@@ -3,18 +3,17 @@ import SwiftUI
 struct MainWindow: View {
     @State private var contextManager = ClusterContextManager()
     @State private var chat = ChatViewModel()
+    @State private var selectedPanel: PanelKind = .pods
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                NavStrip()
+                NavStrip(selection: $selectedPanel)
 
                 HSplitView {
-                    PodsPanel(contextManager: contextManager) { pod in
-                        handoff(pod: pod)
-                    }
-                    .frame(minWidth: 400, idealWidth: 720, maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(NSColor.windowBackgroundColor))
+                    panelView
+                        .frame(minWidth: 400, idealWidth: 720, maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color(NSColor.windowBackgroundColor))
 
                     ChatView(viewModel: chat)
                         .frame(minWidth: 320, idealWidth: 480, maxWidth: .infinity, maxHeight: .infinity)
@@ -44,7 +43,23 @@ struct MainWindow: View {
         }
     }
 
-    private func handoff(pod: Pod) {
+    @ViewBuilder private var panelView: some View {
+        switch selectedPanel {
+        case .pods:
+            PodsPanel(contextManager: contextManager) { pod in
+                handoffPod(pod)
+            }
+        case .logs:
+            // LogsPanel and its handoff are added in Tasks 2-8.
+            // Temporary stub so the project keeps compiling while Plan 2 lands.
+            VStack {
+                Text("Logs panel coming online (Tasks 2-8 in progress)")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func handoffPod(_ pod: Pod) {
         Task {
             guard let ctx = contextManager.active?.name else { return }
             do {

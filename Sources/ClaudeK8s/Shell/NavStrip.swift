@@ -1,12 +1,24 @@
 import SwiftUI
 
 struct NavStrip: View {
+    @Binding var selection: PanelKind
+
     var body: some View {
         VStack(spacing: 16) {
-            Image(systemName: "shippingbox.fill").font(.title2)
-            Image(systemName: "text.alignleft").font(.title2).foregroundStyle(.tertiary)
-            Image(systemName: "bell").font(.title2).foregroundStyle(.tertiary)
-            Image(systemName: "server.rack").font(.title2).foregroundStyle(.tertiary)
+            ForEach(PanelKind.allCases) { kind in
+                Button {
+                    selection = kind
+                } label: {
+                    Image(systemName: kind.icon)
+                        .font(.title2)
+                        .frame(width: 32, height: 32)
+                        .foregroundStyle(selection == kind ? Color.accentColor : Color.secondary)
+                        .background(selection == kind ? Color.accentColor.opacity(0.15) : .clear)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
+                .help(kind.title)
+            }
             Spacer()
         }
         .frame(maxHeight: .infinity)
