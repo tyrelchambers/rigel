@@ -1,5 +1,12 @@
-// Entry point — full implementation added in Task 2.
+import SwiftUI
+
 @main
-struct ClaudeK8sApp {
-    static func main() {}
+struct ClaudeK8sApp: App {
+    var body: some Scene {
+        WindowGroup("claude-k8s") {
+            MainWindow()
+                .frame(minWidth: 1000, minHeight: 600)
+        }
+        .windowResizability(.contentSize)
+    }
 }
