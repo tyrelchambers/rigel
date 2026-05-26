@@ -57,7 +57,6 @@ struct ChatView: View {
                 onDeny: { viewModel.answerPermission(allow: false) }
             )
         }
-        .onAppear { viewModel.start() }
         .onDisappear { viewModel.stop() }
     }
 

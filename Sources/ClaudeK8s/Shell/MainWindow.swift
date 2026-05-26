@@ -23,7 +23,25 @@ struct MainWindow: View {
             }
             StatusBar()
         }
-        .onAppear { contextManager.reload() }
+        .onAppear {
+            contextManager.reload()
+            if let ctx = contextManager.active?.name {
+                let saved = SessionStore.shared.sessionId(for: ctx)
+                chat.start(resumingSessionId: saved)
+            }
+        }
+        .onChange(of: contextManager.active) { _, newCtx in
+            if let ctx = newCtx?.name {
+                let saved = SessionStore.shared.sessionId(for: ctx)
+                chat.stop()
+                chat.start(resumingSessionId: saved)
+            }
+        }
+        .onChange(of: chat.sessionId) { _, newSid in
+            if let sid = newSid, let ctx = contextManager.active?.name {
+                SessionStore.shared.setSessionId(sid, for: ctx)
+            }
+        }
     }
 
     private func handoff(pod: Pod) {
