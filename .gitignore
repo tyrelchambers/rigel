@@ -1,0 +1,14 @@
+.superpowers/
+.claude/settings.local.json
+
+# Swift / Xcode
+.build/
+.swiftpm/
+DerivedData/
+*.xcuserdatad/
+xcuserdata/
+*.xcuserstate
+build/
+
+# macOS
+.DS_Store
