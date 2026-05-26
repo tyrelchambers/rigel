@@ -57,8 +57,8 @@ struct MainWindow: View {
     }
 
     private func handoffLogSlice(line: LogLine, surrounding: [LogLine]) {
-        // Real handoff prompt added in Task 8.
-        chat.sendHandoff("Logs handoff placeholder for \(line.sourcePod): \(line.text)")
+        let prompt = ContextHandoffBuilder.build(.logSlice(line: line, surrounding: surrounding))
+        chat.sendHandoff(prompt)
     }
 
     private func handoffPod(_ pod: Pod) {

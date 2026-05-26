@@ -36,6 +36,21 @@ enum ContextHandoffBuilder {
             \(events)
             ```
             """
+        case .logSlice(let target, let surrounding):
+            let context = surrounding.map { l -> String in
+                let ts = l.timestamp.map { "\($0.formatted(date: .omitted, time: .standard)) " } ?? ""
+                let marker = (l.id == target.id) ? "→ " : "  "
+                return "\(marker)\(ts)\(l.text)"
+            }.joined(separator: "\n")
+            return """
+            From pod **\(target.sourcePod)** — log line marked with → is what I want to ask about:
+
+            ```
+            \(context)
+            ```
+
+            What's happening, and what should I do?
+            """
         }
     }
 }

@@ -2,5 +2,6 @@ import Foundation
 
 enum PanelSelection {
     case pod(Pod, describe: String, recentEvents: String)
-    // .logSlice, .alert, .node added in follow-up plans
+    case logSlice(line: LogLine, surrounding: [LogLine])
+    // .alert, .node added in follow-up plans
 }
