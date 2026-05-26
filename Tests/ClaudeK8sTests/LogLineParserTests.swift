@@ -25,4 +25,19 @@ final class LogLineParserTests: XCTestCase {
         parser.feed(Data("rd\n".utf8)) { lines.append($0) }
         XCTAssertEqual(lines.map(\.text), ["first", "second", "third"])
     }
+
+    func test_extractsKubectlPrefix() {
+        let raw = "[pod/fieldnotes-7d9c8b6f5d-xk2vp/nginx] 2026-05-26T18:42:01.123Z GET / 200"
+        let line = LogLineParser.parse(raw, sourcePod: "fallback", colorIndex: 5)
+        XCTAssertEqual(line.sourcePod, "fieldnotes-7d9c8b6f5d-xk2vp")
+        XCTAssertNotNil(line.timestamp)
+        XCTAssertEqual(line.text, "GET / 200")
+        XCTAssertEqual(line.colorIndex, PodColorAssigner.colorIndex(for: "fieldnotes-7d9c8b6f5d-xk2vp"))
+    }
+
+    func test_keepsFallbackSourceWhenNoPrefix() {
+        let line = LogLineParser.parse("plain log line", sourcePod: "fallback-key", colorIndex: 3)
+        XCTAssertEqual(line.sourcePod, "fallback-key")
+        XCTAssertEqual(line.colorIndex, 3)
+    }
 }

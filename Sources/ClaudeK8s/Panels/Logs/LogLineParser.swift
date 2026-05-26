@@ -7,15 +7,29 @@ enum LogLineParser {
         return f
     }()
 
+    /// kubectl --prefix prefix: `[pod/<name>/<container>] `
+    private static let prefixPattern = #/^\[pod/([^/\]]+)/[^\]]+\]\s+/#
+
     static func parse(_ raw: String, sourcePod: String, colorIndex: Int) -> LogLine {
-        if let spaceIdx = raw.firstIndex(of: " ") {
-            let prefix = String(raw[..<spaceIdx])
-            let rest = String(raw[raw.index(after: spaceIdx)...])
-            if let ts = iso8601.date(from: prefix) {
-                return LogLine(sourcePod: sourcePod, timestamp: ts, text: rest, colorIndex: colorIndex)
+        var working = raw
+        var effectiveSource = sourcePod
+        var effectiveColor = colorIndex
+
+        if let match = try? prefixPattern.firstMatch(in: working) {
+            let podName = String(match.output.1)
+            effectiveSource = podName
+            effectiveColor = PodColorAssigner.colorIndex(for: podName)
+            working.removeSubrange(match.range)
+        }
+
+        if let spaceIdx = working.firstIndex(of: " ") {
+            let timestampPrefix = String(working[..<spaceIdx])
+            let rest = String(working[working.index(after: spaceIdx)...])
+            if let ts = iso8601.date(from: timestampPrefix) {
+                return LogLine(sourcePod: effectiveSource, timestamp: ts, text: rest, colorIndex: effectiveColor)
             }
         }
-        return LogLine(sourcePod: sourcePod, timestamp: nil, text: raw, colorIndex: colorIndex)
+        return LogLine(sourcePod: effectiveSource, timestamp: nil, text: working, colorIndex: effectiveColor)
     }
 }
 
