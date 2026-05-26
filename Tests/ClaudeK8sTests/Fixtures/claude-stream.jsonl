@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"sess-abc-123","model":"claude-opus-4-7"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hello"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":" world"}]}}
+{"type":"result","subtype":"success","session_id":"sess-abc-123","total_cost_usd":0.001}
