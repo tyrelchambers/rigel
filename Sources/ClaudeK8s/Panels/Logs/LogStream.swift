@@ -1,39 +1,44 @@
 import Foundation
 
-actor PodLogStream {
-    nonisolated let podKey: String          // "namespace/name"
+actor LogStream {
     nonisolated let kubectl: String
     nonisolated let context: String?
     nonisolated let namespace: String
-    nonisolated let podName: String
-    nonisolated let colorIndex: Int
+    nonisolated let labelSelector: String
+    nonisolated let streamKey: String
     private var proc: Process?
 
-    init(namespace: String, podName: String, context: String?, colorIndex: Int) throws {
+    init(namespace: String, labelSelector: String, streamKey: String, context: String?) throws {
         guard let path = resolveBinary("kubectl") else { throw KubectlClientError.kubectlNotFound }
         self.kubectl = path
         self.context = context
         self.namespace = namespace
-        self.podName = podName
-        self.podKey = "\(namespace)/\(podName)"
-        self.colorIndex = colorIndex
+        self.labelSelector = labelSelector
+        self.streamKey = streamKey
     }
 
-    /// Starts the subprocess and returns a stream of LogLine values.
+    /// Starts `kubectl logs -f -l <selector> --prefix --timestamps --all-containers` and
+    /// returns a stream of LogLine values. Each line is prefixed by kubectl with
+    /// `[pod/<name>/<container>]` — LogLineParser strips that into LogLine.sourcePod.
     nonisolated func stream() -> AsyncStream<LogLine> {
         AsyncStream { continuation in
             let p = Process()
             p.executableURL = URL(fileURLWithPath: kubectl)
             var args: [String] = []
             if let context { args.append(contentsOf: ["--context", context]) }
-            args.append(contentsOf: ["logs", "-f", "--timestamps", "-n", namespace, podName])
+            args.append(contentsOf: [
+                "logs", "-f", "--timestamps", "--prefix=true", "--all-containers=true",
+                "-n", namespace, "-l", labelSelector,
+                "--max-log-requests=20",
+                "--tail=200",
+            ])
             p.arguments = args
 
             let outPipe = Pipe()
             p.standardOutput = outPipe
             p.standardError = Pipe()
 
-            var parser = LogLineStreamParser(sourcePod: podKey, colorIndex: colorIndex)
+            var parser = LogLineStreamParser(sourcePod: streamKey, colorIndex: 0)
             outPipe.fileHandleForReading.readabilityHandler = { handle in
                 let chunk = handle.availableData
                 if chunk.isEmpty {
