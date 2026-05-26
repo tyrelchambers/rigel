@@ -11,21 +11,29 @@ struct LogsPanel: View {
 
     var body: some View {
         HSplitView {
-            // Left: pod selector
+            // Left: deployment selector
             VStack(alignment: .leading, spacing: 0) {
-                Text("Pods").font(.headline).padding(.horizontal, 12).padding(.top, 8)
+                Text("Deployments").font(.headline).padding(.horizontal, 12).padding(.top, 8)
                 List {
-                    ForEach(viewModel.availablePods) { pod in
-                        let key = "\(pod.metadata.namespace ?? "default")/\(pod.metadata.name)"
+                    ForEach(viewModel.availableDeployments) { dep in
+                        let key = "\(dep.metadata.namespace ?? "default")/\(dep.metadata.name)"
                         Button {
-                            viewModel.toggleSelection(pod, context: contextManager.active?.name)
+                            viewModel.toggleSelection(dep, context: contextManager.active?.name)
                         } label: {
                             HStack(spacing: 6) {
-                                Image(systemName: viewModel.selectedPodKeys.contains(key) ? "checkmark.square.fill" : "square")
-                                    .foregroundStyle(viewModel.selectedPodKeys.contains(key) ? Self.palette[PodColorAssigner.colorIndex(for: key)] : .secondary)
+                                Image(systemName: viewModel.selectedDeploymentKeys.contains(key) ? "checkmark.square.fill" : "square")
+                                    .foregroundStyle(viewModel.selectedDeploymentKeys.contains(key) ? Color.accentColor : .secondary)
                                 VStack(alignment: .leading) {
-                                    Text(pod.metadata.name).font(.caption).lineLimit(1)
-                                    Text(pod.metadata.namespace ?? "—").font(.caption2).foregroundStyle(.tertiary)
+                                    Text(dep.metadata.name).font(.caption).lineLimit(1)
+                                    HStack(spacing: 4) {
+                                        Text(dep.metadata.namespace ?? "—")
+                                        Text("·")
+                                        let ready = dep.status?.readyReplicas ?? 0
+                                        let total = dep.status?.replicas ?? 0
+                                        Text("\(ready)/\(total)")
+                                            .foregroundStyle(ready < total ? Color.red : .secondary)
+                                    }
+                                    .font(.caption2).foregroundStyle(.tertiary)
                                 }
                             }
                         }
@@ -33,13 +41,16 @@ struct LogsPanel: View {
                     }
                 }
             }
-            .frame(minWidth: 220, idealWidth: 260)
+            .frame(minWidth: 240, idealWidth: 280)
 
             // Right: merged log stream
             VStack(spacing: 0) {
                 HStack(spacing: 8) {
                     TextField("filter (case-insensitive substring)", text: $viewModel.filter)
                         .textFieldStyle(.roundedBorder)
+                    Toggle("Hide probes", isOn: $viewModel.hideProbes)
+                        .toggleStyle(.checkbox)
+                        .help("Filters out 'kube-probe/' user-agent and common health endpoints (/healthz, /ready, /live, etc.)")
                     Button(viewModel.isPaused ? "Resume" : "Pause") {
                         viewModel.isPaused.toggle()
                     }
