@@ -50,13 +50,15 @@ struct MainWindow: View {
                 handoffPod(pod)
             }
         case .logs:
-            // LogsPanel and its handoff are added in Tasks 2-8.
-            // Temporary stub so the project keeps compiling while Plan 2 lands.
-            VStack {
-                Text("Logs panel coming online (Tasks 2-8 in progress)")
-                    .foregroundStyle(.secondary)
+            LogsPanel(contextManager: contextManager) { line, surrounding in
+                handoffLogSlice(line: line, surrounding: surrounding)
             }
         }
+    }
+
+    private func handoffLogSlice(line: LogLine, surrounding: [LogLine]) {
+        // Real handoff prompt added in Task 8.
+        chat.sendHandoff("Logs handoff placeholder for \(line.sourcePod): \(line.text)")
     }
 
     private func handoffPod(_ pod: Pod) {
