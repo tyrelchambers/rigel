@@ -16,4 +16,17 @@ final class KubeTypesDecodingTests: XCTestCase {
         XCTAssertEqual(list.items[1].status?.phase, "Pending")
         XCTAssertEqual(list.items[1].status?.containerStatuses?.first?.state?.waiting?.reason, "CrashLoopBackOff")
     }
+
+    func test_decodeDeploymentList_extractsSelectorAndReadyReplicas() throws {
+        let url = Bundle.module.url(forResource: "deployments-list", withExtension: "json")!
+        let data = try Data(contentsOf: url)
+        let list = try JSONDecoder.kube.decode(KubeList<Deployment>.self, from: data)
+        XCTAssertEqual(list.items.count, 2)
+        let fieldnotes = list.items.first(where: { $0.metadata.name == "fieldnotes" })!
+        XCTAssertEqual(fieldnotes.status?.readyReplicas, 2)
+        XCTAssertEqual(fieldnotes.labelSelector, "app=fieldnotes")
+        let postiz = list.items.first(where: { $0.metadata.name == "postiz" })!
+        XCTAssertEqual(postiz.status?.readyReplicas, 0)
+        XCTAssertEqual(postiz.labelSelector, "app=postiz,tier=web")
+    }
 }

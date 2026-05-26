@@ -64,3 +64,38 @@ extension JSONDecoder {
         return d
     }
 }
+
+struct Deployment: Codable, Identifiable, Hashable {
+    let metadata: ObjectMeta
+    let spec: DeploymentSpec?
+    let status: DeploymentStatus?
+    var id: String { metadata.uid }
+}
+
+struct DeploymentSpec: Codable, Hashable {
+    let replicas: Int?
+    let selector: LabelSelector?
+}
+
+struct DeploymentStatus: Codable, Hashable {
+    let replicas: Int?
+    let readyReplicas: Int?
+    let availableReplicas: Int?
+    let updatedReplicas: Int?
+}
+
+struct LabelSelector: Codable, Hashable {
+    let matchLabels: [String: String]?
+}
+
+extension Deployment {
+    /// Build a kubectl label-selector argument from matchLabels.
+    /// Returns e.g. "app=fieldnotes,tier=web" (sorted alphabetically by key for determinism).
+    /// Empty string if no matchLabels.
+    var labelSelector: String {
+        let pairs = spec?.selector?.matchLabels ?? [:]
+        return pairs.sorted(by: { $0.key < $1.key })
+            .map { "\($0.key)=\($0.value)" }
+            .joined(separator: ",")
+    }
+}
