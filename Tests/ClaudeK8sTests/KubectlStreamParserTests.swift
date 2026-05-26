@@ -24,10 +24,25 @@ final class KubectlStreamParserTests: XCTestCase {
     func test_handlesPartialThenComplete() {
         var parser = KubectlStreamParser()
         var values: [Data] = []
-        parser.feed(Data("{\"a\":1}{\"b".utf8)) { values.append($0) }
+        // First chunk ends mid-second-object, BEFORE the second object's first " (so inString is false at chunk boundary).
+        parser.feed(Data(#"{"a":1}{"#.utf8)) { values.append($0) }
         XCTAssertEqual(values.count, 1)
-        parser.feed(Data(":2}".utf8)) { values.append($0) }
+        XCTAssertEqual(values[0], Data(#"{"a":1}"#.utf8))
+        // Second chunk completes the second object.
+        parser.feed(Data(#""b":2}"#.utf8)) { values.append($0) }
         XCTAssertEqual(values.count, 2)
+        XCTAssertEqual(values[1], Data(#"{"b":2}"#.utf8))
+    }
+
+    func test_handlesChunkSplitMidString() {
+        var parser = KubectlStreamParser()
+        var values: [Data] = []
+        // Chunk ends mid-string. inString must remain true across the boundary.
+        parser.feed(Data(#"{"name":"a"#.utf8)) { values.append($0) }
+        XCTAssertEqual(values.count, 0)
+        parser.feed(Data(#"b","x":1}"#.utf8)) { values.append($0) }
+        XCTAssertEqual(values.count, 1)
+        XCTAssertEqual(values[0], Data(#"{"name":"ab","x":1}"#.utf8))
     }
 
     func test_handlesStringWithEscapedBraces() {

@@ -26,13 +26,6 @@ struct KubectlStreamParser {
         // that `buffer` itself never becomes a slice with a non-zero startIndex.
         buffer.append(contentsOf: chunk)
 
-        // Reset string-tracking state at each feed boundary.  In practice kubectl
-        // never splits a watch-event chunk in the middle of a string literal, so
-        // carrying stale `inString` state across feeds causes more harm than good
-        // (the partial-chunk test demonstrates this clearly).
-        inString = false
-        escaped = false
-
         var i = scanOffset
         while i < buffer.count {
             let b = buffer[i]
