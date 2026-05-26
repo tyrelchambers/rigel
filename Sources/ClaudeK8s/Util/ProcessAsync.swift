@@ -17,7 +17,29 @@ enum ProcessError: Error, CustomStringConvertible {
     }
 }
 
+/// Thread-safe accumulator for subprocess pipe drainage.
+/// Pipe readability handlers fire on a serial dispatch queue, but we still want
+/// to coordinate with the termination handler (which runs on a different queue).
+final class OutputBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _data = Data()
+
+    func append(_ chunk: Data) {
+        lock.lock(); defer { lock.unlock() }
+        _data.append(chunk)
+    }
+
+    var data: Data {
+        lock.lock(); defer { lock.unlock() }
+        return _data
+    }
+}
+
 /// Run a one-shot subprocess and collect its full stdout. Throws if exit != 0.
+///
+/// Important: pipes are drained incrementally via `readabilityHandler` to avoid
+/// pipe-buffer deadlock when the child writes more than ~64 KB before exiting
+/// (e.g. `kubectl get pods -A -o json` against a busy cluster).
 func runProcess(_ launchPath: String, args: [String], env: [String: String]? = nil) async throws -> Data {
     try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Data, Error>) in
         let proc = Process()
@@ -30,13 +52,39 @@ func runProcess(_ launchPath: String, args: [String], env: [String: String]? = n
         proc.standardOutput = outPipe
         proc.standardError = errPipe
 
-        proc.terminationHandler = { p in
-            let out = outPipe.fileHandleForReading.readDataToEndOfFile()
-            let err = errPipe.fileHandleForReading.readDataToEndOfFile()
-            if p.terminationStatus == 0 {
-                cont.resume(returning: out)
+        let outBox = OutputBox()
+        let errBox = OutputBox()
+
+        outPipe.fileHandleForReading.readabilityHandler = { handle in
+            let chunk = handle.availableData
+            if chunk.isEmpty {
+                handle.readabilityHandler = nil
             } else {
-                let errStr = String(data: err, encoding: .utf8) ?? ""
+                outBox.append(chunk)
+            }
+        }
+        errPipe.fileHandleForReading.readabilityHandler = { handle in
+            let chunk = handle.availableData
+            if chunk.isEmpty {
+                handle.readabilityHandler = nil
+            } else {
+                errBox.append(chunk)
+            }
+        }
+
+        proc.terminationHandler = { p in
+            // Detach handlers and drain anything left in the pipes after EOF.
+            outPipe.fileHandleForReading.readabilityHandler = nil
+            errPipe.fileHandleForReading.readabilityHandler = nil
+            let trailingOut = (try? outPipe.fileHandleForReading.readToEnd()) ?? Data()
+            outBox.append(trailingOut)
+            let trailingErr = (try? errPipe.fileHandleForReading.readToEnd()) ?? Data()
+            errBox.append(trailingErr)
+
+            if p.terminationStatus == 0 {
+                cont.resume(returning: outBox.data)
+            } else {
+                let errStr = String(data: errBox.data, encoding: .utf8) ?? ""
                 cont.resume(throwing: ProcessError.nonZeroExit(code: p.terminationStatus, stderr: errStr))
             }
         }
