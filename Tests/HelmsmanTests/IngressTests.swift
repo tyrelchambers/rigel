@@ -2,6 +2,35 @@ import XCTest
 @testable import Helmsman
 
 final class IngressTests: XCTestCase {
+    func test_draft_preservesDefaultBackend() {
+        // The editor can't edit defaultBackend, but the manage sheet shows it as a
+        // route — so an edit-then-apply must carry it through, not drop it.
+        let backend = Ingress.Backend(
+            service: Ingress.ServiceBackend(name: "fallback", port: Ingress.ServicePort(number: 8080, name: nil))
+        )
+        let ing = Ingress.draft(
+            name: "web", namespace: "default", className: "nginx",
+            rules: [.init(host: "a.com", path: "/", pathType: "Prefix", service: "svc", port: "80")],
+            tls: [], annotations: [:],
+            defaultBackend: backend
+        )
+        XCTAssertNotNil(ing.spec?.defaultBackend)
+        let yaml = ing.toYAML()
+        XCTAssertTrue(yaml.contains("defaultBackend:"))
+        XCTAssertTrue(yaml.contains("name: 'fallback'"))
+        XCTAssertTrue(yaml.contains("number: 8080"))
+    }
+
+    func test_draft_noDefaultBackend_omitsKey() {
+        let ing = Ingress.draft(
+            name: "web", namespace: "default", className: "nginx",
+            rules: [.init(host: "a.com", path: "/", pathType: "Prefix", service: "svc", port: "80")],
+            tls: [], annotations: [:]
+        )
+        XCTAssertNil(ing.spec?.defaultBackend)
+        XCTAssertFalse(ing.toYAML().contains("defaultBackend:"))
+    }
+
     func test_draft_toYAML_basicRoute() {
         let ing = Ingress.draft(
             name: "web",

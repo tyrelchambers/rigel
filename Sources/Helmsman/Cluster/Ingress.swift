@@ -31,7 +31,8 @@ extension Ingress {
         className: String,
         rules: [RuleDraft],
         tls: [TLSDraft],
-        annotations: [String: String]
+        annotations: [String: String],
+        defaultBackend: Backend? = nil
     ) -> Ingress {
         // Group rule rows by host → one Rule per host with N paths.
         var byHost: [String: [Path]] = [:]
@@ -77,7 +78,7 @@ extension Ingress {
                 ingressClassName: className.isEmpty ? nil : className,
                 tls: specTLS.isEmpty ? nil : specTLS,
                 rules: specRules.isEmpty ? nil : specRules,
-                defaultBackend: nil
+                defaultBackend: defaultBackend
             ),
             status: nil
         )
@@ -101,6 +102,21 @@ extension Ingress {
         lines.append("spec:")
         if let cls = spec?.ingressClassName, !cls.isEmpty {
             lines.append("  ingressClassName: \(Self.yamlScalar(cls))")
+        }
+        // Preserve a defaultBackend the form can't edit but the manage sheet shows,
+        // so editing-then-applying doesn't silently delete it via the 3-way merge.
+        if let backend = spec?.defaultBackend?.service {
+            lines.append("  defaultBackend:")
+            lines.append("    service:")
+            lines.append("      name: \(Self.yamlScalar(backend.name))")
+            if let port = backend.port, port.number != nil || port.name != nil {
+                lines.append("      port:")
+                if let n = port.number {
+                    lines.append("        number: \(n)")
+                } else if let name = port.name {
+                    lines.append("        name: \(Self.yamlScalar(name))")
+                }
+            }
         }
         if let tls = spec?.tls, !tls.isEmpty {
             lines.append("  tls:")

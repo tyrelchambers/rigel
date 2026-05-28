@@ -41,6 +41,10 @@ struct IngressEditorSheet: View {
 
     private let pathTypes = ["Prefix", "Exact", "ImplementationSpecific"]
 
+    /// The form has no defaultBackend field, but the manage sheet shows it as a
+    /// route — carry it through unchanged so an edit-then-apply doesn't drop it.
+    private let originalDefaultBackend: Ingress.Backend?
+
     init(
         mode: IngressEditorMode,
         context: String?,
@@ -60,6 +64,7 @@ struct IngressEditorSheet: View {
             _tlsRows = State(initialValue: [])
             _annotationRows = State(initialValue: [])
             _certManagerEnabled = State(initialValue: false)
+            originalDefaultBackend = nil
         case .edit(let ing):
             _name = State(initialValue: ing.metadata.name)
             _namespace = State(initialValue: ing.metadata.namespace ?? "default")
@@ -72,6 +77,7 @@ struct IngressEditorSheet: View {
             let existingIssuer = annotations[Ingress.certManagerIssuerAnnotation]
             _certManagerEnabled = State(initialValue: existingIssuer != nil)
             _selectedIssuer = State(initialValue: existingIssuer ?? "")
+            originalDefaultBackend = ing.spec?.defaultBackend
         }
     }
 
@@ -356,7 +362,8 @@ struct IngressEditorSheet: View {
             className: className.trimmingCharacters(in: .whitespaces),
             rules: ruleRows,
             tls: tls,
-            annotations: annotations
+            annotations: annotations,
+            defaultBackend: originalDefaultBackend
         )
     }
 
