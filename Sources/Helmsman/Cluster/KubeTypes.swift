@@ -451,7 +451,7 @@ extension Ingress {
         return out
     }
 
-    private static func portLabel(_ port: ServicePort?) -> String {
+    static func portLabel(_ port: ServicePort?) -> String {
         if let n = port?.number { return String(n) }
         return port?.name ?? ""
     }
