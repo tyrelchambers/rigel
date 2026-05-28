@@ -25,6 +25,8 @@ struct MainWindow: View {
     @State private var historyOpen = false
     @State private var manageSecret: Secret?
     @State private var pendingSecretEditor: SecretEditorMode?
+    @State private var manageIngress: Ingress?
+    @State private var pendingIngressEditor: IngressEditorMode?
     @State private var pendingSecretMove: Secret?
     @State private var pendingCatalogDetail: CatalogApp?
     @State private var pendingCatalogInstall: CatalogInstallWizardModel?
@@ -141,6 +143,40 @@ struct MainWindow: View {
                 onCancel: { pendingSecretEditor = nil }
             )
         }
+        .sheet(item: $manageIngress) { ingress in
+            IngressManageSheet(
+                ingress: ingress,
+                context: contextManager.active?.name,
+                onClose: { manageIngress = nil },
+                onViewYAML: {
+                    manageIngress = nil
+                    viewYAML(kind: "ingress", name: ingress.metadata.name, namespace: ingress.metadata.namespace)
+                },
+                onEdit: { ing in
+                    manageIngress = nil
+                    pendingIngressEditor = .edit(ing)
+                },
+                onDelete: { ing in
+                    manageIngress = nil
+                    requestWorkload(.deleteIngress(name: ing.metadata.name, namespace: ing.metadata.namespace ?? "default"))
+                },
+                onAskClaude: { ing in
+                    manageIngress = nil
+                    handoffIngress(ing)
+                }
+            )
+        }
+        .sheet(item: $pendingIngressEditor) { mode in
+            IngressEditorSheet(
+                mode: mode,
+                context: contextManager.active?.name,
+                onSubmit: { ingress, isNew in
+                    pendingIngressEditor = nil
+                    requestWorkload(.applyIngress(ingress, isNew: isNew))
+                },
+                onCancel: { pendingIngressEditor = nil }
+            )
+        }
         .sheet(item: $pendingSecretMove) { secret in
             SecretMoveSheet(
                 secret: secret,
@@ -255,7 +291,15 @@ struct MainWindow: View {
         case .nodes:
             NodesPanel(viewModel: nodesVM, onWorkload: { requestWorkload($0) }, onViewYAML: viewYAML)
         case .ingresses:
-            IngressesPanel(viewModel: ingressesVM, onViewYAML: viewYAML, onAskClaude: handoffIngress)
+            IngressesPanel(
+                viewModel: ingressesVM,
+                onViewYAML: viewYAML,
+                onAskClaude: handoffIngress,
+                onManage: { manageIngress = $0 },
+                onCreate: { pendingIngressEditor = .create },
+                onEdit: { pendingIngressEditor = .edit($0) },
+                onDelete: { requestWorkload(.deleteIngress(name: $0.metadata.name, namespace: $0.metadata.namespace ?? "default")) }
+            )
         case .databases:
             DatabasesPanel(viewModel: databasesVM)
         case .secrets:
