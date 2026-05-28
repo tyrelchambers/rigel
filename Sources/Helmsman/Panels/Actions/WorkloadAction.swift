@@ -34,6 +34,10 @@ enum WorkloadAction: Identifiable {
     case applySecret(Secret)
     case deleteSecret(name: String, namespace: String)
     case moveSecret(original: Secret, newName: String, newNamespace: String)
+    /// Create-or-update an ingress via `kubectl apply -f -`. `isNew` only
+    /// affects the confirm-sheet copy; apply is idempotent either way.
+    case applyIngress(Ingress, isNew: Bool)
+    case deleteIngress(name: String, namespace: String)
     /// Apply an arbitrary manifest YAML (multi-document). Used by the catalog
     /// install wizard; the wizard's Review step is the user confirmation, so
     /// these flow through `WorkloadCommander.run` directly without the
@@ -55,6 +59,8 @@ enum WorkloadAction: Identifiable {
         case .applySecret(let s): return "apply-secret-\(s.metadata.namespace ?? "default")/\(s.metadata.name)"
         case .deleteSecret(let name, let ns): return "delete-secret-\(ns)/\(name)"
         case .moveSecret(let o, let n, let ns): return "move-secret-\(o.id)-to-\(ns)/\(n)"
+        case .applyIngress(let i, _): return "apply-ingress-\(i.metadata.namespace ?? "default")/\(i.metadata.name)"
+        case .deleteIngress(let name, let ns): return "delete-ingress-\(ns)/\(name)"
         case .applyManifest(_, let label): return "apply-manifest-\(label)"
         }
     }
@@ -77,6 +83,10 @@ enum WorkloadAction: Identifiable {
         case .deleteSecret(let name, let ns): return "Delete secret \(ns)/\(name)"
         case .moveSecret(let o, let newName, let newNs):
             return "Move secret \(o.metadata.namespace ?? "default")/\(o.metadata.name) → \(newNs)/\(newName)"
+        case .applyIngress(let i, let isNew):
+            let ns = i.metadata.namespace ?? "default"
+            return "\(isNew ? "Create" : "Apply") ingress \(ns)/\(i.metadata.name)"
+        case .deleteIngress(let name, let ns): return "Delete ingress \(ns)/\(name)"
         case .applyManifest(_, let label):
             return "Apply \(label) manifest"
         }
@@ -124,6 +134,12 @@ enum WorkloadAction: Identifiable {
             else if newName == o.metadata.name { scope = "copy to \(newNs), delete from \(oldNs)" }
             else { scope = "create \(newNs)/\(newName), delete \(oldNs)/\(o.metadata.name)" }
             return "Copy-and-delete (\(scope)). Workloads still referencing the old name/namespace will lose access."
+        case .applyIngress(let i, let isNew):
+            let ns = i.metadata.namespace ?? "default"
+            let routes = i.routes.count
+            return "\(isNew ? "Creates" : "Updates") the ingress in namespace \(ns) with \(routes) route\(routes == 1 ? "" : "s") via `kubectl apply -f -`."
+        case .deleteIngress(let name, let ns):
+            return "Permanently removes ingress \(ns)/\(name). Traffic routed through it will stop until a replacement exists."
         case .applyManifest(_, let label):
             return "Creates or updates the resources defined in the \(label) manifest via `kubectl apply -f -`."
         }
@@ -140,6 +156,7 @@ enum WorkloadAction: Identifiable {
              .restartDeployment,
              .setDeploymentEnv,
              .applySecret,
+             .applyIngress,
              .applyManifest:
             return false
         default:
@@ -150,7 +167,7 @@ enum WorkloadAction: Identifiable {
     /// True = require explicit "I understand" acknowledge checkbox.
     var needsAcknowledge: Bool {
         switch self {
-        case .deletePod, .drainNode, .deleteSecret, .moveSecret: return true
+        case .deletePod, .drainNode, .deleteSecret, .moveSecret, .deleteIngress: return true
         default: return false
         }
     }
@@ -207,6 +224,10 @@ enum WorkloadAction: Identifiable {
                 .applyYAML(moved.toYAML()),
                 .args(["delete", "secret", oldName, "-n", oldNs])
             ]
+        case .applyIngress(let i, _):
+            return [.applyYAML(i.toYAML())]
+        case .deleteIngress(let name, let ns):
+            return [.args(["delete", "ingress", name, "-n", ns])]
         case .applyManifest(let yaml, _):
             return [.applyYAML(yaml)]
         }
