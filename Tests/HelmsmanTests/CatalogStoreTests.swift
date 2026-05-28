@@ -1,0 +1,111 @@
+import XCTest
+@testable import Helmsman
+
+final class CatalogStoreTests: XCTestCase {
+
+    func test_loadCatalog_parsesBundledEntries() {
+        // No bundle arg — CatalogStore's default resolves `.module` in the
+        // Helmsman target's context (where catalog.json actually lives).
+        let store = CatalogStore()
+        XCTAssertNil(store.loadError, "catalog.json should load cleanly: \(store.loadError ?? "")")
+        XCTAssertGreaterThan(store.apps.count, 0, "expected at least one seeded app")
+    }
+
+    func test_filtered_byQuery_isCaseInsensitive() {
+        let store = makeStore(apps: [
+            sampleApp(id: "vaultwarden", name: "Vaultwarden", tagline: "Password manager", category: .productivity),
+            sampleApp(id: "supabase", name: "Supabase", tagline: "Open-source Firebase", category: .database),
+        ])
+        XCTAssertEqual(store.filtered(query: "VAULT").map(\.id), ["vaultwarden"])
+        XCTAssertEqual(store.filtered(query: "supa").map(\.id), ["supabase"])
+        XCTAssertEqual(Set(store.filtered(query: "").map(\.id)), ["vaultwarden", "supabase"])
+    }
+
+    func test_filtered_byCategoryAndQuery_combined() {
+        let store = makeStore(apps: [
+            sampleApp(id: "vaultwarden", name: "Vaultwarden", category: .productivity, tags: ["password"]),
+            sampleApp(id: "memos", name: "Memos", category: .productivity, tags: ["notes"]),
+            sampleApp(id: "supabase", name: "Supabase", category: .database, tags: ["password"]),
+        ])
+        let result = store.filtered(query: "password", category: .productivity).map(\.id)
+        XCTAssertEqual(result, ["vaultwarden"])
+    }
+
+    func test_filtered_matchesTagsAndDescription() {
+        let store = makeStore(apps: [
+            sampleApp(id: "gitea", name: "Gitea", tagline: "Self-hosted git", description: "Code forge with built-in CI runners", tags: ["scm", "git"]),
+        ])
+        XCTAssertEqual(store.filtered(query: "forge").map(\.id), ["gitea"])
+        XCTAssertEqual(store.filtered(query: "scm").map(\.id), ["gitea"])
+    }
+
+    func test_categories_areUniqueAndSorted() {
+        let store = makeStore(apps: [
+            sampleApp(id: "a", category: .productivity),
+            sampleApp(id: "b", category: .database),
+            sampleApp(id: "c", category: .productivity),
+            sampleApp(id: "d", category: .observability),
+        ])
+        XCTAssertEqual(store.categories, [.database, .observability, .productivity])
+    }
+
+    func test_renderPrompt_substitutesPlaceholders() {
+        let app = sampleApp(
+            id: "vault",
+            installPromptTemplate: "Install {{instance}} in {{namespace}} at https://{{hostname}}"
+        )
+        let rendered = app.renderPrompt(vars: [
+            "instance": "vault",
+            "namespace": "default",
+            "hostname": "vault.example.com",
+        ])
+        XCTAssertEqual(rendered, "Install vault in default at https://vault.example.com")
+    }
+
+    func test_renderPrompt_leavesUnknownPlaceholdersIntact() {
+        let app = sampleApp(installPromptTemplate: "x={{instance}} y={{notes}}")
+        let rendered = app.renderPrompt(vars: ["instance": "foo"])
+        XCTAssertEqual(rendered, "x=foo y={{notes}}", "missing vars must remain as literal placeholders — no silent fallback")
+    }
+
+    // MARK: - Helpers
+
+    private func makeStore(apps: [CatalogApp]) -> CatalogStore {
+        CatalogStore(apps: apps)
+    }
+
+    private func sampleApp(
+        id: String = "test",
+        name: String = "Test App",
+        tagline: String = "tagline",
+        description: String = "description",
+        category: AppCategory = .other,
+        tags: [String] = [],
+        installPromptTemplate: String = "prompt"
+    ) -> CatalogApp {
+        CatalogApp(
+            id: id,
+            name: name,
+            tagline: tagline,
+            description: description,
+            category: category,
+            iconSystemName: "cube",
+            docsURL: URL(string: "https://example.com/docs")!,
+            repoURL: nil,
+            homepageURL: nil,
+            tags: tags,
+            requirements: AppRequirements(
+                cpuRequest: "100m",
+                cpuLimit: nil,
+                memoryRequest: "128Mi",
+                memoryLimit: nil,
+                storageGiB: nil
+            ),
+            persistence: false,
+            exposesIngress: false,
+            notes: nil,
+            installPromptTemplate: installPromptTemplate
+        )
+    }
+}
+

@@ -10,5 +10,8 @@ xcuserdata/
 *.xcuserstate
 build/
 
+# Assembled .app bundle (built by `make app`)
+Helmsman.app/
+
 # macOS
 .DS_Store

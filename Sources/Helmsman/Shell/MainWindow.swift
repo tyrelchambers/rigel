@@ -1,0 +1,544 @@
+import SwiftUI
+
+struct MainWindow: View {
+    @State private var contextManager = ClusterContextManager()
+    @State private var chat = ChatViewModel()
+    @State private var selectedPanel: PanelKind = .overview
+
+    // Single watch-owning cache; all panel VMs read from it.
+    @State private var cache: ClusterCache
+    @State private var deploymentsVM: DeploymentsViewModel
+    @State private var podsVM: PodsViewModel
+    @State private var nodesVM: NodesViewModel
+    @State private var ingressesVM: IngressesViewModel
+    @State private var databasesVM: DatabasesViewModel
+    @State private var eventsVM: EventsViewModel
+    @State private var logsVM: LogsViewModel
+    @State private var secretsVM: SecretsViewModel
+    @State private var catalogVM: CatalogViewModel
+    @State private var paletteOpen = false
+    @State private var pendingWorkloadAction: WorkloadAction?
+    @State private var yamlTarget: YAMLTarget?
+    @State private var historyOpen = false
+    @State private var manageSecret: Secret?
+    @State private var pendingSecretEditor: SecretEditorMode?
+    @State private var pendingSecretMove: Secret?
+    @State private var pendingCatalogDetail: CatalogApp?
+    @State private var pendingCatalogInstall: CatalogInstallWizardModel?
+
+    init() {
+        let cache = ClusterCache()
+        let catalogStore = CatalogStore()
+        _cache = State(initialValue: cache)
+        _deploymentsVM = State(initialValue: DeploymentsViewModel(cache: cache))
+        _podsVM = State(initialValue: PodsViewModel(cache: cache))
+        _nodesVM = State(initialValue: NodesViewModel(cache: cache))
+        _ingressesVM = State(initialValue: IngressesViewModel(cache: cache))
+        _databasesVM = State(initialValue: DatabasesViewModel(cache: cache))
+        _eventsVM = State(initialValue: EventsViewModel(cache: cache))
+        _logsVM = State(initialValue: LogsViewModel(cache: cache))
+        _secretsVM = State(initialValue: SecretsViewModel(cache: cache))
+        _catalogVM = State(initialValue: CatalogViewModel(cache: cache, store: catalogStore))
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                NavStrip(selection: $selectedPanel)
+
+                HSplitView {
+                    panelView
+                        .frame(minWidth: 480, idealWidth: 820, maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Theme.Surface.primary)
+
+                    ChatView(
+                        viewModel: chat,
+                        onSlashCommand: handleSlash,
+                        suggestedPrompts: SuggestedPromptsBuilder.build(
+                            cache: cache,
+                            contextName: contextManager.active?.name
+                        ),
+                        onSuggestedPrompt: { chat.sendHandoff($0.prompt) },
+                        mentionCandidates: MentionIndex.build(from: cache),
+                        onNewChat: { chat.startNewChat(clusterContext: contextManager.active?.name) },
+                        onOpenHistory: { historyOpen = true },
+                        onSuggestedAction: runSuggestedAction
+                    )
+                    .frame(minWidth: 260, idealWidth: 340, maxWidth: 480, maxHeight: .infinity)
+                    .background(Theme.Surface.elevated)
+                }
+            }
+            StatusBar(
+                context: contextManager.active?.name,
+                chatState: chatState,
+                podCount: cache.pods.count,
+                nodeCount: cache.nodes.count,
+                cacheError: cache.error
+            )
+        }
+        .background(Theme.Surface.primary)
+        .preferredColorScheme(.dark)
+        .background {
+            Button("Open Command Palette") { paletteOpen.toggle() }
+                .keyboardShortcut("k", modifiers: .command)
+                .hidden()
+        }
+        .sheet(isPresented: $historyOpen) {
+            ChatHistorySheet(
+                entries: SessionStore.shared.history,
+                onResume: { entry in
+                    historyOpen = false
+                    chat.resumeHistory(entry)
+                },
+                onDelete: { entry in
+                    SessionStore.shared.removeHistory(entry.id)
+                },
+                onClose: { historyOpen = false }
+            )
+        }
+        .sheet(item: $yamlTarget) { target in
+            YAMLViewerSheet(
+                kind: target.kind,
+                name: target.name,
+                namespace: target.namespace,
+                context: contextManager.active?.name,
+                onClose: { yamlTarget = nil }
+            )
+        }
+        .sheet(item: $manageSecret) { secret in
+            SecretManageSheet(
+                secret: secret,
+                context: contextManager.active?.name,
+                onClose: { manageSecret = nil },
+                onViewYAML: {
+                    manageSecret = nil
+                    viewYAML(kind: "secret", name: secret.metadata.name, namespace: secret.metadata.namespace)
+                },
+                onEdit: { s in
+                    manageSecret = nil
+                    pendingSecretEditor = .edit(s)
+                },
+                onMove: { s in
+                    manageSecret = nil
+                    pendingSecretMove = s
+                },
+                onDelete: { s in
+                    manageSecret = nil
+                    requestWorkload(.deleteSecret(name: s.metadata.name, namespace: s.metadata.namespace ?? "default"))
+                }
+            )
+        }
+        .sheet(item: $pendingSecretEditor) { mode in
+            SecretEditorSheet(
+                mode: mode,
+                onSubmit: { draft in
+                    pendingSecretEditor = nil
+                    requestWorkload(.applySecret(draft))
+                },
+                onCancel: { pendingSecretEditor = nil }
+            )
+        }
+        .sheet(item: $pendingSecretMove) { secret in
+            SecretMoveSheet(
+                secret: secret,
+                onSubmit: { newName, newNs in
+                    pendingSecretMove = nil
+                    requestWorkload(.moveSecret(original: secret, newName: newName, newNamespace: newNs))
+                },
+                onCancel: { pendingSecretMove = nil }
+            )
+        }
+        .sheet(item: $pendingCatalogDetail) { app in
+            CatalogDetailSheet(
+                app: app,
+                fit: catalogVM.fit(for: app),
+                onClose: { pendingCatalogDetail = nil },
+                onInstall: { app, pinnedNode in
+                    pendingCatalogDetail = nil
+                    pendingCatalogInstall = CatalogInstallWizardModel(
+                        app: app,
+                        fit: catalogVM.fit(for: app),
+                        cache: cache,
+                        context: contextManager.active?.name,
+                        initialNodePin: pinnedNode
+                    )
+                }
+            )
+        }
+        .sheet(item: $pendingCatalogInstall) { model in
+            CatalogInstallWizard(
+                model: model,
+                onClose: {
+                    model.teardownSession()
+                    pendingCatalogInstall = nil
+                },
+                onHandoffToChat: { prompt in
+                    chat.sendHandoff(prompt)
+                }
+            )
+        }
+        .sheet(item: $pendingWorkloadAction) { action in
+            WorkloadConfirmSheet(
+                action: action,
+                contextName: contextManager.active?.name,
+                onApprove: { resolved in
+                    pendingWorkloadAction = nil
+                    executeWorkload(resolved)
+                },
+                onCancel: { pendingWorkloadAction = nil }
+            )
+        }
+        .sheet(isPresented: $paletteOpen) {
+            CommandPalette(
+                isPresented: $paletteOpen,
+                commands: PaletteIndex.build(
+                    cache: cache,
+                    catalog: catalogVM.store,
+                    contexts: contextManager.available,
+                    switchTo: { selectedPanel = $0 },
+                    expandDeployment: { deploymentsVM.expanded = [$0.id] },
+                    tailLogs: { logsVM.select($0, context: contextManager.active?.name) },
+                    switchContext: { contextManager.setActive($0) },
+                    createSecret: { pendingSecretEditor = .create },
+                    manageSecret: { manageSecret = $0 },
+                    installApp: { app in
+                        pendingCatalogInstall = CatalogInstallWizardModel(
+                            app: app,
+                            fit: catalogVM.fit(for: app),
+                            cache: cache,
+                            context: contextManager.active?.name
+                        )
+                    }
+                )
+            )
+        }
+        .onAppear {
+            // reload() updates contextManager.active, which fires onChange below
+            // — that's where the actual start happens. Avoid double-start here.
+            contextManager.reload()
+        }
+        .onChange(of: contextManager.active) { _, newCtx in
+            if let ctx = newCtx?.name {
+                let saved = SessionStore.shared.sessionId(for: ctx)
+                chat.stop()
+                chat.start(resumingSessionId: saved, clusterContext: ctx)
+                startPanelViewModels(context: ctx)
+            }
+        }
+        .onChange(of: chat.sessionId) { _, newSid in
+            if let sid = newSid, let ctx = contextManager.active?.name {
+                SessionStore.shared.setSessionId(sid, for: ctx)
+            }
+        }
+    }
+
+    @ViewBuilder private var panelView: some View {
+        switch selectedPanel {
+        case .overview:
+            OverviewPanel(
+                cache: cache,
+                contextManager: contextManager,
+                databasesVM: databasesVM,
+                onInvestigate: investigateCluster
+            )
+        case .deployments:
+            DeploymentsPanel(viewModel: deploymentsVM, onAction: { dep, pods, action in
+                handoffDeployment(dep, pods: pods, action: action)
+            }, onWorkload: requestWorkload, onViewYAML: viewYAML, contextName: contextManager.active?.name)
+        case .pods:
+            PodsPanel(viewModel: podsVM, onAction: { pod, action in
+                handoffPod(pod, action: action)
+            }, contextName: contextManager.active?.name, onWorkload: requestWorkload, onViewYAML: viewYAML, onTailLogsForPod: tailLogsForPod)
+        case .nodes:
+            NodesPanel(viewModel: nodesVM, onWorkload: requestWorkload, onViewYAML: viewYAML)
+        case .ingresses:
+            IngressesPanel(viewModel: ingressesVM, onViewYAML: viewYAML, onAskClaude: handoffIngress)
+        case .databases:
+            DatabasesPanel(viewModel: databasesVM)
+        case .secrets:
+            SecretsPanel(
+                viewModel: secretsVM,
+                onManage: { manageSecret = $0 },
+                onNew: { pendingSecretEditor = .create },
+                onViewYAML: viewYAML
+            )
+        case .catalog:
+            CatalogPanel(viewModel: catalogVM, onSelect: { pendingCatalogDetail = $0 })
+        case .events:
+            EventsPanel(viewModel: eventsVM) { event in
+                handoffEvent(event)
+            }
+        case .logs:
+            LogsPanel(contextManager: contextManager, viewModel: logsVM) { line, surrounding in
+                handoffLogSlice(line: line, surrounding: surrounding)
+            }
+        }
+    }
+
+    private func startPanelViewModels(context: String) {
+        logsVM.clearSelection()   // old-context stream no longer valid
+        cache.start(context: context)
+    }
+
+    private func requestWorkload(_ action: WorkloadAction) {
+        pendingWorkloadAction = action
+    }
+
+    /// Turn a chat-suggested action into a confirmed kubectl mutation: resolve
+    /// the named resource against the live cache, then open the confirm sheet.
+    /// On a miss, tell the user in-chat rather than failing silently.
+    private func runSuggestedAction(_ suggestion: SuggestedAction) {
+        switch SuggestedActionResolver.resolve(
+            suggestion,
+            deployments: cache.deployments,
+            pods: cache.pods,
+            nodes: cache.nodes
+        ) {
+        case .action(let action):
+            requestWorkload(action)
+        case .unresolved(let reason):
+            chat.appendSystem("⚠︎ Couldn't run “\(suggestion.label)”: \(reason).")
+        }
+    }
+
+    private func viewYAML(kind: String, name: String, namespace: String?) {
+        yamlTarget = YAMLTarget(kind: kind, name: name, namespace: namespace)
+    }
+
+    /// Find the Deployment owning `pod` by matching its labels against deployment selectors,
+    /// switch to the Logs tab, and start tailing.
+    private func tailLogsForPod(_ pod: Pod) {
+        let podLabels = pod.metadata.labels ?? [:]
+        let ns = pod.metadata.namespace
+        let owner = cache.deployments.first { dep in
+            guard dep.metadata.namespace == ns else { return false }
+            let sel = dep.spec?.selector?.matchLabels ?? [:]
+            guard !sel.isEmpty else { return false }
+            return sel.allSatisfy { podLabels[$0.key] == $0.value }
+        }
+        guard let dep = owner else {
+            chat.appendSystem("No deployment owns pod \(pod.metadata.name) — can't tail its deployment logs.")
+            return
+        }
+        logsVM.select(dep, context: contextManager.active?.name)
+        selectedPanel = .logs
+    }
+
+    private func executeWorkload(_ action: WorkloadAction) {
+        let ctx = contextManager.active?.name
+        let preview = action.previewCommand(context: ctx)
+        chat.appendSystem("▶︎ \(preview)")
+        Task {
+            let result = await WorkloadCommander(context: ctx).run(action)
+            await MainActor.run {
+                if result.ok {
+                    let body = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+                    chat.appendSystem("✓ \(action.title) — \(body.isEmpty ? "ok" : body.prefix(400).description)")
+                } else {
+                    chat.appendSystem("✗ \(action.title) failed (exit \(result.exitCode)):\n\(result.stderr.prefix(400))")
+                }
+            }
+        }
+    }
+
+    private var chatState: StatusBar.ChatState {
+        if chat.error != nil && chat.messages.contains(where: { $0.text.contains("no longer running") }) {
+            return .dead
+        }
+        return chat.isStreaming ? .streaming : .idle
+    }
+
+    private func handleSlash(_ cmd: SlashCommand) {
+        switch cmd {
+        case .help:
+            chat.appendSystem(SlashCommand.helpText)
+        case .clear:
+            chat.clear()
+        case .investigate:
+            investigateCluster()
+        case .logs(let name):
+            guard let name, let dep = findDeployment(named: name) else {
+                chat.appendSystem("Usage: `/logs <deployment-name>`")
+                return
+            }
+            logsVM.select(dep, context: contextManager.active?.name)
+            selectedPanel = .logs
+        case .restart(let name):
+            guard let name, let dep = findDeployment(named: name) else {
+                chat.appendSystem("Usage: `/restart <deployment-name>`")
+                return
+            }
+            let ns = dep.metadata.namespace ?? "default"
+            chat.sendHandoff("""
+            Restart deployment **\(dep.metadata.name)** in namespace **\(ns)**.
+
+            Run: `kubectl rollout restart deployment/\(dep.metadata.name) -n \(ns) --context \(contextManager.active?.name ?? "")`
+
+            Then check the rollout status and confirm pods came back healthy.
+            """)
+        case .describe(let name):
+            guard let name else {
+                chat.appendSystem("Usage: `/describe <pod-or-deployment-name>`")
+                return
+            }
+            chat.sendHandoff("Run `kubectl describe` against the resource named **\(name)** (look for matching pods or deployments) and summarize what you find.")
+        }
+    }
+
+    private func findDeployment(named name: String) -> Deployment? {
+        // Exact match first, then prefix match — both case-insensitive.
+        if let exact = cache.deployments.first(where: { $0.metadata.name.caseInsensitiveCompare(name) == .orderedSame }) {
+            return exact
+        }
+        return cache.deployments.first(where: { $0.metadata.name.lowercased().hasPrefix(name.lowercased()) })
+    }
+
+    private func investigateCluster() {
+        let prompt = """
+        Investigate the cluster's current health. Run kubectl read-only commands across nodes, pods, recent events, deployment status, and CNPG cluster health. Identify anything broken, broken-soon, or unusual.
+
+        Be concise. Group findings by severity. If everything looks fine, say so briefly.
+        """
+        chat.sendHandoff(prompt)
+    }
+
+    private func handoffLogSlice(line: LogLine, surrounding: [LogLine]) {
+        let prompt = ContextHandoffBuilder.build(.logSlice(line: line, surrounding: surrounding))
+        chat.sendHandoff(prompt)
+    }
+
+    private func handoffEvent(_ event: K8sEvent) {
+        // Related events: same involved-object name+namespace, excluding the focal event.
+        let related = cache.events.filter {
+            $0.metadata.uid != event.metadata.uid &&
+            $0.involvedObject?.name == event.involvedObject?.name &&
+            $0.involvedObject?.namespace == event.involvedObject?.namespace
+        }.prefix(20)
+        let prompt = ContextHandoffBuilder.build(.event(event, relatedEvents: Array(related)))
+        chat.sendHandoff(prompt)
+    }
+
+    private func handoffIngress(_ ing: Ingress) {
+        let ns = ing.metadata.namespace ?? "default"
+        let hosts = ing.hosts.isEmpty ? "(none)" : ing.hosts.joined(separator: ", ")
+        let routes = ing.routes
+            .map { "  \($0.host)\($0.path) → \($0.service)\($0.port.isEmpty ? "" : ":\($0.port)")" }
+            .joined(separator: "\n")
+        chat.sendHandoff("""
+        Inspect ingress **\(ing.metadata.name)** in namespace **\(ns)**.
+
+        Class: \(ing.className)
+        TLS: \(ing.isTLS ? "yes" : "no")
+        Hosts: \(hosts)
+        Routes:
+        \(routes.isEmpty ? "  (none)" : routes)
+
+        Run `kubectl describe ingress \(ing.metadata.name) -n \(ns)` and verify each backend \
+        service exists and has ready endpoints. Flag any missing TLS secrets, hosts with no \
+        backing service, or backends with zero endpoints.
+        """)
+    }
+
+    private func handoffDeployment(_ dep: Deployment, pods: [Pod], action: DeploymentAction) {
+        // Executable actions skip Claude — fire the corresponding kubectl
+        // WorkloadAction directly (still gated by WorkloadConfirmSheet).
+        if action.kind == .execute {
+            switch action {
+            case .rollout:
+                requestWorkload(.restartDeployment(dep))
+            default:
+                break
+            }
+            return
+        }
+        Task {
+            guard let ctx = contextManager.active?.name else { return }
+            let ns = dep.metadata.namespace ?? "default"
+            let kubectl: String
+            do {
+                kubectl = try KubectlClient(context: ctx).kubectl
+            } catch {
+                await MainActor.run { chat.error = "\(error)" }
+                return
+            }
+
+            let describe = await runKubectl(kubectl, ["--context", ctx, "describe", "deployment", dep.metadata.name, "-n", ns])
+
+            var perPodLogs: [String: String]? = nil
+            if action == .errors || action == .logs {
+                perPodLogs = await fetchPerPodLogs(kubectl: kubectl, ctx: ctx, pods: pods)
+            }
+
+            var rollout: String? = nil
+            if action == .rollout {
+                let history = await runKubectl(kubectl, ["--context", ctx, "rollout", "history", "deployment/\(dep.metadata.name)", "-n", ns])
+                let status = await runKubectl(kubectl, ["--context", ctx, "rollout", "status", "deployment/\(dep.metadata.name)", "-n", ns, "--watch=false"])
+                rollout = """
+                # history
+                \(history)
+
+                # status
+                \(status)
+                """
+            }
+
+            let prompt = ContextHandoffBuilder.build(
+                .deployment(dep, action: action, pods: pods, describe: describe, perPodLogs: perPodLogs, rollout: rollout)
+            )
+            await MainActor.run { chat.sendHandoff(prompt) }
+        }
+    }
+
+    private func handoffPod(_ pod: Pod, action: PodAction) {
+        Task {
+            guard let ctx = contextManager.active?.name else { return }
+            let ns = pod.metadata.namespace ?? "default"
+            let kubectl: String
+            do {
+                kubectl = try KubectlClient(context: ctx).kubectl
+            } catch {
+                await MainActor.run { chat.error = "\(error)" }
+                return
+            }
+
+            async let describeOut = runKubectl(kubectl, ["--context", ctx, "describe", "pod", pod.metadata.name, "-n", ns])
+            async let eventsOut = runKubectl(kubectl, ["--context", ctx, "get", "events", "-n", ns, "--field-selector", "involvedObject.name=\(pod.metadata.name)"])
+
+            let describe = await describeOut
+            let events = await eventsOut
+
+            var logs: String? = nil
+            if action == .errors || action == .logs {
+                logs = await runKubectl(kubectl, ["--context", ctx, "logs", pod.metadata.name, "-n", ns, "--tail=200", "--all-containers=true"])
+            }
+
+            let prompt = ContextHandoffBuilder.build(
+                .pod(pod, action: action, describe: describe, recentEvents: events, logs: logs)
+            )
+            await MainActor.run { chat.sendHandoff(prompt) }
+        }
+    }
+
+    private func fetchPerPodLogs(kubectl: String, ctx: String, pods: [Pod]) async -> [String: String] {
+        await withTaskGroup(of: (String, String).self) { group in
+            for pod in pods {
+                let ns = pod.metadata.namespace ?? "default"
+                let name = pod.metadata.name
+                group.addTask {
+                    let logs = await runKubectl(kubectl, ["--context", ctx, "logs", name, "-n", ns, "--tail=50", "--all-containers=true"])
+                    return (name, logs)
+                }
+            }
+            var result: [String: String] = [:]
+            for await (name, logs) in group {
+                result[name] = logs
+            }
+            return result
+        }
+    }
+
+    private func runKubectl(_ kubectl: String, _ args: [String]) async -> String {
+        let data = (try? await runProcess(kubectl, args: args)) ?? Data()
+        return String(data: data, encoding: .utf8) ?? ""
+    }
+}
