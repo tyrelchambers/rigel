@@ -4,6 +4,10 @@ struct IngressesPanel: View {
     @Bindable var viewModel: IngressesViewModel
     let onViewYAML: (_ kind: String, _ name: String, _ namespace: String?) -> Void
     let onAskClaude: (Ingress) -> Void
+    let onManage: (Ingress) -> Void
+    let onCreate: () -> Void
+    let onEdit: (Ingress) -> Void
+    let onDelete: (Ingress) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -43,6 +47,17 @@ struct IngressesPanel: View {
             if viewModel.isLoading {
                 ProgressView().controlSize(.small).tint(Theme.Accent.primary)
             }
+            Button(action: onCreate) {
+                HStack(spacing: 5) {
+                    Image(systemName: "plus").font(.system(size: 10, weight: .semibold))
+                    Text("New ingress").font(Theme.Font.body(12, weight: .medium))
+                }
+                .foregroundStyle(Theme.Foreground.inverse)
+                .padding(.horizontal, 10).padding(.vertical, 5)
+                .background(Theme.Accent.primary)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
         .background(Theme.Surface.elevated)
@@ -107,13 +122,19 @@ struct IngressesPanel: View {
         ScrollView {
             LazyVStack(spacing: 6) {
                 ForEach(viewModel.filteredIngresses) { ingress in
-                    IngressRow(ingress: ingress)
-                        .contextMenu {
-                            Button("Ask Claude about this ingress") { onAskClaude(ingress) }
-                            Button("View YAML") {
-                                onViewYAML("ingress", ingress.metadata.name, ingress.metadata.namespace)
-                            }
+                    Button { onManage(ingress) } label: {
+                        IngressRow(ingress: ingress)
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button("Edit ingress") { onEdit(ingress) }
+                        Button("Ask Claude about this ingress") { onAskClaude(ingress) }
+                        Button("View YAML") {
+                            onViewYAML("ingress", ingress.metadata.name, ingress.metadata.namespace)
                         }
+                        Divider()
+                        Button("Delete ingress", role: .destructive) { onDelete(ingress) }
+                    }
                 }
             }
             .padding(.horizontal, 10).padding(.vertical, 8)
