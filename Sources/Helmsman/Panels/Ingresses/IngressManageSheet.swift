@@ -149,7 +149,7 @@ struct IngressManageSheet: View {
                 Text("No routing rules")
                     .font(Theme.Font.mono(13)).foregroundStyle(Theme.Foreground.tertiary)
             } else {
-                ForEach(ingress.routes, id: \.self) { route in
+                ForEach(Array(ingress.routes.enumerated()), id: \.offset) { _, route in
                     HStack(spacing: 6) {
                         Text(route.host).font(Theme.Font.mono(12, weight: .medium)).foregroundStyle(Theme.Foreground.primary)
                         Text(route.path).font(Theme.Font.mono(11)).foregroundStyle(Theme.Foreground.secondary)
