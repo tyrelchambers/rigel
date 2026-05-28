@@ -136,7 +136,8 @@ extension Ingress {
                     lines.append("            backend:")
                     lines.append("              service:")
                     lines.append("                name: \(Self.yamlScalar(p.backend.service?.name ?? ""))")
-                    if let port = p.backend.service?.port {
+                    if let port = p.backend.service?.port,
+                       port.number != nil || port.name != nil {
                         lines.append("                port:")
                         if let n = port.number {
                             lines.append("                  number: \(n)")

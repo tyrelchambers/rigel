@@ -94,6 +94,31 @@ final class IngressTests: XCTestCase {
         XCTAssertEqual(ing.editableAnnotations, ["keep": "yes"])
     }
 
+    func test_toYAML_emptyPort_omitsPortBlock() {
+        let ing = Ingress.draft(
+            name: "web", namespace: "default", className: "",
+            rules: [.init(host: "a.com", path: "/", pathType: "Prefix", service: "svc", port: "")],
+            tls: [], annotations: [:]
+        )
+        let yaml = ing.toYAML()
+        XCTAssertTrue(yaml.contains("name: 'svc'"))
+        XCTAssertFalse(yaml.contains("port:"))
+    }
+
+    func test_tlsDrafts_roundTripFromSpec() {
+        let ing = Ingress.draft(
+            name: "web", namespace: "default", className: "nginx",
+            rules: [.init(host: "a.com", path: "/", pathType: "Prefix", service: "svc", port: "80")],
+            tls: [.init(host: "a.com", secretName: "web-tls"),
+                  .init(host: "b.com", secretName: "web-tls")],
+            annotations: [:]
+        )
+        let drafts = ing.tlsDrafts
+        XCTAssertEqual(drafts.count, 2)
+        XCTAssertTrue(drafts.allSatisfy { $0.secretName == "web-tls" })
+        XCTAssertEqual(Set(drafts.map(\.host)), ["a.com", "b.com"])
+    }
+
     func test_ruleDrafts_roundTripFromSpec() {
         let ing = Ingress.draft(
             name: "web", namespace: "default", className: "nginx",
