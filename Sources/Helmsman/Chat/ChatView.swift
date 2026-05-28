@@ -48,13 +48,6 @@ struct ChatView: View {
             inputBar
         }
         .background(Theme.Surface.elevated)
-        .sheet(item: $viewModel.pendingPermission) { pending in
-            PermissionSheet(
-                pending: pending,
-                onApprove: { viewModel.answerPermission(allow: true) },
-                onDeny: { viewModel.answerPermission(allow: false) }
-            )
-        }
         .onDisappear { viewModel.stop() }
         .background {
             Button("Focus chat input") { inputFocused = true }
@@ -82,6 +75,7 @@ struct ChatView: View {
                 }
             }
             Spacer()
+            modelMenu
             if viewModel.isStreaming {
                 headerButton(system: "stop.fill", tint: Theme.Status.failed, help: "Stop reply (SIGINT)") {
                     viewModel.interrupt()
@@ -110,6 +104,54 @@ struct ChatView: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(Theme.Border.subtle).frame(height: 1)
         }
+    }
+
+    /// Model + effort picker. Reads/writes `viewModel.modelConfig`; changing
+    /// either relaunches the session under the new model (see setModelConfig).
+    private var modelMenu: some View {
+        Menu {
+            Picker("Model", selection: modelBinding) {
+                ForEach(ClaudeModel.allCases) { m in
+                    Text(m.displayName).tag(m)
+                }
+            }
+            Picker("Effort", selection: effortBinding) {
+                ForEach(ClaudeEffort.allCases) { e in
+                    Text(e.displayName).tag(e)
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "cpu")
+                    .font(.system(size: 10, weight: .medium))
+                Text(viewModel.modelConfig.shortLabel)
+                    .font(Theme.Font.body(10, weight: .medium))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .semibold))
+            }
+            .foregroundStyle(Theme.Foreground.secondary)
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .background(Theme.Surface.sunken)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Model & reasoning effort — changing it restarts the session, keeping this conversation")
+    }
+
+    private var modelBinding: Binding<ClaudeModel> {
+        Binding(
+            get: { viewModel.modelConfig.model },
+            set: { viewModel.setModelConfig(.init(model: $0, effort: viewModel.modelConfig.effort)) }
+        )
+    }
+
+    private var effortBinding: Binding<ClaudeEffort> {
+        Binding(
+            get: { viewModel.modelConfig.effort },
+            set: { viewModel.setModelConfig(.init(model: viewModel.modelConfig.model, effort: $0)) }
+        )
     }
 
     private func headerButton(system: String, tint: Color, help: String, action: @escaping () -> Void) -> some View {

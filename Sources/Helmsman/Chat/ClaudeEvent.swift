@@ -4,7 +4,6 @@ enum ClaudeEvent {
     case systemInit(sessionId: String, model: String?)
     case assistantText(text: String)
     case toolUse(id: String, name: String, input: [String: Any])
-    case permissionRequest(toolUseId: String, toolName: String, input: [String: Any])
     case result(sessionId: String, costUSD: Double?)
     case unknown(raw: String)
 }
@@ -52,13 +51,6 @@ enum ClaudeEventDecoder {
             return .result(
                 sessionId: (obj["session_id"] as? String) ?? "",
                 costUSD: obj["total_cost_usd"] as? Double
-            )
-
-        case ("permission_request", _):
-            return .permissionRequest(
-                toolUseId: (obj["tool_use_id"] as? String) ?? "",
-                toolName: (obj["tool_name"] as? String) ?? "",
-                input: (obj["input"] as? [String: Any]) ?? [:]
             )
 
         default:

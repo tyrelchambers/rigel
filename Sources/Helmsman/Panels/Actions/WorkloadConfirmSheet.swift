@@ -1,8 +1,7 @@
 import SwiftUI
 
-/// Confirm modal for `WorkloadAction`s triggered from the UI. Mirrors the
-/// visual language of `PermissionSheet` (which gates Claude tool requests) so
-/// users get one consistent destructive-confirm flow.
+/// Confirm modal for `WorkloadAction`s — the single confirmation gate for every
+/// cluster mutation, whether triggered from a panel or a chat action button.
 struct WorkloadConfirmSheet: View {
     let action: WorkloadAction
     let contextName: String?

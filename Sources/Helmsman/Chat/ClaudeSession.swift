@@ -12,8 +12,9 @@ enum ClaudeSessionError: Error, CustomStringConvertible {
 }
 
 actor ClaudeSession {
-    /// Read-only kubectl patterns that bypass the PermissionSheet.
-    /// Anything not in this list still goes through the user-approval modal.
+    /// Read-only kubectl patterns auto-approved for Claude. Anything not listed is
+    /// auto-denied by the CLI — mutations are surfaced as confirmable action
+    /// buttons in chat instead (see `systemPrompt`'s action-block contract).
     static let readOnlyKubectlAllowlist: [String] = [
         "Bash(kubectl get *)",
         "Bash(kubectl describe *)",
@@ -33,18 +34,20 @@ actor ClaudeSession {
 
     let binaryPath: String
     let clusterContext: String?
+    let config: ClaudeModelConfig
     private var proc: Process?
     private var stdinPipe: Pipe?
     private var continuation: AsyncStream<ClaudeEvent>.Continuation?
     var sessionId: String?
 
-    init(resumingSessionId: String? = nil, clusterContext: String? = nil) throws {
+    init(resumingSessionId: String? = nil, clusterContext: String? = nil, config: ClaudeModelConfig = .default) throws {
         guard let path = resolveBinary("claude") else {
             throw ClaudeSessionError.claudeNotFound
         }
         self.binaryPath = path
         self.sessionId = resumingSessionId
         self.clusterContext = clusterContext
+        self.config = config
     }
 
     /// If the bundled MCP server binary is sitting next to this executable
@@ -123,6 +126,41 @@ actor ClaudeSession {
         """
     }
 
+    /// Build the `claude` CLI argument vector. Pure and static so it can be
+    /// unit-tested without launching a subprocess.
+    static func buildArguments(
+        systemPrompt: String,
+        config: ClaudeModelConfig,
+        allowedTools: [String],
+        mcpConfigPath: String?,
+        resumingSessionId: String?
+    ) -> [String] {
+        var args: [String] = [
+            "--output-format", "stream-json",
+            "--input-format", "stream-json",
+            "--verbose",
+            "--model", config.model.cliAlias,
+            "--effort", config.effort.cliLevel,
+            "--append-system-prompt", systemPrompt,
+        ]
+        for pattern in allowedTools {
+            args.append(contentsOf: ["--allowedTools", pattern])
+        }
+        // Wire up our embedded MCP server (only when running from a .app bundle
+        // with the binary alongside — `swift run` won't have it and degrades).
+        if let mcpConfigPath {
+            args.append(contentsOf: ["--mcp-config", mcpConfigPath])
+            args.append(contentsOf: ["--allowedTools",
+                "mcp__helmsman__list_unhealthy_pods",
+                "mcp__helmsman__list_degraded_deployments",
+                "mcp__helmsman__recent_warning_events",
+                "mcp__helmsman__get_pod_logs",
+            ])
+        }
+        if let resumingSessionId { args.append(contentsOf: ["--resume", resumingSessionId]) }
+        return args
+    }
+
     /// Start the subprocess. Returns an AsyncStream of events.
     func start() -> AsyncStream<ClaudeEvent> {
         AsyncStream { (cont: AsyncStream<ClaudeEvent>.Continuation) in
@@ -130,28 +168,13 @@ actor ClaudeSession {
 
             let p = Process()
             p.executableURL = URL(fileURLWithPath: binaryPath)
-            var args: [String] = [
-                "--output-format", "stream-json",
-                "--input-format", "stream-json",
-                "--verbose",
-                "--append-system-prompt", systemPrompt(),
-            ]
-            for pattern in Self.readOnlyKubectlAllowlist {
-                args.append(contentsOf: ["--allowedTools", pattern])
-            }
-            // Wire up our embedded MCP server (only when running from a .app bundle
-            // with the binary alongside — `swift run` won't have it and degrades).
-            if let mcpConfigPath = ClaudeSession.writeMCPConfigIfAvailable() {
-                args.append(contentsOf: ["--mcp-config", mcpConfigPath])
-                args.append(contentsOf: ["--allowedTools",
-                    "mcp__helmsman__list_unhealthy_pods",
-                    "mcp__helmsman__list_degraded_deployments",
-                    "mcp__helmsman__recent_warning_events",
-                    "mcp__helmsman__get_pod_logs",
-                ])
-            }
-            if let sid = sessionId { args.append(contentsOf: ["--resume", sid]) }
-            p.arguments = args
+            p.arguments = ClaudeSession.buildArguments(
+                systemPrompt: systemPrompt(),
+                config: config,
+                allowedTools: Self.readOnlyKubectlAllowlist,
+                mcpConfigPath: ClaudeSession.writeMCPConfigIfAvailable(),
+                resumingSessionId: sessionId
+            )
 
             // Forward the active context to the MCP subprocess via env so its
             // kubectl invocations target the right cluster.
@@ -234,17 +257,6 @@ actor ClaudeSession {
                 "role": "user",
                 "content": [["type": "text", "text": userText]]
             ]
-        ]
-        let data = try JSONSerialization.data(withJSONObject: payload, options: [])
-        try writeLine(data)
-    }
-
-    /// Approve or deny a pending permission request.
-    func answerPermission(toolUseId: String, allow: Bool) throws {
-        let payload: [String: Any] = [
-            "type": "permission_decision",
-            "tool_use_id": toolUseId,
-            "decision": allow ? "allow" : "deny"
         ]
         let data = try JSONSerialization.data(withJSONObject: payload, options: [])
         try writeLine(data)

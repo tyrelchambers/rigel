@@ -20,22 +20,17 @@ struct ToolInvocation {
     let bashDescription: String?
 }
 
-struct PendingPermission: Identifiable {
-    let id = UUID()
-    let toolUseId: String
-    let toolName: String
-    let inputDescription: String
-}
-
 @MainActor
 @Observable
 final class ChatViewModel {
     var messages: [ChatMessage] = []
     var inputText: String = ""
     var isStreaming = false
-    var pendingPermission: PendingPermission? = nil
     var sessionId: String? = nil
     var error: String? = nil
+    /// Model + effort the session launches with. Loaded from (and saved to)
+    /// SessionStore so the choice is global and survives restarts.
+    var modelConfig: ClaudeModelConfig = SessionStore.shared.modelConfig
 
     private var session: ClaudeSession?
     private var pumpTask: Task<Void, Never>?
@@ -54,7 +49,7 @@ final class ChatViewModel {
         stop()
         currentContext = clusterContext
         do {
-            let s = try ClaudeSession(resumingSessionId: resumingSessionId, clusterContext: clusterContext)
+            let s = try ClaudeSession(resumingSessionId: resumingSessionId, clusterContext: clusterContext, config: modelConfig)
             self.session = s
             self.sessionId = resumingSessionId
             let ctx = clusterContext
@@ -103,11 +98,15 @@ final class ChatViewModel {
         session = nil
     }
 
-    /// Send a free-form user message.
-    func send(_ text: String) {
+    /// Send a message into the session. `display: false` feeds it to Claude
+    /// without showing a user bubble — used to return executed-action results so
+    /// Claude stays in the loop within the same session (claude → helmsman → claude).
+    func send(_ text: String, display: Bool = true) {
         guard let session else { return }
-        messages.append(ChatMessage(role: .user, text: text))
-        lastUserMessage = text
+        if display {
+            messages.append(ChatMessage(role: .user, text: text))
+            lastUserMessage = text
+        }
         isStreaming = true
         saveActiveToHistory()
         Task { [weak self] in
@@ -143,6 +142,23 @@ final class ChatViewModel {
         Task { await session.interrupt() }
         isStreaming = false
         messages.append(ChatMessage(role: .system, text: "⏹ Stopped by user."))
+    }
+
+    /// Change the model/effort. Persists globally, then relaunches the live
+    /// session via `--resume` so the conversation continues under the new model.
+    /// If nothing is running yet, the next `start()` picks up the new config.
+    func setModelConfig(_ new: ClaudeModelConfig) {
+        guard new != modelConfig else { return }
+        modelConfig = new
+        SessionStore.shared.setModelConfig(new)
+        messages.append(ChatMessage(role: .system, text: "⚙︎ Switched to \(new.shortLabel)"))
+        guard session != nil else { return }
+        let ctx = currentContext
+        let resume = sessionId
+        isStreaming = false
+        stop()
+        currentContext = nil   // force re-start past the idempotency guard
+        start(resumingSessionId: resume, clusterContext: ctx)
     }
 
     /// End the current chat, save it to history, and start fresh.
@@ -208,12 +224,6 @@ final class ChatViewModel {
         switch r { case .user: return "user"; case .assistant: return "assistant"; case .system: return "system" }
     }
 
-    func answerPermission(allow: Bool) {
-        guard let pending = pendingPermission, let session else { return }
-        self.pendingPermission = nil
-        Task { try? await session.answerPermission(toolUseId: pending.toolUseId, allow: allow) }
-    }
-
     func handle(_ event: ClaudeEvent) {
         switch event {
         case .systemInit(let sid, _):
@@ -238,9 +248,6 @@ final class ChatViewModel {
                 bashDescription: input["description"] as? String
             )
             messages.append(ChatMessage(role: .system, text: "", tool: tool))
-        case .permissionRequest(let toolUseId, let toolName, let input):
-            let desc = (try? String(data: JSONSerialization.data(withJSONObject: input), encoding: .utf8)) ?? "{}"
-            pendingPermission = PendingPermission(toolUseId: toolUseId, toolName: toolName, inputDescription: desc)
         case .result:
             isStreaming = false
             saveActiveToHistory()

@@ -18,6 +18,9 @@ struct MainWindow: View {
     @State private var catalogVM: CatalogViewModel
     @State private var paletteOpen = false
     @State private var pendingWorkloadAction: WorkloadAction?
+    /// True when the pending action came from a Claude chat suggestion — its
+    /// result is fed back into the session so Claude can continue the task.
+    @State private var pendingActionFromChat = false
     @State private var yamlTarget: YAMLTarget?
     @State private var historyOpen = false
     @State private var manageSecret: Secret?
@@ -244,13 +247,13 @@ struct MainWindow: View {
         case .deployments:
             DeploymentsPanel(viewModel: deploymentsVM, onAction: { dep, pods, action in
                 handoffDeployment(dep, pods: pods, action: action)
-            }, onWorkload: requestWorkload, onViewYAML: viewYAML, contextName: contextManager.active?.name)
+            }, onWorkload: { requestWorkload($0) }, onViewYAML: viewYAML, contextName: contextManager.active?.name)
         case .pods:
             PodsPanel(viewModel: podsVM, onAction: { pod, action in
                 handoffPod(pod, action: action)
-            }, contextName: contextManager.active?.name, onWorkload: requestWorkload, onViewYAML: viewYAML, onTailLogsForPod: tailLogsForPod)
+            }, contextName: contextManager.active?.name, onWorkload: { requestWorkload($0) }, onViewYAML: viewYAML, onTailLogsForPod: tailLogsForPod)
         case .nodes:
-            NodesPanel(viewModel: nodesVM, onWorkload: requestWorkload, onViewYAML: viewYAML)
+            NodesPanel(viewModel: nodesVM, onWorkload: { requestWorkload($0) }, onViewYAML: viewYAML)
         case .ingresses:
             IngressesPanel(viewModel: ingressesVM, onViewYAML: viewYAML, onAskClaude: handoffIngress)
         case .databases:
@@ -280,7 +283,8 @@ struct MainWindow: View {
         cache.start(context: context)
     }
 
-    private func requestWorkload(_ action: WorkloadAction) {
+    private func requestWorkload(_ action: WorkloadAction, fromChat: Bool = false) {
+        pendingActionFromChat = fromChat
         pendingWorkloadAction = action
     }
 
@@ -295,7 +299,7 @@ struct MainWindow: View {
             nodes: cache.nodes
         ) {
         case .action(let action):
-            requestWorkload(action)
+            requestWorkload(action, fromChat: true)
         case .unresolved(let reason):
             chat.appendSystem("⚠︎ Couldn't run “\(suggestion.label)”: \(reason).")
         }
@@ -326,6 +330,8 @@ struct MainWindow: View {
 
     private func executeWorkload(_ action: WorkloadAction) {
         let ctx = contextManager.active?.name
+        let fromChat = pendingActionFromChat
+        pendingActionFromChat = false
         let preview = action.previewCommand(context: ctx)
         chat.appendSystem("▶︎ \(preview)")
         Task {
@@ -336,6 +342,11 @@ struct MainWindow: View {
                     chat.appendSystem("✓ \(action.title) — \(body.isEmpty ? "ok" : body.prefix(400).description)")
                 } else {
                     chat.appendSystem("✗ \(action.title) failed (exit \(result.exitCode)):\n\(result.stderr.prefix(400))")
+                }
+                // Close the loop: hand the outcome back to the same Claude session
+                // so it can verify and continue the task it proposed.
+                if fromChat {
+                    chat.send(WorkloadResultReport.chatFeedback(action: action, context: ctx, result: result), display: false)
                 }
             }
         }

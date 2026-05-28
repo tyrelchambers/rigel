@@ -130,7 +130,7 @@ final class CatalogInstallWizardModel: Identifiable {
     private func startGeneratingIfNeeded() {
         guard session == nil else { return }
         do {
-            let s = try ClaudeSession(clusterContext: context)
+            let s = try ClaudeSession(clusterContext: context, config: SessionStore.shared.modelConfig)
             self.session = s
             startPump(session: s)
             sendInitialPrompt()
@@ -168,7 +168,7 @@ final class CatalogInstallWizardModel: Identifiable {
                     manifestYAML = extracted
                 }
             }
-        case .toolUse, .permissionRequest, .systemInit, .unknown:
+        case .toolUse, .systemInit, .unknown:
             break
         }
     }

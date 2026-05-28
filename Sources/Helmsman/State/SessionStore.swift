@@ -27,6 +27,9 @@ final class SessionStore {
     private struct Storage: Codable {
         var sessionsByContext: [String: String]
         var history: [ChatHistoryEntry] = []
+        // Optional so existing sessions.json (written before this field existed)
+        // still decodes; nil is treated as ClaudeModelConfig.default.
+        var modelConfig: ClaudeModelConfig? = nil
     }
 
     private var storage: Storage
@@ -58,6 +61,19 @@ final class SessionStore {
 
     func clearSessionId(for context: String) {
         storage.sessionsByContext.removeValue(forKey: context)
+        persist()
+    }
+
+    // MARK: - Model / effort (global)
+
+    /// The model + effort every chat launches with. Defaults to
+    /// ClaudeModelConfig.default until the user picks otherwise.
+    var modelConfig: ClaudeModelConfig {
+        storage.modelConfig ?? .default
+    }
+
+    func setModelConfig(_ config: ClaudeModelConfig) {
+        storage.modelConfig = config
         persist()
     }
 
