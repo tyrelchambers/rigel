@@ -30,6 +30,11 @@ struct IngressesPanel: View {
             }
         }
         .background(Theme.Surface.primary)
+        .background {
+            Button("New ingress", action: onCreate)
+                .keyboardShortcut("n", modifiers: .command)
+                .hidden()
+        }
     }
 
     private var header: some View {
@@ -58,6 +63,7 @@ struct IngressesPanel: View {
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
             }
             .buttonStyle(.plain)
+            .help("Create a new ingress (⌘N)")
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
         .background(Theme.Surface.elevated)
