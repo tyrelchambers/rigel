@@ -322,19 +322,22 @@ struct IngressEditorSheet: View {
     // MARK: - Build
 
     private var certSecretName: String {
-        "\(name.isEmpty ? "ingress" : name)-tls"
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        return "\(trimmed.isEmpty ? "ingress" : trimmed)-tls"
     }
 
     private func buildIngress() -> Ingress {
         var annotations: [String: String] = [:]
-        for row in annotationRows where !row.key.trimmingCharacters(in: .whitespaces).isEmpty {
-            annotations[row.key] = row.value
+        for row in annotationRows {
+            let key = row.key.trimmingCharacters(in: .whitespaces)
+            guard !key.isEmpty else { continue }
+            annotations[key] = row.value
         }
         var tls = tlsRows
 
         if certManagerEnabled && !selectedIssuer.isEmpty {
             annotations[Ingress.certManagerIssuerAnnotation] = selectedIssuer
-            let hosts = ruleRows.map(\.host).filter { !$0.isEmpty }
+            let hosts = Array(Set(ruleRows.map(\.host).filter { !$0.isEmpty })).sorted()
             let secret = certSecretName
             if !tls.contains(where: { $0.secretName == secret }) {
                 if hosts.isEmpty {
@@ -380,7 +383,7 @@ struct IngressEditorSheet: View {
             await MainActor.run {
                 issuers = names
                 isLoadingIssuers = false
-                if selectedIssuer.isEmpty, names.count == 1 { selectedIssuer = names[0] }
+                if selectedIssuer.isEmpty, let first = names.first { selectedIssuer = first }
                 if names.isEmpty { issuerError = "No ClusterIssuers found." }
             }
         } catch {
