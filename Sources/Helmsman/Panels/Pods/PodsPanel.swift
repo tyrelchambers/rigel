@@ -117,6 +117,7 @@ struct PodsPanel: View {
                     Button("Ask Claude: \(action.label)") { onAction(pod, action) }
                 }
                 Divider()
+                Button("View logs") { onTailLogsForPod(pod) }
                 Button("Manage…") { managePod = pod }
                 Button("View YAML…") { onViewYAML("pod", pod.metadata.name, pod.metadata.namespace) }
                 Button("Run command in pod…") { execPod = pod }
