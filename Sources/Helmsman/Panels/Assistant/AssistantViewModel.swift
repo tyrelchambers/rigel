@@ -5,6 +5,12 @@ import Observation
 /// (`cache.configMaps`) and drives the guided install/uninstall + kill-switch.
 /// Mutations that should be human-confirmed (running a queued suggestion,
 /// reverting an action) are routed back through MainWindow's confirm-sheet flow.
+struct AssistantLiveIssue: Identifiable {
+    let location: String
+    let reason: String
+    var id: String { "\(location)|\(reason)" }
+}
+
 @MainActor
 @Observable
 final class AssistantViewModel {
@@ -65,6 +71,29 @@ final class AssistantViewModel {
     var queue: [AssistantQueuedSuggestion] { clusterState?.queue ?? [] }
     var report: String { clusterState?.report ?? "" }
 
+    /// How many audit entries had a given outcome (for the summary strip).
+    func auditCount(_ outcome: String) -> Int { audit.filter { $0.outcome == outcome }.count }
+
+    /// What the cluster looks like *right now*, independent of the agent — the
+    /// incidents the agent is (or should be) reacting to. Derived from the live
+    /// cache so the control center shows current reality next to agent actions.
+    var liveIssues: [AssistantLiveIssue] {
+        var out: [AssistantLiveIssue] = []
+        for p in cache.pods {
+            if let reason = p.errorReason {
+                out.append(.init(location: "\(p.metadata.namespace ?? "default")/\(p.metadata.name)", reason: reason))
+            }
+        }
+        for d in cache.deployments {
+            let desired = d.spec?.replicas ?? d.status?.replicas ?? 0
+            let ready = d.status?.readyReplicas ?? 0
+            if desired > 0 && ready < desired {
+                out.append(.init(location: "\(d.metadata.namespace ?? "default")/\(d.metadata.name)", reason: "Degraded \(ready)/\(desired)"))
+            }
+        }
+        return out
+    }
+
     var manifestPreview: String { AssistantInstaller.manifestYAML(config) }
 
     /// Token expiry, derived from the issued-at annotation the installer stamped
@@ -87,6 +116,18 @@ final class AssistantViewModel {
     func install() async {
         guard !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             actionError = "Paste the token from `claude setup-token` first."
+            return
+        }
+        // Normalize the image: trim stray whitespace, and reject an uppercase
+        // repository path — Kubernetes rejects those as InvalidImageName.
+        config.image = config.image.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !config.image.isEmpty else {
+            actionError = "Set a container image first."
+            return
+        }
+        let repoPath = config.image.split(separator: ":").first.map(String.init) ?? config.image
+        if repoPath != repoPath.lowercased() {
+            actionError = "Image repository must be lowercase (Kubernetes rejects uppercase as InvalidImageName)."
             return
         }
         working = true

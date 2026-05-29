@@ -65,33 +65,63 @@ struct AssistantPanel: View {
 
     private var controlPanel: some View {
         VStack(alignment: .leading, spacing: 14) {
-            statusCard
-            podCard
-            killSwitchCard
+            summaryStrip
             if !viewModel.report.isEmpty { reportCard }
             if !viewModel.queue.isEmpty { queueSection }
+            liveIssuesSection
             auditSection
+            podCard
+            killSwitchCard
             uninstallCard
         }
         .padding(16)
     }
 
-    private var statusCard: some View {
-        card {
+    /// At-a-glance control-center header: the numbers that matter, in one row.
+    private var summaryStrip: some View {
+        let succeeded = viewModel.auditCount("success")
+        let failed = viewModel.auditCount("failure")
+        return card {
             HStack(spacing: 16) {
-                metric("Status", viewModel.enabled ? "Active" : "Paused", viewModel.enabled ? Theme.Status.running : Theme.Status.pending)
+                stat("Status", viewModel.enabled ? "Active" : "Paused", viewModel.enabled ? Theme.Status.running : Theme.Status.pending)
+                stat("Awaiting", "\(viewModel.queue.count)", viewModel.queue.isEmpty ? Theme.Foreground.secondary : Theme.Status.pending)
+                stat("Live issues", "\(viewModel.liveIssues.count)", viewModel.liveIssues.isEmpty ? Theme.Status.running : Theme.Status.failed)
+                stat("Fixed", "\(succeeded)", Theme.Status.running)
+                stat("Failed", "\(failed)", failed == 0 ? Theme.Foreground.secondary : Theme.Status.failed)
                 if let s = viewModel.status {
-                    metric("Spend", String(format: "$%.2f / $%.0f", s.spentUsd, s.spendCapUsd), Theme.Foreground.primary)
-                    metric("Version", s.version, Theme.Foreground.secondary)
-                    metric("Heartbeat", relative(s.heartbeatAt), Theme.Foreground.secondary)
-                } else {
-                    Text("waiting for first heartbeat…")
-                        .font(Theme.Font.mono(11)).foregroundStyle(Theme.Foreground.tertiary)
+                    stat("Spend", String(format: "$%.2f/$%.0f", s.spentUsd, s.spendCapUsd), Theme.Foreground.primary)
                 }
                 if let t = viewModel.tokenExpiry {
-                    metric("Token", tokenLabel(t), tokenColor(t.level))
+                    stat("Token", tokenLabel(t), tokenColor(t.level))
                 }
                 Spacer()
+            }
+        }
+    }
+
+    private func stat(_ label: String, _ value: String, _ color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label.uppercased()).font(Theme.Font.mono(9, weight: .medium)).foregroundStyle(Theme.Foreground.tertiary)
+            Text(value).font(Theme.Font.body(14, weight: .semibold)).foregroundStyle(color)
+        }
+    }
+
+    private var liveIssuesSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionTitle("Live cluster issues (\(viewModel.liveIssues.count))")
+            if viewModel.liveIssues.isEmpty {
+                Text("Cluster is clean — nothing to remediate.").font(Theme.Font.body(12)).foregroundStyle(Theme.Foreground.tertiary)
+            } else {
+                ForEach(viewModel.liveIssues) { issue in
+                    card {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 10)).foregroundStyle(Theme.Status.failed)
+                            Text(issue.location).font(Theme.Font.mono(11, weight: .medium)).foregroundStyle(Theme.Foreground.primary).lineLimit(1)
+                            Spacer()
+                            Text(issue.reason).font(Theme.Font.mono(10, weight: .medium)).foregroundStyle(Theme.Status.pending)
+                        }
+                    }
+                }
             }
         }
     }
@@ -364,13 +394,6 @@ struct AssistantPanel: View {
 
     private func sectionTitle(_ s: String) -> some View {
         Text(s).font(Theme.Font.body(12, weight: .semibold)).foregroundStyle(Theme.Foreground.secondary)
-    }
-
-    private func metric(_ label: String, _ value: String, _ color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(Theme.Font.mono(9, weight: .medium)).foregroundStyle(Theme.Foreground.tertiary)
-            Text(value).font(Theme.Font.body(13, weight: .semibold)).foregroundStyle(color)
-        }
     }
 
     private func card<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {

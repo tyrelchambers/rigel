@@ -20,7 +20,7 @@ struct AssistantInstallConfig {
     var confirmPolls: Int
 
     static let `default` = AssistantInstallConfig(
-        image: "ghcr.io/OWNER/helmsman-assistant:latest",
+        image: "ghcr.io/tyrelchambers/helmsman-assistant:latest",
         namespaces: "",
         workerModel: "claude-sonnet-4-6",
         supervisorModel: "claude-opus-4-8",
