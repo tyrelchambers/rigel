@@ -48,6 +48,18 @@ final class AssistantViewModel {
     /// Kill-switch reflects the assistant-config ConfigMap; default on if absent.
     var enabled: Bool { configMap("assistant-config")?.data?["enabled"] != "false" }
 
+    /// The pod actually running the agent (by the Deployment's pod label).
+    var agentPod: Pod? {
+        cache.pods.first {
+            ($0.metadata.labels?["app.kubernetes.io/name"]) == "helmsman-assistant"
+                && ($0.metadata.namespace ?? "default") == "default"
+        }
+    }
+
+    func restartCount(_ pod: Pod) -> Int {
+        (pod.status?.containerStatuses ?? []).reduce(0) { $0 + $1.restartCount }
+    }
+
     var status: AssistantAgentStatus? { clusterState?.status }
     var audit: [AssistantAuditEntry] { clusterState?.audit ?? [] }
     var queue: [AssistantQueuedSuggestion] { clusterState?.queue ?? [] }

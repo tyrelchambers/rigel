@@ -6,6 +6,8 @@ struct AssistantPanel: View {
     let onRunSuggestion: (SuggestedAction) -> Void
     /// Re-apply a stored backup YAML (revert), via the confirm sheet.
     let onRevert: (_ yaml: String, _ label: String) -> Void
+    /// Jump to the Pods panel focused on the agent's pod.
+    let onShowPod: (Pod) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -64,6 +66,7 @@ struct AssistantPanel: View {
     private var controlPanel: some View {
         VStack(alignment: .leading, spacing: 14) {
             statusCard
+            podCard
             killSwitchCard
             if !viewModel.report.isEmpty { reportCard }
             if !viewModel.queue.isEmpty { queueSection }
@@ -91,6 +94,49 @@ struct AssistantPanel: View {
                 Spacer()
             }
         }
+    }
+
+    private var podCard: some View {
+        card {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Agent pod").font(Theme.Font.body(12, weight: .semibold)).foregroundStyle(Theme.Foreground.primary)
+                    if let pod = viewModel.agentPod {
+                        Text(pod.metadata.name).font(Theme.Font.mono(11)).foregroundStyle(Theme.Foreground.secondary).textSelection(.enabled)
+                        HStack(spacing: 8) {
+                            let color = podColor(pod)
+                            Text(pod.errorReason ?? (pod.status?.phase ?? "Unknown"))
+                                .font(Theme.Font.mono(10, weight: .medium)).foregroundStyle(color)
+                                .padding(.horizontal, 6).padding(.vertical, 1)
+                                .background(color.opacity(0.12)).clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                            let r = viewModel.restartCount(pod)
+                            Text("\(r) restart\(r == 1 ? "" : "s")").font(Theme.Font.mono(10)).foregroundStyle(Theme.Foreground.tertiary)
+                        }
+                    } else {
+                        Text("No agent pod found yet — it may still be scheduling or failing to pull the image.")
+                            .font(Theme.Font.body(11)).foregroundStyle(Theme.Foreground.tertiary)
+                    }
+                }
+                Spacer()
+                if let pod = viewModel.agentPod {
+                    Button { onShowPod(pod) } label: {
+                        HStack(spacing: 5) {
+                            Text("View pod").font(Theme.Font.body(11, weight: .medium))
+                            Image(systemName: "arrow.right").font(.system(size: 9))
+                        }
+                        .foregroundStyle(Theme.Accent.primary)
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(Theme.Accent.primaryDim).clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func podColor(_ pod: Pod) -> Color {
+        if pod.errorReason != nil { return Theme.Status.failed }
+        return pod.status?.phase == "Running" ? Theme.Status.running : Theme.Status.pending
     }
 
     private var killSwitchCard: some View {

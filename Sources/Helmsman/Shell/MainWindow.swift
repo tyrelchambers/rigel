@@ -417,6 +417,10 @@ struct MainWindow: View {
                 onRunSuggestion: runSuggestedAction,
                 onRevert: { yaml, label in
                     requestWorkload(.applyManifest(yaml: yaml, label: "revert \(label)"))
+                },
+                onShowPod: { pod in
+                    podsVM.search = pod.metadata.name
+                    selectedPanel = .pods
                 }
             )
         case .namespaces:
