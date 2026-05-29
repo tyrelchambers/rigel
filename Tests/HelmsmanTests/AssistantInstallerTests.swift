@@ -74,6 +74,23 @@ final class AssistantInstallerTests: XCTestCase {
         XCTAssertFalse(yaml.contains("\n              imagePullSecrets:"))
     }
 
+    func test_installNamespaceAppliedToNamespacedObjectsAndSubjects() {
+        var cfg = config()
+        cfg.installNamespace = "agents"
+        let yaml = AssistantInstaller.manifestYAML(cfg)
+        XCTAssertTrue(yaml.contains("namespace: agents"))
+        // ServiceAccount subject of the ClusterRoleBinding must point at the install ns.
+        XCTAssertTrue(yaml.contains("- kind: ServiceAccount\n    name: helmsman-assistant\n    namespace: agents"))
+        // Nothing should still be pinned to default.
+        XCTAssertFalse(yaml.contains("namespace: default"))
+    }
+
+    func test_namespaceYAMLBuildsANamespace() {
+        let y = AssistantInstaller.namespaceYAML("agents")
+        XCTAssertTrue(y.contains("kind: Namespace"))
+        XCTAssertTrue(y.contains("name: agents"))
+    }
+
     func test_dockerConfigSecretEncodesAuth() {
         let yaml = AssistantInstaller.dockerConfigSecretYAML(
             name: "ghcr-pull", registry: "ghcr.io", username: "u", token: "t"

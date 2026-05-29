@@ -34,15 +34,23 @@ final class AssistantViewModel {
 
     // MARK: - Derived state (from the watched ConfigMaps / Deployment)
 
-    private func configMap(_ name: String) -> ConfigMap? {
-        cache.configMaps.first { $0.metadata.name == name && ($0.metadata.namespace ?? "default") == "default" }
+    /// The agent Deployment, found in whatever namespace it was installed into.
+    private var agentDeployment: Deployment? {
+        cache.deployments.first { $0.metadata.name == "helmsman-assistant" }
     }
 
-    /// Installed = the agent Deployment exists in-cluster.
-    var isInstalled: Bool {
-        cache.deployments.contains {
-            $0.metadata.name == "helmsman-assistant" && ($0.metadata.namespace ?? "default") == "default"
-        }
+    /// Installed = the agent Deployment exists somewhere in the cluster.
+    var isInstalled: Bool { agentDeployment != nil }
+
+    /// Namespace the agent is actually installed in (discovered), so state reads
+    /// don't depend on remembering the install choice across launches.
+    var installedNamespace: String? { agentDeployment.map { $0.metadata.namespace ?? "default" } }
+
+    /// Where to read the agent's own resources from.
+    private var stateNamespace: String { installedNamespace ?? config.installNamespace }
+
+    private func configMap(_ name: String) -> ConfigMap? {
+        cache.configMaps.first { $0.metadata.name == name && ($0.metadata.namespace ?? "default") == stateNamespace }
     }
 
     var clusterState: AssistantClusterState? {
@@ -58,8 +66,16 @@ final class AssistantViewModel {
     var agentPod: Pod? {
         cache.pods.first {
             ($0.metadata.labels?["app.kubernetes.io/name"]) == "helmsman-assistant"
-                && ($0.metadata.namespace ?? "default") == "default"
+                && ($0.metadata.namespace ?? "default") == stateNamespace
         }
+    }
+
+    /// True when the chosen install namespace doesn't exist yet — drives the
+    /// "create it?" confirmation before install.
+    var namespaceMissing: Bool {
+        let ns = config.installNamespace.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !ns.isEmpty else { return false }
+        return !cache.namespaces.contains { $0.metadata.name == ns }
     }
 
     func restartCount(_ pod: Pod) -> Int {
@@ -99,8 +115,9 @@ final class AssistantViewModel {
     /// Existing image-pull (dockerconfigjson) Secrets in the agent's namespace,
     /// offered as a dropdown so you can reuse one instead of typing its name.
     var pullSecretCandidates: [Secret] {
-        cache.secrets
-            .filter { $0.secretType == .dockerconfigjson && ($0.metadata.namespace ?? "default") == "default" }
+        let ns = config.installNamespace
+        return cache.secrets
+            .filter { $0.secretType == .dockerconfigjson && ($0.metadata.namespace ?? "default") == ns }
             .sorted { $0.metadata.name < $1.metadata.name }
     }
 
@@ -108,7 +125,7 @@ final class AssistantViewModel {
     /// on the token Secret. Nil if the Secret or annotation is missing.
     var tokenExpiry: TokenExpiry.Status? {
         let secret = cache.secrets.first {
-            $0.metadata.name == AssistantInstaller.secretName && ($0.metadata.namespace ?? "default") == "default"
+            $0.metadata.name == AssistantInstaller.secretName && ($0.metadata.namespace ?? "default") == stateNamespace
         }
         guard let iso = secret?.metadata.annotations?[TokenExpiry.issuedAtAnnotation], !iso.isEmpty,
               let issued = ISO8601DateFormatter().date(from: iso) else { return nil }
@@ -138,9 +155,29 @@ final class AssistantViewModel {
             actionError = "Image repository must be lowercase (Kubernetes rejects uppercase as InvalidImageName)."
             return
         }
+        // Normalize + validate the install namespace (must be a lowercase DNS label).
+        config.installNamespace = config.installNamespace.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !config.installNamespace.isEmpty else {
+            actionError = "Set an install namespace (e.g. default)."
+            return
+        }
+        if config.installNamespace != config.installNamespace.lowercased() {
+            actionError = "Namespace must be lowercase."
+            return
+        }
+        let ns = config.installNamespace
         working = true
         actionError = nil
         defer { working = false }
+
+        // Create the target namespace if it doesn't exist (apply is idempotent;
+        // the panel has already confirmed creation with the user).
+        if namespaceMissing {
+            if let err = await applyYAML(AssistantInstaller.namespaceYAML(ns)) {
+                actionError = "Failed to create namespace \(ns): \(err)"
+                return
+            }
+        }
 
         // Private-registry pull Secret (only if a name is set AND a token was
         // supplied; a name alone means "use an existing pull Secret").
@@ -149,7 +186,7 @@ final class AssistantViewModel {
             let registry = String(config.image.split(separator: "/").first ?? "ghcr.io")
             let yaml = AssistantInstaller.dockerConfigSecretYAML(
                 name: config.imagePullSecretName, registry: registry,
-                username: registryUsername, token: registryToken
+                username: registryUsername, token: registryToken, namespace: ns
             )
             if let err = await applyYAML(yaml) {
                 actionError = "Failed to create pull Secret: \(err)"
@@ -161,7 +198,7 @@ final class AssistantViewModel {
         // Secret first (carries the OAuth token), then the rest of the manifests.
         // Stamp the mint date so we can warn before the 1-year token expires.
         let issuedAt = ISO8601DateFormatter().string(from: Date())
-        if let err = await applyYAML(AssistantInstaller.secretYAML(token: token, issuedAt: issuedAt)) {
+        if let err = await applyYAML(AssistantInstaller.secretYAML(token: token, issuedAt: issuedAt, namespace: ns)) {
             actionError = "Failed to create token Secret: \(err)"
             return
         }
@@ -176,13 +213,15 @@ final class AssistantViewModel {
         working = true
         actionError = nil
         defer { working = false }
-        // Delete the workload + RBAC + token; leave state/backups ConfigMaps so a
-        // reinstall can show history. (User can delete those manually if desired.)
-        if let err = await deleteYAML(AssistantInstaller.manifestYAML(config)) {
+        // Delete from wherever it's actually installed. Leave the namespace
+        // itself in place (it may predate or outlive the agent).
+        var c = config
+        c.installNamespace = installedNamespace ?? config.installNamespace
+        if let err = await deleteYAML(AssistantInstaller.manifestYAML(c)) {
             actionError = "Uninstall failed: \(err)"
             return
         }
-        _ = await deleteYAML(AssistantInstaller.secretYAML(token: "x"))
+        _ = await deleteYAML(AssistantInstaller.secretYAML(token: "x", namespace: c.installNamespace))
     }
 
     /// Flip the kill-switch by writing the assistant-config ConfigMap. Instant by
@@ -195,7 +234,7 @@ final class AssistantViewModel {
         kind: ConfigMap
         metadata:
           name: assistant-config
-          namespace: default
+          namespace: \(stateNamespace)
           labels:
             app.kubernetes.io/managed-by: helmsman-assistant
         data:

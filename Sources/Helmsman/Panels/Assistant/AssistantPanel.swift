@@ -12,6 +12,7 @@ struct AssistantPanel: View {
     /// The manifest preview is large; render it only on demand so typing in the
     /// fields above stays snappy (it would otherwise re-lay-out on every keystroke).
     @State private var showManifest = false
+    @State private var confirmCreateNamespace = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -330,7 +331,11 @@ struct AssistantPanel: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("2. Configuration").font(Theme.Font.body(12, weight: .semibold)).foregroundStyle(Theme.Foreground.primary)
                     labeledField("Image", text: $viewModel.config.image)
-                    labeledField("Namespaces (blank = all)", text: $viewModel.config.namespaces)
+                    labeledField("Install namespace", text: $viewModel.config.installNamespace)
+                    if viewModel.namespaceMissing {
+                        Text("Namespace “\(viewModel.config.installNamespace)” doesn't exist — you'll be asked to create it on Install.")
+                            .font(Theme.Font.body(11)).foregroundStyle(Theme.Status.pending)
+                    }
                     HStack(spacing: 8) {
                         Text("Spend cap ($/mo)").font(Theme.Font.body(11)).foregroundStyle(Theme.Foreground.secondary).frame(width: 150, alignment: .leading)
                         TextField("", value: $viewModel.config.spendCapUsd, format: .number)
@@ -381,7 +386,11 @@ struct AssistantPanel: View {
             }
 
             Button {
-                Task { await viewModel.install() }
+                if viewModel.namespaceMissing {
+                    confirmCreateNamespace = true
+                } else {
+                    Task { await viewModel.install() }
+                }
             } label: {
                 Text(viewModel.working ? "Installing…" : "Install")
                     .font(Theme.Font.body(13, weight: .semibold)).foregroundStyle(Theme.Foreground.inverse)
@@ -390,6 +399,14 @@ struct AssistantPanel: View {
             }
             .buttonStyle(.plain)
             .disabled(viewModel.working || viewModel.token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .confirmationDialog(
+                "Namespace “\(viewModel.config.installNamespace)” doesn't exist. Create it and install the assistant there?",
+                isPresented: $confirmCreateNamespace,
+                titleVisibility: .visible
+            ) {
+                Button("Create & install") { Task { await viewModel.install() } }
+                Button("Cancel", role: .cancel) {}
+            }
         }
         .padding(16)
     }

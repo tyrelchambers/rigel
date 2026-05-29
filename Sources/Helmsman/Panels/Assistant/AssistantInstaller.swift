@@ -4,7 +4,10 @@ import Foundation
 /// committed reference manifests in `agent/manifests/`.
 struct AssistantInstallConfig {
     var image: String
-    /// Comma-separated namespaces to scope to; empty = all.
+    /// Namespace the agent is installed INTO (its SA/RBAC/ConfigMaps/Secret/
+    /// Deployment). The agent still watches the whole cluster via its ClusterRole.
+    var installNamespace: String = "default"
+    /// Comma-separated namespaces to scope remediation to; empty = all.
     var namespaces: String
     /// Name of an image-pull Secret for a private registry (e.g. GHCR). Empty =
     /// none (public image). Referenced by the Deployment; the wizard can also
@@ -40,14 +43,27 @@ struct AssistantInstallConfig {
 ///
 /// RBAC cage invariant: nothing here grants access to `secrets`.
 enum AssistantInstaller {
-    static let namespace = "default"
     static let secretName = "assistant-claude-token"
 
     static func manifestYAML(_ c: AssistantInstallConfig) -> String {
-        [rbac, configMaps, deployment(c)].joined(separator: "\n---\n")
+        let ns = c.installNamespace
+        return [rbac(ns), configMaps(ns), deployment(c)].joined(separator: "\n---\n")
     }
 
-    static func secretYAML(token: String, issuedAt: String = "") -> String {
+    /// Standalone Namespace object, applied (after confirmation) when installing
+    /// into a namespace that doesn't exist yet.
+    static func namespaceYAML(_ ns: String) -> String {
+        """
+        apiVersion: v1
+        kind: Namespace
+        metadata:
+          name: \(ns)
+          labels:
+            app.kubernetes.io/managed-by: helmsman-assistant
+        """
+    }
+
+    static func secretYAML(token: String, issuedAt: String = "", namespace: String = "default") -> String {
         """
         apiVersion: v1
         kind: Secret
@@ -66,7 +82,7 @@ enum AssistantInstaller {
 
     /// A `kubernetes.io/dockerconfigjson` pull Secret for a private registry.
     /// Built separately and applied before the Deployment; never shown in preview.
-    static func dockerConfigSecretYAML(name: String, registry: String, username: String, token: String) -> String {
+    static func dockerConfigSecretYAML(name: String, registry: String, username: String, token: String, namespace: String = "default") -> String {
         let auth = Data("\(username):\(token)".utf8).base64EncodedString()
         let dockerConfig = "{\"auths\":{\"\(registry)\":{\"username\":\"\(escape(username))\",\"password\":\"\(escape(token))\",\"auth\":\"\(auth)\"}}}"
         return """
@@ -85,121 +101,125 @@ enum AssistantInstaller {
 
     // MARK: - Pieces
 
-    private static let rbac = """
-    apiVersion: v1
-    kind: ServiceAccount
-    metadata:
-      name: helmsman-assistant
-      namespace: default
-      labels:
-        app.kubernetes.io/managed-by: helmsman-assistant
-    ---
-    apiVersion: rbac.authorization.k8s.io/v1
-    kind: ClusterRole
-    metadata:
-      name: helmsman-assistant
-      labels:
-        app.kubernetes.io/managed-by: helmsman-assistant
-    rules:
-      - apiGroups: [""]
-        resources: [pods, pods/log, nodes, events, namespaces, services, endpoints, persistentvolumeclaims, persistentvolumes, replicationcontrollers, configmaps]
-        verbs: [get, list, watch]
-      - apiGroups: ["apps"]
-        resources: [deployments, replicasets, statefulsets, daemonsets]
-        verbs: [get, list, watch]
-      - apiGroups: ["batch"]
-        resources: [jobs, cronjobs]
-        verbs: [get, list, watch]
-      - apiGroups: ["metrics.k8s.io"]
-        resources: [pods, nodes]
-        verbs: [get, list]
-      - apiGroups: ["apps"]
-        resources: [deployments]
-        verbs: [patch, update]
-      - apiGroups: ["apps"]
-        resources: [deployments/scale]
-        verbs: [patch, update]
-      - apiGroups: [""]
-        resources: [pods]
-        verbs: [delete]
-      - apiGroups: [""]
-        resources: [nodes]
-        verbs: [patch]
-    ---
-    apiVersion: rbac.authorization.k8s.io/v1
-    kind: ClusterRoleBinding
-    metadata:
-      name: helmsman-assistant
-      labels:
-        app.kubernetes.io/managed-by: helmsman-assistant
-    roleRef:
-      apiGroup: rbac.authorization.k8s.io
-      kind: ClusterRole
-      name: helmsman-assistant
-    subjects:
-      - kind: ServiceAccount
-        name: helmsman-assistant
-        namespace: default
-    ---
-    apiVersion: rbac.authorization.k8s.io/v1
-    kind: Role
-    metadata:
-      name: helmsman-assistant-state
-      namespace: default
-      labels:
-        app.kubernetes.io/managed-by: helmsman-assistant
-    rules:
-      - apiGroups: [""]
-        resources: [configmaps]
-        resourceNames: [assistant-config, assistant-state, assistant-backups]
-        verbs: [get, update, patch]
-    ---
-    apiVersion: rbac.authorization.k8s.io/v1
-    kind: RoleBinding
-    metadata:
-      name: helmsman-assistant-state
-      namespace: default
-      labels:
-        app.kubernetes.io/managed-by: helmsman-assistant
-    roleRef:
-      apiGroup: rbac.authorization.k8s.io
-      kind: Role
-      name: helmsman-assistant-state
-    subjects:
-      - kind: ServiceAccount
-        name: helmsman-assistant
-        namespace: default
-    """
+    private static func rbac(_ ns: String) -> String {
+        """
+        apiVersion: v1
+        kind: ServiceAccount
+        metadata:
+          name: helmsman-assistant
+          namespace: \(ns)
+          labels:
+            app.kubernetes.io/managed-by: helmsman-assistant
+        ---
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: ClusterRole
+        metadata:
+          name: helmsman-assistant
+          labels:
+            app.kubernetes.io/managed-by: helmsman-assistant
+        rules:
+          - apiGroups: [""]
+            resources: [pods, pods/log, nodes, events, namespaces, services, endpoints, persistentvolumeclaims, persistentvolumes, replicationcontrollers, configmaps]
+            verbs: [get, list, watch]
+          - apiGroups: ["apps"]
+            resources: [deployments, replicasets, statefulsets, daemonsets]
+            verbs: [get, list, watch]
+          - apiGroups: ["batch"]
+            resources: [jobs, cronjobs]
+            verbs: [get, list, watch]
+          - apiGroups: ["metrics.k8s.io"]
+            resources: [pods, nodes]
+            verbs: [get, list]
+          - apiGroups: ["apps"]
+            resources: [deployments]
+            verbs: [patch, update]
+          - apiGroups: ["apps"]
+            resources: [deployments/scale]
+            verbs: [patch, update]
+          - apiGroups: [""]
+            resources: [pods]
+            verbs: [delete]
+          - apiGroups: [""]
+            resources: [nodes]
+            verbs: [patch]
+        ---
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: ClusterRoleBinding
+        metadata:
+          name: helmsman-assistant
+          labels:
+            app.kubernetes.io/managed-by: helmsman-assistant
+        roleRef:
+          apiGroup: rbac.authorization.k8s.io
+          kind: ClusterRole
+          name: helmsman-assistant
+        subjects:
+          - kind: ServiceAccount
+            name: helmsman-assistant
+            namespace: \(ns)
+        ---
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: Role
+        metadata:
+          name: helmsman-assistant-state
+          namespace: \(ns)
+          labels:
+            app.kubernetes.io/managed-by: helmsman-assistant
+        rules:
+          - apiGroups: [""]
+            resources: [configmaps]
+            resourceNames: [assistant-config, assistant-state, assistant-backups]
+            verbs: [get, update, patch]
+        ---
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: RoleBinding
+        metadata:
+          name: helmsman-assistant-state
+          namespace: \(ns)
+          labels:
+            app.kubernetes.io/managed-by: helmsman-assistant
+        roleRef:
+          apiGroup: rbac.authorization.k8s.io
+          kind: Role
+          name: helmsman-assistant-state
+        subjects:
+          - kind: ServiceAccount
+            name: helmsman-assistant
+            namespace: \(ns)
+        """
+    }
 
-    private static let configMaps = """
-    apiVersion: v1
-    kind: ConfigMap
-    metadata:
-      name: assistant-config
-      namespace: default
-      labels:
-        app.kubernetes.io/managed-by: helmsman-assistant
-    data:
-      enabled: "true"
-    ---
-    apiVersion: v1
-    kind: ConfigMap
-    metadata:
-      name: assistant-state
-      namespace: default
-      labels:
-        app.kubernetes.io/managed-by: helmsman-assistant
-    data: {}
-    ---
-    apiVersion: v1
-    kind: ConfigMap
-    metadata:
-      name: assistant-backups
-      namespace: default
-      labels:
-        app.kubernetes.io/managed-by: helmsman-assistant
-    data: {}
-    """
+    private static func configMaps(_ ns: String) -> String {
+        """
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: assistant-config
+          namespace: \(ns)
+          labels:
+            app.kubernetes.io/managed-by: helmsman-assistant
+        data:
+          enabled: "true"
+        ---
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: assistant-state
+          namespace: \(ns)
+          labels:
+            app.kubernetes.io/managed-by: helmsman-assistant
+        data: {}
+        ---
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: assistant-backups
+          namespace: \(ns)
+          labels:
+            app.kubernetes.io/managed-by: helmsman-assistant
+        data: {}
+        """
+    }
 
     private static func deployment(_ c: AssistantInstallConfig) -> String {
         // Sibling of serviceAccountName under template.spec — must match its
@@ -212,7 +232,7 @@ enum AssistantInstaller {
         kind: Deployment
         metadata:
           name: helmsman-assistant
-          namespace: default
+          namespace: \(c.installNamespace)
           labels:
             app.kubernetes.io/name: helmsman-assistant
             app.kubernetes.io/managed-by: helmsman-assistant
