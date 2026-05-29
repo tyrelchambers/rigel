@@ -91,6 +91,13 @@ final class AssistantInstallerTests: XCTestCase {
         XCTAssertTrue(y.contains("name: agents"))
     }
 
+
+    func test_deploymentSpecifiesNumericNonRootUser() {
+        let yaml = AssistantInstaller.manifestYAML(config())
+        XCTAssertTrue(yaml.contains("runAsNonRoot: true"))
+        XCTAssertTrue(yaml.contains("runAsUser: 1000"))
+    }
+
     func test_dockerConfigSecretEncodesAuth() {
         let yaml = AssistantInstaller.dockerConfigSecretYAML(
             name: "ghcr-pull", registry: "ghcr.io", username: "u", token: "t"

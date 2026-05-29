@@ -248,14 +248,17 @@ struct PodManageSheet: View {
             Text("waiting · \(w.reason ?? "?")\(w.message.map { ": \($0)" } ?? "")")
                 .font(Theme.Font.mono(12))
                 .foregroundStyle(Theme.Status.pending)
+                .textSelection(.enabled)
         } else if state.running != nil {
             Text("running")
                 .font(Theme.Font.mono(12))
                 .foregroundStyle(Theme.Status.running)
+                .textSelection(.enabled)
         } else if let t = state.terminated {
             Text("terminated · \(t.reason ?? "?")\(t.exitCode.map { " (exit \($0))" } ?? "")")
                 .font(Theme.Font.mono(12))
                 .foregroundStyle(Theme.Status.failed)
+                .textSelection(.enabled)
         }
     }
 

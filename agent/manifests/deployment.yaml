@@ -25,6 +25,9 @@ spec:
       serviceAccountName: helmsman-assistant
       securityContext:
         runAsNonRoot: true
+        runAsUser: 1000 # the image's `node` user; numeric so runAsNonRoot can verify it
+        runAsGroup: 1000
+        fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
       containers:
