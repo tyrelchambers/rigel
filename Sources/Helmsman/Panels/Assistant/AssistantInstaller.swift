@@ -202,9 +202,11 @@ enum AssistantInstaller {
     """
 
     private static func deployment(_ c: AssistantInstallConfig) -> String {
+        // Sibling of serviceAccountName under template.spec — must match its
+        // 6-space indentation (list item at 8).
         let pullSecrets = c.imagePullSecretName.isEmpty
             ? ""
-            : "\n              imagePullSecrets:\n                - name: \(c.imagePullSecretName)"
+            : "\n      imagePullSecrets:\n        - name: \(c.imagePullSecretName)"
         return """
         apiVersion: apps/v1
         kind: Deployment
@@ -233,7 +235,7 @@ enum AssistantInstaller {
                   type: RuntimeDefault
               containers:
                 - name: agent
-                  image: \(c.image)
+                  image: "\(c.image)"
                   imagePullPolicy: IfNotPresent
                   env:
                     - name: CLAUDE_CODE_OAUTH_TOKEN

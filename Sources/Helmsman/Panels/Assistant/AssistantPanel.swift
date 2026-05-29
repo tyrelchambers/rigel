@@ -9,6 +9,10 @@ struct AssistantPanel: View {
     /// Jump to the Pods panel focused on the agent's pod.
     let onShowPod: (Pod) -> Void
 
+    /// The manifest preview is large; render it only on demand so typing in the
+    /// fields above stays snappy (it would otherwise re-lay-out on every keystroke).
+    @State private var showManifest = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
@@ -16,6 +20,7 @@ struct AssistantPanel: View {
                 Text(err)
                     .font(Theme.Font.mono(11))
                     .foregroundStyle(Theme.Status.failed)
+                    .textSelection(.enabled)
                     .padding(.horizontal, 16).padding(.vertical, 6)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Theme.Status.failed.opacity(0.08))
@@ -353,17 +358,25 @@ struct AssistantPanel: View {
 
             card {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("4. Review manifests").font(Theme.Font.body(12, weight: .semibold)).foregroundStyle(Theme.Foreground.primary)
+                    HStack {
+                        Text("4. Review manifests").font(Theme.Font.body(12, weight: .semibold)).foregroundStyle(Theme.Foreground.primary)
+                        Spacer()
+                        Button(showManifest ? "Hide" : "Show") { showManifest.toggle() }
+                            .buttonStyle(.plain)
+                            .font(Theme.Font.body(11, weight: .medium)).foregroundStyle(Theme.Accent.primary)
+                    }
                     Text("Exactly what will be applied — including the RBAC cage. Nothing is applied until you click Install.")
                         .font(Theme.Font.body(11)).foregroundStyle(Theme.Foreground.secondary)
-                    ScrollView {
-                        Text(viewModel.manifestPreview)
-                            .font(Theme.Font.mono(10)).foregroundStyle(Theme.Foreground.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
+                    if showManifest {
+                        ScrollView {
+                            Text(viewModel.manifestPreview)
+                                .font(Theme.Font.mono(10)).foregroundStyle(Theme.Foreground.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
+                        }
+                        .frame(height: 220)
+                        .padding(8).background(Theme.Surface.sunken)
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
                     }
-                    .frame(height: 220)
-                    .padding(8).background(Theme.Surface.sunken)
-                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
                 }
             }
 

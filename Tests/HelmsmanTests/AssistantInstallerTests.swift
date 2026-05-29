@@ -63,6 +63,17 @@ final class AssistantInstallerTests: XCTestCase {
         XCTAssertFalse(yaml.contains("imagePullSecrets"))
     }
 
+    /// Regression: imagePullSecrets must sit at the same 6-space indent as its
+    /// sibling serviceAccountName under template.spec. A 14-space indent (the
+    /// original bug) produced "mapping values are not allowed in this context".
+    func test_imagePullSecretIndentationMatchesServiceAccountName() {
+        var cfg = config()
+        cfg.imagePullSecretName = "ghcr-pull"
+        let yaml = AssistantInstaller.manifestYAML(cfg)
+        XCTAssertTrue(yaml.contains("\n      imagePullSecrets:\n        - name: ghcr-pull"))
+        XCTAssertFalse(yaml.contains("\n              imagePullSecrets:"))
+    }
+
     func test_dockerConfigSecretEncodesAuth() {
         let yaml = AssistantInstaller.dockerConfigSecretYAML(
             name: "ghcr-pull", registry: "ghcr.io", username: "u", token: "t"
