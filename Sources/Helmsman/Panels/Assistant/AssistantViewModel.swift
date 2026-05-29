@@ -14,6 +14,11 @@ final class AssistantViewModel {
     // Installer wizard state.
     var config = AssistantInstallConfig.default
     var token: String = ""
+    /// Optional private-registry creds. If a pull-secret name is set and a token
+    /// is provided, the installer creates the dockerconfigjson Secret; if only a
+    /// name is set, it references an existing pull Secret.
+    var registryUsername: String = ""
+    var registryToken: String = ""
     var working = false
     var actionError: String?
 
@@ -75,6 +80,22 @@ final class AssistantViewModel {
         working = true
         actionError = nil
         defer { working = false }
+
+        // Private-registry pull Secret (only if a name is set AND a token was
+        // supplied; a name alone means "use an existing pull Secret").
+        if !config.imagePullSecretName.isEmpty,
+           !registryToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let registry = String(config.image.split(separator: "/").first ?? "ghcr.io")
+            let yaml = AssistantInstaller.dockerConfigSecretYAML(
+                name: config.imagePullSecretName, registry: registry,
+                username: registryUsername, token: registryToken
+            )
+            if let err = await applyYAML(yaml) {
+                actionError = "Failed to create pull Secret: \(err)"
+                return
+            }
+            registryToken = ""
+        }
 
         // Secret first (carries the OAuth token), then the rest of the manifests.
         // Stamp the mint date so we can warn before the 1-year token expires.

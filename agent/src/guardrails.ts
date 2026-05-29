@@ -82,8 +82,29 @@ export class CircuitBreaker {
  * is reached the agent stops invoking models (and therefore stops acting). */
 export class SpendTracker {
   private spent = 0;
+  private month = "";
 
   constructor(private readonly capUsd: number) {}
+
+  /** Restore persisted spend (from the assistant-state ConfigMap) so the cap
+   * survives pod restarts instead of resetting to zero. */
+  restore(spentUsd: number, month: string): void {
+    this.spent = spentUsd;
+    this.month = month;
+  }
+
+  /** Align to the billing month. When the month changes the running total
+   * resets — mirroring the monthly Agent SDK credit, which does not roll over. */
+  syncMonth(currentMonth: string): void {
+    if (this.month !== currentMonth) {
+      this.month = currentMonth;
+      this.spent = 0;
+    }
+  }
+
+  currentMonth(): string {
+    return this.month;
+  }
 
   add(costUsd: number): void {
     this.spent += costUsd;

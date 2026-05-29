@@ -70,11 +70,16 @@ async function tick(
   const ts = new Date(now).toISOString();
   let state = await readState(cfg.stateConfigMap, cfg.stateNamespace);
 
+  // Align the spend cap to the billing month (resets the running total when the
+  // month rolls over, mirroring the non-rolling monthly Agent SDK credit).
+  spend.syncMonth(monthKey(now));
+
   const enabled = await isEnabled(cfg);
   state = {
     ...state,
     updatedAt: ts,
     status: { heartbeatAt: ts, spentUsd: spend.total(), spendCapUsd: cfg.spendCapUsd, enabled, version: VERSION },
+    spend: { month: spend.currentMonth(), spentUsd: spend.total() },
   };
 
   if (!enabled) {
@@ -238,7 +243,15 @@ async function tick(
     }
   }
 
+  // Refresh the spend snapshot to include anything spent during this tick.
+  if (state.status) state.status.spentUsd = spend.total();
+  state.spend = { month: spend.currentMonth(), spentUsd: spend.total() };
   await writeState(cfg.stateConfigMap, cfg.stateNamespace, state);
+}
+
+function monthKey(now: number): string {
+  const d = new Date(now);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
 function record(state: AssistantState, cfg: Config, entry: AuditEntry): AssistantState {
@@ -285,6 +298,17 @@ async function main(): Promise<void> {
   });
   const spend = new SpendTracker(cfg.spendCapUsd);
   const loop: LoopState = { streaks: new Map(), handled: new Set() };
+
+  // Restore persisted spend so the monthly cap survives pod restarts.
+  try {
+    const persisted = await readState(cfg.stateConfigMap, cfg.stateNamespace);
+    if (persisted.spend) {
+      spend.restore(persisted.spend.spentUsd, persisted.spend.month);
+      log(`restored spend $${persisted.spend.spentUsd.toFixed(2)} for ${persisted.spend.month}`);
+    }
+  } catch {
+    // no persisted state yet — start fresh
+  }
 
   // eslint-disable-next-line no-constant-condition
   while (true) {

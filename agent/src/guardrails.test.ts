@@ -71,4 +71,27 @@ describe("SpendTracker", () => {
     const s = new SpendTracker(0);
     expect(s.canSpend()).toBe(false);
   });
+
+  test("restore seeds the running total (survives a pod restart)", () => {
+    const s = new SpendTracker(1.0);
+    s.restore(0.4, "2026-05");
+    expect(s.total()).toBeCloseTo(0.4, 5);
+    expect(s.currentMonth()).toBe("2026-05");
+  });
+
+  test("syncMonth to the same month keeps accumulated spend", () => {
+    const s = new SpendTracker(1.0);
+    s.restore(0.4, "2026-05");
+    s.syncMonth("2026-05");
+    expect(s.total()).toBeCloseTo(0.4, 5);
+  });
+
+  test("syncMonth to a new month resets spend (monthly credit cycle)", () => {
+    const s = new SpendTracker(1.0);
+    s.restore(0.9, "2026-05");
+    s.syncMonth("2026-06");
+    expect(s.total()).toBe(0);
+    expect(s.currentMonth()).toBe("2026-06");
+    expect(s.canSpend()).toBe(true);
+  });
 });

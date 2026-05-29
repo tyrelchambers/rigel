@@ -261,7 +261,23 @@ struct AssistantPanel: View {
 
             card {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("3. Review manifests").font(Theme.Font.body(12, weight: .semibold)).foregroundStyle(Theme.Foreground.primary)
+                    Text("3. Private registry (optional)").font(Theme.Font.body(12, weight: .semibold)).foregroundStyle(Theme.Foreground.primary)
+                    Text("If the image is in a private registry (e.g. GHCR), set a pull-secret name. Provide a username + token to create it, or leave creds blank to reference an existing one.")
+                        .font(Theme.Font.body(11)).foregroundStyle(Theme.Foreground.secondary)
+                    labeledField("Pull secret name", text: $viewModel.config.imagePullSecretName)
+                    labeledField("Registry username", text: $viewModel.registryUsername)
+                    HStack(spacing: 8) {
+                        Text("Registry token").font(Theme.Font.body(11)).foregroundStyle(Theme.Foreground.secondary).frame(width: 150, alignment: .leading)
+                        SecureField("read:packages PAT", text: $viewModel.registryToken)
+                            .textFieldStyle(.plain).font(Theme.Font.mono(11))
+                            .padding(.horizontal, 8).padding(.vertical, 6).inputChrome()
+                    }
+                }
+            }
+
+            card {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("4. Review manifests").font(Theme.Font.body(12, weight: .semibold)).foregroundStyle(Theme.Foreground.primary)
                     Text("Exactly what will be applied — including the RBAC cage. Nothing is applied until you click Install.")
                         .font(Theme.Font.body(11)).foregroundStyle(Theme.Foreground.secondary)
                     ScrollView {

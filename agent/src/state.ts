@@ -50,6 +50,9 @@ export interface AgentStatus {
 export interface AssistantState {
   updatedAt: string;
   status?: AgentStatus;
+  /** Persisted monthly spend so the cap survives pod restarts and resets with
+   * the billing month. */
+  spend?: { month: string; spentUsd: number };
   audit: AuditEntry[];
   queue: QueuedSuggestion[];
   report: string;
