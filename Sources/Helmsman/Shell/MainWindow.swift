@@ -23,6 +23,7 @@ struct MainWindow: View {
     @State private var namespacesVM: NamespacesViewModel
     @State private var rbacVM: RBACViewModel
     @State private var catalogVM: CatalogViewModel
+    @State private var assistantVM: AssistantViewModel
     @State private var paletteOpen = false
     @State private var pendingWorkloadAction: WorkloadAction?
     /// True when the pending action came from a Claude chat suggestion — its
@@ -65,6 +66,7 @@ struct MainWindow: View {
         _namespacesVM = State(initialValue: NamespacesViewModel(cache: cache))
         _rbacVM = State(initialValue: RBACViewModel(cache: cache))
         _catalogVM = State(initialValue: CatalogViewModel(cache: cache, store: catalogStore))
+        _assistantVM = State(initialValue: AssistantViewModel(cache: cache))
     }
 
     var body: some View {
@@ -409,6 +411,14 @@ struct MainWindow: View {
                 databasesVM: databasesVM,
                 onInvestigate: investigateCluster
             )
+        case .assistant:
+            AssistantPanel(
+                viewModel: assistantVM,
+                onRunSuggestion: runSuggestedAction,
+                onRevert: { yaml, label in
+                    requestWorkload(.applyManifest(yaml: yaml, label: "revert \(label)"))
+                }
+            )
         case .namespaces:
             NamespacesPanel(
                 viewModel: namespacesVM,
@@ -508,6 +518,7 @@ struct MainWindow: View {
     private func startPanelViewModels(context: String) {
         logsVM.clearSelection()        // old-context stream no longer valid
         servicesVM.stopAllForwards()   // port-forwards are context-specific
+        assistantVM.load(context: context)
         cache.start(context: context)
     }
 

@@ -1,0 +1,106 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# The RBAC cage. This is what makes "destructive actions are blocked entirely"
+# TRUE at the cluster level — not a prompt the model could talk its way past.
+#
+# The agent can read broadly for diagnosis (EXCEPT secrets) and perform exactly
+# the narrow set of safe mutations that back the LOW/MEDIUM action kinds. Every
+# destructive verb is simply absent, so the API server itself refuses them:
+#   - NO verbs on secrets (no value exfiltration)
+#   - NO delete on namespaces / persistentvolumeclaims / persistentvolumes
+#   - NO create on pods/eviction (so `kubectl drain` cannot work)
+#   - NO verbs on roles / rolebindings / clusterroles (no self-escalation)
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: helmsman-assistant
+  namespace: default
+  labels:
+    app.kubernetes.io/name: helmsman-assistant
+    app.kubernetes.io/managed-by: helmsman-assistant
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: helmsman-assistant
+  labels:
+    app.kubernetes.io/managed-by: helmsman-assistant
+rules:
+  # ── broad read for diagnosis — secrets deliberately omitted ──
+  - apiGroups: [""]
+    resources:
+      [pods, pods/log, nodes, events, namespaces, services, endpoints,
+       persistentvolumeclaims, persistentvolumes, replicationcontrollers, configmaps]
+    verbs: [get, list, watch]
+  - apiGroups: ["apps"]
+    resources: [deployments, replicasets, statefulsets, daemonsets]
+    verbs: [get, list, watch]
+  - apiGroups: ["batch"]
+    resources: [jobs, cronjobs]
+    verbs: [get, list, watch]
+  - apiGroups: ["events.k8s.io"]
+    resources: [events]
+    verbs: [get, list, watch]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: [pods, nodes]
+    verbs: [get, list]
+  # ── narrow mutations: exactly the LOW/MEDIUM action surface, nothing else ──
+  - apiGroups: ["apps"]
+    resources: [deployments]
+    verbs: [patch, update] # restart, setEnv, rollback
+  - apiGroups: ["apps"]
+    resources: [deployments/scale]
+    verbs: [patch, update] # scale
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [delete] # delete a crashlooping/stuck pod (controller recreates it)
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: [patch] # cordon / uncordon (.spec.unschedulable)
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: helmsman-assistant
+  labels:
+    app.kubernetes.io/managed-by: helmsman-assistant
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: helmsman-assistant
+subjects:
+  - kind: ServiceAccount
+    name: helmsman-assistant
+    namespace: default
+---
+# Namespaced role for the agent's OWN state ConfigMaps. Scoped by resourceNames
+# to the three assistant ConfigMaps; no `create` needed because the install
+# pre-creates them empty (see configmaps.yaml).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: helmsman-assistant-state
+  namespace: default
+  labels:
+    app.kubernetes.io/managed-by: helmsman-assistant
+rules:
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames: [assistant-config, assistant-state, assistant-backups]
+    verbs: [get, update, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: helmsman-assistant-state
+  namespace: default
+  labels:
+    app.kubernetes.io/managed-by: helmsman-assistant
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: helmsman-assistant-state
+subjects:
+  - kind: ServiceAccount
+    name: helmsman-assistant
+    namespace: default

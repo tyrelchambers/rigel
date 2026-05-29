@@ -2,6 +2,7 @@ import Foundation
 
 enum PanelKind: Hashable, CaseIterable, Identifiable {
     case overview
+    case assistant
     case namespaces
     case deployments
     case pods
@@ -24,6 +25,7 @@ enum PanelKind: Hashable, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .overview:    return "rectangle.grid.2x2.fill"
+        case .assistant:   return "sparkles"
         case .namespaces:  return "square.dashed"
         case .deployments: return "square.stack.3d.up.fill"
         case .pods:        return "shippingbox.fill"
@@ -46,6 +48,7 @@ enum PanelKind: Hashable, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .overview:    return "Overview"
+        case .assistant:   return "Assistant"
         case .namespaces:  return "Namespaces"
         case .deployments: return "Deployments"
         case .pods:        return "Pods"

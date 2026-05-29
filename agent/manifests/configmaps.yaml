@@ -1,0 +1,34 @@
+# Human/Helmsman-editable runtime config. The agent reads `enabled` every poll,
+# so flipping it to "false" halts all action within one interval (the
+# kill-switch). The agent never writes this ConfigMap.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: assistant-config
+  namespace: default
+  labels:
+    app.kubernetes.io/managed-by: helmsman-assistant
+data:
+  enabled: "true"
+---
+# Agent-owned state surface that Helmsman renders (audit timeline, morning
+# report, queued suggestions). Pre-created empty so the agent only needs
+# update/patch (not create) — keeping its RBAC tighter.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: assistant-state
+  namespace: default
+  labels:
+    app.kubernetes.io/managed-by: helmsman-assistant
+data: {}
+---
+# Pre-mutation YAML snapshots, capped (MAX_BACKUPS). Backs one-click revert.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: assistant-backups
+  namespace: default
+  labels:
+    app.kubernetes.io/managed-by: helmsman-assistant
+data: {}

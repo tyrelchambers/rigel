@@ -1,0 +1,69 @@
+# The agent Deployment. The image tag and env knobs are filled in by Helmsman's
+# guided installer; the values below are sane defaults. The OAuth token is
+# mounted from the `assistant-claude-token` Secret created during setup (see
+# secret.example.yaml) — it is NOT committed.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: helmsman-assistant
+  namespace: default
+  labels:
+    app.kubernetes.io/name: helmsman-assistant
+    app.kubernetes.io/managed-by: helmsman-assistant
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # single-writer of the state ConfigMaps; never run two
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: helmsman-assistant
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: helmsman-assistant
+    spec:
+      serviceAccountName: helmsman-assistant
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agent
+          image: ghcr.io/OWNER/helmsman-assistant:latest # ← set by installer
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: CLAUDE_CODE_OAUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: assistant-claude-token
+                  key: token
+            - name: WORKER_MODEL
+              value: claude-sonnet-4-6
+            - name: SUPERVISOR_MODEL
+              value: claude-opus-4-8
+            - name: POLL_INTERVAL_MS
+              value: "30000"
+            - name: SPEND_CAP_USD
+              value: "50"
+            - name: MAX_PER_RESOURCE_PER_HOUR
+              value: "3"
+            - name: MAX_PER_NIGHT
+              value: "20"
+            - name: MAX_ATTEMPTS_PER_INCIDENT
+              value: "3"
+            - name: CONFIRM_POLLS
+              value: "2"
+            - name: NAMESPACES
+              value: "" # empty = all namespaces
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false # claude writes cache under $HOME
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
