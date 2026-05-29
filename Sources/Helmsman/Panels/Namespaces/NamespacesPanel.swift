@@ -76,20 +76,7 @@ struct NamespacesPanel: View {
     }
 
     private var searchBar: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 10))
-                .foregroundStyle(Theme.Foreground.tertiary)
-            TextField("search", text: $viewModel.search)
-                .textFieldStyle(.plain)
-                .font(Theme.Font.mono(11))
-                .foregroundStyle(Theme.Foreground.primary)
-        }
-        .padding(.horizontal, 8).padding(.vertical, 4)
-        .background(Theme.Surface.sunken)
-        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(Theme.Border.subtle, lineWidth: 1))
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
-        .frame(maxWidth: 240)
+        PanelSearchField(text: $viewModel.search, maxWidth: 240)
         .padding(.horizontal, 12).padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.Surface.elevated)

@@ -3,8 +3,11 @@ import AppKit
 
 struct RightSizingPanel: View {
     @Bindable var viewModel: RightSizingViewModel
+    var contextName: String? = nil
     let onApply: (WorkloadAction) -> Void
     let onAskClaude: (WorkloadRightSizing) -> Void
+    /// Opens the metrics-backend install sheet (wired by MainWindow).
+    var onInstall: () -> Void = {}
 
     @State private var expanded: Set<String> = []
 
@@ -22,7 +25,10 @@ struct RightSizingPanel: View {
             }
         }
         .background(Theme.Surface.primary)
-        .task { await viewModel.refresh() }
+        .task {
+            viewModel.load(context: contextName)
+            await viewModel.refresh()
+        }
     }
 
     private var header: some View {
@@ -37,6 +43,7 @@ struct RightSizingPanel: View {
                 .background(Theme.Border.subtle)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
             Spacer()
+            backendMenu
             if viewModel.isAnalyzing {
                 ProgressView().controlSize(.small).tint(Theme.Accent.primary)
             }
@@ -56,6 +63,43 @@ struct RightSizingPanel: View {
         .overlay(alignment: .bottom) { Rectangle().fill(Theme.Border.subtle).frame(height: 1) }
     }
 
+    /// Source picker: Local history vs any detected Prometheus-compatible
+    /// endpoint, plus an entry to install one.
+    private var backendMenu: some View {
+        Menu {
+            Button { Task { await viewModel.setBackend(.local) } } label: {
+                Label("Local history", systemImage: viewModel.backend.isPrometheus ? "internaldrive" : "checkmark")
+            }
+            let detected = viewModel.detectedBackends
+            if !detected.isEmpty {
+                Divider()
+                ForEach(detected, id: \.self) { b in
+                    Button { Task { await viewModel.setBackend(b) } } label: {
+                        Label(b.displayLabel, systemImage: viewModel.backend == b ? "checkmark" : "chart.line.uptrend.xyaxis")
+                    }
+                }
+            }
+            Divider()
+            Button("Set up a metrics backend…", action: onInstall)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: viewModel.backend.isPrometheus ? "chart.line.uptrend.xyaxis" : "internaldrive")
+                    .font(.system(size: 10))
+                Text(viewModel.backend.flavorLabel)
+                    .font(Theme.Font.body(11, weight: .medium))
+                Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold))
+            }
+            .foregroundStyle(Theme.Foreground.secondary)
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .background(Theme.Surface.field)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Right-sizing data source")
+    }
+
     private var controlBar: some View {
         HStack(spacing: 8) {
             ForEach(RightSizingSort.allCases) { s in
@@ -71,16 +115,7 @@ struct RightSizingPanel: View {
                 }
             }
             Spacer(minLength: 4)
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass").font(.system(size: 10)).foregroundStyle(Theme.Foreground.tertiary)
-                TextField("search", text: $viewModel.search)
-                    .textFieldStyle(.plain).font(Theme.Font.mono(11)).foregroundStyle(Theme.Foreground.primary)
-            }
-            .padding(.horizontal, 8).padding(.vertical, 4)
-            .background(Theme.Surface.sunken)
-            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(Theme.Border.subtle, lineWidth: 1))
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
-            .frame(maxWidth: 180)
+            PanelSearchField(text: $viewModel.search, maxWidth: 180)
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
         .background(Theme.Surface.elevated)
@@ -95,7 +130,7 @@ struct RightSizingPanel: View {
                 Text("Collecting usage history — recommendations need ~\(RightSizing.minHours)h of data")
                     .font(Theme.Font.body(12, weight: .medium))
                     .foregroundStyle(Theme.Foreground.primary)
-                Text("Usage is sampled while Helmsman runs and rolled up hourly to a local store. So far: \(viewModel.maxHoursCovered)h of \(RightSizing.minHours)h. Verdicts appear automatically once there's enough.")
+                Text(warmingDetail)
                     .font(Theme.Font.body(11))
                     .foregroundStyle(Theme.Foreground.secondary)
             }
@@ -105,6 +140,15 @@ struct RightSizingPanel: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.Accent.primary.opacity(0.08))
         .overlay(alignment: .bottom) { Rectangle().fill(Theme.Border.subtle).frame(height: 1) }
+    }
+
+    /// Backend-specific explanation of why everything still reads "gathering".
+    private var warmingDetail: String {
+        let so = "So far: \(viewModel.maxHoursCovered)h of \(RightSizing.minHours)h. Verdicts appear automatically once there's enough."
+        if viewModel.backend.isPrometheus {
+            return "Reading from \(viewModel.backend.flavorLabel) (\(viewModel.backend.displayLabel)), which scrapes continuously — but it still needs ~\(RightSizing.minHours)h of history built up. \(so)"
+        }
+        return "Usage is sampled while Helmsman runs and rolled up hourly to a local store. \(so)"
     }
 
     private var empty: some View {

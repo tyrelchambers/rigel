@@ -40,6 +40,7 @@ struct MainWindow: View {
     @State private var manageConfigMap: ConfigMap?
     @State private var pendingConfigMapEditor: ConfigMapEditorMode?
     @State private var pendingNamespaceCreate = false
+    @State private var pendingMetricsInstall: MetricsInstallModel?
     @State private var pendingSecretMove: Secret?
     @State private var pendingCatalogDetail: CatalogApp?
     @State private var pendingCatalogInstall: CatalogInstallWizardModel?
@@ -98,7 +99,8 @@ struct MainWindow: View {
                 chatState: chatState,
                 podCount: cache.pods.count,
                 nodeCount: cache.nodes.count,
-                cacheError: cache.error
+                cacheError: cache.error,
+                onOpenPalette: { paletteOpen = true }
             )
         }
         .background(Theme.Surface.primary)
@@ -283,6 +285,17 @@ struct MainWindow: View {
                 onCancel: { pendingConfigMapEditor = nil }
             )
         }
+        .sheet(item: $pendingMetricsInstall) { model in
+            MetricsInstallSheet(model: model, onClose: {
+                let installed = model.installedBackend != nil
+                pendingMetricsInstall = nil
+                // Pick up the newly-installed backend immediately.
+                if installed {
+                    rightSizingVM.load(context: contextManager.active?.name)
+                    Task { await rightSizingVM.refresh() }
+                }
+            })
+        }
         .sheet(isPresented: $pendingNamespaceCreate) {
             NamespaceCreateSheet(
                 onSubmit: { name in
@@ -370,6 +383,7 @@ struct MainWindow: View {
             // reload() updates contextManager.active, which fires onChange below
             // — that's where the actual start happens. Avoid double-start here.
             contextManager.reload()
+            SearchFocusController.shared.startGlobalSlashShortcut()
         }
         .onChange(of: contextManager.active) { _, newCtx in
             if let ctx = newCtx?.name {
@@ -419,8 +433,10 @@ struct MainWindow: View {
         case .rightSizing:
             RightSizingPanel(
                 viewModel: rightSizingVM,
+                contextName: contextManager.active?.name,
                 onApply: { requestWorkload($0) },
-                onAskClaude: handoffRightSizing
+                onAskClaude: handoffRightSizing,
+                onInstall: { pendingMetricsInstall = MetricsInstallModel(context: contextManager.active?.name, cache: cache) }
             )
         case .nodes:
             NodesPanel(viewModel: nodesVM, onWorkload: { requestWorkload($0) }, onViewYAML: viewYAML)

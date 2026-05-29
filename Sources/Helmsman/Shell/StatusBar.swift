@@ -6,6 +6,7 @@ struct StatusBar: View {
     let podCount: Int
     let nodeCount: Int
     let cacheError: String?
+    var onOpenPalette: () -> Void = {}
 
     enum ChatState {
         case idle, streaming, dead
@@ -66,19 +67,38 @@ struct StatusBar: View {
                     .foregroundStyle(Theme.Foreground.tertiary)
             }
 
-            Text("⌘K")
-                .font(Theme.Font.mono(9, weight: .medium))
-                .foregroundStyle(Theme.Foreground.tertiary)
-                .padding(.horizontal, 4).padding(.vertical, 1)
-                .background(Theme.Surface.elevated)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
-                .help("Command palette")
+            // Shortcut callouts — so the key bindings stay discoverable.
+            Button(action: onOpenPalette) {
+                shortcut(key: "⌘K", label: "Commands")
+            }
+            .buttonStyle(.plain)
+            .help("Open the command palette")
+            shortcut(key: "/", label: "Search")
+                .help("Search the current tab")
+            shortcut(key: "⌘L", label: "Chat")
+                .help("Focus the Claude chat input")
         }
         .padding(.horizontal, 12)
         .frame(height: 22)
         .background(Theme.Surface.sunken)
         .overlay(alignment: .top) {
             Rectangle().fill(Theme.Border.subtle).frame(height: 1)
+        }
+    }
+
+    /// A "⌘K Commands"-style shortcut hint: keycap chip + label.
+    private func shortcut(key: String, label: String) -> some View {
+        HStack(spacing: 4) {
+            Text(key)
+                .font(Theme.Font.mono(9, weight: .medium))
+                .foregroundStyle(Theme.Foreground.secondary)
+                .padding(.horizontal, 4).padding(.vertical, 1)
+                .background(Theme.Surface.elevated)
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(Theme.Border.subtle, lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+            Text(label)
+                .font(Theme.Font.mono(9))
+                .foregroundStyle(Theme.Foreground.tertiary)
         }
     }
 

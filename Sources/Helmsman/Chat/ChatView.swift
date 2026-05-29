@@ -44,7 +44,8 @@ struct ChatView: View {
                         withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                     }
                 }
-                .onAppear { inputFocused = true }
+                // Cursor is no longer auto-grabbed on launch — focus the chat
+                // deliberately via ⌘L or by clicking the input.
             }
 
             SuggestedPromptsRow(prompts: suggestedPrompts, onTap: onSuggestedPrompt)

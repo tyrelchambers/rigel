@@ -87,23 +87,7 @@ struct IngressesPanel: View {
                 }
             }
             Spacer(minLength: 4)
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 10))
-                    .foregroundStyle(Theme.Foreground.tertiary)
-                TextField("search", text: $viewModel.search)
-                    .textFieldStyle(.plain)
-                    .font(Theme.Font.mono(11))
-                    .foregroundStyle(Theme.Foreground.primary)
-            }
-            .padding(.horizontal, 8).padding(.vertical, 4)
-            .background(Theme.Surface.sunken)
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.Radius.sm)
-                    .strokeBorder(Theme.Border.subtle, lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
-            .frame(maxWidth: 200)
+            PanelSearchField(text: $viewModel.search, maxWidth: 200)
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
         .background(Theme.Surface.elevated)

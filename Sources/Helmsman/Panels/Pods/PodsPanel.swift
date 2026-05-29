@@ -34,23 +34,7 @@ struct PodsPanel: View {
                 .font(Theme.Font.body(15, weight: .semibold))
                 .foregroundStyle(Theme.Foreground.primary)
             countChip
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 10))
-                    .foregroundStyle(Theme.Foreground.tertiary)
-                TextField("search name, namespace, label…", text: $viewModel.search)
-                    .textFieldStyle(.plain)
-                    .font(Theme.Font.mono(11))
-                    .foregroundStyle(Theme.Foreground.primary)
-            }
-            .padding(.horizontal, 8).padding(.vertical, 4)
-            .background(Theme.Surface.sunken)
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.Radius.sm)
-                    .strokeBorder(Theme.Border.subtle, lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
-            .frame(maxWidth: 260)
+            PanelSearchField(text: $viewModel.search, placeholder: "search name, namespace, label…", maxWidth: 260)
             Spacer()
             if viewModel.isLoading {
                 ProgressView()

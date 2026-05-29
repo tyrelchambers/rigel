@@ -32,23 +32,7 @@ struct CatalogPanel: View {
                 .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(Theme.Border.subtle)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 10))
-                    .foregroundStyle(Theme.Foreground.tertiary)
-                TextField("search apps, tags…", text: $viewModel.search)
-                    .textFieldStyle(.plain)
-                    .font(Theme.Font.mono(11))
-                    .foregroundStyle(Theme.Foreground.primary)
-            }
-            .padding(.horizontal, 8).padding(.vertical, 4)
-            .background(Theme.Surface.sunken)
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.Radius.sm)
-                    .strokeBorder(Theme.Border.subtle, lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
-            .frame(maxWidth: 280)
+            PanelSearchField(text: $viewModel.search, placeholder: "search apps, tags…", maxWidth: 280)
             Spacer()
         }
         .padding(.horizontal, 16).padding(.vertical, 12)

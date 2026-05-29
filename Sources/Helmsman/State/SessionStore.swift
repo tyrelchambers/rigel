@@ -30,6 +30,8 @@ final class SessionStore {
         // Optional so existing sessions.json (written before this field existed)
         // still decodes; nil is treated as ClaudeModelConfig.default.
         var modelConfig: ClaudeModelConfig? = nil
+        // Per-context right-sizing metrics source. Optional for back-compat.
+        var metricsBackendByContext: [String: MetricsBackendConfig]? = nil
     }
 
     private var storage: Storage
@@ -74,6 +76,20 @@ final class SessionStore {
 
     func setModelConfig(_ config: ClaudeModelConfig) {
         storage.modelConfig = config
+        persist()
+    }
+
+    // MARK: - Metrics backend (per-context)
+
+    /// The configured right-sizing source for a context, or `.local` if unset.
+    func metricsBackend(for context: String) -> MetricsBackendConfig {
+        storage.metricsBackendByContext?[context] ?? .local
+    }
+
+    func setMetricsBackend(_ config: MetricsBackendConfig, for context: String) {
+        var map = storage.metricsBackendByContext ?? [:]
+        map[context] = config
+        storage.metricsBackendByContext = map
         persist()
     }
 

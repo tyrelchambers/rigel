@@ -52,7 +52,29 @@ final class RightSizingViewModel {
     var search: String = ""
     var sort: RightSizingSort = .attention
 
+    /// Where history is read from for this context (local SQLite vs Prometheus).
+    private(set) var backend: MetricsBackendConfig = .local
+    private(set) var contextName: String? = nil
+
     var error: String? { cache.error }
+
+    /// Prometheus-compatible endpoints found in the cluster, for the picker.
+    var detectedBackends: [MetricsBackendConfig] {
+        MetricsBackendDetector.detect(in: cache.services)
+    }
+
+    /// Load the persisted backend choice for the active context.
+    func load(context: String?) {
+        contextName = context
+        backend = context.map { SessionStore.shared.metricsBackend(for: $0) } ?? .local
+    }
+
+    /// Switch source, persist per-context, and re-analyze.
+    func setBackend(_ config: MetricsBackendConfig) async {
+        backend = config
+        if let ctx = contextName { SessionStore.shared.setMetricsBackend(config, for: ctx) }
+        await refresh()
+    }
 
     var availableNamespaces: [String] {
         Set(results.map { $0.namespace }).sorted()
@@ -102,18 +124,27 @@ final class RightSizingViewModel {
         }
     }
 
-    /// Recompute every workload's right-sizing from the persisted history.
+    /// Recompute every workload's right-sizing from the configured source
+    /// (Prometheus when set for this context, else the local SQLite store).
     func refresh() async {
-        guard let store = cache.metricsStore else { results = []; return }
         isAnalyzing = true
         defer { isAnalyzing = false }
+
+        let promSource = backend.isPrometheus ? PrometheusMetricsSource(backend: backend) : nil
 
         // Snapshot workload specs on the main actor.
         let specs = workloadSpecs()
 
         var out: [WorkloadRightSizing] = []
         for spec in specs {
-            let stats = (try? await store.aggregate(namespace: spec.namespace, kind: spec.kind, name: spec.name)) ?? []
+            let stats: [WindowStats]
+            if let promSource {
+                stats = await promSource.aggregate(via: cache, namespace: spec.namespace, name: spec.name)
+            } else if let store = cache.metricsStore {
+                stats = (try? await store.aggregate(namespace: spec.namespace, kind: spec.kind, name: spec.name)) ?? []
+            } else {
+                stats = []
+            }
             let statsByContainer = Dictionary(uniqueKeysWithValues: stats.map { ($0.container, $0) })
             let containerResults: [RightSizingResult] = spec.containers.map { cr in
                 let ws = statsByContainer[cr.container]

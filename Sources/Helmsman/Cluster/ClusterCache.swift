@@ -275,6 +275,14 @@ final class ClusterCache {
         }
     }
 
+    /// Run a Prometheus-compatible instant query through the API-server proxy
+    /// (path built by `PrometheusMetricsSource`). Returns nil if no client or the
+    /// proxy/query fails — callers degrade to the local store.
+    func promInstantQuery(path: String) async -> PromQueryResponse? {
+        guard let client else { return nil }
+        return try? await client.getRaw(path, type: PromQueryResponse.self)
+    }
+
     /// Resolve a pod to its owning long-lived workload by label-matching against
     /// Deployment / StatefulSet / DaemonSet selectors. Returns nil for pods with
     /// no such owner (bare pods, jobs). Deployment selectors match through the
