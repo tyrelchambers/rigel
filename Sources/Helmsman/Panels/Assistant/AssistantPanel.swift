@@ -331,11 +331,12 @@ struct AssistantPanel: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("2. Configuration").font(Theme.Font.body(12, weight: .semibold)).foregroundStyle(Theme.Foreground.primary)
                     labeledField("Image", text: $viewModel.config.image)
-                    labeledField("Install namespace", text: $viewModel.config.installNamespace)
+                    installNamespaceField
                     if viewModel.namespaceMissing {
                         Text("Namespace “\(viewModel.config.installNamespace)” doesn't exist — you'll be asked to create it on Install.")
                             .font(Theme.Font.body(11)).foregroundStyle(Theme.Status.pending)
                     }
+                    monitorNamespacesField
                     HStack(spacing: 8) {
                         Text("Spend cap ($/mo)").font(Theme.Font.body(11)).foregroundStyle(Theme.Foreground.secondary).frame(width: 150, alignment: .leading)
                         TextField("", value: $viewModel.config.spendCapUsd, format: .number)
@@ -412,6 +413,52 @@ struct AssistantPanel: View {
     }
 
     // MARK: - Bits
+
+    /// Install target: type a custom namespace (created on install) or pick an
+    /// existing one from the dropdown.
+    private var installNamespaceField: some View {
+        HStack(spacing: 8) {
+            Text("Install namespace").font(Theme.Font.body(11)).foregroundStyle(Theme.Foreground.secondary).frame(width: 150, alignment: .leading)
+            TextField("", text: $viewModel.config.installNamespace)
+                .textFieldStyle(.plain).font(Theme.Font.mono(11))
+                .padding(.horizontal, 8).padding(.vertical, 6).inputChrome()
+            Menu {
+                ForEach(viewModel.allNamespaceNames, id: \.self) { ns in
+                    Button(ns) { viewModel.config.installNamespace = ns }
+                }
+            } label: {
+                Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.Accent.primary)
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 22)
+            .help("Pick an existing namespace")
+        }
+    }
+
+    /// Monitor scope: multi-select existing namespaces (none selected = all).
+    private var monitorNamespacesField: some View {
+        let selected = viewModel.monitoredSet
+        return HStack(spacing: 8) {
+            Text("Monitor namespaces").font(Theme.Font.body(11)).foregroundStyle(Theme.Foreground.secondary).frame(width: 150, alignment: .leading)
+            Menu {
+                Button(selected.isEmpty ? "✓ All namespaces" : "All namespaces") { viewModel.monitorAllNamespaces() }
+                Divider()
+                ForEach(viewModel.allNamespaceNames, id: \.self) { ns in
+                    Button { viewModel.toggleMonitored(ns) } label: {
+                        if selected.contains(ns) { Label(ns, systemImage: "checkmark") } else { Text(ns) }
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(selected.isEmpty ? "All namespaces" : selected.sorted().joined(separator: ", "))
+                        .font(Theme.Font.mono(11)).foregroundStyle(Theme.Foreground.primary).lineLimit(1)
+                    Spacer()
+                    Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.Accent.primary)
+                }
+                .padding(.horizontal, 8).padding(.vertical, 6).inputChrome()
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden)
+        }
+    }
 
     /// Pull-secret name with a dropdown of existing dockerconfigjson Secrets —
     /// pick one to reuse, or type a name to create a new one.

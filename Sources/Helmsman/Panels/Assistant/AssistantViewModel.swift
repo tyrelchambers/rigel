@@ -112,6 +112,22 @@ final class AssistantViewModel {
 
     var manifestPreview: String { AssistantInstaller.manifestYAML(config) }
 
+    /// All namespaces in the cluster, for the install-target and monitor dropdowns.
+    var allNamespaceNames: [String] { cache.namespaces.map { $0.metadata.name }.sorted() }
+
+    /// The set of namespaces the agent is scoped to monitor (empty = all).
+    var monitoredSet: Set<String> {
+        Set(config.namespaces.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
+    }
+
+    func toggleMonitored(_ ns: String) {
+        var s = monitoredSet
+        if s.contains(ns) { s.remove(ns) } else { s.insert(ns) }
+        config.namespaces = s.sorted().joined(separator: ",")
+    }
+
+    func monitorAllNamespaces() { config.namespaces = "" }
+
     /// Existing image-pull (dockerconfigjson) Secrets in the agent's namespace,
     /// offered as a dropdown so you can reuse one instead of typing its name.
     var pullSecretCandidates: [Secret] {
