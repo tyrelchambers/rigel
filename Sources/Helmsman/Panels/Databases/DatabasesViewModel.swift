@@ -27,6 +27,12 @@ final class DatabasesViewModel {
             .sorted { $0.metadata.name < $1.metadata.name }
     }
 
+    /// Distinct node names hosting this database's pods, sorted for stable display.
+    func nodes(for instance: DatabaseInstance) -> [String] {
+        let names = pods(for: instance).compactMap { $0.spec?.nodeName }
+        return Set(names).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
     func toggleExpansion(_ instance: DatabaseInstance) {
         if expanded.contains(instance.id) { expanded.remove(instance.id) }
         else { expanded.insert(instance.id) }

@@ -28,7 +28,7 @@ let package = Package(
         ),
         .testTarget(
             name: "HelmsmanTests",
-            dependencies: ["Helmsman"],
+            dependencies: ["Helmsman", "Yams"],
             path: "Tests/HelmsmanTests",
             resources: [.process("Fixtures")]
         ),

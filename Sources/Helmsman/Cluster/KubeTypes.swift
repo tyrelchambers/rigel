@@ -130,6 +130,9 @@ struct RollingUpdateStrategy: Codable, Hashable {
 struct AnyKubeIntOrString: Codable, Hashable {
     let stringValue: String
 
+    /// Wrap a raw value (numeric or named) the user typed in a form.
+    init(_ stringValue: String) { self.stringValue = stringValue }
+
     init(from decoder: Decoder) throws {
         let c = try decoder.singleValueContainer()
         if let s = try? c.decode(String.self) { stringValue = s }
@@ -455,6 +458,55 @@ extension Ingress {
         if let n = port?.number { return String(n) }
         return port?.name ?? ""
     }
+}
+
+struct Service: Codable, Identifiable, Hashable {
+    let metadata: ObjectMeta
+    let spec: Spec?
+    let status: Status?
+    var id: String { metadata.uid }
+
+    struct Spec: Codable, Hashable {
+        let type: String?                 // ClusterIP | NodePort | LoadBalancer | ExternalName
+        let clusterIP: String?
+        let selector: [String: String]?
+        let ports: [Port]?
+        let externalName: String?
+        let externalIPs: [String]?
+    }
+
+    struct Port: Codable, Hashable {
+        let name: String?
+        let port: Int
+        let targetPort: AnyKubeIntOrString?
+        let `protocol`: String?
+        let nodePort: Int?
+    }
+
+    struct Status: Codable, Hashable {
+        let loadBalancer: LoadBalancer?
+    }
+
+    struct LoadBalancer: Codable, Hashable {
+        let ingress: [LBEntry]?
+    }
+
+    struct LBEntry: Codable, Hashable {
+        let ip: String?
+        let hostname: String?
+    }
+}
+
+struct Namespace: Codable, Identifiable, Hashable {
+    let metadata: ObjectMeta
+    let status: Status?
+    var id: String { metadata.uid }
+
+    struct Status: Codable, Hashable {
+        let phase: String?   // Active | Terminating
+    }
+
+    var phase: String { status?.phase ?? "Active" }
 }
 
 struct ContainerResourceSummary: Hashable {

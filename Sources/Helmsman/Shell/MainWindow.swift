@@ -9,12 +9,19 @@ struct MainWindow: View {
     @State private var cache: ClusterCache
     @State private var deploymentsVM: DeploymentsViewModel
     @State private var podsVM: PodsViewModel
+    @State private var workloadsVM: WorkloadsViewModel
+    @State private var rightSizingVM: RightSizingViewModel
     @State private var nodesVM: NodesViewModel
     @State private var ingressesVM: IngressesViewModel
+    @State private var servicesVM: ServicesViewModel
     @State private var databasesVM: DatabasesViewModel
     @State private var eventsVM: EventsViewModel
     @State private var logsVM: LogsViewModel
     @State private var secretsVM: SecretsViewModel
+    @State private var configMapsVM: ConfigMapsViewModel
+    @State private var storageVM: StorageViewModel
+    @State private var namespacesVM: NamespacesViewModel
+    @State private var rbacVM: RBACViewModel
     @State private var catalogVM: CatalogViewModel
     @State private var paletteOpen = false
     @State private var pendingWorkloadAction: WorkloadAction?
@@ -27,6 +34,12 @@ struct MainWindow: View {
     @State private var pendingSecretEditor: SecretEditorMode?
     @State private var manageIngress: Ingress?
     @State private var pendingIngressEditor: IngressEditorMode?
+    @State private var manageService: Service?
+    @State private var pendingServiceEditor: ServiceEditorMode?
+    @State private var pendingPortForward: PortForwardTarget?
+    @State private var manageConfigMap: ConfigMap?
+    @State private var pendingConfigMapEditor: ConfigMapEditorMode?
+    @State private var pendingNamespaceCreate = false
     @State private var pendingSecretMove: Secret?
     @State private var pendingCatalogDetail: CatalogApp?
     @State private var pendingCatalogInstall: CatalogInstallWizardModel?
@@ -37,12 +50,19 @@ struct MainWindow: View {
         _cache = State(initialValue: cache)
         _deploymentsVM = State(initialValue: DeploymentsViewModel(cache: cache))
         _podsVM = State(initialValue: PodsViewModel(cache: cache))
+        _workloadsVM = State(initialValue: WorkloadsViewModel(cache: cache))
+        _rightSizingVM = State(initialValue: RightSizingViewModel(cache: cache))
         _nodesVM = State(initialValue: NodesViewModel(cache: cache))
         _ingressesVM = State(initialValue: IngressesViewModel(cache: cache))
+        _servicesVM = State(initialValue: ServicesViewModel(cache: cache))
         _databasesVM = State(initialValue: DatabasesViewModel(cache: cache))
         _eventsVM = State(initialValue: EventsViewModel(cache: cache))
         _logsVM = State(initialValue: LogsViewModel(cache: cache))
         _secretsVM = State(initialValue: SecretsViewModel(cache: cache))
+        _configMapsVM = State(initialValue: ConfigMapsViewModel(cache: cache))
+        _storageVM = State(initialValue: StorageViewModel(cache: cache))
+        _namespacesVM = State(initialValue: NamespacesViewModel(cache: cache))
+        _rbacVM = State(initialValue: RBACViewModel(cache: cache))
         _catalogVM = State(initialValue: CatalogViewModel(cache: cache, store: catalogStore))
     }
 
@@ -177,6 +197,101 @@ struct MainWindow: View {
                 onCancel: { pendingIngressEditor = nil }
             )
         }
+        .sheet(item: $manageService) { service in
+            ServiceManageSheet(
+                service: service,
+                context: contextManager.active?.name,
+                onClose: { manageService = nil },
+                onViewYAML: {
+                    manageService = nil
+                    viewYAML(kind: "service", name: service.metadata.name, namespace: service.metadata.namespace)
+                },
+                onEdit: { s in
+                    manageService = nil
+                    pendingServiceEditor = .edit(s)
+                },
+                onDelete: { s in
+                    manageService = nil
+                    requestWorkload(.deleteService(name: s.metadata.name, namespace: s.metadata.namespace ?? "default"))
+                },
+                onAskClaude: { s in
+                    manageService = nil
+                    handoffService(s)
+                },
+                onForward: { s, port in
+                    manageService = nil
+                    beginPortForward(s, port: port)
+                }
+            )
+        }
+        .sheet(item: $pendingServiceEditor) { mode in
+            ServiceEditorSheet(
+                mode: mode,
+                onSubmit: { service, isNew in
+                    pendingServiceEditor = nil
+                    requestWorkload(.applyService(service, isNew: isNew))
+                },
+                onCancel: { pendingServiceEditor = nil }
+            )
+        }
+        .sheet(item: $pendingPortForward) { target in
+            PortForwardStartSheet(
+                targetKind: target.targetKind,
+                targetName: target.targetName,
+                namespace: target.namespace,
+                remotePort: target.remotePort,
+                isLocalPortInUse: { servicesVM.portForwards.isLocalPortInUse($0) },
+                onStart: { local in
+                    servicesVM.portForwards.start(
+                        targetKind: target.targetKind,
+                        targetName: target.targetName,
+                        namespace: target.namespace,
+                        remotePort: target.remotePort,
+                        localPort: local,
+                        context: contextManager.active?.name
+                    )
+                    pendingPortForward = nil
+                },
+                onCancel: { pendingPortForward = nil }
+            )
+        }
+        .sheet(item: $manageConfigMap) { configMap in
+            ConfigMapManageSheet(
+                configMap: configMap,
+                onClose: { manageConfigMap = nil },
+                onViewYAML: {
+                    manageConfigMap = nil
+                    viewYAML(kind: "configmap", name: configMap.metadata.name, namespace: configMap.metadata.namespace)
+                },
+                onEdit: { c in
+                    manageConfigMap = nil
+                    pendingConfigMapEditor = .edit(c)
+                },
+                onDelete: { c in
+                    manageConfigMap = nil
+                    requestWorkload(.deleteConfigMap(name: c.metadata.name, namespace: c.metadata.namespace ?? "default"))
+                }
+            )
+        }
+        .sheet(item: $pendingConfigMapEditor) { mode in
+            ConfigMapEditorSheet(
+                mode: mode,
+                onSubmit: { configMap, isNew in
+                    pendingConfigMapEditor = nil
+                    requestWorkload(.applyConfigMap(configMap, isNew: isNew))
+                },
+                onCancel: { pendingConfigMapEditor = nil }
+            )
+        }
+        .sheet(isPresented: $pendingNamespaceCreate) {
+            NamespaceCreateSheet(
+                onSubmit: { name in
+                    pendingNamespaceCreate = false
+                    requestWorkload(.createNamespace(name: name))
+                },
+                onCancel: { pendingNamespaceCreate = false }
+            )
+        }
         .sheet(item: $pendingSecretMove) { secret in
             SecretMoveSheet(
                 secret: secret,
@@ -280,6 +395,13 @@ struct MainWindow: View {
                 databasesVM: databasesVM,
                 onInvestigate: investigateCluster
             )
+        case .namespaces:
+            NamespacesPanel(
+                viewModel: namespacesVM,
+                onCreate: { pendingNamespaceCreate = true },
+                onDelete: { requestWorkload(.deleteNamespace(name: $0.metadata.name)) },
+                onViewYAML: viewYAML
+            )
         case .deployments:
             DeploymentsPanel(viewModel: deploymentsVM, onAction: { dep, pods, action in
                 handoffDeployment(dep, pods: pods, action: action)
@@ -287,7 +409,19 @@ struct MainWindow: View {
         case .pods:
             PodsPanel(viewModel: podsVM, onAction: { pod, action in
                 handoffPod(pod, action: action)
-            }, contextName: contextManager.active?.name, onWorkload: { requestWorkload($0) }, onViewYAML: viewYAML, onTailLogsForPod: tailLogsForPod)
+            }, contextName: contextManager.active?.name, onWorkload: { requestWorkload($0) }, onViewYAML: viewYAML, onTailLogsForPod: tailLogsForPod, onForwardPod: beginPodPortForward)
+        case .workloads:
+            WorkloadsPanel(
+                viewModel: workloadsVM,
+                onViewYAML: viewYAML,
+                onWorkload: { requestWorkload($0) }
+            )
+        case .rightSizing:
+            RightSizingPanel(
+                viewModel: rightSizingVM,
+                onApply: { requestWorkload($0) },
+                onAskClaude: handoffRightSizing
+            )
         case .nodes:
             NodesPanel(viewModel: nodesVM, onWorkload: { requestWorkload($0) }, onViewYAML: viewYAML)
         case .ingresses:
@@ -300,6 +434,17 @@ struct MainWindow: View {
                 onEdit: { pendingIngressEditor = .edit($0) },
                 onDelete: { requestWorkload(.deleteIngress(name: $0.metadata.name, namespace: $0.metadata.namespace ?? "default")) }
             )
+        case .services:
+            ServicesPanel(
+                viewModel: servicesVM,
+                onViewYAML: viewYAML,
+                onAskClaude: handoffService,
+                onManage: { manageService = $0 },
+                onCreate: { pendingServiceEditor = .create },
+                onEdit: { pendingServiceEditor = .edit($0) },
+                onDelete: { requestWorkload(.deleteService(name: $0.metadata.name, namespace: $0.metadata.namespace ?? "default")) },
+                onForward: beginPortForward
+            )
         case .databases:
             DatabasesPanel(viewModel: databasesVM)
         case .secrets:
@@ -308,6 +453,28 @@ struct MainWindow: View {
                 onManage: { manageSecret = $0 },
                 onNew: { pendingSecretEditor = .create },
                 onViewYAML: viewYAML
+            )
+        case .configMaps:
+            ConfigMapsPanel(
+                viewModel: configMapsVM,
+                onManage: { manageConfigMap = $0 },
+                onNew: { pendingConfigMapEditor = .create },
+                onViewYAML: viewYAML
+            )
+        case .storage:
+            StoragePanel(
+                viewModel: storageVM,
+                onViewYAML: viewYAML,
+                onDeletePVC: { requestWorkload(.deletePVC(name: $0.metadata.name, namespace: $0.metadata.namespace ?? "default")) },
+                onDeletePV: { requestWorkload(.deletePV(name: $0.metadata.name)) }
+            )
+        case .rbac:
+            RBACPanel(
+                viewModel: rbacVM,
+                onViewYAML: viewYAML,
+                onDelete: { kind, name, ns in
+                    requestWorkload(.deleteRBAC(kind: kind, name: name, namespace: ns))
+                }
             )
         case .catalog:
             CatalogPanel(viewModel: catalogVM, onSelect: { pendingCatalogDetail = $0 })
@@ -323,7 +490,8 @@ struct MainWindow: View {
     }
 
     private func startPanelViewModels(context: String) {
-        logsVM.clearSelection()   // old-context stream no longer valid
+        logsVM.clearSelection()        // old-context stream no longer valid
+        servicesVM.stopAllForwards()   // port-forwards are context-specific
         cache.start(context: context)
     }
 
@@ -492,6 +660,62 @@ struct MainWindow: View {
         service exists and has ready endpoints. Flag any missing TLS secrets, hosts with no \
         backing service, or backends with zero endpoints.
         """)
+    }
+
+    private func handoffService(_ svc: Service) {
+        let ns = svc.metadata.namespace ?? "default"
+        let ports = svc.portSummaries.isEmpty ? "(none)" : svc.portSummaries.joined(separator: ", ")
+        let selector = (svc.spec?.selector ?? [:]).isEmpty
+            ? "(none — headless / externally managed)"
+            : (svc.spec?.selector ?? [:]).sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: ", ")
+        chat.sendHandoff("""
+        Inspect service **\(svc.metadata.name)** in namespace **\(ns)**.
+
+        Type: \(svc.typeLabel)
+        ClusterIP: \(svc.spec?.clusterIP ?? "—")
+        Ports: \(ports)
+        Selector: \(selector)
+
+        Run `kubectl describe service \(svc.metadata.name) -n \(ns)` and check its endpoints \
+        (`kubectl get endpoints \(svc.metadata.name) -n \(ns)`). Flag a selector that matches \
+        no ready pods, ports with no backing target, or a type/config that won't route traffic.
+        """)
+    }
+
+    private func beginPortForward(_ service: Service, port: Service.Port) {
+        pendingPortForward = PortForwardTarget(
+            targetKind: "svc",
+            targetName: service.metadata.name,
+            namespace: service.metadata.namespace ?? "default",
+            remotePort: port.port
+        )
+    }
+
+    private func handoffRightSizing(_ w: WorkloadRightSizing) {
+        let lines = w.containers.map { r -> String in
+            let cur = "req cpu=\(r.cpuRequest.map(ResourceQuantity.formatCores) ?? "unset") mem=\(r.memRequest.map(ResourceQuantity.formatBytes) ?? "unset"); lim cpu=\(r.cpuLimit.map(ResourceQuantity.formatCores) ?? "unset") mem=\(r.memLimit.map(ResourceQuantity.formatBytes) ?? "unset")"
+            let obs = "peak cpu=\(ResourceQuantity.formatCores(r.cpuPeak)) mem=\(ResourceQuantity.formatBytes(r.memPeak)); typical cpu=\(ResourceQuantity.formatCores(r.cpuTypical)) mem=\(ResourceQuantity.formatBytes(r.memTypical)) over \(r.hoursCovered)h"
+            return "- \(r.container) [\(r.verdict.label)]\n    current: \(cur)\n    observed: \(obs)"
+        }.joined(separator: "\n")
+        chat.sendHandoff("""
+        Review right-sizing for **\(w.kind)/\(w.name)** in namespace **\(w.namespace)**, based on \
+        Helmsman's persisted usage history:
+
+        \(lines)
+
+        For each container, advise whether the requests/limits should change and to what, weighing \
+        headroom for spikes against reclaiming waste. Call out anything risky (peak near a limit, or \
+        missing requests/limits). Be concrete with suggested values.
+        """)
+    }
+
+    private func beginPodPortForward(_ pod: Pod, remotePort: Int) {
+        pendingPortForward = PortForwardTarget(
+            targetKind: "pod",
+            targetName: pod.metadata.name,
+            namespace: pod.metadata.namespace ?? "default",
+            remotePort: remotePort
+        )
     }
 
     private func handoffDeployment(_ dep: Deployment, pods: [Pod], action: DeploymentAction) {

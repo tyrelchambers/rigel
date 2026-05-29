@@ -15,6 +15,20 @@ final class ClusterCache {
     private(set) var events: [K8sEvent] = []
     private(set) var secrets: [Secret] = []
     private(set) var ingresses: [Ingress] = []
+    private(set) var services: [Service] = []
+    private(set) var configMaps: [ConfigMap] = []
+    private(set) var pvcs: [PersistentVolumeClaim] = []
+    private(set) var pvs: [PersistentVolume] = []
+    private(set) var storageClasses: [StorageClass] = []
+    private(set) var jobs: [Job] = []
+    private(set) var cronJobs: [CronJob] = []
+    private(set) var daemonSets: [DaemonSet] = []
+    private(set) var namespaces: [Namespace] = []
+    private(set) var serviceAccounts: [ServiceAccount] = []
+    private(set) var roles: [Role] = []
+    private(set) var roleBindings: [RoleBinding] = []
+    private(set) var clusterRoles: [ClusterRole] = []
+    private(set) var clusterRoleBindings: [ClusterRoleBinding] = []
     private(set) var nodeMetrics: [String: NodeMetrics] = [:]
     /// Per-pod metrics history. Key = "namespace/name". Newest sample at the end.
     private(set) var podMetricsHistory: [String: [PodMetricSample]] = [:]
@@ -34,12 +48,19 @@ final class ClusterCache {
     private var client: KubectlClient?
     private var activeContext: String?
 
+    /// Rolling on-disk usage history for right-sizing (one DB per context).
+    private(set) var metricsStore: MetricsStore?
+    private let metricsCollector = MetricsCollector()
+
     // MARK: - Lifecycle
 
     func start(context: String?) {
         if !tasks.isEmpty && context == activeContext { return }   // already running for this context
         stop()
         activeContext = context
+        // Open the per-context usage history store (right-sizing). Best-effort:
+        // a failure just means no persisted history this session.
+        metricsStore = try? MetricsStore(context: context ?? "default")
         do {
             let c = try KubectlClient(context: context)
             self.client = c
@@ -53,6 +74,20 @@ final class ClusterCache {
                 watchTask("events", c: c, into: \.events, applyEvent: applyEvent),
                 watchTask("secrets", c: c, into: \.secrets, applyEvent: applySecret),
                 watchTask("ingresses", c: c, into: \.ingresses, applyEvent: applyIngress),
+            watchTask("services", c: c, into: \.services, applyEvent: applyService),
+            watchTask("configmaps", c: c, into: \.configMaps, applyEvent: applyConfigMap),
+            watchTask("persistentvolumeclaims", c: c, into: \.pvcs, applyEvent: applyPVC),
+            watchTask("persistentvolumes", c: c, into: \.pvs, applyEvent: applyPV),
+            watchTask("storageclasses", c: c, into: \.storageClasses, applyEvent: applyStorageClass),
+            watchTask("jobs", c: c, into: \.jobs, applyEvent: applyJob),
+            watchTask("cronjobs", c: c, into: \.cronJobs, applyEvent: applyCronJob),
+            watchTask("daemonsets", c: c, into: \.daemonSets, applyEvent: applyDaemonSet),
+            watchTask("namespaces", c: c, into: \.namespaces, applyEvent: applyNamespace),
+            watchTask("serviceaccounts", c: c, into: \.serviceAccounts, applyEvent: applyServiceAccount),
+            watchTask("roles", c: c, into: \.roles, applyEvent: applyRole),
+            watchTask("rolebindings", c: c, into: \.roleBindings, applyEvent: applyRoleBinding),
+            watchTask("clusterroles", c: c, into: \.clusterRoles, applyEvent: applyClusterRole),
+            watchTask("clusterrolebindings", c: c, into: \.clusterRoleBindings, applyEvent: applyClusterRoleBinding),
                 cnpgTask(c),
                 metricsPollTask(c),
                 podMetricsPollTask(c),
@@ -230,6 +265,39 @@ final class ClusterCache {
                 podMetricsHistory.removeValue(forKey: k)
             }
         }
+
+        // Feed the right-sizing collector; persist completed hours off-main.
+        let completed = metricsCollector.ingest(items) { [weak self] item in
+            self?.ownerWorkload(podNamed: item.metadata.name, namespace: item.metadata.namespace ?? "default")
+        }
+        if !completed.isEmpty, let store = metricsStore {
+            Task { try? await store.writeBuckets(completed) }
+        }
+    }
+
+    /// Resolve a pod to its owning long-lived workload by label-matching against
+    /// Deployment / StatefulSet / DaemonSet selectors. Returns nil for pods with
+    /// no such owner (bare pods, jobs). Deployment selectors match through the
+    /// ReplicaSet because the controller's matchLabels are present on the pod.
+    private func ownerWorkload(podNamed name: String, namespace: String) -> MetricsCollector.OwnerRef? {
+        guard let pod = pods.first(where: { $0.metadata.name == name && ($0.metadata.namespace ?? "default") == namespace }) else {
+            return nil
+        }
+        let labels = pod.metadata.labels ?? [:]
+        func matches(_ selector: [String: String]?) -> Bool {
+            guard let selector, !selector.isEmpty else { return false }
+            return selector.allSatisfy { labels[$0.key] == $0.value }
+        }
+        if let d = deployments.first(where: { ($0.metadata.namespace ?? "default") == namespace && matches($0.spec?.selector?.matchLabels) }) {
+            return .init(kind: "deployment", name: d.metadata.name)
+        }
+        if let s = statefulSets.first(where: { ($0.metadata.namespace ?? "default") == namespace && matches($0.spec?.selector?.matchLabels) }) {
+            return .init(kind: "statefulset", name: s.metadata.name)
+        }
+        if let ds = daemonSets.first(where: { ($0.metadata.namespace ?? "default") == namespace && matches($0.spec?.selector?.matchLabels) }) {
+            return .init(kind: "daemonset", name: ds.metadata.name)
+        }
+        return nil
     }
 
     private func metricsPollTask(_ c: KubectlClient) -> Task<Void, Never> {
@@ -342,6 +410,62 @@ final class ClusterCache {
     }
     private func applyIngress(_ event: WatchEvent<Ingress>) {
         applyGeneric(event, list: \.ingresses)
+    }
+
+    private func applyService(_ event: WatchEvent<Service>) {
+        applyGeneric(event, list: \.services)
+    }
+
+    private func applyConfigMap(_ event: WatchEvent<ConfigMap>) {
+        applyGeneric(event, list: \.configMaps)
+    }
+
+    private func applyPVC(_ event: WatchEvent<PersistentVolumeClaim>) {
+        applyGeneric(event, list: \.pvcs)
+    }
+
+    private func applyPV(_ event: WatchEvent<PersistentVolume>) {
+        applyGeneric(event, list: \.pvs)
+    }
+
+    private func applyStorageClass(_ event: WatchEvent<StorageClass>) {
+        applyGeneric(event, list: \.storageClasses)
+    }
+
+    private func applyJob(_ event: WatchEvent<Job>) {
+        applyGeneric(event, list: \.jobs)
+    }
+
+    private func applyCronJob(_ event: WatchEvent<CronJob>) {
+        applyGeneric(event, list: \.cronJobs)
+    }
+
+    private func applyDaemonSet(_ event: WatchEvent<DaemonSet>) {
+        applyGeneric(event, list: \.daemonSets)
+    }
+
+    private func applyNamespace(_ event: WatchEvent<Namespace>) {
+        applyGeneric(event, list: \.namespaces)
+    }
+
+    private func applyServiceAccount(_ event: WatchEvent<ServiceAccount>) {
+        applyGeneric(event, list: \.serviceAccounts)
+    }
+
+    private func applyRole(_ event: WatchEvent<Role>) {
+        applyGeneric(event, list: \.roles)
+    }
+
+    private func applyRoleBinding(_ event: WatchEvent<RoleBinding>) {
+        applyGeneric(event, list: \.roleBindings)
+    }
+
+    private func applyClusterRole(_ event: WatchEvent<ClusterRole>) {
+        applyGeneric(event, list: \.clusterRoles)
+    }
+
+    private func applyClusterRoleBinding(_ event: WatchEvent<ClusterRoleBinding>) {
+        applyGeneric(event, list: \.clusterRoleBindings)
     }
 
     private func applyGeneric<T>(_ event: WatchEvent<T>, list keyPath: ReferenceWritableKeyPath<ClusterCache, [T]>) where T: Codable & Identifiable, T.ID == String {

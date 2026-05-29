@@ -74,6 +74,7 @@ struct DatabasesPanel: View {
                     DatabaseRow(
                         instance: inst,
                         isExpanded: viewModel.isExpanded(inst),
+                        nodes: viewModel.nodes(for: inst),
                         childPods: viewModel.isExpanded(inst) ? viewModel.pods(for: inst) : [],
                         onToggle: { viewModel.toggleExpansion(inst) }
                     )
@@ -87,6 +88,7 @@ struct DatabasesPanel: View {
 private struct DatabaseRow: View {
     let instance: DatabaseInstance
     let isExpanded: Bool
+    let nodes: [String]
     let childPods: [Pod]
     let onToggle: () -> Void
 
@@ -121,6 +123,20 @@ private struct DatabaseRow: View {
                         Text("primary: \(primary)")
                             .font(Theme.Font.mono(10))
                             .foregroundStyle(Theme.Accent.primary)
+                    }
+
+                    if !nodes.isEmpty {
+                        HStack(spacing: 4) {
+                            Image(systemName: "server.rack")
+                                .font(.system(size: 9))
+                                .foregroundStyle(Theme.Foreground.tertiary)
+                            Text(nodes.joined(separator: ", "))
+                                .font(Theme.Font.mono(10))
+                                .foregroundStyle(Theme.Foreground.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        .help(nodes.count == 1 ? "Node: \(nodes[0])" : "Nodes: \(nodes.joined(separator: ", "))")
                     }
 
                     Text("\(instance.readyReplicas)/\(instance.desiredReplicas)")
@@ -275,6 +291,17 @@ private struct PodChildRow: View {
                     .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
             }
             Spacer()
+            if let node = pod.spec?.nodeName {
+                HStack(spacing: 4) {
+                    Image(systemName: "server.rack")
+                        .font(.system(size: 9))
+                        .foregroundStyle(Theme.Foreground.tertiary)
+                    Text(node)
+                        .font(Theme.Font.mono(10))
+                        .foregroundStyle(Theme.Foreground.tertiary)
+                        .lineLimit(1)
+                }
+            }
             Text(phase)
                 .font(Theme.Font.mono(10))
                 .foregroundStyle(phaseColor)

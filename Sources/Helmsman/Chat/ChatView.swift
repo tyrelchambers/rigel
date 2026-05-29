@@ -15,6 +15,9 @@ struct ChatView: View {
 
     @State private var mentionQuery: String? = nil
     @State private var mentionSelectedIndex = 0
+    /// Active when the composer holds a leading `/token` — drives the command popover.
+    @State private var commandQuery: String? = nil
+    @State private var commandSelectedIndex = 0
     /// Per-message context summaries attached to the next send. Cleared after send.
     @State private var attachedMentions: [MentionCandidate] = []
     @FocusState private var inputFocused: Bool
@@ -178,11 +181,19 @@ struct ChatView: View {
                 )
                 .padding(.horizontal, 12).padding(.top, 6)
             }
+            if let q = commandQuery {
+                CommandPopover(
+                    commands: ChatCommandRegistry.filter(q),
+                    selectedIndex: commandSelectedIndex,
+                    onPick: pickCommand
+                )
+                .padding(.horizontal, 12).padding(.top, 6)
+            }
             if !attachedMentions.isEmpty {
                 attachedMentionsRow
             }
             HStack(alignment: .bottom, spacing: 8) {
-                TextField("Ask Claude…  (type @ to mention a resource)", text: $viewModel.inputText, axis: .vertical)
+                TextField("Ask Claude…  (/ for commands, @ to mention a resource)", text: $viewModel.inputText, axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(Theme.Font.body(13))
                     .foregroundStyle(Theme.Foreground.primary)
@@ -198,19 +209,29 @@ struct ChatView: View {
                     .onSubmit { sendInput() }
                     .onChange(of: viewModel.inputText) { _, newValue in
                         updateMentionQuery(from: newValue)
+                        updateCommandQuery(from: newValue)
                     }
                     .onKeyPress(.downArrow) {
+                        if commandQuery != nil {
+                            let count = ChatCommandRegistry.filter(commandQuery ?? "").count
+                            commandSelectedIndex = min(commandSelectedIndex + 1, max(0, count - 1))
+                            return .handled
+                        }
                         guard mentionQuery != nil else { return .ignored }
                         let count = MentionIndex.filter(mentionCandidates, query: mentionQuery ?? "").count
                         mentionSelectedIndex = min(mentionSelectedIndex + 1, max(0, count - 1))
                         return .handled
                     }
                     .onKeyPress(.upArrow) {
+                        if commandQuery != nil {
+                            commandSelectedIndex = max(0, commandSelectedIndex - 1)
+                            return .handled
+                        }
                         if mentionQuery != nil {
                             mentionSelectedIndex = max(0, mentionSelectedIndex - 1)
                             return .handled
                         }
-                        // No active mention popover → ↑ on empty input recalls last message.
+                        // No active popover → ↑ on empty input recalls last message.
                         if viewModel.inputText.isEmpty, let last = viewModel.lastUserMessage {
                             viewModel.inputText = last
                             return .handled
@@ -218,11 +239,19 @@ struct ChatView: View {
                         return .ignored
                     }
                     .onKeyPress(.tab) {
+                        if commandQuery != nil { commitSelectedCommand(); return .handled }
                         guard mentionQuery != nil else { return .ignored }
                         commitSelectedMention()
                         return .handled
                     }
+                    .onKeyPress(.return) {
+                        // With the command popover open, Enter picks the highlighted
+                        // command rather than sending a half-typed "/lo".
+                        if commandQuery != nil { commitSelectedCommand(); return .handled }
+                        return .ignored
+                    }
                     .onKeyPress(.escape) {
+                        if commandQuery != nil { commandQuery = nil; return .handled }
                         if mentionQuery != nil { mentionQuery = nil; return .handled }
                         return .ignored
                     }
@@ -239,8 +268,10 @@ struct ChatView: View {
                 .keyboardShortcut(.return, modifiers: .command)
                 .disabled(!canSend)
             }
-            .padding(.horizontal, 12).padding(.vertical, 10)
+            .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 6)
             .background(Theme.Surface.elevated)
+
+            commandsChipRow
         }
     }
 
@@ -336,6 +367,78 @@ struct ChatView: View {
             attachedMentions.append(c)
         }
         mentionQuery = nil
+    }
+
+    // MARK: - Commands
+
+    /// A "commands" chip under the input — lists every command, so they're
+    /// discoverable without knowing to type `/`.
+    private var commandsChipRow: some View {
+        HStack(spacing: 6) {
+            Menu {
+                ForEach(ChatCommandRegistry.all) { spec in
+                    Button {
+                        viewModel.inputText = spec.insertion
+                        commandQuery = spec.argHint == nil ? nil : ""
+                        commandSelectedIndex = 0
+                        inputFocused = true
+                    } label: {
+                        Text("\(spec.display) — \(spec.description)")
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.left.forwardslash.chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                    Text("commands")
+                        .font(Theme.Font.body(11, weight: .medium))
+                }
+                .foregroundStyle(Theme.Foreground.secondary)
+                .padding(.horizontal, 8).padding(.vertical, 3)
+                .background(Theme.Surface.field)
+                .clipShape(Capsule())
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Browse chat commands")
+            Spacer()
+        }
+        .padding(.horizontal, 12).padding(.bottom, 10)
+        .background(Theme.Surface.elevated)
+    }
+
+    /// Active when the whole input is a leading slash token (`/`, `/lo`, …) with
+    /// no space yet — i.e. the command name is still being typed. Clears once a
+    /// space (the argument) or any non-command text follows.
+    private func updateCommandQuery(from text: String) {
+        guard text.hasPrefix("/") else { commandQuery = nil; return }
+        let token = text.dropFirst()
+        if token.contains(" ") || token.contains("\n") {
+            commandQuery = nil
+            return
+        }
+        guard token.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "?" }) else {
+            commandQuery = nil
+            return
+        }
+        commandQuery = String(token)
+        commandSelectedIndex = 0
+    }
+
+    private func commitSelectedCommand() {
+        guard let q = commandQuery else { return }
+        let filtered = ChatCommandRegistry.filter(q)
+        guard filtered.indices.contains(commandSelectedIndex) else { return }
+        pickCommand(filtered[commandSelectedIndex])
+    }
+
+    private func pickCommand(_ spec: ChatCommandSpec) {
+        viewModel.inputText = spec.insertion
+        // No-arg commands are ready to fire; keep the popover open for ones that
+        // still need an argument so the user knows to type it.
+        commandQuery = nil
+        inputFocused = true
     }
 }
 

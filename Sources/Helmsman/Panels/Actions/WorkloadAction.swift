@@ -38,6 +38,35 @@ enum WorkloadAction: Identifiable {
     /// affects the confirm-sheet copy; apply is idempotent either way.
     case applyIngress(Ingress, isNew: Bool)
     case deleteIngress(name: String, namespace: String)
+    /// Create-or-update a service via `kubectl apply -f -`. `isNew` only affects
+    /// the confirm-sheet copy; apply is idempotent either way.
+    case applyService(Service, isNew: Bool)
+    case deleteService(name: String, namespace: String)
+    /// Create-or-update a configmap via `kubectl apply -f -`. `isNew` only
+    /// affects the confirm-sheet copy; apply is idempotent either way.
+    case applyConfigMap(ConfigMap, isNew: Bool)
+    case deleteConfigMap(name: String, namespace: String)
+    case deletePVC(name: String, namespace: String)
+    /// PersistentVolume is cluster-scoped — no namespace.
+    case deletePV(name: String)
+    /// Generic workload ops keyed by kubectl resource kind ("statefulset",
+    /// "daemonset", "job", "cronjob") — shared across the Workloads panel.
+    case restartWorkload(kind: String, name: String, namespace: String)
+    case scaleWorkload(kind: String, name: String, namespace: String, current: Int, to: Int)
+    case deleteWorkload(kind: String, name: String, namespace: String)
+    case setCronJobSuspend(name: String, namespace: String, suspend: Bool)
+    /// Trigger a manual run of a CronJob. `jobName` is generated at the call site
+    /// so the preview and the executed command match.
+    case triggerCronJob(name: String, namespace: String, jobName: String)
+    case createNamespace(name: String)
+    case deleteNamespace(name: String)
+    /// Delete an RBAC object. `namespace` is nil for cluster-scoped kinds
+    /// (clusterrole/clusterrolebinding). kind = kubectl resource string.
+    case deleteRBAC(kind: String, name: String, namespace: String?)
+    /// Apply right-sized requests/limits to one container via `kubectl set
+    /// resources`. `requests`/`limits` are kubectl quantity lists like
+    /// "cpu=250m,memory=512Mi" (empty to leave that side untouched).
+    case setResources(kind: String, name: String, namespace: String, container: String, requests: String, limits: String)
     /// Apply an arbitrary manifest YAML (multi-document). Used by the catalog
     /// install wizard; the wizard's Review step is the user confirmation, so
     /// these flow through `WorkloadCommander.run` directly without the
@@ -61,6 +90,21 @@ enum WorkloadAction: Identifiable {
         case .moveSecret(let o, let n, let ns): return "move-secret-\(o.id)-to-\(ns)/\(n)"
         case .applyIngress(let i, _): return "apply-ingress-\(i.metadata.namespace ?? "default")/\(i.metadata.name)"
         case .deleteIngress(let name, let ns): return "delete-ingress-\(ns)/\(name)"
+        case .applyService(let s, _): return "apply-service-\(s.metadata.namespace ?? "default")/\(s.metadata.name)"
+        case .deleteService(let name, let ns): return "delete-service-\(ns)/\(name)"
+        case .applyConfigMap(let c, _): return "apply-configmap-\(c.metadata.namespace ?? "default")/\(c.metadata.name)"
+        case .deleteConfigMap(let name, let ns): return "delete-configmap-\(ns)/\(name)"
+        case .deletePVC(let name, let ns): return "delete-pvc-\(ns)/\(name)"
+        case .deletePV(let name): return "delete-pv-\(name)"
+        case .restartWorkload(let k, let n, let ns): return "restart-\(k)-\(ns)/\(n)"
+        case .scaleWorkload(let k, let n, let ns, _, let to): return "scale-\(k)-\(ns)/\(n)-\(to)"
+        case .deleteWorkload(let k, let n, let ns): return "delete-\(k)-\(ns)/\(n)"
+        case .setCronJobSuspend(let n, let ns, let s): return "suspend-cronjob-\(ns)/\(n)-\(s)"
+        case .triggerCronJob(let n, let ns, _): return "trigger-cronjob-\(ns)/\(n)"
+        case .createNamespace(let n): return "create-namespace-\(n)"
+        case .deleteNamespace(let n): return "delete-namespace-\(n)"
+        case .deleteRBAC(let k, let n, let ns): return "delete-\(k)-\(ns ?? "_")/\(n)"
+        case .setResources(let k, let n, let ns, let c, _, _): return "setresources-\(k)-\(ns)/\(n)-\(c)"
         case .applyManifest(_, let label): return "apply-manifest-\(label)"
         }
     }
@@ -87,6 +131,27 @@ enum WorkloadAction: Identifiable {
             let ns = i.metadata.namespace ?? "default"
             return "\(isNew ? "Create" : "Apply") ingress \(ns)/\(i.metadata.name)"
         case .deleteIngress(let name, let ns): return "Delete ingress \(ns)/\(name)"
+        case .applyService(let s, let isNew):
+            let ns = s.metadata.namespace ?? "default"
+            return "\(isNew ? "Create" : "Apply") service \(ns)/\(s.metadata.name)"
+        case .deleteService(let name, let ns): return "Delete service \(ns)/\(name)"
+        case .applyConfigMap(let c, let isNew):
+            let ns = c.metadata.namespace ?? "default"
+            return "\(isNew ? "Create" : "Apply") configmap \(ns)/\(c.metadata.name)"
+        case .deleteConfigMap(let name, let ns): return "Delete configmap \(ns)/\(name)"
+        case .deletePVC(let name, let ns): return "Delete PVC \(ns)/\(name)"
+        case .deletePV(let name): return "Delete PV \(name)"
+        case .restartWorkload(let k, let n, _): return "Restart \(k)/\(n)"
+        case .scaleWorkload(let k, let n, _, _, let to): return "Scale \(k)/\(n) → \(to)"
+        case .deleteWorkload(let k, let n, let ns): return "Delete \(k) \(ns)/\(n)"
+        case .setCronJobSuspend(let n, _, let s): return "\(s ? "Suspend" : "Resume") cronjob \(n)"
+        case .triggerCronJob(let n, _, _): return "Trigger cronjob \(n)"
+        case .createNamespace(let n): return "Create namespace \(n)"
+        case .deleteNamespace(let n): return "Delete namespace \(n)"
+        case .deleteRBAC(let k, let n, let ns):
+            return "Delete \(k) \(ns.map { "\($0)/" } ?? "")\(n)"
+        case .setResources(let k, let n, _, let c, _, _):
+            return "Right-size \(k)/\(n) (\(c))"
         case .applyManifest(_, let label):
             return "Apply \(label) manifest"
         }
@@ -140,6 +205,43 @@ enum WorkloadAction: Identifiable {
             return "\(isNew ? "Creates" : "Updates") the ingress in namespace \(ns) with \(routes) route\(routes == 1 ? "" : "s") via `kubectl apply -f -`."
         case .deleteIngress(let name, let ns):
             return "Permanently removes ingress \(ns)/\(name). Traffic routed through it will stop until a replacement exists."
+        case .applyService(let s, let isNew):
+            let ns = s.metadata.namespace ?? "default"
+            let n = s.spec?.ports?.count ?? 0
+            return "\(isNew ? "Creates" : "Updates") the \(s.typeLabel) service in namespace \(ns) with \(n) port\(n == 1 ? "" : "s") via `kubectl apply -f -`."
+        case .deleteService(let name, let ns):
+            return "Permanently removes service \(ns)/\(name). Workloads and ingresses referencing it will lose connectivity until a replacement exists."
+        case .applyConfigMap(let c, let isNew):
+            let ns = c.metadata.namespace ?? "default"
+            let n = c.data?.count ?? 0
+            return "\(isNew ? "Creates" : "Updates") the configmap in namespace \(ns) with \(n) key\(n == 1 ? "" : "s") via `kubectl apply -f -`."
+        case .deleteConfigMap(let name, let ns):
+            return "Permanently removes configmap \(ns)/\(name). Workloads mounting it as env/volume will fail to start or roll out until a replacement exists."
+        case .deletePVC(let name, let ns):
+            return "Permanently removes PVC \(ns)/\(name). Depending on the StorageClass reclaim policy, the bound volume and its DATA may be deleted. Pods using this claim will fail to mount."
+        case .deletePV(let name):
+            return "Permanently removes PersistentVolume \(name). If a Delete reclaim policy applies, the underlying storage and its DATA are destroyed."
+        case .restartWorkload(let k, let n, let ns):
+            return "Triggers a rolling restart of \(k)/\(n) in namespace \(ns). Pods are recreated on the latest template."
+        case .scaleWorkload(let k, let n, let ns, let current, let to):
+            return "Sets replicas from \(current) → \(to) for \(k)/\(n) in namespace \(ns)."
+        case .deleteWorkload(let k, let n, let ns):
+            return "Permanently removes \(k) \(ns)/\(n) and the pods it manages."
+        case .setCronJobSuspend(let n, let ns, let s):
+            return s
+                ? "Suspends cronjob \(ns)/\(n). No new jobs will be scheduled until resumed; running jobs continue."
+                : "Resumes cronjob \(ns)/\(n). Scheduling restarts on the next matching time."
+        case .triggerCronJob(let n, let ns, let jobName):
+            return "Creates job \(ns)/\(jobName) from cronjob \(n) to run it once now, outside its schedule."
+        case .createNamespace(let n):
+            return "Creates namespace \(n)."
+        case .deleteNamespace(let n):
+            return "Permanently removes namespace \(n) AND every resource inside it — pods, deployments, services, secrets, PVCs, everything. This cascade is irreversible."
+        case .deleteRBAC(let k, let n, let ns):
+            return "Permanently removes \(k) \(ns.map { "\($0)/" } ?? "")\(n). Subjects relying on it will lose the access it granted — this can lock workloads or users out."
+        case .setResources(_, _, let ns, let c, let requests, let limits):
+            let parts = [requests.isEmpty ? nil : "requests \(requests)", limits.isEmpty ? nil : "limits \(limits)"].compactMap { $0 }
+            return "Sets \(parts.joined(separator: " / ")) on container \(c) in namespace \(ns). Triggers a new rollout."
         case .applyManifest(_, let label):
             return "Creates or updates the resources defined in the \(label) manifest via `kubectl apply -f -`."
         }
@@ -157,6 +259,14 @@ enum WorkloadAction: Identifiable {
              .setDeploymentEnv,
              .applySecret,
              .applyIngress,
+             .applyService,
+             .applyConfigMap,
+             .restartWorkload,
+             .scaleWorkload,
+             .setCronJobSuspend,
+             .triggerCronJob,
+             .createNamespace,
+             .setResources,
              .applyManifest:
             return false
         default:
@@ -167,7 +277,7 @@ enum WorkloadAction: Identifiable {
     /// True = require explicit "I understand" acknowledge checkbox.
     var needsAcknowledge: Bool {
         switch self {
-        case .deletePod, .drainNode, .deleteSecret, .moveSecret, .deleteIngress: return true
+        case .deletePod, .drainNode, .deleteSecret, .moveSecret, .deleteIngress, .deleteService, .deleteConfigMap, .deletePVC, .deletePV, .deleteWorkload, .deleteNamespace, .deleteRBAC: return true
         default: return false
         }
     }
@@ -228,6 +338,40 @@ enum WorkloadAction: Identifiable {
             return [.applyYAML(i.toYAML())]
         case .deleteIngress(let name, let ns):
             return [.args(["delete", "ingress", name, "-n", ns])]
+        case .applyService(let s, _):
+            return [.applyYAML(s.toYAML())]
+        case .deleteService(let name, let ns):
+            return [.args(["delete", "service", name, "-n", ns])]
+        case .applyConfigMap(let c, _):
+            return [.applyYAML(c.toYAML())]
+        case .deleteConfigMap(let name, let ns):
+            return [.args(["delete", "configmap", name, "-n", ns])]
+        case .deletePVC(let name, let ns):
+            return [.args(["delete", "pvc", name, "-n", ns])]
+        case .deletePV(let name):
+            return [.args(["delete", "pv", name])]
+        case .restartWorkload(let k, let n, let ns):
+            return [.args(["rollout", "restart", "\(k)/\(n)", "-n", ns])]
+        case .scaleWorkload(let k, let n, let ns, _, let to):
+            return [.args(["scale", "\(k)/\(n)", "--replicas=\(to)", "-n", ns])]
+        case .deleteWorkload(let k, let n, let ns):
+            return [.args(["delete", k, n, "-n", ns])]
+        case .setCronJobSuspend(let n, let ns, let suspend):
+            return [.args(["patch", "cronjob", n, "-n", ns, "--type=merge", "-p", "{\"spec\":{\"suspend\":\(suspend)}}"])]
+        case .triggerCronJob(let n, let ns, let jobName):
+            return [.args(["create", "job", jobName, "--from=cronjob/\(n)", "-n", ns])]
+        case .createNamespace(let n):
+            return [.args(["create", "namespace", n])]
+        case .deleteNamespace(let n):
+            return [.args(["delete", "namespace", n])]
+        case .deleteRBAC(let k, let n, let ns):
+            return [.args(["delete", k, n] + (ns.map { ["-n", $0] } ?? []))]
+        case .setResources(let k, let n, let ns, let c, let requests, let limits):
+            var args = ["set", "resources", "\(k)/\(n)", "-c", c]
+            if !requests.isEmpty { args.append("--requests=\(requests)") }
+            if !limits.isEmpty { args.append("--limits=\(limits)") }
+            args.append(contentsOf: ["-n", ns])
+            return [.args(args)]
         case .applyManifest(let yaml, _):
             return [.applyYAML(yaml)]
         }

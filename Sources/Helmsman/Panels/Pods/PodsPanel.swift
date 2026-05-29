@@ -11,6 +11,7 @@ struct PodsPanel: View {
     var onWorkload: (WorkloadAction) -> Void = { _ in }
     var onViewYAML: (String, String, String?) -> Void = { _, _, _ in }
     var onTailLogsForPod: (Pod) -> Void = { _ in }
+    var onForwardPod: (Pod, Int) -> Void = { _, _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -135,6 +136,7 @@ struct PodsPanel: View {
                 Button("Manage…") { managePod = pod }
                 Button("View YAML…") { onViewYAML("pod", pod.metadata.name, pod.metadata.namespace) }
                 Button("Run command in pod…") { execPod = pod }
+                forwardMenu(for: pod)
                 Divider()
                 Button("Delete pod…", role: .destructive) { onWorkload(.deletePod(pod)) }
             }
@@ -168,6 +170,25 @@ struct PodsPanel: View {
                     onWorkload(.deletePod(pod))
                 }
             )
+        }
+    }
+
+    /// "Forward port" entry — a submenu when the pod declares multiple container
+    /// ports, a single item for one, disabled when none are declared.
+    @ViewBuilder
+    private func forwardMenu(for pod: Pod) -> some View {
+        let ports = (pod.spec?.containers ?? []).flatMap { $0.ports ?? [] }
+        if ports.isEmpty {
+            Button("Forward port…") {}.disabled(true)
+        } else if ports.count == 1 {
+            Button("Forward port \(ports[0].containerPort)…") { onForwardPod(pod, ports[0].containerPort) }
+        } else {
+            Menu("Forward port…") {
+                ForEach(ports, id: \.self) { p in
+                    let label = (p.name.map { "\($0) (\(p.containerPort))" }) ?? "\(p.containerPort)"
+                    Button(label) { onForwardPod(pod, p.containerPort) }
+                }
+            }
         }
     }
 

@@ -76,4 +76,24 @@ enum ResourceQuantity {
         if c < 1 { return String(format: "%.0f m", c * 1000) }
         return c >= 10 ? String(format: "%.0f", c) : String(format: "%.2f", c)
     }
+
+    // MARK: - kubectl-valid quantity strings (for `kubectl set resources`)
+
+    /// Emit a CPU quantity kubectl accepts: millicores rounded up to the nearest
+    /// 10m, collapsed to whole cores when evenly divisible (e.g. 0.25 → "250m",
+    /// 2.0 → "2"). Never returns "0".
+    static func cpuQuantityString(_ cores: Double) -> String {
+        var millis = Int((cores * 1000).rounded(.up))
+        millis = max(10, ((millis + 9) / 10) * 10)   // round up to nearest 10m, floor 10m
+        if millis % 1000 == 0 { return "\(millis / 1000)" }
+        return "\(millis)m"
+    }
+
+    /// Emit a memory quantity kubectl accepts: bytes rounded up to the nearest
+    /// Mi, collapsed to Gi when an exact multiple (e.g. 320Mi, 2Gi). Never "0".
+    static func memQuantityString(_ bytes: Double) -> String {
+        let mi = max(1, Int((bytes / (1024 * 1024)).rounded(.up)))
+        if mi % 1024 == 0 { return "\(mi / 1024)Gi" }
+        return "\(mi)Mi"
+    }
 }

@@ -21,6 +21,8 @@ struct WorkloadConfirmSheet: View {
         self.onCancel = onCancel
         if case .scaleDeployment(let d, let to) = action {
             _replicas = State(initialValue: to == 0 ? (d.spec?.replicas ?? d.status?.replicas ?? 1) : to)
+        } else if case .scaleWorkload(_, _, _, let current, let to) = action {
+            _replicas = State(initialValue: to == 0 ? current : to)
         } else {
             _replicas = State(initialValue: 0)
         }
@@ -35,10 +37,25 @@ struct WorkloadConfirmSheet: View {
         action.isHighRisk ? Theme.Status.failed : Theme.Accent.primary
     }
 
+    /// Current replica count for whichever scale action this is (nil otherwise) —
+    /// drives the inline stepper.
+    private var scaleCurrent: Int? {
+        switch action {
+        case .scaleDeployment(let d, _):
+            return d.spec?.replicas ?? d.status?.replicas ?? 0
+        case .scaleWorkload(_, _, _, let current, _):
+            return current
+        default:
+            return nil
+        }
+    }
+
     private var effectiveAction: WorkloadAction {
         switch action {
         case .scaleDeployment(let d, _):
             return .scaleDeployment(d, to: replicas)
+        case .scaleWorkload(let k, let n, let ns, let current, _):
+            return .scaleWorkload(kind: k, name: n, namespace: ns, current: current, to: replicas)
         case .drainNode(let n, _):
             return .drainNode(n, options: drainOpts)
         default:
@@ -92,9 +109,8 @@ struct WorkloadConfirmSheet: View {
                 drainOptionsBlock
             }
 
-            // Inline replica stepper for Scale.
-            if case .scaleDeployment(let d, _) = action {
-                let cur = d.spec?.replicas ?? d.status?.replicas ?? 0
+            // Inline replica stepper for Scale (deployment or generic workload).
+            if let cur = scaleCurrent {
                 HStack(spacing: 10) {
                     Text("REPLICAS")
                         .font(Theme.Font.body(10, weight: .semibold))
