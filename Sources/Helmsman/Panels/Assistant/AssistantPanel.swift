@@ -340,7 +340,7 @@ struct AssistantPanel: View {
                     Text("3. Private registry (optional)").font(Theme.Font.body(12, weight: .semibold)).foregroundStyle(Theme.Foreground.primary)
                     Text("If the image is in a private registry (e.g. GHCR), set a pull-secret name. Provide a username + token to create it, or leave creds blank to reference an existing one.")
                         .font(Theme.Font.body(11)).foregroundStyle(Theme.Foreground.secondary)
-                    labeledField("Pull secret name", text: $viewModel.config.imagePullSecretName)
+                    pullSecretField
                     labeledField("Registry username", text: $viewModel.registryUsername)
                     HStack(spacing: 8) {
                         Text("Registry token").font(Theme.Font.body(11)).foregroundStyle(Theme.Foreground.secondary).frame(width: 150, alignment: .leading)
@@ -382,6 +382,32 @@ struct AssistantPanel: View {
     }
 
     // MARK: - Bits
+
+    /// Pull-secret name with a dropdown of existing dockerconfigjson Secrets —
+    /// pick one to reuse, or type a name to create a new one.
+    private var pullSecretField: some View {
+        HStack(spacing: 8) {
+            Text("Pull secret name").font(Theme.Font.body(11)).foregroundStyle(Theme.Foreground.secondary).frame(width: 150, alignment: .leading)
+            TextField("", text: $viewModel.config.imagePullSecretName)
+                .textFieldStyle(.plain).font(Theme.Font.mono(11))
+                .padding(.horizontal, 8).padding(.vertical, 6).inputChrome()
+            Menu {
+                Button("None") { viewModel.config.imagePullSecretName = "" }
+                if !viewModel.pullSecretCandidates.isEmpty {
+                    Divider()
+                    ForEach(viewModel.pullSecretCandidates) { s in
+                        Button(s.metadata.name) { viewModel.config.imagePullSecretName = s.metadata.name }
+                    }
+                }
+            } label: {
+                Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.Accent.primary)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .frame(width: 22)
+            .help(viewModel.pullSecretCandidates.isEmpty ? "No existing pull secrets found" : "Pick an existing pull secret")
+        }
+    }
 
     private func labeledField(_ label: String, text: Binding<String>) -> some View {
         HStack(spacing: 8) {

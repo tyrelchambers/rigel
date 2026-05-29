@@ -96,6 +96,14 @@ final class AssistantViewModel {
 
     var manifestPreview: String { AssistantInstaller.manifestYAML(config) }
 
+    /// Existing image-pull (dockerconfigjson) Secrets in the agent's namespace,
+    /// offered as a dropdown so you can reuse one instead of typing its name.
+    var pullSecretCandidates: [Secret] {
+        cache.secrets
+            .filter { $0.secretType == .dockerconfigjson && ($0.metadata.namespace ?? "default") == "default" }
+            .sorted { $0.metadata.name < $1.metadata.name }
+    }
+
     /// Token expiry, derived from the issued-at annotation the installer stamped
     /// on the token Secret. Nil if the Secret or annotation is missing.
     var tokenExpiry: TokenExpiry.Status? {
