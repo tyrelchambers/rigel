@@ -153,18 +153,25 @@ final class SettingsViewModel {
                 namespace: ns, localPort: Self.linkLocalPort,
                 remotePort: SignalBridgeManifests.port, context: context)
             defer { Task { await session.terminate() } }
-            // Wait for the listener before sending.
-            var ready = false
+            // Send while still iterating the stream: leaving the loop drops the
+            // iterator, which tears the port-forward down (onTermination) and
+            // would drop the in-flight request (NSURLError -1005). So do the
+            // POST inside the .ready case, then return.
             for await event in session.stream() {
-                if case .ready = event { ready = true; break }
-                if case .failed(let e) = event { actionError = "Port-forward failed: \(e)"; return }
+                switch event {
+                case .ready:
+                    let recipients = assistant.signalRecipients
+                        .split(whereSeparator: { $0 == "," || $0 == " " })
+                        .map { String($0).trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+                    try await SignalBridgeClient(localPort: Self.linkLocalPort)
+                        .sendTest(number: assistant.signalNumber, recipients: recipients)
+                    return
+                case .failed(let e):
+                    actionError = "Port-forward failed: \(e)"; return
+                case .ended:
+                    actionError = "Port-forward ended before it was ready."; return
+                }
             }
-            guard ready else { actionError = "Port-forward did not become ready."; return }
-            let recipients = assistant.signalRecipients
-                .split(whereSeparator: { $0 == "," || $0 == " " })
-                .map { String($0).trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-            try await SignalBridgeClient(localPort: Self.linkLocalPort)
-                .sendTest(number: assistant.signalNumber, recipients: recipients)
         } catch {
             actionError = "Test send failed: \(error)"
         }
