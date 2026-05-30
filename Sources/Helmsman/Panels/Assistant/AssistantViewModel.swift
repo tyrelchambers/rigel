@@ -265,6 +265,30 @@ final class AssistantViewModel {
         }
     }
 
+    /// Clear the agent's last report (e.g. a stale auth warning). Read-modify-
+    /// writes only the `report` field of the state ConfigMap; the agent only
+    /// re-populates it on a fresh event, so a cleared report stays cleared.
+    func clearReport() async {
+        guard let raw = configMap("assistant-state")?.data?["state.json"],
+              let data = raw.data(using: .utf8),
+              var obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else { return }
+        obj["report"] = ""
+        guard let newData = try? JSONSerialization.data(withJSONObject: obj),
+              let newJSON = String(data: newData, encoding: .utf8) else { return }
+        let cm: [String: Any] = [
+            "apiVersion": "v1", "kind": "ConfigMap",
+            "metadata": ["name": "assistant-state", "namespace": stateNamespace,
+                         "labels": ["app.kubernetes.io/managed-by": "helmsman-assistant"]],
+            "data": ["state.json": newJSON],
+        ]
+        guard let cmData = try? JSONSerialization.data(withJSONObject: cm),
+              let cmJSON = String(data: cmData, encoding: .utf8) else { return }
+        working = true
+        defer { working = false }
+        if let err = await applyYAML(cmJSON) { actionError = "Failed to clear report: \(err)" }
+    }
+
     /// Roll the agent Deployment (new pod) — picks up an updated Secret/config.
     func restartAgent() async {
         working = true

@@ -13,6 +13,7 @@ struct AssistantPanel: View {
     /// fields above stays snappy (it would otherwise re-lay-out on every keystroke).
     @State private var showManifest = false
     @State private var confirmCreateNamespace = false
+    @State private var showAllActivity = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -35,6 +36,7 @@ struct AssistantPanel: View {
             }
         }
         .background(Theme.Surface.primary)
+        .sheet(isPresented: $showAllActivity) { activitySheet }
     }
 
     // MARK: - Header
@@ -205,8 +207,16 @@ struct AssistantPanel: View {
     private var reportCard: some View {
         card {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Last report").font(Theme.Font.body(12, weight: .semibold)).foregroundStyle(Theme.Foreground.primary)
-                Text(viewModel.report).font(Theme.Font.body(12)).foregroundStyle(Theme.Foreground.secondary)
+                HStack {
+                    Text("Last report").font(Theme.Font.body(12, weight: .semibold)).foregroundStyle(Theme.Foreground.primary)
+                    Spacer()
+                    Button { Task { await viewModel.clearReport() } } label: {
+                        Text("Clear").font(Theme.Font.body(11, weight: .medium)).foregroundStyle(Theme.Accent.primary)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(viewModel.working)
+                }
+                Text(viewModel.report).font(Theme.Font.body(12)).foregroundStyle(Theme.Foreground.secondary).textSelection(.enabled)
             }
         }
     }
@@ -231,15 +241,52 @@ struct AssistantPanel: View {
 
     private var auditSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionTitle("Activity")
-            if viewModel.audit.isEmpty {
-                Text("No actions yet.").font(Theme.Font.body(12)).foregroundStyle(Theme.Foreground.tertiary)
-            } else {
-                ForEach(viewModel.audit) { entry in
-                    auditRow(entry)
+            HStack {
+                sectionTitle("Activity (\(viewModel.audit.count))")
+                Spacer()
+                if viewModel.audit.count > 10 {
+                    Button("See all") { showAllActivity = true }
+                        .buttonStyle(.plain)
+                        .font(Theme.Font.body(11, weight: .medium)).foregroundStyle(Theme.Accent.primary)
+                }
+            }
+            card {
+                if viewModel.audit.isEmpty {
+                    Text("No actions yet.").font(Theme.Font.body(12)).foregroundStyle(Theme.Foreground.tertiary)
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 8) {
+                            ForEach(viewModel.audit.prefix(10)) { entry in auditRow(entry) }
+                        }
+                    }
+                    .frame(maxHeight: 320)
                 }
             }
         }
+    }
+
+    /// Full activity, opened from "See all" — a scrollable modal of every entry.
+    private var activitySheet: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Activity — \(viewModel.audit.count) entries")
+                    .font(Theme.Font.body(14, weight: .semibold)).foregroundStyle(Theme.Foreground.primary)
+                Spacer()
+                Button("Done") { showAllActivity = false }
+                    .buttonStyle(.plain).font(Theme.Font.body(12, weight: .medium)).foregroundStyle(Theme.Accent.primary)
+            }
+            .padding(16)
+            .background(Theme.Surface.elevated)
+            .overlay(alignment: .bottom) { Rectangle().fill(Theme.Border.subtle).frame(height: 1) }
+            ScrollView {
+                LazyVStack(spacing: 8) {
+                    ForEach(viewModel.audit) { entry in auditRow(entry) }
+                }
+                .padding(16)
+            }
+        }
+        .frame(minWidth: 640, minHeight: 520)
+        .background(Theme.Surface.primary)
     }
 
     private func auditRow(_ e: AssistantAuditEntry) -> some View {
