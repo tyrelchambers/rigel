@@ -1,6 +1,5 @@
 import Foundation
 import Observation
-import AppKit
 
 /// Backs the Settings → Signal notifications page. Owns the deploy + phone-link
 /// flow; delegates the notification config (API URL / number / recipients) to
@@ -42,13 +41,14 @@ final class SettingsViewModel {
     /// agent is installed, else `default`.
     var targetNamespace: String { assistant.installedNamespace ?? "default" }
 
+    /// Tracks an in-flight deploy so `status` can show `.deploying`.
+    @ObservationIgnored private var statusApplying = false
+
     var status: SignalBridgeStatus {
         SignalBridgeStatus.derive(
             deployments: cache.deployments, namespace: targetNamespace,
             hasSavedNumber: !assistant.signalNumber.isEmpty, applying: statusApplying)
     }
-    /// Tracks an in-flight deploy so `status` can show `.deploying`.
-    @ObservationIgnored private var statusApplying = false
 
     // Config passthrough (single source of truth = assistant-config).
     var signalApiUrl: String { assistant.signalApiUrl }
@@ -61,7 +61,7 @@ final class SettingsViewModel {
         working = true; statusApplying = true; actionError = nil
         defer { working = false; statusApplying = false }
         let ns = targetNamespace
-        if let err = await assistant.applyManifestForSettings(SignalBridgeManifests.manifest(namespace: ns)) {
+        if let err = await assistant.applyManifest(SignalBridgeManifests.manifest(namespace: ns)) {
             actionError = "Deploy failed: \(err)"
             return
         }
@@ -107,6 +107,7 @@ final class SettingsViewModel {
         let client = SignalBridgeClient(localPort: Self.linkLocalPort)
         // Fetch the QR to scan.
         do { qrPNG = try await client.qrCodePNG() }
+        catch is CancellationError { return }
         catch { actionError = "Could not load QR code: \(error)" }
         // Poll for a linked account; first number wins.
         while !Task.isCancelled {
@@ -142,6 +143,7 @@ final class SettingsViewModel {
 
     /// Brief port-forward → POST a test message → tear down.
     func sendTest() async {
+        guard !linking else { actionError = "Finish linking before sending a test."; return }
         working = true; actionError = nil
         defer { working = false }
         let ns = targetNamespace

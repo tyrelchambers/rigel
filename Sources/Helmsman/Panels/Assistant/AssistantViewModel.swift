@@ -380,9 +380,8 @@ final class AssistantViewModel {
     }
 
     /// Apply arbitrary YAML through the agent's kubectl/context plumbing.
-    /// Used by the Settings page to deploy the Signal bridge. Returns nil on
-    /// success, or an error string.
-    func applyManifestForSettings(_ yaml: String) async -> String? {
+    /// Returns nil on success, or an error string.
+    func applyManifest(_ yaml: String) async -> String? {
         await applyYAML(yaml)
     }
 
