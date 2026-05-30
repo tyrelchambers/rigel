@@ -16,9 +16,6 @@ struct AssistantPanel: View {
     @State private var showAllActivity = false
     @State private var windowText = ""
     @State private var webhookText = ""
-    @State private var signalApiText = ""
-    @State private var signalNumberText = ""
-    @State private var signalRecipientsText = ""
     @State private var expandedAudit: Set<String> = []
 
     var body: some View {
@@ -95,9 +92,6 @@ struct AssistantPanel: View {
         .onAppear {
             windowText = viewModel.quietWindow.isEmpty ? "22:00-07:00" : viewModel.quietWindow
             webhookText = viewModel.webhookURL
-            signalApiText = viewModel.signalApiUrl
-            signalNumberText = viewModel.signalNumber
-            signalRecipientsText = viewModel.signalRecipients
         }
     }
 
@@ -130,21 +124,12 @@ struct AssistantPanel: View {
                         .buttonStyle(.plain).font(Theme.Font.body(11, weight: .medium)).foregroundStyle(Theme.Accent.primary)
                 }
                 Divider().background(Theme.Border.subtle)
-                Text("Signal (self-hosted signal-cli-rest-api)").font(Theme.Font.body(11, weight: .medium)).foregroundStyle(Theme.Foreground.secondary)
-                signalField("API URL", "http://signal-cli-rest:8080", $signalApiText)
-                signalField("Sender number", "+15551234567", $signalNumberText)
-                signalField("Recipients", "+15551234567 (comma-sep)", $signalRecipientsText)
-                Button("Save Signal") { Task { await viewModel.setSignal(apiUrl: signalApiText, number: signalNumberText, recipients: signalRecipientsText) } }
-                    .buttonStyle(.plain).font(Theme.Font.body(11, weight: .medium)).foregroundStyle(Theme.Accent.primary)
+                HStack(spacing: 6) {
+                    Image(systemName: "bell.badge").font(.system(size: 10)).foregroundStyle(Theme.Foreground.tertiary)
+                    Text("Signal notifications are set up in the Settings tab.")
+                        .font(Theme.Font.body(11)).foregroundStyle(Theme.Foreground.tertiary)
+                }
             }
-        }
-    }
-
-    private func signalField(_ label: String, _ placeholder: String, _ text: Binding<String>) -> some View {
-        HStack(spacing: 8) {
-            Text(label).font(Theme.Font.body(11)).foregroundStyle(Theme.Foreground.secondary).frame(width: 110, alignment: .leading)
-            TextField(placeholder, text: text)
-                .textFieldStyle(.plain).font(Theme.Font.mono(11)).padding(.horizontal, 8).padding(.vertical, 6).inputChrome()
         }
     }
 
