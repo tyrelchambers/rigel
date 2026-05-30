@@ -1,7 +1,14 @@
 import { classifyRisk, RiskTier } from "./classifier.js";
 import { loadConfig, type Config } from "./config.js";
 import { readRuntimeConfig, decideAutonomy, type RuntimeConfig } from "./runtimeConfig.js";
-import { notifyWebhook, notifySignal } from "./notify.js";
+import { notifyWebhook, notifySignal, receiveSignal } from "./notify.js";
+import { runDiagnosis } from "./diagnose.js";
+import {
+  handleInbound,
+  HELP_TEXT,
+  SeenTimestamps,
+  type InboundHandlers,
+} from "./signalInbound.js";
 import {
   detectDegradedDeployments,
   detectUnhealthyPods,
@@ -65,6 +72,8 @@ async function detectAll(cfg: Config): Promise<Incident[]> {
 interface LoopState {
   streaks: Map<string, number>;
   handled: Set<string>;
+  /** Inbound Signal messages already processed, so none is answered twice. */
+  seen: SeenTimestamps;
 }
 
 async function tick(
@@ -286,6 +295,135 @@ async function tick(
       void notifySignal(rc.signalApiUrl, rc.signalNumber, rc.signalRecipients, text);
     }
   }
+
+  // Two-way Signal: answer any inbound diagnosis questions / approval commands.
+  // Gated on the kill-switch (we already returned above when disabled) and the
+  // explicit signalInbound opt-in. Never throws — failures stay out of the loop.
+  if (rc.signalInbound && rc.signalApiUrl && rc.signalNumber) {
+    try {
+      await handleSignalInbound(cfg, rc, spend, cb, loop);
+    } catch (e) {
+      log(`signal inbound error: ${String(e)}`);
+    }
+  }
+}
+
+/** Wire the real IO handlers and run one inbound poll. Read-only diagnosis is
+ * metered against the spend cap; `approve` runs a previously-queued, supervised
+ * fix through the same circuit breaker + backup path as the autonomous loop. */
+async function handleSignalInbound(
+  cfg: Config,
+  rc: RuntimeConfig,
+  spend: SpendTracker,
+  cb: CircuitBreaker,
+  loop: LoopState,
+): Promise<void> {
+  // Allowlist: explicit recipients, else fall back to the linked number itself.
+  const allow = rc.signalRecipients.length > 0 ? rc.signalRecipients : rc.signalNumber ? [rc.signalNumber] : [];
+  if (allow.length === 0) {
+    log("signal inbound: no authorized numbers configured — skipping");
+    return;
+  }
+  const spentBefore = spend.total();
+
+  const handlers: InboundHandlers = {
+    receive: (apiUrl, number) => receiveSignal(apiUrl, number),
+    reply: (to, text) => notifySignal(rc.signalApiUrl!, rc.signalNumber!, [to], text),
+    help: () => HELP_TEXT,
+    status: async () => {
+      const s = await readState(cfg.stateConfigMap, cfg.stateNamespace);
+      const enabled = s.status?.enabled ? "active" : "disabled";
+      const spent = s.status ? `$${s.status.spentUsd.toFixed(2)}/$${s.status.spendCapUsd}` : "—";
+      return `Helmsman assistant is ${enabled}. Spend ${spent} this month. ${s.queue.length} fix(es) queued. Updated ${s.updatedAt || "—"}.`;
+    },
+    queue: async () => {
+      const s = await readState(cfg.stateConfigMap, cfg.stateNamespace);
+      if (s.queue.length === 0) return "No fixes are queued.";
+      const lines = s.queue
+        .slice(0, 10)
+        .map((q, i) => `${i + 1}. ${q.suggestion} — ${q.incident}${q.action ? "" : " (manual; run in Helmsman)"}`);
+      return `${lines.join("\n")}\n\nReply "approve N" to run one.`;
+    },
+    approve: (index) => approveQueued(cfg, cb, index),
+    diagnose: async (question) => {
+      if (!spend.canSpend()) {
+        return "I've reached my monthly spend cap, so I can't investigate right now.";
+      }
+      const out = await runDiagnosis(cfg, question);
+      spend.add(out.costUsd);
+      return out.text || "I couldn't find anything conclusive — try asking more specifically.";
+    },
+    log,
+  };
+
+  await handleInbound({ enabled: true, apiUrl: rc.signalApiUrl, number: rc.signalNumber, allow }, handlers, loop.seen);
+
+  // Persist spend if a diagnosis cost anything, so the cap survives restarts.
+  if (spend.total() !== spentBefore) {
+    const s = await readState(cfg.stateConfigMap, cfg.stateNamespace);
+    if (s.status) s.status.spentUsd = spend.total();
+    s.spend = { month: spend.currentMonth(), spentUsd: spend.total() };
+    await writeState(cfg.stateConfigMap, cfg.stateNamespace, s);
+  }
+}
+
+/** Execute a queued suggestion the operator approved over Signal. The human is
+ * the approver here, so a MEDIUM-tier fix runs without the unattended Opus
+ * supervisor — but every other guardrail still applies: BLOCKED/destructive
+ * items are refused, the circuit breaker can veto, and we snapshot a backup
+ * before mutating. Mirrors the executor path in `tick`. */
+async function approveQueued(cfg: Config, cb: CircuitBreaker, index: number): Promise<string> {
+  let state = await readState(cfg.stateConfigMap, cfg.stateNamespace);
+  const item = state.queue[index];
+  if (!item) return `There's no queued fix #${index + 1}. Reply "queue" to see the list.`;
+  if (!item.action) {
+    return `"${item.suggestion}" can't be run automatically (destructive / RBAC-blocked). Run it from Helmsman.`;
+  }
+  const action = item.action;
+  const tier = classifyRisk(action.kind);
+  if (tier === RiskTier.Blocked) {
+    return `"${item.suggestion}" is blocked from automatic execution. Run it from Helmsman.`;
+  }
+
+  const now = Date.now();
+  const ts = new Date(now).toISOString();
+  const ns = action.namespace ?? "default";
+  const targetName = action.deployment ?? action.pod ?? action.node ?? action.label;
+  const resourceKey = `${ns}/${targetName}`;
+  const fp = item.incident; // best available fingerprint for this queued item
+
+  const cbVerdict = cb.canAct(fp, resourceKey, now);
+  if (!cbVerdict.allowed) return `Can't run that right now — ${cbVerdict.reason}.`;
+  cb.record(fp, resourceKey, now);
+
+  try {
+    const result = await executeAction(action);
+    let backupRef: string | undefined;
+    if (result.backupYaml) {
+      const key = `${ts}_${fp}`.replace(/[^A-Za-z0-9_.-]/g, "_");
+      backupRef = await storeBackup(cfg.backupsConfigMap, cfg.stateNamespace, key, result.backupYaml, cfg.maxBackups);
+    }
+    state = appendAudit(
+      state,
+      {
+        at: ts, fingerprint: fp, incident: item.incident, proposal: action.label,
+        command: result.commands.join(" && "), tier: tier === RiskTier.Medium ? "medium" : "low",
+        verdict: "approved", outcome: result.success ? "success" : "failure",
+        detail: truncate(`approved via Signal — ${result.output}`), backupRef,
+      },
+      cfg.auditMaxEntries,
+    );
+    // Drop the item from the queue whether or not the command succeeded — a
+    // failed run is recorded in the audit log; re-queuing happens on re-detect.
+    state = { ...state, queue: state.queue.filter((_, i) => i !== index) };
+    await writeState(cfg.stateConfigMap, cfg.stateNamespace, state);
+    log(`${result.success ? "✓" : "✗"} approved-via-signal ${action.label} — ${result.commands.join(" && ")}`);
+    return result.success
+      ? `✓ Ran: ${action.label}\n${result.commands.join(" && ")}`
+      : truncate(`✗ Failed: ${action.label}\n${result.output}`, 1200);
+  } catch (e) {
+    return `✗ Error running ${action.label}: ${String(e)}`;
+  }
 }
 
 function monthKey(now: number): string {
@@ -342,7 +480,7 @@ async function main(): Promise<void> {
     windowMs: cfg.windowMs,
   });
   const spend = new SpendTracker(cfg.spendCapUsd);
-  const loop: LoopState = { streaks: new Map(), handled: new Set() };
+  const loop: LoopState = { streaks: new Map(), handled: new Set(), seen: new SeenTimestamps() };
 
   // Restore persisted spend so the monthly cap survives pod restarts.
   try {

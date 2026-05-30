@@ -25,6 +25,36 @@ and **fail-closed** on any model/exec error.
 State is written to the `assistant-state` ConfigMap (audit timeline, queued
 suggestions, status) and backups to `assistant-backups` — both read by Helmsman.
 
+## Two-way Signal (texting the assistant)
+
+With `signalInbound=true` in `assistant-config`, each tick the agent also polls
+the Signal bridge (`GET /v1/receive/<number>`) and answers messages — but only
+from numbers on `signalRecipients` (your own linked number by default); every
+other sender is dropped silently.
+
+```
+inbound Signal msg → authorize (allowlist) → de-dupe (timestamp) → route:
+   free text   → read-only diagnosis (claude -p, get/describe/logs/top/events) → reply
+   "status"    → health / spend / queue summary
+   "queue"     → list fixes awaiting approval
+   "approve N" → run queued fix #N through the SAME guardrails as the loop
+                 (classifier → circuit breaker → backup-before-mutate → executor)
+   "help"      → command list
+```
+
+Design notes:
+- **Diagnosis is always read-only** — texting a question can never mutate the
+  cluster.
+- **The only mutation path is `approve`**, and it runs a fix the supervised loop
+  already vetted and queued — never an arbitrary command. The human texting
+  `approve` is the approver, so a MEDIUM fix skips the *unattended* Opus
+  supervisor, but the RBAC cage, circuit breaker, and backup-before-mutate all
+  still apply; BLOCKED/destructive items are refused.
+- Diagnosis spends against the same monthly cap; at the cap, inbound replies say
+  so instead of investigating.
+- The pure routing/parsing/auth/chunking logic lives in `signalInbound.ts` and
+  is fully unit-tested; `index.ts` wires the real receive/send/model/executor IO.
+
 ## Develop
 
 ```bash
