@@ -19,6 +19,7 @@ enum PanelKind: Hashable, CaseIterable, Identifiable {
     case catalog
     case events
     case logs
+    case settings
 
     var id: Self { self }
 
@@ -42,6 +43,7 @@ enum PanelKind: Hashable, CaseIterable, Identifiable {
         case .catalog:     return "app.gift.fill"
         case .events:      return "exclamationmark.bubble.fill"
         case .logs:        return "text.alignleft"
+        case .settings:    return "gearshape.fill"
         }
     }
 
@@ -65,6 +67,7 @@ enum PanelKind: Hashable, CaseIterable, Identifiable {
         case .catalog:     return "Apps"
         case .events:      return "Events"
         case .logs:        return "Logs"
+        case .settings:    return "Settings"
         }
     }
 }

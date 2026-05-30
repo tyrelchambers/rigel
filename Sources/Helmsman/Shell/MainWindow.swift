@@ -24,6 +24,7 @@ struct MainWindow: View {
     @State private var rbacVM: RBACViewModel
     @State private var catalogVM: CatalogViewModel
     @State private var assistantVM: AssistantViewModel
+    @State private var settingsVM: SettingsViewModel
     @State private var paletteOpen = false
     @State private var pendingWorkloadAction: WorkloadAction?
     /// True when the pending action came from a Claude chat suggestion — its
@@ -66,7 +67,9 @@ struct MainWindow: View {
         _namespacesVM = State(initialValue: NamespacesViewModel(cache: cache))
         _rbacVM = State(initialValue: RBACViewModel(cache: cache))
         _catalogVM = State(initialValue: CatalogViewModel(cache: cache, store: catalogStore))
-        _assistantVM = State(initialValue: AssistantViewModel(cache: cache))
+        let assistant = AssistantViewModel(cache: cache)
+        _assistantVM = State(initialValue: assistant)
+        _settingsVM = State(initialValue: SettingsViewModel(cache: cache, assistant: assistant))
     }
 
     var body: some View {
@@ -516,6 +519,8 @@ struct MainWindow: View {
             LogsPanel(contextManager: contextManager, viewModel: logsVM) { line, surrounding in
                 handoffLogSlice(line: line, surrounding: surrounding)
             }
+        case .settings:
+            SettingsPanel(viewModel: settingsVM, onOpenAssistant: { selectedPanel = .assistant })
         }
     }
 
@@ -523,6 +528,7 @@ struct MainWindow: View {
         logsVM.clearSelection()        // old-context stream no longer valid
         servicesVM.stopAllForwards()   // port-forwards are context-specific
         assistantVM.load(context: context)
+        settingsVM.load(context: context)
         cache.start(context: context)
     }
 
