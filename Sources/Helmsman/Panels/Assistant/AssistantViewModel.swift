@@ -8,7 +8,9 @@ import Observation
 struct AssistantLiveIssue: Identifiable {
     let location: String
     let reason: String
-    var id: String { "\(location)|\(reason)" }
+    /// Matches the agent's incident fingerprint so it can be silenced.
+    let fingerprint: String
+    var id: String { fingerprint }
 }
 
 @MainActor
@@ -60,7 +62,19 @@ final class AssistantViewModel {
     }
 
     /// Kill-switch reflects the assistant-config ConfigMap; default on if absent.
-    var enabled: Bool { configMap("assistant-config")?.data?["enabled"] != "false" }
+    var enabled: Bool { configData["enabled"] != "false" }
+
+    // Live control surface (assistant-config) — read here, written via patchConfig.
+    private var configData: [String: String] { configMap("assistant-config")?.data ?? [:] }
+    var autonomyMode: String { configData["mode"] ?? "auto" }
+    var quietWindow: String { configData["window"] ?? "" }
+    var webhookURL: String { configData["webhookUrl"] ?? "" }
+    var silencedSet: Set<String> {
+        Set((configData["silenced"] ?? "")
+            .split(whereSeparator: { $0 == "\n" || $0 == "," })
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty })
+    }
 
     /// The pod actually running the agent (by the Deployment's pod label).
     var agentPod: Pod? {
@@ -97,14 +111,18 @@ final class AssistantViewModel {
         var out: [AssistantLiveIssue] = []
         for p in cache.pods {
             if let reason = p.errorReason {
-                out.append(.init(location: "\(p.metadata.namespace ?? "default")/\(p.metadata.name)", reason: reason))
+                let ns = p.metadata.namespace ?? "default"
+                out.append(.init(location: "\(ns)/\(p.metadata.name)", reason: reason,
+                                 fingerprint: "unhealthyPod|\(ns)|\(p.metadata.name)|\(reason)"))
             }
         }
         for d in cache.deployments {
             let desired = d.spec?.replicas ?? d.status?.replicas ?? 0
             let ready = d.status?.readyReplicas ?? 0
             if desired > 0 && ready < desired {
-                out.append(.init(location: "\(d.metadata.namespace ?? "default")/\(d.metadata.name)", reason: "Degraded \(ready)/\(desired)"))
+                let ns = d.metadata.namespace ?? "default"
+                out.append(.init(location: "\(ns)/\(d.metadata.name)", reason: "Degraded \(ready)/\(desired)",
+                                 fingerprint: "degradedDeployment|\(ns)|\(d.metadata.name)|Degraded"))
             }
         }
         return out
@@ -303,25 +321,43 @@ final class AssistantViewModel {
         await runKubectl(["rollout", "restart", "deployment/helmsman-assistant", "-n", ns], stdin: nil)
     }
 
-    /// Flip the kill-switch by writing the assistant-config ConfigMap. Instant by
-    /// design — this is the emergency stop.
-    func setEnabled(_ on: Bool) async {
+    /// Flip the kill-switch. Instant by design — the emergency stop.
+    func setEnabled(_ on: Bool) async { await patchConfig(["enabled": on ? "true" : "false"]) }
+
+    /// Set autonomy mode (auto | advisory | window) and the quiet-hours window.
+    func setMode(_ mode: String, window: String) async {
+        await patchConfig(["mode": mode, "window": window.trimmingCharacters(in: .whitespacesAndNewlines)])
+    }
+
+    /// Set the outbound notification webhook (Slack/Discord/ntfy). Empty clears it.
+    func setWebhook(_ url: String) async { await patchConfig(["webhookUrl": url.trimmingCharacters(in: .whitespacesAndNewlines)]) }
+
+    func silence(_ fingerprint: String) async {
+        var s = silencedSet; s.insert(fingerprint)
+        await patchConfig(["silenced": s.sorted().joined(separator: "\n")])
+    }
+
+    func unsilence(_ fingerprint: String) async {
+        var s = silencedSet; s.remove(fingerprint)
+        await patchConfig(["silenced": s.sorted().joined(separator: "\n")])
+    }
+
+    /// Read-modify-write assistant-config, merging `updates` over existing keys so
+    /// changing one setting never clobbers the others (kill-switch, mode, silence…).
+    private func patchConfig(_ updates: [String: String]) async {
         working = true
         defer { working = false }
-        let yaml = """
-        apiVersion: v1
-        kind: ConfigMap
-        metadata:
-          name: assistant-config
-          namespace: \(stateNamespace)
-          labels:
-            app.kubernetes.io/managed-by: helmsman-assistant
-        data:
-          enabled: "\(on ? "true" : "false")"
-        """
-        if let err = await applyYAML(yaml) {
-            actionError = "Failed to toggle: \(err)"
-        }
+        var data = configData
+        for (k, v) in updates { data[k] = v }
+        let cm: [String: Any] = [
+            "apiVersion": "v1", "kind": "ConfigMap",
+            "metadata": ["name": "assistant-config", "namespace": stateNamespace,
+                         "labels": ["app.kubernetes.io/managed-by": "helmsman-assistant"]],
+            "data": data,
+        ]
+        guard let cmData = try? JSONSerialization.data(withJSONObject: cm),
+              let cmJSON = String(data: cmData, encoding: .utf8) else { return }
+        if let err = await applyYAML(cmJSON) { actionError = "Failed to update config: \(err)" }
     }
 
     // MARK: - kubectl plumbing

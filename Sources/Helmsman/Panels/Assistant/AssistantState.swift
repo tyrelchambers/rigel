@@ -43,6 +43,7 @@ struct AssistantAuditEntry: Decodable, Identifiable {
     var outcome: String
     var detail: String
     var backupRef: String?
+    var analysis: String?
 
     var id: String { "\(at)|\(fingerprint)|\(proposal ?? "")|\(outcome)" }
 }

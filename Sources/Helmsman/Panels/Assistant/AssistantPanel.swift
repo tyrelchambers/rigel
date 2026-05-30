@@ -14,6 +14,9 @@ struct AssistantPanel: View {
     @State private var showManifest = false
     @State private var confirmCreateNamespace = false
     @State private var showAllActivity = false
+    @State private var windowText = ""
+    @State private var webhookText = ""
+    @State private var expandedAudit: Set<String> = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -77,6 +80,8 @@ struct AssistantPanel: View {
             if !viewModel.report.isEmpty { reportCard }
             if !viewModel.queue.isEmpty { queueSection }
             liveIssuesSection
+            autonomyCard
+            if !viewModel.silencedSet.isEmpty { silencedCard }
             auditSection
             podCard
             killSwitchCard
@@ -84,6 +89,74 @@ struct AssistantPanel: View {
             uninstallCard
         }
         .padding(16)
+        .onAppear {
+            windowText = viewModel.quietWindow.isEmpty ? "22:00-07:00" : viewModel.quietWindow
+            webhookText = viewModel.webhookURL
+        }
+    }
+
+    private var autonomyCard: some View {
+        card {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Autonomy & notifications").font(Theme.Font.body(12, weight: .semibold)).foregroundStyle(Theme.Foreground.primary)
+                Text("How the agent acts on safe fixes.").font(Theme.Font.body(11)).foregroundStyle(Theme.Foreground.secondary)
+                HStack(spacing: 6) {
+                    modeButton("Auto", "auto")
+                    modeButton("Advisory", "advisory")
+                    modeButton("Quiet-hours", "window")
+                }
+                if viewModel.autonomyMode == "window" {
+                    HStack(spacing: 8) {
+                        Text("Window").font(Theme.Font.body(11)).foregroundStyle(Theme.Foreground.secondary).frame(width: 110, alignment: .leading)
+                        TextField("22:00-07:00", text: $windowText)
+                            .textFieldStyle(.plain).font(Theme.Font.mono(11)).padding(.horizontal, 8).padding(.vertical, 6).inputChrome()
+                        Button("Save") { Task { await viewModel.setMode("window", window: windowText) } }
+                            .buttonStyle(.plain).font(Theme.Font.body(11, weight: .medium)).foregroundStyle(Theme.Accent.primary)
+                    }
+                    Text("Outside the window (agent timezone), safe fixes are queued for approval instead of auto-run.")
+                        .font(Theme.Font.body(10)).foregroundStyle(Theme.Foreground.tertiary)
+                }
+                HStack(spacing: 8) {
+                    Text("Notify webhook").font(Theme.Font.body(11)).foregroundStyle(Theme.Foreground.secondary).frame(width: 110, alignment: .leading)
+                    TextField("Slack/Discord/ntfy URL (optional)", text: $webhookText)
+                        .textFieldStyle(.plain).font(Theme.Font.mono(11)).padding(.horizontal, 8).padding(.vertical, 6).inputChrome()
+                    Button("Save") { Task { await viewModel.setWebhook(webhookText) } }
+                        .buttonStyle(.plain).font(Theme.Font.body(11, weight: .medium)).foregroundStyle(Theme.Accent.primary)
+                }
+            }
+        }
+    }
+
+    private func modeButton(_ label: String, _ value: String) -> some View {
+        let sel = viewModel.autonomyMode == value
+        return Button {
+            Task { await viewModel.setMode(value, window: windowText.isEmpty ? viewModel.quietWindow : windowText) }
+        } label: {
+            Text(label).font(Theme.Font.body(12, weight: .semibold))
+                .foregroundStyle(sel ? Theme.Foreground.inverse : Theme.Accent.primary)
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(sel ? Theme.Accent.primary : Theme.Accent.primaryDim)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+        }
+        .buttonStyle(.plain)
+        .disabled(viewModel.working)
+    }
+
+    private var silencedCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionTitle("Silenced (\(viewModel.silencedSet.count))")
+            ForEach(viewModel.silencedSet.sorted(), id: \.self) { fp in
+                card {
+                    HStack(spacing: 8) {
+                        Image(systemName: "bell.slash").font(.system(size: 10)).foregroundStyle(Theme.Foreground.tertiary)
+                        Text(fp).font(Theme.Font.mono(10)).foregroundStyle(Theme.Foreground.secondary).lineLimit(1).truncationMode(.middle)
+                        Spacer()
+                        Button("Unsilence") { Task { await viewModel.unsilence(fp) } }
+                            .buttonStyle(.plain).font(Theme.Font.body(11, weight: .medium)).foregroundStyle(Theme.Accent.primary)
+                    }
+                }
+            }
+        }
     }
 
     /// At-a-glance control-center header: the numbers that matter, in one row.
@@ -128,6 +201,10 @@ struct AssistantPanel: View {
                             Text(issue.location).font(Theme.Font.mono(11, weight: .medium)).foregroundStyle(Theme.Foreground.primary).lineLimit(1)
                             Spacer()
                             Text(issue.reason).font(Theme.Font.mono(10, weight: .medium)).foregroundStyle(Theme.Status.pending)
+                            Button { Task { await viewModel.silence(issue.fingerprint) } } label: {
+                                Image(systemName: "bell.slash").font(.system(size: 10)).foregroundStyle(Theme.Foreground.tertiary)
+                            }
+                            .buttonStyle(.plain).help("Silence this incident (agent stops acting on it)")
                         }
                     }
                 }
@@ -290,12 +367,16 @@ struct AssistantPanel: View {
     }
 
     private func auditRow(_ e: AssistantAuditEntry) -> some View {
-        card {
+        let expanded = expandedAudit.contains(e.id)
+        return card {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
                     Text(outcomeGlyph(e.outcome)).foregroundStyle(outcomeColor(e.outcome))
                     Text(e.incident).font(Theme.Font.mono(11, weight: .medium)).foregroundStyle(Theme.Foreground.primary).lineLimit(1)
                     Spacer()
+                    if e.analysis?.isEmpty == false {
+                        Image(systemName: expanded ? "chevron.down" : "chevron.right").font(.system(size: 9)).foregroundStyle(Theme.Foreground.tertiary)
+                    }
                     Text(e.tier.uppercased()).font(Theme.Font.mono(9, weight: .medium)).foregroundStyle(Theme.Foreground.tertiary)
                     Text(relative(e.at)).font(Theme.Font.mono(10)).foregroundStyle(Theme.Foreground.tertiary)
                 }
@@ -306,7 +387,13 @@ struct AssistantPanel: View {
                     Text(c).font(Theme.Font.mono(10)).foregroundStyle(Theme.Foreground.tertiary).textSelection(.enabled)
                 }
                 if !e.detail.isEmpty {
-                    Text(e.detail).font(Theme.Font.mono(10)).foregroundStyle(Theme.Foreground.tertiary).lineLimit(3)
+                    Text(e.detail).font(Theme.Font.mono(10)).foregroundStyle(Theme.Foreground.tertiary)
+                        .lineLimit(expanded ? nil : 3).textSelection(.enabled)
+                }
+                if expanded, let analysis = e.analysis, !analysis.isEmpty {
+                    Divider().background(Theme.Border.subtle)
+                    Text("Claude's analysis").font(Theme.Font.mono(9, weight: .medium)).foregroundStyle(Theme.Foreground.tertiary)
+                    Text(analysis).font(Theme.Font.body(11)).foregroundStyle(Theme.Foreground.secondary).textSelection(.enabled)
                 }
                 if let ref = e.backupRef, let yaml = viewModel.backupYAML(ref: ref) {
                     Button {
@@ -323,6 +410,14 @@ struct AssistantPanel: View {
                     }
                     .buttonStyle(.plain)
                 }
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                guard e.analysis?.isEmpty == false else { return }
+                if expanded { expandedAudit.remove(e.id) } else { expandedAudit.insert(e.id) }
+            }
+            .contextMenu {
+                Button("Silence this incident") { Task { await viewModel.silence(e.fingerprint) } }
             }
         }
     }

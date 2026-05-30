@@ -426,6 +426,41 @@ final class ClusterCache {
 
     private func applyConfigMap(_ event: WatchEvent<ConfigMap>) {
         applyGeneric(event, list: \.configMaps)
+        if event.type == .added || event.type == .modified {
+            notifyAssistantIfNeeded(event.object)
+        }
+    }
+
+    // Desktop notifications for the in-cluster Assistant: diff the agent's audit
+    // log (in the assistant-state ConfigMap) and notify on new actions/approvals.
+    private var lastSeenAssistantAudit: Set<String> = []
+    private var assistantAuditPrimed = false
+
+    private func notifyAssistantIfNeeded(_ cm: ConfigMap) {
+        guard cm.metadata.name == "assistant-state",
+              let raw = cm.data?["state.json"], let data = raw.data(using: .utf8),
+              let state = try? JSONDecoder().decode(AssistantClusterState.self, from: data) else { return }
+        // Prime on the first sighting so we don't notify for pre-existing history.
+        if !assistantAuditPrimed {
+            lastSeenAssistantAudit = Set(state.audit.map(\.id))
+            assistantAuditPrimed = true
+            return
+        }
+        for e in state.audit where !lastSeenAssistantAudit.contains(e.id) {
+            lastSeenAssistantAudit.insert(e.id)
+            let verb: String
+            switch e.outcome {
+            case "success": verb = "✓ fixed"
+            case "failure": verb = "✗ action failed"
+            case "queued": verb = "needs approval"
+            default: continue
+            }
+            ClusterNotifier.shared.notify(
+                title: "Assistant — \(verb)",
+                body: e.proposal ?? e.incident,
+                id: "assistant-\(e.fingerprint)-\(e.at)"
+            )
+        }
     }
 
     private func applyPVC(_ event: WatchEvent<PersistentVolumeClaim>) {
