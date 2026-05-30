@@ -9,6 +9,12 @@ struct SettingsPanel: View {
 
     @State private var recipientsText = ""
 
+    /// Recipients to show in the field, defaulting to the linked number itself
+    /// (send-to-self) when none are configured yet.
+    private var defaultedRecipients: String {
+        viewModel.signalRecipients.isEmpty ? viewModel.signalNumber : viewModel.signalRecipients
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -22,8 +28,8 @@ struct SettingsPanel: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Theme.Surface.primary)
-        .onAppear { recipientsText = viewModel.signalRecipients }
-        .onChange(of: viewModel.signalRecipients) { _, newValue in recipientsText = newValue }
+        .onAppear { recipientsText = defaultedRecipients }
+        .onChange(of: viewModel.signalRecipients) { _, _ in recipientsText = defaultedRecipients }
         .onDisappear { viewModel.stopLinking() }
     }
 

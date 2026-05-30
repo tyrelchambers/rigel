@@ -112,8 +112,11 @@ final class SettingsViewModel {
         // Poll for a linked account; first number wins.
         while !Task.isCancelled {
             if let number = try? await client.accounts().first, !number.isEmpty {
+                // Default to send-to-self: if no recipients are set yet, target
+                // the linked number itself (the documented common case).
+                let recipients = assistant.signalRecipients.isEmpty ? number : assistant.signalRecipients
                 await assistant.setSignal(apiUrl: SignalBridgeManifests.apiURL(namespace: targetNamespace),
-                                          number: number, recipients: assistant.signalRecipients)
+                                          number: number, recipients: recipients)
                 stopLinking()
                 return
             }
