@@ -48,6 +48,11 @@ async function detectAll(cfg: Config): Promise<Incident[]> {
   let incidents: Incident[] = [];
   if (pods.code === 0) incidents.push(...detectUnhealthyPods(safeParse(pods.stdout)));
   if (deps.code === 0) incidents.push(...detectDegradedDeployments(safeParse(deps.stdout)));
+  log(
+    `detect: pods exit=${pods.code} (${pods.stdout.length}b) deps exit=${deps.code} (${deps.stdout.length}b) → ${incidents.length} incident(s) before filter` +
+      (incidents.length ? `: ${incidents.map((i) => `${i.namespace}/${i.name}:${i.reason}`).join(", ")}` : "") +
+      (pods.code !== 0 ? ` | pods stderr: ${pods.stderr.slice(0, 200)}` : ""),
+  );
   if (cfg.namespaces.length > 0) {
     const allow = new Set(cfg.namespaces);
     incidents = incidents.filter((i) => i.namespace === "" || allow.has(i.namespace));
@@ -114,6 +119,9 @@ async function tick(
     return (loop.streaks.get(fp) ?? 0) >= cfg.confirmPolls && !loop.handled.has(fp);
   });
 
+  if (incidents.length > 0) {
+    log(`tick: ${incidents.length} present, confirmPolls=${cfg.confirmPolls}, streaks=[${[...loop.streaks.entries()].map(([k, v]) => `${k}=${v}`).join("; ")}], ${confirmed.length} confirmed, ${loop.handled.size} handled`);
+  }
   if (confirmed.length > 0) log(`handling ${confirmed.length} confirmed incident(s)`);
 
   for (const incident of confirmed) {
