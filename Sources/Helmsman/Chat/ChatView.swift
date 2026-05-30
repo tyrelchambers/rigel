@@ -85,6 +85,11 @@ struct ChatView: View {
                     viewModel.interrupt()
                 }
             }
+            headerButton(system: "doc.on.doc", tint: Theme.Foreground.secondary, help: "Copy conversation") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(viewModel.transcript(), forType: .string)
+            }
+            .disabled(viewModel.messages.isEmpty)
             headerButton(system: "eraser", tint: Theme.Foreground.secondary, help: "Clear visible messages") {
                 viewModel.clear()
             }

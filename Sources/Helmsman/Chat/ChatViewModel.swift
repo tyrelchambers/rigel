@@ -41,6 +41,28 @@ final class ChatViewModel {
     /// Text of the most recent user message, used by the ↑-arrow recall in the input.
     private(set) var lastUserMessage: String? = nil
 
+    /// The visible conversation as plain text for the clipboard: each message
+    /// labelled by role and separated by a blank line. Assistant ```action
+    /// blocks are stripped (only the rendered prose is copied); tool-execution
+    /// cards and messages with no displayable text are skipped.
+    func transcript() -> String { Self.transcript(of: messages) }
+
+    nonisolated static func transcript(of messages: [ChatMessage]) -> String {
+        messages.compactMap { msg -> String? in
+            guard msg.tool == nil else { return nil }
+            let body = (msg.role == .assistant ? SuggestedAction.parse(from: msg.text).display : msg.text)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !body.isEmpty else { return nil }
+            let label: String
+            switch msg.role {
+            case .user:      label = "You"
+            case .assistant: label = "Claude"
+            case .system:    label = "System"
+            }
+            return "\(label):\n\(body)"
+        }.joined(separator: "\n\n")
+    }
+
     func start(resumingSessionId: String? = nil, clusterContext: String? = nil) {
         // Idempotent: skip restart if already running for this context.
         if session != nil && clusterContext == currentContext {
