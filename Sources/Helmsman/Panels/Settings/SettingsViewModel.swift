@@ -31,8 +31,8 @@ final class SettingsViewModel {
     }
 
     func load(context: String?) {
+        // MainWindow.startPanelViewModels owns assistantVM.load on the shared instance.
         self.context = context
-        assistant.load(context: context)
     }
 
     // MARK: - Derived state

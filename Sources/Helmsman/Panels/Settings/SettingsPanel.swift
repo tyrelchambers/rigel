@@ -23,6 +23,7 @@ struct SettingsPanel: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Theme.Surface.primary)
         .onAppear { recipientsText = viewModel.signalRecipients }
+        .onChange(of: viewModel.signalRecipients) { _, newValue in recipientsText = newValue }
         .onDisappear { viewModel.stopLinking() }
     }
 
