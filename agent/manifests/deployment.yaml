@@ -28,8 +28,10 @@ spec:
         runAsUser: 1000 # the image's `node` user; numeric so runAsNonRoot can verify it
         runAsGroup: 1000
         fsGroup: 1000
+        # Unconfined required: Claude Code's Bun runtime segfaults during GC under
+        # RuntimeDefault on kernel 6.17. Still caged by non-root + dropped caps + RBAC.
         seccompProfile:
-          type: RuntimeDefault
+          type: Unconfined
       containers:
         - name: agent
           image: ghcr.io/OWNER/helmsman-assistant:latest # ← set by installer

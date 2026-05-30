@@ -254,8 +254,12 @@ enum AssistantInstaller {
                 runAsUser: 1000
                 runAsGroup: 1000
                 fsGroup: 1000
+                # Unconfined is required: Claude Code's Bun runtime crashes during
+                # GC under RuntimeDefault on kernel 6.17 (it needs thread-suspension
+                # syscalls the default profile filters). The agent is still caged by
+                # non-root + dropped caps + tightly-scoped RBAC.
                 seccompProfile:
-                  type: RuntimeDefault
+                  type: Unconfined
               containers:
                 - name: agent
                   image: "\(c.image)"
