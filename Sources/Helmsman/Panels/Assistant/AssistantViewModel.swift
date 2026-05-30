@@ -155,7 +155,8 @@ final class AssistantViewModel {
     // MARK: - Install / uninstall (the wizard's Install button is the gate)
 
     func install() async {
-        guard !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        token = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else {
             actionError = "Paste the token from `claude setup-token` first."
             return
         }
@@ -238,6 +239,44 @@ final class AssistantViewModel {
             return
         }
         _ = await deleteYAML(AssistantInstaller.secretYAML(token: "x", namespace: c.installNamespace))
+    }
+
+    /// Replace the agent's OAuth token Secret (trimmed, re-stamping the issued
+    /// date) and roll the Deployment so the new pod picks it up. Use this when
+    /// the token expired or was pasted wrong (401 Invalid bearer token).
+    func updateToken() async {
+        token = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else {
+            actionError = "Paste a fresh token from `claude setup-token` first."
+            return
+        }
+        working = true
+        actionError = nil
+        defer { working = false }
+        let ns = installedNamespace ?? config.installNamespace
+        let issuedAt = ISO8601DateFormatter().string(from: Date())
+        if let err = await applyYAML(AssistantInstaller.secretYAML(token: token, issuedAt: issuedAt, namespace: ns)) {
+            actionError = "Failed to update token: \(err)"
+            return
+        }
+        token = "" // don't keep it in memory
+        if let err = await restartRollout(ns) {
+            actionError = "Token saved, but rollout failed: \(err)"
+        }
+    }
+
+    /// Roll the agent Deployment (new pod) — picks up an updated Secret/config.
+    func restartAgent() async {
+        working = true
+        actionError = nil
+        defer { working = false }
+        if let err = await restartRollout(installedNamespace ?? config.installNamespace) {
+            actionError = "Restart failed: \(err)"
+        }
+    }
+
+    private func restartRollout(_ ns: String) async -> String? {
+        await runKubectl(["rollout", "restart", "deployment/helmsman-assistant", "-n", ns], stdin: nil)
     }
 
     /// Flip the kill-switch by writing the assistant-config ConfigMap. Instant by

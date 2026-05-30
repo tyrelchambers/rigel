@@ -78,6 +78,7 @@ struct AssistantPanel: View {
             auditSection
             podCard
             killSwitchCard
+            credentialsCard
             uninstallCard
         }
         .padding(16)
@@ -274,6 +275,40 @@ struct AssistantPanel: View {
                         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
                     }
                     .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private var credentialsCard: some View {
+        card {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Credentials & maintenance").font(Theme.Font.body(12, weight: .semibold)).foregroundStyle(Theme.Foreground.primary)
+                Text("Update the subscription token (run `claude setup-token` and paste it). Saving replaces the Secret and rolls the agent so it picks up the new token. Use after a 401 / token expiry.")
+                    .font(Theme.Font.body(11)).foregroundStyle(Theme.Foreground.secondary)
+                SecureField("New CLAUDE_CODE_OAUTH_TOKEN", text: $viewModel.token)
+                    .textFieldStyle(.plain).font(Theme.Font.mono(11))
+                    .padding(.horizontal, 8).padding(.vertical, 6).inputChrome()
+                HStack(spacing: 8) {
+                    Button { Task { await viewModel.updateToken() } } label: {
+                        Text("Update token & restart").font(Theme.Font.body(12, weight: .semibold))
+                            .foregroundStyle(Theme.Foreground.inverse)
+                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .background(Theme.Accent.primary).clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(viewModel.working || viewModel.token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button { Task { await viewModel.restartAgent() } } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "arrow.clockwise").font(.system(size: 10))
+                            Text("Restart agent").font(Theme.Font.body(12, weight: .medium))
+                        }
+                        .foregroundStyle(Theme.Accent.primary)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(Theme.Accent.primaryDim).clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(viewModel.working)
                 }
             }
         }
