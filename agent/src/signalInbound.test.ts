@@ -36,6 +36,18 @@ describe("parseReceived", () => {
     const raw = [{ envelope: { source: "+15550101234", timestamp: 999, dataMessage: { message: "hi" } } }];
     expect(parseReceived(raw)).toEqual([{ source: "+15550101234", timestamp: 999, text: "hi" }]);
   });
+  test("extracts text from a sync sentMessage (send-to-self on a linked device)", () => {
+    const raw = [
+      {
+        envelope: {
+          sourceNumber: "+15550101234",
+          timestamp: 111,
+          syncMessage: { sentMessage: { timestamp: 333, message: " why is payments down? ", destinationNumber: "+15550101234" } },
+        },
+      },
+    ];
+    expect(parseReceived(raw)).toEqual([{ source: "+15550101234", timestamp: 333, text: "why is payments down?" }]);
+  });
   test("skips receipts, typing, empty and malformed entries", () => {
     const raw = [
       { envelope: { source: "+1", receiptMessage: { when: 1 } } }, // no dataMessage

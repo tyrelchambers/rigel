@@ -52,9 +52,13 @@ export function isAuthorized(source: string, allow: string[]): boolean {
 
 /**
  * Parse the array returned by `GET /v1/receive/{number}`. Each element carries
- * an `envelope`; we keep only entries with a real `dataMessage.message`
- * (skipping receipts, typing indicators, and empty messages). Defensive against
- * shape drift — anything malformed is skipped rather than thrown.
+ * an `envelope`; we keep entries that carry message text in either a
+ * `dataMessage` (a message sent to us by someone else) or a
+ * `syncMessage.sentMessage` (a message the account sent from another device —
+ * e.g. texting your own number / "Note to Self", which is how send-to-self
+ * arrives on a linked signal-cli device). Receipts, typing indicators, and
+ * empty messages are skipped. Defensive against shape drift — anything
+ * malformed is skipped rather than thrown.
  */
 export function parseReceived(raw: unknown): IncomingMessage[] {
   if (!Array.isArray(raw)) return [];
@@ -65,14 +69,18 @@ export function parseReceived(raw: unknown): IncomingMessage[] {
       | undefined;
     if (!env || typeof env !== "object") continue;
     const dm = env["dataMessage"] as Record<string, unknown> | undefined;
-    const text = dm && typeof dm["message"] === "string" ? (dm["message"] as string) : "";
+    const sm = (env["syncMessage"] as Record<string, unknown> | undefined)?.["sentMessage"] as
+      | Record<string, unknown>
+      | undefined;
+    const msg = dm ?? sm; // dataMessage takes priority; both should never be set
+    const text = msg && typeof msg["message"] === "string" ? (msg["message"] as string) : "";
     if (text.trim() === "") continue; // receipt / typing / empty — ignore
     const sourceNumber = typeof env["sourceNumber"] === "string" ? (env["sourceNumber"] as string) : "";
     const source = sourceNumber || (typeof env["source"] === "string" ? (env["source"] as string) : "");
     if (!source) continue;
     const timestamp =
-      typeof dm?.["timestamp"] === "number"
-        ? (dm["timestamp"] as number)
+      typeof msg?.["timestamp"] === "number"
+        ? (msg["timestamp"] as number)
         : typeof env["timestamp"] === "number"
           ? (env["timestamp"] as number)
           : 0;
