@@ -528,6 +528,7 @@ struct MainWindow: View {
         logsVM.clearSelection()        // old-context stream no longer valid
         servicesVM.stopAllForwards()   // port-forwards are context-specific
         assistantVM.load(context: context)
+        settingsVM.stopLinking()   // tear down any active link port-forward before the context changes
         settingsVM.load(context: context)
         cache.start(context: context)
     }
