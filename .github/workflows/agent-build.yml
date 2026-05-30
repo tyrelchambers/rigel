@@ -20,9 +20,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
+      # No QEMU: build natively for amd64 so claude-code's installer detects the
+      # runner's AVX2 CPU and bakes the AVX2 Bun build. Under QEMU emulation it
+      # sees a generic no-AVX2 CPU and bakes the *baseline* Bun, which segfaults
+      # during GC on kernel 6.17. All target nodes are amd64.
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -37,7 +38,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./agent
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: |
             ${{ env.IMAGE }}:latest
