@@ -144,6 +144,17 @@ final class SettingsViewModel {
     /// Brief port-forward → POST a test message → tear down.
     func sendTest() async {
         guard !linking else { actionError = "Finish linking before sending a test."; return }
+        let recipients = assistant.signalRecipients
+            .split(whereSeparator: { $0 == "," || $0 == " " })
+            .map { String($0).trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        guard !recipients.isEmpty else {
+            actionError = "Add at least one recipient (then Save) before sending a test."
+            return
+        }
+        guard !assistant.signalNumber.isEmpty else {
+            actionError = "No linked sender number — link your phone first."
+            return
+        }
         working = true; actionError = nil
         defer { working = false }
         let ns = targetNamespace
@@ -160,9 +171,6 @@ final class SettingsViewModel {
             for await event in session.stream() {
                 switch event {
                 case .ready:
-                    let recipients = assistant.signalRecipients
-                        .split(whereSeparator: { $0 == "," || $0 == " " })
-                        .map { String($0).trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
                     try await SignalBridgeClient(localPort: Self.linkLocalPort)
                         .sendTest(number: assistant.signalNumber, recipients: recipients)
                     return

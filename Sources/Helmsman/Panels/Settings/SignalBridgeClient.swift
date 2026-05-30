@@ -11,7 +11,17 @@ struct SignalBridgeClient {
         self.session = session
     }
 
-    enum ClientError: Error { case http(Int), badResponse }
+    enum ClientError: Error, CustomStringConvertible {
+        case http(Int, String)   // status code + response body (the API explains 4xx here)
+        case badResponse
+        var description: String {
+            switch self {
+            case .http(let code, let body):
+                return body.isEmpty ? "HTTP \(code)" : "HTTP \(code): \(body)"
+            case .badResponse: return "unexpected response"
+            }
+        }
+    }
 
     private func url(_ path: String, query: [URLQueryItem] = []) -> URL {
         var c = URLComponents()
@@ -27,14 +37,14 @@ struct SignalBridgeClient {
     func qrCodePNG(deviceName: String = "helmsman") async throws -> Data {
         let u = url("/v1/qrcodelink", query: [.init(name: "device_name", value: deviceName)])
         let (data, resp) = try await session.data(from: u)
-        try check(resp)
+        try check(resp, data)
         return data
     }
 
     /// Registered Signal numbers. Non-empty once a phone is linked.
     func accounts() async throws -> [String] {
         let (data, resp) = try await session.data(from: url("/v1/accounts"))
-        try check(resp)
+        try check(resp, data)
         return try JSONDecoder().decode([String].self, from: data)
     }
 
@@ -49,12 +59,15 @@ struct SignalBridgeClient {
             "recipients": recipients,
         ]
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (_, resp) = try await session.data(for: req)
-        try check(resp)
+        let (data, resp) = try await session.data(for: req)
+        try check(resp, data)
     }
 
-    private func check(_ resp: URLResponse) throws {
+    private func check(_ resp: URLResponse, _ data: Data) throws {
         guard let http = resp as? HTTPURLResponse else { throw ClientError.badResponse }
-        guard (200..<300).contains(http.statusCode) else { throw ClientError.http(http.statusCode) }
+        guard (200..<300).contains(http.statusCode) else {
+            let body = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            throw ClientError.http(http.statusCode, body)
+        }
     }
 }
