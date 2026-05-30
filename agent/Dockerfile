@@ -18,7 +18,7 @@ FROM node:22-alpine
 
 # Runtime libs: ca-certificates (HTTPS to Anthropic + dl.k8s.io), and
 # libstdc++/libgcc which the musl Bun binary links against.
-RUN apk add --no-cache ca-certificates libstdc++ libgcc curl \
+RUN apk add --no-cache ca-certificates libstdc++ libgcc bash curl \
  && case "$(uname -m)" in x86_64) KARCH=amd64;; aarch64) KARCH=arm64;; *) KARCH=amd64;; esac \
  && KVER="$(curl -fsSL https://dl.k8s.io/release/stable.txt)" \
  && curl -fsSL -o /usr/local/bin/kubectl "https://dl.k8s.io/release/${KVER}/bin/linux/${KARCH}/kubectl" \

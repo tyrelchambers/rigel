@@ -295,11 +295,19 @@ actor ClaudeSession {
         proc = nil
     }
 
-    /// Sends SIGINT to the claude subprocess. Claude Code interprets that as
-    /// "abort the current turn but keep the session alive", same as Ctrl-C in
-    /// the CLI. Safe no-op if there's no live process.
+    /// Abort the in-progress turn WITHOUT killing the subprocess, by sending a
+    /// stream-json `control_request` interrupt on stdin. (SIGINT terminates
+    /// `claude` in piped stream-json mode — it has no interactive Ctrl-C
+    /// handler — which would kill the whole session and break further sends.)
+    /// Safe no-op if there's no live process.
     func interrupt() {
         guard let p = proc, p.isRunning else { return }
-        p.interrupt()
+        let payload: [String: Any] = [
+            "type": "control_request",
+            "request_id": "interrupt-\(UUID().uuidString)",
+            "request": ["subtype": "interrupt"],
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: payload, options: []) else { return }
+        try? writeLine(data)
     }
 }

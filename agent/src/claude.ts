@@ -85,8 +85,10 @@ export async function runClaude(opts: RunClaudeOptions): Promise<ClaudeResult> {
     });
     child.on("close", (code) => {
       if (timer) clearTimeout(timer);
-      if (code !== 0) reject(new Error(`claude exited ${code}: ${err.trim()}`));
-      else resolve(out);
+      if (code !== 0) {
+        const detail = err.trim() || out.trim().slice(0, 600) || "(no output)";
+        reject(new Error(`claude exited ${code}: ${detail}`));
+      } else resolve(out);
     });
   });
 
