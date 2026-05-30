@@ -9,6 +9,8 @@ struct LogsPanel: View {
     /// the user is "stuck to the bottom" and we should auto-scroll new lines.
     @State private var bottomVisibleID: UUID? = nil
     @State private var stickToBottom = true
+    /// Wrap long log lines vs. truncate to one line each.
+    @State private var wrapLines = false
 
     var body: some View {
         HSplitView {
@@ -17,6 +19,11 @@ struct LogsPanel: View {
             streamPane
         }
         .background(Theme.Surface.primary)
+        .background {
+            Button("Toggle line wrap") { wrapLines.toggle() }
+                .keyboardShortcut("w", modifiers: [.command, .option])
+                .hidden()
+        }
         .onDisappear { viewModel.stop() }
     }
 
@@ -146,7 +153,7 @@ struct LogsPanel: View {
     }
 
     private func logRow(for line: LogLine) -> some View {
-        LogLineRow(line: line, color: Theme.Pod.palette[line.colorIndex])
+        LogLineRow(line: line, color: Theme.Pod.palette[line.colorIndex], wrap: wrapLines)
             .id(line.id)
             .contextMenu {
                 Button("Ask Claude about this line") {
@@ -226,6 +233,7 @@ struct LogsPanel: View {
 
             Spacer(minLength: 4)
 
+            IconToggle(isOn: $wrapLines, systemImage: "arrow.turn.down.left", help: "Wrap long lines (⌥⌘W)")
             IconToggle(isOn: $viewModel.hideProbes, systemImage: "heart.slash", help: "Hide probe traffic (kube-probe / healthz / readyz)")
             IconButton(systemImage: viewModel.isPaused ? "play.fill" : "pause.fill",
                        help: viewModel.isPaused ? "Resume" : "Pause") {
@@ -370,6 +378,7 @@ private struct JumpToBottomButton: View {
 struct LogLineRow: View {
     let line: LogLine
     let color: Color
+    var wrap: Bool = false
     @State private var isExpanded = false
 
     private var isError: Bool {
@@ -399,8 +408,9 @@ struct LogLineRow: View {
                 .font(Theme.Font.mono(11))
                 .foregroundStyle(isError ? Theme.Status.failed : Theme.Foreground.primary)
                 .textSelection(.enabled)
-                .lineLimit(isExpanded ? nil : 1)
+                .lineLimit(wrap || isExpanded ? nil : 1)
                 .truncationMode(.tail)
+                .fixedSize(horizontal: false, vertical: wrap || isExpanded)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .onTapGesture { isExpanded.toggle() }
         }
