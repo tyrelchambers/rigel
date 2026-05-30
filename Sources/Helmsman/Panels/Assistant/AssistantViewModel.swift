@@ -69,6 +69,9 @@ final class AssistantViewModel {
     var autonomyMode: String { configData["mode"] ?? "auto" }
     var quietWindow: String { configData["window"] ?? "" }
     var webhookURL: String { configData["webhookUrl"] ?? "" }
+    var signalApiUrl: String { configData["signalApiUrl"] ?? "" }
+    var signalNumber: String { configData["signalNumber"] ?? "" }
+    var signalRecipients: String { configData["signalRecipients"] ?? "" }
     var silencedSet: Set<String> {
         Set((configData["silenced"] ?? "")
             .split(whereSeparator: { $0 == "\n" || $0 == "," })
@@ -331,6 +334,15 @@ final class AssistantViewModel {
 
     /// Set the outbound notification webhook (Slack/Discord/ntfy). Empty clears it.
     func setWebhook(_ url: String) async { await patchConfig(["webhookUrl": url.trimmingCharacters(in: .whitespacesAndNewlines)]) }
+
+    /// Configure the self-hosted Signal bridge (signal-cli-rest-api).
+    func setSignal(apiUrl: String, number: String, recipients: String) async {
+        await patchConfig([
+            "signalApiUrl": apiUrl.trimmingCharacters(in: .whitespacesAndNewlines),
+            "signalNumber": number.trimmingCharacters(in: .whitespacesAndNewlines),
+            "signalRecipients": recipients.trimmingCharacters(in: .whitespacesAndNewlines),
+        ])
+    }
 
     func silence(_ fingerprint: String) async {
         var s = silencedSet; s.insert(fingerprint)

@@ -1,0 +1,79 @@
+# Self-hosted Signal bridge for Assistant notifications.
+#
+# After applying, link your Signal number as a device (one-time):
+#   kubectl -n default port-forward svc/signal-cli-rest 8080:8080
+#   open http://localhost:8080/v1/qrcodelink?device_name=helmsman   # scan in Signal app
+# Then in the Assistant tab (or assistant-config) set:
+#   signalApiUrl=http://signal-cli-rest:8080
+#   signalNumber=+<your linked number>
+#   signalRecipients=+<your number>   (send to self)
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: signal-cli-data
+  namespace: default
+  labels:
+    app.kubernetes.io/managed-by: helmsman-assistant
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: signal-cli-rest
+  namespace: default
+  labels:
+    app.kubernetes.io/name: signal-cli-rest
+    app.kubernetes.io/managed-by: helmsman-assistant
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: signal-cli-rest
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: signal-cli-rest
+    spec:
+      containers:
+        - name: signal-cli-rest-api
+          image: bbernhard/signal-cli-rest-api:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MODE
+              value: native # faster than the default JVM mode
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: data
+              mountPath: /home/.local/share/signal-cli
+          resources:
+            requests:
+              cpu: 25m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: signal-cli-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: signal-cli-rest
+  namespace: default
+  labels:
+    app.kubernetes.io/managed-by: helmsman-assistant
+spec:
+  selector:
+    app.kubernetes.io/name: signal-cli-rest
+  ports:
+    - port: 8080
+      targetPort: 8080

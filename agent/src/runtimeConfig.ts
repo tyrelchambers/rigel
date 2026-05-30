@@ -21,6 +21,10 @@ export interface RuntimeConfig {
   window?: TimeWindow;
   silenced: Set<string>;
   webhookUrl?: string;
+  /** Self-hosted signal-cli-rest-api: base URL, linked sender number, recipients. */
+  signalApiUrl?: string;
+  signalNumber?: string;
+  signalRecipients: string[];
 }
 
 /** Parse "HH:MM-HH:MM" into minutes-of-day. Null on malformed input. */
@@ -53,12 +57,12 @@ export function decideAutonomy(
  * missing/unreadable — same as the kill-switch default. */
 export async function readRuntimeConfig(cfg: Config): Promise<RuntimeConfig> {
   const res = await kubectl(["get", "configmap", cfg.configConfigMap, "-n", cfg.stateNamespace, "-o", "json"]);
-  if (res.code !== 0) return { enabled: false, mode: "auto", silenced: new Set(), window: undefined };
+  if (res.code !== 0) return { enabled: false, mode: "auto", silenced: new Set(), window: undefined, signalRecipients: [] };
   let data: Record<string, string> = {};
   try {
     data = (JSON.parse(res.stdout) as { data?: Record<string, string> }).data ?? {};
   } catch {
-    return { enabled: false, mode: "auto", silenced: new Set(), window: undefined };
+    return { enabled: false, mode: "auto", silenced: new Set(), window: undefined, signalRecipients: [] };
   }
   const mode = (data.mode as AutonomyMode) || "auto";
   const silenced = new Set(
@@ -67,11 +71,18 @@ export async function readRuntimeConfig(cfg: Config): Promise<RuntimeConfig> {
       .map((s) => s.trim())
       .filter(Boolean),
   );
+  const signalRecipients = (data.signalRecipients ?? "")
+    .split(/[\n,]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
   return {
     enabled: data.enabled !== "false",
     mode: mode === "advisory" || mode === "window" ? mode : "auto",
     window: data.window ? parseWindow(data.window) ?? undefined : undefined,
     silenced,
     webhookUrl: data.webhookUrl && data.webhookUrl.trim() ? data.webhookUrl.trim() : undefined,
+    signalApiUrl: data.signalApiUrl && data.signalApiUrl.trim() ? data.signalApiUrl.trim() : undefined,
+    signalNumber: data.signalNumber && data.signalNumber.trim() ? data.signalNumber.trim() : undefined,
+    signalRecipients,
   };
 }

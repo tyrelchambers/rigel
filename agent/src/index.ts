@@ -1,7 +1,7 @@
 import { classifyRisk, RiskTier } from "./classifier.js";
 import { loadConfig, type Config } from "./config.js";
 import { readRuntimeConfig, decideAutonomy, type RuntimeConfig } from "./runtimeConfig.js";
-import { notifyWebhook } from "./notify.js";
+import { notifyWebhook, notifySignal } from "./notify.js";
 import {
   detectDegradedDeployments,
   detectUnhealthyPods,
@@ -278,9 +278,13 @@ async function tick(
   state.spend = { month: spend.currentMonth(), spentUsd: spend.total() };
   await writeState(cfg.stateConfigMap, cfg.stateNamespace, state);
 
-  // Best-effort outbound notification (phone/Slack) for what happened this tick.
-  if (rc.webhookUrl && notifications.length > 0) {
-    void notifyWebhook(rc.webhookUrl, `Helmsman assistant:\n${notifications.join("\n")}`);
+  // Best-effort outbound notification for what happened this tick.
+  if (notifications.length > 0) {
+    const text = `Helmsman assistant:\n${notifications.join("\n")}`;
+    if (rc.webhookUrl) void notifyWebhook(rc.webhookUrl, text);
+    if (rc.signalApiUrl && rc.signalNumber) {
+      void notifySignal(rc.signalApiUrl, rc.signalNumber, rc.signalRecipients, text);
+    }
   }
 }
 
