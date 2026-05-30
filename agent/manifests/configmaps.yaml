@@ -10,6 +10,10 @@ metadata:
     app.kubernetes.io/managed-by: helmsman-assistant
 data:
   enabled: "true"
+  # autonomy: "auto" (auto-remediate), "advisory" (suggest only), or "window"
+  # (auto only inside `window`). Optional: window "HH:MM-HH:MM", silenced
+  # (newline-separated incident fingerprints), webhookUrl (Slack/Discord/ntfy).
+  mode: "auto"
 ---
 # Agent-owned state surface that Helmsman renders (audit timeline, morning
 # report, queued suggestions). Pre-created empty so the agent only needs

@@ -97,6 +97,12 @@ final class ClusterNotifier: @unchecked Sendable {
         lastPodState.removeValue(forKey: uid)
     }
 
+    /// Post an arbitrary desktop notification (used by the Assistant for
+    /// action / approval-needed alerts).
+    func notify(title: String, body: String, id: String) {
+        post(title: title, body: body, identifier: id)
+    }
+
     // MARK: - Internals
 
     private static func unhealthyState(pod: Pod) -> String? {

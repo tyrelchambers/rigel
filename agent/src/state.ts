@@ -24,6 +24,9 @@ export interface AuditEntry {
   outcome: Outcome;
   detail: string;
   backupRef?: string;
+  /** The worker's full prose reasoning + the supervisor verdict reason, for the
+   * Helmsman drill-down (why the agent did what it did). */
+  analysis?: string;
 }
 
 /** A remediation the agent could not perform (RBAC-blocked / destructive), left

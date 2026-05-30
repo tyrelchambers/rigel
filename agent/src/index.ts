@@ -1,5 +1,7 @@
 import { classifyRisk, RiskTier } from "./classifier.js";
-import { loadConfig, isEnabled, type Config } from "./config.js";
+import { loadConfig, type Config } from "./config.js";
+import { readRuntimeConfig, decideAutonomy, type RuntimeConfig } from "./runtimeConfig.js";
+import { notifyWebhook } from "./notify.js";
 import {
   detectDegradedDeployments,
   detectUnhealthyPods,
@@ -79,15 +81,16 @@ async function tick(
   // month rolls over, mirroring the non-rolling monthly Agent SDK credit).
   spend.syncMonth(monthKey(now));
 
-  const enabled = await isEnabled(cfg);
+  const rc = await readRuntimeConfig(cfg);
+  const notifications: string[] = [];
   state = {
     ...state,
     updatedAt: ts,
-    status: { heartbeatAt: ts, spentUsd: spend.total(), spendCapUsd: cfg.spendCapUsd, enabled, version: VERSION },
+    status: { heartbeatAt: ts, spentUsd: spend.total(), spendCapUsd: cfg.spendCapUsd, enabled: rc.enabled, version: VERSION },
     spend: { month: spend.currentMonth(), spentUsd: spend.total() },
   };
 
-  if (!enabled) {
+  if (!rc.enabled) {
     log("kill-switch is off — idle");
     await writeState(cfg.stateConfigMap, cfg.stateNamespace, state);
     return;
@@ -98,7 +101,9 @@ async function tick(
     return;
   }
 
-  const incidents = await detectAll(cfg);
+  // Drop incidents the operator has silenced (known noise) — no detection,
+  // no spend, no action on those fingerprints.
+  const incidents = (await detectAll(cfg)).filter((i) => !rc.silenced.has(fingerprint(i)));
   const present = new Set(incidents.map(fingerprint));
 
   // Recovered incidents fall out of the debounce/handled tracking so a fresh
@@ -167,8 +172,9 @@ async function tick(
       state = queue(state, cfg, ts, describe(incident), action.label, "destructive — RBAC-blocked; run manually in Helmsman");
       state = record(state, cfg, {
         at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-        tier: "blocked", outcome: "queued", detail: "queued for human (destructive)",
+        tier: "blocked", outcome: "queued", detail: "queued for human (destructive)", analysis: truncate(analysis),
       });
+      notifications.push(`▸ Needs approval (destructive): ${action.label} — ${describe(incident)}`);
       continue;
     }
 
@@ -211,12 +217,27 @@ async function tick(
         state = record(state, cfg, {
           at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
           tier: "medium", verdict: "escalated", outcome: "queued",
-          detail: `Opus escalated (conf ${sup.verdict.confidence.toFixed(2)}): ${sup.verdict.reason}`,
+          detail: `Opus escalated (conf ${sup.verdict.confidence.toFixed(2)}): ${sup.verdict.reason}`, analysis: truncate(analysis),
         });
+        notifications.push(`▸ Needs approval (Opus escalated): ${action.label} — ${describe(incident)}`);
         continue;
       }
       execVerdict = "approved";
       log(`Opus approved (conf ${sup.verdict.confidence.toFixed(2)}): ${action.label}`);
+    }
+
+    // Autonomy gate: advisory mode (or being outside the quiet-hours window)
+    // queues the action for approval instead of auto-executing — even LOW and
+    // Opus-approved MEDIUM.
+    if (decideAutonomy(rc.mode, rc.window, minOfDay(now)) === "queue") {
+      const why = rc.mode === "advisory" ? "advisory mode — suggestion only" : "outside quiet-hours window — queued for approval";
+      state = queue(state, cfg, ts, describe(incident), action.label, why, action);
+      state = record(state, cfg, {
+        at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
+        command: previewCommand(action), tier: tierStr, outcome: "queued", detail: why, analysis: truncate(analysis),
+      });
+      notifications.push(`▸ Needs approval: ${action.label} — ${describe(incident)} (${why})`);
+      continue;
     }
 
     // LOW (auto) or MEDIUM (Opus-approved) — execute under the circuit breaker.
@@ -224,7 +245,7 @@ async function tick(
     if (!cbVerdict.allowed) {
       state = record(state, cfg, {
         at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-        tier: tierStr, outcome: "skipped", detail: cbVerdict.reason ?? "blocked by circuit breaker",
+        tier: tierStr, outcome: "skipped", detail: cbVerdict.reason ?? "blocked by circuit breaker", analysis: truncate(analysis),
       });
       continue;
     }
@@ -240,13 +261,14 @@ async function tick(
       state = record(state, cfg, {
         at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
         command: result.commands.join(" && "), tier: tierStr, verdict: execVerdict,
-        outcome: result.success ? "success" : "failure", detail: truncate(result.output), backupRef,
+        outcome: result.success ? "success" : "failure", detail: truncate(result.output), backupRef, analysis: truncate(analysis),
       });
       log(`${result.success ? "✓" : "✗"} ${action.label} — ${result.commands.join(" && ")}`);
+      notifications.push(`${result.success ? "✓" : "✗"} ${action.label} — ${describe(incident)}`);
     } catch (e) {
       state = record(state, cfg, {
         at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-        tier: tierStr, verdict: execVerdict, outcome: "failure", detail: String(e),
+        tier: tierStr, verdict: execVerdict, outcome: "failure", detail: String(e), analysis: truncate(analysis),
       });
     }
   }
@@ -255,11 +277,22 @@ async function tick(
   if (state.status) state.status.spentUsd = spend.total();
   state.spend = { month: spend.currentMonth(), spentUsd: spend.total() };
   await writeState(cfg.stateConfigMap, cfg.stateNamespace, state);
+
+  // Best-effort outbound notification (phone/Slack) for what happened this tick.
+  if (rc.webhookUrl && notifications.length > 0) {
+    void notifyWebhook(rc.webhookUrl, `Helmsman assistant:\n${notifications.join("\n")}`);
+  }
 }
 
 function monthKey(now: number): string {
   const d = new Date(now);
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Local minutes-of-day (respects the container TZ env) for the quiet-hours window. */
+function minOfDay(now: number): number {
+  const d = new Date(now);
+  return d.getHours() * 60 + d.getMinutes();
 }
 
 function record(state: AssistantState, cfg: Config, entry: AuditEntry): AssistantState {

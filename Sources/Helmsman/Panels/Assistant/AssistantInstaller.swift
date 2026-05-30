@@ -200,6 +200,7 @@ enum AssistantInstaller {
             app.kubernetes.io/managed-by: helmsman-assistant
         data:
           enabled: "true"
+          mode: "auto"
         ---
         apiVersion: v1
         kind: ConfigMap
