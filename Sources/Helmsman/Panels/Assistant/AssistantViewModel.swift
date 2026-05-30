@@ -379,6 +379,13 @@ final class AssistantViewModel {
         await runKubectl(["delete", "-f", "-", "--ignore-not-found=true"], stdin: yaml)
     }
 
+    /// Apply arbitrary YAML through the agent's kubectl/context plumbing.
+    /// Used by the Settings page to deploy the Signal bridge. Returns nil on
+    /// success, or an error string.
+    func applyManifestForSettings(_ yaml: String) async -> String? {
+        await applyYAML(yaml)
+    }
+
     /// Returns nil on success, or an error string.
     private func runKubectl(_ args: [String], stdin: String?) async -> String? {
         guard let kubectl = resolveBinary("kubectl") else { return "kubectl not found on PATH" }
