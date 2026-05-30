@@ -41,7 +41,7 @@ struct SettingsPanel: View {
                     .font(Theme.Font.body(15, weight: .semibold))
                     .foregroundStyle(Theme.Foreground.primary)
             }
-            Text("Deploy a self-hosted Signal bridge into the cluster and link your phone so the assistant can message you.")
+            Text("Deploy a self-hosted Signal bridge into the cluster and link your phone so the assistant can message you — and, with two-way enabled, so you can text it back to diagnose issues and approve fixes.")
                 .font(Theme.Font.body(12)).foregroundStyle(Theme.Foreground.secondary)
 
             statusRow
@@ -148,6 +148,25 @@ struct SettingsPanel: View {
                 Button("Open Assistant") { onOpenAssistant() }
                     .buttonStyle(.plain).font(Theme.Font.body(12)).foregroundStyle(Theme.Foreground.tertiary)
             }
+            inboundControls
+        }
+    }
+
+    /// Two-way Signal opt-in. Only the linked/recipient number can drive the
+    /// assistant; texted commands diagnose read-only or approve queued fixes.
+    private var inboundControls: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Divider().overlay(Theme.Border.subtle)
+            Toggle(isOn: Binding(
+                get: { viewModel.signalInbound },
+                set: { on in Task { await viewModel.setInbound(on) } }
+            )) {
+                Text("Let me text the assistant back (two-way)")
+                    .font(Theme.Font.body(12, weight: .medium)).foregroundStyle(Theme.Foreground.primary)
+            }
+            .toggleStyle(.switch).tint(Theme.Accent.primary).disabled(viewModel.working)
+            Text("The agent polls the bridge for messages from your recipients. Ask anything to diagnose read-only; reply \"queue\" to list pending fixes and \"approve N\" to run one. Other senders are ignored.")
+                .font(Theme.Font.body(11)).foregroundStyle(Theme.Foreground.tertiary)
         }
     }
 

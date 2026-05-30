@@ -7,6 +7,12 @@
 #   signalApiUrl=http://signal-cli-rest:8080
 #   signalNumber=+<your linked number>
 #   signalRecipients=+<your number>   (send to self)
+#
+# Two-way (texting the assistant to diagnose / approve fixes): set
+#   signalInbound=true
+# The agent then polls GET /v1/receive/<number> each tick and answers messages
+# from signalRecipients only. native MODE (below) supports receive via polling;
+# no extra config is needed.
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

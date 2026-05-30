@@ -38,3 +38,17 @@ export async function notifySignal(
     // swallow — notifications are best-effort
   }
 }
+
+/**
+ * Drain pending inbound messages from signal-cli-rest-api
+ * (`GET /v1/receive/{number}`). Works in the bridge's default `native` mode;
+ * the call also acknowledges the messages server-side so they aren't redelivered.
+ * Returns the parsed JSON array (the caller decodes it). Throws on a transport
+ * or non-2xx error so inbound handling can log and skip this poll.
+ */
+export async function receiveSignal(apiUrl: string, number: string): Promise<unknown> {
+  const url = `${apiUrl.replace(/\/+$/, "")}/v1/receive/${encodeURIComponent(number)}`;
+  const res = await fetch(url, { method: "GET" });
+  if (!res.ok) throw new Error(`signal receive returned ${res.status}`);
+  return res.json();
+}

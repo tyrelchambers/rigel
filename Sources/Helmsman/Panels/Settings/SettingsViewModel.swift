@@ -54,6 +54,7 @@ final class SettingsViewModel {
     var signalApiUrl: String { assistant.signalApiUrl }
     var signalNumber: String { assistant.signalNumber }
     var signalRecipients: String { assistant.signalRecipients }
+    var signalInbound: Bool { assistant.signalInbound }
 
     // MARK: - Deploy
 
@@ -142,6 +143,11 @@ final class SettingsViewModel {
     func saveRecipients(_ recipients: String) async {
         await assistant.setSignal(apiUrl: assistant.signalApiUrl, number: assistant.signalNumber,
                                   recipients: recipients)
+    }
+
+    /// Enable/disable two-way Signal (texting the assistant to diagnose & approve).
+    func setInbound(_ on: Bool) async {
+        await assistant.setSignalInbound(on)
     }
 
     /// Brief port-forward → POST a test message → tear down.

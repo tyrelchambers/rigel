@@ -1,5 +1,19 @@
-import { describe, expect, test } from "vitest";
-import { parseWindow, inWindow, decideAutonomy } from "./runtimeConfig.js";
+import { describe, expect, test, vi } from "vitest";
+import { parseWindow, inWindow, decideAutonomy, readRuntimeConfig } from "./runtimeConfig.js";
+import { kubectl } from "./kubectl.js";
+import type { Config } from "./config.js";
+
+vi.mock("./kubectl.js", () => ({ kubectl: vi.fn() }));
+
+const CFG = { configConfigMap: "assistant-config", stateNamespace: "default" } as Config;
+
+function mockConfigMap(data: Record<string, string>): void {
+  vi.mocked(kubectl).mockResolvedValueOnce({
+    stdout: JSON.stringify({ data }),
+    stderr: "",
+    code: 0,
+  });
+}
 
 describe("parseWindow", () => {
   test("parses HH:MM-HH:MM into minutes-of-day", () => {
@@ -42,5 +56,23 @@ describe("decideAutonomy", () => {
   });
   test("window mode with no window falls back to queue (safe)", () => {
     expect(decideAutonomy("window", undefined, 60)).toBe("queue");
+  });
+});
+
+describe("readRuntimeConfig — signalInbound", () => {
+  test("defaults off, and only the literal \"true\" turns it on", async () => {
+    mockConfigMap({ enabled: "true" });
+    expect((await readRuntimeConfig(CFG)).signalInbound).toBe(false);
+
+    mockConfigMap({ enabled: "true", signalInbound: "true" });
+    expect((await readRuntimeConfig(CFG)).signalInbound).toBe(true);
+
+    mockConfigMap({ enabled: "true", signalInbound: "yes" });
+    expect((await readRuntimeConfig(CFG)).signalInbound).toBe(false);
+  });
+
+  test("fail-closed (inbound off) when the config map is unreadable", async () => {
+    vi.mocked(kubectl).mockResolvedValueOnce({ stdout: "", stderr: "not found", code: 1 });
+    expect((await readRuntimeConfig(CFG)).signalInbound).toBe(false);
   });
 });
