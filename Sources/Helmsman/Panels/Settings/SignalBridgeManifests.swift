@@ -8,7 +8,7 @@ enum SignalBridgeManifests {
     static let serviceName = "signal-cli-rest"
     static let pvcName = "signal-cli-data"
     static let port = 8080
-    static let image = "bbernhard/signal-cli-rest-api:latest"
+    private static let image = "bbernhard/signal-cli-rest-api:latest"
 
     /// In-cluster URL the agent uses to reach the bridge. Fully-qualified so it
     /// resolves regardless of which namespace the agent runs in.
@@ -17,17 +17,17 @@ enum SignalBridgeManifests {
     }
 
     /// Final multi-doc YAML for `kubectl apply -f -`.
-    static func manifest(namespace ns: String) -> String {
-        [pvc(ns), deployment(ns), service(ns)].joined(separator: "\n---\n")
+    static func manifest(namespace: String) -> String {
+        [pvc(namespace: namespace), deployment(namespace: namespace), service(namespace: namespace)].joined(separator: "\n---\n") + "\n"
     }
 
-    private static func pvc(_ ns: String) -> String {
+    private static func pvc(namespace: String) -> String {
         """
         apiVersion: v1
         kind: PersistentVolumeClaim
         metadata:
           name: \(pvcName)
-          namespace: \(ns)
+          namespace: \(namespace)
           labels:
             app.kubernetes.io/managed-by: helmsman-assistant
         spec:
@@ -38,13 +38,13 @@ enum SignalBridgeManifests {
         """
     }
 
-    private static func deployment(_ ns: String) -> String {
+    private static func deployment(namespace: String) -> String {
         """
         apiVersion: apps/v1
         kind: Deployment
         metadata:
           name: \(serviceName)
-          namespace: \(ns)
+          namespace: \(namespace)
           labels:
             app.kubernetes.io/name: \(serviceName)
             app.kubernetes.io/managed-by: helmsman-assistant
@@ -85,13 +85,13 @@ enum SignalBridgeManifests {
         """
     }
 
-    private static func service(_ ns: String) -> String {
+    private static func service(namespace: String) -> String {
         """
         apiVersion: v1
         kind: Service
         metadata:
           name: \(serviceName)
-          namespace: \(ns)
+          namespace: \(namespace)
           labels:
             app.kubernetes.io/managed-by: helmsman-assistant
         spec:

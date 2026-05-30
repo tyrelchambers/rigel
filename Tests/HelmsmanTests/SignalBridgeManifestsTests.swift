@@ -3,7 +3,7 @@ import XCTest
 
 final class SignalBridgeManifestsTests: XCTestCase {
     func test_manifestContainsCoreObjects() {
-        let y = SignalBridgeManifests.manifest(namespace: "default")
+        let y = SignalBridgeManifests.manifest(namespace: "test")
         XCTAssertTrue(y.contains("kind: PersistentVolumeClaim"))
         XCTAssertTrue(y.contains("kind: Deployment"))
         XCTAssertTrue(y.contains("kind: Service"))
