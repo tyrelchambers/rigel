@@ -35,7 +35,9 @@ spec:
       containers:
         - name: agent
           image: ghcr.io/OWNER/helmsman-assistant:latest # ← set by installer
-          imagePullPolicy: IfNotPresent
+          # Always: CI pushes a new image to the :latest tag and rolls the
+          # Deployment, so each restarted pod must re-pull to get the new code.
+          imagePullPolicy: Always
           env:
             - name: CLAUDE_CODE_OAUTH_TOKEN
               valueFrom:
