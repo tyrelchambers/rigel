@@ -8,19 +8,14 @@ final class ServicesViewModel {
 
     init(cache: ClusterCache) { self.cache = cache }
 
-    var namespaceFilter: String? = nil
     var search: String = ""
 
     var error: String? { cache.error }
     var isLoading: Bool { cache.isLoading }
 
-    var availableNamespaces: [String] {
-        Set(cache.services.compactMap { $0.metadata.namespace }).sorted()
-    }
-
     var filteredServices: [Service] {
         cache.services
-            .filter { namespaceFilter == nil || $0.metadata.namespace == namespaceFilter }
+            .filter { cache.namespaceFilter == nil || $0.metadata.namespace == cache.namespaceFilter }
             .filter { svc in
                 if search.isEmpty { return true }
                 let hay = ([svc.metadata.name, svc.metadata.namespace, svc.typeLabel, svc.spec?.clusterIP]
