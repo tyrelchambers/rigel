@@ -61,20 +61,6 @@ struct RBACPanel: View {
 
     private var filterBar: some View {
         HStack(spacing: 8) {
-            if viewModel.kind.isNamespaced {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        RBACPill(label: "all ns", isActive: viewModel.namespaceFilter == nil) {
-                            viewModel.namespaceFilter = nil
-                        }
-                        ForEach(viewModel.availableNamespaces, id: \.self) { ns in
-                            RBACPill(label: ns, isActive: viewModel.namespaceFilter == ns) {
-                                viewModel.namespaceFilter = ns
-                            }
-                        }
-                    }
-                }
-            }
             Spacer(minLength: 4)
             PanelSearchField(text: $viewModel.search, maxWidth: 200)
         }

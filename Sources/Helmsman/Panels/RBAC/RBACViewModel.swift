@@ -45,22 +45,10 @@ final class RBACViewModel {
     init(cache: ClusterCache) { self.cache = cache }
 
     var kind: RBACKind = .serviceAccounts
-    var namespaceFilter: String? = nil
     var search: String = ""
 
     var error: String? { cache.error }
     var isLoading: Bool { cache.isLoading }
-
-    var availableNamespaces: [String] {
-        let metas: [ObjectMeta]
-        switch kind {
-        case .serviceAccounts: metas = cache.serviceAccounts.map(\.metadata)
-        case .roles:           metas = cache.roles.map(\.metadata)
-        case .roleBindings:    metas = cache.roleBindings.map(\.metadata)
-        default:               metas = []
-        }
-        return Set(metas.compactMap { $0.namespace }).sorted()
-    }
 
     var count: Int {
         switch kind {
@@ -106,7 +94,7 @@ final class RBACViewModel {
     }
 
     private func passesNamespace(_ meta: ObjectMeta) -> Bool {
-        namespaceFilter == nil || meta.namespace == namespaceFilter
+        cache.namespaceFilter == nil || meta.namespace == cache.namespaceFilter
     }
 
     private func matches(_ fields: [String?]) -> Bool {
