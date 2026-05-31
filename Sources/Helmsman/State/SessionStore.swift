@@ -32,6 +32,9 @@ final class SessionStore {
         var modelConfig: ClaudeModelConfig? = nil
         // Per-context right-sizing metrics source. Optional for back-compat.
         var metricsBackendByContext: [String: MetricsBackendConfig]? = nil
+        // Per-context selected namespace (nil/absent = all namespaces). Optional
+        // for back-compat with sessions.json written before this field existed.
+        var namespaceByContext: [String: String]? = nil
     }
 
     private var storage: Storage
@@ -90,6 +93,26 @@ final class SessionStore {
         var map = storage.metricsBackendByContext ?? [:]
         map[context] = config
         storage.metricsBackendByContext = map
+        persist()
+    }
+
+    // MARK: - Selected namespace (per-context)
+
+    /// The persisted namespace for a context, or nil ("all namespaces") if unset.
+    func namespace(for context: String) -> String? {
+        storage.namespaceByContext?[context]
+    }
+
+    /// Persist the selected namespace for a context. Passing nil clears it
+    /// (back to "all namespaces").
+    func setNamespace(_ namespace: String?, for context: String) {
+        var map = storage.namespaceByContext ?? [:]
+        if let namespace {
+            map[context] = namespace
+        } else {
+            map.removeValue(forKey: context)
+        }
+        storage.namespaceByContext = map
         persist()
     }
 
