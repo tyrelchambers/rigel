@@ -105,15 +105,6 @@ struct RightSizingPanel: View {
             ForEach(RightSizingSort.allCases) { s in
                 RSPill(label: s.label, isActive: viewModel.sort == s) { viewModel.sort = s }
             }
-            Divider().frame(height: 16)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    RSPill(label: "all ns", isActive: viewModel.namespaceFilter == nil) { viewModel.namespaceFilter = nil }
-                    ForEach(viewModel.availableNamespaces, id: \.self) { ns in
-                        RSPill(label: ns, isActive: viewModel.namespaceFilter == ns) { viewModel.namespaceFilter = ns }
-                    }
-                }
-            }
             Spacer(minLength: 4)
             PanelSearchField(text: $viewModel.search, maxWidth: 180)
         }
