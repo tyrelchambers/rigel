@@ -3,6 +3,12 @@ import SwiftUI
 struct CatalogPanel: View {
     @Bindable var viewModel: CatalogViewModel
     let onSelect: (CatalogApp) -> Void
+    /// Hand off an app with a newer version to Claude for upgrade.
+    var onUpdate: (CatalogApp) -> Void = { _ in }
+    /// Run an update check immediately (the "Check now" button).
+    var onCheckNow: () -> Void = {}
+    /// Check a single installed app for updates (per-app recheck button).
+    var onCheckApp: (CatalogApp) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -32,13 +38,66 @@ struct CatalogPanel: View {
                 .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(Theme.Border.subtle)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+            scopeToggle
             PanelSearchField(text: $viewModel.search, placeholder: "search apps, tags…", maxWidth: 280)
             Spacer()
+            updateCheckControl
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
         .background(Theme.Surface.elevated)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Theme.Border.subtle).frame(height: 1)
+        }
+    }
+
+    private var scopeToggle: some View {
+        HStack(spacing: 2) {
+            ScopeSegment(label: "All", isActive: viewModel.scope == .all) {
+                viewModel.scope = .all
+            }
+            ScopeSegment(
+                label: "Installed",
+                count: viewModel.installedCount,
+                isActive: viewModel.scope == .installed
+            ) {
+                viewModel.scope = .installed
+            }
+        }
+        .padding(2)
+        .background(Theme.Surface.sunken)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
+    }
+
+    private var updateCheckControl: some View {
+        HStack(spacing: 8) {
+            if !viewModel.updates.isChecking, let last = viewModel.updates.lastChecked {
+                Text("checked \(last.formatted(.relative(presentation: .named)))")
+                    .font(Theme.Font.mono(10))
+                    .foregroundStyle(Theme.Foreground.tertiary)
+            }
+            Button(action: onCheckNow) {
+                HStack(spacing: 5) {
+                    if viewModel.updates.isChecking {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    Text(viewModel.updates.isChecking ? "Checking…" : "Check for updates")
+                        .font(Theme.Font.mono(11, weight: .medium))
+                }
+                .foregroundStyle(Theme.Foreground.secondary)
+                .padding(.horizontal, 10).padding(.vertical, 4)
+                .background(Theme.Surface.sunken)
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.Radius.sm)
+                        .strokeBorder(Theme.Border.strong, lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+            }
+            .buttonStyle(.plain)
+            .disabled(viewModel.updates.isChecking)
+            .help("Check all installed apps for newer versions")
         }
     }
 
@@ -63,7 +122,9 @@ struct CatalogPanel: View {
     }
 
     private var grid: some View {
-        ScrollView {
+        // Resolve the installed set once per render rather than per-card.
+        let installed = viewModel.installedIDs
+        return ScrollView {
             LazyVGrid(
                 columns: [
                     GridItem(.adaptive(minimum: 260, maximum: 360), spacing: 12, alignment: .top)
@@ -71,14 +132,47 @@ struct CatalogPanel: View {
                 spacing: 12
             ) {
                 ForEach(viewModel.filteredApps) { app in
-                    CatalogCard(app: app, fit: viewModel.fit(for: app)) {
-                        onSelect(app)
-                    }
+                    CatalogCard(
+                        app: app,
+                        fit: viewModel.fit(for: app),
+                        isInstalled: installed.contains(app.id),
+                        updateStatus: viewModel.updateStatus(for: app),
+                        checkPhase: viewModel.checkPhase(for: app),
+                        onSelect: { onSelect(app) },
+                        onUpdate: { onUpdate(app) },
+                        onCheck: { onCheckApp(app) }
+                    )
                 }
             }
             .padding(16)
         }
         .background(Theme.Surface.primary)
+    }
+}
+
+private struct ScopeSegment: View {
+    let label: String
+    var count: Int? = nil
+    let isActive: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Text(label)
+                    .font(Theme.Font.mono(11, weight: .medium))
+                if let count {
+                    Text("\(count)")
+                        .font(Theme.Font.mono(10, weight: .medium))
+                        .foregroundStyle(isActive ? Theme.Foreground.inverse.opacity(0.8) : Theme.Foreground.tertiary)
+                }
+            }
+            .foregroundStyle(isActive ? Theme.Foreground.inverse : Theme.Foreground.secondary)
+            .padding(.horizontal, 10).padding(.vertical, 4)
+            .background(isActive ? Theme.Accent.primary : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -107,55 +201,167 @@ private struct CategoryPill: View {
 struct CatalogCard: View {
     let app: CatalogApp
     let fit: FitResult
-    let action: () -> Void
+    let isInstalled: Bool
+    var updateStatus: UpdateStatus? = nil
+    var checkPhase: UpdateCheckStore.CheckPhase? = nil
+    let onSelect: () -> Void
+    var onUpdate: () -> Void = {}
+    var onCheck: () -> Void = {}
 
     @State private var hovering = false
 
     var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: app.iconSystemName)
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(Theme.Accent.primary)
-                        .frame(width: 32, height: 32)
-                        .background(Theme.Accent.primaryDim)
-                        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(app.name)
-                            .font(Theme.Font.body(13, weight: .semibold))
-                            .foregroundStyle(Theme.Foreground.primary)
-                        Text(app.tagline)
-                            .font(Theme.Font.body(11))
-                            .foregroundStyle(Theme.Foreground.secondary)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 0)
-                    fitDot
+        // A tap-gesture container rather than a Button, so the inner "Update"
+        // button receives its own taps instead of being swallowed by an outer
+        // Button's hit area.
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: app.iconSystemName)
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(Theme.Accent.primary)
+                    .frame(width: 32, height: 32)
+                    .background(Theme.Accent.primaryDim)
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(app.name)
+                        .font(Theme.Font.body(13, weight: .semibold))
+                        .foregroundStyle(Theme.Foreground.primary)
+                    Text(app.tagline)
+                        .font(Theme.Font.body(11))
+                        .foregroundStyle(Theme.Foreground.secondary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                HStack(spacing: 4) {
-                    Chip(text: app.category.displayName, fg: Theme.Foreground.secondary, bg: Theme.Surface.sunken)
-                    Chip(text: app.requirements.cpuRequest, fg: Theme.Foreground.tertiary, bg: Theme.Surface.sunken)
-                    Chip(text: app.requirements.memoryRequest, fg: Theme.Foreground.tertiary, bg: Theme.Surface.sunken)
-                    if let g = app.requirements.storageGiB {
-                        Chip(text: "\(g)Gi", fg: Theme.Foreground.tertiary, bg: Theme.Surface.sunken)
+                Spacer(minLength: 0)
+                fitDot
+            }
+            HStack(spacing: 4) {
+                if isInstalled {
+                    HStack(spacing: 3) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 9, weight: .bold))
+                        Text("installed")
+                            .font(Theme.Font.mono(10, weight: .medium))
                     }
+                    .lineLimit(1)
+                    .fixedSize()
+                    .foregroundStyle(Theme.Status.running)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(Theme.Status.running.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                }
+                Chip(text: app.category.displayName, fg: Theme.Foreground.secondary, bg: Theme.Surface.sunken)
+                Chip(text: app.requirements.cpuRequest, fg: Theme.Foreground.tertiary, bg: Theme.Surface.sunken)
+                Chip(text: app.requirements.memoryRequest, fg: Theme.Foreground.tertiary, bg: Theme.Surface.sunken)
+                if let g = app.requirements.storageGiB {
+                    Chip(text: "\(g)Gi", fg: Theme.Foreground.tertiary, bg: Theme.Surface.sunken)
                 }
             }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.Surface.elevated)
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.Radius.lg)
-                    .strokeBorder(hovering ? Theme.Accent.primary.opacity(0.4) : Theme.Border.subtle, lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
+            // Per-app update/check state on its own full-width row so it never
+            // competes with the chips above (which were wrapping mid-word).
+            if isInstalled { statusRow }
         }
-        .buttonStyle(.plain)
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.Surface.elevated)
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.lg)
+                .strokeBorder(hovering ? Theme.Accent.primary.opacity(0.4) : Theme.Border.subtle, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
+        .contentShape(Rectangle())
+        .onTapGesture { onSelect() }
         .onHover { hovering = $0 }
         .help(app.tagline)
+    }
+
+    /// A single full-width row for an installed app's update/check state:
+    /// queued → checking → then up-to-date / version-unknown, or an
+    /// "current → latest" badge with an Update button when a newer version
+    /// exists. One row keeps it from crowding the chips above.
+    @ViewBuilder private var statusRow: some View {
+        switch checkPhase {
+        case .pending:
+            statusPill("queued", systemImage: "clock", color: Theme.Foreground.tertiary)
+        case .checking:
+            HStack(spacing: 4) {
+                ProgressView().controlSize(.small)
+                Text("checking for updates…")
+                    .font(Theme.Font.mono(10))
+                    .foregroundStyle(Theme.Foreground.tertiary)
+            }
+        case .checked, nil:
+            HStack(spacing: 6) {
+                statusBadge
+                Spacer(minLength: 0)
+                recheckButton   // check just this app
+                if case let .updateAvailable(_, latest) = updateStatus {
+                    Button(action: onUpdate) {
+                        Text("Update")
+                            .font(Theme.Font.mono(10, weight: .semibold))
+                            .foregroundStyle(Theme.Foreground.inverse)
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(Theme.Accent.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Hand off to Claude to upgrade to \(latest)")
+                }
+            }
+        }
+    }
+
+    /// The left-hand status badge for an installed app's latest known result.
+    @ViewBuilder private var statusBadge: some View {
+        switch updateStatus {
+        case let .updateAvailable(current, latest):
+            HStack(spacing: 3) {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 9, weight: .bold))
+                Text("\(current) → \(latest)")
+                    .font(Theme.Font.mono(10, weight: .medium))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(Theme.Status.pending)
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(Theme.Status.pending.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+        case .upToDate:
+            statusPill("up to date", systemImage: "checkmark.seal.fill", color: Theme.Status.running)
+        case .unknown:
+            statusPill("version unknown", systemImage: "questionmark.circle", color: Theme.Foreground.tertiary)
+        case nil:
+            Text("not checked")
+                .font(Theme.Font.mono(10))
+                .foregroundStyle(Theme.Foreground.tertiary)
+        }
+    }
+
+    /// Recheck just this app for a newer version, independent of the daily sweep.
+    private var recheckButton: some View {
+        Button(action: onCheck) {
+            Image(systemName: "arrow.clockwise")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(Theme.Foreground.secondary)
+                .padding(.horizontal, 6).padding(.vertical, 3)
+                .background(Theme.Surface.sunken)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+        }
+        .buttonStyle(.plain)
+        .help("Check \(app.name) for updates")
+    }
+
+    private func statusPill(_ text: String, systemImage: String, color: Color) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: systemImage).font(.system(size: 9, weight: .bold))
+            Text(text).font(Theme.Font.mono(10, weight: .medium)).lineLimit(1)
+        }
+        .fixedSize()
+        .foregroundStyle(color)
+        .padding(.horizontal, 6).padding(.vertical, 2)
+        .background(color.opacity(0.12))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
     }
 
     private var fitDot: some View {
@@ -192,6 +398,8 @@ private struct Chip: View {
     var body: some View {
         Text(text)
             .font(Theme.Font.mono(10))
+            .lineLimit(1)
+            .fixedSize()
             .foregroundStyle(fg)
             .padding(.horizontal, 6).padding(.vertical, 2)
             .background(bg)

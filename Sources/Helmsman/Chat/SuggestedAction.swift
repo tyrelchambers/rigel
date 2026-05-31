@@ -7,7 +7,7 @@ import Foundation
 /// Claude's auto-mode tool classifier.
 struct SuggestedAction: Identifiable, Decodable {
     enum Kind: String, Decodable {
-        case restart, scale, rollback, setEnv, deletePod, cordon, uncordon
+        case restart, scale, rollback, setEnv, setImage, deletePod, cordon, uncordon
     }
 
     let id: UUID
@@ -19,9 +19,13 @@ struct SuggestedAction: Identifiable, Decodable {
     var namespace: String?
     var replicas: Int?
     var env: [String: String]?
+    /// Container name to retag (setImage only).
+    var container: String?
+    /// Full target image reference, e.g. `repo:newtag` (setImage only).
+    var image: String?
 
     private enum CodingKeys: String, CodingKey {
-        case label, kind, deployment, pod, node, namespace, replicas, env
+        case label, kind, deployment, pod, node, namespace, replicas, env, container, image
     }
 
     init(from decoder: Decoder) throws {
@@ -35,6 +39,8 @@ struct SuggestedAction: Identifiable, Decodable {
         self.namespace = try c.decodeIfPresent(String.self, forKey: .namespace)
         self.replicas = try c.decodeIfPresent(Int.self, forKey: .replicas)
         self.env = try c.decodeIfPresent([String: String].self, forKey: .env)
+        self.container = try c.decodeIfPresent(String.self, forKey: .container)
+        self.image = try c.decodeIfPresent(String.self, forKey: .image)
     }
 
     var systemImage: String {
@@ -43,6 +49,7 @@ struct SuggestedAction: Identifiable, Decodable {
         case .scale:     return "arrow.up.arrow.down"
         case .rollback:  return "arrow.uturn.backward"
         case .setEnv:    return "slider.horizontal.3"
+        case .setImage:  return "shippingbox.and.arrow.backward"
         case .deletePod: return "trash"
         case .cordon:    return "nosign"
         case .uncordon:  return "checkmark.circle"

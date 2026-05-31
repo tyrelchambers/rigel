@@ -4,6 +4,8 @@ import AppKit
 struct CatalogDetailSheet: View {
     let app: CatalogApp
     let fit: FitResult
+    /// Running-instance details when this app is installed; nil otherwise.
+    var installed: CatalogViewModel.InstalledAppInfo? = nil
     let onClose: () -> Void
     /// Hands off the app plus the node the user pinned it to (nil = let the
     /// recommendation stand / Kubernetes schedule freely).
@@ -66,6 +68,7 @@ struct CatalogDetailSheet: View {
     private var leftColumn: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                installedBlock
                 if !app.description.isEmpty {
                     Text(app.description)
                         .font(Theme.Font.body(12))
@@ -131,6 +134,84 @@ struct CatalogDetailSheet: View {
             }
             .padding(20)
         }
+    }
+
+    /// Running-instance summary shown only when the app is installed: version,
+    /// update status, and the full image reference. Tinted green to read as
+    /// "this is live in your cluster".
+    @ViewBuilder private var installedBlock: some View {
+        if let installed {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("INSTALLED")
+                    .font(Theme.Font.mono(9, weight: .semibold))
+                    .foregroundStyle(Theme.Foreground.tertiary)
+                    .tracking(0.5)
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .top, spacing: 24) {
+                        labeledValue("VERSION") {
+                            Text(installed.version)
+                                .font(Theme.Font.mono(12, weight: .semibold))
+                                .foregroundStyle(Theme.Foreground.primary)
+                        }
+                        labeledValue("STATUS") {
+                            installedStatusLine(installed.status)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    labeledValue("IMAGE") {
+                        Text(installed.imageRef)
+                            .font(Theme.Font.mono(11))
+                            .foregroundStyle(Theme.Foreground.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .help(installed.imageRef)
+                    }
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.Status.running.opacity(0.06))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.Radius.sm)
+                        .strokeBorder(Theme.Status.running.opacity(0.25), lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+            }
+        }
+    }
+
+    private func labeledValue<V: View>(_ label: String, @ViewBuilder _ value: () -> V) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label)
+                .font(Theme.Font.mono(9, weight: .semibold))
+                .foregroundStyle(Theme.Foreground.tertiary)
+                .tracking(0.5)
+            value()
+        }
+    }
+
+    /// Mirrors the catalog card's update-status badge so the sheet and card
+    /// read the same.
+    @ViewBuilder private func installedStatusLine(_ status: UpdateStatus?) -> some View {
+        switch status {
+        case let .updateAvailable(current, latest):
+            statusLine("\(current) → \(latest)", systemImage: "arrow.up.circle.fill", color: Theme.Status.pending)
+        case .upToDate:
+            statusLine("up to date", systemImage: "checkmark.seal.fill", color: Theme.Status.running)
+        case .unknown:
+            statusLine("version unknown", systemImage: "questionmark.circle", color: Theme.Foreground.tertiary)
+        case nil:
+            Text("not checked")
+                .font(Theme.Font.mono(11))
+                .foregroundStyle(Theme.Foreground.tertiary)
+        }
+    }
+
+    private func statusLine(_ text: String, systemImage: String, color: Color) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: systemImage).font(.system(size: 10, weight: .bold))
+            Text(text).font(Theme.Font.mono(11, weight: .medium)).lineLimit(1)
+        }
+        .foregroundStyle(color)
     }
 
     private var requirementsBlock: some View {

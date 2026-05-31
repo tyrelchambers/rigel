@@ -67,6 +67,10 @@ enum WorkloadAction: Identifiable {
     /// resources`. `requests`/`limits` are kubectl quantity lists like
     /// "cpu=250m,memory=512Mi" (empty to leave that side untouched).
     case setResources(kind: String, name: String, namespace: String, container: String, requests: String, limits: String)
+    /// Change one container's image via `kubectl set image` — the app-upgrade
+    /// apply step. `kind` is a kubectl resource string ("deployment" |
+    /// "statefulset"); reversible via `rollbackDeployment` (rollout undo).
+    case setImage(kind: String, name: String, namespace: String, container: String, image: String)
     /// Apply an arbitrary manifest YAML (multi-document). Used by the catalog
     /// install wizard; the wizard's Review step is the user confirmation, so
     /// these flow through `WorkloadCommander.run` directly without the
@@ -105,6 +109,7 @@ enum WorkloadAction: Identifiable {
         case .deleteNamespace(let n): return "delete-namespace-\(n)"
         case .deleteRBAC(let k, let n, let ns): return "delete-\(k)-\(ns ?? "_")/\(n)"
         case .setResources(let k, let n, let ns, let c, _, _): return "setresources-\(k)-\(ns)/\(n)-\(c)"
+        case .setImage(let k, let n, let ns, let c, let img): return "setimage-\(k)-\(ns)/\(n)-\(c)-\(img)"
         case .applyManifest(_, let label): return "apply-manifest-\(label)"
         }
     }
@@ -152,6 +157,8 @@ enum WorkloadAction: Identifiable {
             return "Delete \(k) \(ns.map { "\($0)/" } ?? "")\(n)"
         case .setResources(let k, let n, _, let c, _, _):
             return "Right-size \(k)/\(n) (\(c))"
+        case .setImage(let k, let n, _, _, let img):
+            return "Upgrade \(k)/\(n) → \(img)"
         case .applyManifest(_, let label):
             return "Apply \(label) manifest"
         }
@@ -242,6 +249,8 @@ enum WorkloadAction: Identifiable {
         case .setResources(_, _, let ns, let c, let requests, let limits):
             let parts = [requests.isEmpty ? nil : "requests \(requests)", limits.isEmpty ? nil : "limits \(limits)"].compactMap { $0 }
             return "Sets \(parts.joined(separator: " / ")) on container \(c) in namespace \(ns). Triggers a new rollout."
+        case .setImage(let k, let n, let ns, let c, let img):
+            return "Sets container \(c) on \(k)/\(n) in namespace \(ns) to \(img). Triggers a new rollout. Reversible with a rollback (rollout undo)."
         case .applyManifest(_, let label):
             return "Creates or updates the resources defined in the \(label) manifest via `kubectl apply -f -`."
         }
@@ -372,6 +381,8 @@ enum WorkloadAction: Identifiable {
             if !limits.isEmpty { args.append("--limits=\(limits)") }
             args.append(contentsOf: ["-n", ns])
             return [.args(args)]
+        case .setImage(let k, let n, let ns, let c, let img):
+            return [.args(["set", "image", "\(k)/\(n)", "\(c)=\(img)", "-n", ns])]
         case .applyManifest(let yaml, _):
             return [.applyYAML(yaml)]
         }

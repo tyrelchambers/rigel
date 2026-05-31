@@ -25,6 +25,7 @@ struct MainWindow: View {
     @State private var catalogVM: CatalogViewModel
     @State private var assistantVM: AssistantViewModel
     @State private var settingsVM: SettingsViewModel
+    @State private var updateScheduler: UpdateScheduler
     @State private var paletteOpen = false
     @State private var pendingWorkloadAction: WorkloadAction?
     /// True when the pending action came from a Claude chat suggestion — its
@@ -66,7 +67,9 @@ struct MainWindow: View {
         _storageVM = State(initialValue: StorageViewModel(cache: cache))
         _namespacesVM = State(initialValue: NamespacesViewModel(cache: cache))
         _rbacVM = State(initialValue: RBACViewModel(cache: cache))
-        _catalogVM = State(initialValue: CatalogViewModel(cache: cache, store: catalogStore))
+        let updateStore = UpdateCheckStore()
+        _catalogVM = State(initialValue: CatalogViewModel(cache: cache, store: catalogStore, updates: updateStore))
+        _updateScheduler = State(initialValue: UpdateScheduler(store: updateStore, cache: cache, catalog: catalogStore))
         let assistant = AssistantViewModel(cache: cache)
         _assistantVM = State(initialValue: assistant)
         _settingsVM = State(initialValue: SettingsViewModel(cache: cache, assistant: assistant))
@@ -330,6 +333,7 @@ struct MainWindow: View {
             CatalogDetailSheet(
                 app: app,
                 fit: catalogVM.fit(for: app),
+                installed: catalogVM.installedInfo(for: app),
                 onClose: { pendingCatalogDetail = nil },
                 onInstall: { app, pinnedNode in
                     pendingCatalogDetail = nil
@@ -516,7 +520,13 @@ struct MainWindow: View {
                 }
             )
         case .catalog:
-            CatalogPanel(viewModel: catalogVM, onSelect: { pendingCatalogDetail = $0 })
+            CatalogPanel(
+                viewModel: catalogVM,
+                onSelect: { pendingCatalogDetail = $0 },
+                onUpdate: { handoffUpdate($0) },
+                onCheckNow: { Task { await updateScheduler.checkNow() } },
+                onCheckApp: { app in Task { await updateScheduler.checkNow(appID: app.id) } }
+            )
         case .events:
             EventsPanel(viewModel: eventsVM) { event in
                 handoffEvent(event)
@@ -526,7 +536,13 @@ struct MainWindow: View {
                 handoffLogSlice(line: line, surrounding: surrounding)
             }
         case .settings:
-            SettingsPanel(viewModel: settingsVM, onOpenAssistant: { selectedPanel = .assistant })
+            SettingsPanel(
+                viewModel: settingsVM,
+                onOpenAssistant: { selectedPanel = .assistant },
+                updates: updateScheduler.store,
+                onToggleDailyUpdates: { updateScheduler.setEnabled($0) },
+                onCheckUpdatesNow: { Task { await updateScheduler.checkNow() } }
+            )
         }
     }
 
@@ -537,6 +553,38 @@ struct MainWindow: View {
         settingsVM.stopLinking()   // tear down any active link port-forward before the context changes
         settingsVM.load(context: context)
         cache.start(context: context)
+        updateScheduler.start()
+    }
+
+    /// Hand a catalog app with an available update off to Claude to facilitate
+    /// the upgrade. Builds a prompt anchored on the live deployment (so Claude
+    /// works from what's actually running) and the target version.
+    private func handoffUpdate(_ app: CatalogApp) {
+        guard case let .updateAvailable(_, latest)? = catalogVM.updateStatus(for: app) else { return }
+        // The exact running image (with its current tag) — UpgradePlan scans the
+        // live workloads from it, so the assistant gets precise targets.
+        let installed = installedImages(
+            apps: [app],
+            deployments: cache.deployments,
+            statefulSets: cache.statefulSets,
+            pods: cache.pods
+        )
+        guard let running = installed.first else {
+            chat.appendSystem("⚠︎ Couldn't upgrade \(app.name): its running image isn't in the live cluster view.")
+            return
+        }
+        let plan = UpgradePlan.make(
+            appName: app.name,
+            currentImage: running.image,
+            targetTag: latest,
+            deployments: cache.deployments,
+            statefulSets: cache.statefulSets
+        )
+        let (text, playbookMissing) = UpgradePlaybook.upgradeMessage(for: plan)
+        if playbookMissing {
+            chat.appendSystem("⚠︎ Upgrade playbook resource unavailable — sending a basic upgrade request instead.")
+        }
+        chat.sendHandoff(text)
     }
 
     private func requestWorkload(_ action: WorkloadAction, fromChat: Bool = false) {
@@ -552,7 +600,8 @@ struct MainWindow: View {
             suggestion,
             deployments: cache.deployments,
             pods: cache.pods,
-            nodes: cache.nodes
+            nodes: cache.nodes,
+            statefulSets: cache.statefulSets
         ) {
         case .action(let action):
             requestWorkload(action, fromChat: true)

@@ -61,9 +61,18 @@ struct ChatView: View {
             inputBar
         }
         .background(Theme.Surface.elevated)
-        .onAppear { cachedPrompts = suggestedPrompts() }
-        // Refresh between turns (a new message arrived) — not on every cluster
-        // watch event, which is what made the whole window churn.
+        // Refresh on a slow timer (not on every cluster watch event — that's
+        // what made the whole window churn) so dynamic chips like the grouped
+        // warnings appear shortly after events stream in. Skips the assignment
+        // when the chips are unchanged to avoid needless redraws.
+        .task {
+            while !Task.isCancelled {
+                let fresh = suggestedPrompts()
+                if fresh != cachedPrompts { cachedPrompts = fresh }
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+            }
+        }
+        // Also refresh immediately between turns (a new message arrived).
         .onChange(of: viewModel.messages.count) { _, _ in cachedPrompts = suggestedPrompts() }
         .onDisappear { viewModel.stop() }
         .background {

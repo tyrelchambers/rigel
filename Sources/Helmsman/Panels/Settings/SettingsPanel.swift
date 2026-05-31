@@ -6,6 +6,10 @@ struct SettingsPanel: View {
     @Bindable var viewModel: SettingsViewModel
     /// Jump to the Assistant tab (notifications are consumed by the agent).
     let onOpenAssistant: () -> Void
+    /// Daily app-update-check state + controls (owned by MainWindow).
+    var updates: UpdateCheckStore? = nil
+    var onToggleDailyUpdates: (Bool) -> Void = { _ in }
+    var onCheckUpdatesNow: () -> Void = {}
 
     @State private var recipientsText = ""
 
@@ -22,6 +26,7 @@ struct SettingsPanel: View {
                     .font(Theme.Font.mono(20, weight: .semibold))
                     .foregroundStyle(Theme.Foreground.primary)
                 signalSection
+                if let updates { updatesSection(updates) }
             }
             .padding(20)
             .frame(maxWidth: 720, alignment: .leading)
@@ -31,6 +36,59 @@ struct SettingsPanel: View {
         .onAppear { recipientsText = defaultedRecipients }
         .onChange(of: viewModel.signalRecipients) { _, _ in recipientsText = defaultedRecipients }
         .onDisappear { viewModel.stopLinking() }
+    }
+
+    private func updatesSection(_ updates: UpdateCheckStore) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.triangle.2.circlepath").foregroundStyle(Theme.Accent.primary)
+                Text("App updates")
+                    .font(Theme.Font.body(15, weight: .semibold))
+                    .foregroundStyle(Theme.Foreground.primary)
+            }
+            Text("Check your installed catalog apps against their registries for newer stable versions. When a check can't be made by tag (e.g. an image pinned to :latest), Claude is asked to determine the latest release.")
+                .font(Theme.Font.body(12)).foregroundStyle(Theme.Foreground.secondary)
+
+            Toggle(isOn: Binding(
+                get: { updates.dailyChecksEnabled },
+                set: { onToggleDailyUpdates($0) }
+            )) {
+                Text("Check for updates once a day")
+                    .font(Theme.Font.body(12, weight: .medium)).foregroundStyle(Theme.Foreground.primary)
+            }
+            .toggleStyle(.switch).tint(Theme.Accent.primary)
+
+            HStack(spacing: 10) {
+                Button(action: onCheckUpdatesNow) {
+                    HStack(spacing: 5) {
+                        if updates.isChecking {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .medium))
+                        }
+                        Text(updates.isChecking ? "Checking…" : "Check for updates")
+                            .font(Theme.Font.body(12, weight: .medium))
+                    }
+                }
+                .buttonStyle(.borderedProminent).tint(Theme.Accent.primary)
+                .disabled(updates.isChecking)
+
+                if !updates.isChecking, let last = updates.lastChecked {
+                    Text("Last checked \(last.formatted(.relative(presentation: .named)))")
+                        .font(Theme.Font.body(11)).foregroundStyle(Theme.Foreground.tertiary)
+                }
+                if updates.updateCount > 0 {
+                    Text("\(updates.updateCount) update\(updates.updateCount == 1 ? "" : "s") available")
+                        .font(Theme.Font.mono(11, weight: .medium))
+                        .foregroundStyle(Theme.Status.pending)
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.Surface.elevated)
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.lg).strokeBorder(Theme.Border.subtle, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
     }
 
     private var signalSection: some View {

@@ -53,6 +53,11 @@ struct CatalogApp: Codable, Identifiable, Hashable {
     let repoURL: URL?
     let homepageURL: URL?
     let tags: [String]
+    /// Distinctive container image repo path(s) that identify this app when
+    /// found running in the cluster — the app's OWN image, never a shared
+    /// dependency like `postgres`. Registry host and `:tag` are optional;
+    /// install detection matches host- and tag-insensitively.
+    let matchImages: [String]
     let requirements: AppRequirements
     /// True = needs a PVC; surfaces a "Storage" field in Configure.
     let persistence: Bool

@@ -108,13 +108,15 @@ actor ClaudeSession {
 
         The block is JSON — a single object or an array of objects. Schema (include only the fields the kind needs; always set `namespace`):
         - `label`: short imperative button text, e.g. "Set MEMOS_PORT=5230 & restart memos"
-        - `kind`: one of restart | scale | rollback | setEnv | deletePod | cordon | uncordon
-        - `deployment`: name (for restart/scale/rollback/setEnv)
+        - `kind`: one of restart | scale | rollback | setEnv | setImage | deletePod | cordon | uncordon
+        - `deployment`: name (for restart/scale/rollback/setEnv/setImage — for setImage this is the workload name, deployment or statefulset)
         - `pod`: name (for deletePod)
         - `node`: name (for cordon/uncordon)
         - `namespace`: defaults to "default"
         - `replicas`: integer (scale only)
         - `env`: object of KEY:VALUE strings (setEnv only)
+        - `container`: container name (setImage only)
+        - `image`: full target image ref like `repo:newtag` (setImage only) — this is how you apply an app upgrade
 
         Example — fixing a deployment listening on the wrong port:
         ```action

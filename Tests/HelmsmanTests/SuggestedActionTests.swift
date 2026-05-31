@@ -114,6 +114,49 @@ final class SuggestedActionTests: XCTestCase {
         XCTAssertEqual(wa.title, "Delete pod memos-abc")
     }
 
+    // MARK: - setImage (app upgrade)
+
+    func test_parse_setImage_decodesImageAndContainer() {
+        let action = parseOne("""
+        {"label":"Upgrade plausible to v3.2.1","kind":"setImage","deployment":"plausible","namespace":"default","container":"app","image":"ghcr.io/plausible/community-edition:v3.2.1"}
+        """)
+        XCTAssertEqual(action.kind, .setImage)
+        XCTAssertEqual(action.container, "app")
+        XCTAssertEqual(action.image, "ghcr.io/plausible/community-edition:v3.2.1")
+    }
+
+    func test_resolve_setImage_buildsSetImageCommandForDeployment() {
+        let dep = makeDeployment("plausible")
+        let action = parseOne("""
+        {"label":"Upgrade","kind":"setImage","deployment":"plausible","namespace":"default","container":"app","image":"ghcr.io/plausible/community-edition:v3.2.1"}
+        """)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [dep], pods: [], nodes: []) else {
+            return XCTFail("expected a resolved action")
+        }
+        let preview = wa.previewCommand(context: "default")
+        XCTAssertTrue(preview.contains("set image deployment/plausible app=ghcr.io/plausible/community-edition:v3.2.1 -n default"), preview)
+    }
+
+    func test_resolve_setImage_resolvesStatefulSetWhenNotADeployment() {
+        let ss = makeStatefulSet("gitea")
+        let action = parseOne("""
+        {"label":"Upgrade","kind":"setImage","deployment":"gitea","namespace":"default","container":"gitea","image":"gitea/gitea:1.22"}
+        """)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: [], statefulSets: [ss]) else {
+            return XCTFail("expected a resolved action")
+        }
+        XCTAssertTrue(wa.previewCommand(context: nil).contains("set image statefulset/gitea"), wa.previewCommand(context: nil))
+    }
+
+    func test_resolve_setImage_withoutImage_isUnresolved() {
+        let dep = makeDeployment("plausible")
+        let action = parseOne(#"{"label":"Upgrade","kind":"setImage","deployment":"plausible","container":"app"}"#)
+        guard case .unresolved(let reason) = SuggestedActionResolver.resolve(action, deployments: [dep], pods: [], nodes: []) else {
+            return XCTFail("expected unresolved")
+        }
+        XCTAssertTrue(reason.contains("image"), reason)
+    }
+
     // MARK: - Fixtures
 
     private func parseOne(_ json: String) -> SuggestedAction {
@@ -125,6 +168,14 @@ final class SuggestedActionTests: XCTestCase {
         Deployment(
             metadata: ObjectMeta(name: name, namespace: ns, uid: "uid-\(name)", creationTimestamp: nil, labels: nil, annotations: nil),
             spec: DeploymentSpec(replicas: 1, selector: nil, template: nil, strategy: nil, paused: nil),
+            status: nil
+        )
+    }
+
+    private func makeStatefulSet(_ name: String, ns: String = "default") -> StatefulSet {
+        StatefulSet(
+            metadata: ObjectMeta(name: name, namespace: ns, uid: "uid-\(name)", creationTimestamp: nil, labels: nil, annotations: nil),
+            spec: StatefulSetSpec(replicas: 1, selector: nil, template: nil),
             status: nil
         )
     }

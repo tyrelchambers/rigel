@@ -1,6 +1,7 @@
 [
   {
     "id": "vaultwarden",
+    "matchImages": ["vaultwarden/server"],
     "name": "Vaultwarden",
     "tagline": "Lightweight Bitwarden-compatible password manager.",
     "description": "Unofficial Bitwarden server written in Rust. Single binary, SQLite by default, drop-in compatible with the official Bitwarden clients. Ideal first install — small footprint, no external database required.",
@@ -24,6 +25,7 @@
   },
   {
     "id": "supabase",
+    "matchImages": ["supabase/studio", "supabase/postgres"],
     "name": "Supabase",
     "tagline": "Open-source Firebase — Postgres, Auth, Storage, Realtime.",
     "description": "Bundled backend: Postgres + GoTrue auth + PostgREST + Realtime + Storage + Kong API gateway + Studio admin UI. Large surface area — multiple Deployments and Services. Expect ~2–4 GiB memory usage at idle.",
@@ -47,6 +49,7 @@
   },
   {
     "id": "plausible",
+    "matchImages": ["plausible/community-edition"],
     "name": "Plausible",
     "tagline": "Lightweight, cookie-free web analytics.",
     "description": "Privacy-focused Google Analytics alternative. Self-hosted Plausible Analytics dashboard backed by Postgres and ClickHouse. Open source, GDPR-friendly, simple stats UI.",
@@ -70,6 +73,7 @@
   },
   {
     "id": "nextcloud",
+    "matchImages": ["nextcloud"],
     "name": "Nextcloud",
     "tagline": "Self-hosted file sync, share, and collaboration.",
     "description": "Personal cloud platform: file sync (Dropbox replacement), shared calendars, contacts, notes. Heavy app — PHP-FPM + nginx + Postgres. Plan on at least 2 GiB RAM and a sizeable PVC.",
@@ -93,6 +97,7 @@
   },
   {
     "id": "gitea",
+    "matchImages": ["gitea/gitea"],
     "name": "Gitea",
     "tagline": "Lightweight self-hosted Git service + CI runner.",
     "description": "GitHub-flavored Git hosting, issue tracking, and Actions-compatible CI runners — in one binary. Small footprint, Postgres or SQLite backing. Best for personal repos and small teams.",
@@ -116,6 +121,7 @@
   },
   {
     "id": "uptime-kuma",
+    "matchImages": ["louislam/uptime-kuma"],
     "name": "Uptime Kuma",
     "tagline": "Self-hosted uptime monitoring with a beautiful UI.",
     "description": "Fancy status-page-and-monitor tool. HTTP/TCP/ping/DNS checks, push notifications via dozens of channels, public status pages. Tiny footprint (Node.js + SQLite).",
@@ -139,6 +145,7 @@
   },
   {
     "id": "linkwarden",
+    "matchImages": ["linkwarden/linkwarden"],
     "name": "Linkwarden",
     "tagline": "Bookmark + page-archive manager.",
     "description": "Self-hosted Pocket / Pinboard / raindrop.io alternative. Save links, take notes, capture full-page archives (PDF + screenshot). Postgres-backed.",
@@ -162,6 +169,7 @@
   },
   {
     "id": "memos",
+    "matchImages": ["neosmemo/memos"],
     "name": "Memos",
     "tagline": "Open-source self-hosted note-taking, Twitter-style.",
     "description": "Lightweight personal note hub. SQLite-backed by default. Markdown notes, daily reflections, tags, public sharing.",
@@ -185,6 +193,7 @@
   },
   {
     "id": "freshrss",
+    "matchImages": ["freshrss/freshrss"],
     "name": "FreshRSS",
     "tagline": "Self-hosted RSS reader.",
     "description": "Lightweight PHP-based RSS aggregator. Multi-user, OPML import, mobile-friendly themes. SQLite or Postgres backing.",
@@ -208,6 +217,7 @@
   },
   {
     "id": "penpot",
+    "matchImages": ["penpotapp/frontend", "penpotapp/backend"],
     "name": "Penpot",
     "tagline": "Open-source design + prototyping platform.",
     "description": "Free Figma alternative — open-source vector design, prototyping, real-time collaboration. Stack: frontend nginx + backend Clojure + Postgres + Redis. Multi-pod install.",
@@ -231,6 +241,7 @@
   },
   {
     "id": "sentry",
+    "matchImages": ["getsentry/sentry", "getsentry/snuba", "getsentry/relay"],
     "name": "Sentry",
     "tagline": "Open-source error tracking and performance monitoring.",
     "description": "Self-hosted Sentry — capture exceptions, traces, profiles, and replays across your apps. Heavy multi-service install: web + worker + cron + ingest consumers + Snuba (events) + ClickHouse + Postgres + Redis + Kafka + Zookeeper + Memcached + Symbolicator. Expect ~8 GiB RAM at idle.",
@@ -254,6 +265,7 @@
   },
   {
     "id": "signoz",
+    "matchImages": ["signoz/signoz"],
     "name": "SigNoz",
     "tagline": "Open-source DataDog — APM, metrics, logs, traces.",
     "description": "Full-stack OpenTelemetry-based observability platform. Components: query-service, frontend, otel-collector (ingestion), ClickHouse (storage), Zookeeper, alertmanager. SigNoz is the obvious choice when you want one tool for APM + metrics + logs.",
@@ -277,6 +289,7 @@
   },
   {
     "id": "posthog",
+    "matchImages": ["posthog/posthog"],
     "name": "PostHog",
     "tagline": "Open-source product analytics, feature flags, session replays.",
     "description": "All-in-one product analytics: event capture, funnels, retention, A/B tests, feature flags, session replays. ClickHouse for analytics, Postgres for app state, Kafka for ingestion, Redis for caching.",
@@ -300,6 +313,7 @@
   },
   {
     "id": "excalidraw",
+    "matchImages": ["excalidraw/excalidraw"],
     "name": "Excalidraw",
     "tagline": "Virtual whiteboard for sketchy hand-drawn diagrams.",
     "description": "Frontend-only collaborative whiteboard. Single static-served container, no backend state. Loads instantly, drawings persist in browser localStorage by default. Already deployed in this cluster — this entry is a clean template for a second instance.",
@@ -323,6 +337,7 @@
   },
   {
     "id": "twenty",
+    "matchImages": ["twentycrm/twenty"],
     "name": "Twenty",
     "tagline": "Open-source Salesforce alternative — modern CRM.",
     "description": "Notion-meets-Airtable CRM. Customizable objects, kanban + table views, GraphQL API, REST API. Stack: server (NestJS), worker, frontend, Postgres, Redis.",
@@ -346,6 +361,7 @@
   },
   {
     "id": "postiz",
+    "matchImages": ["gitroomhq/postiz-app"],
     "name": "Postiz",
     "tagline": "Open-source social media scheduling.",
     "description": "Schedule, cross-post, and queue content across Twitter/X, LinkedIn, Bluesky, Mastodon, Threads, Discord, and more. Stack: app + worker + cron + Postgres + Redis. Already deployed in this cluster — this entry is a clean template for a second instance.",
@@ -369,6 +385,7 @@
   },
   {
     "id": "n8n",
+    "matchImages": ["n8nio/n8n"],
     "name": "n8n",
     "tagline": "Fair-code workflow automation — Zapier alternative.",
     "description": "Node-RED-style visual workflow builder with 400+ integrations. SQLite by default (fine for single-replica); switch to Postgres for HA. Webhook receiver + cron triggers + execution worker all in one container.",

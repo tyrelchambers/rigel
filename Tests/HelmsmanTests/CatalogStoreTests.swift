@@ -81,6 +81,7 @@ final class CatalogStoreTests: XCTestCase {
         description: String = "description",
         category: AppCategory = .other,
         tags: [String] = [],
+        matchImages: [String] = [],
         installPromptTemplate: String = "prompt"
     ) -> CatalogApp {
         CatalogApp(
@@ -94,6 +95,7 @@ final class CatalogStoreTests: XCTestCase {
             repoURL: nil,
             homepageURL: nil,
             tags: tags,
+            matchImages: matchImages,
             requirements: AppRequirements(
                 cpuRequest: "100m",
                 cpuLimit: nil,

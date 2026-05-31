@@ -88,6 +88,7 @@ final class NodeFitTests: XCTestCase {
             repoURL: nil,
             homepageURL: nil,
             tags: [],
+            matchImages: [],
             requirements: AppRequirements(
                 cpuRequest: cpu,
                 cpuLimit: nil,

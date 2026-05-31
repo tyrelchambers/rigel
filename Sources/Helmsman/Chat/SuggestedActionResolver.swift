@@ -16,7 +16,8 @@ enum SuggestedActionResolver {
         _ s: SuggestedAction,
         deployments: [Deployment],
         pods: [Pod],
-        nodes: [Node]
+        nodes: [Node],
+        statefulSets: [StatefulSet] = []
     ) -> SuggestedActionResolution {
         let ns = s.namespace ?? "default"
 
@@ -31,6 +32,19 @@ enum SuggestedActionResolver {
         }
 
         switch s.kind {
+        case .setImage:
+            guard let name = s.deployment else { return .unresolved("setImage needs a workload name") }
+            guard let container = s.container, let image = s.image else {
+                return .unresolved("setImage needs a container and an image")
+            }
+            // Resolve the workload kind by name: deployment first, then statefulset.
+            if deployments.contains(where: { $0.metadata.name == name }) {
+                return .action(.setImage(kind: "deployment", name: name, namespace: ns, container: container, image: image))
+            }
+            if statefulSets.contains(where: { $0.metadata.name == name }) {
+                return .action(.setImage(kind: "statefulset", name: name, namespace: ns, container: container, image: image))
+            }
+            return .unresolved("workload \(ns)/\(name) isn't in the live cluster view")
         case .restart:
             return deployment().map { .action(.restartDeployment($0)) } ?? deploymentMiss()
         case .rollback:
