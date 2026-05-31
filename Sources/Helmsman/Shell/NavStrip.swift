@@ -5,10 +5,20 @@ struct NavStrip: View {
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 2) {
-                ForEach(PanelKind.allCases) { kind in
-                    NavButton(kind: kind, isSelected: selection == kind) {
-                        selection = kind
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(PanelKind.navGroups) { group in
+                    if let title = group.title {
+                        Text(title.uppercased())
+                            .font(Theme.Font.body(10, weight: .semibold))
+                            .foregroundStyle(Theme.Foreground.tertiary)
+                            .padding(.horizontal, 12)
+                            .padding(.top, 14)
+                            .padding(.bottom, 2)
+                    }
+                    ForEach(group.panels) { kind in
+                        NavButton(kind: kind, isSelected: selection == kind) {
+                            selection = kind
+                        }
                     }
                 }
             }

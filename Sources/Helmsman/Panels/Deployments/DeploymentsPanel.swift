@@ -64,9 +64,7 @@ struct DeploymentsPanel: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Text("Deployments")
-                .font(Theme.Font.body(15, weight: .semibold))
-                .foregroundStyle(Theme.Foreground.primary)
+            PanelTitle(.deployments)
             Text("\(viewModel.filteredDeployments.count)")
                 .font(Theme.Font.mono(11))
                 .foregroundStyle(Theme.Foreground.tertiary)

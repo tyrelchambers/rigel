@@ -23,6 +23,27 @@ enum PanelKind: Hashable, CaseIterable, Identifiable {
 
     var id: Self { self }
 
+    /// A labelled cluster of panels in the sidebar. A `nil` title renders the
+    /// panels pinned at the very top with no header.
+    struct NavGroup: Identifiable {
+        let title: String?
+        let panels: [PanelKind]
+        var id: String { title ?? "_pinned" }
+    }
+
+    /// Sidebar layout: ordered top-to-bottom, most frequently used first.
+    /// Every case appears exactly once (asserted by `PanelKind.navGroups`
+    /// coverage test).
+    static let navGroups: [NavGroup] = [
+        NavGroup(title: nil, panels: [.overview, .assistant]),
+        NavGroup(title: "Workloads", panels: [.deployments, .pods, .workloads, .rightSizing]),
+        NavGroup(title: "Networking", panels: [.services, .ingresses]),
+        NavGroup(title: "Config & Storage", panels: [.configMaps, .secrets, .storage, .databases]),
+        NavGroup(title: "Cluster", panels: [.namespaces, .nodes, .rbac]),
+        NavGroup(title: "Observability", panels: [.events, .logs]),
+        NavGroup(title: "System", panels: [.catalog, .settings]),
+    ]
+
     var icon: String {
         switch self {
         case .overview:    return "rectangle.grid.2x2.fill"
@@ -68,6 +89,31 @@ enum PanelKind: Hashable, CaseIterable, Identifiable {
         case .events:      return "Events"
         case .logs:        return "Logs"
         case .settings:    return "Settings"
+        }
+    }
+
+    /// One-line descriptor shown beneath the title in the sidebar.
+    var subtitle: String {
+        switch self {
+        case .overview:    return "Health at a glance"
+        case .assistant:   return "AI cluster operator"
+        case .namespaces:  return "Logical partitions"
+        case .deployments: return "Rollouts & replicas"
+        case .pods:        return "Running containers"
+        case .workloads:   return "All controllers"
+        case .rightSizing: return "Resource tuning"
+        case .nodes:       return "Cluster machines"
+        case .ingresses:   return "External routing"
+        case .services:    return "Internal networking"
+        case .databases:   return "Stateful stores"
+        case .secrets:     return "Sensitive config"
+        case .configMaps:  return "App configuration"
+        case .storage:     return "Volumes & claims"
+        case .rbac:        return "Access control"
+        case .catalog:     return "Install apps"
+        case .events:      return "Recent activity"
+        case .logs:        return "Container output"
+        case .settings:    return "Preferences"
         }
     }
 

@@ -25,9 +25,7 @@ struct EventsPanel: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Text("Events")
-                .font(Theme.Font.body(15, weight: .semibold))
-                .foregroundStyle(Theme.Foreground.primary)
+            PanelTitle(.events)
             Text("\(viewModel.filteredEvents.count)")
                 .font(Theme.Font.mono(11))
                 .foregroundStyle(Theme.Foreground.tertiary)

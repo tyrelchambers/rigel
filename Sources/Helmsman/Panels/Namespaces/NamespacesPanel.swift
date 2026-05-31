@@ -44,9 +44,7 @@ struct NamespacesPanel: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Text("Namespaces")
-                .font(Theme.Font.body(15, weight: .semibold))
-                .foregroundStyle(Theme.Foreground.primary)
+            PanelTitle(.namespaces)
             Text("\(viewModel.filteredNamespaces.count)")
                 .font(Theme.Font.mono(11))
                 .foregroundStyle(Theme.Foreground.tertiary)

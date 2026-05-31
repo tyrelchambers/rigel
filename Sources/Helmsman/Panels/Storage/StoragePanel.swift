@@ -27,9 +27,7 @@ struct StoragePanel: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Text("Storage")
-                .font(Theme.Font.body(15, weight: .semibold))
-                .foregroundStyle(Theme.Foreground.primary)
+            PanelTitle(.storage)
             Text("\(viewModel.count)")
                 .font(Theme.Font.mono(11))
                 .foregroundStyle(Theme.Foreground.tertiary)

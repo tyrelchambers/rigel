@@ -47,7 +47,7 @@ struct AssistantPanel: View {
     private var header: some View {
         HStack(spacing: 12) {
             Image(systemName: "sparkles").foregroundStyle(Theme.Accent.primary)
-            Text("Assistant").font(Theme.Font.body(15, weight: .semibold)).foregroundStyle(Theme.Foreground.primary)
+            PanelTitle(.assistant)
             if viewModel.isInstalled {
                 statusPill
             }

@@ -41,9 +41,7 @@ struct ConfigMapsPanel: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Text("ConfigMaps")
-                .font(Theme.Font.body(15, weight: .semibold))
-                .foregroundStyle(Theme.Foreground.primary)
+            PanelTitle(.configMaps)
             Text("\(viewModel.filteredConfigMaps.count)")
                 .font(Theme.Font.mono(11))
                 .foregroundStyle(Theme.Foreground.tertiary)

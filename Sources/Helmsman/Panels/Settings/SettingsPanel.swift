@@ -22,9 +22,8 @@ struct SettingsPanel: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("Settings")
-                    .font(Theme.Font.mono(20, weight: .semibold))
-                    .foregroundStyle(Theme.Foreground.primary)
+                PanelTitle(title: PanelKind.settings.title, subtitle: PanelKind.settings.subtitle,
+                           titleFont: Theme.Font.mono(20, weight: .semibold))
                 signalSection
                 if let updates { updatesSection(updates) }
             }

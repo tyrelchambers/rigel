@@ -33,9 +33,7 @@ struct RightSizingPanel: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Text("Right-sizing")
-                .font(Theme.Font.body(15, weight: .semibold))
-                .foregroundStyle(Theme.Foreground.primary)
+            PanelTitle(.rightSizing)
             Text("\(viewModel.filtered.count)")
                 .font(Theme.Font.mono(11))
                 .foregroundStyle(Theme.Foreground.tertiary)

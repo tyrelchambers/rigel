@@ -27,9 +27,7 @@ struct DatabasesPanel: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Text("Databases")
-                .font(Theme.Font.body(15, weight: .semibold))
-                .foregroundStyle(Theme.Foreground.primary)
+            PanelTitle(.databases)
             Text("\(viewModel.instances.count)")
                 .font(Theme.Font.mono(11))
                 .foregroundStyle(Theme.Foreground.tertiary)

@@ -21,9 +21,7 @@ struct OverviewPanel: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            Text("Overview")
-                .font(Theme.Font.body(15, weight: .semibold))
-                .foregroundStyle(Theme.Foreground.primary)
+            PanelTitle(.overview)
             if let ctx = contextManager.active?.name {
                 Text(ctx)
                     .font(Theme.Font.mono(11))

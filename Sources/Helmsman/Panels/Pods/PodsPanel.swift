@@ -30,9 +30,7 @@ struct PodsPanel: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            Text("Pods")
-                .font(Theme.Font.body(15, weight: .semibold))
-                .foregroundStyle(Theme.Foreground.primary)
+            PanelTitle(.pods)
             countChip
             PanelSearchField(text: $viewModel.search, placeholder: "search name, namespace, label…", maxWidth: 260)
             Spacer()

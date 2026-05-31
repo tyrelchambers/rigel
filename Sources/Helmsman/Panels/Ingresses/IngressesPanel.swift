@@ -38,9 +38,7 @@ struct IngressesPanel: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Text("Ingresses")
-                .font(Theme.Font.body(15, weight: .semibold))
-                .foregroundStyle(Theme.Foreground.primary)
+            PanelTitle(.ingresses)
             Text("\(viewModel.filteredIngresses.count)")
                 .font(Theme.Font.mono(11))
                 .foregroundStyle(Theme.Foreground.tertiary)
