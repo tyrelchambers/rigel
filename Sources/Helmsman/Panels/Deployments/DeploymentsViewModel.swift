@@ -6,20 +6,15 @@ final class DeploymentsViewModel {
     let cache: ClusterCache
     init(cache: ClusterCache) { self.cache = cache }
 
-    var namespaceFilter: String? = nil
     var search: String = ""
     var expanded: Set<String> = []
 
     var error: String? { cache.error }
     var isLoading: Bool { cache.isLoading }
 
-    var availableNamespaces: [String] {
-        Set(cache.deployments.compactMap { $0.metadata.namespace }).sorted()
-    }
-
     var filteredDeployments: [Deployment] {
         var base: [Deployment]
-        if let ns = namespaceFilter {
+        if let ns = cache.namespaceFilter {
             base = cache.deployments.filter { $0.metadata.namespace == ns }
         } else {
             base = cache.deployments
