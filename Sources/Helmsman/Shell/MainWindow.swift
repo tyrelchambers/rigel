@@ -78,9 +78,14 @@ struct MainWindow: View {
                 NavStrip(selection: $selectedPanel)
 
                 HSplitView {
-                    panelView
-                        .frame(minWidth: 480, idealWidth: 820, maxWidth: .infinity, maxHeight: .infinity)
-                        .background(Theme.Surface.primary)
+                    VStack(spacing: 0) {
+                        if selectedPanel.isNamespaceScoped {
+                            NamespaceBar(cache: cache)
+                        }
+                        panelView
+                    }
+                    .frame(minWidth: 480, idealWidth: 820, maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Theme.Surface.primary)
 
                     ChatView(
                         viewModel: chat,
