@@ -82,19 +82,7 @@ struct ServicesPanel: View {
 
     private var filterBar: some View {
         HStack(spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    FilterPill(label: "all ns", isActive: viewModel.namespaceFilter == nil) {
-                        viewModel.namespaceFilter = nil
-                    }
-                    ForEach(viewModel.availableNamespaces, id: \.self) { ns in
-                        FilterPill(label: ns, isActive: viewModel.namespaceFilter == ns) {
-                            viewModel.namespaceFilter = ns
-                        }
-                    }
-                }
-            }
-            Spacer(minLength: 4)
+            Spacer(minLength: 0)
             PanelSearchField(text: $viewModel.search, maxWidth: 200)
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
@@ -278,28 +266,6 @@ private struct ForwardRow: View {
                 .strokeBorder(Theme.Border.subtle, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
-    }
-}
-
-private struct FilterPill: View {
-    let label: String
-    let isActive: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(label)
-                .font(Theme.Font.mono(10, weight: .medium))
-                .foregroundStyle(isActive ? Theme.Foreground.inverse : Theme.Foreground.secondary)
-                .padding(.horizontal, 8).padding(.vertical, 3)
-                .background(isActive ? Theme.Accent.primary : Theme.Surface.sunken)
-                .overlay(
-                    RoundedRectangle(cornerRadius: Theme.Radius.sm)
-                        .strokeBorder(isActive ? Color.clear : Theme.Border.strong, lineWidth: 1)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
-        }
-        .buttonStyle(.plain)
     }
 }
 

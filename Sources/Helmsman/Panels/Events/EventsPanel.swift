@@ -53,19 +53,6 @@ struct EventsPanel: View {
                     viewModel.typeFilter = kind
                 }
             }
-            Divider().frame(height: 14)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    FilterPill(label: "all ns", isActive: viewModel.namespaceFilter == nil, color: Theme.Accent.primary) {
-                        viewModel.namespaceFilter = nil
-                    }
-                    ForEach(viewModel.availableNamespaces, id: \.self) { ns in
-                        FilterPill(label: ns, isActive: viewModel.namespaceFilter == ns, color: Theme.Accent.primary) {
-                            viewModel.namespaceFilter = ns
-                        }
-                    }
-                }
-            }
             Spacer(minLength: 4)
             PanelSearchField(text: $viewModel.search, maxWidth: 200)
         }

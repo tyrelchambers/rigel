@@ -24,23 +24,10 @@ final class WorkloadsViewModel {
     init(cache: ClusterCache) { self.cache = cache }
 
     var kind: WorkloadKind = .statefulSets
-    var namespaceFilter: String? = nil
     var search: String = ""
 
     var error: String? { cache.error }
     var isLoading: Bool { cache.isLoading }
-
-    /// Namespaces present in the currently-selected kind.
-    var availableNamespaces: [String] {
-        let metas: [ObjectMeta]
-        switch kind {
-        case .statefulSets: metas = cache.statefulSets.map(\.metadata)
-        case .daemonSets:   metas = cache.daemonSets.map(\.metadata)
-        case .jobs:         metas = cache.jobs.map(\.metadata)
-        case .cronJobs:     metas = cache.cronJobs.map(\.metadata)
-        }
-        return Set(metas.compactMap { $0.namespace }).sorted()
-    }
 
     var count: Int {
         switch kind {
@@ -80,7 +67,7 @@ final class WorkloadsViewModel {
     }
 
     private func passesNamespace(_ meta: ObjectMeta) -> Bool {
-        namespaceFilter == nil || meta.namespace == namespaceFilter
+        cache.namespaceFilter == nil || meta.namespace == cache.namespaceFilter
     }
 
     private func matches(_ fields: [String?]) -> Bool {

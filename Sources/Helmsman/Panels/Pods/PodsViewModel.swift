@@ -15,9 +15,12 @@ final class PodsViewModel {
     var isLoading: Bool { cache.isLoading }
 
     var filteredPods: [Pod] {
-        guard !search.isEmpty else { return pods }
+        let base = cache.namespaceFilter == nil
+            ? pods
+            : pods.filter { $0.metadata.namespace == cache.namespaceFilter }
+        guard !search.isEmpty else { return base }
         let q = search.lowercased()
-        return pods.filter { pod in
+        return base.filter { pod in
             if pod.metadata.name.lowercased().contains(q) { return true }
             if (pod.metadata.namespace ?? "").lowercased().contains(q) { return true }
             if let labels = pod.metadata.labels {

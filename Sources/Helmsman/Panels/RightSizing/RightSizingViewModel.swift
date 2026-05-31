@@ -48,7 +48,6 @@ final class RightSizingViewModel {
 
     private(set) var results: [WorkloadRightSizing] = []
     private(set) var isAnalyzing = false
-    var namespaceFilter: String? = nil
     var search: String = ""
     var sort: RightSizingSort = .attention
 
@@ -76,10 +75,6 @@ final class RightSizingViewModel {
         await refresh()
     }
 
-    var availableNamespaces: [String] {
-        Set(results.map { $0.namespace }).sorted()
-    }
-
     /// Cold start: workloads exist but none has enough history yet, so every row
     /// reads "Gathering data". Drives a top-of-panel explainer banner.
     var isWarmingUp: Bool {
@@ -93,7 +88,7 @@ final class RightSizingViewModel {
 
     var filtered: [WorkloadRightSizing] {
         results
-            .filter { namespaceFilter == nil || $0.namespace == namespaceFilter }
+            .filter { cache.namespaceFilter == nil || $0.namespace == cache.namespaceFilter }
             .filter { w in
                 if search.isEmpty { return true }
                 return w.name.localizedCaseInsensitiveContains(search) || w.namespace.localizedCaseInsensitiveContains(search)
