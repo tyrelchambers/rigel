@@ -6,19 +6,14 @@ final class IngressesViewModel {
     let cache: ClusterCache
     init(cache: ClusterCache) { self.cache = cache }
 
-    var namespaceFilter: String? = nil
     var search: String = ""
 
     var error: String? { cache.error }
     var isLoading: Bool { cache.isLoading }
 
-    var availableNamespaces: [String] {
-        Set(cache.ingresses.compactMap { $0.metadata.namespace }).sorted()
-    }
-
     var filteredIngresses: [Ingress] {
         cache.ingresses
-            .filter { namespaceFilter == nil || $0.metadata.namespace == namespaceFilter }
+            .filter { cache.namespaceFilter == nil || $0.metadata.namespace == cache.namespaceFilter }
             .filter { ing in
                 if search.isEmpty { return true }
                 let hay = ([ing.metadata.name, ing.metadata.namespace, ing.className]
