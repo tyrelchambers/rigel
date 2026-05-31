@@ -40,6 +40,18 @@ final class ClusterCache {
     var error: String? = nil
     var isLoading = false
 
+    /// Shared namespace filter applied across all namespace-scoped panels
+    /// (nil = all namespaces). Loaded from SessionStore when a context starts;
+    /// persisted per-context on change.
+    var namespaceFilter: String? {
+        didSet {
+            guard let ctx = activeContext else { return }
+            MainActor.assumeIsolated {
+                SessionStore.shared.setNamespace(namespaceFilter, for: ctx)
+            }
+        }
+    }
+
     /// Per-node pod count, kept in sync with the pod watch.
     private(set) var podCountByNode: [String: Int] = [:]
     private var podNodeAssignment: [String: String] = [:]   // uid → nodeName
@@ -54,10 +66,17 @@ final class ClusterCache {
 
     // MARK: - Lifecycle
 
-    func start(context: String?) {
+    @MainActor func start(context: String?) {
         if !tasks.isEmpty && context == activeContext { return }   // already running for this context
         stop()
         activeContext = context
+        // Recall this context's last-selected namespace. Re-persists the same
+        // value via didSet — harmless (idempotent).
+        if let context {
+            namespaceFilter = SessionStore.shared.namespace(for: context)
+        } else {
+            namespaceFilter = nil
+        }
         // Open the per-context usage history store (right-sizing). Best-effort:
         // a failure just means no persisted history this session.
         metricsStore = try? MetricsStore(context: context ?? "default")
