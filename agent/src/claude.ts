@@ -11,6 +11,8 @@ export interface ClaudeResult {
   text: string;
   costUsd: number;
   isError: boolean;
+  /** The CLI session this call belongs to; pass back via resumeSessionId to continue the thread. */
+  sessionId?: string;
   /** Present when the call used --json-schema (the validated structured output). */
   structuredOutput?: unknown;
 }
@@ -23,6 +25,7 @@ export function parseClaudeResult(stdout: string): ClaudeResult {
     text: typeof obj.result === "string" ? obj.result : "",
     costUsd: typeof obj.total_cost_usd === "number" ? obj.total_cost_usd : 0,
     isError: obj.is_error === true,
+    sessionId: typeof obj.session_id === "string" ? obj.session_id : undefined,
     structuredOutput: "structured_output" in obj ? obj.structured_output : undefined,
   };
 }
@@ -50,6 +53,8 @@ export interface RunClaudeOptions {
   appendSystemPrompt?: string;
   /** JSON Schema string for --json-schema (structured output). */
   jsonSchema?: string;
+  /** When set, continue this prior CLI session via --resume instead of starting fresh. */
+  resumeSessionId?: string;
   cwd?: string;
   timeoutMs?: number;
 }
@@ -62,6 +67,7 @@ export async function runClaude(opts: RunClaudeOptions): Promise<ClaudeResult> {
   for (const tool of opts.allowedTools ?? []) args.push("--allowedTools", tool);
   if (opts.appendSystemPrompt) args.push("--append-system-prompt", opts.appendSystemPrompt);
   if (opts.jsonSchema) args.push("--json-schema", opts.jsonSchema);
+  if (opts.resumeSessionId) args.push("--resume", opts.resumeSessionId);
 
   const stdout = await new Promise<string>((resolve, reject) => {
     const child = spawn("claude", args, {
