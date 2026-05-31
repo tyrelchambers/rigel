@@ -6,19 +6,14 @@ final class ConfigMapsViewModel {
     let cache: ClusterCache
     init(cache: ClusterCache) { self.cache = cache }
 
-    var namespaceFilter: String? = nil
     var search: String = ""
 
     var error: String? { cache.error }
     var isLoading: Bool { cache.isLoading }
 
-    var availableNamespaces: [String] {
-        Set(cache.configMaps.compactMap { $0.metadata.namespace }).sorted()
-    }
-
     var filteredConfigMaps: [ConfigMap] {
         var base: [ConfigMap]
-        if let ns = namespaceFilter {
+        if let ns = cache.namespaceFilter {
             base = cache.configMaps.filter { $0.metadata.namespace == ns }
         } else {
             base = cache.configMaps
