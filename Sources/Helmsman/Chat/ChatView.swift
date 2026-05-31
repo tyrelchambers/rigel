@@ -5,9 +5,13 @@ import MarkdownUI
 struct ChatView: View {
     @Bindable var viewModel: ChatViewModel
     var onSlashCommand: (SlashCommand) -> Void = { _ in }
-    var suggestedPrompts: [SuggestedPrompt] = []
+    /// Lazily-evaluated so the (O(cluster)) builders run only when prompts are
+    /// actually refreshed — never on every parent render. See `cachedPrompts`.
+    var suggestedPrompts: () -> [SuggestedPrompt] = { [] }
     var onSuggestedPrompt: (SuggestedPrompt) -> Void = { _ in }
-    var mentionCandidates: [MentionCandidate] = []
+    /// Lazily-evaluated; the candidate pool is built once per mention session
+    /// (when `@` is first typed), not on every render. See `mentionPool`.
+    var mentionCandidates: () -> [MentionCandidate] = { [] }
     var onNewChat: () -> Void = {}
     var onOpenHistory: () -> Void = {}
     /// Fired when the user taps an action button Claude suggested in a message.
@@ -15,6 +19,11 @@ struct ChatView: View {
 
     @State private var mentionQuery: String? = nil
     @State private var mentionSelectedIndex = 0
+    /// Suggested-prompt chips, refreshed on appear and between chat turns rather
+    /// than recomputed every render — keeps the cluster-watch churn out of body.
+    @State private var cachedPrompts: [SuggestedPrompt] = []
+    /// Mention candidate pool, rebuilt when a mention session begins.
+    @State private var mentionPool: [MentionCandidate] = []
     /// Active when the composer holds a leading `/token` — drives the command popover.
     @State private var commandQuery: String? = nil
     @State private var commandSelectedIndex = 0
@@ -48,10 +57,14 @@ struct ChatView: View {
                 // deliberately via ⌘L or by clicking the input.
             }
 
-            SuggestedPromptsRow(prompts: suggestedPrompts, onTap: onSuggestedPrompt)
+            SuggestedPromptsRow(prompts: cachedPrompts, onTap: onSuggestedPrompt)
             inputBar
         }
         .background(Theme.Surface.elevated)
+        .onAppear { cachedPrompts = suggestedPrompts() }
+        // Refresh between turns (a new message arrived) — not on every cluster
+        // watch event, which is what made the whole window churn.
+        .onChange(of: viewModel.messages.count) { _, _ in cachedPrompts = suggestedPrompts() }
         .onDisappear { viewModel.stop() }
         .background {
             Button("Focus chat input") { inputFocused = true }
@@ -181,7 +194,7 @@ struct ChatView: View {
             Rectangle().fill(Theme.Border.subtle).frame(height: 1)
             if let q = mentionQuery {
                 MentionPopover(
-                    candidates: MentionIndex.filter(mentionCandidates, query: q),
+                    candidates: MentionIndex.filter(mentionPool, query: q),
                     selectedIndex: mentionSelectedIndex,
                     onPick: pickMention
                 )
@@ -224,7 +237,7 @@ struct ChatView: View {
                             return .handled
                         }
                         guard mentionQuery != nil else { return .ignored }
-                        let count = MentionIndex.filter(mentionCandidates, query: mentionQuery ?? "").count
+                        let count = MentionIndex.filter(mentionPool, query: mentionQuery ?? "").count
                         mentionSelectedIndex = min(mentionSelectedIndex + 1, max(0, count - 1))
                         return .handled
                     }
@@ -353,13 +366,16 @@ struct ChatView: View {
             mentionQuery = nil
             return
         }
+        // Build the candidate pool once at the start of a mention session; it
+        // stays stable while the user keeps typing the same @token.
+        if mentionQuery == nil { mentionPool = mentionCandidates() }
         mentionQuery = String(tail)
         mentionSelectedIndex = 0
     }
 
     private func commitSelectedMention() {
         guard let q = mentionQuery else { return }
-        let filtered = MentionIndex.filter(mentionCandidates, query: q)
+        let filtered = MentionIndex.filter(mentionPool, query: q)
         guard filtered.indices.contains(mentionSelectedIndex) else { return }
         pickMention(filtered[mentionSelectedIndex])
     }
