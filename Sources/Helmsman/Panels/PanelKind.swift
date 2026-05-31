@@ -70,4 +70,17 @@ enum PanelKind: Hashable, CaseIterable, Identifiable {
         case .settings:    return "Settings"
         }
     }
+
+    /// Tabs that list namespaced resources and honor the shared namespace
+    /// filter. Drives whether `NamespaceBar` is shown.
+    var isNamespaceScoped: Bool {
+        switch self {
+        case .deployments, .pods, .workloads, .rightSizing, .ingresses,
+             .services, .secrets, .configMaps, .storage, .rbac, .events:
+            return true
+        case .overview, .assistant, .namespaces, .nodes, .databases,
+             .catalog, .logs, .settings:
+            return false
+        }
+    }
 }
