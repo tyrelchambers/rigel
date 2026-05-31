@@ -10,7 +10,6 @@ struct StoragePanel: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             kindBar
-            filterBar
 
             if let err = viewModel.error {
                 Text(err)
@@ -38,6 +37,7 @@ struct StoragePanel: View {
                 .background(Theme.Border.subtle)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
             Spacer()
+            PanelSearchField(text: $viewModel.search, maxWidth: 200)
             if viewModel.isLoading {
                 ProgressView().controlSize(.small).tint(Theme.Accent.primary)
             }
@@ -57,19 +57,6 @@ struct StoragePanel: View {
                 }
             }
             Spacer()
-        }
-        .padding(.horizontal, 12).padding(.vertical, 8)
-        .background(Theme.Surface.elevated)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(Theme.Border.subtle).frame(height: 1)
-        }
-    }
-
-    @ViewBuilder
-    private var filterBar: some View {
-        HStack(spacing: 8) {
-            Spacer(minLength: 4)
-            PanelSearchField(text: $viewModel.search, maxWidth: 200)
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
         .background(Theme.Surface.elevated)

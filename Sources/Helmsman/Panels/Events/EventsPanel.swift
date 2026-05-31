@@ -35,6 +35,7 @@ struct EventsPanel: View {
                 .background(Theme.Border.subtle)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
             Spacer()
+            PanelSearchField(text: $viewModel.search, maxWidth: 200)
             if viewModel.isLoading {
                 ProgressView().controlSize(.small).tint(Theme.Accent.primary)
             }
@@ -53,8 +54,7 @@ struct EventsPanel: View {
                     viewModel.typeFilter = kind
                 }
             }
-            Spacer(minLength: 4)
-            PanelSearchField(text: $viewModel.search, maxWidth: 200)
+            Spacer()
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
         .background(Theme.Surface.elevated)

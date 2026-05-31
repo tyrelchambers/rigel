@@ -9,7 +9,6 @@ struct ConfigMapsPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            filterBar
 
             if let err = viewModel.error {
                 Text(err)
@@ -52,6 +51,7 @@ struct ConfigMapsPanel: View {
                 .background(Theme.Border.subtle)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
             Spacer()
+            PanelSearchField(text: $viewModel.search, maxWidth: 220)
             if viewModel.isLoading {
                 ProgressView()
                     .controlSize(.small)
@@ -79,17 +79,6 @@ struct ConfigMapsPanel: View {
         }
     }
 
-    private var filterBar: some View {
-        HStack(spacing: 8) {
-            Spacer(minLength: 0)
-            PanelSearchField(text: $viewModel.search, maxWidth: 220)
-        }
-        .padding(.horizontal, 12).padding(.vertical, 8)
-        .background(Theme.Surface.elevated)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(Theme.Border.subtle).frame(height: 1)
-        }
-    }
 }
 
 private struct ConfigMapRow: View {

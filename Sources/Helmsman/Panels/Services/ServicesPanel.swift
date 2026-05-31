@@ -16,7 +16,6 @@ struct ServicesPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            filterBar
 
             if let err = viewModel.error {
                 Text(err)
@@ -57,6 +56,7 @@ struct ServicesPanel: View {
                 .background(Theme.Border.subtle)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
             Spacer()
+            PanelSearchField(text: $viewModel.search, maxWidth: 200)
             if viewModel.isLoading {
                 ProgressView().controlSize(.small).tint(Theme.Accent.primary)
             }
@@ -74,18 +74,6 @@ struct ServicesPanel: View {
             .help("Create a new service (⌘N)")
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
-        .background(Theme.Surface.elevated)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(Theme.Border.subtle).frame(height: 1)
-        }
-    }
-
-    private var filterBar: some View {
-        HStack(spacing: 8) {
-            Spacer(minLength: 0)
-            PanelSearchField(text: $viewModel.search, maxWidth: 200)
-        }
-        .padding(.horizontal, 12).padding(.vertical, 8)
         .background(Theme.Surface.elevated)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Theme.Border.subtle).frame(height: 1)
