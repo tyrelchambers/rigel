@@ -3,6 +3,7 @@ import { loadConfig, type Config } from "./config.js";
 import { readRuntimeConfig, decideAutonomy, type RuntimeConfig } from "./runtimeConfig.js";
 import { notifyWebhook, notifySignal, receiveSignal } from "./notify.js";
 import { runDiagnosis } from "./diagnose.js";
+import { SessionStore } from "./sessionStore.js";
 import {
   handleInbound,
   HELP_TEXT,
@@ -74,6 +75,8 @@ interface LoopState {
   handled: Set<string>;
   /** Inbound Signal messages already processed, so none is answered twice. */
   seen: SeenTimestamps;
+  /** Per-sender claude diagnosis threads (1-hour idle reset, in-memory). */
+  sessions: SessionStore;
 }
 
 async function tick(
@@ -345,12 +348,23 @@ async function handleSignalInbound(
       return `${lines.join("\n")}\n\nReply "approve N" to run one.`;
     },
     approve: (index) => approveQueued(cfg, cb, index),
-    diagnose: async (question) => {
+    diagnose: async (question, source, timestamp) => {
       if (!spend.canSpend()) {
         return "I've reached my monthly spend cap, so I can't investigate right now.";
       }
-      const out = await runDiagnosis(cfg, question);
+      const resumeId = loop.sessions.resumeIdFor(source, timestamp);
+      let out;
+      try {
+        out = await runDiagnosis(cfg, question, resumeId);
+      } catch (e) {
+        if (!resumeId) throw e; // a fresh call already failed — nothing to retry
+        // Stale/cleaned-up session: forget it and answer as a brand-new thread.
+        log(`signal: resume failed for ${source}, starting fresh: ${String(e)}`);
+        loop.sessions.clear(source);
+        out = await runDiagnosis(cfg, question);
+      }
       spend.add(out.costUsd);
+      loop.sessions.record(source, out.sessionId, timestamp);
       return out.text || "I couldn't find anything conclusive — try asking more specifically.";
     },
     log,
@@ -480,7 +494,7 @@ async function main(): Promise<void> {
     windowMs: cfg.windowMs,
   });
   const spend = new SpendTracker(cfg.spendCapUsd);
-  const loop: LoopState = { streaks: new Map(), handled: new Set(), seen: new SeenTimestamps() };
+  const loop: LoopState = { streaks: new Map(), handled: new Set(), seen: new SeenTimestamps(), sessions: new SessionStore() };
 
   // Restore persisted spend so the monthly cap survives pod restarts.
   try {
