@@ -41,7 +41,8 @@ enum PanelKind: Hashable, CaseIterable, Identifiable {
         NavGroup(title: "Config & Storage", panels: [.configMaps, .secrets, .storage, .databases]),
         NavGroup(title: "Cluster", panels: [.namespaces, .nodes, .rbac]),
         NavGroup(title: "Observability", panels: [.events, .logs]),
-        NavGroup(title: "System", panels: [.catalog, .settings]),
+        NavGroup(title: "Self-host", panels: [.catalog]),
+        NavGroup(title: "System", panels: [.settings]),
     ]
 
     var icon: String {
