@@ -22,16 +22,10 @@ final class StorageViewModel {
     init(cache: ClusterCache) { self.cache = cache }
 
     var kind: StorageKind = .pvcs
-    var namespaceFilter: String? = nil   // applies to PVCs only (PVs/SCs are cluster-scoped)
     var search: String = ""
 
     var error: String? { cache.error }
     var isLoading: Bool { cache.isLoading }
-
-    /// Namespaces present among PVCs — drives the filter bar (PVCs only).
-    var availableNamespaces: [String] {
-        Set(cache.pvcs.compactMap { $0.metadata.namespace }).sorted()
-    }
 
     /// Count for the currently-selected kind (after filtering), for the header.
     var count: Int {
@@ -44,7 +38,7 @@ final class StorageViewModel {
 
     var filteredPVCs: [PersistentVolumeClaim] {
         cache.pvcs
-            .filter { namespaceFilter == nil || $0.metadata.namespace == namespaceFilter }
+            .filter { cache.namespaceFilter == nil || $0.metadata.namespace == cache.namespaceFilter }
             .filter { matches([$0.metadata.name, $0.metadata.namespace, $0.spec?.storageClassName, $0.spec?.volumeName, $0.phase]) }
             .sorted { sortByNamespaceName($0.metadata, $1.metadata) }
     }
