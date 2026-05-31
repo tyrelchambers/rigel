@@ -61,18 +61,6 @@ struct WorkloadsPanel: View {
 
     private var filterBar: some View {
         HStack(spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    WorkloadPill(label: "all ns", isActive: viewModel.namespaceFilter == nil) {
-                        viewModel.namespaceFilter = nil
-                    }
-                    ForEach(viewModel.availableNamespaces, id: \.self) { ns in
-                        WorkloadPill(label: ns, isActive: viewModel.namespaceFilter == ns) {
-                            viewModel.namespaceFilter = ns
-                        }
-                    }
-                }
-            }
             Spacer(minLength: 4)
             PanelSearchField(text: $viewModel.search, maxWidth: 200)
         }
