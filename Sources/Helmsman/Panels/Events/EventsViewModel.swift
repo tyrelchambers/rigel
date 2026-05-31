@@ -19,15 +19,10 @@ final class EventsViewModel {
     init(cache: ClusterCache) { self.cache = cache }
 
     var typeFilter: EventTypeFilter = .warning
-    var namespaceFilter: String? = nil
     var search: String = ""
 
     var error: String? { cache.error }
     var isLoading: Bool { cache.isLoading }
-
-    var availableNamespaces: [String] {
-        Set(cache.events.compactMap { $0.involvedObject?.namespace }).sorted()
-    }
 
     var filteredEvents: [K8sEvent] {
         cache.events.filter { e in
@@ -38,7 +33,7 @@ final class EventsViewModel {
             }
         }
         .filter { e in
-            namespaceFilter == nil || e.involvedObject?.namespace == namespaceFilter
+            cache.namespaceFilter == nil || e.involvedObject?.namespace == cache.namespaceFilter
         }
         .filter { e in
             if search.isEmpty { return true }
