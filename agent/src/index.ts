@@ -18,6 +18,7 @@ import {
 } from "./detector.js";
 import { kubectl } from "./kubectl.js";
 import { toKubectlInvocations, type SuggestedAction } from "./action.js";
+import { runThreadedDiagnosis } from "./threadedDiagnosis.js";
 import { runWorker } from "./worker.js";
 import { runSupervisor } from "./supervisor.js";
 import { executeAction } from "./executor.js";
@@ -348,25 +349,19 @@ async function handleSignalInbound(
       return `${lines.join("\n")}\n\nReply "approve N" to run one.`;
     },
     approve: (index) => approveQueued(cfg, cb, index),
-    diagnose: async (question, source, timestamp) => {
-      if (!spend.canSpend()) {
-        return "I've reached my monthly spend cap, so I can't investigate right now.";
-      }
-      const resumeId = loop.sessions.resumeIdFor(source, timestamp);
-      let out;
-      try {
-        out = await runDiagnosis(cfg, question, resumeId);
-      } catch (e) {
-        if (!resumeId) throw e; // a fresh call already failed — nothing to retry
-        // Stale/cleaned-up session: forget it and answer as a brand-new thread.
-        log(`signal: resume failed for ${source}, starting fresh: ${String(e)}`);
-        loop.sessions.clear(source);
-        out = await runDiagnosis(cfg, question);
-      }
-      spend.add(out.costUsd);
-      loop.sessions.record(source, out.sessionId, timestamp);
-      return out.text || "I couldn't find anything conclusive — try asking more specifically.";
-    },
+    diagnose: (question, source, timestamp) =>
+      runThreadedDiagnosis(
+        {
+          sessions: loop.sessions,
+          diagnose: (q, resumeId) => runDiagnosis(cfg, q, resumeId),
+          canSpend: () => spend.canSpend(),
+          addSpend: (c) => spend.add(c),
+          log,
+        },
+        source,
+        timestamp,
+        question,
+      ),
     log,
   };
 
