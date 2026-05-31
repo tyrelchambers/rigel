@@ -31,17 +31,23 @@ Answer for a phone screen: lead with the direct answer, then a sentence or two o
 export interface DiagnosisOutput {
   text: string;
   costUsd: number;
+  sessionId: string;
 }
 
 /** Investigate and answer a single operator question. Rejects on model/exec
  * failure so the caller can reply with an error rather than silence. */
-export async function runDiagnosis(cfg: Config, question: string): Promise<DiagnosisOutput> {
+export async function runDiagnosis(
+  cfg: Config,
+  question: string,
+  resumeSessionId?: string,
+): Promise<DiagnosisOutput> {
   const result = await runClaude({
     model: cfg.workerModel,
     prompt: question,
     appendSystemPrompt: SYSTEM_PROMPT,
     allowedTools: READ_ONLY_TOOLS,
     timeoutMs: 150_000,
+    resumeSessionId,
   });
-  return { text: result.text, costUsd: result.costUsd };
+  return { text: result.text, costUsd: result.costUsd, sessionId: result.sessionId ?? "" };
 }

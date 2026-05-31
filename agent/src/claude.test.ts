@@ -53,4 +53,14 @@ describe("parseClaudeResult", () => {
     const stdout = JSON.stringify({ is_error: false, result: "hi", total_cost_usd: 0 });
     expect(parseClaudeResult(stdout).structuredOutput).toBeUndefined();
   });
+
+  test("captures session_id from the envelope", () => {
+    const stdout = JSON.stringify({ is_error: false, result: "hi", total_cost_usd: 0, session_id: "sess-abc" });
+    expect(parseClaudeResult(stdout).sessionId).toBe("sess-abc");
+  });
+
+  test("sessionId is undefined when absent", () => {
+    const stdout = JSON.stringify({ is_error: false, result: "hi", total_cost_usd: 0 });
+    expect(parseClaudeResult(stdout).sessionId).toBeUndefined();
+  });
 });

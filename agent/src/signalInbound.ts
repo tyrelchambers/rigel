@@ -167,7 +167,7 @@ export interface InboundHandlers {
   status(): Promise<string>;
   queue(): Promise<string>;
   approve(index: number): Promise<string>;
-  diagnose(question: string): Promise<string>;
+  diagnose(question: string, source: string, timestamp: number): Promise<string>;
   log?(msg: string): void;
 }
 
@@ -215,7 +215,7 @@ export async function handleInbound(
           reply = await h.approve(cmd.index);
           break;
         case "diagnose":
-          reply = await h.diagnose(cmd.text);
+          reply = await h.diagnose(cmd.text, msg.source, msg.timestamp);
           break;
       }
     } catch (e) {

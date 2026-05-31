@@ -3,6 +3,7 @@ import { loadConfig, type Config } from "./config.js";
 import { readRuntimeConfig, decideAutonomy, type RuntimeConfig } from "./runtimeConfig.js";
 import { notifyWebhook, notifySignal, receiveSignal } from "./notify.js";
 import { runDiagnosis } from "./diagnose.js";
+import { SessionStore } from "./sessionStore.js";
 import {
   handleInbound,
   HELP_TEXT,
@@ -17,6 +18,7 @@ import {
 } from "./detector.js";
 import { kubectl } from "./kubectl.js";
 import { toKubectlInvocations, type SuggestedAction } from "./action.js";
+import { runThreadedDiagnosis } from "./threadedDiagnosis.js";
 import { runWorker } from "./worker.js";
 import { runSupervisor } from "./supervisor.js";
 import { executeAction } from "./executor.js";
@@ -74,6 +76,8 @@ interface LoopState {
   handled: Set<string>;
   /** Inbound Signal messages already processed, so none is answered twice. */
   seen: SeenTimestamps;
+  /** Per-sender claude diagnosis threads (1-hour idle reset, in-memory). */
+  sessions: SessionStore;
 }
 
 async function tick(
@@ -345,14 +349,19 @@ async function handleSignalInbound(
       return `${lines.join("\n")}\n\nReply "approve N" to run one.`;
     },
     approve: (index) => approveQueued(cfg, cb, index),
-    diagnose: async (question) => {
-      if (!spend.canSpend()) {
-        return "I've reached my monthly spend cap, so I can't investigate right now.";
-      }
-      const out = await runDiagnosis(cfg, question);
-      spend.add(out.costUsd);
-      return out.text || "I couldn't find anything conclusive — try asking more specifically.";
-    },
+    diagnose: (question, source, timestamp) =>
+      runThreadedDiagnosis(
+        {
+          sessions: loop.sessions,
+          diagnose: (q, resumeId) => runDiagnosis(cfg, q, resumeId),
+          canSpend: () => spend.canSpend(),
+          addSpend: (c) => spend.add(c),
+          log,
+        },
+        source,
+        timestamp,
+        question,
+      ),
     log,
   };
 
@@ -480,7 +489,7 @@ async function main(): Promise<void> {
     windowMs: cfg.windowMs,
   });
   const spend = new SpendTracker(cfg.spendCapUsd);
-  const loop: LoopState = { streaks: new Map(), handled: new Set(), seen: new SeenTimestamps() };
+  const loop: LoopState = { streaks: new Map(), handled: new Set(), seen: new SeenTimestamps(), sessions: new SessionStore() };
 
   // Restore persisted spend so the monthly cap survives pod restarts.
   try {
