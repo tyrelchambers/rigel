@@ -19,14 +19,6 @@ enum RBACKind: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Cluster-scoped kinds have no namespace filter.
-    var isNamespaced: Bool {
-        switch self {
-        case .serviceAccounts, .roles, .roleBindings: return true
-        case .clusterRoles, .clusterRoleBindings:     return false
-        }
-    }
-
     /// kubectl resource string for delete.
     var resource: String {
         switch self {

@@ -9,7 +9,7 @@ struct ConfigMapsPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            namespaceFilterBar
+            filterBar
 
             if let err = viewModel.error {
                 Text(err)
@@ -79,7 +79,7 @@ struct ConfigMapsPanel: View {
         }
     }
 
-    private var namespaceFilterBar: some View {
+    private var filterBar: some View {
         HStack(spacing: 8) {
             Spacer(minLength: 0)
             PanelSearchField(text: $viewModel.search, maxWidth: 220)
