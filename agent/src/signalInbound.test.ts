@@ -129,7 +129,7 @@ function fakeHandlers(over: Partial<InboundHandlers> = {}): InboundHandlers & {
     status: vi.fn(async () => "STATUS"),
     queue: vi.fn(async () => "QUEUE"),
     approve: vi.fn(async (i: number) => `APPROVED ${i}`),
-    diagnose: vi.fn(async (q: string) => `DIAGNOSED: ${q}`),
+    diagnose: vi.fn(async (q: string, _source: string, _ts: number) => `DIAGNOSED: ${q}`),
     ...over,
   };
 }
@@ -148,7 +148,7 @@ describe("handleInbound", () => {
     const raw = [{ envelope: { sourceNumber: "+15550101234", dataMessage: { timestamp: 1, message: "why down?" } } }];
     const h = fakeHandlers({ receive: vi.fn(async () => raw) });
     await handleInbound(CTX, h, new SeenTimestamps());
-    expect(h.diagnose).toHaveBeenCalledWith("why down?");
+    expect(h.diagnose).toHaveBeenCalledWith("why down?", "+15550101234", 1);
     expect(h.replies).toEqual([{ to: "+15550101234", text: "DIAGNOSED: why down?" }]);
   });
 
