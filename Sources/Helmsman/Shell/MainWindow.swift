@@ -90,12 +90,14 @@ struct MainWindow: View {
                     ChatView(
                         viewModel: chat,
                         onSlashCommand: handleSlash,
-                        suggestedPrompts: SuggestedPromptsBuilder.build(
-                            cache: cache,
-                            contextName: contextManager.active?.name
-                        ),
+                        suggestedPrompts: {
+                            SuggestedPromptsBuilder.build(
+                                cache: cache,
+                                contextName: contextManager.active?.name
+                            )
+                        },
                         onSuggestedPrompt: { chat.sendHandoff($0.prompt) },
-                        mentionCandidates: MentionIndex.build(from: cache),
+                        mentionCandidates: { MentionIndex.build(from: cache) },
                         onNewChat: { chat.startNewChat(clusterContext: contextManager.active?.name) },
                         onOpenHistory: { historyOpen = true },
                         onSuggestedAction: runSuggestedAction
@@ -105,10 +107,9 @@ struct MainWindow: View {
                 }
             }
             StatusBar(
+                cache: cache,
                 context: contextManager.active?.name,
                 chatState: chatState,
-                podCount: cache.pods.count,
-                nodeCount: cache.nodes.count,
                 cacheError: cache.error,
                 onOpenPalette: { paletteOpen = true }
             )

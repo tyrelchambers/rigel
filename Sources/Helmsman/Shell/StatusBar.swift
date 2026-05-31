@@ -1,10 +1,11 @@
 import SwiftUI
 
 struct StatusBar: View {
+    /// Read pod/node counts here (in this tiny view) rather than in MainWindow's
+    /// body, so the live pod/node watches don't re-evaluate the whole window.
+    let cache: ClusterCache
     let context: String?
     let chatState: ChatState
-    let podCount: Int
-    let nodeCount: Int
     let cacheError: String?
     var onOpenPalette: () -> Void = {}
 
@@ -38,8 +39,8 @@ struct StatusBar: View {
                     .foregroundStyle(Theme.Foreground.tertiary)
             }
 
-            chip(label: "pods", value: "\(podCount)")
-            chip(label: "nodes", value: "\(nodeCount)")
+            chip(label: "pods", value: "\(cache.pods.count)")
+            chip(label: "nodes", value: "\(cache.nodes.count)")
 
             Spacer()
 
