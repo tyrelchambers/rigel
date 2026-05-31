@@ -374,13 +374,17 @@ struct AssistantPanel: View {
 
     private func auditRow(_ e: AssistantAuditEntry) -> some View {
         let expanded = expandedAudit.contains(e.id)
+        // Expandable when there's content hidden by the collapsed view: a stored
+        // analysis, or a detail long enough to be clamped past its 3-line limit
+        // (e.g. "skipped" entries store the full investigation summary in detail).
+        let canExpand = e.analysis?.isEmpty == false || e.detail.count > 160
         return card {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
                     Text(outcomeGlyph(e.outcome)).foregroundStyle(outcomeColor(e.outcome))
                     Text(e.incident).font(Theme.Font.mono(11, weight: .medium)).foregroundStyle(Theme.Foreground.primary).lineLimit(1)
                     Spacer()
-                    if e.analysis?.isEmpty == false {
+                    if canExpand {
                         Image(systemName: expanded ? "chevron.down" : "chevron.right").font(.system(size: 9)).foregroundStyle(Theme.Foreground.tertiary)
                     }
                     Text(e.tier.uppercased()).font(Theme.Font.mono(9, weight: .medium)).foregroundStyle(Theme.Foreground.tertiary)
@@ -419,7 +423,7 @@ struct AssistantPanel: View {
             }
             .contentShape(Rectangle())
             .onTapGesture {
-                guard e.analysis?.isEmpty == false else { return }
+                guard canExpand else { return }
                 if expanded { expandedAudit.remove(e.id) } else { expandedAudit.insert(e.id) }
             }
             .contextMenu {

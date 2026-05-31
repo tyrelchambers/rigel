@@ -72,6 +72,9 @@ final class AssistantViewModel {
     var signalApiUrl: String { configData["signalApiUrl"] ?? "" }
     var signalNumber: String { configData["signalNumber"] ?? "" }
     var signalRecipients: String { configData["signalRecipients"] ?? "" }
+    /// Two-way Signal: when on, the agent answers inbound diagnosis questions
+    /// and `approve` commands texted from a recipient. Off by default.
+    var signalInbound: Bool { configData["signalInbound"] == "true" }
     var silencedSet: Set<String> {
         Set((configData["silenced"] ?? "")
             .split(whereSeparator: { $0 == "\n" || $0 == "," })
@@ -342,6 +345,11 @@ final class AssistantViewModel {
             "signalNumber": number.trimmingCharacters(in: .whitespacesAndNewlines),
             "signalRecipients": recipients.trimmingCharacters(in: .whitespacesAndNewlines),
         ])
+    }
+
+    /// Toggle two-way Signal (the agent polling the bridge for inbound commands).
+    func setSignalInbound(_ on: Bool) async {
+        await patchConfig(["signalInbound": on ? "true" : "false"])
     }
 
     func silence(_ fingerprint: String) async {

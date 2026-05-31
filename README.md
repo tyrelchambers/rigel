@@ -76,6 +76,11 @@ and pushed to GHCR by CI.
   self-hosted `signal-cli-rest-api` bridge into the cluster, shows an in-app QR code to
   link your device, and sends a test message. Recipients default to your own number
   (send-to-self); the assistant then messages you over Signal.
+- **Signal, two-way** — flip on two-way in **Settings** and you can text the assistant
+  back: ask anything to get a **read-only diagnosis** ("why is payments crashlooping?"),
+  reply `queue` to list pending fixes, and `approve N` to run one through the same
+  guardrails as the autonomous loop. Only your linked recipients are obeyed; texting a
+  question never mutates the cluster.
 
 ## Architecture at a glance
 
@@ -91,7 +96,10 @@ and pushed to GHCR by CI.
   observable control surface over it.
 - **Signal bridge** — Helmsman applies a `signal-cli-rest-api` Deployment/Service and
   talks to it over a short-lived `kubectl port-forward` to fetch the link QR and send
-  test messages; the agent reaches it in-cluster via its service FQDN.
+  test messages; the agent reaches it in-cluster via its service FQDN. With two-way
+  enabled (`signalInbound`), the agent also polls the bridge for inbound messages and
+  answers diagnosis questions / `approve` commands — see
+  [`agent/README.md`](agent/README.md#two-way-signal-texting-the-assistant).
 
 ## Prerequisites
 
