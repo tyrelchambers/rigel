@@ -6,19 +6,14 @@ final class SecretsViewModel {
     let cache: ClusterCache
     init(cache: ClusterCache) { self.cache = cache }
 
-    var namespaceFilter: String? = nil
     var search: String = ""
 
     var error: String? { cache.error }
     var isLoading: Bool { cache.isLoading }
 
-    var availableNamespaces: [String] {
-        Set(cache.secrets.compactMap { $0.metadata.namespace }).sorted()
-    }
-
     var filteredSecrets: [Secret] {
         var base: [Secret]
-        if let ns = namespaceFilter {
+        if let ns = cache.namespaceFilter {
             base = cache.secrets.filter { $0.metadata.namespace == ns }
         } else {
             base = cache.secrets
