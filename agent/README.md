@@ -34,7 +34,8 @@ other sender is dropped silently.
 
 ```
 inbound Signal msg → authorize (allowlist) → de-dupe (timestamp) → route:
-   free text   → read-only diagnosis (claude -p, get/describe/logs/top/events) → reply
+   free text   → read-only diagnosis (claude -p, get/describe/logs/top/events),
+                 threaded per sender, auto-resetting after 1h idle → reply
    "status"    → health / spend / queue summary
    "queue"     → list fixes awaiting approval
    "approve N" → run queued fix #N through the SAME guardrails as the loop
@@ -44,7 +45,9 @@ inbound Signal msg → authorize (allowlist) → de-dupe (timestamp) → route:
 
 Design notes:
 - **Diagnosis is always read-only** — texting a question can never mutate the
-  cluster.
+  cluster. Replies thread per sender via the CLI's own session (`--resume`); the
+  thread is in-memory and auto-resets after an hour of silence, so context stays
+  scoped to a burst of related questions and a pod restart is a clean slate.
 - **The only mutation path is `approve`**, and it runs a fix the supervised loop
   already vetted and queued — never an arbitrary command. The human texting
   `approve` is the approver, so a MEDIUM fix skips the *unattended* Opus
