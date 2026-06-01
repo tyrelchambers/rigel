@@ -16,6 +16,7 @@ struct UsageBandChart: View {
                     .foregroundStyle(.linearGradient(
                         colors: [Theme.Accent.primary.opacity(0.35), Theme.Accent.primary.opacity(0.02)],
                         startPoint: .top, endPoint: .bottom))
+                    .interpolationMethod(.monotone)
                 LineMark(x: .value("Time", p.date), y: .value("Usage", p.value))
                     .foregroundStyle(Theme.Accent.primary)
                     .interpolationMethod(.monotone)
@@ -90,7 +91,9 @@ struct WorkloadUsageBands: View {
     }
 
     private var reloadKey: String {
-        "\(workload.id)|\(metric == .cpu ? "cpu" : "mem")|\(backend.isPrometheus)"
+        // backend.hashValue (not just isPrometheus) so switching between two
+        // Prometheus endpoints refetches instead of showing the stale series.
+        "\(workload.id)|\(metric == .cpu ? "cpu" : "mem")|\(backend.hashValue)"
     }
 
     @ViewBuilder private var content: some View {
@@ -141,7 +144,8 @@ struct WorkloadUsageBands: View {
     }
 
     private func load() async {
-        guard backend.isPrometheus else { points = []; return }
+        points = []                       // drop stale series before refetch (avoids a flash on switch)
+        guard backend.isPrometheus else { return }
         loading = true
         defer { loading = false }
         let source = UsageSeriesSource(backend: backend)
