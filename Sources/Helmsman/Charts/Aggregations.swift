@@ -67,7 +67,7 @@ enum Viz {
     /// Events without a usable timestamp or outside the window are dropped; an
     /// event exactly at `now` lands in the final bucket.
     static func eventBuckets(_ events: [K8sEvent], now: Date, span: TimeInterval, count: Int) -> [EventBucket] {
-        precondition(count > 0 && span > 0)
+        guard count > 0, span > 0 else { return [] }
         let slot = span / Double(count)
         let start = now.addingTimeInterval(-span)
         var buckets = (0..<count).map {
@@ -110,6 +110,7 @@ enum Viz {
     static func treemapModel(pods: [Pod], nodes: [Node], history: [String: [PodMetricSample]], metric: TreemapMetric) -> [TreemapNode] {
         func value(for pod: Pod) -> Double {
             let key = "\(pod.metadata.namespace ?? "default")/\(pod.metadata.name)"
+            // Latest sample (not an average): tile size reflects current usage.
             guard let s = history[key]?.last else { return 0 }
             return metric == .cpu ? s.cpuCores : s.memBytes
         }

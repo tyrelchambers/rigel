@@ -125,6 +125,22 @@ final class VizAggregationsTests: XCTestCase {
         XCTAssertEqual(model[1].pods[0].health, .failed)
     }
 
+    func test_eventBuckets_windowStartBoundaryLandsInFirstBucket() {
+        let now = Date(timeIntervalSince1970: 100_000)
+        let span: TimeInterval = 4
+        let buckets = Viz.eventBuckets([event("s", warning: false, at: now.addingTimeInterval(-span))],
+                                        now: now, span: span, count: 4)
+        XCTAssertEqual(buckets[0].normal, 1)
+    }
+
+    func test_treemapModel_memoryMetricUsesMemBytes() {
+        let pods = [pod("a", node: "n1", phase: "Running", restarts: 0)]
+        let nodes = [node("n1", cpu: "4", mem: "8Gi")]
+        let history: [String: [PodMetricSample]] = ["default/a": [PodMetricSample(cpuCores: 0.5, memBytes: 4096)]]
+        let model = Viz.treemapModel(pods: pods, nodes: nodes, history: history, metric: .memory)
+        XCTAssertEqual(model[0].pods[0].value, 4096, accuracy: 0.001)
+    }
+
     func test_treemapModel_unscheduledPodsGrouped() {
         let pods = [pod("a", node: nil, phase: "Pending", restarts: 0)]
         let model = Viz.treemapModel(pods: pods, nodes: [], history: [:], metric: .cpu)
