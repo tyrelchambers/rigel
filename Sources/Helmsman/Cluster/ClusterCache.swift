@@ -37,6 +37,7 @@ final class ClusterCache {
     static let podHistoryDepth = 60
 
     var cnpgAvailable = true
+    private(set) var cnpgPluginAvailable = false
     var metricsAvailable = true
     var error: String? = nil
     var isLoading = false
@@ -109,6 +110,10 @@ final class ClusterCache {
             watchTask("clusterroles", c: c, into: \.clusterRoles, applyEvent: applyClusterRole),
             watchTask("clusterrolebindings", c: c, into: \.clusterRoleBindings, applyEvent: applyClusterRoleBinding),
                 cnpgTask(c),
+                Task { [weak self] in
+                    let available = await CNPGPluginProbe().isAvailable()
+                    await MainActor.run { self?.cnpgPluginAvailable = available }
+                },
                 scheduledBackupTask(c),
                 metricsPollTask(c),
                 podMetricsPollTask(c),
