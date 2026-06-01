@@ -141,6 +141,7 @@ actor ClaudeSession {
             "--output-format", "stream-json",
             "--input-format", "stream-json",
             "--verbose",
+            "--include-partial-messages",
             "--model", config.model.cliAlias,
             "--effort", config.effort.cliLevel,
             "--append-system-prompt", systemPrompt,
