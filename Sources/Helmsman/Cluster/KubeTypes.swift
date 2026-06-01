@@ -31,6 +31,44 @@ struct Container: Codable, Hashable {
     let image: String?
     let resources: ResourceRequirements?
     let ports: [ContainerPort]?
+    let env: [EnvVar]?
+    let envFrom: [EnvFromSource]?
+
+    // Explicit init defaulting the env fields to nil: an inline `let … = nil`
+    // default would be excluded from synthesized Decodable, and the synthesized
+    // memberwise init won't default a bare optional — so existing call sites that
+    // pass only name/image/resources/ports need this to keep compiling.
+    init(name: String, image: String?, resources: ResourceRequirements?, ports: [ContainerPort]?,
+         env: [EnvVar]? = nil, envFrom: [EnvFromSource]? = nil) {
+        self.name = name
+        self.image = image
+        self.resources = resources
+        self.ports = ports
+        self.env = env
+        self.envFrom = envFrom
+    }
+}
+
+struct EnvVar: Codable, Hashable {
+    let name: String
+    let valueFrom: EnvVarSource?
+}
+
+struct EnvVarSource: Codable, Hashable {
+    let secretKeyRef: SecretKeySelector?
+}
+
+struct SecretKeySelector: Codable, Hashable {
+    let name: String?
+    let key: String?
+}
+
+struct EnvFromSource: Codable, Hashable {
+    let secretRef: LocalObjectReference?
+}
+
+struct LocalObjectReference: Codable, Hashable {
+    let name: String?
 }
 
 struct ResourceRequirements: Codable, Hashable {
