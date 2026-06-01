@@ -302,6 +302,13 @@ final class ClusterCache {
         return try? await client.getRaw(path, type: PromQueryResponse.self)
     }
 
+    /// Run a Prometheus-compatible range query (`/api/v1/query_range`) through
+    /// the API-server proxy. Returns nil if no client or the query fails.
+    func promRangeQuery(path: String) async -> PromRangeResponse? {
+        guard let client else { return nil }
+        return try? await client.getRaw(path, type: PromRangeResponse.self)
+    }
+
     /// Resolve a pod to its owning long-lived workload by label-matching against
     /// Deployment / StatefulSet / DaemonSet selectors. Returns nil for pods with
     /// no such owner (bare pods, jobs). Deployment selectors match through the
