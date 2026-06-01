@@ -8,6 +8,7 @@ struct EventsPanel: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             filterBar
+            timelineRibbon
 
             if let err = viewModel.error {
                 Text(err)
@@ -59,6 +60,13 @@ struct EventsPanel: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(Theme.Border.subtle).frame(height: 1)
         }
+    }
+
+    private var timelineRibbon: some View {
+        EventTimeline(buckets: Viz.eventBuckets(viewModel.cache.events, now: Date(), span: 24 * 3600, count: 48))
+            .padding(.horizontal, 16).padding(.vertical, 10)
+            .background(Theme.Surface.elevated)
+            .overlay(alignment: .bottom) { Rectangle().fill(Theme.Border.subtle).frame(height: 1) }
     }
 
     private var list: some View {

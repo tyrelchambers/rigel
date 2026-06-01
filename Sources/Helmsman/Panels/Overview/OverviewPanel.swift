@@ -14,6 +14,7 @@ struct OverviewPanel: View {
                 gaugesRow
                 topRow
                 middleRow
+                eventTimelineCard
                 warningsCard
             }
             .padding(16)
@@ -174,6 +175,25 @@ struct OverviewPanel: View {
             MetricRow(big: "\(warnings)", caption: "warnings (last 500)")
             HealthLine(label: "Total cached", count: total, color: Theme.Foreground.secondary)
         }
+    }
+
+    private var eventTimelineCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "waveform.path.ecg").font(.system(size: 11)).foregroundStyle(Theme.Accent.primary)
+                Text("Event activity — last 24h")
+                    .font(Theme.Font.body(11, weight: .semibold))
+                    .foregroundStyle(Theme.Foreground.secondary)
+                    .textCase(.uppercase).tracking(0.5)
+                Spacer()
+            }
+            EventTimeline(buckets: Viz.eventBuckets(cache.events, now: Date(), span: 24 * 3600, count: 48), height: 56)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.Surface.elevated)
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.lg).strokeBorder(Theme.Border.subtle, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
     }
 
     // MARK: - Recent warnings
