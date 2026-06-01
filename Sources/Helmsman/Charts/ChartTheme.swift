@@ -12,8 +12,10 @@ enum ChartTheme {
     }
 
     /// Ring/usage tint by load fraction: accent → amber → red as it fills.
+    /// Clamps internally so a stray NaN/out-of-range input can't fall through
+    /// to `.failed`.
     static func loadColor(_ fraction: Double) -> Color {
-        switch fraction {
+        switch min(max(fraction, 0), 1) {
         case ..<0.75: return Theme.Accent.primary
         case ..<0.9:  return Theme.Status.pending
         default:      return Theme.Status.failed
