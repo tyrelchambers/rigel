@@ -200,12 +200,32 @@ private struct ConfigureStep: View {
                     }
                     if model.app.exposesIngress {
                         FieldRow(label: "Ingress hostname") {
-                            TextField("\(model.app.id).tyrelchambers.com", text: $model.hostname)
+                            TextField(model.hostnamePlaceholder, text: $model.hostname)
                                 .textFieldStyle(.plain)
                                 .font(Theme.Font.mono(12))
                                 .focused($focus, equals: .hostname)
                                 .padding(.horizontal, 10).padding(.vertical, 8)
                                 .inputChrome(focused: focus == .hostname)
+                        }
+                        FieldRow(label: "Cluster issuer (TLS)") {
+                            if model.discoveredIssuers.isEmpty {
+                                // No issuers discovered yet (cert-manager absent or
+                                // probe pending) — fall back to free text.
+                                TextField("letsencrypt-prod (blank = no TLS)", text: $model.clusterIssuer)
+                                    .textFieldStyle(.plain)
+                                    .font(Theme.Font.mono(12))
+                                    .padding(.horizontal, 10).padding(.vertical, 8)
+                                    .inputChrome()
+                            } else {
+                                Picker("", selection: $model.clusterIssuer) {
+                                    Text("None (skip TLS)").tag("")
+                                    ForEach(model.issuerOptions, id: \.self) { Text($0).tag($0) }
+                                }
+                                .labelsHidden()
+                                .pickerStyle(.menu)
+                                .font(Theme.Font.mono(12))
+                                .tint(Theme.Foreground.primary)
+                            }
                         }
                     }
                     FieldRow(label: "Node pin") {
@@ -245,6 +265,7 @@ private struct ConfigureStep: View {
             }
             .padding(20)
         }
+        .task { if model.app.exposesIngress { await model.loadClusterIssuers() } }
     }
 }
 

@@ -25,6 +25,7 @@ struct SettingsPanel: View {
                 PanelTitle(title: PanelKind.settings.title, subtitle: PanelKind.settings.subtitle,
                            titleFont: Theme.Font.mono(20, weight: .semibold))
                 signalSection
+                selfHostSection
                 if let updates { updatesSection(updates) }
             }
             .padding(20)
@@ -88,6 +89,70 @@ struct SettingsPanel: View {
         .background(Theme.Surface.elevated)
         .overlay(RoundedRectangle(cornerRadius: Theme.Radius.lg).strokeBorder(Theme.Border.subtle, lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
+    }
+
+    // MARK: - Self-hosted defaults
+
+    /// Per-context conventions the catalog install wizard bakes into the prompt
+    /// it sends Claude: the cert-manager ClusterIssuer, the ingress base domain,
+    /// the image-pull secret, and the public edge IP.
+    private var selfHostSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "lock.shield.fill").foregroundStyle(Theme.Accent.primary)
+                Text("Self-hosted app defaults")
+                    .font(Theme.Font.body(15, weight: .semibold))
+                    .foregroundStyle(Theme.Foreground.primary)
+            }
+            Text("Used by the catalog install wizard when it asks Claude to generate manifests for this cluster. Leave a field blank to omit it. (The TLS ClusterIssuer is chosen per app in the install flow.) These are saved per kubectl context.")
+                .font(Theme.Font.body(12)).foregroundStyle(Theme.Foreground.secondary)
+
+            selfHostField(label: "Ingress domain", placeholder: "apps.example.com",
+                          text: $viewModel.ingressDomain,
+                          help: "Base domain hostnames default under (<app>.<domain>).")
+            selfHostField(label: "Image pull secret", placeholder: "(none)",
+                          text: $viewModel.imagePullSecret,
+                          help: "Pull-secret name added to pod specs. Blank = no imagePullSecrets.")
+            selfHostField(label: "Redirect middleware", placeholder: "(none)",
+                          text: $viewModel.redirectMiddleware,
+                          help: "Traefik HTTPS-redirect middleware ref, e.g. default-redirect-https@kubernetescrd. Blank = no router.middlewares annotation.")
+            selfHostField(label: "Edge IP", placeholder: "(optional)",
+                          text: $viewModel.edgeIP,
+                          help: "Public IP your *.domain A-records point at. Informational only.")
+
+            HStack(spacing: 10) {
+                Button("Save defaults") { viewModel.saveSelfHostDefaults() }
+                    .buttonStyle(.borderedProminent).tint(Theme.Accent.primary)
+                if viewModel.selfHostSaved {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.Status.running)
+                        Text("Saved").font(Theme.Font.body(11)).foregroundStyle(Theme.Foreground.tertiary)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.Surface.elevated)
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.lg).strokeBorder(Theme.Border.subtle, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
+    }
+
+    private func selfHostField(label: String, placeholder: String,
+                               text: Binding<String>, help: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(label).font(Theme.Font.body(11, weight: .medium))
+                    .foregroundStyle(Theme.Foreground.secondary)
+                    .frame(width: 120, alignment: .leading)
+                TextField(placeholder, text: text)
+                    .textFieldStyle(.plain).font(Theme.Font.mono(11))
+                    .padding(.horizontal, 8).padding(.vertical, 6).inputChrome()
+                    .onChange(of: text.wrappedValue) { _, _ in viewModel.selfHostSaved = false }
+            }
+            Text(help).font(Theme.Font.body(10)).foregroundStyle(Theme.Foreground.tertiary)
+                .padding(.leading, 130)
+        }
     }
 
     private var signalSection: some View {

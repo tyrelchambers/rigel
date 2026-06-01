@@ -19,6 +19,19 @@ final class SettingsViewModel {
     var working = false
     var actionError: String?
 
+    // MARK: - Self-hosted install defaults (per-context, bound to the UI)
+
+    // `clusterIssuer` isn't edited here — it's chosen per-app in the install
+    // wizard — but it's loaded/saved so the persisted per-context value
+    // round-trips untouched when the other defaults are saved.
+    var clusterIssuer = ""
+    var ingressDomain = ""
+    var imagePullSecret = ""
+    var redirectMiddleware = ""
+    var edgeIP = ""
+    /// Set briefly after a successful save so the UI can confirm.
+    var selfHostSaved = false
+
     // Link flow state (nil unless a link session is active).
     var qrPNG: Data?
     var linking = false
@@ -33,6 +46,35 @@ final class SettingsViewModel {
     func load(context: String?) {
         // MainWindow.startPanelViewModels owns assistantVM.load on the shared instance.
         self.context = context
+        let defaults = SessionStore.shared.selfHostDefaults(for: context ?? "")
+        clusterIssuer = defaults.clusterIssuer
+        ingressDomain = defaults.ingressDomain
+        imagePullSecret = defaults.imagePullSecret
+        redirectMiddleware = defaults.redirectMiddleware
+        edgeIP = defaults.edgeIP
+        selfHostSaved = false
+    }
+
+    /// Persist the self-hosted install conventions for the active context. These
+    /// feed the catalog install wizard's prompt (cluster issuer, ingress domain,
+    /// pull secret, edge IP). Fields are trimmed; blanks mean "not configured".
+    func saveSelfHostDefaults() {
+        func clean(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines) }
+        let trimmed = SelfHostDefaults(
+            clusterIssuer:  clean(clusterIssuer),
+            ingressDomain:  clean(ingressDomain),
+            imagePullSecret: clean(imagePullSecret),
+            redirectMiddleware: clean(redirectMiddleware),
+            edgeIP:         clean(edgeIP)
+        )
+        SessionStore.shared.setSelfHostDefaults(trimmed, for: context ?? "")
+        // Reflect the normalized values back into the fields.
+        clusterIssuer = trimmed.clusterIssuer
+        ingressDomain = trimmed.ingressDomain
+        imagePullSecret = trimmed.imagePullSecret
+        redirectMiddleware = trimmed.redirectMiddleware
+        edgeIP = trimmed.edgeIP
+        selfHostSaved = true
     }
 
     // MARK: - Derived state

@@ -41,7 +41,7 @@ final class ManifestSummaryTests: XCTestCase {
         XCTAssertEqual(summary.ingresses.count, 1)
         let ing = summary.ingresses[0]
         XCTAssertTrue(ing.tls)
-        XCTAssertEqual(ing.rules.first?.host, "memos.tyrelchambers.com")
+        XCTAssertEqual(ing.rules.first?.host, "memos.example.com")
         XCTAssertEqual(ing.rules.first?.paths.first?.service, "memos")
         XCTAssertEqual(ing.rules.first?.paths.first?.port, "5230")
 
@@ -132,10 +132,10 @@ final class ManifestSummaryTests: XCTestCase {
     spec:
       tls:
         - hosts:
-            - memos.tyrelchambers.com
+            - memos.example.com
           secretName: memos-tls
       rules:
-        - host: memos.tyrelchambers.com
+        - host: memos.example.com
           http:
             paths:
               - path: /

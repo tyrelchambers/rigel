@@ -59,6 +59,15 @@ final class CatalogInstallWizardModel: Identifiable {
     var storageGiB: Int
     var notes: String = ""
 
+    /// cert-manager ClusterIssuer for this install's ingress. Seeded from the
+    /// context's saved default; the Configure step lets the user pick a
+    /// different one (from `discoveredIssuers`) or clear it (empty = no TLS).
+    var clusterIssuer: String
+    /// ClusterIssuers found on the cluster, populated by `loadClusterIssuers()`.
+    /// Empty until the read-only probe returns (or if cert-manager isn't found).
+    var discoveredIssuers: [String] = []
+    @ObservationIgnored private var issuersLoaded = false
+
     // Manifest produced by Claude (or pasted by the user during the stub phase).
     var manifestYAML: String = ""
 
@@ -91,7 +100,9 @@ final class CatalogInstallWizardModel: Identifiable {
         self.cache = cache
         self.context = context
         self.instance = app.id
-        self.hostname = app.exposesIngress ? "\(app.id).tyrelchambers.com" : ""
+        let defaults = SessionStore.shared.selfHostDefaults(for: context ?? "")
+        self.hostname = (app.exposesIngress && !defaults.ingressDomain.isEmpty) ? "\(app.id).\(defaults.ingressDomain)" : ""
+        self.clusterIssuer = defaults.clusterIssuer
         self.storageGiB = app.requirements.storageGiB ?? 0
         // Seed the node pin from the detail sheet's selection (nil = "Any").
         self.nodePin = initialNodePin
@@ -99,6 +110,44 @@ final class CatalogInstallWizardModel: Identifiable {
 
     var recommendedNodeName: String? {
         fit.recommended?.node.metadata.name
+    }
+
+    /// Placeholder for the ingress-hostname field: `<instance>.<domain>` using
+    /// the context's configured ingress domain, or a neutral example when none
+    /// is set up yet.
+    var hostnamePlaceholder: String {
+        let domain = SessionStore.shared.selfHostDefaults(for: context ?? "").ingressDomain
+        return "\(app.id).\(domain.isEmpty ? "example.com" : domain)"
+    }
+
+    /// Issuer names to show in the Configure-step dropdown: the discovered
+    /// ClusterIssuers, plus the seeded default if it isn't among them (e.g. the
+    /// probe hasn't returned yet, or cert-manager is reachable only at apply
+    /// time) so the current selection is always representable.
+    var issuerOptions: [String] {
+        var opts = discoveredIssuers
+        let current = clusterIssuer.trimmingCharacters(in: .whitespaces)
+        if !current.isEmpty && !opts.contains(current) { opts.insert(current, at: 0) }
+        return opts
+    }
+
+    /// Probe the cluster for ClusterIssuers (read-only) to populate the dropdown.
+    /// Best-effort: a missing CRD / kubectl just leaves `discoveredIssuers`
+    /// empty, and the Configure step falls back to a free-text field.
+    func loadClusterIssuers() async {
+        guard !issuersLoaded else { return }
+        issuersLoaded = true
+        guard let names = try? await ClusterIssuerLoader.load(context: context) else { return }
+        discoveredIssuers = names
+        // If we're still sitting on the built-in placeholder and it isn't a real
+        // issuer on this cluster, prefer the cluster's first actual issuer rather
+        // than seeding a name that doesn't exist. A deliberately-saved issuer is
+        // left alone.
+        let current = clusterIssuer.trimmingCharacters(in: .whitespaces)
+        if !names.isEmpty, !names.contains(current),
+           current == SelfHostDefaults.default.clusterIssuer {
+            clusterIssuer = names.first!
+        }
     }
 
     /// Names of nodes the app can actually land on. Same set the node-pin
@@ -120,8 +169,21 @@ final class CatalogInstallWizardModel: Identifiable {
 
     func advanceFromConfigure() {
         guard canAdvanceFromConfigure else { return }
+        rememberChosenIssuer()
         step = .generating
         startGeneratingIfNeeded()
+    }
+
+    /// Persist the issuer picked for this install as the context's default, so
+    /// the next install pre-selects it. Only touches the clusterIssuer field of
+    /// the saved defaults.
+    private func rememberChosenIssuer() {
+        guard app.exposesIngress else { return }
+        let chosen = clusterIssuer.trimmingCharacters(in: .whitespaces)
+        var defaults = SessionStore.shared.selfHostDefaults(for: context ?? "")
+        guard defaults.clusterIssuer != chosen else { return }
+        defaults.clusterIssuer = chosen
+        SessionStore.shared.setSelfHostDefaults(defaults, for: context ?? "")
     }
 
     /// Lazily spawn the wizard's `ClaudeSession` and send the initial install
@@ -194,14 +256,41 @@ final class CatalogInstallWizardModel: Identifiable {
     /// rendered `installPromptTemplate` + node fit snapshot. Kept here so the
     /// wizard owns the assembly; the catalog JSON only owns the per-app body.
     private func buildInstallPrompt() -> String {
+        let defaults = SessionStore.shared.selfHostDefaults(for: context ?? "")
+        var lines: [String] = []
+        lines.append("- Ingress class: traefik (already installed in kube-system).")
+
+        let issuer = clusterIssuer.trimmingCharacters(in: .whitespaces)
+        if issuer.isEmpty {
+            lines.append("- TLS: cert-manager is available, but no ClusterIssuer is configured — OMIT the `cert-manager.io/cluster-issuer` annotation and ignore any cluster-issuer reference in the per-app instructions below.")
+        } else {
+            lines.append("- TLS: cert-manager with ClusterIssuer `\(issuer)`, HTTP-01 only — port 80 must work for issuance.")
+        }
+
+        if defaults.redirectMiddleware.isEmpty {
+            lines.append("- HTTPS redirect: no redirect Middleware configured — do NOT set the `traefik.ingress.kubernetes.io/router.middlewares` annotation, and ignore any middleware reference in the per-app instructions below.")
+        } else {
+            lines.append("- HTTPS redirect: reference Middleware `\(defaults.redirectMiddleware)` in the `traefik.ingress.kubernetes.io/router.middlewares` annotation.")
+        }
+
+        if defaults.imagePullSecret.isEmpty {
+            lines.append("- Image pull secret: none configured — do NOT add `imagePullSecrets` to pod specs, and ignore any imagePullSecrets reference in the per-app instructions below.")
+        } else {
+            lines.append("- Image pull secret: `\(defaults.imagePullSecret)` in `default` namespace. Reference as `imagePullSecrets: [{name: \(defaults.imagePullSecret)}]` on every pod spec.")
+        }
+
+        if !defaults.edgeIP.isEmpty {
+            let dnsNote = defaults.ingressDomain.isEmpty
+                ? ""
+                : " App ingresses point at this via DNS A records under `*.\(defaults.ingressDomain)`."
+            lines.append("- Edge IP: `\(defaults.edgeIP)`.\(dnsNote)")
+        }
+
+        lines.append("- Active context: \(context ?? "(none)") — pass `--context \(context ?? "")` to any kubectl probes you run.")
+
         let preamble = """
         # Cluster context
-        - Ingress class: traefik (already installed in kube-system).
-        - TLS: cert-manager with ClusterIssuer `letsencrypt-prod`, HTTP-01 only — port 80 must work for issuance.
-        - HTTPS redirect: shared Middleware `default/redirect-https` — reference as `default-redirect-https@kubernetescrd` in the ingress annotation.
-        - GHCR pull secret: `ghrc` in `default` namespace (sic — original typo). Reference as `imagePullSecrets: [{name: ghrc}]` on every pod spec.
-        - Edge IP: `159.203.36.138`. App ingresses point at this via DNS A records under `*.tyrelchambers.com`.
-        - Active context: \(context ?? "(none)") — pass `--context \(context ?? "")` to any kubectl probes you run.
+        \(lines.joined(separator: "\n"))
 
         # Node snapshot
         \(nodeSnapshot())
@@ -471,13 +560,20 @@ final class CatalogInstallWizardModel: Identifiable {
     /// Vars rendered into `CatalogApp.installPromptTemplate`. Used by the
     /// Generating step in Task 7.
     var templateVars: [String: String] {
-        [
-            "instance":  instance,
-            "namespace": namespace,
-            "hostname":  hostname,
-            "nodeName":  nodePin ?? "",
-            "storage":   "\(storageGiB)",
-            "notes":     notes.isEmpty ? "(none)" : notes,
+        let defaults = SessionStore.shared.selfHostDefaults(for: context ?? "")
+        return [
+            "instance":       instance,
+            "namespace":      namespace,
+            "hostname":       hostname,
+            "nodeName":       nodePin ?? "",
+            "storage":        "\(storageGiB)",
+            "notes":          notes.isEmpty ? "(none)" : notes,
+            // Per-cluster conventions (see SelfHostDefaults). The preamble in
+            // buildInstallPrompt() is authoritative and handles the empty cases.
+            // clusterIssuer is the per-install selection, not the raw default.
+            "clusterIssuer":  clusterIssuer.trimmingCharacters(in: .whitespaces),
+            "imagePullSecret": defaults.imagePullSecret,
+            "redirectMiddleware": defaults.redirectMiddleware,
         ]
     }
 }
