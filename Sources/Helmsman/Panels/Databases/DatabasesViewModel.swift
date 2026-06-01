@@ -42,6 +42,52 @@ final class DatabasesViewModel {
         expanded.contains(instance.id)
     }
 
+    // MARK: - Capabilities & DSN
+
+    private let registry = DatabaseOperatorRegistry()
+
+    /// Live snapshot for operator capability computation.
+    private var databaseContext: DatabaseContext {
+        DatabaseContext(
+            cnpgPluginAvailable: cache.cnpgPluginAvailable,
+            scheduledBackups: cache.scheduledBackups,
+            cnpgClusters: cache.cnpgClusters,
+            secrets: cache.secrets,
+            pods: cache.pods
+        )
+    }
+
+    func capabilities(for instance: DatabaseInstance) -> DatabaseCapabilities {
+        var caps = registry.capabilities(for: instance, context: databaseContext)
+        // Fill the CNPG username from the -app secret if present.
+        if var conn = caps.connection, conn.username == nil, let secretName = conn.secretName,
+           let user = username(fromSecret: secretName, namespace: conn.namespace) {
+            conn = ConnectionInfo(targetKind: conn.targetKind, targetName: conn.targetName,
+                                  namespace: conn.namespace, port: conn.port, scheme: conn.scheme,
+                                  secretName: conn.secretName, username: user, dbName: conn.dbName)
+            caps.connection = conn
+        }
+        return caps
+    }
+
+    /// Decodes the `username` key from a secret in the cache, if present.
+    private func username(fromSecret name: String, namespace: String) -> String? {
+        guard let secret = cache.secrets.first(where: {
+            $0.metadata.name == name && ($0.metadata.namespace ?? "default") == namespace
+        }), let b64 = secret.data?["username"], let data = Data(base64Encoded: b64) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    /// Builds a connection string. `user`/`db` are omitted when nil.
+    static func dsn(for c: ConnectionInfo) -> String {
+        let hostSuffix = c.targetKind == "svc" ? ".\(c.namespace).svc" : ".\(c.namespace)"
+        var s = "\(c.scheme)://"
+        if let u = c.username { s += "\(u)@" }
+        s += "\(c.targetName)\(hostSuffix):\(c.port)"
+        if let db = c.dbName { s += "/\(db)" }
+        return s
+    }
+
     // MARK: - Builders
 
     private func cnpgInstances() -> [DatabaseInstance] {
