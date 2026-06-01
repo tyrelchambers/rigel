@@ -82,4 +82,56 @@ enum Viz {
         }
         return buckets
     }
+
+    // MARK: - Treemap model (Topology tab)
+
+    enum TreemapMetric { case cpu, memory }
+    enum PodHealth: Equatable { case healthy, warning, failed }
+
+    struct TreemapPod: Equatable, Identifiable {
+        let id: String          // pod uid
+        let name: String
+        let namespace: String
+        let value: Double       // cpu cores or mem bytes (0 when no metrics)
+        let health: PodHealth
+    }
+
+    struct TreemapNode: Equatable, Identifiable {
+        let name: String
+        let pods: [TreemapPod]
+        var id: String { name }
+        var total: Double { pods.reduce(0) { $0 + $1.value } }
+    }
+
+    /// Group pods under their assigned node (unscheduled pods under
+    /// "(unscheduled)"), valued by latest CPU/mem sample and tagged with a
+    /// health from phase + restart count. Nodes keep cluster list order; pods
+    /// sort by value descending.
+    static func treemapModel(pods: [Pod], nodes: [Node], history: [String: [PodMetricSample]], metric: TreemapMetric) -> [TreemapNode] {
+        func value(for pod: Pod) -> Double {
+            let key = "\(pod.metadata.namespace ?? "default")/\(pod.metadata.name)"
+            guard let s = history[key]?.last else { return 0 }
+            return metric == .cpu ? s.cpuCores : s.memBytes
+        }
+        func health(for pod: Pod) -> PodHealth {
+            if pod.status?.phase == "Failed" { return .failed }
+            let restarts = (pod.status?.containerStatuses ?? []).reduce(0) { $0 + $1.restartCount }
+            return restarts > 0 ? .warning : .healthy
+        }
+
+        var byNode: [String: [TreemapPod]] = [:]
+        for pod in pods {
+            let node = pod.spec?.nodeName ?? "(unscheduled)"
+            byNode[node, default: []].append(TreemapPod(
+                id: pod.metadata.uid, name: pod.metadata.name,
+                namespace: pod.metadata.namespace ?? "default",
+                value: value(for: pod), health: health(for: pod)))
+        }
+        let nodeOrder = nodes.map(\.metadata.name)
+        let ordered = nodeOrder.filter { byNode[$0] != nil }
+            + byNode.keys.filter { !nodeOrder.contains($0) }.sorted()
+        return ordered.map { name in
+            TreemapNode(name: name, pods: (byNode[name] ?? []).sorted { $0.value > $1.value })
+        }
+    }
 }

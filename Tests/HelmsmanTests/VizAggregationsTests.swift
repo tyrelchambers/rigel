@@ -95,4 +95,40 @@ final class VizAggregationsTests: XCTestCase {
         let buckets = Viz.eventBuckets([event("e", warning: true, at: now)], now: now, span: 4, count: 4)
         XCTAssertEqual(buckets[3].warnings, 1)
     }
+
+    private func pod(_ name: String, node: String?, phase: String, restarts: Int) -> Pod {
+        Pod(
+            metadata: ObjectMeta(name: name, namespace: "default", uid: "uid-\(name)", creationTimestamp: nil, labels: nil, annotations: nil),
+            spec: PodSpec(nodeName: node, containers: []),
+            status: PodStatus(phase: phase, podIP: nil,
+                              containerStatuses: [ContainerStatus(name: "c", ready: true, restartCount: restarts, state: nil)])
+        )
+    }
+
+    func test_treemapModel_groupsByNodeWithValuesAndHealth() {
+        let pods = [
+            pod("a", node: "n1", phase: "Running", restarts: 0),
+            pod("b", node: "n1", phase: "Running", restarts: 3),   // warning
+            pod("c", node: "n2", phase: "Failed",  restarts: 0),   // failed
+        ]
+        let nodes = [node("n1", cpu: "4", mem: "8Gi"), node("n2", cpu: "4", mem: "8Gi")]
+        let history: [String: [PodMetricSample]] = [
+            "default/a": [PodMetricSample(cpuCores: 0.5, memBytes: 100)],
+            "default/b": [PodMetricSample(cpuCores: 1.5, memBytes: 200)],
+            "default/c": [PodMetricSample(cpuCores: 0.1, memBytes: 50)],
+        ]
+        let model = Viz.treemapModel(pods: pods, nodes: nodes, history: history, metric: .cpu)
+        XCTAssertEqual(model.map(\.name), ["n1", "n2"])              // node order preserved
+        XCTAssertEqual(model[0].pods.map(\.name), ["b", "a"])        // sorted by value desc
+        XCTAssertEqual(model[0].pods[0].value, 1.5, accuracy: 0.001)
+        XCTAssertEqual(model[0].pods[0].health, .warning)
+        XCTAssertEqual(model[1].pods[0].health, .failed)
+    }
+
+    func test_treemapModel_unscheduledPodsGrouped() {
+        let pods = [pod("a", node: nil, phase: "Pending", restarts: 0)]
+        let model = Viz.treemapModel(pods: pods, nodes: [], history: [:], metric: .cpu)
+        XCTAssertEqual(model.map(\.name), ["(unscheduled)"])
+        XCTAssertEqual(model[0].pods[0].value, 0, accuracy: 0.001) // no history → 0
+    }
 }
