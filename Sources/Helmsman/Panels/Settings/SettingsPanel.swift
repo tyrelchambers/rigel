@@ -104,12 +104,9 @@ struct SettingsPanel: View {
                     .font(Theme.Font.body(15, weight: .semibold))
                     .foregroundStyle(Theme.Foreground.primary)
             }
-            Text("Used by the catalog install wizard when it asks Claude to generate manifests for this cluster. The ClusterIssuer issues TLS certificates for app ingresses. Leave a field blank to omit it. These are saved per kubectl context.")
+            Text("Used by the catalog install wizard when it asks Claude to generate manifests for this cluster. Leave a field blank to omit it. (The TLS ClusterIssuer is chosen per app in the install flow.) These are saved per kubectl context.")
                 .font(Theme.Font.body(12)).foregroundStyle(Theme.Foreground.secondary)
 
-            selfHostField(label: "Cluster issuer", placeholder: "letsencrypt-prod",
-                          text: $viewModel.clusterIssuer,
-                          help: "cert-manager ClusterIssuer name for the cert-manager.io/cluster-issuer annotation.")
             selfHostField(label: "Ingress domain", placeholder: "apps.example.com",
                           text: $viewModel.ingressDomain,
                           help: "Base domain hostnames default under (<app>.<domain>).")

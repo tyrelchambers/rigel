@@ -21,6 +21,9 @@ final class SettingsViewModel {
 
     // MARK: - Self-hosted install defaults (per-context, bound to the UI)
 
+    // `clusterIssuer` isn't edited here — it's chosen per-app in the install
+    // wizard — but it's loaded/saved so the persisted per-context value
+    // round-trips untouched when the other defaults are saved.
     var clusterIssuer = ""
     var ingressDomain = ""
     var imagePullSecret = ""

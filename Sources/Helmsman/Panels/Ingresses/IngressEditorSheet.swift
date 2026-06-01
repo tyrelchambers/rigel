@@ -369,30 +369,17 @@ struct IngressEditorSheet: View {
 
     // MARK: - ClusterIssuer detection (read-only)
 
-    private struct IssuerList: Decodable {
-        let items: [Item]
-        struct Item: Decodable { let metadata: Meta }
-        struct Meta: Decodable { let name: String }
-    }
-
     private func loadClusterIssuers() async {
-        guard let kubectl = resolveBinary("kubectl") else {
-            await MainActor.run { issuerError = "kubectl not found"; isLoadingIssuers = false }
-            return
-        }
-        var args: [String] = []
-        if let context { args.append(contentsOf: ["--context", context]) }
-        args.append(contentsOf: ["get", "clusterissuers", "-o", "json"])
         do {
-            let data = try await runProcess(kubectl, args: args)
-            let list = try JSONDecoder().decode(IssuerList.self, from: data)
-            let names = list.items.map(\.metadata.name).sorted()
+            let names = try await ClusterIssuerLoader.load(context: context)
             await MainActor.run {
                 issuers = names
                 isLoadingIssuers = false
                 if selectedIssuer.isEmpty, let first = names.first { selectedIssuer = first }
                 if names.isEmpty { issuerError = "No ClusterIssuers found." }
             }
+        } catch ClusterIssuerLoader.LoadError.kubectlNotFound {
+            await MainActor.run { issuerError = "kubectl not found"; isLoadingIssuers = false }
         } catch {
             await MainActor.run {
                 issuerError = "cert-manager not detected (no ClusterIssuers)."
