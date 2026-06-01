@@ -32,4 +32,23 @@ enum Viz {
         }
         return t
     }
+
+    // MARK: - Reclaimable-waste summary (Overview headline)
+
+    struct WasteSummary: Equatable {
+        var reclaimableBytes: Double = 0
+        var workloadCount: Int = 0
+    }
+
+    /// Total reclaimable memory across workloads, counting only those with a
+    /// positive reclaimable figure. `WorkloadRightSizing.reclaimableMemBytes`
+    /// already sums over over-provisioned containers.
+    static func wasteSummary(_ results: [WorkloadRightSizing]) -> WasteSummary {
+        var s = WasteSummary()
+        for w in results {
+            let r = w.reclaimableMemBytes
+            if r > 0 { s.reclaimableBytes += r; s.workloadCount += 1 }
+        }
+        return s
+    }
 }
