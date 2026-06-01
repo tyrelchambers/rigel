@@ -364,6 +364,30 @@ struct CNPGClusterStatus: Codable, Hashable {
     let readyInstances: Int?
     let currentPrimary: String?
     let targetPrimary: String?
+    let lastSuccessfulBackup: String?
+    let conditions: [CNPGCondition]?
+}
+
+struct CNPGCondition: Codable, Hashable {
+    let type: String
+    let status: String
+    let reason: String?
+    let message: String?
+}
+
+/// scheduledbackups.postgresql.cnpg.io — the backup schedule for a CNPG cluster.
+struct CNPGScheduledBackup: Codable, Identifiable, Hashable {
+    let metadata: ObjectMeta
+    let spec: Spec?
+    var id: String { metadata.uid }
+
+    struct Spec: Codable, Hashable {
+        let schedule: String?     // 6-field cron (CNPG includes seconds)
+        let cluster: ClusterRef?
+    }
+    struct ClusterRef: Codable, Hashable {
+        let name: String
+    }
 }
 
 // MARK: - Ingresses (networking.k8s.io/v1)

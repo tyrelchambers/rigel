@@ -12,6 +12,7 @@ final class ClusterCache {
     private(set) var statefulSets: [StatefulSet] = []
     private(set) var nodes: [Node] = []
     private(set) var cnpgClusters: [CNPGCluster] = []
+    private(set) var scheduledBackups: [CNPGScheduledBackup] = []
     private(set) var events: [K8sEvent] = []
     private(set) var secrets: [Secret] = []
     private(set) var ingresses: [Ingress] = []
@@ -108,6 +109,7 @@ final class ClusterCache {
             watchTask("clusterroles", c: c, into: \.clusterRoles, applyEvent: applyClusterRole),
             watchTask("clusterrolebindings", c: c, into: \.clusterRoleBindings, applyEvent: applyClusterRoleBinding),
                 cnpgTask(c),
+                scheduledBackupTask(c),
                 metricsPollTask(c),
                 podMetricsPollTask(c),
             ]
@@ -244,6 +246,15 @@ final class ClusterCache {
                 if !hasConnected { self?.cnpgAvailable = false }
                 return hasConnected
             }
+        )
+    }
+
+    private func scheduledBackupTask(_ c: KubectlClient) -> Task<Void, Never> {
+        reconnectingWatch(
+            "scheduledbackups.postgresql.cnpg.io", c: c,
+            onSync: { [weak self] items in self?.scheduledBackups = items },
+            onEvent: { [weak self] event in self?.applyScheduledBackup(event) },
+            onError: { _, hasConnected in hasConnected }
         )
     }
 
@@ -438,6 +449,9 @@ final class ClusterCache {
     }
     private func applyCNPG(_ event: WatchEvent<CNPGCluster>) {
         applyGeneric(event, list: \.cnpgClusters)
+    }
+    private func applyScheduledBackup(_ event: WatchEvent<CNPGScheduledBackup>) {
+        applyGeneric(event, list: \.scheduledBackups)
     }
     private func applySecret(_ event: WatchEvent<Secret>) {
         applyGeneric(event, list: \.secrets)
