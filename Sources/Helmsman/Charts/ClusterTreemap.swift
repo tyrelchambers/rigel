@@ -11,8 +11,8 @@ struct NodeTreemap: View {
     var body: some View {
         GeometryReader { geo in
             let maxV = node.pods.map(\.value).max() ?? 0
-            let floor = max(maxV * 0.03, 1)                       // keep zero-usage pods visible
-            let weights = node.pods.map { max($0.value, floor) }
+            let floorWeight = max(maxV * 0.03, 1)                 // keep zero-usage pods visible
+            let weights = node.pods.map { max($0.value, floorWeight) }
             let rects = TreemapLayout.squarify(weights, in: CGRect(origin: .zero, size: geo.size))
             ForEach(Array(node.pods.enumerated()), id: \.element.id) { i, pod in
                 let r = rects[i]
