@@ -502,7 +502,29 @@ struct MainWindow: View {
                 onForward: beginPortForward
             )
         case .databases:
-            DatabasesPanel(viewModel: databasesVM)
+            DatabasesPanel(
+                viewModel: databasesVM,
+                onAction: { requestWorkload($0) },
+                onPortForward: { conn in
+                    pendingPortForward = PortForwardTarget(
+                        targetKind: conn.targetKind,
+                        targetName: conn.targetName,
+                        namespace: conn.namespace,
+                        remotePort: conn.port
+                    )
+                },
+                onRevealCredentials: { secretName, namespace in
+                    if let secret = cache.secrets.first(where: {
+                        $0.metadata.name == secretName && ($0.metadata.namespace ?? "default") == namespace
+                    }) {
+                        manageSecret = secret
+                    }
+                },
+                onCopyDSN: { dsn in
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(dsn, forType: .string)
+                }
+            )
         case .secrets:
             SecretsPanel(
                 viewModel: secretsVM,

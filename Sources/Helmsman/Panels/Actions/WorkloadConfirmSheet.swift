@@ -23,6 +23,8 @@ struct WorkloadConfirmSheet: View {
             _replicas = State(initialValue: to == 0 ? (d.spec?.replicas ?? d.status?.replicas ?? 1) : to)
         } else if case .scaleWorkload(_, _, _, let current, let to) = action {
             _replicas = State(initialValue: to == 0 ? current : to)
+        } else if case .scaleCNPG(_, _, let current, let to) = action {
+            _replicas = State(initialValue: to == current ? current : to)
         } else {
             _replicas = State(initialValue: 0)
         }
@@ -34,7 +36,7 @@ struct WorkloadConfirmSheet: View {
     }
 
     private var accent: Color {
-        action.isHighRisk ? Theme.Status.failed : Theme.Accent.primary
+        effectiveAction.isHighRisk ? Theme.Status.failed : Theme.Accent.primary
     }
 
     /// Current replica count for whichever scale action this is (nil otherwise) —
@@ -44,6 +46,8 @@ struct WorkloadConfirmSheet: View {
         case .scaleDeployment(let d, _):
             return d.spec?.replicas ?? d.status?.replicas ?? 0
         case .scaleWorkload(_, _, _, let current, _):
+            return current
+        case .scaleCNPG(_, _, let current, _):
             return current
         default:
             return nil
@@ -56,6 +60,8 @@ struct WorkloadConfirmSheet: View {
             return .scaleDeployment(d, to: replicas)
         case .scaleWorkload(let k, let n, let ns, let current, _):
             return .scaleWorkload(kind: k, name: n, namespace: ns, current: current, to: replicas)
+        case .scaleCNPG(let c, let ns, let current, _):
+            return .scaleCNPG(cluster: c, namespace: ns, current: current, to: replicas)
         case .drainNode(let n, _):
             return .drainNode(n, options: drainOpts)
         default:
@@ -81,14 +87,14 @@ struct WorkloadConfirmSheet: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            Image(systemName: action.isHighRisk ? "exclamationmark.triangle.fill" : "wrench.and.screwdriver.fill")
+            Image(systemName: effectiveAction.isHighRisk ? "exclamationmark.triangle.fill" : "wrench.and.screwdriver.fill")
                 .font(.system(size: 16))
                 .foregroundStyle(accent)
             VStack(alignment: .leading, spacing: 2) {
-                Text(action.isHighRisk ? "Confirm destructive action" : "Confirm action")
+                Text(effectiveAction.isHighRisk ? "Confirm destructive action" : "Confirm action")
                     .font(Theme.Font.body(14, weight: .semibold))
                     .foregroundStyle(Theme.Foreground.primary)
-                Text(action.title)
+                Text(effectiveAction.title)
                     .font(Theme.Font.mono(11))
                     .foregroundStyle(Theme.Foreground.secondary)
             }
@@ -142,7 +148,7 @@ struct WorkloadConfirmSheet: View {
                     .foregroundStyle(Theme.Foreground.tertiary)
                 Text(effectiveAction.previewCommand(context: contextName))
                     .font(Theme.Font.mono(12))
-                    .foregroundStyle(action.isHighRisk ? Theme.Status.failed : Theme.Foreground.primary)
+                    .foregroundStyle(effectiveAction.isHighRisk ? Theme.Status.failed : Theme.Foreground.primary)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(10)
@@ -154,7 +160,7 @@ struct WorkloadConfirmSheet: View {
                     .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
             }
 
-            if action.needsAcknowledge {
+            if effectiveAction.needsAcknowledge {
                 Toggle(isOn: $acknowledged) {
                     Text("I understand this is destructive")
                         .font(Theme.Font.body(12))
@@ -247,21 +253,21 @@ struct WorkloadConfirmSheet: View {
 
             Button { onApprove(effectiveAction) } label: {
                 HStack(spacing: 6) {
-                    if action.isHighRisk {
+                    if effectiveAction.isHighRisk {
                         Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 10))
                     }
-                    Text(action.isHighRisk ? "Run anyway" : "Run")
+                    Text(effectiveAction.isHighRisk ? "Run anyway" : "Run")
                         .font(Theme.Font.body(12, weight: .semibold))
                 }
                 .foregroundStyle(Theme.Foreground.primary)
                 .padding(.horizontal, 14).padding(.vertical, 7)
                 .background(accent)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
-                .opacity((action.needsAcknowledge && !acknowledged) ? 0.4 : 1.0)
+                .opacity((effectiveAction.needsAcknowledge && !acknowledged) ? 0.4 : 1.0)
             }
             .buttonStyle(.plain)
             .keyboardShortcut(.defaultAction)
-            .disabled(action.needsAcknowledge && !acknowledged)
+            .disabled(effectiveAction.needsAcknowledge && !acknowledged)
         }
         .padding(.horizontal, 18).padding(.vertical, 12)
         .background(Theme.Surface.primary)

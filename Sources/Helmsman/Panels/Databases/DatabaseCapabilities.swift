@@ -42,7 +42,7 @@ enum DatabaseAction: Hashable, Identifiable {
     var systemImage: String {
         switch self {
         case .backupNow:         return "arrow.down.doc"
-        case .switchover:        return "arrow.triangle.swap"
+        case .switchover:        return "arrow.triangle.2.circlepath"
         case .hibernate:         return "moon.zzz"
         case .resume:            return "sun.max"
         case .scale:             return "arrow.up.arrow.down"
