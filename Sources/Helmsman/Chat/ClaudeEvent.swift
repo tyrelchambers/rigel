@@ -2,9 +2,12 @@ import Foundation
 
 enum ClaudeEvent {
     case systemInit(sessionId: String, model: String?)
-    case assistantText(text: String)
+    case textDelta(String)
+    case thinkingDelta(String)
     case toolUse(id: String, name: String, input: [String: Any])
     case result(sessionId: String, costUSD: Double?)
+    /// Lines we don't surface. `raw` is non-empty only for genuine diagnostics
+    /// (malformed JSON, stderr); recognized-but-ignored events carry "".
     case unknown(raw: String)
 }
 
@@ -25,27 +28,20 @@ enum ClaudeEventDecoder {
                 model: obj["model"] as? String
             )
 
+        case ("stream_event", _):
+            return decodeStreamEvent(obj["event"] as? [String: Any])
+
         case ("assistant", _):
+            // Text streams via deltas; use the consolidated message only for tool_use.
             let message = obj["message"] as? [String: Any]
             let content = message?["content"] as? [[String: Any]] ?? []
-            // Concatenate any text blocks; surface tool_use separately.
-            var text = ""
-            var toolUses: [ClaudeEvent] = []
-            for block in content {
-                let bt = block["type"] as? String
-                if bt == "text", let t = block["text"] as? String { text += t }
-                else if bt == "tool_use",
-                        let id = block["id"] as? String,
-                        let name = block["name"] as? String {
+            for block in content where (block["type"] as? String) == "tool_use" {
+                if let id = block["id"] as? String, let name = block["name"] as? String {
                     let input = (block["input"] as? [String: Any]) ?? [:]
-                    toolUses.append(.toolUse(id: id, name: name, input: input))
+                    return .toolUse(id: id, name: name, input: input)
                 }
             }
-            if !toolUses.isEmpty, text.isEmpty {
-                return toolUses[0]
-            } else {
-                return .assistantText(text: text)
-            }
+            return .unknown(raw: "")
 
         case ("result", _):
             return .result(
@@ -55,6 +51,23 @@ enum ClaudeEventDecoder {
 
         default:
             return .unknown(raw: String(data: line, encoding: .utf8) ?? "")
+        }
+    }
+
+    /// Pull text/thinking out of a raw Anthropic SSE `content_block_delta`.
+    /// Every other partial-message event is recognized-but-ignored ("").
+    private static func decodeStreamEvent(_ event: [String: Any]?) -> ClaudeEvent {
+        guard let event, (event["type"] as? String) == "content_block_delta",
+              let delta = event["delta"] as? [String: Any] else {
+            return .unknown(raw: "")
+        }
+        switch delta["type"] as? String {
+        case "text_delta":
+            return .textDelta((delta["text"] as? String) ?? "")
+        case "thinking_delta":
+            return .thinkingDelta((delta["thinking"] as? String) ?? "")
+        default:
+            return .unknown(raw: "")
         }
     }
 }
