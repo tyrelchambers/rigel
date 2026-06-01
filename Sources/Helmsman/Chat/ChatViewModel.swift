@@ -6,6 +6,11 @@ struct ChatMessage: Identifiable {
     let role: Role
     var text: String
     var tool: ToolInvocation? = nil
+    /// Claude's reasoning for this turn, stamped on at `result`. In-memory only —
+    /// not persisted to chat history.
+    var thinking: String? = nil
+    /// Wall-clock seconds the reasoning took, for the "Thought for Ns" label.
+    var thinkingSeconds: Int? = nil
 
     enum Role { case user, assistant, system }
 }
@@ -28,6 +33,13 @@ final class ChatViewModel {
     var isStreaming = false
     var sessionId: String? = nil
     var error: String? = nil
+    /// The current turn's reasoning, accumulating as thinking deltas arrive.
+    /// Shown live in the ThinkingPane; cleared and stamped onto the message at result.
+    var liveThinking: String = ""
+    /// True once any thinking delta has arrived this turn — drives the pane.
+    var isThinking: Bool = false
+    /// When the active turn began, for the pane's elapsed-seconds timer.
+    var turnStartedAt: Date? = nil
     /// Model + effort the session launches with. Loaded from (and saved to)
     /// SessionStore so the choice is global and survives restarts.
     var modelConfig: ClaudeModelConfig = SessionStore.shared.modelConfig
@@ -84,7 +96,7 @@ final class ChatViewModel {
                 var sawRealOutput = false
                 for await event in eventStream {
                     switch event {
-                    case .assistantText(let chunk):
+                    case .textDelta(let chunk):
                         if !chunk.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             sawRealOutput = true
                         }
@@ -130,6 +142,9 @@ final class ChatViewModel {
             lastUserMessage = text
         }
         isStreaming = true
+        turnStartedAt = Date()
+        liveThinking = ""
+        isThinking = false
         saveActiveToHistory()
         Task { [weak self] in
             do {
@@ -163,6 +178,9 @@ final class ChatViewModel {
         guard let session else { return }
         Task { await session.interrupt() }
         isStreaming = false
+        liveThinking = ""
+        isThinking = false
+        turnStartedAt = nil
         messages.append(ChatMessage(role: .system, text: "⏹ Stopped by user."))
     }
 
@@ -251,14 +269,18 @@ final class ChatViewModel {
         case .systemInit(let sid, _):
             sessionId = sid
             saveActiveToHistory()
-        case .assistantText(let chunk):
-            guard !chunk.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { break }
+        case .textDelta(let chunk):
+            guard !chunk.isEmpty else { break }
             if var last = messages.last, last.role == .assistant, last.tool == nil {
                 last.text += chunk
                 messages[messages.count - 1] = last
             } else {
                 messages.append(ChatMessage(role: .assistant, text: chunk))
             }
+        case .thinkingDelta(let chunk):
+            guard !chunk.isEmpty else { break }
+            isThinking = true
+            liveThinking += chunk
         case .toolUse(let id, let name, let input):
             let pretty = (try? JSONSerialization.data(withJSONObject: input, options: [.prettyPrinted]))
                 .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
@@ -272,6 +294,7 @@ final class ChatViewModel {
             messages.append(ChatMessage(role: .system, text: "", tool: tool))
         case .result:
             isStreaming = false
+            stampThinkingOntoLastAssistant()
             saveActiveToHistory()
         case .unknown(let raw):
             // Surface diagnostic strings (e.g. terminationHandler stderr) but skip
@@ -280,5 +303,22 @@ final class ChatViewModel {
             guard !trimmed.isEmpty, !trimmed.hasPrefix("{") else { return }
             messages.append(ChatMessage(role: .system, text: "⚠︎ \(trimmed)"))
         }
+    }
+
+    /// At turn end, fold the accumulated reasoning onto the most recent assistant
+    /// message as a collapsible "Thought for Ns" trail, then reset live state.
+    private func stampThinkingOntoLastAssistant() {
+        defer {
+            liveThinking = ""
+            isThinking = false
+            turnStartedAt = nil
+        }
+        let trimmed = liveThinking.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let idx = messages.lastIndex(where: { $0.role == .assistant && $0.tool == nil })
+        else { return }
+        let seconds = turnStartedAt.map { Int(Date().timeIntervalSince($0).rounded()) } ?? 0
+        messages[idx].thinking = trimmed
+        messages[idx].thinkingSeconds = seconds
     }
 }

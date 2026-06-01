@@ -152,7 +152,7 @@ final class CatalogInstallWizardModel: Identifiable {
 
     private func handle(_ event: ClaudeEvent) {
         switch event {
-        case .assistantText(let chunk):
+        case .textDelta(let chunk):
             if let last = transcript.indices.last, transcript[last].role == .assistant {
                 transcript[last].text += chunk
             } else {
@@ -168,7 +168,7 @@ final class CatalogInstallWizardModel: Identifiable {
                     manifestYAML = extracted
                 }
             }
-        case .toolUse, .systemInit, .unknown:
+        case .toolUse, .systemInit, .thinkingDelta, .unknown:
             break
         }
     }
