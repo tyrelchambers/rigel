@@ -9,7 +9,7 @@ enum PanelKind: Hashable, CaseIterable, Identifiable {
     case workloads
     case rightSizing
     case nodes
-    case topology
+    case connectivity
     case ingresses
     case services
     case databases
@@ -40,7 +40,7 @@ enum PanelKind: Hashable, CaseIterable, Identifiable {
         NavGroup(title: "Workloads", panels: [.deployments, .pods, .workloads, .rightSizing]),
         NavGroup(title: "Networking", panels: [.services, .ingresses]),
         NavGroup(title: "Config & Storage", panels: [.configMaps, .secrets, .storage, .databases]),
-        NavGroup(title: "Cluster", panels: [.namespaces, .nodes, .topology, .rbac]),
+        NavGroup(title: "Cluster", panels: [.namespaces, .nodes, .connectivity, .rbac]),
         NavGroup(title: "Observability", panels: [.events, .logs]),
         NavGroup(title: "Self-host", panels: [.catalog]),
         NavGroup(title: "System", panels: [.settings]),
@@ -56,7 +56,7 @@ enum PanelKind: Hashable, CaseIterable, Identifiable {
         case .workloads:   return "rectangle.stack.fill"
         case .rightSizing: return "gauge.with.dots.needle.bottom.50percent"
         case .nodes:       return "server.rack"
-        case .topology:    return "rectangle.3.group.fill"
+        case .connectivity: return "arrow.triangle.branch"
         case .ingresses:   return "signpost.right.fill"
         case .services:    return "network"
         case .databases:   return "cylinder.split.1x2.fill"
@@ -81,7 +81,7 @@ enum PanelKind: Hashable, CaseIterable, Identifiable {
         case .workloads:   return "Workloads"
         case .rightSizing: return "Right-sizing"
         case .nodes:       return "Nodes"
-        case .topology:    return "Topology"
+        case .connectivity: return "Connectivity"
         case .ingresses:   return "Ingresses"
         case .services:    return "Services"
         case .databases:   return "Databases"
@@ -107,7 +107,7 @@ enum PanelKind: Hashable, CaseIterable, Identifiable {
         case .workloads:   return "All controllers"
         case .rightSizing: return "Resource tuning"
         case .nodes:       return "Cluster machines"
-        case .topology:    return "Cluster map"
+        case .connectivity: return "Traffic & reachability"
         case .ingresses:   return "External routing"
         case .services:    return "Internal networking"
         case .databases:   return "Stateful stores"
@@ -129,7 +129,7 @@ enum PanelKind: Hashable, CaseIterable, Identifiable {
         case .deployments, .pods, .workloads, .rightSizing, .ingresses,
              .services, .secrets, .configMaps, .storage, .rbac, .events:
             return true
-        case .overview, .assistant, .namespaces, .nodes, .topology, .databases,
+        case .overview, .assistant, .namespaces, .nodes, .connectivity, .databases,
              .catalog, .logs, .settings:
             return false
         }

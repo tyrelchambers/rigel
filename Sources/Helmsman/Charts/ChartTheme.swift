@@ -1,13 +1,13 @@
 import SwiftUI
 
-/// Shared color mapping for the cluster visualizations, so the treemap,
-/// timeline and gauges read consistently against the app `Theme`.
+/// Shared color mapping for the cluster visualizations, so the connectivity
+/// map, timeline and gauges read consistently against the app `Theme`.
 enum ChartTheme {
-    static func color(for health: Viz.PodHealth) -> Color {
+    static func color(for health: Connectivity.Health) -> Color {
         switch health {
-        case .healthy: return Theme.Status.running
-        case .warning: return Theme.Status.pending
-        case .failed:  return Theme.Status.failed
+        case .ok:     return Theme.Status.running
+        case .warn:   return Theme.Status.pending
+        case .broken: return Theme.Status.failed
         }
     }
 
