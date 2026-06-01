@@ -59,6 +59,8 @@ struct UsageSeriesSource {
         guard let q = promql.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return [] }
         let path = "\(base)/api/v1/query_range?query=\(q)&start=\(start)&end=\(end)&step=\(Self.stepSeconds)"
 
+        // The PromQL wraps everything in `sum(...)`, so the response is always a
+        // single series — `.first` is the whole result, not a truncation.
         guard let resp = await cache.promRangeQuery(path: path),
               resp.status == "success",
               let series = resp.data.result.first else { return [] }
