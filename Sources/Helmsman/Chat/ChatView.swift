@@ -20,6 +20,12 @@ struct ChatView: View {
     /// than recomputed every render — keeps the cluster-watch churn out of body.
     @State private var cachedPrompts: [SuggestedPrompt] = []
     @FocusState private var inputFocused: Bool
+    /// True while the scroll is parked at (or near) the bottom. Autoscroll follows
+    /// new content only when pinned; scrolling up unpins it until the user returns
+    /// to the bottom or taps the jump-to-bottom button.
+    @State private var isAtBottom = true
+    /// Latest scroll viewport height, used to derive distance-from-bottom.
+    @State private var viewportHeight: CGFloat = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -39,13 +45,48 @@ struct ChatView: View {
                     }
                     .animation(.easeOut(duration: 0.2), value: viewModel.messages.count)
                     .padding(.horizontal, 14).padding(.vertical, 14)
+                    // Report the content's bottom edge in the scroll's coordinate
+                    // space so we can tell how far from the bottom the user is.
+                    .background(GeometryReader { geo in
+                        Color.clear.preference(
+                            key: ScrollBottomKey.self,
+                            value: geo.frame(in: .named(Self.scrollSpace)).maxY
+                        )
+                    })
                 }
+                .coordinateSpace(name: Self.scrollSpace)
                 .background(Theme.Surface.elevated)
+                // Track the viewport height — needed to compute distance-to-bottom.
+                .background(GeometryReader { vp in
+                    Color.clear
+                        .onAppear { viewportHeight = vp.size.height }
+                        .onChange(of: vp.size.height) { _, h in viewportHeight = h }
+                })
+                .onPreferenceChange(ScrollBottomKey.self) { contentBottom in
+                    // At the bottom, content's maxY ≈ viewport height; scrolling up
+                    // pushes it larger. A small threshold absorbs sub-pixel jitter.
+                    let atBottom = contentBottom - viewportHeight < Self.atBottomThreshold
+                    if atBottom != isAtBottom { isAtBottom = atBottom }
+                }
+                // New message / tool card: follow only if pinned to the bottom.
                 .onChange(of: viewModel.messages.count) { _, _ in
-                    if let last = viewModel.messages.last {
-                        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                    scrollToBottomIfPinned(proxy, animated: true)
+                }
+                // Streaming text grows the last bubble without changing the count —
+                // follow that too, unanimated so it reads as smooth tailing.
+                .onChange(of: viewModel.messages.last?.text) { _, _ in
+                    scrollToBottomIfPinned(proxy, animated: false)
+                }
+                // A jump-to-bottom affordance, shown only when scrolled up. Tapping
+                // it re-pins autoscroll (the preference flips isAtBottom back true).
+                .overlay(alignment: .bottomTrailing) {
+                    if !isAtBottom && !viewModel.messages.isEmpty {
+                        scrollToBottomButton(proxy)
+                            .padding(.trailing, 16).padding(.bottom, 12)
+                            .transition(.scale.combined(with: .opacity))
                     }
                 }
+                .animation(.easeInOut(duration: 0.15), value: isAtBottom)
                 // Cursor is no longer auto-grabbed on launch — focus the chat
                 // deliberately via ⌘L or by clicking the input.
             }
@@ -84,6 +125,45 @@ struct ChatView: View {
                 .keyboardShortcut("l", modifiers: .command)
                 .hidden()
         }
+    }
+
+    /// Named coordinate space for measuring scroll content against its viewport.
+    private static let scrollSpace = "chatScroll"
+    /// Px slack below which we consider the scroll "at the bottom" — absorbs
+    /// fractional layout offsets and the bottom content padding.
+    private static let atBottomThreshold: CGFloat = 24
+
+    /// Scroll to the newest message, but only while the user is pinned to the
+    /// bottom. Once they scroll up, content keeps arriving without yanking them
+    /// back down.
+    private func scrollToBottomIfPinned(_ proxy: ScrollViewProxy, animated: Bool) {
+        guard isAtBottom, let last = viewModel.messages.last else { return }
+        if animated {
+            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+        } else {
+            proxy.scrollTo(last.id, anchor: .bottom)
+        }
+    }
+
+    /// Floating "jump to newest" button, shown only when scrolled up. Tapping it
+    /// scrolls to the bottom, which re-pins autoscroll via the preference update.
+    private func scrollToBottomButton(_ proxy: ScrollViewProxy) -> some View {
+        Button {
+            if let last = viewModel.messages.last {
+                withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+            }
+        } label: {
+            Image(systemName: "arrow.down")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(Theme.Foreground.primary)
+                .frame(width: 30, height: 30)
+                .background(Theme.Surface.field)
+                .clipShape(Circle())
+                .overlay(Circle().strokeBorder(Theme.Border.strong, lineWidth: 1))
+                .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
+        }
+        .buttonStyle(.plain)
+        .help("Scroll to latest")
     }
 
     private var header: some View {
@@ -136,5 +216,14 @@ struct ChatView: View {
         }
         .buttonStyle(.plain)
         .help(help)
+    }
+}
+
+/// Carries the chat content's bottom edge (maxY) in the scroll's coordinate space
+/// up to the ScrollView, so it can decide whether the user is pinned to the bottom.
+private struct ScrollBottomKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
