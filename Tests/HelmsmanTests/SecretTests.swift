@@ -42,7 +42,7 @@ final class SecretTests: XCTestCase {
 
     func test_toYAML_dockerconfigjson_emitsCorrectType() {
         let s = Secret.draft(
-            name: "ghrc",
+            name: "regcred",
             namespace: "default",
             type: .dockerconfigjson,
             decodedData: [".dockerconfigjson": #"{"auths":{}}"#]

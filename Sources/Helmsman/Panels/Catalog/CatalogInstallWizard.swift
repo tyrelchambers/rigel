@@ -200,7 +200,7 @@ private struct ConfigureStep: View {
                     }
                     if model.app.exposesIngress {
                         FieldRow(label: "Ingress hostname") {
-                            TextField("\(model.app.id).tyrelchambers.com", text: $model.hostname)
+                            TextField(model.hostnamePlaceholder, text: $model.hostname)
                                 .textFieldStyle(.plain)
                                 .font(Theme.Font.mono(12))
                                 .focused($focus, equals: .hostname)

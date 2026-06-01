@@ -35,6 +35,9 @@ final class SessionStore {
         // Per-context selected namespace (nil/absent = all namespaces). Optional
         // for back-compat with sessions.json written before this field existed.
         var namespaceByContext: [String: String]? = nil
+        // Per-context self-hosted install conventions (cluster issuer, ingress
+        // domain, pull secret, edge IP). Optional for back-compat.
+        var selfHostDefaultsByContext: [String: SelfHostDefaults]? = nil
     }
 
     private var storage: Storage
@@ -113,6 +116,22 @@ final class SessionStore {
             map.removeValue(forKey: context)
         }
         storage.namespaceByContext = map
+        persist()
+    }
+
+    // MARK: - Self-hosted install defaults (per-context)
+
+    /// The self-hosted install conventions for a context, or `.default`
+    /// (conventional issuer name, everything else blank) if the user hasn't set
+    /// them up yet.
+    func selfHostDefaults(for context: String) -> SelfHostDefaults {
+        storage.selfHostDefaultsByContext?[context] ?? .default
+    }
+
+    func setSelfHostDefaults(_ defaults: SelfHostDefaults, for context: String) {
+        var map = storage.selfHostDefaultsByContext ?? [:]
+        map[context] = defaults
+        storage.selfHostDefaultsByContext = map
         persist()
     }
 

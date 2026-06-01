@@ -19,6 +19,15 @@ final class SettingsViewModel {
     var working = false
     var actionError: String?
 
+    // MARK: - Self-hosted install defaults (per-context, bound to the UI)
+
+    var clusterIssuer = ""
+    var ingressDomain = ""
+    var imagePullSecret = ""
+    var edgeIP = ""
+    /// Set briefly after a successful save so the UI can confirm.
+    var selfHostSaved = false
+
     // Link flow state (nil unless a link session is active).
     var qrPNG: Data?
     var linking = false
@@ -33,6 +42,31 @@ final class SettingsViewModel {
     func load(context: String?) {
         // MainWindow.startPanelViewModels owns assistantVM.load on the shared instance.
         self.context = context
+        let defaults = SessionStore.shared.selfHostDefaults(for: context ?? "")
+        clusterIssuer = defaults.clusterIssuer
+        ingressDomain = defaults.ingressDomain
+        imagePullSecret = defaults.imagePullSecret
+        edgeIP = defaults.edgeIP
+        selfHostSaved = false
+    }
+
+    /// Persist the self-hosted install conventions for the active context. These
+    /// feed the catalog install wizard's prompt (cluster issuer, ingress domain,
+    /// pull secret, edge IP). Fields are trimmed; blanks mean "not configured".
+    func saveSelfHostDefaults() {
+        let trimmed = SelfHostDefaults(
+            clusterIssuer:  clusterIssuer.trimmingCharacters(in: .whitespacesAndNewlines),
+            ingressDomain:  ingressDomain.trimmingCharacters(in: .whitespacesAndNewlines),
+            imagePullSecret: imagePullSecret.trimmingCharacters(in: .whitespacesAndNewlines),
+            edgeIP:         edgeIP.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+        SessionStore.shared.setSelfHostDefaults(trimmed, for: context ?? "")
+        // Reflect the normalized values back into the fields.
+        clusterIssuer = trimmed.clusterIssuer
+        ingressDomain = trimmed.ingressDomain
+        imagePullSecret = trimmed.imagePullSecret
+        edgeIP = trimmed.edgeIP
+        selfHostSaved = true
     }
 
     // MARK: - Derived state
