@@ -89,7 +89,7 @@ final class ConnectivityTests: XCTestCase {
         let svc = service("orphan", selector: ["app": "nope"])
         let flows = Connectivity.flows(ingresses: [], services: [svc], pods: [])
         XCTAssertEqual(flows[0].health, .warn)
-        XCTAssertTrue(flows[0].issues.contains { $0.localizedCaseInsensitiveContains("no pods") })
+        XCTAssertEqual(flows[0].issues, ["Selector matches no pods"])
     }
 
     func test_noSelectorService_isOkWithNoPodIssue() {
@@ -104,6 +104,46 @@ final class ConnectivityTests: XCTestCase {
         let okPods = [pod("web-1", labels: ["app": "web"])]
         let brokenIng = ingress("api-ing", host: "old.me", service: "ghost")
         let flows = Connectivity.flows(ingresses: [brokenIng], services: [okSvc], pods: okPods)
+        XCTAssertEqual(flows.count, 2)
         XCTAssertEqual(flows.first?.health, .broken)
+        XCTAssertEqual(flows.last?.health, .ok)
+    }
+
+    func test_multipleIngressesToOneService_mergesHostsAndNames() {
+        let svc = service("web", selector: ["app": "web"])
+        let pods = [pod("web-1", labels: ["app": "web"])]
+        let prod = ingress("web-prod", host: "app.com", service: "web")
+        let stg = ingress("web-stg", host: "staging.app.com", service: "web")
+        let flows = Connectivity.flows(ingresses: [prod, stg], services: [svc], pods: pods)
+        XCTAssertEqual(flows.count, 1)
+        XCTAssertEqual(flows[0].hosts, ["app.com", "staging.app.com"])
+        XCTAssertEqual(flows[0].ingressNames, ["web-prod", "web-stg"])
+    }
+
+    func test_ingressToNoSelectorService_isExternalAndOk() {
+        // ExternalName / manually-managed endpoints behind an ingress: external,
+        // but with no selector we can't assess endpoints, so it stays .ok.
+        let svc = service("ext", selector: nil, type: "ExternalName")
+        let ing = ingress("ext-ing", host: "ext.me", service: "ext")
+        let flows = Connectivity.flows(ingresses: [ing], services: [svc], pods: [])
+        XCTAssertTrue(flows[0].isExternal)
+        XCTAssertTrue(flows[0].issues.isEmpty)
+        XCTAssertEqual(flows[0].health, .ok)
+    }
+
+    func test_wildcardHost_excludedFromHostsButStillExternal() {
+        let backend = Ingress.Backend(service: Ingress.ServiceBackend(name: "web", port: nil))
+        let path = Ingress.Path(path: "/", pathType: "Prefix", backend: backend)
+        let rule = Ingress.Rule(host: nil, http: Ingress.HTTP(paths: [path]))   // nil host → "*"
+        let ing = Ingress(
+            metadata: ObjectMeta(name: "wild", namespace: "default", uid: "uid-wild", creationTimestamp: nil, labels: nil, annotations: nil),
+            spec: Ingress.Spec(ingressClassName: nil, tls: nil, rules: [rule], defaultBackend: nil),
+            status: nil
+        )
+        let svc = service("web", selector: ["app": "web"])
+        let pods = [pod("web-1", labels: ["app": "web"])]
+        let flows = Connectivity.flows(ingresses: [ing], services: [svc], pods: pods)
+        XCTAssertTrue(flows[0].isExternal)        // fronted by an ingress even with a wildcard host
+        XCTAssertTrue(flows[0].hosts.isEmpty)     // "*" is not a displayable host
     }
 }
