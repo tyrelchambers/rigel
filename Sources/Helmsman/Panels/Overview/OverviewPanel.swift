@@ -4,12 +4,14 @@ struct OverviewPanel: View {
     @Bindable var cache: ClusterCache
     @Bindable var contextManager: ClusterContextManager
     @Bindable var databasesVM: DatabasesViewModel
+    @Bindable var rightSizingVM: RightSizingViewModel
     let onInvestigate: () -> Void
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 header
+                gaugesRow
                 topRow
                 middleRow
                 warningsCard
@@ -90,6 +92,60 @@ struct OverviewPanel: View {
         return Card(title: "Nodes", icon: "server.rack") {
             MetricRow(big: "\(ready)/\(total)", caption: "ready")
             HealthLine(label: "Pressure conditions", count: pressureCount, color: Theme.Status.pending)
+        }
+    }
+
+    // MARK: - Gauges row: Cluster CPU | Cluster Memory | Reclaimable
+
+    private var gaugesRow: some View {
+        let totals = Viz.clusterResourceTotals(nodes: cache.nodes, metrics: cache.nodeMetrics)
+        let waste = Viz.wasteSummary(rightSizingVM.results)
+        return HStack(alignment: .top, spacing: 12) {
+            if cache.metricsAvailable && totals.cpuAllocatable > 0 {
+                RingGauge(
+                    title: "Cluster CPU",
+                    fraction: totals.cpuFraction,
+                    detail: "\(ResourceQuantity.formatCores(totals.cpuUsed)) / \(ResourceQuantity.formatCores(totals.cpuAllocatable))"
+                )
+                RingGauge(
+                    title: "Cluster Memory",
+                    fraction: totals.memFraction,
+                    detail: "\(ResourceQuantity.formatBytes(totals.memUsed)) / \(ResourceQuantity.formatBytes(totals.memAllocatable))"
+                )
+            } else {
+                metricsUnavailableCard
+            }
+            wasteCard(waste)
+        }
+    }
+
+    private var metricsUnavailableCard: some View {
+        Card(title: "Cluster Usage", icon: "gauge.with.dots.needle.bottom.50percent") {
+            Text("metrics-server unavailable — install it to see live CPU/memory usage.")
+                .font(Theme.Font.body(11))
+                .foregroundStyle(Theme.Foreground.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func wasteCard(_ waste: Viz.WasteSummary) -> some View {
+        Card(title: "Reclaimable", icon: "arrow.down.right.circle.fill") {
+            if waste.workloadCount > 0 {
+                MetricRow(
+                    big: ResourceQuantity.formatBytes(waste.reclaimableBytes),
+                    caption: "across \(waste.workloadCount) workload\(waste.workloadCount == 1 ? "" : "s")"
+                )
+                Text("Memory you could give back by right-sizing over-provisioned workloads.")
+                    .font(Theme.Font.body(11))
+                    .foregroundStyle(Theme.Foreground.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                MetricRow(big: "—", caption: "no data yet")
+                Text("Open Right-Sizing to analyze workloads and surface reclaimable memory.")
+                    .font(Theme.Font.body(11))
+                    .foregroundStyle(Theme.Foreground.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 

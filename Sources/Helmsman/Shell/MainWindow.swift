@@ -422,6 +422,7 @@ struct MainWindow: View {
                 cache: cache,
                 contextManager: contextManager,
                 databasesVM: databasesVM,
+                rightSizingVM: rightSizingVM,
                 onInvestigate: investigateCluster
             )
         case .assistant:
