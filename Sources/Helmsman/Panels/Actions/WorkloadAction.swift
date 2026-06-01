@@ -76,6 +76,14 @@ enum WorkloadAction: Identifiable {
     /// these flow through `WorkloadCommander.run` directly without the
     /// `WorkloadConfirmSheet`.
     case applyManifest(yaml: String, label: String)
+    /// CNPG: create an on-demand backup via the kubectl-cnpg plugin.
+    case cnpgBackupNow(cluster: String, namespace: String)
+    /// CNPG: promote a standby to primary (controlled switchover) via the plugin.
+    case cnpgSwitchover(cluster: String, namespace: String, to: String)
+    /// CNPG: hibernate (`on`) shuts the cluster down; `off` resumes it. Plugin.
+    case cnpgHibernate(cluster: String, namespace: String, on: Bool)
+    /// CNPG: scale instances by patching `spec.instances` (pure kubectl).
+    case scaleCNPG(cluster: String, namespace: String, current: Int, to: Int)
 
     var id: String {
         switch self {
@@ -111,6 +119,10 @@ enum WorkloadAction: Identifiable {
         case .setResources(let k, let n, let ns, let c, _, _): return "setresources-\(k)-\(ns)/\(n)-\(c)"
         case .setImage(let k, let n, let ns, let c, let img): return "setimage-\(k)-\(ns)/\(n)-\(c)-\(img)"
         case .applyManifest(_, let label): return "apply-manifest-\(label)"
+        case .cnpgBackupNow(let c, let ns): return "cnpg-backup-\(ns)/\(c)"
+        case .cnpgSwitchover(let c, let ns, let to): return "cnpg-switchover-\(ns)/\(c)-\(to)"
+        case .cnpgHibernate(let c, let ns, let on): return "cnpg-hibernate-\(ns)/\(c)-\(on)"
+        case .scaleCNPG(let c, let ns, _, let to): return "scale-cnpg-\(ns)/\(c)-\(to)"
         }
     }
 
@@ -161,6 +173,10 @@ enum WorkloadAction: Identifiable {
             return "Upgrade \(k)/\(n) → \(img)"
         case .applyManifest(_, let label):
             return "Apply \(label) manifest"
+        case .cnpgBackupNow(let c, _): return "Back up \(c) now"
+        case .cnpgSwitchover(let c, _, let to): return "Switch over \(c) → \(to)"
+        case .cnpgHibernate(let c, _, let on): return on ? "Hibernate \(c)" : "Resume \(c)"
+        case .scaleCNPG(let c, _, _, let to): return "Scale \(c) → \(to)"
         }
     }
 
@@ -253,6 +269,16 @@ enum WorkloadAction: Identifiable {
             return "Sets container \(c) on \(k)/\(n) in namespace \(ns) to \(img). Triggers a new rollout. Reversible with a rollback (rollout undo)."
         case .applyManifest(_, let label):
             return "Creates or updates the resources defined in the \(label) manifest via `kubectl apply -f -`."
+        case .cnpgBackupNow(let c, let ns):
+            return "Creates an on-demand backup of CNPG cluster \(ns)/\(c) via the kubectl-cnpg plugin. Non-destructive."
+        case .cnpgSwitchover(let c, let ns, let to):
+            return "Promotes standby \(to) to primary in CNPG cluster \(ns)/\(c). Causes a brief failover; in-flight connections drop."
+        case .cnpgHibernate(let c, let ns, let on):
+            return on
+                ? "Hibernates CNPG cluster \(ns)/\(c): scales it to zero and shuts Postgres down. The database is OFFLINE until resumed."
+                : "Resumes hibernated CNPG cluster \(ns)/\(c). Postgres starts back up."
+        case .scaleCNPG(let c, let ns, let current, let to):
+            return "Sets spec.instances from \(current) → \(to) on CNPG cluster \(ns)/\(c)."
         }
     }
 
@@ -276,8 +302,13 @@ enum WorkloadAction: Identifiable {
              .triggerCronJob,
              .createNamespace,
              .setResources,
-             .applyManifest:
+             .applyManifest,
+             .cnpgBackupNow:
             return false
+        case .scaleCNPG(_, _, let current, let to):
+            return to < current     // scaling down is high-risk
+        case .cnpgHibernate(_, _, let on):
+            return on               // hibernate (offline) is high-risk; resume is not
         default:
             return true
         }
@@ -287,6 +318,10 @@ enum WorkloadAction: Identifiable {
     var needsAcknowledge: Bool {
         switch self {
         case .deletePod, .drainNode, .deleteSecret, .moveSecret, .deleteIngress, .deleteService, .deleteConfigMap, .deletePVC, .deletePV, .deleteWorkload, .deleteNamespace, .deleteRBAC: return true
+        case .cnpgHibernate(_, _, let on):
+            return on               // taking the DB offline needs acknowledgement
+        case .scaleCNPG(_, _, let current, let to):
+            return to < current     // scaling down drops replicas
         default: return false
         }
     }
@@ -385,6 +420,14 @@ enum WorkloadAction: Identifiable {
             return [.args(["set", "image", "\(k)/\(n)", "\(c)=\(img)", "-n", ns])]
         case .applyManifest(let yaml, _):
             return [.applyYAML(yaml)]
+        case .cnpgBackupNow(let c, let ns):
+            return [.args(["cnpg", "backup", c, "-n", ns])]
+        case .cnpgSwitchover(let c, let ns, let to):
+            return [.args(["cnpg", "promote", c, to, "-n", ns])]
+        case .cnpgHibernate(let c, let ns, let on):
+            return [.args(["cnpg", "hibernate", on ? "on" : "off", c, "-n", ns])]
+        case .scaleCNPG(let c, let ns, _, let to):
+            return [.args(["patch", "cluster", c, "-n", ns, "--type=merge", "-p", "{\"spec\":{\"instances\":\(to)}}"])]
         }
     }
 
