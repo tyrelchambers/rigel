@@ -24,6 +24,7 @@ final class SettingsViewModel {
     var clusterIssuer = ""
     var ingressDomain = ""
     var imagePullSecret = ""
+    var redirectMiddleware = ""
     var edgeIP = ""
     /// Set briefly after a successful save so the UI can confirm.
     var selfHostSaved = false
@@ -46,6 +47,7 @@ final class SettingsViewModel {
         clusterIssuer = defaults.clusterIssuer
         ingressDomain = defaults.ingressDomain
         imagePullSecret = defaults.imagePullSecret
+        redirectMiddleware = defaults.redirectMiddleware
         edgeIP = defaults.edgeIP
         selfHostSaved = false
     }
@@ -54,17 +56,20 @@ final class SettingsViewModel {
     /// feed the catalog install wizard's prompt (cluster issuer, ingress domain,
     /// pull secret, edge IP). Fields are trimmed; blanks mean "not configured".
     func saveSelfHostDefaults() {
+        func clean(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines) }
         let trimmed = SelfHostDefaults(
-            clusterIssuer:  clusterIssuer.trimmingCharacters(in: .whitespacesAndNewlines),
-            ingressDomain:  ingressDomain.trimmingCharacters(in: .whitespacesAndNewlines),
-            imagePullSecret: imagePullSecret.trimmingCharacters(in: .whitespacesAndNewlines),
-            edgeIP:         edgeIP.trimmingCharacters(in: .whitespacesAndNewlines)
+            clusterIssuer:  clean(clusterIssuer),
+            ingressDomain:  clean(ingressDomain),
+            imagePullSecret: clean(imagePullSecret),
+            redirectMiddleware: clean(redirectMiddleware),
+            edgeIP:         clean(edgeIP)
         )
         SessionStore.shared.setSelfHostDefaults(trimmed, for: context ?? "")
         // Reflect the normalized values back into the fields.
         clusterIssuer = trimmed.clusterIssuer
         ingressDomain = trimmed.ingressDomain
         imagePullSecret = trimmed.imagePullSecret
+        redirectMiddleware = trimmed.redirectMiddleware
         edgeIP = trimmed.edgeIP
         selfHostSaved = true
     }

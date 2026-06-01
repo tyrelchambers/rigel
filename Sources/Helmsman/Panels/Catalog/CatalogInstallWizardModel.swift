@@ -213,7 +213,11 @@ final class CatalogInstallWizardModel: Identifiable {
             lines.append("- TLS: cert-manager with ClusterIssuer `\(defaults.clusterIssuer)`, HTTP-01 only — port 80 must work for issuance.")
         }
 
-        lines.append("- HTTPS redirect: shared Middleware `default/redirect-https` — reference as `default-redirect-https@kubernetescrd` in the ingress annotation.")
+        if defaults.redirectMiddleware.isEmpty {
+            lines.append("- HTTPS redirect: no redirect Middleware configured — do NOT set the `traefik.ingress.kubernetes.io/router.middlewares` annotation, and ignore any middleware reference in the per-app instructions below.")
+        } else {
+            lines.append("- HTTPS redirect: reference Middleware `\(defaults.redirectMiddleware)` in the `traefik.ingress.kubernetes.io/router.middlewares` annotation.")
+        }
 
         if defaults.imagePullSecret.isEmpty {
             lines.append("- Image pull secret: none configured — do NOT add `imagePullSecrets` to pod specs, and ignore any imagePullSecrets reference in the per-app instructions below.")
@@ -514,6 +518,7 @@ final class CatalogInstallWizardModel: Identifiable {
             // buildInstallPrompt() is authoritative and handles the empty cases.
             "clusterIssuer":  defaults.clusterIssuer,
             "imagePullSecret": defaults.imagePullSecret,
+            "redirectMiddleware": defaults.redirectMiddleware,
         ]
     }
 }

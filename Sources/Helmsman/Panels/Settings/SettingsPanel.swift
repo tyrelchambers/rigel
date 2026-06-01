@@ -116,6 +116,9 @@ struct SettingsPanel: View {
             selfHostField(label: "Image pull secret", placeholder: "(none)",
                           text: $viewModel.imagePullSecret,
                           help: "Pull-secret name added to pod specs. Blank = no imagePullSecrets.")
+            selfHostField(label: "Redirect middleware", placeholder: "(none)",
+                          text: $viewModel.redirectMiddleware,
+                          help: "Traefik HTTPS-redirect middleware ref, e.g. default-redirect-https@kubernetescrd. Blank = no router.middlewares annotation.")
             selfHostField(label: "Edge IP", placeholder: "(optional)",
                           text: $viewModel.edgeIP,
                           help: "Public IP your *.domain A-records point at. Informational only.")
