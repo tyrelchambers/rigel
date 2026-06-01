@@ -72,6 +72,33 @@ final class ChatViewModelDeltaTests: XCTestCase {
         XCTAssertFalse(vm.isThinking)
     }
 
+    func test_resultAfterThinking_doesNotLeakIntoNextTurn() {
+        let vm = ChatViewModel()
+        // Turn 1 captures reasoning and completes.
+        vm.isStreaming = true
+        vm.turnStartedAt = Date()
+        vm.handle(.thinkingDelta("turn 1 reasoning"))
+        vm.handle(.textDelta("Turn 1 answer"))
+        vm.handle(.result(sessionId: "s", costUSD: nil))
+        XCTAssertEqual(vm.liveThinking, "")
+        XCTAssertFalse(vm.isThinking)
+
+        // A user message arrives for turn 2 (this is what really separates turns —
+        // it breaks the assistant-bubble merge chain, just like send() does).
+        vm.messages.append(ChatMessage(role: .user, text: "follow-up"))
+
+        // Turn 2's reasoning must start clean — none of turn 1's text carries over,
+        // and turn 2's reasoning stamps only onto turn 2's answer (a fresh bubble).
+        vm.handle(.thinkingDelta("turn 2 reasoning"))
+        XCTAssertEqual(vm.liveThinking, "turn 2 reasoning")
+        vm.handle(.textDelta("Turn 2 answer"))
+        vm.handle(.result(sessionId: "s", costUSD: nil))
+        XCTAssertEqual(vm.messages[0].thinking, "turn 1 reasoning")
+        XCTAssertEqual(vm.messages[0].text, "Turn 1 answer")
+        XCTAssertEqual(vm.messages.last?.thinking, "turn 2 reasoning")
+        XCTAssertEqual(vm.messages.last?.text, "Turn 2 answer")
+    }
+
     func test_result_computesThinkingSecondsFromTurnStart() {
         let vm = ChatViewModel()
         vm.isStreaming = true

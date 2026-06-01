@@ -99,6 +99,11 @@ final class ChatViewModel {
                 // session's state.
                 var sawRealOutput = false
                 for await event in eventStream {
+                    // After stop()/startNewChat() cancels this task, cooperative
+                    // cancellation only kicks in at the next suspension point — so
+                    // bail before dispatching a straggler event into handle(), which
+                    // would otherwise paint a ghost bubble onto the new session.
+                    if Task.isCancelled { break }
                     switch event {
                     case .textDelta(let chunk):
                         if !chunk.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
