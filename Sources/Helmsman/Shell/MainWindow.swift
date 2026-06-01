@@ -468,6 +468,11 @@ struct MainWindow: View {
             )
         case .nodes:
             NodesPanel(viewModel: nodesVM, onWorkload: { requestWorkload($0) }, onViewYAML: viewYAML)
+        case .topology:
+            TopologyPanel(cache: cache, onSelectPod: { pod in
+                podsVM.search = pod.name
+                selectedPanel = .pods
+            })
         case .ingresses:
             IngressesPanel(
                 viewModel: ingressesVM,
