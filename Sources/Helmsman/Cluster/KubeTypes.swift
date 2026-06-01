@@ -297,6 +297,25 @@ extension K8sEvent {
     var isWarning: Bool { type == "Warning" }
     /// Best timestamp we have for "when did this last happen".
     var when: Date? { lastTimestamp ?? firstTimestamp ?? metadata.creationTimestamp }
+
+    /// Compact relative age of `when` ("5s" / "3m" / "2h" / "1d"), or "—" if the
+    /// event carries no usable timestamp. Shared by every warning/event surface
+    /// so they read identically. Pass `now` in tests for determinism.
+    func relativeAge(now: Date = Date()) -> String {
+        guard let when else { return "—" }
+        let dt = now.timeIntervalSince(when)
+        if dt < 0 { return "0s" }
+        if dt < 60 { return "\(Int(dt))s" }
+        if dt < 3600 { return "\(Int(dt / 60))m" }
+        if dt < 86400 { return "\(Int(dt / 3600))h" }
+        return "\(Int(dt / 86400))d"
+    }
+
+    /// Full absolute timestamp for hover/tooltip, e.g. "Jun 1, 2026 at 8:14:02 AM",
+    /// or nil when the event has no timestamp.
+    var absoluteWhen: String? {
+        when?.formatted(date: .abbreviated, time: .standard)
+    }
 }
 
 // MARK: - StatefulSets

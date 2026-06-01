@@ -122,7 +122,7 @@ private struct EventRow: View {
             Rectangle().fill(tint).frame(width: 2).frame(maxHeight: .infinity)
 
             VStack(alignment: .leading, spacing: 0) {
-                Text(timeAgo)
+                Text(event.relativeAge())
                     .font(Theme.Font.mono(9))
                     .foregroundStyle(Theme.Foreground.tertiary)
                 if let count = event.count, count > 1 {
@@ -132,6 +132,7 @@ private struct EventRow: View {
                 }
             }
             .frame(width: 70, alignment: .leading)
+            .help(event.absoluteWhen ?? "Unknown time")
 
             Text(event.type ?? "—")
                 .font(Theme.Font.mono(9, weight: .semibold))
@@ -172,15 +173,6 @@ private struct EventRow: View {
                 .strokeBorder(Theme.Border.subtle, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
-    }
-
-    private var timeAgo: String {
-        guard let when = event.when else { return "—" }
-        let dt = Date().timeIntervalSince(when)
-        if dt < 60 { return "\(Int(dt))s" }
-        if dt < 3600 { return "\(Int(dt / 60))m" }
-        if dt < 86400 { return "\(Int(dt / 3600))h" }
-        return "\(Int(dt / 86400))d"
     }
 
     private var target: String {

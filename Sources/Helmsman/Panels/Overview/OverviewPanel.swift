@@ -181,6 +181,11 @@ struct OverviewPanel: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            Text(evt.relativeAge())
+                .font(Theme.Font.mono(10))
+                .foregroundStyle(Theme.Foreground.tertiary)
+                .frame(width: 36, alignment: .trailing)
+                .help(evt.absoluteWhen ?? "Unknown time")
         }
         .padding(.horizontal, 6).padding(.vertical, 3)
     }
