@@ -1,6 +1,5 @@
 import SwiftUI
 import AppKit
-import MarkdownUI
 
 struct ChatView: View {
     @Bindable var viewModel: ChatViewModel
@@ -10,7 +9,7 @@ struct ChatView: View {
     var suggestedPrompts: () -> [SuggestedPrompt] = { [] }
     var onSuggestedPrompt: (SuggestedPrompt) -> Void = { _ in }
     /// Lazily-evaluated; the candidate pool is built once per mention session
-    /// (when `@` is first typed), not on every render. See `mentionPool`.
+    /// (when `@` is first typed), not on every render. Consumed by `ChatComposer`.
     var mentionCandidates: () -> [MentionCandidate] = { [] }
     var onNewChat: () -> Void = {}
     var onOpenHistory: () -> Void = {}
