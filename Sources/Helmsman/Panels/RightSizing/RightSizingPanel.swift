@@ -162,7 +162,9 @@ struct RightSizingPanel: View {
                         isExpanded: expanded.contains(w.id),
                         onToggle: { toggle(w.id) },
                         onApply: onApply,
-                        onAskClaude: { onAskClaude(w) }
+                        onAskClaude: { onAskClaude(w) },
+                        cache: viewModel.cache,
+                        backend: viewModel.backend
                     )
                 }
             }
@@ -226,6 +228,8 @@ private struct WorkloadRow: View {
     let onToggle: () -> Void
     let onApply: (WorkloadAction) -> Void
     let onAskClaude: () -> Void
+    let cache: ClusterCache
+    let backend: MetricsBackendConfig
 
     var body: some View {
         VStack(spacing: 0) {
@@ -258,6 +262,12 @@ private struct WorkloadRow: View {
                     ForEach(workload.containers, id: \.container) { r in
                         ContainerDetail(workload: workload, result: r, onApply: onApply, onAskClaude: onAskClaude)
                     }
+                    WorkloadUsageBands(
+                        cache: cache,
+                        backend: backend,
+                        workload: workload
+                    )
+                    .padding(.top, 8)
                 }
                 .padding(.top, 6)
             }
