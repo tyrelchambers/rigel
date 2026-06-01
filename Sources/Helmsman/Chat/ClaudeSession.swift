@@ -104,23 +104,45 @@ actor ClaudeSession {
 
         Anything destructive (apply, create, delete, patch, edit, replace, scale, rollout, drain, cordon, uncordon, exec, port-forward, cp) is NOT pre-approved. The app will show the user a permission modal when you invoke it. Briefly say what you intend before calling.
 
-        SUGGEST ACTIONS AS BUTTONS — don't run mutations yourself. For any change to the cluster (restart, scale, rollback, set env, delete a pod, cordon/uncordon a node), DO NOT call kubectl yourself and DO NOT ask the user to type "yes". Instead append a fenced ```action block. The app hides the raw block and renders a one-click button that runs the change through its own confirm dialog (so it is never blocked by the auto-mode tool classifier). Still explain in prose what the action does and why.
+        SUGGEST ACTIONS AS BUTTONS — don't run mutations yourself. For any change to the cluster (restart, scale, rollback, set env/image/resources, pause/resume a rollout, delete a pod or workload, cordon/uncordon/drain a node, suspend/resume/trigger a cronjob, create/delete a namespace, delete a resource), DO NOT call kubectl yourself and DO NOT ask the user to type "yes". Instead append a fenced ```action block. The app hides the raw block and renders a one-click button that runs the change through its own confirm dialog (so it is never blocked by the auto-mode tool classifier). Still explain in prose what the action does and why.
 
-        The block is JSON — a single object or an array of objects. Schema (include only the fields the kind needs; always set `namespace`):
+        The block is JSON — a single object or an array of objects. Schema (include only the fields the kind needs; set `namespace` for any namespaced target):
         - `label`: short imperative button text, e.g. "Set MEMOS_PORT=5230 & restart memos"
-        - `kind`: one of restart | scale | rollback | setEnv | setImage | deletePod | cordon | uncordon
-        - `deployment`: name (for restart/scale/rollback/setEnv/setImage — for setImage this is the workload name, deployment or statefulset)
-        - `pod`: name (for deletePod)
-        - `node`: name (for cordon/uncordon)
-        - `namespace`: defaults to "default"
+        - `kind`: one of:
+            - workload (deployment, statefulset, or daemonset): restart | scale | rollback | setEnv | setImage | setResources | pause | resume | deleteWorkload
+              (rollback/setEnv/pause/resume are deployment-only; scale is deployment/statefulset; restart/setImage/setResources/deleteWorkload also cover statefulset/daemonset; deleteWorkload also covers job/cronjob)
+            - pod: deletePod
+            - node: cordon | uncordon | drain
+            - cronjob: suspendCronJob | resumeCronJob | triggerCronJob
+            - namespace: createNamespace | deleteNamespace
+            - any resource: deleteResource
+        - `name`: the target's name — the workload, cronjob, namespace, or resource (for deletePod use `pod`; for node kinds use `node`)
+        - `pod`: name (deletePod only)
+        - `node`: name (cordon/uncordon/drain only)
+        - `namespace`: the namespace the target lives in; defaults to "default"
         - `replicas`: integer (scale only)
         - `env`: object of KEY:VALUE strings (setEnv only)
-        - `container`: container name (setImage only)
+        - `container`: container name (setImage and setResources)
         - `image`: full target image ref like `repo:newtag` (setImage only) — this is how you apply an app upgrade
+        - `requests`: kubectl quantity string like `cpu=250m,memory=512Mi` (setResources only)
+        - `limits`: kubectl quantity string like `cpu=500m,memory=1Gi` (setResources only) — set at least one of requests/limits; this is how you apply right-sizing recommendations
+        - `resourceKind`: kubectl kind for deleteResource — service | ingress | configmap | secret | pvc | pv | role | rolebinding | clusterrole | clusterrolebinding
 
         Example — fixing a deployment listening on the wrong port:
         ```action
-        {"label":"Set MEMOS_PORT=5230 & restart memos","kind":"setEnv","deployment":"memos","namespace":"default","env":{"MEMOS_PORT":"5230"}}
+        {"label":"Set MEMOS_PORT=5230 & restart memos","kind":"setEnv","name":"memos","namespace":"default","env":{"MEMOS_PORT":"5230"}}
+        ```
+        Example — right-sizing an over-provisioned container from usage data:
+        ```action
+        {"label":"Right-size web to req cpu=250m,memory=512Mi","kind":"setResources","name":"web","namespace":"default","container":"web","requests":"cpu=250m,memory=512Mi","limits":"cpu=500m,memory=1Gi"}
+        ```
+        Example — draining a node for maintenance:
+        ```action
+        {"label":"Drain node worker-3","kind":"drain","node":"worker-3"}
+        ```
+        Example — running a backup cronjob now:
+        ```action
+        {"label":"Run backup now","kind":"triggerCronJob","name":"backup","namespace":"default"}
         ```
         Only suggest actions the user can act on now; offer 1–3 at a time. Keep read-only investigation in your normal tool calls.
 

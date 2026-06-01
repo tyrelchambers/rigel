@@ -88,6 +88,15 @@ struct CronJob: Codable, Identifiable, Hashable {
         if dt < 86400 { return "\(Int(dt/3600))h ago" }
         return "\(Int(dt/86400))d ago"
     }
+
+    /// A unique-enough name for a manual run created via `kubectl create job
+    /// --from=cronjob/<name>`. Computed at the call site so the confirm-sheet
+    /// preview matches what's executed.
+    static func manualRunName(for cronName: String) -> String {
+        let stamp = Int(Date().timeIntervalSince1970) % 100000
+        let base = cronName.count > 40 ? String(cronName.prefix(40)) : cronName
+        return "\(base)-manual-\(stamp)"
+    }
 }
 
 // MARK: - DaemonSet (apps/v1)

@@ -157,6 +157,251 @@ final class SuggestedActionTests: XCTestCase {
         XCTAssertTrue(reason.contains("image"), reason)
     }
 
+    // MARK: - setResources (right-sizing)
+
+    func test_parse_setResources_decodesRequestsAndLimits() {
+        let action = parseOne("""
+        {"label":"Right-size web","kind":"setResources","deployment":"web","namespace":"default","container":"web","requests":"cpu=250m,memory=512Mi","limits":"cpu=500m,memory=1Gi"}
+        """)
+        XCTAssertEqual(action.kind, .setResources)
+        XCTAssertEqual(action.container, "web")
+        XCTAssertEqual(action.requests, "cpu=250m,memory=512Mi")
+        XCTAssertEqual(action.limits, "cpu=500m,memory=1Gi")
+    }
+
+    func test_resolve_setResources_buildsSetResourcesCommandForDeployment() {
+        let dep = makeDeployment("web")
+        let action = parseOne("""
+        {"label":"Right-size","kind":"setResources","deployment":"web","namespace":"default","container":"web","requests":"cpu=250m,memory=512Mi","limits":"cpu=500m,memory=1Gi"}
+        """)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [dep], pods: [], nodes: []) else {
+            return XCTFail("expected a resolved action")
+        }
+        let preview = wa.previewCommand(context: "default")
+        XCTAssertTrue(preview.contains("set resources deployment/web -c web"), preview)
+        XCTAssertTrue(preview.contains("--requests=cpu=250m,memory=512Mi"), preview)
+        XCTAssertTrue(preview.contains("--limits=cpu=500m,memory=1Gi"), preview)
+    }
+
+    func test_resolve_setResources_resolvesStatefulSetWhenNotADeployment() {
+        let ss = makeStatefulSet("gitea")
+        let action = parseOne("""
+        {"label":"Right-size","kind":"setResources","deployment":"gitea","namespace":"default","container":"gitea","requests":"cpu=100m,memory=256Mi"}
+        """)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: [], statefulSets: [ss]) else {
+            return XCTFail("expected a resolved action")
+        }
+        XCTAssertTrue(wa.previewCommand(context: nil).contains("set resources statefulset/gitea"), wa.previewCommand(context: nil))
+    }
+
+    func test_resolve_setResources_resolvesDaemonSet() {
+        let ds = makeDaemonSet("fluentd")
+        let action = parseOne("""
+        {"label":"Right-size","kind":"setResources","deployment":"fluentd","namespace":"default","container":"fluentd","limits":"memory=512Mi"}
+        """)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: [], statefulSets: [], daemonSets: [ds]) else {
+            return XCTFail("expected a resolved action")
+        }
+        XCTAssertTrue(wa.previewCommand(context: nil).contains("set resources daemonset/fluentd"), wa.previewCommand(context: nil))
+    }
+
+    func test_resolve_setResources_withoutRequestsOrLimits_isUnresolved() {
+        let dep = makeDeployment("web")
+        let action = parseOne(#"{"label":"Right-size","kind":"setResources","deployment":"web","container":"web"}"#)
+        guard case .unresolved(let reason) = SuggestedActionResolver.resolve(action, deployments: [dep], pods: [], nodes: []) else {
+            return XCTFail("expected unresolved")
+        }
+        XCTAssertTrue(reason.contains("requests") || reason.contains("limits"), reason)
+    }
+
+    // MARK: - Node & rollout remediation
+
+    func test_resolve_drain_buildsDrainCommand() {
+        let node = makeNode("node-1")
+        let action = parseOne(#"{"label":"Drain","kind":"drain","node":"node-1"}"#)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: [node]) else {
+            return XCTFail("expected a resolved action")
+        }
+        XCTAssertTrue(wa.previewCommand(context: nil).contains("drain node-1"), wa.previewCommand(context: nil))
+    }
+
+    func test_resolve_drain_unknownNode_isUnresolved() {
+        let action = parseOne(#"{"label":"Drain","kind":"drain","node":"ghost"}"#)
+        guard case .unresolved(let reason) = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: []) else {
+            return XCTFail("expected unresolved")
+        }
+        XCTAssertTrue(reason.contains("ghost"), reason)
+    }
+
+    func test_resolve_pause_buildsPauseRollout() {
+        let dep = makeDeployment("web")
+        let action = parseOne(#"{"label":"Pause","kind":"pause","name":"web"}"#)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [dep], pods: [], nodes: []) else {
+            return XCTFail("expected a resolved action")
+        }
+        XCTAssertTrue(wa.previewCommand(context: nil).contains("rollout pause deployment/web"), wa.previewCommand(context: nil))
+    }
+
+    func test_resolve_resume_buildsResumeRollout() {
+        let dep = makeDeployment("web")
+        let action = parseOne(#"{"label":"Resume","kind":"resume","name":"web"}"#)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [dep], pods: [], nodes: []) else {
+            return XCTFail("expected a resolved action")
+        }
+        XCTAssertTrue(wa.previewCommand(context: nil).contains("rollout resume deployment/web"), wa.previewCommand(context: nil))
+    }
+
+    // MARK: - Broadened restart / scale
+
+    func test_resolve_restart_statefulset_usesGenericRestart() {
+        let ss = makeStatefulSet("gitea")
+        let action = parseOne(#"{"label":"Restart","kind":"restart","name":"gitea"}"#)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: [], statefulSets: [ss]) else {
+            return XCTFail("expected a resolved action")
+        }
+        XCTAssertTrue(wa.previewCommand(context: nil).contains("rollout restart statefulset/gitea"), wa.previewCommand(context: nil))
+    }
+
+    func test_resolve_restart_daemonset_usesGenericRestart() {
+        let ds = makeDaemonSet("fluentd")
+        let action = parseOne(#"{"label":"Restart","kind":"restart","name":"fluentd"}"#)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: [], daemonSets: [ds]) else {
+            return XCTFail("expected a resolved action")
+        }
+        XCTAssertTrue(wa.previewCommand(context: nil).contains("rollout restart daemonset/fluentd"), wa.previewCommand(context: nil))
+    }
+
+    func test_resolve_scale_statefulset_usesGenericScale() {
+        let ss = makeStatefulSet("gitea")
+        let action = parseOne(#"{"label":"Scale","kind":"scale","name":"gitea","replicas":3}"#)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: [], statefulSets: [ss]) else {
+            return XCTFail("expected a resolved action")
+        }
+        XCTAssertTrue(wa.previewCommand(context: nil).contains("scale statefulset/gitea --replicas=3"), wa.previewCommand(context: nil))
+    }
+
+    func test_resolve_scale_daemonset_isUnresolved() {
+        let ds = makeDaemonSet("fluentd")
+        let action = parseOne(#"{"label":"Scale","kind":"scale","name":"fluentd","replicas":3}"#)
+        guard case .unresolved = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: [], daemonSets: [ds]) else {
+            return XCTFail("expected unresolved — daemonsets don't scale by replicas")
+        }
+    }
+
+    // MARK: - CronJob ops
+
+    func test_resolve_suspendCronJob_buildsPatch() {
+        let cj = makeCronJob("backup")
+        let action = parseOne(#"{"label":"Suspend","kind":"suspendCronJob","name":"backup"}"#)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: [], cronJobs: [cj]) else {
+            return XCTFail("expected a resolved action")
+        }
+        let preview = wa.previewCommand(context: nil)
+        XCTAssertTrue(preview.contains("patch cronjob backup"), preview)
+        XCTAssertTrue(preview.contains("suspend"), preview)
+    }
+
+    func test_resolve_triggerCronJob_buildsCreateJobFromCronJob() {
+        let cj = makeCronJob("backup")
+        let action = parseOne(#"{"label":"Run now","kind":"triggerCronJob","name":"backup"}"#)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: [], cronJobs: [cj]) else {
+            return XCTFail("expected a resolved action")
+        }
+        let preview = wa.previewCommand(context: nil)
+        XCTAssertTrue(preview.contains("create job"), preview)
+        XCTAssertTrue(preview.contains("--from=cronjob/backup"), preview)
+    }
+
+    func test_resolve_triggerCronJob_unknown_isUnresolved() {
+        let action = parseOne(#"{"label":"Run now","kind":"triggerCronJob","name":"ghost"}"#)
+        guard case .unresolved = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: []) else {
+            return XCTFail("expected unresolved")
+        }
+    }
+
+    // MARK: - deleteWorkload
+
+    func test_resolve_deleteWorkload_job() {
+        let job = makeJob("migrate")
+        let action = parseOne(#"{"label":"Delete","kind":"deleteWorkload","name":"migrate","namespace":"default"}"#)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: [], jobs: [job]) else {
+            return XCTFail("expected a resolved action")
+        }
+        XCTAssertTrue(wa.previewCommand(context: nil).contains("delete job migrate"), wa.previewCommand(context: nil))
+    }
+
+    func test_resolve_deleteWorkload_deployment() {
+        let dep = makeDeployment("web")
+        let action = parseOne(#"{"label":"Delete","kind":"deleteWorkload","name":"web"}"#)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [dep], pods: [], nodes: []) else {
+            return XCTFail("expected a resolved action")
+        }
+        XCTAssertTrue(wa.previewCommand(context: nil).contains("delete deployment web"), wa.previewCommand(context: nil))
+    }
+
+    // MARK: - Namespace lifecycle
+
+    func test_resolve_createNamespace_whenAbsent() {
+        let action = parseOne(#"{"label":"Create","kind":"createNamespace","name":"staging"}"#)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: []) else {
+            return XCTFail("expected a resolved action")
+        }
+        XCTAssertTrue(wa.previewCommand(context: nil).contains("create namespace staging"), wa.previewCommand(context: nil))
+    }
+
+    func test_resolve_createNamespace_whenPresent_isUnresolved() {
+        let ns = makeNamespace("staging")
+        let action = parseOne(#"{"label":"Create","kind":"createNamespace","name":"staging"}"#)
+        guard case .unresolved(let reason) = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: [], namespaces: [ns]) else {
+            return XCTFail("expected unresolved — already exists")
+        }
+        XCTAssertTrue(reason.contains("staging"), reason)
+    }
+
+    func test_resolve_deleteNamespace_whenPresent() {
+        let ns = makeNamespace("staging")
+        let action = parseOne(#"{"label":"Delete","kind":"deleteNamespace","name":"staging"}"#)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: [], namespaces: [ns]) else {
+            return XCTFail("expected a resolved action")
+        }
+        XCTAssertTrue(wa.previewCommand(context: nil).contains("delete namespace staging"), wa.previewCommand(context: nil))
+    }
+
+    func test_resolve_deleteNamespace_whenAbsent_isUnresolved() {
+        let action = parseOne(#"{"label":"Delete","kind":"deleteNamespace","name":"ghost"}"#)
+        guard case .unresolved = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: []) else {
+            return XCTFail("expected unresolved")
+        }
+    }
+
+    // MARK: - deleteResource (generic cleanup)
+
+    func test_resolve_deleteResource_service() {
+        let action = parseOne(#"{"label":"Delete svc","kind":"deleteResource","resourceKind":"service","name":"api","namespace":"default"}"#)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: []) else {
+            return XCTFail("expected a resolved action")
+        }
+        XCTAssertTrue(wa.previewCommand(context: nil).contains("delete service api -n default"), wa.previewCommand(context: nil))
+    }
+
+    func test_resolve_deleteResource_clusterRole_isClusterScoped() {
+        let action = parseOne(#"{"label":"Delete cr","kind":"deleteResource","resourceKind":"clusterrole","name":"admin"}"#)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: []) else {
+            return XCTFail("expected a resolved action")
+        }
+        let preview = wa.previewCommand(context: nil)
+        XCTAssertTrue(preview.contains("delete clusterrole admin"), preview)
+        XCTAssertFalse(preview.contains("-n "), preview)
+    }
+
+    func test_resolve_deleteResource_unknownKind_isUnresolved() {
+        let action = parseOne(#"{"label":"Delete","kind":"deleteResource","resourceKind":"frobnicator","name":"x"}"#)
+        guard case .unresolved(let reason) = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: []) else {
+            return XCTFail("expected unresolved")
+        }
+        XCTAssertTrue(reason.contains("frobnicator"), reason)
+    }
+
     // MARK: - Fixtures
 
     private func parseOne(_ json: String) -> SuggestedAction {
@@ -176,6 +421,45 @@ final class SuggestedActionTests: XCTestCase {
         StatefulSet(
             metadata: ObjectMeta(name: name, namespace: ns, uid: "uid-\(name)", creationTimestamp: nil, labels: nil, annotations: nil),
             spec: StatefulSetSpec(replicas: 1, selector: nil, template: nil),
+            status: nil
+        )
+    }
+
+    private func makeDaemonSet(_ name: String, ns: String = "default") -> DaemonSet {
+        DaemonSet(
+            metadata: ObjectMeta(name: name, namespace: ns, uid: "uid-\(name)", creationTimestamp: nil, labels: nil, annotations: nil),
+            spec: nil,
+            status: nil
+        )
+    }
+
+    private func makeNode(_ name: String) -> Node {
+        Node(
+            metadata: ObjectMeta(name: name, namespace: nil, uid: "uid-\(name)", creationTimestamp: nil, labels: nil, annotations: nil),
+            spec: nil,
+            status: nil
+        )
+    }
+
+    private func makeJob(_ name: String, ns: String = "default") -> Job {
+        Job(
+            metadata: ObjectMeta(name: name, namespace: ns, uid: "uid-\(name)", creationTimestamp: nil, labels: nil, annotations: nil),
+            spec: nil,
+            status: nil
+        )
+    }
+
+    private func makeCronJob(_ name: String, ns: String = "default") -> CronJob {
+        CronJob(
+            metadata: ObjectMeta(name: name, namespace: ns, uid: "uid-\(name)", creationTimestamp: nil, labels: nil, annotations: nil),
+            spec: nil,
+            status: nil
+        )
+    }
+
+    private func makeNamespace(_ name: String) -> Namespace {
+        Namespace(
+            metadata: ObjectMeta(name: name, namespace: nil, uid: "uid-\(name)", creationTimestamp: nil, labels: nil, annotations: nil),
             status: nil
         )
     }

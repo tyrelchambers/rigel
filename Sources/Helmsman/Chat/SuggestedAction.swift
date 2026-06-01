@@ -7,25 +7,46 @@ import Foundation
 /// Claude's auto-mode tool classifier.
 struct SuggestedAction: Identifiable, Decodable {
     enum Kind: String, Decodable {
-        case restart, scale, rollback, setEnv, setImage, deletePod, cordon, uncordon
+        case restart, scale, rollback, setEnv, setImage, setResources
+        case pause, resume
+        case deletePod, deleteWorkload
+        case cordon, uncordon, drain
+        case suspendCronJob, resumeCronJob, triggerCronJob
+        case createNamespace, deleteNamespace
+        case deleteResource
     }
 
     let id: UUID
     let label: String
     let kind: Kind
+    /// Primary target name: the controller (restart/scale/rollback/setEnv/setImage/
+    /// setResources/pause/resume/deleteWorkload), cronjob (suspend/resume/trigger),
+    /// namespace (create/deleteNamespace), or resource (deleteResource). `deployment`
+    /// is accepted as a back-compat alias.
+    var name: String?
     var deployment: String?
     var pod: String?
     var node: String?
     var namespace: String?
     var replicas: Int?
     var env: [String: String]?
-    /// Container name to retag (setImage only).
+    /// Container name to retag (setImage) or right-size (setResources).
     var container: String?
     /// Full target image reference, e.g. `repo:newtag` (setImage only).
     var image: String?
+    /// kubectl `--requests` quantity string, e.g. `cpu=250m,memory=512Mi` (setResources only).
+    var requests: String?
+    /// kubectl `--limits` quantity string, e.g. `cpu=500m,memory=1Gi` (setResources only).
+    var limits: String?
+    /// kubectl resource kind for `deleteResource`, e.g. "service", "configmap",
+    /// "secret", "pvc", "pv", "ingress", "clusterrole".
+    var resourceKind: String?
+
+    /// The target name, preferring the generic `name` over the `deployment` alias.
+    var target: String? { name ?? deployment }
 
     private enum CodingKeys: String, CodingKey {
-        case label, kind, deployment, pod, node, namespace, replicas, env, container, image
+        case label, kind, name, deployment, pod, node, namespace, replicas, env, container, image, requests, limits, resourceKind
     }
 
     init(from decoder: Decoder) throws {
@@ -33,6 +54,7 @@ struct SuggestedAction: Identifiable, Decodable {
         self.id = UUID()
         self.label = try c.decode(String.self, forKey: .label)
         self.kind = try c.decode(Kind.self, forKey: .kind)
+        self.name = try c.decodeIfPresent(String.self, forKey: .name)
         self.deployment = try c.decodeIfPresent(String.self, forKey: .deployment)
         self.pod = try c.decodeIfPresent(String.self, forKey: .pod)
         self.node = try c.decodeIfPresent(String.self, forKey: .node)
@@ -41,6 +63,9 @@ struct SuggestedAction: Identifiable, Decodable {
         self.env = try c.decodeIfPresent([String: String].self, forKey: .env)
         self.container = try c.decodeIfPresent(String.self, forKey: .container)
         self.image = try c.decodeIfPresent(String.self, forKey: .image)
+        self.requests = try c.decodeIfPresent(String.self, forKey: .requests)
+        self.limits = try c.decodeIfPresent(String.self, forKey: .limits)
+        self.resourceKind = try c.decodeIfPresent(String.self, forKey: .resourceKind)
     }
 
     var systemImage: String {
@@ -50,9 +75,20 @@ struct SuggestedAction: Identifiable, Decodable {
         case .rollback:  return "arrow.uturn.backward"
         case .setEnv:    return "slider.horizontal.3"
         case .setImage:  return "shippingbox.and.arrow.backward"
+        case .setResources: return "gauge.with.dots.needle.bottom.50percent"
+        case .pause:     return "pause.circle"
+        case .resume:    return "play.circle"
         case .deletePod: return "trash"
+        case .deleteWorkload: return "trash"
         case .cordon:    return "nosign"
         case .uncordon:  return "checkmark.circle"
+        case .drain:     return "square.stack.3d.up.slash"
+        case .suspendCronJob: return "pause.circle"
+        case .resumeCronJob:  return "play.circle"
+        case .triggerCronJob: return "bolt.fill"
+        case .createNamespace: return "plus.rectangle.on.folder"
+        case .deleteNamespace: return "trash"
+        case .deleteResource:  return "trash"
         }
     }
 

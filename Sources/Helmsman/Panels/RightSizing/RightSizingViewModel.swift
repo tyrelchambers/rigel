@@ -55,6 +55,14 @@ final class RightSizingViewModel {
     private(set) var backend: MetricsBackendConfig = .local
     private(set) var contextName: String? = nil
 
+    /// Staleness guard so revisiting the tab doesn't recompute every workload
+    /// (Prometheus fires several range queries per workload). We keep the last
+    /// results and skip recompute while they're fresh for the same context+backend.
+    private static let freshness: TimeInterval = 120
+    private var lastRefreshed: Date?
+    private var lastRefreshContext: String?
+    private var lastRefreshBackend: MetricsBackendConfig?
+
     var error: String? { cache.error }
 
     /// Prometheus-compatible endpoints found in the cluster, for the picker.
@@ -72,7 +80,7 @@ final class RightSizingViewModel {
     func setBackend(_ config: MetricsBackendConfig) async {
         backend = config
         if let ctx = contextName { SessionStore.shared.setMetricsBackend(config, for: ctx) }
-        await refresh()
+        await refresh(force: true)
     }
 
     /// Cold start: workloads exist but none has enough history yet, so every row
@@ -121,7 +129,19 @@ final class RightSizingViewModel {
 
     /// Recompute every workload's right-sizing from the configured source
     /// (Prometheus when set for this context, else the local SQLite store).
-    func refresh() async {
+    ///
+    /// Skips recompute when called for the same context+backend with results
+    /// still fresh (see `freshness`); pass `force: true` for the manual refresh
+    /// button, backend switches, and post-install to bypass the guard.
+    func refresh(force: Bool = false) async {
+        if !force, !results.isEmpty,
+           lastRefreshContext == contextName,
+           lastRefreshBackend == backend,
+           let last = lastRefreshed,
+           Date().timeIntervalSince(last) < Self.freshness {
+            return
+        }
+
         isAnalyzing = true
         defer { isAnalyzing = false }
 
@@ -149,6 +169,9 @@ final class RightSizingViewModel {
             out.append(WorkloadRightSizing(kind: spec.kind, name: spec.name, namespace: spec.namespace, containers: containerResults))
         }
         results = out
+        lastRefreshed = Date()
+        lastRefreshContext = contextName
+        lastRefreshBackend = backend
     }
 
     // MARK: - Spec extraction

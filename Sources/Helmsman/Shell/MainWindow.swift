@@ -306,7 +306,7 @@ struct MainWindow: View {
                 // Pick up the newly-installed backend immediately.
                 if installed {
                     rightSizingVM.load(context: contextManager.active?.name)
-                    Task { await rightSizingVM.refresh() }
+                    Task { await rightSizingVM.refresh(force: true) }
                 }
             })
         }
@@ -601,7 +601,11 @@ struct MainWindow: View {
             deployments: cache.deployments,
             pods: cache.pods,
             nodes: cache.nodes,
-            statefulSets: cache.statefulSets
+            statefulSets: cache.statefulSets,
+            daemonSets: cache.daemonSets,
+            jobs: cache.jobs,
+            cronJobs: cache.cronJobs,
+            namespaces: cache.namespaces
         ) {
         case .action(let action):
             requestWorkload(action, fromChat: true)

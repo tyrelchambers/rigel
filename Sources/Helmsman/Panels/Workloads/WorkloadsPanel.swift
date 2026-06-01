@@ -117,7 +117,7 @@ struct WorkloadsPanel: View {
                         .contextMenu {
                             let ns = cj.metadata.namespace ?? "default"
                             Button("Trigger now…") {
-                                onWorkload(.triggerCronJob(name: cj.metadata.name, namespace: ns, jobName: manualJobName(cj.metadata.name)))
+                                onWorkload(.triggerCronJob(name: cj.metadata.name, namespace: ns, jobName: CronJob.manualRunName(for: cj.metadata.name)))
                             }
                             Button(cj.isSuspended ? "Resume…" : "Suspend…") {
                                 onWorkload(.setCronJobSuspend(name: cj.metadata.name, namespace: ns, suspend: !cj.isSuspended))
@@ -133,14 +133,6 @@ struct WorkloadsPanel: View {
             }
             .padding(.horizontal, 12).padding(.vertical, 10)
         }
-    }
-
-    /// A unique-enough manual run name; computed at the call site so the confirm
-    /// sheet preview matches what's executed.
-    private func manualJobName(_ cronName: String) -> String {
-        let stamp = Int(Date().timeIntervalSince1970) % 100000
-        let base = cronName.count > 40 ? String(cronName.prefix(40)) : cronName
-        return "\(base)-manual-\(stamp)"
     }
 }
 

@@ -45,7 +45,7 @@ struct RightSizingPanel: View {
             if viewModel.isAnalyzing {
                 ProgressView().controlSize(.small).tint(Theme.Accent.primary)
             }
-            Button { Task { await viewModel.refresh() } } label: {
+            Button { Task { await viewModel.refresh(force: true) } } label: {
                 Image(systemName: "arrow.clockwise")
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.Foreground.secondary)
@@ -284,12 +284,22 @@ private struct ContainerDetail: View {
             Text(result.rationale).font(Theme.Font.body(11)).foregroundStyle(Theme.Foreground.secondary)
 
             if result.hasSuggestion {
-                resourceLine("CPU", current: ResourceQuantity.formatCores(result.cpuRequest ?? 0) + (result.cpuRequest == nil ? " (unset)" : "") + " / " + (result.cpuLimit.map(ResourceQuantity.formatCores) ?? "unset"),
-                             suggested: ResourceQuantity.formatCores(result.suggestedCpuRequest ?? 0) + " / " + ResourceQuantity.formatCores(result.suggestedCpuLimit ?? 0),
-                             observed: "peak \(ResourceQuantity.formatCores(result.cpuPeak)) · typ \(ResourceQuantity.formatCores(result.cpuTypical))")
-                resourceLine("MEM", current: (result.memRequest.map(ResourceQuantity.formatBytes) ?? "unset") + " / " + (result.memLimit.map(ResourceQuantity.formatBytes) ?? "unset"),
-                             suggested: ResourceQuantity.formatBytes(result.suggestedMemRequest ?? 0) + " / " + ResourceQuantity.formatBytes(result.suggestedMemLimit ?? 0),
-                             observed: "peak \(ResourceQuantity.formatBytes(result.memPeak)) · typ \(ResourceQuantity.formatBytes(result.memTypical))")
+                Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 10, verticalSpacing: 5) {
+                    GridRow(alignment: .firstTextBaseline) {
+                        Color.clear.frame(width: 0, height: 0)
+                        columnHeader("current", "req / limit")
+                        Color.clear.frame(width: 0, height: 0)
+                        columnHeader("recommended", "req / limit")
+                        Text("observed").font(Theme.Font.body(8, weight: .semibold)).tracking(0.5)
+                            .foregroundStyle(Theme.Foreground.tertiary).padding(.leading, 16)
+                    }
+                    resourceRow("CPU", current: ResourceQuantity.formatCores(result.cpuRequest ?? 0) + (result.cpuRequest == nil ? " (unset)" : "") + " / " + (result.cpuLimit.map(ResourceQuantity.formatCores) ?? "unset"),
+                                suggested: ResourceQuantity.formatCores(result.suggestedCpuRequest ?? 0) + " / " + ResourceQuantity.formatCores(result.suggestedCpuLimit ?? 0),
+                                observed: "peak \(ResourceQuantity.formatCores(result.cpuPeak)) · typ \(ResourceQuantity.formatCores(result.cpuTypical))")
+                    resourceRow("MEM", current: (result.memRequest.map(ResourceQuantity.formatBytes) ?? "unset") + " / " + (result.memLimit.map(ResourceQuantity.formatBytes) ?? "unset"),
+                                suggested: ResourceQuantity.formatBytes(result.suggestedMemRequest ?? 0) + " / " + ResourceQuantity.formatBytes(result.suggestedMemLimit ?? 0),
+                                observed: "peak \(ResourceQuantity.formatBytes(result.memPeak)) · typ \(ResourceQuantity.formatBytes(result.memTypical))")
+                }
 
                 HStack(spacing: 8) {
                     Spacer()
@@ -306,14 +316,24 @@ private struct ContainerDetail: View {
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
     }
 
-    private func resourceLine(_ label: String, current: String, suggested: String, observed: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(label).font(Theme.Font.body(9, weight: .semibold)).tracking(0.5).foregroundStyle(Theme.Foreground.tertiary).frame(width: 34, alignment: .leading)
+    /// Two-line header cell sitting above the current / recommended columns.
+    private func columnHeader(_ top: String, _ bottom: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(top).font(Theme.Font.body(8, weight: .semibold)).tracking(0.5)
+            Text(bottom).font(Theme.Font.mono(8))
+        }
+        .foregroundStyle(Theme.Foreground.tertiary)
+    }
+
+    /// One dimension's row (CPU/MEM): label · current → recommended · observed.
+    /// Columns align with `columnHeader` via the enclosing Grid.
+    private func resourceRow(_ label: String, current: String, suggested: String, observed: String) -> some View {
+        GridRow(alignment: .firstTextBaseline) {
+            Text(label).font(Theme.Font.body(9, weight: .semibold)).tracking(0.5).foregroundStyle(Theme.Foreground.tertiary)
             Text(current).font(Theme.Font.mono(10)).foregroundStyle(Theme.Foreground.secondary)
             Image(systemName: "arrow.right").font(.system(size: 8)).foregroundStyle(Theme.Foreground.tertiary)
             Text(suggested).font(Theme.Font.mono(10, weight: .medium)).foregroundStyle(Theme.Accent.primary)
-            Spacer()
-            Text(observed).font(Theme.Font.mono(9)).foregroundStyle(Theme.Foreground.tertiary)
+            Text(observed).font(Theme.Font.mono(9)).foregroundStyle(Theme.Foreground.tertiary).padding(.leading, 16)
         }
     }
 
