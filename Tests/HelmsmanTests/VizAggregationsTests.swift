@@ -64,4 +64,35 @@ final class VizAggregationsTests: XCTestCase {
         XCTAssertEqual(s.reclaimableBytes, 0, accuracy: 0.001)
         XCTAssertEqual(s.workloadCount, 0)
     }
+
+    private func event(_ uid: String, warning: Bool, at: Date) -> K8sEvent {
+        K8sEvent(
+            metadata: ObjectMeta(name: uid, namespace: "default", uid: uid, creationTimestamp: at, labels: nil, annotations: nil),
+            type: warning ? "Warning" : "Normal", reason: "R", message: "m", count: 1,
+            firstTimestamp: at, lastTimestamp: at, involvedObject: nil
+        )
+    }
+
+    func test_eventBuckets_partitionsByTimeAndSeverity() {
+        let now = Date(timeIntervalSince1970: 100_000)
+        let span: TimeInterval = 4    // 4 seconds, 4 buckets of 1s each
+        let events = [
+            event("w0", warning: true,  at: now.addingTimeInterval(-3.5)), // bucket 0
+            event("n0", warning: false, at: now.addingTimeInterval(-3.1)), // bucket 0
+            event("w3", warning: true,  at: now.addingTimeInterval(-0.2)), // bucket 3
+            event("old", warning: true, at: now.addingTimeInterval(-10)),  // out of window → ignored
+        ]
+        let buckets = Viz.eventBuckets(events, now: now, span: span, count: 4)
+        XCTAssertEqual(buckets.count, 4)
+        XCTAssertEqual(buckets[0].warnings, 1)
+        XCTAssertEqual(buckets[0].normal, 1)
+        XCTAssertEqual(buckets[3].warnings, 1)
+        XCTAssertEqual(buckets[1].total, 0)
+    }
+
+    func test_eventBuckets_nowBoundaryLandsInLastBucket() {
+        let now = Date(timeIntervalSince1970: 100_000)
+        let buckets = Viz.eventBuckets([event("e", warning: true, at: now)], now: now, span: 4, count: 4)
+        XCTAssertEqual(buckets[3].warnings, 1)
+    }
 }

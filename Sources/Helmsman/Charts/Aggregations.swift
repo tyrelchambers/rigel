@@ -51,4 +51,35 @@ enum Viz {
         }
         return s
     }
+
+    // MARK: - Event timeline buckets
+
+    struct EventBucket: Equatable, Identifiable {
+        let index: Int
+        let start: Date
+        var warnings: Int
+        var normal: Int
+        var id: Int { index }
+        var total: Int { warnings + normal }
+    }
+
+    /// Partition events into `count` equal slots spanning `[now - span, now]`.
+    /// Events without a usable timestamp or outside the window are dropped; an
+    /// event exactly at `now` lands in the final bucket.
+    static func eventBuckets(_ events: [K8sEvent], now: Date, span: TimeInterval, count: Int) -> [EventBucket] {
+        precondition(count > 0 && span > 0)
+        let slot = span / Double(count)
+        let start = now.addingTimeInterval(-span)
+        var buckets = (0..<count).map {
+            EventBucket(index: $0, start: start.addingTimeInterval(Double($0) * slot), warnings: 0, normal: 0)
+        }
+        for e in events {
+            guard let when = e.when, when >= start, when <= now else { continue }
+            var idx = Int(when.timeIntervalSince(start) / slot)
+            if idx >= count { idx = count - 1 }
+            if idx < 0 { idx = 0 }
+            if e.isWarning { buckets[idx].warnings += 1 } else { buckets[idx].normal += 1 }
+        }
+        return buckets
+    }
 }
