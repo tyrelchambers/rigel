@@ -52,4 +52,34 @@ final class ChatViewModelDeltaTests: XCTestCase {
         vm.handle(.result(sessionId: "s1", costUSD: nil))
         XCTAssertNil(vm.messages.last?.thinking)
     }
+
+    func test_toolOnlyTurn_doesNotOverwritePriorTurnThinking() {
+        let vm = ChatViewModel()
+        // Turn 1: an answer that captured reasoning.
+        vm.handle(.thinkingDelta("turn 1 reasoning"))
+        vm.handle(.textDelta("Turn 1 answer"))
+        vm.handle(.result(sessionId: "s", costUSD: nil))
+        XCTAssertEqual(vm.messages[0].thinking, "turn 1 reasoning")
+
+        // Turn 2: reasoning then a tool call, NO answer text bubble.
+        vm.handle(.thinkingDelta("turn 2 reasoning"))
+        vm.handle(.toolUse(id: "t1", name: "Bash", input: ["command": "ls"]))
+        vm.handle(.result(sessionId: "s", costUSD: nil))
+
+        // Turn 1's message must be untouched; turn 2's reasoning is discarded.
+        XCTAssertEqual(vm.messages[0].thinking, "turn 1 reasoning")
+        XCTAssertEqual(vm.liveThinking, "")
+        XCTAssertFalse(vm.isThinking)
+    }
+
+    func test_result_computesThinkingSecondsFromTurnStart() {
+        let vm = ChatViewModel()
+        vm.isStreaming = true
+        vm.turnStartedAt = Date().addingTimeInterval(-3)
+        vm.handle(.thinkingDelta("Reasoning"))
+        vm.handle(.textDelta("Answer"))
+        vm.handle(.result(sessionId: "s1", costUSD: nil))
+        XCTAssertEqual(vm.messages.last?.thinking, "Reasoning")
+        XCTAssertGreaterThanOrEqual(vm.messages.last?.thinkingSeconds ?? -1, 2)
+    }
 }

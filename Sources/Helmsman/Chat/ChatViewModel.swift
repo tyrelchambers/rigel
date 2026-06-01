@@ -40,6 +40,10 @@ final class ChatViewModel {
     var isThinking: Bool = false
     /// When the active turn began, for the pane's elapsed-seconds timer.
     var turnStartedAt: Date? = nil
+    /// The assistant bubble being built in the active turn, so end-of-turn
+    /// reasoning attaches to THIS turn's answer — never a previous turn's.
+    /// Reset at turn start and turn end.
+    private var currentTurnAssistantID: UUID? = nil
     /// Model + effort the session launches with. Loaded from (and saved to)
     /// SessionStore so the choice is global and survives restarts.
     var modelConfig: ClaudeModelConfig = SessionStore.shared.modelConfig
@@ -130,6 +134,8 @@ final class ChatViewModel {
         pumpTask = nil
         Task { await session?.terminate() }
         session = nil
+        isStreaming = false
+        resetThinkingState()
     }
 
     /// Send a message into the session. `display: false` feeds it to Claude
@@ -142,9 +148,8 @@ final class ChatViewModel {
             lastUserMessage = text
         }
         isStreaming = true
+        resetThinkingState()
         turnStartedAt = Date()
-        liveThinking = ""
-        isThinking = false
         saveActiveToHistory()
         Task { [weak self] in
             do {
@@ -178,9 +183,7 @@ final class ChatViewModel {
         guard let session else { return }
         Task { await session.interrupt() }
         isStreaming = false
-        liveThinking = ""
-        isThinking = false
-        turnStartedAt = nil
+        resetThinkingState()
         messages.append(ChatMessage(role: .system, text: "⏹ Stopped by user."))
     }
 
@@ -274,8 +277,11 @@ final class ChatViewModel {
             if var last = messages.last, last.role == .assistant, last.tool == nil {
                 last.text += chunk
                 messages[messages.count - 1] = last
+                currentTurnAssistantID = last.id
             } else {
-                messages.append(ChatMessage(role: .assistant, text: chunk))
+                let bubble = ChatMessage(role: .assistant, text: chunk)
+                currentTurnAssistantID = bubble.id
+                messages.append(bubble)
             }
         case .thinkingDelta(let chunk):
             guard !chunk.isEmpty else { break }
@@ -294,7 +300,7 @@ final class ChatViewModel {
             messages.append(ChatMessage(role: .system, text: "", tool: tool))
         case .result:
             isStreaming = false
-            stampThinkingOntoLastAssistant()
+            stampThinkingOntoCurrentTurn()
             saveActiveToHistory()
         case .unknown(let raw):
             // Surface diagnostic strings (e.g. terminationHandler stderr) but skip
@@ -305,17 +311,30 @@ final class ChatViewModel {
         }
     }
 
-    /// At turn end, fold the accumulated reasoning onto the most recent assistant
+    /// Clear all per-turn reasoning state. Called at turn start, on interrupt,
+    /// and on any session teardown so a new/resumed chat starts clean.
+    private func resetThinkingState() {
+        liveThinking = ""
+        isThinking = false
+        turnStartedAt = nil
+        currentTurnAssistantID = nil
+    }
+
+    /// At turn end, fold the accumulated reasoning onto THIS turn's assistant
     /// message as a collapsible "Thought for Ns" trail, then reset live state.
-    private func stampThinkingOntoLastAssistant() {
+    /// If the turn produced no answer bubble (e.g. a tool-only turn), the
+    /// reasoning is discarded rather than mis-attached to an earlier message.
+    private func stampThinkingOntoCurrentTurn() {
         defer {
             liveThinking = ""
             isThinking = false
             turnStartedAt = nil
+            currentTurnAssistantID = nil
         }
         let trimmed = liveThinking.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty,
-              let idx = messages.lastIndex(where: { $0.role == .assistant && $0.tool == nil })
+              let id = currentTurnAssistantID,
+              let idx = messages.firstIndex(where: { $0.id == id })
         else { return }
         let seconds = turnStartedAt.map { Int(Date().timeIntervalSince($0).rounded()) } ?? 0
         messages[idx].thinking = trimmed
