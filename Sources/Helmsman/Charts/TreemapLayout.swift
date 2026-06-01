@@ -7,7 +7,7 @@ enum TreemapLayout {
     static func squarify(_ weights: [Double], in rect: CGRect) -> [CGRect] {
         var result = [CGRect](repeating: .zero, count: weights.count)
         let total = weights.reduce(0, +)
-        guard total > 0, rect.width > 0, rect.height > 0 else { return result }
+        guard total > 0, total.isFinite, rect.width > 0, rect.height > 0 else { return result }
 
         let scale = Double(rect.width * rect.height) / total
         let items = weights.enumerated()
