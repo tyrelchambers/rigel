@@ -106,7 +106,10 @@ struct ChatComposer: View {
                 return .handled
             }
             .onKeyPress(.return) {
+                // With a popover open, Enter commits the highlighted item rather
+                // than sending a half-typed "/lo" or "@po" — mirrors Tab.
                 if commandQuery != nil { commitSelectedCommand(); return .handled }
+                if mentionQuery != nil { commitSelectedMention(); return .handled }
                 return .ignored
             }
             .onKeyPress(.escape) {
