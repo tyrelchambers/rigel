@@ -6,7 +6,6 @@ import SwiftUI
 struct ThinkingPane: View {
     let thinking: String
     let startedAt: Date?
-    var onInterrupt: () -> Void = {}
 
     @State private var expanded = true
     @State private var verbIndex = 0
@@ -125,6 +124,7 @@ struct ShimmerText: View {
                     withAnimation(.linear(duration: 1.4)) { phase = 1 }
                     try? await Task.sleep(nanoseconds: 1_400_000_000)
                     phase = -1
+                    try? await Task.sleep(nanoseconds: 200_000_000)
                 }
             }
     }
