@@ -5,14 +5,12 @@ struct ConnectivityPanel: View {
     let onSelectService: (_ name: String, _ namespace: String) -> Void
     let onSelectPods: (Connectivity.Flow) -> Void
 
-    private var flows: [Connectivity.Flow] {
-        Connectivity.flows(ingresses: cache.ingresses, services: cache.services, pods: cache.pods)
-    }
-    private var external: [Connectivity.Flow] { flows.filter { $0.isExternal } }
-    private var internalFlows: [Connectivity.Flow] { flows.filter { !$0.isExternal } }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        // Resolve flows once per render, then split — the model does loops + sorts.
+        let flows = Connectivity.flows(ingresses: cache.ingresses, services: cache.services, pods: cache.pods)
+        let external = flows.filter { $0.isExternal }
+        let internalFlows = flows.filter { !$0.isExternal }
+        return VStack(alignment: .leading, spacing: 0) {
             header
             if flows.isEmpty {
                 emptyState
