@@ -167,6 +167,11 @@ actor ClaudeSession {
             "--model", config.model.cliAlias,
             "--effort", config.effort.cliLevel,
             "--append-system-prompt", systemPrompt,
+            // AskUserQuestion needs the interactive TUI to render its picker; in
+            // our headless stream-json session it can't, so it errors and the
+            // model dumps raw JSON then re-asks in prose. Disallow it so the
+            // model just asks in plain prose from the start.
+            "--disallowedTools", "AskUserQuestion",
         ]
         for pattern in allowedTools {
             args.append(contentsOf: ["--allowedTools", pattern])

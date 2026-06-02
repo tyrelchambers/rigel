@@ -41,6 +41,8 @@ final class ClaudeSessionArgsTests: XCTestCase {
         XCTAssertTrue(adjacent(args, "--model", "opus"))
         XCTAssertTrue(adjacent(args, "--effort", "high"))
         XCTAssertTrue(adjacent(args, "--append-system-prompt", "PROMPT"))
+        // AskUserQuestion can't render in our headless session — keep it disallowed.
+        XCTAssertTrue(adjacent(args, "--disallowedTools", "AskUserQuestion"))
         XCTAssertFalse(args.contains("--resume"))
         XCTAssertFalse(args.contains("--mcp-config"))
     }
