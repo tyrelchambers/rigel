@@ -37,7 +37,7 @@ struct CatalogInstallWizard: View {
                 Text("Install \(model.app.name)")
                     .font(Theme.Font.body(15, weight: .semibold))
                     .foregroundStyle(Theme.Foreground.primary)
-                StepIndicator(step: model.step)
+                StepIndicator(model: model)
             }
             Spacer()
             Button(action: onClose) {
@@ -108,18 +108,29 @@ struct CatalogInstallWizard: View {
 // MARK: - Step indicator
 
 private struct StepIndicator: View {
-    let step: WizardStep
+    @Bindable var model: CatalogInstallWizardModel
     private let order: [WizardStep] = [.configure, .generating, .review, .applying, .verifying, .done]
 
     var body: some View {
         HStack(spacing: 4) {
             ForEach(Array(order.enumerated()), id: \.offset) { _, s in
-                Text(label(for: s))
-                    .font(Theme.Font.mono(9, weight: state(of: s) == .current ? .semibold : .regular))
-                    .foregroundStyle(color(for: state(of: s)))
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(state(of: s) == .current ? Theme.Accent.primaryDim : Color.clear)
-                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                let isCurrent = stepFamily(model.step) == s
+                // Reachable = already visited. Lets the user click back/forward
+                // to any step they've been to, but no further.
+                let reachable = s.pipelineIndex <= model.farthestStepIndex
+                Button {
+                    if reachable, model.step != s { model.step = s }
+                } label: {
+                    Text(label(for: s))
+                        .font(Theme.Font.mono(9, weight: isCurrent ? .semibold : .regular))
+                        .foregroundStyle(color(isCurrent: isCurrent, reachable: reachable))
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(isCurrent ? Theme.Accent.primaryDim : Color.clear)
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                }
+                .buttonStyle(.plain)
+                .disabled(!reachable)
+                .help(reachable ? "Go to \(label(for: s))" : "Not reached yet")
                 if s != .done {
                     Text("›")
                         .font(Theme.Font.mono(9))
@@ -129,18 +140,8 @@ private struct StepIndicator: View {
         }
     }
 
-    private enum State { case past, current, future }
-
-    private func state(of s: WizardStep) -> State {
-        guard let currentIdx = order.firstIndex(of: stepFamily(step)),
-              let thisIdx = order.firstIndex(of: s) else { return .future }
-        if thisIdx < currentIdx { return .past }
-        if thisIdx == currentIdx { return .current }
-        return .future
-    }
-
-    /// Collapse `.failed(_)` onto its sibling state (after applying) for the
-    /// indicator's purposes.
+    /// Collapse `.failed(_)` onto the apply step so the indicator still shows a
+    /// sensible "current" while failed.
     private func stepFamily(_ s: WizardStep) -> WizardStep {
         if case .failed = s { return .applying }
         return s
@@ -158,12 +159,9 @@ private struct StepIndicator: View {
         }
     }
 
-    private func color(for state: State) -> Color {
-        switch state {
-        case .past:    return Theme.Foreground.secondary
-        case .current: return Theme.Accent.primary
-        case .future:  return Theme.Foreground.tertiary
-        }
+    private func color(isCurrent: Bool, reachable: Bool) -> Color {
+        if isCurrent { return Theme.Accent.primary }
+        return reachable ? Theme.Foreground.secondary : Theme.Foreground.tertiary
     }
 }
 
@@ -191,12 +189,13 @@ private struct ConfigureStep: View {
                             .inputChrome(focused: focus == .instance)
                     }
                     FieldRow(label: "Namespace") {
-                        TextField("default", text: $model.namespace)
-                            .textFieldStyle(.plain)
-                            .font(Theme.Font.mono(12))
-                            .focused($focus, equals: .namespace)
-                            .padding(.horizontal, 10).padding(.vertical, 8)
-                            .inputChrome(focused: focus == .namespace)
+                        Picker("", selection: $model.namespace) {
+                            ForEach(model.namespaceOptions, id: \.self) { Text($0).tag($0) }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .font(Theme.Font.mono(12))
+                        .tint(Theme.Foreground.primary)
                     }
                     if model.app.exposesIngress {
                         FieldRow(label: "Ingress hostname") {

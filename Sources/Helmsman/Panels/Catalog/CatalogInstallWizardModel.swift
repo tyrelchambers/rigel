@@ -9,6 +9,21 @@ enum WizardStep: Hashable {
     case verifying
     case done
     case failed(String)
+
+    /// Position in the linear install pipeline, used to track how far the user
+    /// has progressed and gate back/forward navigation. `.failed` collapses onto
+    /// the apply step it most often follows but never advances the reachable range.
+    var pipelineIndex: Int {
+        switch self {
+        case .configure:  return 0
+        case .generating: return 1
+        case .review:     return 2
+        case .applying:   return 3
+        case .failed:     return 3
+        case .verifying:  return 4
+        case .done:       return 5
+        }
+    }
 }
 
 struct WizardChatTurn: Identifiable, Hashable {
@@ -49,7 +64,17 @@ final class CatalogInstallWizardModel: Identifiable {
     let cache: ClusterCache
     let context: String?
 
-    var step: WizardStep = .configure
+    var step: WizardStep = .configure {
+        didSet {
+            // `.failed` is a side-state — don't let it inflate the reachable range.
+            if case .failed = step { return }
+            if step.pipelineIndex > farthestStepIndex { farthestStepIndex = step.pipelineIndex }
+        }
+    }
+
+    /// Highest pipeline index reached, so the step indicator can let the user
+    /// click back/forward to any step they've already visited — but no further.
+    private(set) var farthestStepIndex = 0
 
     // Configure-step fields
     var instance: String
@@ -148,6 +173,17 @@ final class CatalogInstallWizardModel: Identifiable {
            current == SelfHostDefaults.default.clusterIssuer {
             clusterIssuer = names.first!
         }
+    }
+
+    /// Namespace names for the Configure-step dropdown — the cluster's
+    /// namespaces, plus the current selection if the watch hasn't surfaced it
+    /// yet, so the picker can always represent the chosen value. Sorted.
+    var namespaceOptions: [String] {
+        var opts = cache.namespaces.map(\.metadata.name)
+            .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+        let current = namespace.trimmingCharacters(in: .whitespaces)
+        if !current.isEmpty && !opts.contains(current) { opts.insert(current, at: 0) }
+        return opts
     }
 
     /// Names of nodes the app can actually land on. Same set the node-pin
