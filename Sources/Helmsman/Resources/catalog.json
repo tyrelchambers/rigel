@@ -1463,5 +1463,39 @@
     "exposesIngress": true,
     "notes": "Proprietary (not open-source, unlike the rest of the catalog). Self-hosted is free for small teams; SSO and higher seat counts need a paid license key. Multi-service (backend api + jobs-runner + workflows + code-executor + Postgres) - installed via the official Helm chart.",
     "installPromptTemplate": "Generate a Kubernetes manifest for **Retool** ({{instance}}) on the user's k3s cluster.\n\n## App\nRetool ({{instance}}) - low-code internal-tools builder (commercial, self-hosted).\n\n## Target\n- Namespace: {{namespace}}\n- Ingress hostname: {{hostname}}\n- Node pin: {{nodeName}} (empty = no nodeSelector)\n- Notes: {{notes}}\n\n## Conventions\n- Install via the official Retool Helm chart (`retool/retool`, repo https://github.com/tryretool/retool-helm).\n- `values.yaml`: set `config.encryptionKey` and `config.jwtSecret` to `<FILL_ME_IN>` random values; `config.licenseKey` to the user's key (or the free-tier key).\n- `config.baseDomain: {{hostname}}`, and enable ingress: `ingress.enabled: true`, `ingress.className: traefik`, annotations for `cert-manager.io/cluster-issuer: {{clusterIssuer}}` + the traefik redirect-https middleware, TLS secret `{{instance}}-tls`.\n- Keep the bundled internal Postgres enabled (`postgresql.enabled: true`) with a PVC of about `{{storage}}Gi`; set its password to `<FILL_ME_IN>`.\n- Leave the default backend/jobs-runner/workflows/code-executor deployments enabled.\n- Resources: heavy - reflect the requests/limits above across the backend + workflow pods.\n\n## Output\nThis app is best installed via its official Helm chart. Reply with ONE fenced ```yaml block holding a tuned `values.yaml`, then ONE fenced ```bash block with the `helm repo add` / `helm upgrade --install -n {{namespace}}` commands. No other prose."
+  },
+  {
+    "id": "gitlab",
+    "matchImages": [
+      "gitlab/gitlab-ce",
+      "gitlab/gitlab-ee"
+    ],
+    "name": "GitLab CE",
+    "tagline": "Full DevOps platform: Git, CI/CD, registry, issues.",
+    "description": "Self-hosted GitLab Community Edition via the all-in-one Omnibus image - Git hosting, merge requests, CI/CD pipelines, a container registry, and issue tracking in a single container with bundled Postgres and Redis. Heavy; best on a node with spare CPU and 8GB+ free memory.",
+    "category": "dev-tools",
+    "iconSystemName": "arrow.triangle.branch",
+    "docsURL": "https://docs.gitlab.com/install/requirements/",
+    "repoURL": "https://gitlab.com/gitlab-org/gitlab",
+    "homepageURL": "https://about.gitlab.com",
+    "tags": [
+      "git",
+      "ci-cd",
+      "devops",
+      "scm",
+      "registry",
+      "github-alternative"
+    ],
+    "requirements": {
+      "cpuRequest": "1000m",
+      "cpuLimit": "4000m",
+      "memoryRequest": "4Gi",
+      "memoryLimit": "8Gi",
+      "storageGiB": 50
+    },
+    "persistence": true,
+    "exposesIngress": true,
+    "notes": "Heaviest single-container entry: GitLab recommends 8 vCPU / 16GB for up to 1,000 users (8GB minimum) and ~40GB+ disk. The bundled Omnibus image runs Postgres, Redis, Gitaly, Sidekiq, Puma and Nginx in one pod, so first boot takes several minutes. Single-replica only; SSH (22) is not exposed by default.",
+    "installPromptTemplate": "Generate a Kubernetes manifest for **GitLab CE** ({{instance}}) on the user's k3s cluster.\n\n## App\nGitLab Community Edition ({{instance}}) - self-hosted DevOps platform (Git hosting, CI/CD, issues, container registry) via the all-in-one Omnibus image.\n\n## Target\n- Namespace: {{namespace}}\n- Ingress hostname: {{hostname}}\n- Node pin: {{nodeName}} (empty = no nodeSelector)\n- Data PVC: {{storage}}Gi\n- Notes: {{notes}}\n\n## Conventions\n- Single Deployment, image `gitlab/gitlab-ce:17.5.1-ce.0`, 1 replica, Recreate strategy. This is heavy and slow to boot (several minutes on first start).\n- Secret `{{instance}}-secrets` (stringData) with `root-password: \"<FILL_ME_IN>\"`. Reference it as env `GITLAB_ROOT_PASSWORD` via secretKeyRef - do NOT inline the password anywhere else.\n- Env `GITLAB_OMNIBUS_CONFIG` (a multi-line block scalar) sets at least: `external_url 'https://{{hostname}}'`; `gitlab_rails['initial_root_password'] = ENV['GITLAB_ROOT_PASSWORD']`; `nginx['listen_port'] = 80`; `nginx['listen_https'] = false` (TLS terminates at traefik); `gitlab_rails['gitlab_shell_ssh_port'] = 22`. Tune for a small single-node instance: `puma['worker_processes'] = 2`, `sidekiq['max_concurrency'] = 10`, `prometheus_monitoring['enable'] = false`.\n- Ports: 80 (HTTP), 22 (SSH).\n- PVCs (default storageClass): `{{storage}}Gi` mounted at `/var/opt/gitlab` (data), plus a 1Gi PVC at `/etc/gitlab` (config).\n- Service: ClusterIP exposing 80 and 22 (SSH is not reachable from outside the cluster without a NodePort or LoadBalancer - mention in a comment but do not add one).\n- Ingress: port 80 only. `ingressClassName: traefik`. Annotations: `cert-manager.io/cluster-issuer: {{clusterIssuer}}`, `traefik.ingress.kubernetes.io/router.entrypoints: web,websecure`, `traefik.ingress.kubernetes.io/router.middlewares: {{redirectMiddleware}}`. TLS: `secretName: {{instance}}-tls`.\n- Labels: `app.kubernetes.io/name: gitlab`, `app.kubernetes.io/instance: {{instance}}`.\n- `imagePullSecrets: [{name: {{imagePullSecret}}}]`.\n- Probes (GitLab boots slowly - be generous): startupProbe `httpGet /-/health` on port 80 with `failureThreshold: 60`, `periodSeconds: 10`; readinessProbe `httpGet /-/readiness` on port 80, `initialDelaySeconds: 60`. Apply the requests/limits above.\n\n## Output\nOne fenced ```yaml block, multi-document. No prose outside the fence."
   }
 ]
