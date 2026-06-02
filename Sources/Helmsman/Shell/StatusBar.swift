@@ -1,13 +1,23 @@
 import SwiftUI
 
 struct StatusBar: View {
-    /// Read pod/node counts here (in this tiny view) rather than in MainWindow's
-    /// body, so the live pod/node watches don't re-evaluate the whole window.
+    /// Read pod/node counts, the kubectl error and the live chat state here (in
+    /// this tiny view) rather than in MainWindow's body, so the high-frequency
+    /// pod/node watches and per-token chat streaming don't re-evaluate the whole
+    /// window (and rebuild the active panel).
     let cache: ClusterCache
     let context: String?
-    let chatState: ChatState
-    let cacheError: String?
+    let chat: ChatViewModel
     var onOpenPalette: () -> Void = {}
+
+    /// Derived locally so reading `chat.isStreaming`/`messages`/`error` subscribes
+    /// this status bar, not MainWindow.
+    private var chatState: ChatState {
+        if chat.error != nil && chat.messages.contains(where: { $0.text.contains("no longer running") }) {
+            return .dead
+        }
+        return chat.isStreaming ? .streaming : .idle
+    }
 
     enum ChatState {
         case idle, streaming, dead
@@ -44,14 +54,14 @@ struct StatusBar: View {
 
             Spacer()
 
-            if cacheError != nil {
+            if let cacheError = cache.error {
                 HStack(spacing: 5) {
                     Circle().fill(Theme.Status.failed).frame(width: 5, height: 5)
                     Text("kubectl: error")
                         .font(Theme.Font.mono(10))
                         .foregroundStyle(Theme.Status.failed)
                 }
-                .help(cacheError ?? "")
+                .help(cacheError)
             } else {
                 HStack(spacing: 5) {
                     Circle().fill(Theme.Status.running).frame(width: 5, height: 5)

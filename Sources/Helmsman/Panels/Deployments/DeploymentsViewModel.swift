@@ -13,23 +13,9 @@ final class DeploymentsViewModel {
     var isLoading: Bool { cache.isLoading }
 
     var filteredDeployments: [Deployment] {
-        var base: [Deployment]
-        if let ns = cache.namespaceFilter {
-            base = cache.deployments.filter { $0.metadata.namespace == ns }
-        } else {
-            base = cache.deployments
+        cache.filtered(cache.deployments, search: search) { d, q in
+            (d.spec?.template?.spec?.containers.first?.image ?? "").localizedCaseInsensitiveContains(q)
         }
-        if !search.isEmpty {
-            let q = search.lowercased()
-            base = base.filter { d in
-                if d.metadata.name.lowercased().contains(q) { return true }
-                if (d.metadata.namespace ?? "").lowercased().contains(q) { return true }
-                if let img = d.spec?.template?.spec?.containers.first?.image,
-                   img.lowercased().contains(q) { return true }
-                return false
-            }
-        }
-        return base.sorted { $0.metadata.name.localizedStandardCompare($1.metadata.name) == .orderedAscending }
     }
 
     func pods(for deployment: Deployment) -> [Pod] {

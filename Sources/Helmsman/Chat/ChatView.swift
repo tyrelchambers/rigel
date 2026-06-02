@@ -35,12 +35,13 @@ struct ChatView: View {
 
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 10) {
+                    LazyVStack(alignment: .leading, spacing: 10) {
                         ForEach(viewModel.messages) { msg in
                             MessageBubble(message: msg, onRetry: { text in
                                 viewModel.inputText = text
                                 inputFocused = true
                             }, onSuggestedAction: onSuggestedAction, onAnswerQuestion: onAnswerQuestion)
+                            .equatable()
                             .id(msg.id)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                         }

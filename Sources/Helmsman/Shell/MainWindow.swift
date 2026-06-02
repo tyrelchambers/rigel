@@ -85,7 +85,15 @@ struct MainWindow: View {
                         if selectedPanel.isNamespaceScoped {
                             NamespaceBar(cache: cache)
                         }
-                        panelView
+                        // Heavy list/table tabs mount one tick after the switch so
+                        // navigation paints instantly; `.id` makes each tab a fresh
+                        // identity so it re-defers on every visit.
+                        DeferredView(isDeferred: selectedPanel.hasHeavyList) {
+                            panelView
+                        } placeholder: {
+                            PanelLoading()
+                        }
+                        .id(selectedPanel)
                     }
                     .frame(minWidth: 480, idealWidth: 820, maxWidth: .infinity, maxHeight: .infinity)
                     .background(Theme.Surface.primary)
@@ -113,8 +121,7 @@ struct MainWindow: View {
             StatusBar(
                 cache: cache,
                 context: contextManager.active?.name,
-                chatState: chatState,
-                cacheError: cache.error,
+                chat: chat,
                 onOpenPalette: { paletteOpen = true }
             )
         }
@@ -695,13 +702,6 @@ struct MainWindow: View {
                 }
             }
         }
-    }
-
-    private var chatState: StatusBar.ChatState {
-        if chat.error != nil && chat.messages.contains(where: { $0.text.contains("no longer running") }) {
-            return .dead
-        }
-        return chat.isStreaming ? .streaming : .idle
     }
 
     private func handleSlash(_ cmd: SlashCommand) {

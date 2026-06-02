@@ -36,6 +36,14 @@ final class ClusterCache {
 
     static let podHistoryDepth = 60
 
+    /// Monotonic counter bumped on every resource-watch change (list sync or
+    /// event). A cheap O(1) memoization key for derived views so they recompute
+    /// only when the underlying resources actually change — crucially NOT on the
+    /// 5s metrics poll, which bumps `metricsRevision` instead.
+    private(set) var dataRevision = 0
+    /// Monotonic counter bumped on every metrics poll (node + pod metrics).
+    private(set) var metricsRevision = 0
+
     var cnpgAvailable = true
     private(set) var cnpgPluginAvailable = false
     var metricsAvailable = true
@@ -89,26 +97,26 @@ final class ClusterCache {
             self.error = nil
             tasks = [
                 podsTask(c),
-                watchTask("deployments", c: c, into: \.deployments, applyEvent: applyDeployment),
-                watchTask("statefulsets", c: c, into: \.statefulSets, applyEvent: applyStatefulSet),
-                watchTask("nodes", c: c, into: \.nodes, applyEvent: applyNode),
+                genericWatch("deployments", c: c, into: \.deployments),
+                genericWatch("statefulsets", c: c, into: \.statefulSets),
+                genericWatch("nodes", c: c, into: \.nodes),
                 watchTask("events", c: c, into: \.events, applyEvent: applyEvent),
-                watchTask("secrets", c: c, into: \.secrets, applyEvent: applySecret),
-                watchTask("ingresses", c: c, into: \.ingresses, applyEvent: applyIngress),
-            watchTask("services", c: c, into: \.services, applyEvent: applyService),
-            watchTask("configmaps", c: c, into: \.configMaps, applyEvent: applyConfigMap),
-            watchTask("persistentvolumeclaims", c: c, into: \.pvcs, applyEvent: applyPVC),
-            watchTask("persistentvolumes", c: c, into: \.pvs, applyEvent: applyPV),
-            watchTask("storageclasses", c: c, into: \.storageClasses, applyEvent: applyStorageClass),
-            watchTask("jobs", c: c, into: \.jobs, applyEvent: applyJob),
-            watchTask("cronjobs", c: c, into: \.cronJobs, applyEvent: applyCronJob),
-            watchTask("daemonsets", c: c, into: \.daemonSets, applyEvent: applyDaemonSet),
-            watchTask("namespaces", c: c, into: \.namespaces, applyEvent: applyNamespace),
-            watchTask("serviceaccounts", c: c, into: \.serviceAccounts, applyEvent: applyServiceAccount),
-            watchTask("roles", c: c, into: \.roles, applyEvent: applyRole),
-            watchTask("rolebindings", c: c, into: \.roleBindings, applyEvent: applyRoleBinding),
-            watchTask("clusterroles", c: c, into: \.clusterRoles, applyEvent: applyClusterRole),
-            watchTask("clusterrolebindings", c: c, into: \.clusterRoleBindings, applyEvent: applyClusterRoleBinding),
+                genericWatch("secrets", c: c, into: \.secrets),
+                genericWatch("ingresses", c: c, into: \.ingresses),
+                genericWatch("services", c: c, into: \.services),
+                watchTask("configmaps", c: c, into: \.configMaps, applyEvent: applyConfigMap),
+                genericWatch("persistentvolumeclaims", c: c, into: \.pvcs),
+                genericWatch("persistentvolumes", c: c, into: \.pvs),
+                genericWatch("storageclasses", c: c, into: \.storageClasses),
+                genericWatch("jobs", c: c, into: \.jobs),
+                genericWatch("cronjobs", c: c, into: \.cronJobs),
+                genericWatch("daemonsets", c: c, into: \.daemonSets),
+                genericWatch("namespaces", c: c, into: \.namespaces),
+                genericWatch("serviceaccounts", c: c, into: \.serviceAccounts),
+                genericWatch("roles", c: c, into: \.roles),
+                genericWatch("rolebindings", c: c, into: \.roleBindings),
+                genericWatch("clusterroles", c: c, into: \.clusterRoles),
+                genericWatch("clusterrolebindings", c: c, into: \.clusterRoleBindings),
                 cnpgTask(c),
                 Task { [weak self] in
                     let available = await CNPGPluginProbe().isAvailable()
@@ -166,7 +174,7 @@ final class ClusterCache {
         onEvent: @escaping (WatchEvent<T>) -> Void,
         onError: @escaping (Error, _ hasConnected: Bool) -> Bool = { _, _ in true }
     ) -> Task<Void, Never> {
-        Task {
+        Task { [weak self] in
             var backoff: UInt64 = 1_000_000_000          // 1s, doubling to a 30s cap
             let maxBackoff: UInt64 = 30_000_000_000
             var hasConnected = false
@@ -174,7 +182,7 @@ final class ClusterCache {
                 do {
                     let list = try await c.getList(resource, type: T.self)
                     hasConnected = true
-                    await MainActor.run { onSync(list.items) }
+                    await MainActor.run { onSync(list.items); self?.dataRevision &+= 1 }
                 } catch {
                     if Task.isCancelled || Self.isCancellation(error) { return }
                     let connected = hasConnected
@@ -190,7 +198,7 @@ final class ClusterCache {
                 do {
                     for try await event in stream {
                         if Task.isCancelled { break }
-                        await MainActor.run { onEvent(event) }
+                        await MainActor.run { onEvent(event); self?.dataRevision &+= 1 }
                     }
                 } catch {
                     if Self.isCancellation(error) { return }
@@ -216,6 +224,23 @@ final class ClusterCache {
             resource, c: c,
             onSync: { [weak self] items in self?[keyPath: keyPath] = items },
             onEvent: applyEvent
+        )
+    }
+
+    /// Watch a resource whose only behavior is generic add/modify/delete: list
+    /// into `keyPath`, then apply each event via `applyGeneric`. Collapses the
+    /// per-type `watchTask(..., applyEvent: applyX)` line plus its boilerplate
+    /// `applyX` wrapper into one declarative call. Resources with bespoke handling
+    /// (pods, events, configmaps, cnpg) keep their dedicated tasks.
+    private func genericWatch<T: Codable & Sendable & Identifiable>(
+        _ resource: String,
+        c: KubectlClient,
+        into keyPath: ReferenceWritableKeyPath<ClusterCache, [T]>
+    ) -> Task<Void, Never> where T.ID == String {
+        reconnectingWatch(
+            resource, c: c,
+            onSync: { [weak self] items in self?[keyPath: keyPath] = items },
+            onEvent: { [weak self] event in self?.applyGeneric(event, list: keyPath) }
         )
     }
 
@@ -300,6 +325,7 @@ final class ClusterCache {
                 podMetricsHistory.removeValue(forKey: k)
             }
         }
+        metricsRevision &+= 1
 
         // Feed the right-sizing collector; persist completed hours off-main.
         let completed = metricsCollector.ingest(items) { [weak self] item in
@@ -362,6 +388,7 @@ final class ClusterCache {
                             var map: [String: NodeMetrics] = [:]
                             for m in list.items { map[m.metadata.name] = m }
                             self.nodeMetrics = map
+                            self.metricsRevision &+= 1
                         } else {
                             self.metricsAvailable = false
                         }
@@ -443,32 +470,12 @@ final class ClusterCache {
         }
     }
 
-    private func applyDeployment(_ event: WatchEvent<Deployment>) {
-        applyGeneric(event, list: \.deployments)
-    }
-    private func applyStatefulSet(_ event: WatchEvent<StatefulSet>) {
-        applyGeneric(event, list: \.statefulSets)
-    }
-    private func applyNode(_ event: WatchEvent<Node>) {
-        applyGeneric(event, list: \.nodes)
-    }
     private func applyCNPG(_ event: WatchEvent<CNPGCluster>) {
         applyGeneric(event, list: \.cnpgClusters)
     }
     private func applyScheduledBackup(_ event: WatchEvent<CNPGScheduledBackup>) {
         applyGeneric(event, list: \.scheduledBackups)
     }
-    private func applySecret(_ event: WatchEvent<Secret>) {
-        applyGeneric(event, list: \.secrets)
-    }
-    private func applyIngress(_ event: WatchEvent<Ingress>) {
-        applyGeneric(event, list: \.ingresses)
-    }
-
-    private func applyService(_ event: WatchEvent<Service>) {
-        applyGeneric(event, list: \.services)
-    }
-
     private func applyConfigMap(_ event: WatchEvent<ConfigMap>) {
         applyGeneric(event, list: \.configMaps)
         if event.type == .added || event.type == .modified {
@@ -506,54 +513,6 @@ final class ClusterCache {
                 id: "assistant-\(e.fingerprint)-\(e.at)"
             )
         }
-    }
-
-    private func applyPVC(_ event: WatchEvent<PersistentVolumeClaim>) {
-        applyGeneric(event, list: \.pvcs)
-    }
-
-    private func applyPV(_ event: WatchEvent<PersistentVolume>) {
-        applyGeneric(event, list: \.pvs)
-    }
-
-    private func applyStorageClass(_ event: WatchEvent<StorageClass>) {
-        applyGeneric(event, list: \.storageClasses)
-    }
-
-    private func applyJob(_ event: WatchEvent<Job>) {
-        applyGeneric(event, list: \.jobs)
-    }
-
-    private func applyCronJob(_ event: WatchEvent<CronJob>) {
-        applyGeneric(event, list: \.cronJobs)
-    }
-
-    private func applyDaemonSet(_ event: WatchEvent<DaemonSet>) {
-        applyGeneric(event, list: \.daemonSets)
-    }
-
-    private func applyNamespace(_ event: WatchEvent<Namespace>) {
-        applyGeneric(event, list: \.namespaces)
-    }
-
-    private func applyServiceAccount(_ event: WatchEvent<ServiceAccount>) {
-        applyGeneric(event, list: \.serviceAccounts)
-    }
-
-    private func applyRole(_ event: WatchEvent<Role>) {
-        applyGeneric(event, list: \.roles)
-    }
-
-    private func applyRoleBinding(_ event: WatchEvent<RoleBinding>) {
-        applyGeneric(event, list: \.roleBindings)
-    }
-
-    private func applyClusterRole(_ event: WatchEvent<ClusterRole>) {
-        applyGeneric(event, list: \.clusterRoles)
-    }
-
-    private func applyClusterRoleBinding(_ event: WatchEvent<ClusterRoleBinding>) {
-        applyGeneric(event, list: \.clusterRoleBindings)
     }
 
     private func applyGeneric<T>(_ event: WatchEvent<T>, list keyPath: ReferenceWritableKeyPath<ClusterCache, [T]>) where T: Codable & Identifiable, T.ID == String {

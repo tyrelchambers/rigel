@@ -11,9 +11,13 @@ struct MessageBubble: View {
     var onAnswerQuestion: (String) -> Void = { _ in }
     @State private var thoughtExpanded = false
 
+    private typealias Parsed = (display: String, actions: [SuggestedAction], questions: [ClarifyingQuestion])
+
     /// For assistant messages, split prose from any ```action / ```question
-    /// button blocks. User/system messages render verbatim.
-    private var parsed: (display: String, actions: [SuggestedAction], questions: [ClarifyingQuestion]) {
+    /// button blocks. User/system messages render verbatim. Computed once per
+    /// body evaluation and threaded through — `SuggestedAction.parse` scans the
+    /// whole message, so re-running it several times per render adds up.
+    private var parsed: Parsed {
         guard message.role == .assistant else { return (message.text, [], []) }
         return SuggestedAction.parse(from: message.text)
     }
@@ -22,7 +26,8 @@ struct MessageBubble: View {
         if let tool = message.tool {
             ToolCard(tool: tool)
         } else {
-            textBubble
+            let parsed = self.parsed
+            textBubble(parsed)
                 .contextMenu {
                     Button("Copy") {
                         NSPasteboard.general.clearContents()
@@ -35,7 +40,7 @@ struct MessageBubble: View {
         }
     }
 
-    private var textBubble: some View {
+    private func textBubble(_ parsed: Parsed) -> some View {
         HStack(alignment: .top, spacing: 8) {
             roleIcon
             VStack(alignment: .leading, spacing: 4) {
@@ -45,7 +50,7 @@ struct MessageBubble: View {
                     .textCase(.uppercase)
                     .tracking(0.5)
                 thoughtTrail
-                content
+                content(parsed)
                 if !parsed.questions.isEmpty {
                     ForEach(parsed.questions) { question in
                         ClarifyingQuestionView(question: question, onAnswer: onAnswerQuestion)
@@ -68,7 +73,7 @@ struct MessageBubble: View {
         }
     }
 
-    @ViewBuilder private var content: some View {
+    @ViewBuilder private func content(_ parsed: Parsed) -> some View {
         switch message.role {
         case .assistant:
             if !parsed.display.isEmpty {
@@ -166,6 +171,18 @@ struct MessageBubble: View {
         case .assistant: return Theme.Accent.primary.opacity(0.2)
         case .system:    return Theme.Border.subtle
         }
+    }
+}
+
+extension MessageBubble: Equatable {
+    /// Re-render a bubble only when its message value actually changes. During
+    /// streaming the array is reassigned every token, which would otherwise
+    /// re-run `body` (re-parsing markdown + action blocks) for the WHOLE
+    /// transcript; with this, only the growing last bubble re-renders. The
+    /// callbacks are intentionally excluded — they forward to stable handlers,
+    /// so comparing `message` alone is correct. Used via `.equatable()` in ChatView.
+    static func == (lhs: MessageBubble, rhs: MessageBubble) -> Bool {
+        lhs.message == rhs.message
     }
 }
 
