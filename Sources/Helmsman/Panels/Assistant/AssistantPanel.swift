@@ -1,4 +1,5 @@
 import SwiftUI
+import MarkdownUI
 
 struct AssistantPanel: View {
     @Bindable var viewModel: AssistantViewModel
@@ -389,6 +390,10 @@ struct AssistantPanel: View {
                     }
                     Text(e.tier.uppercased()).font(Theme.Font.mono(9, weight: .medium)).foregroundStyle(Theme.Foreground.tertiary)
                     Text(relative(e.at)).font(Theme.Font.mono(10)).foregroundStyle(Theme.Foreground.tertiary)
+                        .help(absolute(e.at))
+                }
+                if expanded {
+                    Text(absolute(e.at)).font(Theme.Font.mono(9)).foregroundStyle(Theme.Foreground.tertiary)
                 }
                 if let p = e.proposal {
                     Text(p).font(Theme.Font.body(12)).foregroundStyle(Theme.Foreground.secondary)
@@ -397,13 +402,17 @@ struct AssistantPanel: View {
                     Text(c).font(Theme.Font.mono(10)).foregroundStyle(Theme.Foreground.tertiary).textSelection(.enabled)
                 }
                 if !e.detail.isEmpty {
-                    Text(e.detail).font(Theme.Font.mono(10)).foregroundStyle(Theme.Foreground.tertiary)
-                        .lineLimit(expanded ? nil : 3).textSelection(.enabled)
+                    if expanded {
+                        Markdown(e.detail).markdownTheme(.claudeK8s).textSelection(.enabled)
+                    } else {
+                        Text(e.detail).font(Theme.Font.mono(10)).foregroundStyle(Theme.Foreground.tertiary)
+                            .lineLimit(3).textSelection(.enabled)
+                    }
                 }
                 if expanded, let analysis = e.analysis, !analysis.isEmpty {
                     Divider().background(Theme.Border.subtle)
-                    Text("Claude's analysis").font(Theme.Font.mono(9, weight: .medium)).foregroundStyle(Theme.Foreground.tertiary)
-                    Text(analysis).font(Theme.Font.body(11)).foregroundStyle(Theme.Foreground.secondary).textSelection(.enabled)
+                    Text("Helmsman's analysis").font(Theme.Font.mono(9, weight: .medium)).foregroundStyle(Theme.Foreground.tertiary)
+                    Markdown(analysis).markdownTheme(.claudeK8s).textSelection(.enabled)
                 }
                 if let ref = e.backupRef, let yaml = viewModel.backupYAML(ref: ref) {
                     Button {
@@ -688,13 +697,33 @@ struct AssistantPanel: View {
     }
 
     /// Compact relative time from an ISO-8601 string.
-    private func relative(_ iso: String) -> String {
+    /// Parse the agent's ISO timestamps, tolerating fractional seconds (e.g.
+    /// `…:00.123Z`) — the default `ISO8601DateFormatter` rejects those and would
+    /// otherwise leave every activity's time blank.
+    private func parseISO(_ iso: String) -> Date? {
         let f = ISO8601DateFormatter()
-        guard let date = f.date(from: iso) else { return "" }
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = f.date(from: iso) { return d }
+        f.formatOptions = [.withInternetDateTime]
+        return f.date(from: iso)
+    }
+
+    private func relative(_ iso: String) -> String {
+        guard let date = parseISO(iso) else { return "" }
         let dt = Date().timeIntervalSince(date)
         if dt < 60 { return "\(Int(max(0, dt)))s" }
         if dt < 3600 { return "\(Int(dt / 60))m" }
         if dt < 86400 { return "\(Int(dt / 3600))h" }
         return "\(Int(dt / 86400))d"
+    }
+
+    /// Absolute local date + time, shown as a tooltip and in the expanded row so
+    /// you can see exactly when an activity occurred (not just "5m ago").
+    private func absolute(_ iso: String) -> String {
+        guard let date = parseISO(iso) else { return iso }
+        let df = DateFormatter()
+        df.dateStyle = .medium
+        df.timeStyle = .short
+        return df.string(from: date)
     }
 }
