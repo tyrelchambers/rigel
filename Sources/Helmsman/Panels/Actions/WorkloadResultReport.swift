@@ -37,6 +37,37 @@ enum WorkloadResultReport {
         }
     }
 
+    /// Single report for a queue of actions run back-to-back, so the assistant
+    /// reacts once at the end instead of after every action. `skipped` lists
+    /// queued actions that never ran because an earlier one failed.
+    static func batchFeedback(
+        ran: [(action: WorkloadAction, result: WorkloadCommander.Result)],
+        skipped: [WorkloadAction],
+        context: String?
+    ) -> String {
+        var lines: [String] = ["[Helmsman ran a queue of actions you proposed — the user approved and ran them together.]", ""]
+        for (action, result) in ran {
+            let cmd = action.previewCommand(context: context)
+            if result.ok {
+                let out = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+                lines.append("• success: \(cmd)\n  output: \(clip(out, fallback: "(no output)"))")
+            } else {
+                let err = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+                lines.append("• FAILED (exit \(result.exitCode)): \(cmd)\n  error: \(clip(err, fallback: "(no stderr)"))")
+            }
+        }
+        if !skipped.isEmpty {
+            lines.append("")
+            lines.append("Stopped after a failure — these queued actions were NOT run:")
+            for a in skipped { lines.append("• \(a.previewCommand(context: context))") }
+        }
+        lines.append("")
+        lines.append(ran.contains { !$0.result.ok }
+            ? "Diagnose the failure and propose a corrected next step for the remaining work."
+            : "Continue the task: confirm completion briefly, or proceed with the next step.")
+        return lines.joined(separator: "\n")
+    }
+
     private static func clip(_ s: String, fallback: String) -> String {
         if s.isEmpty { return fallback }
         return s.count > maxBody ? String(s.prefix(maxBody)) + "\n…(truncated)" : s

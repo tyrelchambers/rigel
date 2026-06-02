@@ -6,6 +6,9 @@ struct MessageBubble: View {
     let message: ChatMessage
     var onRetry: ((String) -> Void)? = nil
     var onSuggestedAction: (SuggestedAction) -> Void = { _ in }
+    /// Fired with the selected actions when the user runs a batch ("Run
+    /// selected") from a message carrying multiple action buttons.
+    var onRunActions: ([SuggestedAction]) -> Void = { _ in }
     /// Fired with the chosen answer text when the user taps a clarifying-question
     /// option — sent back to Claude as the next message.
     var onAnswerQuestion: (String) -> Void = { _ in }
@@ -58,7 +61,7 @@ struct MessageBubble: View {
                     }
                 }
                 if !parsed.actions.isEmpty {
-                    SuggestedActionList(actions: parsed.actions, onTap: onSuggestedAction)
+                    SuggestedActionList(actions: parsed.actions, onTap: onSuggestedAction, onRunBatch: onRunActions)
                         .padding(.top, 4)
                 }
             }
@@ -191,38 +194,111 @@ extension MessageBubble: Equatable {
 struct SuggestedActionList: View {
     let actions: [SuggestedAction]
     let onTap: (SuggestedAction) -> Void
+    /// Run several actions back-to-back. Only surfaced when there are 2+.
+    var onRunBatch: ([SuggestedAction]) -> Void = { _ in }
+
+    /// IDs the user has unchecked. Default (empty) = everything selected, so a
+    /// freshly-rendered multi-action message is ready to "Run selected (all)".
+    @State private var deselected: Set<UUID> = []
+
+    private var isMulti: Bool { actions.count > 1 }
+    private func isSelected(_ a: SuggestedAction) -> Bool { !deselected.contains(a.id) }
+    private var selectedActions: [SuggestedAction] { actions.filter(isSelected) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             ForEach(actions) { action in
-                Button {
-                    onTap(action)
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: action.systemImage)
-                            .font(.system(size: 11, weight: .semibold))
-                        Text(action.label)
-                            .font(Theme.Font.body(12, weight: .semibold))
-                            .multilineTextAlignment(.leading)
-                        Spacer(minLength: 4)
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 9, weight: .semibold))
-                            .opacity(0.6)
-                    }
-                    .foregroundStyle(Theme.Accent.primary)
-                    .padding(.horizontal, 10).padding(.vertical, 7)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Theme.Accent.primaryDim)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: Theme.Radius.sm)
-                            .strokeBorder(Theme.Accent.primary.opacity(0.4), lineWidth: 1)
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
-                }
-                .buttonStyle(.plain)
-                .help("Review and run — \(action.label)")
+                row(action)
+            }
+            if isMulti {
+                batchBar
             }
         }
+    }
+
+    private func row(_ action: SuggestedAction) -> some View {
+        HStack(spacing: 6) {
+            // Batch-selection checkbox (only meaningful with 2+ actions).
+            if isMulti {
+                Button {
+                    if deselected.contains(action.id) { deselected.remove(action.id) }
+                    else { deselected.insert(action.id) }
+                } label: {
+                    Image(systemName: isSelected(action) ? "checkmark.square.fill" : "square")
+                        .font(.system(size: 13))
+                        .foregroundStyle(isSelected(action) ? Theme.Accent.primary : Theme.Foreground.tertiary)
+                }
+                .buttonStyle(.plain)
+                .help(isSelected(action) ? "Deselect from batch" : "Select for batch")
+            }
+
+            // The action itself — tapping runs just this one (today's behavior).
+            Button {
+                onTap(action)
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: action.systemImage)
+                        .font(.system(size: 11, weight: .semibold))
+                    Text(action.label)
+                        .font(Theme.Font.body(12, weight: .semibold))
+                        .multilineTextAlignment(.leading)
+                    Spacer(minLength: 4)
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .opacity(0.6)
+                }
+                .foregroundStyle(Theme.Accent.primary)
+                .padding(.horizontal, 10).padding(.vertical, 7)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.Accent.primaryDim)
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.Radius.sm)
+                        .strokeBorder(Theme.Accent.primary.opacity(0.4), lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+            }
+            .buttonStyle(.plain)
+            .help("Review and run — \(action.label)")
+        }
+    }
+
+    private var batchBar: some View {
+        HStack(spacing: 8) {
+            Button { deselected = Set(actions.map(\.id)) } label: {
+                Text("None").font(Theme.Font.body(11, weight: .medium))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Theme.Foreground.tertiary)
+            .disabled(selectedActions.isEmpty)
+
+            Button { deselected.removeAll() } label: {
+                Text("All").font(Theme.Font.body(11, weight: .medium))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Theme.Foreground.tertiary)
+            .disabled(deselected.isEmpty)
+
+            Spacer()
+
+            Button {
+                onRunBatch(selectedActions)
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "play.fill").font(.system(size: 9, weight: .semibold))
+                    Text("Run selected (\(selectedActions.count))")
+                        .font(Theme.Font.body(12, weight: .semibold))
+                }
+                .foregroundStyle(Theme.Foreground.inverse)
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(selectedActions.isEmpty ? Theme.Foreground.tertiary : Theme.Accent.primary)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                .opacity(selectedActions.isEmpty ? 0.5 : 1)
+            }
+            .buttonStyle(.plain)
+            .disabled(selectedActions.isEmpty)
+            .help("Run the selected actions in order, stopping at the first failure")
+        }
+        .padding(.top, 2)
     }
 }
 

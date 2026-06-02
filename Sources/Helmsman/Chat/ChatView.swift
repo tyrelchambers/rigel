@@ -13,8 +13,10 @@ struct ChatView: View {
     var mentionCandidates: () -> [MentionCandidate] = { [] }
     var onNewChat: () -> Void = {}
     var onOpenHistory: () -> Void = {}
-    /// Fired when the user taps an action button Claude suggested in a message.
+    /// Fired when the user taps an action button the assistant suggested in a message.
     var onSuggestedAction: (SuggestedAction) -> Void = { _ in }
+    /// Fired with the selected actions when the user runs a batch ("Run selected").
+    var onRunActions: ([SuggestedAction]) -> Void = { _ in }
     /// Fired with the chosen answer when the user taps a clarifying-question option.
     var onAnswerQuestion: (String) -> Void = { _ in }
 
@@ -40,7 +42,7 @@ struct ChatView: View {
                             MessageBubble(message: msg, onRetry: { text in
                                 viewModel.inputText = text
                                 inputFocused = true
-                            }, onSuggestedAction: onSuggestedAction, onAnswerQuestion: onAnswerQuestion)
+                            }, onSuggestedAction: onSuggestedAction, onRunActions: onRunActions, onAnswerQuestion: onAnswerQuestion)
                             .equatable()
                             .id(msg.id)
                             .transition(.move(edge: .bottom).combined(with: .opacity))

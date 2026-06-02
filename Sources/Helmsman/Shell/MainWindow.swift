@@ -31,6 +31,8 @@ struct MainWindow: View {
     /// True when the pending action came from a Claude chat suggestion — its
     /// result is fed back into the session so Claude can continue the task.
     @State private var pendingActionFromChat = false
+    /// A queue of chat-suggested actions awaiting one combined confirm + run.
+    @State private var pendingBatch: BatchActions?
     @State private var yamlTarget: YAMLTarget?
     @State private var historyOpen = false
     @State private var manageSecret: Secret?
@@ -112,6 +114,7 @@ struct MainWindow: View {
                         onNewChat: { chat.startNewChat(clusterContext: contextManager.active?.name) },
                         onOpenHistory: { historyOpen = true },
                         onSuggestedAction: runSuggestedAction,
+                        onRunActions: runSuggestedActionBatch,
                         onAnswerQuestion: { chat.send($0) }
                     )
                     .frame(minWidth: 260, idealWidth: 340, maxWidth: 480, maxHeight: .infinity)
@@ -378,6 +381,17 @@ struct MainWindow: View {
                 onCancel: { pendingWorkloadAction = nil }
             )
         }
+        .sheet(item: $pendingBatch) { batch in
+            BatchActionConfirmSheet(
+                actions: batch.actions,
+                contextName: contextManager.active?.name,
+                onApprove: {
+                    pendingBatch = nil
+                    executeBatch(batch.actions)
+                },
+                onCancel: { pendingBatch = nil }
+            )
+        }
         .sheet(isPresented: $paletteOpen) {
             CommandPalette(
                 isPresented: $paletteOpen,
@@ -640,10 +654,10 @@ struct MainWindow: View {
         pendingWorkloadAction = action
     }
 
-    /// Turn a chat-suggested action into a confirmed kubectl mutation: resolve
-    /// the named resource against the live cache, then open the confirm sheet.
-    /// On a miss, tell the user in-chat rather than failing silently.
-    private func runSuggestedAction(_ suggestion: SuggestedAction) {
+    /// Resolve a chat-suggested action against the live cache, surfacing a
+    /// system message (and returning nil) on a miss. Shared by the single-tap
+    /// and batch paths.
+    private func resolveSuggestion(_ suggestion: SuggestedAction) -> WorkloadAction? {
         switch SuggestedActionResolver.resolve(
             suggestion,
             deployments: cache.deployments,
@@ -656,9 +670,58 @@ struct MainWindow: View {
             namespaces: cache.namespaces
         ) {
         case .action(let action):
-            requestWorkload(action, fromChat: true)
+            return action
         case .unresolved(let reason):
             chat.appendSystem("⚠︎ Couldn't run “\(suggestion.label)”: \(reason).")
+            return nil
+        }
+    }
+
+    /// Turn a single chat-suggested action into a confirmed kubectl mutation:
+    /// resolve it, then open the confirm sheet.
+    private func runSuggestedAction(_ suggestion: SuggestedAction) {
+        if let action = resolveSuggestion(suggestion) {
+            requestWorkload(action, fromChat: true)
+        }
+    }
+
+    /// Queue several chat-suggested actions for one combined confirm + run.
+    /// Unresolvable ones are reported and dropped; if none resolve, nothing opens.
+    private func runSuggestedActionBatch(_ suggestions: [SuggestedAction]) {
+        let actions = suggestions.compactMap(resolveSuggestion)
+        guard !actions.isEmpty else { return }
+        pendingBatch = BatchActions(actions: actions)
+    }
+
+    /// Run a confirmed queue sequentially, stopping at the first failure, then
+    /// report all outcomes back to the session in ONE message so the assistant
+    /// reacts once instead of after every action.
+    private func executeBatch(_ actions: [WorkloadAction]) {
+        let ctx = contextManager.active?.name
+        Task {
+            var ran: [(action: WorkloadAction, result: WorkloadCommander.Result)] = []
+            var stoppedAt: Int? = nil
+            for (idx, action) in actions.enumerated() {
+                await MainActor.run { chat.appendSystem("▶︎ \(action.previewCommand(context: ctx))") }
+                let result = await WorkloadCommander(context: ctx).run(action)
+                await MainActor.run {
+                    if result.ok {
+                        let body = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+                        chat.appendSystem("✓ \(action.title) — \(body.isEmpty ? "ok" : body.prefix(400).description)")
+                    } else {
+                        chat.appendSystem("✗ \(action.title) failed (exit \(result.exitCode)):\n\(result.stderr.prefix(400))")
+                    }
+                }
+                ran.append((action, result))
+                if !result.ok { stoppedAt = idx + 1; break }
+            }
+            let skipped = stoppedAt.map { Array(actions[$0...]) } ?? []
+            await MainActor.run {
+                chat.send(
+                    WorkloadResultReport.batchFeedback(ran: ran, skipped: skipped, context: ctx),
+                    display: false
+                )
+            }
         }
     }
 
