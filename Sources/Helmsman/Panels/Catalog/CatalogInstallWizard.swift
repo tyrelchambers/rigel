@@ -62,6 +62,8 @@ struct CatalogInstallWizard: View {
             ConfigureStep(model: model)
         case .generating:
             GeneratingStep(model: model)
+        case .secrets:
+            SecretsStep(model: model)
         case .review:
             ReviewStep(model: model)
         case .applying:
@@ -89,6 +91,10 @@ struct CatalogInstallWizard: View {
             case .generating:
                 // Footer controls live inside the step (chat strip + use-this-manifest).
                 EmptyView()
+            case .secrets:
+                TertiaryButton(label: "Back to Claude", action: { model.step = .generating })
+                PrimaryButton(label: "Continue", systemImage: "arrow.right", action: model.advanceFromSecrets)
+                    .disabled(!model.canAdvanceFromSecrets)
             case .review:
                 TertiaryButton(label: "Back to Claude", action: { model.step = .generating })
                 PrimaryButton(label: "Apply to cluster", systemImage: "arrow.down.app.fill", action: model.advanceFromReview)
@@ -109,7 +115,7 @@ struct CatalogInstallWizard: View {
 
 private struct StepIndicator: View {
     @Bindable var model: CatalogInstallWizardModel
-    private let order: [WizardStep] = [.configure, .generating, .review, .applying, .verifying, .done]
+    private let order: [WizardStep] = [.configure, .generating, .secrets, .review, .applying, .verifying, .done]
 
     var body: some View {
         HStack(spacing: 4) {
@@ -151,6 +157,7 @@ private struct StepIndicator: View {
         switch s {
         case .configure:  return "configure"
         case .generating: return "generate"
+        case .secrets:    return "secrets"
         case .review:     return "review"
         case .applying:   return "apply"
         case .verifying:  return "verify"
@@ -398,6 +405,128 @@ private struct ReviewStep: View {
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
         }
         .padding(20)
+    }
+}
+
+// MARK: - Secrets step
+
+private struct SecretsStep: View {
+    @Bindable var model: CatalogInstallWizardModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Text("Secrets")
+                    .font(Theme.Font.body(14, weight: .semibold))
+                    .foregroundStyle(Theme.Foreground.primary)
+                Spacer()
+                Text("\(model.effectiveSecretName) · \(model.namespace)")
+                    .font(Theme.Font.mono(10))
+                    .foregroundStyle(Theme.Foreground.tertiary)
+            }
+
+            banner
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(model.secretSchema) { spec in
+                        SecretFieldRow(spec: spec, model: model)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .padding(20)
+    }
+
+    @ViewBuilder private var banner: some View {
+        switch model.secretNameNote {
+        case .fresh:
+            EmptyView()
+        case .reusing:
+            noteText("Updating the existing secret for this install.", systemImage: "arrow.triangle.2.circlepath")
+        case .suffixed(let requested):
+            noteText("\(requested) is already in use by another resource — creating \(model.effectiveSecretName) instead.",
+                     systemImage: "exclamationmark.triangle")
+        }
+    }
+
+    private func noteText(_ text: String, systemImage: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: systemImage).font(.system(size: 11))
+            Text(text).font(Theme.Font.body(11))
+        }
+        .foregroundStyle(Theme.Foreground.secondary)
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.Surface.sunken)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+    }
+}
+
+private struct SecretFieldRow: View {
+    let spec: SecretFieldSpec
+    @Bindable var model: CatalogInstallWizardModel
+    @State private var revealed = false
+
+    private var binding: Binding<String> {
+        Binding(
+            get: { model.secretValues[spec.key] ?? "" },
+            set: { model.secretValues[spec.key] = $0 }
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Text(spec.label)
+                    .font(Theme.Font.body(12, weight: .semibold))
+                    .foregroundStyle(Theme.Foreground.primary)
+                Text(spec.kind == .random ? "generated" : (spec.required ? "required" : "optional"))
+                    .font(Theme.Font.mono(9))
+                    .foregroundStyle(Theme.Foreground.tertiary)
+                Spacer()
+            }
+            if let desc = spec.description, !desc.isEmpty {
+                Text(desc)
+                    .font(Theme.Font.body(11))
+                    .foregroundStyle(Theme.Foreground.secondary)
+            }
+            HStack(spacing: 8) {
+                Group {
+                    if revealed {
+                        TextField(spec.kind == .user ? "Enter value" : "", text: binding)
+                    } else {
+                        SecureField(spec.kind == .user ? "Enter value" : "", text: binding)
+                    }
+                }
+                .textFieldStyle(.plain)
+                .font(Theme.Font.mono(12))
+                .padding(.horizontal, 10).padding(.vertical, 7)
+                .background(Theme.Surface.field)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(Theme.Border.subtle, lineWidth: 1))
+
+                Button { revealed.toggle() } label: {
+                    Image(systemName: revealed ? "eye.slash" : "eye")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.Foreground.tertiary)
+                }
+                .buttonStyle(.plain)
+                .help(revealed ? "Hide" : "Reveal")
+
+                if spec.kind == .random {
+                    Button { model.regenerateSecret(spec.key) } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.Foreground.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Regenerate")
+                }
+            }
+        }
     }
 }
 
