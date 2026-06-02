@@ -42,4 +42,22 @@ final class WorkloadActionCNPGTests: XCTestCase {
         XCTAssertTrue(a.isHighRisk)
         XCTAssertTrue(a.needsAcknowledge)
     }
+
+    func test_command_runsLiteralArgs_titleIsLabel() {
+        let a = WorkloadAction.command(args: ["cnpg", "destroy", "pg", "pg-1", "-n", "default"], label: "Destroy pg-1", destructive: true)
+        XCTAssertEqual(a.kubectlInvocations(), [.args(["cnpg", "destroy", "pg", "pg-1", "-n", "default"])])
+        XCTAssertEqual(a.title, "Destroy pg-1")
+    }
+
+    func test_destructiveCommand_isHighRiskAndNeedsAcknowledge() {
+        let a = WorkloadAction.command(args: ["delete", "ns", "x"], label: "Delete ns x", destructive: true)
+        XCTAssertTrue(a.isHighRisk)
+        XCTAssertTrue(a.needsAcknowledge)
+    }
+
+    func test_nonDestructiveCommand_isNeutral() {
+        let a = WorkloadAction.command(args: ["rollout", "restart", "deploy/x", "-n", "default"], label: "Restart x", destructive: false)
+        XCTAssertFalse(a.isHighRisk)
+        XCTAssertFalse(a.needsAcknowledge)
+    }
 }

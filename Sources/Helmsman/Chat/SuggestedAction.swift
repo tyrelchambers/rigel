@@ -14,6 +14,9 @@ struct SuggestedAction: Identifiable, Decodable {
         case suspendCronJob, resumeCronJob, triggerCronJob
         case createNamespace, deleteNamespace
         case deleteResource
+        /// Escape hatch: run a literal `kubectl` command (incl. plugins like
+        /// `cnpg`) the typed kinds above don't model. Carries `args`.
+        case command
     }
 
     let id: UUID
@@ -41,12 +44,20 @@ struct SuggestedAction: Identifiable, Decodable {
     /// kubectl resource kind for `deleteResource`, e.g. "service", "configmap",
     /// "secret", "pvc", "pv", "ingress", "clusterrole".
     var resourceKind: String?
+    /// Literal `kubectl` arguments for the generic `command` kind — without the
+    /// `kubectl` binary or `--context` (the app prepends both). e.g.
+    /// `["cnpg", "destroy", "pg", "pg-1", "-n", "default"]`.
+    var args: [String]?
+    /// `command` only: Claude's destructiveness hint. The app also infers this
+    /// from destructive verbs in `args` and takes the stricter of the two, so a
+    /// `false` here can never downgrade an obviously destructive command.
+    var destructive: Bool?
 
     /// The target name, preferring the generic `name` over the `deployment` alias.
     var target: String? { name ?? deployment }
 
     private enum CodingKeys: String, CodingKey {
-        case label, kind, name, deployment, pod, node, namespace, replicas, env, container, image, requests, limits, resourceKind
+        case label, kind, name, deployment, pod, node, namespace, replicas, env, container, image, requests, limits, resourceKind, args, destructive
     }
 
     init(from decoder: Decoder) throws {
@@ -66,6 +77,8 @@ struct SuggestedAction: Identifiable, Decodable {
         self.requests = try c.decodeIfPresent(String.self, forKey: .requests)
         self.limits = try c.decodeIfPresent(String.self, forKey: .limits)
         self.resourceKind = try c.decodeIfPresent(String.self, forKey: .resourceKind)
+        self.args = try c.decodeIfPresent([String].self, forKey: .args)
+        self.destructive = try c.decodeIfPresent(Bool.self, forKey: .destructive)
     }
 
     var systemImage: String {
@@ -89,6 +102,7 @@ struct SuggestedAction: Identifiable, Decodable {
         case .createNamespace: return "plus.rectangle.on.folder"
         case .deleteNamespace: return "trash"
         case .deleteResource:  return "trash"
+        case .command:         return "terminal"
         }
     }
 

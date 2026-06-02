@@ -84,6 +84,11 @@ enum WorkloadAction: Identifiable {
     case cnpgHibernate(cluster: String, namespace: String, on: Bool)
     /// CNPG: scale instances by patching `spec.instances` (pure kubectl).
     case scaleCNPG(cluster: String, namespace: String, current: Int, to: Int)
+    /// Generic escape hatch: run a literal `kubectl` command Claude proposed in
+    /// chat that the typed cases don't model (e.g. `cnpg destroy`). `args` are the
+    /// kubectl arguments only — the commander prepends `kubectl` + `--context`.
+    /// `destructive` drives the red confirm + acknowledge gate.
+    case command(args: [String], label: String, destructive: Bool)
 
     var id: String {
         switch self {
@@ -123,6 +128,7 @@ enum WorkloadAction: Identifiable {
         case .cnpgSwitchover(let c, let ns, let to): return "cnpg-switchover-\(ns)/\(c)-\(to)"
         case .cnpgHibernate(let c, let ns, let on): return "cnpg-hibernate-\(ns)/\(c)-\(on)"
         case .scaleCNPG(let c, let ns, _, let to): return "scale-cnpg-\(ns)/\(c)-\(to)"
+        case .command(let args, _, _): return "command-\(args.joined(separator: " "))"
         }
     }
 
@@ -177,6 +183,7 @@ enum WorkloadAction: Identifiable {
         case .cnpgSwitchover(let c, _, let to): return "Switch over \(c) → \(to)"
         case .cnpgHibernate(let c, _, let on): return on ? "Hibernate \(c)" : "Resume \(c)"
         case .scaleCNPG(let c, _, _, let to): return "Scale \(c) → \(to)"
+        case .command(_, let label, _): return label
         }
     }
 
@@ -279,6 +286,9 @@ enum WorkloadAction: Identifiable {
                 : "Resumes hibernated CNPG cluster \(ns)/\(c). Postgres starts back up."
         case .scaleCNPG(let c, let ns, let current, let to):
             return "Sets spec.instances from \(current) → \(to) on CNPG cluster \(ns)/\(c)."
+        case .command(let args, _, let destructive):
+            let warn = destructive ? " This is destructive — review the command carefully." : ""
+            return "Runs `kubectl \(args.joined(separator: " "))`.\(warn)"
         }
     }
 
@@ -309,6 +319,8 @@ enum WorkloadAction: Identifiable {
             return to < current     // scaling down is high-risk
         case .cnpgHibernate(_, _, let on):
             return on               // hibernate (offline) is high-risk; resume is not
+        case .command(_, _, let destructive):
+            return destructive
         default:
             return true
         }
@@ -322,6 +334,8 @@ enum WorkloadAction: Identifiable {
             return on               // taking the DB offline needs acknowledgement
         case .scaleCNPG(_, _, let current, let to):
             return to < current     // scaling down drops replicas
+        case .command(_, _, let destructive):
+            return destructive      // destructive raw commands need explicit ack
         default: return false
         }
     }
@@ -428,6 +442,8 @@ enum WorkloadAction: Identifiable {
             return [.args(["cnpg", "hibernate", on ? "on" : "off", c, "-n", ns])]
         case .scaleCNPG(let c, let ns, _, let to):
             return [.args(["patch", "cluster", c, "-n", ns, "--type=merge", "-p", "{\"spec\":{\"instances\":\(to)}}"])]
+        case .command(let args, _, _):
+            return [.args(args)]
         }
     }
 

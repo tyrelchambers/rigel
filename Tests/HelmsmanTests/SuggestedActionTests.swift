@@ -438,6 +438,55 @@ final class SuggestedActionTests: XCTestCase {
 
     // MARK: - Fixtures
 
+    // MARK: - Generic command escape hatch
+
+    func test_resolve_command_buildsLiteralCommand() {
+        let action = parseOne(#"{"label":"Destroy pg-1","kind":"command","args":["cnpg","destroy","pg","pg-1","-n","default"]}"#)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: []),
+              case .command(let args, let label, let destructive) = wa else {
+            return XCTFail("expected a resolved command action")
+        }
+        XCTAssertEqual(args, ["cnpg", "destroy", "pg", "pg-1", "-n", "default"])
+        XCTAssertEqual(label, "Destroy pg-1")
+        XCTAssertTrue(destructive, "`destroy` is a destructive verb → forced destructive")
+        XCTAssertTrue(wa.previewCommand(context: "default").contains("cnpg destroy pg pg-1 -n default"))
+    }
+
+    func test_resolve_command_destructiveVerbForcesAck_evenWhenClaudeSaysFalse() {
+        let action = parseOne(#"{"label":"x","kind":"command","args":["delete","pod","p","-n","default"],"destructive":false}"#)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: []) else {
+            return XCTFail("expected resolved")
+        }
+        XCTAssertTrue(wa.isHighRisk, "delete is a destructive verb — the app's floor wins over the hint")
+        XCTAssertTrue(wa.needsAcknowledge)
+    }
+
+    func test_resolve_command_claudeCanEscalateNonDestructiveVerb() {
+        let action = parseOne(#"{"label":"x","kind":"command","args":["patch","cluster","pg","-n","default"],"destructive":true}"#)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: []) else {
+            return XCTFail("expected resolved")
+        }
+        XCTAssertTrue(wa.isHighRisk, "Claude can raise the caution on a non-destructive verb")
+        XCTAssertTrue(wa.needsAcknowledge)
+    }
+
+    func test_resolve_command_nonDestructive_isNeutral() {
+        let action = parseOne(#"{"label":"x","kind":"command","args":["annotate","pod","p","key=val","-n","default"]}"#)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: []) else {
+            return XCTFail("expected resolved")
+        }
+        XCTAssertFalse(wa.isHighRisk)
+        XCTAssertFalse(wa.needsAcknowledge)
+    }
+
+    func test_resolve_command_emptyArgs_isUnresolved() {
+        let action = parseOne(#"{"label":"x","kind":"command","args":[]}"#)
+        guard case .unresolved(let reason) = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: []) else {
+            return XCTFail("expected unresolved")
+        }
+        XCTAssertTrue(reason.contains("args"))
+    }
+
     private func parseOne(_ json: String) -> SuggestedAction {
         let (_, actions, _) = SuggestedAction.parse(from: "```action\n\(json)\n```")
         return actions[0]

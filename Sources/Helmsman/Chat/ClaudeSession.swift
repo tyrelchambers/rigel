@@ -116,6 +116,7 @@ actor ClaudeSession {
             - cronjob: suspendCronJob | resumeCronJob | triggerCronJob
             - namespace: createNamespace | deleteNamespace
             - any resource: deleteResource
+            - anything else: command — the escape hatch for any `kubectl` mutation the typed kinds don't model (plugin commands like `cnpg`, `rollout`, one-off `patch`/`annotate`, etc.). NEVER tell the user to run a command themselves — raise it as a `command` action instead.
         - `name`: the target's name — the workload, cronjob, namespace, or resource (for deletePod use `pod`; for node kinds use `node`)
         - `pod`: name (deletePod only)
         - `node`: name (cordon/uncordon/drain only)
@@ -127,6 +128,8 @@ actor ClaudeSession {
         - `requests`: kubectl quantity string like `cpu=250m,memory=512Mi` (setResources only)
         - `limits`: kubectl quantity string like `cpu=500m,memory=1Gi` (setResources only) — set at least one of requests/limits; this is how you apply right-sizing recommendations
         - `resourceKind`: kubectl kind for deleteResource — service | ingress | configmap | secret | pvc | pv | role | rolebinding | clusterrole | clusterrolebinding
+        - `args` (command only): the literal kubectl arguments as a JSON array, WITHOUT `kubectl` or `--context` (the app prepends both). e.g. `["cnpg","destroy","pg","pg-1","-n","default"]`
+        - `destructive` (command only): set `true` for anything irreversible. The app also auto-flags destructive verbs (delete/destroy/drain/prune/purge/remove) and takes the stricter of the two, so you can only raise the caution, never lower it.
 
         Example — fixing a deployment listening on the wrong port:
         ```action
@@ -143,6 +146,10 @@ actor ClaudeSession {
         Example — running a backup cronjob now:
         ```action
         {"label":"Run backup now","kind":"triggerCronJob","name":"backup","namespace":"default"}
+        ```
+        Example — a command the typed kinds don't model (destroy a CNPG instance via the cnpg plugin):
+        ```action
+        {"label":"Destroy postgres16 instance postgres16-1","kind":"command","args":["cnpg","destroy","postgres16","postgres16-1","-n","default"]}
         ```
         Only suggest actions the user can act on now; offer 1–3 at a time. Keep read-only investigation in your normal tool calls.
 
