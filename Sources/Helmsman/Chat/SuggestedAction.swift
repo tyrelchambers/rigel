@@ -92,32 +92,35 @@ struct SuggestedAction: Identifiable, Decodable {
         }
     }
 
-    /// Split an assistant message into the prose to display and the actions to
-    /// surface as buttons. Fenced ```action blocks are removed from `display`;
-    /// each one's JSON (a single object or an array) is decoded into actions.
-    /// Unterminated trailing ```action fences (mid-stream) are dropped from
-    /// display and yield no actions until they close, so half-written JSON
-    /// never flashes in the transcript. Other code fences are left intact.
-    static func parse(from text: String) -> (display: String, actions: [SuggestedAction]) {
-        guard text.contains("```") else { return (text, []) }
+    /// Split an assistant message into the prose to display, the actions to
+    /// surface as buttons, and any clarifying questions to surface as option
+    /// buttons. Fenced ```action and ```question blocks are removed from
+    /// `display`; each one's JSON (a single object or an array) is decoded.
+    /// Unterminated trailing fences (mid-stream) are dropped from display and
+    /// yield nothing until they close, so half-written JSON never flashes in the
+    /// transcript. Other code fences are left intact.
+    static func parse(from text: String) -> (display: String, actions: [SuggestedAction], questions: [ClarifyingQuestion]) {
+        guard text.contains("```") else { return (text, [], []) }
         let parts = text.components(separatedBy: "```")
         var display = ""
         var actions: [SuggestedAction] = []
+        var questions: [ClarifyingQuestion] = []
         for (i, part) in parts.enumerated() {
             let insideFence = (i % 2 == 1)
             guard insideFence else { display += part; continue }
             let isClosed = (i < parts.count - 1)
             let (lang, body) = splitFence(part)
-            if lang == "action" {
-                if isClosed { actions.append(contentsOf: decode(body)) }
+            switch lang {
+            case "action":
+                if isClosed { actions.append(contentsOf: decode(body, as: SuggestedAction.self)) }
                 // closed or still-open action fence → contributes nothing to display
-            } else if isClosed {
-                display += "```\(part)```"
-            } else {
-                display += "```\(part)"
+            case "question":
+                if isClosed { questions.append(contentsOf: decode(body, as: ClarifyingQuestion.self)) }
+            default:
+                display += isClosed ? "```\(part)```" : "```\(part)"
             }
         }
-        return (display.trimmingCharacters(in: .whitespacesAndNewlines), actions)
+        return (display.trimmingCharacters(in: .whitespacesAndNewlines), actions, questions)
     }
 
     private static func splitFence(_ part: String) -> (lang: String, body: String) {
@@ -128,11 +131,13 @@ struct SuggestedAction: Identifiable, Decodable {
         return (lang, String(part[part.index(after: nl)...]))
     }
 
-    private static func decode(_ json: String) -> [SuggestedAction] {
+    /// Decode a fenced block's JSON — accepting either a single object or an
+    /// array of them — into `[T]`. Shared by the `action` and `question` blocks.
+    private static func decode<T: Decodable>(_ json: String, as _: T.Type) -> [T] {
         let data = Data(json.utf8)
         let decoder = JSONDecoder()
-        if let arr = try? decoder.decode([SuggestedAction].self, from: data) { return arr }
-        if let one = try? decoder.decode(SuggestedAction.self, from: data) { return [one] }
+        if let arr = try? decoder.decode([T].self, from: data) { return arr }
+        if let one = try? decoder.decode(T.self, from: data) { return [one] }
         return []
     }
 }

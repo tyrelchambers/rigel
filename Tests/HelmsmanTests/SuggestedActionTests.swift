@@ -13,7 +13,7 @@ final class SuggestedActionTests: XCTestCase {
         ```
         Want me to go ahead?
         """
-        let (display, actions) = SuggestedAction.parse(from: text)
+        let (display, actions, _) = SuggestedAction.parse(from: text)
         XCTAssertEqual(actions.count, 1)
         XCTAssertEqual(actions[0].kind, .setEnv)
         XCTAssertEqual(actions[0].label, "Set MEMOS_PORT=5230 & restart memos")
@@ -32,7 +32,7 @@ final class SuggestedActionTests: XCTestCase {
          {"label":"Scale memos to 2","kind":"scale","deployment":"memos","replicas":2}]
         ```
         """
-        let (_, actions) = SuggestedAction.parse(from: text)
+        let (_, actions, _) = SuggestedAction.parse(from: text)
         XCTAssertEqual(actions.count, 2)
         XCTAssertEqual(actions[0].kind, .restart)
         XCTAssertEqual(actions[1].kind, .scale)
@@ -46,7 +46,7 @@ final class SuggestedActionTests: XCTestCase {
         ```action
         {"label":"Restart memos","kind":"restart","deployment":"memos"
         """
-        let (display, actions) = SuggestedAction.parse(from: text)
+        let (display, actions, _) = SuggestedAction.parse(from: text)
         XCTAssertTrue(actions.isEmpty)
         XCTAssertFalse(display.contains("Restart memos"))
         XCTAssertTrue(display.contains("Here's a fix"))
@@ -59,10 +59,44 @@ final class SuggestedActionTests: XCTestCase {
         kubectl get pods
         ```
         """
-        let (display, actions) = SuggestedAction.parse(from: text)
+        let (display, actions, _) = SuggestedAction.parse(from: text)
         XCTAssertTrue(actions.isEmpty)
         XCTAssertTrue(display.contains("kubectl get pods"))
         XCTAssertTrue(display.contains("```"))
+    }
+
+    // MARK: - Clarifying questions
+
+    func test_parse_question_extractsAndStrips() {
+        let text = """
+        I need to know how to proceed.
+        ```question
+        {"question":"How should I proceed with the cleanup?","options":[{"label":"Both A and B","value":"Do both"},{"label":"Just A"},{"label":"Hold off"}]}
+        ```
+        """
+        let (display, actions, questions) = SuggestedAction.parse(from: text)
+        XCTAssertTrue(actions.isEmpty)
+        XCTAssertEqual(questions.count, 1)
+        XCTAssertEqual(questions[0].question, "How should I proceed with the cleanup?")
+        XCTAssertEqual(questions[0].options.count, 3)
+        // value present → sent verbatim; absent → falls back to the label.
+        XCTAssertEqual(questions[0].options[0].answer, "Do both")
+        XCTAssertEqual(questions[0].options[1].answer, "Just A")
+        XCTAssertFalse(display.contains("```"))
+        XCTAssertFalse(display.contains("Hold off"))
+        XCTAssertTrue(display.contains("how to proceed"))
+    }
+
+    func test_parse_unterminatedQuestionFence_isHiddenWithNoQuestions() {
+        let text = """
+        Let me ask:
+        ```question
+        {"question":"Pick one","options":[{"label":"A"
+        """
+        let (display, _, questions) = SuggestedAction.parse(from: text)
+        XCTAssertTrue(questions.isEmpty)
+        XCTAssertFalse(display.contains("Pick one"))
+        XCTAssertTrue(display.contains("Let me ask"))
     }
 
     // MARK: - Resolution
@@ -405,7 +439,7 @@ final class SuggestedActionTests: XCTestCase {
     // MARK: - Fixtures
 
     private func parseOne(_ json: String) -> SuggestedAction {
-        let (_, actions) = SuggestedAction.parse(from: "```action\n\(json)\n```")
+        let (_, actions, _) = SuggestedAction.parse(from: "```action\n\(json)\n```")
         return actions[0]
     }
 

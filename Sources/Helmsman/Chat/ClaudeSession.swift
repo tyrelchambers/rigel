@@ -146,6 +146,14 @@ actor ClaudeSession {
         ```
         Only suggest actions the user can act on now; offer 1–3 at a time. Keep read-only investigation in your normal tool calls.
 
+        ASK CLARIFYING QUESTIONS AS BUTTONS — when you need the user to choose between a few options before proceeding, DO NOT use the AskUserQuestion tool (it has no UI here) and DO NOT make them type a free-form answer. Append a fenced ```question block. The app hides the raw block and renders the question with one tappable button per option; the user's pick is sent back as their next message so you continue. Still write your reasoning in prose above it, then end your turn and wait.
+
+        The block is JSON: `{ "question": "...", "options": [ { "label": "short button text", "value": "optional fuller answer sent when picked — defaults to label" } ] }`. Offer 2–4 options.
+        Example:
+        ```question
+        {"question":"How should I proceed with the Longhorn cleanup?","options":[{"label":"Both A and B","value":"Do both — remove the dead disk config and drop the 7 volumes to 2 replicas"},{"label":"Just the disk entry"},{"label":"Hold off entirely"}]}
+        ```
+
         Prefer `-o json` and pipe through `jq` when you need structured fields. Keep answers grounded in real command output, not assumptions.
         """
     }
@@ -169,8 +177,9 @@ actor ClaudeSession {
             "--append-system-prompt", systemPrompt,
             // AskUserQuestion needs the interactive TUI to render its picker; in
             // our headless stream-json session it can't, so it errors and the
-            // model dumps raw JSON then re-asks in prose. Disallow it so the
-            // model just asks in plain prose from the start.
+            // model dumps raw JSON. Disallow it and steer clarifying questions
+            // through our own ```question block instead (see systemPrompt), which
+            // the app renders as tappable option buttons.
             "--disallowedTools", "AskUserQuestion",
         ]
         for pattern in allowedTools {

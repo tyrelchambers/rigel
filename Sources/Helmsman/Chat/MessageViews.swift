@@ -6,12 +6,15 @@ struct MessageBubble: View {
     let message: ChatMessage
     var onRetry: ((String) -> Void)? = nil
     var onSuggestedAction: (SuggestedAction) -> Void = { _ in }
+    /// Fired with the chosen answer text when the user taps a clarifying-question
+    /// option — sent back to Claude as the next message.
+    var onAnswerQuestion: (String) -> Void = { _ in }
     @State private var thoughtExpanded = false
 
-    /// For assistant messages, split prose from any ```action button blocks.
-    /// User/system messages render verbatim.
-    private var parsed: (display: String, actions: [SuggestedAction]) {
-        guard message.role == .assistant else { return (message.text, []) }
+    /// For assistant messages, split prose from any ```action / ```question
+    /// button blocks. User/system messages render verbatim.
+    private var parsed: (display: String, actions: [SuggestedAction], questions: [ClarifyingQuestion]) {
+        guard message.role == .assistant else { return (message.text, [], []) }
         return SuggestedAction.parse(from: message.text)
     }
 
@@ -43,6 +46,12 @@ struct MessageBubble: View {
                     .tracking(0.5)
                 thoughtTrail
                 content
+                if !parsed.questions.isEmpty {
+                    ForEach(parsed.questions) { question in
+                        ClarifyingQuestionView(question: question, onAnswer: onAnswerQuestion)
+                            .padding(.top, 4)
+                    }
+                }
                 if !parsed.actions.isEmpty {
                     SuggestedActionList(actions: parsed.actions, onTap: onSuggestedAction)
                         .padding(.top, 4)
@@ -195,6 +204,47 @@ struct SuggestedActionList: View {
                 }
                 .buttonStyle(.plain)
                 .help("Review and run — \(action.label)")
+            }
+        }
+    }
+}
+
+/// A clarifying question Claude raised, with its options as tappable buttons.
+/// Tapping one sends that option's answer back as the user's next message.
+struct ClarifyingQuestionView: View {
+    let question: ClarifyingQuestion
+    let onAnswer: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(question.question)
+                .font(Theme.Font.body(12, weight: .medium))
+                .foregroundStyle(Theme.Foreground.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            ForEach(question.options) { option in
+                Button {
+                    onAnswer(option.answer)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "circle")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text(option.label)
+                            .font(Theme.Font.body(12, weight: .semibold))
+                            .multilineTextAlignment(.leading)
+                        Spacer(minLength: 4)
+                    }
+                    .foregroundStyle(Theme.Accent.primary)
+                    .padding(.horizontal, 10).padding(.vertical, 7)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.Accent.primaryDim)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Theme.Radius.sm)
+                            .strokeBorder(Theme.Accent.primary.opacity(0.4), lineWidth: 1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                }
+                .buttonStyle(.plain)
+                .help("Answer — \(option.label)")
             }
         }
     }

@@ -103,7 +103,8 @@ struct MainWindow: View {
                         mentionCandidates: { MentionIndex.build(from: cache) },
                         onNewChat: { chat.startNewChat(clusterContext: contextManager.active?.name) },
                         onOpenHistory: { historyOpen = true },
-                        onSuggestedAction: runSuggestedAction
+                        onSuggestedAction: runSuggestedAction,
+                        onAnswerQuestion: { chat.send($0) }
                     )
                     .frame(minWidth: 260, idealWidth: 340, maxWidth: 480, maxHeight: .infinity)
                     .background(Theme.Surface.elevated)
