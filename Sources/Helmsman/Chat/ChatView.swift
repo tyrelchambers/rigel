@@ -174,7 +174,7 @@ struct ChatView: View {
             Image(systemName: "sparkles")
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.Accent.primary)
-            Text("Claude")
+            Text("Helmsman")
                 .font(Theme.Font.body(13, weight: .semibold))
                 .foregroundStyle(Theme.Foreground.primary)
             Spacer()

@@ -22,7 +22,7 @@ enum ChatCommandRegistry {
     static let all: [ChatCommandSpec] = [
         .init(name: "help", aliases: ["?"], description: "Show available commands", argHint: nil),
         .init(name: "clear", aliases: [], description: "Clear the visible chat history", argHint: nil),
-        .init(name: "investigate", aliases: [], description: "Ask Claude to audit cluster health", argHint: nil),
+        .init(name: "investigate", aliases: [], description: "Audit cluster health", argHint: nil),
         .init(name: "logs", aliases: ["tail"], description: "Open the Logs tab tailing a deployment", argHint: "<deployment>"),
         .init(name: "restart", aliases: [], description: "Rollout-restart a deployment", argHint: "<deployment>"),
         .init(name: "describe", aliases: [], description: "Paste a kubectl describe into chat", argHint: "<pod|deployment>"),

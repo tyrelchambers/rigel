@@ -363,7 +363,7 @@ struct MainWindow: View {
                     pendingCatalogInstall = nil
                 },
                 onHandoffToChat: { prompt in
-                    chat.sendHandoff(prompt)
+                    chat.sendHandoff(prompt, summary: "Continue installing \(model.app.name)")
                 }
             )
         }
@@ -456,7 +456,10 @@ struct MainWindow: View {
             DeploymentsPanel(viewModel: deploymentsVM, onAction: { dep, pods, action in
                 handoffDeployment(dep, pods: pods, action: action)
             }, onWorkload: { requestWorkload($0) }, onViewYAML: viewYAML, onMove: { dep, target in
-                chat.sendHandoff(ContextHandoffBuilder.moveDeploymentPrompt(dep, targetNamespace: target))
+                chat.sendHandoff(
+                    ContextHandoffBuilder.moveDeploymentPrompt(dep, targetNamespace: target),
+                    summary: "Move deployment \(dep.metadata.name): \(dep.metadata.namespace ?? "default") → \(target)"
+                )
             }, contextName: contextManager.active?.name)
         case .pods:
             PodsPanel(viewModel: podsVM, onAction: { pod, action in
@@ -629,7 +632,7 @@ struct MainWindow: View {
         if playbookMissing {
             chat.appendSystem("⚠︎ Upgrade playbook resource unavailable — sending a basic upgrade request instead.")
         }
-        chat.sendHandoff(text)
+        chat.sendHandoff(text, summary: "Upgrade plan")
     }
 
     private func requestWorkload(_ action: WorkloadAction, fromChat: Bool = false) {
@@ -733,13 +736,13 @@ struct MainWindow: View {
             Run: `kubectl rollout restart deployment/\(dep.metadata.name) -n \(ns) --context \(contextManager.active?.name ?? "")`
 
             Then check the rollout status and confirm pods came back healthy.
-            """)
+            """, summary: "Restart deployment \(dep.metadata.name)")
         case .describe(let name):
             guard let name else {
                 chat.appendSystem("Usage: `/describe <pod-or-deployment-name>`")
                 return
             }
-            chat.sendHandoff("Run `kubectl describe` against the resource named **\(name)** (look for matching pods or deployments) and summarize what you find.")
+            chat.sendHandoff("Run `kubectl describe` against the resource named **\(name)** (look for matching pods or deployments) and summarize what you find.", summary: "Describe \(name)")
         }
     }
 
@@ -757,12 +760,12 @@ struct MainWindow: View {
 
         Be concise. Group findings by severity. If everything looks fine, say so briefly.
         """
-        chat.sendHandoff(prompt)
+        chat.sendHandoff(prompt, summary: "Investigate cluster health")
     }
 
     private func handoffLogSlice(line: LogLine, surrounding: [LogLine]) {
         let prompt = ContextHandoffBuilder.build(.logSlice(line: line, surrounding: surrounding))
-        chat.sendHandoff(prompt)
+        chat.sendHandoff(prompt, summary: "Explain this log line")
     }
 
     private func handoffEvent(_ event: K8sEvent) {
@@ -773,7 +776,7 @@ struct MainWindow: View {
             $0.involvedObject?.namespace == event.involvedObject?.namespace
         }.prefix(20)
         let prompt = ContextHandoffBuilder.build(.event(event, relatedEvents: Array(related)))
-        chat.sendHandoff(prompt)
+        chat.sendHandoff(prompt, summary: "Inspect event\(event.involvedObject?.name.map { ": \($0)" } ?? "")")
     }
 
     private func handoffIngress(_ ing: Ingress) {
@@ -794,7 +797,7 @@ struct MainWindow: View {
         Run `kubectl describe ingress \(ing.metadata.name) -n \(ns)` and verify each backend \
         service exists and has ready endpoints. Flag any missing TLS secrets, hosts with no \
         backing service, or backends with zero endpoints.
-        """)
+        """, summary: "Inspect ingress \(ing.metadata.name)")
     }
 
     private func handoffService(_ svc: Service) {
@@ -814,7 +817,7 @@ struct MainWindow: View {
         Run `kubectl describe service \(svc.metadata.name) -n \(ns)` and check its endpoints \
         (`kubectl get endpoints \(svc.metadata.name) -n \(ns)`). Flag a selector that matches \
         no ready pods, ports with no backing target, or a type/config that won't route traffic.
-        """)
+        """, summary: "Inspect service \(svc.metadata.name)")
     }
 
     private func beginPortForward(_ service: Service, port: Service.Port) {
@@ -841,7 +844,7 @@ struct MainWindow: View {
         For each container, advise whether the requests/limits should change and to what, weighing \
         headroom for spikes against reclaiming waste. Call out anything risky (peak near a limit, or \
         missing requests/limits). Be concrete with suggested values.
-        """)
+        """, summary: "Right-size \(w.kind)/\(w.name)")
     }
 
     private func beginPodPortForward(_ pod: Pod, remotePort: Int) {
@@ -899,7 +902,7 @@ struct MainWindow: View {
             let prompt = ContextHandoffBuilder.build(
                 .deployment(dep, action: action, pods: pods, describe: describe, perPodLogs: perPodLogs, rollout: rollout)
             )
-            await MainActor.run { chat.sendHandoff(prompt) }
+            await MainActor.run { chat.sendHandoff(prompt, summary: "\(action.label): deployment \(dep.metadata.name)") }
         }
     }
 
@@ -929,7 +932,7 @@ struct MainWindow: View {
             let prompt = ContextHandoffBuilder.build(
                 .pod(pod, action: action, describe: describe, recentEvents: events, logs: logs)
             )
-            await MainActor.run { chat.sendHandoff(prompt) }
+            await MainActor.run { chat.sendHandoff(prompt, summary: "\(action.label): pod \(pod.metadata.name)") }
         }
     }
 

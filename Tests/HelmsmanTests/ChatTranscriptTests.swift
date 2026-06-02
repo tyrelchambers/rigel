@@ -18,7 +18,7 @@ final class ChatTranscriptTests: XCTestCase {
             ChatMessage(role: .system, text: "context cleared"),
         ]
         let t = ChatViewModel.transcript(of: msgs)
-        XCTAssertEqual(t, "You:\ndeploy the app\n\nClaude:\nDone.\n\nSystem:\ncontext cleared")
+        XCTAssertEqual(t, "You:\ndeploy the app\n\nHelmsman:\nDone.\n\nSystem:\ncontext cleared")
     }
 
     func test_assistantActionBlocksAreStripped() {
@@ -26,7 +26,7 @@ final class ChatTranscriptTests: XCTestCase {
             ChatMessage(role: .assistant, text: "Here is the plan.\n```action\n{\"label\":\"x\"}\n```"),
         ]
         let t = ChatViewModel.transcript(of: msgs)
-        XCTAssertTrue(t.contains("Claude:\nHere is the plan."))
+        XCTAssertTrue(t.contains("Helmsman:\nHere is the plan."))
         XCTAssertFalse(t.contains("\"label\""))
         XCTAssertFalse(t.contains("```"))
     }
@@ -38,7 +38,7 @@ final class ChatTranscriptTests: XCTestCase {
             ChatMessage(role: .assistant, text: "Two pods."),
         ]
         let t = ChatViewModel.transcript(of: msgs)
-        XCTAssertEqual(t, "You:\nwhat's running?\n\nClaude:\nTwo pods.")
+        XCTAssertEqual(t, "You:\nwhat's running?\n\nHelmsman:\nTwo pods.")
         XCTAssertFalse(t.contains("Bash"))
     }
 

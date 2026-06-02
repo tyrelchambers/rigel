@@ -62,7 +62,7 @@ struct ChatComposer: View {
     }
 
     private var inputField: some View {
-        TextField("Ask Claude…  (/ for commands, @ to mention a resource)", text: $viewModel.inputText, axis: .vertical)
+        TextField("Ask Helmsman…  (/ for commands, @ to mention a resource)", text: $viewModel.inputText, axis: .vertical)
             .textFieldStyle(.plain)
             .font(Theme.Font.body(13))
             .foregroundStyle(Theme.Foreground.primary)

@@ -72,7 +72,7 @@ final class ChatViewModel {
             let label: String
             switch msg.role {
             case .user:      label = "You"
-            case .assistant: label = "Claude"
+            case .assistant: label = "Helmsman"
             case .system:    label = "System"
             }
             return "\(label):\n\(body)"
@@ -169,9 +169,18 @@ final class ChatViewModel {
         }
     }
 
-    /// Send a prebuilt context-handoff prompt (e.g. "Ask Claude about this pod").
-    func sendHandoff(_ prompt: String) {
-        send(prompt)
+    /// Send a prebuilt context-handoff prompt (e.g. "inspect this pod"). When a
+    /// `summary` is given, the (often large) prompt is fed to the model behind
+    /// the scenes and only a compact breadcrumb is shown in the transcript, so
+    /// the chat isn't dominated by an auto-generated wall of context. Without a
+    /// summary it behaves like a normal visible message.
+    func sendHandoff(_ prompt: String, summary: String? = nil) {
+        if let summary {
+            messages.append(ChatMessage(role: .system, text: "↪ \(summary)"))
+            send(prompt, display: false)
+        } else {
+            send(prompt)
+        }
     }
 
     func clear() {
