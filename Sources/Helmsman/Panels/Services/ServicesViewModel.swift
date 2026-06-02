@@ -14,22 +14,12 @@ final class ServicesViewModel {
     var isLoading: Bool { cache.isLoading }
 
     var filteredServices: [Service] {
-        cache.services
-            .filter { cache.namespaceFilter == nil || $0.metadata.namespace == cache.namespaceFilter }
-            .filter { svc in
-                if search.isEmpty { return true }
-                let hay = ([svc.metadata.name, svc.metadata.namespace, svc.typeLabel, svc.spec?.clusterIP]
-                    + svc.portSummaries
-                    + (svc.spec?.selector?.map { "\($0.key)=\($0.value)" } ?? []))
-                    .compactMap { $0 }.joined(separator: " ")
-                return hay.localizedCaseInsensitiveContains(search)
-            }
-            .sorted { lhs, rhs in
-                let lns = lhs.metadata.namespace ?? ""
-                let rns = rhs.metadata.namespace ?? ""
-                if lns != rns { return lns < rns }
-                return lhs.metadata.name.localizedStandardCompare(rhs.metadata.name) == .orderedAscending
-            }
+        cache.filtered(cache.services, search: search, groupByNamespace: true) { svc, q in
+            let extras = [svc.typeLabel, svc.spec?.clusterIP].compactMap { $0 }
+                + svc.portSummaries
+                + (svc.spec?.selector?.map { "\($0.key)=\($0.value)" } ?? [])
+            return extras.contains { $0.localizedCaseInsensitiveContains(q) }
+        }
     }
 
     /// Number of pods backing this service (its selector → ready pods), used as a

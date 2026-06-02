@@ -63,7 +63,7 @@ struct EventsPanel: View {
     }
 
     private var timelineRibbon: some View {
-        EventTimeline(buckets: Viz.eventBuckets(viewModel.cache.events, now: Date(), span: 24 * 3600, count: 48))
+        EventTimeline(buckets: Viz.eventBuckets(viewModel.cache.events, now: Date(), span: 3600, count: 60), span: 3600)
             .padding(.horizontal, 16).padding(.vertical, 10)
             .background(Theme.Surface.elevated)
             .overlay(alignment: .bottom) { Rectangle().fill(Theme.Border.subtle).frame(height: 1) }

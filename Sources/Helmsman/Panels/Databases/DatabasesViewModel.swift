@@ -12,14 +12,23 @@ final class DatabasesViewModel {
     var isLoading: Bool { cache.isLoading }
     var cnpgAvailable: Bool { cache.cnpgAvailable }
 
+    /// Memoized on `cache.dataRevision`: building `instances` rescans cnpg
+    /// clusters + every deployment/statefulset for DB images, so without this it
+    /// would re-run on every render of the panel (e.g. each 5s metrics poll).
+    /// `@ObservationIgnored` keeps the cache out of observation.
+    @ObservationIgnored private var instancesMemo: (rev: Int, value: [DatabaseInstance])?
+
     var instances: [DatabaseInstance] {
+        if let memo = instancesMemo, memo.rev == cache.dataRevision { return memo.value }
         var result: [DatabaseInstance] = []
         result.append(contentsOf: cnpgInstances())
         result.append(contentsOf: imageDetectedFromDeployments())
         result.append(contentsOf: imageDetectedFromStatefulSets())
-        return result.sorted {
+        let sorted = result.sorted {
             "\($0.namespace)/\($0.name)".localizedStandardCompare("\($1.namespace)/\($1.name)") == .orderedAscending
         }
+        instancesMemo = (cache.dataRevision, sorted)
+        return sorted
     }
 
     func pods(for instance: DatabaseInstance) -> [Pod] {

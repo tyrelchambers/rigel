@@ -68,7 +68,6 @@ struct ChatComposer: View {
             .foregroundStyle(Theme.Foreground.primary)
             .lineLimit(1...8)
             .focused($inputFocused)
-            .onSubmit { sendInput() }
             .onChange(of: viewModel.inputText) { _, newValue in
                 updateMentionQuery(from: newValue)
                 updateCommandQuery(from: newValue)
@@ -105,12 +104,17 @@ struct ChatComposer: View {
                 commitSelectedMention()
                 return .handled
             }
-            .onKeyPress(.return) {
+            .onKeyPress(phases: .down) { press in
+                guard press.key == .return else { return .ignored }
                 // With a popover open, Enter commits the highlighted item rather
                 // than sending a half-typed "/lo" or "@po" — mirrors Tab.
                 if commandQuery != nil { commitSelectedCommand(); return .handled }
                 if mentionQuery != nil { commitSelectedMention(); return .handled }
-                return .ignored
+                // Shift+Enter falls through to the field's own newline insertion;
+                // a plain Enter sends.
+                if press.modifiers.contains(.shift) { return .ignored }
+                sendInput()
+                return .handled
             }
             .onKeyPress(.escape) {
                 if commandQuery != nil { commandQuery = nil; return .handled }

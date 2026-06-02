@@ -14,6 +14,9 @@ struct SuggestedAction: Identifiable, Decodable {
         case suspendCronJob, resumeCronJob, triggerCronJob
         case createNamespace, deleteNamespace
         case deleteResource
+        /// Escape hatch: run a literal `kubectl` command (incl. plugins like
+        /// `cnpg`) the typed kinds above don't model. Carries `args`.
+        case command
     }
 
     let id: UUID
@@ -41,12 +44,20 @@ struct SuggestedAction: Identifiable, Decodable {
     /// kubectl resource kind for `deleteResource`, e.g. "service", "configmap",
     /// "secret", "pvc", "pv", "ingress", "clusterrole".
     var resourceKind: String?
+    /// Literal `kubectl` arguments for the generic `command` kind — without the
+    /// `kubectl` binary or `--context` (the app prepends both). e.g.
+    /// `["cnpg", "destroy", "pg", "pg-1", "-n", "default"]`.
+    var args: [String]?
+    /// `command` only: Claude's destructiveness hint. The app also infers this
+    /// from destructive verbs in `args` and takes the stricter of the two, so a
+    /// `false` here can never downgrade an obviously destructive command.
+    var destructive: Bool?
 
     /// The target name, preferring the generic `name` over the `deployment` alias.
     var target: String? { name ?? deployment }
 
     private enum CodingKeys: String, CodingKey {
-        case label, kind, name, deployment, pod, node, namespace, replicas, env, container, image, requests, limits, resourceKind
+        case label, kind, name, deployment, pod, node, namespace, replicas, env, container, image, requests, limits, resourceKind, args, destructive
     }
 
     init(from decoder: Decoder) throws {
@@ -66,6 +77,8 @@ struct SuggestedAction: Identifiable, Decodable {
         self.requests = try c.decodeIfPresent(String.self, forKey: .requests)
         self.limits = try c.decodeIfPresent(String.self, forKey: .limits)
         self.resourceKind = try c.decodeIfPresent(String.self, forKey: .resourceKind)
+        self.args = try c.decodeIfPresent([String].self, forKey: .args)
+        self.destructive = try c.decodeIfPresent(Bool.self, forKey: .destructive)
     }
 
     var systemImage: String {
@@ -89,35 +102,39 @@ struct SuggestedAction: Identifiable, Decodable {
         case .createNamespace: return "plus.rectangle.on.folder"
         case .deleteNamespace: return "trash"
         case .deleteResource:  return "trash"
+        case .command:         return "terminal"
         }
     }
 
-    /// Split an assistant message into the prose to display and the actions to
-    /// surface as buttons. Fenced ```action blocks are removed from `display`;
-    /// each one's JSON (a single object or an array) is decoded into actions.
-    /// Unterminated trailing ```action fences (mid-stream) are dropped from
-    /// display and yield no actions until they close, so half-written JSON
-    /// never flashes in the transcript. Other code fences are left intact.
-    static func parse(from text: String) -> (display: String, actions: [SuggestedAction]) {
-        guard text.contains("```") else { return (text, []) }
+    /// Split an assistant message into the prose to display, the actions to
+    /// surface as buttons, and any clarifying questions to surface as option
+    /// buttons. Fenced ```action and ```question blocks are removed from
+    /// `display`; each one's JSON (a single object or an array) is decoded.
+    /// Unterminated trailing fences (mid-stream) are dropped from display and
+    /// yield nothing until they close, so half-written JSON never flashes in the
+    /// transcript. Other code fences are left intact.
+    static func parse(from text: String) -> (display: String, actions: [SuggestedAction], questions: [ClarifyingQuestion]) {
+        guard text.contains("```") else { return (text, [], []) }
         let parts = text.components(separatedBy: "```")
         var display = ""
         var actions: [SuggestedAction] = []
+        var questions: [ClarifyingQuestion] = []
         for (i, part) in parts.enumerated() {
             let insideFence = (i % 2 == 1)
             guard insideFence else { display += part; continue }
             let isClosed = (i < parts.count - 1)
             let (lang, body) = splitFence(part)
-            if lang == "action" {
-                if isClosed { actions.append(contentsOf: decode(body)) }
+            switch lang {
+            case "action":
+                if isClosed { actions.append(contentsOf: decode(body, as: SuggestedAction.self)) }
                 // closed or still-open action fence → contributes nothing to display
-            } else if isClosed {
-                display += "```\(part)```"
-            } else {
-                display += "```\(part)"
+            case "question":
+                if isClosed { questions.append(contentsOf: decode(body, as: ClarifyingQuestion.self)) }
+            default:
+                display += isClosed ? "```\(part)```" : "```\(part)"
             }
         }
-        return (display.trimmingCharacters(in: .whitespacesAndNewlines), actions)
+        return (display.trimmingCharacters(in: .whitespacesAndNewlines), actions, questions)
     }
 
     private static func splitFence(_ part: String) -> (lang: String, body: String) {
@@ -128,11 +145,13 @@ struct SuggestedAction: Identifiable, Decodable {
         return (lang, String(part[part.index(after: nl)...]))
     }
 
-    private static func decode(_ json: String) -> [SuggestedAction] {
+    /// Decode a fenced block's JSON — accepting either a single object or an
+    /// array of them — into `[T]`. Shared by the `action` and `question` blocks.
+    private static func decode<T: Decodable>(_ json: String, as _: T.Type) -> [T] {
         let data = Data(json.utf8)
         let decoder = JSONDecoder()
-        if let arr = try? decoder.decode([SuggestedAction].self, from: data) { return arr }
-        if let one = try? decoder.decode(SuggestedAction.self, from: data) { return [one] }
+        if let arr = try? decoder.decode([T].self, from: data) { return arr }
+        if let one = try? decoder.decode(T.self, from: data) { return [one] }
         return []
     }
 }

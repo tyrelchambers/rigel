@@ -20,6 +20,7 @@ import { kubectl } from "./kubectl.js";
 import { toKubectlInvocations, type SuggestedAction } from "./action.js";
 import { runThreadedDiagnosis } from "./threadedDiagnosis.js";
 import { runWorker } from "./worker.js";
+import { diagnoseConfirmed } from "./diagnosePool.js";
 import { runSupervisor } from "./supervisor.js";
 import { executeAction } from "./executor.js";
 import { CircuitBreaker, SpendTracker } from "./guardrails.js";
@@ -142,22 +143,38 @@ async function tick(
   }
   if (confirmed.length > 0) log(`handling ${confirmed.length} confirmed incident(s)`);
 
-  for (const incident of confirmed) {
-    if (!spend.canSpend()) break;
+  // Stage A: investigate every confirmed incident concurrently (bounded). The
+  // Worker model call is the slow, side-effect-free part, so overlapping the
+  // calls cuts wall-clock when several incidents land in one tick. Spend
+  // metering happens here; the deterministic guardrails stay in Stage B below.
+  const packets = await diagnoseConfirmed(
+    {
+      diagnose: (incident) => runWorker(cfg, [incident]),
+      canSpend: () => spend.canSpend(),
+      addSpend: (c) => spend.add(c),
+      limit: cfg.maxConcurrentDiagnoses,
+    },
+    confirmed,
+  );
+
+  // Stage B: decide + execute one incident at a time, in confirmed order, so the
+  // circuit breaker, spend cap and audit log stay deterministic regardless of
+  // which diagnosis finished first.
+  for (const packet of packets) {
+    const incident = packet.incident;
     const fp = fingerprint(incident);
     const resourceKey = `${incident.namespace}/${incident.name}`;
+
+    // Spend cap tripped before this incident was diagnosed — leave it un-handled
+    // so it retries next tick once budget frees.
+    if (packet.noBudget) continue;
+
+    // Diagnosed (and metered) — mark handled so we don't re-dispatch next tick.
     loop.handled.add(fp);
 
-    let analysis = "";
-    let actions;
-    try {
-      const out = await runWorker(cfg, [incident]);
-      spend.add(out.costUsd);
-      analysis = out.analysis;
-      actions = out.actions;
-    } catch (e) {
+    if (packet.error) {
       // Fail closed: a worker failure never results in an action.
-      const msg = String(e);
+      const msg = packet.error;
       if (/auth|oauth|401|token|unauthor/i.test(msg)) {
         // Loud signal in the report — almost certainly the 1-year token lapsed.
         state = { ...state, report: `⚠️ Claude auth is failing — the subscription token may have expired. Re-run \`claude setup-token\` and update the assistant-claude-token Secret. (${msg})` };
@@ -169,6 +186,8 @@ async function tick(
       continue;
     }
 
+    const analysis = packet.analysis;
+    const actions = packet.actions;
     if (!actions || actions.length === 0) {
       state = record(state, cfg, {
         at: ts, fingerprint: fp, incident: describe(incident), tier: "low",

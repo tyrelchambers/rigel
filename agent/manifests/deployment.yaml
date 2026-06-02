@@ -60,6 +60,8 @@ spec:
               value: "3"
             - name: CONFIRM_POLLS
               value: "2"
+            - name: MAX_CONCURRENT_DIAGNOSES
+              value: "3" # diagnose up to N confirmed incidents at once per tick
             - name: NAMESPACES
               value: "" # empty = all namespaces
           securityContext:

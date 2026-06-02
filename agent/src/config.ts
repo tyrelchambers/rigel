@@ -22,6 +22,10 @@ export interface Config {
   /** Consecutive polls an incident must persist before the agent acts —
    * debounces transient states like a mid-rollout deployment. */
   confirmPolls: number;
+  /** Max Worker (diagnosis) model calls in flight at once when several incidents
+   * are confirmed in one tick. Kept small to overlap latency without hammering
+   * the Claude subscription rate limit. */
+  maxConcurrentDiagnoses: number;
   stateConfigMap: string;
   configConfigMap: string;
   backupsConfigMap: string;
@@ -58,6 +62,7 @@ export function loadConfig(): Config {
       .map((s) => s.trim())
       .filter(Boolean),
     confirmPolls: num("CONFIRM_POLLS", 2),
+    maxConcurrentDiagnoses: Math.max(1, num("MAX_CONCURRENT_DIAGNOSES", 3)),
     stateConfigMap: str("STATE_CONFIGMAP", "assistant-state"),
     configConfigMap: str("CONFIG_CONFIGMAP", "assistant-config"),
     backupsConfigMap: str("BACKUPS_CONFIGMAP", "assistant-backups"),

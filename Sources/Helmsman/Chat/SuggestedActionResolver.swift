@@ -157,7 +157,25 @@ enum SuggestedActionResolver {
             guard let name = s.target else { return .unresolved("deleteResource needs a name") }
             guard let rk = s.resourceKind?.lowercased() else { return .unresolved("deleteResource needs a resourceKind") }
             return resolveDelete(resourceKind: rk, name: name, namespace: ns)
+        case .command:
+            let args = (s.args ?? []).filter { !$0.isEmpty }
+            guard !args.isEmpty else { return .unresolved("command needs kubectl args") }
+            // The destructive floor is the app's, not Claude's: a destructive verb
+            // in the args forces the red confirm + acknowledge even if Claude said
+            // otherwise. Claude can only escalate (destructive: true), never relax.
+            let destructive = isDestructive(args) || (s.destructive == true)
+            return .action(.command(args: args, label: s.label, destructive: destructive))
         }
+    }
+
+    /// Destructive kubectl verbs that force the red confirm sheet + acknowledge
+    /// checkbox for a generic `command` action, regardless of Claude's hint.
+    private static let destructiveVerbs: Set<String> = ["delete", "destroy", "drain", "prune", "purge", "remove"]
+
+    /// True when any argument is a known destructive verb (e.g. `delete`,
+    /// `cnpg destroy`). Over-matching only adds caution, so this scans every arg.
+    private static func isDestructive(_ args: [String]) -> Bool {
+        args.contains { destructiveVerbs.contains($0.lowercased()) }
     }
 
     /// Map a `deleteResource` kind string to the matching delete `WorkloadAction`.

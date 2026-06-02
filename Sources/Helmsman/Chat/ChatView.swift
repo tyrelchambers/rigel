@@ -15,6 +15,8 @@ struct ChatView: View {
     var onOpenHistory: () -> Void = {}
     /// Fired when the user taps an action button Claude suggested in a message.
     var onSuggestedAction: (SuggestedAction) -> Void = { _ in }
+    /// Fired with the chosen answer when the user taps a clarifying-question option.
+    var onAnswerQuestion: (String) -> Void = { _ in }
 
     /// Suggested-prompt chips, refreshed on appear and between chat turns rather
     /// than recomputed every render — keeps the cluster-watch churn out of body.
@@ -33,12 +35,13 @@ struct ChatView: View {
 
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 10) {
+                    LazyVStack(alignment: .leading, spacing: 10) {
                         ForEach(viewModel.messages) { msg in
                             MessageBubble(message: msg, onRetry: { text in
                                 viewModel.inputText = text
                                 inputFocused = true
-                            }, onSuggestedAction: onSuggestedAction)
+                            }, onSuggestedAction: onSuggestedAction, onAnswerQuestion: onAnswerQuestion)
+                            .equatable()
                             .id(msg.id)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                         }

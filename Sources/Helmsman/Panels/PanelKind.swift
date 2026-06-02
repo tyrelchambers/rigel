@@ -122,6 +122,20 @@ enum PanelKind: Hashable, CaseIterable, Identifiable {
         }
     }
 
+    /// Tabs whose first render builds a potentially large table/list. These are
+    /// deferred one runloop tick on tab switch (see `DeferredView`) so the switch
+    /// paints instantly instead of blocking on the list's first layout. Lighter
+    /// panels (overview cards, settings, the logs stream) render immediately.
+    var hasHeavyList: Bool {
+        switch self {
+        case .deployments, .pods, .workloads, .rightSizing, .services, .ingresses,
+             .secrets, .configMaps, .storage, .rbac, .events, .databases, .nodes, .connectivity:
+            return true
+        case .overview, .assistant, .namespaces, .catalog, .logs, .settings:
+            return false
+        }
+    }
+
     /// Tabs that list namespaced resources and honor the shared namespace
     /// filter. Drives whether `NamespaceBar` is shown.
     var isNamespaceScoped: Bool {

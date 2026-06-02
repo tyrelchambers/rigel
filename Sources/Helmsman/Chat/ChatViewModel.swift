@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-struct ChatMessage: Identifiable {
+struct ChatMessage: Identifiable, Equatable {
     let id = UUID()
     let role: Role
     var text: String
@@ -15,7 +15,7 @@ struct ChatMessage: Identifiable {
     enum Role { case user, assistant, system }
 }
 
-struct ToolInvocation {
+struct ToolInvocation: Equatable {
     let toolUseId: String
     let name: String
     /// JSON-serialized representation of the tool's input arguments.
