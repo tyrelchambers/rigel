@@ -415,22 +415,17 @@ private struct SecretsStep: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Text("Secrets")
-                    .font(Theme.Font.body(14, weight: .semibold))
-                    .foregroundStyle(Theme.Foreground.primary)
-                Spacer()
-                Text("\(model.effectiveSecretName) · \(model.namespace)")
-                    .font(Theme.Font.mono(10))
-                    .foregroundStyle(Theme.Foreground.tertiary)
-            }
+            Text("Secrets & values")
+                .font(Theme.Font.body(14, weight: .semibold))
+                .foregroundStyle(Theme.Foreground.primary)
 
-            banner
+            noteText("This app needs a value for each field below. Strong random values are pre-filled — keep them, regenerate, or type your own (e.g. an email or an external API key). Nothing is applied until you continue.",
+                     systemImage: "key.fill")
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    ForEach(model.secretSchema) { spec in
-                        SecretFieldRow(spec: spec, model: model)
+                    ForEach(model.placeholders) { placeholder in
+                        SecretFieldRow(placeholder: placeholder, model: model)
                     }
                 }
                 .padding(.vertical, 2)
@@ -440,22 +435,10 @@ private struct SecretsStep: View {
         .padding(20)
     }
 
-    @ViewBuilder private var banner: some View {
-        switch model.secretNameNote {
-        case .fresh:
-            EmptyView()
-        case .reusing:
-            noteText("Updating the existing secret for this install.", systemImage: "arrow.triangle.2.circlepath")
-        case .suffixed(let requested):
-            noteText("\(requested) is already in use by another resource — creating \(model.effectiveSecretName) instead.",
-                     systemImage: "exclamationmark.triangle")
-        }
-    }
-
     private func noteText(_ text: String, systemImage: String) -> some View {
-        HStack(spacing: 6) {
+        HStack(alignment: .top, spacing: 6) {
             Image(systemName: systemImage).font(.system(size: 11))
-            Text(text).font(Theme.Font.body(11))
+            Text(text).font(Theme.Font.body(11)).fixedSize(horizontal: false, vertical: true)
         }
         .foregroundStyle(Theme.Foreground.secondary)
         .padding(.horizontal, 10).padding(.vertical, 6)
@@ -466,39 +449,40 @@ private struct SecretsStep: View {
 }
 
 private struct SecretFieldRow: View {
-    let spec: SecretFieldSpec
+    let placeholder: ManifestPlaceholder
     @Bindable var model: CatalogInstallWizardModel
     @State private var revealed = false
 
     private var binding: Binding<String> {
         Binding(
-            get: { model.secretValues[spec.key] ?? "" },
-            set: { model.secretValues[spec.key] = $0 }
+            get: { model.secretValues[placeholder.key] ?? "" },
+            set: { model.secretValues[placeholder.key] = $0 }
         )
+    }
+
+    private var isEmpty: Bool {
+        (model.secretValues[placeholder.key] ?? "").trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
-                Text(spec.label)
-                    .font(Theme.Font.body(12, weight: .semibold))
+                Text(placeholder.key)
+                    .font(Theme.Font.mono(12, weight: .semibold))
                     .foregroundStyle(Theme.Foreground.primary)
-                Text(spec.kind == .random ? "generated" : (spec.required ? "required" : "optional"))
-                    .font(Theme.Font.mono(9))
-                    .foregroundStyle(Theme.Foreground.tertiary)
+                if isEmpty {
+                    Text("required")
+                        .font(Theme.Font.mono(9))
+                        .foregroundStyle(Theme.Status.failed)
+                }
                 Spacer()
-            }
-            if let desc = spec.description, !desc.isEmpty {
-                Text(desc)
-                    .font(Theme.Font.body(11))
-                    .foregroundStyle(Theme.Foreground.secondary)
             }
             HStack(spacing: 8) {
                 Group {
                     if revealed {
-                        TextField(spec.kind == .user ? "Enter value" : "", text: binding)
+                        TextField("Enter a value", text: binding)
                     } else {
-                        SecureField(spec.kind == .user ? "Enter value" : "", text: binding)
+                        SecureField("Enter a value", text: binding)
                     }
                 }
                 .textFieldStyle(.plain)
@@ -506,7 +490,7 @@ private struct SecretFieldRow: View {
                 .padding(.horizontal, 10).padding(.vertical, 7)
                 .background(Theme.Surface.field)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
-                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(Theme.Border.subtle, lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(isEmpty ? Theme.Status.failed.opacity(0.5) : Theme.Border.subtle, lineWidth: 1))
 
                 Button { revealed.toggle() } label: {
                     Image(systemName: revealed ? "eye.slash" : "eye")
@@ -516,15 +500,13 @@ private struct SecretFieldRow: View {
                 .buttonStyle(.plain)
                 .help(revealed ? "Hide" : "Reveal")
 
-                if spec.kind == .random {
-                    Button { model.regenerateSecret(spec.key) } label: {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 12))
-                            .foregroundStyle(Theme.Foreground.tertiary)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Regenerate")
+                Button { model.regenerateSecret(placeholder.key) } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.Foreground.tertiary)
                 }
+                .buttonStyle(.plain)
+                .help("Generate a strong random value")
             }
         }
     }

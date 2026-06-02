@@ -98,21 +98,15 @@ final class CatalogInstallWizardModel: Identifiable {
     // Manifest produced by Claude (or pasted by the user during the stub phase).
     var manifestYAML: String = ""
 
-    // Collision-safe Secret name, resolved before generating (see resolveSecretName).
-    var secretName: String = ""
-    var secretNameNote: SecretNameNote = .fresh
-    // Schema + install descriptor parsed from the latest completed assistant turn.
-    var secretSchema: [SecretFieldSpec] = []
+    /// Install descriptor parsed from the latest completed assistant turn (helm
+    /// vs raw manifest). nil → manifest mode.
     var installDescriptor: InstallDescriptor? = nil
-    // Collected secret values keyed by SecretFieldSpec.key (randoms pre-generated).
+    /// Values the generated manifest leaves for the operator to fill — detected
+    /// from `<FILL_ME_IN>` markers and empty Secret values (see PlaceholderScanner).
+    var placeholders: [ManifestPlaceholder] = []
+    /// Collected values keyed by placeholder key; each is pre-seeded with a
+    /// generated strong value so the common "just confirm" path is one click.
     var secretValues: [String: String] = [:]
-    @ObservationIgnored private var secretNameResolved = false
-
-    /// The Secret name to create, falling back to the conventional default
-    /// before `resolveSecretName()` has run.
-    var effectiveSecretName: String {
-        secretName.isEmpty ? "\(instance)-secrets" : secretName
-    }
 
     // Live kubectl stdout from the Applying step.
     var applyLog: String = ""
@@ -225,24 +219,7 @@ final class CatalogInstallWizardModel: Identifiable {
         guard canAdvanceFromConfigure else { return }
         rememberChosenIssuer()
         step = .generating
-        Task { [weak self] in
-            await self?.resolveSecretName()
-            self?.startGeneratingIfNeeded()
-        }
-    }
-
-    /// Probe the namespace and pick a collision-safe Secret name BEFORE the
-    /// prompt is sent, so `{{secretName}}` in the prompt always matches what we
-    /// create. Best-effort: probe failure falls back to the base name as
-    /// `.fresh`.
-    private func resolveSecretName() async {
-        guard !secretNameResolved else { return }
-        secretNameResolved = true
-        let existing = await NamespaceSecretsProbe.load(namespace: namespace, context: context)
-        let res = SecretNameResolver.resolve(instance: instance, existing: existing)
-        secretName = res.name
-        secretNameNote = res.note
-        for (k, v) in res.prefill { secretValues[k] = v }   // reuse-prefill
+        startGeneratingIfNeeded()
     }
 
     /// Persist the issuer picked for this install as the context's default, so
@@ -301,23 +278,20 @@ final class CatalogInstallWizardModel: Identifiable {
                 let parsed = WizardArtifacts.parse(last.text)
                 if let yaml = parsed.yaml { manifestYAML = yaml }
                 if let install = parsed.install { installDescriptor = install }
-                applySecretSchema(parsed.secrets)
+                detectPlaceholders()
             }
         case .toolUse, .systemInit, .thinkingDelta, .unknown:
             break
         }
     }
 
-    /// Merge a freshly-parsed schema into `secretSchema`, seeding `secretValues`:
-    /// random keys get a generated value if absent, user keys start empty.
-    /// Existing values (e.g. prefill from a reused Secret) are preserved.
-    private func applySecretSchema(_ schema: [SecretFieldSpec]) {
-        secretSchema = schema
-        for spec in schema where secretValues[spec.key] == nil {
-            switch spec.kind {
-            case .random: secretValues[spec.key] = RandomSecret.generate(length: spec.length ?? 32)
-            case .user:   secretValues[spec.key] = ""
-            }
+    /// Scan the generated manifest for values the operator must supply, seeding
+    /// each with a generated strong default so the common "confirm the random
+    /// passwords" path is one click — the user can still overwrite any of them.
+    private func detectPlaceholders() {
+        placeholders = PlaceholderScanner.scan(manifestYAML)
+        for p in placeholders where secretValues[p.key] == nil {
+            secretValues[p.key] = RandomSecret.generate(length: 32)
         }
     }
 
@@ -373,24 +347,18 @@ final class CatalogInstallWizardModel: Identifiable {
 
         lines.append("- Active context: \(context ?? "(none)") — pass `--context \(context ?? "")` to any kubectl probes you run.")
 
-        let sn = effectiveSecretName
-        let secretsContract = """
-        # Secrets & install contract (authoritative — overrides any <FILL_ME_IN> wording in the per-app instructions below)
-        - Do NOT inline secret values. Put every sensitive value (passwords, signing keys, API keys, tokens, access keys) into ONE Kubernetes Secret named `\(sn)` in namespace `\(namespace)`. Do NOT emit that Secret resource yourself — the app creates it from values it collects. Only REFERENCE it:
-          - Raw manifests: reference each value via `valueFrom.secretKeyRef` with `name: \(sn)` and `key: <the data key>`. Do NOT include the Secret object in your ```yaml.
-          - Helm charts: point the chart at this Secret via its existing-secret value (e.g. `existingSecret: \(sn)`); make the Secret's data keys match what the chart expects.
-        - After the manifest/values, emit a fenced ```secrets block: a JSON array of the keys to collect. Each item: {"key": "<secret data key>", "label": "<short human label>", "description": "<what it is / where to get it>", "kind": "random" | "user", "length": <int, random only, default 32>, "required": true|false}. Use "random" for values that can be machine-generated (passwords, signing keys, access keys); use "user" for values only the operator knows (OAuth client secrets, SMTP credentials, external API keys, admin email/password). If the app needs no secrets, emit `[]`.
-        - Also emit a fenced ```install block describing how to install: a raw manifest => {"mode": "manifest"}; a Helm chart => {"mode": "helm", "repoName": "<repo alias>", "repoURL": "https://...", "chart": "<chart name>", "version": "<x.y.z>", "releaseName": "\(instance)"}.
-        """
-
+        // Secrets are left as `<FILL_ME_IN>` placeholders by the per-app
+        // templates; the wizard's Secrets step collects and substitutes them
+        // before apply (see PlaceholderScanner). We deliberately do NOT add a
+        // competing "emit a secrets schema / don't inline secrets" instruction
+        // here — that conflicted with the templates' single-yaml output and made
+        // the model emit blank-valued secrets.
         let preamble = """
         # Cluster context
         \(lines.joined(separator: "\n"))
 
         # Node snapshot
         \(nodeSnapshot())
-
-        \(secretsContract)
 
         """
         return preamble + "\n" + app.renderPrompt(vars: templateVars)
@@ -499,16 +467,14 @@ final class CatalogInstallWizardModel: Identifiable {
             manifestYAML = extracted
         }
         guard !manifestYAML.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        step = secretSchema.isEmpty ? .review : .secrets
+        detectPlaceholders()
+        step = placeholders.isEmpty ? .review : .secrets
     }
 
-    /// All required user-supplied secret fields are filled. Random fields always
-    /// hold a generated value, so they never block.
+    /// Every detected placeholder has a non-empty value. Each is pre-seeded with
+    /// a generated value, so this only blocks if the user cleared one.
     var canAdvanceFromSecrets: Bool {
-        for spec in secretSchema where spec.kind == .user && spec.required {
-            if (secretValues[spec.key] ?? "").trimmingCharacters(in: .whitespaces).isEmpty { return false }
-        }
-        return true
+        placeholders.allSatisfy { !(secretValues[$0.key] ?? "").trimmingCharacters(in: .whitespaces).isEmpty }
     }
 
     func advanceFromSecrets() {
@@ -516,10 +482,10 @@ final class CatalogInstallWizardModel: Identifiable {
         step = .review
     }
 
-    /// Regenerate one random field's value (Secrets-step "Regenerate" button).
+    /// Regenerate one field's value (Secrets-step "Regenerate" button).
     func regenerateSecret(_ key: String) {
-        guard let spec = secretSchema.first(where: { $0.key == key }), spec.kind == .random else { return }
-        secretValues[key] = RandomSecret.generate(length: spec.length ?? 32)
+        guard placeholders.contains(where: { $0.key == key }) else { return }
+        secretValues[key] = RandomSecret.generate(length: 32)
     }
 
     func advanceFromReview() {
@@ -534,31 +500,18 @@ final class CatalogInstallWizardModel: Identifiable {
     private func runApply() async {
         applyLog = ""
 
-        // 1. Secret first, so the app's secretKeyRef / existingSecret resolves.
-        if !secretSchema.isEmpty {
-            let secret = Secret.draft(
-                name: effectiveSecretName,
-                namespace: namespace,
-                type: .opaque,
-                decodedData: secretValues,
-                labels: [
-                    SecretNameResolver.managedByLabel: SecretNameResolver.managedByValue,
-                    SecretNameResolver.instanceLabel: instance,
-                ]
-            )
-            let secretResult = await WorkloadCommander(context: context).run(.applySecret(secret))
-            if secretResult.ok {
-                applyLog = secretResult.stdout
-            } else {
-                step = .failed(secretResult.stderr.isEmpty ? "secret apply exited \(secretResult.exitCode)" : secretResult.stderr)
-                return
-            }
+        // Substitute the collected values into the manifest's placeholders, then
+        // hard-stop if any marker survived — never apply a half-blank Secret.
+        let filled = PlaceholderScanner.substitute(manifestYAML, values: secretValues)
+        if PlaceholderScanner.hasUnfilledMarkers(filled) {
+            step = .failed("Some required values are still unfilled (\(PlaceholderScanner.marker)). Go back to the Secrets step and complete them.")
+            return
         }
 
-        // 2. Install the app per descriptor (missing descriptor => manifest mode).
+        // Install per descriptor (missing descriptor => manifest mode).
         switch installDescriptor?.mode ?? .manifest {
         case .manifest:
-            let result = await WorkloadCommander(context: context).run(.applyManifest(yaml: manifestYAML, label: app.id))
+            let result = await WorkloadCommander(context: context).run(.applyManifest(yaml: filled, label: app.id))
             finishApply(ok: result.ok, stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode)
         case .helm:
             guard let descriptor = installDescriptor else {
@@ -566,7 +519,7 @@ final class CatalogInstallWizardModel: Identifiable {
                 return
             }
             let result = await HelmCommander(context: context).install(
-                descriptor: descriptor, valuesYAML: manifestYAML, namespace: namespace
+                descriptor: descriptor, valuesYAML: filled, namespace: namespace
             )
             finishApply(ok: result.ok, stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode)
         }
@@ -627,9 +580,6 @@ final class CatalogInstallWizardModel: Identifiable {
     var verifyResources: [VerifyResource] {
         guard let summary = ManifestSummary.parse(manifestYAML) else { return [] }
         var rows: [VerifyResource] = []
-        if !secretSchema.isEmpty {
-            rows.append(VerifyResource(kind: "Secret", name: effectiveSecretName, state: .applied))
-        }
         for w in summary.workloads {
             rows.append(VerifyResource(kind: w.kind, name: w.name, state: workloadState(name: w.name)))
         }
@@ -732,7 +682,6 @@ final class CatalogInstallWizardModel: Identifiable {
             "clusterIssuer":  clusterIssuer.trimmingCharacters(in: .whitespaces),
             "imagePullSecret": defaults.imagePullSecret,
             "redirectMiddleware": defaults.redirectMiddleware,
-            "secretName":     effectiveSecretName,
         ]
     }
 }

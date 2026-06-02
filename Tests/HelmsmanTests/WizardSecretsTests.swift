@@ -33,40 +33,26 @@ final class WizardSecretsTests: XCTestCase {
         return CatalogInstallWizardModel(app: makeApp(), fit: fit, cache: ClusterCache(), context: "ctx")
     }
 
-    private func decodeSpec(_ json: String) -> SecretFieldSpec {
-        try! JSONDecoder().decode(SecretFieldSpec.self, from: Data(json.utf8))
-    }
-
     func test_pipelineIndex_order() {
         XCTAssertEqual(WizardStep.secrets.pipelineIndex, 2)
         XCTAssertEqual(WizardStep.review.pipelineIndex, 3)
         XCTAssertEqual(WizardStep.done.pipelineIndex, 6)
     }
 
-    func test_gating_requiresUserFields_notRandom() {
+    func test_gating_requiresEveryPlaceholderFilled() {
         let m = makeModel()
-        m.secretSchema = [
-            decodeSpec(#"{"key":"R","label":"r","kind":"random"}"#),
-            decodeSpec(#"{"key":"U","label":"u","kind":"user","required":true}"#),
-        ]
-        m.secretValues = ["R": "generated", "U": ""]
+        m.placeholders = [ManifestPlaceholder(key: "SECRET_KEY"), ManifestPlaceholder(key: "SMTP_PASSWORD")]
+        m.secretValues = ["SECRET_KEY": "generated", "SMTP_PASSWORD": ""]
         XCTAssertFalse(m.canAdvanceFromSecrets)
-        m.secretValues["U"] = "supplied"
+        m.secretValues["SMTP_PASSWORD"] = "hunter2"
         XCTAssertTrue(m.canAdvanceFromSecrets)
     }
 
-    func test_regenerate_changesRandomValue() {
+    func test_regenerate_fillsAStrongValue() {
         let m = makeModel()
-        m.secretSchema = [decodeSpec(#"{"key":"R","label":"r","kind":"random","length":24}"#)]
-        m.secretValues = ["R": ""]
-        m.regenerateSecret("R")
-        XCTAssertEqual(m.secretValues["R"]?.count, 24)
-    }
-
-    func test_effectiveSecretName_defaultsToInstance() {
-        let m = makeModel()
-        XCTAssertEqual(m.effectiveSecretName, "demo-secrets")
-        m.secretName = "demo-secrets-2"
-        XCTAssertEqual(m.effectiveSecretName, "demo-secrets-2")
+        m.placeholders = [ManifestPlaceholder(key: "SECRET_KEY")]
+        m.secretValues = ["SECRET_KEY": ""]
+        m.regenerateSecret("SECRET_KEY")
+        XCTAssertEqual(m.secretValues["SECRET_KEY"]?.count, 32)
     }
 }
