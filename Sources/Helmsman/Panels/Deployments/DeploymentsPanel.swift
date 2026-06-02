@@ -5,9 +5,17 @@ struct DeploymentsPanel: View {
     let onAction: (Deployment, [Pod], DeploymentAction) -> Void
     var onWorkload: (WorkloadAction) -> Void = { _ in }
     var onViewYAML: (String, String, String?) -> Void = { _, _, _ in }
+    /// Move a deployment (+ related resources) to another namespace — handed
+    /// off to Claude by the parent.
+    var onMove: (Deployment, String) -> Void = { _, _ in }
     var contextName: String? = nil
 
     @State private var manageDeployment: Deployment? = nil
+    @State private var moveDeployment: Deployment? = nil
+
+    private var namespaceNames: [String] {
+        viewModel.cache.namespaces.map(\.metadata.name)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -35,7 +43,8 @@ struct DeploymentsPanel: View {
                             },
                             onWorkload: onWorkload,
                             onViewYAML: onViewYAML,
-                            onManage: { manageDeployment = dep }
+                            onManage: { manageDeployment = dep },
+                            onMove: { moveDeployment = dep }
                         )
                     }
                 }
@@ -58,6 +67,17 @@ struct DeploymentsPanel: View {
                     manageDeployment = nil
                     onWorkload(action)
                 }
+            )
+        }
+        .sheet(item: $moveDeployment) { dep in
+            DeploymentMoveSheet(
+                deployment: dep,
+                namespaces: namespaceNames,
+                onSubmit: { target in
+                    moveDeployment = nil
+                    onMove(dep, target)
+                },
+                onCancel: { moveDeployment = nil }
             )
         }
     }
@@ -96,6 +116,7 @@ private struct DeploymentRow: View {
     let onWorkload: (WorkloadAction) -> Void
     let onViewYAML: (String, String, String?) -> Void
     let onManage: () -> Void
+    let onMove: () -> Void
 
     private var ready: Int { deployment.status?.readyReplicas ?? 0 }
     private var total: Int { deployment.status?.replicas ?? 0 }
@@ -137,6 +158,18 @@ private struct DeploymentRow: View {
 
     private var fullImage: String? {
         deployment.spec?.template?.spec?.containers.first?.image
+    }
+
+    /// The image without its tag/digest — the repository path shown as a row
+    /// label. `ghcr.io/foo/bar:1.2` → `ghcr.io/foo/bar`; digest refs drop `@sha…`.
+    private var imageRepo: String? {
+        guard let image = fullImage else { return nil }
+        if let at = image.firstIndex(of: "@") { return String(image[..<at]) }
+        let lastSlash = image.lastIndex(of: "/") ?? image.startIndex
+        if let colon = image.range(of: ":", options: .backwards), colon.lowerBound > lastSlash {
+            return String(image[..<colon.lowerBound])
+        }
+        return image
     }
 
     /// Just the tag portion of the first container's image. `postgres:16-alpine` → `16-alpine`.
@@ -182,6 +215,16 @@ private struct DeploymentRow: View {
                             .background(Theme.Surface.sunken)
                             .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
 
+                        if let repo = imageRepo {
+                            Text(repo)
+                                .font(Theme.Font.mono(10))
+                                .foregroundStyle(Theme.Foreground.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .help(fullImage ?? "")
+                                .layoutPriority(-1)
+                        }
+
                         if let tag = imageTag {
                             Text(tag)
                                 .font(Theme.Font.mono(10, weight: .medium))
@@ -192,11 +235,12 @@ private struct DeploymentRow: View {
                                 .help(fullImage ?? "")
                                 .lineLimit(1)
                                 .truncationMode(.tail)
+                                .fixedSize(horizontal: true, vertical: false)
                         }
 
                         Spacer(minLength: 8)
 
-                        if isRedeploying {
+                        if isRedeploying || oldRemaining > 0 {
                             rolloutChurn
                         }
 
@@ -251,6 +295,7 @@ private struct DeploymentRow: View {
                 }
                 Divider()
                 Button("Manage…", action: onManage)
+                Button("Move to namespace…", action: onMove)
                 Button("View YAML…") {
                     onViewYAML("deployment", deployment.metadata.name, deployment.metadata.namespace)
                 }

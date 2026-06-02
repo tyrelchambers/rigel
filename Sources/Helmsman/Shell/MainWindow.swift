@@ -455,7 +455,9 @@ struct MainWindow: View {
         case .deployments:
             DeploymentsPanel(viewModel: deploymentsVM, onAction: { dep, pods, action in
                 handoffDeployment(dep, pods: pods, action: action)
-            }, onWorkload: { requestWorkload($0) }, onViewYAML: viewYAML, contextName: contextManager.active?.name)
+            }, onWorkload: { requestWorkload($0) }, onViewYAML: viewYAML, onMove: { dep, target in
+                chat.sendHandoff(ContextHandoffBuilder.moveDeploymentPrompt(dep, targetNamespace: target))
+            }, contextName: contextManager.active?.name)
         case .pods:
             PodsPanel(viewModel: podsVM, onAction: { pod, action in
                 handoffPod(pod, action: action)

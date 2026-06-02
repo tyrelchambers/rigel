@@ -183,6 +183,37 @@ enum ContextHandoffBuilder {
         }
     }
 
+    /// Instruction prompt for moving a Deployment and its related resources to
+    /// another namespace. There is no native k8s move, so the Helmsman must
+    /// recreate everything in the target namespace, then delete the originals —
+    /// each change gated through the app's confirm/permission flow.
+    static func moveDeploymentPrompt(_ dep: Deployment, targetNamespace: String) -> String {
+        let src = dep.metadata.namespace ?? "default"
+        let name = dep.metadata.name
+        return """
+        Move the deployment **\(name)** from namespace **\(src)** to namespace **\(targetNamespace)**, along with its related resources.
+
+        There is no native "move" in Kubernetes — recreate each resource in `\(targetNamespace)`, then delete the original in `\(src)`. Work step by step and let me confirm each change (use the app's action buttons, or run `kubectl apply` so the permission modal gates it — don't ask me to type "yes").
+
+        ## Steps
+        1. If namespace `\(targetNamespace)` doesn't exist, create it first.
+        2. Discover what belongs to this deployment using read-only `kubectl get -o yaml` (pass the active `--context`):
+           - the Deployment `\(name)` itself;
+           - **Services** whose selector matches its pod labels;
+           - **ConfigMaps** and **Secrets** referenced by the pod spec (`envFrom`, `env[].valueFrom`, volumes, `imagePullSecrets`);
+           - **Ingresses** that route to the matched Service(s);
+           - **PersistentVolumeClaims** used by the pods.
+        3. For each, produce a clean manifest for `\(targetNamespace)`: set `metadata.namespace: \(targetNamespace)` and strip server-assigned fields (`resourceVersion`, `uid`, `creationTimestamp`, `status`, and a Service's `spec.clusterIP`/`clusterIPs`). Apply them to the new namespace.
+        4. Verify the new deployment's pods come up healthy in `\(targetNamespace)`.
+        5. Only then delete the originals from `\(src)`.
+
+        ## Important
+        - **PVCs: the data does NOT follow.** A recreated PVC in `\(targetNamespace)` binds to a new, empty volume. STOP and explain this before touching any PVC — confirm with me whether to recreate empty, skip storage, or manually rebind the existing PV. Do not delete the source PVC unless I explicitly agree.
+        - Anything in the cluster still referencing `\(src)/\(name)` (or its Services) by namespace will break until updated — call out anything you can't see.
+        - Surface the discovery first, then propose the apply/delete actions; don't bulk-delete before the new namespace is confirmed working.
+        """
+    }
+
     private static func deploymentHeader(_ dep: Deployment, pods: [Pod]) -> String {
         let ns = dep.metadata.namespace ?? "default"
         let replicas = "\(dep.status?.readyReplicas ?? 0)/\(dep.status?.replicas ?? 0) ready"
