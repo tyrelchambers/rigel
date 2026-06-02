@@ -117,28 +117,7 @@ struct WorkloadConfirmSheet: View {
 
             // Inline replica stepper for Scale (deployment or generic workload).
             if let cur = scaleCurrent {
-                HStack(spacing: 10) {
-                    Text("REPLICAS")
-                        .font(Theme.Font.body(10, weight: .semibold))
-                        .tracking(0.5)
-                        .foregroundStyle(Theme.Foreground.tertiary)
-                    Text("\(cur)")
-                        .font(Theme.Font.mono(13))
-                        .foregroundStyle(Theme.Foreground.tertiary)
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Theme.Foreground.tertiary)
-                    Stepper(value: $replicas, in: 0...50) {
-                        Text("\(replicas)")
-                            .font(Theme.Font.mono(13, weight: .semibold))
-                            .foregroundStyle(Theme.Foreground.primary)
-                            .frame(minWidth: 24, alignment: .leading)
-                    }
-                    .labelsHidden()
-                }
-                .padding(10)
-                .background(Theme.Surface.sunken)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
+                replicasBlock(current: cur)
             }
 
             VStack(alignment: .leading, spacing: 6) {
@@ -170,6 +149,66 @@ struct WorkloadConfirmSheet: View {
             }
         }
         .padding(18)
+    }
+
+    /// Scale control laid out as an explicit CURRENT → NEW comparison so it's
+    /// unambiguous that the left number is today's replica count and the stepper
+    /// on the right is the new target you're setting. The new value is sized up
+    /// and accent-colored when it differs from current (i.e. an actual change).
+    private func replicasBlock(current: Int) -> some View {
+        let changed = replicas != current
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("REPLICAS")
+                .font(Theme.Font.body(10, weight: .semibold))
+                .tracking(0.5)
+                .foregroundStyle(Theme.Foreground.tertiary)
+
+            HStack(alignment: .center, spacing: 18) {
+                // Current — read-only.
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("CURRENT")
+                        .font(Theme.Font.body(9, weight: .semibold))
+                        .tracking(0.5)
+                        .foregroundStyle(Theme.Foreground.tertiary)
+                    Text("\(current)")
+                        .font(Theme.Font.mono(22))
+                        .foregroundStyle(Theme.Foreground.secondary)
+                }
+
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.Foreground.tertiary)
+                    .padding(.top, 12)
+
+                // New — the value being set, with the stepper.
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("NEW")
+                        .font(Theme.Font.body(9, weight: .semibold))
+                        .tracking(0.5)
+                        .foregroundStyle(changed ? accent : Theme.Foreground.tertiary)
+                    HStack(spacing: 8) {
+                        Text("\(replicas)")
+                            .font(Theme.Font.mono(22, weight: .semibold))
+                            .foregroundStyle(changed ? accent : Theme.Foreground.secondary)
+                            .frame(minWidth: 26, alignment: .leading)
+                            .contentTransition(.numericText())
+                            .animation(.snappy(duration: 0.15), value: replicas)
+                        Stepper(value: $replicas, in: 0...50) { EmptyView() }
+                            .labelsHidden()
+                    }
+                }
+
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.Surface.sunken)
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.md)
+                .strokeBorder(changed ? accent.opacity(0.35) : Theme.Border.subtle, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
     }
 
     private var drainOptionsBlock: some View {
