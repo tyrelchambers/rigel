@@ -22,11 +22,6 @@ final class AssistantViewModel {
     // Installer wizard state.
     var config = AssistantInstallConfig.default
     var token: String = ""
-    /// Optional private-registry creds. If a pull-secret name is set and a token
-    /// is provided, the installer creates the dockerconfigjson Secret; if only a
-    /// name is set, it references an existing pull Secret.
-    var registryUsername: String = ""
-    var registryToken: String = ""
     var working = false
     var actionError: String?
 
@@ -152,15 +147,6 @@ final class AssistantViewModel {
 
     func monitorAllNamespaces() { config.namespaces = "" }
 
-    /// Existing image-pull (dockerconfigjson) Secrets in the agent's namespace,
-    /// offered as a dropdown so you can reuse one instead of typing its name.
-    var pullSecretCandidates: [Secret] {
-        let ns = config.installNamespace
-        return cache.secrets
-            .filter { $0.secretType == .dockerconfigjson && ($0.metadata.namespace ?? "default") == ns }
-            .sorted { $0.metadata.name < $1.metadata.name }
-    }
-
     /// Token expiry, derived from the issued-at annotation the installer stamped
     /// on the token Secret. Nil if the Secret or annotation is missing.
     var tokenExpiry: TokenExpiry.Status? {
@@ -218,22 +204,6 @@ final class AssistantViewModel {
                 actionError = "Failed to create namespace \(ns): \(err)"
                 return
             }
-        }
-
-        // Private-registry pull Secret (only if a name is set AND a token was
-        // supplied; a name alone means "use an existing pull Secret").
-        if !config.imagePullSecretName.isEmpty,
-           !registryToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            let registry = String(config.image.split(separator: "/").first ?? "ghcr.io")
-            let yaml = AssistantInstaller.dockerConfigSecretYAML(
-                name: config.imagePullSecretName, registry: registry,
-                username: registryUsername, token: registryToken, namespace: ns
-            )
-            if let err = await applyYAML(yaml) {
-                actionError = "Failed to create pull Secret: \(err)"
-                return
-            }
-            registryToken = ""
         }
 
         // Secret first (carries the OAuth token), then the rest of the manifests.

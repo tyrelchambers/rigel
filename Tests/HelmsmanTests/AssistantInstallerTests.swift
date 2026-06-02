@@ -38,40 +38,12 @@ final class AssistantInstallerTests: XCTestCase {
         XCTAssertTrue(yaml.contains("enabled: \"true\""))
     }
 
-    /// The RBAC cage invariant: the agent's permissions never reference secrets,
-    /// so it can neither read nor mutate them. If this ever fails, the cage leaks.
-    /// (imagePullSecrets is a legitimate, unrelated use of the word — strip it
-    /// before checking so the invariant stays about RBAC.)
+    /// The RBAC cage invariant: the agent's permissions never reference the
+    /// `secrets` resource, so it can neither read nor mutate them. The token is
+    /// injected via a `secretKeyRef` (singular), not by granting `secrets` access.
     func test_manifestNeverGrantsSecretsAccess() {
-        var cfg = config()
-        cfg.imagePullSecretName = "ghcr-pull"
-        let yaml = AssistantInstaller.manifestYAML(cfg)
-            .replacingOccurrences(of: "imagePullSecrets", with: "")
+        let yaml = AssistantInstaller.manifestYAML(config())
         XCTAssertFalse(yaml.lowercased().contains("secrets"))
-    }
-
-    func test_deploymentReferencesImagePullSecretWhenSet() {
-        var cfg = config()
-        cfg.imagePullSecretName = "ghcr-pull"
-        let yaml = AssistantInstaller.manifestYAML(cfg)
-        XCTAssertTrue(yaml.contains("imagePullSecrets"))
-        XCTAssertTrue(yaml.contains("ghcr-pull"))
-    }
-
-    func test_noImagePullSecretWhenUnset() {
-        let yaml = AssistantInstaller.manifestYAML(config()) // imagePullSecretName == ""
-        XCTAssertFalse(yaml.contains("imagePullSecrets"))
-    }
-
-    /// Regression: imagePullSecrets must sit at the same 6-space indent as its
-    /// sibling serviceAccountName under template.spec. A 14-space indent (the
-    /// original bug) produced "mapping values are not allowed in this context".
-    func test_imagePullSecretIndentationMatchesServiceAccountName() {
-        var cfg = config()
-        cfg.imagePullSecretName = "ghcr-pull"
-        let yaml = AssistantInstaller.manifestYAML(cfg)
-        XCTAssertTrue(yaml.contains("\n      imagePullSecrets:\n        - name: ghcr-pull"))
-        XCTAssertFalse(yaml.contains("\n              imagePullSecrets:"))
     }
 
     func test_installNamespaceAppliedToNamespacedObjectsAndSubjects() {
@@ -96,17 +68,6 @@ final class AssistantInstallerTests: XCTestCase {
         let yaml = AssistantInstaller.manifestYAML(config())
         XCTAssertTrue(yaml.contains("runAsNonRoot: true"))
         XCTAssertTrue(yaml.contains("runAsUser: 1000"))
-    }
-
-    func test_dockerConfigSecretEncodesAuth() {
-        let yaml = AssistantInstaller.dockerConfigSecretYAML(
-            name: "ghcr-pull", registry: "ghcr.io", username: "u", token: "t"
-        )
-        XCTAssertTrue(yaml.contains("kind: Secret"))
-        XCTAssertTrue(yaml.contains("kubernetes.io/dockerconfigjson"))
-        XCTAssertTrue(yaml.contains("ghcr.io"))
-        let expectedAuth = Data("u:t".utf8).base64EncodedString()
-        XCTAssertTrue(yaml.contains(expectedAuth))
     }
 
     func test_secretManifestCarriesTokenButIsSeparate() {

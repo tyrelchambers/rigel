@@ -9,10 +9,6 @@ struct AssistantInstallConfig {
     var installNamespace: String = "default"
     /// Comma-separated namespaces to scope remediation to; empty = all.
     var namespaces: String
-    /// Name of an image-pull Secret for a private registry (e.g. GHCR). Empty =
-    /// none (public image). Referenced by the Deployment; the wizard can also
-    /// create it from a registry username + token.
-    var imagePullSecretName: String = ""
     var workerModel: String
     var supervisorModel: String
     var spendCapUsd: Int
@@ -77,25 +73,6 @@ enum AssistantInstaller {
         type: Opaque
         stringData:
           token: "\(escape(token))"
-        """
-    }
-
-    /// A `kubernetes.io/dockerconfigjson` pull Secret for a private registry.
-    /// Built separately and applied before the Deployment; never shown in preview.
-    static func dockerConfigSecretYAML(name: String, registry: String, username: String, token: String, namespace: String = "default") -> String {
-        let auth = Data("\(username):\(token)".utf8).base64EncodedString()
-        let dockerConfig = "{\"auths\":{\"\(registry)\":{\"username\":\"\(escape(username))\",\"password\":\"\(escape(token))\",\"auth\":\"\(auth)\"}}}"
-        return """
-        apiVersion: v1
-        kind: Secret
-        metadata:
-          name: \(name)
-          namespace: \(namespace)
-          labels:
-            app.kubernetes.io/managed-by: helmsman-assistant
-        type: kubernetes.io/dockerconfigjson
-        stringData:
-          .dockerconfigjson: '\(dockerConfig)'
         """
     }
 
@@ -223,11 +200,6 @@ enum AssistantInstaller {
     }
 
     private static func deployment(_ c: AssistantInstallConfig) -> String {
-        // Sibling of serviceAccountName under template.spec — must match its
-        // 6-space indentation (list item at 8).
-        let pullSecrets = c.imagePullSecretName.isEmpty
-            ? ""
-            : "\n      imagePullSecrets:\n        - name: \(c.imagePullSecretName)"
         return """
         apiVersion: apps/v1
         kind: Deployment
@@ -249,7 +221,7 @@ enum AssistantInstaller {
               labels:
                 app.kubernetes.io/name: helmsman-assistant
             spec:
-              serviceAccountName: helmsman-assistant\(pullSecrets)
+              serviceAccountName: helmsman-assistant
               securityContext:
                 runAsNonRoot: true
                 runAsUser: 1000
