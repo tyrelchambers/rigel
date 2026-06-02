@@ -6,9 +6,20 @@ import Charts
 /// clusters ("everything went red at 2am") at a glance.
 struct EventTimeline: View {
     let buckets: [Viz.EventBucket]
+    /// Time span the buckets cover. Drives the x-axis tick cadence and the
+    /// empty-state copy so the same component reads correctly whether it's a
+    /// 1-hour or multi-hour window. Kubernetes only retains ~1h of events by
+    /// default, so the typical span is short.
+    var span: TimeInterval = 3600
     var height: CGFloat = 70
 
     private var isEmpty: Bool { buckets.allSatisfy { $0.total == 0 } }
+
+    /// "the last hour" / "the last 6 hours" / "the last 24 hours" — matches `span`.
+    private var windowLabel: String {
+        let hours = Int((span / 3600).rounded())
+        return hours <= 1 ? "the last hour" : "the last \(hours) hours"
+    }
 
     /// One stacked segment (normal or warning) of a bucket. Flattening to a
     /// series dimension lets Swift Charts stack the two colors per bar via
@@ -32,7 +43,7 @@ struct EventTimeline: View {
     var body: some View {
         Group {
             if isEmpty {
-                Text("No events in the last 24 hours.")
+                Text("No events in \(windowLabel).")
                     .font(Theme.Font.body(11))
                     .foregroundStyle(Theme.Foreground.tertiary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -48,9 +59,16 @@ struct EventTimeline: View {
                 ])
                 .chartLegend(.hidden)
                 .chartXAxis {
-                    AxisMarks(values: .stride(by: .hour, count: 6)) { _ in
-                        AxisGridLine().foregroundStyle(Theme.Border.subtle)
-                        AxisValueLabel(format: .dateTime.hour())
+                    if span <= 2 * 3600 {
+                        AxisMarks(values: .stride(by: .minute, count: 15)) { _ in
+                            AxisGridLine().foregroundStyle(Theme.Border.subtle)
+                            AxisValueLabel(format: .dateTime.hour().minute())
+                        }
+                    } else {
+                        AxisMarks(values: .stride(by: .hour, count: 6)) { _ in
+                            AxisGridLine().foregroundStyle(Theme.Border.subtle)
+                            AxisValueLabel(format: .dateTime.hour())
+                        }
                     }
                 }
                 .chartYAxis {
