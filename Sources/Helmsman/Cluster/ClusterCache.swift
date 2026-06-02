@@ -182,7 +182,7 @@ final class ClusterCache {
                 do {
                     let list = try await c.getList(resource, type: T.self)
                     hasConnected = true
-                    await MainActor.run { onSync(list.items); self?.dataRevision &+= 1 }
+                    await MainActor.run { [weak self] in onSync(list.items); self?.dataRevision &+= 1 }
                 } catch {
                     if Task.isCancelled || Self.isCancellation(error) { return }
                     let connected = hasConnected
@@ -198,7 +198,7 @@ final class ClusterCache {
                 do {
                     for try await event in stream {
                         if Task.isCancelled { break }
-                        await MainActor.run { onEvent(event); self?.dataRevision &+= 1 }
+                        await MainActor.run { [weak self] in onEvent(event); self?.dataRevision &+= 1 }
                     }
                 } catch {
                     if Self.isCancellation(error) { return }
@@ -293,7 +293,7 @@ final class ClusterCache {
             while !Task.isCancelled {
                 do {
                     let list: PodMetricsList? = try await c.getRaw("/apis/metrics.k8s.io/v1beta1/pods")
-                    await MainActor.run {
+                    await MainActor.run { [weak self] in
                         guard let self, let list else { return }
                         self.applyPodMetrics(list.items)
                     }
@@ -381,7 +381,7 @@ final class ClusterCache {
             while !Task.isCancelled {
                 do {
                     let list: NodeMetricsList? = try await c.getRaw("/apis/metrics.k8s.io/v1beta1/nodes")
-                    await MainActor.run {
+                    await MainActor.run { [weak self] in
                         guard let self else { return }
                         if let list {
                             self.metricsAvailable = true
@@ -394,7 +394,7 @@ final class ClusterCache {
                         }
                     }
                 } catch {
-                    await MainActor.run { self?.metricsAvailable = false }
+                    await MainActor.run { [weak self] in self?.metricsAvailable = false }
                 }
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
             }

@@ -203,7 +203,7 @@ enum WorkloadAction: Identifiable {
             return "Pauses the rollout controller for \(d.metadata.name). Changes to pod template stop reconciling until resumed."
         case .resumeDeployment(let d):
             return "Resumes rollout for \(d.metadata.name). Any pending template changes start rolling out."
-        case .deletePod(let p):
+        case .deletePod:
             return "Pod will be removed. If managed by a workload controller, a replacement will be created."
         case .cordonNode(let n):
             return "Marks \(n.metadata.name) unschedulable. Existing pods continue running."
