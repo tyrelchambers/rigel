@@ -2,7 +2,7 @@ import XCTest
 @testable import Helmsman
 
 final class InstallArtifactsTests: XCTestCase {
-    func test_parse_extractsYamlSecretsAndInstall() {
+    func test_parse_extractsYamlAndSecrets() {
         let text = """
         Here you go.
 
@@ -17,10 +17,6 @@ final class InstallArtifactsTests: XCTestCase {
           {"key": "SMTP_PASSWORD", "label": "SMTP password", "description": "Mail relay", "kind": "user", "required": true}
         ]
         ```
-
-        ```install
-        {"mode": "helm", "repoName": "plane", "repoURL": "https://helm.plane.so", "chart": "plane-ce", "version": "1.2.3", "releaseName": "plane"}
-        ```
         """
         let r = WizardArtifacts.parse(text)
         XCTAssertTrue(r.yaml?.contains("kind: Deployment") ?? false)
@@ -30,17 +26,13 @@ final class InstallArtifactsTests: XCTestCase {
         XCTAssertEqual(r.secrets[0].length, 50)
         XCTAssertEqual(r.secrets[1].kind, .user)
         XCTAssertTrue(r.secrets[1].required)
-        XCTAssertEqual(r.install?.mode, .helm)
-        XCTAssertEqual(r.install?.chart, "plane-ce")
-        XCTAssertEqual(r.install?.releaseName, "plane")
     }
 
-    func test_parse_absentBlocks_yieldEmptyAndNil() {
+    func test_parse_absentSecrets_yieldEmpty() {
         let text = "```yaml\nkind: Pod\n```"
         let r = WizardArtifacts.parse(text)
         XCTAssertEqual(r.yaml, "kind: Pod")
         XCTAssertTrue(r.secrets.isEmpty)
-        XCTAssertNil(r.install)
     }
 
     func test_parse_unclosedBlock_isIgnored() {

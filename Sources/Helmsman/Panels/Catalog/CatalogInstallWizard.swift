@@ -294,14 +294,23 @@ private struct FieldRow<Content: View>: View {
 
 private struct GeneratingStep: View {
     @Bindable var model: CatalogInstallWizardModel
-    @State private var showRawYAML = false
 
-    private var summary: ManifestSummary? {
-        model.currentManifestYAML.flatMap { ManifestSummary.parse($0) }
+    private var artifactNoun: String {
+        model.mode == .helm ? "values.yaml" : "manifest"
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        switch model.mode {
+        case .manifest: manifestBody
+        case .helm:     helmBody
+        }
+    }
+
+    // MARK: Manifest mode (behavior unchanged)
+
+    private var manifestBody: some View {
+        let summary = model.resourceSummary
+        return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Text(summary == nil ? "Working with Claude" : "What will be deployed")
                     .font(Theme.Font.body(14, weight: .semibold))
@@ -315,39 +324,53 @@ private struct GeneratingStep: View {
                         .font(Theme.Font.mono(10))
                         .foregroundStyle(Theme.Status.failed)
                 }
-                if summary != nil {
-                    ViewModeToggle(showRawYAML: $showRawYAML)
-                }
             }
 
             if let summary {
-                manifestPane(summary: summary)
+                ResourceSummarySection(summary: summary, yaml: model.currentManifestYAML ?? "")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 Divider().background(Theme.Border.subtle)
-                WizardChatStrip(model: model, useThisManifestEnabled: model.hasManifestReady, collapseManifest: true)
+                WizardChatStrip(model: model, useThisManifestEnabled: model.hasManifestReady, collapseManifest: true, artifactNoun: artifactNoun)
                     .frame(height: 200)
             } else {
-                WizardChatStrip(model: model, useThisManifestEnabled: model.hasManifestReady, collapseManifest: true)
+                WizardChatStrip(model: model, useThisManifestEnabled: model.hasManifestReady, collapseManifest: true, artifactNoun: artifactNoun)
             }
         }
         .padding(20)
     }
 
-    @ViewBuilder private func manifestPane(summary: ManifestSummary) -> some View {
-        if showRawYAML {
-            YAMLDisplay(yaml: .constant(model.currentManifestYAML ?? ""), editable: false)
-                .overlay(
-                    RoundedRectangle(cornerRadius: Theme.Radius.sm)
-                        .strokeBorder(Theme.Border.subtle, lineWidth: 1)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
-        } else {
-            ScrollView {
-                ManifestSummaryView(summary: summary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 2)
+    // MARK: Helm mode
+
+    private var helmBody: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Text("What will be deployed")
+                    .font(Theme.Font.body(14, weight: .semibold))
+                    .foregroundStyle(Theme.Foreground.primary)
+                if model.isStreaming {
+                    ProgressView().controlSize(.small).tint(Theme.Accent.primary)
+                }
+                Spacer()
+                if let err = model.generateError {
+                    Text(err)
+                        .font(Theme.Font.mono(10))
+                        .foregroundStyle(Theme.Status.failed)
+                }
             }
+
+            if let descriptor = model.effectiveInstallDescriptor {
+                ChartCard(descriptor: descriptor, namespace: model.namespace)
+            }
+
+            HelmResourcePreview(model: model, yaml: model.currentManifestYAML ?? "")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            Divider().background(Theme.Border.subtle)
+            WizardChatStrip(model: model, useThisManifestEnabled: model.hasManifestReady, collapseManifest: true, artifactNoun: artifactNoun)
+                .frame(height: 200)
         }
+        .padding(20)
+        .helmRenderTrigger(model: model)
     }
 }
 
@@ -378,24 +401,204 @@ private struct ViewModeToggle: View {
     }
 }
 
+// MARK: - Shared resource summary section
+
+/// Visual/YAML toggle + content, shared by the Generate and Review steps. The
+/// `summary` drives the visual cards; `yaml` is the raw artifact shown under the
+/// "YAML" tab.
+private struct ResourceSummarySection: View {
+    let summary: ManifestSummary
+    let yaml: String
+    @State private var showRawYAML = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Spacer()
+                ViewModeToggle(showRawYAML: $showRawYAML)
+            }
+            if showRawYAML {
+                YAMLDisplay(yaml: .constant(yaml), editable: false)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Theme.Radius.sm)
+                            .strokeBorder(Theme.Border.subtle, lineWidth: 1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+            } else {
+                ScrollView {
+                    ManifestSummaryView(summary: summary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 2)
+                }
+            }
+        }
+    }
+}
+
+/// Compact card describing the Helm chart that will be installed: chart
+/// coordinates, release name, and target namespace.
+private struct ChartCard: View {
+    let descriptor: InstallDescriptor
+    let namespace: String
+
+    private var chartCoordinates: String {
+        let repo = descriptor.repoName ?? "?"
+        let chart = descriptor.chart ?? "?"
+        return "\(repo)/\(chart)"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "shippingbox.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.Accent.primary)
+                Text(chartCoordinates)
+                    .font(Theme.Font.mono(12, weight: .semibold))
+                    .foregroundStyle(Theme.Foreground.primary)
+                    .textSelection(.enabled)
+                if let version = descriptor.version, !version.isEmpty {
+                    MetaChipInline(icon: "tag.fill", text: version)
+                }
+                Spacer()
+            }
+            HStack(spacing: 14) {
+                detail(label: "RELEASE", value: descriptor.releaseName ?? "—")
+                detail(label: "NAMESPACE", value: namespace)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.Surface.elevated)
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.sm)
+                .strokeBorder(Theme.Border.subtle, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+    }
+
+    private func detail(label: String, value: String) -> some View {
+        HStack(spacing: 5) {
+            Text(label)
+                .font(Theme.Font.mono(8, weight: .semibold))
+                .foregroundStyle(Theme.Foreground.tertiary)
+                .tracking(0.5)
+            Text(value)
+                .font(Theme.Font.mono(10, weight: .medium))
+                .foregroundStyle(Theme.Foreground.primary)
+        }
+    }
+}
+
+private struct MetaChipInline: View {
+    let icon: String
+    let text: String
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: icon).font(.system(size: 8))
+            Text(text).font(Theme.Font.mono(9, weight: .medium))
+        }
+        .foregroundStyle(Theme.Foreground.secondary)
+        .padding(.horizontal, 6).padding(.vertical, 2)
+        .background(Theme.Surface.sunken)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+    }
+}
+
+/// The Helm resource preview area, driven by `model.helmRender`. Shows a
+/// spinner while rendering, the shared resource cards once rendered, or a
+/// non-blocking note on failure (install stays enabled).
+private struct HelmResourcePreview: View {
+    @Bindable var model: CatalogInstallWizardModel
+    let yaml: String
+
+    var body: some View {
+        switch model.helmRender {
+        case .idle, .rendering:
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small).tint(Theme.Accent.primary)
+                Text("Rendering chart…")
+                    .font(Theme.Font.body(11))
+                    .foregroundStyle(Theme.Foreground.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        case .rendered:
+            if let summary = model.resourceSummary {
+                ResourceSummarySection(summary: summary, yaml: yaml)
+            } else {
+                Text("Rendered, but no Kubernetes resources were parsed from the chart.")
+                    .font(Theme.Font.body(11))
+                    .foregroundStyle(Theme.Foreground.tertiary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+        case .failed(let reason):
+            Text("Couldn't preview resources: \(reason). You can still review the values and install.")
+                .font(Theme.Font.body(11))
+                .foregroundStyle(Theme.Status.failed)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+}
+
+/// Drives the Helm render lifecycle for a step: kicks off a render on appear and
+/// re-renders (debounced ~600ms) when the values artifact changes. The model's
+/// `triggerHelmRender()` already cancels any in-flight render.
+private extension View {
+    func helmRenderTrigger(model: CatalogInstallWizardModel) -> some View {
+        modifier(HelmRenderTrigger(model: model))
+    }
+}
+
+private struct HelmRenderTrigger: ViewModifier {
+    @Bindable var model: CatalogInstallWizardModel
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear { model.triggerHelmRender() }
+            .task(id: model.currentManifestYAML) {
+                // Debounce edits; skip the initial onAppear render (handled above)
+                // unless the values change while the step stays mounted.
+                guard model.helmRender != .idle else { return }
+                try? await Task.sleep(nanoseconds: 600_000_000)
+                guard !Task.isCancelled else { return }
+                model.triggerHelmRender()
+            }
+    }
+}
+
 // MARK: - Review step
 
 private struct ReviewStep: View {
     @Bindable var model: CatalogInstallWizardModel
 
+    private var isHelm: Bool { model.mode == .helm }
+    private var lineCount: Int { model.manifestYAML.split(separator: "\n").count }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Review")
+                Text(isHelm ? "Review values" : "Review")
                     .font(Theme.Font.body(14, weight: .semibold))
                     .foregroundStyle(Theme.Foreground.primary)
-                Text("\(model.manifestYAML.split(separator: "\n").count) lines")
+                Text("\(lineCount) lines")
                     .font(Theme.Font.mono(10))
                     .foregroundStyle(Theme.Foreground.tertiary)
                 Spacer()
-                Text("Edit freely — what you see is what we apply.")
+                Text(isHelm
+                     ? "Edit the values — Helm renders these into the resources above."
+                     : "Edit freely — what you see is what we apply.")
                     .font(Theme.Font.body(11))
                     .foregroundStyle(Theme.Foreground.secondary)
+            }
+
+            resourcePreview
+
+            if isHelm {
+                Text("values.yaml")
+                    .font(Theme.Font.mono(9, weight: .semibold))
+                    .foregroundStyle(Theme.Foreground.tertiary)
+                    .tracking(0.5)
             }
             YAMLDisplay(yaml: $model.manifestYAML, editable: true)
                 .overlay(
@@ -405,6 +608,32 @@ private struct ReviewStep: View {
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
         }
         .padding(20)
+        .modifier(ConditionalHelmTrigger(model: model, enabled: isHelm))
+    }
+
+    @ViewBuilder private var resourcePreview: some View {
+        if isHelm {
+            HelmResourcePreview(model: model, yaml: model.manifestYAML)
+                .frame(maxWidth: .infinity, maxHeight: 260, alignment: .topLeading)
+        } else if let summary = model.resourceSummary {
+            ResourceSummarySection(summary: summary, yaml: model.manifestYAML)
+                .frame(maxWidth: .infinity, maxHeight: 260, alignment: .topLeading)
+        }
+    }
+}
+
+/// Applies the Helm render trigger only in Helm mode; a no-op for manifest apps
+/// (whose preview parses the edited manifest directly with no render needed).
+private struct ConditionalHelmTrigger: ViewModifier {
+    @Bindable var model: CatalogInstallWizardModel
+    let enabled: Bool
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.helmRenderTrigger(model: model)
+        } else {
+            content
+        }
     }
 }
 

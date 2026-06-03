@@ -71,6 +71,20 @@ struct StatusBar: View {
                 }
             }
 
+            if let limit = chat.usageLimit {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 9))
+                    Text(usageLimitLabel(limit))
+                        .font(Theme.Font.mono(10, weight: .medium))
+                }
+                .foregroundStyle(Theme.Status.pending)
+                .padding(.horizontal, 6).padding(.vertical, 1)
+                .background(Theme.Status.pending.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                .help(limit.message)
+            }
+
             HStack(spacing: 5) {
                 Circle().fill(chatState.color).frame(width: 5, height: 5)
                 Text("claude: \(chatState.label)")
@@ -96,6 +110,30 @@ struct StatusBar: View {
             Rectangle().fill(Theme.Border.subtle).frame(height: 1)
         }
     }
+
+    /// Badge text for the usage-limit pill: includes the reset time when known,
+    /// prefixed with a short day if the reset falls on a different calendar day.
+    private func usageLimitLabel(_ limit: ChatViewModel.UsageLimit) -> String {
+        guard let resetAt = limit.resetAt else { return "limit reached" }
+        var when = Self.resetTimeFormatter.string(from: resetAt)
+        if !Calendar.current.isDate(resetAt, inSameDayAs: Date()) {
+            when = "\(Self.resetDayFormatter.string(from: resetAt)) \(when)"
+        }
+        return "limit · resets \(when)"
+    }
+
+    private static let resetTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.timeStyle = .short
+        f.dateStyle = .none
+        return f
+    }()
+
+    private static let resetDayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.setLocalizedDateFormatFromTemplate("EEE")
+        return f
+    }()
 
     /// A "⌘K Commands"-style shortcut hint: keycap chip + label.
     private func shortcut(key: String, label: String) -> some View {

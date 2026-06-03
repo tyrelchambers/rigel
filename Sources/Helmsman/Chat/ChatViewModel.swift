@@ -28,6 +28,16 @@ struct ToolInvocation: Equatable {
 @MainActor
 @Observable
 final class ChatViewModel {
+    /// The subscription usage limit hit on the interactive chat. Sticky: stays
+    /// set until a successful turn (or a new/cleared chat). Drives the status-bar
+    /// badge.
+    struct UsageLimit: Equatable {
+        let resetAt: Date?
+        /// The original line, for the badge tooltip.
+        let message: String
+    }
+    var usageLimit: UsageLimit? = nil
+
     var messages: [ChatMessage] = []
     var inputText: String = ""
     var isStreaming = false
@@ -185,7 +195,16 @@ final class ChatViewModel {
 
     func clear() {
         messages.removeAll()
+        usageLimit = nil
     }
+
+    /// Short time-of-day formatter for usage-limit reset times in transcript/tooltip text.
+    private static let usageLimitTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.timeStyle = .short
+        f.dateStyle = .none
+        return f
+    }()
 
     func appendSystem(_ text: String) {
         messages.append(ChatMessage(role: .system, text: text))
@@ -227,6 +246,7 @@ final class ChatViewModel {
         messages.removeAll()
         sessionId = nil
         error = nil
+        usageLimit = nil
         historyEntryId = nil
         currentContext = nil   // force re-start
         start(resumingSessionId: nil, clusterContext: ctx)
@@ -314,8 +334,16 @@ final class ChatViewModel {
             messages.append(ChatMessage(role: .system, text: "", tool: tool))
         case .result:
             isStreaming = false
+            usageLimit = nil   // a successful turn lifts the sticky badge
             stampThinkingOntoCurrentTurn()
             saveActiveToHistory()
+        case .usageLimit(let resetAt):
+            let detail = resetAt.map { " (resets \(Self.usageLimitTimeFormatter.string(from: $0)))" } ?? ""
+            usageLimit = UsageLimit(resetAt: resetAt, message: "Claude AI usage limit reached\(detail)")
+            isStreaming = false
+            stampThinkingOntoCurrentTurn()
+            saveActiveToHistory()
+            messages.append(ChatMessage(role: .system, text: "⚠︎ Claude usage limit reached\(detail)…"))
         case .unknown(let raw):
             // Surface diagnostic strings (e.g. terminationHandler stderr) but skip
             // genuine JSON we don't recognize — those are stream-format noise.

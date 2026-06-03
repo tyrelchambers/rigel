@@ -12,6 +12,9 @@ struct WizardChatStrip: View {
     /// compact note — used on the generate step where the visual summary
     /// already shows the manifest, so the transcript stays prose-only.
     var collapseManifest: Bool = false
+    /// Noun for the collapsed-block breadcrumb — "manifest" for manifest apps,
+    /// "values.yaml" for Helm apps (whose artifact is a values file).
+    var artifactNoun: String = "manifest"
     @State private var input: String = ""
     @FocusState private var inputFocused: Bool
 
@@ -27,7 +30,7 @@ struct WizardChatStrip: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 8) {
                     ForEach(model.transcript) { turn in
-                        TurnBubble(turn: turn, collapseManifest: collapseManifest)
+                        TurnBubble(turn: turn, collapseManifest: collapseManifest, artifactNoun: artifactNoun)
                             .id(turn.id)
                     }
                     Color.clear.frame(height: 1).id("__bottom__")
@@ -103,7 +106,7 @@ struct WizardChatStrip: View {
     /// `apiVersion:`/`kind:`) with a one-line note. Leaves prose and other code
     /// fences intact. An unterminated trailing fence (mid-stream) is collapsed
     /// too so half-written YAML never flashes in the transcript.
-    static func collapseManifestBlocks(_ text: String) -> String {
+    static func collapseManifestBlocks(_ text: String, artifactNoun: String = "manifest") -> String {
         guard text.contains("```") else { return text }
         let parts = text.components(separatedBy: "```")
         var out = ""
@@ -116,7 +119,7 @@ struct WizardChatStrip: View {
                 || part.contains("apiVersion:") || part.contains("\nkind:") || part.hasPrefix("kind:")
             let isClosed = (i < parts.count - 1)
             if looksManifest {
-                out += "📄 _manifest — shown in the summary above_"
+                out += "📄 _\(artifactNoun) — shown above_"
             } else if isClosed {
                 out += "```\(part)```"
             } else {
@@ -130,10 +133,11 @@ struct WizardChatStrip: View {
 private struct TurnBubble: View {
     let turn: WizardChatTurn
     var collapseManifest: Bool = false
+    var artifactNoun: String = "manifest"
 
     private var displayText: String {
         guard collapseManifest, turn.role == .assistant else { return turn.text }
-        return WizardChatStrip.collapseManifestBlocks(turn.text)
+        return WizardChatStrip.collapseManifestBlocks(turn.text, artifactNoun: artifactNoun)
     }
 
     var body: some View {

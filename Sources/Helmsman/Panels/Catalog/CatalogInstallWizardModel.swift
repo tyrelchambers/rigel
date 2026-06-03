@@ -98,9 +98,73 @@ final class CatalogInstallWizardModel: Identifiable {
     // Manifest produced by Claude (or pasted by the user during the stub phase).
     var manifestYAML: String = ""
 
-    /// Install descriptor parsed from the latest completed assistant turn (helm
-    /// vs raw manifest). nil → manifest mode.
-    var installDescriptor: InstallDescriptor? = nil
+    /// Install mode owned authoritatively by the catalog (`app.install`), not
+    /// inferred from the model's output. Absent ⇒ manifest.
+    var mode: InstallDescriptor.Mode { app.install?.mode ?? .manifest }
+
+    /// The catalog descriptor with the instance-specific `releaseName` injected
+    /// (the Configure step's instance). nil when the app has no install
+    /// descriptor (manifest apps). Used by both the Helm render preview and the
+    /// Apply helm branch so the release name is consistent.
+    var effectiveInstallDescriptor: InstallDescriptor? {
+        guard let base = app.install else { return nil }
+        return InstallDescriptor(
+            mode: base.mode,
+            repoName: base.repoName,
+            repoURL: base.repoURL,
+            chart: base.chart,
+            version: base.version,
+            releaseName: instance
+        )
+    }
+
+    /// State of the local `helm template` preview render for Helm-mode apps.
+    enum HelmRender: Equatable { case idle, rendering, rendered(String), failed(String) }
+    var helmRender: HelmRender = .idle
+    @ObservationIgnored private var renderTask: Task<Void, Never>?
+
+    /// Unified resource summary the Generate/Review views read, independent of
+    /// install mode: a parsed manifest for manifest apps, or the parsed
+    /// `helm template` output once a Helm render has completed.
+    var resourceSummary: ManifestSummary? {
+        switch mode {
+        case .manifest:
+            return currentManifestYAML.flatMap(ManifestSummary.parse)
+        case .helm:
+            if case .rendered(let yaml) = helmRender { return ManifestSummary.parse(yaml) }
+            return nil
+        }
+    }
+
+    /// Render the Helm chart locally (`helm template`) into a multi-doc manifest
+    /// for the resource preview. No-op outside Helm mode or without an effective
+    /// descriptor + values. Preview degradation only — Apply runs the real helm.
+    func renderHelmPreview() async {
+        guard mode == .helm,
+              let descriptor = effectiveInstallDescriptor,
+              let values = currentManifestYAML,
+              !values.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        helmRender = .rendering
+        let result = await HelmCommander(context: context).template(
+            descriptor: descriptor, valuesYAML: values, namespace: namespace
+        )
+        if Task.isCancelled { return }
+        if result.ok {
+            helmRender = .rendered(result.stdout)
+        } else {
+            helmRender = .failed(result.stderr.isEmpty ? "helm exited \(result.exitCode)" : result.stderr)
+        }
+    }
+
+    /// Cancel any in-flight render and (re)start one. Phase 2 wires the call
+    /// sites + debounce; Phase 1 exposes the trigger.
+    func triggerHelmRender() {
+        renderTask?.cancel()
+        renderTask = Task { [weak self] in
+            await self?.renderHelmPreview()
+        }
+    }
+
     /// Values the generated manifest leaves for the operator to fill — detected
     /// from `<FILL_ME_IN>` markers and empty Secret values (see PlaceholderScanner).
     var placeholders: [ManifestPlaceholder] = []
@@ -271,15 +335,18 @@ final class CatalogInstallWizardModel: Identifiable {
             }
         case .result:
             isStreaming = false
-            // Best-effort extract the latest YAML block, secrets schema, and
-            // install descriptor from the most recent assistant turn, so "Use
-            // this manifest" is enabled exactly when we have one.
+            // Best-effort extract the latest YAML block and secrets schema from
+            // the most recent assistant turn, so "Use this manifest" is enabled
+            // exactly when we have one. Install mode is owned by the catalog
+            // (`app.install`), not derived from the model's output.
             if let last = transcript.last, last.role == .assistant {
                 let parsed = WizardArtifacts.parse(last.text)
                 if let yaml = parsed.yaml { manifestYAML = yaml }
-                if let install = parsed.install { installDescriptor = install }
                 detectPlaceholders()
             }
+        case .usageLimit:
+            // Usage limit ends this turn; the interactive chat surfaces the badge.
+            isStreaming = false
         case .toolUse, .systemInit, .thinkingDelta, .unknown:
             break
         }
@@ -508,14 +575,19 @@ final class CatalogInstallWizardModel: Identifiable {
             return
         }
 
-        // Install per descriptor (missing descriptor => manifest mode).
-        switch installDescriptor?.mode ?? .manifest {
+        // Install per the CATALOG's authoritative mode (absent => manifest).
+        switch app.install?.mode ?? .manifest {
         case .manifest:
+            // Belt-and-suspenders: never hand non-manifest YAML to kubectl apply.
+            if let reason = ManifestShape.validationError(filled) {
+                step = .failed("This doesn't look like a Kubernetes manifest — \(reason). The generated YAML may be Helm values or incomplete. Regenerate, or check the app's install mode.")
+                return
+            }
             let result = await WorkloadCommander(context: context).run(.applyManifest(yaml: filled, label: app.id))
             finishApply(ok: result.ok, stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode)
         case .helm:
-            guard let descriptor = installDescriptor else {
-                step = .failed("helm install requested but no descriptor was produced")
+            guard let descriptor = effectiveInstallDescriptor else {
+                step = .failed("helm install requested but the catalog entry has no install descriptor")
                 return
             }
             let result = await HelmCommander(context: context).install(

@@ -68,6 +68,41 @@ final class CatalogStoreTests: XCTestCase {
         XCTAssertEqual(rendered, "x=foo y={{notes}}", "missing vars must remain as literal placeholders — no silent fallback")
     }
 
+    func test_decode_entryWithHelmInstall_populatesDescriptor() throws {
+        let json = """
+        {
+          "id": "plane", "name": "Plane", "tagline": "PM", "description": "d",
+          "category": "productivity", "iconSystemName": "cube",
+          "docsURL": "https://example.com/docs", "repoURL": null, "homepageURL": null,
+          "tags": [], "matchImages": [],
+          "requirements": {"cpuRequest": "100m", "memoryRequest": "128Mi"},
+          "persistence": false, "exposesIngress": false, "notes": null,
+          "installPromptTemplate": "x",
+          "install": {"mode": "helm", "repoName": "plane", "repoURL": "https://helm.plane.so", "chart": "plane-ce", "version": "1.2.3", "releaseName": "plane"}
+        }
+        """
+        let app = try JSONDecoder().decode(CatalogApp.self, from: Data(json.utf8))
+        XCTAssertEqual(app.install?.mode, .helm)
+        XCTAssertEqual(app.install?.chart, "plane-ce")
+        XCTAssertEqual(app.install?.releaseName, "plane")
+    }
+
+    func test_decode_entryWithoutInstall_yieldsNilDescriptor() throws {
+        let json = """
+        {
+          "id": "memos", "name": "Memos", "tagline": "notes", "description": "d",
+          "category": "productivity", "iconSystemName": "cube",
+          "docsURL": "https://example.com/docs", "repoURL": null, "homepageURL": null,
+          "tags": [], "matchImages": [],
+          "requirements": {"cpuRequest": "100m", "memoryRequest": "128Mi"},
+          "persistence": false, "exposesIngress": false, "notes": null,
+          "installPromptTemplate": "x"
+        }
+        """
+        let app = try JSONDecoder().decode(CatalogApp.self, from: Data(json.utf8))
+        XCTAssertNil(app.install)
+    }
+
     // MARK: - Helpers
 
     private func makeStore(apps: [CatalogApp]) -> CatalogStore {

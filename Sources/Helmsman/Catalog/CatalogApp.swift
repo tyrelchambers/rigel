@@ -69,6 +69,47 @@ struct CatalogApp: Codable, Identifiable, Hashable {
     /// `{{instance}}`, `{{namespace}}`, `{{hostname}}`, `{{nodeName}}`,
     /// `{{storage}}`, `{{notes}}` placeholders.
     let installPromptTemplate: String
+    /// How this app installs. Absent ⇒ manifest (a curated default, not a guess).
+    /// Helm apps declare { mode: helm, repoName, repoURL, chart, version, releaseName }.
+    let install: InstallDescriptor?
+
+    init(
+        id: String,
+        name: String,
+        tagline: String,
+        description: String,
+        category: AppCategory,
+        iconSystemName: String,
+        docsURL: URL,
+        repoURL: URL?,
+        homepageURL: URL?,
+        tags: [String],
+        matchImages: [String],
+        requirements: AppRequirements,
+        persistence: Bool,
+        exposesIngress: Bool,
+        notes: String?,
+        installPromptTemplate: String,
+        install: InstallDescriptor? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.tagline = tagline
+        self.description = description
+        self.category = category
+        self.iconSystemName = iconSystemName
+        self.docsURL = docsURL
+        self.repoURL = repoURL
+        self.homepageURL = homepageURL
+        self.tags = tags
+        self.matchImages = matchImages
+        self.requirements = requirements
+        self.persistence = persistence
+        self.exposesIngress = exposesIngress
+        self.notes = notes
+        self.installPromptTemplate = installPromptTemplate
+        self.install = install
+    }
 }
 
 extension CatalogApp {

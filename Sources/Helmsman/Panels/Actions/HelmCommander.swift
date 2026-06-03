@@ -35,6 +35,72 @@ struct HelmCommander {
         ]
     }
 
+    /// The ordered helm argument vectors to render the chart locally with
+    /// `helm template`. Pure + testable. `helm template` is a client-side render,
+    /// so it takes no `--kube-context`. The `repo add`/`repo update` steps still
+    /// need network to fetch the chart.
+    static func templateCommands(descriptor: InstallDescriptor, valuesPath: String, namespace: String, context: String?) -> [[String]] {
+        let repoName = descriptor.repoName ?? ""
+        let repoURL = descriptor.repoURL ?? ""
+        let chart = descriptor.chart ?? ""
+        let release = descriptor.releaseName ?? ""
+
+        var template: [String] = ["template", release, "\(repoName)/\(chart)"]
+        if let v = descriptor.version, !v.isEmpty { template.append(contentsOf: ["--version", v]) }
+        template.append(contentsOf: ["-n", namespace, "-f", valuesPath])
+
+        return [
+            ["repo", "add", repoName, repoURL],
+            ["repo", "update", repoName],
+            template,
+        ]
+    }
+
+    /// Write `valuesYAML` to a temp file and run `helm template`, returning the
+    /// rendered multi-document manifest YAML in `Result.stdout`. Same idempotent
+    /// `repo add` "already exists" handling and temp-file cleanup as `install`.
+    /// Only the `template` step's stdout is returned (repo add/update output is
+    /// discarded), so the rendered YAML is exactly what callers parse.
+    func template(descriptor: InstallDescriptor, valuesYAML: String, namespace: String) async -> Result {
+        guard let helm = resolveBinary("helm") else {
+            return Result(stdout: "", stderr: "helm not found on PATH", exitCode: -1)
+        }
+        guard descriptor.mode == .helm,
+              descriptor.repoName?.isEmpty == false,
+              descriptor.chart?.isEmpty == false,
+              descriptor.releaseName?.isEmpty == false,
+              descriptor.repoURL?.isEmpty == false else {
+            return Result(stdout: "", stderr: "incomplete helm install descriptor", exitCode: -1)
+        }
+
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("helmsman-values-\(UUID().uuidString).yaml")
+        do {
+            try valuesYAML.write(to: tmp, atomically: true, encoding: .utf8)
+        } catch {
+            return Result(stdout: "", stderr: "couldn't write values file: \(error)", exitCode: -1)
+        }
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        var rendered = ""
+        let cmds = Self.templateCommands(descriptor: descriptor, valuesPath: tmp.path, namespace: namespace, context: context)
+        for (i, args) in cmds.enumerated() {
+            do {
+                let data = try await runProcess(helm, args: args)
+                // Only the final `template` step's stdout is the rendered manifest.
+                if i == cmds.count - 1 {
+                    rendered = String(data: data, encoding: .utf8) ?? ""
+                }
+            } catch ProcessError.nonZeroExit(let code, let stderr) {
+                // `repo add` (i == 0) is idempotent — an "already exists" failure is fine.
+                if i == 0, stderr.localizedCaseInsensitiveContains("already exists") { continue }
+                return Result(stdout: rendered, stderr: stderr, exitCode: code)
+            } catch {
+                return Result(stdout: rendered, stderr: "\(error)", exitCode: -1)
+            }
+        }
+        return Result(stdout: rendered, stderr: "", exitCode: 0)
+    }
+
     /// Write `valuesYAML` to a temp file and run the helm command sequence,
     /// streaming combined stdout. `helm repo add` returning "already exists" is
     /// treated as success.

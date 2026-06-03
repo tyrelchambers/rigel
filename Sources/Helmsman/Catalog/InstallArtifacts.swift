@@ -28,9 +28,9 @@ struct SecretFieldSpec: Decodable, Identifiable, Equatable {
     }
 }
 
-/// How the app should be installed, declared by Claude in an ```install block.
-struct InstallDescriptor: Decodable, Equatable {
-    enum Mode: String, Decodable { case manifest, helm }
+/// How an app installs. Declared authoritatively by the catalog (`CatalogApp.install`).
+struct InstallDescriptor: Codable, Equatable, Hashable {
+    enum Mode: String, Codable, Hashable { case manifest, helm }
 
     let mode: Mode
     let repoName: String?
@@ -44,12 +44,11 @@ struct InstallDescriptor: Decodable, Equatable {
 /// assistant message. Mirrors `SuggestedAction.parse`'s fenced-block handling:
 /// only CLOSED fences decode, so half-streamed JSON never decodes mid-write.
 enum WizardArtifacts {
-    static func parse(_ text: String) -> (yaml: String?, secrets: [SecretFieldSpec], install: InstallDescriptor?) {
-        guard text.contains("```") else { return (nil, [], nil) }
+    static func parse(_ text: String) -> (yaml: String?, secrets: [SecretFieldSpec]) {
+        guard text.contains("```") else { return (nil, []) }
         let parts = text.components(separatedBy: "```")
         var lastYAML: String? = nil
         var secrets: [SecretFieldSpec] = []
-        var install: InstallDescriptor? = nil
         for (i, part) in parts.enumerated() {
             guard i % 2 == 1 else { continue }      // odd indices are inside a fence
             let isClosed = (i < parts.count - 1)
@@ -63,15 +62,11 @@ enum WizardArtifacts {
                 if let arr = try? JSONDecoder().decode([SecretFieldSpec].self, from: Data(body.utf8)) {
                     secrets = arr
                 }
-            case "install":
-                if let one = try? JSONDecoder().decode(InstallDescriptor.self, from: Data(body.utf8)) {
-                    install = one
-                }
             default:
                 break
             }
         }
-        return (lastYAML, secrets, install)
+        return (lastYAML, secrets)
     }
 
     private static func splitFence(_ part: String) -> (lang: String, body: String) {

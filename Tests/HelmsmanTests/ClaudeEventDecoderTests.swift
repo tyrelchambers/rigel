@@ -54,6 +54,32 @@ final class ClaudeEventDecoderTests: XCTestCase {
         XCTAssertEqual(cost ?? 0, 0.002, accuracy: 0.0001)
     }
 
+    func test_result_usageLimit_decodesResetAt() {
+        let epoch = 1_900_000_000
+        let e = decode(#"{"type":"result","subtype":"error","is_error":true,"session_id":"s1","result":"Claude AI usage limit reached|\#(epoch)"}"#)
+        guard case .usageLimit(let resetAt) = e else { return XCTFail("got \(e)") }
+        XCTAssertEqual(resetAt, Date(timeIntervalSince1970: TimeInterval(epoch)))
+    }
+
+    func test_result_usageLimit_noEpoch_resetAtNil() {
+        let e = decode(#"{"type":"result","subtype":"error","is_error":true,"result":"Claude AI usage limit reached"}"#)
+        guard case .usageLimit(let resetAt) = e else { return XCTFail("got \(e)") }
+        XCTAssertNil(resetAt)
+    }
+
+    func test_result_normal_isNotUsageLimit() {
+        let e = decode(#"{"type":"result","subtype":"success","session_id":"s1","result":"all good","total_cost_usd":0.002}"#)
+        guard case .result = e else { return XCTFail("got \(e)") }
+    }
+
+    func test_assistant_textUsageLimit_decodesUsageLimit() {
+        let epoch = 1_900_000_000
+        let json = #"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Claude AI usage limit reached|\#(epoch)"}]}}"#
+        let e = decode(json)
+        guard case .usageLimit(let resetAt) = e else { return XCTFail("got \(e)") }
+        XCTAssertEqual(resetAt, Date(timeIntervalSince1970: TimeInterval(epoch)))
+    }
+
     func test_malformedLine_isUnknownWithRaw() {
         let e = decode("not json")
         guard case .unknown(let raw) = e else { return XCTFail("got \(e)") }

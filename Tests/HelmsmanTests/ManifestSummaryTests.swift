@@ -87,6 +87,38 @@ final class ManifestSummaryTests: XCTestCase {
         XCTAssertTrue(collapsed.contains("Let me know if you want changes"))
     }
 
+    func test_collapseManifestBlocks_defaultNounIsManifest() {
+        let text = """
+        Here are the values:
+        ```yaml
+        replicaCount: 2
+        image:
+          tag: latest
+        ```
+        Done.
+        """
+        let collapsed = WizardChatStrip.collapseManifestBlocks(text)
+        XCTAssertTrue(collapsed.contains("📄 _manifest — shown above_"))
+        XCTAssertFalse(collapsed.contains("values.yaml"))
+        XCTAssertFalse(collapsed.contains("replicaCount"))
+    }
+
+    func test_collapseManifestBlocks_helmNounIsValuesYAML() {
+        let text = """
+        Here are the values:
+        ```yaml
+        replicaCount: 2
+        image:
+          tag: latest
+        ```
+        Done.
+        """
+        let collapsed = WizardChatStrip.collapseManifestBlocks(text, artifactNoun: "values.yaml")
+        XCTAssertTrue(collapsed.contains("📄 _values.yaml — shown above_"))
+        XCTAssertFalse(collapsed.contains("replicaCount"))
+        XCTAssertTrue(collapsed.contains("Here are the values"))
+    }
+
     private static let memosManifest = """
     apiVersion: apps/v1
     kind: Deployment
