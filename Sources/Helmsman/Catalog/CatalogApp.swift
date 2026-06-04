@@ -113,11 +113,29 @@ struct CatalogApp: Codable, Identifiable, Hashable {
 }
 
 extension CatalogApp {
+    /// True when the catalog ships a baked install artifact for this app — the
+    /// wizard then installs deterministically (substitute + apply, no Claude).
+    var isBaked: Bool { install?.manifest != nil || install?.values != nil }
+
     /// Substitute the wizard's collected variables into the prompt template.
     /// Missing variables are left as the literal `{{var}}` placeholder so the
     /// gap surfaces in the rendered prompt rather than silently disappearing.
     func renderPrompt(vars: [String: String]) -> String {
-        var out = installPromptTemplate
+        Self.substitute(installPromptTemplate, vars: vars)
+    }
+
+    /// Fill the configure-step variables into the baked install artifact —
+    /// `install.manifest` for manifest mode, `install.values` for helm mode.
+    /// Returns nil for not-yet-baked apps (which use the LLM-generated path).
+    func renderInstallArtifact(vars: [String: String]) -> String? {
+        guard let raw = install?.manifest ?? install?.values else { return nil }
+        return Self.substitute(raw, vars: vars)
+    }
+
+    /// Replace every `{{key}}` token with its value; unknown tokens are left as
+    /// the literal placeholder so gaps surface rather than silently disappearing.
+    static func substitute(_ text: String, vars: [String: String]) -> String {
+        var out = text
         for (key, value) in vars {
             out = out.replacingOccurrences(of: "{{\(key)}}", with: value)
         }

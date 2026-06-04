@@ -54,5 +54,36 @@ final class InstallArtifactsTests: XCTestCase {
         let spec = try JSONDecoder().decode(InstallDescriptor.self, from: Data(#"{"mode":"manifest"}"#.utf8))
         XCTAssertEqual(spec.mode, .manifest)
         XCTAssertNil(spec.chart)
+        XCTAssertNil(spec.manifest)
+        XCTAssertNil(spec.secrets)
+    }
+
+    func test_secretFieldSpec_formatDefaultsAlphanumeric_andDecodesHex() throws {
+        let plain = try JSONDecoder().decode(SecretFieldSpec.self, from: Data(#"{"key":"K","label":"L","kind":"random"}"#.utf8))
+        XCTAssertEqual(plain.format, .alphanumeric)
+        let hex = try JSONDecoder().decode(SecretFieldSpec.self, from: Data(#"{"key":"K","label":"L","kind":"random","format":"hex"}"#.utf8))
+        XCTAssertEqual(hex.format, .hex)
+    }
+
+    // A baked entry must survive a Codable round-trip with its parameterized
+    // manifest and typed secret schema intact — that's what catalog.json stores.
+    func test_installDescriptor_bakedManifest_roundTrips() throws {
+        let descriptor = InstallDescriptor(
+            mode: .manifest, repoName: nil, repoURL: nil, chart: nil, version: nil, releaseName: nil,
+            manifest: "kind: Secret\nstringData:\n  SECRET_KEY: <FILL_ME_IN>\n",
+            values: nil,
+            secrets: [
+                SecretFieldSpec(key: "SECRET_KEY", label: "Secret key", kind: .random, length: 64, format: .hex),
+                SecretFieldSpec(key: "OIDC_CLIENT_ID", label: "OIDC client ID", kind: .user, required: true),
+            ]
+        )
+        let data = try JSONEncoder().encode(descriptor)
+        let back = try JSONDecoder().decode(InstallDescriptor.self, from: data)
+        XCTAssertEqual(back, descriptor)
+        XCTAssertEqual(back.secrets?.count, 2)
+        XCTAssertEqual(back.secrets?[0].format, .hex)
+        XCTAssertEqual(back.secrets?[0].length, 64)
+        XCTAssertEqual(back.secrets?[1].kind, .user)
+        XCTAssertTrue(back.manifest?.contains("<FILL_ME_IN>") ?? false)
     }
 }

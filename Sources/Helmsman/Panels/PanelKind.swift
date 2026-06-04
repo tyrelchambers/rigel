@@ -21,6 +21,7 @@ enum PanelKind: Hashable, CaseIterable, Identifiable {
     case events
     case logs
     case settings
+    case accounts
 
     var id: Self { self }
 
@@ -43,7 +44,7 @@ enum PanelKind: Hashable, CaseIterable, Identifiable {
         NavGroup(title: "Cluster", panels: [.namespaces, .nodes, .connectivity, .rbac]),
         NavGroup(title: "Observability", panels: [.events, .logs]),
         NavGroup(title: "Self-host", panels: [.catalog]),
-        NavGroup(title: "System", panels: [.settings]),
+        NavGroup(title: "System", panels: [.accounts, .settings]),
     ]
 
     var icon: String {
@@ -68,6 +69,7 @@ enum PanelKind: Hashable, CaseIterable, Identifiable {
         case .events:      return "exclamationmark.bubble.fill"
         case .logs:        return "text.alignleft"
         case .settings:    return "gearshape.fill"
+        case .accounts:    return "person.badge.key.fill"
         }
     }
 
@@ -93,6 +95,7 @@ enum PanelKind: Hashable, CaseIterable, Identifiable {
         case .events:      return "Events"
         case .logs:        return "Logs"
         case .settings:    return "Settings"
+        case .accounts:    return "Accounts"
         }
     }
 
@@ -119,6 +122,7 @@ enum PanelKind: Hashable, CaseIterable, Identifiable {
         case .events:      return "Recent activity"
         case .logs:        return "Container output"
         case .settings:    return "Preferences"
+        case .accounts:    return "Registry credentials"
         }
     }
 
@@ -131,7 +135,7 @@ enum PanelKind: Hashable, CaseIterable, Identifiable {
         case .deployments, .pods, .workloads, .rightSizing, .services, .ingresses,
              .secrets, .configMaps, .storage, .rbac, .events, .databases, .nodes, .connectivity:
             return true
-        case .overview, .assistant, .namespaces, .catalog, .logs, .settings:
+        case .overview, .assistant, .namespaces, .catalog, .logs, .settings, .accounts:
             return false
         }
     }
@@ -144,7 +148,7 @@ enum PanelKind: Hashable, CaseIterable, Identifiable {
              .services, .secrets, .configMaps, .storage, .rbac, .events:
             return true
         case .overview, .assistant, .namespaces, .nodes, .connectivity, .databases,
-             .catalog, .logs, .settings:
+             .catalog, .logs, .settings, .accounts:
             return false
         }
     }

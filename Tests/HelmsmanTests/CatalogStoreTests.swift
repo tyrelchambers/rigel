@@ -87,6 +87,27 @@ final class CatalogStoreTests: XCTestCase {
         XCTAssertEqual(app.install?.releaseName, "plane")
     }
 
+    func test_bundledOutline_isBaked_andRendersWithoutMarkers() throws {
+        let store = CatalogStore()
+        let outline = try XCTUnwrap(store.apps.first { $0.id == "outline" }, "outline should be in the catalog")
+        XCTAssertTrue(outline.isBaked, "outline is the deterministic-install pilot")
+        XCTAssertEqual(outline.install?.mode, .manifest)
+        let specs = try XCTUnwrap(outline.install?.secrets)
+        XCTAssertEqual(Array(specs.map(\.key).prefix(3)), ["SECRET_KEY", "UTILS_SECRET", "POSTGRES_PASSWORD"])
+
+        // Render with configure-step vars, then fill every declared secret key —
+        // exactly what the wizard does. Nothing should remain unresolved.
+        let rendered = try XCTUnwrap(outline.renderInstallArtifact(vars: [
+            "instance": "wiki", "namespace": "default", "hostname": "wiki.example.com",
+            "nodeName": "", "storage": "10",
+            "clusterIssuer": "letsencrypt-prod", "redirectMiddleware": "default-redirect-https@kubernetescrd",
+        ]))
+        let filled = PlaceholderScanner.substitute(rendered, values: Dictionary(uniqueKeysWithValues: specs.map { ($0.key, "x") }))
+        XCTAssertFalse(filled.contains("<FILL_ME_IN>"), "all declared secrets must substitute away")
+        XCTAssertFalse(filled.contains("{{"), "all template vars must substitute away")
+        XCTAssertTrue(filled.contains("wiki.example.com"), "hostname should be substituted")
+    }
+
     func test_decode_entryWithoutInstall_yieldsNilDescriptor() throws {
         let json = """
         {

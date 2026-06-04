@@ -38,6 +38,9 @@ final class SessionStore {
         // Per-context self-hosted install conventions (cluster issuer, ingress
         // domain, pull secret, edge IP). Optional for back-compat.
         var selfHostDefaultsByContext: [String: SelfHostDefaults]? = nil
+        // Per-context registry/pull accounts (metadata only — no credential).
+        // Optional for back-compat with sessions.json written before this field.
+        var registryAccountsByContext: [String: [RegistryAccount]]? = nil
     }
 
     private var storage: Storage
@@ -133,6 +136,27 @@ final class SessionStore {
         map[context] = defaults
         storage.selfHostDefaultsByContext = map
         persist()
+    }
+
+    // MARK: - Registry accounts (per-context)
+
+    func registryAccounts(for context: String) -> [RegistryAccount] {
+        storage.registryAccountsByContext?[context] ?? []
+    }
+
+    func setRegistryAccounts(_ accounts: [RegistryAccount], for context: String) {
+        assert(accounts.filter(\.isDefault).count <= 1,
+               "RegistryAccount invariant violated: more than one default for context \(context)")
+        var map = storage.registryAccountsByContext ?? [:]
+        map[context] = accounts
+        storage.registryAccountsByContext = map
+        persist()
+    }
+
+    /// The account flagged as default for this context (≤1; first wins if a
+    /// malformed file ever has more). nil when none is marked.
+    func defaultRegistryAccount(for context: String) -> RegistryAccount? {
+        registryAccounts(for: context).first { $0.isDefault }
     }
 
     // MARK: - History
