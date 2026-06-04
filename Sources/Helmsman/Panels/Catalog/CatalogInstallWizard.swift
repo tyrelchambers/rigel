@@ -891,7 +891,8 @@ private struct VerifyingStep: View {
 
     private var statusMessage: String {
         if model.verifyTimedOut {
-            return "Pods didn't reach Ready within 90s — investigate with Claude or close."
+            let mins = Int(CatalogInstallWizardModel.verifySoftTimeout / 60)
+            return "Still not Ready after \(mins) min — still watching; investigate with Claude or close."
         }
         return "Rolling out — watching resources come up…"
     }

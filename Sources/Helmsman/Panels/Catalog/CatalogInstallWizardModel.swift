@@ -778,7 +778,7 @@ final class CatalogInstallWizardModel: Identifiable {
 
     /// After this long the verify step surfaces a "taking a while" affordance
     /// but keeps watching (slow image pulls are normal for big apps).
-    private static let verifySoftTimeout: TimeInterval = 300
+    static let verifySoftTimeout: TimeInterval = 300
     /// After this long we stop polling entirely — a genuinely stuck install.
     private static let verifyHardTimeout: TimeInterval = 900
 
