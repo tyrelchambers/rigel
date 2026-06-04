@@ -18,4 +18,22 @@ final class PurgeExecutorTests: XCTestCase {
         ])
         XCTAssertTrue(PurgeExecutor.actions(for: plan).isEmpty)
     }
+
+    func test_helmRelease_addsUninstallStep() {
+        var plan = PurgePlan(appName: "plane", namespace: "personal", resources: [])
+        plan.helmRelease = "plane"
+        XCTAssertEqual(PurgeExecutor.helmUninstallArgs(for: plan),
+                       ["uninstall", "plane", "-n", "personal"])
+    }
+
+    func test_helmRelease_inProtectedNamespace_yieldsNoUninstall() {
+        var plan = PurgePlan(appName: "x", namespace: "kube-system", resources: [])
+        plan.helmRelease = "x"
+        XCTAssertNil(PurgeExecutor.helmUninstallArgs(for: plan))
+    }
+
+    func test_noHelmRelease_yieldsNoUninstall() {
+        let plan = PurgePlan(appName: "x", namespace: "default", resources: [])
+        XCTAssertNil(PurgeExecutor.helmUninstallArgs(for: plan))
+    }
 }

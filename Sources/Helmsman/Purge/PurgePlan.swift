@@ -17,6 +17,9 @@ struct PurgePlan: Identifiable {
     let appName: String
     let namespace: String
     var resources: [PurgeResource]
+    /// Non-nil when the app was installed via Helm — purge runs `helm uninstall`
+    /// for the release FIRST, then sweeps anything the chart left behind (PVCs).
+    var helmRelease: String? = nil
     /// Surfaced separately, default-OFF: an opt-in logical DB drop.
     var databaseHint: String? = nil
     var dropDatabase: Bool = false
@@ -52,7 +55,27 @@ enum PurgeDiscovery {
         for cm in configMaps where isRelated(cm.metadata.name, rootName) { add(.configMap, cm.metadata.name) }
         for sec in secrets where isRelated(sec.metadata.name, rootName) { add(.secret, sec.metadata.name) }
         for p in pvcs where isRelated(p.metadata.name, rootName) { add(.pvc, p.metadata.name) }
-        return PurgePlan(appName: rootName, namespace: namespace, resources: out)
+        return PurgePlan(appName: rootName, namespace: namespace, resources: out,
+                         helmRelease: helmRelease(among: secrets, rootName: rootName))
+    }
+
+    /// Detect a Helm-managed app: Helm stores release state in a Secret named
+    /// `sh.helm.release.v1.<release>.v<N>`. We parse the `<release>` token and keep
+    /// it only when it relates to the purge root by the same loose name-core match,
+    /// so an unrelated release in the same namespace can't be uninstalled.
+    private static func helmRelease(among secrets: [Secret], rootName: String) -> String? {
+        let prefix = "sh.helm.release.v1."
+        for sec in secrets {
+            let name = sec.metadata.name
+            guard name.hasPrefix(prefix) else { continue }
+            // Strip the prefix and the trailing `.v<N>` revision segment.
+            let rest = String(name.dropFirst(prefix.count))
+            guard let dot = rest.lastIndex(of: ".") else { continue }
+            let release = String(rest[..<dot])
+            guard !release.isEmpty else { continue }
+            if isRelated(release, rootName) { return release }
+        }
+        return nil
     }
 
     private static func isRelated(_ name: String, _ root: String) -> Bool {
