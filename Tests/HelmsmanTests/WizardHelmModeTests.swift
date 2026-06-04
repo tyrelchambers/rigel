@@ -107,6 +107,26 @@ final class WizardHelmModeTests: XCTestCase {
         XCTAssertNil(m.resourceSummary)
     }
 
+    func test_hasManifestReady_staysTrueAfterNonManifestFollowup() {
+        let m = makeModel(install: nil)
+        // First turn produced a manifest, captured into manifestYAML by `.result`.
+        m.manifestYAML = manifestFixture
+        // User then chats; the latest assistant turn carries no YAML fence.
+        m.transcript.append(WizardChatTurn(role: .user, text: "thanks"))
+        m.transcript.append(WizardChatTurn(role: .assistant, text: "You're welcome!"))
+        XCTAssertTrue(
+            m.hasManifestReady,
+            "Use-this-manifest must persist once a manifest exists, even after non-manifest chat"
+        )
+    }
+
+    func test_hasManifestReady_falseBeforeAnyManifest() {
+        let m = makeModel(install: nil)
+        m.transcript.append(WizardChatTurn(role: .user, text: "hi"))
+        m.transcript.append(WizardChatTurn(role: .assistant, text: "Hello!"))
+        XCTAssertFalse(m.hasManifestReady)
+    }
+
     func test_resourceSummary_helmMode_parsesRenderedYAML() {
         let m = makeModel(install: helmDescriptor())
         m.helmRender = .rendered(manifestFixture)
