@@ -50,4 +50,21 @@ final class RegistryAccountReconcilerTests: XCTestCase {
         XCTAssertEqual(copy.data, [".dockerconfigjson": "e30="])        // data preserved verbatim
         XCTAssertEqual(copy.type, "kubernetes.io/dockerconfigjson")
     }
+
+    func test_secretCopied_outputNeverContainsResourceVersion() throws {
+        // A server-returned Secret JSON carrying resourceVersion (a field ObjectMeta
+        // doesn't model, so it's dropped on decode). The copy's YAML must not carry it,
+        // or `kubectl apply` would conflict-fail. Guards against a future ObjectMeta
+        // gaining resourceVersion and silently breaking the copy path.
+        let json = """
+        {"apiVersion":"v1","kind":"Secret","type":"kubernetes.io/dockerconfigjson",
+         "metadata":{"name":"regcred","namespace":"default","uid":"abc","resourceVersion":"998877","creationTimestamp":"2020-01-01T00:00:00Z"},
+         "data":{".dockerconfigjson":"e30="}}
+        """
+        let src = try JSONDecoder.kube.decode(Secret.self, from: Data(json.utf8))
+        let yaml = src.copied(toNamespace: "media").toYAML()
+        XCTAssertFalse(yaml.contains("resourceVersion"))
+        XCTAssertFalse(yaml.contains("998877"))
+        XCTAssertTrue(yaml.contains("namespace: 'media'"))
+    }
 }
