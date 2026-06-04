@@ -11,7 +11,9 @@ struct PurgeResource: Identifiable, Hashable {
     var id: String { "\(kind.rawValue)/\(namespace)/\(name)" }
 }
 
-struct PurgePlan {
+struct PurgePlan: Identifiable {
+    /// Stable identity for `.sheet(item:)` presentation.
+    var id: String { "\(appName)/\(namespace)" }
     let appName: String
     let namespace: String
     var resources: [PurgeResource]
