@@ -165,6 +165,11 @@ enum SuggestedActionResolver {
             // otherwise. Claude can only escalate (destructive: true), never relax.
             let destructive = isDestructive(args) || (s.destructive == true)
             return .action(.command(args: args, label: s.label, destructive: destructive))
+        case .purge:
+            // Purge is handled upstream (MainWindow opens the typed-name purge
+            // confirm sheet); it has no WorkloadAction mapping and must never
+            // resolve into the generic confirm/execute path.
+            return .unresolved("purge is handled by the dedicated app-removal sheet")
         }
     }
 

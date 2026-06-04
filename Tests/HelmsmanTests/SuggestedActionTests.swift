@@ -99,6 +99,20 @@ final class SuggestedActionTests: XCTestCase {
         XCTAssertTrue(display.contains("Let me ask"))
     }
 
+    func test_parse_purge_decodesNameAndNamespace() {
+        let text = """
+        I can remove that app for you:
+        ```action
+        {"label":"Purge","kind":"purge","name":"canada-hires-web","namespace":"default"}
+        ```
+        """
+        let (_, actions, _) = SuggestedAction.parse(from: text)
+        XCTAssertEqual(actions.count, 1)
+        XCTAssertEqual(actions[0].kind, .purge)
+        XCTAssertEqual(actions[0].name, "canada-hires-web")
+        XCTAssertEqual(actions[0].namespace, "default")
+    }
+
     // MARK: - Resolution
 
     func test_resolve_setEnv_buildsSetEnvCommand() {

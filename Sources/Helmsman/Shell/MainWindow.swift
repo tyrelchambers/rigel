@@ -728,6 +728,24 @@ struct MainWindow: View {
     /// Turn a single chat-suggested action into a confirmed kubectl mutation:
     /// resolve it, then open the confirm sheet.
     private func runSuggestedAction(_ suggestion: SuggestedAction) {
+        // App-removal door: open the SAME typed-name purge confirm sheet rather
+        // than the workload confirm path. Discovery runs against the live cache;
+        // the sheet — never this handler — is the only gate that executes.
+        if suggestion.kind == .purge {
+            let plan = PurgeDiscovery.discover(
+                rootName: suggestion.name ?? suggestion.target ?? "",
+                namespace: suggestion.namespace ?? "default",
+                deployments: cache.deployments,
+                statefulSets: cache.statefulSets,
+                services: cache.services,
+                ingresses: cache.ingresses,
+                secrets: cache.secrets,
+                configMaps: cache.configMaps,
+                pvcs: cache.pvcs
+            )
+            pendingPurge = plan
+            return
+        }
         if let action = resolveSuggestion(suggestion) {
             requestWorkload(action, fromChat: true)
         }
