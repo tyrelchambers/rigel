@@ -66,7 +66,7 @@ final class CatalogViewModel {
     /// + `cache.pods` snapshots; recomputes on every access so the result
     /// tracks the watch stream.
     func fit(for app: CatalogApp) -> FitResult {
-        nodeFit(app: app, nodes: cache.nodes, pods: cache.pods)
+        nodeFit(app: app, nodes: cache.nodes, pods: cache.pods, nodeDisk: cache.nodeDisk)
     }
 
     /// Snapshot of an installed app's running instance, for the detail sheet.

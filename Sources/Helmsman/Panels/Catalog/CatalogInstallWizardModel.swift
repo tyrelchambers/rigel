@@ -507,12 +507,13 @@ final class CatalogInstallWizardModel: Identifiable {
         let lines = fit.perNode.map { nf -> String in
             let cpu = ResourceQuantity.formatCores(nf.freeCPU)
             let mem = ResourceQuantity.formatBytes(nf.freeMemoryBytes)
+            let disk = nf.allocatableDiskBytes > 0 ? " / \(ResourceQuantity.formatBytes(nf.freeDiskBytes)) disk free" : ""
             var flags: [String] = []
             if nf.tainted   { flags.append("tainted") }
             if nf.cordoned  { flags.append("cordoned") }
             if !nf.node.isReady { flags.append("not-ready") }
             let suffix = flags.isEmpty ? "" : " — " + flags.joined(separator: ", ")
-            return "- \(nf.node.metadata.name): \(cpu) CPU free / \(mem) memory free\(suffix)"
+            return "- \(nf.node.metadata.name): \(cpu) CPU free / \(mem) memory free\(disk)\(suffix)"
         }
         return lines.joined(separator: "\n")
     }

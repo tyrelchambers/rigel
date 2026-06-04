@@ -472,6 +472,15 @@ private struct NodeFitCard: View {
                 requested: ResourceQuantity.bytes(app.requirements.memoryRequest),
                 formatter: ResourceQuantity.formatBytes
             )
+            if fit.allocatableDiskBytes > 0 {
+                ResourceBar(
+                    label: "Disk",
+                    used: max(0, fit.allocatableDiskBytes - fit.freeDiskBytes),
+                    free: fit.freeDiskBytes,
+                    requested: Double(app.requirements.storageGiB ?? 0) * 1024 * 1024 * 1024,
+                    formatter: ResourceQuantity.formatBytes
+                )
+            }
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
