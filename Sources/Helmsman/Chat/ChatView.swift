@@ -185,9 +185,6 @@ struct ChatView: View {
                 NSPasteboard.general.setString(viewModel.transcript(), forType: .string)
             }
             .disabled(viewModel.messages.isEmpty)
-            headerButton(system: "eraser", tint: Theme.Foreground.secondary, help: "Clear visible messages") {
-                viewModel.clear()
-            }
             headerButton(system: "square.and.pencil", tint: Theme.Accent.primary, help: "New chat") {
                 onNewChat()
             }
