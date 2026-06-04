@@ -105,6 +105,22 @@ extension Secret {
         return Secret(metadata: meta, type: raw, data: encoded)
     }
 
+    /// A copy of this Secret retargeted to another namespace, with server-assigned
+    /// metadata (uid, creationTimestamp, annotations) dropped so it applies cleanly
+    /// via `kubectl apply -f -`. The base64 `data` payload is preserved verbatim,
+    /// so this works for copying a pull Secret across namespaces without decoding it.
+    func copied(toNamespace ns: String) -> Secret {
+        let meta = ObjectMeta(
+            name: metadata.name,
+            namespace: ns,
+            uid: "",
+            creationTimestamp: nil,
+            labels: metadata.labels,
+            annotations: nil
+        )
+        return Secret(metadata: meta, type: type, data: data)
+    }
+
     /// YAML for `kubectl apply -f -`. Hand-rolled — Secret's shape is shallow
     /// enough that pulling in a YAML package would be overkill.
     func toYAML() -> String {
