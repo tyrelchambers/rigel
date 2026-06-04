@@ -42,6 +42,7 @@ final class CatalogStore {
             if app.tags.contains(where: { $0.lowercased().contains(q) }) { return true }
             return false
         }
+        .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     private func load(from bundle: Bundle) {
