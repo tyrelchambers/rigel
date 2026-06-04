@@ -1,6 +1,19 @@
 [
   {
     "id": "vaultwarden",
+    "install": {
+      "mode": "manifest",
+      "manifest": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: {{instance}}-secrets\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: vaultwarden\n    app.kubernetes.io/instance: {{instance}}\ntype: Opaque\nstringData:\n  ADMIN_TOKEN: <FILL_ME_IN>\n---\napiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: {{instance}}-data\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: vaultwarden\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\nspec:\n  accessModes: [ReadWriteOnce]\n  resources:\n    requests:\n      storage: {{storage}}Gi\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: {{instance}}\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: vaultwarden\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\nspec:\n  type: ClusterIP\n  selector:\n    app.kubernetes.io/name: vaultwarden\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\n  ports:\n    - name: http\n      port: 80\n      targetPort: 80\n    - name: websocket\n      port: 3012\n      targetPort: 3012\n---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: {{instance}}\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: vaultwarden\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\nspec:\n  replicas: 1\n  strategy:\n    type: Recreate\n  selector:\n    matchLabels:\n      app.kubernetes.io/name: vaultwarden\n      app.kubernetes.io/instance: {{instance}}\n      app.kubernetes.io/component: app\n  template:\n    metadata:\n      labels:\n        app.kubernetes.io/name: vaultwarden\n        app.kubernetes.io/instance: {{instance}}\n        app.kubernetes.io/component: app\n    spec:\n      nodeName: {{nodeName}}\n      imagePullSecrets:\n        - name: {{imagePullSecret}}\n      securityContext:\n        runAsNonRoot: true\n        runAsUser: 65534\n        runAsGroup: 65534\n        fsGroup: 65534\n      containers:\n        - name: vaultwarden\n          image: vaultwarden/server:latest\n          imagePullPolicy: Always\n          ports:\n            - name: http\n              containerPort: 80\n            - name: websocket\n              containerPort: 3012\n          env:\n            - name: DOMAIN\n              value: https://{{hostname}}\n            - name: SIGNUPS_ALLOWED\n              value: \"true\"\n            - name: WEBSOCKET_ENABLED\n              value: \"true\"\n            - name: ADMIN_TOKEN\n              valueFrom:\n                secretKeyRef:\n                  name: {{instance}}-secrets\n                  key: ADMIN_TOKEN\n          resources:\n            requests:\n              cpu: 100m\n              memory: 128Mi\n            limits:\n              cpu: 500m\n              memory: 512Mi\n          readinessProbe:\n            httpGet:\n              path: /alive\n              port: 80\n            initialDelaySeconds: 10\n            periodSeconds: 10\n          livenessProbe:\n            httpGet:\n              path: /alive\n              port: 80\n            initialDelaySeconds: 10\n            periodSeconds: 10\n          securityContext:\n            readOnlyRootFilesystem: false\n            allowPrivilegeEscalation: false\n            capabilities:\n              drop: [ALL]\n          volumeMounts:\n            - name: data\n              mountPath: /data\n      volumes:\n        - name: data\n          persistentVolumeClaim:\n            claimName: {{instance}}-data\n---\napiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: {{instance}}\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: vaultwarden\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\n  annotations:\n    cert-manager.io/cluster-issuer: {{clusterIssuer}}\n    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure\n    traefik.ingress.kubernetes.io/router.middlewares: {{redirectMiddleware}}\nspec:\n  ingressClassName: traefik\n  tls:\n    - hosts:\n        - {{hostname}}\n      secretName: {{instance}}-tls\n  rules:\n    - host: {{hostname}}\n      http:\n        paths:\n          - path: /\n            pathType: Prefix\n            backend:\n              service:\n                name: {{instance}}\n                port:\n                  number: 80",
+      "secrets": [
+        {
+          "key": "ADMIN_TOKEN",
+          "label": "Admin panel token",
+          "description": "Token that protects the /admin panel (the password to log in at https://<hostname>/admin). Vaultwarden also accepts an Argon2 PHC hash here. Disable SIGNUPS_ALLOWED after creating your first user.",
+          "kind": "user",
+          "required": true
+        }
+      ]
+    },
     "matchImages": ["vaultwarden/server"],
     "name": "Vaultwarden",
     "tagline": "Lightweight Bitwarden-compatible password manager.",
@@ -97,6 +110,28 @@
   },
   {
     "id": "gitea",
+    "install": {
+      "mode": "manifest",
+      "manifest": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: {{instance}}-secrets\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: gitea\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\ntype: Opaque\nstringData:\n  GITEA__security__SECRET_KEY: <FILL_ME_IN>\n  GITEA__security__INTERNAL_TOKEN: <FILL_ME_IN>\n---\napiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: {{instance}}-data\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: gitea\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\nspec:\n  accessModes: [ReadWriteOnce]\n  resources:\n    requests:\n      storage: {{storage}}Gi\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: {{instance}}\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: gitea\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\nspec:\n  type: ClusterIP\n  selector:\n    app.kubernetes.io/name: gitea\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\n  ports:\n    - name: http\n      port: 3000\n      targetPort: 3000\n    - name: ssh\n      port: 22\n      targetPort: 22\n---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: {{instance}}\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: gitea\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\nspec:\n  replicas: 1\n  strategy:\n    type: Recreate\n  selector:\n    matchLabels:\n      app.kubernetes.io/name: gitea\n      app.kubernetes.io/instance: {{instance}}\n      app.kubernetes.io/component: app\n  template:\n    metadata:\n      labels:\n        app.kubernetes.io/name: gitea\n        app.kubernetes.io/instance: {{instance}}\n        app.kubernetes.io/component: app\n    spec:\n      securityContext:\n        runAsNonRoot: true\n        runAsUser: 1000\n        runAsGroup: 1000\n        fsGroup: 1000\n      containers:\n        - name: gitea\n          image: gitea/gitea:1.22\n          ports:\n            - name: http\n              containerPort: 3000\n            - name: ssh\n              containerPort: 22\n          env:\n            - name: GITEA__server__DOMAIN\n              value: {{hostname}}\n            - name: GITEA__server__ROOT_URL\n              value: https://{{hostname}}/\n            - name: GITEA__server__SSH_DOMAIN\n              value: {{hostname}}\n            - name: GITEA__service__DISABLE_REGISTRATION\n              value: \"false\"\n            - name: GITEA__database__DB_TYPE\n              value: sqlite3\n            - name: GITEA__security__SECRET_KEY\n              valueFrom:\n                secretKeyRef:\n                  name: {{instance}}-secrets\n                  key: GITEA__security__SECRET_KEY\n            - name: GITEA__security__INTERNAL_TOKEN\n              valueFrom:\n                secretKeyRef:\n                  name: {{instance}}-secrets\n                  key: GITEA__security__INTERNAL_TOKEN\n          resources:\n            requests:\n              cpu: 250m\n              memory: 256Mi\n            limits:\n              cpu: 1000m\n              memory: 1Gi\n          readinessProbe:\n            httpGet:\n              path: /api/healthz\n              port: 3000\n            initialDelaySeconds: 20\n            periodSeconds: 10\n          securityContext:\n            allowPrivilegeEscalation: false\n            capabilities:\n              drop: [ALL]\n          volumeMounts:\n            - name: data\n              mountPath: /data\n      volumes:\n        - name: data\n          persistentVolumeClaim:\n            claimName: {{instance}}-data\n---\napiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: {{instance}}\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: gitea\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\n  annotations:\n    cert-manager.io/cluster-issuer: {{clusterIssuer}}\n    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure\n    traefik.ingress.kubernetes.io/router.middlewares: {{redirectMiddleware}}\nspec:\n  ingressClassName: traefik\n  tls:\n    - hosts:\n        - {{hostname}}\n      secretName: {{instance}}-tls\n  rules:\n    - host: {{hostname}}\n      http:\n        paths:\n          - path: /\n            pathType: Prefix\n            backend:\n              service:\n                name: {{instance}}\n                port:\n                  number: 3000",
+      "secrets": [
+        {
+          "key": "GITEA__security__SECRET_KEY",
+          "label": "Gitea secret key",
+          "description": "Internal signing key for Gitea cookies/sessions (32-byte hex, i.e. openssl rand -hex 32 / gitea generate secret SECRET_KEY). Baked so the install is deterministic and survives pod restarts instead of being auto-generated onto the PVC.",
+          "kind": "random",
+          "length": 64,
+          "format": "hex"
+        },
+        {
+          "key": "GITEA__security__INTERNAL_TOKEN",
+          "label": "Gitea internal token",
+          "description": "Internal API token Gitea uses for hook/internal calls. Baked as a stable random hex value so it is not regenerated on each boot.",
+          "kind": "random",
+          "length": 64,
+          "format": "hex"
+        }
+      ]
+    },
     "matchImages": ["gitea/gitea"],
     "name": "Gitea",
     "tagline": "Lightweight self-hosted Git service + CI runner.",
@@ -121,6 +156,10 @@
   },
   {
     "id": "uptime-kuma",
+    "install": {
+      "mode": "manifest",
+      "manifest": "apiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: {{instance}}-data\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: uptime-kuma\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\nspec:\n  accessModes: [ReadWriteOnce]\n  resources:\n    requests:\n      storage: {{storage}}Gi\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: {{instance}}\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: uptime-kuma\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\nspec:\n  selector:\n    app.kubernetes.io/name: uptime-kuma\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\n  ports:\n    - name: http\n      port: 80\n      targetPort: 3001\n---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: {{instance}}\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: uptime-kuma\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\nspec:\n  replicas: 1\n  strategy:\n    type: Recreate\n  selector:\n    matchLabels:\n      app.kubernetes.io/name: uptime-kuma\n      app.kubernetes.io/instance: {{instance}}\n      app.kubernetes.io/component: app\n  template:\n    metadata:\n      labels:\n        app.kubernetes.io/name: uptime-kuma\n        app.kubernetes.io/instance: {{instance}}\n        app.kubernetes.io/component: app\n    spec:\n      securityContext:\n        runAsNonRoot: true\n        runAsUser: 1000\n        fsGroup: 1000\n      containers:\n        - name: uptime-kuma\n          image: louislam/uptime-kuma:1\n          ports:\n            - containerPort: 3001\n          resources:\n            requests:\n              cpu: 100m\n              memory: 128Mi\n            limits:\n              cpu: 500m\n              memory: 512Mi\n          readinessProbe:\n            httpGet:\n              path: /\n              port: 3001\n            initialDelaySeconds: 5\n            periodSeconds: 10\n          securityContext:\n            allowPrivilegeEscalation: false\n            capabilities:\n              drop: [ALL]\n          volumeMounts:\n            - name: data\n              mountPath: /app/data\n      volumes:\n        - name: data\n          persistentVolumeClaim:\n            claimName: {{instance}}-data\n---\napiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: {{instance}}\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: uptime-kuma\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\n  annotations:\n    cert-manager.io/cluster-issuer: {{clusterIssuer}}\n    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure\n    traefik.ingress.kubernetes.io/router.middlewares: {{redirectMiddleware}}\nspec:\n  ingressClassName: traefik\n  tls:\n    - hosts:\n        - {{hostname}}\n      secretName: {{instance}}-tls\n  rules:\n    - host: {{hostname}}\n      http:\n        paths:\n          - path: /\n            pathType: Prefix\n            backend:\n              service:\n                name: {{instance}}\n                port:\n                  number: 80"
+    },
     "matchImages": ["louislam/uptime-kuma"],
     "name": "Uptime Kuma",
     "tagline": "Self-hosted uptime monitoring with a beautiful UI.",
@@ -832,6 +871,25 @@
   },
   {
     "id": "minio",
+    "install": {
+      "mode": "manifest",
+      "manifest": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: {{instance}}-secrets\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: minio\n    app.kubernetes.io/instance: {{instance}}\ntype: Opaque\nstringData:\n  MINIO_ROOT_USER: <FILL_ME_IN>\n  MINIO_ROOT_PASSWORD: <FILL_ME_IN>\n---\napiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: {{instance}}-data\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: minio\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\nspec:\n  accessModes: [ReadWriteOnce]\n  resources:\n    requests:\n      storage: {{storage}}Gi\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: {{instance}}\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: minio\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\nspec:\n  type: ClusterIP\n  selector:\n    app.kubernetes.io/name: minio\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\n  ports:\n    - name: s3\n      port: 9000\n      targetPort: 9000\n    - name: console\n      port: 9001\n      targetPort: 9001\n---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: {{instance}}\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: minio\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\nspec:\n  replicas: 1\n  strategy:\n    type: Recreate\n  selector:\n    matchLabels:\n      app.kubernetes.io/name: minio\n      app.kubernetes.io/instance: {{instance}}\n      app.kubernetes.io/component: app\n  template:\n    metadata:\n      labels:\n        app.kubernetes.io/name: minio\n        app.kubernetes.io/instance: {{instance}}\n        app.kubernetes.io/component: app\n    spec:\n      securityContext:\n        runAsNonRoot: true\n        runAsUser: 1000\n        runAsGroup: 1000\n        fsGroup: 1000\n      containers:\n        - name: minio\n          image: minio/minio:RELEASE.2025-04-22T22-12-26Z\n          # First element is the real `minio` binary (image Cmd is [\"minio\"]);\n          # `server` is a minio subcommand, so naming the binary first is required.\n          command: [\"minio\", \"server\", \"/data\", \"--console-address\", \":9001\"]\n          env:\n            - name: MINIO_ROOT_USER\n              valueFrom:\n                secretKeyRef:\n                  name: {{instance}}-secrets\n                  key: MINIO_ROOT_USER\n            - name: MINIO_ROOT_PASSWORD\n              valueFrom:\n                secretKeyRef:\n                  name: {{instance}}-secrets\n                  key: MINIO_ROOT_PASSWORD\n          ports:\n            - name: s3\n              containerPort: 9000\n            - name: console\n              containerPort: 9001\n          readinessProbe:\n            httpGet:\n              path: /minio/health/live\n              port: 9000\n            initialDelaySeconds: 15\n            periodSeconds: 10\n          resources:\n            requests:\n              cpu: 250m\n              memory: 512Mi\n            limits:\n              cpu: 1000m\n              memory: 2Gi\n          securityContext:\n            allowPrivilegeEscalation: false\n            capabilities:\n              drop: [ALL]\n          volumeMounts:\n            - name: data\n              mountPath: /data\n      volumes:\n        - name: data\n          persistentVolumeClaim:\n            claimName: {{instance}}-data\n---\napiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: {{instance}}\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: minio\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\n  annotations:\n    cert-manager.io/cluster-issuer: {{clusterIssuer}}\n    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure\n    traefik.ingress.kubernetes.io/router.middlewares: {{redirectMiddleware}}\nspec:\n  ingressClassName: traefik\n  tls:\n    - hosts:\n        - {{hostname}}\n      secretName: {{instance}}-tls\n  rules:\n    # Routes to the web console (9001). To expose the S3 API (9000) externally,\n    # add a second host block below pointing at port 9000, e.g. s3.{{hostname}}.\n    - host: {{hostname}}\n      http:\n        paths:\n          - path: /\n            pathType: Prefix\n            backend:\n              service:\n                name: {{instance}}\n                port:\n                  number: 9001",
+      "secrets": [
+        {
+          "key": "MINIO_ROOT_USER",
+          "label": "Root access key (username)",
+          "description": "The MinIO root user / S3 access key you log into the console with and use as the S3 access key ID. Operator-chosen, e.g. a strong unique string.",
+          "kind": "user"
+        },
+        {
+          "key": "MINIO_ROOT_PASSWORD",
+          "label": "Root secret key (password)",
+          "description": "The MinIO root password / S3 secret key. App-generated strong secret.",
+          "kind": "random",
+          "length": 40
+        }
+      ]
+    },
     "matchImages": [
       "minio/minio",
       "quay.io/minio/minio"
@@ -1151,7 +1209,34 @@
   },
   {
     "id": "harbor",
-    "install": { "mode": "helm", "repoName": "harbor", "repoURL": "https://helm.goharbor.io", "chart": "harbor" },
+    "install": {
+      "mode": "helm",
+      "repoName": "harbor",
+      "repoURL": "https://helm.goharbor.io",
+      "chart": "harbor",
+      "version": "1.19.1",
+      "values": "expose:\n  type: ingress\n  tls:\n    enabled: true\n    certSource: secret\n    secret:\n      secretName: {{instance}}-tls\n  ingress:\n    hosts:\n      core: {{hostname}}\n    className: traefik\n    annotations:\n      cert-manager.io/cluster-issuer: {{clusterIssuer}}\n      traefik.ingress.kubernetes.io/router.entrypoints: web,websecure\n      traefik.ingress.kubernetes.io/router.middlewares: {{redirectMiddleware}}\n    labels:\n      app.kubernetes.io/name: harbor\n      app.kubernetes.io/instance: {{instance}}\n      app.kubernetes.io/component: portal\nexternalURL: https://{{hostname}}\nharborAdminPassword: <FILL_ME_IN>\nsecretKey: <FILL_ME_IN>\npersistence:\n  enabled: true\n  resourcePolicy: keep\n  persistentVolumeClaim:\n    registry:\n      accessMode: ReadWriteOnce\n      size: {{storage}}Gi\n    jobservice:\n      jobLog:\n        accessMode: ReadWriteOnce\n        size: 1Gi\n    database:\n      accessMode: ReadWriteOnce\n      size: 5Gi\n    redis:\n      accessMode: ReadWriteOnce\n      size: 5Gi\n    trivy:\n      accessMode: ReadWriteOnce\n      size: 5Gi\n  imageChartStorage:\n    type: filesystem\n    filesystem:\n      rootdirectory: /storage\ndatabase:\n  type: internal\nredis:\n  type: internal\ntrivy:\n  enabled: true",
+      "secrets": [
+        {
+          "key": "harborAdminPassword",
+          "label": "Harbor admin password",
+          "description": "Password for the built-in 'admin' user. Used to log into the Harbor UI and as the registry credential for docker login.",
+          "kind": "random",
+          "length": 24,
+          "format": "alphanumeric",
+          "required": true
+        },
+        {
+          "key": "secretKey",
+          "label": "Encryption secret key",
+          "description": "Key used by Harbor to encrypt sensitive data at rest. MUST be exactly 16 characters.",
+          "kind": "random",
+          "length": 16,
+          "format": "alphanumeric",
+          "required": true
+        }
+      ]
+    },
     "matchImages": [
       "goharbor/harbor-core"
     ],
