@@ -367,8 +367,8 @@ struct MainWindow: View {
                     model.teardownSession()
                     pendingCatalogInstall = nil
                 },
-                onHandoffToChat: { prompt in
-                    chat.sendHandoff(prompt, summary: "Continue installing \(model.app.name)")
+                onHandoffToChat: { prompt, summary in
+                    chat.sendHandoff(prompt, summary: summary)
                 }
             )
         }

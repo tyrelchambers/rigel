@@ -756,11 +756,10 @@ final class CatalogInstallWizardModel: Identifiable {
         verifyTask = Task { [weak self] in
             while !Task.isCancelled {
                 if Date() >= hardDeadline { return }
-                if Date() >= softDeadline {
-                    await MainActor.run { self?.verifyTimedOut = true }
-                }
-                await MainActor.run {
-                    guard let self else { return }
+                let timedOut = Date() >= softDeadline
+                let tick: VerifyTick? = await MainActor.run {
+                    guard let self else { return nil }
+                    if timedOut { self.verifyTimedOut = true }
                     let matched = self.cache.pods.filter { p in
                         p.metadata.namespace == ns
                             && p.metadata.labels?["app.kubernetes.io/instance"] == instanceLabel
@@ -768,12 +767,60 @@ final class CatalogInstallWizardModel: Identifiable {
                     self.verifyingPods = matched
                     if !matched.isEmpty, matched.allSatisfy(Self.podIsReady) {
                         self.step = .done
+                        return .done
                     }
+                    // Trouble → hand the unfinished install to the main-chat Helmsman, once.
+                    // Fire on a clear crashloop (restarts ≥ 3) or once the soft deadline passes
+                    // without all pods Ready — early transient restarts don't trip it.
+                    let crashing = matched.contains { p in
+                        (p.status?.containerStatuses ?? []).contains { $0.restartCount >= 3 }
+                    }
+                    if !self.didFinishHandoff, self.onFinishHandoff != nil, crashing || timedOut {
+                        self.didFinishHandoff = true
+                        let h = self.buildFinishHandoff()
+                        self.onFinishHandoff?(h.prompt, h.breadcrumb)
+                        return .handedOff
+                    }
+                    return .watching
                 }
-                if case .done = (await MainActor.run { self?.step }) ?? .configure { return }
+                if tick == nil || tick == .done || tick == .handedOff { return }
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
             }
         }
+    }
+
+    private enum VerifyTick { case done, handedOff, watching }
+
+    /// Set by the view: hand the unfinished install to the main chat as
+    /// `(prompt, breadcrumb)`. Invoked automatically from the verify poll on trouble.
+    var onFinishHandoff: ((String, String) -> Void)? = nil
+    private var didFinishHandoff = false
+
+    /// The resources this install owns — used to scope the Helmsman's auto-fixes.
+    var installScope: InstallScope { InstallScope(namespace: namespace, instance: instance) }
+
+    /// Snapshot the install's live state into a main-chat handoff (prompt + breadcrumb).
+    func buildFinishHandoff() -> (prompt: String, breadcrumb: String) {
+        let pods = cache.pods
+            .filter { $0.metadata.namespace == namespace
+                && $0.metadata.labels?["app.kubernetes.io/instance"] == instance }
+            .map { p in
+                InstallPodState(
+                    name: p.metadata.name,
+                    phase: p.status?.phase ?? "Unknown",
+                    ready: Self.podIsReady(p),
+                    restarts: (p.status?.containerStatuses ?? []).map(\.restartCount).max() ?? 0,
+                    reason: p.errorReason
+                )
+            }
+        let events = installEvents.suffix(15).map { e in
+            "[\(e.type ?? "Normal")] \(e.reason ?? ""): \(e.message ?? "")"
+        }
+        return InstallFinishPrompt.build(
+            appName: app.name, scope: installScope, hostname: hostname,
+            exposesIngress: app.exposesIngress, manifestYAML: manifestYAML,
+            pods: pods, events: Array(events), failingLogs: [], notes: notes
+        )
     }
 
     /// After this long the verify step surfaces a "taking a while" affordance
