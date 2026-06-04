@@ -32,4 +32,19 @@ final class RegistryAccountTests: XCTestCase {
         store.setRegistryAccounts([], for: ctx)   // cleanup
         XCTAssertNil(store.defaultRegistryAccount(for: ctx))
     }
+
+    func test_accountsViewModel_setDefault_makesExactlyOneDefault() {
+        let ctx = "vm-ctx-\(UUID().uuidString)"
+        let vm = AccountsViewModel(context: ctx)
+        let a = RegistryAccount(id: UUID(), registry: "docker.io", username: "u", secretName: "s",
+                                sourceNamespace: "default", managed: false, isDefault: true)
+        let b = RegistryAccount(id: UUID(), registry: "ghcr.io", username: "u", secretName: "s2",
+                                sourceNamespace: "default", managed: false, isDefault: false)
+        vm.accounts = [a, b]
+        vm.persist()
+        vm.setDefault(b.id)
+        XCTAssertEqual(vm.accounts.filter(\.isDefault).map(\.id), [b.id])
+        XCTAssertEqual(SessionStore.shared.defaultRegistryAccount(for: ctx)?.id, b.id)
+        SessionStore.shared.setRegistryAccounts([], for: ctx)   // cleanup
+    }
 }
