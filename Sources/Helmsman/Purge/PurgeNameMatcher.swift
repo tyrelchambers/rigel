@@ -26,6 +26,10 @@ enum PurgeNameMatcher {
         guard rc.count >= 4 else { return [root] }
         return among.filter { name in
             let c = core(name)
+            if c == rc { return true }
+            // Require the SHORTER core to still be identity-bearing (≥ 4) before a
+            // prefix match, so a 1–3 char candidate core can't over-merge.
+            guard min(c.count, rc.count) >= 4 else { return false }
             return c.hasPrefix(rc) || rc.hasPrefix(c)
         }
     }

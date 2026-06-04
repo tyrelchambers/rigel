@@ -23,4 +23,9 @@ final class PurgeNameMatcherTests: XCTestCase {
         // A 3-char core is too short to prefix-merge aggressively.
         XCTAssertEqual(PurgeNameMatcher.core("big-o"), "bigo")
     }
+    func test_shortCandidateCore_doesNotMatchLongRoot() {
+        // Root core `plane` must not pull in a candidate whose core is only `pl`.
+        let r = PurgeNameMatcher.relatedNames(root: "plane", among: ["plane", "pl-web"])
+        XCTAssertEqual(Set(r), ["plane"])
+    }
 }

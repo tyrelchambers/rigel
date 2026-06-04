@@ -5,8 +5,8 @@ struct PurgeResource: Identifiable, Hashable {
     let kind: Kind
     let name: String
     let namespace: String
-    /// Selected for deletion by default. PVCs (data) start selected too but are
-    /// visually flagged; the typed-name confirm is the real gate.
+    /// Selected for deletion by default. PVCs (data) start unselected — data deletion
+    /// is opt-in; the typed-name confirm is the final gate.
     var selected: Bool = true
     var id: String { "\(kind.rawValue)/\(namespace)/\(name)" }
 }
@@ -38,19 +38,30 @@ enum PurgeDiscovery {
             return PurgePlan(appName: rootName, namespace: namespace, resources: [],
                              blockedReason: "\(namespace) is a protected system namespace")
         }
+        // Scope every input collection to the target namespace BEFORE matching, so a
+        // same-named resource in another namespace can't be mislabeled or deleted in
+        // the wrong namespace. (The passed-in arrays are the unfiltered cache.)
+        let deployments  = deployments.filter  { ($0.metadata.namespace ?? "default") == namespace }
+        let statefulSets = statefulSets.filter { ($0.metadata.namespace ?? "default") == namespace }
+        let services     = services.filter     { ($0.metadata.namespace ?? "default") == namespace }
+        let ingresses    = ingresses.filter    { ($0.metadata.namespace ?? "default") == namespace }
+        let secrets      = secrets.filter      { ($0.metadata.namespace ?? "default") == namespace }
+        let configMaps   = configMaps.filter   { ($0.metadata.namespace ?? "default") == namespace }
+        let pvcs         = pvcs.filter         { ($0.metadata.namespace ?? "default") == namespace }
         let depNames = deployments.map(\.metadata.name)
         let related = Set(PurgeNameMatcher.relatedNames(root: rootName, among: depNames))
         // Sibling workloads (skip shared infra servers).
         var out: [PurgeResource] = []
         func add(_ kind: PurgeResource.Kind, _ name: String) {
             if PurgeGuardrails.isSharedInfraWorkload(name: name, namespace: namespace) { return }
-            out.append(PurgeResource(kind: kind, name: name, namespace: namespace))
+            // PVCs hold data: opt-in by default (like the DB drop), everything else opt-out.
+            out.append(PurgeResource(kind: kind, name: name, namespace: namespace, selected: kind != .pvc))
         }
         for d in deployments where related.contains(d.metadata.name) { add(.deployment, d.metadata.name) }
         let ssNames = PurgeNameMatcher.relatedNames(root: rootName, among: statefulSets.map(\.metadata.name))
         for s in statefulSets where ssNames.contains(s.metadata.name) { add(.statefulSet, s.metadata.name) }
         // Dependents matched by name relation to the app (same loose matcher).
-        for svc in services where !related.isDisjoint(with: [svc.metadata.name]) || isRelated(svc.metadata.name, rootName) { add(.service, svc.metadata.name) }
+        for svc in services where isRelated(svc.metadata.name, rootName) { add(.service, svc.metadata.name) }
         for ing in ingresses where isRelated(ing.metadata.name, rootName) { add(.ingress, ing.metadata.name) }
         for cm in configMaps where isRelated(cm.metadata.name, rootName) { add(.configMap, cm.metadata.name) }
         for sec in secrets where isRelated(sec.metadata.name, rootName) { add(.secret, sec.metadata.name) }
@@ -86,6 +97,10 @@ enum PurgeDiscovery {
     private static func isRelated(_ name: String, _ root: String) -> Bool {
         let c = PurgeNameMatcher.core(name), rc = PurgeNameMatcher.core(root)
         guard rc.count >= 4 else { return name == root }
+        if c == rc { return true }
+        // Only allow a prefix match when the SHORTER core is still long enough to be
+        // identity-bearing, so a 1–3 char candidate core can't over-merge.
+        guard min(c.count, rc.count) >= 4 else { return false }
         return c.hasPrefix(rc) || rc.hasPrefix(c)
     }
 }

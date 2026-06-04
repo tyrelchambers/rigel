@@ -15,10 +15,23 @@ final class PurgeDiscoveryTests: XCTestCase {
         let names = Set(plan.resources.map(\.name))
         XCTAssertTrue(names.contains("canada-hires-web"))
         XCTAssertTrue(names.contains("canadahires-api"))
-        XCTAssertTrue(names.contains("canada-hires-web") )
+        XCTAssertTrue(plan.resources.contains { $0.kind == .service && $0.name == "canada-hires-web" })
         XCTAssertFalse(names.contains("big-o"), "unrelated app must not be pulled in")
         XCTAssertEqual(plan.namespace, "default")
         XCTAssertEqual(plan.appName, "canada-hires-web")
+    }
+
+    func test_discover_doesNotMatchAcrossNamespaces() {
+        let dep = { (n: String, ns: String) in Deployment(metadata: ObjectMeta(name: n, namespace: ns, uid: "u-\(n)-\(ns)", creationTimestamp: nil, labels: nil, annotations: nil), spec: nil, status: nil) }
+        let plan = PurgeDiscovery.discover(
+            rootName: "canada-hires-web", namespace: "default",
+            deployments: [dep("canada-hires-web", "default"), dep("canadahires-api", "other")],
+            statefulSets: [],
+            services: [], ingresses: [], secrets: [], configMaps: [], pvcs: []
+        )
+        let matched = plan.resources.filter { $0.name == "canadahires-api" }
+        XCTAssertTrue(matched.isEmpty, "a same-named resource in a different namespace must not be included")
+        XCTAssertTrue(plan.resources.allSatisfy { $0.namespace == "default" })
     }
 
     func test_discover_detectsHelmRelease() {
