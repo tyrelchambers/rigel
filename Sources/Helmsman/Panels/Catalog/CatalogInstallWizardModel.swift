@@ -114,8 +114,17 @@ final class CatalogInstallWizardModel: Identifiable {
             repoURL: base.repoURL,
             chart: base.chart,
             version: base.version,
-            releaseName: instance
+            releaseName: instance,
+            manifest: base.manifest,
+            values: base.values,
+            secrets: base.secrets
         )
+    }
+
+    /// The account selected for this install, if any.
+    var selectedRegistryAccount: RegistryAccount? {
+        guard let id = selectedRegistryAccountID else { return nil }
+        return registryAccountOptions.first { $0.id == id }
     }
 
     /// State of the local `helm template` preview render for Helm-mode apps.
@@ -168,9 +177,28 @@ final class CatalogInstallWizardModel: Identifiable {
     /// Values the generated manifest leaves for the operator to fill — detected
     /// from `<FILL_ME_IN>` markers and empty Secret values (see PlaceholderScanner).
     var placeholders: [ManifestPlaceholder] = []
+    /// Authoritative typed secret schema when present: the catalog entry's baked
+    /// `install.secrets`, or a Claude-emitted ```secrets block. Drives the field
+    /// list, labels, random-vs-user behaviour, and `required` gating — replacing
+    /// the brittle YAML scrape. Empty ⇒ fall back to `PlaceholderScanner`.
+    var secretSpecs: [SecretFieldSpec] = []
     /// Collected values keyed by placeholder key; each is pre-seeded with a
     /// generated strong value so the common "just confirm" path is one click.
     var secretValues: [String: String] = [:]
+
+    /// Registry accounts available in this context (for the "Pull credentials"
+    /// control), read live from the store so it never goes stale. Empty when none.
+    var registryAccountOptions: [RegistryAccount] {
+        SessionStore.shared.registryAccounts(for: context ?? "")
+    }
+    /// The account whose pull secret will be ensured in the target namespace before
+    /// apply. nil = none (no authenticated pulls). Defaults to the context default.
+    var selectedRegistryAccountID: UUID? = nil
+
+    /// The declared spec for a secret key, when a typed schema is in force.
+    func secretSpec(_ key: String) -> SecretFieldSpec? {
+        secretSpecs.first { $0.key == key }
+    }
 
     // Live kubectl stdout from the Applying step.
     var applyLog: String = ""
@@ -207,6 +235,7 @@ final class CatalogInstallWizardModel: Identifiable {
         self.storageGiB = app.requirements.storageGiB ?? 0
         // Seed the node pin from the detail sheet's selection (nil = "Any").
         self.nodePin = initialNodePin
+        self.selectedRegistryAccountID = registryAccountOptions.first { $0.isDefault }?.id
     }
 
     var recommendedNodeName: String? {
@@ -282,8 +311,22 @@ final class CatalogInstallWizardModel: Identifiable {
     func advanceFromConfigure() {
         guard canAdvanceFromConfigure else { return }
         rememberChosenIssuer()
-        step = .generating
-        startGeneratingIfNeeded()
+        if app.isBaked {
+            startBakedInstall()
+        } else {
+            step = .generating
+            startGeneratingIfNeeded()
+        }
+    }
+
+    /// Deterministic path for baked catalog entries: render the parameterized
+    /// artifact with the configure-step values, adopt the declared secret schema,
+    /// and jump straight to Secrets (or Review when there are none). No Claude
+    /// session is started — the artifact was researched + verified at add-time.
+    private func startBakedInstall() {
+        manifestYAML = app.renderInstallArtifact(vars: templateVars) ?? ""
+        applySecretSchema(app.install?.secrets ?? [])
+        step = placeholders.isEmpty ? .review : .secrets
     }
 
     /// Persist the issuer picked for this install as the context's default, so
@@ -342,7 +385,15 @@ final class CatalogInstallWizardModel: Identifiable {
             if let last = transcript.last, last.role == .assistant {
                 let parsed = WizardArtifacts.parse(last.text)
                 if let yaml = parsed.yaml { manifestYAML = yaml }
-                detectPlaceholders()
+                // Prefer the typed ```secrets schema when Claude emitted one — it's
+                // authoritative. Only fall back to scraping the YAML (which can
+                // mistake a comment or a literal `value:` line for a field) when no
+                // schema is present.
+                if !parsed.secrets.isEmpty {
+                    applySecretSchema(parsed.secrets)
+                } else {
+                    detectPlaceholders()
+                }
             }
         case .usageLimit:
             // Usage limit ends this turn; the interactive chat surfaces the badge.
@@ -356,9 +407,30 @@ final class CatalogInstallWizardModel: Identifiable {
     /// each with a generated strong default so the common "confirm the random
     /// passwords" path is one click — the user can still overwrite any of them.
     private func detectPlaceholders() {
+        secretSpecs = []
         placeholders = PlaceholderScanner.scan(manifestYAML)
         for p in placeholders where secretValues[p.key] == nil {
             secretValues[p.key] = RandomSecret.generate(length: 32)
+        }
+    }
+
+    /// Adopt a typed secret schema as the authoritative field list. `random`
+    /// fields are pre-seeded with a strong value (the common "just confirm"
+    /// path); `user` fields start blank so they gate Continue. The manifest's
+    /// Secret keeps a `<FILL_ME_IN>` marker per key, which `runApply` substitutes
+    /// by key — so the field list never depends on scraping the YAML.
+    private func applySecretSchema(_ specs: [SecretFieldSpec]) {
+        secretSpecs = specs
+        placeholders = specs.map { ManifestPlaceholder(key: $0.key) }
+        for s in specs {
+            switch s.kind {
+            case .random:
+                if (secretValues[s.key] ?? "").isEmpty {
+                    secretValues[s.key] = RandomSecret.generate(length: s.length ?? 32, format: s.format)
+                }
+            case .user:
+                if secretValues[s.key] == nil { secretValues[s.key] = "" }
+            }
         }
     }
 
@@ -475,11 +547,12 @@ final class CatalogInstallWizardModel: Identifiable {
         return nil
     }
 
-    /// True when the last assistant turn contains a YAML fence — drives the
-    /// "Use this manifest" button's enabled state.
+    /// True when there's a manifest to advance with — drives the "Use this
+    /// manifest" button. Mirrors `currentManifestYAML` so the button and the
+    /// visual preview agree: once a manifest is captured it stays available,
+    /// even if later chit-chat turns carry no YAML fence.
     var hasManifestReady: Bool {
-        guard let last = transcript.last, last.role == .assistant else { return false }
-        return Self.extractYAMLBlock(from: last.text) != nil
+        currentManifestYAML?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
     }
 
     /// Best current manifest to visualize on the generate step: the extracted
@@ -534,14 +607,46 @@ final class CatalogInstallWizardModel: Identifiable {
             manifestYAML = extracted
         }
         guard !manifestYAML.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        detectPlaceholders()
+        // Keep a typed schema if `handle(.result)` already adopted one; only scrape
+        // when Claude emitted no ```secrets block.
+        if secretSpecs.isEmpty { detectPlaceholders() }
         step = placeholders.isEmpty ? .review : .secrets
     }
 
-    /// Every detected placeholder has a non-empty value. Each is pre-seeded with
-    /// a generated value, so this only blocks if the user cleared one.
+    /// Continue is allowed once every *required* field has a value. With a typed
+    /// schema, only `required` specs gate (a `random` field is always pre-seeded;
+    /// a `user` field gates until typed). Without a schema, every scraped
+    /// placeholder must be non-empty (all are pre-seeded, so this only blocks if
+    /// the user cleared one).
     var canAdvanceFromSecrets: Bool {
-        placeholders.allSatisfy { !(secretValues[$0.key] ?? "").trimmingCharacters(in: .whitespaces).isEmpty }
+        if !secretSpecs.isEmpty {
+            return secretSpecs.allSatisfy { spec in
+                !spec.required || !(secretValues[spec.key] ?? "").trimmingCharacters(in: .whitespaces).isEmpty
+            }
+        }
+        return placeholders.allSatisfy { !(secretValues[$0.key] ?? "").trimmingCharacters(in: .whitespaces).isEmpty }
+    }
+
+    /// Keys whose value the operator still hasn't supplied: scan the *filled*
+    /// manifest, so surviving `<FILL_ME_IN>` markers and empty Secret values both
+    /// surface. Drives the "what's left to fill" apply error so it names fields.
+    var unfilledPlaceholderKeys: [String] {
+        let filled = PlaceholderScanner.substitute(manifestYAML, values: secretValues)
+        return PlaceholderScanner.scan(filled).map(\.key)
+    }
+
+    /// Mask shown in the Review preview for a secret the operator has filled in.
+    static let secretMask = "••••••••"
+
+    /// The manifest as shown in the Review step: placeholders the operator has
+    /// filled are masked (so they read as "set" without exposing the secret),
+    /// while still-unfilled ones keep their `<FILL_ME_IN>` marker so they stand
+    /// out. Display-only — apply substitutes the real `secretValues`.
+    var maskedManifestYAML: String {
+        let masked = secretValues.compactMapValues {
+            $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : Self.secretMask
+        }
+        return PlaceholderScanner.substitute(manifestYAML, values: masked)
     }
 
     func advanceFromSecrets() {
@@ -549,10 +654,20 @@ final class CatalogInstallWizardModel: Identifiable {
         step = .review
     }
 
-    /// Regenerate one field's value (Secrets-step "Regenerate" button).
+    /// Regenerate one field's value (Secrets-step "Regenerate" button). Honours
+    /// the declared length when a schema is in force.
     func regenerateSecret(_ key: String) {
         guard placeholders.contains(where: { $0.key == key }) else { return }
-        secretValues[key] = RandomSecret.generate(length: 32)
+        let spec = secretSpec(key)
+        secretValues[key] = RandomSecret.generate(length: spec?.length ?? 32, format: spec?.format ?? .alphanumeric)
+    }
+
+    /// Where the Review step's back button lands: for a baked app, the Secrets
+    /// step (or Configure when there are none); otherwise back to the Claude
+    /// generate step.
+    var backStepFromReview: WizardStep {
+        guard app.isBaked else { return .generating }
+        return placeholders.isEmpty ? .configure : .secrets
     }
 
     func advanceFromReview() {
@@ -567,11 +682,24 @@ final class CatalogInstallWizardModel: Identifiable {
     private func runApply() async {
         applyLog = ""
 
+        // Ensure registry auth in the target namespace BEFORE applying, so image
+        // pulls are authenticated (covers app + bundled Postgres/Redis). No-op when
+        // no account is selected. The reconciler never logs the secret payload.
+        if let account = selectedRegistryAccount {
+            let outcome = await RegistryAccountReconciler(context: context).ensureAccess(account: account, namespace: namespace)
+            if case let .failed(msg) = outcome {
+                step = .failed("Couldn't set up registry credentials in \(namespace): \(msg)")
+                return
+            }
+        }
+
         // Substitute the collected values into the manifest's placeholders, then
         // hard-stop if any marker survived — never apply a half-blank Secret.
         let filled = PlaceholderScanner.substitute(manifestYAML, values: secretValues)
         if PlaceholderScanner.hasUnfilledMarkers(filled) {
-            step = .failed("Some required values are still unfilled (\(PlaceholderScanner.marker)). Go back to the Secrets step and complete them.")
+            let missing = unfilledPlaceholderKeys
+            let detail = missing.isEmpty ? "" : ": \(missing.joined(separator: ", "))"
+            step = .failed("These required values are still unfilled\(detail). Go back to the Secrets step and complete them.")
             return
         }
 

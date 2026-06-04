@@ -86,17 +86,23 @@ struct CatalogInstallWizard: View {
             switch model.step {
             case .configure:
                 TertiaryButton(label: "Cancel", action: onClose)
-                PrimaryButton(label: "Generate manifest", systemImage: "wand.and.stars", action: model.advanceFromConfigure)
-                    .disabled(!model.canAdvanceFromConfigure)
+                PrimaryButton(
+                    label: model.app.isBaked ? "Continue" : "Generate manifest",
+                    systemImage: model.app.isBaked ? "arrow.right" : "wand.and.stars",
+                    action: model.advanceFromConfigure
+                )
+                .disabled(!model.canAdvanceFromConfigure)
             case .generating:
                 // Footer controls live inside the step (chat strip + use-this-manifest).
                 EmptyView()
             case .secrets:
-                TertiaryButton(label: "Back to Claude", action: { model.step = .generating })
+                TertiaryButton(label: model.app.isBaked ? "Back" : "Back to Claude",
+                               action: { model.step = model.app.isBaked ? .configure : .generating })
                 PrimaryButton(label: "Continue", systemImage: "arrow.right", action: model.advanceFromSecrets)
                     .disabled(!model.canAdvanceFromSecrets)
             case .review:
-                TertiaryButton(label: "Back to Claude", action: { model.step = .generating })
+                TertiaryButton(label: model.app.isBaked ? "Back" : "Back to Claude",
+                               action: { model.step = model.backStepFromReview })
                 PrimaryButton(label: "Apply to cluster", systemImage: "arrow.down.app.fill", action: model.advanceFromReview)
                     .disabled(model.manifestYAML.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             case .applying, .verifying:
@@ -115,7 +121,13 @@ struct CatalogInstallWizard: View {
 
 private struct StepIndicator: View {
     @Bindable var model: CatalogInstallWizardModel
-    private let order: [WizardStep] = [.configure, .generating, .secrets, .review, .applying, .verifying, .done]
+    /// Baked apps install deterministically, so the "generate" step never runs —
+    /// drop it from the breadcrumb.
+    private var order: [WizardStep] {
+        model.app.isBaked
+            ? [.configure, .secrets, .review, .applying, .verifying, .done]
+            : [.configure, .generating, .secrets, .review, .applying, .verifying, .done]
+    }
 
     var body: some View {
         HStack(spacing: 4) {
@@ -183,7 +195,9 @@ private struct ConfigureStep: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Text("Pick the basics. Claude will use these values to generate a manifest tailored to your cluster.")
+                Text(model.app.isBaked
+                     ? "Pick the basics. These values are filled into this app's verified install manifest — no generation step."
+                     : "Pick the basics. Claude will use these values to generate a manifest tailored to your cluster.")
                     .font(Theme.Font.body(12))
                     .foregroundStyle(Theme.Foreground.secondary)
                 Group {
@@ -245,6 +259,20 @@ private struct ConfigureStep: View {
                         .pickerStyle(.menu)
                         .font(Theme.Font.mono(12))
                         .tint(Theme.Foreground.primary)
+                    }
+                    if !model.registryAccountOptions.isEmpty {
+                        FieldRow(label: "Pull credentials") {
+                            Picker("", selection: $model.selectedRegistryAccountID) {
+                                Text("None (anonymous pulls)").tag(UUID?.none)
+                                ForEach(model.registryAccountOptions) { acct in
+                                    Text("\(acct.registry) — \(acct.username)").tag(UUID?.some(acct.id))
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                            .font(Theme.Font.mono(12))
+                            .tint(Theme.Foreground.primary)
+                        }
                     }
                     if model.app.persistence {
                         FieldRow(label: "Storage (GiB)") {
@@ -575,6 +603,17 @@ private struct ReviewStep: View {
     private var isHelm: Bool { model.mode == .helm }
     private var lineCount: Int { model.manifestYAML.split(separator: "\n").count }
 
+    /// True once the operator has supplied at least one secret value. When so,
+    /// the preview shows masked values (and is read-only, since masked text can't
+    /// be edited back into real secrets).
+    private var hasFilledSecrets: Bool {
+        model.placeholders.contains { !(model.secretValues[$0.key] ?? "").trimmingCharacters(in: .whitespaces).isEmpty }
+    }
+
+    /// What the preview surfaces render: masked once secrets are filled, else the
+    /// raw manifest (editable for the common no-secret app).
+    private var previewYAML: String { hasFilledSecrets ? model.maskedManifestYAML : model.manifestYAML }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -585,9 +624,7 @@ private struct ReviewStep: View {
                     .font(Theme.Font.mono(10))
                     .foregroundStyle(Theme.Foreground.tertiary)
                 Spacer()
-                Text(isHelm
-                     ? "Edit the values — Helm renders these into the resources above."
-                     : "Edit freely — what you see is what we apply.")
+                Text(reviewHint)
                     .font(Theme.Font.body(11))
                     .foregroundStyle(Theme.Foreground.secondary)
             }
@@ -600,23 +637,43 @@ private struct ReviewStep: View {
                     .foregroundStyle(Theme.Foreground.tertiary)
                     .tracking(0.5)
             }
-            YAMLDisplay(yaml: $model.manifestYAML, editable: true)
-                .overlay(
-                    RoundedRectangle(cornerRadius: Theme.Radius.sm)
-                        .strokeBorder(Theme.Border.subtle, lineWidth: 1)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+            // Editable raw YAML for no-secret apps; once secrets are filled the
+            // preview is masked and therefore read-only (masked text can't round-
+            // trip back into real secret values).
+            if hasFilledSecrets {
+                YAMLDisplay(yaml: .constant(model.maskedManifestYAML), editable: false)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Theme.Radius.sm)
+                            .strokeBorder(Theme.Border.subtle, lineWidth: 1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+            } else {
+                YAMLDisplay(yaml: $model.manifestYAML, editable: true)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Theme.Radius.sm)
+                            .strokeBorder(Theme.Border.subtle, lineWidth: 1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+            }
         }
         .padding(20)
         .modifier(ConditionalHelmTrigger(model: model, enabled: isHelm))
     }
 
+    /// Right-aligned hint that adapts to mode and whether secrets are masked.
+    private var reviewHint: String {
+        if hasFilledSecrets { return "Filled secrets are masked (••••••••) — your real values apply on install." }
+        return isHelm
+            ? "Edit the values — Helm renders these into the resources above."
+            : "Edit freely — what you see is what we apply."
+    }
+
     @ViewBuilder private var resourcePreview: some View {
         if isHelm {
-            HelmResourcePreview(model: model, yaml: model.manifestYAML)
+            HelmResourcePreview(model: model, yaml: previewYAML)
                 .frame(maxWidth: .infinity, maxHeight: 260, alignment: .topLeading)
         } else if let summary = model.resourceSummary {
-            ResourceSummarySection(summary: summary, yaml: model.manifestYAML)
+            ResourceSummarySection(summary: summary, yaml: previewYAML)
                 .frame(maxWidth: .infinity, maxHeight: 260, alignment: .topLeading)
         }
     }
@@ -682,6 +739,12 @@ private struct SecretFieldRow: View {
     @Bindable var model: CatalogInstallWizardModel
     @State private var revealed = false
 
+    private var spec: SecretFieldSpec? { model.secretSpec(placeholder.key) }
+    /// `random`-kind fields (and legacy no-schema fields) offer a regenerate
+    /// button; a `user`-supplied value (an email, an external API key) does not.
+    private var canRegenerate: Bool { spec == nil || spec?.kind == .random }
+    private var isRequired: Bool { spec?.required ?? true }
+
     private var binding: Binding<String> {
         Binding(
             get: { model.secretValues[placeholder.key] ?? "" },
@@ -693,18 +756,31 @@ private struct SecretFieldRow: View {
         (model.secretValues[placeholder.key] ?? "").trimmingCharacters(in: .whitespaces).isEmpty
     }
 
+    /// Empty borders read as an error only when the field is actually required.
+    private var flagsMissing: Bool { isEmpty && isRequired }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Text(placeholder.key)
                     .font(Theme.Font.mono(12, weight: .semibold))
                     .foregroundStyle(Theme.Foreground.primary)
-                if isEmpty {
+                if flagsMissing {
                     Text("required")
                         .font(Theme.Font.mono(9))
                         .foregroundStyle(Theme.Status.failed)
+                } else if !isRequired {
+                    Text("optional")
+                        .font(Theme.Font.mono(9))
+                        .foregroundStyle(Theme.Foreground.tertiary)
                 }
                 Spacer()
+            }
+            if let desc = spec?.description, !desc.isEmpty {
+                Text(desc)
+                    .font(Theme.Font.body(11))
+                    .foregroundStyle(Theme.Foreground.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             HStack(spacing: 8) {
                 Group {
@@ -719,7 +795,7 @@ private struct SecretFieldRow: View {
                 .padding(.horizontal, 10).padding(.vertical, 7)
                 .background(Theme.Surface.field)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
-                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(isEmpty ? Theme.Status.failed.opacity(0.5) : Theme.Border.subtle, lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(flagsMissing ? Theme.Status.failed.opacity(0.5) : Theme.Border.subtle, lineWidth: 1))
 
                 Button { revealed.toggle() } label: {
                     Image(systemName: revealed ? "eye.slash" : "eye")
@@ -729,13 +805,15 @@ private struct SecretFieldRow: View {
                 .buttonStyle(.plain)
                 .help(revealed ? "Hide" : "Reveal")
 
-                Button { model.regenerateSecret(placeholder.key) } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.Foreground.tertiary)
+                if canRegenerate {
+                    Button { model.regenerateSecret(placeholder.key) } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.Foreground.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Generate a strong random value")
                 }
-                .buttonStyle(.plain)
-                .help("Generate a strong random value")
             }
         }
     }
