@@ -93,6 +93,11 @@ struct ContainerStatus: Codable, Hashable {
     let ready: Bool
     let restartCount: Int
     let state: ContainerState?
+    /// The image actually pulled, as a digest reference (e.g.
+    /// `ghcr.io/x/y@sha256:…` or `docker-pullable://…@sha256:…`). This is the
+    /// ground truth for "what are we really running" behind a moving tag like
+    /// `:latest`, where the spec image string carries no version.
+    var imageID: String? = nil
 }
 
 struct ContainerState: Codable, Hashable {

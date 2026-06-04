@@ -736,20 +736,27 @@ final class CatalogInstallWizardModel: Identifiable {
     }
 
     /// Poll `cache.pods` for pods matching this install's namespace + instance
-    /// label. Advance to .done once all matched pods report Ready, or stop at
-    /// the 90s timeout (still .verifying, with `verifyTimedOut = true` so the
-    /// UI can offer a "give up / open in chat" affordance).
+    /// label. Advance to .done once all matched pods report Ready.
+    ///
+    /// Timeout is two-stage so a slow first-time image pull (heavyweight apps
+    /// pulling multi-hundred-MB images, Postgres + app + a migration Job) isn't
+    /// reported as a failure while it's legitimately still coming up: at the
+    /// *soft* deadline we set `verifyTimedOut = true` to surface the "taking a
+    /// while / open in chat" affordance but KEEP watching, so it still flips to
+    /// .done when the pods finally report Ready. Only the *hard* deadline stops
+    /// the poll entirely, to avoid watching a truly stuck install forever.
     private func startVerifyPoll() {
         verifyTask?.cancel()
         verifyTimedOut = false
-        let deadline = Date().addingTimeInterval(90)
+        let softDeadline = Date().addingTimeInterval(Self.verifySoftTimeout)
+        let hardDeadline = Date().addingTimeInterval(Self.verifyHardTimeout)
         let instanceLabel = instance
         let ns = namespace
         verifyTask = Task { [weak self] in
             while !Task.isCancelled {
-                if Date() >= deadline {
+                if Date() >= hardDeadline { return }
+                if Date() >= softDeadline {
                     await MainActor.run { self?.verifyTimedOut = true }
-                    return
                 }
                 await MainActor.run {
                     guard let self else { return }
@@ -767,6 +774,12 @@ final class CatalogInstallWizardModel: Identifiable {
             }
         }
     }
+
+    /// After this long the verify step surfaces a "taking a while" affordance
+    /// but keeps watching (slow image pulls are normal for big apps).
+    private static let verifySoftTimeout: TimeInterval = 300
+    /// After this long we stop polling entirely — a genuinely stuck install.
+    private static let verifyHardTimeout: TimeInterval = 900
 
     private static func podIsReady(_ pod: Pod) -> Bool {
         let statuses = pod.status?.containerStatuses ?? []

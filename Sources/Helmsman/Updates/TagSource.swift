@@ -5,7 +5,28 @@ import Foundation
 /// resolver can be unit-tested with a stub instead of real network.
 protocol TagSource: Sendable {
     func listTags(repository: String) async throws -> [String]
+
+    /// The manifest digest a tag/reference currently resolves to (the registry's
+    /// `Docker-Content-Digest`). Used by the moving-tag tier to compare what's
+    /// running against the newest release. Default nil ⇒ this source can't
+    /// resolve digests (e.g. the GitHub Releases tier), so the resolver routes
+    /// such images to assist rather than guessing.
+    func resolveDigest(repository: String, reference: String) async throws -> String?
 }
+
+extension TagSource {
+    func resolveDigest(repository: String, reference: String) async throws -> String? { nil }
+}
+
+/// Accept header advertising the manifest media types a digest HEAD may return,
+/// so multi-arch (OCI index / Docker manifest list) and single-arch images both
+/// resolve to their canonical `Docker-Content-Digest`.
+private let ociManifestAccept = [
+    "application/vnd.oci.image.index.v1+json",
+    "application/vnd.docker.distribution.manifest.list.v2+json",
+    "application/vnd.oci.image.manifest.v1+json",
+    "application/vnd.docker.distribution.manifest.v2+json",
+].joined(separator: ", ")
 
 enum TagSourceError: Error, CustomStringConvertible {
     case unsupportedRegistry(String)
@@ -55,6 +76,29 @@ struct DockerHubTagSource: TagSource {
         return page.results.map(\.name)
     }
 
+    /// Docker Hub digests come from the OCI distribution API on
+    /// `registry-1.docker.io` (the hub.docker.com tags API isn't reliable for
+    /// the canonical manifest-list digest), with an anonymous pull token.
+    func resolveDigest(repository: String, reference: String) async throws -> String? {
+        let token = try await Self.fetchRegistryToken(repository: repository, session: session)
+        var req = URLRequest(url: URL(string: "https://registry-1.docker.io/v2/\(repository)/manifests/\(reference)")!)
+        req.httpMethod = "HEAD"
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue(ociManifestAccept, forHTTPHeaderField: "Accept")
+        let (_, response) = try await session.data(for: req)
+        try Self.checkStatus(response)
+        return (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Docker-Content-Digest")
+    }
+
+    private static func fetchRegistryToken(repository: String, session: URLSession) async throws -> String {
+        let url = URL(string: "https://auth.docker.io/token?service=registry.docker.io&scope=repository:\(repository):pull")!
+        let (data, response) = try await session.data(from: url)
+        try checkStatus(response)
+        struct Token: Decodable { let token: String }
+        guard let t = try? JSONDecoder().decode(Token.self, from: data) else { throw TagSourceError.decodeFailed }
+        return t.token
+    }
+
     private static func checkStatus(_ response: URLResponse) throws {
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             throw TagSourceError.badResponse(status: http.statusCode)
@@ -80,6 +124,22 @@ struct GHCRTagSource: TagSource {
             throw TagSourceError.decodeFailed
         }
         return list.tags ?? []
+    }
+
+    /// GHCR digest via an OCI manifest HEAD; the `Docker-Content-Digest` header
+    /// is the canonical (manifest-list) digest. Same anonymous bearer token as
+    /// the tag list.
+    func resolveDigest(repository: String, reference: String) async throws -> String? {
+        let token = try await fetchAnonymousToken(repository: repository)
+        var req = URLRequest(url: URL(string: "https://ghcr.io/v2/\(repository)/manifests/\(reference)")!)
+        req.httpMethod = "HEAD"
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue(ociManifestAccept, forHTTPHeaderField: "Accept")
+        let (_, response) = try await session.data(for: req)
+        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            throw TagSourceError.badResponse(status: http.statusCode)
+        }
+        return (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Docker-Content-Digest")
     }
 
     private func fetchAnonymousToken(repository: String) async throws -> String {
