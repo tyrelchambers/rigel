@@ -25,6 +25,7 @@ struct MainWindow: View {
     @State private var catalogVM: CatalogViewModel
     @State private var assistantVM: AssistantViewModel
     @State private var settingsVM: SettingsViewModel
+    @State private var accountsVM: AccountsViewModel
     @State private var updateScheduler: UpdateScheduler
     @State private var paletteOpen = false
     @State private var pendingWorkloadAction: WorkloadAction?
@@ -75,6 +76,7 @@ struct MainWindow: View {
         let assistant = AssistantViewModel(cache: cache)
         _assistantVM = State(initialValue: assistant)
         _settingsVM = State(initialValue: SettingsViewModel(cache: cache, assistant: assistant))
+        _accountsVM = State(initialValue: AccountsViewModel(context: ""))
     }
 
     var body: some View {
@@ -605,6 +607,8 @@ struct MainWindow: View {
                 onToggleDailyUpdates: { updateScheduler.setEnabled($0) },
                 onCheckUpdatesNow: { Task { await updateScheduler.checkNow() } }
             )
+        case .accounts:
+            AccountsPanel(viewModel: accountsVM)
         }
     }
 
@@ -614,6 +618,7 @@ struct MainWindow: View {
         assistantVM.load(context: context)
         settingsVM.stopLinking()   // tear down any active link port-forward before the context changes
         settingsVM.load(context: context)
+        accountsVM.load(context: context)
         cache.start(context: context)
         updateScheduler.start()
     }
