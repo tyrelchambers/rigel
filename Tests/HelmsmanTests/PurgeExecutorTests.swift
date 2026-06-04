@@ -36,4 +36,18 @@ final class PurgeExecutorTests: XCTestCase {
         let plan = PurgePlan(appName: "x", namespace: "default", resources: [])
         XCTAssertNil(PurgeExecutor.helmUninstallArgs(for: plan))
     }
+
+    func test_dropDatabase_optInOnly() {
+        var plan = PurgePlan(appName: "canadahires", namespace: "default", resources: [])
+        plan.databaseHint = "canadahires"
+        XCTAssertNil(PurgeExecutor.dbDropPlan(for: plan))          // default off
+        plan.dropDatabase = true
+        XCTAssertEqual(PurgeExecutor.dbDropPlan(for: plan)?.database, "canadahires")
+    }
+
+    func test_dropDatabase_withoutHint_yieldsNil() {
+        var plan = PurgePlan(appName: "x", namespace: "default", resources: [])
+        plan.dropDatabase = true
+        XCTAssertNil(PurgeExecutor.dbDropPlan(for: plan))
+    }
 }

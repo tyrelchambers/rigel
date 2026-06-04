@@ -55,6 +55,11 @@ enum PurgeDiscovery {
         for cm in configMaps where isRelated(cm.metadata.name, rootName) { add(.configMap, cm.metadata.name) }
         for sec in secrets where isRelated(sec.metadata.name, rootName) { add(.secret, sec.metadata.name) }
         for p in pvcs where isRelated(p.metadata.name, rootName) { add(.pvc, p.metadata.name) }
+        // TODO(purge-db): set `databaseHint` from real discovery (a logical DB/role in
+        // the shared postgres/mysql server whose name matches the app core). Left nil
+        // for v1 — the DB drop toggle is default-OFF and only ever surfaces an
+        // informational outcome (PurgeExecutor.run), never an auto-executed DROP, so a
+        // nil hint here is the safe, simplest correct default.
         return PurgePlan(appName: rootName, namespace: namespace, resources: out,
                          helmRelease: helmRelease(among: secrets, rootName: rootName))
     }

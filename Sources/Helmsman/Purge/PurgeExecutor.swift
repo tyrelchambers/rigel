@@ -28,6 +28,15 @@ enum PurgeExecutor {
         return ["uninstall", release, "-n", plan.namespace]
     }
 
+    /// Pure: the opt-in logical DB drop target, or nil. Returns nil unless the user
+    /// opted in (`dropDatabase`) AND discovery found a `databaseHint`. The `server` is
+    /// the shared database SERVER the app's logical DB lives in (the workload guardrails
+    /// protect from deletion); only the named `database` inside it would be dropped.
+    static func dbDropPlan(for plan: PurgePlan) -> (server: String, database: String)? {
+        guard plan.dropDatabase, let db = plan.databaseHint else { return nil }
+        return (server: "postgres", database: db)
+    }
+
     struct Outcome { let resource: String; let ok: Bool; let detail: String }
 
     /// Run the plan: if Helm-managed, `helm uninstall` the release FIRST (so the chart
@@ -45,6 +54,19 @@ enum PurgeExecutor {
             let r = await commander.run(action)
             results.append(Outcome(resource: action.title, ok: r.ok,
                                    detail: r.ok ? "deleted" : (r.stderr.isEmpty ? "exit \(r.exitCode)" : r.stderr)))
+        }
+
+        // INTENTIONAL v1 SCOPING: when a DB drop is opted in we do NOT auto-execute a
+        // `DROP DATABASE`. Discovering the right pod + credentials in the shared server
+        // is fiddly and the action is irreversible, so we surface it as a non-ok,
+        // informational outcome for the operator (or the Helmsman) to run by hand,
+        // rather than performing a blind destructive exec into shared infrastructure.
+        if let drop = dbDropPlan(for: plan) {
+            results.append(Outcome(
+                resource: "database/\(drop.database)",
+                ok: false,
+                detail: "DB drop requested — run manually or ask the Helmsman: "
+                    + "DROP DATABASE \"\(drop.database)\" on the shared \(drop.server)"))
         }
         return results
     }
