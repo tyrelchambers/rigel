@@ -76,7 +76,10 @@ struct RegistryAccountReconciler {
             // memory only, never logged.
             let (json, ok) = await read(["get", "secret", account.secretName, "-n", account.sourceNamespace, "-o", "json"])
             guard ok else { return .failed("couldn't read \(account.secretName) in \(account.sourceNamespace)") }
-            guard let src = try? JSONDecoder().decode(Secret.self, from: Data(json.utf8)) else {
+            // Must use the shared `.kube` decoder: k8s metadata.creationTimestamp is
+            // an ISO-8601 string, which a bare JSONDecoder (default .deferredToDate)
+            // can't parse — that mis-decode is what surfaced as "couldn't parse".
+            guard let src = try? JSONDecoder.kube.decode(Secret.self, from: Data(json.utf8)) else {
                 return .failed("couldn't parse \(account.secretName)")
             }
             let copy = src.copied(toNamespace: namespace)
