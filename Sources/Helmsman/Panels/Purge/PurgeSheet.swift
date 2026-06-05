@@ -215,7 +215,10 @@ struct PurgeSheet: View {
                 .opacity(canPurge ? 1.0 : 0.4)
             }
             .buttonStyle(.plain)
-            .keyboardShortcut(.defaultAction)
+            // Deliberately NOT .defaultAction: the confirm gate is a text field,
+            // so binding this destructive action to Return would let "type the
+            // name + press Enter" purge the app in one motion, bypassing the
+            // intended deliberate click. Return must do nothing here.
             .disabled(!canPurge)
         }
         .padding(.horizontal, 18).padding(.vertical, 12)
