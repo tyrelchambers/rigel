@@ -113,17 +113,56 @@ struct GHCRTagSource: TagSource {
 
     func listTags(repository: String) async throws -> [String] {
         let token = try await fetchAnonymousToken(repository: repository)
-        var req = URLRequest(url: URL(string: "https://ghcr.io/v2/\(repository)/tags/list")!)
-        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        let (data, response) = try await session.data(for: req)
-        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-            throw TagSourceError.badResponse(status: http.statusCode)
+        let base = URL(string: "https://ghcr.io")!
+        // GHCR's OCI `/tags/list` is paginated (default 100) and returns tags
+        // oldest-first with NO ordering guarantee, so the newest releases sit on
+        // the LAST page. We MUST walk every page via the `Link: rel="next"`
+        // header — fetching only page 1 silently caps visibility at the ~100
+        // oldest tags, which made every >100-tag image (e.g. paperless-ngx) look
+        // perpetually up to date. The page cap is a runaway-loop guard, not a
+        // truncation: 50×100 covers far more tags than any real image carries.
+        var next: URL? = URL(string: "https://ghcr.io/v2/\(repository)/tags/list?n=100")!
+        var all: [String] = []
+        var pages = 0
+        while let url = next, pages < 50 {
+            var req = URLRequest(url: url)
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            let (data, response) = try await session.data(for: req)
+            guard let http = response as? HTTPURLResponse else { throw TagSourceError.decodeFailed }
+            if !(200...299).contains(http.statusCode) {
+                throw TagSourceError.badResponse(status: http.statusCode)
+            }
+            guard let tags = Self.parseTags(data) else { throw TagSourceError.decodeFailed }
+            all.append(contentsOf: tags)
+            next = Self.nextPageURL(linkHeader: http.value(forHTTPHeaderField: "Link"), base: base)
+            pages += 1
         }
+        return all
+    }
+
+    /// Decode the `{ "tags": [...] }` body of one tag-list page. nil on malformed
+    /// JSON. Pure — unit-tested without a network round-trip.
+    static func parseTags(_ data: Data) -> [String]? {
         struct TagList: Decodable { let tags: [String]? }
-        guard let list = try? JSONDecoder().decode(TagList.self, from: data) else {
-            throw TagSourceError.decodeFailed
-        }
+        guard let list = try? JSONDecoder().decode(TagList.self, from: data) else { return nil }
         return list.tags ?? []
+    }
+
+    /// Resolve the `rel="next"` page from an OCI `Link` response header against
+    /// `base`, or nil when there is no next page. The registry emits a relative
+    /// reference like `</v2/<repo>/tags/list?last=X&n=100>; rel="next"`. Pure.
+    static func nextPageURL(linkHeader: String?, base: URL) -> URL? {
+        guard let header = linkHeader else { return nil }
+        for segment in header.split(separator: ",") {
+            let part = segment.trimmingCharacters(in: .whitespaces)
+            guard part.range(of: #"rel="?next"?"#, options: .regularExpression) != nil,
+                  let lo = part.firstIndex(of: "<"),
+                  let hi = part.firstIndex(of: ">"), lo < hi
+            else { continue }
+            let reference = String(part[part.index(after: lo)..<hi])
+            return URL(string: reference, relativeTo: base)?.absoluteURL
+        }
+        return nil
     }
 
     /// GHCR digest via an OCI manifest HEAD; the `Docker-Content-Digest` header
