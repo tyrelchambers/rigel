@@ -237,11 +237,11 @@ actor ClaudeSession {
             p.standardInput = inPipe
             self.stdinPipe = inPipe
 
-            var parser = StreamJsonParser()
+            let parserBox = StreamJsonParserBox()
             outPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
                 let chunk = handle.availableData
                 guard !chunk.isEmpty else { return }
-                parser.feed(chunk) { line in
+                parserBox.feed(chunk) { line in
                     let event = ClaudeEventDecoder.decode(line)
                     if case .systemInit(let sid, _) = event {
                         Task { await self?.recordSessionId(sid) }
