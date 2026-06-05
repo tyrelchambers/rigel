@@ -31,6 +31,9 @@ final class ClusterCache {
     private(set) var clusterRoles: [ClusterRole] = []
     private(set) var clusterRoleBindings: [ClusterRoleBinding] = []
     private(set) var nodeMetrics: [String: NodeMetrics] = [:]
+    /// Real per-node disk usage from the kubelet Summary API, keyed by node name.
+    /// Empty when the Summary API is unreachable (RBAC / proxy disabled).
+    private(set) var nodeDisk: [String: NodeDiskUsage] = [:]
     /// Per-pod metrics history. Key = "namespace/name". Newest sample at the end.
     private(set) var podMetricsHistory: [String: [PodMetricSample]] = [:]
 
@@ -125,6 +128,7 @@ final class ClusterCache {
                 scheduledBackupTask(c),
                 metricsPollTask(c),
                 podMetricsPollTask(c),
+                nodeDiskPollTask(c),
             ]
         } catch {
             self.error = "\(error)"
@@ -395,6 +399,30 @@ final class ClusterCache {
                     }
                 } catch {
                     await MainActor.run { [weak self] in self?.metricsAvailable = false }
+                }
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+            }
+        }
+    }
+
+    /// Poll each node's kubelet Summary API for real filesystem usage. One
+    /// request per node per cycle (homelab-scale). Best-effort: nodes whose
+    /// summary is unreachable are simply omitted; a wholly-empty result leaves
+    /// the last good map in place rather than blanking the UI.
+    private func nodeDiskPollTask(_ c: KubectlClient) -> Task<Void, Never> {
+        Task { [weak self] in
+            while !Task.isCancelled {
+                let names = await MainActor.run { [weak self] in self?.nodes.map { $0.metadata.name } ?? [] }
+                var collected: [String: NodeDiskUsage] = [:]
+                for name in names {
+                    let summary: NodeStatsSummary? = try? await c.getRaw("/api/v1/nodes/\(name)/proxy/stats/summary")
+                    if let disk = summary?.diskUsage { collected[name] = disk }
+                }
+                let result = collected
+                await MainActor.run { [weak self] in
+                    guard let self, !result.isEmpty else { return }
+                    self.nodeDisk = result
+                    self.metricsRevision &+= 1
                 }
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
             }

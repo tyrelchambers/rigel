@@ -11,6 +11,38 @@ final class SecretTests: XCTestCase {
         XCTAssertEqual(SecretType(rawType: "bootstrap.kubernetes.io/token"), .other)
     }
 
+    /// Regression: a real `kubectl get secret -o json` payload carries an
+    /// ISO-8601 `metadata.creationTimestamp`. It must decode through the shared
+    /// `.kube` decoder (the cross-namespace pull-secret copy in
+    /// RegistryAccountReconciler relies on this). A bare JSONDecoder defaults to
+    /// `.deferredToDate` and fails on the string — which surfaced as the
+    /// "couldn't parse <secret>" install error.
+    func test_secret_decodesKubectlJSON_viaKubeDecoder() throws {
+        let json = """
+        {
+          "apiVersion": "v1",
+          "kind": "Secret",
+          "type": "kubernetes.io/dockerconfigjson",
+          "metadata": {
+            "name": "helmsman-dockerhub",
+            "namespace": "default",
+            "uid": "abc-123",
+            "creationTimestamp": "2026-06-04T01:35:38Z",
+            "resourceVersion": "12345",
+            "labels": {"app.kubernetes.io/managed-by": "helmsman"}
+          },
+          "data": {".dockerconfigjson": "eyJhdXRocyI6e319"}
+        }
+        """
+        let data = Data(json.utf8)
+        let secret = try JSONDecoder.kube.decode(Secret.self, from: data)
+        XCTAssertEqual(secret.metadata.name, "helmsman-dockerhub")
+        XCTAssertEqual(secret.secretType, .dockerconfigjson)
+        XCTAssertNotNil(secret.data?[".dockerconfigjson"])
+        // A bare decoder can't handle the ISO-8601 timestamp — proving why .kube is required.
+        XCTAssertThrowsError(try JSONDecoder().decode(Secret.self, from: data))
+    }
+
     func test_decodedHelper_roundTripsUTF8() {
         let s = Secret.draft(
             name: "demo",

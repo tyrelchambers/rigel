@@ -6,6 +6,7 @@ struct OverviewPanel: View {
     @Bindable var databasesVM: DatabasesViewModel
     @Bindable var rightSizingVM: RightSizingViewModel
     let onInvestigate: () -> Void
+    var onPurge: () -> Void = {}
 
     var body: some View {
         ScrollView {
@@ -34,6 +35,20 @@ struct OverviewPanel: View {
                     .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
             }
             Spacer()
+            Button(action: onPurge) {
+                HStack(spacing: 6) {
+                    Image(systemName: "trash").font(.system(size: 11))
+                    Text("Purge an app")
+                        .font(Theme.Font.body(12, weight: .medium))
+                }
+                .foregroundStyle(Theme.Status.failed)
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(Theme.Status.failed.opacity(0.10))
+                .overlay(Capsule().strokeBorder(Theme.Status.failed.opacity(0.4), lineWidth: 1))
+                .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .help("Remove an entire app and its related resources")
             Button(action: onInvestigate) {
                 HStack(spacing: 6) {
                     Image(systemName: "sparkles").font(.system(size: 11))

@@ -57,6 +57,19 @@ struct ReleaseVersion: Comparable, Hashable {
     }
 }
 
+/// The newest *stable* version tag in a registry's tag list, ignoring
+/// pre-releases and unparseable tags (`latest`, `stable`, …). Used by the
+/// moving-tag tier, where there is no running version to compare against — we
+/// just need "what is the newest released artifact". nil when no tag parses.
+func newestStableTag(_ availableTags: [String]) -> String? {
+    var best: (tag: String, version: ReleaseVersion)? = nil
+    for tag in availableTags {
+        guard let v = ReleaseVersion(tag: tag), !v.isPrerelease else { continue }
+        if best == nil || best!.version < v { best = (tag, v) }
+    }
+    return best?.tag
+}
+
 /// Given the running tag and every tag a registry reports, find the newest
 /// *stable* release strictly newer than what's running. Returns nil when
 /// nothing is newer (or the running tag isn't a parseable version — that case

@@ -28,6 +28,7 @@ struct NodesPanel: View {
                         NodeCard(
                             node: node,
                             metrics: viewModel.metrics[node.metadata.name],
+                            disk: viewModel.disk[node.metadata.name],
                             podCount: viewModel.podCounts[node.metadata.name] ?? 0,
                             isExpanded: viewModel.isExpanded(node),
                             onToggle: { viewModel.toggleExpansion(node) },
@@ -83,6 +84,7 @@ struct NodesPanel: View {
 private struct NodeCard: View {
     let node: Node
     let metrics: NodeMetrics?
+    let disk: NodeDiskUsage?
     let podCount: Int
     let isExpanded: Bool
     let onToggle: () -> Void
@@ -98,6 +100,14 @@ private struct NodeCard: View {
 
     private var cpuPercent: Double { cpuCapacity > 0 ? cpuUsage / cpuCapacity : 0 }
     private var memPercent: Double { memCapacity > 0 ? memUsage / memCapacity : 0 }
+
+    // Disk: real usage from the kubelet Summary API; falls back to ephemeral-storage
+    // capacity (no usage) so the bar still shows total when the Summary API is blocked.
+    private var diskCapacity: Double {
+        disk?.capacityBytes ?? ResourceQuantity.bytes(node.status?.capacity?["ephemeral-storage"] ?? "0")
+    }
+    private var diskUsage: Double { disk?.usedBytes ?? 0 }
+    private var diskPercent: Double { disk?.percent ?? 0 }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -182,6 +192,13 @@ private struct NodeCard: View {
                 secondaryText: "/ \(ResourceQuantity.formatBytes(memCapacity))",
                 hasMetrics: metrics != nil
             )
+            UsageBar(
+                title: "Disk",
+                percent: diskPercent,
+                primaryText: ResourceQuantity.formatBytes(diskUsage),
+                secondaryText: "/ \(ResourceQuantity.formatBytes(diskCapacity))",
+                hasMetrics: disk != nil
+            )
             PodsBar(used: podCount, total: maxPods)
         }
     }
@@ -203,6 +220,9 @@ private struct NodeCard: View {
                 label: "Free Mem",
                 value: ResourceQuantity.formatBytes(max(0, memCapacity - memUsage))
             )
+            if let disk {
+                detailRow(label: "Free Disk", value: ResourceQuantity.formatBytes(disk.availableBytes))
+            }
 
             if let conds = node.status?.conditions {
                 let active = conds.filter { $0.type != "Ready" && $0.status == "True" }

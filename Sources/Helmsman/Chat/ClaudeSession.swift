@@ -116,6 +116,7 @@ actor ClaudeSession {
             - cronjob: suspendCronJob | resumeCronJob | triggerCronJob
             - namespace: createNamespace | deleteNamespace
             - any resource: deleteResource
+            - whole app removal: purge — for an app-removal request ("remove/uninstall/tear down <app>"), emit `{"kind":"purge","name":<root-deployment>,"namespace":<ns>}`. The app discovers every related resource and opens its typed-name confirm sheet; never list resources to delete one-by-one for a full removal.
             - anything else: command — the escape hatch for any `kubectl` mutation the typed kinds don't model (plugin commands like `cnpg`, `rollout`, one-off `patch`/`annotate`, etc.). NEVER tell the user to run a command themselves — raise it as a `command` action instead.
         - `name`: the target's name — the workload, cronjob, namespace, or resource (for deletePod use `pod`; for node kinds use `node`)
         - `pod`: name (deletePod only)

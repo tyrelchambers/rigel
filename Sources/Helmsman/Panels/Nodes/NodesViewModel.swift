@@ -14,6 +14,7 @@ final class NodesViewModel {
 
     var nodes: [Node] { cache.nodes }
     var metrics: [String: NodeMetrics] { cache.nodeMetrics }
+    var disk: [String: NodeDiskUsage] { cache.nodeDisk }
     var podCounts: [String: Int] { cache.podCountByNode }
 
     /// Memoized on `cache.dataRevision` so the sort doesn't re-run on every 5s

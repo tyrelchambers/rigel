@@ -10,7 +10,7 @@ struct CatalogInstallWizard: View {
     let onClose: () -> Void
     /// Push the wizard's transcript over to the main chat ViewModel when the
     /// user hits "Hand off to main chat" on the Failed step.
-    var onHandoffToChat: (String) -> Void = { _ in }
+    var onHandoffToChat: (String, String) -> Void = { _, _ in }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,6 +23,14 @@ struct CatalogInstallWizard: View {
         }
         .frame(width: 960, height: 680)
         .background(Theme.Surface.primary)
+        .onAppear {
+            // The verify poll auto-hands a stuck install to the main chat with live
+            // context; wire that to seed the chat (breadcrumb) and close the wizard.
+            model.onFinishHandoff = { prompt, breadcrumb in
+                onHandoffToChat(prompt, breadcrumb)
+                onClose()
+            }
+        }
     }
 
     private var header: some View {
@@ -74,7 +82,7 @@ struct CatalogInstallWizard: View {
             DoneStep(model: model, onClose: onClose)
         case .failed(let reason):
             FailedStep(model: model, reason: reason, onClose: onClose, onHandoff: { prompt in
-                onHandoffToChat(prompt)
+                onHandoffToChat(prompt, "Continue installing \(model.app.name)")
                 onClose()
             })
         }
@@ -891,7 +899,8 @@ private struct VerifyingStep: View {
 
     private var statusMessage: String {
         if model.verifyTimedOut {
-            return "Pods didn't reach Ready within 90s — investigate with Claude or close."
+            let mins = Int(CatalogInstallWizardModel.verifySoftTimeout / 60)
+            return "Still not Ready after \(mins) min — still watching; investigate with Claude or close."
         }
         return "Rolling out — watching resources come up…"
     }

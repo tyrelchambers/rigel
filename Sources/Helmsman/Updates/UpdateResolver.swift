@@ -9,6 +9,10 @@ struct InstalledImage: Hashable {
     /// The catalog app's source repo, used by the GitHub Releases tier. nil when
     /// the app has no repo or the item wasn't built from a catalog app.
     var repoURL: URL? = nil
+    /// The `sha256:…` digest the running pod actually pulled (from pod status
+    /// `imageID`). For a moving tag like `:latest` this is the only way to know
+    /// what's truly running. nil when no pod status was available.
+    var runningDigest: String? = nil
 }
 
 /// Resolves update status by querying registries. Stateless apart from the
@@ -52,10 +56,11 @@ struct UpdateResolver {
 
         guard let tag = ref.tag else { return nil }   // digest-only → Claude
 
-        // `:latest` tracks the newest stable, so report up to date informationally
-        // — matches today's Claude-for-`:latest` outcome without a web call.
-        if tag == "latest" { return .upToDate(current: "latest") }
-
+        // A moving tag (`:latest`, `:stable`) carries no version, so a release
+        // tag alone can't tell us whether it's current — `:latest` is routinely
+        // frozen behind the newest release (authentik abandoned it at 2025.2.4).
+        // Resolving that needs a digest comparison (`resolveViaMovingTag`), not
+        // this tier; return nil so we don't falsely claim up-to-date.
         guard let runningVer = ReleaseVersion(tag: tag) else { return nil }
         guard schemesComparable(runningVer, releaseVer) else { return nil }
 
@@ -106,12 +111,52 @@ struct UpdateResolver {
         return true
     }
 
-    /// Resolve a single image deterministically. Tries the registry, then the
+    /// Resolve a single image deterministically. Tries the registry (version
+    /// tag), then the moving-tag digest tier (`:latest`/`:stable`), then the
     /// GitHub Releases tier. Returns nil to mean "needs assist" — the caller
     /// routes those to the Claude fallback.
     func resolveOne(_ item: InstalledImage) async -> UpdateStatus? {
         if let status = await resolveViaRegistry(item) { return status }
+        if let status = await resolveViaMovingTag(item) { return status }
         return await resolveViaReleases(item)
+    }
+
+    /// Tier 1.5: a *moving* tag (`:latest`, `:stable` — anything that doesn't
+    /// parse as a version) on a registry we can query. The tag name tells us
+    /// nothing, so we compare digests: what we're actually running vs the newest
+    /// released artifact.
+    ///
+    /// "What we're running" prefers the pod's pulled digest (`runningDigest`),
+    /// since the registry's `:latest` may have moved since the node last pulled;
+    /// when that's unavailable we fall back to what `:latest` resolves to now.
+    /// "Newest released" is the digest of the newest stable version tag — so a
+    /// frozen/abandoned `:latest` (running an old build, or pointing at one) is
+    /// correctly flagged as behind. nil (→ assist) whenever a digest can't be
+    /// obtained, rather than guessing.
+    private func resolveViaMovingTag(_ item: InstalledImage) async -> UpdateStatus? {
+        guard let ref = ImageReference(item.image), let tag = ref.tag,
+              ReleaseVersion(tag: tag) == nil,                 // moving / non-version tag
+              let source = tagSourceFor(ref.registry)
+        else { return nil }
+
+        let newestTag: String
+        let newestDigest: String?
+        do {
+            guard let t = newestStableTag(try await source.listTags(repository: ref.repository)) else { return nil }
+            newestTag = t
+            newestDigest = try await source.resolveDigest(repository: ref.repository, reference: t)
+        } catch {
+            return nil
+        }
+        guard let dNew = newestDigest else { return nil }
+
+        // Prefer the digest the pod actually pulled; else what the moving tag
+        // currently points to in the registry.
+        var current = item.runningDigest
+        if current == nil { current = try? await source.resolveDigest(repository: ref.repository, reference: tag) }
+        guard let dCur = current else { return nil }
+
+        return dCur == dNew ? .upToDate(current: tag) : .updateAvailable(current: tag, latest: newestTag)
     }
 
     /// Tier 1: tag-checkable image on a known registry.

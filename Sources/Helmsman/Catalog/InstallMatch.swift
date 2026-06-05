@@ -98,6 +98,15 @@ func installedAppIDs(
     return installed
 }
 
+/// The `sha256:…` digest a container actually pulled, extracted from a pod
+/// status `imageID`. Handles the common forms: `ghcr.io/x/y@sha256:…`,
+/// `docker-pullable://x/y@sha256:…`, and a bare `sha256:…`. nil when no digest
+/// is embedded.
+func runningImageDigest(_ imageID: String?) -> String? {
+    guard let id = imageID, let r = id.range(of: "sha256:") else { return nil }
+    return String(id[r.lowerBound...])
+}
+
 /// For each installed catalog app, the exact image reference it's running —
 /// the full string (registry + repo + tag) of the first container that matched
 /// one of the app's `matchImages`. This is what the update check needs: the
@@ -118,12 +127,26 @@ func installedImages(
     for s in statefulSets { for c in s.spec?.template?.spec?.containers ?? [] { collect(c.image) } }
     for p in pods { for c in p.spec?.containers ?? [] { collect(c.image) } }
 
+    // (normalized repo path, running digest) from pod *status* — the only place
+    // the actually-pulled sha lives. Match a pod's spec container to its status
+    // by name so we attribute the digest to the right image.
+    var podDigests: [(repo: String, digest: String)] = []
+    for p in pods {
+        var idByName: [String: String] = [:]
+        for cs in p.status?.containerStatuses ?? [] { if let id = cs.imageID { idByName[cs.name] = id } }
+        for c in p.spec?.containers ?? [] {
+            guard let image = c.image, let digest = runningImageDigest(idByName[c.name]) else { continue }
+            podDigests.append((imageRepoPath(image), digest))
+        }
+    }
+
     var out: [InstalledImage] = []
     for app in apps {
         for raw in app.matchImages {
             let candidate = imageRepoPath(raw)
             if let hit = running.first(where: { repoPathsMatch($0.repo, candidate) }) {
-                out.append(InstalledImage(appID: app.id, image: hit.full, repoURL: app.repoURL))
+                let digest = podDigests.first { repoPathsMatch($0.repo, candidate) }?.digest
+                out.append(InstalledImage(appID: app.id, image: hit.full, repoURL: app.repoURL, runningDigest: digest))
                 break
             }
         }

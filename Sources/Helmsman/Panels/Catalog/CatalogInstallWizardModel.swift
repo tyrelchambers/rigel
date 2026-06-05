@@ -507,12 +507,13 @@ final class CatalogInstallWizardModel: Identifiable {
         let lines = fit.perNode.map { nf -> String in
             let cpu = ResourceQuantity.formatCores(nf.freeCPU)
             let mem = ResourceQuantity.formatBytes(nf.freeMemoryBytes)
+            let disk = nf.allocatableDiskBytes > 0 ? " / \(ResourceQuantity.formatBytes(nf.freeDiskBytes)) disk free" : ""
             var flags: [String] = []
             if nf.tainted   { flags.append("tainted") }
             if nf.cordoned  { flags.append("cordoned") }
             if !nf.node.isReady { flags.append("not-ready") }
             let suffix = flags.isEmpty ? "" : " — " + flags.joined(separator: ", ")
-            return "- \(nf.node.metadata.name): \(cpu) CPU free / \(mem) memory free\(suffix)"
+            return "- \(nf.node.metadata.name): \(cpu) CPU free / \(mem) memory free\(disk)\(suffix)"
         }
         return lines.joined(separator: "\n")
     }
@@ -736,23 +737,29 @@ final class CatalogInstallWizardModel: Identifiable {
     }
 
     /// Poll `cache.pods` for pods matching this install's namespace + instance
-    /// label. Advance to .done once all matched pods report Ready, or stop at
-    /// the 90s timeout (still .verifying, with `verifyTimedOut = true` so the
-    /// UI can offer a "give up / open in chat" affordance).
+    /// label. Advance to .done once all matched pods report Ready.
+    ///
+    /// Timeout is two-stage so a slow first-time image pull (heavyweight apps
+    /// pulling multi-hundred-MB images, Postgres + app + a migration Job) isn't
+    /// reported as a failure while it's legitimately still coming up: at the
+    /// *soft* deadline we set `verifyTimedOut = true` to surface the "taking a
+    /// while / open in chat" affordance but KEEP watching, so it still flips to
+    /// .done when the pods finally report Ready. Only the *hard* deadline stops
+    /// the poll entirely, to avoid watching a truly stuck install forever.
     private func startVerifyPoll() {
         verifyTask?.cancel()
         verifyTimedOut = false
-        let deadline = Date().addingTimeInterval(90)
+        let softDeadline = Date().addingTimeInterval(Self.verifySoftTimeout)
+        let hardDeadline = Date().addingTimeInterval(Self.verifyHardTimeout)
         let instanceLabel = instance
         let ns = namespace
         verifyTask = Task { [weak self] in
             while !Task.isCancelled {
-                if Date() >= deadline {
-                    await MainActor.run { self?.verifyTimedOut = true }
-                    return
-                }
-                await MainActor.run {
-                    guard let self else { return }
+                if Date() >= hardDeadline { return }
+                let timedOut = Date() >= softDeadline
+                let tick: VerifyTick? = await MainActor.run {
+                    guard let self else { return nil }
+                    if timedOut { self.verifyTimedOut = true }
                     let matched = self.cache.pods.filter { p in
                         p.metadata.namespace == ns
                             && p.metadata.labels?["app.kubernetes.io/instance"] == instanceLabel
@@ -760,13 +767,67 @@ final class CatalogInstallWizardModel: Identifiable {
                     self.verifyingPods = matched
                     if !matched.isEmpty, matched.allSatisfy(Self.podIsReady) {
                         self.step = .done
+                        return .done
                     }
+                    // Trouble → hand the unfinished install to the main-chat Helmsman, once.
+                    // Fire on a clear crashloop (restarts ≥ 3) or once the soft deadline passes
+                    // without all pods Ready — early transient restarts don't trip it.
+                    let crashing = matched.contains { p in
+                        (p.status?.containerStatuses ?? []).contains { $0.restartCount >= 3 }
+                    }
+                    if !self.didFinishHandoff, self.onFinishHandoff != nil, crashing || timedOut {
+                        self.didFinishHandoff = true
+                        let h = self.buildFinishHandoff()
+                        self.onFinishHandoff?(h.prompt, h.breadcrumb)
+                        return .handedOff
+                    }
+                    return .watching
                 }
-                if case .done = (await MainActor.run { self?.step }) ?? .configure { return }
+                if tick == nil || tick == .done || tick == .handedOff { return }
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
             }
         }
     }
+
+    private enum VerifyTick { case done, handedOff, watching }
+
+    /// Set by the view: hand the unfinished install to the main chat as
+    /// `(prompt, breadcrumb)`. Invoked automatically from the verify poll on trouble.
+    var onFinishHandoff: ((String, String) -> Void)? = nil
+    private var didFinishHandoff = false
+
+    /// The resources this install owns — used to scope the Helmsman's auto-fixes.
+    var installScope: InstallScope { InstallScope(namespace: namespace, instance: instance) }
+
+    /// Snapshot the install's live state into a main-chat handoff (prompt + breadcrumb).
+    func buildFinishHandoff() -> (prompt: String, breadcrumb: String) {
+        let pods = cache.pods
+            .filter { $0.metadata.namespace == namespace
+                && $0.metadata.labels?["app.kubernetes.io/instance"] == instance }
+            .map { p in
+                InstallPodState(
+                    name: p.metadata.name,
+                    phase: p.status?.phase ?? "Unknown",
+                    ready: Self.podIsReady(p),
+                    restarts: (p.status?.containerStatuses ?? []).map(\.restartCount).max() ?? 0,
+                    reason: p.errorReason
+                )
+            }
+        let events = installEvents.suffix(15).map { e in
+            "[\(e.type ?? "Normal")] \(e.reason ?? ""): \(e.message ?? "")"
+        }
+        return InstallFinishPrompt.build(
+            appName: app.name, scope: installScope, hostname: hostname,
+            exposesIngress: app.exposesIngress, manifestYAML: manifestYAML,
+            pods: pods, events: Array(events), failingLogs: [], notes: notes
+        )
+    }
+
+    /// After this long the verify step surfaces a "taking a while" affordance
+    /// but keeps watching (slow image pulls are normal for big apps).
+    static let verifySoftTimeout: TimeInterval = 300
+    /// After this long we stop polling entirely — a genuinely stuck install.
+    private static let verifyHardTimeout: TimeInterval = 900
 
     private static func podIsReady(_ pod: Pod) -> Bool {
         let statuses = pod.status?.containerStatuses ?? []

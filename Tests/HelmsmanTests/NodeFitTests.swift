@@ -76,7 +76,39 @@ final class NodeFitTests: XCTestCase {
 
     // MARK: - Fixture builders
 
-    private func testApp(cpu: String, memory: String) -> CatalogApp {
+    // MARK: - Disk fit
+
+    func test_fit_diskInsufficient_excludesNode() {
+        let nodes = [makeNode(name: "k3s-1", cpu: "4", memory: "8Gi")]
+        let gib = 1024.0 * 1024 * 1024
+        // Node has only 5Gi free disk; the app wants 10Gi.
+        let disk = ["k3s-1": NodeDiskUsage(capacityBytes: 100 * gib, usedBytes: 95 * gib, availableBytes: 5 * gib)]
+        let result = nodeFit(app: testApp(cpu: "500m", memory: "512Mi", storage: 10),
+                             nodes: nodes, pods: [], nodeDisk: disk)
+        XCTAssertNil(result.recommended, "node with too little free disk should not host a 10Gi app")
+    }
+
+    func test_fit_diskSufficient_fits() {
+        let nodes = [makeNode(name: "k3s-1", cpu: "4", memory: "8Gi")]
+        let gib = 1024.0 * 1024 * 1024
+        let disk = ["k3s-1": NodeDiskUsage(capacityBytes: 100 * gib, usedBytes: 20 * gib, availableBytes: 80 * gib)]
+        let result = nodeFit(app: testApp(cpu: "500m", memory: "512Mi", storage: 10),
+                             nodes: nodes, pods: [], nodeDisk: disk)
+        XCTAssertEqual(result.recommended?.node.metadata.name, "k3s-1")
+        XCTAssertNotNil(result.recommended?.usedDiskBytes, "actual disk usage should be carried when known")
+    }
+
+    func test_fit_diskUnknown_doesNotGate() {
+        // No Summary-API data + an app that wants storage → disk must NOT exclude
+        // the node (could be networked PVC storage).
+        let nodes = [makeNode(name: "k3s-1", cpu: "4", memory: "8Gi")]
+        let result = nodeFit(app: testApp(cpu: "500m", memory: "512Mi", storage: 50),
+                             nodes: nodes, pods: [], nodeDisk: [:])
+        XCTAssertEqual(result.recommended?.node.metadata.name, "k3s-1")
+        XCTAssertNil(result.recommended?.usedDiskBytes)
+    }
+
+    private func testApp(cpu: String, memory: String, storage: Int? = nil) -> CatalogApp {
         CatalogApp(
             id: "test",
             name: "Test",
@@ -94,7 +126,7 @@ final class NodeFitTests: XCTestCase {
                 cpuLimit: nil,
                 memoryRequest: memory,
                 memoryLimit: nil,
-                storageGiB: nil
+                storageGiB: storage
             ),
             persistence: false,
             exposesIngress: false,

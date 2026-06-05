@@ -21,6 +21,15 @@ final class CatalogStoreTests: XCTestCase {
         XCTAssertEqual(Set(store.filtered(query: "").map(\.id)), ["vaultwarden", "supabase"])
     }
 
+    func test_filtered_sortsByNameCaseInsensitive() {
+        let store = makeStore(apps: [
+            sampleApp(id: "zammad", name: "Zammad", category: .productivity),
+            sampleApp(id: "adminer", name: "Adminer", category: .database),
+            sampleApp(id: "memos", name: "memos", category: .productivity),
+        ])
+        XCTAssertEqual(store.filtered(query: "").map(\.name), ["Adminer", "memos", "Zammad"])
+    }
+
     func test_filtered_byCategoryAndQuery_combined() {
         let store = makeStore(apps: [
             sampleApp(id: "vaultwarden", name: "Vaultwarden", category: .productivity, tags: ["password"]),

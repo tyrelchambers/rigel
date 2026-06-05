@@ -4,9 +4,16 @@ import XCTest
 private struct StubTagSource: TagSource {
     let tags: [String]
     var fail = false
+    /// reference (tag) -> digest, for the moving-tag tier. Empty ⇒ no digest
+    /// support (mirrors a source whose `resolveDigest` default-returns nil).
+    var digests: [String: String] = [:]
     func listTags(repository: String) async throws -> [String] {
         if fail { throw TagSourceError.badResponse(status: 500) }
         return tags
+    }
+    func resolveDigest(repository: String, reference: String) async throws -> String? {
+        if fail { throw TagSourceError.badResponse(status: 500) }
+        return digests[reference]
     }
 }
 
@@ -110,9 +117,11 @@ final class UpdateResolverTests: XCTestCase {
         XCTAssertEqual(s, .upToDate(current: "1.23"))
     }
 
-    func test_statusFromRelease_latestPin_upToDate() {
+    func test_statusFromRelease_latestPin_returnsNil() {
+        // A moving tag can't be judged from a release tag alone — that's the
+        // moving-tag digest tier's job, not this one.
         let s = UpdateResolver.statusFromRelease(currentImage: "vaultwarden/server:latest", releaseTag: "1.30.1")
-        XCTAssertEqual(s, .upToDate(current: "latest"))
+        XCTAssertNil(s)
     }
 
     func test_statusFromRelease_nonSemverRunningTag_returnsNil() {
@@ -149,14 +158,70 @@ final class UpdateResolverTests: XCTestCase {
         )
     }
 
-    func test_latestPin_resolvedByGitHubTier() async {
+    func test_latestPin_noDigestSupport_routesToAssist() async {
+        // `:latest` with a GitHub repo but a registry that can't resolve digests
+        // (stub has none) can't be judged deterministically → assist. The old
+        // behavior of blindly reporting up-to-date for `:latest` is gone.
         let r = githubResolver(registryTags: [], githubTag: "1.30.1")
         let (resolved, assist) = await r.resolve([
             InstalledImage(appID: "vw", image: "vaultwarden/server:latest",
                            repoURL: URL(string: "https://github.com/dani-garcia/vaultwarden")!)
         ])
+        XCTAssertTrue(resolved.isEmpty)
+        XCTAssertEqual(assist.map(\.appID), ["vw"])
+    }
+
+    // MARK: - moving-tag digest tier
+
+    private func movingResolver(tags: [String], digests: [String: String]) -> UpdateResolver {
+        UpdateResolver(tagSourceFor: { _ in StubTagSource(tags: tags, digests: digests) }, githubSource: nil)
+    }
+
+    func test_movingTag_runningDigestBehindNewest_updateAvailable() async {
+        // authentik shape: running `:latest` (frozen at an old build) while a
+        // newer version tag exists with a different digest.
+        let r = movingResolver(tags: ["2025.2.4", "2026.5.2", "latest"],
+                               digests: ["2026.5.2": "sha256:NEW", "latest": "sha256:OLD"])
+        let (resolved, assist) = await r.resolve([
+            InstalledImage(appID: "authentik", image: "ghcr.io/goauthentik/server:latest",
+                           runningDigest: "sha256:OLD")
+        ])
         XCTAssertTrue(assist.isEmpty)
-        XCTAssertEqual(resolved["vw"], .upToDate(current: "latest"))
+        XCTAssertEqual(resolved["authentik"], .updateAvailable(current: "latest", latest: "2026.5.2"))
+    }
+
+    func test_movingTag_runningDigestMatchesNewest_upToDate() async {
+        let r = movingResolver(tags: ["2026.5.2", "latest"],
+                               digests: ["2026.5.2": "sha256:NEW", "latest": "sha256:NEW"])
+        let (resolved, assist) = await r.resolve([
+            InstalledImage(appID: "authentik", image: "ghcr.io/goauthentik/server:latest",
+                           runningDigest: "sha256:NEW")
+        ])
+        XCTAssertTrue(assist.isEmpty)
+        XCTAssertEqual(resolved["authentik"], .upToDate(current: "latest"))
+    }
+
+    func test_movingTag_noRunningDigest_fallsBackToRegistryLatestDigest() async {
+        // No pod digest available → compare what `:latest` resolves to now
+        // against the newest version tag. Here they differ → behind.
+        let r = movingResolver(tags: ["2026.5.2", "latest"],
+                               digests: ["2026.5.2": "sha256:NEW", "latest": "sha256:OLD"])
+        let (resolved, assist) = await r.resolve([
+            InstalledImage(appID: "authentik", image: "ghcr.io/goauthentik/server:latest")
+        ])
+        XCTAssertTrue(assist.isEmpty)
+        XCTAssertEqual(resolved["authentik"], .updateAvailable(current: "latest", latest: "2026.5.2"))
+    }
+
+    func test_movingTag_newestDigestUnavailable_routesToAssist() async {
+        // Tags exist but the newest's digest can't be fetched → assist, never guess.
+        let r = movingResolver(tags: ["2026.5.2", "latest"], digests: [:])
+        let (resolved, assist) = await r.resolve([
+            InstalledImage(appID: "authentik", image: "ghcr.io/goauthentik/server:latest",
+                           runningDigest: "sha256:OLD")
+        ])
+        XCTAssertTrue(resolved.isEmpty)
+        XCTAssertEqual(assist.map(\.appID), ["authentik"])
     }
 
     func test_registryFailure_fallsToGitHubTier() async {

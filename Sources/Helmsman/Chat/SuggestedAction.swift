@@ -14,6 +14,10 @@ struct SuggestedAction: Identifiable, Decodable {
         case suspendCronJob, resumeCronJob, triggerCronJob
         case createNamespace, deleteNamespace
         case deleteResource
+        /// Conversational door to the full app-removal flow: opens the typed-name
+        /// purge confirm sheet (discovery against the live cache). Uses `name`
+        /// (root deployment) + `namespace`. Never auto-executes.
+        case purge
         /// Escape hatch: run a literal `kubectl` command (incl. plugins like
         /// `cnpg`) the typed kinds above don't model. Carries `args`.
         case command
@@ -102,6 +106,7 @@ struct SuggestedAction: Identifiable, Decodable {
         case .createNamespace: return "plus.rectangle.on.folder"
         case .deleteNamespace: return "trash"
         case .deleteResource:  return "trash"
+        case .purge:           return "trash"
         case .command:         return "terminal"
         }
     }

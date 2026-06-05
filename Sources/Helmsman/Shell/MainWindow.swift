@@ -50,6 +50,8 @@ struct MainWindow: View {
     @State private var pendingSecretMove: Secret?
     @State private var pendingCatalogDetail: CatalogApp?
     @State private var pendingCatalogInstall: CatalogInstallWizardModel?
+    @State private var purgePickerShown = false
+    @State private var pendingPurge: PurgePlan?
 
     init() {
         let cache = ClusterCache()
@@ -367,8 +369,48 @@ struct MainWindow: View {
                     model.teardownSession()
                     pendingCatalogInstall = nil
                 },
-                onHandoffToChat: { prompt in
-                    chat.sendHandoff(prompt, summary: "Continue installing \(model.app.name)")
+                onHandoffToChat: { prompt, summary in
+                    chat.sendHandoff(prompt, summary: summary)
+                }
+            )
+        }
+        .sheet(isPresented: $purgePickerShown) {
+            PurgePickerSheet(
+                cache: cache,
+                onPick: { name, ns in
+                    let plan = PurgeDiscovery.discover(
+                        rootName: name,
+                        namespace: ns,
+                        deployments: cache.deployments,
+                        statefulSets: cache.statefulSets,
+                        services: cache.services,
+                        ingresses: cache.ingresses,
+                        secrets: cache.secrets,
+                        configMaps: cache.configMaps,
+                        pvcs: cache.pvcs
+                    )
+                    purgePickerShown = false
+                    // Open a fresh chat thread seeded with what's about to be purged,
+                    // then present the structured confirm sheet.
+                    chat.startNewChat(clusterContext: contextManager.active?.name)
+                    chat.sendHandoff(purgeSummaryPrompt(plan), summary: "Purging \(name)")
+                    pendingPurge = plan
+                },
+                onCancel: { purgePickerShown = false }
+            )
+        }
+        .sheet(item: $pendingPurge) { plan in
+            PurgeSheet(
+                plan: plan,
+                onCancel: { pendingPurge = nil },
+                onConfirm: { confirmed in
+                    Task {
+                        let out = await PurgeExecutor.run(confirmed, context: contextManager.active?.name)
+                        await MainActor.run {
+                            chat.sendHandoff(purgeResultSummary(out), summary: "Purge complete")
+                            pendingPurge = nil
+                        }
+                    }
                 }
             )
         }
@@ -447,7 +489,8 @@ struct MainWindow: View {
                 contextManager: contextManager,
                 databasesVM: databasesVM,
                 rightSizingVM: rightSizingVM,
-                onInvestigate: investigateCluster
+                onInvestigate: investigateCluster,
+                onPurge: { purgePickerShown = true }
             )
         case .assistant:
             AssistantPanel(
@@ -685,6 +728,24 @@ struct MainWindow: View {
     /// Turn a single chat-suggested action into a confirmed kubectl mutation:
     /// resolve it, then open the confirm sheet.
     private func runSuggestedAction(_ suggestion: SuggestedAction) {
+        // App-removal door: open the SAME typed-name purge confirm sheet rather
+        // than the workload confirm path. Discovery runs against the live cache;
+        // the sheet — never this handler — is the only gate that executes.
+        if suggestion.kind == .purge {
+            let plan = PurgeDiscovery.discover(
+                rootName: suggestion.name ?? suggestion.target ?? "",
+                namespace: suggestion.namespace ?? "default",
+                deployments: cache.deployments,
+                statefulSets: cache.statefulSets,
+                services: cache.services,
+                ingresses: cache.ingresses,
+                secrets: cache.secrets,
+                configMaps: cache.configMaps,
+                pvcs: cache.pvcs
+            )
+            pendingPurge = plan
+            return
+        }
         if let action = resolveSuggestion(suggestion) {
             requestWorkload(action, fromChat: true)
         }
@@ -829,6 +890,43 @@ struct MainWindow: View {
         Be concise. Group findings by severity. If everything looks fine, say so briefly.
         """
         chat.sendHandoff(prompt, summary: "Investigate cluster health")
+    }
+
+    /// Seed prompt for the new chat thread opened when a purge begins: tells the
+    /// Helmsman what the operator is about to remove so it has context if they ask
+    /// follow-up questions.
+    private func purgeSummaryPrompt(_ plan: PurgePlan) -> String {
+        if let reason = plan.blockedReason {
+            return "The user tried to purge **\(plan.appName)** in namespace **\(plan.namespace)**, but it's blocked: \(reason)."
+        }
+        let lines = plan.resources
+            .map { "- \($0.kind.rawValue) \($0.name)" }
+            .joined(separator: "\n")
+        return """
+        The user is about to purge the app **\(plan.appName)** in namespace **\(plan.namespace)**. \
+        A confirmation sheet is open. These resources are queued for deletion:
+
+        \(lines.isEmpty ? "- (no resources discovered)" : lines)
+
+        Nothing has been deleted yet — the user reviews and types the app name to confirm. \
+        Stand by; if they ask, help them decide what to keep.
+        """
+    }
+
+    /// Result summary posted back to chat once the executor finishes.
+    private func purgeResultSummary(_ outcomes: [PurgeExecutor.Outcome]) -> String {
+        guard !outcomes.isEmpty else {
+            return "Purge ran but produced no actions (nothing was selected or the target was protected)."
+        }
+        let ok = outcomes.filter(\.ok).count
+        let lines = outcomes
+            .map { "\($0.ok ? "✓" : "✗") \($0.resource) — \($0.detail)" }
+            .joined(separator: "\n")
+        return """
+        Purge complete — \(ok)/\(outcomes.count) succeeded:
+
+        \(lines)
+        """
     }
 
     private func handoffLogSlice(line: LogLine, surrounding: [LogLine]) {

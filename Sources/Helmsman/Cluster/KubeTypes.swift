@@ -93,6 +93,11 @@ struct ContainerStatus: Codable, Hashable {
     let ready: Bool
     let restartCount: Int
     let state: ContainerState?
+    /// The image actually pulled, as a digest reference (e.g.
+    /// `ghcr.io/x/y@sha256:…` or `docker-pullable://…@sha256:…`). This is the
+    /// ground truth for "what are we really running" behind a moving tag like
+    /// `:latest`, where the spec image string carries no version.
+    var imageID: String? = nil
 }
 
 struct ContainerState: Codable, Hashable {
@@ -273,6 +278,36 @@ struct NodeMetrics: Codable, Identifiable, Hashable {
 
 struct NodeMetricsList: Codable {
     let items: [NodeMetrics]
+}
+
+/// Real per-node filesystem usage. metrics-server doesn't report disk, so this
+/// comes from the kubelet Summary API (`/stats/summary` → `node.fs`).
+struct NodeDiskUsage: Hashable {
+    let capacityBytes: Double
+    let usedBytes: Double
+    let availableBytes: Double
+
+    var percent: Double { capacityBytes > 0 ? usedBytes / capacityBytes : 0 }
+}
+
+/// Minimal decode of the kubelet Summary API for the node root filesystem.
+struct NodeStatsSummary: Codable {
+    struct NodeBlock: Codable {
+        struct Fs: Codable {
+            let capacityBytes: Double?
+            let usedBytes: Double?
+            let availableBytes: Double?
+        }
+        let fs: Fs?
+    }
+    let node: NodeBlock
+
+    /// The node's filesystem usage, when the summary carried `node.fs`.
+    var diskUsage: NodeDiskUsage? {
+        guard let fs = node.fs, let cap = fs.capacityBytes, let used = fs.usedBytes else { return nil }
+        return NodeDiskUsage(capacityBytes: cap, usedBytes: used,
+                             availableBytes: fs.availableBytes ?? max(0, cap - used))
+    }
 }
 
 struct PodMetrics: Codable, Hashable {
