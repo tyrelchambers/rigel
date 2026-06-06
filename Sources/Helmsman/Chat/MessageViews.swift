@@ -54,11 +54,14 @@ struct MessageBubble: View {
                     .tracking(0.5)
                 thoughtTrail
                 content(parsed)
-                if !parsed.questions.isEmpty {
-                    ForEach(parsed.questions) { question in
-                        ClarifyingQuestionView(question: question, onAnswer: onAnswerQuestion)
-                            .padding(.top, 4)
-                    }
+                if parsed.questions.count == 1, let question = parsed.questions.first {
+                    ClarifyingQuestionView(question: question, onAnswer: onAnswerQuestion)
+                        .padding(.top, 4)
+                } else if !parsed.questions.isEmpty {
+                    // 2+ groups: collect one answer per group, send together — a
+                    // tap on any single option would otherwise end the turn.
+                    ClarifyingQuestionBatchView(questions: parsed.questions, onSubmit: onAnswerQuestion)
+                        .padding(.top, 4)
                 }
                 if !parsed.actions.isEmpty {
                     SuggestedActionList(actions: parsed.actions, onTap: onSuggestedAction, onRunBatch: onRunActions)
@@ -302,8 +305,42 @@ struct SuggestedActionList: View {
     }
 }
 
-/// A clarifying question Claude raised, with its options as tappable buttons.
-/// Tapping one sends that option's answer back as the user's next message.
+/// One tappable option in a clarifying question. Shows a hollow circle when
+/// unselected and a filled one when selected, so the same row serves both the
+/// instant-send single-question view and the radio-style batch view.
+private struct QuestionOptionRow: View {
+    let label: String
+    let selected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: selected ? "largecircle.fill.circle" : "circle")
+                    .font(.system(size: 10, weight: .semibold))
+                Text(label)
+                    .font(Theme.Font.body(12, weight: .semibold))
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 4)
+            }
+            .foregroundStyle(Theme.Accent.primary)
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(selected ? Theme.Accent.primary.opacity(0.28) : Theme.Accent.primaryDim)
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.Radius.sm)
+                    .strokeBorder(Theme.Accent.primary.opacity(selected ? 0.9 : 0.4), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+        }
+        .buttonStyle(.plain)
+        .help("Answer — \(label)")
+    }
+}
+
+/// A single clarifying question Claude raised, with its options as tappable
+/// buttons. Tapping one immediately sends that option's answer as the user's
+/// next message.
 struct ClarifyingQuestionView: View {
     let question: ClarifyingQuestion
     let onAnswer: (String) -> Void
@@ -315,31 +352,70 @@ struct ClarifyingQuestionView: View {
                 .foregroundStyle(Theme.Foreground.primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
             ForEach(question.options) { option in
-                Button {
+                QuestionOptionRow(label: option.label, selected: false) {
                     onAnswer(option.answer)
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "circle")
-                            .font(.system(size: 10, weight: .semibold))
-                        Text(option.label)
-                            .font(Theme.Font.body(12, weight: .semibold))
-                            .multilineTextAlignment(.leading)
-                        Spacer(minLength: 4)
-                    }
-                    .foregroundStyle(Theme.Accent.primary)
-                    .padding(.horizontal, 10).padding(.vertical, 7)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Theme.Accent.primaryDim)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: Theme.Radius.sm)
-                            .strokeBorder(Theme.Accent.primary.opacity(0.4), lineWidth: 1)
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
                 }
-                .buttonStyle(.plain)
-                .help("Answer — \(option.label)")
             }
         }
+    }
+}
+
+/// Two or more question groups from one assistant message. Each group is a
+/// single-choice radio list; the user picks one option per group, then submits
+/// all answers in one message. Submit stays disabled until every group has a
+/// selection, and the whole block locks once submitted to prevent a double-send.
+struct ClarifyingQuestionBatchView: View {
+    let questions: [ClarifyingQuestion]
+    let onSubmit: (String) -> Void
+
+    @State private var selections: [UUID: UUID] = [:]
+    @State private var submitted = false
+
+    private var allAnswered: Bool { selections.count == questions.count }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(questions) { question in
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(question.question)
+                        .font(Theme.Font.body(12, weight: .medium))
+                        .foregroundStyle(Theme.Foreground.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    ForEach(question.options) { option in
+                        QuestionOptionRow(
+                            label: option.label,
+                            selected: selections[question.id] == option.id
+                        ) {
+                            selections[question.id] = option.id
+                        }
+                    }
+                }
+            }
+
+            HStack {
+                Spacer()
+                Button {
+                    onSubmit(ClarifyingQuestion.combinedAnswer(questions: questions, selections: selections))
+                    submitted = true
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "paperplane.fill").font(.system(size: 9, weight: .semibold))
+                        Text("Submit answers")
+                            .font(Theme.Font.body(12, weight: .semibold))
+                    }
+                    .foregroundStyle(Theme.Foreground.inverse)
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(allAnswered ? Theme.Accent.primary : Theme.Foreground.tertiary)
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                    .opacity(allAnswered ? 1 : 0.5)
+                }
+                .buttonStyle(.plain)
+                .disabled(!allAnswered || submitted)
+                .help(allAnswered ? "Send all answers in one message" : "Answer every question to submit")
+            }
+        }
+        .opacity(submitted ? 0.55 : 1)
+        .disabled(submitted)
     }
 }
 

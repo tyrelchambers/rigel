@@ -44,4 +44,19 @@ struct ClarifyingQuestion: Identifiable, Decodable {
         self.question = try c.decode(String.self, forKey: .question)
         self.options = try c.decode([Option].self, forKey: .options)
     }
+
+    /// Build the single message sent back to Claude when several question groups
+    /// are answered together. Each answered group becomes a `>` blockquote with
+    /// the full question prose followed by the chosen option's answer, in the
+    /// order the groups appeared, blank-line separated. Groups with no selection
+    /// are skipped (Submit gates on completeness, but the builder stays safe).
+    static func combinedAnswer(questions: [ClarifyingQuestion], selections: [UUID: UUID]) -> String {
+        questions.compactMap { question -> String? in
+            guard let optionID = selections[question.id],
+                  let option = question.options.first(where: { $0.id == optionID })
+            else { return nil }
+            return "> \(question.question)\n\(option.answer)"
+        }
+        .joined(separator: "\n\n")
+    }
 }
