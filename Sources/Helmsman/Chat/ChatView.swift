@@ -30,6 +30,11 @@ struct ChatView: View {
     @State private var isAtBottom = true
     /// Latest scroll viewport height, used to derive distance-from-bottom.
     @State private var viewportHeight: CGFloat = 0
+    /// Timestamp of the last streaming tail-scroll. Throttles the per-token
+    /// auto-scroll so a user scrolling up isn't instantly yanked back before
+    /// `isAtBottom` can register the scroll — without the gap, rapid tokens trap
+    /// the view at the bottom permanently. See `.onChange(of: …last?.text)`.
+    @State private var lastTailScroll = Date.distantPast
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -78,9 +83,21 @@ struct ChatView: View {
                     scrollToBottomIfPinned(proxy, animated: true)
                 }
                 // Streaming text grows the last bubble without changing the count —
-                // follow that too, unanimated so it reads as smooth tailing.
+                // follow it too, unanimated so it reads as smooth tailing. Throttled:
+                // tokens can arrive many times per second, and scrolling on every one
+                // would overwrite a user's scroll-up before `isAtBottom` flips, pinning
+                // them at the bottom. The gap lets a scroll-up register and unpin.
                 .onChange(of: viewModel.messages.last?.text) { _, _ in
+                    let now = Date()
+                    guard now.timeIntervalSince(lastTailScroll) > Self.tailScrollInterval else { return }
+                    lastTailScroll = now
                     scrollToBottomIfPinned(proxy, animated: false)
+                }
+                // Final catch-up when a turn ends: the last tokens may have landed
+                // inside a throttle gap, so settle to the bottom — but only if still
+                // pinned (a user who scrolled up stays put, guarded in the helper).
+                .onChange(of: viewModel.isStreaming) { _, streaming in
+                    if !streaming { scrollToBottomIfPinned(proxy, animated: true) }
                 }
                 // A jump-to-bottom affordance, shown only when scrolled up. Tapping
                 // it re-pins autoscroll (the preference flips isAtBottom back true).
@@ -137,6 +154,10 @@ struct ChatView: View {
     /// Px slack below which we consider the scroll "at the bottom" — absorbs
     /// fractional layout offsets and the bottom content padding.
     private static let atBottomThreshold: CGFloat = 24
+    /// Minimum gap between streaming tail-scrolls. Small enough that following
+    /// reads as smooth, large enough that a user scroll-up registers (and unpins
+    /// autoscroll) within a cycle or two instead of being trapped at the bottom.
+    private static let tailScrollInterval: TimeInterval = 0.1
 
     /// Scroll to the newest message, but only while the user is pinned to the
     /// bottom. Once they scroll up, content keeps arriving without yanking them
