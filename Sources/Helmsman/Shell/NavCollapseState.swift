@@ -28,6 +28,13 @@ struct NavCollapseState {
     /// this is unambiguous.
     var storage: String { collapsed.sorted().joined(separator: ",") }
 
+    /// Every titled group collapsed — the first-launch default, so the sidebar
+    /// starts compact. The pinned (title-less) group has no header and is left
+    /// out, keeping Overview/Assistant visible.
+    static var collapsedByDefault: NavCollapseState {
+        NavCollapseState(storage: PanelKind.navGroups.compactMap(\.title).joined(separator: ","))
+    }
+
     /// Tolerant decode: blanks are dropped, so `""` yields an empty set and a
     /// stale/renamed title in storage never wedges the state.
     init(storage: String) {

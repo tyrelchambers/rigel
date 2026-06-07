@@ -2,7 +2,9 @@ import SwiftUI
 
 struct NavStrip: View {
     @Binding var selection: PanelKind
-    @AppStorage("nav.collapsedGroups") private var collapsedRaw = ""
+    // First launch starts compact: every titled group collapsed. Once the user
+    // toggles anything, the written value takes over (and "" = all expanded).
+    @AppStorage("nav.collapsedGroups") private var collapsedRaw = NavCollapseState.collapsedByDefault.storage
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {

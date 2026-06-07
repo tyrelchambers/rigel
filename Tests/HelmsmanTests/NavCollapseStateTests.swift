@@ -56,4 +56,20 @@ final class NavCollapseStateTests: XCTestCase {
         let state = NavCollapseState(storage: "Workloads,, ,Cluster")
         XCTAssertEqual(state.collapsed, ["Workloads", "Cluster"])
     }
+
+    func test_collapsedByDefault_collapsesEveryTitledGroup() {
+        let state = NavCollapseState.collapsedByDefault
+        for group in PanelKind.navGroups {
+            if let title = group.title {
+                XCTAssertTrue(state.isCollapsed(title), "expected \(title) collapsed by default")
+            }
+        }
+    }
+
+    func test_collapsedByDefault_leavesPinnedGroupOut() {
+        // The pinned group has no header, so it can't be collapsed. .overview
+        // lives there and must stay revealed.
+        let state = NavCollapseState.collapsedByDefault
+        XCTAssertEqual(state.collapsed.count, PanelKind.navGroups.compactMap(\.title).count)
+    }
 }
