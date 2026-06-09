@@ -4,9 +4,11 @@ import { kubectl } from "@helmsman/k8s/src/run";
 import { WatchManager } from "./watchManager";
 import { makeWsHandlers } from "./ws";
 import { buildCommand, PurgeActionError, type ActionBlock } from "./actions";
+import { checkAuth } from "./auth";
 
 const KUBECONFIG = resolveKubeconfigPath(process.env, homedir());
 const PORT = Number(process.env.PORT ?? 8787);
+const TOKEN = process.env.HELMSMAN_TOKEN ?? null;
 
 const ctxRes = await kubectl(null, ["config", "current-context"]);
 const context = ctxRes.code === 0 ? ctxRes.stdout.trim() : null;
@@ -20,6 +22,11 @@ const server = Bun.serve({
 
     if (url.pathname === "/api/health") {
       return Response.json({ ok: true, kubeconfig: KUBECONFIG });
+    }
+
+    // Auth gate: every non-health path requires a valid bearer token when TOKEN is set.
+    if (!checkAuth(req.headers.get("authorization") ?? undefined, TOKEN)) {
+      return new Response("unauthorized", { status: 401 });
     }
 
     // POST /api/action — execute or preview a chat action-block mutation.
