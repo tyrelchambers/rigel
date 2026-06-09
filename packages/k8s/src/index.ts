@@ -1,6 +1,14 @@
 // kubectl wrappers, output parsing, and resource types are ported here
 // from Sources/Helmsman/Cluster/ via the parity orchestrator.
 
+export {
+  type SuggestedAction,
+  ACTION_KINDS,
+  extractActionBlocks,
+  stripActionBlocks,
+  parseSuggestedActions,
+} from "./actionBlocks";
+
 /** Kubernetes ObjectMeta (subset used by the web panels). */
 export interface ObjectMeta {
   name: string;

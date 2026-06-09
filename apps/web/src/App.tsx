@@ -2,9 +2,10 @@ import { useEffect } from "react";
 import { NavLink, Routes, Route } from "react-router";
 import HealthPanel from "./panels/health/HealthPanel";
 import PodsPanel from "./panels/pods/PodsPanel";
+import ChatPanel from "./panels/chat/ChatPanel";
 import { connectCluster } from "@/lib/ws";
 
-const PANELS = ["overview", "pods", "deployments", "services", "health"]; // grows as panels are ported
+const PANELS = ["overview", "pods", "deployments", "services", "health", "chat"]; // grows as panels are ported
 
 export default function App() {
   useEffect(() => { connectCluster(); }, []);
@@ -17,13 +18,15 @@ export default function App() {
           </NavLink>
         ))}
       </nav>
-      <main className="flex-1 overflow-auto p-4">
+      <main className="flex-1 overflow-hidden">
         <Routes>
-          <Route path="/" element={<div>Helmsman Web</div>} />
-          <Route path="/health" element={<HealthPanel />} />
-          <Route path="/pods" element={<PodsPanel />} />
-          {PANELS.filter((p) => p !== "health" && p !== "pods").map((p) => (
-            <Route key={p} path={`/${p}`} element={<div className="capitalize">{p} panel (not yet ported)</div>} />
+          {/* Chat owns its full-height scroll layout (no padded wrapper). */}
+          <Route path="/chat" element={<ChatPanel />} />
+          <Route path="/" element={<div className="p-4">Helmsman Web</div>} />
+          <Route path="/health" element={<div className="h-full overflow-auto p-4"><HealthPanel /></div>} />
+          <Route path="/pods" element={<div className="h-full overflow-auto p-4"><PodsPanel /></div>} />
+          {PANELS.filter((p) => p !== "health" && p !== "pods" && p !== "chat").map((p) => (
+            <Route key={p} path={`/${p}`} element={<div className="p-4 capitalize">{p} panel (not yet ported)</div>} />
           ))}
         </Routes>
       </main>

@@ -1,6 +1,28 @@
 import { useCluster } from "@/store/cluster";
+import type { ChatEvent } from "@/panels/chat/types";
 
 let socket: WebSocket | null = null;
+
+type ChatEventCallback = (event: ChatEvent) => void;
+let chatListeners: ChatEventCallback[] = [];
+
+/** Send a chat prompt to the server. {type:"chat", prompt}. */
+export function sendChat(prompt: string): void {
+  socket?.send(JSON.stringify({ type: "chat", prompt }));
+}
+
+/** Request the server interrupt the current chat turn. */
+export function interruptChat(): void {
+  socket?.send(JSON.stringify({ type: "chat-interrupt" }));
+}
+
+/** Subscribe to inbound chat events. Returns an unsubscribe fn. */
+export function onChatEvent(callback: ChatEventCallback): () => void {
+  chatListeners.push(callback);
+  return () => {
+    chatListeners = chatListeners.filter((c) => c !== callback);
+  };
+}
 
 export function connectCluster(): void {
   socket = new WebSocket(`ws://${location.host}/ws`);
@@ -13,7 +35,9 @@ export function connectCluster(): void {
   socket.onerror = () => store.setError("websocket connection failed");
   socket.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
-    if (m.type === "snapshot") {
+    if (m.type === "chat" && m.event) {
+      chatListeners.forEach((cb) => cb(m.event as ChatEvent));
+    } else if (m.type === "snapshot") {
       // First payload for this subscription: clear loading and surface items.
       store.setLoading(false);
       store.setError(null);

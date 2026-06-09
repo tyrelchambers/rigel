@@ -1,17 +1,6 @@
-/** Pull fenced action JSON blocks out of an assistant message. */
-export function extractActionBlocks(markdown: string): any[] {
-  const out: any[] = [];
-  const re = /```action\s*\n([\s\S]*?)\n```/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(markdown))) {
-    try {
-      out.push(JSON.parse(m[1].trim()));
-    } catch {
-      /* skip malformed */
-    }
-  }
-  return out;
-}
+// Action-block parsing lives once in the shared package so the chat panel
+// (apps/web) and this bridge decode the fenced ```action JSON identically.
+export { extractActionBlocks } from "@helmsman/k8s/src/actionBlocks";
 
 const READ_ONLY_ALLOWLIST = [
   "Bash(kubectl get *)",
@@ -31,8 +20,10 @@ const READ_ONLY_ALLOWLIST = [
 ];
 
 export interface ChatEvent {
-  type: "thinking" | "text" | "done" | "error";
+  type: "thinking" | "text" | "done" | "error" | "session";
   text?: string;
+  /** Present on `session` events — the CLI session id (system init line). */
+  sessionId?: string;
 }
 
 /**
@@ -90,7 +81,9 @@ export async function* runClaude(
       } catch {
         continue;
       }
-      if (ev.type === "assistant" && Array.isArray(ev.message?.content)) {
+      if (ev.type === "system" && ev.subtype === "init" && typeof ev.session_id === "string") {
+        yield { type: "session", sessionId: ev.session_id };
+      } else if (ev.type === "assistant" && Array.isArray(ev.message?.content)) {
         for (const block of ev.message.content) {
           if (block.type === "text") yield { type: "text", text: block.text };
           else if (block.type === "thinking") yield { type: "thinking", text: block.thinking };

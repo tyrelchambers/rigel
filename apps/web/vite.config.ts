@@ -5,7 +5,12 @@ import path from "node:path";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  resolve: { alias: { "@": path.resolve(__dirname, "./src") } },
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+      "@helmsman/k8s": path.resolve(__dirname, "../../packages/k8s/src/index.ts"),
+    },
+  },
   server: {
     proxy: {
       "/api": "http://localhost:8787",
