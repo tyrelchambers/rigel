@@ -1,8 +1,16 @@
 import { homedir } from "node:os";
 import { resolveKubeconfigPath } from "./kubeconfig";
+import { kubectl } from "@helmsman/k8s/src/run";
+import { WatchManager } from "./watchManager";
+import { makeWsHandlers } from "./ws";
 
 const KUBECONFIG = resolveKubeconfigPath(process.env, homedir());
 const PORT = Number(process.env.PORT ?? 8787);
+
+const ctxRes = await kubectl(null, ["config", "current-context"]);
+const context = ctxRes.code === 0 ? ctxRes.stdout.trim() : null;
+
+const mgr = new WatchManager(context);
 
 const server = Bun.serve({
   port: PORT,
@@ -17,14 +25,7 @@ const server = Bun.serve({
     }
     return new Response("not found", { status: 404 });
   },
-  websocket: {
-    open(ws) {
-      ws.send(JSON.stringify({ type: "hello", kubeconfig: KUBECONFIG }));
-    },
-    message(ws, msg) {
-      ws.send(JSON.stringify({ type: "echo", data: String(msg) }));
-    },
-  },
+  websocket: makeWsHandlers(mgr),
 });
 
 console.log(`helmsman server on :${server.port} (kubeconfig=${KUBECONFIG})`);

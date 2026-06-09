@@ -9,6 +9,10 @@ importers:
   .: {}
 
   apps/server:
+    dependencies:
+      '@helmsman/k8s':
+        specifier: workspace:*
+        version: link:../../packages/k8s
     devDependencies:
       '@types/bun':
         specifier: latest
