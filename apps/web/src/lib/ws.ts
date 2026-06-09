@@ -6,6 +6,44 @@ let socket: WebSocket | null = null;
 type ChatEventCallback = (event: ChatEvent) => void;
 let chatListeners: ChatEventCallback[] = [];
 
+/** A line streamed from the server's kubectl-logs process. */
+export interface LogStreamMessage {
+  type: "logs" | "logs.error";
+  namespace: string;
+  pod?: string;
+  container?: string;
+  line?: string;
+  message?: string; // present on logs.error
+}
+type LogCallback = (msg: LogStreamMessage) => void;
+let logListeners: LogCallback[] = [];
+
+/** A single log target — a deployment (labelSelector) or a single pod. */
+export interface LogTarget {
+  namespace: string;
+  labelSelector?: string;
+  pod?: string;
+  container?: string;
+}
+
+/** Start streaming logs for the given targets. {type:"logs.start", targets, tailLines}. */
+export function sendLogsStart(targets: LogTarget[], tailLines = 200): void {
+  socket?.send(JSON.stringify({ type: "logs.start", targets, tailLines }));
+}
+
+/** Stop all log streams for this connection. {type:"logs.stop"}. */
+export function sendLogsStop(): void {
+  socket?.send(JSON.stringify({ type: "logs.stop" }));
+}
+
+/** Subscribe to inbound log-stream lines/errors. Returns an unsubscribe fn. */
+export function onLogLine(callback: LogCallback): () => void {
+  logListeners.push(callback);
+  return () => {
+    logListeners = logListeners.filter((c) => c !== callback);
+  };
+}
+
 /** Send a chat prompt to the server. {type:"chat", prompt}. */
 export function sendChat(prompt: string): void {
   socket?.send(JSON.stringify({ type: "chat", prompt }));
@@ -37,6 +75,8 @@ export function connectCluster(): void {
     const m = JSON.parse(ev.data);
     if (m.type === "chat" && m.event) {
       chatListeners.forEach((cb) => cb(m.event as ChatEvent));
+    } else if (m.type === "logs" || m.type === "logs.error") {
+      logListeners.forEach((cb) => cb(m as LogStreamMessage));
     } else if (m.type === "snapshot") {
       // First payload for this subscription: clear loading and surface items.
       store.setLoading(false);

@@ -9,6 +9,17 @@ export {
   parseSuggestedActions,
 } from "./actionBlocks";
 
+export {
+  type ParsedLogLine,
+  POD_COLORS,
+  fnv1a32,
+  fnv1aColorIndex,
+  deploymentColorIndex,
+  parseLogLine,
+  isProbeLine,
+  isErrorLine,
+} from "./logs";
+
 /** Kubernetes ObjectMeta (subset used by the web panels). */
 export interface ObjectMeta {
   name: string;
