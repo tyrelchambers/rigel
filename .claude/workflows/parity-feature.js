@@ -10,9 +10,25 @@ export const meta = {
 }
 
 // args: { mode: 'porter' | 'feature', feature: string, request: string }
-const mode = (args && args.mode) || 'porter'
-const feature = (args && args.feature) || 'unnamed-feature'
-const request = (args && args.request) || ''
+// Coerce: the runtime may hand `args` through as a JSON-encoded string.
+let a = args
+if (typeof a === 'string') {
+  try { a = JSON.parse(a) } catch { /* leave as the raw string */ }
+}
+const mode = (a && a.mode) || 'porter'
+const feature = (a && a.feature) || 'unnamed-feature'
+const request = (a && a.request) || ''
+
+// Fail fast (before spawning any agents) if args did not arrive — this turns a
+// misconfigured invocation into a cheap, diagnosable no-op instead of a full run.
+if (feature === 'unnamed-feature' || !request) {
+  log(`parity-feature: ABORT missing args (typeof args=${typeof args})`)
+  return {
+    error: 'missing-args',
+    argsType: typeof args,
+    argsPreview: typeof args === 'string' ? args.slice(0, 300) : JSON.stringify(args ?? null).slice(0, 300),
+  }
+}
 
 const CONTRACTS = 'docs/parity/contracts.md'
 const SWIFT_CTX = 'Sources/Helmsman/CLAUDE.md'
