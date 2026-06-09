@@ -7,11 +7,12 @@ import NamespacesPanel from "./panels/namespaces/NamespacesPanel";
 import NodesPanel from "./panels/nodes/NodesPanel";
 import ServicesPanel from "./panels/services/ServicesPanel";
 import IngressesPanel from "./panels/ingresses/IngressesPanel";
+import StoragePanel from "./panels/storage/StoragePanel";
 import WorkloadsPanel from "./panels/workloads/WorkloadsPanel";
 import ChatPanel from "./panels/chat/ChatPanel";
 import { connectCluster } from "@/lib/ws";
 
-const PANELS = ["overview", "pods", "deployments", "workloads", "namespaces", "nodes", "services", "ingresses", "health", "chat"]; // grows as panels are ported
+const PANELS = ["overview", "pods", "deployments", "workloads", "namespaces", "nodes", "services", "ingresses", "storage", "health", "chat"]; // grows as panels are ported
 
 export default function App() {
   useEffect(() => { connectCluster(); }, []);
@@ -37,7 +38,8 @@ export default function App() {
           <Route path="/nodes" element={<div className="h-full overflow-auto p-4"><NodesPanel /></div>} />
           <Route path="/services" element={<div className="h-full overflow-auto p-4"><ServicesPanel /></div>} />
           <Route path="/ingresses" element={<div className="h-full overflow-auto p-4"><IngressesPanel /></div>} />
-          {PANELS.filter((p) => p !== "health" && p !== "pods" && p !== "deployments" && p !== "workloads" && p !== "namespaces" && p !== "nodes" && p !== "services" && p !== "ingresses" && p !== "chat").map((p) => (
+          <Route path="/storage" element={<div className="h-full overflow-auto p-4"><StoragePanel /></div>} />
+          {PANELS.filter((p) => p !== "health" && p !== "pods" && p !== "deployments" && p !== "workloads" && p !== "namespaces" && p !== "nodes" && p !== "services" && p !== "ingresses" && p !== "storage" && p !== "chat").map((p) => (
             <Route key={p} path={`/${p}`} element={<div className="p-4 capitalize">{p} panel (not yet ported)</div>} />
           ))}
         </Routes>
