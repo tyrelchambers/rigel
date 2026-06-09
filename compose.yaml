@@ -1,0 +1,23 @@
+services:
+  helmsman:
+    build: .
+    image: helmsman-web
+    ports:
+      - "8787:8787"
+    environment:
+      # Path INSIDE the container where the kubeconfig is mounted (below).
+      - KUBECONFIG=/kube/config
+      # Optional: set HELMSMAN_TOKEN in your shell to require a bearer token on /api + /ws.
+      - HELMSMAN_TOKEN=${HELMSMAN_TOKEN:-}
+    volumes:
+      # Your kubeconfig (read-only). The cluster's API server URL in this file
+      # must be reachable from inside the container — see README "Run in Docker".
+      - ${HOME}/.kube/config:/kube/config:ro
+      # Claude subscription auth for the chat copilot (read-only). Optional —
+      # omit if you only need the read/observe panels.
+      - ${HOME}/.claude:/root/.claude:ro
+    # If your kubeconfig points at a cluster on the host (kind/minikube/localhost),
+    # uncomment to let the container reach the host. For a remote cluster IP/host,
+    # the default bridge network is fine.
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"

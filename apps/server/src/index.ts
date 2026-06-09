@@ -10,6 +10,23 @@ const KUBECONFIG = resolveKubeconfigPath(process.env, homedir());
 const PORT = Number(process.env.PORT ?? 8787);
 const TOKEN = process.env.HELMSMAN_TOKEN ?? null;
 
+// Built web UI. Default resolves to apps/web/dist relative to this file, which
+// holds whether running from source (apps/server/src) or in the container
+// (/app/apps/server/src). Override with WEB_DIST if the layout differs.
+const WEB_DIST = process.env.WEB_DIST ?? new URL("../../web/dist", import.meta.url).pathname;
+
+/** Serve a file from the built web UI, falling back to index.html for SPA routes. */
+async function serveStatic(pathname: string): Promise<Response> {
+  const rel = pathname === "/" ? "/index.html" : pathname;
+  // Guard against path traversal escaping WEB_DIST.
+  const safe = rel.split("/").filter((s) => s !== "..").join("/");
+  const direct = Bun.file(`${WEB_DIST}/${safe}`);
+  if (await direct.exists()) return new Response(direct);
+  const index = Bun.file(`${WEB_DIST}/index.html`);
+  if (await index.exists()) return new Response(index);
+  return new Response("web UI not built (run `pnpm --filter web build`)", { status: 404 });
+}
+
 const ctxRes = await kubectl(null, ["config", "current-context"]);
 const context = ctxRes.code === 0 ? ctxRes.stdout.trim() : null;
 
@@ -24,7 +41,13 @@ const server = Bun.serve({
       return Response.json({ ok: true, kubeconfig: KUBECONFIG });
     }
 
-    // Auth gate: every non-health path requires a valid bearer token when TOKEN is set.
+    // Serve the built web UI for everything that isn't an API or WS path. The UI
+    // shell loads without auth; the /api/* and /ws calls it makes are gated below.
+    if (!url.pathname.startsWith("/api/") && url.pathname !== "/ws") {
+      return serveStatic(url.pathname);
+    }
+
+    // Auth gate: every non-health API/WS path requires a valid bearer token when TOKEN is set.
     if (!checkAuth(req.headers.get("authorization") ?? undefined, TOKEN)) {
       return new Response("unauthorized", { status: 401 });
     }

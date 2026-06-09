@@ -1,0 +1,25 @@
+# Node / build artifacts
+node_modules
+**/node_modules
+**/dist
+**/.vite
+**/*.tsbuildinfo
+
+# Swift app (not part of the web image)
+Sources
+Tests
+Resources
+Helmsman.app
+.build
+.swiftpm
+Package.swift
+Package.resolved
+Makefile
+
+# Repo cruft
+.git
+.github
+docs
+agent
+.claude
+.DS_Store
