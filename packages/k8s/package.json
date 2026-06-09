@@ -4,5 +4,5 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": { "build": "tsc --noEmit", "typecheck": "tsc --noEmit", "test": "bun test" },
-  "devDependencies": { "typescript": "latest" }
+  "devDependencies": { "@types/bun": "latest", "typescript": "latest" }
 }
