@@ -1,8 +1,9 @@
 import type { ServerWebSocket } from "bun";
 import { WatchManager } from "./watchManager";
 import type { WatchEvent } from "@helmsman/k8s/src/watch";
+import { runClaude } from "./claudeBridge";
 
-export function makeWsHandlers(mgr: WatchManager) {
+export function makeWsHandlers(mgr: WatchManager, context: string | null = null) {
   const unsubs = new WeakMap<ServerWebSocket<any>, Map<string, () => void>>();
   return {
     open(ws: ServerWebSocket<any>) {
@@ -44,6 +45,12 @@ export function makeWsHandlers(mgr: WatchManager) {
         const key = `${m.kind}/${m.namespace}`;
         map.get(key)?.();
         map.delete(key);
+      } else if (m.type === "chat" && typeof m.prompt === "string") {
+        (async () => {
+          for await (const event of runClaude(m.prompt, context)) {
+            ws.send(JSON.stringify({ type: "chat", event }));
+          }
+        })();
       }
     },
   };

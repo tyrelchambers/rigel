@@ -25,7 +25,7 @@ const server = Bun.serve({
     }
     return new Response("not found", { status: 404 });
   },
-  websocket: makeWsHandlers(mgr),
+  websocket: makeWsHandlers(mgr, context),
 });
 
 console.log(`helmsman server on :${server.port} (kubeconfig=${KUBECONFIG})`);
