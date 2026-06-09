@@ -89,3 +89,17 @@ export interface K8sEvent {
   lastTimestamp: string | null; // ISO 8601
   involvedObject: InvolvedObject | null;
 }
+
+/**
+ * Secret — mirrors the Kubernetes Secret JSON schema and the Swift
+ * `Secret` type in `Sources/Helmsman/Cluster/Secret.swift`. Secrets are
+ * namespace-scoped. All values in `data` are base64-encoded as returned by
+ * `kubectl get -o json`. See `docs/parity/secrets.md`.
+ */
+export interface Secret {
+  metadata: ObjectMeta;
+  /** e.g. "Opaque", "kubernetes.io/dockerconfigjson", "kubernetes.io/tls". */
+  type?: string;
+  /** Base64-encoded key/value pairs. */
+  data?: Record<string, string>;
+}
