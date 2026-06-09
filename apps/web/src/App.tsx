@@ -1,6 +1,7 @@
 import { NavLink, Routes, Route } from "react-router";
+import HealthPanel from "./panels/health/HealthPanel";
 
-const PANELS = ["overview", "pods", "deployments", "services"]; // grows as panels are ported
+const PANELS = ["overview", "pods", "deployments", "services", "health"]; // grows as panels are ported
 
 export default function App() {
   return (
@@ -15,7 +16,8 @@ export default function App() {
       <main className="flex-1 overflow-auto p-4">
         <Routes>
           <Route path="/" element={<div>Helmsman Web</div>} />
-          {PANELS.map((p) => (
+          <Route path="/health" element={<HealthPanel />} />
+          {PANELS.filter((p) => p !== "health").map((p) => (
             <Route key={p} path={`/${p}`} element={<div className="capitalize">{p} panel (not yet ported)</div>} />
           ))}
         </Routes>
