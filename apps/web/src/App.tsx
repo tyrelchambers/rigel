@@ -10,10 +10,11 @@ import IngressesPanel from "./panels/ingresses/IngressesPanel";
 import StoragePanel from "./panels/storage/StoragePanel";
 import ConfigMapsPanel from "./panels/configmaps/ConfigMapsPanel";
 import WorkloadsPanel from "./panels/workloads/WorkloadsPanel";
+import RbacPanel from "./panels/rbac/RbacPanel";
 import ChatPanel from "./panels/chat/ChatPanel";
 import { connectCluster } from "@/lib/ws";
 
-const PANELS = ["overview", "pods", "deployments", "workloads", "namespaces", "nodes", "services", "ingresses", "configmaps", "storage", "health", "chat"]; // grows as panels are ported
+const PANELS = ["overview", "pods", "deployments", "workloads", "namespaces", "nodes", "services", "ingresses", "configmaps", "storage", "rbac", "health", "chat"]; // grows as panels are ported
 
 export default function App() {
   useEffect(() => { connectCluster(); }, []);
@@ -41,7 +42,8 @@ export default function App() {
           <Route path="/ingresses" element={<div className="h-full overflow-auto p-4"><IngressesPanel /></div>} />
           <Route path="/configmaps" element={<div className="h-full overflow-auto p-4"><ConfigMapsPanel /></div>} />
           <Route path="/storage" element={<div className="h-full overflow-auto p-4"><StoragePanel /></div>} />
-          {PANELS.filter((p) => p !== "health" && p !== "pods" && p !== "deployments" && p !== "workloads" && p !== "namespaces" && p !== "nodes" && p !== "services" && p !== "ingresses" && p !== "configmaps" && p !== "storage" && p !== "chat").map((p) => (
+          <Route path="/rbac" element={<div className="h-full overflow-auto p-4"><RbacPanel /></div>} />
+          {PANELS.filter((p) => p !== "health" && p !== "pods" && p !== "deployments" && p !== "workloads" && p !== "namespaces" && p !== "nodes" && p !== "services" && p !== "ingresses" && p !== "configmaps" && p !== "storage" && p !== "rbac" && p !== "chat").map((p) => (
             <Route key={p} path={`/${p}`} element={<div className="p-4 capitalize">{p} panel (not yet ported)</div>} />
           ))}
         </Routes>
