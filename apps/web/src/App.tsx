@@ -5,6 +5,7 @@ import PodsPanel from "./panels/pods/PodsPanel";
 import DeploymentsPanel from "./panels/deployments/DeploymentsPanel";
 import NamespacesPanel from "./panels/namespaces/NamespacesPanel";
 import NodesPanel from "./panels/nodes/NodesPanel";
+import ServicesPanel from "./panels/services/ServicesPanel";
 import ChatPanel from "./panels/chat/ChatPanel";
 import { connectCluster } from "@/lib/ws";
 
@@ -31,7 +32,8 @@ export default function App() {
           <Route path="/deployments" element={<div className="h-full overflow-auto p-4"><DeploymentsPanel /></div>} />
           <Route path="/namespaces" element={<div className="h-full overflow-auto p-4"><NamespacesPanel /></div>} />
           <Route path="/nodes" element={<div className="h-full overflow-auto p-4"><NodesPanel /></div>} />
-          {PANELS.filter((p) => p !== "health" && p !== "pods" && p !== "deployments" && p !== "namespaces" && p !== "nodes" && p !== "chat").map((p) => (
+          <Route path="/services" element={<div className="h-full overflow-auto p-4"><ServicesPanel /></div>} />
+          {PANELS.filter((p) => p !== "health" && p !== "pods" && p !== "deployments" && p !== "namespaces" && p !== "nodes" && p !== "services" && p !== "chat").map((p) => (
             <Route key={p} path={`/${p}`} element={<div className="p-4 capitalize">{p} panel (not yet ported)</div>} />
           ))}
         </Routes>
