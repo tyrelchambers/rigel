@@ -1,0 +1,8 @@
+{
+  "name": "@helmsman/k8s",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": { "build": "tsc --noEmit", "typecheck": "tsc --noEmit", "test": "bun test" },
+  "devDependencies": { "typescript": "latest" }
+}

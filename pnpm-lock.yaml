@@ -84,6 +84,18 @@ importers:
         specifier: ^4.1.8
         version: 4.1.8(@types/node@25.9.2)(vite@8.0.16(@types/node@25.9.2)(jiti@2.7.0))
 
+  packages/catalog:
+    devDependencies:
+      typescript:
+        specifier: latest
+        version: 6.0.3
+
+  packages/k8s:
+    devDependencies:
+      typescript:
+        specifier: latest
+        version: 6.0.3
+
 packages:
 
   '@babel/code-frame@7.29.7':
