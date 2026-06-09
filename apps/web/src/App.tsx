@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { NavLink, Routes, Route } from "react-router";
+import OverviewPanel from "./panels/overview/OverviewPanel";
 import HealthPanel from "./panels/health/HealthPanel";
 import PodsPanel from "./panels/pods/PodsPanel";
 import DeploymentsPanel from "./panels/deployments/DeploymentsPanel";
@@ -33,7 +34,8 @@ export default function App() {
         <Routes>
           {/* Chat owns its full-height scroll layout (no padded wrapper). */}
           <Route path="/chat" element={<ChatPanel />} />
-          <Route path="/" element={<div className="p-4">Helmsman Web</div>} />
+          <Route path="/" element={<div className="h-full overflow-auto p-4"><OverviewPanel /></div>} />
+          <Route path="/overview" element={<div className="h-full overflow-auto p-4"><OverviewPanel /></div>} />
           <Route path="/health" element={<div className="h-full overflow-auto p-4"><HealthPanel /></div>} />
           <Route path="/pods" element={<div className="h-full overflow-auto p-4"><PodsPanel /></div>} />
           <Route path="/deployments" element={<div className="h-full overflow-auto p-4"><DeploymentsPanel /></div>} />
@@ -47,7 +49,7 @@ export default function App() {
           <Route path="/storage" element={<div className="h-full overflow-auto p-4"><StoragePanel /></div>} />
           <Route path="/rbac" element={<div className="h-full overflow-auto p-4"><RbacPanel /></div>} />
           <Route path="/events" element={<div className="h-full overflow-auto p-4"><EventsPanel /></div>} />
-          {PANELS.filter((p) => p !== "health" && p !== "pods" && p !== "deployments" && p !== "workloads" && p !== "databases" && p !== "namespaces" && p !== "nodes" && p !== "services" && p !== "ingresses" && p !== "configmaps" && p !== "storage" && p !== "rbac" && p !== "events" && p !== "chat").map((p) => (
+          {PANELS.filter((p) => p !== "overview" && p !== "health" && p !== "pods" && p !== "deployments" && p !== "workloads" && p !== "databases" && p !== "namespaces" && p !== "nodes" && p !== "services" && p !== "ingresses" && p !== "configmaps" && p !== "storage" && p !== "rbac" && p !== "events" && p !== "chat").map((p) => (
             <Route key={p} path={`/${p}`} element={<div className="p-4 capitalize">{p} panel (not yet ported)</div>} />
           ))}
         </Routes>
