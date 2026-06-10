@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { NavLink, Routes, Route } from "react-router";
+import { Routes, Route } from "react-router";
 import OverviewPanel from "./panels/overview/OverviewPanel";
 import HealthPanel from "./panels/health/HealthPanel";
 import PodsPanel from "./panels/pods/PodsPanel";
@@ -24,52 +24,68 @@ import AssistantPanel from "./panels/assistant/AssistantPanel";
 import SettingsPanel from "./panels/settings/SettingsPanel";
 import AccountsPanel from "./panels/accounts/AccountsPanel";
 import { connectCluster } from "@/lib/ws";
+import NavStrip from "@/shell/NavStrip";
+import NamespaceBar from "@/shell/NamespaceBar";
+import StatusBar from "@/shell/StatusBar";
 
-const PANELS = ["overview", "catalog", "accounts", "pods", "deployments", "workloads", "databases", "rightsizing", "namespaces", "nodes", "services", "ingresses", "connectivity", "configmaps", "secrets", "storage", "rbac", "events", "logs", "health", "assistant", "settings", "chat"]; // grows as panels are ported
+/** Wrapper for panels that need padding + vertical scroll. */
+function Padded({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="h-full overflow-auto p-4">
+      {children}
+    </div>
+  );
+}
 
 export default function App() {
   useEffect(() => { connectCluster(); }, []);
+
   return (
-    <div className="flex h-screen">
-      <nav className="w-48 border-r p-2 space-y-1">
-        {PANELS.map((p) => (
-          <NavLink key={p} to={`/${p}`} className="block rounded px-2 py-1 hover:bg-muted capitalize">
-            {p}
-          </NavLink>
-        ))}
-      </nav>
-      <main className="flex-1 overflow-hidden">
-        <Routes>
-          {/* Chat and Logs own their full-height scroll layout (no padded wrapper). */}
-          <Route path="/chat" element={<ChatPanel />} />
-          <Route path="/logs" element={<LogsPanel />} />
-          <Route path="/" element={<div className="h-full overflow-auto p-4"><OverviewPanel /></div>} />
-          <Route path="/overview" element={<div className="h-full overflow-auto p-4"><OverviewPanel /></div>} />
-          <Route path="/health" element={<div className="h-full overflow-auto p-4"><HealthPanel /></div>} />
-          <Route path="/pods" element={<div className="h-full overflow-auto p-4"><PodsPanel /></div>} />
-          <Route path="/deployments" element={<div className="h-full overflow-auto p-4"><DeploymentsPanel /></div>} />
-          <Route path="/workloads" element={<div className="h-full overflow-auto p-4"><WorkloadsPanel /></div>} />
-          <Route path="/databases" element={<div className="h-full overflow-auto p-4"><DatabasesPanel /></div>} />
-          <Route path="/rightsizing" element={<div className="h-full overflow-auto p-4"><RightSizingPanel /></div>} />
-          <Route path="/namespaces" element={<div className="h-full overflow-auto p-4"><NamespacesPanel /></div>} />
-          <Route path="/nodes" element={<div className="h-full overflow-auto p-4"><NodesPanel /></div>} />
-          <Route path="/services" element={<div className="h-full overflow-auto p-4"><ServicesPanel /></div>} />
-          <Route path="/ingresses" element={<div className="h-full overflow-auto p-4"><IngressesPanel /></div>} />
-          <Route path="/connectivity" element={<div className="h-full overflow-auto p-4"><ConnectivityPanel /></div>} />
-          <Route path="/configmaps" element={<div className="h-full overflow-auto p-4"><ConfigMapsPanel /></div>} />
-          <Route path="/secrets" element={<div className="h-full overflow-auto p-4"><SecretsPanel /></div>} />
-          <Route path="/storage" element={<div className="h-full overflow-auto p-4"><StoragePanel /></div>} />
-          <Route path="/rbac" element={<div className="h-full overflow-auto p-4"><RbacPanel /></div>} />
-          <Route path="/catalog" element={<div className="h-full overflow-auto p-4"><CatalogPanel /></div>} />
-          <Route path="/accounts" element={<div className="h-full overflow-auto p-4"><AccountsPanel /></div>} />
-          <Route path="/events" element={<div className="h-full overflow-auto p-4"><EventsPanel /></div>} />
-          <Route path="/assistant" element={<div className="h-full overflow-auto p-4"><AssistantPanel /></div>} />
-          <Route path="/settings" element={<div className="h-full overflow-auto p-4"><SettingsPanel /></div>} />
-          {PANELS.filter((p) => p !== "overview" && p !== "catalog" && p !== "accounts" && p !== "health" && p !== "pods" && p !== "deployments" && p !== "workloads" && p !== "databases" && p !== "rightsizing" && p !== "namespaces" && p !== "nodes" && p !== "services" && p !== "ingresses" && p !== "connectivity" && p !== "configmaps" && p !== "secrets" && p !== "storage" && p !== "rbac" && p !== "events" && p !== "logs" && p !== "assistant" && p !== "settings" && p !== "chat").map((p) => (
-            <Route key={p} path={`/${p}`} element={<div className="p-4 capitalize">{p} panel (not yet ported)</div>} />
-          ))}
-        </Routes>
-      </main>
+    <div style={{ display: "flex", height: "100vh", background: "#0A0A0A" }}>
+      {/* ── Sidebar ──────────────────────────────────────────────────────── */}
+      <NavStrip />
+
+      {/* ── Content column ───────────────────────────────────────────────── */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+        {/* Namespace bar — only renders on namespace-scoped routes */}
+        <NamespaceBar />
+
+        {/* Routed panel */}
+        <main style={{ flex: 1, overflow: "hidden", background: "#0A0A0A" }}>
+          <Routes>
+            {/* Chat and Logs own their full-height scroll layout (no padded wrapper). */}
+            <Route path="/chat" element={<ChatPanel />} />
+            <Route path="/logs" element={<LogsPanel />} />
+
+            {/* Root → Overview */}
+            <Route path="/" element={<Padded><OverviewPanel /></Padded>} />
+            <Route path="/overview" element={<Padded><OverviewPanel /></Padded>} />
+            <Route path="/health" element={<Padded><HealthPanel /></Padded>} />
+            <Route path="/pods" element={<Padded><PodsPanel /></Padded>} />
+            <Route path="/deployments" element={<Padded><DeploymentsPanel /></Padded>} />
+            <Route path="/workloads" element={<Padded><WorkloadsPanel /></Padded>} />
+            <Route path="/databases" element={<Padded><DatabasesPanel /></Padded>} />
+            <Route path="/rightsizing" element={<Padded><RightSizingPanel /></Padded>} />
+            <Route path="/namespaces" element={<Padded><NamespacesPanel /></Padded>} />
+            <Route path="/nodes" element={<Padded><NodesPanel /></Padded>} />
+            <Route path="/services" element={<Padded><ServicesPanel /></Padded>} />
+            <Route path="/ingresses" element={<Padded><IngressesPanel /></Padded>} />
+            <Route path="/connectivity" element={<Padded><ConnectivityPanel /></Padded>} />
+            <Route path="/configmaps" element={<Padded><ConfigMapsPanel /></Padded>} />
+            <Route path="/secrets" element={<Padded><SecretsPanel /></Padded>} />
+            <Route path="/storage" element={<Padded><StoragePanel /></Padded>} />
+            <Route path="/rbac" element={<Padded><RbacPanel /></Padded>} />
+            <Route path="/catalog" element={<Padded><CatalogPanel /></Padded>} />
+            <Route path="/accounts" element={<Padded><AccountsPanel /></Padded>} />
+            <Route path="/events" element={<Padded><EventsPanel /></Padded>} />
+            <Route path="/assistant" element={<Padded><AssistantPanel /></Padded>} />
+            <Route path="/settings" element={<Padded><SettingsPanel /></Padded>} />
+          </Routes>
+        </main>
+
+        {/* Status bar */}
+        <StatusBar />
+      </div>
     </div>
   );
 }
