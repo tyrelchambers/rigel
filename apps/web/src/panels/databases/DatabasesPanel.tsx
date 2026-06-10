@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, Database, LoaderCircle, MonitorSmartphone } from "lucide-react";
+import { Database, LoaderCircle } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
+import { handoffToChat } from "@/lib/chatHandoff";
+import { ListRow } from "@/panels/components/ListRow";
+import { TagPill } from "@/panels/components/TagPill";
+import { StatusBadge } from "@/panels/components/StatusBadge";
+import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
+import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import type {
   CNPGCluster,
   CNPGScheduledBackup,
@@ -13,12 +19,10 @@ import type {
 import {
   buildInstances,
   connectionString,
-  kindColorClass,
   matchPods,
   matchesDatabase,
   phaseDotClass,
   podNodes,
-  readyColorClass,
   readyFraction,
   relativeAge,
   sourceBadgeLabel,
@@ -26,27 +30,8 @@ import {
 } from "./databasesDisplay";
 
 // ---------------------------------------------------------------------------
-// DEFERRED ACTIONS (docs/parity/databases.md §"Action block protocol"). This is
-// a READ-ONLY panel. It emits NO action blocks and renders NO mutation buttons.
-// All mutations come from chat action-blocks routed through the ConfirmSheet:
-//   backupNow   → command args ["cnpg","backup",<cluster>,"-n",<ns>]
-//   switchover  → command args ["cnpg","promote",<cluster>,<standby>,"-n",<ns>]
-//   hibernate   → command args ["cnpg","maintenance","set",<cluster>,"-n",<ns>,"--reuse-pvc"]
-//   resume      → command args ["cnpg","maintenance","unset",<cluster>,"-n",<ns>]
-//   scale       → {"kind":"scale", ...} (reused from Workloads) or cnpg scale
-//   portForward / revealCredentials → server endpoints (deferred)
-//   copyDSN     → client-side string only (see connectionString)
-// The CNPG-plugin button-state matrix is likewise deferred to chat.
+// READ-ONLY panel. No action blocks emitted. All mutations via chat → ConfirmSheet.
 // ---------------------------------------------------------------------------
-
-/** Small muted chip (namespace etc.). */
-function Chip({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-xs font-mono text-muted-foreground">
-      {children}
-    </span>
-  );
-}
 
 export default function DatabasesPanel() {
   const resources = useCluster((s) => s.resources);
@@ -57,9 +42,7 @@ export default function DatabasesPanel() {
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  // Watch CNPG CRDs + image-detected workloads + pods. CNPG cluster/backup CRDs
-  // and the generic deployment/statefulset/pod watches all re-subscribe when the
-  // namespace filter changes.
+  // Watch CNPG CRDs + image-detected workloads + pods.
   useEffect(() => {
     const ns = namespaceFilter ?? "*";
     subscribe("clusters.postgresql.cnpg.io", ns);
@@ -76,8 +59,6 @@ export default function DatabasesPanel() {
     };
   }, [namespaceFilter]);
 
-  // Rebuild the instance list only when the underlying resources change (the
-  // store updates on every watch delta, not on any metrics poll).
   const instances = useMemo(
     () =>
       buildInstances({
@@ -108,9 +89,6 @@ export default function DatabasesPanel() {
     [instances, search],
   );
 
-  // Empty state: shown when there are no instances and no watch error. A failed
-  // CNPG watch surfaces as the error banner (which never hides the list), so the
-  // "no databases detected" empty state is only the genuine not-installed case.
   const showEmpty = !isLoading && instances.length === 0 && !error;
 
   function toggle(id: string) {
@@ -122,12 +100,31 @@ export default function DatabasesPanel() {
     });
   }
 
+  function askClaude(inst: DatabaseInstance, topic: "Errors" | "Logs" | "Explain") {
+    handoffToChat(buildHandoffPrompt(inst.kind, inst.name, inst.namespace, topic));
+  }
+
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-0">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold">Databases</h1>
-        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-mono text-muted-foreground">
+      <div
+        className="flex items-center gap-3 px-4 py-3"
+        style={{ borderBottom: "1px solid #1A1A1A", background: "#141417" }}
+      >
+        <div className="flex flex-col gap-0">
+          <span className="text-sm font-semibold leading-tight">Databases</span>
+          <span style={{ fontSize: 11, color: "#6B6B73" }}>CNPG clusters &amp; image-detected</span>
+        </div>
+        <span
+          style={{
+            fontFamily: "ui-monospace, monospace",
+            fontSize: 11,
+            color: "#6B6B73",
+            background: "#1A1A1A",
+            padding: "2px 6px",
+            borderRadius: 4,
+          }}
+        >
           {filtered.length}
         </span>
         {isLoading && (
@@ -138,171 +135,144 @@ export default function DatabasesPanel() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search databases…"
-          className="ml-auto w-64 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="ml-auto w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
         />
       </div>
 
       {/* Error banner — never hides the list. */}
       {error && (
-        <pre className="rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+        <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
           {error}
         </pre>
       )}
 
-      {/* Empty state (CRD not installed AND nothing image-detected). */}
+      {/* Friendly empty state: no CNPG and nothing image-detected. */}
       {showEmpty && (
         <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
           <Database className="size-8 text-muted-foreground" />
-          <p className="text-sm font-medium">No databases detected</p>
+          <p className="text-sm font-medium">No CloudNativePG clusters found</p>
           <p className="max-w-md text-xs text-muted-foreground">
-            Nothing matched a known database operator CRD or a recognized database image.
+            Install the CloudNativePG operator and create a Cluster resource, or deploy a
+            workload with a recognized database image to see it here.
           </p>
         </div>
       )}
 
-      {/* Instance cards */}
-      <div className="space-y-1.5">
-        {filtered.map((inst) => (
-          <DatabaseCard
-            key={inst.id}
-            instance={inst}
-            pods={pods}
-            expanded={expanded.has(inst.id)}
-            onToggle={() => toggle(inst.id)}
-          />
-        ))}
+      {/* Row list */}
+      <div className="flex flex-col gap-0.5 px-3 py-2">
+        {filtered.map((inst) => {
+          const isOpen = expanded.has(inst.id);
+          const matchedPods = matchPods(inst, pods);
+          const ready = readyFraction(inst.readyReplicas, inst.desiredReplicas);
+          const readyVariant = inst.isHealthy ? "healthy" : "error";
+
+          return (
+            <ListRow
+              key={inst.id}
+              rowKey={inst.id}
+              isOpen={isOpen}
+              onToggle={() => toggle(inst.id)}
+              expandedContent={
+                <DatabaseDetail instance={inst} matchedPods={matchedPods} />
+              }
+            >
+              {/* Name */}
+              <button
+                type="button"
+                onClick={() => toggle(inst.id)}
+                className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
+              >
+                {inst.name}
+              </button>
+
+              {/* Namespace chip */}
+              <span
+                style={{
+                  fontFamily: "ui-monospace, monospace",
+                  fontSize: 10,
+                  color: "#6B6B73",
+                  background: "#050505",
+                  padding: "1px 5px",
+                  borderRadius: 4,
+                  border: "1px solid #1A1A1A",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {inst.namespace}
+              </span>
+
+              {/* Kind / source — purple TagPill */}
+              <TagPill label={inst.source === "cnpg" ? `cnpg/${inst.kind}` : inst.kind} />
+
+              {/* Ready badge */}
+              <StatusBadge label={ready} variant={readyVariant} />
+
+              {/* Phase text — dim */}
+              <span
+                style={{
+                  fontFamily: "ui-monospace, monospace",
+                  fontSize: 10,
+                  color: "#6B6B73",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  minWidth: 0,
+                  flexShrink: 1,
+                }}
+              >
+                {inst.phaseText}
+              </span>
+
+              {/* Image / version — dim */}
+              {inst.image && (
+                <span
+                  title={inst.image}
+                  style={{
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: 10,
+                    color: "#6B6B73",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    minWidth: 0,
+                    flexShrink: 1,
+                    maxWidth: "14rem",
+                  }}
+                >
+                  {inst.image}
+                </span>
+              )}
+
+              {/* Spacer */}
+              <span className="flex-1" />
+
+              {/* Action strip — Errors / Logs / Explain */}
+              <ActionButtonStrip
+                onErrors={(e) => { e.stopPropagation(); askClaude(inst, "Errors"); }}
+                onLogs={(e) => { e.stopPropagation(); askClaude(inst, "Logs"); }}
+                onExplain={(e) => { e.stopPropagation(); askClaude(inst, "Explain"); }}
+              />
+            </ListRow>
+          );
+        })}
       </div>
 
-      {/* Filtered-to-zero (but instances exist) — keep it quiet. */}
+      {/* Filtered-to-zero (but instances exist) */}
       {!showEmpty && instances.length > 0 && filtered.length === 0 && (
-        <p className="px-2 py-4 text-sm text-muted-foreground">No databases match search</p>
+        <p className="px-4 py-4 text-sm text-muted-foreground">No databases match search</p>
       )}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Card
+// Expanded detail
 // ---------------------------------------------------------------------------
-
-function DatabaseCard({
-  instance,
-  pods,
-  expanded,
-  onToggle,
-}: {
-  instance: DatabaseInstance;
-  pods: DatabasePodRaw[];
-  expanded: boolean;
-  onToggle: () => void;
-}) {
-  const matchedPods = useMemo(() => matchPods(instance, pods), [instance, pods]);
-  const nodes = podNodes(matchedPods);
-
-  return (
-    <div className="rounded-md border bg-card">
-      {/* Collapsed row */}
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={expanded}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left"
-      >
-        <ChevronRight
-          className={`size-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-90" : ""}`}
-        />
-        <span
-          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${kindColorClass(instance.kind)}`}
-        >
-          {instance.kind}
-        </span>
-        <span className="truncate font-mono font-semibold" title={instance.name}>
-          {instance.name}
-        </span>
-        <Chip>{instance.namespace}</Chip>
-        <span className="rounded border px-1.5 py-0.5 text-[10px] font-mono uppercase text-muted-foreground">
-          {sourceBadgeLabel(instance.source)}
-        </span>
-
-        {/* primary (CNPG only) */}
-        {instance.source === "cnpg" && instance.cnpgPrimary && (
-          <span className="truncate font-mono text-xs text-primary" title={instance.cnpgPrimary}>
-            primary: {instance.cnpgPrimary}
-          </span>
-        )}
-
-        {/* nodes */}
-        {nodes.length > 0 && (
-          <span className="flex items-center gap-1 truncate font-mono text-xs text-muted-foreground">
-            {nodes.length > 1 && <MonitorSmartphone className="size-3 shrink-0" />}
-            {nodes.join(", ")}
-          </span>
-        )}
-
-        {/* ready/desired */}
-        <span
-          className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-xs font-mono ${readyColorClass(instance.isHealthy)}`}
-        >
-          {readyFraction(instance.readyReplicas, instance.desiredReplicas)}
-        </span>
-      </button>
-
-      {/* Expanded details */}
-      {expanded && (
-        <div className="space-y-3 border-t px-3 py-3 text-sm">
-          {/* IMAGE */}
-          {instance.image && (
-            <DetailRow label="IMAGE">
-              <span className="font-mono text-xs break-all select-text">{instance.image}</span>
-            </DetailRow>
-          )}
-
-          {/* STATUS */}
-          <DetailRow label="STATUS">
-            <span
-              className={`text-xs ${instance.isHealthy ? "text-green-600 dark:text-green-400" : "text-foreground"}`}
-            >
-              {instance.phaseText}
-            </span>
-          </DetailRow>
-
-          {/* AGE */}
-          <DetailRow label="AGE">
-            <span className="font-mono text-xs text-muted-foreground">
-              {relativeAge(instance.creationTimestamp)}
-            </span>
-          </DetailRow>
-
-          {/* PODS */}
-          <PodsSection pods={matchedPods} />
-
-          {/* CONNECT */}
-          <DetailRow label="CONNECT">
-            <span className="font-mono text-xs break-all select-text">
-              {connectionString({
-                kind: instance.kind,
-                source: instance.source,
-                target:
-                  instance.source === "cnpg"
-                    ? `${instance.name}-rw`
-                    : (matchedPods[0]?.name ?? instance.name),
-                namespace: instance.namespace,
-              })}
-            </span>
-          </DetailRow>
-
-          {/* BACKUPS & HEALTH (CNPG only) */}
-          {instance.source === "cnpg" && <BackupsSection instance={instance} />}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex gap-3">
-      <span className="w-32 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <span className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground w-32 shrink-0">
         {label}
       </span>
       <div className="min-w-0 flex-1">{children}</div>
@@ -310,56 +280,122 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
-function PodsSection({ pods }: { pods: DatabasePod[] }) {
-  return (
-    <DetailRow label="PODS">
-      {pods.length === 0 ? (
-        <span className="text-xs text-muted-foreground/70">No matching pods</span>
-      ) : (
-        <ul className="space-y-1">
-          {pods.map((p) => (
-            <li key={p.name} className="flex items-center gap-2 text-xs">
-              <span className="text-muted-foreground/60">├─</span>
-              <span className="font-mono">{p.name}</span>
-              <span className={`size-2 shrink-0 rounded-full ${phaseDotClass(p.phase)}`} />
-              <span className="text-muted-foreground">{p.phase}</span>
-              {p.isPrimary && (
-                <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                  primary
-                </span>
-              )}
-              {p.node && (
-                <span className="ml-auto font-mono text-muted-foreground">{p.node}</span>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </DetailRow>
-  );
-}
-
-function BackupsSection({ instance }: { instance: DatabaseInstance }) {
+function DatabaseDetail({
+  instance,
+  matchedPods,
+}: {
+  instance: DatabaseInstance;
+  matchedPods: DatabasePod[];
+}) {
+  const nodes = podNodes(matchedPods);
   const wal = instance.walArchiving ?? "unknown";
+
   return (
-    <DetailRow label="BACKUPS & HEALTH">
-      <div className="space-y-1 text-xs">
-        <div className="flex gap-2">
-          <span className="w-28 text-muted-foreground">Last backup</span>
-          <span className="font-mono select-text">{instance.lastBackup ?? "never"}</span>
-        </div>
-        <div className="flex gap-2">
-          <span className="w-28 text-muted-foreground">Schedule</span>
-          <span className="font-mono select-text">
-            {instance.scheduledBackup ?? "none configured"}
+    <div className="space-y-3">
+      {/* IMAGE */}
+      {instance.image && (
+        <DetailRow label="IMAGE">
+          <span className="font-mono text-xs break-all select-text text-muted-foreground">
+            {instance.image}
           </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-28 text-muted-foreground">WAL archiving</span>
-          <span className={`size-2 shrink-0 rounded-full ${walDotClass(wal)}`} />
-          <span>{wal}</span>
-        </div>
-      </div>
-    </DetailRow>
+        </DetailRow>
+      )}
+
+      {/* SOURCE */}
+      <DetailRow label="SOURCE">
+        <span className="font-mono text-xs text-muted-foreground">
+          {sourceBadgeLabel(instance.source)}
+        </span>
+      </DetailRow>
+
+      {/* STATUS */}
+      <DetailRow label="STATUS">
+        <span
+          className={`text-xs font-mono ${instance.isHealthy ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`}
+        >
+          {instance.phaseText}
+        </span>
+      </DetailRow>
+
+      {/* AGE */}
+      <DetailRow label="AGE">
+        <span className="font-mono text-xs text-muted-foreground">
+          {relativeAge(instance.creationTimestamp)}
+        </span>
+      </DetailRow>
+
+      {/* NODES */}
+      {nodes.length > 0 && (
+        <DetailRow label="NODES">
+          <span className="font-mono text-xs text-muted-foreground">{nodes.join(", ")}</span>
+        </DetailRow>
+      )}
+
+      {/* PODS */}
+      <DetailRow label="PODS">
+        {matchedPods.length === 0 ? (
+          <span className="text-xs text-muted-foreground/70">No matching pods</span>
+        ) : (
+          <ul className="space-y-1">
+            {matchedPods.map((p) => (
+              <li key={p.name} className="flex items-center gap-2 text-xs">
+                <span className="text-muted-foreground/60">├─</span>
+                <span className="font-mono text-muted-foreground">{p.name}</span>
+                <span className={`size-2 shrink-0 rounded-full ${phaseDotClass(p.phase)}`} />
+                <span className="text-muted-foreground">{p.phase}</span>
+                {p.isPrimary && (
+                  <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                    primary
+                  </span>
+                )}
+                {p.node && (
+                  <span className="ml-auto font-mono text-muted-foreground">{p.node}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </DetailRow>
+
+      {/* CONNECT */}
+      <DetailRow label="CONNECT">
+        <span className="font-mono text-xs break-all select-text text-muted-foreground">
+          {connectionString({
+            kind: instance.kind,
+            source: instance.source,
+            target:
+              instance.source === "cnpg"
+                ? `${instance.name}-rw`
+                : (matchedPods[0]?.name ?? instance.name),
+            namespace: instance.namespace,
+          })}
+        </span>
+      </DetailRow>
+
+      {/* BACKUPS & WAL (CNPG only) */}
+      {instance.source === "cnpg" && (
+        <DetailRow label="BACKUPS & HEALTH">
+          <div className="space-y-1 text-xs">
+            <div className="flex gap-2">
+              <span className="w-28 text-muted-foreground">Last backup</span>
+              <span className="font-mono select-text text-muted-foreground">
+                {instance.lastBackup ?? "never"}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <span className="w-28 text-muted-foreground">Schedule</span>
+              <span className="font-mono select-text text-muted-foreground">
+                {instance.scheduledBackup ?? "none configured"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-28 text-muted-foreground">WAL archiving</span>
+              <span className={`size-2 shrink-0 rounded-full ${walDotClass(wal)}`} />
+              <span className="text-muted-foreground">{wal}</span>
+            </div>
+          </div>
+        </DetailRow>
+      )}
+    </div>
   );
 }

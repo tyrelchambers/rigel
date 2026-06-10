@@ -1,17 +1,15 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
-import { LoaderCircle, ChevronRight, ChevronDown, KeyRound, Eye, EyeOff, Plus, Pencil } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { LoaderCircle, Eye, EyeOff, Plus, Pencil } from "lucide-react";
 import type { Secret } from "@helmsman/k8s";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from "@/components/ui/table";
+import { handoffToChat } from "@/lib/chatHandoff";
 import { Button } from "@/components/ui/button";
+import { ListRow } from "@/panels/components/ListRow";
+import { TagPill } from "@/panels/components/TagPill";
+import { StatusBadge } from "@/panels/components/StatusBadge";
+import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
+import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { SecretEditor } from "./SecretEditor";
 import {
   relativeAge,
@@ -28,10 +26,8 @@ import {
 // CREATE + EDIT are implemented via SecretEditor → POST /api/apply
 // (`kubectl apply -f -`); see docs/parity/configmap-secret-edit.md. Plaintext
 // values are base64-encoded into the manifest; binary values are read-only on
-// edit. The watch auto-refreshes after a successful apply. Still DEFERRED (need
-// new infra / specs): Delete mutation, move-to-namespace, standalone View-YAML,
-// copy-to-clipboard. Reveal is purely client-side base64 decoding; values are
-// never searched.
+// edit. The watch auto-refreshes after a successful apply. Reveal is purely
+// client-side base64 decoding; values are never searched.
 // ---------------------------------------------------------------------------
 
 /** "0 keys" / "1 key" / "N keys" with correct pluralization. */
@@ -93,12 +89,33 @@ export default function SecretsPanel() {
     });
   }
 
+  function askClaude(secret: Secret, topic: "Errors" | "Logs" | "Explain") {
+    handoffToChat(
+      buildHandoffPrompt("secret", secret.metadata.name, secret.metadata.namespace, topic),
+    );
+  }
+
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-0">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold">Secrets</h1>
-        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-mono text-muted-foreground">
+      <div
+        className="flex items-center gap-3 px-4 py-3"
+        style={{ borderBottom: "1px solid #1A1A1A", background: "#141417" }}
+      >
+        <div className="flex flex-col gap-0">
+          <span className="text-sm font-semibold leading-tight">Secrets</span>
+          <span style={{ fontSize: 11, color: "#6B6B73" }}>Encrypted key/value pairs</span>
+        </div>
+        <span
+          style={{
+            fontFamily: "ui-monospace, monospace",
+            fontSize: 11,
+            color: "#6B6B73",
+            background: "#1A1A1A",
+            padding: "2px 6px",
+            borderRadius: 4,
+          }}
+        >
           {countLabel}
         </span>
         {isLoading && (
@@ -109,7 +126,7 @@ export default function SecretsPanel() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search secrets…"
-          className="ml-auto w-64 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="ml-auto w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
         />
         <Button size="sm" onClick={openCreate}>
           <Plus className="size-4" aria-hidden /> New Secret
@@ -118,91 +135,100 @@ export default function SecretsPanel() {
 
       {/* Error banner */}
       {error && (
-        <pre className="rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+        <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
           {error}
         </pre>
       )}
 
-      {/* Table */}
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-6" />
-            <TableHead className="w-3" />
-            <TableHead>Name</TableHead>
-            <TableHead>Namespace</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Keys</TableHead>
-            <TableHead className="text-right">Age</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {filtered.map((secret) => {
-            const uid = secret.metadata.uid;
-            const isOpen = expanded.has(uid);
-            const displayType = secretTypeDisplayName(secret.type);
-            const rawType = secret.type ?? "Opaque";
-            return (
-              <Fragment key={uid}>
-                <TableRow>
-                  <TableCell className="align-top">
-                    <button
-                      type="button"
-                      onClick={() => toggleExpand(uid)}
-                      aria-label={isOpen ? "Collapse" : "Expand"}
-                      aria-expanded={isOpen}
-                      className="text-muted-foreground hover:text-foreground"
-                    >
-                      {isOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-                    </button>
-                  </TableCell>
-                  <TableCell className="align-top">
-                    <KeyRound className="size-3 text-primary" aria-hidden />
-                  </TableCell>
-                  <TableCell>
-                    <button
-                      type="button"
-                      onClick={() => toggleExpand(uid)}
-                      className="font-mono hover:underline"
-                    >
-                      {secret.metadata.name}
-                    </button>
-                  </TableCell>
-                  <TableCell className="font-mono text-muted-foreground">
-                    {secret.metadata.namespace ?? "—"}
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      title={rawType}
-                      className="inline-block rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
-                    >
-                      {displayType}
-                    </span>
-                  </TableCell>
-                  <TableCell className="font-mono text-muted-foreground">
-                    {keysLabel(keyCount(secret))}
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-muted-foreground">
-                    {relativeAge(secret.metadata.creationTimestamp)}
-                  </TableCell>
-                </TableRow>
+      {/* Row list */}
+      <div className="flex flex-col gap-0.5 px-3 py-2">
+        {filtered.map((secret) => {
+          const uid = secret.metadata.uid;
+          const isOpen = expanded.has(uid);
+          const displayType = secretTypeDisplayName(secret.type);
+          const rawType = secret.type ?? "Opaque";
+          const keys = keyCount(secret);
 
-                {isOpen && (
-                  <TableRow>
-                    <TableCell colSpan={7} className="bg-muted/30">
-                      <SecretDetail secret={secret} onEdit={() => openEdit(secret)} />
-                    </TableCell>
-                  </TableRow>
-                )}
-              </Fragment>
-            );
-          })}
-        </TableBody>
-      </Table>
+          return (
+            <ListRow
+              key={uid}
+              rowKey={uid}
+              isOpen={isOpen}
+              onToggle={() => toggleExpand(uid)}
+              expandedContent={
+                <SecretDetail secret={secret} onEdit={() => openEdit(secret)} />
+              }
+            >
+              {/* Name */}
+              <button
+                type="button"
+                onClick={() => toggleExpand(uid)}
+                className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
+              >
+                {secret.metadata.name}
+              </button>
+
+              {/* Namespace chip */}
+              <span
+                style={{
+                  fontFamily: "ui-monospace, monospace",
+                  fontSize: 10,
+                  color: "#6B6B73",
+                  background: "#050505",
+                  padding: "1px 5px",
+                  borderRadius: 4,
+                  border: "1px solid #1A1A1A",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {secret.metadata.namespace ?? "—"}
+              </span>
+
+              {/* Secret type — purple TagPill */}
+              <TagPill label={displayType} title={rawType} />
+
+              {/* Key count — neutral badge */}
+              <StatusBadge label={keysLabel(keys)} variant="neutral" />
+
+              {/* Spacer */}
+              <span className="flex-1" />
+
+              {/* Age — dim */}
+              <span
+                style={{
+                  fontFamily: "ui-monospace, monospace",
+                  fontSize: 10,
+                  color: "#6B6B73",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {relativeAge(secret.metadata.creationTimestamp)}
+              </span>
+
+              {/* Action button strip — Errors / Logs / Explain + Edit */}
+              <ActionButtonStrip
+                onErrors={(e) => { e.stopPropagation(); askClaude(secret, "Errors"); }}
+                onLogs={(e) => { e.stopPropagation(); askClaude(secret, "Logs"); }}
+                onExplain={(e) => { e.stopPropagation(); askClaude(secret, "Explain"); }}
+                extra={[
+                  {
+                    label: "Edit",
+                    Icon: Pencil,
+                    onClick: (e) => { e.stopPropagation(); openEdit(secret); },
+                  },
+                ]}
+              />
+            </ListRow>
+          );
+        })}
+      </div>
 
       {/* Empty / filtered-to-zero states */}
-      {!isLoading && filtered.length === 0 && (
-        <p className="px-2 py-4 text-sm text-muted-foreground">No secrets found</p>
+      {!isLoading && allSecrets.length === 0 && (
+        <p className="px-4 py-4 text-sm text-muted-foreground">No secrets found</p>
+      )}
+      {!isLoading && allSecrets.length > 0 && filtered.length === 0 && (
+        <p className="px-4 py-4 text-sm text-muted-foreground">No secrets match search</p>
       )}
 
       <SecretEditor
@@ -214,6 +240,10 @@ export default function SecretsPanel() {
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Expanded detail: STATUS summary + KEYS section (sorted, reveal toggles).
+// ---------------------------------------------------------------------------
 
 /** Expanded detail: STATUS summary + KEYS section (sorted, reveal toggles). */
 function SecretDetail({ secret, onEdit }: { secret: Secret; onEdit: () => void }) {
@@ -235,17 +265,10 @@ function SecretDetail({ secret, onEdit }: { secret: Secret; onEdit: () => void }
   }
 
   return (
-    <div className="space-y-3 px-2 py-3">
-      {/* Actions */}
-      <div className="flex justify-end">
-        <Button variant="outline" size="sm" onClick={onEdit}>
-          <Pencil className="size-3.5" aria-hidden /> Edit
-        </Button>
-      </div>
-
+    <div className="space-y-3">
       {/* STATUS */}
       <div className="space-y-1">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
           Status
         </h3>
         <dl className="grid grid-cols-[6rem_1fr] gap-x-3 gap-y-0.5 text-xs font-mono">
@@ -270,7 +293,7 @@ function SecretDetail({ secret, onEdit }: { secret: Secret; onEdit: () => void }
 
       {/* KEYS */}
       <div className="space-y-1">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
           Keys ({total})
         </h3>
         {keys.length === 0 ? (
@@ -323,6 +346,20 @@ function SecretDetail({ secret, onEdit }: { secret: Secret; onEdit: () => void }
             })}
           </ul>
         )}
+      </div>
+
+      {/* Edit button */}
+      <div
+        className="flex items-center gap-2 border-t pt-3"
+        style={{ borderColor: "#1A1A1A" }}
+      >
+        <span className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground mr-2">
+          Manage
+        </span>
+        <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={onEdit}>
+          <Pencil className="size-3" />
+          Edit
+        </Button>
       </div>
     </div>
   );

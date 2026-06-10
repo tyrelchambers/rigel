@@ -1,22 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  LoaderCircle,
-  HardDrive,
-  Server,
-  Package,
-  ArrowRight,
-} from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
+import { handoffToChat } from "@/lib/chatHandoff";
+import { ListRow } from "@/panels/components/ListRow";
+import { TagPill } from "@/panels/components/TagPill";
+import { StatusBadge } from "@/panels/components/StatusBadge";
+import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
+import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import type {
   PersistentVolumeClaim,
   PersistentVolume,
   StorageClass,
   StorageKind,
 } from "./types";
+import type { StatusBadgeVariant } from "@/panels/components/StatusBadge";
 import {
   abbreviateAccessModes,
-  storagePhaseColor,
   isDefaultStorageClass,
   claimRef,
   pvcPhase,
@@ -33,20 +33,8 @@ import {
 } from "./storageDisplay";
 
 // ---------------------------------------------------------------------------
-// DEFERRED ACTIONS (docs/parity/storage.md §4). This is a READ-ONLY panel.
-// The following are intentionally NOT implemented and must NOT be added
-// without a new feature spec + infra:
-//   - View YAML (needs a server YAML endpoint + viewer UI). Row context-menu
-//     items are deferred stubs only.
-//   - Delete PVC / Delete PV mutations (need ConfirmSheet wiring + server
-//     action routes — reuse the pods/nodes ConfirmSheet pattern later). The
-//     action-block shapes the future mutations will emit are recorded here:
-//       Delete PVC → {"kind":"deleteResource","name":<pvc>,"namespace":<ns>,
-//                     "resourceKind":"pvc"}  →  kubectl delete pvc <name> -n <ns>
-//       Delete PV  → {"kind":"deleteResource","name":<pv>,"resourceKind":"pv"}
-//                     →  kubectl delete pv <name>
-//   - Edit / Create / port-forward / Ask Claude handoff.
-// No action blocks are emitted by this panel.
+// READ-ONLY panel. No action blocks are emitted; all chat handoffs use
+// handoffToChat. Mutations (delete PVC/PV) are deferred per spec.
 // ---------------------------------------------------------------------------
 
 const KIND_TABS: { kind: StorageKind; label: string }[] = [
@@ -55,24 +43,20 @@ const KIND_TABS: { kind: StorageKind; label: string }[] = [
   { kind: "storageclasses", label: "Classes" },
 ];
 
-/** Small muted chip used for storageClass / reclaimPolicy / namespace / etc. */
-function Chip({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-xs font-mono text-muted-foreground">
-      {children}
-    </span>
-  );
-}
-
-/** Status-colored phase pill. */
-function PhaseBadge({ phase }: { phase: string }) {
-  return (
-    <span
-      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${storagePhaseColor(phase)}`}
-    >
-      {phase}
-    </span>
-  );
+/** Map a storage phase to a StatusBadge variant. */
+function phaseVariant(phase: string): StatusBadgeVariant {
+  switch (phase) {
+    case "Bound":
+    case "Available":
+      return "healthy";
+    case "Pending":
+      return "pending";
+    case "Lost":
+    case "Failed":
+      return "error";
+    default:
+      return "neutral";
+  }
 }
 
 export default function StoragePanel() {
@@ -83,6 +67,7 @@ export default function StoragePanel() {
 
   const [activeKind, setActiveKind] = useState<StorageKind>("pvcs");
   const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   // PVCs are namespace-scoped: re-subscribe when the namespace filter changes.
   useEffect(() => {
@@ -146,12 +131,40 @@ export default function StoragePanel() {
   const { total, shown } = counts[activeKind];
   const countLabel = search.trim() && shown !== total ? `${shown} / ${total}` : `${total}`;
 
+  function toggleExpand(key: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function askClaude(kind: string, name: string, namespace: string | undefined, topic: "Errors" | "Logs" | "Explain") {
+    handoffToChat(buildHandoffPrompt(kind, name, namespace, topic));
+  }
+
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-0">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold">Storage</h1>
-        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-mono text-muted-foreground">
+      <div
+        className="flex items-center gap-3 px-4 py-3"
+        style={{ borderBottom: "1px solid #1A1A1A", background: "#141417" }}
+      >
+        <div className="flex flex-col gap-0">
+          <span className="text-sm font-semibold leading-tight">Storage</span>
+          <span style={{ fontSize: 11, color: "#6B6B73" }}>Claims · Volumes · Classes</span>
+        </div>
+        <span
+          style={{
+            fontFamily: "ui-monospace, monospace",
+            fontSize: 11,
+            color: "#6B6B73",
+            background: "#1A1A1A",
+            padding: "2px 6px",
+            borderRadius: 4,
+          }}
+        >
           {countLabel}
         </span>
         {isLoading && (
@@ -162,19 +175,19 @@ export default function StoragePanel() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search…"
-          className="ml-auto w-[200px] max-w-[200px] rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="ml-auto w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
         />
       </div>
 
-      {/* Kind toggle bar */}
-      <div className="flex items-center gap-1">
+      {/* Kind toggle pills */}
+      <div className="flex items-center gap-1 px-4 py-2" style={{ borderBottom: "1px solid #1A1A1A" }}>
         {KIND_TABS.map((t) => (
           <button
             key={t.kind}
             type="button"
             onClick={() => setActiveKind(t.kind)}
             aria-pressed={activeKind === t.kind}
-            className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
+            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
               activeKind === t.kind
                 ? "bg-primary text-primary-foreground"
                 : "bg-muted text-muted-foreground hover:text-foreground"
@@ -187,115 +200,365 @@ export default function StoragePanel() {
 
       {/* Error banner */}
       {error && (
-        <pre className="rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+        <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
           {error}
         </pre>
       )}
 
-      {/* Main list — blank scrollable area when empty (no "no results" copy). */}
-      <div className="space-y-1.5">
+      {/* Row list */}
+      <div className="flex flex-col gap-0.5 px-3 py-2">
         {activeKind === "pvcs" &&
-          filteredPVCs.map((pvc) => <PVCCard key={pvc.metadata.uid ?? pvc.metadata.name} pvc={pvc} />)}
+          filteredPVCs.map((pvc) => {
+            const k = pvc.metadata.uid ?? pvc.metadata.name;
+            const isOpen = expanded.has(k);
+            const phase = pvcPhase(pvc);
+            const modes = abbreviateAccessModes(pvcAccessModes(pvc));
+            const capacity = pvcCapacity(pvc);
+            const storageClass = pvc.spec?.storageClassName;
+            return (
+              <ListRow
+                key={k}
+                rowKey={k}
+                isOpen={isOpen}
+                onToggle={() => toggleExpand(k)}
+                expandedContent={<PVCDetail pvc={pvc} />}
+              >
+                {/* Name */}
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(k)}
+                  className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
+                >
+                  {pvc.metadata.name}
+                </button>
+
+                {/* Namespace chip */}
+                <span
+                  style={{
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: 10,
+                    color: "#6B6B73",
+                    background: "#050505",
+                    padding: "1px 5px",
+                    borderRadius: 4,
+                    border: "1px solid #1A1A1A",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {pvc.metadata.namespace ?? "—"}
+                </span>
+
+                {/* Phase badge */}
+                <StatusBadge label={phase} variant={phaseVariant(phase)} />
+
+                {/* Capacity — dim */}
+                <span
+                  style={{
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: 10,
+                    color: "#A1A1AA",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {capacity}
+                </span>
+
+                {/* Access modes — dim */}
+                {modes.length > 0 && (
+                  <span
+                    style={{
+                      fontFamily: "ui-monospace, monospace",
+                      fontSize: 10,
+                      color: "#6B6B73",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {modes.join(",")}
+                  </span>
+                )}
+
+                {/* StorageClass — TagPill */}
+                {storageClass && <TagPill label={storageClass} />}
+
+                {/* Spacer */}
+                <span className="flex-1" />
+
+                {/* Action strip */}
+                <ActionButtonStrip
+                  onErrors={(e) => { e.stopPropagation(); askClaude("persistentvolumeclaim", pvc.metadata.name, pvc.metadata.namespace, "Errors"); }}
+                  onLogs={(e) => { e.stopPropagation(); askClaude("persistentvolumeclaim", pvc.metadata.name, pvc.metadata.namespace, "Logs"); }}
+                  onExplain={(e) => { e.stopPropagation(); askClaude("persistentvolumeclaim", pvc.metadata.name, pvc.metadata.namespace, "Explain"); }}
+                />
+              </ListRow>
+            );
+          })}
+
         {activeKind === "pvs" &&
-          filteredPVs.map((pv) => <PVCard key={pv.metadata.uid ?? pv.metadata.name} pv={pv} />)}
+          filteredPVs.map((pv) => {
+            const k = pv.metadata.uid ?? pv.metadata.name;
+            const isOpen = expanded.has(k);
+            const phase = pvPhase(pv);
+            const capacity = pvCapacity(pv);
+            const reclaim = pv.spec?.persistentVolumeReclaimPolicy;
+            const storageClass = pv.spec?.storageClassName;
+            const claim = claimRef(pv);
+            return (
+              <ListRow
+                key={k}
+                rowKey={k}
+                isOpen={isOpen}
+                onToggle={() => toggleExpand(k)}
+                expandedContent={<PVDetail pv={pv} />}
+              >
+                {/* Name */}
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(k)}
+                  className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
+                >
+                  {pv.metadata.name}
+                </button>
+
+                {/* Phase badge */}
+                <StatusBadge label={phase} variant={phaseVariant(phase)} />
+
+                {/* Capacity — dim */}
+                <span
+                  style={{
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: 10,
+                    color: "#A1A1AA",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {capacity}
+                </span>
+
+                {/* Reclaim policy — dim */}
+                {reclaim && (
+                  <span
+                    style={{
+                      fontFamily: "ui-monospace, monospace",
+                      fontSize: 10,
+                      color: "#6B6B73",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {reclaim}
+                  </span>
+                )}
+
+                {/* StorageClass — TagPill */}
+                {storageClass && <TagPill label={storageClass} />}
+
+                {/* ClaimRef — dim */}
+                {claim && (
+                  <span
+                    style={{
+                      fontFamily: "ui-monospace, monospace",
+                      fontSize: 10,
+                      color: "#6B6B73",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      minWidth: 0,
+                      flexShrink: 1,
+                    }}
+                    title={claim}
+                  >
+                    {claim}
+                  </span>
+                )}
+
+                {/* Spacer */}
+                <span className="flex-1" />
+
+                {/* Action strip */}
+                <ActionButtonStrip
+                  onErrors={(e) => { e.stopPropagation(); askClaude("persistentvolume", pv.metadata.name, undefined, "Errors"); }}
+                  onLogs={(e) => { e.stopPropagation(); askClaude("persistentvolume", pv.metadata.name, undefined, "Logs"); }}
+                  onExplain={(e) => { e.stopPropagation(); askClaude("persistentvolume", pv.metadata.name, undefined, "Explain"); }}
+                />
+              </ListRow>
+            );
+          })}
+
         {activeKind === "storageclasses" &&
-          filteredSCs.map((sc) => <SCCard key={sc.metadata.uid ?? sc.metadata.name} sc={sc} />)}
+          filteredSCs.map((sc) => {
+            const k = sc.metadata.uid ?? sc.metadata.name;
+            const isOpen = expanded.has(k);
+            const isDefault = isDefaultStorageClass(sc);
+            const provisioner = sc.provisioner;
+            const reclaim = sc.reclaimPolicy;
+            const bindingMode = sc.volumeBindingMode;
+            return (
+              <ListRow
+                key={k}
+                rowKey={k}
+                isOpen={isOpen}
+                onToggle={() => toggleExpand(k)}
+                expandedContent={<SCDetail sc={sc} />}
+              >
+                {/* Name */}
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(k)}
+                  className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
+                >
+                  {sc.metadata.name}
+                </button>
+
+                {/* Default tag pill */}
+                {isDefault && <TagPill label="default" />}
+
+                {/* Provisioner — dim, truncated */}
+                {provisioner && (
+                  <span
+                    style={{
+                      fontFamily: "ui-monospace, monospace",
+                      fontSize: 10,
+                      color: "#A1A1AA",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      minWidth: 0,
+                      flexShrink: 1,
+                    }}
+                    title={provisioner}
+                  >
+                    {provisioner}
+                  </span>
+                )}
+
+                {/* Reclaim policy — dim */}
+                {reclaim && (
+                  <span
+                    style={{
+                      fontFamily: "ui-monospace, monospace",
+                      fontSize: 10,
+                      color: "#6B6B73",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {reclaim}
+                  </span>
+                )}
+
+                {/* Volume binding mode — dim */}
+                {bindingMode && (
+                  <span
+                    style={{
+                      fontFamily: "ui-monospace, monospace",
+                      fontSize: 10,
+                      color: "#6B6B73",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {bindingMode}
+                  </span>
+                )}
+
+                {/* Spacer */}
+                <span className="flex-1" />
+
+                {/* Action strip */}
+                <ActionButtonStrip
+                  onErrors={(e) => { e.stopPropagation(); askClaude("storageclass", sc.metadata.name, undefined, "Errors"); }}
+                  onLogs={(e) => { e.stopPropagation(); askClaude("storageclass", sc.metadata.name, undefined, "Logs"); }}
+                  onExplain={(e) => { e.stopPropagation(); askClaude("storageclass", sc.metadata.name, undefined, "Explain"); }}
+                />
+              </ListRow>
+            );
+          })}
       </div>
+
+      {/* Empty states */}
+      {!isLoading && activeKind === "pvcs" && allPVCs.length === 0 && (
+        <p className="px-4 py-4 text-sm text-muted-foreground">No persistent volume claims found</p>
+      )}
+      {!isLoading && activeKind === "pvs" && allPVs.length === 0 && (
+        <p className="px-4 py-4 text-sm text-muted-foreground">No persistent volumes found</p>
+      )}
+      {!isLoading && activeKind === "storageclasses" && allSCs.length === 0 && (
+        <p className="px-4 py-4 text-sm text-muted-foreground">No storage classes found</p>
+      )}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Cards
+// Expanded details
 // ---------------------------------------------------------------------------
 
-function CardShell({
-  icon,
-  children,
-}: {
-  icon: React.ReactNode;
-  children: React.ReactNode;
-}) {
+function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-3 rounded-md border bg-card px-3 py-2">
-      <span className="shrink-0 text-primary">{icon}</span>
-      {children}
+    <div className="flex gap-3">
+      <span className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground w-20 shrink-0">
+        {label}
+      </span>
+      <div className="min-w-0 flex-1 font-mono text-xs text-muted-foreground">{children}</div>
     </div>
   );
 }
 
-function PVCCard({ pvc }: { pvc: PersistentVolumeClaim }) {
+function PVCDetail({ pvc }: { pvc: PersistentVolumeClaim }) {
   const phase = pvcPhase(pvc);
-  const modes = abbreviateAccessModes(pvcAccessModes(pvc));
-  const storageClass = pvc.spec?.storageClassName;
+  const modes = pvcAccessModes(pvc);
   const capacity = pvcCapacity(pvc);
+  const storageClass = pvc.spec?.storageClassName;
+  const volumeName = pvc.spec?.volumeName;
+
   return (
-    <CardShell icon={<HardDrive className="size-4" />}>
-      <span className="truncate font-mono font-semibold" title={pvc.metadata.name}>
-        {pvc.metadata.name}
-      </span>
-      <Chip>{pvc.metadata.namespace ?? "—"}</Chip>
-      <PhaseBadge phase={phase} />
+    <div className="space-y-1.5">
+      <DetailRow label="PHASE">{phase}</DetailRow>
+      <DetailRow label="CAPACITY">{capacity}</DetailRow>
       {modes.length > 0 && (
-        <span className="font-mono text-xs text-muted-foreground">{modes.join(",")}</span>
+        <DetailRow label="ACCESS">{modes.join(", ")}</DetailRow>
       )}
-      {storageClass && <Chip>{storageClass}</Chip>}
-      <span className="ml-auto min-w-[48px] text-right font-mono text-sm">{capacity}</span>
-    </CardShell>
+      {storageClass && <DetailRow label="CLASS">{storageClass}</DetailRow>}
+      {volumeName && <DetailRow label="VOLUME">{volumeName}</DetailRow>}
+    </div>
   );
 }
 
-function PVCard({ pv }: { pv: PersistentVolume }) {
+function PVDetail({ pv }: { pv: PersistentVolume }) {
   const phase = pvPhase(pv);
-  const claim = claimRef(pv);
-  const reclaim = pv.spec?.persistentVolumeReclaimPolicy ?? "—";
-  const storageClass = pv.spec?.storageClassName;
   const capacity = pvCapacity(pv);
+  const reclaim = pv.spec?.persistentVolumeReclaimPolicy;
+  const storageClass = pv.spec?.storageClassName;
+  const claim = claimRef(pv);
+  const modes = pv.spec?.accessModes ?? [];
+
   return (
-    <CardShell icon={<Server className="size-4" />}>
-      <span className="truncate font-mono font-semibold" title={pv.metadata.name}>
-        {pv.metadata.name}
-      </span>
-      <PhaseBadge phase={phase} />
-      {claim && (
-        <span
-          className="flex items-center gap-0.5 truncate font-mono text-xs text-muted-foreground"
-          title={claim}
-        >
-          <ArrowRight className="size-3" />
-          {claim}
-        </span>
+    <div className="space-y-1.5">
+      <DetailRow label="PHASE">{phase}</DetailRow>
+      <DetailRow label="CAPACITY">{capacity}</DetailRow>
+      {modes.length > 0 && (
+        <DetailRow label="ACCESS">{modes.join(", ")}</DetailRow>
       )}
-      <Chip>{reclaim}</Chip>
-      {storageClass && <Chip>{storageClass}</Chip>}
-      <span className="ml-auto min-w-[48px] text-right font-mono text-sm">{capacity}</span>
-    </CardShell>
+      {reclaim && <DetailRow label="RECLAIM">{reclaim}</DetailRow>}
+      {storageClass && <DetailRow label="CLASS">{storageClass}</DetailRow>}
+      {claim && <DetailRow label="CLAIM">{claim}</DetailRow>}
+    </div>
   );
 }
 
-function SCCard({ sc }: { sc: StorageClass }) {
+function SCDetail({ sc }: { sc: StorageClass }) {
   const isDefault = isDefaultStorageClass(sc);
-  const bindingMode = sc.volumeBindingMode;
+  const provisioner = sc.provisioner;
   const reclaim = sc.reclaimPolicy;
-  const provisioner = sc.provisioner ?? "—";
+  const bindingMode = sc.volumeBindingMode;
+  const allowExpansion = sc.allowVolumeExpansion;
+
   return (
-    <CardShell icon={<Package className="size-4" />}>
-      <span className="truncate font-mono font-semibold" title={sc.metadata.name}>
-        {sc.metadata.name}
-      </span>
-      {isDefault && (
-        <span className="inline-block rounded-full bg-green-500/15 px-2 py-0.5 text-xs font-mono text-green-600 dark:text-green-400">
-          default
-        </span>
+    <div className="space-y-1.5">
+      {provisioner && <DetailRow label="PROVISIONER">{provisioner}</DetailRow>}
+      {reclaim && <DetailRow label="RECLAIM">{reclaim}</DetailRow>}
+      {bindingMode && <DetailRow label="BINDING">{bindingMode}</DetailRow>}
+      <DetailRow label="DEFAULT">{isDefault ? "yes" : "no"}</DetailRow>
+      {allowExpansion !== undefined && (
+        <DetailRow label="EXPANDABLE">{allowExpansion ? "yes" : "no"}</DetailRow>
       )}
-      {bindingMode && <Chip>{bindingMode}</Chip>}
-      {reclaim && <Chip>{reclaim}</Chip>}
-      <span
-        className="ml-auto max-w-[220px] truncate text-right font-mono text-xs text-muted-foreground"
-        title={provisioner}
-      >
-        {provisioner}
-      </span>
-    </CardShell>
+    </div>
   );
 }
