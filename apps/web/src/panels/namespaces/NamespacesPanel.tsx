@@ -1,16 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { LoaderCircle, SquareDashed, Trash2, Plus } from "lucide-react";
+import { LoaderCircle, Plus, Trash2 } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
+import { handoffToChat } from "@/lib/chatHandoff";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -20,19 +13,35 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
+import { ListRow } from "@/panels/components/ListRow";
+import { StatusBadge } from "@/panels/components/StatusBadge";
+import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
+import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import type { ActionBlock } from "@/lib/api";
 import type { Namespace } from "./types";
 import type { Pod } from "../pods/types";
 import {
   relativeAge,
   phaseOf,
-  namespacePhaseColorClass,
   podCountInNamespace,
   podCountLabel,
   matchesSearch,
   sortNamespaces,
   isValidNamespaceName,
 } from "./namespaceDisplay";
+import type { StatusBadgeVariant } from "@/panels/components/StatusBadge";
+
+/** Map a namespace phase to a StatusBadge variant. */
+function phaseVariant(phase: string): StatusBadgeVariant {
+  switch (phase) {
+    case "Active":
+      return "healthy";
+    case "Terminating":
+      return "pending";
+    default:
+      return "neutral";
+  }
+}
 
 export default function NamespacesPanel() {
   const resources = useCluster((s) => s.resources);
@@ -41,6 +50,7 @@ export default function NamespacesPanel() {
 
   const [search, setSearch] = useState("");
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
 
@@ -70,6 +80,7 @@ export default function NamespacesPanel() {
       ),
     [resources],
   );
+
   // Pod count is derived from a (possibly absent) pods watch. If the pods watch
   // is not subscribed, `pods` is null → count column shows "—".
   const pods = useMemo<Pod[] | null>(
@@ -79,6 +90,7 @@ export default function NamespacesPanel() {
         : null,
     [resources],
   );
+
   const filtered = useMemo(
     () => allNamespaces.filter((ns) => matchesSearch(ns, search)),
     [allNamespaces, search],
@@ -90,6 +102,15 @@ export default function NamespacesPanel() {
 
   const trimmedName = newName.trim();
   const nameValid = isValidNamespaceName(trimmedName);
+
+  function toggleExpand(uid: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(uid)) next.delete(uid);
+      else next.add(uid);
+      return next;
+    });
+  }
 
   function openCreate() {
     setNewName("");
@@ -115,12 +136,31 @@ export default function NamespacesPanel() {
     });
   }
 
+  function askClaude(ns: Namespace, topic: "Errors" | "Logs" | "Explain") {
+    handoffToChat(buildHandoffPrompt("namespace", ns.metadata.name, undefined, topic));
+  }
+
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-0">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold">Namespaces</h1>
-        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-mono text-muted-foreground">
+      <div
+        className="flex items-center gap-3 px-4 py-3"
+        style={{ borderBottom: "1px solid #1A1A1A", background: "#141417" }}
+      >
+        <div className="flex flex-col gap-0">
+          <span className="text-sm font-semibold leading-tight">Namespaces</span>
+          <span style={{ fontSize: 11, color: "#6B6B73" }}>Cluster isolation</span>
+        </div>
+        <span
+          style={{
+            fontFamily: "ui-monospace, monospace",
+            fontSize: 11,
+            color: "#6B6B73",
+            background: "#1A1A1A",
+            padding: "2px 6px",
+            borderRadius: 4,
+          }}
+        >
           {countLabel}
         </span>
         {isLoading && (
@@ -131,80 +171,101 @@ export default function NamespacesPanel() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search namespaces…"
-          className="ml-auto w-64 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="ml-auto w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
         />
         <Button size="sm" onClick={openCreate}>
-          <Plus />
+          <Plus className="size-3" />
           New
         </Button>
       </div>
 
       {/* Error banner */}
       {error && (
-        <pre className="rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+        <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
           {error}
         </pre>
       )}
 
-      {/* Table */}
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-6" />
-            <TableHead>Name</TableHead>
-            <TableHead>Phase</TableHead>
-            <TableHead>Pods</TableHead>
-            <TableHead>Age</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {filtered.map((ns) => {
-            const phase = phaseOf(ns);
-            const count = podCountInNamespace(ns, pods);
-            return (
-              <TableRow key={ns.metadata.uid || ns.metadata.name}>
-                <TableCell className="align-middle text-muted-foreground">
-                  <SquareDashed className="size-4" aria-hidden />
-                </TableCell>
-                <TableCell className="font-mono whitespace-nowrap">{ns.metadata.name}</TableCell>
-                <TableCell>
-                  <span
-                    className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${namespacePhaseColorClass(phase)}`}
-                  >
-                    {phase}
-                  </span>
-                </TableCell>
-                <TableCell className="font-mono text-muted-foreground">
-                  {podCountLabel(count)}
-                </TableCell>
-                <TableCell className="font-mono text-muted-foreground">
-                  {relativeAge(ns.metadata.creationTimestamp)}
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`Delete namespace ${ns.metadata.name}`}
-                    title="Delete"
-                    className="text-destructive hover:text-destructive"
-                    onClick={() => handleDelete(ns)}
-                  >
-                    <Trash2 />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+      {/* Row list */}
+      <div className="flex flex-col gap-0.5 px-3 py-2">
+        {filtered.map((ns) => {
+          const k = ns.metadata.uid || ns.metadata.name;
+          const isOpen = expanded.has(k);
+          const phase = phaseOf(ns);
+          const count = podCountInNamespace(ns, pods);
+          const age = relativeAge(ns.metadata.creationTimestamp);
+
+          return (
+            <ListRow
+              key={k}
+              rowKey={k}
+              isOpen={isOpen}
+              onToggle={() => toggleExpand(k)}
+            >
+              {/* Name */}
+              <button
+                type="button"
+                onClick={() => toggleExpand(k)}
+                className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
+              >
+                {ns.metadata.name}
+              </button>
+
+              {/* Phase badge */}
+              <StatusBadge label={phase} variant={phaseVariant(phase)} />
+
+              {/* Pod count — dim */}
+              <span
+                style={{
+                  fontFamily: "ui-monospace, monospace",
+                  fontSize: 10,
+                  color: "#6B6B73",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {podCountLabel(count)}
+              </span>
+
+              {/* Spacer */}
+              <span className="flex-1" />
+
+              {/* Age — dim */}
+              <span
+                style={{
+                  fontFamily: "ui-monospace, monospace",
+                  fontSize: 10,
+                  color: "#6B6B73",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {age}
+              </span>
+
+              {/* Action strip — Errors / Logs / Explain + Delete */}
+              <ActionButtonStrip
+                onErrors={(e) => { e.stopPropagation(); askClaude(ns, "Errors"); }}
+                onLogs={(e) => { e.stopPropagation(); askClaude(ns, "Logs"); }}
+                onExplain={(e) => { e.stopPropagation(); askClaude(ns, "Explain"); }}
+                extra={[
+                  {
+                    label: "Delete",
+                    Icon: Trash2,
+                    onClick: (e) => { e.stopPropagation(); handleDelete(ns); },
+                    destructive: true,
+                  },
+                ]}
+              />
+            </ListRow>
+          );
+        })}
+      </div>
 
       {/* Empty / filtered-to-zero states */}
       {!isLoading && allNamespaces.length === 0 && (
-        <p className="px-2 py-4 text-sm text-muted-foreground">No namespaces found</p>
+        <p className="px-4 py-4 text-sm text-muted-foreground">No namespaces found</p>
       )}
       {!isLoading && allNamespaces.length > 0 && filtered.length === 0 && (
-        <p className="px-2 py-4 text-sm text-muted-foreground">No namespaces match search</p>
+        <p className="px-4 py-4 text-sm text-muted-foreground">No namespaces match search</p>
       )}
 
       {/* Create dialog */}

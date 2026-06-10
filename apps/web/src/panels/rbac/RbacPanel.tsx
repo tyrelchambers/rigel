@@ -1,24 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  LoaderCircle,
-  UserCircle,
-  Lock,
-  Link as LinkIcon,
-  ShieldCheck,
-  Link2,
-  ChevronRight,
-  ChevronDown,
-  MoreHorizontal,
-} from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
+import { handoffToChat } from "@/lib/chatHandoff";
+import { ListRow } from "@/panels/components/ListRow";
+import { StatusBadge } from "@/panels/components/StatusBadge";
+import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
+import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import type {
   ServiceAccount,
   Role,
@@ -42,19 +30,7 @@ import {
 //   - View YAML (needs a server YAML endpoint + viewer UI).
 //   - Delete <kind> (needs ConfirmSheet wiring + server mutation route). When
 //     wired, deletions emit `deleteResource` action blocks per
-//     docs/parity/contracts.md §1:
-//       Delete ServiceAccount → {"kind":"deleteResource","name":<n>,"namespace":<ns>,
-//         "resourceKind":"serviceaccount","label":"Delete ServiceAccount <n>"}
-//         → kubectl delete serviceaccount <name> -n <ns>
-//       Delete Role → {... "resourceKind":"role" ...}
-//         → kubectl delete role <name> -n <ns>
-//       Delete RoleBinding → {... "resourceKind":"rolebinding" ...}
-//         → kubectl delete rolebinding <name> -n <ns>
-//       Delete ClusterRole → {"kind":"deleteResource","name":<n>,
-//         "resourceKind":"clusterrole","label":"Delete ClusterRole <n>"}
-//         → kubectl delete clusterrole <name>
-//       Delete ClusterRoleBinding → {... "resourceKind":"clusterrolebinding" ...}
-//         → kubectl delete clusterrolebinding <name>
+//     docs/parity/contracts.md §1.
 // No action blocks are emitted by this panel.
 // ---------------------------------------------------------------------------
 
@@ -86,28 +62,52 @@ function roleRefLabel(
   return `${kind}/${roleRef.name}`;
 }
 
-/** Small muted chip used for namespace badges. */
-function Chip({ children }: { children: React.ReactNode }) {
+/** Namespace chip — dim bordered monospace pill (namespaced kinds only). */
+function NamespaceChip({ namespace }: { namespace: string }) {
   return (
-    <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-xs font-mono text-muted-foreground">
-      {children}
+    <span
+      style={{
+        fontFamily: "ui-monospace, monospace",
+        fontSize: 10,
+        color: "#6B6B73",
+        background: "#050505",
+        padding: "1px 5px",
+        borderRadius: 4,
+        border: "1px solid #1A1A1A",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {namespace}
     </span>
   );
 }
 
-/** Deferred context-menu stub shared across every card. */
-function RowMenu({ kindLabel }: { kindLabel: string }) {
+/** Expanded rules detail shared by Role and ClusterRole rows. */
+function RulesDetail({ summary }: { summary: string }) {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground">
-        <MoreHorizontal className="size-4" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent>
-        <DropdownMenuItem disabled>View YAML… (soon)</DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem disabled>Delete {kindLabel}… (soon)</DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <pre className="rounded-md bg-muted/30 px-3 py-2 text-xs font-mono text-muted-foreground whitespace-pre-wrap break-all">
+      {summary}
+    </pre>
+  );
+}
+
+/** Expanded subjects/roleRef detail for RoleBinding and ClusterRoleBinding rows. */
+function BindingDetail({ roleRef, subjects }: { roleRef: string; subjects: string }) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex gap-3">
+        <span className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground w-16 shrink-0">
+          ROLE REF
+        </span>
+        <span className="font-mono text-xs text-muted-foreground">{roleRef}</span>
+      </div>
+      <div className="flex gap-3">
+        <span className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground w-16 shrink-0">
+          SUBJECTS
+        </span>
+        <span className="font-mono text-xs text-muted-foreground">{subjects}</span>
+      </div>
+    </div>
   );
 }
 
@@ -266,16 +266,35 @@ export default function RbacPanel() {
     });
   }
 
-  function cardKey(meta: { uid?: string; name: string; namespace?: string }): string {
+  function rowKey(meta: { uid?: string; name: string; namespace?: string }): string {
     return meta.uid ?? `${meta.namespace ?? ""}/${meta.name}`;
   }
 
+  function askClaude(kind: string, name: string, namespace: string | undefined, topic: "Errors" | "Logs" | "Explain") {
+    handoffToChat(buildHandoffPrompt(kind, name, namespace, topic));
+  }
+
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-0">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold">RBAC</h1>
-        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-mono text-muted-foreground">
+      <div
+        className="flex items-center gap-3 px-4 py-3"
+        style={{ borderBottom: "1px solid #1A1A1A", background: "#141417" }}
+      >
+        <div className="flex flex-col gap-0">
+          <span className="text-sm font-semibold leading-tight">RBAC</span>
+          <span style={{ fontSize: 11, color: "#6B6B73" }}>Roles &amp; bindings</span>
+        </div>
+        <span
+          style={{
+            fontFamily: "ui-monospace, monospace",
+            fontSize: 11,
+            color: "#6B6B73",
+            background: "#1A1A1A",
+            padding: "2px 6px",
+            borderRadius: 4,
+          }}
+        >
           {countLabel}
         </span>
         {isLoading && (
@@ -286,19 +305,22 @@ export default function RbacPanel() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search…"
-          className="ml-auto w-[200px] max-w-[200px] rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="ml-auto w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
         />
       </div>
 
-      {/* Kind toggle bar */}
-      <div className="flex items-center gap-1 overflow-x-auto">
+      {/* Kind toggle pills */}
+      <div
+        className="flex items-center gap-1 overflow-x-auto px-4 py-2"
+        style={{ borderBottom: "1px solid #1A1A1A" }}
+      >
         {KIND_TABS.map((t) => (
           <button
             key={t.kind}
             type="button"
             onClick={() => setActiveKind(t.kind)}
             aria-pressed={activeKind === t.kind}
-            className={`whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium transition-colors ${
+            className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-colors ${
               activeKind === t.kind
                 ? "bg-primary text-primary-foreground"
                 : "bg-muted text-muted-foreground hover:text-foreground"
@@ -311,225 +333,228 @@ export default function RbacPanel() {
 
       {/* Error banner */}
       {error && (
-        <pre className="rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+        <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
           {error}
         </pre>
       )}
 
-      {/* Main list — blank scrollable area when empty (no "no results" copy). */}
-      <div className="space-y-1.5">
+      {/* Row list */}
+      <div className="flex flex-col gap-0.5 px-3 py-2">
+        {/* ServiceAccounts */}
         {activeKind === "serviceaccounts" &&
-          filteredServiceAccounts.map((sa) => (
-            <ServiceAccountCard key={cardKey(sa.metadata)} sa={sa} />
-          ))}
+          filteredServiceAccounts.map((sa) => {
+            const k = rowKey(sa.metadata);
+            const isOpen = expanded.has(k);
+            const count = sa.secrets?.length ?? 0;
+            return (
+              <ListRow
+                key={k}
+                rowKey={k}
+                isOpen={isOpen}
+                onToggle={() => toggleExpand(k)}
+              >
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(k)}
+                  className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
+                >
+                  {sa.metadata.name}
+                </button>
+
+                {sa.metadata.namespace && (
+                  <NamespaceChip namespace={sa.metadata.namespace} />
+                )}
+
+                <StatusBadge label={secretsLabel(count)} variant="neutral" />
+
+                <span className="flex-1" />
+
+                <ActionButtonStrip
+                  onErrors={(e) => { e.stopPropagation(); askClaude("serviceaccount", sa.metadata.name, sa.metadata.namespace, "Errors"); }}
+                  onLogs={(e) => { e.stopPropagation(); askClaude("serviceaccount", sa.metadata.name, sa.metadata.namespace, "Logs"); }}
+                  onExplain={(e) => { e.stopPropagation(); askClaude("serviceaccount", sa.metadata.name, sa.metadata.namespace, "Explain"); }}
+                />
+              </ListRow>
+            );
+          })}
+
+        {/* Roles */}
         {activeKind === "roles" &&
           filteredRoles.map((r) => {
-            const key = cardKey(r.metadata);
+            const k = rowKey(r.metadata);
+            const isOpen = expanded.has(k);
+            const count = r.rules?.length ?? 0;
             return (
-              <RoleCard
-                key={key}
-                role={r}
-                isOpen={expanded.has(key)}
-                onToggle={() => toggleExpand(key)}
-              />
+              <ListRow
+                key={k}
+                rowKey={k}
+                isOpen={isOpen}
+                onToggle={() => toggleExpand(k)}
+                expandedContent={<RulesDetail summary={rulesSummary(r.rules)} />}
+              >
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(k)}
+                  className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
+                >
+                  {r.metadata.name}
+                </button>
+
+                {r.metadata.namespace && (
+                  <NamespaceChip namespace={r.metadata.namespace} />
+                )}
+
+                <StatusBadge label={rulesLabel(count)} variant="neutral" />
+
+                <span className="flex-1" />
+
+                <ActionButtonStrip
+                  onErrors={(e) => { e.stopPropagation(); askClaude("role", r.metadata.name, r.metadata.namespace, "Errors"); }}
+                  onLogs={(e) => { e.stopPropagation(); askClaude("role", r.metadata.name, r.metadata.namespace, "Logs"); }}
+                  onExplain={(e) => { e.stopPropagation(); askClaude("role", r.metadata.name, r.metadata.namespace, "Explain"); }}
+                />
+              </ListRow>
             );
           })}
+
+        {/* RoleBindings */}
         {activeKind === "rolebindings" &&
-          filteredRoleBindings.map((rb) => (
-            <RoleBindingCard key={cardKey(rb.metadata)} rb={rb} />
-          ))}
+          filteredRoleBindings.map((rb) => {
+            const k = rowKey(rb.metadata);
+            const isOpen = expanded.has(k);
+            return (
+              <ListRow
+                key={k}
+                rowKey={k}
+                isOpen={isOpen}
+                onToggle={() => toggleExpand(k)}
+                expandedContent={
+                  <BindingDetail
+                    roleRef={roleRefLabel(rb.roleRef, "Role")}
+                    subjects={subjectsSummary(rb.subjects)}
+                  />
+                }
+              >
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(k)}
+                  className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
+                >
+                  {rb.metadata.name}
+                </button>
+
+                {rb.metadata.namespace && (
+                  <NamespaceChip namespace={rb.metadata.namespace} />
+                )}
+
+                <StatusBadge label={roleRefLabel(rb.roleRef, "Role")} variant="neutral" />
+
+                <span className="flex-1" />
+
+                <ActionButtonStrip
+                  onErrors={(e) => { e.stopPropagation(); askClaude("rolebinding", rb.metadata.name, rb.metadata.namespace, "Errors"); }}
+                  onLogs={(e) => { e.stopPropagation(); askClaude("rolebinding", rb.metadata.name, rb.metadata.namespace, "Logs"); }}
+                  onExplain={(e) => { e.stopPropagation(); askClaude("rolebinding", rb.metadata.name, rb.metadata.namespace, "Explain"); }}
+                />
+              </ListRow>
+            );
+          })}
+
+        {/* ClusterRoles */}
         {activeKind === "clusterroles" &&
           filteredClusterRoles.map((cr) => {
-            const key = cardKey(cr.metadata);
+            const k = rowKey(cr.metadata);
+            const isOpen = expanded.has(k);
+            const count = cr.rules?.length ?? 0;
             return (
-              <ClusterRoleCard
-                key={key}
-                clusterRole={cr}
-                isOpen={expanded.has(key)}
-                onToggle={() => toggleExpand(key)}
-              />
+              <ListRow
+                key={k}
+                rowKey={k}
+                isOpen={isOpen}
+                onToggle={() => toggleExpand(k)}
+                expandedContent={<RulesDetail summary={rulesSummary(cr.rules)} />}
+              >
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(k)}
+                  className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
+                >
+                  {cr.metadata.name}
+                </button>
+
+                {/* ClusterRoles are cluster-scoped — no namespace chip */}
+
+                <StatusBadge label={rulesLabel(count)} variant="neutral" />
+
+                <span className="flex-1" />
+
+                <ActionButtonStrip
+                  onErrors={(e) => { e.stopPropagation(); askClaude("clusterrole", cr.metadata.name, undefined, "Errors"); }}
+                  onLogs={(e) => { e.stopPropagation(); askClaude("clusterrole", cr.metadata.name, undefined, "Logs"); }}
+                  onExplain={(e) => { e.stopPropagation(); askClaude("clusterrole", cr.metadata.name, undefined, "Explain"); }}
+                />
+              </ListRow>
             );
           })}
+
+        {/* ClusterRoleBindings */}
         {activeKind === "clusterrolebindings" &&
-          filteredClusterRoleBindings.map((crb) => (
-            <ClusterRoleBindingCard key={cardKey(crb.metadata)} crb={crb} />
-          ))}
+          filteredClusterRoleBindings.map((crb) => {
+            const k = rowKey(crb.metadata);
+            const isOpen = expanded.has(k);
+            return (
+              <ListRow
+                key={k}
+                rowKey={k}
+                isOpen={isOpen}
+                onToggle={() => toggleExpand(k)}
+                expandedContent={
+                  <BindingDetail
+                    roleRef={roleRefLabel(crb.roleRef, "ClusterRole")}
+                    subjects={subjectsSummary(crb.subjects)}
+                  />
+                }
+              >
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(k)}
+                  className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
+                >
+                  {crb.metadata.name}
+                </button>
+
+                {/* ClusterRoleBindings are cluster-scoped — no namespace chip */}
+
+                <StatusBadge label={roleRefLabel(crb.roleRef, "ClusterRole")} variant="neutral" />
+
+                <span className="flex-1" />
+
+                <ActionButtonStrip
+                  onErrors={(e) => { e.stopPropagation(); askClaude("clusterrolebinding", crb.metadata.name, undefined, "Errors"); }}
+                  onLogs={(e) => { e.stopPropagation(); askClaude("clusterrolebinding", crb.metadata.name, undefined, "Logs"); }}
+                  onExplain={(e) => { e.stopPropagation(); askClaude("clusterrolebinding", crb.metadata.name, undefined, "Explain"); }}
+                />
+              </ListRow>
+            );
+          })}
       </div>
-    </div>
-  );
-}
 
-// ---------------------------------------------------------------------------
-// Cards
-// ---------------------------------------------------------------------------
-
-function CardShell({
-  icon,
-  children,
-  menu,
-}: {
-  icon: React.ReactNode;
-  children: React.ReactNode;
-  menu: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center gap-3 rounded-md border bg-card px-3 py-2">
-      <span className="shrink-0 text-primary">{icon}</span>
-      {children}
-      {menu}
-    </div>
-  );
-}
-
-function ServiceAccountCard({ sa }: { sa: ServiceAccount }) {
-  const count = sa.secrets?.length ?? 0;
-  return (
-    <CardShell
-      icon={<UserCircle className="size-4" />}
-      menu={<RowMenu kindLabel="ServiceAccount" />}
-    >
-      <span className="truncate font-mono font-semibold" title={sa.metadata.name}>
-        {sa.metadata.name}
-      </span>
-      {sa.metadata.namespace && <Chip>{sa.metadata.namespace}</Chip>}
-      <span className="ml-auto min-w-[64px] text-right font-mono text-sm text-muted-foreground">
-        {secretsLabel(count)}
-      </span>
-    </CardShell>
-  );
-}
-
-/** Expandable rules detail shared by Role and ClusterRole cards. */
-function RulesDetail({ summary }: { summary: string }) {
-  return (
-    <pre className="ml-7 rounded-md bg-muted/30 px-3 py-2 text-xs font-mono text-muted-foreground whitespace-pre-wrap break-all">
-      {summary}
-    </pre>
-  );
-}
-
-function RoleCard({
-  role,
-  isOpen,
-  onToggle,
-}: {
-  role: Role;
-  isOpen: boolean;
-  onToggle: () => void;
-}) {
-  const count = role.rules?.length ?? 0;
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center gap-3 rounded-md border bg-card px-3 py-2">
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-label={isOpen ? "Collapse" : "Expand"}
-          aria-expanded={isOpen}
-          className="shrink-0 text-muted-foreground hover:text-foreground"
-        >
-          {isOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-        </button>
-        <span className="shrink-0 text-primary">
-          <Lock className="size-4" />
-        </span>
-        <span className="truncate font-mono font-semibold" title={role.metadata.name}>
-          {role.metadata.name}
-        </span>
-        {role.metadata.namespace && <Chip>{role.metadata.namespace}</Chip>}
-        <span className="ml-auto min-w-[56px] text-right font-mono text-sm text-muted-foreground">
-          {rulesLabel(count)}
-        </span>
-        <RowMenu kindLabel="Role" />
-      </div>
-      {isOpen && <RulesDetail summary={rulesSummary(role.rules)} />}
-    </div>
-  );
-}
-
-function ClusterRoleCard({
-  clusterRole,
-  isOpen,
-  onToggle,
-}: {
-  clusterRole: ClusterRole;
-  isOpen: boolean;
-  onToggle: () => void;
-}) {
-  const count = clusterRole.rules?.length ?? 0;
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center gap-3 rounded-md border bg-card px-3 py-2">
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-label={isOpen ? "Collapse" : "Expand"}
-          aria-expanded={isOpen}
-          className="shrink-0 text-muted-foreground hover:text-foreground"
-        >
-          {isOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-        </button>
-        <span className="shrink-0 text-primary">
-          <ShieldCheck className="size-4" />
-        </span>
-        <span className="truncate font-mono font-semibold" title={clusterRole.metadata.name}>
-          {clusterRole.metadata.name}
-        </span>
-        <span className="ml-auto min-w-[56px] text-right font-mono text-sm text-muted-foreground">
-          {rulesLabel(count)}
-        </span>
-        <RowMenu kindLabel="ClusterRole" />
-      </div>
-      {isOpen && <RulesDetail summary={rulesSummary(clusterRole.rules)} />}
-    </div>
-  );
-}
-
-function RoleBindingCard({ rb }: { rb: RoleBinding }) {
-  return (
-    <div className="flex items-start gap-3 rounded-md border bg-card px-3 py-2">
-      <span className="mt-0.5 shrink-0 text-primary">
-        <LinkIcon className="size-4" />
-      </span>
-      <div className="min-w-0 flex-1 space-y-0.5">
-        <div className="flex items-center gap-3">
-          <span className="truncate font-mono font-semibold" title={rb.metadata.name}>
-            {rb.metadata.name}
-          </span>
-          {rb.metadata.namespace && <Chip>{rb.metadata.namespace}</Chip>}
-          <span className="ml-auto truncate font-mono text-sm text-muted-foreground">
-            {roleRefLabel(rb.roleRef, "Role")}
-          </span>
-        </div>
-        <p className="truncate font-mono text-xs text-muted-foreground">
-          {subjectsSummary(rb.subjects)}
-        </p>
-      </div>
-      <RowMenu kindLabel="RoleBinding" />
-    </div>
-  );
-}
-
-function ClusterRoleBindingCard({ crb }: { crb: ClusterRoleBinding }) {
-  return (
-    <div className="flex items-start gap-3 rounded-md border bg-card px-3 py-2">
-      <span className="mt-0.5 shrink-0 text-primary">
-        <Link2 className="size-4" />
-      </span>
-      <div className="min-w-0 flex-1 space-y-0.5">
-        <div className="flex items-center gap-3">
-          <span className="truncate font-mono font-semibold" title={crb.metadata.name}>
-            {crb.metadata.name}
-          </span>
-          <span className="ml-auto truncate font-mono text-sm text-muted-foreground">
-            {roleRefLabel(crb.roleRef, "ClusterRole")}
-          </span>
-        </div>
-        <p className="truncate font-mono text-xs text-muted-foreground">
-          {subjectsSummary(crb.subjects)}
-        </p>
-      </div>
-      <RowMenu kindLabel="ClusterRoleBinding" />
+      {/* Empty states */}
+      {!isLoading && activeKind === "serviceaccounts" && allServiceAccounts.length === 0 && (
+        <p className="px-4 py-4 text-sm text-muted-foreground">No service accounts found</p>
+      )}
+      {!isLoading && activeKind === "roles" && allRoles.length === 0 && (
+        <p className="px-4 py-4 text-sm text-muted-foreground">No roles found</p>
+      )}
+      {!isLoading && activeKind === "rolebindings" && allRoleBindings.length === 0 && (
+        <p className="px-4 py-4 text-sm text-muted-foreground">No role bindings found</p>
+      )}
+      {!isLoading && activeKind === "clusterroles" && allClusterRoles.length === 0 && (
+        <p className="px-4 py-4 text-sm text-muted-foreground">No cluster roles found</p>
+      )}
+      {!isLoading && activeKind === "clusterrolebindings" && allClusterRoleBindings.length === 0 && (
+        <p className="px-4 py-4 text-sm text-muted-foreground">No cluster role bindings found</p>
+      )}
     </div>
   );
 }

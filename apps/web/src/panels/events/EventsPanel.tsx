@@ -2,15 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { ListRow } from "@/panels/components/ListRow";
+import { StatusBadge } from "@/panels/components/StatusBadge";
 import type { EventBucket, EventTypeFilter, K8sEvent } from "./types";
 import {
   absoluteWhen,
@@ -19,9 +13,9 @@ import {
   matchesTypeFilter,
   relativeAge,
   sortEvents,
-  typeColorClass,
   when,
 } from "./eventsDisplay";
+import type { StatusBadgeVariant } from "@/panels/components/StatusBadge";
 
 // ---------------------------------------------------------------------------
 // DEFERRED (docs/parity/events.md). This is a READ-ONLY, presentation-only
@@ -54,6 +48,23 @@ function filterPillClass(filter: EventTypeFilter, active: boolean): string {
   }
 }
 
+/** Map event type to a StatusBadge variant. */
+function eventVariant(type: string | null | undefined): StatusBadgeVariant {
+  if (type === "Warning") return "error";
+  return "neutral";
+}
+
+/** "kind/name" or "kind/name · namespace"; "—" if no name. */
+function involvedObjectLabel(event: K8sEvent): string {
+  const io = event.involvedObject;
+  const name = io?.name ?? "";
+  if (name === "") return "—";
+  const kind = io?.kind ?? "";
+  const base = kind ? `${kind}/${name}` : name;
+  const ns = io?.namespace;
+  return ns ? `${base} · ${ns}` : base;
+}
+
 export default function EventsPanel() {
   const resources = useCluster((s) => s.resources);
   const isLoading = useCluster((s) => s.isLoading);
@@ -73,8 +84,7 @@ export default function EventsPanel() {
     return () => unsubscribe("events", ns);
   }, [namespaceFilter]);
 
-  // All events from the store, sorted newest-first. The store keys events by
-  // metadata.name (unique); we read the values and dedupe/sort here.
+  // All events from the store, sorted newest-first.
   const allEvents = useMemo(
     () => sortEvents(Object.values((resources["events"] ?? {}) as Record<string, K8sEvent>)),
     [resources],
@@ -113,11 +123,26 @@ export default function EventsPanel() {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-0">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold">Events</h1>
-        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-mono text-muted-foreground">
+      <div
+        className="flex items-center gap-3 px-4 py-3"
+        style={{ borderBottom: "1px solid #1A1A1A", background: "#141417" }}
+      >
+        <div className="flex flex-col gap-0">
+          <span className="text-sm font-semibold leading-tight">Events</span>
+          <span style={{ fontSize: 11, color: "#6B6B73" }}>Cluster activity stream</span>
+        </div>
+        <span
+          style={{
+            fontFamily: "ui-monospace, monospace",
+            fontSize: 11,
+            color: "#6B6B73",
+            background: "#1A1A1A",
+            padding: "2px 6px",
+            borderRadius: 4,
+          }}
+        >
           {filtered.length}
         </span>
         {isLoading && (
@@ -128,12 +153,15 @@ export default function EventsPanel() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search events…"
-          className="ml-auto w-64 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="ml-auto w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
         />
       </div>
 
       {/* Filter bar */}
-      <div className="flex items-center gap-2">
+      <div
+        className="flex items-center gap-2 px-4 py-2"
+        style={{ borderBottom: "1px solid #1A1A1A" }}
+      >
         {FILTERS.map((f) => (
           <button
             key={f}
@@ -151,124 +179,133 @@ export default function EventsPanel() {
 
       {/* Error banner — below filter bar, above timeline/list */}
       {error && (
-        <pre className="rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+        <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
           {error}
         </pre>
       )}
 
       {/* Timeline ribbon — 1h span, 60 stacked warning/normal buckets */}
-      <EventTimeline buckets={buckets} />
+      <div className="px-3 pt-2 pb-1">
+        <EventTimeline buckets={buckets} />
+      </div>
 
-      {/* Table */}
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[64px]">Age</TableHead>
-            <TableHead className="w-[56px]">Count</TableHead>
-            <TableHead className="w-[80px]">Type</TableHead>
-            <TableHead className="w-[150px]">Reason</TableHead>
-            <TableHead className="w-[220px]">Involved Object</TableHead>
-            <TableHead>Message</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {filtered.map((event) => (
-            <EventRow
-              key={event.metadata.uid}
-              event={event}
-              expanded={expanded.has(event.metadata.uid)}
-              onToggle={() => toggleExpand(event.metadata.uid)}
-            />
-          ))}
-        </TableBody>
-      </Table>
+      {/* Row list — compact, no per-row chat strip */}
+      <div className="flex flex-col gap-0.5 px-3 py-1">
+        {filtered.map((event) => {
+          const k = event.metadata.uid;
+          const isOpen = expanded.has(k);
+          const ts = when(event);
+          const age = relativeAge(ts);
+          const tooltip = absoluteWhen(ts) ?? undefined;
+          const count = event.count ?? 0;
+          const reason = event.reason ?? "—";
+          const message = event.message ?? "—";
+          const objLabel = involvedObjectLabel(event);
+
+          return (
+            <ListRow
+              key={k}
+              rowKey={k}
+              isOpen={isOpen}
+              onToggle={() => toggleExpand(k)}
+              expandedContent={
+                <div className="font-mono text-xs text-muted-foreground whitespace-pre-wrap break-words">
+                  {message}
+                </div>
+              }
+            >
+              {/* Type badge — Warning→error, Normal/other→neutral */}
+              <StatusBadge
+                label={event.type ?? "—"}
+                variant={eventVariant(event.type)}
+              />
+
+              {/* Reason — monospace */}
+              <span
+                className="shrink-0 font-mono text-xs font-medium leading-none text-foreground"
+                style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                title={reason}
+              >
+                {reason}
+              </span>
+
+              {/* Involved object — dim */}
+              <span
+                style={{
+                  fontFamily: "ui-monospace, monospace",
+                  fontSize: 10,
+                  color: "#6B6B73",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  minWidth: 0,
+                  flexShrink: 1,
+                }}
+                title={objLabel}
+              >
+                {objLabel}
+              </span>
+
+              {/* Message — truncated in collapsed state */}
+              {!isOpen && (
+                <span
+                  style={{
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: 10,
+                    color: "#A1A1AA",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    minWidth: 0,
+                    flexShrink: 2,
+                  }}
+                  title={message}
+                >
+                  {message}
+                </span>
+              )}
+
+              <span className="flex-1" />
+
+              {/* Count "×N" when > 1 — right-aligned */}
+              {count > 1 && (
+                <span
+                  style={{
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: 10,
+                    color: "#F59E0B",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                  }}
+                >
+                  ×{count}
+                </span>
+              )}
+
+              {/* Age — right-aligned */}
+              <span
+                title={tooltip}
+                style={{
+                  fontFamily: "ui-monospace, monospace",
+                  fontSize: 10,
+                  color: "#6B6B73",
+                  whiteSpace: "nowrap",
+                  flexShrink: 0,
+                }}
+              >
+                {age}
+              </span>
+            </ListRow>
+          );
+        })}
+      </div>
 
       {/* Empty state — header/filter/timeline still render above */}
       {!isLoading && filtered.length === 0 && (
-        <p className="px-2 py-4 text-sm text-muted-foreground">No events found</p>
+        <p className="px-4 py-4 text-sm text-muted-foreground">No events found</p>
       )}
     </div>
   );
-}
-
-/** A single event row. Age column stacks relative age + "×N" count below it. */
-function EventRow({
-  event,
-  expanded,
-  onToggle,
-}: {
-  event: K8sEvent;
-  expanded: boolean;
-  onToggle: () => void;
-}) {
-  const ts = when(event);
-  const age = relativeAge(ts);
-  const tooltip = absoluteWhen(ts) ?? undefined;
-  const count = event.count ?? 0;
-  const message = event.message ?? "—";
-
-  return (
-    <TableRow className="align-top">
-      {/* Age */}
-      <TableCell className="h-[70px] font-mono text-muted-foreground">
-        <span title={tooltip}>{age}</span>
-      </TableCell>
-
-      {/* Count — "×N" only when count > 1, muted/secondary */}
-      <TableCell className="font-mono text-xs text-muted-foreground">
-        {count > 1 ? <span className="font-semibold">×{count}</span> : null}
-      </TableCell>
-
-      {/* Type badge */}
-      <TableCell>
-        {event.type == null ? (
-          <span className="text-muted-foreground">—</span>
-        ) : (
-          <span
-            className={cn(
-              "rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase",
-              typeColorClass(event.type),
-            )}
-          >
-            {event.type}
-          </span>
-        )}
-      </TableCell>
-
-      {/* Reason */}
-      <TableCell className="max-w-[150px] truncate font-mono">
-        {event.reason ?? <span className="text-muted-foreground">—</span>}
-      </TableCell>
-
-      {/* Involved object */}
-      <TableCell className="max-w-[220px] truncate font-mono text-xs text-muted-foreground">
-        {involvedObjectLabel(event)}
-      </TableCell>
-
-      {/* Message — click toggles single-line ↔ multi-line */}
-      <TableCell
-        onClick={onToggle}
-        className={cn(
-          "cursor-pointer select-text font-mono",
-          expanded ? "whitespace-pre-wrap break-words" : "max-w-0 truncate",
-        )}
-        title={expanded ? undefined : "Click to expand"}
-      >
-        {message}
-      </TableCell>
-    </TableRow>
-  );
-}
-
-/** "kind/name" or "kind/name · namespace"; "—" if no name. */
-function involvedObjectLabel(event: K8sEvent): string {
-  const io = event.involvedObject;
-  const name = io?.name ?? "";
-  if (name === "") return "—";
-  const kind = io?.kind ?? "";
-  const base = kind ? `${kind}/${name}` : name;
-  const ns = io?.namespace;
-  return ns ? `${base} · ${ns}` : base;
 }
 
 /** Stacked warning(red)/normal(green) histogram over the 1-hour window. */
