@@ -97,6 +97,28 @@ export {
   signalConfigUpdates,
 } from "./signal";
 
+export {
+  type RegistryCredential,
+  type DockerConfigJsonAuth,
+  type DockerConfigJsonData,
+  type KubernetesSecret,
+  MANAGED_BY_LABEL,
+  MANAGED_BY_VALUE,
+  DOCKERCONFIGJSON_TYPE,
+  DOCKERCONFIGJSON_KEY,
+  DOCKER_HUB_KEY,
+  base64Encode,
+  base64Decode,
+  normalizeRegistryKey,
+  buildDockerConfigJson,
+  buildAuths,
+  dockerconfigjsonToSecret,
+  parseDockerConfigJson,
+  extractRegistryFromSecret,
+  displayRegistry,
+  isValidDNS1123Subdomain,
+} from "./dockerconfigjson";
+
 /** Kubernetes ObjectMeta (subset used by the web panels). */
 export interface ObjectMeta {
   name: string;

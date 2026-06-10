@@ -22,9 +22,10 @@ import LogsPanel from "./panels/logs/LogsPanel";
 import ChatPanel from "./panels/chat/ChatPanel";
 import AssistantPanel from "./panels/assistant/AssistantPanel";
 import SettingsPanel from "./panels/settings/SettingsPanel";
+import AccountsPanel from "./panels/accounts/AccountsPanel";
 import { connectCluster } from "@/lib/ws";
 
-const PANELS = ["overview", "catalog", "pods", "deployments", "workloads", "databases", "rightsizing", "namespaces", "nodes", "services", "ingresses", "connectivity", "configmaps", "secrets", "storage", "rbac", "events", "logs", "health", "assistant", "settings", "chat"]; // grows as panels are ported
+const PANELS = ["overview", "catalog", "accounts", "pods", "deployments", "workloads", "databases", "rightsizing", "namespaces", "nodes", "services", "ingresses", "connectivity", "configmaps", "secrets", "storage", "rbac", "events", "logs", "health", "assistant", "settings", "chat"]; // grows as panels are ported
 
 export default function App() {
   useEffect(() => { connectCluster(); }, []);
@@ -60,10 +61,11 @@ export default function App() {
           <Route path="/storage" element={<div className="h-full overflow-auto p-4"><StoragePanel /></div>} />
           <Route path="/rbac" element={<div className="h-full overflow-auto p-4"><RbacPanel /></div>} />
           <Route path="/catalog" element={<div className="h-full overflow-auto p-4"><CatalogPanel /></div>} />
+          <Route path="/accounts" element={<div className="h-full overflow-auto p-4"><AccountsPanel /></div>} />
           <Route path="/events" element={<div className="h-full overflow-auto p-4"><EventsPanel /></div>} />
           <Route path="/assistant" element={<div className="h-full overflow-auto p-4"><AssistantPanel /></div>} />
           <Route path="/settings" element={<div className="h-full overflow-auto p-4"><SettingsPanel /></div>} />
-          {PANELS.filter((p) => p !== "overview" && p !== "catalog" && p !== "health" && p !== "pods" && p !== "deployments" && p !== "workloads" && p !== "databases" && p !== "rightsizing" && p !== "namespaces" && p !== "nodes" && p !== "services" && p !== "ingresses" && p !== "connectivity" && p !== "configmaps" && p !== "secrets" && p !== "storage" && p !== "rbac" && p !== "events" && p !== "logs" && p !== "assistant" && p !== "settings" && p !== "chat").map((p) => (
+          {PANELS.filter((p) => p !== "overview" && p !== "catalog" && p !== "accounts" && p !== "health" && p !== "pods" && p !== "deployments" && p !== "workloads" && p !== "databases" && p !== "rightsizing" && p !== "namespaces" && p !== "nodes" && p !== "services" && p !== "ingresses" && p !== "connectivity" && p !== "configmaps" && p !== "secrets" && p !== "storage" && p !== "rbac" && p !== "events" && p !== "logs" && p !== "assistant" && p !== "settings" && p !== "chat").map((p) => (
             <Route key={p} path={`/${p}`} element={<div className="p-4 capitalize">{p} panel (not yet ported)</div>} />
           ))}
         </Routes>
