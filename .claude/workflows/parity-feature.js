@@ -122,9 +122,8 @@ const targets = mode === 'porter' ? ['web'] : ['web', 'swift']
 const verdicts = (await parallel(targets.map((t) => () =>
   agent(
     t === 'web'
-      ? `You are the WEB VERIFIER. Run: pnpm --filter web typecheck && pnpm --filter web build && pnpm --filter web test, ` +
-        `and pnpm --filter @helmsman/server test. Then check the implementation against the acceptance criteria in ${SPEC_PATH}. ` +
-        `Return the verdict (parity true only if build+tests pass AND acceptance criteria are met).`
+      ? `You are the WEB VERIFIER. Run, and ALL must pass: pnpm -r typecheck (whole workspace — server runs on Bun with no tsc gate, so server/catalog/k8s typecheck errors only show here), pnpm --filter web build, pnpm --filter web test, and pnpm --filter @helmsman/server test (+ pnpm --filter @helmsman/catalog test if that package changed). Then check the implementation against the acceptance criteria in ${SPEC_PATH}. ` +
+        `Return the verdict (parity true ONLY if pnpm -r typecheck is clean AND build+tests pass AND acceptance criteria are met).`
       : `You are the SWIFT VERIFIER. Run: swift build && swift test. Then check against the acceptance criteria in ${SPEC_PATH}. ` +
         `Return the verdict (parity true only if build+tests pass AND acceptance criteria are met).`,
     { label: `verify:${t}`, phase: 'Verify', schema: VERDICT_SCHEMA },
