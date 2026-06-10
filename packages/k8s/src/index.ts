@@ -20,6 +20,29 @@ export {
   isErrorLine,
 } from "./logs";
 
+export {
+  type ResourceKind,
+  type RawResource,
+  type DiscoveredResource,
+  DISCOVERY_KINDS,
+  MIN_CORE_LEN,
+  canonicalKind,
+  kubectlDeleteKind,
+  defaultSelected,
+  isProtectedNamespace,
+  blockedNamespaceReason,
+  isSharedInfraWorkload,
+  core,
+  isRelated,
+  helmReleaseFromSecretName,
+  detectHelmRelease,
+  filterDiscovered,
+  discoveryArgs,
+  fallbackDiscoveryArgs,
+  deleteArgs,
+  helmUninstallArgs,
+} from "./purge";
+
 /** Kubernetes ObjectMeta (subset used by the web panels). */
 export interface ObjectMeta {
   name: string;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   LoaderCircle,
   Layers,
@@ -9,10 +9,14 @@ import {
   Activity,
   AlertTriangle,
   Gauge,
+  Trash2,
 } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { PurgePickerSheet } from "@/panels/purge/PurgePickerSheet";
+import { PurgeSheet } from "@/panels/purge/PurgeSheet";
 import type {
   Deployment,
   EventBucket,
@@ -41,16 +45,13 @@ import {
 } from "@/panels/events/eventsDisplay";
 
 // ---------------------------------------------------------------------------
-// DEFERRED (docs/parity/overview.md). This is a READ-ONLY landing dashboard.
-// The following are intentionally NOT implemented and must NOT be added without
-// a new feature spec + infra:
-//   - "Purge an app" button (red, trash) — complex multi-resource deletion;
-//     needs its own panel + typed-name confirm sheet spec.
-//     TODO: Purge flow (deferred, see docs/parity/purge.md when available).
+// DEFERRED (docs/parity/overview.md). This is a READ-ONLY landing dashboard
+// except for the "Purge an app…" entry point (docs/parity/purge.md), which
+// opens the picker → typed-name confirm sheet flow. The following remain NOT
+// implemented and must NOT be added without a new feature spec + infra:
 //   - "Investigate cluster" button (primary, sparkles) — chat/Claude handoff.
 //     TODO: Investigate handoff (deferred, see docs/parity/chat-overview.md).
 //   - Event timeline drilldown — the ribbon is display-only here.
-//   - Any mutation, ConfirmSheet, dialog, or action dispatch.
 //   - Namespace-scoped aggregation — Overview is always cluster-wide.
 // ---------------------------------------------------------------------------
 
@@ -62,6 +63,10 @@ export default function OverviewPanel() {
   const resources = useCluster((s) => s.resources);
   const isLoading = useCluster((s) => s.isLoading);
   const error = useCluster((s) => s.error);
+
+  // Purge flow: picker → typed-name confirm sheet.
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [purgeTarget, setPurgeTarget] = useState<{ name: string; namespace: string } | null>(null);
 
   // Subscribe to the five cluster-wide watches on mount; unsubscribe on unmount.
   // All cluster-scoped: namespace "*" (Overview never applies the namespace
@@ -129,7 +134,16 @@ export default function OverviewPanel() {
         {isLoading && (
           <LoaderCircle className="size-4 animate-spin text-muted-foreground" aria-label="loading" />
         )}
-        {/* TODO: Purge / Investigate buttons (deferred — see DEFERRED block above) */}
+        <Button
+          variant="destructive"
+          size="sm"
+          className="ml-auto"
+          onClick={() => setPickerOpen(true)}
+        >
+          <Trash2 />
+          Purge an app…
+        </Button>
+        {/* TODO: Investigate button (deferred — see DEFERRED block above) */}
       </div>
 
       {/* Error banner */}
@@ -225,6 +239,18 @@ export default function OverviewPanel() {
           </div>
         )}
       </div>
+
+      {/* Purge flow: pick → discover → typed-name confirm → execute. */}
+      <PurgePickerSheet
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onPick={(target) => setPurgeTarget(target)}
+      />
+      <PurgeSheet
+        target={purgeTarget}
+        open={purgeTarget !== null}
+        onClose={() => setPurgeTarget(null)}
+      />
     </div>
   );
 }

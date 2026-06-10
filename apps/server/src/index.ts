@@ -5,6 +5,7 @@ import { WatchManager } from "./watchManager";
 import { makeWsHandlers } from "./ws";
 import { buildCommand, PurgeActionError, type ActionBlock } from "./actions";
 import { applyManifest, installHelm, type HelmInstallRequest } from "./install";
+import { handlePurge, type PurgeRequest } from "./purge";
 import { getPodMetrics, getNodeMetrics } from "./metrics";
 import { checkAuth } from "./auth";
 
@@ -158,6 +159,27 @@ const server = Bun.serve({
         namespace: body.namespace,
         values: body.values,
       });
+      return Response.json(result);
+    }
+
+    // POST /api/purge — full app-removal flow (docs/parity/purge.md).
+    //
+    // dryRun=true  → discover related resources (label + name-prefix), detect a
+    //                helm release, enforce guardrails. Returns { discovered,
+    //                helmRelease?, blockedReason? }.
+    // dryRun=false → execute: helm uninstall (if managed) then kubectl delete
+    //                per selected resource. Returns { ok, results }.
+    if (url.pathname === "/api/purge" && req.method === "POST") {
+      let body: PurgeRequest;
+      try {
+        body = (await req.json()) as PurgeRequest;
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      if (typeof body.namespace !== "string" || typeof body.instance !== "string") {
+        return Response.json({ error: "missing namespace or instance" }, { status: 422 });
+      }
+      const result = await handlePurge(context, body);
       return Response.json(result);
     }
 

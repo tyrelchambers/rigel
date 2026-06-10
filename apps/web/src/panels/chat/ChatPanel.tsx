@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Sparkles, Copy, SquarePen, ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
+import { PurgeSheet } from "@/panels/purge/PurgeSheet";
 import type { ActionBlock } from "@/lib/api";
 import { stripActionBlocks, type SuggestedAction } from "@/lib/actionBlocks";
 import { onChatEvent, sendChat, interruptChat } from "@/lib/ws";
@@ -188,10 +189,21 @@ export default function ChatPanel() {
     }
   }
 
-  // --- Action blocks → ConfirmSheet ----------------------------------------
+  // --- Action blocks → ConfirmSheet / PurgeSheet ---------------------------
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
+  // kind:purge routes straight to the typed-name removal sheet (no kubectl
+  // preview, no picker) — discovery runs inside PurgeSheet on the action target.
+  const [purgeTarget, setPurgeTarget] = useState<{ name: string; namespace: string } | null>(null);
   function handleSuggestedAction(action: SuggestedAction) {
-    setPendingAction(toActionBlock(action));
+    const block = toActionBlock(action);
+    if (block.kind === "purge") {
+      setPurgeTarget({
+        name: block.name ?? block.deployment ?? "",
+        namespace: block.namespace ?? "default",
+      });
+      return;
+    }
+    setPendingAction(block);
   }
 
   const shortId = shortSessionId(sessionId);
@@ -271,6 +283,15 @@ export default function ChatPanel() {
         action={pendingAction}
         open={!!pendingAction}
         onClose={() => setPendingAction(null)}
+        onPurge={(name, namespace) =>
+          setPurgeTarget({ name: name ?? "", namespace })
+        }
+      />
+
+      <PurgeSheet
+        target={purgeTarget}
+        open={purgeTarget !== null}
+        onClose={() => setPurgeTarget(null)}
       />
     </div>
   );
