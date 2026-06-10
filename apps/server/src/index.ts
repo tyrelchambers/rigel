@@ -4,6 +4,7 @@ import { kubectl } from "@helmsman/k8s/src/run";
 import { WatchManager } from "./watchManager";
 import { makeWsHandlers } from "./ws";
 import { buildCommand, PurgeActionError, type ActionBlock } from "./actions";
+import { getPodMetrics, getNodeMetrics } from "./metrics";
 import { checkAuth } from "./auth";
 
 const KUBECONFIG = resolveKubeconfigPath(process.env, homedir());
@@ -50,6 +51,20 @@ const server = Bun.serve({
     // Auth gate: every non-health API/WS path requires a valid bearer token when TOKEN is set.
     if (!checkAuth(req.headers.get("authorization") ?? undefined, TOKEN)) {
       return new Response("unauthorized", { status: 401 });
+    }
+
+    // GET /api/metrics/pods?namespace=<ns|*> — current pod CPU/memory usage.
+    // Always HTTP 200; { available:false, items:[] } when metrics-server absent.
+    if (url.pathname === "/api/metrics/pods" && req.method === "GET") {
+      const ns = url.searchParams.get("namespace") ?? "*";
+      const result = await getPodMetrics(context, ns);
+      return Response.json(result);
+    }
+
+    // GET /api/metrics/nodes — current node CPU/memory usage. Same graceful path.
+    if (url.pathname === "/api/metrics/nodes" && req.method === "GET") {
+      const result = await getNodeMetrics(context);
+      return Response.json(result);
     }
 
     // POST /api/action — execute or preview a chat action-block mutation.
