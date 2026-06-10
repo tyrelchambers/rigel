@@ -119,6 +119,33 @@ export {
   isValidDNS1123Subdomain,
 } from "./dockerconfigjson";
 
+export {
+  type SecretTypeId,
+  type SecretTypeInfo,
+  type KVRow,
+  type DockerCredsForm,
+  CREATABLE_SECRET_TYPES,
+  canonicalKeysFor,
+  secretTypeId,
+  encodeSecretValue,
+  decodeSecretValue,
+  decodedByteLength,
+  validateConfigMapName,
+  validateSecretName,
+  canSubmitConfigMap,
+  canSubmitSecret,
+  emptyDockerCreds,
+  encodeDockerConfigJson,
+  parseDockerCredsForm,
+  buildConfigMapYAML,
+  buildSecretYAML,
+  newRowId,
+  blankRow,
+  seedConfigMapRows,
+  seedSecretRows,
+  rowsToConfigMapData,
+} from "./configmapSecretEditor";
+
 /** Kubernetes ObjectMeta (subset used by the web panels). */
 export interface ObjectMeta {
   name: string;
@@ -212,4 +239,17 @@ export interface Secret {
   type?: string;
   /** Base64-encoded key/value pairs. */
   data?: Record<string, string>;
+}
+
+/**
+ * ConfigMap — mirrors the Kubernetes ConfigMap JSON schema and the Swift
+ * `ConfigMap` type in `Sources/Helmsman/Cluster/ConfigMap.swift`. Namespace-
+ * scoped. `data` holds plaintext UTF-8 values; `binaryData` holds base64-encoded
+ * values (read-only in the editor, carried through unchanged on edit).
+ * See `docs/parity/configmaps.md`.
+ */
+export interface ConfigMap {
+  metadata: ObjectMeta;
+  data?: Record<string, string>;
+  binaryData?: Record<string, string>;
 }

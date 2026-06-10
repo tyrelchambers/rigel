@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { LoaderCircle, ChevronRight, ChevronDown, KeyRound, Eye, EyeOff } from "lucide-react";
+import { LoaderCircle, ChevronRight, ChevronDown, KeyRound, Eye, EyeOff, Plus, Pencil } from "lucide-react";
 import type { Secret } from "@helmsman/k8s";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
@@ -11,6 +11,8 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { SecretEditor } from "./SecretEditor";
 import {
   relativeAge,
   keyCount,
@@ -23,16 +25,13 @@ import {
 } from "./secretsDisplay";
 
 // ---------------------------------------------------------------------------
-// DEFERRED ACTIONS (docs/parity/secrets.md §"Row Actions"). This is a
-// read-only panel. The following are intentionally NOT implemented and must
-// NOT be added without a new feature spec + infra:
-//   - Edit / Create mutations (need a generic `kubectl apply -f -` server
-//     route — the Swift editor routes through SecretEditorSheet/toYAML()).
-//   - Delete mutation (needs ConfirmSheet wiring + `deleteResource` action).
-//   - Move-to-namespace (needs a copy-and-delete flow + destination picker).
-//   - View YAML (needs a server YAML endpoint + viewer UI).
-//   - Copy-to-clipboard for revealed values (needs a web impl).
-// Reveal is purely client-side base64 decoding; values are never searched.
+// CREATE + EDIT are implemented via SecretEditor → POST /api/apply
+// (`kubectl apply -f -`); see docs/parity/configmap-secret-edit.md. Plaintext
+// values are base64-encoded into the manifest; binary values are read-only on
+// edit. The watch auto-refreshes after a successful apply. Still DEFERRED (need
+// new infra / specs): Delete mutation, move-to-namespace, standalone View-YAML,
+// copy-to-clipboard. Reveal is purely client-side base64 decoding; values are
+// never searched.
 // ---------------------------------------------------------------------------
 
 /** "0 keys" / "1 key" / "N keys" with correct pluralization. */
@@ -48,6 +47,19 @@ export default function SecretsPanel() {
 
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  // Editor sheet: `editorOpen` true; `editTarget` null = create, else edit.
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<Secret | null>(null);
+
+  function openCreate() {
+    setEditTarget(null);
+    setEditorOpen(true);
+  }
+  function openEdit(secret: Secret) {
+    setEditTarget(secret);
+    setEditorOpen(true);
+  }
 
   // Subscribe to the secrets watch for the active namespace (or all).
   useEffect(() => {
@@ -99,6 +111,9 @@ export default function SecretsPanel() {
           placeholder="Search secrets…"
           className="ml-auto w-64 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
         />
+        <Button size="sm" onClick={openCreate}>
+          <Plus className="size-4" aria-hidden /> New Secret
+        </Button>
       </div>
 
       {/* Error banner */}
@@ -175,7 +190,7 @@ export default function SecretsPanel() {
                 {isOpen && (
                   <TableRow>
                     <TableCell colSpan={7} className="bg-muted/30">
-                      <SecretDetail secret={secret} />
+                      <SecretDetail secret={secret} onEdit={() => openEdit(secret)} />
                     </TableCell>
                   </TableRow>
                 )}
@@ -189,12 +204,19 @@ export default function SecretsPanel() {
       {!isLoading && filtered.length === 0 && (
         <p className="px-2 py-4 text-sm text-muted-foreground">No secrets found</p>
       )}
+
+      <SecretEditor
+        target={editTarget}
+        open={editorOpen}
+        onClose={() => setEditorOpen(false)}
+        onApplied={() => setEditorOpen(false)}
+      />
     </div>
   );
 }
 
 /** Expanded detail: STATUS summary + KEYS section (sorted, reveal toggles). */
-function SecretDetail({ secret }: { secret: Secret }) {
+function SecretDetail({ secret, onEdit }: { secret: Secret; onEdit: () => void }) {
   const keys = keysSorted(secret);
   const total = keyCount(secret);
   const displayType = secretTypeDisplayName(secret.type);
@@ -214,6 +236,13 @@ function SecretDetail({ secret }: { secret: Secret }) {
 
   return (
     <div className="space-y-3 px-2 py-3">
+      {/* Actions */}
+      <div className="flex justify-end">
+        <Button variant="outline" size="sm" onClick={onEdit}>
+          <Pencil className="size-3.5" aria-hidden /> Edit
+        </Button>
+      </div>
+
       {/* STATUS */}
       <div className="space-y-1">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

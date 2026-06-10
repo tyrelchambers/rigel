@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { LoaderCircle, ChevronRight, ChevronDown, CircleDashed, FileArchive } from "lucide-react";
+import { LoaderCircle, ChevronRight, ChevronDown, CircleDashed, FileArchive, Plus, Pencil } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import {
@@ -10,7 +10,9 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 import type { ConfigMap } from "./types";
+import { ConfigMapEditor } from "./ConfigMapEditor";
 import {
   relativeAge,
   keyCount,
@@ -24,14 +26,10 @@ import {
 } from "./configmapsDisplay";
 
 // ---------------------------------------------------------------------------
-// DEFERRED ACTIONS (docs/parity/configmaps.md §"Row Actions"). This is a
-// read-only panel. The following are intentionally NOT implemented and must
-// NOT be added without a new feature spec + infra:
-//   - Edit / Create mutations (need a generic `kubectl apply -f -` server
-//     route — the Swift editor routes through ConfigMap.toYAML()).
-//   - Delete mutation (needs ConfirmSheet wiring + `deleteResource` action).
-//   - View YAML (needs a server YAML endpoint + viewer UI).
-//   - Copy-to-clipboard for plaintext values (needs a web impl).
+// CREATE + EDIT are implemented via ConfigMapEditor → POST /api/apply
+// (`kubectl apply -f -`); see docs/parity/configmap-secret-edit.md. The watch
+// auto-refreshes the list after a successful apply. Still DEFERRED (need new
+// infra / specs): Delete mutation, standalone View-YAML, copy-to-clipboard.
 // ---------------------------------------------------------------------------
 
 /** "0 keys" / "1 key" / "N keys" with correct pluralization. */
@@ -47,6 +45,19 @@ export default function ConfigMapsPanel() {
 
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  // Editor sheet: `editorOpen` true; `editTarget` null = create, else edit.
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<ConfigMap | null>(null);
+
+  function openCreate() {
+    setEditTarget(null);
+    setEditorOpen(true);
+  }
+  function openEdit(cm: ConfigMap) {
+    setEditTarget(cm);
+    setEditorOpen(true);
+  }
 
   // Subscribe to the configmaps watch for the active namespace (or all).
   useEffect(() => {
@@ -98,6 +109,9 @@ export default function ConfigMapsPanel() {
           placeholder="Search configmaps…"
           className="ml-auto w-64 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
         />
+        <Button size="sm" onClick={openCreate}>
+          <Plus className="size-4" aria-hidden /> New ConfigMap
+        </Button>
       </div>
 
       {/* Error banner */}
@@ -159,7 +173,7 @@ export default function ConfigMapsPanel() {
                 {isOpen && (
                   <TableRow>
                     <TableCell colSpan={5} className="bg-muted/30">
-                      <ConfigMapDetail configMap={cm} />
+                      <ConfigMapDetail configMap={cm} onEdit={() => openEdit(cm)} />
                     </TableCell>
                   </TableRow>
                 )}
@@ -173,12 +187,19 @@ export default function ConfigMapsPanel() {
       {!isLoading && filtered.length === 0 && (
         <p className="px-2 py-4 text-sm text-muted-foreground">No configmaps found</p>
       )}
+
+      <ConfigMapEditor
+        target={editTarget}
+        open={editorOpen}
+        onClose={() => setEditorOpen(false)}
+        onApplied={() => setEditorOpen(false)}
+      />
     </div>
   );
 }
 
 /** Expanded detail: STATUS summary + KEYS section (sorted, with values). */
-function ConfigMapDetail({ configMap }: { configMap: ConfigMap }) {
+function ConfigMapDetail({ configMap, onEdit }: { configMap: ConfigMap; onEdit: () => void }) {
   const keys = keysSorted(configMap);
   const total = keyCount(configMap);
   const binary = binaryKeyCount(configMap);
@@ -186,6 +207,13 @@ function ConfigMapDetail({ configMap }: { configMap: ConfigMap }) {
 
   return (
     <div className="space-y-3 px-2 py-3">
+      {/* Actions */}
+      <div className="flex justify-end">
+        <Button variant="outline" size="sm" onClick={onEdit}>
+          <Pencil className="size-3.5" aria-hidden /> Edit
+        </Button>
+      </div>
+
       {/* STATUS */}
       <div className="space-y-1">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
