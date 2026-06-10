@@ -35,17 +35,34 @@ import { ApplyingStep } from "./steps/ApplyingStep";
 import { VerifyingStep } from "./steps/VerifyingStep";
 import { DoneStep } from "./steps/DoneStep";
 import { FailedStep } from "./steps/FailedStep";
+import { iconFor } from "./icons";
+import { appIconGradient } from "./appColors";
 
-const STEP_TITLE: Record<WizardStep, string> = {
+// Steps in order for the stepper indicator
+const WIZARD_STEPS_ORDERED: WizardStep[] = [
+  "configure",
+  "secrets",
+  "review",
+  "applying",
+  "verifying",
+  "done",
+];
+
+const STEP_LABEL: Record<WizardStep, string> = {
   configure: "Configure",
-  generating: "Generate manifest",
+  generating: "Generate",
   secrets: "Secrets",
   review: "Review",
-  applying: "Applying",
-  verifying: "Verifying",
+  applying: "Apply",
+  verifying: "Verify",
   done: "Done",
   failed: "Failed",
 };
+
+// Which step index (0-based) in the ordered list
+function stepIndex(step: WizardStep): number {
+  return WIZARD_STEPS_ORDERED.indexOf(step);
+}
 
 /**
  * Multi-step install wizard state machine
@@ -88,6 +105,9 @@ export function CatalogInstallWizard({
 
   const canAdvance = canAdvanceFromConfigure(app, config);
   const isHelm = app.install?.mode === "helm";
+
+  const Icon = iconFor(app.iconSystemName);
+  const gradient = appIconGradient(app.id);
 
   // --- step transitions ----------------------------------------------------
 
@@ -170,82 +190,131 @@ export function CatalogInstallWizard({
     navigate("/chat");
   }
 
+  // Stepper visibility: show for normal flow steps; hide for generating/failed
+  const currentIndex = stepIndex(step);
+  const showStepper = step !== "generating" && step !== "failed";
+
   // --- render --------------------------------------------------------------
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[85vh] w-[min(640px,92vw)] max-w-none overflow-auto">
-        <DialogHeader>
-          <DialogTitle>
-            Install {app.name} — {STEP_TITLE[step]}
-          </DialogTitle>
+      <DialogContent className="wizard-dialog max-h-[88vh] w-[min(600px,94vw)] max-w-none overflow-auto">
+        <DialogHeader className="wizard-header">
+          {/* App identity row */}
+          <div className="wizard-app-row">
+            <div
+              className="wizard-app-icon"
+              style={{ background: `linear-gradient(135deg, ${gradient.from}, ${gradient.to})` }}
+              aria-hidden
+            >
+              <Icon className="wizard-app-icon-glyph" />
+              <div className="wizard-app-icon-highlight" />
+            </div>
+            <div className="wizard-app-info">
+              <DialogTitle className="wizard-title">Install {app.name}</DialogTitle>
+              <p className="wizard-step-label">{STEP_LABEL[step]}</p>
+            </div>
+          </div>
+
+          {/* Step progress dots */}
+          {showStepper && (
+            <div className="wizard-stepper" role="list" aria-label="Installation steps">
+              {WIZARD_STEPS_ORDERED.map((s, i) => {
+                const isDone = i < currentIndex;
+                const isCurrent = s === step;
+                return (
+                  <div
+                    key={s}
+                    role="listitem"
+                    className={`wizard-step-dot${isCurrent ? " current" : ""}${isDone ? " done" : ""}`}
+                    aria-label={`${STEP_LABEL[s]}${isDone ? " (complete)" : isCurrent ? " (current)" : ""}`}
+                  >
+                    {isDone && (
+                      <svg viewBox="0 0 8 8" className="wizard-step-check" aria-hidden>
+                        <polyline points="1,4 3.2,6.2 7,1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </div>
+                );
+              })}
+              {/* Connector lines between dots */}
+              <div className="wizard-stepper-track" aria-hidden>
+                <div
+                  className="wizard-stepper-fill"
+                  style={{ width: `${Math.max(0, (currentIndex / (WIZARD_STEPS_ORDERED.length - 1)) * 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
         </DialogHeader>
 
-        {step === "configure" && (
-          <ConfigureStep
-            app={app}
-            values={config}
-            setValues={setConfig}
-            namespaces={namespaces}
-            nodeNames={nodeNames}
-            clusterIssuers={clusterIssuers}
-            canAdvance={canAdvance}
-            onContinue={handleAdvanceFromConfigure}
-          />
-        )}
+        <div className="wizard-body">
+          {step === "configure" && (
+            <ConfigureStep
+              app={app}
+              values={config}
+              setValues={setConfig}
+              namespaces={namespaces}
+              nodeNames={nodeNames}
+              clusterIssuers={clusterIssuers}
+              canAdvance={canAdvance}
+              onContinue={handleAdvanceFromConfigure}
+            />
+          )}
 
-        {step === "generating" && (
-          <GeneratingStep
-            app={app}
-            prompt={substitute(app.installPromptTemplate, templateVars(config))}
-            onHandoff={() => handoffToChat("This app isn't baked yet")}
-            onBack={() => setStep("configure")}
-          />
-        )}
+          {step === "generating" && (
+            <GeneratingStep
+              app={app}
+              prompt={substitute(app.installPromptTemplate, templateVars(config))}
+              onHandoff={() => handoffToChat("This app isn't baked yet")}
+              onBack={() => setStep("configure")}
+            />
+          )}
 
-        {step === "secrets" && (
-          <SecretsStep
-            specs={secretSpecs}
-            values={secretValues}
-            setValues={setSecretValues}
-            canContinue={secretsComplete(secretSpecs, secretValues)}
-            onContinue={handleSecretsContinue}
-            onBack={() => setStep("configure")}
-          />
-        )}
+          {step === "secrets" && (
+            <SecretsStep
+              specs={secretSpecs}
+              values={secretValues}
+              setValues={setSecretValues}
+              canContinue={secretsComplete(secretSpecs, secretValues)}
+              onContinue={handleSecretsContinue}
+              onBack={() => setStep("configure")}
+            />
+          )}
 
-        {step === "review" && (
-          <ReviewStep
-            app={app}
-            artifact={artifact}
-            values={config}
-            shapeError={shapeError}
-            onInstall={handleInstall}
-            onBack={() => setStep(secretSpecs.length > 0 ? "secrets" : "configure")}
-          />
-        )}
+          {step === "review" && (
+            <ReviewStep
+              app={app}
+              artifact={artifact}
+              values={config}
+              shapeError={shapeError}
+              onInstall={handleInstall}
+              onBack={() => setStep(secretSpecs.length > 0 ? "secrets" : "configure")}
+            />
+          )}
 
-        {step === "applying" && <ApplyingStep log={applyLog} />}
+          {step === "applying" && <ApplyingStep log={applyLog} />}
 
-        {step === "verifying" && (
-          <VerifyingStep
-            instance={config.instance}
-            namespace={config.namespace}
-            onDone={() => setStep("done")}
-            onHandoff={handoffToChat}
-          />
-        )}
+          {step === "verifying" && (
+            <VerifyingStep
+              instance={config.instance}
+              namespace={config.namespace}
+              onDone={() => setStep("done")}
+              onHandoff={handoffToChat}
+            />
+          )}
 
-        {step === "done" && <DoneStep app={app} values={config} onClose={onClose} />}
+          {step === "done" && <DoneStep app={app} values={config} onClose={onClose} />}
 
-        {step === "failed" && (
-          <FailedStep
-            message={failMessage}
-            onBack={() => setStep("review")}
-            onRetry={handleInstall}
-            onHandoff={() => handoffToChat("The install failed")}
-          />
-        )}
+          {step === "failed" && (
+            <FailedStep
+              message={failMessage}
+              onBack={() => setStep("review")}
+              onRetry={handleInstall}
+              onHandoff={() => handoffToChat("The install failed")}
+            />
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );

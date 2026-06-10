@@ -5,6 +5,10 @@ import {
   Check,
   HelpCircle,
   RefreshCw,
+  Search,
+  Cpu,
+  MemoryStick,
+  HardDrive,
 } from "lucide-react";
 import {
   APP_CATEGORIES,
@@ -25,12 +29,12 @@ import { iconFor } from "./icons";
 import {
   availableCategories,
   filterCatalog,
-  requirementsSummary,
   type Scope,
 } from "./catalogDisplay";
 import { CatalogDetailSheet } from "./CatalogDetailSheet";
 import { CatalogInstallWizard } from "./CatalogInstallWizard";
 import { updateTargets, withTag, type UpdateTarget } from "./updateTargets";
+import { appIconGradient, appAccentAlpha } from "./appColors";
 
 // Watches the catalog needs cluster-wide (detection scans every namespace) plus
 // namespace/node lists for the wizard dropdowns.
@@ -159,90 +163,112 @@ export default function CatalogPanel() {
   const isLoading = catalog.length === 0 && !loadError;
 
   return (
-    <div className="space-y-3">
-      {/* Header */}
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-lg font-semibold">Catalog</h1>
-        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-mono text-muted-foreground">
-          {filtered.length}
-        </span>
-        {isLoading && (
-          <LoaderCircle className="size-4 animate-spin text-muted-foreground" aria-label="loading" />
-        )}
+    <div className="catalog-root">
+      {/* Atmosphere layer — subtle radial glow + dot grid */}
+      <div className="catalog-atmosphere" aria-hidden />
 
-        {/* Scope toggle */}
-        <div className="inline-flex overflow-hidden rounded-md border text-sm">
-          <button
-            type="button"
-            className={`px-3 py-1 ${scope === "all" ? "bg-muted font-medium" : "hover:bg-muted/50"}`}
-            onClick={() => setScope("all")}
-          >
-            All
-          </button>
-          <button
-            type="button"
-            className={`px-3 py-1 ${scope === "installed" ? "bg-muted font-medium" : "hover:bg-muted/50"}`}
-            onClick={() => setScope("installed")}
-          >
-            Installed ({installedIDs.size})
-          </button>
+      {/* Sticky header */}
+      <div className="catalog-header">
+        <div className="catalog-header-top">
+          <div className="catalog-title-group">
+            <h1 className="catalog-title">Apps</h1>
+            <p className="catalog-subtitle">Install and manage cluster applications</p>
+          </div>
+
+          <div className="catalog-header-controls">
+            {/* Scope segmented control */}
+            <div className="catalog-scope-control">
+              <button
+                type="button"
+                className={`catalog-scope-btn${scope === "all" ? " active" : ""}`}
+                onClick={() => setScope("all")}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                className={`catalog-scope-btn${scope === "installed" ? " active" : ""}`}
+                onClick={() => setScope("installed")}
+              >
+                Installed
+                <span className="catalog-scope-count">{installedIDs.size}</span>
+              </button>
+            </div>
+
+            {/* Search */}
+            <div className="catalog-search-wrap">
+              <Search className="catalog-search-icon" aria-hidden />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search apps, tags…"
+                maxLength={280}
+                className="catalog-search-input"
+                aria-label="Search apps"
+              />
+              {isLoading && (
+                <LoaderCircle className="catalog-search-spinner" aria-label="loading" />
+              )}
+            </div>
+          </div>
         </div>
 
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search apps, tags…"
-          maxLength={280}
-          className="ml-auto w-64 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
-        />
+        {/* Category pill rail */}
+        <div className="catalog-category-rail" role="group" aria-label="Filter by category">
+          <CategoryPill active={category === null} label="All" onClick={() => setCategory(null)} />
+          {cats.map((c) => (
+            <CategoryPill
+              key={c}
+              active={category === c}
+              label={categoryDisplayName(c)}
+              onClick={() => setCategory(category === c ? null : c)}
+            />
+          ))}
+        </div>
       </div>
 
-      {/* Category bar */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        <CategoryPill active={category === null} label="all" onClick={() => setCategory(null)} />
-        {cats.map((c) => (
-          <CategoryPill
-            key={c}
-            active={category === c}
-            label={categoryDisplayName(c)}
-            onClick={() => setCategory(category === c ? null : c)}
-          />
-        ))}
-      </div>
-
-      {/* Load error banner (below category bar) */}
+      {/* Load error banner */}
       {loadError && (
-        <pre className="rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
-          {loadError}
-        </pre>
+        <pre className="catalog-error">{loadError}</pre>
       )}
 
       {/* Grid */}
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
-        {filtered.map((app) => {
-          const installed = installedIDs.has(app.id);
-          const target = targetByApp.get(app.id);
-          const result = target ? resultByImage.get(target.image) : undefined;
-          return (
-            <CatalogCard
-              key={app.id}
-              app={app}
-              isInstalled={installed}
-              onSelect={() => setDetailApp(app)}
-              onInstall={() => setWizardApp(app)}
-            >
-              {installed && target && (
-                <UpdateStatusRow
-                  checking={updates.isPending && images.length > 0}
-                  result={result}
-                  onUpdate={(latest) => onUpdate(target, latest)}
-                />
-              )}
-            </CatalogCard>
-          );
-        })}
-      </div>
+      {isLoading ? (
+        <div className="catalog-grid">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <SkeletonCard key={i} index={i} />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <EmptyState search={search} scope={scope} />
+      ) : (
+        <div className="catalog-grid">
+          {filtered.map((app, i) => {
+            const installed = installedIDs.has(app.id);
+            const target = targetByApp.get(app.id);
+            const result = target ? resultByImage.get(target.image) : undefined;
+            return (
+              <CatalogCard
+                key={app.id}
+                app={app}
+                isInstalled={installed}
+                index={i}
+                onSelect={() => setDetailApp(app)}
+                onInstall={() => setWizardApp(app)}
+              >
+                {installed && target && (
+                  <UpdateStatusRow
+                    checking={updates.isPending && images.length > 0}
+                    result={result}
+                    onUpdate={(latest) => onUpdate(target, latest)}
+                  />
+                )}
+              </CatalogCard>
+            );
+          })}
+        </div>
+      )}
 
       {/* Detail sheet */}
       {detailApp && (
@@ -279,6 +305,8 @@ export default function CatalogPanel() {
   );
 }
 
+// ─── Category Pill ────────────────────────────────────────────────────────────
+
 function CategoryPill({
   active,
   label,
@@ -292,89 +320,146 @@ function CategoryPill({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-full px-3 py-1 text-xs ${
-        active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/70"
-      }`}
+      className={`catalog-cat-pill${active ? " active" : ""}`}
     >
       {label}
     </button>
   );
 }
 
+// ─── App Card ─────────────────────────────────────────────────────────────────
+
 function CatalogCard({
   app,
   isInstalled,
+  index,
   onSelect,
   onInstall,
   children,
 }: {
   app: CatalogApp;
   isInstalled: boolean;
+  index: number;
   onSelect: () => void;
   onInstall: () => void;
   children?: ReactNode;
 }) {
   const Icon = iconFor(app.iconSystemName);
+  const gradient = appIconGradient(app.id);
+  const accentBorder = appAccentAlpha(app.id, 0.5);
+  const accentGlow = appAccentAlpha(app.id, 0.18);
+  // Stagger: cap at first 12, then no delay
+  const delayMs = index < 12 ? index * 40 : 0;
+
+  // CSS custom properties for hover effects driven by inline style
+  const cardStyle = {
+    "--card-accent-border": accentBorder,
+    "--card-accent-glow": accentGlow,
+    animationDelay: `${delayMs}ms`,
+  } as React.CSSProperties;
+
   return (
-    <button
-      type="button"
+    <article
+      className="catalog-card"
+      style={cardStyle}
+      role="button"
+      tabIndex={0}
+      aria-label={`${app.name} — ${app.tagline}`}
       onClick={onSelect}
-      className="flex flex-col gap-2 rounded-lg border bg-card p-3 text-left transition-colors hover:border-ring hover:bg-muted/30"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
     >
-      <div className="flex items-start gap-3">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
-          <Icon className="size-5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="truncate font-medium">{app.name}</span>
+      {/* Top row: icon + name/tagline + installed badge */}
+      <div className="catalog-card-top">
+        {/* Icon tile */}
+        <div
+          className="catalog-icon-tile"
+          style={{
+            background: `linear-gradient(135deg, ${gradient.from}, ${gradient.to})`,
+          }}
+          aria-hidden
+        >
+          <Icon className="catalog-icon-glyph" />
+          {/* Inner highlight for depth */}
+          <div className="catalog-icon-highlight" />
+        </div>
+
+        <div className="catalog-card-meta">
+          <div className="catalog-card-name-row">
+            <span className="catalog-card-name">{app.name}</span>
             {isInstalled && (
-              <span className="rounded-full bg-green-500/15 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:text-green-400">
-                installed
+              <span className="catalog-installed-badge" aria-label="Installed">
+                <span className="catalog-installed-dot" />
+                Installed
               </span>
             )}
           </div>
-          <p className="truncate text-xs text-muted-foreground">{app.tagline}</p>
+          <p className="catalog-card-tagline">{app.tagline}</p>
         </div>
       </div>
-      <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-        <span className="rounded-full bg-muted px-1.5 py-0.5">
+
+      {/* Chips row: category + resource requirements */}
+      <div className="catalog-card-chips">
+        <span className="catalog-chip catalog-chip-category">
           {categoryDisplayName(app.category)}
         </span>
-        <span className="truncate font-mono">{requirementsSummary(app)}</span>
+        <span className="catalog-chip catalog-chip-req" title={`CPU: ${app.requirements.cpuRequest}${app.requirements.cpuLimit ? ` → ${app.requirements.cpuLimit}` : ""}`}>
+          <Cpu className="catalog-chip-icon" aria-hidden />
+          {app.requirements.cpuRequest}
+        </span>
+        <span className="catalog-chip catalog-chip-req" title={`Memory: ${app.requirements.memoryRequest}${app.requirements.memoryLimit ? ` → ${app.requirements.memoryLimit}` : ""}`}>
+          <MemoryStick className="catalog-chip-icon" aria-hidden />
+          {app.requirements.memoryRequest}
+        </span>
+        {app.requirements.storageGiB != null && (
+          <span className="catalog-chip catalog-chip-req" title={`Storage: ${app.requirements.storageGiB} GiB`}>
+            <HardDrive className="catalog-chip-icon" aria-hidden />
+            {app.requirements.storageGiB}Gi
+          </span>
+        )}
       </div>
-      {children}
-      <span
-        role="button"
-        tabIndex={0}
-        onClick={(e) => {
-          e.stopPropagation();
-          onInstall();
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.stopPropagation();
-            onInstall();
-          }
-        }}
-        className="mt-1 inline-flex items-center justify-center rounded-md border px-2 py-1 text-xs hover:bg-muted"
-      >
-        Install
-      </span>
-    </button>
+
+      {/* Update status row (for installed apps) */}
+      {children && <div className="catalog-card-update">{children}</div>}
+
+      {/* Action footer */}
+      <div className="catalog-card-footer">
+        {isInstalled ? (
+          <button
+            type="button"
+            className="catalog-btn-manage"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect();
+            }}
+            aria-label={`Manage ${app.name}`}
+          >
+            Manage
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="catalog-btn-install"
+            onClick={(e) => {
+              e.stopPropagation();
+              onInstall();
+            }}
+            aria-label={`Install ${app.name}`}
+          >
+            Install
+          </button>
+        )}
+      </div>
+    </article>
   );
 }
 
-/**
- * The per-installed-app update status row. Reflects the /api/updates result:
- *   - checking      → spinner + "checking for updates…"
- *   - updateAvailable → "↑ current → latest" (orange) + [Update] button
- *   - upToDate      → "✓ up to date" (green)
- *   - unknown       → "? version unknown" (gray) + reason tooltip
- *   - not yet cached → "not checked"
- * Interactive children stop propagation so they don't trigger the card's
- * onSelect (the card is itself a button).
- */
+// ─── Update Status Row ────────────────────────────────────────────────────────
+
 function UpdateStatusRow({
   checking,
   result,
@@ -386,43 +471,37 @@ function UpdateStatusRow({
 }) {
   if (checking && !result) {
     return (
-      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-        <LoaderCircle className="size-3 animate-spin" />
-        checking for updates…
+      <div className="catalog-update-row">
+        <LoaderCircle className="catalog-update-spin" aria-hidden />
+        <span>Checking for updates…</span>
       </div>
     );
   }
 
   if (!result) {
-    return <div className="text-[11px] text-muted-foreground">not checked</div>;
+    return <div className="catalog-update-row catalog-update-dim">Not checked</div>;
   }
 
   if (result.updateAvailable && result.latest) {
     const latest = result.latest;
     return (
-      <div className="flex items-center justify-between gap-2 text-[11px]">
-        <span className="inline-flex items-center gap-1 truncate font-mono text-amber-600 dark:text-amber-400">
-          <ArrowUp className="size-3 shrink-0" />
+      <div className="catalog-update-row catalog-update-available">
+        <span className="catalog-update-label">
+          <ArrowUp className="size-3 shrink-0" aria-hidden />
           {result.currentTag ?? "?"} → {latest}
         </span>
-        <span
-          role="button"
-          tabIndex={0}
+        <button
+          type="button"
+          className="catalog-update-btn"
           onClick={(e) => {
             e.stopPropagation();
             onUpdate(latest);
           }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.stopPropagation();
-              onUpdate(latest);
-            }
-          }}
-          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-500/40 px-2 py-0.5 text-amber-700 hover:bg-amber-500/10 dark:text-amber-300"
+          aria-label={`Update to ${latest}`}
         >
-          <RefreshCw className="size-3" />
+          <RefreshCw className="size-3" aria-hidden />
           Update
-        </span>
+        </button>
       </div>
     );
   }
@@ -430,20 +509,68 @@ function UpdateStatusRow({
   if (result.kind === "unknown") {
     return (
       <div
-        className="inline-flex items-center gap-1 text-[11px] text-muted-foreground"
-        title={result.reason ?? "could not determine an update for this image"}
+        className="catalog-update-row catalog-update-dim"
+        title={result.reason ?? "Could not determine an update for this image"}
       >
-        <HelpCircle className="size-3" />
-        version unknown
+        <HelpCircle className="size-3 shrink-0" aria-hidden />
+        Version unknown
       </div>
     );
   }
 
-  // upToDate (no newer version, known tier).
   return (
-    <div className="inline-flex items-center gap-1 text-[11px] text-green-700 dark:text-green-400">
-      <Check className="size-3" />
-      up to date
+    <div className="catalog-update-row catalog-update-ok">
+      <Check className="size-3 shrink-0" aria-hidden />
+      Up to date
+    </div>
+  );
+}
+
+// ─── Skeleton Card ────────────────────────────────────────────────────────────
+
+function SkeletonCard({ index }: { index: number }) {
+  return (
+    <div
+      className="catalog-card catalog-card-skeleton"
+      style={{ animationDelay: `${index * 60}ms` }}
+      aria-hidden
+    >
+      <div className="catalog-card-top">
+        <div className="catalog-skeleton-icon" />
+        <div className="catalog-skeleton-text">
+          <div className="catalog-skeleton-line catalog-skeleton-name" />
+          <div className="catalog-skeleton-line catalog-skeleton-tagline" />
+        </div>
+      </div>
+      <div className="catalog-skeleton-chips">
+        <div className="catalog-skeleton-chip" />
+        <div className="catalog-skeleton-chip" style={{ width: "56px" }} />
+        <div className="catalog-skeleton-chip" style={{ width: "48px" }} />
+      </div>
+    </div>
+  );
+}
+
+// ─── Empty State ─────────────────────────────────────────────────────────────
+
+function EmptyState({ search, scope }: { search: string; scope: Scope }) {
+  return (
+    <div className="catalog-empty">
+      <div className="catalog-empty-icon" aria-hidden>
+        <Search className="size-6 text-[#6B6B73]" />
+      </div>
+      <p className="catalog-empty-title">
+        {scope === "installed" && !search
+          ? "No apps installed yet"
+          : search
+          ? `No results for "${search}"`
+          : "No apps in this category"}
+      </p>
+      <p className="catalog-empty-sub">
+        {scope === "installed" && !search
+          ? "Switch to All to browse the full catalog"
+          : "Try a different search or category"}
+      </p>
     </div>
   );
 }

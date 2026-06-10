@@ -1,4 +1,4 @@
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Cpu, MemoryStick, HardDrive } from "lucide-react";
 import { categoryDisplayName, type CatalogApp } from "@helmsman/catalog";
 import {
   Sheet,
@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { iconFor } from "./icons";
-import { requirementsSummary } from "./catalogDisplay";
+import { appIconGradient } from "./appColors";
 
 /** Detail sheet — full app info + Install button (docs/parity/catalog.md §"Detail Sheet"). */
 export function CatalogDetailSheet({
@@ -27,111 +27,120 @@ export function CatalogDetailSheet({
   onInstall: () => void;
 }) {
   const Icon = iconFor(app.iconSystemName);
+  const gradient = appIconGradient(app.id);
   const links: Array<{ label: string; url: string | null | undefined }> = [
     { label: "Docs", url: app.docsURL },
     { label: "Repo", url: app.repoURL },
     { label: "Homepage", url: app.homepageURL },
   ];
+  const activeLinks = links.filter((l) => !!l.url);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full overflow-auto sm:max-w-md">
-        <SheetHeader>
-          <div className="flex items-center gap-3">
-            <span className="flex size-10 items-center justify-center rounded-lg bg-muted">
-              <Icon className="size-5" />
-            </span>
-            <div className="min-w-0">
-              <SheetTitle className="flex items-center gap-2">
+      <SheetContent className="detail-sheet w-full overflow-auto sm:max-w-md">
+        <SheetHeader className="detail-sheet-header">
+          {/* Icon + title */}
+          <div className="detail-sheet-hero">
+            <div
+              className="detail-sheet-icon"
+              style={{ background: `linear-gradient(135deg, ${gradient.from}, ${gradient.to})` }}
+              aria-hidden
+            >
+              <Icon className="detail-sheet-icon-glyph" />
+              <div className="detail-sheet-icon-highlight" />
+            </div>
+            <div className="detail-sheet-title-group">
+              <SheetTitle className="detail-sheet-name">
                 {app.name}
                 {isInstalled && (
-                  <span className="rounded-full bg-green-500/15 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">
-                    installed
+                  <span className="detail-sheet-installed-badge" aria-label="Installed">
+                    <span className="catalog-installed-dot" />
+                    Installed
                   </span>
                 )}
               </SheetTitle>
-              <SheetDescription>{app.tagline}</SheetDescription>
+              <SheetDescription className="detail-sheet-tagline">{app.tagline}</SheetDescription>
             </div>
+          </div>
+
+          {/* Category + resource chips */}
+          <div className="detail-sheet-chips">
+            <span className="catalog-chip catalog-chip-category">
+              {categoryDisplayName(app.category)}
+            </span>
+            <span className="catalog-chip catalog-chip-req">
+              <Cpu className="catalog-chip-icon" aria-hidden />
+              {app.requirements.cpuRequest}
+              {app.requirements.cpuLimit ? ` → ${app.requirements.cpuLimit}` : ""}
+            </span>
+            <span className="catalog-chip catalog-chip-req">
+              <MemoryStick className="catalog-chip-icon" aria-hidden />
+              {app.requirements.memoryRequest}
+              {app.requirements.memoryLimit ? ` → ${app.requirements.memoryLimit}` : ""}
+            </span>
+            {app.requirements.storageGiB != null && (
+              <span className="catalog-chip catalog-chip-req">
+                <HardDrive className="catalog-chip-icon" aria-hidden />
+                {app.requirements.storageGiB} GiB
+              </span>
+            )}
           </div>
         </SheetHeader>
 
-        <div className="space-y-4 px-4 pb-4">
-          {/* Category + requirements */}
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="rounded-full bg-muted px-2 py-0.5">
-              {categoryDisplayName(app.category)}
-            </span>
-            <span className="font-mono">{requirementsSummary(app)}</span>
-          </div>
-
+        <div className="detail-sheet-body">
           {/* Description */}
-          <p className="whitespace-pre-wrap text-sm text-muted-foreground">{app.description}</p>
-
-          {/* Requirements detail */}
-          <div className="space-y-1">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Requirements
-            </h3>
-            <ul className="space-y-0.5 text-xs font-mono text-muted-foreground">
-              <li>
-                cpu: {app.requirements.cpuRequest}
-                {app.requirements.cpuLimit ? ` → ${app.requirements.cpuLimit}` : ""}
-              </li>
-              <li>
-                memory: {app.requirements.memoryRequest}
-                {app.requirements.memoryLimit ? ` → ${app.requirements.memoryLimit}` : ""}
-              </li>
-              {app.requirements.storageGiB != null && (
-                <li>storage: {app.requirements.storageGiB} GiB</li>
-              )}
-            </ul>
-          </div>
+          <p className="detail-sheet-description">{app.description}</p>
 
           {/* Links */}
-          <div className="flex flex-wrap gap-2">
-            {links
-              .filter((l) => !!l.url)
-              .map((l) => (
-                <a
-                  key={l.label}
-                  href={l.url ?? "#"}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs hover:bg-muted"
-                >
-                  {l.label}
-                  <ExternalLink className="size-3" />
-                </a>
-              ))}
-          </div>
+          {activeLinks.length > 0 && (
+            <div className="detail-sheet-section">
+              <div className="detail-sheet-links">
+                {activeLinks.map((l) => (
+                  <a
+                    key={l.label}
+                    href={l.url ?? "#"}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="detail-sheet-link"
+                  >
+                    {l.label}
+                    <ExternalLink className="size-3" aria-hidden />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Tags */}
           {app.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {app.tags.map((t) => (
-                <span
-                  key={t}
-                  className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
-                >
-                  {t}
-                </span>
-              ))}
+            <div className="detail-sheet-section">
+              <h3 className="detail-sheet-section-label">Tags</h3>
+              <div className="detail-sheet-tags">
+                {app.tags.map((t) => (
+                  <span key={t} className="detail-sheet-tag">
+                    {t}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
 
           {/* Notes */}
           {app.notes && (
-            <div className="space-y-1">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Notes
-              </h3>
-              <p className="whitespace-pre-wrap text-xs text-muted-foreground">{app.notes}</p>
+            <div className="detail-sheet-section">
+              <h3 className="detail-sheet-section-label">Notes</h3>
+              <p className="detail-sheet-notes">{app.notes}</p>
             </div>
           )}
         </div>
 
-        <SheetFooter>
-          <Button onClick={onInstall}>{isInstalled ? "Reinstall" : "Install"}</Button>
+        <SheetFooter className="detail-sheet-footer">
+          <Button
+            onClick={onInstall}
+            className="detail-sheet-install-btn"
+          >
+            {isInstalled ? "Reinstall" : "Install"}
+          </Button>
         </SheetFooter>
       </SheetContent>
     </Sheet>
