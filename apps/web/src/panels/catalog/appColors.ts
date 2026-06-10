@@ -19,9 +19,10 @@ export function appHue(id: string): number {
  */
 export function appIconGradient(id: string): { from: string; to: string } {
   const h = appHue(id);
+  // Vivid + clearly distinct per app (the dim 42→28% range read as uniform purple).
   return {
-    from: `hsl(${h} 65% 42%)`,
-    to: `hsl(${(h + 25) % 360} 55% 28%)`,
+    from: `hsl(${h} 72% 56%)`,
+    to: `hsl(${(h + 20) % 360} 68% 44%)`,
   };
 }
 

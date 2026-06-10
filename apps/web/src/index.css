@@ -677,17 +677,19 @@
   border-radius: 7px;
   font-size: 12px;
   font-weight: 600;
-  background: #A855F7;
-  color: #FFFFFF;
-  border: none;
+  background: rgba(168, 85, 247, 0.10);
+  color: #C9A2F9;
+  border: 1px solid rgba(168, 85, 247, 0.40);
   cursor: pointer;
   width: 100%;
-  transition: background 120ms, box-shadow 120ms, transform 80ms;
+  transition: background 120ms, color 120ms, border-color 120ms, box-shadow 120ms, transform 80ms;
   letter-spacing: 0.1px;
 }
 .catalog-btn-install:hover {
-  background: #9333EA;
-  box-shadow: 0 0 16px rgba(168, 85, 247, 0.3);
+  background: #A855F7;
+  color: #FFFFFF;
+  border-color: #A855F7;
+  box-shadow: 0 0 18px rgba(168, 85, 247, 0.35);
   transform: translateY(-1px);
 }
 .catalog-btn-install:active { transform: translateY(0); }
