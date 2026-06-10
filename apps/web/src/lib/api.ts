@@ -235,7 +235,8 @@ export type AssistantAction =
   | "restart"
   | "silence"
   | "unsilence"
-  | "clearReport";
+  | "clearReport"
+  | "setSignal";
 
 export interface AssistantRequest {
   action: AssistantAction;
@@ -255,6 +256,11 @@ export interface AssistantRequest {
   window?: string;
   enabled?: boolean;
   fingerprint?: string;
+  // setSignal — Signal notifications bridge config (docs/parity/settings.md §2).
+  apiUrl?: string;
+  number?: string;
+  recipients?: string;
+  inbound?: boolean;
 }
 
 /**
@@ -294,4 +300,56 @@ export function usePurgeExecute() {
   return useMutation<PurgeExecuteResponse, Error, PurgeExecuteRequest>({
     mutationFn: executePurge,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Signal bridge proxy — POST /api/signal (docs/parity/settings.md §7.1)
+// ---------------------------------------------------------------------------
+
+/** Parse a server JSON error body into a thrown Error (shared with helpers). */
+async function throwApiError(res: Response): Promise<never> {
+  const err = await res.json().catch(() => ({ error: res.statusText }));
+  throw new Error((err as { error?: string }).error ?? res.statusText);
+}
+
+/**
+ * Request the link QR for the bridge. Opens a server-side port-forward and
+ * returns the PNG as an object URL the caller renders in an <img>. The caller
+ * is responsible for `URL.revokeObjectURL` when the QR is dismissed.
+ */
+export async function fetchSignalQR(namespace: string): Promise<string> {
+  const res = await fetch("/api/signal", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "link", namespace }),
+  });
+  if (!res.ok) await throwApiError(res);
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}
+
+/** Poll the bridge for linked accounts. Returns the registered numbers. */
+export async function fetchSignalAccounts(namespace: string): Promise<string[]> {
+  const res = await fetch("/api/signal", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "accounts", namespace }),
+  });
+  if (!res.ok) await throwApiError(res);
+  const data = (await res.json()) as { accounts?: string[] };
+  return data.accounts ?? [];
+}
+
+/** Send a test notification through the bridge (brief port-forward). */
+export async function sendSignalTest(args: {
+  namespace: string;
+  number: string;
+  recipients: string[];
+}): Promise<void> {
+  const res = await fetch("/api/signal", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "sendTest", ...args }),
+  });
+  if (!res.ok) await throwApiError(res);
 }

@@ -79,6 +79,24 @@ export {
   clearedReportConfigMapJSON,
 } from "./assistant";
 
+export {
+  type SignalBridgeStatus,
+  SIGNAL_BRIDGE_NAME,
+  SIGNAL_BRIDGE_PORT,
+  SIGNAL_DEVICE_NAME,
+  signalBridgeManifest,
+  deriveSignalBridgeStatus,
+  signalStatusColor,
+  signalStatusLabel,
+  parseRecipients,
+  signalApiUrl,
+  signalNumber,
+  signalRecipients,
+  signalInbound,
+  hasSavedNumber,
+  signalConfigUpdates,
+} from "./signal";
+
 /** Kubernetes ObjectMeta (subset used by the web panels). */
 export interface ObjectMeta {
   name: string;

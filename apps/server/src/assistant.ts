@@ -22,6 +22,7 @@ import {
   silencedSet,
   type AssistantInstallConfig,
 } from "@helmsman/k8s/src/assistant";
+import { signalConfigUpdates } from "@helmsman/k8s/src/signal";
 
 // ---------------------------------------------------------------------------
 // kubectl plumbing
@@ -102,7 +103,8 @@ export type AssistantAction =
   | "restart"
   | "silence"
   | "unsilence"
-  | "clearReport";
+  | "clearReport"
+  | "setSignal";
 
 export interface AssistantRequest {
   action: AssistantAction;
@@ -122,6 +124,11 @@ export interface AssistantRequest {
   window?: string;
   enabled?: boolean;
   fingerprint?: string;
+  // setSignal — Signal notifications bridge config (docs/parity/settings.md §2).
+  apiUrl?: string;
+  number?: string;
+  recipients?: string;
+  inbound?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -213,6 +220,25 @@ async function patchConfig(
   const result = await applyStdin(context, cmJSON);
   ensureOk(result, "Failed to update config");
   return result;
+}
+
+/**
+ * Read-modify-write `assistant-config` with the Signal notification settings.
+ * Only the provided fields are written, so a recipients edit never drops the
+ * two-way toggle and vice versa (mirrors Swift `setSignal`).
+ */
+async function setSignal(
+  context: string | null,
+  namespace: string,
+  req: AssistantRequest,
+): Promise<RunResult> {
+  const updates = signalConfigUpdates({
+    apiUrl: req.apiUrl,
+    number: req.number,
+    recipients: req.recipients,
+    inbound: req.inbound,
+  });
+  return patchConfig(context, namespace, updates);
 }
 
 async function setMode(
@@ -315,6 +341,8 @@ export async function handleAssistant(
       return silenceIncident(context, namespace, req.fingerprint ?? "", false);
     case "clearReport":
       return clearReport(context, namespace);
+    case "setSignal":
+      return setSignal(context, namespace, req);
     default:
       throw new Error(`unknown action: ${String(req.action)}`);
   }

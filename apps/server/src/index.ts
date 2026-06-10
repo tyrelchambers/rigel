@@ -9,6 +9,7 @@ import { handlePurge, type PurgeRequest } from "./purge";
 import { getPodMetrics, getNodeMetrics } from "./metrics";
 import { handleUpdates, type UpdatesRequest } from "./updates";
 import { handleAssistant, type AssistantRequest } from "./assistant";
+import { handleSignal, type SignalRequest } from "./signal";
 import { checkAuth } from "./auth";
 
 const KUBECONFIG = resolveKubeconfigPath(process.env, homedir());
@@ -241,6 +242,35 @@ const server = Bun.serve({
         console.error(`assistant action ${body.action}:`, msg);
         return Response.json({ error: msg }, { status: 500 });
       }
+    }
+
+    // POST /api/signal — Signal notifications bridge proxy
+    // (docs/parity/settings.md §7.1). Opens a short-lived port-forward to
+    // svc/signal-cli-rest and proxies one request to the bridge REST API:
+    //   link     → PNG QR bytes (image/png)
+    //   accounts → { accounts: string[] }
+    //   status   → { ready: true }
+    //   sendTest → { ok: true }
+    // Every action runs via kubectl argv (no shell); port-forward stderr is
+    // surfaced verbatim as "Port-forward failed: <stderr>".
+    if (url.pathname === "/api/signal" && req.method === "POST") {
+      let body: SignalRequest;
+      try {
+        body = (await req.json()) as SignalRequest;
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      if (typeof body.action !== "string") {
+        return Response.json({ error: "missing action" }, { status: 422 });
+      }
+      const result = await handleSignal(context, body);
+      if (result.kind === "error") {
+        return Response.json({ error: result.message }, { status: result.status });
+      }
+      if (result.kind === "png") {
+        return new Response(result.bytes, { headers: { "Content-Type": "image/png" } });
+      }
+      return Response.json(result.body);
     }
 
     if (url.pathname === "/ws") {
