@@ -1,24 +1,14 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
-import { LoaderCircle, ChevronRight, ChevronDown, MoreHorizontal } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { LoaderCircle, Minus, RotateCcw } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
-import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
+import { handoffToChat } from "@/lib/chatHandoff";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
+import { ListRow } from "@/panels/components/ListRow";
+import { TagPill } from "@/panels/components/TagPill";
+import { StatusBadge } from "@/panels/components/StatusBadge";
+import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
+import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { useNodeMetrics, type ActionBlock } from "@/lib/api";
 import type { Node } from "./types";
 import {
@@ -45,7 +35,7 @@ export default function NodesPanel() {
 
   const { data: nodeMetricsData } = useNodeMetrics();
 
-  // Nodes are cluster-scoped: subscribe with namespace "*" (no namespace filter).
+  // Nodes are cluster-scoped
   useEffect(() => {
     subscribe("nodes", "*");
     return () => unsubscribe("nodes", "*");
@@ -106,11 +96,26 @@ export default function NodesPanel() {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-0">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold">Nodes</h1>
-        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-mono text-muted-foreground">
+      <div
+        className="flex items-center gap-3 px-4 py-3"
+        style={{ borderBottom: "1px solid #1A1A1A", background: "#141417" }}
+      >
+        <div className="flex flex-col gap-0">
+          <span className="text-sm font-semibold leading-tight">Nodes</span>
+          <span style={{ fontSize: 11, color: "#6B6B73" }}>Cluster infrastructure</span>
+        </div>
+        <span
+          style={{
+            fontFamily: "ui-monospace, monospace",
+            fontSize: 11,
+            color: "#6B6B73",
+            background: "#1A1A1A",
+            padding: "2px 6px",
+            borderRadius: 4,
+          }}
+        >
           {countLabel}
         </span>
         {isLoading && (
@@ -121,139 +126,157 @@ export default function NodesPanel() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search nodes…"
-          className="ml-auto w-64 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="ml-auto w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
         />
       </div>
 
       {/* Error banner */}
       {error && (
-        <pre className="rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+        <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
           {error}
         </pre>
       )}
 
-      {/* Table */}
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-6" />
-            <TableHead>Name</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Role</TableHead>
-            <TableHead />
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {filtered.map((n) => {
-            const k = key(n);
-            const isOpen = expanded.has(k);
-            const ready = isReady(n);
-            const nodeRole = role(n);
-            const cordoned = isCordoned(n);
-            return (
-              <Fragment key={k}>
-                <TableRow>
-                  <TableCell className="align-top">
-                    <button
-                      type="button"
-                      onClick={() => toggleExpand(n)}
-                      aria-label={isOpen ? "Collapse" : "Expand"}
-                      aria-expanded={isOpen}
-                      className="text-muted-foreground hover:text-foreground"
-                    >
-                      {isOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-                    </button>
-                  </TableCell>
-                  <TableCell>
-                    <button
-                      type="button"
-                      onClick={() => toggleExpand(n)}
-                      className="font-mono hover:underline"
-                    >
-                      {n.metadata.name}
-                    </button>
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-                        ready
-                          ? "bg-green-500/15 text-green-600 dark:text-green-400"
-                          : "bg-red-500/15 text-red-600 dark:text-red-400"
-                      }`}
-                    >
-                      {ready ? "Ready" : "NotReady"}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className={`inline-block rounded-full px-2 py-0.5 text-xs font-mono uppercase ${
-                        nodeRole === "control-plane"
-                          ? "bg-primary/10 text-primary"
-                          : "bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      {nodeRole === "control-plane" ? "CONTROL-PLANE" : "WORKER"}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    {cordoned && (
-                      <span className="inline-block rounded-full bg-yellow-500/15 px-2 py-0.5 text-xs font-mono uppercase text-yellow-600 dark:text-yellow-400">
-                        CORDONED
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={<Button variant="ghost" size="icon-sm" aria-label="Node actions" title="Actions" />}
-                      >
-                        <MoreHorizontal />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent>
-                        {!cordoned && (
-                          <DropdownMenuItem onClick={() => cordon(n)}>Cordon node</DropdownMenuItem>
-                        )}
-                        {cordoned && (
-                          <DropdownMenuItem onClick={() => uncordon(n)}>Uncordon node</DropdownMenuItem>
-                        )}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          variant="destructive"
-                          onClick={() => drain(n)}
-                        >
-                          Drain node…
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem disabled>View YAML… (soon)</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
+      {/* Row list */}
+      <div className="flex flex-col gap-0.5 px-3 py-2">
+        {filtered.map((n) => {
+          const k = key(n);
+          const isOpen = expanded.has(k);
+          const ready = isReady(n);
+          const nodeRole = role(n);
+          const cordoned = isCordoned(n);
+          const nodeMetrics = nodeMetricsData?.available
+            ? nodeMetricsData.items.find((m) => m.name === n.metadata.name)
+            : undefined;
+          const cpuCap = formatCpu(capacityValue(n, "cpu"));
+          const memCap = formatBytes(capacityValue(n, "memory"));
 
-                {isOpen && (
-                  <TableRow>
-                    <TableCell colSpan={6} className="bg-muted/30">
-                      <NodeDetail
-                        node={n}
-                        nodeCpu={nodeMetricsData?.available ? nodeMetricsData.items.find((m) => m.name === n.metadata.name)?.cpu : undefined}
-                        nodeMem={nodeMetricsData?.available ? nodeMetricsData.items.find((m) => m.name === n.metadata.name)?.memory : undefined}
-                      />
-                    </TableCell>
-                  </TableRow>
-                )}
-              </Fragment>
-            );
-          })}
-        </TableBody>
-      </Table>
+          return (
+            <ListRow
+              key={k}
+              rowKey={k}
+              isOpen={isOpen}
+              onToggle={() => toggleExpand(n)}
+              expandedContent={
+                <NodeDetail
+                  node={n}
+                  nodeCpu={nodeMetrics?.cpu}
+                  nodeMem={nodeMetrics?.memory}
+                />
+              }
+            >
+              {/* Name */}
+              <button
+                type="button"
+                onClick={() => toggleExpand(n)}
+                className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
+              >
+                {n.metadata.name}
+              </button>
+
+              {/* Role — purple TagPill */}
+              <TagPill
+                label={nodeRole === "control-plane" ? "control-plane" : "worker"}
+                title={`Role: ${nodeRole}`}
+              />
+
+              {/* Spacer */}
+              <span className="flex-1" />
+
+              {/* Capacity — dim */}
+              {(cpuCap !== "—" || memCap !== "—") && (
+                <span
+                  style={{
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: 10,
+                    color: "#6B6B73",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                  }}
+                >
+                  {cpuCap !== "—" && `cpu:${cpuCap}`}
+                  {cpuCap !== "—" && memCap !== "—" && " "}
+                  {memCap !== "—" && `mem:${memCap}`}
+                </span>
+              )}
+
+              {/* Live usage from metrics-server */}
+              {nodeMetrics !== undefined && (
+                <span
+                  style={{
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: 10,
+                    color: "#A1A1AA",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                  }}
+                >
+                  {nodeMetrics.cpu !== undefined && `${nodeMetrics.cpu}m`}
+                  {nodeMetrics.cpu !== undefined && nodeMetrics.memory !== undefined && " "}
+                  {nodeMetrics.memory !== undefined && `${nodeMetrics.memory}Mi`}
+                </span>
+              )}
+
+              {/* Cordoned badge */}
+              {cordoned && (
+                <StatusBadge label="Cordoned" variant="pending" />
+              )}
+
+              {/* Ready badge */}
+              <StatusBadge
+                label={ready ? "Ready" : "NotReady"}
+                variant={ready ? "healthy" : "error"}
+              />
+
+              {/* Action strip — Errors / Logs / Explain + Cordon/Uncordon + Drain */}
+              <ActionButtonStrip
+                onErrors={(e) => {
+                  e.stopPropagation();
+                  handoffToChat(buildHandoffPrompt("node", n.metadata.name, undefined, "Errors"));
+                }}
+                onLogs={(e) => {
+                  e.stopPropagation();
+                  handoffToChat(buildHandoffPrompt("node", n.metadata.name, undefined, "Logs"));
+                }}
+                onExplain={(e) => {
+                  e.stopPropagation();
+                  handoffToChat(buildHandoffPrompt("node", n.metadata.name, undefined, "Explain"));
+                }}
+                extra={[
+                  ...(cordoned
+                    ? [
+                        {
+                          label: "Uncordon",
+                          Icon: RotateCcw,
+                          onClick: (e: React.MouseEvent) => { e.stopPropagation(); uncordon(n); },
+                        },
+                      ]
+                    : [
+                        {
+                          label: "Cordon",
+                          Icon: Minus,
+                          onClick: (e: React.MouseEvent) => { e.stopPropagation(); cordon(n); },
+                        },
+                      ]),
+                  {
+                    label: "Drain",
+                    Icon: RotateCcw,
+                    onClick: (e) => { e.stopPropagation(); drain(n); },
+                    destructive: true,
+                  },
+                ]}
+              />
+            </ListRow>
+          );
+        })}
+      </div>
 
       {/* Empty / filtered-to-zero states */}
       {!isLoading && allNodes.length === 0 && (
-        <p className="px-2 py-4 text-sm text-muted-foreground">No nodes found</p>
+        <p className="px-4 py-4 text-sm text-muted-foreground">No nodes found</p>
       )}
       {!isLoading && allNodes.length > 0 && filtered.length === 0 && (
-        <p className="px-2 py-4 text-sm text-muted-foreground">No nodes match search</p>
+        <p className="px-4 py-4 text-sm text-muted-foreground">No nodes match search</p>
       )}
 
       <ConfirmSheet
@@ -265,16 +288,20 @@ export default function NodesPanel() {
   );
 }
 
-/** Expanded detail block for one node: System Info, Network & Storage, Pressure, Usage. */
+// ---------------------------------------------------------------------------
+// Expanded detail: System Info, Network & Storage, Live Usage, Pressure
+// ---------------------------------------------------------------------------
+
 function NodeDetail({ node, nodeCpu, nodeMem }: { node: Node; nodeCpu?: number; nodeMem?: number }) {
   const info = node.status?.nodeInfo;
   const pressure = pressureConditions(node);
+
   return (
-    <div className="space-y-3 px-2 py-3">
+    <div className="space-y-3">
       <div className="grid gap-4 md:grid-cols-2">
         {/* System Info */}
         <div className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
             System Info
           </h3>
           <dl className="space-y-1 text-xs">
@@ -286,9 +313,9 @@ function NodeDetail({ node, nodeCpu, nodeMem }: { node: Node; nodeCpu?: number; 
           </dl>
         </div>
 
-        {/* Network & Storage (capacity only — no usage metrics) */}
+        {/* Network & Storage */}
         <div className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
             Network &amp; Storage
           </h3>
           <dl className="space-y-1 text-xs">
@@ -305,16 +332,12 @@ function NodeDetail({ node, nodeCpu, nodeMem }: { node: Node; nodeCpu?: number; 
       {/* Live usage from metrics-server (optional) */}
       {(nodeCpu !== undefined || nodeMem !== undefined) && (
         <div className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
             Live Usage
           </h3>
           <dl className="space-y-1 text-xs">
-            {nodeCpu !== undefined && (
-              <Field label="CPU used" value={`${nodeCpu}m`} />
-            )}
-            {nodeMem !== undefined && (
-              <Field label="Mem used" value={`${nodeMem}Mi`} />
-            )}
+            {nodeCpu !== undefined && <Field label="CPU used" value={`${nodeCpu}m`} />}
+            {nodeMem !== undefined && <Field label="Mem used" value={`${nodeMem}Mi`} />}
           </dl>
         </div>
       )}
@@ -322,13 +345,19 @@ function NodeDetail({ node, nodeCpu, nodeMem }: { node: Node; nodeCpu?: number; 
       {/* Pressure conditions — only when active non-Ready conditions exist */}
       {pressure.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-yellow-600 dark:text-yellow-400">
+          <h3
+            className="text-[9px] font-semibold uppercase tracking-[0.05em]"
+            style={{ color: "#F59E0B" }}
+          >
             Pressure
           </h3>
           <ul className="space-y-1">
             {pressure.map((c) => (
               <li key={c.type} className="flex items-start gap-2 text-xs">
-                <span className="mt-1 inline-block size-2 shrink-0 rounded-full bg-yellow-500" />
+                <span
+                  className="mt-1 inline-block size-2 shrink-0 rounded-full"
+                  style={{ background: "#F59E0B" }}
+                />
                 <span className="font-mono font-medium">{c.type}</span>
                 {c.message && <span className="text-muted-foreground">{c.message}</span>}
               </li>

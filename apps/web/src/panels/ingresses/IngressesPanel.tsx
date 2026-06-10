@@ -1,15 +1,13 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
-import { LoaderCircle, ChevronRight, ChevronDown, Lock } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { LoaderCircle } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from "@/components/ui/table";
+import { handoffToChat } from "@/lib/chatHandoff";
+import { ListRow } from "@/panels/components/ListRow";
+import { TagPill } from "@/panels/components/TagPill";
+import { StatusBadge } from "@/panels/components/StatusBadge";
+import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
+import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import type { Ingress } from "./types";
 import {
   relativeAge,
@@ -23,17 +21,7 @@ import {
 } from "./ingressesDisplay";
 
 // ---------------------------------------------------------------------------
-// DEFERRED ACTIONS (docs/parity/ingresses.md §"Row Actions: NONE"). This is a
-// read-only panel. The following are intentionally NOT implemented and must
-// NOT be added without a new feature spec + infra:
-//   - Edit / Create / Delete ingress mutations (need ConfirmSheet wiring +
-//     server action routes + ingress form UI: class, routing rules, TLS,
-//     cert-manager — reuse the pods/nodes ConfirmSheet pattern later).
-//     Delete maps to action-block kind "deleteResource" with resourceKind
-//     "ingress": `kubectl delete ingress <name> -n <namespace>`.
-//   - Ask Claude handoff (needs an ingress-diagnostics context builder).
-//   - View YAML (needs a server YAML endpoint + viewer UI).
-//   - Cert-manager integration / automatic HTTPS (loads ClusterIssuers).
+// Read-only panel. Errors/Logs/Explain handoffs use handoffToChat.
 // ---------------------------------------------------------------------------
 
 export default function IngressesPanel() {
@@ -45,8 +33,6 @@ export default function IngressesPanel() {
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  // Subscribe to the ingresses watch for the active namespace (or all).
-  // Re-subscribes when the namespace filter changes.
   useEffect(() => {
     const ns = namespaceFilter ?? "*";
     subscribe("ingresses", ns);
@@ -75,12 +61,31 @@ export default function IngressesPanel() {
     });
   }
 
+  function askClaude(ing: Ingress, topic: "Errors" | "Logs" | "Explain") {
+    handoffToChat(buildHandoffPrompt("ingress", ing.metadata.name, ing.metadata.namespace, topic));
+  }
+
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-0">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold">Ingresses</h1>
-        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-mono text-muted-foreground">
+      <div
+        className="flex items-center gap-3 px-4 py-3"
+        style={{ borderBottom: "1px solid #1A1A1A", background: "#141417" }}
+      >
+        <div className="flex flex-col gap-0">
+          <span className="text-sm font-semibold leading-tight">Ingresses</span>
+          <span style={{ fontSize: 11, color: "#6B6B73" }}>HTTP routing &amp; TLS</span>
+        </div>
+        <span
+          style={{
+            fontFamily: "ui-monospace, monospace",
+            fontSize: 11,
+            color: "#6B6B73",
+            background: "#1A1A1A",
+            padding: "2px 6px",
+            borderRadius: 4,
+          }}
+        >
           {countLabel}
         </span>
         {isLoading && (
@@ -91,123 +96,138 @@ export default function IngressesPanel() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search ingresses…"
-          className="ml-auto w-64 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="ml-auto w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
         />
       </div>
 
       {/* Error banner */}
       {error && (
-        <pre className="rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+        <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
           {error}
         </pre>
       )}
 
-      {/* Table */}
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-6" />
-            <TableHead>Namespace</TableHead>
-            <TableHead>Name</TableHead>
-            <TableHead>Class</TableHead>
-            <TableHead>Hosts</TableHead>
-            <TableHead>TLS</TableHead>
-            <TableHead>External Address</TableHead>
-            <TableHead>Age</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {filtered.map((ing) => {
-            const uid = ing.metadata.uid;
-            const isOpen = expanded.has(uid);
-            const cls = className(ing);
-            const hostList = hosts(ing);
-            const tls = isTLS(ing);
-            const external = externalAddress(ing);
-            return (
-              <Fragment key={uid}>
-                <TableRow>
-                  <TableCell className="align-top">
-                    <button
-                      type="button"
-                      onClick={() => toggleExpand(uid)}
-                      aria-label={isOpen ? "Collapse" : "Expand"}
-                      aria-expanded={isOpen}
-                      className="text-muted-foreground hover:text-foreground"
-                    >
-                      {isOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-                    </button>
-                  </TableCell>
-                  <TableCell className="font-mono text-muted-foreground">
-                    {ing.metadata.namespace ?? "—"}
-                  </TableCell>
-                  <TableCell>
-                    <button
-                      type="button"
-                      onClick={() => toggleExpand(uid)}
-                      className="font-mono hover:underline"
-                    >
-                      {ing.metadata.name}
-                    </button>
-                  </TableCell>
-                  <TableCell>
-                    {cls === "—" ? (
-                      <span className="text-muted-foreground">—</span>
-                    ) : (
-                      <span className="inline-block rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                        {cls}
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell
-                    className="max-w-[18rem] truncate font-mono text-muted-foreground"
-                    title={hostList.join(", ") || undefined}
-                  >
-                    {hostList.length > 0 ? hostList.join(", ") : "—"}
-                  </TableCell>
-                  <TableCell>
-                    {tls ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                        <Lock className="size-3" />
-                        TLS
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell
-                    className="max-w-[16rem] truncate font-mono text-muted-foreground"
-                    title={external ?? undefined}
-                  >
-                    {external ?? "—"}
-                  </TableCell>
-                  <TableCell className="font-mono text-muted-foreground">
-                    {relativeAge(ing.metadata.creationTimestamp)}
-                  </TableCell>
-                </TableRow>
+      {/* Row list */}
+      <div className="flex flex-col gap-0.5 px-3 py-2">
+        {filtered.map((ing) => {
+          const uid = ing.metadata.uid;
+          const isOpen = expanded.has(uid);
+          const cls = className(ing);
+          const hostList = hosts(ing);
+          const tls = isTLS(ing);
+          const external = externalAddress(ing);
 
-                {isOpen && (
-                  <TableRow>
-                    <TableCell colSpan={8} className="bg-muted/30">
-                      <IngressDetail ingress={ing} />
-                    </TableCell>
-                  </TableRow>
-                )}
-              </Fragment>
-            );
-          })}
-        </TableBody>
-      </Table>
+          return (
+            <ListRow
+              key={uid}
+              rowKey={uid}
+              isOpen={isOpen}
+              onToggle={() => toggleExpand(uid)}
+              expandedContent={<IngressDetail ingress={ing} />}
+            >
+              {/* Name */}
+              <button
+                type="button"
+                onClick={() => toggleExpand(uid)}
+                className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
+              >
+                {ing.metadata.name}
+              </button>
+
+              {/* Namespace chip */}
+              <span
+                style={{
+                  fontFamily: "ui-monospace, monospace",
+                  fontSize: 10,
+                  color: "#6B6B73",
+                  background: "#050505",
+                  padding: "1px 5px",
+                  borderRadius: 4,
+                  border: "1px solid #1A1A1A",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {ing.metadata.namespace ?? "—"}
+              </span>
+
+              {/* Class — purple TagPill (only when set) */}
+              {cls !== "—" && <TagPill label={cls} />}
+
+              {/* Hosts — dim, truncated */}
+              {hostList.length > 0 && (
+                <span
+                  style={{
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: 10,
+                    color: "#A1A1AA",
+                    whiteSpace: "nowrap",
+                    flexShrink: 1,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    minWidth: 0,
+                  }}
+                  title={hostList.join(", ")}
+                >
+                  {hostList.join(", ")}
+                </span>
+              )}
+
+              {/* Spacer */}
+              <span className="flex-1" />
+
+              {/* TLS badge */}
+              <StatusBadge
+                label={tls ? "TLS" : "no TLS"}
+                variant={tls ? "healthy" : "neutral"}
+                title={tls ? "TLS enabled" : "No TLS configured"}
+              />
+
+              {/* External address — dim */}
+              {external && (
+                <span
+                  style={{
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: 10,
+                    color: "#A1A1AA",
+                    whiteSpace: "nowrap",
+                    flexShrink: 1,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    minWidth: 0,
+                    maxWidth: "12rem",
+                  }}
+                  title={external}
+                >
+                  {external}
+                </span>
+              )}
+
+              {/* Action strip — Errors / Logs / Explain */}
+              <ActionButtonStrip
+                onErrors={(e) => { e.stopPropagation(); askClaude(ing, "Errors"); }}
+                onLogs={(e) => { e.stopPropagation(); askClaude(ing, "Logs"); }}
+                onExplain={(e) => { e.stopPropagation(); askClaude(ing, "Explain"); }}
+              />
+            </ListRow>
+          );
+        })}
+      </div>
 
       {/* Empty / filtered-to-zero states */}
-      {!isLoading && filtered.length === 0 && (
-        <p className="px-2 py-4 text-sm text-muted-foreground">No ingresses found</p>
+      {!isLoading && allIngresses.length === 0 && (
+        <p className="px-4 py-4 text-sm text-muted-foreground">No ingresses found</p>
+      )}
+      {!isLoading && allIngresses.length > 0 && filtered.length === 0 && (
+        <p className="px-4 py-4 text-sm text-muted-foreground">No ingresses match search</p>
       )}
     </div>
   );
 }
 
-/** Expanded detail: ROUTES, TLS (if any), DETAILS (class + address). */
+// ---------------------------------------------------------------------------
+// Expanded detail: ROUTES, TLS (if any), DETAILS
+// ---------------------------------------------------------------------------
+
 function IngressDetail({ ingress }: { ingress: Ingress }) {
   const routes = flattenRoutes(ingress);
   const tlsEntries = ingress.spec?.tls ?? [];
@@ -215,10 +235,10 @@ function IngressDetail({ ingress }: { ingress: Ingress }) {
   const external = externalAddress(ingress);
 
   return (
-    <div className="space-y-3 px-2 py-3">
+    <div className="space-y-3">
       {/* ROUTES */}
       <div className="space-y-1">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
           Routes ({routes.length})
         </h3>
         {routes.length === 0 ? (
@@ -228,10 +248,10 @@ function IngressDetail({ ingress }: { ingress: Ingress }) {
             <tbody>
               {routes.map((r, i) => (
                 <tr key={`${r.host}-${r.path}-${i}`}>
-                  <td className="pr-4 text-muted-foreground">{r.host}</td>
+                  <td className="pr-4" style={{ color: "#6B6B73" }}>{r.host}</td>
                   <td className="pr-2">{r.path}</td>
-                  <td className="px-2 text-muted-foreground">→</td>
-                  <td>
+                  <td className="px-2" style={{ color: "#6B6B73" }}>→</td>
+                  <td style={{ color: "#A1A1AA" }}>
                     {r.service}
                     {r.port ? `:${r.port}` : ""}
                   </td>
@@ -245,10 +265,10 @@ function IngressDetail({ ingress }: { ingress: Ingress }) {
       {/* TLS (only when present) */}
       {tlsEntries.length > 0 && (
         <div className="space-y-1">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
             TLS
           </h3>
-          <ul className="space-y-0.5 text-xs font-mono">
+          <ul className="space-y-0.5 text-xs font-mono" style={{ color: "#A1A1AA" }}>
             {tlsEntries.map((t, i) => {
               const h = (t.hosts ?? []).join(", ") || "—";
               return (
@@ -263,14 +283,19 @@ function IngressDetail({ ingress }: { ingress: Ingress }) {
 
       {/* DETAILS: class + external address */}
       <div className="space-y-1">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
           Details
         </h3>
-        <dl className="grid grid-cols-[6rem_1fr] gap-x-4 gap-y-0.5 text-xs font-mono">
-          <dt className="text-muted-foreground">CLASS</dt>
-          <dd>{cls}</dd>
-          <dt className="text-muted-foreground">ADDRESS</dt>
-          <dd className="break-all">{external ?? "—"}</dd>
+        <dl
+          className="grid gap-x-4 gap-y-0.5 text-xs font-mono"
+          style={{ gridTemplateColumns: "6rem 1fr" }}
+        >
+          <dt style={{ color: "#6B6B73" }}>CLASS</dt>
+          <dd style={{ color: "#A1A1AA" }}>{cls}</dd>
+          <dt style={{ color: "#6B6B73" }}>ADDRESS</dt>
+          <dd className="break-all" style={{ color: "#A1A1AA" }}>{external ?? "—"}</dd>
+          <dt style={{ color: "#6B6B73" }}>AGE</dt>
+          <dd style={{ color: "#A1A1AA" }}>{relativeAge(ingress.metadata.creationTimestamp)} ago</dd>
         </dl>
       </div>
     </div>

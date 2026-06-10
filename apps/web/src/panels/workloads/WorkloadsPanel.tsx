@@ -1,23 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { LoaderCircle, MoreHorizontal } from "lucide-react";
+import {
+  LoaderCircle,
+  RefreshCw,
+  MoveVertical,
+  Trash2,
+  Play,
+  Pause,
+  Zap,
+} from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
+import { handoffToChat } from "@/lib/chatHandoff";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -27,19 +21,21 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
+import { ListRow } from "@/panels/components/ListRow";
+import { TagPill } from "@/panels/components/TagPill";
+import { StatusBadge } from "@/panels/components/StatusBadge";
+import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
+import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import type { ActionBlock } from "@/lib/api";
 import type { StatefulSet, DaemonSet, Job, CronJob, WorkloadKind } from "./types";
 import {
   relativeAge,
   readyFraction,
-  readyColorClass,
   statefulSetReady,
   statefulSetDesired,
   daemonSetReady,
   daemonSetDesired,
   jobPhase,
-  jobPhaseColorClass,
-  jobDuration,
   jobCompletionsLabel,
   lastScheduleAgo,
   cronJobActiveCount,
@@ -59,6 +55,19 @@ const PILL_LABEL: Record<WorkloadKind, string> = {
   cronjobs: "CronJobs",
 };
 
+/** Map job phase to StatusBadge variant. */
+function jobPhaseVariant(phase: string): "healthy" | "error" | "pending" | "neutral" {
+  switch (phase) {
+    case "Complete":
+    case "Running":
+      return "healthy";
+    case "Failed":
+      return "error";
+    default:
+      return "pending";
+  }
+}
+
 export default function WorkloadsPanel() {
   const resources = useCluster((s) => s.resources);
   const isLoading = useCluster((s) => s.isLoading);
@@ -68,11 +77,10 @@ export default function WorkloadsPanel() {
   const [search, setSearch] = useState("");
   const [activeKind, setActiveKind] = useState<WorkloadKind>("statefulsets");
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [scaleTarget, setScaleTarget] = useState<StatefulSet | null>(null);
   const [scaleValue, setScaleValue] = useState("1");
 
-  // Subscribe to all four watches for the active namespace (or all). Four
-  // subscribe calls on mount; four unsubscribe on unmount/namespace change.
   useEffect(() => {
     const ns = namespaceFilter ?? "*";
     subscribe("statefulsets", ns);
@@ -88,15 +96,11 @@ export default function WorkloadsPanel() {
   }, [namespaceFilter]);
 
   const statefulSets = useMemo(
-    () =>
-      sortWorkloads(
-        Object.values((resources["statefulsets"] ?? {}) as Record<string, StatefulSet>),
-      ),
+    () => sortWorkloads(Object.values((resources["statefulsets"] ?? {}) as Record<string, StatefulSet>)),
     [resources],
   );
   const daemonSets = useMemo(
-    () =>
-      sortWorkloads(Object.values((resources["daemonsets"] ?? {}) as Record<string, DaemonSet>)),
+    () => sortWorkloads(Object.values((resources["daemonsets"] ?? {}) as Record<string, DaemonSet>)),
     [resources],
   );
   const jobs = useMemo(
@@ -115,7 +119,6 @@ export default function WorkloadsPanel() {
     cronjobs: cronJobs.length,
   };
 
-  // --- Per-kind filtered lists --------------------------------------------
   const filteredStatefulSets = useMemo(
     () => statefulSets.filter((s) => matchesSearch(s.metadata.name, s.metadata.namespace, [], search)),
     [statefulSets, search],
@@ -125,15 +128,13 @@ export default function WorkloadsPanel() {
     [daemonSets, search],
   );
   const filteredJobs = useMemo(
-    () =>
-      jobs.filter((j) => matchesSearch(j.metadata.name, j.metadata.namespace, [jobPhase(j)], search)),
+    () => jobs.filter((j) => matchesSearch(j.metadata.name, j.metadata.namespace, [jobPhase(j)], search)),
     [jobs, search],
   );
   const filteredCronJobs = useMemo(
-    () =>
-      cronJobs.filter((c) =>
-        matchesSearch(c.metadata.name, c.metadata.namespace, [c.spec?.schedule], search),
-      ),
+    () => cronJobs.filter((c) =>
+      matchesSearch(c.metadata.name, c.metadata.namespace, [c.spec?.schedule], search),
+    ),
     [cronJobs, search],
   );
 
@@ -147,7 +148,28 @@ export default function WorkloadsPanel() {
           ? filteredJobs.length
           : filteredCronJobs.length;
 
-  // --- Action builders (mirror docs/parity/workloads.md §4) ---------------
+  // --- Expand/collapse -------------------------------------------------------
+
+  function rowKey(name: string, namespace?: string, uid?: string): string {
+    return uid || `${namespace ?? ""}/${name}`;
+  }
+
+  function toggleExpand(k: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
+  }
+
+  // --- Chat handoff ----------------------------------------------------------
+
+  function askClaude(kind: string, name: string, namespace: string | undefined, topic: "Errors" | "Logs" | "Explain") {
+    handoffToChat(buildHandoffPrompt(kind, name, namespace, topic));
+  }
+
+  // --- Action builders (mirror docs/parity/workloads.md §4) -----------------
 
   function restartStatefulSet(s: StatefulSet) {
     setPendingAction({
@@ -222,8 +244,6 @@ export default function WorkloadsPanel() {
   }
 
   function triggerCronJob(c: CronJob) {
-    // Generate the job name at click time so the confirm sheet shows the exact
-    // name that will be created.
     const jobName = generateTriggerJobName(c.metadata.name);
     setPendingAction({
       kind: "triggerCronJob",
@@ -267,11 +287,26 @@ export default function WorkloadsPanel() {
   const label = kindLabel(activeKind);
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-0">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold">Workloads</h1>
-        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-mono text-muted-foreground">
+      <div
+        className="flex items-center gap-3 px-4 py-3"
+        style={{ borderBottom: "1px solid #1A1A1A", background: "#141417" }}
+      >
+        <div className="flex flex-col gap-0">
+          <span className="text-sm font-semibold leading-tight">Workloads</span>
+          <span style={{ fontSize: 11, color: "#6B6B73" }}>StatefulSets · DaemonSets · Jobs</span>
+        </div>
+        <span
+          style={{
+            fontFamily: "ui-monospace, monospace",
+            fontSize: 11,
+            color: "#6B6B73",
+            background: "#1A1A1A",
+            padding: "2px 6px",
+            borderRadius: 4,
+          }}
+        >
           {filteredCount}
         </span>
         {isLoading && (
@@ -282,12 +317,15 @@ export default function WorkloadsPanel() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={`Search ${label}…`}
-          className="ml-auto w-64 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="ml-auto w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
         />
       </div>
 
-      {/* Kind toggle bar */}
-      <div className="flex items-center gap-1">
+      {/* Kind toggle pills */}
+      <div
+        className="flex items-center gap-1 px-4 py-2"
+        style={{ borderBottom: "1px solid #1A1A1A" }}
+      >
         {KINDS.map((k) => {
           const isActive = k === activeKind;
           return (
@@ -296,17 +334,24 @@ export default function WorkloadsPanel() {
               type="button"
               onClick={() => setActiveKind(k)}
               aria-pressed={isActive}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                isActive
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:bg-muted/70"
-              }`}
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors"
+              style={{
+                background: isActive ? "#A855F7" : "#1A1A1A",
+                color: isActive ? "#fff" : "#6B6B73",
+                border: "1px solid",
+                borderColor: isActive ? "#A855F7" : "#2A2A2A",
+              }}
             >
               {PILL_LABEL[k]}
               <span
-                className={`rounded-full px-1.5 text-[10px] font-mono ${
-                  isActive ? "bg-primary-foreground/20" : "bg-background/60"
-                }`}
+                style={{
+                  fontFamily: "ui-monospace, monospace",
+                  fontSize: 10,
+                  color: isActive ? "rgba(255,255,255,0.7)" : "#6B6B73",
+                  background: isActive ? "rgba(255,255,255,0.15)" : "#050505",
+                  padding: "0 4px",
+                  borderRadius: 3,
+                }}
               >
                 {counts[k]}
               </span>
@@ -317,268 +362,405 @@ export default function WorkloadsPanel() {
 
       {/* Error banner */}
       {error && (
-        <pre className="rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+        <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
           {error}
         </pre>
       )}
 
-      {/* Tables (one per kind, mutually exclusive) */}
-      {activeKind === "statefulsets" && (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Namespace</TableHead>
-              <TableHead>Ready</TableHead>
-              <TableHead>Age</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredStatefulSets.map((s) => {
-              const ready = statefulSetReady(s);
-              const desired = statefulSetDesired(s);
-              return (
-                <TableRow key={s.metadata.uid || `${s.metadata.namespace}/${s.metadata.name}`}>
-                  <TableCell className="font-mono">{s.metadata.name}</TableCell>
-                  <TableCell className="font-mono text-muted-foreground">
-                    {s.metadata.namespace ?? "default"}
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className={`inline-block rounded-full px-2 py-0.5 text-xs font-mono ${readyColorClass(ready, desired)}`}
-                    >
-                      {readyFraction(ready, desired)}
-                    </span>
-                  </TableCell>
-                  <TableCell className="font-mono text-muted-foreground">
-                    {relativeAge(s.metadata.creationTimestamp)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={<Button variant="ghost" size="icon-sm" aria-label="StatefulSet actions" title="Actions" />}
-                      >
-                        <MoreHorizontal />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent>
-                        <DropdownMenuItem onClick={() => restartStatefulSet(s)}>Restart…</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => openScale(s)}>Scale…</DropdownMenuItem>
-                        <DropdownMenuItem disabled>View YAML… (soon)</DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem variant="destructive" onClick={() => deleteStatefulSet(s)}>
-                          Delete StatefulSet
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      )}
+      {/* Row lists — one per kind, mutually exclusive */}
+      <div className="flex flex-col gap-0.5 px-3 py-2">
+        {/* StatefulSets */}
+        {activeKind === "statefulsets" &&
+          filteredStatefulSets.map((s) => {
+            const k = rowKey(s.metadata.name, s.metadata.namespace, s.metadata.uid);
+            const isOpen = expanded.has(k);
+            const ready = statefulSetReady(s);
+            const desired = statefulSetDesired(s);
+            const allReady = ready === desired;
 
-      {activeKind === "daemonsets" && (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Namespace</TableHead>
-              <TableHead>Ready</TableHead>
-              <TableHead>Age</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredDaemonSets.map((d) => {
-              const ready = daemonSetReady(d);
-              const desired = daemonSetDesired(d);
-              return (
-                <TableRow key={d.metadata.uid || `${d.metadata.namespace}/${d.metadata.name}`}>
-                  <TableCell className="font-mono">{d.metadata.name}</TableCell>
-                  <TableCell className="font-mono text-muted-foreground">
-                    {d.metadata.namespace ?? "default"}
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className={`inline-block rounded-full px-2 py-0.5 text-xs font-mono ${readyColorClass(ready, desired)}`}
-                    >
-                      {readyFraction(ready, desired)}
-                    </span>
-                  </TableCell>
-                  <TableCell className="font-mono text-muted-foreground">
-                    {relativeAge(d.metadata.creationTimestamp)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={<Button variant="ghost" size="icon-sm" aria-label="DaemonSet actions" title="Actions" />}
-                      >
-                        <MoreHorizontal />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent>
-                        <DropdownMenuItem onClick={() => restartDaemonSet(d)}>Restart…</DropdownMenuItem>
-                        <DropdownMenuItem disabled>View YAML… (soon)</DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem variant="destructive" onClick={() => deleteDaemonSet(d)}>
-                          Delete DaemonSet
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      )}
+            return (
+              <ListRow
+                key={k}
+                rowKey={k}
+                isOpen={isOpen}
+                onToggle={() => toggleExpand(k)}
+              >
+                {/* Name */}
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(k)}
+                  className="shrink-0 font-mono text-xs font-medium leading-none hover:underline"
+                  style={{ color: allReady ? "#10B981" : "#EF4444" }}
+                >
+                  {s.metadata.name}
+                </button>
 
-      {activeKind === "jobs" && (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Namespace</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Completions</TableHead>
-              <TableHead>Duration</TableHead>
-              <TableHead>Age</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredJobs.map((j) => {
-              const phase = jobPhase(j);
-              const duration = jobDuration(j);
-              return (
-                <TableRow key={j.metadata.uid || `${j.metadata.namespace}/${j.metadata.name}`}>
-                  <TableCell className="font-mono">{j.metadata.name}</TableCell>
-                  <TableCell className="font-mono text-muted-foreground">
-                    {j.metadata.namespace ?? "default"}
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${jobPhaseColorClass(phase)}`}
-                    >
-                      {phase}
-                    </span>
-                  </TableCell>
-                  <TableCell className="font-mono text-muted-foreground">
-                    {jobCompletionsLabel(j)}
-                  </TableCell>
-                  <TableCell className="font-mono text-muted-foreground">
-                    {duration ?? "—"}
-                  </TableCell>
-                  <TableCell className="font-mono text-muted-foreground">
-                    {relativeAge(j.metadata.creationTimestamp)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={<Button variant="ghost" size="icon-sm" aria-label="Job actions" title="Actions" />}
-                      >
-                        <MoreHorizontal />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent>
-                        <DropdownMenuItem disabled>View YAML… (soon)</DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem variant="destructive" onClick={() => deleteJob(j)}>
-                          Delete Job
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      )}
+                {/* Namespace chip */}
+                <span
+                  style={{
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: 10,
+                    color: "#6B6B73",
+                    background: "#050505",
+                    padding: "1px 5px",
+                    borderRadius: 4,
+                    border: "1px solid #1A1A1A",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {s.metadata.namespace ?? "default"}
+                </span>
 
-      {activeKind === "cronjobs" && (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Namespace</TableHead>
-              <TableHead>Schedule</TableHead>
-              <TableHead>State</TableHead>
-              <TableHead>Last Schedule</TableHead>
-              <TableHead>Age</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredCronJobs.map((c) => {
-              const suspended = isCronJobSuspended(c);
-              const active = cronJobActiveCount(c);
-              const lastSched = lastScheduleAgo(c);
-              return (
-                <TableRow key={c.metadata.uid || `${c.metadata.namespace}/${c.metadata.name}`}>
-                  <TableCell className="font-mono">{c.metadata.name}</TableCell>
-                  <TableCell className="font-mono text-muted-foreground">
-                    {c.metadata.namespace ?? "default"}
-                  </TableCell>
-                  <TableCell>
-                    <span className="inline-block rounded-full bg-primary/10 px-2 py-0.5 text-xs font-mono text-primary">
-                      {c.spec?.schedule ?? "—"}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1.5">
-                      {suspended && (
-                        <span className="inline-block rounded-full bg-yellow-500/15 px-2 py-0.5 text-xs font-medium text-yellow-600 dark:text-yellow-400">
-                          Suspended
-                        </span>
-                      )}
-                      {active > 0 && (
-                        <span className="font-mono text-xs text-muted-foreground">{active} active</span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-mono text-muted-foreground">
-                    {lastSched ?? "—"}
-                  </TableCell>
-                  <TableCell className="font-mono text-muted-foreground">
-                    {relativeAge(c.metadata.creationTimestamp)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={<Button variant="ghost" size="icon-sm" aria-label="CronJob actions" title="Actions" />}
-                      >
-                        <MoreHorizontal />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent>
-                        <DropdownMenuItem onClick={() => triggerCronJob(c)}>Trigger now…</DropdownMenuItem>
-                        {!suspended && (
-                          <DropdownMenuItem onClick={() => suspendCronJob(c)}>Suspend…</DropdownMenuItem>
-                        )}
-                        {suspended && (
-                          <DropdownMenuItem onClick={() => resumeCronJob(c)}>Resume…</DropdownMenuItem>
-                        )}
-                        <DropdownMenuItem disabled>View YAML… (soon)</DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem variant="destructive" onClick={() => deleteCronJob(c)}>
-                          Delete CronJob
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      )}
+                {/* Spacer */}
+                <span className="flex-1" />
+
+                {/* Age */}
+                <span
+                  style={{
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: 10,
+                    color: "#6B6B73",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                  }}
+                >
+                  {relativeAge(s.metadata.creationTimestamp)}
+                </span>
+
+                {/* Ready badge */}
+                <StatusBadge
+                  label={readyFraction(ready, desired)}
+                  variant={allReady ? "healthy" : "error"}
+                  title={`Ready: ${ready}/${desired}`}
+                />
+
+                {/* Actions */}
+                <ActionButtonStrip
+                  onErrors={(e) => { e.stopPropagation(); askClaude("statefulset", s.metadata.name, s.metadata.namespace, "Errors"); }}
+                  onLogs={(e) => { e.stopPropagation(); askClaude("statefulset", s.metadata.name, s.metadata.namespace, "Logs"); }}
+                  onExplain={(e) => { e.stopPropagation(); askClaude("statefulset", s.metadata.name, s.metadata.namespace, "Explain"); }}
+                  extra={[
+                    {
+                      label: "Restart",
+                      Icon: RefreshCw,
+                      onClick: (e) => { e.stopPropagation(); restartStatefulSet(s); },
+                    },
+                    {
+                      label: "Scale",
+                      Icon: MoveVertical,
+                      onClick: (e) => { e.stopPropagation(); openScale(s); },
+                    },
+                    {
+                      label: "Delete",
+                      Icon: Trash2,
+                      onClick: (e) => { e.stopPropagation(); deleteStatefulSet(s); },
+                      destructive: true,
+                    },
+                  ]}
+                />
+              </ListRow>
+            );
+          })}
+
+        {/* DaemonSets */}
+        {activeKind === "daemonsets" &&
+          filteredDaemonSets.map((d) => {
+            const k = rowKey(d.metadata.name, d.metadata.namespace, d.metadata.uid);
+            const isOpen = expanded.has(k);
+            const ready = daemonSetReady(d);
+            const desired = daemonSetDesired(d);
+            const allReady = ready === desired;
+
+            return (
+              <ListRow
+                key={k}
+                rowKey={k}
+                isOpen={isOpen}
+                onToggle={() => toggleExpand(k)}
+              >
+                {/* Name */}
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(k)}
+                  className="shrink-0 font-mono text-xs font-medium leading-none hover:underline"
+                  style={{ color: allReady ? "#10B981" : "#EF4444" }}
+                >
+                  {d.metadata.name}
+                </button>
+
+                {/* Namespace chip */}
+                <span
+                  style={{
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: 10,
+                    color: "#6B6B73",
+                    background: "#050505",
+                    padding: "1px 5px",
+                    borderRadius: 4,
+                    border: "1px solid #1A1A1A",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {d.metadata.namespace ?? "default"}
+                </span>
+
+                {/* Spacer */}
+                <span className="flex-1" />
+
+                {/* Age */}
+                <span
+                  style={{
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: 10,
+                    color: "#6B6B73",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                  }}
+                >
+                  {relativeAge(d.metadata.creationTimestamp)}
+                </span>
+
+                {/* Ready badge */}
+                <StatusBadge
+                  label={readyFraction(ready, desired)}
+                  variant={allReady ? "healthy" : "error"}
+                  title={`Ready: ${ready}/${desired}`}
+                />
+
+                {/* Actions */}
+                <ActionButtonStrip
+                  onErrors={(e) => { e.stopPropagation(); askClaude("daemonset", d.metadata.name, d.metadata.namespace, "Errors"); }}
+                  onLogs={(e) => { e.stopPropagation(); askClaude("daemonset", d.metadata.name, d.metadata.namespace, "Logs"); }}
+                  onExplain={(e) => { e.stopPropagation(); askClaude("daemonset", d.metadata.name, d.metadata.namespace, "Explain"); }}
+                  extra={[
+                    {
+                      label: "Restart",
+                      Icon: RefreshCw,
+                      onClick: (e) => { e.stopPropagation(); restartDaemonSet(d); },
+                    },
+                    {
+                      label: "Delete",
+                      Icon: Trash2,
+                      onClick: (e) => { e.stopPropagation(); deleteDaemonSet(d); },
+                      destructive: true,
+                    },
+                  ]}
+                />
+              </ListRow>
+            );
+          })}
+
+        {/* Jobs */}
+        {activeKind === "jobs" &&
+          filteredJobs.map((j) => {
+            const k = rowKey(j.metadata.name, j.metadata.namespace, j.metadata.uid);
+            const isOpen = expanded.has(k);
+            const phase = jobPhase(j);
+
+            return (
+              <ListRow
+                key={k}
+                rowKey={k}
+                isOpen={isOpen}
+                onToggle={() => toggleExpand(k)}
+              >
+                {/* Name */}
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(k)}
+                  className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
+                >
+                  {j.metadata.name}
+                </button>
+
+                {/* Namespace chip */}
+                <span
+                  style={{
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: 10,
+                    color: "#6B6B73",
+                    background: "#050505",
+                    padding: "1px 5px",
+                    borderRadius: 4,
+                    border: "1px solid #1A1A1A",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {j.metadata.namespace ?? "default"}
+                </span>
+
+                {/* Spacer */}
+                <span className="flex-1" />
+
+                {/* Age */}
+                <span
+                  style={{
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: 10,
+                    color: "#6B6B73",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                  }}
+                >
+                  {relativeAge(j.metadata.creationTimestamp)}
+                </span>
+
+                {/* Completions */}
+                <StatusBadge
+                  label={jobCompletionsLabel(j)}
+                  variant="neutral"
+                  title={`Completions: ${jobCompletionsLabel(j)}`}
+                />
+
+                {/* Phase badge */}
+                <StatusBadge
+                  label={phase}
+                  variant={jobPhaseVariant(phase)}
+                />
+
+                {/* Actions */}
+                <ActionButtonStrip
+                  onErrors={(e) => { e.stopPropagation(); askClaude("job", j.metadata.name, j.metadata.namespace, "Errors"); }}
+                  onLogs={(e) => { e.stopPropagation(); askClaude("job", j.metadata.name, j.metadata.namespace, "Logs"); }}
+                  onExplain={(e) => { e.stopPropagation(); askClaude("job", j.metadata.name, j.metadata.namespace, "Explain"); }}
+                  extra={[
+                    {
+                      label: "Delete",
+                      Icon: Trash2,
+                      onClick: (e) => { e.stopPropagation(); deleteJob(j); },
+                      destructive: true,
+                    },
+                  ]}
+                />
+              </ListRow>
+            );
+          })}
+
+        {/* CronJobs */}
+        {activeKind === "cronjobs" &&
+          filteredCronJobs.map((c) => {
+            const k = rowKey(c.metadata.name, c.metadata.namespace, c.metadata.uid);
+            const isOpen = expanded.has(k);
+            const suspended = isCronJobSuspended(c);
+            const active = cronJobActiveCount(c);
+            const lastSched = lastScheduleAgo(c);
+
+            return (
+              <ListRow
+                key={k}
+                rowKey={k}
+                isOpen={isOpen}
+                onToggle={() => toggleExpand(k)}
+              >
+                {/* Name */}
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(k)}
+                  className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
+                >
+                  {c.metadata.name}
+                </button>
+
+                {/* Namespace chip */}
+                <span
+                  style={{
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: 10,
+                    color: "#6B6B73",
+                    background: "#050505",
+                    padding: "1px 5px",
+                    borderRadius: 4,
+                    border: "1px solid #1A1A1A",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {c.metadata.namespace ?? "default"}
+                </span>
+
+                {/* Schedule — purple TagPill */}
+                {c.spec?.schedule && <TagPill label={c.spec.schedule} title="Schedule" />}
+
+                {/* Spacer */}
+                <span className="flex-1" />
+
+                {/* Last schedule */}
+                {lastSched && (
+                  <span
+                    style={{
+                      fontFamily: "ui-monospace, monospace",
+                      fontSize: 10,
+                      color: "#6B6B73",
+                      whiteSpace: "nowrap",
+                      flexShrink: 0,
+                    }}
+                    title="Last scheduled"
+                  >
+                    {lastSched}
+                  </span>
+                )}
+
+                {/* Active count */}
+                {active > 0 && (
+                  <StatusBadge
+                    label={`${active} active`}
+                    variant="healthy"
+                    title={`${active} active job(s)`}
+                  />
+                )}
+
+                {/* Suspended badge */}
+                {suspended && (
+                  <StatusBadge
+                    label="Suspended"
+                    variant="pending"
+                  />
+                )}
+
+                {/* Actions */}
+                <ActionButtonStrip
+                  onErrors={(e) => { e.stopPropagation(); askClaude("cronjob", c.metadata.name, c.metadata.namespace, "Errors"); }}
+                  onLogs={(e) => { e.stopPropagation(); askClaude("cronjob", c.metadata.name, c.metadata.namespace, "Logs"); }}
+                  onExplain={(e) => { e.stopPropagation(); askClaude("cronjob", c.metadata.name, c.metadata.namespace, "Explain"); }}
+                  extra={[
+                    {
+                      label: "Trigger",
+                      Icon: Zap,
+                      onClick: (e) => { e.stopPropagation(); triggerCronJob(c); },
+                    },
+                    ...(suspended
+                      ? [
+                          {
+                            label: "Resume",
+                            Icon: Play,
+                            onClick: (e: React.MouseEvent) => { e.stopPropagation(); resumeCronJob(c); },
+                          },
+                        ]
+                      : [
+                          {
+                            label: "Suspend",
+                            Icon: Pause,
+                            onClick: (e: React.MouseEvent) => { e.stopPropagation(); suspendCronJob(c); },
+                          },
+                        ]),
+                    {
+                      label: "Delete",
+                      Icon: Trash2,
+                      onClick: (e) => { e.stopPropagation(); deleteCronJob(c); },
+                      destructive: true,
+                    },
+                  ]}
+                />
+              </ListRow>
+            );
+          })}
+      </div>
 
       {/* Empty / filtered-to-zero states */}
       {!isLoading && totalForActive === 0 && (
-        <p className="px-2 py-4 text-sm text-muted-foreground">No {label} found</p>
+        <p className="px-4 py-4 text-sm text-muted-foreground">No {label} found</p>
       )}
       {!isLoading && totalForActive > 0 && filteredCount === 0 && (
-        <p className="px-2 py-4 text-sm text-muted-foreground">No {label} match search</p>
+        <p className="px-4 py-4 text-sm text-muted-foreground">No {label} match search</p>
       )}
 
       {/* Scale prompt (StatefulSet) */}
