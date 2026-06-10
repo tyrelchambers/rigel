@@ -19,7 +19,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
-import type { ActionBlock } from "@/lib/api";
+import { useNodeMetrics, type ActionBlock } from "@/lib/api";
 import type { Node } from "./types";
 import {
   isReady,
@@ -42,6 +42,8 @@ export default function NodesPanel() {
   const [search, setSearch] = useState("");
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const { data: nodeMetricsData } = useNodeMetrics();
 
   // Nodes are cluster-scoped: subscribe with namespace "*" (no namespace filter).
   useEffect(() => {
@@ -232,7 +234,11 @@ export default function NodesPanel() {
                 {isOpen && (
                   <TableRow>
                     <TableCell colSpan={6} className="bg-muted/30">
-                      <NodeDetail node={n} />
+                      <NodeDetail
+                        node={n}
+                        nodeCpu={nodeMetricsData?.available ? nodeMetricsData.items.find((m) => m.name === n.metadata.name)?.cpu : undefined}
+                        nodeMem={nodeMetricsData?.available ? nodeMetricsData.items.find((m) => m.name === n.metadata.name)?.memory : undefined}
+                      />
                     </TableCell>
                   </TableRow>
                 )}
@@ -259,8 +265,8 @@ export default function NodesPanel() {
   );
 }
 
-/** Expanded detail block for one node: System Info, Network & Storage, Pressure. */
-function NodeDetail({ node }: { node: Node }) {
+/** Expanded detail block for one node: System Info, Network & Storage, Pressure, Usage. */
+function NodeDetail({ node, nodeCpu, nodeMem }: { node: Node; nodeCpu?: number; nodeMem?: number }) {
   const info = node.status?.nodeInfo;
   const pressure = pressureConditions(node);
   return (
@@ -295,6 +301,23 @@ function NodeDetail({ node }: { node: Node }) {
           </dl>
         </div>
       </div>
+
+      {/* Live usage from metrics-server (optional) */}
+      {(nodeCpu !== undefined || nodeMem !== undefined) && (
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Live Usage
+          </h3>
+          <dl className="space-y-1 text-xs">
+            {nodeCpu !== undefined && (
+              <Field label="CPU used" value={`${nodeCpu}m`} />
+            )}
+            {nodeMem !== undefined && (
+              <Field label="Mem used" value={`${nodeMem}Mi`} />
+            )}
+          </dl>
+        </div>
+      )}
 
       {/* Pressure conditions — only when active non-Ready conditions exist */}
       {pressure.length > 0 && (

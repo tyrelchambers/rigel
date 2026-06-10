@@ -44,14 +44,14 @@ import {
 
 // ─── Panel metadata ───────────────────────────────────────────────────────────
 
-interface PanelMeta {
+export interface PanelMeta {
   route: string;
   title: string;
   subtitle: string;
   icon: LucideIcon;
 }
 
-const PANEL_META: Record<string, PanelMeta> = {
+export const PANEL_META: Record<string, PanelMeta> = {
   overview:     { route: "/overview",     title: "Overview",     subtitle: "Health at a glance",    icon: LayoutGrid },
   assistant:    { route: "/assistant",    title: "Assistant",    subtitle: "AI cluster operator",   icon: Sparkles },
   deployments:  { route: "/deployments",  title: "Deployments",  subtitle: "Rollouts & replicas",   icon: Layers },
@@ -77,12 +77,12 @@ const PANEL_META: Record<string, PanelMeta> = {
 
 // ─── Nav groups (mirrors PanelKind.navGroups) ─────────────────────────────────
 
-interface NavGroup {
+export interface NavGroup {
   title: string | null;
   panels: string[]; // panel keys
 }
 
-const NAV_GROUPS: NavGroup[] = [
+export const NAV_GROUPS: NavGroup[] = [
   { title: null, panels: ["overview", "assistant"] },
   { title: "Workloads", panels: ["deployments", "pods", "workloads", "rightsizing"] },
   { title: "Networking", panels: ["services", "ingresses"] },

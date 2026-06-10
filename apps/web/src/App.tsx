@@ -27,6 +27,7 @@ import { connectCluster } from "@/lib/ws";
 import NavStrip from "@/shell/NavStrip";
 import NamespaceBar from "@/shell/NamespaceBar";
 import StatusBar from "@/shell/StatusBar";
+import { CommandPalette, useCommandPalette } from "@/shell/CommandPalette";
 
 /** Wrapper for panels that need padding + vertical scroll. */
 function Padded({ children }: { children: React.ReactNode }) {
@@ -39,9 +40,11 @@ function Padded({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   useEffect(() => { connectCluster(); }, []);
+  const [paletteOpen, setPaletteOpen] = useCommandPalette();
 
   return (
     <div style={{ display: "flex", height: "100vh", background: "#0A0A0A" }}>
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       {/* ── Sidebar ──────────────────────────────────────────────────────── */}
       <NavStrip />
 

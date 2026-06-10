@@ -12,6 +12,8 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
+import { Sparkline } from "@/components/Sparkline";
+import { useMetricsHistory } from "@/lib/useMetricsHistory";
 import type { ActionBlock } from "@/lib/api";
 import type { Pod } from "./types";
 import {
@@ -31,6 +33,7 @@ export default function PodsPanel() {
 
   const [search, setSearch] = useState("");
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
+  const { available: metricsAvailable, history: metricsHistory } = useMetricsHistory();
 
   // Subscribe to the pods watch for the active namespace (or all namespaces).
   useEffect(() => {
@@ -99,6 +102,8 @@ export default function PodsPanel() {
             <TableHead>Status</TableHead>
             <TableHead>Ready</TableHead>
             <TableHead>Restarts</TableHead>
+            <TableHead>CPU</TableHead>
+            <TableHead>Memory</TableHead>
             <TableHead>Node</TableHead>
             <TableHead>Age</TableHead>
             <TableHead className="text-right">Actions</TableHead>
@@ -108,6 +113,8 @@ export default function PodsPanel() {
           {filtered.map((pod) => {
             const phase = pod.status?.phase;
             const restarts = restartCount(pod);
+            const podHistoryKey = `${pod.metadata.namespace ?? ""}/${pod.metadata.name}`;
+            const podMetrics = metricsAvailable ? metricsHistory.get(podHistoryKey) : undefined;
             return (
               <TableRow key={pod.metadata.uid || `${pod.metadata.namespace}/${pod.metadata.name}`}>
                 <TableCell className="font-mono text-muted-foreground">
@@ -130,6 +137,32 @@ export default function PodsPanel() {
                   className={`font-mono ${restarts > 0 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}
                 >
                   {restarts}
+                </TableCell>
+                {/* CPU sparkline + current value */}
+                <TableCell>
+                  {podMetrics && podMetrics.cpuSeries.length >= 2 ? (
+                    <div className="flex items-center gap-1.5">
+                      <Sparkline values={podMetrics.cpuSeries} color="#A855F7" width={48} height={16} />
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {podMetrics.cpuNow}m
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="font-mono text-xs text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                {/* Memory sparkline + current value */}
+                <TableCell>
+                  {podMetrics && podMetrics.memSeries.length >= 2 ? (
+                    <div className="flex items-center gap-1.5">
+                      <Sparkline values={podMetrics.memSeries} color="#22C55E" width={48} height={16} />
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {podMetrics.memNow}Mi
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="font-mono text-xs text-muted-foreground">—</span>
+                  )}
                 </TableCell>
                 <TableCell className="font-mono text-muted-foreground">
                   {pod.spec?.nodeName ?? "—"}

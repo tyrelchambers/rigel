@@ -304,6 +304,65 @@ export function usePurgeExecute() {
 }
 
 // ---------------------------------------------------------------------------
+// Metrics — GET /api/metrics/pods?namespace=<ns|*>
+//           GET /api/metrics/nodes
+// ---------------------------------------------------------------------------
+
+export interface MetricItem {
+  namespace?: string; // absent for nodes
+  name: string;
+  cpu: number; // millicores
+  memory: number; // MiB
+}
+
+export interface MetricsResponse {
+  available: boolean;
+  items: MetricItem[];
+}
+
+/** Fetch pod metrics for a namespace (or "*" for all namespaces). */
+export async function fetchPodMetrics(namespace: string): Promise<MetricsResponse> {
+  const res = await fetch(`/api/metrics/pods?namespace=${encodeURIComponent(namespace)}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? res.statusText);
+  }
+  return res.json() as Promise<MetricsResponse>;
+}
+
+/** Fetch node metrics. */
+export async function fetchNodeMetrics(): Promise<MetricsResponse> {
+  const res = await fetch("/api/metrics/nodes");
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? res.statusText);
+  }
+  return res.json() as Promise<MetricsResponse>;
+}
+
+/** TanStack Query hook: polls pod metrics for the given namespace every 5s. */
+export function usePodMetrics(namespace: string) {
+  return useQuery<MetricsResponse, Error>({
+    queryKey: ["metrics", "pods", namespace],
+    queryFn: () => fetchPodMetrics(namespace),
+    refetchInterval: 5_000,
+    staleTime: 5_000,
+    retry: false,
+  });
+}
+
+/** TanStack Query hook: polls node metrics every 5s. */
+export function useNodeMetrics() {
+  return useQuery<MetricsResponse, Error>({
+    queryKey: ["metrics", "nodes"],
+    queryFn: fetchNodeMetrics,
+    refetchInterval: 5_000,
+    staleTime: 5_000,
+    retry: false,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Signal bridge proxy — POST /api/signal (docs/parity/settings.md §7.1)
 // ---------------------------------------------------------------------------
 

@@ -27,7 +27,7 @@ export const useCluster = create<ClusterState>((set) => ({
   resources: {},
   isLoading: false,
   error: null,
-  namespaceFilter: "default",
+  namespaceFilter: null, // null = All namespaces (non-empty first view)
   setConnected: (connected) => set({ connected }),
   setLoading: (isLoading) => set({ isLoading }),
   setError: (error) => set({ error }),

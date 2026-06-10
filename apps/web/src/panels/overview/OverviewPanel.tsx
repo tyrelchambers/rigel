@@ -15,6 +15,7 @@ import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useNodeMetrics } from "@/lib/api";
 import { PurgePickerSheet } from "@/panels/purge/PurgePickerSheet";
 import { PurgeSheet } from "@/panels/purge/PurgeSheet";
 import type {
@@ -31,7 +32,6 @@ import {
   nodeReadyCount,
   nodePressureCount,
   clusterResourceTotals,
-  metricsAvailable,
   formatCpu,
   formatBytes,
 } from "./overviewDisplay";
@@ -102,16 +102,28 @@ export default function OverviewPanel() {
     () => sortEvents(Object.values((resources["events"] ?? {}) as Record<string, K8sEvent>)),
     [resources],
   );
-  // Optional metrics-server feed, keyed by node name. Not yet pushed by the
-  // server, so this is normally empty → the metrics fallback card renders.
-  const nodeMetrics = useMemo(
-    () => (resources["nodemetrics"] ?? {}) as Record<string, NodeMetrics>,
-    [resources],
-  );
+  // Fetch live node metrics from the metrics-server REST API.
+  const { data: nodeMetricsData } = useNodeMetrics();
+
+  // Build a nodeMetrics map keyed by node name, matching overviewDisplay expectations.
+  const nodeMetrics = useMemo<Record<string, NodeMetrics>>(() => {
+    if (!nodeMetricsData?.available || !nodeMetricsData.items) return {};
+    const map: Record<string, NodeMetrics> = {};
+    for (const item of nodeMetricsData.items) {
+      map[item.name] = {
+        metadata: { name: item.name },
+        usage: {
+          cpu: `${item.cpu}m`,
+          memory: `${item.memory}Mi`,
+        },
+      };
+    }
+    return map;
+  }, [nodeMetricsData]);
 
   // --- Derived card data ---------------------------------------------------
   const totals = useMemo(() => clusterResourceTotals(nodes, nodeMetrics), [nodes, nodeMetrics]);
-  const hasMetrics = metricsAvailable(nodeMetrics);
+  const hasMetrics = nodeMetricsData?.available === true && Object.keys(nodeMetrics).length > 0;
 
   const deployUnhealthy = unhealthyDeploymentCount(deployments);
   const phases = useMemo(() => phaseCounts(pods), [pods]);
