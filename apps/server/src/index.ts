@@ -4,6 +4,7 @@ import { kubectl } from "@helmsman/k8s/src/run";
 import { WatchManager } from "./watchManager";
 import { makeWsHandlers } from "./ws";
 import { buildCommand, PurgeActionError, type ActionBlock } from "./actions";
+import { applyManifest, installHelm, type HelmInstallRequest } from "./install";
 import { getPodMetrics, getNodeMetrics } from "./metrics";
 import { checkAuth } from "./auth";
 
@@ -106,6 +107,57 @@ const server = Bun.serve({
 
       // Execute mode: run kubectl and return the result
       const result = await kubectl(context, argv);
+      return Response.json(result);
+    }
+
+    // POST /api/apply — catalog wizard MANIFEST install. Feeds the multi-doc
+    // YAML to `kubectl apply -f -` via STDIN (never shell-interpolated).
+    // Returns { code, stdout, stderr }.
+    if (url.pathname === "/api/apply" && req.method === "POST") {
+      let body: { yaml?: string };
+      try {
+        body = (await req.json()) as { yaml?: string };
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      if (typeof body.yaml !== "string" || body.yaml.trim() === "") {
+        return Response.json({ error: "missing yaml" }, { status: 422 });
+      }
+      const result = await applyManifest(context, body.yaml);
+      return Response.json(result);
+    }
+
+    // POST /api/helm — catalog wizard HELM install. Runs repo add (idempotent)
+    // → repo update → upgrade --install in sequence. Returns { code, stdout, stderr }.
+    if (url.pathname === "/api/helm" && req.method === "POST") {
+      let body: Partial<HelmInstallRequest>;
+      try {
+        body = (await req.json()) as Partial<HelmInstallRequest>;
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      if (
+        !body.repoName ||
+        !body.repoURL ||
+        !body.chart ||
+        !body.releaseName ||
+        !body.namespace ||
+        typeof body.values !== "string"
+      ) {
+        return Response.json(
+          { error: "missing required helm fields (repoName, repoURL, chart, releaseName, namespace, values)" },
+          { status: 422 },
+        );
+      }
+      const result = await installHelm(context, {
+        repoName: body.repoName,
+        repoURL: body.repoURL,
+        chart: body.chart,
+        version: body.version ?? null,
+        releaseName: body.releaseName,
+        namespace: body.namespace,
+        values: body.values,
+      });
       return Response.json(result);
     }
 
