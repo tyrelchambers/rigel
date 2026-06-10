@@ -15,8 +15,8 @@
  * The chat engine (state, WS, event loop) is reused wholesale from
  * ChatPanel.tsx — only the outer shell chrome and layout differ.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Sparkles, Copy, SquarePen, Clock, ArrowDown } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Sparkles, Copy, SquarePen, Clock, ArrowDown, Box, Layers, Server, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { PurgeSheet } from "@/panels/purge/PurgeSheet";
@@ -27,6 +27,29 @@ import { registerChatHandoff } from "@/lib/chatHandoff";
 import { useCluster } from "@/store/cluster";
 import { MessageBubble } from "@/panels/chat/MessageBubble";
 import { ThinkingPane } from "@/panels/chat/ThinkingPane";
+import {
+  CLAUDE_MODELS,
+  CLAUDE_EFFORTS,
+  loadModelConfig,
+  saveModelConfig,
+  modelLabel,
+  type ModelConfig,
+} from "@/panels/chat/composerModel";
+import {
+  CHAT_COMMANDS,
+  commandDisplay,
+  commandInsertion,
+  filterCommands,
+  type ChatCommandSpec,
+} from "@/panels/chat/chatCommands";
+import {
+  buildMentions,
+  filterMentions,
+  MENTION_KIND_LABEL,
+  type MentionCandidate,
+  type MentionKind,
+} from "@/panels/chat/mentions";
+import { loadChatHistory, saveChatHistory, clearChatHistory } from "@/panels/chat/chatHistory";
 import {
   appendTextDelta,
   stampThinking,
@@ -123,10 +146,17 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   }, []);
 
   // ── Chat state (mirrors ChatPanel.tsx) ────────────────────────────────────
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // Lazy init restores the most recent conversation from localStorage so a page
+  // refresh keeps the transcript (the slot is written before first render, so
+  // the persist effect below never wipes it on mount).
+  const [messages, setMessages] = useState<ChatMessage[]>(
+    () => loadChatHistory()?.messages ?? [],
+  );
   const [inputText, setInputText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(
+    () => loadChatHistory()?.sessionId ?? null,
+  );
   const [liveThinking, setLiveThinking] = useState("");
   const [isThinking, setIsThinking] = useState(false);
   const [turnStartedAt, setTurnStartedAt] = useState<Date | null>(null);
@@ -135,6 +165,23 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   const [autoFocusComposer, setAutoFocusComposer] = useState(false);
 
   const connected = useCluster((s) => s.connected);
+  const resources = useCluster((s) => s.resources);
+
+  // Model/effort selection (persisted) + @-mention candidates from the store.
+  const [modelConfig, setModelConfigState] = useState<ModelConfig>(() => loadModelConfig());
+  const setModelConfig = useCallback((c: ModelConfig) => {
+    setModelConfigState(c);
+    saveModelConfig(c);
+  }, []);
+  const modelConfigRef = useRef<ModelConfig>(modelConfig);
+  modelConfigRef.current = modelConfig;
+  const mentionCandidates = useMemo(() => buildMentions(resources), [resources]);
+
+  // Persist the conversation once each turn settles (not mid-stream, to avoid a
+  // write per token). Runs on mount too, re-saving the restored transcript.
+  useEffect(() => {
+    if (!isStreaming) saveChatHistory(messages, sessionId);
+  }, [messages, isStreaming, sessionId]);
 
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -167,7 +214,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
       turnStartedAtRef.current = start;
       setIsAtBottom(true);
       isAtBottomRef.current = true;
-      sendChat(prompt);
+      sendChat(prompt, modelConfigRef.current);
     };
     if (handleRef) handleRef.current = { send: submit };
     registerChatHandoff(submit);
@@ -287,6 +334,22 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   function handleSend() {
     const text = inputText.trim();
     if (!text || usageLimit) return;
+
+    // Client-handled slash commands (mirror SlashCommand): these never reach the
+    // model. Unknown / arg-bearing commands fall through to Claude as a prompt.
+    if (text === "/clear") {
+      startNewChat();
+      return;
+    }
+    if (text === "/help" || text === "/?") {
+      setInputText("");
+      const help =
+        "Available commands:\n" +
+        CHAT_COMMANDS.map((c) => `- \`${commandDisplay(c)}\` — ${c.description}`).join("\n");
+      setMessages((prev) => [...prev, makeMessage("system", help)]);
+      return;
+    }
+
     setMessages((prev) => [...prev, makeMessage("user", text)]);
     setInputText("");
     setIsStreaming(true);
@@ -298,7 +361,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     turnStartedAtRef.current = start;
     setIsAtBottom(true);
     isAtBottomRef.current = true;
-    sendChat(text);
+    sendChat(text, modelConfig);
   }
 
   function handleStop() {
@@ -311,6 +374,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   }
 
   function startNewChat() {
+    clearChatHistory();
     setMessages([]);
     setSessionId(null);
     setUsageLimit(null);
@@ -465,6 +529,9 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
               overflowY: "auto",
               overflowX: "hidden",
               padding: "14px 14px 0",
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
             }}
           >
             {messages.map((m) => (
@@ -508,6 +575,9 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
           onStop={handleStop}
           isStreaming={isStreaming}
           disabled={!connected || !!usageLimit}
+          modelConfig={modelConfig}
+          onModelConfig={setModelConfig}
+          mentionCandidates={mentionCandidates}
         />
 
         <ConfirmSheet
@@ -559,12 +629,27 @@ interface PaneComposerProps {
   onStop: () => void;
   isStreaming: boolean;
   disabled?: boolean;
+  modelConfig: ModelConfig;
+  onModelConfig: (c: ModelConfig) => void;
+  mentionCandidates: MentionCandidate[];
 }
+
+type ComposerTrigger =
+  | { kind: "command"; query: string; items: ChatCommandSpec[] }
+  | { kind: "mention"; query: string; start: number; items: MentionCandidate[] };
+
+const MENTION_ICON: Record<MentionKind, typeof Box> = {
+  pod: Box,
+  deployment: Layers,
+  node: Server,
+};
 
 /**
  * Composer chrome matching ChatComposer.swift:
  * - Rounded container with a multiline field.
- * - Footer row: model label + "</> commands" chip on the left; send/stop on the right.
+ * - Footer: model picker + "</> commands" chip on the left; send/stop on the right.
+ * - `/` opens a command typeahead; `@` opens a resource mention picker
+ *   (↑/↓ to move, Enter/Tab to pick, Esc to dismiss).
  */
 function PaneComposer({
   ref,
@@ -574,9 +659,16 @@ function PaneComposer({
   onStop,
   isStreaming,
   disabled,
+  modelConfig,
+  onModelConfig,
+  mentionCandidates,
 }: PaneComposerProps) {
   const internalRef = useRef<HTMLTextAreaElement>(null);
   const textareaRef = (ref ?? internalRef) as React.RefObject<HTMLTextAreaElement>;
+  const [caret, setCaret] = useState(0);
+  const [sel, setSel] = useState(0);
+  const [dismissed, setDismissed] = useState(false);
+  const [modelOpen, setModelOpen] = useState(false);
 
   // Auto-grow textarea
   useEffect(() => {
@@ -587,7 +679,92 @@ function PaneComposer({
     el.style.height = `${Math.min(el.scrollHeight, max)}px`;
   }, [value, textareaRef]);
 
+  // Active "/" (leading) or "@<token>" trigger from the text up to the caret.
+  const trigger = useMemo<ComposerTrigger | null>(() => {
+    const before = value.slice(0, caret);
+    if (value.startsWith("/") && !/\s/.test(before)) {
+      const query = before.slice(1);
+      const items = filterCommands(query);
+      return items.length ? { kind: "command", query, items } : null;
+    }
+    const at = before.lastIndexOf("@");
+    if (at >= 0) {
+      const prevOk = at === 0 || /\s/.test(before[at - 1]);
+      const frag = before.slice(at + 1);
+      if (prevOk && !/\s/.test(frag)) {
+        const items = filterMentions(mentionCandidates, frag);
+        return items.length ? { kind: "mention", query: frag, start: at, items } : null;
+      }
+    }
+    return null;
+  }, [value, caret, mentionCandidates]);
+
+  const triggerKey = trigger ? `${trigger.kind}:${trigger.query}` : "";
+  useEffect(() => {
+    setSel(0);
+    setDismissed(false);
+  }, [triggerKey]);
+
+  const popoverOpen = trigger !== null && !dismissed;
+
+  function syncCaret() {
+    const el = textareaRef.current;
+    if (el) setCaret(el.selectionStart ?? 0);
+  }
+  function setCaretAt(p: number) {
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (el) {
+        el.focus();
+        el.setSelectionRange(p, p);
+        setCaret(p);
+      }
+    });
+  }
+
+  function pickCommand(spec: ChatCommandSpec) {
+    const sp = value.indexOf(" ");
+    const rest = sp >= 0 ? value.slice(sp + 1) : "";
+    const ins = commandInsertion(spec);
+    onChange(ins + rest);
+    setCaretAt(ins.length);
+  }
+  function pickMention(c: MentionCandidate) {
+    if (trigger?.kind !== "mention") return;
+    const ins = `${c.name} `;
+    onChange(value.slice(0, trigger.start) + ins + value.slice(caret));
+    setCaretAt(trigger.start + ins.length);
+  }
+  function selectCurrent() {
+    if (!trigger) return;
+    if (trigger.kind === "command") pickCommand(trigger.items[sel]);
+    else pickMention(trigger.items[sel]);
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (popoverOpen && trigger) {
+      const n = trigger.items.length;
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSel((s) => (s + 1) % n);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSel((s) => (s - 1 + n) % n);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        selectCurrent();
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setDismissed(true);
+        return;
+      }
+    }
     if (e.key === "Escape") {
       if (isStreaming) {
         e.preventDefault();
@@ -611,87 +788,136 @@ function PaneComposer({
         borderTop: "1px solid #1A1A1A",
         background: "#141417",
         flexShrink: 0,
+        position: "relative",
       }}
     >
+      {/* `/` command or `@` mention popover (above the input) */}
+      {popoverOpen && trigger && (
+        <div style={popoverStyle}>
+          {trigger.kind === "command"
+            ? trigger.items.map((c, i) => (
+                <button
+                  key={c.name}
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    pickCommand(c);
+                  }}
+                  onMouseEnter={() => setSel(i)}
+                  style={popRowStyle(i === sel)}
+                >
+                  <span style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 12, fontWeight: 600, color: "#FFFFFF" }}>
+                    {commandDisplay(c)}
+                  </span>
+                  <span
+                    style={{
+                      marginLeft: "auto",
+                      fontSize: 11,
+                      color: i === sel ? "rgba(255,255,255,0.8)" : "#6B6B73",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {c.description}
+                  </span>
+                </button>
+              ))
+            : trigger.items.map((c, i) => {
+                const Icon = MENTION_ICON[c.kind];
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      pickMention(c);
+                    }}
+                    onMouseEnter={() => setSel(i)}
+                    style={popRowStyle(i === sel)}
+                  >
+                    <Icon style={{ width: 12, height: 12, color: i === sel ? "#FFFFFF" : "#A1A1AA", flexShrink: 0 }} />
+                    <span
+                      style={{
+                        fontFamily: "var(--font-mono, monospace)",
+                        fontSize: 12,
+                        fontWeight: 500,
+                        color: "#FFFFFF",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {c.name}
+                    </span>
+                    {c.namespace && (
+                      <span style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 10, color: i === sel ? "rgba(255,255,255,0.7)" : "#6B6B73", whiteSpace: "nowrap" }}>
+                        {c.namespace}
+                      </span>
+                    )}
+                    <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono, monospace)", fontSize: 9, fontWeight: 600, letterSpacing: 0.5, color: i === sel ? "rgba(255,255,255,0.7)" : "#6B6B73" }}>
+                      {MENTION_KIND_LABEL[c.kind]}
+                    </span>
+                  </button>
+                );
+              })}
+        </div>
+      )}
+
       {/* Rounded container */}
-      <div
-        style={{
-          background: "#0A0A0C",
-          borderRadius: 10,
-          border: "1px solid #2A2A2A",
-          overflow: "hidden",
-        }}
-      >
+      <div style={{ background: "#0A0A0C", borderRadius: 10, border: "1px solid #2A2A2A", overflow: "hidden" }}>
         <textarea
           ref={textareaRef}
           value={value}
           rows={1}
           disabled={disabled}
           placeholder={PLACEHOLDER}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={handleKeyDown}
-          style={{
-            display: "block",
-            width: "100%",
-            background: "transparent",
-            border: "none",
-            outline: "none",
-            resize: "none",
-            color: "#FFFFFF",
-            fontSize: 13,
-            lineHeight: `${LINE_HEIGHT}px`,
-            maxHeight: LINE_HEIGHT * MAX_LINES,
-            padding: "10px 10px 0",
-            fontFamily: "var(--font-geist, system-ui, sans-serif)",
+          onChange={(e) => {
+            onChange(e.target.value);
+            setCaret(e.target.selectionStart ?? 0);
           }}
+          onKeyUp={syncCaret}
+          onClick={syncCaret}
+          onSelect={syncCaret}
+          onKeyDown={handleKeyDown}
+          style={textareaStyle}
         />
         {/* Control row */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "6px 8px 8px",
-          }}
-        >
-          {/* Model label */}
-          <span
-            style={{
-              fontSize: 10,
-              color: "#6B6B73",
-              background: "#141417",
-              padding: "2px 7px",
-              borderRadius: 100,
-              border: "1px solid #2A2A2A",
-              whiteSpace: "nowrap",
-              fontWeight: 500,
-            }}
-          >
-            Opus 4.8 · High
-          </span>
-          {/* Commands pill */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px 8px", position: "relative" }}>
+          {/* Model picker */}
+          <button type="button" onClick={() => setModelOpen((o) => !o)} title="Choose model and reasoning effort" style={{ ...pillStyle, cursor: "pointer" }}>
+            {modelLabel(modelConfig)}
+          </button>
+          {modelOpen && (
+            <>
+              <div style={{ position: "fixed", inset: 0, zIndex: 25 }} onClick={() => setModelOpen(false)} />
+              <div style={modelMenuStyle}>
+                <div style={modelSectionLabel}>MODEL</div>
+                {CLAUDE_MODELS.map((m) => (
+                  <button key={m.id} type="button" onClick={() => onModelConfig({ ...modelConfig, model: m.id })} style={modelRowStyle(modelConfig.model === m.id)}>
+                    {modelConfig.model === m.id ? <Check style={checkStyle} /> : <span style={{ width: 12 }} />}
+                    {m.name}
+                  </button>
+                ))}
+                <div style={{ ...modelSectionLabel, marginTop: 6 }}>EFFORT</div>
+                {CLAUDE_EFFORTS.map((ef) => (
+                  <button key={ef.id} type="button" onClick={() => onModelConfig({ ...modelConfig, effort: ef.id })} style={modelRowStyle(modelConfig.effort === ef.id)}>
+                    {modelConfig.effort === ef.id ? <Check style={checkStyle} /> : <span style={{ width: 12 }} />}
+                    {ef.name}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Commands pill — opens the / popover */}
           <button
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-              fontSize: 10,
-              color: "#6B6B73",
-              background: "#141417",
-              padding: "2px 7px",
-              borderRadius: 100,
-              border: "1px solid #2A2A2A",
-              cursor: "pointer",
-              fontWeight: 500,
-              whiteSpace: "nowrap",
-            }}
+            type="button"
+            style={{ ...pillStyle, display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}
             title="Browse chat commands"
             onClick={() => {
-              // Insert "/" to open command hints — same as picking from the menu
-              if (textareaRef.current && !value.startsWith("/")) {
-                onChange("/" + value);
-                textareaRef.current.focus();
-              }
+              if (!value.startsWith("/")) onChange("/" + value);
+              setCaretAt(1);
             }}
           >
             <span style={{ fontFamily: "monospace", fontSize: 9 }}>&lt;/&gt;</span>
@@ -702,21 +928,11 @@ function PaneComposer({
 
           {/* Send / Stop */}
           {isStreaming ? (
-            <button
-              onClick={onStop}
-              aria-label="Stop"
-              style={sendBtnStyle("#EF4444")}
-            >
+            <button onClick={onStop} aria-label="Stop" style={sendBtnStyle("#EF4444")}>
               <span style={{ display: "block", width: 10, height: 10, background: "#fff", borderRadius: 1 }} />
             </button>
           ) : (
-            <button
-              onClick={onSend}
-              disabled={!canSend}
-              aria-label="Send"
-              style={sendBtnStyle(canSend ? "#A855F7" : "#2A2A2A")}
-            >
-              {/* Arrow-up icon */}
+            <button onClick={onSend} disabled={!canSend} aria-label="Send" style={sendBtnStyle(canSend ? "#A855F7" : "#2A2A2A")}>
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ display: "block" }}>
                 <path d="M6 10V2M6 2L2 6M6 2l4 4" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
@@ -727,6 +943,106 @@ function PaneComposer({
     </div>
   );
 }
+
+const textareaStyle: React.CSSProperties = {
+  display: "block",
+  width: "100%",
+  background: "transparent",
+  border: "none",
+  outline: "none",
+  resize: "none",
+  color: "#FFFFFF",
+  fontSize: 13,
+  lineHeight: `${LINE_HEIGHT}px`,
+  maxHeight: LINE_HEIGHT * MAX_LINES,
+  padding: "10px 10px 0",
+  fontFamily: "var(--font-geist, system-ui, sans-serif)",
+};
+
+const pillStyle: React.CSSProperties = {
+  fontSize: 10,
+  color: "#6B6B73",
+  background: "#141417",
+  padding: "2px 7px",
+  borderRadius: 100,
+  border: "1px solid #2A2A2A",
+  whiteSpace: "nowrap",
+  fontWeight: 500,
+};
+
+const popoverStyle: React.CSSProperties = {
+  position: "absolute",
+  left: 12,
+  right: 12,
+  bottom: "100%",
+  marginBottom: 6,
+  background: "#141417",
+  border: "1px solid #2A2A2A",
+  borderRadius: 8,
+  boxShadow: "0 12px 32px rgba(0,0,0,0.5)",
+  overflow: "hidden",
+  zIndex: 30,
+  padding: 4,
+  maxHeight: 280,
+  overflowY: "auto",
+};
+
+function popRowStyle(active: boolean): React.CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    width: "100%",
+    textAlign: "left",
+    padding: "6px 8px",
+    borderRadius: 6,
+    border: "none",
+    cursor: "pointer",
+    background: active ? "#A855F7" : "transparent",
+  };
+}
+
+const modelMenuStyle: React.CSSProperties = {
+  position: "absolute",
+  left: 8,
+  bottom: "100%",
+  marginBottom: 6,
+  zIndex: 30,
+  background: "#141417",
+  border: "1px solid #2A2A2A",
+  borderRadius: 8,
+  boxShadow: "0 12px 32px rgba(0,0,0,0.5)",
+  padding: 6,
+  width: 200,
+};
+
+const modelSectionLabel: React.CSSProperties = {
+  fontSize: 9,
+  fontWeight: 600,
+  letterSpacing: 0.5,
+  color: "#6B6B73",
+  padding: "3px 8px 2px",
+};
+
+function modelRowStyle(active: boolean): React.CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    width: "100%",
+    textAlign: "left",
+    padding: "5px 8px",
+    borderRadius: 6,
+    border: "none",
+    cursor: "pointer",
+    background: active ? "#1C1C22" : "transparent",
+    color: active ? "#FFFFFF" : "#A1A1AA",
+    fontSize: 12,
+    fontWeight: 500,
+  };
+}
+
+const checkStyle: React.CSSProperties = { width: 12, height: 12, color: "#A855F7", flexShrink: 0 };
 
 function sendBtnStyle(bg: string): React.CSSProperties {
   return {

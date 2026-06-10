@@ -9,6 +9,12 @@ services:
       - KUBECONFIG=/kube/config
       # Optional: set HELMSMAN_TOKEN in your shell to require a bearer token on /api + /ws.
       - HELMSMAN_TOKEN=${HELMSMAN_TOKEN:-}
+      # Claude subscription auth for the chat copilot. macOS keeps its OAuth
+      # creds in the Keychain (not ~/.claude), so the bind-mount below can't
+      # carry them in. Instead run `claude setup-token` and put the token in a
+      # .env file next to this compose file (CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat…),
+      # which docker compose auto-loads. The `claude` CLI reads this env var.
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
     volumes:
       # Your kubeconfig (read-only). The cluster's API server URL in this file
       # must be reachable from inside the container — see README "Run in Docker".

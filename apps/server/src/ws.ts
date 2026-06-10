@@ -64,9 +64,11 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null)
         chatAborts.get(ws)?.abort();
         const ac = new AbortController();
         chatAborts.set(ws, ac);
+        const model = typeof m.model === "string" ? m.model : undefined;
+        const effort = typeof m.effort === "string" ? m.effort : undefined;
         (async () => {
           try {
-            for await (const event of runClaude(m.prompt, context, ac.signal)) {
+            for await (const event of runClaude(m.prompt, context, ac.signal, { model, effort })) {
               ws.send(JSON.stringify({ type: "chat", event }));
             }
           } catch {

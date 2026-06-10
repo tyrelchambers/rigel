@@ -28,3 +28,6 @@ node_modules/
 # build output
 dist/
 **/dist/
+
+# Local secrets for docker compose (Claude OAuth token, etc.)
+.env

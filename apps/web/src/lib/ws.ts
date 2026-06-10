@@ -56,9 +56,9 @@ export function onLogLine(callback: LogCallback): () => void {
   };
 }
 
-/** Send a chat prompt to the server. {type:"chat", prompt}. */
-export function sendChat(prompt: string): void {
-  rawSend(JSON.stringify({ type: "chat", prompt }));
+/** Send a chat prompt to the server. {type:"chat", prompt, model?, effort?}. */
+export function sendChat(prompt: string, opts?: { model?: string; effort?: string }): void {
+  rawSend(JSON.stringify({ type: "chat", prompt, model: opts?.model, effort: opts?.effort }));
 }
 
 /** Request the server interrupt the current chat turn. */

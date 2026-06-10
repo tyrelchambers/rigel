@@ -47,12 +47,21 @@ export interface ChatEvent {
  *  - { type: "result", ... } -- final summary; signals end-of-stream.
  *  - Other types (system, user, tool_use, tool_result) are silently skipped.
  */
+/** CLI aliases the picker may send; anything else is ignored (no flag added). */
+const ALLOWED_MODELS = new Set(["opus", "sonnet", "haiku"]);
+const ALLOWED_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
+
 export async function* runClaude(
   prompt: string,
   context: string | null,
   signal?: AbortSignal,
+  opts?: { model?: string; effort?: string },
 ): AsyncGenerator<ChatEvent> {
   const argv = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose"];
+  // Apply the composer's model/effort selection as launch flags (validated so a
+  // bad value can't inject arbitrary args or break the CLI).
+  if (opts?.model && ALLOWED_MODELS.has(opts.model)) argv.push("--model", opts.model);
+  if (opts?.effort && ALLOWED_EFFORTS.has(opts.effort)) argv.push("--effort", opts.effort);
   for (const tool of READ_ONLY_ALLOWLIST) {
     argv.push("--allowedTools", tool);
   }

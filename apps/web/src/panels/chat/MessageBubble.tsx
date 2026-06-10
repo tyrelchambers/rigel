@@ -12,11 +12,21 @@ interface Props {
   onAction: (action: SuggestedAction) => void;
 }
 
+// Role color mirrors the Swift MessageBubble: user = pod-palette blue,
+// assistant = accent purple, system = tertiary grey.
 const ROLE_META = {
-  user: { Icon: User, label: "You" },
-  assistant: { Icon: Sparkles, label: "Helmsman" },
-  system: { Icon: Settings, label: "System" },
+  user: { Icon: User, label: "You", color: "#60A5FA" },
+  assistant: { Icon: Sparkles, label: "Helmsman", color: "#A855F7" },
+  system: { Icon: Settings, label: "System", color: "#6B6B73" },
 } as const;
+
+/** Role-tinted card surface + border (assistant gets a faint purple wash). */
+function cardSurface(role: ChatMessage["role"]): { background: string; borderColor: string } {
+  if (role === "assistant") {
+    return { background: "rgba(168, 85, 247, 0.06)", borderColor: "rgba(168, 85, 247, 0.2)" };
+  }
+  return { background: "#050505", borderColor: "#1A1A1A" };
+}
 
 /** Collapsible "Thought for Ns" disclosure shown above an assistant message. */
 function ThinkingTrail({ thinking, seconds }: { thinking: string; seconds?: number }) {
@@ -47,35 +57,49 @@ function ThinkingTrail({ thinking, seconds }: { thinking: string; seconds?: numb
  * plain.
  */
 export function MessageBubble({ message, onAction }: Props) {
-  const { Icon, label } = ROLE_META[message.role];
+  const { Icon, label, color } = ROLE_META[message.role];
   const isAssistant = message.role === "assistant";
   const isSystem = message.role === "system";
+  const surface = cardSurface(message.role);
 
   const { display, actions } = isAssistant
     ? parseSuggestedActions(message.text)
     : { display: message.text, actions: [] as SuggestedAction[] };
 
   return (
-    <div className="flex gap-3 py-3">
-      <div className="mt-0.5 shrink-0 text-muted-foreground">
-        <Icon className="size-4" />
+    <div className="flex items-start gap-2">
+      {/* Role avatar — colored circle (mirrors Swift roleIcon) */}
+      <div
+        className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full"
+        style={{ background: `${color}26` }}
+        aria-hidden
+      >
+        <Icon className="size-3" style={{ color }} />
       </div>
-      <div className="min-w-0 flex-1">
-        <div className="mb-0.5 text-[11px] font-medium uppercase tracking-[0.5px] text-muted-foreground">
+
+      {/* Role-tinted bordered card */}
+      <div
+        className=" chat-bubble min-w-0 flex-1 rounded-md border px-2.5 py-2"
+        style={surface}
+      >
+        <div
+          className="mb-1 text-[10px] font-semibold uppercase tracking-[0.5px]"
+          style={{ color }}
+        >
           {label}
         </div>
         {isAssistant && message.thinking ? (
           <ThinkingTrail thinking={message.thinking} seconds={message.thinkingSeconds} />
         ) : null}
         {isAssistant ? (
-          <div className="prose prose-sm max-w-none dark:prose-invert select-text [&_pre]:overflow-auto [&_pre]:rounded-md [&_pre]:bg-muted [&_pre]:p-3 [&_code]:text-xs">
+          <div className="chat-md select-text">
             <Markdown remarkPlugins={[remarkGfm]}>{display}</Markdown>
           </div>
         ) : (
           <p
             className={cn(
               "whitespace-pre-wrap select-text",
-              isSystem ? "text-xs text-muted-foreground" : "text-sm",
+              isSystem ? "text-xs text-muted-foreground" : "text-[13px] text-foreground",
             )}
           >
             {display}
