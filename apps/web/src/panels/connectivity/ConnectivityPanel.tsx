@@ -12,6 +12,10 @@ import {
 } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
+import { ListRow } from "@/panels/components/ListRow";
+import { StatusBadge } from "@/panels/components/StatusBadge";
+import { TagPill } from "@/panels/components/TagPill";
+import type { StatusBadgeVariant } from "@/panels/components/StatusBadge";
 import type { Ingress } from "../ingresses/types";
 import type { Service } from "../services/types";
 import type { Pod } from "../pods/types";
@@ -38,16 +42,25 @@ function onSelectPods(_flow: Flow): void {
   // Intentionally a no-op until cross-panel navigation exists. See spec.
 }
 
-// Health → Tailwind tint classes (text / dot / left bar background).
-const HEALTH_TEXT: Record<Health, string> = {
-  ok: "text-green-600 dark:text-green-400",
-  warn: "text-yellow-600 dark:text-yellow-400",
-  broken: "text-red-600 dark:text-red-400",
+// Health → StatusBadge variant mapping.
+const HEALTH_VARIANT: Record<Health, StatusBadgeVariant> = {
+  ok: "healthy",
+  warn: "pending",
+  broken: "error",
 };
+
+// Health → dot color for the legend.
 const HEALTH_DOT: Record<Health, string> = {
   ok: "bg-green-500",
   warn: "bg-yellow-500",
   broken: "bg-red-500",
+};
+
+// Health → text color for issue lines.
+const HEALTH_TEXT: Record<Health, string> = {
+  ok: "text-green-600 dark:text-green-400",
+  warn: "text-yellow-600 dark:text-yellow-400",
+  broken: "text-red-600 dark:text-red-400",
 };
 
 export default function ConnectivityPanel() {
@@ -95,10 +108,16 @@ export default function ConnectivityPanel() {
   const firstLoad = isLoading && flows.length === 0;
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-0">
       {/* Header: title + legend */}
-      <div className="flex items-center gap-3 border-b pb-3">
-        <h1 className="text-lg font-semibold">Connectivity</h1>
+      <div
+        className="flex items-center gap-3 px-4 py-3"
+        style={{ borderBottom: "1px solid #1A1A1A", background: "#141417" }}
+      >
+        <div className="flex flex-col gap-0">
+          <span className="text-sm font-semibold leading-tight">Connectivity</span>
+          <span style={{ fontSize: 11, color: "#6B6B73" }}>Ingress → Service → Pods</span>
+        </div>
         {isLoading && (
           <LoaderCircle
             className="size-4 animate-spin text-muted-foreground"
@@ -110,19 +129,19 @@ export default function ConnectivityPanel() {
 
       {/* Error banner — keep last flows visible (stale OK). */}
       {error && (
-        <pre className="rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+        <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
           {error}
         </pre>
       )}
 
       {firstLoad && (
-        <p className="px-2 py-4 text-sm text-muted-foreground">Loading connectivity…</p>
+        <p className="px-4 py-4 text-sm text-muted-foreground">Loading connectivity…</p>
       )}
 
       {!firstLoad && flows.length === 0 && <EmptyState />}
 
       {flows.length > 0 && (
-        <div className="space-y-6">
+        <div className="flex flex-col gap-4 px-3 py-2">
           {external.length > 0 && (
             <Section title="External" count={external.length}>
               {external.map((f) => (
@@ -169,11 +188,15 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="space-y-2">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {title} <span className="font-mono">({count})</span>
+    <section className="space-y-1">
+      <h2
+        className="text-xs font-semibold uppercase tracking-wide"
+        style={{ color: "#6B6B73" }}
+      >
+        {title}{" "}
+        <span className="font-mono">({count})</span>
       </h2>
-      <div className="space-y-2">{children}</div>
+      <div className="flex flex-col gap-0.5">{children}</div>
     </section>
   );
 }
@@ -181,14 +204,14 @@ function Section({
 function Chip({
   icon,
   children,
-  className = "",
+  style,
 }: {
   icon: React.ReactNode;
   children: React.ReactNode;
-  className?: string;
+  style?: React.CSSProperties;
 }) {
   return (
-    <span className={`inline-flex items-center gap-1 text-sm ${className}`}>
+    <span className="inline-flex items-center gap-1 text-sm" style={style}>
       {icon}
       <span className="font-mono">{children}</span>
     </span>
@@ -200,26 +223,34 @@ function Arrow() {
 }
 
 function FlowRow({ flow }: { flow: Flow }) {
-  const tint = HEALTH_TEXT[flow.health];
   const podsDisabled = flow.totalPods === 0;
+  const tintClass = HEALTH_TEXT[flow.health];
+  const healthColor =
+    flow.health === "ok" ? "#10B981" : flow.health === "warn" ? "#F59E0B" : "#EF4444";
 
   return (
-    <div className="relative overflow-hidden rounded-sm border bg-card">
-      {/* Left 3px health color bar. */}
-      <span
-        className={`absolute inset-y-0 left-0 w-[3px] ${HEALTH_DOT[flow.health]}`}
-        aria-hidden
-      />
-      <div className="space-y-1 py-2 pl-4 pr-3">
-        {/* Main chain. */}
+    <ListRow
+      rowKey={flow.id}
+      isOpen={false}
+      onToggle={() => {}}
+    >
+      {/* Flex-col container so the issues line stacks below the main chain */}
+      <div className="flex flex-1 flex-col gap-1 min-w-0">
+        {/* Main chain */}
         <div className="flex flex-wrap items-center gap-1.5">
           {flow.isExternal ? (
             <>
-              <Chip icon={<Globe className="size-3.5 text-muted-foreground" />}>
+              <Chip
+                icon={<Globe className="size-3.5 text-muted-foreground" />}
+                style={{ color: "#A1A1AA" }}
+              >
                 {flow.hosts.length > 0 ? flow.hosts.join(", ") : "(no host)"}
               </Chip>
               <Arrow />
-              <Chip icon={<Signpost className="size-3.5 text-muted-foreground" />}>
+              <Chip
+                icon={<Signpost className="size-3.5 text-muted-foreground" />}
+                style={{ color: "#A1A1AA" }}
+              >
                 {flow.ingressNames.join(", ")}
               </Chip>
               <Arrow />
@@ -228,7 +259,7 @@ function FlowRow({ flow }: { flow: Flow }) {
             <>
               <Chip
                 icon={<Lock className="size-3.5 text-muted-foreground" />}
-                className="text-muted-foreground"
+                style={{ color: "#6B6B73" }}
               >
                 cluster
               </Chip>
@@ -236,49 +267,72 @@ function FlowRow({ flow }: { flow: Flow }) {
             </>
           )}
 
-          {/* Service chip (button). primary if it exists, red if missing. */}
+          {/* Service identity — TagPill when exists, error-colored when missing */}
           <button
             type="button"
             onClick={() => onSelectService(flow.serviceName, flow.namespace)}
             className="rounded hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <Chip
-              icon={<Network className="size-3.5" />}
-              className={flow.serviceExists ? "text-foreground" : HEALTH_TEXT.broken}
-            >
-              svc/{flow.serviceName}
-            </Chip>
+            {flow.serviceExists ? (
+              <TagPill label={`svc/${flow.serviceName}`} title={flow.serviceName} />
+            ) : (
+              <Chip
+                icon={<Network className="size-3.5" style={{ color: "#EF4444" }} />}
+                style={{ color: "#EF4444" }}
+              >
+                svc/{flow.serviceName}
+              </Chip>
+            )}
           </button>
 
           <Arrow />
 
-          {/* Pods chip (button). Disabled when there are no pods. */}
+          {/* Pod count chip */}
           <button
             type="button"
             disabled={podsDisabled}
             onClick={() => onSelectPods(flow)}
-            className="rounded hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:no-underline disabled:hover:no-underline"
+            className="rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
           >
-            <Chip icon={<Boxes className="size-3.5" />} className={tint}>
+            <Chip
+              icon={<Boxes className="size-3.5" style={{ color: healthColor }} />}
+              style={{ color: healthColor }}
+            >
               {flow.serviceExists ? `${flow.readyPods}/${flow.totalPods}` : "no service"}
             </Chip>
           </button>
 
-          {/* Spacer + right-aligned namespace label. */}
-          <span className="ml-auto pl-3 font-mono text-xs text-muted-foreground/70">
+          {/* Spacer */}
+          <span className="flex-1" />
+
+          {/* Health badge */}
+          <StatusBadge
+            label={flow.health === "ok" ? "ok" : flow.health === "warn" ? "degraded" : "broken"}
+            variant={HEALTH_VARIANT[flow.health]}
+          />
+
+          {/* Namespace */}
+          <span
+            style={{
+              fontFamily: "ui-monospace, monospace",
+              fontSize: 10,
+              color: "#6B6B73",
+              whiteSpace: "nowrap",
+            }}
+          >
             {flow.namespace}
           </span>
         </div>
 
-        {/* Issues line. */}
+        {/* Issues line — always visible when present */}
         {flow.issues.length > 0 && (
-          <div className={`flex items-center gap-1.5 pl-5 text-xs ${tint}`}>
+          <div className={`flex items-center gap-1.5 text-xs ${tintClass}`}>
             <AlertTriangle className="size-3.5 shrink-0" aria-hidden />
             <span className="font-mono">{flow.issues.join(" · ")}</span>
           </div>
         )}
       </div>
-    </div>
+    </ListRow>
   );
 }
 

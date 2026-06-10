@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router";
 import {
   hasUnfilledMarkers,
   scanPlaceholders,
@@ -14,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { sendChat } from "@/lib/ws";
+import { handoffToChat as sendToChatPane } from "@/lib/chatHandoff";
 import { applyManifest, installHelm } from "./installApi";
 import {
   canAdvanceFromConfigure,
@@ -82,7 +81,6 @@ export function CatalogInstallWizard({
   clusterIssuers: string[];
   onClose: () => void;
 }) {
-  const navigate = useNavigate();
   const [step, setStep] = useState<WizardStep>("configure");
 
   const [config, setConfig] = useState<ConfigureValues>({
@@ -183,9 +181,8 @@ export function CatalogInstallWizard({
     const prompt = isHelm
       ? `Continue installing ${app.name} (helm release "${config.instance}" in namespace "${config.namespace}"). ${reason}. Check the release status and pod health, and fix any issues.`
       : `Continue installing ${app.name} (instance "${config.instance}" in namespace "${config.namespace}"). ${reason}. Check the pods labeled app.kubernetes.io/instance=${config.instance} and fix any issues.\n\nManifest:\n\n\`\`\`yaml\n${artifact}\n\`\`\``;
-    sendChat(prompt);
     onClose();
-    navigate("/chat");
+    sendToChatPane(prompt);
   }
 
   // Stepper visibility: show for normal flow steps; hide for generating/failed
