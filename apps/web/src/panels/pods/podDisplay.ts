@@ -63,11 +63,13 @@ export function podNameColorClass(pod: Pod): string {
       return "text-red-600 dark:text-red-400";
     }
   }
-  if (phase === "Pending") return "text-yellow-600 dark:text-yellow-400";
   if (phase === "Running") {
     const allReady = statuses.length > 0 && statuses.every((c) => c.ready);
-    if (allReady) return "text-green-600 dark:text-green-400";
+    // Stably running → white; containers still coming up → green (deploying).
+    return allReady ? "text-foreground" : "text-green-600 dark:text-green-400";
   }
+  // Pending / ContainerCreating etc. — the pod is deploying → green.
+  if (phase === "Pending") return "text-green-600 dark:text-green-400";
   return "text-foreground";
 }
 
