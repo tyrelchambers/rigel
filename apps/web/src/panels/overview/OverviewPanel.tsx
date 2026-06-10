@@ -44,6 +44,12 @@ import {
   absoluteWhen,
   when,
 } from "@/panels/events/eventsDisplay";
+import { buildInstances } from "@/panels/databases/databasesDisplay";
+import type {
+  CNPGCluster,
+  CNPGScheduledBackup,
+  WorkloadDB,
+} from "@/panels/databases/types";
 
 // ---------------------------------------------------------------------------
 // NOTE (docs/parity/overview.md). This is primarily a READ-ONLY landing dashboard
@@ -79,17 +85,19 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
   // All cluster-scoped: namespace "*" (Overview never applies the namespace
   // filter — aggregates are always cluster-wide).
   useEffect(() => {
-    subscribe("nodes", "*");
-    subscribe("pods", "*");
-    subscribe("deployments", "*");
-    subscribe("events", "*");
-    subscribe("namespaces", "*");
+    const kinds = [
+      "nodes",
+      "pods",
+      "deployments",
+      "statefulsets",
+      "events",
+      "namespaces",
+      "clusters.postgresql.cnpg.io",
+      "scheduledbackups.postgresql.cnpg.io",
+    ];
+    for (const k of kinds) subscribe(k, "*");
     return () => {
-      unsubscribe("nodes", "*");
-      unsubscribe("pods", "*");
-      unsubscribe("deployments", "*");
-      unsubscribe("events", "*");
-      unsubscribe("namespaces", "*");
+      for (const k of kinds) unsubscribe(k, "*");
     };
   }, []);
 
@@ -139,6 +147,29 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
   const phases = useMemo(() => phaseCounts(pods), [pods]);
   const nodeReady = nodeReadyCount(nodes);
   const pressure = nodePressureCount(nodes);
+
+  // Detected databases — CNPG clusters + image-detected workloads (same logic
+  // as the Databases panel), so the count matches instead of a 0 stub.
+  const databases = useMemo(
+    () =>
+      buildInstances({
+        cnpgClusters: Object.values(
+          (resources["clusters.postgresql.cnpg.io"] ?? {}) as Record<string, CNPGCluster>,
+        ),
+        scheduledBackups: Object.values(
+          (resources["scheduledbackups.postgresql.cnpg.io"] ?? {}) as Record<
+            string,
+            CNPGScheduledBackup
+          >,
+        ),
+        deployments: deployments as unknown as WorkloadDB[],
+        statefulSets: Object.values(
+          (resources["statefulsets"] ?? {}) as Record<string, WorkloadDB>,
+        ),
+      }),
+    [resources, deployments],
+  );
+  const dbUnhealthy = databases.filter((d) => !d.isHealthy).length;
 
   const warnings = useMemo(() => events.filter(isWarning), [events]);
   const recentWarnings = warnings.slice(0, MAX_RECENT_WARNINGS);
@@ -259,10 +290,9 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
 
       {/* Middle row: Databases | Events */}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        {/* MVP stub: full Databases detection (CNPG + image parsing) is deferred. */}
         <Card title="Databases" icon={<Database className="size-3.5" />}>
-          <Metric value={0} caption={plural(0, "instance")} />
-          <HealthLine label="Unhealthy" count={0} tone="red" />
+          <Metric value={databases.length} caption={plural(databases.length, "instance")} />
+          <HealthLine label="Unhealthy" count={dbUnhealthy} tone="red" />
         </Card>
 
         <Card title="Events" icon={<MessageSquareWarning className="size-3.5" />}>
@@ -465,7 +495,7 @@ function GaugeCard({
 function EventTimeline({ buckets }: { buckets: EventBucket[] }) {
   const max = Math.max(1, ...buckets.map((b) => b.warnings + b.normal));
   return (
-    <div className="flex h-12 items-end gap-px rounded-md border bg-muted/30 p-1">
+    <div className="flex h-12 items-stretch gap-px rounded-md border bg-muted/30 p-1">
       {buckets.map((b) => {
         const total = b.warnings + b.normal;
         const warnPct = (b.warnings / max) * 100;
@@ -473,7 +503,7 @@ function EventTimeline({ buckets }: { buckets: EventBucket[] }) {
         return (
           <div
             key={b.index}
-            className="flex flex-1 flex-col justify-end"
+            className="flex h-full flex-1 flex-col justify-end"
             title={total > 0 ? `${b.warnings} warning, ${b.normal} normal` : undefined}
           >
             <div className="bg-green-600" style={{ height: `${normPct}%` }} />

@@ -50,6 +50,7 @@ export interface ChatEvent {
 export async function* runClaude(
   prompt: string,
   context: string | null,
+  signal?: AbortSignal,
 ): AsyncGenerator<ChatEvent> {
   const argv = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose"];
   for (const tool of READ_ONLY_ALLOWLIST) {
@@ -61,6 +62,20 @@ export async function* runClaude(
     stderr: "pipe",
     env: { ...process.env, ...(context ? { KUBECONFIG_CONTEXT: context } : {}) },
   });
+
+  // Stop: aborting kills the claude subprocess; the stdout reader then ends and
+  // we exit the turn cleanly (no spurious "exited with code 143" error below).
+  const onAbort = () => {
+    try {
+      proc.kill();
+    } catch {
+      /* already gone */
+    }
+  };
+  if (signal) {
+    if (signal.aborted) onAbort();
+    else signal.addEventListener("abort", onAbort, { once: true });
+  }
 
   const reader = proc.stdout.getReader();
   const dec = new TextDecoder();
@@ -95,6 +110,12 @@ export async function* runClaude(
   }
 
   const exitCode = await proc.exited;
+  if (signal) signal.removeEventListener("abort", onAbort);
+  if (signal?.aborted) {
+    // Interrupted by the user — end the turn quietly, not as an error.
+    yield { type: "done" };
+    return;
+  }
   if (exitCode !== 0) {
     const errText = await new Response(proc.stderr).text();
     yield { type: "error", text: errText.trim() || `claude exited with code ${exitCode}` };

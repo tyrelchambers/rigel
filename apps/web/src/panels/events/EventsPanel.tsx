@@ -312,7 +312,7 @@ export default function EventsPanel() {
 function EventTimeline({ buckets }: { buckets: EventBucket[] }) {
   const max = Math.max(1, ...buckets.map((b) => b.warnings + b.normal));
   return (
-    <div className="flex h-12 items-end gap-px rounded-md border bg-muted/30 p-1">
+    <div className="flex h-12 items-stretch gap-px rounded-md border bg-muted/30 p-1">
       {buckets.map((b) => {
         const total = b.warnings + b.normal;
         const warnPct = (b.warnings / max) * 100;
@@ -320,7 +320,7 @@ function EventTimeline({ buckets }: { buckets: EventBucket[] }) {
         return (
           <div
             key={b.index}
-            className="flex flex-1 flex-col justify-end"
+            className="flex h-full flex-1 flex-col justify-end"
             title={
               total > 0
                 ? `${b.warnings} warning, ${b.normal} normal`

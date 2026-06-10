@@ -8,6 +8,8 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null)
   const unsubs = new WeakMap<ServerWebSocket<any>, Map<string, () => void>>();
   // One kubectl-logs stream manager per connection — killed on logs.stop/close.
   const logStreams = new WeakMap<ServerWebSocket<any>, LogStreamManager>();
+  // Abort handle for the in-flight chat turn — aborted on Stop/new-turn/close.
+  const chatAborts = new WeakMap<ServerWebSocket<any>, AbortController>();
   return {
     open(ws: ServerWebSocket<any>) {
       unsubs.set(ws, new Map());
@@ -16,6 +18,7 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null)
     close(ws: ServerWebSocket<any>) {
       unsubs.get(ws)?.forEach((u) => u());
       logStreams.get(ws)?.stop();
+      chatAborts.get(ws)?.abort();
     },
     message(ws: ServerWebSocket<any>, raw: string | Buffer) {
       const m = JSON.parse(String(raw));
@@ -57,11 +60,22 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null)
       } else if (m.type === "logs.stop") {
         logStreams.get(ws)?.stop();
       } else if (m.type === "chat" && typeof m.prompt === "string") {
+        // A new turn supersedes any in-flight one.
+        chatAborts.get(ws)?.abort();
+        const ac = new AbortController();
+        chatAborts.set(ws, ac);
         (async () => {
-          for await (const event of runClaude(m.prompt, context)) {
-            ws.send(JSON.stringify({ type: "chat", event }));
+          try {
+            for await (const event of runClaude(m.prompt, context, ac.signal)) {
+              ws.send(JSON.stringify({ type: "chat", event }));
+            }
+          } catch {
+            /* connection/stream torn down */
           }
         })();
+      } else if (m.type === "chat-interrupt") {
+        // Stop button: kill the running claude subprocess for this connection.
+        chatAborts.get(ws)?.abort();
       }
     },
   };
