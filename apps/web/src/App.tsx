@@ -8,6 +8,7 @@ import NamespacesPanel from "./panels/namespaces/NamespacesPanel";
 import NodesPanel from "./panels/nodes/NodesPanel";
 import ServicesPanel from "./panels/services/ServicesPanel";
 import IngressesPanel from "./panels/ingresses/IngressesPanel";
+import ConnectivityPanel from "./panels/connectivity/ConnectivityPanel";
 import StoragePanel from "./panels/storage/StoragePanel";
 import ConfigMapsPanel from "./panels/configmaps/ConfigMapsPanel";
 import SecretsPanel from "./panels/secrets/SecretsPanel";
@@ -21,7 +22,7 @@ import LogsPanel from "./panels/logs/LogsPanel";
 import ChatPanel from "./panels/chat/ChatPanel";
 import { connectCluster } from "@/lib/ws";
 
-const PANELS = ["overview", "catalog", "pods", "deployments", "workloads", "databases", "rightsizing", "namespaces", "nodes", "services", "ingresses", "configmaps", "secrets", "storage", "rbac", "events", "logs", "health", "chat"]; // grows as panels are ported
+const PANELS = ["overview", "catalog", "pods", "deployments", "workloads", "databases", "rightsizing", "namespaces", "nodes", "services", "ingresses", "connectivity", "configmaps", "secrets", "storage", "rbac", "events", "logs", "health", "chat"]; // grows as panels are ported
 
 export default function App() {
   useEffect(() => { connectCluster(); }, []);
@@ -51,13 +52,14 @@ export default function App() {
           <Route path="/nodes" element={<div className="h-full overflow-auto p-4"><NodesPanel /></div>} />
           <Route path="/services" element={<div className="h-full overflow-auto p-4"><ServicesPanel /></div>} />
           <Route path="/ingresses" element={<div className="h-full overflow-auto p-4"><IngressesPanel /></div>} />
+          <Route path="/connectivity" element={<div className="h-full overflow-auto p-4"><ConnectivityPanel /></div>} />
           <Route path="/configmaps" element={<div className="h-full overflow-auto p-4"><ConfigMapsPanel /></div>} />
           <Route path="/secrets" element={<div className="h-full overflow-auto p-4"><SecretsPanel /></div>} />
           <Route path="/storage" element={<div className="h-full overflow-auto p-4"><StoragePanel /></div>} />
           <Route path="/rbac" element={<div className="h-full overflow-auto p-4"><RbacPanel /></div>} />
           <Route path="/catalog" element={<div className="h-full overflow-auto p-4"><CatalogPanel /></div>} />
           <Route path="/events" element={<div className="h-full overflow-auto p-4"><EventsPanel /></div>} />
-          {PANELS.filter((p) => p !== "overview" && p !== "catalog" && p !== "health" && p !== "pods" && p !== "deployments" && p !== "workloads" && p !== "databases" && p !== "rightsizing" && p !== "namespaces" && p !== "nodes" && p !== "services" && p !== "ingresses" && p !== "configmaps" && p !== "secrets" && p !== "storage" && p !== "rbac" && p !== "events" && p !== "logs" && p !== "chat").map((p) => (
+          {PANELS.filter((p) => p !== "overview" && p !== "catalog" && p !== "health" && p !== "pods" && p !== "deployments" && p !== "workloads" && p !== "databases" && p !== "rightsizing" && p !== "namespaces" && p !== "nodes" && p !== "services" && p !== "ingresses" && p !== "connectivity" && p !== "configmaps" && p !== "secrets" && p !== "storage" && p !== "rbac" && p !== "events" && p !== "logs" && p !== "chat").map((p) => (
             <Route key={p} path={`/${p}`} element={<div className="p-4 capitalize">{p} panel (not yet ported)</div>} />
           ))}
         </Routes>
