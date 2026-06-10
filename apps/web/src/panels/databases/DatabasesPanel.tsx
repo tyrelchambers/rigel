@@ -1,0 +1,401 @@
+import { useEffect, useMemo, useState } from "react";
+import { Database, LoaderCircle } from "lucide-react";
+import { useCluster } from "@/store/cluster";
+import { subscribe, unsubscribe } from "@/lib/ws";
+import { handoffToChat } from "@/lib/chatHandoff";
+import { ListRow } from "@/panels/components/ListRow";
+import { TagPill } from "@/panels/components/TagPill";
+import { StatusBadge } from "@/panels/components/StatusBadge";
+import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
+import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
+import type {
+  CNPGCluster,
+  CNPGScheduledBackup,
+  DatabaseInstance,
+  DatabasePod,
+  DatabasePodRaw,
+  WorkloadDB,
+} from "./types";
+import {
+  buildInstances,
+  connectionString,
+  matchPods,
+  matchesDatabase,
+  phaseDotClass,
+  podNodes,
+  readyFraction,
+  relativeAge,
+  sourceBadgeLabel,
+  walDotClass,
+} from "./databasesDisplay";
+
+// ---------------------------------------------------------------------------
+// READ-ONLY panel. No action blocks emitted. All mutations via chat → ConfirmSheet.
+// ---------------------------------------------------------------------------
+
+export default function DatabasesPanel() {
+  const resources = useCluster((s) => s.resources);
+  const isLoading = useCluster((s) => s.isLoading);
+  const error = useCluster((s) => s.error);
+  const namespaceFilter = useCluster((s) => s.namespaceFilter);
+
+  const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  // Watch CNPG CRDs + image-detected workloads + pods.
+  useEffect(() => {
+    const ns = namespaceFilter ?? "*";
+    subscribe("clusters.postgresql.cnpg.io", ns);
+    subscribe("scheduledbackups.postgresql.cnpg.io", ns);
+    subscribe("deployments", ns);
+    subscribe("statefulsets", ns);
+    subscribe("pods", ns);
+    return () => {
+      unsubscribe("clusters.postgresql.cnpg.io", ns);
+      unsubscribe("scheduledbackups.postgresql.cnpg.io", ns);
+      unsubscribe("deployments", ns);
+      unsubscribe("statefulsets", ns);
+      unsubscribe("pods", ns);
+    };
+  }, [namespaceFilter]);
+
+  const instances = useMemo(
+    () =>
+      buildInstances({
+        cnpgClusters: Object.values(
+          (resources["clusters.postgresql.cnpg.io"] ?? {}) as Record<string, CNPGCluster>,
+        ),
+        scheduledBackups: Object.values(
+          (resources["scheduledbackups.postgresql.cnpg.io"] ?? {}) as Record<
+            string,
+            CNPGScheduledBackup
+          >,
+        ),
+        deployments: Object.values((resources["deployments"] ?? {}) as Record<string, WorkloadDB>),
+        statefulSets: Object.values(
+          (resources["statefulsets"] ?? {}) as Record<string, WorkloadDB>,
+        ),
+      }),
+    [resources],
+  );
+
+  const pods = useMemo(
+    () => Object.values((resources["pods"] ?? {}) as Record<string, DatabasePodRaw>),
+    [resources],
+  );
+
+  const filtered = useMemo(
+    () => instances.filter((i) => matchesDatabase(i, search)),
+    [instances, search],
+  );
+
+  const showEmpty = !isLoading && instances.length === 0 && !error;
+
+  function toggle(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function askClaude(inst: DatabaseInstance, topic: "Errors" | "Logs" | "Explain") {
+    handoffToChat(buildHandoffPrompt(inst.kind, inst.name, inst.namespace, topic));
+  }
+
+  return (
+    <div className="flex flex-col gap-0">
+      {/* Header */}
+      <div
+        className="flex items-center gap-3 px-4 py-3"
+        style={{ borderBottom: "1px solid #1A1A1A", background: "#141417" }}
+      >
+        <div className="flex flex-col gap-0">
+          <span className="text-sm font-semibold leading-tight">Databases</span>
+          <span style={{ fontSize: 11, color: "#6B6B73" }}>CNPG clusters &amp; image-detected</span>
+        </div>
+        <span
+          style={{
+            fontFamily: "ui-monospace, monospace",
+            fontSize: 11,
+            color: "#6B6B73",
+            background: "#1A1A1A",
+            padding: "2px 6px",
+            borderRadius: 4,
+          }}
+        >
+          {filtered.length}
+        </span>
+        {isLoading && (
+          <LoaderCircle className="size-4 animate-spin text-muted-foreground" aria-label="loading" />
+        )}
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search databases…"
+          className="ml-auto w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+        />
+      </div>
+
+      {/* Error banner — never hides the list. */}
+      {error && (
+        <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+          {error}
+        </pre>
+      )}
+
+      {/* Friendly empty state: no CNPG and nothing image-detected. */}
+      {showEmpty && (
+        <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
+          <Database className="size-8 text-muted-foreground" />
+          <p className="text-sm font-medium">No CloudNativePG clusters found</p>
+          <p className="max-w-md text-xs text-muted-foreground">
+            Install the CloudNativePG operator and create a Cluster resource, or deploy a
+            workload with a recognized database image to see it here.
+          </p>
+        </div>
+      )}
+
+      {/* Row list */}
+      <div className="flex flex-col gap-0.5 px-3 py-2">
+        {filtered.map((inst) => {
+          const isOpen = expanded.has(inst.id);
+          const matchedPods = matchPods(inst, pods);
+          const ready = readyFraction(inst.readyReplicas, inst.desiredReplicas);
+          const readyVariant = inst.isHealthy ? "healthy" : "error";
+
+          return (
+            <ListRow
+              key={inst.id}
+              rowKey={inst.id}
+              isOpen={isOpen}
+              onToggle={() => toggle(inst.id)}
+              expandedContent={
+                <DatabaseDetail instance={inst} matchedPods={matchedPods} />
+              }
+            >
+              {/* Name */}
+              <button
+                type="button"
+                onClick={() => toggle(inst.id)}
+                className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
+              >
+                {inst.name}
+              </button>
+
+              {/* Namespace chip */}
+              <span
+                style={{
+                  fontFamily: "ui-monospace, monospace",
+                  fontSize: 10,
+                  color: "#6B6B73",
+                  background: "#050505",
+                  padding: "1px 5px",
+                  borderRadius: 4,
+                  border: "1px solid #1A1A1A",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {inst.namespace}
+              </span>
+
+              {/* Kind / source — purple TagPill */}
+              <TagPill label={inst.source === "cnpg" ? `cnpg/${inst.kind}` : inst.kind} />
+
+              {/* Ready badge */}
+              <StatusBadge label={ready} variant={readyVariant} />
+
+              {/* Phase text — dim */}
+              <span
+                style={{
+                  fontFamily: "ui-monospace, monospace",
+                  fontSize: 10,
+                  color: "#6B6B73",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  minWidth: 0,
+                  flexShrink: 1,
+                }}
+              >
+                {inst.phaseText}
+              </span>
+
+              {/* Image / version — dim */}
+              {inst.image && (
+                <span
+                  title={inst.image}
+                  style={{
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: 10,
+                    color: "#6B6B73",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    minWidth: 0,
+                    flexShrink: 1,
+                    maxWidth: "14rem",
+                  }}
+                >
+                  {inst.image}
+                </span>
+              )}
+
+              {/* Spacer */}
+              <span className="flex-1" />
+
+              {/* Action strip — Errors / Logs / Explain */}
+              <ActionButtonStrip
+                onErrors={(e) => { e.stopPropagation(); askClaude(inst, "Errors"); }}
+                onLogs={(e) => { e.stopPropagation(); askClaude(inst, "Logs"); }}
+                onExplain={(e) => { e.stopPropagation(); askClaude(inst, "Explain"); }}
+              />
+            </ListRow>
+          );
+        })}
+      </div>
+
+      {/* Filtered-to-zero (but instances exist) */}
+      {!showEmpty && instances.length > 0 && filtered.length === 0 && (
+        <p className="px-4 py-4 text-sm text-muted-foreground">No databases match search</p>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Expanded detail
+// ---------------------------------------------------------------------------
+
+function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex gap-3">
+      <span className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground w-32 shrink-0">
+        {label}
+      </span>
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
+  );
+}
+
+function DatabaseDetail({
+  instance,
+  matchedPods,
+}: {
+  instance: DatabaseInstance;
+  matchedPods: DatabasePod[];
+}) {
+  const nodes = podNodes(matchedPods);
+  const wal = instance.walArchiving ?? "unknown";
+
+  return (
+    <div className="space-y-3">
+      {/* IMAGE */}
+      {instance.image && (
+        <DetailRow label="IMAGE">
+          <span className="font-mono text-xs break-all select-text text-muted-foreground">
+            {instance.image}
+          </span>
+        </DetailRow>
+      )}
+
+      {/* SOURCE */}
+      <DetailRow label="SOURCE">
+        <span className="font-mono text-xs text-muted-foreground">
+          {sourceBadgeLabel(instance.source)}
+        </span>
+      </DetailRow>
+
+      {/* STATUS */}
+      <DetailRow label="STATUS">
+        <span
+          className={`text-xs font-mono ${instance.isHealthy ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`}
+        >
+          {instance.phaseText}
+        </span>
+      </DetailRow>
+
+      {/* AGE */}
+      <DetailRow label="AGE">
+        <span className="font-mono text-xs text-muted-foreground">
+          {relativeAge(instance.creationTimestamp)}
+        </span>
+      </DetailRow>
+
+      {/* NODES */}
+      {nodes.length > 0 && (
+        <DetailRow label="NODES">
+          <span className="font-mono text-xs text-muted-foreground">{nodes.join(", ")}</span>
+        </DetailRow>
+      )}
+
+      {/* PODS */}
+      <DetailRow label="PODS">
+        {matchedPods.length === 0 ? (
+          <span className="text-xs text-muted-foreground/70">No matching pods</span>
+        ) : (
+          <ul className="space-y-1">
+            {matchedPods.map((p) => (
+              <li key={p.name} className="flex items-center gap-2 text-xs">
+                <span className="text-muted-foreground/60">├─</span>
+                <span className="font-mono text-muted-foreground">{p.name}</span>
+                <span className={`size-2 shrink-0 rounded-full ${phaseDotClass(p.phase)}`} />
+                <span className="text-muted-foreground">{p.phase}</span>
+                {p.isPrimary && (
+                  <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                    primary
+                  </span>
+                )}
+                {p.node && (
+                  <span className="ml-auto font-mono text-muted-foreground">{p.node}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </DetailRow>
+
+      {/* CONNECT */}
+      <DetailRow label="CONNECT">
+        <span className="font-mono text-xs break-all select-text text-muted-foreground">
+          {connectionString({
+            kind: instance.kind,
+            source: instance.source,
+            target:
+              instance.source === "cnpg"
+                ? `${instance.name}-rw`
+                : (matchedPods[0]?.name ?? instance.name),
+            namespace: instance.namespace,
+          })}
+        </span>
+      </DetailRow>
+
+      {/* BACKUPS & WAL (CNPG only) */}
+      {instance.source === "cnpg" && (
+        <DetailRow label="BACKUPS & HEALTH">
+          <div className="space-y-1 text-xs">
+            <div className="flex gap-2">
+              <span className="w-28 text-muted-foreground">Last backup</span>
+              <span className="font-mono select-text text-muted-foreground">
+                {instance.lastBackup ?? "never"}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <span className="w-28 text-muted-foreground">Schedule</span>
+              <span className="font-mono select-text text-muted-foreground">
+                {instance.scheduledBackup ?? "none configured"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-28 text-muted-foreground">WAL archiving</span>
+              <span className={`size-2 shrink-0 rounded-full ${walDotClass(wal)}`} />
+              <span className="text-muted-foreground">{wal}</span>
+            </div>
+          </div>
+        </DetailRow>
+      )}
+    </div>
+  );
+}

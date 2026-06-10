@@ -16,5 +16,15 @@ Helmsman.app/
 # Internal planning docs
 docs/
 
+# Node / pnpm
+node_modules/
+
 # macOS
 .DS_Store
+
+# TS build cache
+*.tsbuildinfo
+
+# build output
+dist/
+**/dist/

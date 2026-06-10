@@ -1,0 +1,285 @@
+/**
+ * Action-block → kubectl argv mapping.
+ *
+ * Each kind mirrors the EXACT kubectl invocation built by
+ * `WorkloadAction.kubectlInvocations()` in the Swift app
+ * (Sources/Helmsman/Panels/Actions/WorkloadAction.swift).
+ *
+ * Per-kind argv table (derived from Swift source):
+ *
+ * restart          rollout restart <workloadKind>/<name> -n <ns>
+ *                  workloadKind defaults to "deployment"; use resourceKind for sts/ds.
+ * scale            scale <workloadKind>/<name> --replicas=<n> -n <ns>
+ * rollback         rollout undo deployment/<name> -n <ns>
+ * pause            rollout pause deployment/<name> -n <ns>
+ * resume           rollout resume deployment/<name> -n <ns>
+ * setEnv           set env deployment/<name> -n <ns> KEY=val... (sorted)
+ * setImage         set image <workloadKind>/<name> <container>=<image> -n <ns>
+ * setResources     set resources <workloadKind>/<name> -c <container>
+ *                    [--requests=<r>] [--limits=<l>] -n <ns>   (empty flags omitted)
+ * deletePod        delete pod <pod> -n <ns>
+ * deleteWorkload   delete <resourceKind> <name> -n <ns>
+ * cordon           cordon <node>
+ * uncordon         uncordon <node>
+ * drain            drain <node> [--ignore-daemonsets] [--delete-emptydir-data]
+ *                    [--force] [--disable-eviction]  (default opts applied)
+ * suspendCronJob   patch cronjob <name> -n <ns> --type=merge -p {"spec":{"suspend":true}}
+ * resumeCronJob    patch cronjob <name> -n <ns> --type=merge -p {"spec":{"suspend":false}}
+ * triggerCronJob   create job <jobName> --from=cronjob/<name> -n <ns>
+ *                  jobName comes from `pod` field (Swift uses CronJob.manualRunName)
+ * createNamespace  create namespace <name>
+ * deleteNamespace  delete namespace <name>
+ * deleteResource   varies by resourceKind (see resolveDeleteResource); RBAC cluster-scoped
+ *                  kinds (clusterrole/clusterrolebinding) have no -n flag.
+ * command          args[] verbatim (pre-filtered empty strings by Swift)
+ * purge            throws PurgeActionError — handled by the client purge flow, not kubectl.
+ */
+
+export interface ActionBlock {
+  kind: string;
+  label?: string;
+  /** Primary target: controller, cronjob, namespace, or resource name. */
+  name?: string;
+  /** Back-compat alias for `name` (legacy `deployment` field). */
+  deployment?: string;
+  pod?: string;
+  node?: string;
+  namespace?: string;
+  replicas?: number;
+  env?: Record<string, string>;
+  container?: string;
+  image?: string;
+  /** kubectl --requests quantity string e.g. "cpu=250m,memory=512Mi". */
+  requests?: string;
+  /** kubectl --limits quantity string e.g. "cpu=500m,memory=1Gi". */
+  limits?: string;
+  /**
+   * For deleteResource: the kubectl resource kind (service, pvc, pv, ingress,
+   * role, clusterrole, …).
+   * For restart/scale/setImage/setResources/deleteWorkload: the workload kind
+   * (deployment, statefulset, daemonset, job, cronjob). Defaults to "deployment".
+   */
+  resourceKind?: string;
+  /**
+   * `command` only: literal kubectl args WITHOUT the `kubectl` binary or
+   * `--context`. App prepends both.
+   */
+  args?: string[];
+  /** `command` only: Claude's destructiveness hint. */
+  destructive?: boolean;
+}
+
+/** Thrown when `kind === "purge"` — not a kubectl command; caller opens purge flow. */
+export class PurgeActionError extends Error {
+  constructor(name?: string) {
+    super(`purge is handled by the dedicated app-removal sheet (target: ${name ?? "unknown"})`);
+    this.name = "PurgeActionError";
+  }
+}
+
+/** `name ?? deployment ?? ""` — mirrors Swift `SuggestedAction.target`. */
+const target = (a: ActionBlock): string => a.name ?? a.deployment ?? "";
+
+/** Workload kind string, defaulting to "deployment". */
+const workloadKind = (a: ActionBlock): string =>
+  a.resourceKind ?? "deployment";
+
+/**
+ * Map a `deleteResource` resourceKind to a kubectl delete invocation.
+ * Mirrors `SuggestedActionResolver.resolveDelete` in Swift.
+ *
+ * Cluster-scoped kinds (pv, clusterrole, clusterrolebinding) omit -n.
+ * Namespaced kinds append -n <ns>.
+ */
+function resolveDeleteResource(a: ActionBlock): string[] {
+  const rk = (a.resourceKind ?? "").toLowerCase();
+  const name = target(a);
+  const ns = a.namespace;
+
+  // Cluster-scoped resources — no namespace flag
+  const clusterScoped = new Set(["pv", "persistentvolume", "clusterrole", "clusterrolebinding"]);
+  if (clusterScoped.has(rk)) {
+    return ["delete", rk === "persistentvolume" ? "pv" : rk, name];
+  }
+
+  // Normalise aliases
+  let kubectl_kind = rk;
+  if (rk === "svc") kubectl_kind = "service";
+  if (rk === "ing") kubectl_kind = "ingress";
+  if (rk === "cm") kubectl_kind = "configmap";
+  if (rk === "persistentvolumeclaim") kubectl_kind = "pvc";
+
+  const nsFlags = ns ? ["-n", ns] : [];
+  return ["delete", kubectl_kind, name, ...nsFlags];
+}
+
+/**
+ * Build the kubectl argv for an ActionBlock.
+ *
+ * The caller prepends `kubectl [--context <ctx>]`; this function returns only
+ * the arguments (verb onward), matching Swift's `KubectlInvocation.args`.
+ *
+ * @throws {PurgeActionError} for kind === "purge" — caller must open purge flow.
+ * @throws {Error} for unknown kinds.
+ */
+export function buildCommand(a: ActionBlock): string[] {
+  const ns = a.namespace ? ["-n", a.namespace] : [];
+
+  switch (a.kind) {
+    // -----------------------------------------------------------------------
+    // rollout operations
+    // -----------------------------------------------------------------------
+    case "restart": {
+      const wk = workloadKind(a);
+      return ["rollout", "restart", `${wk}/${target(a)}`, ...ns];
+    }
+
+    case "rollback":
+      return ["rollout", "undo", `deployment/${target(a)}`, ...ns];
+
+    case "pause":
+      return ["rollout", "pause", `deployment/${target(a)}`, ...ns];
+
+    case "resume":
+      return ["rollout", "resume", `deployment/${target(a)}`, ...ns];
+
+    // -----------------------------------------------------------------------
+    // scale
+    // -----------------------------------------------------------------------
+    case "scale": {
+      const wk = workloadKind(a);
+      return ["scale", `${wk}/${target(a)}`, `--replicas=${a.replicas}`, ...ns];
+    }
+
+    // -----------------------------------------------------------------------
+    // set env — Swift: sorted key=value pairs appended after deployment+ns
+    // setDeploymentEnv: ["set","env","deployment/<name>","-n",ns,...sorted_pairs]
+    // -----------------------------------------------------------------------
+    case "setEnv": {
+      const pairs = Object.entries(a.env ?? {})
+        .map(([k, v]) => `${k}=${v}`)
+        .sort();
+      return ["set", "env", `deployment/${target(a)}`, ...ns, ...pairs];
+    }
+
+    // -----------------------------------------------------------------------
+    // setImage — set image <kind>/<name> <container>=<image> -n <ns>
+    // -----------------------------------------------------------------------
+    case "setImage": {
+      const wk = workloadKind(a);
+      return [
+        "set", "image",
+        `${wk}/${target(a)}`,
+        `${a.container}=${a.image}`,
+        ...ns,
+      ];
+    }
+
+    // -----------------------------------------------------------------------
+    // setResources — set resources <kind>/<name> -c <container>
+    //   [--requests=...] [--limits=...] -n <ns>
+    // Empty strings are omitted (mirrors Swift guard !requests.isEmpty etc.)
+    // -----------------------------------------------------------------------
+    case "setResources": {
+      const wk = workloadKind(a);
+      const args: string[] = ["set", "resources", `${wk}/${target(a)}`, "-c", a.container ?? ""];
+      if (a.requests && a.requests !== "") args.push(`--requests=${a.requests}`);
+      if (a.limits && a.limits !== "") args.push(`--limits=${a.limits}`);
+      args.push(...ns);
+      return args;
+    }
+
+    // -----------------------------------------------------------------------
+    // pod / workload deletion
+    // -----------------------------------------------------------------------
+    case "deletePod":
+      return ["delete", "pod", a.pod ?? "", ...ns];
+
+    case "deleteWorkload": {
+      const wk = workloadKind(a);
+      return ["delete", wk, target(a), ...ns];
+    }
+
+    // -----------------------------------------------------------------------
+    // node operations
+    // -----------------------------------------------------------------------
+    case "cordon":
+      return ["cordon", a.node ?? ""];
+
+    case "uncordon":
+      return ["uncordon", a.node ?? ""];
+
+    case "drain": {
+      // Mirror Swift DrainOptions defaults:
+      //   gracePeriodSeconds = -1  (not emitted)
+      //   timeout = "0s"           (not emitted — "0s" is skip condition)
+      //   ignoreDaemonSets = true  → --ignore-daemonsets
+      //   deleteEmptyDirData = true → --delete-emptydir-data
+      //   force = false            (not emitted)
+      //   disableEviction = false  (not emitted)
+      const args = ["drain", a.node ?? ""];
+      args.push("--ignore-daemonsets");
+      args.push("--delete-emptydir-data");
+      return args;
+    }
+
+    // -----------------------------------------------------------------------
+    // CronJob operations
+    // -----------------------------------------------------------------------
+    case "suspendCronJob":
+      return [
+        "patch", "cronjob", target(a),
+        ...ns,
+        "--type=merge",
+        "-p", '{"spec":{"suspend":true}}',
+      ];
+
+    case "resumeCronJob":
+      return [
+        "patch", "cronjob", target(a),
+        ...ns,
+        "--type=merge",
+        "-p", '{"spec":{"suspend":false}}',
+      ];
+
+    case "triggerCronJob":
+      // Swift uses CronJob.manualRunName(for:); web receives the pre-generated
+      // job name in the `pod` field (same wire-format convention as the action block).
+      return [
+        "create", "job", a.pod ?? `${target(a)}-manual`,
+        `--from=cronjob/${target(a)}`,
+        ...ns,
+      ];
+
+    // -----------------------------------------------------------------------
+    // Namespace operations
+    // -----------------------------------------------------------------------
+    case "createNamespace":
+      return ["create", "namespace", target(a)];
+
+    case "deleteNamespace":
+      return ["delete", "namespace", target(a)];
+
+    // -----------------------------------------------------------------------
+    // deleteResource — mirrors SuggestedActionResolver.resolveDelete
+    // -----------------------------------------------------------------------
+    case "deleteResource":
+      return resolveDeleteResource(a);
+
+    // -----------------------------------------------------------------------
+    // command — verbatim args (empty strings pre-filtered by Swift, we mirror)
+    // -----------------------------------------------------------------------
+    case "command":
+      return (a.args ?? []).filter((s) => s !== "");
+
+    // -----------------------------------------------------------------------
+    // purge — NOT a kubectl command; opens typed-name purge confirm sheet
+    // -----------------------------------------------------------------------
+    case "purge":
+      throw new PurgeActionError(target(a));
+
+    // -----------------------------------------------------------------------
+    default:
+      throw new Error(`unsupported action kind: ${a.kind}`);
+  }
+}

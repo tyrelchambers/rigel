@@ -1,0 +1,13 @@
+{
+  "name": "@helmsman/server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "build": "bun build src/index.ts --target=bun --outdir=dist",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": { "@helmsman/k8s": "workspace:*", "@helmsman/catalog": "workspace:*" },
+  "devDependencies": { "@types/bun": "latest", "typescript": "latest" }
+}
