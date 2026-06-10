@@ -36,7 +36,6 @@ import { VerifyingStep } from "./steps/VerifyingStep";
 import { DoneStep } from "./steps/DoneStep";
 import { FailedStep } from "./steps/FailedStep";
 import { iconFor } from "./icons";
-import { appIconGradient } from "./appColors";
 
 // Steps in order for the stepper indicator
 const WIZARD_STEPS_ORDERED: WizardStep[] = [
@@ -107,7 +106,6 @@ export function CatalogInstallWizard({
   const isHelm = app.install?.mode === "helm";
 
   const Icon = iconFor(app.iconSystemName);
-  const gradient = appIconGradient(app.id);
 
   // --- step transitions ----------------------------------------------------
 
@@ -204,11 +202,10 @@ export function CatalogInstallWizard({
           <div className="wizard-app-row">
             <div
               className="wizard-app-icon"
-              style={{ background: `linear-gradient(135deg, ${gradient.from}, ${gradient.to})` }}
+              style={{ background: "#26262C", border: "1px solid #2F2F36" }}
               aria-hidden
             >
               <Icon className="wizard-app-icon-glyph" />
-              <div className="wizard-app-icon-highlight" />
             </div>
             <div className="wizard-app-info">
               <DialogTitle className="wizard-title">Install {app.name}</DialogTitle>

@@ -34,7 +34,6 @@ import {
 import { CatalogDetailSheet } from "./CatalogDetailSheet";
 import { CatalogInstallWizard } from "./CatalogInstallWizard";
 import { updateTargets, withTag, type UpdateTarget } from "./updateTargets";
-import { appIconGradient, appAccentAlpha } from "./appColors";
 
 // Watches the catalog needs cluster-wide (detection scans every namespace) plus
 // namespace/node lists for the wizard dropdowns.
@@ -345,18 +344,9 @@ function CatalogCard({
   children?: ReactNode;
 }) {
   const Icon = iconFor(app.iconSystemName);
-  const gradient = appIconGradient(app.id);
-  const accentBorder = appAccentAlpha(app.id, 0.5);
-  const accentGlow = appAccentAlpha(app.id, 0.18);
   // Stagger: cap at first 12, then no delay
   const delayMs = index < 12 ? index * 40 : 0;
-
-  // CSS custom properties for hover effects driven by inline style
-  const cardStyle = {
-    "--card-accent-border": accentBorder,
-    "--card-accent-glow": accentGlow,
-    animationDelay: `${delayMs}ms`,
-  } as React.CSSProperties;
+  const cardStyle = { animationDelay: `${delayMs}ms` } as React.CSSProperties;
 
   return (
     <article
@@ -375,17 +365,9 @@ function CatalogCard({
     >
       {/* Top row: icon + name/tagline + installed badge */}
       <div className="catalog-card-top">
-        {/* Icon tile */}
-        <div
-          className="catalog-icon-tile"
-          style={{
-            background: `linear-gradient(135deg, ${gradient.from}, ${gradient.to})`,
-          }}
-          aria-hidden
-        >
+        {/* Icon tile — flat neutral so it doesn't pop */}
+        <div className="catalog-icon-tile" aria-hidden>
           <Icon className="catalog-icon-glyph" />
-          {/* Inner highlight for depth */}
-          <div className="catalog-icon-highlight" />
         </div>
 
         <div className="catalog-card-meta">
@@ -485,8 +467,8 @@ function UpdateStatusRow({
   if (result.updateAvailable && result.latest) {
     const latest = result.latest;
     return (
-      <div className="catalog-update-row catalog-update-available">
-        <span className="catalog-update-label">
+      <div className="catalog-update-row">
+        <span className="catalog-update-chip catalog-update-chip-diff">
           <ArrowUp className="size-3 shrink-0" aria-hidden />
           {result.currentTag ?? "?"} → {latest}
         </span>
@@ -508,20 +490,24 @@ function UpdateStatusRow({
 
   if (result.kind === "unknown") {
     return (
-      <div
-        className="catalog-update-row catalog-update-dim"
-        title={result.reason ?? "Could not determine an update for this image"}
-      >
-        <HelpCircle className="size-3 shrink-0" aria-hidden />
-        Version unknown
+      <div className="catalog-update-row">
+        <span
+          className="catalog-update-chip catalog-update-chip-unknown"
+          title={result.reason ?? "Could not determine an update for this image"}
+        >
+          <HelpCircle className="size-3 shrink-0" aria-hidden />
+          version unknown
+        </span>
       </div>
     );
   }
 
   return (
-    <div className="catalog-update-row catalog-update-ok">
-      <Check className="size-3 shrink-0" aria-hidden />
-      Up to date
+    <div className="catalog-update-row">
+      <span className="catalog-update-chip catalog-update-chip-ok">
+        <Check className="size-3 shrink-0" aria-hidden />
+        up to date
+      </span>
     </div>
   );
 }

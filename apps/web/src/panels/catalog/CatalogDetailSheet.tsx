@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { iconFor } from "./icons";
-import { appIconGradient } from "./appColors";
 
 /** Detail sheet — full app info + Install button (docs/parity/catalog.md §"Detail Sheet"). */
 export function CatalogDetailSheet({
@@ -27,7 +26,6 @@ export function CatalogDetailSheet({
   onInstall: () => void;
 }) {
   const Icon = iconFor(app.iconSystemName);
-  const gradient = appIconGradient(app.id);
   const links: Array<{ label: string; url: string | null | undefined }> = [
     { label: "Docs", url: app.docsURL },
     { label: "Repo", url: app.repoURL },
@@ -43,11 +41,10 @@ export function CatalogDetailSheet({
           <div className="detail-sheet-hero">
             <div
               className="detail-sheet-icon"
-              style={{ background: `linear-gradient(135deg, ${gradient.from}, ${gradient.to})` }}
+              style={{ background: "#26262C", border: "1px solid #2F2F36" }}
               aria-hidden
             >
               <Icon className="detail-sheet-icon-glyph" />
-              <div className="detail-sheet-icon-highlight" />
             </div>
             <div className="detail-sheet-title-group">
               <SheetTitle className="detail-sheet-name">
