@@ -10,6 +10,7 @@ import { getPodMetrics, getNodeMetrics } from "./metrics";
 import { handleUpdates, type UpdatesRequest } from "./updates";
 import { handleAssistant, type AssistantRequest } from "./assistant";
 import { handleSignal, type SignalRequest } from "./signal";
+import { PortForwardManager, type TargetKind } from "./portForward";
 import { checkAuth } from "./auth";
 
 const KUBECONFIG = resolveKubeconfigPath(process.env, homedir());
@@ -37,6 +38,11 @@ const ctxRes = await kubectl(null, ["config", "current-context"]);
 const context = ctxRes.code === 0 ? ctxRes.stdout.trim() : null;
 
 const mgr = new WatchManager(context);
+
+// Port-forward subprocess registry (docs/parity/portforward.md). One instance
+// for the server's lifetime; killed wholesale on shutdown so no zombie kubectl
+// survives. The forwards bind the SERVER's 127.0.0.1 — see the module caveat.
+const portForwards = new PortForwardManager(context);
 
 const server = Bun.serve({
   port: PORT,
@@ -277,6 +283,73 @@ const server = Bun.serve({
       return Response.json(result.body);
     }
 
+    // POST /api/portforward — kubectl port-forward subprocess manager
+    // (docs/parity/portforward.md). Dispatches on `action`:
+    //   start → spawn `kubectl port-forward svc/<name> <local>:<remote> -n <ns>`,
+    //           returns { ok:true, forward } (status "starting"; polls to running).
+    //   stop  → SIGTERM the child for `id`, returns { ok:true }.
+    //   list  → { forwards: ActiveForward[] }.
+    // The forward binds the SERVER's loopback (127.0.0.1) — reachable from the
+    // host only when the server runs locally or the port is published.
+    if (url.pathname === "/api/portforward" && req.method === "POST") {
+      let body: {
+        action?: "start" | "stop" | "list";
+        namespace?: string;
+        service?: string;
+        remotePort?: number;
+        localPort?: number;
+        context?: string;
+        targetKind?: TargetKind;
+        id?: string;
+      };
+      try {
+        body = await req.json();
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+
+      if (body.action === "list") {
+        return Response.json({ forwards: portForwards.list() });
+      }
+
+      if (body.action === "stop") {
+        if (typeof body.id !== "string" || body.id.trim() === "") {
+          return Response.json({ ok: false, error: "missing id" }, { status: 422 });
+        }
+        const stopped = await portForwards.stop(body.id);
+        if (!stopped) {
+          return Response.json({ ok: false, error: "no such forward" }, { status: 404 });
+        }
+        return Response.json({ ok: true });
+      }
+
+      if (body.action === "start") {
+        if (typeof body.namespace !== "string" || typeof body.service !== "string") {
+          return Response.json(
+            { ok: false, error: "missing namespace or service" },
+            { status: 422 },
+          );
+        }
+        if (typeof body.remotePort !== "number") {
+          return Response.json({ ok: false, error: "missing remotePort" }, { status: 422 });
+        }
+        const result = portForwards.start({
+          namespace: body.namespace,
+          service: body.service,
+          remotePort: body.remotePort,
+          localPort: body.localPort,
+          context: body.context,
+          targetKind: body.targetKind,
+        });
+        if (result.kind === "error") {
+          return Response.json({ ok: false, error: result.message }, { status: result.status });
+        }
+        return Response.json({ ok: true, forward: result.forward });
+      }
+
+      return Response.json({ error: "unknown action" }, { status: 422 });
+    }
+
     if (url.pathname === "/ws") {
       if (srv.upgrade(req)) return; // handled by websocket
       return new Response("expected websocket", { status: 426 });
@@ -288,3 +361,11 @@ const server = Bun.serve({
 });
 
 console.log(`helmsman server on :${server.port} (kubeconfig=${KUBECONFIG})`);
+
+// Shutdown hook: kill every port-forward child so no zombie kubectl survives the
+// server. SIGINT/SIGTERM both run stopAll() before exiting.
+for (const sig of ["SIGINT", "SIGTERM"] as const) {
+  process.on(sig, () => {
+    void portForwards.stopAll().finally(() => process.exit(0));
+  });
+}

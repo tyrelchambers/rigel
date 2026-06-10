@@ -1,4 +1,5 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ActiveForward } from "@/panels/services/portForward";
 
 /**
  * ActionBlock mirrors the server-side ActionBlock interface and
@@ -352,4 +353,80 @@ export async function sendSignalTest(args: {
     body: JSON.stringify({ action: "sendTest", ...args }),
   });
   if (!res.ok) await throwApiError(res);
+}
+
+// ---------------------------------------------------------------------------
+// Port-forward — POST /api/portforward (docs/parity/portforward.md)
+//
+// One endpoint, dispatched on `action`. The active list is polled (3s) via
+// TanStack Query so it picks up server-side state changes (a forward becoming
+// ready/failed, or a forward stopped from elsewhere). Start/stop are mutations
+// that invalidate the list on settle.
+// ---------------------------------------------------------------------------
+
+export interface StartForwardParams {
+  namespace: string;
+  service: string;
+  remotePort: number;
+  localPort?: number;
+}
+
+const PORT_FORWARD_KEY = ["portforward"] as const;
+
+async function listForwards(): Promise<ActiveForward[]> {
+  const res = await fetch("/api/portforward", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "list" }),
+  });
+  if (!res.ok) await throwApiError(res);
+  const data = (await res.json()) as { forwards?: ActiveForward[] };
+  return data.forwards ?? [];
+}
+
+async function startForward(params: StartForwardParams): Promise<ActiveForward> {
+  const res = await fetch("/api/portforward", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "start", ...params }),
+  });
+  if (!res.ok) await throwApiError(res);
+  const data = (await res.json()) as { forward: ActiveForward };
+  return data.forward;
+}
+
+async function stopForward(id: string): Promise<void> {
+  const res = await fetch("/api/portforward", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "stop", id }),
+  });
+  if (!res.ok) await throwApiError(res);
+}
+
+/** Poll the active port-forwards every 3s (docs/parity/portforward.md). */
+export function useForwards() {
+  return useQuery({
+    queryKey: PORT_FORWARD_KEY,
+    queryFn: listForwards,
+    refetchInterval: 3000,
+  });
+}
+
+/** Start a forward, then refresh the active list. */
+export function useStartForward() {
+  const qc = useQueryClient();
+  return useMutation<ActiveForward, Error, StartForwardParams>({
+    mutationFn: startForward,
+    onSettled: () => qc.invalidateQueries({ queryKey: PORT_FORWARD_KEY }),
+  });
+}
+
+/** Stop a forward by id, then refresh the active list. */
+export function useStopForward() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: stopForward,
+    onSettled: () => qc.invalidateQueries({ queryKey: PORT_FORWARD_KEY }),
+  });
 }

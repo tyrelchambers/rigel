@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { LoaderCircle, ChevronRight, ChevronDown } from "lucide-react";
+import { LoaderCircle, ChevronRight, ChevronDown, MoreHorizontal, ArrowRightLeft } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import {
@@ -10,29 +10,39 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/table";
-import type { Service } from "./types";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import { useForwards } from "@/lib/api";
+import type { Service, ServicePort } from "./types";
 import type { Pod } from "../pods/types";
 import {
   relativeAge,
   typeLabel,
+  isExternalName,
   portSummaries,
   externalAddress,
   endpointCount,
   matchesSearch,
   sortServices,
 } from "./servicesDisplay";
+import { getForwardingServices } from "./portForward";
+import { ActiveForwardsList } from "./ActiveForwardsList";
+import { PortForwardDialog, type PortForwardTarget } from "./PortForwardDialog";
 
 // ---------------------------------------------------------------------------
-// DEFERRED ACTIONS (docs/parity/services.md §"Row Actions"). This is a
-// read-only panel. The following are intentionally NOT implemented and must
-// NOT be added without a new feature spec + infra:
-//   - Port-forward UI/control (needs a server-side subprocess manager +
-//     bidirectional WebSocket; do NOT render a button that 422s).
+// IMPLEMENTED: Port-forward (docs/parity/portforward.md) — "Forward port" row
+// action, ACTIVE FORWARDS list, and the running-forward badge.
+//
+// DEFERRED ACTIONS (docs/parity/services.md §"Row Actions") — still NOT wired:
 //   - Edit / Create / Delete service mutations (need ConfirmSheet wiring +
 //     server action routes — reuse the pods/nodes ConfirmSheet pattern later).
 //   - Ask Claude handoff (needs a service-diagnostics context builder).
 //   - View YAML (needs a server YAML endpoint + viewer UI).
-//   - Forwarding badge (needs server port-forward state polling).
 // ---------------------------------------------------------------------------
 
 /** Type → badge color class. ExternalName is secondary; the rest are primary. */
@@ -50,6 +60,11 @@ export default function ServicesPanel() {
 
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [forwardTarget, setForwardTarget] = useState<PortForwardTarget | null>(null);
+
+  // Active port-forwards (polled every 3s) drive the ACTIVE FORWARDS list, the
+  // running-forward badge, and the dialog's duplicate-port validation.
+  const { data: forwards = [] } = useForwards();
 
   // Subscribe to the services watch for the active namespace (or all).
   useEffect(() => {
@@ -72,6 +87,11 @@ export default function ServicesPanel() {
   const pods = useMemo(
     () => Object.values((resources["pods"] ?? {}) as Record<string, Pod>),
     [resources],
+  );
+
+  const forwardingUids = useMemo(
+    () => getForwardingServices(forwards, allServices),
+    [forwards, allServices],
   );
 
   const total = allServices.length;
@@ -114,6 +134,16 @@ export default function ServicesPanel() {
         </pre>
       )}
 
+      {/* Active port-forwards (above the table; hidden when none) */}
+      <ActiveForwardsList forwards={forwards} />
+
+      {/* Start-a-forward dialog */}
+      <PortForwardDialog
+        target={forwardTarget}
+        activeForwards={forwards}
+        onClose={() => setForwardTarget(null)}
+      />
+
       {/* Table */}
       <Table>
         <TableHeader>
@@ -127,6 +157,7 @@ export default function ServicesPanel() {
             <TableHead>Endpoints</TableHead>
             <TableHead>External Address</TableHead>
             <TableHead>Age</TableHead>
+            <TableHead className="w-10" />
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -139,6 +170,7 @@ export default function ServicesPanel() {
             const summaries = portSummaries(svc.spec?.ports);
             const endpoints = endpointCount(svc, pods);
             const external = externalAddress(svc);
+            const isForwarding = forwardingUids.has(uid);
             return (
               <Fragment key={uid}>
                 <TableRow>
@@ -157,13 +189,21 @@ export default function ServicesPanel() {
                     {svc.metadata.namespace ?? "—"}
                   </TableCell>
                   <TableCell>
-                    <button
-                      type="button"
-                      onClick={() => toggleExpand(uid)}
-                      className="font-mono hover:underline"
-                    >
-                      {svc.metadata.name}
-                    </button>
+                    <span className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleExpand(uid)}
+                        className="font-mono hover:underline"
+                      >
+                        {svc.metadata.name}
+                      </button>
+                      {isForwarding && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-1.5 py-0.5 text-xs font-medium text-green-600 dark:text-green-400">
+                          <ArrowRightLeft className="size-3" />
+                          Forwarding
+                        </span>
+                      )}
+                    </span>
                   </TableCell>
                   <TableCell>
                     <span
@@ -196,11 +236,14 @@ export default function ServicesPanel() {
                   <TableCell className="font-mono text-muted-foreground">
                     {relativeAge(svc.metadata.creationTimestamp)}
                   </TableCell>
+                  <TableCell className="align-top">
+                    <ServiceActions service={svc} onForward={setForwardTarget} />
+                  </TableCell>
                 </TableRow>
 
                 {isOpen && (
                   <TableRow>
-                    <TableCell colSpan={9} className="bg-muted/30">
+                    <TableCell colSpan={10} className="bg-muted/30">
                       <ServiceDetail service={svc} />
                     </TableCell>
                   </TableRow>
@@ -281,5 +324,73 @@ function ServiceDetail({ service }: { service: Service }) {
         </div>
       )}
     </div>
+  );
+}
+
+/** Human label + remote port for one "Forward port" menu entry. */
+function forwardOption(p: ServicePort): { remotePort: number; label: string } {
+  const name = p.name ? `${p.name} ` : "";
+  const proto = p.protocol && p.protocol !== "TCP" ? `/${p.protocol}` : "";
+  return { remotePort: p.port, label: `Forward port ${name}${p.port}${proto}` };
+}
+
+/**
+ * Per-row ellipsis menu. The only action today is "Forward port"
+ * (docs/parity/portforward.md §"Port-Forward Action in Row Context"):
+ *   - ExternalName services → the action is hidden (cannot be port-forwarded).
+ *   - No ports → a single disabled "Forward port" item.
+ *   - One port → "Forward port <port>".
+ *   - Multiple ports → one "Forward port <port>" item per port.
+ * Selecting an item opens the PortForwardDialog with that service port as the
+ * remote port; kubectl forwards `svc/<name> <local>:<servicePort>`.
+ */
+function ServiceActions({
+  service,
+  onForward,
+}: {
+  service: Service;
+  onForward: (target: PortForwardTarget) => void;
+}) {
+  // ExternalName has no cluster endpoint to forward to → no menu at all.
+  if (isExternalName(service)) return null;
+
+  const namespace = service.metadata.namespace ?? "default";
+  const ports = service.spec?.ports ?? [];
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={`Actions for ${service.metadata.name}`}
+            title="Actions"
+          />
+        }
+      >
+        <MoreHorizontal className="size-4" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {ports.length === 0 ? (
+          <DropdownMenuItem disabled>Forward port (no ports)</DropdownMenuItem>
+        ) : (
+          ports.map((p, i) => {
+            const { remotePort, label } = forwardOption(p);
+            return (
+              <DropdownMenuItem
+                key={`${remotePort}-${i}`}
+                onClick={() =>
+                  onForward({ service: service.metadata.name, namespace, remotePort })
+                }
+              >
+                <ArrowRightLeft className="size-3.5" />
+                {label}
+              </DropdownMenuItem>
+            );
+          })
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
