@@ -1,36 +1,24 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   LoaderCircle,
+  ChevronRight,
+  ChevronDown,
+  ArrowUp,
+  ArrowDown,
+  TriangleAlert,
+  ScrollText,
+  CircleHelp,
+  RotateCcw,
   RefreshCw,
   MoveVertical,
   Undo2,
   Pause,
   Play,
-  MoreHorizontal,
-  ChevronRight,
-  ChevronDown,
-  ArrowUp,
-  ArrowDown,
 } from "lucide-react";
-import { useNavigate } from "react-router";
 import { useCluster } from "@/store/cluster";
-import { subscribe, unsubscribe, sendChat } from "@/lib/ws";
+import { subscribe, unsubscribe } from "@/lib/ws";
+import { handoffToChat } from "@/lib/chatHandoff";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -74,7 +62,6 @@ export default function DeploymentsPanel() {
   const isLoading = useCluster((s) => s.isLoading);
   const error = useCluster((s) => s.error);
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
-  const navigate = useNavigate();
 
   const [search, setSearch] = useState("");
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
@@ -82,8 +69,6 @@ export default function DeploymentsPanel() {
   const [scaleTarget, setScaleTarget] = useState<Deployment | null>(null);
   const [scaleValue, setScaleValue] = useState("1");
 
-  // Subscribe to the deployments watch for the active namespace (or all). Pods
-  // power the row color / error-state / child-pod detail, so subscribe to both.
   useEffect(() => {
     const ns = namespaceFilter ?? "*";
     subscribe("deployments", ns);
@@ -124,7 +109,7 @@ export default function DeploymentsPanel() {
     });
   }
 
-  // --- Action builders (mirror docs/parity/deployments.md §4) ---------------
+  // --- Mutation action builders --------------------------------------------
 
   function restart(d: Deployment) {
     setPendingAction({
@@ -174,27 +159,42 @@ export default function DeploymentsPanel() {
     setScaleTarget(null);
   }
 
-  // Ask-Claude handoffs: prose-only, route to the chat panel.
+  // --- Chat handoff (matches Overview's onInvestigateCluster pattern) -------
+
   function askClaude(d: Deployment, topic: "Errors" | "Logs" | "Explain" | "Rollout") {
     const ns = d.metadata.namespace ?? "default";
     const prompts: Record<string, string> = {
-      Errors: `Investigate errors on deployment ${d.metadata.name} in namespace ${ns}.`,
-      Logs: `Show recent logs for deployment ${d.metadata.name} in namespace ${ns}.`,
+      Errors: `Investigate errors on deployment ${d.metadata.name} in namespace ${ns} — check pod statuses, recent events, and crash/restart reasons.`,
+      Logs: `Show and summarize recent logs for deployment ${d.metadata.name} in namespace ${ns}.`,
       Explain: `Explain what deployment ${d.metadata.name} in namespace ${ns} does and its current state.`,
-      Rollout: `Show the rollout status and recent history of deployment ${d.metadata.name} in namespace ${ns}.`,
+      Rollout: `Show the rollout status and recent rollout history of deployment ${d.metadata.name} in namespace ${ns}.`,
     };
-    sendChat(prompts[topic]);
-    navigate("/chat");
+    handoffToChat(prompts[topic]);
   }
 
   const scaleN = Math.max(0, Math.min(50, Math.floor(Number(scaleValue) || 0)));
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-0">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold">Deployments</h1>
-        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-mono text-muted-foreground">
+      <div
+        className="flex items-center gap-3 px-4 py-3"
+        style={{ borderBottom: "1px solid #1A1A1A", background: "#141417" }}
+      >
+        <div className="flex flex-col gap-0">
+          <span className="text-sm font-semibold leading-tight">Deployments</span>
+          <span style={{ fontSize: 11, color: "#6B6B73" }}>Rollouts &amp; replicas</span>
+        </div>
+        <span
+          style={{
+            fontFamily: "ui-monospace, monospace",
+            fontSize: 11,
+            color: "#6B6B73",
+            background: "#1A1A1A",
+            padding: "2px 6px",
+            borderRadius: 4,
+          }}
+        >
           {filtered.length}
         </span>
         {isLoading && (
@@ -205,191 +205,220 @@ export default function DeploymentsPanel() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search deployments…"
-          className="ml-auto w-64 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="ml-auto w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
         />
       </div>
 
       {/* Error banner */}
       {error && (
-        <pre className="rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+        <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
           {error}
         </pre>
       )}
 
-      {/* Table */}
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-6" />
-            <TableHead>Namespace</TableHead>
-            <TableHead>Name</TableHead>
-            <TableHead>Image</TableHead>
-            <TableHead>Tag</TableHead>
-            <TableHead>Ready</TableHead>
-            <TableHead>Updated</TableHead>
-            <TableHead>Available</TableHead>
-            <TableHead>Age</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {filtered.map((d) => {
-            const k = key(d);
-            const isOpen = expanded.has(k);
-            const image = firstImage(d);
-            const pods = childPods(d, allPods);
-            const redeploying = isRedeploying(d, allPods);
-            const total = totalReplicas(d);
-            const updated = d.status?.updatedReplicas ?? 0;
-            const paused = d.spec?.paused === true;
-            return (
-              <Fragment key={k}>
-                <TableRow>
-                  <TableCell className="align-top">
-                    <button
-                      type="button"
-                      onClick={() => toggleExpand(d)}
-                      aria-label={isOpen ? "Collapse" : "Expand"}
-                      aria-expanded={isOpen}
-                      className="text-muted-foreground hover:text-foreground"
-                    >
-                      {isOpen ? (
-                        <ChevronDown className="size-4" />
-                      ) : (
-                        <ChevronRight className="size-4" />
-                      )}
-                    </button>
-                  </TableCell>
-                  <TableCell className="font-mono text-muted-foreground">
-                    {d.metadata.namespace ?? "default"}
-                  </TableCell>
-                  <TableCell>
-                    <button
-                      type="button"
-                      onClick={() => toggleExpand(d)}
-                      className={`font-mono hover:underline ${statusColor(d, allPods)}`}
-                    >
-                      {d.metadata.name}
-                    </button>
-                    {/* Rollout churn chips */}
-                    {redeploying && (
-                      <span className="ml-2 inline-flex items-center gap-2 align-middle text-xs">
-                        <span className="inline-flex items-center gap-0.5 text-green-600 dark:text-green-400">
-                          <ArrowUp className="size-3" />
-                          {updated}
-                        </span>
-                        <span className="inline-flex items-center gap-0.5 text-muted-foreground">
-                          <ArrowDown className="size-3" />
-                          {Math.max(0, total - updated)}
-                        </span>
-                      </span>
+      {/* Row list */}
+      <div className="flex flex-col gap-0.5 px-3 py-2">
+        {filtered.map((d) => {
+          const k = key(d);
+          const isOpen = expanded.has(k);
+          const image = firstImage(d);
+          const pods = childPods(d, allPods);
+          const redeploying = isRedeploying(d, allPods);
+          const total = totalReplicas(d);
+          const updated = d.status?.updatedReplicas ?? 0;
+          const paused = d.spec?.paused === true;
+          const progress = rolloutProgress(d);
+
+          return (
+            <Fragment key={k}>
+              {/* Main row */}
+              <div
+                className="relative overflow-hidden rounded-md"
+                style={{
+                  background: isOpen ? "#141417" : "#050505",
+                  border: "1px solid #1A1A1A",
+                }}
+              >
+                {/* Redeploying left-edge glow */}
+                {redeploying && (
+                  <div
+                    className="pointer-events-none absolute inset-0"
+                    style={{
+                      background:
+                        "linear-gradient(to right, rgba(16,185,129,0.18) 0%, transparent 55%)",
+                    }}
+                  />
+                )}
+
+                <div className="relative flex items-center gap-2 px-2.5 py-2">
+                  {/* Chevron toggle */}
+                  <button
+                    type="button"
+                    onClick={() => toggleExpand(d)}
+                    aria-label={isOpen ? "Collapse" : "Expand"}
+                    aria-expanded={isOpen}
+                    className="shrink-0 text-muted-foreground hover:text-foreground"
+                  >
+                    {isOpen ? (
+                      <ChevronDown className="size-3" />
+                    ) : (
+                      <ChevronRight className="size-3" />
                     )}
-                  </TableCell>
-                  <TableCell className="font-mono text-muted-foreground text-xs">
-                    {imageRepo(image)}
-                  </TableCell>
-                  <TableCell>
-                    <span className="inline-block rounded-full bg-primary/10 px-2 py-0.5 text-xs font-mono text-primary">
+                  </button>
+
+                  {/* Name — health-colored */}
+                  <button
+                    type="button"
+                    onClick={() => toggleExpand(d)}
+                    className={`shrink-0 font-mono text-xs font-medium leading-none hover:underline ${statusColor(d, allPods)}`}
+                  >
+                    {d.metadata.name}
+                  </button>
+
+                  {/* Namespace — dim tertiary */}
+                  <span
+                    style={{
+                      fontFamily: "ui-monospace, monospace",
+                      fontSize: 10,
+                      color: "#6B6B73",
+                      background: "#050505",
+                      padding: "1px 5px",
+                      borderRadius: 4,
+                      border: "1px solid #1A1A1A",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {d.metadata.namespace ?? "—"}
+                  </span>
+
+                  {/* Image repo — dim, truncated */}
+                  {image && imageRepo(image) !== "—" && (
+                    <span
+                      title={image}
+                      style={{
+                        fontFamily: "ui-monospace, monospace",
+                        fontSize: 10,
+                        color: "#A1A1AA",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        minWidth: 0,
+                        flexShrink: 1,
+                      }}
+                    >
+                      {imageRepo(image)}
+                    </span>
+                  )}
+
+                  {/* Tag pill — purple accent */}
+                  {image && (
+                    <span
+                      title={image}
+                      style={{
+                        fontFamily: "ui-monospace, monospace",
+                        fontSize: 10,
+                        fontWeight: 500,
+                        color: "#A855F7",
+                        background: "rgba(168,85,247,0.15)",
+                        padding: "1px 5px",
+                        borderRadius: 4,
+                        whiteSpace: "nowrap",
+                        flexShrink: 0,
+                      }}
+                    >
                       {imageTag(image)}
                     </span>
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className={`inline-block rounded-full px-2 py-0.5 text-xs font-mono ${readyColorClass(d)}`}
-                    >
-                      {readyText(d)}
-                    </span>
-                  </TableCell>
-                  <TableCell className="font-mono text-muted-foreground">{updated}</TableCell>
-                  <TableCell className="font-mono text-muted-foreground">
-                    {d.status?.availableReplicas ?? 0}
-                  </TableCell>
-                  <TableCell className="font-mono text-muted-foreground">
-                    {relativeAge(d.metadata.creationTimestamp)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="icon-sm" aria-label="Restart" title="Restart" onClick={() => restart(d)}>
-                        <RefreshCw />
-                      </Button>
-                      <Button variant="ghost" size="icon-sm" aria-label="Scale" title="Scale" onClick={() => openScale(d)}>
-                        <MoveVertical />
-                      </Button>
-                      <Button variant="ghost" size="icon-sm" aria-label="Rollback" title="Rollback" onClick={() => rollback(d)}>
-                        <Undo2 />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={paused ? "Resume" : "Pause"}
-                        title={paused ? "Resume" : "Pause"}
-                        onClick={() => togglePause(d)}
-                      >
-                        {paused ? <Play /> : <Pause />}
-                      </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger
-                          render={<Button variant="ghost" size="icon-sm" aria-label="More actions" title="More" />}
+                  )}
+
+                  {/* Spacer */}
+                  <span className="flex-1" />
+
+                  {/* Rollout churn chips — only while live */}
+                  {redeploying && (
+                    <span className="inline-flex items-center gap-1.5 text-[10px]">
+                      {updated > 0 && (
+                        <span
+                          className="inline-flex items-center gap-0.5"
+                          style={{ color: "#10B981" }}
+                          title={`${updated} new pod(s) up`}
                         >
-                          <MoreHorizontal />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                          <DropdownMenuItem onClick={() => askClaude(d, "Errors")}>
-                            Ask Claude: Errors
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => askClaude(d, "Logs")}>
-                            Ask Claude: Logs
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => askClaude(d, "Explain")}>
-                            Ask Claude: Explain
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => askClaude(d, "Rollout")}>
-                            Ask Claude: Rollout
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem disabled>View YAML… (soon)</DropdownMenuItem>
-                          <DropdownMenuItem disabled>Manage… (soon)</DropdownMenuItem>
-                          <DropdownMenuItem disabled>Move to namespace… (soon)</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </TableCell>
-                </TableRow>
+                          <ArrowUp className="size-2.5" />
+                          {updated}
+                        </span>
+                      )}
+                      {Math.max(0, total - updated) > 0 && (
+                        <span
+                          className="inline-flex items-center gap-0.5"
+                          style={{ color: "#F59E0B" }}
+                          title={`${Math.max(0, total - updated)} old terminating`}
+                        >
+                          <ArrowDown className="size-2.5" />
+                          {Math.max(0, total - updated)}
+                        </span>
+                      )}
+                    </span>
+                  )}
 
-                {/* Rollout progress bar row */}
+                  {/* Ready badge */}
+                  <span
+                    className={`shrink-0 rounded font-mono text-[11px] font-medium px-2 py-0.5 ${readyColorClass(d)}`}
+                  >
+                    {readyText(d)}
+                  </span>
+
+                  {/* Action button strip — 4 chat handoff buttons */}
+                  <ActionButtonStrip
+                    deployment={d}
+                    onAsk={askClaude}
+                  />
+                </div>
+
+                {/* Rollout progress bar — pinned to bottom edge */}
                 {redeploying && (
-                  <TableRow>
-                    <TableCell colSpan={10} className="p-0">
-                      <div className="h-0.5 w-full bg-muted">
-                        <div
-                          className="h-0.5 bg-green-500 transition-all"
-                          style={{ width: `${Math.round(rolloutProgress(d) * 100)}%` }}
-                        />
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                  <div
+                    className="absolute bottom-0 left-0 right-0"
+                    style={{ height: 2.5, background: "#2A2A2A" }}
+                  >
+                    <div
+                      style={{
+                        height: "100%",
+                        width: `${Math.round(progress * 100)}%`,
+                        background: "#10B981",
+                        transition: "width 0.4s ease",
+                      }}
+                    />
+                  </div>
                 )}
+              </div>
 
-                {/* Expanded detail */}
-                {isOpen && (
-                  <TableRow>
-                    <TableCell colSpan={10} className="bg-muted/30">
-                      <DeploymentDetail deployment={d} pods={pods} />
-                    </TableCell>
-                  </TableRow>
-                )}
-              </Fragment>
-            );
-          })}
-        </TableBody>
-      </Table>
+              {/* Expanded detail */}
+              {isOpen && (
+                <div
+                  className="rounded-b-md border-x border-b px-6 py-3"
+                  style={{ borderColor: "#1A1A1A", background: "#0A0A0A" }}
+                >
+                  <DeploymentDetail
+                    deployment={d}
+                    pods={pods}
+                    paused={paused}
+                    onRestart={() => restart(d)}
+                    onScale={() => openScale(d)}
+                    onRollback={() => rollback(d)}
+                    onTogglePause={() => togglePause(d)}
+                  />
+                </div>
+              )}
+            </Fragment>
+          );
+        })}
+      </div>
 
       {/* Empty / filtered-to-zero states */}
       {!isLoading && allDeployments.length === 0 && (
-        <p className="px-2 py-4 text-sm text-muted-foreground">No deployments found</p>
+        <p className="px-4 py-4 text-sm text-muted-foreground">No deployments found</p>
       )}
       {!isLoading && allDeployments.length > 0 && filtered.length === 0 && (
-        <p className="px-2 py-4 text-sm text-muted-foreground">No deployments match search</p>
+        <p className="px-4 py-4 text-sm text-muted-foreground">No deployments match search</p>
       )}
 
       {/* Scale prompt */}
@@ -425,82 +454,199 @@ export default function DeploymentsPanel() {
   );
 }
 
-/** Expanded SPEC + PODS detail blocks for one deployment. */
-function DeploymentDetail({ deployment, pods }: { deployment: Deployment; pods: Pod[] }) {
+// ---------------------------------------------------------------------------
+// Action button strip — 4 chat handoffs matching ActionButtonStrip.swift
+// ---------------------------------------------------------------------------
+
+interface ActionButtonStripProps {
+  deployment: Deployment;
+  onAsk: (d: Deployment, topic: "Errors" | "Logs" | "Explain" | "Rollout") => void;
+}
+
+function ActionButtonStrip({ deployment, onAsk }: ActionButtonStripProps) {
+  const actions = [
+    { topic: "Errors" as const,  Icon: TriangleAlert, label: "Errors" },
+    { topic: "Logs"   as const,  Icon: ScrollText,    label: "Logs"   },
+    { topic: "Explain"as const,  Icon: CircleHelp,    label: "Explain"},
+    { topic: "Rollout"as const,  Icon: RotateCcw,     label: "Rollout"},
+  ];
+
+  return (
+    <span className="flex items-center gap-1 shrink-0">
+      {actions.map(({ topic, Icon, label }) => (
+        <button
+          key={topic}
+          type="button"
+          title={`Ask Claude: ${label}`}
+          onClick={(e) => { e.stopPropagation(); onAsk(deployment, topic); }}
+          className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 transition-colors hover:bg-[#1A1A1A]"
+          style={{
+            fontFamily: "ui-monospace, monospace",
+            fontSize: 10,
+            fontWeight: 500,
+            color: "#A1A1AA",
+            border: "1px solid #1A1A1A",
+            background: "#141417",
+          }}
+        >
+          <Icon className="size-2.5" />
+          <span>{label}</span>
+        </button>
+      ))}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Expanded detail: SPEC + PODS + Manage actions
+// ---------------------------------------------------------------------------
+
+interface DeploymentDetailProps {
+  deployment: Deployment;
+  pods: Pod[];
+  paused: boolean;
+  onRestart: () => void;
+  onScale: () => void;
+  onRollback: () => void;
+  onTogglePause: () => void;
+}
+
+function DeploymentDetail({
+  deployment,
+  pods,
+  paused,
+  onRestart,
+  onScale,
+  onRollback,
+  onTogglePause,
+}: DeploymentDetailProps) {
   const containers = containerSummaries(deployment);
   const sortedPods = [...pods].sort((a, b) => a.metadata.name.localeCompare(b.metadata.name));
+
   return (
-    <div className="grid gap-4 px-2 py-3 md:grid-cols-2">
-      {/* SPEC block */}
-      <div className="space-y-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Spec</h3>
-        <dl className="space-y-1 text-xs">
-          <div className="flex gap-2">
-            <dt className="w-20 text-muted-foreground">Strategy</dt>
-            <dd className="font-mono">{strategyDescription(deployment)}</dd>
-          </div>
-          <div className="flex gap-2">
-            <dt className="w-20 text-muted-foreground">Selector</dt>
-            <dd className="font-mono">{selectorString(deployment)}</dd>
-          </div>
-          <div className="flex gap-2">
-            <dt className="w-20 text-muted-foreground">Created</dt>
-            <dd className="font-mono">{relativeAge(deployment.metadata.creationTimestamp)} ago</dd>
-          </div>
-        </dl>
-        <div className="space-y-2 pt-1">
-          {containers.map((c) => (
-            <div key={c.name} className="rounded-md border bg-background/50 p-2 text-xs">
-              <div className="flex items-center gap-2">
-                <span className="font-mono font-medium text-primary">{c.name}</span>
-                {c.ports.length > 0 && (
-                  <span className="font-mono text-muted-foreground">
-                    {c.ports.map((p) => `:${p}`).join(" ")}
-                  </span>
-                )}
-              </div>
-              <div className="font-mono text-muted-foreground break-all">{c.image}</div>
-              <div className="font-mono text-muted-foreground">
-                cpu req {c.cpuReq ?? "—"} / lim {c.cpuLim ?? "—"}
-              </div>
-              <div className="font-mono text-muted-foreground">
-                mem req {c.memReq ?? "—"} / lim {c.memLim ?? "—"}
-              </div>
+    <div className="space-y-4">
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* SPEC block */}
+        <div className="space-y-2">
+          <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+            Spec
+          </h3>
+          <dl className="space-y-1 text-xs">
+            <div className="flex gap-2">
+              <dt className="w-20 shrink-0 text-muted-foreground">Strategy</dt>
+              <dd className="font-mono">{strategyDescription(deployment)}</dd>
             </div>
-          ))}
+            <div className="flex gap-2">
+              <dt className="w-20 shrink-0 text-muted-foreground">Selector</dt>
+              <dd className="font-mono">{selectorString(deployment)}</dd>
+            </div>
+            <div className="flex gap-2">
+              <dt className="w-20 shrink-0 text-muted-foreground">Created</dt>
+              <dd className="font-mono">{relativeAge(deployment.metadata.creationTimestamp)} ago</dd>
+            </div>
+          </dl>
+          <div className="space-y-2 pt-1">
+            {containers.map((c) => (
+              <div
+                key={c.name}
+                className="rounded p-2 text-xs"
+                style={{ background: "#050505", border: "1px solid #1A1A1A" }}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-medium text-primary">{c.name}</span>
+                  {c.ports.length > 0 && (
+                    <span className="font-mono text-muted-foreground">
+                      {c.ports.map((p) => `:${p}`).join(" ")}
+                    </span>
+                  )}
+                </div>
+                <div className="font-mono text-muted-foreground break-all">{c.image}</div>
+                <div className="font-mono text-muted-foreground">
+                  cpu req {c.cpuReq ?? "—"} / lim {c.cpuLim ?? "—"}
+                </div>
+                <div className="font-mono text-muted-foreground">
+                  mem req {c.memReq ?? "—"} / lim {c.memLim ?? "—"}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* PODS block */}
+        <div className="space-y-2">
+          <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+            Pods ({sortedPods.length})
+          </h3>
+          {sortedPods.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No matching pods</p>
+          ) : (
+            <ul className="space-y-1">
+              {sortedPods.map((p) => {
+                const restarts = restartCount(p);
+                return (
+                  <li
+                    key={p.metadata.uid || p.metadata.name}
+                    className="flex items-center gap-2 rounded px-2 py-1 text-xs"
+                    style={{ background: "rgba(5,5,5,0.5)" }}
+                  >
+                    <span
+                      className={`inline-block size-1.5 shrink-0 rounded-full ${phaseColorClass(p.status?.phase)}`}
+                      title={p.status?.phase ?? "Unknown"}
+                    />
+                    <span className="font-mono text-muted-foreground truncate min-w-0">
+                      {p.metadata.name}
+                    </span>
+                    {restarts > 0 && (
+                      <span
+                        className="shrink-0 rounded-full px-1.5 text-[10px]"
+                        style={{ background: "rgba(245,158,11,0.15)", color: "#F59E0B" }}
+                      >
+                        ×{restarts}
+                      </span>
+                    )}
+                    <span className="ml-auto font-mono text-muted-foreground shrink-0">
+                      {podReady(p)}
+                    </span>
+                    <span className="font-mono text-muted-foreground shrink-0">
+                      {podAge(p.metadata.creationTimestamp)}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
       </div>
 
-      {/* PODS block */}
-      <div className="space-y-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Pods ({sortedPods.length})
-        </h3>
-        {sortedPods.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No matching pods</p>
-        ) : (
-          <ul className="space-y-1">
-            {sortedPods.map((p) => {
-              const restarts = restartCount(p);
-              return (
-                <li key={p.metadata.uid || p.metadata.name} className="flex items-center gap-2 text-xs">
-                  <span
-                    className={`inline-block size-2 shrink-0 rounded-full ${phaseColorClass(p.status?.phase)}`}
-                    title={p.status?.phase ?? "Unknown"}
-                  />
-                  <span className="font-mono text-muted-foreground truncate">{p.metadata.name}</span>
-                  {restarts > 0 && (
-                    <span className="rounded-full bg-amber-500/15 px-1.5 text-amber-600 dark:text-amber-400">
-                      ×{restarts}
-                    </span>
-                  )}
-                  <span className="ml-auto font-mono text-muted-foreground">{podReady(p)}</span>
-                  <span className="font-mono text-muted-foreground">{podAge(p.metadata.creationTimestamp)}</span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+      {/* Manage section — mutations via ConfirmSheet */}
+      <div
+        className="flex items-center gap-2 border-t pt-3"
+        style={{ borderColor: "#1A1A1A" }}
+      >
+        <span className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground mr-2">
+          Manage
+        </span>
+        <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={onRestart}>
+          <RefreshCw className="size-3" />
+          Restart
+        </Button>
+        <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={onScale}>
+          <MoveVertical className="size-3" />
+          Scale
+        </Button>
+        <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={onRollback}>
+          <Undo2 className="size-3" />
+          Rollback
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 gap-1.5 text-xs"
+          onClick={onTogglePause}
+        >
+          {paused ? <Play className="size-3" /> : <Pause className="size-3" />}
+          {paused ? "Resume" : "Pause"}
+        </Button>
       </div>
     </div>
   );

@@ -23,6 +23,7 @@ import { PurgeSheet } from "@/panels/purge/PurgeSheet";
 import type { ActionBlock } from "@/lib/api";
 import { stripActionBlocks, type SuggestedAction } from "@/lib/actionBlocks";
 import { onChatEvent, sendChat, interruptChat } from "@/lib/ws";
+import { registerChatHandoff } from "@/lib/chatHandoff";
 import { useCluster } from "@/store/cluster";
 import { MessageBubble } from "@/panels/chat/MessageBubble";
 import { ThinkingPane } from "@/panels/chat/ThinkingPane";
@@ -149,25 +150,27 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     bottomRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
   }, []);
 
-  // ── Expose send handle ────────────────────────────────────────────────────
+  // ── Expose send handle + global handoff ───────────────────────────────────
+  // The handle (for App-level callers) and the global registry (for any panel)
+  // share one submit: it appends the user message to the transcript and streams
+  // the reply in this always-visible pane — so handoffs never navigate.
   useEffect(() => {
-    if (!handleRef) return;
-    handleRef.current = {
-      send: (prompt: string) => {
-        if (!prompt.trim()) return;
-        setMessages((prev) => [...prev, makeMessage("user", prompt)]);
-        setIsStreaming(true);
-        setIsThinking(false);
-        setLiveThinking("");
-        liveThinkingRef.current = "";
-        const start = new Date();
-        setTurnStartedAt(start);
-        turnStartedAtRef.current = start;
-        setIsAtBottom(true);
-        isAtBottomRef.current = true;
-        sendChat(prompt);
-      },
+    const submit = (prompt: string) => {
+      if (!prompt.trim()) return;
+      setMessages((prev) => [...prev, makeMessage("user", prompt)]);
+      setIsStreaming(true);
+      setIsThinking(false);
+      setLiveThinking("");
+      liveThinkingRef.current = "";
+      const start = new Date();
+      setTurnStartedAt(start);
+      turnStartedAtRef.current = start;
+      setIsAtBottom(true);
+      isAtBottomRef.current = true;
+      sendChat(prompt);
     };
+    if (handleRef) handleRef.current = { send: submit };
+    registerChatHandoff(submit);
   }, [handleRef]);
 
   // ── WebSocket chat event handling ─────────────────────────────────────────
