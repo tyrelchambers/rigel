@@ -65,11 +65,16 @@ export function useMetricsHistory(): UseMetricsHistoryResult {
         cpuNow: 0,
         memNow: 0,
       };
+      // Endpoint returns cpu as plain millicores ("8") and memory unit-suffixed
+      // ("29Mi"); parseFloat yields the numeric prefix for both (8, 29). Without
+      // this, "29Mi" stays a string → NaN in the sparkline math (blank memory).
+      const cpu = Number.parseFloat(String(item.cpu)) || 0;
+      const mem = Number.parseFloat(String(item.memory)) || 0;
       history.set(key, {
-        cpuSeries: appendRing(prev.cpuSeries, item.cpu, RING_SIZE),
-        memSeries: appendRing(prev.memSeries, item.memory, RING_SIZE),
-        cpuNow: item.cpu,
-        memNow: item.memory,
+        cpuSeries: appendRing(prev.cpuSeries, cpu, RING_SIZE),
+        memSeries: appendRing(prev.memSeries, mem, RING_SIZE),
+        cpuNow: cpu,
+        memNow: mem,
       });
     }
   }, [data]);

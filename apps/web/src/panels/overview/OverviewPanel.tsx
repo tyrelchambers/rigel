@@ -120,8 +120,11 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
       map[item.name] = {
         metadata: { name: item.name },
         usage: {
-          cpu: `${item.cpu}m`,
-          memory: `${item.memory}Mi`,
+          // The metrics endpoint returns cpu as plain millicores ("1080") but
+          // memory already unit-suffixed ("10393Mi") — only add a unit when one
+          // isn't already present (avoids "10393MiMi" → 0).
+          cpu: /[a-z]/i.test(String(item.cpu)) ? String(item.cpu) : `${item.cpu}m`,
+          memory: /[a-z]/i.test(String(item.memory)) ? String(item.memory) : `${item.memory}Mi`,
         },
       };
     }
