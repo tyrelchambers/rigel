@@ -32,6 +32,63 @@ export function phaseColorClass(phase: string | undefined): string {
   }
 }
 
+/** Error waiting reasons that mark a pod as in a crash/error state. */
+const ERROR_WAITING_REASONS = new Set([
+  "CrashLoopBackOff",
+  "ImagePullBackOff",
+  "ErrImagePull",
+  "CreateContainerConfigError",
+  "CreateContainerError",
+  "InvalidImageName",
+  "RunContainerError",
+]);
+
+/**
+ * Tailwind color class for the pod NAME field — mirrors PodsPanel.swift
+ * `statusColor()`:
+ *   - red   → any container in a crash/error state, or phase "Failed"
+ *   - amber → Pending
+ *   - green → Running + all containers ready
+ *   - default foreground otherwise (Succeeded, Unknown, etc.)
+ */
+export function podNameColorClass(pod: Pod): string {
+  const phase = pod.status?.phase;
+  if (phase === "Failed") return "text-red-600 dark:text-red-400";
+  const statuses = pod.status?.containerStatuses ?? [];
+  for (const c of statuses) {
+    const waiting = c.state?.waiting?.reason;
+    if (waiting && ERROR_WAITING_REASONS.has(waiting)) return "text-red-600 dark:text-red-400";
+    const term = c.state?.terminated;
+    if (term && (term.exitCode ?? 0) !== 0 && term.reason !== "Completed") {
+      return "text-red-600 dark:text-red-400";
+    }
+  }
+  if (phase === "Pending") return "text-yellow-600 dark:text-yellow-400";
+  if (phase === "Running") {
+    const allReady = statuses.length > 0 && statuses.every((c) => c.ready);
+    if (allReady) return "text-green-600 dark:text-green-400";
+  }
+  return "text-foreground";
+}
+
+/**
+ * Phase → StatusBadge variant ("healthy" | "error" | "pending" | "neutral").
+ * Used to color the phase badge consistently with the theme tokens.
+ */
+export function phaseVariant(phase: string | undefined): "healthy" | "error" | "pending" | "neutral" {
+  switch (phase) {
+    case "Running":
+    case "Succeeded":
+      return "healthy";
+    case "Failed":
+      return "error";
+    case "Pending":
+      return "pending";
+    default:
+      return "neutral";
+  }
+}
+
 /**
  * `<ready_count>/<total>` from `status.containerStatuses`, or "—" when there
  * are no statuses.

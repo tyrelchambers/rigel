@@ -1,13 +1,8 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   LoaderCircle,
-  ChevronRight,
-  ChevronDown,
   ArrowUp,
   ArrowDown,
-  TriangleAlert,
-  ScrollText,
-  CircleHelp,
   RotateCcw,
   RefreshCw,
   MoveVertical,
@@ -28,13 +23,18 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
+import { ListRow } from "@/panels/components/ListRow";
+import { TagPill } from "@/panels/components/TagPill";
+import { StatusBadge } from "@/panels/components/StatusBadge";
+import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
+import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import type { ActionBlock } from "@/lib/api";
 import type { Deployment } from "./types";
 import type { Pod } from "../pods/types";
 import {
   relativeAge,
   readyText,
-  readyColorClass,
+  isReady,
   statusColor,
   imageRepo,
   imageTag,
@@ -159,17 +159,10 @@ export default function DeploymentsPanel() {
     setScaleTarget(null);
   }
 
-  // --- Chat handoff (matches Overview's onInvestigateCluster pattern) -------
+  // --- Chat handoff -------------------------------------------------------
 
   function askClaude(d: Deployment, topic: "Errors" | "Logs" | "Explain" | "Rollout") {
-    const ns = d.metadata.namespace ?? "default";
-    const prompts: Record<string, string> = {
-      Errors: `Investigate errors on deployment ${d.metadata.name} in namespace ${ns} — check pod statuses, recent events, and crash/restart reasons.`,
-      Logs: `Show and summarize recent logs for deployment ${d.metadata.name} in namespace ${ns}.`,
-      Explain: `Explain what deployment ${d.metadata.name} in namespace ${ns} does and its current state.`,
-      Rollout: `Show the rollout status and recent rollout history of deployment ${d.metadata.name} in namespace ${ns}.`,
-    };
-    handoffToChat(prompts[topic]);
+    handoffToChat(buildHandoffPrompt("deployment", d.metadata.name, d.metadata.namespace, topic));
   }
 
   const scaleN = Math.max(0, Math.min(50, Math.floor(Number(scaleValue) || 0)));
@@ -230,17 +223,14 @@ export default function DeploymentsPanel() {
           const progress = rolloutProgress(d);
 
           return (
-            <Fragment key={k}>
-              {/* Main row */}
-              <div
-                className="relative overflow-hidden rounded-md"
-                style={{
-                  background: isOpen ? "#141417" : "#050505",
-                  border: "1px solid #1A1A1A",
-                }}
-              >
-                {/* Redeploying left-edge glow */}
-                {redeploying && (
+            <ListRow
+              key={k}
+              rowKey={k}
+              isOpen={isOpen}
+              onToggle={() => toggleExpand(d)}
+              progress={redeploying ? progress : undefined}
+              overlay={
+                redeploying ? (
                   <div
                     className="pointer-events-none absolute inset-0"
                     style={{
@@ -248,167 +238,116 @@ export default function DeploymentsPanel() {
                         "linear-gradient(to right, rgba(16,185,129,0.18) 0%, transparent 55%)",
                     }}
                   />
-                )}
+                ) : undefined
+              }
+              expandedContent={
+                <DeploymentDetail
+                  deployment={d}
+                  pods={pods}
+                  paused={paused}
+                  onRestart={() => restart(d)}
+                  onScale={() => openScale(d)}
+                  onRollback={() => rollback(d)}
+                  onTogglePause={() => togglePause(d)}
+                />
+              }
+            >
+              {/* Name — health-colored */}
+              <button
+                type="button"
+                onClick={() => toggleExpand(d)}
+                className={`shrink-0 font-mono text-xs font-medium leading-none hover:underline ${statusColor(d, allPods)}`}
+              >
+                {d.metadata.name}
+              </button>
 
-                <div className="relative flex items-center gap-2 px-2.5 py-2">
-                  {/* Chevron toggle */}
-                  <button
-                    type="button"
-                    onClick={() => toggleExpand(d)}
-                    aria-label={isOpen ? "Collapse" : "Expand"}
-                    aria-expanded={isOpen}
-                    className="shrink-0 text-muted-foreground hover:text-foreground"
-                  >
-                    {isOpen ? (
-                      <ChevronDown className="size-3" />
-                    ) : (
-                      <ChevronRight className="size-3" />
-                    )}
-                  </button>
+              {/* Namespace — dim tertiary chip */}
+              <span
+                style={{
+                  fontFamily: "ui-monospace, monospace",
+                  fontSize: 10,
+                  color: "#6B6B73",
+                  background: "#050505",
+                  padding: "1px 5px",
+                  borderRadius: 4,
+                  border: "1px solid #1A1A1A",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {d.metadata.namespace ?? "—"}
+              </span>
 
-                  {/* Name — health-colored */}
-                  <button
-                    type="button"
-                    onClick={() => toggleExpand(d)}
-                    className={`shrink-0 font-mono text-xs font-medium leading-none hover:underline ${statusColor(d, allPods)}`}
-                  >
-                    {d.metadata.name}
-                  </button>
-
-                  {/* Namespace — dim tertiary */}
-                  <span
-                    style={{
-                      fontFamily: "ui-monospace, monospace",
-                      fontSize: 10,
-                      color: "#6B6B73",
-                      background: "#050505",
-                      padding: "1px 5px",
-                      borderRadius: 4,
-                      border: "1px solid #1A1A1A",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {d.metadata.namespace ?? "—"}
-                  </span>
-
-                  {/* Image repo — dim, truncated */}
-                  {image && imageRepo(image) !== "—" && (
-                    <span
-                      title={image}
-                      style={{
-                        fontFamily: "ui-monospace, monospace",
-                        fontSize: 10,
-                        color: "#A1A1AA",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        minWidth: 0,
-                        flexShrink: 1,
-                      }}
-                    >
-                      {imageRepo(image)}
-                    </span>
-                  )}
-
-                  {/* Tag pill — purple accent */}
-                  {image && (
-                    <span
-                      title={image}
-                      style={{
-                        fontFamily: "ui-monospace, monospace",
-                        fontSize: 10,
-                        fontWeight: 500,
-                        color: "#A855F7",
-                        background: "rgba(168,85,247,0.15)",
-                        padding: "1px 5px",
-                        borderRadius: 4,
-                        whiteSpace: "nowrap",
-                        flexShrink: 0,
-                      }}
-                    >
-                      {imageTag(image)}
-                    </span>
-                  )}
-
-                  {/* Spacer */}
-                  <span className="flex-1" />
-
-                  {/* Rollout churn chips — only while live */}
-                  {redeploying && (
-                    <span className="inline-flex items-center gap-1.5 text-[10px]">
-                      {updated > 0 && (
-                        <span
-                          className="inline-flex items-center gap-0.5"
-                          style={{ color: "#10B981" }}
-                          title={`${updated} new pod(s) up`}
-                        >
-                          <ArrowUp className="size-2.5" />
-                          {updated}
-                        </span>
-                      )}
-                      {Math.max(0, total - updated) > 0 && (
-                        <span
-                          className="inline-flex items-center gap-0.5"
-                          style={{ color: "#F59E0B" }}
-                          title={`${Math.max(0, total - updated)} old terminating`}
-                        >
-                          <ArrowDown className="size-2.5" />
-                          {Math.max(0, total - updated)}
-                        </span>
-                      )}
-                    </span>
-                  )}
-
-                  {/* Ready badge */}
-                  <span
-                    className={`shrink-0 rounded font-mono text-[11px] font-medium px-2 py-0.5 ${readyColorClass(d)}`}
-                  >
-                    {readyText(d)}
-                  </span>
-
-                  {/* Action button strip — 4 chat handoff buttons */}
-                  <ActionButtonStrip
-                    deployment={d}
-                    onAsk={askClaude}
-                  />
-                </div>
-
-                {/* Rollout progress bar — pinned to bottom edge */}
-                {redeploying && (
-                  <div
-                    className="absolute bottom-0 left-0 right-0"
-                    style={{ height: 2.5, background: "#2A2A2A" }}
-                  >
-                    <div
-                      style={{
-                        height: "100%",
-                        width: `${Math.round(progress * 100)}%`,
-                        background: "#10B981",
-                        transition: "width 0.4s ease",
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Expanded detail */}
-              {isOpen && (
-                <div
-                  className="rounded-b-md border-x border-b px-6 py-3"
-                  style={{ borderColor: "#1A1A1A", background: "#0A0A0A" }}
+              {/* Image repo — dim, truncated */}
+              {image && imageRepo(image) !== "—" && (
+                <span
+                  title={image}
+                  style={{
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: 10,
+                    color: "#A1A1AA",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    minWidth: 0,
+                    flexShrink: 1,
+                  }}
                 >
-                  <DeploymentDetail
-                    deployment={d}
-                    pods={pods}
-                    paused={paused}
-                    onRestart={() => restart(d)}
-                    onScale={() => openScale(d)}
-                    onRollback={() => rollback(d)}
-                    onTogglePause={() => togglePause(d)}
-                  />
-                </div>
+                  {imageRepo(image)}
+                </span>
               )}
-            </Fragment>
+
+              {/* Tag pill — shared accent purple */}
+              {image && <TagPill label={imageTag(image)} title={image} />}
+
+              {/* Spacer */}
+              <span className="flex-1" />
+
+              {/* Rollout churn chips — only while live */}
+              {redeploying && (
+                <span className="inline-flex items-center gap-1.5 text-[10px]">
+                  {updated > 0 && (
+                    <span
+                      className="inline-flex items-center gap-0.5"
+                      style={{ color: "#10B981" }}
+                      title={`${updated} new pod(s) up`}
+                    >
+                      <ArrowUp className="size-2.5" />
+                      {updated}
+                    </span>
+                  )}
+                  {Math.max(0, total - updated) > 0 && (
+                    <span
+                      className="inline-flex items-center gap-0.5"
+                      style={{ color: "#F59E0B" }}
+                      title={`${Math.max(0, total - updated)} old terminating`}
+                    >
+                      <ArrowDown className="size-2.5" />
+                      {Math.max(0, total - updated)}
+                    </span>
+                  )}
+                </span>
+              )}
+
+              {/* Ready badge — shared StatusBadge */}
+              <StatusBadge
+                label={readyText(d)}
+                variant={isReady(d) ? "healthy" : "error"}
+              />
+
+              {/* Action button strip — Errors / Logs / Explain / Rollout */}
+              <ActionButtonStrip
+                onErrors={(e) => { e.stopPropagation(); askClaude(d, "Errors"); }}
+                onLogs={(e) => { e.stopPropagation(); askClaude(d, "Logs"); }}
+                onExplain={(e) => { e.stopPropagation(); askClaude(d, "Explain"); }}
+                extra={[
+                  {
+                    label: "Rollout",
+                    Icon: RotateCcw,
+                    onClick: (e) => { e.stopPropagation(); askClaude(d, "Rollout"); },
+                  },
+                ]}
+              />
+            </ListRow>
           );
         })}
       </div>
@@ -451,49 +390,6 @@ export default function DeploymentsPanel() {
         onClose={() => setPendingAction(null)}
       />
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Action button strip — 4 chat handoffs matching ActionButtonStrip.swift
-// ---------------------------------------------------------------------------
-
-interface ActionButtonStripProps {
-  deployment: Deployment;
-  onAsk: (d: Deployment, topic: "Errors" | "Logs" | "Explain" | "Rollout") => void;
-}
-
-function ActionButtonStrip({ deployment, onAsk }: ActionButtonStripProps) {
-  const actions = [
-    { topic: "Errors" as const,  Icon: TriangleAlert, label: "Errors" },
-    { topic: "Logs"   as const,  Icon: ScrollText,    label: "Logs"   },
-    { topic: "Explain"as const,  Icon: CircleHelp,    label: "Explain"},
-    { topic: "Rollout"as const,  Icon: RotateCcw,     label: "Rollout"},
-  ];
-
-  return (
-    <span className="flex items-center gap-1 shrink-0">
-      {actions.map(({ topic, Icon, label }) => (
-        <button
-          key={topic}
-          type="button"
-          title={`Ask Claude: ${label}`}
-          onClick={(e) => { e.stopPropagation(); onAsk(deployment, topic); }}
-          className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 transition-colors hover:bg-[#1A1A1A]"
-          style={{
-            fontFamily: "ui-monospace, monospace",
-            fontSize: 10,
-            fontWeight: 500,
-            color: "#A1A1AA",
-            border: "1px solid #1A1A1A",
-            background: "#141417",
-          }}
-        >
-          <Icon className="size-2.5" />
-          <span>{label}</span>
-        </button>
-      ))}
-    </span>
   );
 }
 
