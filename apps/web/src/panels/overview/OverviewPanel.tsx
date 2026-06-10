@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   Gauge,
   Trash2,
+  Sparkles,
 } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
@@ -45,12 +46,12 @@ import {
 } from "@/panels/events/eventsDisplay";
 
 // ---------------------------------------------------------------------------
-// DEFERRED (docs/parity/overview.md). This is a READ-ONLY landing dashboard
-// except for the "Purge an app…" entry point (docs/parity/purge.md), which
-// opens the picker → typed-name confirm sheet flow. The following remain NOT
-// implemented and must NOT be added without a new feature spec + infra:
-//   - "Investigate cluster" button (primary, sparkles) — chat/Claude handoff.
-//     TODO: Investigate handoff (deferred, see docs/parity/chat-overview.md).
+// NOTE (docs/parity/overview.md). This is primarily a READ-ONLY landing dashboard
+// except for two entry points:
+//   - "Purge an app…" (docs/parity/purge.md): picker → typed-name confirm sheet.
+//   - "Investigate cluster": injects a health-check prompt into the always-visible
+//     ChatPane via the onInvestigateCluster prop (connected in App.tsx).
+// The following remain deferred and must NOT be added without a new feature spec:
 //   - Event timeline drilldown — the ribbon is display-only here.
 //   - Namespace-scoped aggregation — Overview is always cluster-wide.
 // ---------------------------------------------------------------------------
@@ -59,10 +60,16 @@ const TIMELINE_SPAN_SECONDS = 3600;
 const TIMELINE_BUCKETS = 60;
 const MAX_RECENT_WARNINGS = 10;
 
-export default function OverviewPanel() {
+interface OverviewPanelProps {
+  /** Called when the user clicks "Investigate cluster" — injects the prompt into the chat pane. */
+  onInvestigateCluster?: () => void;
+}
+
+export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelProps) {
   const resources = useCluster((s) => s.resources);
   const isLoading = useCluster((s) => s.isLoading);
   const error = useCluster((s) => s.error);
+  const namespaceFilter = useCluster((s) => s.namespaceFilter);
 
   // Purge flow: picker → typed-name confirm sheet.
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -140,22 +147,55 @@ export default function OverviewPanel() {
 
   return (
     <div className="h-full space-y-4 overflow-auto">
-      {/* Header */}
+      {/* Header — mirrors OverviewPanel.swift header */}
       <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold">Overview</h1>
-        {isLoading && (
-          <LoaderCircle className="size-4 animate-spin text-muted-foreground" aria-label="loading" />
+        <div className="flex flex-col">
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-semibold">Overview</h1>
+            {isLoading && (
+              <LoaderCircle className="size-4 animate-spin text-muted-foreground" aria-label="loading" />
+            )}
+          </div>
+          <span className="text-xs text-muted-foreground">Health at a glance</span>
+        </div>
+        {namespaceFilter && (
+          <span
+            style={{
+              fontFamily: "ui-monospace, monospace",
+              fontSize: 11,
+              color: "#6B6B73",
+              background: "#141417",
+              padding: "2px 6px",
+              borderRadius: 4,
+              border: "1px solid #1A1A1A",
+            }}
+          >
+            {namespaceFilter}
+          </span>
         )}
-        <Button
-          variant="destructive"
-          size="sm"
-          className="ml-auto"
-          onClick={() => setPickerOpen(true)}
-        >
-          <Trash2 />
-          Purge an app…
-        </Button>
-        {/* TODO: Investigate button (deferred — see DEFERRED block above) */}
+
+        <div className="ml-auto flex items-center gap-2">
+          {/* Purge an app — destructive outline */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-red-600/40 text-red-500 hover:bg-red-600/10 hover:text-red-400"
+            onClick={() => setPickerOpen(true)}
+          >
+            <Trash2 className="size-3.5" />
+            Purge an app
+          </Button>
+
+          {/* Investigate cluster — purple filled */}
+          <Button
+            size="sm"
+            className="bg-purple-600 hover:bg-purple-500 text-white"
+            onClick={onInvestigateCluster}
+          >
+            <Sparkles className="size-3.5" />
+            Investigate cluster
+          </Button>
+        </div>
       </div>
 
       {/* Error banner */}
@@ -323,7 +363,7 @@ function HealthLine({ label, count, tone }: { label: string; count: number; tone
   );
 }
 
-/** Ring gauge: a circular progress indicator with a centered percentage. */
+/** Ring gauge: large centered donut (120px) matching RingGauge.swift. */
 function GaugeCard({
   title,
   fraction,
@@ -334,24 +374,85 @@ function GaugeCard({
   detail: string;
 }) {
   const pct = Math.round(Math.min(Math.max(fraction, 0), 1) * 100);
+  // SVG donut approach: 120px outer, ~16px track, accent arc
+  const RADIUS = 46;
+  const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+  const arcLength = CIRCUMFERENCE * Math.min(Math.max(fraction, 0), 1);
+
   return (
     <Card title={title} icon={<Gauge className="size-3.5" />}>
-      <div className="flex items-center gap-3">
-        <div
-          className="size-14 shrink-0 rounded-full"
-          style={{
-            background: `conic-gradient(var(--color-accent, currentColor) ${pct}%, color-mix(in srgb, currentColor 12%, transparent) 0)`,
-          }}
-        >
-          <div className="flex size-full items-center justify-center">
-            <div className="flex size-10 items-center justify-center rounded-full bg-background font-mono text-xs font-semibold">
+      <div className="flex flex-col items-center gap-2 py-1">
+        {/* Donut ring — 120px */}
+        <div style={{ position: "relative", width: 120, height: 120 }}>
+          <svg width="120" height="120" viewBox="0 0 120 120" style={{ display: "block" }}>
+            {/* Track */}
+            <circle
+              cx="60" cy="60" r={RADIUS}
+              fill="none"
+              stroke="#1A1A2E"
+              strokeWidth="14"
+            />
+            {/* Arc */}
+            <circle
+              cx="60" cy="60" r={RADIUS}
+              fill="none"
+              stroke="#A855F7"
+              strokeWidth="14"
+              strokeLinecap="round"
+              strokeDasharray={`${arcLength} ${CIRCUMFERENCE}`}
+              strokeDashoffset={CIRCUMFERENCE / 4} /* start at top */
+              transform="rotate(-90 60 60)"
+              style={{ transition: "stroke-dasharray 0.4s ease" }}
+            />
+          </svg>
+          {/* Centered percentage */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "ui-monospace, monospace",
+                fontSize: 22,
+                fontWeight: 700,
+                color: "#FFFFFF",
+                lineHeight: 1,
+              }}
+            >
               {pct}%
-            </div>
+            </span>
           </div>
         </div>
-        <div className="min-w-0">
-          <div className="font-mono text-sm">{detail}</div>
-        </div>
+        {/* Label below ring */}
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 600,
+            color: "#6B6B73",
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            textAlign: "center",
+          }}
+        >
+          {title}
+        </span>
+        {/* Raw value */}
+        <span
+          style={{
+            fontFamily: "ui-monospace, monospace",
+            fontSize: 11,
+            color: "#A1A1AA",
+            textAlign: "center",
+          }}
+        >
+          {detail}
+        </span>
       </div>
     </Card>
   );

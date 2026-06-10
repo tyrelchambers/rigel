@@ -1,10 +1,11 @@
 /**
- * StatusBar — thin bottom chrome bar.
- * Mirrors StatusBar.swift: connectivity dot (kubectl ok / error), pod count,
- * and basic cluster context info from GET /api/health.
+ * StatusBar — thin bottom chrome bar (full width, below the main row).
+ * Mirrors StatusBar.swift:
+ *   LEFT  : "{namespace} · pods N · nodes N"  (counts from store)
+ *   RIGHT : "kubectl: ok/error" dot · "claude: idle" · hint chips
+ *             ⌘K Commands · / Search · ⌘L Chat
  */
 import { useEffect, useState } from "react";
-import { Network } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 
 interface HealthData {
@@ -16,6 +17,7 @@ export default function StatusBar() {
   const connected = useCluster((s) => s.connected);
   const resources = useCluster((s) => s.resources);
   const error = useCluster((s) => s.error);
+  const namespaceFilter = useCluster((s) => s.namespaceFilter);
 
   const [health, setHealth] = useState<HealthData>({});
 
@@ -23,7 +25,7 @@ export default function StatusBar() {
     fetch("/api/health")
       .then((r) => r.json())
       .then((d) => setHealth(d as HealthData))
-      .catch(() => {/* ignore — optional data */});
+      .catch(() => {/* ignore — optional */});
   }, []);
 
   const podCount = Object.keys(resources["pods"] ?? {}).length;
@@ -33,6 +35,9 @@ export default function StatusBar() {
   const statusColor = kubectlOk ? "#10B981" : "#EF4444";
   const statusLabel = kubectlOk ? "kubectl: ok" : "kubectl: error";
 
+  // Namespace label for left side — use context name or namespace filter
+  const namespaceLabel = namespaceFilter ?? health.context ?? null;
+
   return (
     <div
       style={{
@@ -41,85 +46,124 @@ export default function StatusBar() {
         borderTop: "1px solid #1A1A1A",
         display: "flex",
         alignItems: "center",
-        gap: 12,
+        gap: 10,
         padding: "0 12px",
         flexShrink: 0,
       }}
     >
-      {/* Context */}
-      {health.context && (
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <Network size={9} style={{ color: "#6B6B73" }} />
-          <span
-            style={{
-              fontFamily: "'Geist Variable', ui-monospace, monospace",
-              fontSize: 10,
-              color: "#A1A1AA",
-            }}
-          >
-            {health.context}
-          </span>
-        </div>
-      )}
-
-      {/* Pod / node chips */}
-      {podCount > 0 && <Chip label="pods" value={String(podCount)} />}
-      {nodeCount > 0 && <Chip label="nodes" value={String(nodeCount)} />}
+      {/* LEFT: namespace · pods N · nodes N */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {namespaceLabel && (
+          <MonoChip>{namespaceLabel}</MonoChip>
+        )}
+        {podCount > 0 && (
+          <>
+            {namespaceLabel && <Sep />}
+            <MonoChip>pods {podCount}</MonoChip>
+          </>
+        )}
+        {nodeCount > 0 && (
+          <>
+            {(podCount > 0 || namespaceLabel) && <Sep />}
+            <MonoChip>nodes {nodeCount}</MonoChip>
+          </>
+        )}
+      </div>
 
       <div style={{ flex: 1 }} />
 
-      {/* kubectl status */}
-      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-        <div
-          style={{
-            width: 5,
-            height: 5,
-            borderRadius: "50%",
-            background: statusColor,
-            flexShrink: 0,
-          }}
-        />
-        <span
-          style={{
-            fontFamily: "'Geist Variable', ui-monospace, monospace",
-            fontSize: 10,
-            color: kubectlOk ? "#6B6B73" : "#EF4444",
-          }}
-          title={error ?? undefined}
-        >
-          {statusLabel}
-        </span>
+      {/* RIGHT: kubectl status · claude idle · hint chips */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        {/* kubectl dot + label */}
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <div
+            style={{
+              width: 5,
+              height: 5,
+              borderRadius: "50%",
+              background: statusColor,
+              flexShrink: 0,
+            }}
+          />
+          <MonoChip style={{ color: kubectlOk ? "#6B6B73" : "#EF4444" }} title={error ?? undefined}>
+            {statusLabel}
+          </MonoChip>
+        </div>
+
+        <Sep />
+
+        {/* claude: idle */}
+        <MonoChip>claude: idle</MonoChip>
+
+        <Sep />
+
+        {/* Hint chips */}
+        <HintChip kbd="⌘K">Commands</HintChip>
+        <HintChip kbd="/">Search</HintChip>
+        <HintChip kbd="⌘L">Chat</HintChip>
       </div>
     </div>
   );
 }
 
-interface ChipProps {
-  label: string;
-  value: string;
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function Sep() {
+  return (
+    <span style={{ color: "#2A2A2A", fontSize: 10, userSelect: "none" }}>·</span>
+  );
 }
 
-function Chip({ label, value }: ChipProps) {
+interface MonoChipProps extends React.HTMLAttributes<HTMLSpanElement> {
+  children: React.ReactNode;
+}
+
+function MonoChip({ children, style, ...rest }: MonoChipProps) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+    <span
+      style={{
+        fontFamily: "'Geist Variable', ui-monospace, monospace",
+        fontSize: 10,
+        color: "#6B6B73",
+        ...style,
+      }}
+      {...rest}
+    >
+      {children}
+    </span>
+  );
+}
+
+interface HintChipProps {
+  kbd: string;
+  children: string;
+}
+
+function HintChip({ kbd, children }: HintChipProps) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
       <span
         style={{
           fontFamily: "'Geist Variable', ui-monospace, monospace",
           fontSize: 9,
-          color: "#6B6B73",
+          color: "#4B4B55",
+          background: "#141417",
+          padding: "1px 4px",
+          borderRadius: 3,
+          border: "1px solid #1A1A1A",
+          lineHeight: 1.4,
         }}
       >
-        {label}
+        {kbd}
       </span>
       <span
         style={{
           fontFamily: "'Geist Variable', ui-monospace, monospace",
           fontSize: 10,
-          fontWeight: 500,
-          color: "#A1A1AA",
+          color: "#4B4B55",
         }}
       >
-        {value}
+        {children}
       </span>
     </div>
   );

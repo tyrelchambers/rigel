@@ -32,6 +32,8 @@ import {
   ChevronDown,
   AppWindow,
 } from "lucide-react";
+// Note: MessageSquare (chat) and Activity (health) are intentionally absent —
+// chat is the always-visible right pane (not a route), and health is nav-hidden.
 import type { LucideIcon } from "lucide-react";
 import {
   loadCollapsed,
@@ -73,6 +75,9 @@ export const PANEL_META: Record<string, PanelMeta> = {
   catalog:      { route: "/catalog",      title: "Apps",         subtitle: "Install apps",          icon: AppWindow },
   accounts:     { route: "/accounts",     title: "Accounts",     subtitle: "Registry credentials",  icon: UserRoundKey },
   settings:     { route: "/settings",     title: "Settings",     subtitle: "Preferences",           icon: Settings },
+  // "chat" and "health" are intentionally omitted:
+  //   chat   → always-visible right pane (ChatPane), not a route
+  //   health → internal route kept registered but not shown in nav/palette
 };
 
 // ─── Nav groups (mirrors PanelKind.navGroups) ─────────────────────────────────
