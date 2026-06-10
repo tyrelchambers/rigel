@@ -268,7 +268,11 @@ const server = Bun.serve({
         return Response.json({ error: result.message }, { status: result.status });
       }
       if (result.kind === "png") {
-        return new Response(result.bytes, { headers: { "Content-Type": "image/png" } });
+        // Uint8Array is a valid Response body at runtime (Bun/DOM); the cast
+        // sidesteps TS 5.7's Uint8Array<ArrayBufferLike> vs BodyInit strictness.
+        return new Response(result.bytes as unknown as BodyInit, {
+          headers: { "Content-Type": "image/png" },
+        });
       }
       return Response.json(result.body);
     }
