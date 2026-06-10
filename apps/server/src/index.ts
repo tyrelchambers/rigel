@@ -8,6 +8,7 @@ import { applyManifest, installHelm, type HelmInstallRequest } from "./install";
 import { handlePurge, type PurgeRequest } from "./purge";
 import { getPodMetrics, getNodeMetrics } from "./metrics";
 import { handleUpdates, type UpdatesRequest } from "./updates";
+import { handleAssistant, type AssistantRequest } from "./assistant";
 import { checkAuth } from "./auth";
 
 const KUBECONFIG = resolveKubeconfigPath(process.env, homedir());
@@ -202,6 +203,44 @@ const server = Bun.serve({
       }
       const result = await handleUpdates(body);
       return Response.json(result);
+    }
+
+    // POST /api/assistant — control plane for the in-cluster assistant agent
+    // (docs/parity/assistant.md). Dispatches on `action`. Every cluster write
+    // is a kubectl argv invocation (no shell); the OAuth token is only ever
+    // piped into the applied Secret and is NEVER logged or echoed back.
+    if (url.pathname === "/api/assistant" && req.method === "POST") {
+      let body: AssistantRequest;
+      try {
+        body = (await req.json()) as AssistantRequest;
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      if (typeof body.action !== "string") {
+        return Response.json({ error: "missing action" }, { status: 422 });
+      }
+      if (
+        (body.action === "silence" || body.action === "unsilence") &&
+        (typeof body.fingerprint !== "string" || body.fingerprint.trim() === "")
+      ) {
+        return Response.json({ error: "missing fingerprint" }, { status: 422 });
+      }
+      try {
+        const result = await handleAssistant(context, body);
+        if (result.code !== 0) {
+          return Response.json(
+            { error: result.stderr.trim() || result.stdout.trim() || `exit ${result.code}` },
+            { status: 500 },
+          );
+        }
+        return Response.json({ success: true });
+      } catch (err) {
+        // Log WITHOUT the token (err.message carries kubectl stderr, never the
+        // Secret payload — that only ever lives on the process stdin pipe).
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`assistant action ${body.action}:`, msg);
+        return Response.json({ error: msg }, { status: 500 });
+      }
     }
 
     if (url.pathname === "/ws") {

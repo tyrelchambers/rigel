@@ -222,6 +222,66 @@ export async function executePurge(
   return res.json() as Promise<PurgeExecuteResponse>;
 }
 
+// ---------------------------------------------------------------------------
+// Assistant agent control plane — POST /api/assistant (docs/parity/assistant.md)
+// ---------------------------------------------------------------------------
+
+export type AssistantAction =
+  | "install"
+  | "uninstall"
+  | "setMode"
+  | "kill"
+  | "updateToken"
+  | "restart"
+  | "silence"
+  | "unsilence"
+  | "clearReport";
+
+export interface AssistantRequest {
+  action: AssistantAction;
+  namespace?: string;
+  token?: string;
+  image?: string;
+  spendCapUsd?: number;
+  workerModel?: string;
+  supervisorModel?: string;
+  pollIntervalMs?: number;
+  maxPerResourcePerHour?: number;
+  maxPerNight?: number;
+  maxAttemptsPerIncident?: number;
+  confirmPolls?: number;
+  monitorNamespaces?: string;
+  mode?: string;
+  window?: string;
+  enabled?: boolean;
+  fingerprint?: string;
+}
+
+/**
+ * POST an assistant control action. Returns on success; throws with the server
+ * error message on failure. The token (when present) is sent in the JSON body
+ * over the same authenticated channel and is never logged client-side.
+ */
+async function postAssistant(req: AssistantRequest): Promise<{ success: true }> {
+  const res = await fetch("/api/assistant", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? res.statusText);
+  }
+  return res.json() as Promise<{ success: true }>;
+}
+
+/** Mutation hook for every assistant control action. */
+export function useAssistantAction() {
+  return useMutation<{ success: true }, Error, AssistantRequest>({
+    mutationFn: postAssistant,
+  });
+}
+
 /** Discovery mutation hook (dry-run). */
 export function usePurgeDiscovery() {
   return useMutation<PurgeDiscoverResponse, Error, { namespace: string; instance: string }>({

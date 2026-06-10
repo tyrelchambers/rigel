@@ -1,0 +1,910 @@
+import { useEffect, useMemo, useState } from "react";
+import {
+  LoaderCircle,
+  Sparkles,
+  AlertTriangle,
+  BellOff,
+  ChevronDown,
+  ChevronRight,
+  RotateCcw,
+  Undo2,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { ConfirmSheet } from "@/components/ConfirmSheet";
+import { useAssistantAction, type ActionBlock } from "@/lib/api";
+import {
+  DEFAULT_INSTALL_CONFIG,
+  manifestYAML,
+  auditEntryId,
+  queuedSuggestionId,
+  type AssistantInstallConfig,
+  type AssistantAuditEntry,
+  type AssistantQueuedSuggestion,
+} from "@helmsman/k8s";
+import { useAssistant, type AssistantDerived } from "./useAssistant";
+import {
+  tokenLabel,
+  tokenColorClass,
+  outcomeGlyph,
+  outcomeColorClass,
+  auditCanExpand,
+  relativeTime,
+  spendLabel,
+  auditCount,
+} from "./display";
+
+// Reusable shells -----------------------------------------------------------
+
+function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <div className={`rounded-lg border bg-card p-3 ${className}`}>{children}</div>;
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-40 shrink-0 text-sm text-muted-foreground">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+const inputClass =
+  "flex-1 rounded-md border bg-background px-2 py-1.5 font-mono text-sm outline-none focus:ring-2 focus:ring-ring";
+
+// ---------------------------------------------------------------------------
+
+export default function AssistantPanel() {
+  // Install-form local state (the form's chosen install namespace also drives
+  // state reads before the agent exists).
+  const [config, setConfig] = useState<AssistantInstallConfig>(DEFAULT_INSTALL_CONFIG);
+  const [installToken, setInstallToken] = useState("");
+  const [newToken, setNewToken] = useState("");
+  const [showManifest, setShowManifest] = useState(false);
+  const [confirmCreateNs, setConfirmCreateNs] = useState(false);
+  const [confirmUninstall, setConfirmUninstall] = useState(false);
+  const [showAllActivity, setShowAllActivity] = useState(false);
+  const [windowText, setWindowText] = useState("");
+  const [webhookText, setWebhookText] = useState("");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
+  const [pendingRevert, setPendingRevert] = useState<{ yaml: string; label: string } | null>(null);
+  const [reverting, setReverting] = useState(false);
+
+  const d = useAssistant(config.installNamespace.trim() || "default");
+  const action = useAssistantAction();
+  const working = action.isPending;
+
+  // Seed the window/webhook inputs once the live config arrives.
+  useEffect(() => {
+    setWindowText(d.quietWindow || "22:00-07:00");
+    setWebhookText(d.webhookURL);
+    // Only when the installed state flips or values change.
+  }, [d.quietWindow, d.webhookURL]);
+
+  const namespaceMissing = useMemo(() => {
+    const ns = config.installNamespace.trim();
+    if (ns === "") return false;
+    return !d.allNamespaceNames.includes(ns);
+  }, [config.installNamespace, d.allNamespaceNames]);
+
+  // One mutation runner: clears the previous error, runs, surfaces failures.
+  function run(req: Parameters<typeof action.mutate>[0], onDone?: () => void) {
+    setActionError(null);
+    action.mutate(req, {
+      onError: (err) => setActionError(err.message),
+      onSuccess: () => onDone?.(),
+    });
+  }
+
+  const ns = d.installedNamespace ?? config.installNamespace.trim() ?? "default";
+
+  // --- Install ---
+  function doInstall() {
+    const token = installToken.trim();
+    const image = config.image.trim();
+    const namespace = config.installNamespace.trim();
+    if (token === "") return setActionError("Paste the token from `claude setup-token` first.");
+    if (image === "") return setActionError("Set a container image first.");
+    const repoPath = image.split(":")[0] ?? image;
+    if (repoPath !== repoPath.toLowerCase())
+      return setActionError(
+        "Image repository must be lowercase (Kubernetes rejects uppercase as InvalidImageName).",
+      );
+    if (namespace === "") return setActionError("Set an install namespace (e.g. default).");
+    if (namespace !== namespace.toLowerCase()) return setActionError("Namespace must be lowercase.");
+    run(
+      {
+        action: "install",
+        namespace,
+        token,
+        image,
+        spendCapUsd: config.spendCapUsd,
+        monitorNamespaces: config.namespaces,
+      },
+      () => setInstallToken(""),
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <Sparkles className="size-5 text-primary" />
+        <h1 className="text-lg font-semibold">Assistant</h1>
+        {d.isInstalled && <StatusPill enabled={d.enabled} />}
+        <div className="ml-auto">
+          {working && <LoaderCircle className="size-4 animate-spin text-muted-foreground" aria-label="working" />}
+        </div>
+      </div>
+
+      {/* Error banner (selectable, monospace, red) — never includes the token. */}
+      {actionError && (
+        <pre className="select-text rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+          {actionError}
+        </pre>
+      )}
+
+      {d.isInstalled ? (
+        <ControlCenter
+          d={d}
+          ns={ns}
+          working={working}
+          windowText={windowText}
+          setWindowText={setWindowText}
+          webhookText={webhookText}
+          setWebhookText={setWebhookText}
+          expanded={expanded}
+          setExpanded={setExpanded}
+          showAllActivity={showAllActivity}
+          setShowAllActivity={setShowAllActivity}
+          newToken={newToken}
+          setNewToken={setNewToken}
+          confirmUninstall={confirmUninstall}
+          setConfirmUninstall={setConfirmUninstall}
+          run={run}
+          onRunSuggestion={(a) => setPendingAction(a)}
+          onRevert={(yaml, label) => setPendingRevert({ yaml, label })}
+        />
+      ) : (
+        <Installer
+          config={config}
+          setConfig={setConfig}
+          installToken={installToken}
+          setInstallToken={setInstallToken}
+          showManifest={showManifest}
+          setShowManifest={setShowManifest}
+          namespaceMissing={namespaceMissing}
+          allNamespaceNames={d.allNamespaceNames}
+          working={working}
+          onInstall={() => (namespaceMissing ? setConfirmCreateNs(true) : doInstall())}
+        />
+      )}
+
+      {/* Create-namespace confirmation */}
+      <Dialog open={confirmCreateNs} onOpenChange={setConfirmCreateNs}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create namespace “{config.installNamespace}”?</DialogTitle>
+            <DialogDescription>
+              Namespace “{config.installNamespace}” doesn't exist. Create it and install the assistant
+              there?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmCreateNs(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                setConfirmCreateNs(false);
+                doInstall();
+              }}
+            >
+              Create &amp; install
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Revert confirmation — re-applies a stored backup YAML via /api/apply. */}
+      <Dialog open={!!pendingRevert} onOpenChange={(o) => !o && setPendingRevert(null)}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Revert “{pendingRevert?.label}”?</DialogTitle>
+            <DialogDescription>
+              Re-applies the pre-mutation snapshot the agent captured. Review the exact YAML before it
+              runs.
+            </DialogDescription>
+          </DialogHeader>
+          <pre className="max-h-72 select-text overflow-auto rounded-md bg-muted p-2 font-mono text-[11px] whitespace-pre">
+            {pendingRevert?.yaml}
+          </pre>
+          <DialogFooter>
+            <Button variant="outline" disabled={reverting} onClick={() => setPendingRevert(null)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={reverting}
+              onClick={async () => {
+                if (!pendingRevert) return;
+                setReverting(true);
+                setActionError(null);
+                try {
+                  const res = await fetch("/api/apply", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ yaml: pendingRevert.yaml }),
+                  });
+                  const data = (await res.json().catch(() => ({}))) as {
+                    error?: string;
+                    code?: number;
+                    stderr?: string;
+                  };
+                  if (!res.ok) throw new Error(data.error ?? res.statusText);
+                  if (typeof data.code === "number" && data.code !== 0)
+                    throw new Error(data.stderr || `exit ${data.code}`);
+                  setPendingRevert(null);
+                } catch (err) {
+                  setActionError(err instanceof Error ? err.message : String(err));
+                } finally {
+                  setReverting(false);
+                }
+              }}
+            >
+              {reverting ? "Reverting…" : "Apply revert"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmSheet
+        action={pendingAction}
+        open={!!pendingAction}
+        onClose={() => setPendingAction(null)}
+      />
+    </div>
+  );
+}
+
+// --- Status pill ------------------------------------------------------------
+
+function StatusPill({ enabled }: { enabled: boolean }) {
+  return (
+    <span
+      className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-medium ${
+        enabled
+          ? "bg-green-500/15 text-green-600 dark:text-green-400"
+          : "bg-muted text-muted-foreground"
+      }`}
+    >
+      {enabled ? "active" : "paused"}
+    </span>
+  );
+}
+
+// --- Installer (not installed) ---------------------------------------------
+
+function Installer({
+  config,
+  setConfig,
+  installToken,
+  setInstallToken,
+  showManifest,
+  setShowManifest,
+  namespaceMissing,
+  allNamespaceNames,
+  working,
+  onInstall,
+}: {
+  config: AssistantInstallConfig;
+  setConfig: React.Dispatch<React.SetStateAction<AssistantInstallConfig>>;
+  installToken: string;
+  setInstallToken: (v: string) => void;
+  showManifest: boolean;
+  setShowManifest: (v: boolean) => void;
+  namespaceMissing: boolean;
+  allNamespaceNames: string[];
+  working: boolean;
+  onInstall: () => void;
+}) {
+  const monitored = useMemo(
+    () =>
+      new Set(
+        config.namespaces
+          .split(",")
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0),
+      ),
+    [config.namespaces],
+  );
+  function toggleMonitored(name: string) {
+    const next = new Set(monitored);
+    if (next.has(name)) next.delete(name);
+    else next.add(name);
+    setConfig((c) => ({ ...c, namespaces: [...next].sort().join(",") }));
+  }
+
+  return (
+    <div className="space-y-3">
+      <Card>
+        <p className="text-sm font-semibold">Install the in-cluster assistant</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          A pod that watches the cluster and auto-fixes safe issues while you're away. It is caged by
+          RBAC: it can read everything except secrets, and only restart/scale/rollback workloads,
+          delete crashlooping pods, and cordon nodes. It can never delete namespaces, PVCs, secrets,
+          or change RBAC — those only ever appear here as suggestions for you to run.
+        </p>
+      </Card>
+
+      <Card>
+        <p className="text-sm font-semibold">1. Subscription token</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          On a machine logged into your Claude plan, run:
+        </p>
+        <p className="select-text font-mono text-sm text-primary">claude setup-token</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Paste the token below — it's stored as a Kubernetes Secret, never shown again.
+        </p>
+        <input
+          type="password"
+          autoComplete="off"
+          value={installToken}
+          onChange={(e) => setInstallToken(e.target.value)}
+          placeholder="CLAUDE_CODE_OAUTH_TOKEN"
+          className={`mt-2 w-full ${inputClass}`}
+        />
+      </Card>
+
+      <Card className="space-y-2">
+        <p className="text-sm font-semibold">2. Configuration</p>
+        <Field label="Image">
+          <input
+            value={config.image}
+            onChange={(e) => setConfig((c) => ({ ...c, image: e.target.value }))}
+            className={inputClass}
+          />
+        </Field>
+        <Field label="Install namespace">
+          <input
+            value={config.installNamespace}
+            onChange={(e) => setConfig((c) => ({ ...c, installNamespace: e.target.value }))}
+            className={inputClass}
+          />
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={<Button variant="ghost" size="icon" title="Pick an existing namespace" />}
+            >
+              <ChevronDown className="size-4 text-primary" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              {allNamespaceNames.map((name) => (
+                <DropdownMenuItem
+                  key={name}
+                  onClick={() => setConfig((c) => ({ ...c, installNamespace: name }))}
+                >
+                  {name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </Field>
+        {namespaceMissing && (
+          <p className="text-sm text-amber-600 dark:text-amber-400">
+            Namespace “{config.installNamespace}” doesn't exist — you'll be asked to create it on
+            Install.
+          </p>
+        )}
+        <Field label="Monitor namespaces">
+          <DropdownMenu>
+            <DropdownMenuTrigger className={`flex items-center justify-between ${inputClass}`}>
+              <span className="truncate">
+                {monitored.size === 0 ? "All namespaces" : [...monitored].sort().join(", ")}
+              </span>
+              <ChevronDown className="size-4 shrink-0 text-primary" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => setConfig((c) => ({ ...c, namespaces: "" }))}>
+                {monitored.size === 0 ? "✓ All namespaces" : "All namespaces"}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {allNamespaceNames.map((name) => (
+                <DropdownMenuItem
+                  key={name}
+                  closeOnClick={false}
+                  onClick={() => toggleMonitored(name)}
+                >
+                  {monitored.has(name) ? `✓ ${name}` : name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </Field>
+        <Field label="Spend cap ($/mo)">
+          <input
+            type="number"
+            min={0}
+            value={config.spendCapUsd}
+            onChange={(e) => setConfig((c) => ({ ...c, spendCapUsd: Math.max(0, Number(e.target.value) || 0) }))}
+            className={`w-28 ${inputClass}`}
+          />
+        </Field>
+      </Card>
+
+      <Card>
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold">3. Review manifests</p>
+          <Button variant="ghost" size="sm" onClick={() => setShowManifest(!showManifest)}>
+            {showManifest ? "Hide" : "Show"}
+          </Button>
+        </div>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Exactly what will be applied — including the RBAC cage. Nothing is applied until you click
+          Install. The token Secret is not shown here.
+        </p>
+        {showManifest && (
+          <pre className="mt-2 max-h-56 select-text overflow-auto rounded-md bg-muted p-2 font-mono text-[11px] whitespace-pre">
+            {manifestYAML(config)}
+          </pre>
+        )}
+      </Card>
+
+      <Button
+        className="w-full"
+        disabled={working || installToken.trim() === ""}
+        onClick={onInstall}
+      >
+        {working ? "Installing…" : "Install"}
+      </Button>
+    </div>
+  );
+}
+
+// --- Control center (installed) --------------------------------------------
+
+interface ControlProps {
+  d: AssistantDerived;
+  ns: string;
+  working: boolean;
+  windowText: string;
+  setWindowText: (v: string) => void;
+  webhookText: string;
+  setWebhookText: (v: string) => void;
+  expanded: Set<string>;
+  setExpanded: React.Dispatch<React.SetStateAction<Set<string>>>;
+  showAllActivity: boolean;
+  setShowAllActivity: (v: boolean) => void;
+  newToken: string;
+  setNewToken: (v: string) => void;
+  confirmUninstall: boolean;
+  setConfirmUninstall: (v: boolean) => void;
+  run: (req: import("@/lib/api").AssistantRequest, onDone?: () => void) => void;
+  onRunSuggestion: (a: ActionBlock) => void;
+  onRevert: (yaml: string, label: string) => void;
+}
+
+function ControlCenter(p: ControlProps) {
+  const { d, ns, working, run } = p;
+  const audit = d.clusterState?.audit ?? [];
+  const queue = d.clusterState?.queue ?? [];
+  const report = d.clusterState?.report ?? "";
+  const status = d.clusterState?.status;
+
+  return (
+    <div className="space-y-3.5">
+      {/* Summary strip */}
+      <Card>
+        <div className="flex flex-wrap gap-x-6 gap-y-2">
+          <Stat label="Status" value={d.enabled ? "Active" : "Paused"} color={d.enabled ? "text-green-600 dark:text-green-400" : "text-muted-foreground"} />
+          <Stat label="Awaiting" value={`${queue.length}`} color={queue.length === 0 ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400"} />
+          <Stat label="Live issues" value={`${d.liveIssues.length}`} color={d.liveIssues.length === 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"} />
+          <Stat label="Fixed" value={`${auditCount(audit, "success")}`} color="text-green-600 dark:text-green-400" />
+          <Stat label="Failed" value={`${auditCount(audit, "failure")}`} color={auditCount(audit, "failure") === 0 ? "text-muted-foreground" : "text-red-600 dark:text-red-400"} />
+          {status && <Stat label="Spend" value={spendLabel(status.spentUsd, status.spendCapUsd)} color="text-foreground" />}
+          {d.tokenExpiry && <Stat label="Token" value={tokenLabel(d.tokenExpiry)} color={tokenColorClass(d.tokenExpiry.level)} />}
+        </div>
+      </Card>
+
+      {/* Last report */}
+      {report && (
+        <Card>
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold">Last report</p>
+            <Button variant="ghost" size="sm" disabled={working} onClick={() => run({ action: "clearReport", namespace: ns })}>
+              Clear
+            </Button>
+          </div>
+          <p className="mt-1 select-text text-sm text-muted-foreground whitespace-pre-wrap">{report}</p>
+        </Card>
+      )}
+
+      {/* Awaiting approval (queued suggestions) */}
+      {queue.length > 0 && (
+        <Section title={`Awaiting your approval (${queue.length})`}>
+          {queue.map((q: AssistantQueuedSuggestion) => (
+            <Card key={queuedSuggestionId(q)} className="space-y-1.5">
+              <p className="font-mono text-sm font-medium">{q.incident}</p>
+              <p className="text-sm">{q.suggestion}</p>
+              <p className="text-xs text-muted-foreground">{q.reason}</p>
+              {q.action && (
+                <Button size="sm" onClick={() => p.onRunSuggestion(q.action as ActionBlock)}>
+                  {q.action.label}
+                </Button>
+              )}
+            </Card>
+          ))}
+        </Section>
+      )}
+
+      {/* Live cluster issues */}
+      <Section title={`Live cluster issues (${d.liveIssues.length})`}>
+        {d.liveIssues.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Cluster is clean — nothing to remediate.</p>
+        ) : (
+          d.liveIssues.map((issue) => (
+            <Card key={issue.fingerprint}>
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="size-3.5 shrink-0 text-red-600 dark:text-red-400" />
+                <span className="truncate font-mono text-sm font-medium">{issue.location}</span>
+                <span className="ml-auto font-mono text-xs text-amber-600 dark:text-amber-400">{issue.reason}</span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title="Silence this incident (agent stops acting on it)"
+                  disabled={working}
+                  onClick={() => run({ action: "silence", namespace: ns, fingerprint: issue.fingerprint })}
+                >
+                  <BellOff className="size-3.5 text-muted-foreground" />
+                </Button>
+              </div>
+            </Card>
+          ))
+        )}
+      </Section>
+
+      {/* Autonomy & notifications */}
+      <Card className="space-y-2">
+        <p className="text-sm font-semibold">Autonomy &amp; notifications</p>
+        <p className="text-xs text-muted-foreground">How the agent acts on safe fixes.</p>
+        <div className="flex gap-1.5">
+          {([
+            ["Auto", "auto"],
+            ["Advisory", "advisory"],
+            ["Quiet-hours", "window"],
+          ] as const).map(([label, value]) => (
+            <Button
+              key={value}
+              size="sm"
+              variant={d.autonomyMode === value ? "default" : "secondary"}
+              disabled={working}
+              onClick={() => run({ action: "setMode", namespace: ns, mode: value, window: p.windowText })}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+        {d.autonomyMode === "window" && (
+          <>
+            <Field label="Window">
+              <input value={p.windowText} onChange={(e) => p.setWindowText(e.target.value)} placeholder="22:00-07:00" className={inputClass} />
+              <Button variant="ghost" size="sm" disabled={working} onClick={() => run({ action: "setMode", namespace: ns, mode: "window", window: p.windowText })}>
+                Save
+              </Button>
+            </Field>
+            <p className="text-xs text-muted-foreground">
+              Outside the window (agent timezone), safe fixes are queued for approval instead of
+              auto-run.
+            </p>
+          </>
+        )}
+        <Field label="Notify webhook">
+          <input value={p.webhookText} onChange={(e) => p.setWebhookText(e.target.value)} placeholder="Slack/Discord/ntfy URL (optional)" className={inputClass} />
+          <Button variant="ghost" size="sm" disabled={working} onClick={() => run({ action: "setMode", namespace: ns, mode: d.autonomyMode, window: p.windowText })}>
+            Save
+          </Button>
+        </Field>
+        <p className="border-t pt-2 text-xs text-muted-foreground">
+          Signal notifications are set up in the Settings tab.
+        </p>
+      </Card>
+
+      {/* Silenced */}
+      {d.silenced.length > 0 && (
+        <Section title={`Silenced (${d.silenced.length})`}>
+          {d.silenced.map((fp) => (
+            <Card key={fp}>
+              <div className="flex items-center gap-2">
+                <BellOff className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate font-mono text-xs text-muted-foreground">{fp}</span>
+                <Button variant="ghost" size="sm" className="ml-auto" disabled={working} onClick={() => run({ action: "unsilence", namespace: ns, fingerprint: fp })}>
+                  Unsilence
+                </Button>
+              </div>
+            </Card>
+          ))}
+        </Section>
+      )}
+
+      {/* Activity */}
+      <Section
+        title={`Activity (${audit.length})`}
+        right={
+          audit.length > 10 ? (
+            <Button variant="ghost" size="sm" onClick={() => p.setShowAllActivity(true)}>
+              See all
+            </Button>
+          ) : undefined
+        }
+      >
+        <Card>
+          {audit.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No actions yet.</p>
+          ) : (
+            <div className="max-h-80 space-y-2 overflow-auto">
+              {audit.slice(0, 10).map((e) => (
+                <AuditRow key={auditEntryId(e)} e={e} {...p} />
+              ))}
+            </div>
+          )}
+        </Card>
+      </Section>
+
+      {/* Agent pod */}
+      <Card>
+        <p className="text-sm font-semibold">Agent pod</p>
+        {d.agentPod ? (
+          <div className="mt-1 flex items-center justify-between">
+            <div>
+              <p className="select-text font-mono text-sm text-muted-foreground">{d.agentPod.metadata.name}</p>
+              <div className="mt-1 flex items-center gap-2">
+                <span
+                  className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-medium ${
+                    d.agentPodReason
+                      ? "bg-red-500/15 text-red-600 dark:text-red-400"
+                      : d.agentPod.status?.phase === "Running"
+                        ? "bg-green-500/15 text-green-600 dark:text-green-400"
+                        : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {d.agentPodReason ?? d.agentPod.status?.phase ?? "Unknown"}
+                </span>
+                <span className="font-mono text-[10px] text-muted-foreground">
+                  {d.agentPodRestarts} restart{d.agentPodRestarts === 1 ? "" : "s"}
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-1 text-sm text-muted-foreground">
+            No agent pod found yet — it may still be scheduling or failing to pull the image.
+          </p>
+        )}
+      </Card>
+
+      {/* Kill switch */}
+      <Card>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold">Kill switch</p>
+            <p className="text-sm text-muted-foreground">
+              {d.enabled ? "Agent is acting on incidents." : "Agent is paused — it will not act."}
+            </p>
+          </div>
+          <Button
+            variant={d.enabled ? "destructive" : "default"}
+            disabled={working}
+            onClick={() => run({ action: "kill", namespace: ns, enabled: !d.enabled })}
+          >
+            {d.enabled ? "Pause" : "Resume"}
+          </Button>
+        </div>
+      </Card>
+
+      {/* Credentials & maintenance */}
+      <Card className="space-y-2">
+        <p className="text-sm font-semibold">Credentials &amp; maintenance</p>
+        <p className="text-sm text-muted-foreground">
+          Update the subscription token (run <span className="font-mono">claude setup-token</span> and
+          paste it). Saving replaces the Secret and rolls the agent so it picks up the new token. Use
+          after a 401 / token expiry.
+        </p>
+        <input
+          type="password"
+          autoComplete="off"
+          value={p.newToken}
+          onChange={(e) => p.setNewToken(e.target.value)}
+          placeholder="New CLAUDE_CODE_OAUTH_TOKEN"
+          className={`w-full ${inputClass}`}
+        />
+        <div className="flex gap-2">
+          <Button
+            disabled={working || p.newToken.trim() === ""}
+            onClick={() => run({ action: "updateToken", namespace: ns, token: p.newToken.trim() }, () => p.setNewToken(""))}
+          >
+            Update token &amp; restart
+          </Button>
+          <Button variant="secondary" disabled={working} onClick={() => run({ action: "restart", namespace: ns })}>
+            <RotateCcw className="size-4" /> Restart agent
+          </Button>
+        </div>
+      </Card>
+
+      {/* Uninstall */}
+      <Card>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold">Uninstall</p>
+            <p className="text-sm text-muted-foreground">
+              Removes the agent Deployment, RBAC, and token. Keeps the audit history.
+            </p>
+          </div>
+          <Button variant="destructive" disabled={working} onClick={() => p.setConfirmUninstall(true)}>
+            Uninstall
+          </Button>
+        </div>
+      </Card>
+
+      <Dialog open={p.confirmUninstall} onOpenChange={p.setConfirmUninstall}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Uninstall the assistant?</DialogTitle>
+            <DialogDescription>
+              Removes the agent Deployment, RBAC, and token. Keeps the audit history.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => p.setConfirmUninstall(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                p.setConfirmUninstall(false);
+                run({ action: "uninstall", namespace: ns });
+              }}
+            >
+              Uninstall
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Full activity modal */}
+      <Dialog open={p.showAllActivity} onOpenChange={p.setShowAllActivity}>
+        <DialogContent className="max-h-[80vh] overflow-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Activity — {audit.length} entries</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            {audit.map((e) => (
+              <AuditRow key={auditEntryId(e)} e={e} {...p} />
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// --- Audit row --------------------------------------------------------------
+
+function AuditRow({
+  e,
+  d,
+  ns,
+  working,
+  expanded,
+  setExpanded,
+  run,
+  onRevert,
+}: ControlProps & { e: AssistantAuditEntry }) {
+  const id = auditEntryId(e);
+  const isOpen = expanded.has(id);
+  const canExpand = auditCanExpand(e.detail, e.analysis);
+  const backup = e.backupRef ? d.backupYAML(e.backupRef) : undefined;
+
+  function toggle() {
+    if (!canExpand) return;
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  return (
+    <div className="rounded-md border p-2" onContextMenu={(ev) => {
+      ev.preventDefault();
+      run({ action: "silence", namespace: ns, fingerprint: e.fingerprint });
+    }}>
+      <button className="flex w-full items-center gap-2 text-left" onClick={toggle} disabled={!canExpand}>
+        <span className={outcomeColorClass(e.outcome)}>{outcomeGlyph(e.outcome)}</span>
+        <span className="truncate font-mono text-sm font-medium">{e.incident}</span>
+        <span className="ml-auto flex items-center gap-2">
+          {canExpand && (isOpen ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />)}
+          <span className="font-mono text-[9px] uppercase text-muted-foreground">{e.tier}</span>
+          <span className="font-mono text-[10px] text-muted-foreground" title={e.at}>
+            {relativeTime(e.at)}
+          </span>
+        </span>
+      </button>
+      {e.proposal && <p className="mt-1 text-sm text-muted-foreground">{e.proposal}</p>}
+      {e.command && <p className="select-text font-mono text-[10px] text-muted-foreground">{e.command}</p>}
+      {e.detail && (
+        <p className={`select-text font-mono text-[10px] text-muted-foreground ${isOpen ? "whitespace-pre-wrap" : "line-clamp-3"}`}>
+          {e.detail}
+        </p>
+      )}
+      {isOpen && e.analysis && (
+        <div className="mt-1 border-t pt-1">
+          <p className="font-mono text-[9px] uppercase text-muted-foreground">Helmsman's analysis</p>
+          <p className="select-text whitespace-pre-wrap text-xs text-muted-foreground">{e.analysis}</p>
+        </div>
+      )}
+      {backup && (
+        <Button
+          variant="secondary"
+          size="sm"
+          className="mt-1"
+          disabled={working}
+          onClick={() => onRevert(backup, e.proposal ?? e.incident)}
+        >
+          <Undo2 className="size-3.5" /> Revert
+        </Button>
+      )}
+    </div>
+  );
+}
+
+// --- Bits -------------------------------------------------------------------
+
+function Stat({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="font-mono text-[9px] font-medium uppercase text-muted-foreground">{label}</span>
+      <span className={`text-sm font-semibold ${color}`}>{value}</span>
+    </div>
+  );
+}
+
+function Section({
+  title,
+  right,
+  children,
+}: {
+  title: string;
+  right?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-muted-foreground">{title}</p>
+        {right}
+      </div>
+      {children}
+    </div>
+  );
+}

@@ -43,6 +43,42 @@ export {
   helmUninstallArgs,
 } from "./purge";
 
+export {
+  type AssistantInstallConfig,
+  type TokenExpiryLevel,
+  type TokenExpiryStatus,
+  type AssistantAgentStatus,
+  type AssistantAuditEntry,
+  type AssistantQueuedSuggestion,
+  type AssistantClusterState,
+  type AssistantLiveIssue,
+  DEFAULT_INSTALL_CONFIG,
+  SECRET_NAME,
+  ISSUED_AT_ANNOTATION,
+  TOKEN_LIFETIME_DAYS,
+  TOKEN_WARN_WITHIN_DAYS,
+  namespaceYAML,
+  secretYAML,
+  rbac,
+  configMaps,
+  deployment,
+  manifestYAML,
+  maskToken,
+  tokenExpiryStatus,
+  parseTokenExpiry,
+  decodeClusterState,
+  auditEntryId,
+  queuedSuggestionId,
+  isEnabled,
+  autonomyMode,
+  quietWindow,
+  silencedSet,
+  podErrorReason,
+  computeLiveIssues,
+  mergedConfigMapJSON,
+  clearedReportConfigMapJSON,
+} from "./assistant";
+
 /** Kubernetes ObjectMeta (subset used by the web panels). */
 export interface ObjectMeta {
   name: string;
