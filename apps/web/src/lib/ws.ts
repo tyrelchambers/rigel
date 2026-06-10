@@ -3,6 +3,18 @@ import type { ChatEvent } from "@/panels/chat/types";
 
 let socket: WebSocket | null = null;
 
+/** Raw frames queued while the socket is still CONNECTING; flushed on open. */
+const pendingFrames: string[] = [];
+/** Active watch subscriptions, re-sent on every (re)connect so first-load
+ *  panels (which mount before the socket is OPEN) and reconnects get their data. */
+const activeSubs = new Map<string, { kind: string; namespace: string }>();
+
+/** Send now if the socket is OPEN, else buffer until it opens. */
+function rawSend(frame: string): void {
+  if (socket && socket.readyState === WebSocket.OPEN) socket.send(frame);
+  else pendingFrames.push(frame);
+}
+
 type ChatEventCallback = (event: ChatEvent) => void;
 let chatListeners: ChatEventCallback[] = [];
 
@@ -28,12 +40,12 @@ export interface LogTarget {
 
 /** Start streaming logs for the given targets. {type:"logs.start", targets, tailLines}. */
 export function sendLogsStart(targets: LogTarget[], tailLines = 200): void {
-  socket?.send(JSON.stringify({ type: "logs.start", targets, tailLines }));
+  rawSend(JSON.stringify({ type: "logs.start", targets, tailLines }));
 }
 
 /** Stop all log streams for this connection. {type:"logs.stop"}. */
 export function sendLogsStop(): void {
-  socket?.send(JSON.stringify({ type: "logs.stop" }));
+  rawSend(JSON.stringify({ type: "logs.stop" }));
 }
 
 /** Subscribe to inbound log-stream lines/errors. Returns an unsubscribe fn. */
@@ -46,12 +58,12 @@ export function onLogLine(callback: LogCallback): () => void {
 
 /** Send a chat prompt to the server. {type:"chat", prompt}. */
 export function sendChat(prompt: string): void {
-  socket?.send(JSON.stringify({ type: "chat", prompt }));
+  rawSend(JSON.stringify({ type: "chat", prompt }));
 }
 
 /** Request the server interrupt the current chat turn. */
 export function interruptChat(): void {
-  socket?.send(JSON.stringify({ type: "chat-interrupt" }));
+  rawSend(JSON.stringify({ type: "chat-interrupt" }));
 }
 
 /** Subscribe to inbound chat events. Returns an unsubscribe fn. */
@@ -68,6 +80,13 @@ export function connectCluster(): void {
   socket.onopen = () => {
     store.setConnected(true);
     store.setError(null);
+    // (Re)send every active watch subscription — panels mount before the
+    // socket opens, so their initial subscribe() calls would otherwise be lost.
+    for (const sub of activeSubs.values()) {
+      socket!.send(JSON.stringify({ type: "subscribe", kind: sub.kind, namespace: sub.namespace }));
+    }
+    // Drain any chat/log frames buffered while connecting.
+    while (pendingFrames.length) socket!.send(pendingFrames.shift()!);
   };
   socket.onclose = () => store.setConnected(false);
   socket.onerror = () => store.setError("websocket connection failed");
@@ -96,8 +115,16 @@ export function subscribe(kind: string, namespace = "default"): void {
   const store = useCluster.getState();
   store.setLoading(true);
   store.setError(null);
-  socket?.send(JSON.stringify({ type: "subscribe", kind, namespace }));
+  // Record the subscription so it is (re)sent on open/reconnect. If the socket
+  // is already OPEN send immediately; otherwise the onopen flush handles it.
+  activeSubs.set(`${kind}/${namespace}`, { kind, namespace });
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: "subscribe", kind, namespace }));
+  }
 }
 export function unsubscribe(kind: string, namespace = "default"): void {
-  socket?.send(JSON.stringify({ type: "unsubscribe", kind, namespace }));
+  activeSubs.delete(`${kind}/${namespace}`);
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: "unsubscribe", kind, namespace }));
+  }
 }
