@@ -7,6 +7,7 @@ import { buildCommand, PurgeActionError, type ActionBlock } from "./actions";
 import { applyManifest, installHelm, type HelmInstallRequest } from "./install";
 import { handlePurge, type PurgeRequest } from "./purge";
 import { getPodMetrics, getNodeMetrics } from "./metrics";
+import { handleUpdates, type UpdatesRequest } from "./updates";
 import { checkAuth } from "./auth";
 
 const KUBECONFIG = resolveKubeconfigPath(process.env, homedir());
@@ -180,6 +181,26 @@ const server = Bun.serve({
         return Response.json({ error: "missing namespace or instance" }, { status: 422 });
       }
       const result = await handlePurge(context, body);
+      return Response.json(result);
+    }
+
+    // POST /api/updates — check running images for newer stable releases.
+    //
+    // Body { images: string[] }. For each image, resolves an update status via
+    // the deterministic resolver tiers (registry version → moving-tag digest →
+    // GitHub Releases). Per-image failures degrade to { kind:"unknown" } rather
+    // than failing the batch. Always HTTP 200 with { results: UpdateResult[] }.
+    if (url.pathname === "/api/updates" && req.method === "POST") {
+      let body: UpdatesRequest;
+      try {
+        body = (await req.json()) as UpdatesRequest;
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      if (!Array.isArray(body?.images)) {
+        return Response.json({ error: "missing images array" }, { status: 422 });
+      }
+      const result = await handleUpdates(body);
       return Response.json(result);
     }
 

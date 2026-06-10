@@ -7,6 +7,7 @@ import type {
   StatefulSetLike,
   PodLike,
 } from "./types";
+import type { InstalledImage } from "./updates";
 
 /**
  * Normalize a container image reference down to its repo path — the part that
@@ -111,4 +112,77 @@ export function installedAppIDs(
     if (isInstalled) installed.add(app.id);
   }
   return installed;
+}
+
+/**
+ * The `sha256:…` digest a container actually pulled, extracted from a pod
+ * status `imageID`. Handles the common forms: `ghcr.io/x/y@sha256:…`,
+ * `docker-pullable://x/y@sha256:…`, and a bare `sha256:…`. null when no digest
+ * is embedded. Mirrors Swift `runningImageDigest`.
+ */
+export function runningImageDigest(imageID: string | undefined): string | null {
+  if (!imageID) return null;
+  const i = imageID.indexOf("sha256:");
+  if (i === -1) return null;
+  return imageID.slice(i);
+}
+
+/**
+ * For each installed catalog app, the exact image reference it's running — the
+ * full string (registry + repo + tag) of the first container that matched one
+ * of the app's `matchImages`. This is what the update check needs: the running
+ * *tag*, not just the repo path. Apps with no matching container are omitted.
+ * Mirrors Swift `installedImages`.
+ */
+export function installedImages(
+  apps: CatalogApp[],
+  deployments: DeploymentLike[],
+  statefulSets: StatefulSetLike[],
+  pods: PodLike[],
+): InstalledImage[] {
+  // (normalized repo path, full image ref) for every running container.
+  const running: Array<{ repo: string; full: string }> = [];
+  const collect = (image: string | undefined) => {
+    if (image) running.push({ repo: imageRepoPath(image), full: image });
+  };
+  for (const d of deployments)
+    for (const c of d.spec?.template?.spec?.containers ?? []) collect(c.image);
+  for (const s of statefulSets)
+    for (const c of s.spec?.template?.spec?.containers ?? []) collect(c.image);
+  for (const p of pods) for (const c of p.spec?.containers ?? []) collect(c.image);
+
+  // (normalized repo path, running digest) from pod *status* — the only place
+  // the actually-pulled sha lives. Match a pod's spec container to its status
+  // by name so we attribute the digest to the right image.
+  const podDigests: Array<{ repo: string; digest: string }> = [];
+  for (const p of pods) {
+    const idByName = new Map<string, string>();
+    for (const cs of p.status?.containerStatuses ?? []) {
+      if (cs.name && cs.imageID) idByName.set(cs.name, cs.imageID);
+    }
+    for (const c of p.spec?.containers ?? []) {
+      const digest = c.name ? runningImageDigest(idByName.get(c.name)) : null;
+      if (!c.image || !digest) continue;
+      podDigests.push({ repo: imageRepoPath(c.image), digest });
+    }
+  }
+
+  const out: InstalledImage[] = [];
+  for (const app of apps) {
+    for (const raw of app.matchImages) {
+      const candidate = imageRepoPath(raw);
+      const hit = running.find((r) => repoPathsMatch(r.repo, candidate));
+      if (hit) {
+        const digest = podDigests.find((d) => repoPathsMatch(d.repo, candidate))?.digest;
+        out.push({
+          appID: app.id,
+          image: hit.full,
+          repoURL: app.repoURL ?? undefined,
+          runningDigest: digest,
+        });
+        break;
+      }
+    }
+  }
+  return out;
 }

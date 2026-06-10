@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 /**
  * ActionBlock mirrors the server-side ActionBlock interface and
@@ -73,6 +73,61 @@ async function executeAction(action: ActionBlock): Promise<ActionResponse> {
 export function useAction() {
   return useMutation<ActionResponse, Error, ActionBlock>({
     mutationFn: executeAction,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Update detection — POST /api/updates (docs/parity/updates.md)
+// ---------------------------------------------------------------------------
+
+/** Per-image update outcome — mirrors the server `UpdateResult`. */
+export interface UpdateResult {
+  /** Echoed input image reference. */
+  image: string;
+  /** Parsed tag from the image, or null when digest-only. */
+  currentTag: string | null;
+  /** Version to upgrade to, or null when none / undeterminable. */
+  latest: string | null;
+  /** True iff a newer stable version exists. */
+  updateAvailable: boolean;
+  /** Which tier answered, or "unknown" when none could. */
+  kind: "version" | "digest" | "none" | "unknown";
+  /** For "unknown": why we couldn't decide (tooltip). */
+  reason?: string;
+}
+
+export interface UpdatesResponse {
+  results: UpdateResult[];
+}
+
+/** POST a batch of image refs to the update checker. */
+async function fetchUpdates(images: string[]): Promise<UpdatesResponse> {
+  const res = await fetch("/api/updates", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ images }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? res.statusText);
+  }
+  return res.json() as Promise<UpdatesResponse>;
+}
+
+/**
+ * Update-status query for a set of installed-app images. Keyed by the sorted
+ * image list so it re-runs only when the running images actually change.
+ * Results are cached for the session (the client owns the TTL; the server does
+ * no persistent caching).
+ */
+export function useUpdates(images: string[]) {
+  const key = [...images].sort();
+  return useQuery<UpdatesResponse, Error>({
+    queryKey: ["updates", key],
+    queryFn: () => fetchUpdates(key),
+    enabled: images.length > 0,
+    staleTime: 10 * 60_000, // 10 min — registries don't move that fast.
+    gcTime: 10 * 60_000,
   });
 }
 

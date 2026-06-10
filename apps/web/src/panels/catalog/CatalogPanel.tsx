@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
-import { LoaderCircle } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  LoaderCircle,
+  ArrowUp,
+  Check,
+  HelpCircle,
+  RefreshCw,
+} from "lucide-react";
 import {
   APP_CATEGORIES,
   categoryDisplayName,
@@ -13,6 +19,8 @@ import {
 } from "@helmsman/catalog";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
+import { useUpdates, type UpdateResult, type ActionBlock } from "@/lib/api";
+import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { iconFor } from "./icons";
 import {
   availableCategories,
@@ -22,6 +30,7 @@ import {
 } from "./catalogDisplay";
 import { CatalogDetailSheet } from "./CatalogDetailSheet";
 import { CatalogInstallWizard } from "./CatalogInstallWizard";
+import { updateTargets, withTag, type UpdateTarget } from "./updateTargets";
 
 // Watches the catalog needs cluster-wide (detection scans every namespace) plus
 // namespace/node lists for the wizard dropdowns.
@@ -48,6 +57,7 @@ export default function CatalogPanel() {
   const [scope, setScope] = useState<Scope>("all");
   const [detailApp, setDetailApp] = useState<CatalogApp | null>(null);
   const [wizardApp, setWizardApp] = useState<CatalogApp | null>(null);
+  const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
 
   // Load the bundled catalog once.
   useEffect(() => {
@@ -87,6 +97,40 @@ export default function CatalogPanel() {
     () => installedAppIDs(catalog, deployments, statefulSets, pods),
     [catalog, deployments, statefulSets, pods],
   );
+
+  // Update targets — the running image + workload coordinates for each
+  // installed app, so we can both check for updates and emit a setImage action.
+  const targets = useMemo(
+    () => updateTargets(catalog, deployments, statefulSets, pods),
+    [catalog, deployments, statefulSets, pods],
+  );
+  const targetByApp = useMemo(() => {
+    const m = new Map<string, UpdateTarget>();
+    for (const t of targets) m.set(t.appID, t);
+    return m;
+  }, [targets]);
+
+  // One batched /api/updates query for every installed image, cached for the
+  // session (TanStack Query owns the TTL; the server does no persistent cache).
+  const images = useMemo(() => targets.map((t) => t.image), [targets]);
+  const updates = useUpdates(images);
+  const resultByImage = useMemo(() => {
+    const m = new Map<string, UpdateResult>();
+    for (const r of updates.data?.results ?? []) m.set(r.image, r);
+    return m;
+  }, [updates.data]);
+
+  // Hand off an [Update] click to the guarded ConfirmSheet as a setImage action.
+  function onUpdate(target: UpdateTarget, latest: string) {
+    setPendingAction({
+      kind: "setImage",
+      label: `Update ${target.appID} to ${latest}`,
+      name: target.workloadName,
+      namespace: target.namespace,
+      container: target.container,
+      image: withTag(target.image, latest),
+    });
+  }
 
   const namespaces = useMemo(
     () =>
@@ -176,15 +220,28 @@ export default function CatalogPanel() {
 
       {/* Grid */}
       <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
-        {filtered.map((app) => (
-          <CatalogCard
-            key={app.id}
-            app={app}
-            isInstalled={installedIDs.has(app.id)}
-            onSelect={() => setDetailApp(app)}
-            onInstall={() => setWizardApp(app)}
-          />
-        ))}
+        {filtered.map((app) => {
+          const installed = installedIDs.has(app.id);
+          const target = targetByApp.get(app.id);
+          const result = target ? resultByImage.get(target.image) : undefined;
+          return (
+            <CatalogCard
+              key={app.id}
+              app={app}
+              isInstalled={installed}
+              onSelect={() => setDetailApp(app)}
+              onInstall={() => setWizardApp(app)}
+            >
+              {installed && target && (
+                <UpdateStatusRow
+                  checking={updates.isPending && images.length > 0}
+                  result={result}
+                  onUpdate={(latest) => onUpdate(target, latest)}
+                />
+              )}
+            </CatalogCard>
+          );
+        })}
       </div>
 
       {/* Detail sheet */}
@@ -211,6 +268,13 @@ export default function CatalogPanel() {
           onClose={() => setWizardApp(null)}
         />
       )}
+
+      {/* setImage confirm sheet for the [Update] button */}
+      <ConfirmSheet
+        action={pendingAction}
+        open={!!pendingAction}
+        onClose={() => setPendingAction(null)}
+      />
     </div>
   );
 }
@@ -242,11 +306,13 @@ function CatalogCard({
   isInstalled,
   onSelect,
   onInstall,
+  children,
 }: {
   app: CatalogApp;
   isInstalled: boolean;
   onSelect: () => void;
   onInstall: () => void;
+  children?: ReactNode;
 }) {
   const Icon = iconFor(app.iconSystemName);
   return (
@@ -277,6 +343,7 @@ function CatalogCard({
         </span>
         <span className="truncate font-mono">{requirementsSummary(app)}</span>
       </div>
+      {children}
       <span
         role="button"
         tabIndex={0}
@@ -295,5 +362,88 @@ function CatalogCard({
         Install
       </span>
     </button>
+  );
+}
+
+/**
+ * The per-installed-app update status row. Reflects the /api/updates result:
+ *   - checking      → spinner + "checking for updates…"
+ *   - updateAvailable → "↑ current → latest" (orange) + [Update] button
+ *   - upToDate      → "✓ up to date" (green)
+ *   - unknown       → "? version unknown" (gray) + reason tooltip
+ *   - not yet cached → "not checked"
+ * Interactive children stop propagation so they don't trigger the card's
+ * onSelect (the card is itself a button).
+ */
+function UpdateStatusRow({
+  checking,
+  result,
+  onUpdate,
+}: {
+  checking: boolean;
+  result: UpdateResult | undefined;
+  onUpdate: (latest: string) => void;
+}) {
+  if (checking && !result) {
+    return (
+      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <LoaderCircle className="size-3 animate-spin" />
+        checking for updates…
+      </div>
+    );
+  }
+
+  if (!result) {
+    return <div className="text-[11px] text-muted-foreground">not checked</div>;
+  }
+
+  if (result.updateAvailable && result.latest) {
+    const latest = result.latest;
+    return (
+      <div className="flex items-center justify-between gap-2 text-[11px]">
+        <span className="inline-flex items-center gap-1 truncate font-mono text-amber-600 dark:text-amber-400">
+          <ArrowUp className="size-3 shrink-0" />
+          {result.currentTag ?? "?"} → {latest}
+        </span>
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={(e) => {
+            e.stopPropagation();
+            onUpdate(latest);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.stopPropagation();
+              onUpdate(latest);
+            }
+          }}
+          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-500/40 px-2 py-0.5 text-amber-700 hover:bg-amber-500/10 dark:text-amber-300"
+        >
+          <RefreshCw className="size-3" />
+          Update
+        </span>
+      </div>
+    );
+  }
+
+  if (result.kind === "unknown") {
+    return (
+      <div
+        className="inline-flex items-center gap-1 text-[11px] text-muted-foreground"
+        title={result.reason ?? "could not determine an update for this image"}
+      >
+        <HelpCircle className="size-3" />
+        version unknown
+      </div>
+    );
+  }
+
+  // upToDate (no newer version, known tier).
+  return (
+    <div className="inline-flex items-center gap-1 text-[11px] text-green-700 dark:text-green-400">
+      <Check className="size-3" />
+      up to date
+    </div>
   );
 }

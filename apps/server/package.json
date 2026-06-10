@@ -8,6 +8,6 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test"
   },
-  "dependencies": { "@helmsman/k8s": "workspace:*" },
+  "dependencies": { "@helmsman/k8s": "workspace:*", "@helmsman/catalog": "workspace:*" },
   "devDependencies": { "@types/bun": "latest", "typescript": "latest" }
 }

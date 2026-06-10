@@ -10,6 +10,9 @@ importers:
 
   apps/server:
     dependencies:
+      '@helmsman/catalog':
+        specifier: workspace:*
+        version: link:../../packages/catalog
       '@helmsman/k8s':
         specifier: workspace:*
         version: link:../../packages/k8s
@@ -29,6 +32,9 @@ importers:
       '@fontsource-variable/geist':
         specifier: ^5.2.9
         version: 5.2.9
+      '@helmsman/catalog':
+        specifier: workspace:*
+        version: link:../../packages/catalog
       '@helmsman/k8s':
         specifier: workspace:*
         version: link:../../packages/k8s
@@ -99,6 +105,9 @@ importers:
 
   packages/catalog:
     devDependencies:
+      '@types/bun':
+        specifier: latest
+        version: 1.3.14
       typescript:
         specifier: latest
         version: 6.0.3

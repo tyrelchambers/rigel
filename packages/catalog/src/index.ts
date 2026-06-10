@@ -19,7 +19,41 @@ export { loadCatalog, CATALOG } from "./loader";
 
 export { substitute } from "./substitute";
 
-export { imageRepoPath, repoPathsMatch, installedAppIDs } from "./detection";
+export {
+  imageRepoPath,
+  repoPathsMatch,
+  installedAppIDs,
+  installedImages,
+  runningImageDigest,
+} from "./detection";
+
+export type {
+  ImageReference,
+  ReleaseVersion,
+  UpdateStatus,
+  InstalledImage,
+  TagSource,
+  FetchLike,
+  ResolverOptions,
+} from "./updates";
+export {
+  parseImageRef,
+  parseReleaseVersion,
+  versionLess,
+  newestStableTag,
+  pickLatestVersion,
+  statusFromTags,
+  schemeComparable,
+  isNewerRelease,
+  statusFromRelease,
+  ownerRepo,
+  DockerHubTagSource,
+  GHCRTagSource,
+  GitHubReleaseSource,
+  tagSourceFor,
+  registryIsKnown,
+  UpdateResolver,
+} from "./updates";
 
 export type { ManifestPlaceholder } from "./placeholder";
 export {

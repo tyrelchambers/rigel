@@ -149,17 +149,28 @@ export function isBaked(app: CatalogApp): boolean {
 // images are needed for installation detection.
 
 interface ContainerLike {
+  name?: string;
   image?: string;
 }
 interface PodSpecTemplateLike {
   spec?: { containers?: ContainerLike[] };
 }
 export interface DeploymentLike {
+  metadata?: { name?: string; namespace?: string };
   spec?: { template?: PodSpecTemplateLike };
 }
 export interface StatefulSetLike {
+  metadata?: { name?: string; namespace?: string };
   spec?: { template?: PodSpecTemplateLike };
+}
+/** A single entry in pod `status.containerStatuses` (subset). */
+interface ContainerStatusLike {
+  name?: string;
+  image?: string;
+  /** e.g. "ghcr.io/x/y@sha256:…" — carries the digest the node actually pulled. */
+  imageID?: string;
 }
 export interface PodLike {
   spec?: { containers?: ContainerLike[] };
+  status?: { containerStatuses?: ContainerStatusLike[] };
 }
