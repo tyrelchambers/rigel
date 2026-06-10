@@ -1,19 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { LoaderCircle } from "lucide-react";
+import { Lock } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { ListRow } from "@/panels/components/ListRow";
 import { TagPill } from "@/panels/components/TagPill";
-import { StatusBadge } from "@/panels/components/StatusBadge";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
+import { PanelHeader } from "@/panels/components/PanelHeader";
 import type { Ingress } from "./types";
 import {
   relativeAge,
   className,
   isTLS,
-  hosts,
   flattenRoutes,
   externalAddress,
   matchesSearch,
@@ -48,9 +47,7 @@ export default function IngressesPanel() {
     [allIngresses, search],
   );
 
-  const total = allIngresses.length;
   const shown = filtered.length;
-  const countLabel = search.trim() && shown !== total ? `${shown} / ${total}` : `${total}`;
 
   function toggleExpand(uid: string) {
     setExpanded((prev) => {
@@ -66,56 +63,39 @@ export default function IngressesPanel() {
   }
 
   return (
-    <div className="flex flex-col gap-0">
-      {/* Header */}
-      <div
-        className="flex items-center gap-3 px-4 py-3"
-        style={{ borderBottom: "1px solid #1A1A1A", background: "#141417" }}
+    <div className="flex h-full flex-col">
+      <PanelHeader
+        title="Ingresses"
+        subtitle="HTTP routing & TLS"
+        count={shown}
+        loading={isLoading}
       >
-        <div className="flex flex-col gap-0">
-          <span className="text-sm font-semibold leading-tight">Ingresses</span>
-          <span style={{ fontSize: 11, color: "#6B6B73" }}>HTTP routing &amp; TLS</span>
-        </div>
-        <span
-          style={{
-            fontFamily: "ui-monospace, monospace",
-            fontSize: 11,
-            color: "#6B6B73",
-            background: "#1A1A1A",
-            padding: "2px 6px",
-            borderRadius: 4,
-          }}
-        >
-          {countLabel}
-        </span>
-        {isLoading && (
-          <LoaderCircle className="size-4 animate-spin text-muted-foreground" aria-label="loading" />
-        )}
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search ingresses…"
-          className="ml-auto w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
         />
-      </div>
+      </PanelHeader>
 
-      {/* Error banner */}
-      {error && (
-        <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
-          {error}
-        </pre>
-      )}
+      <div className="flex-1 overflow-auto">
+        {/* Error banner */}
+        {error && (
+          <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+            {error}
+          </pre>
+        )}
 
-      {/* Row list */}
-      <div className="flex flex-col gap-0.5 px-3 py-2">
+        {/* Row list */}
+        <div className="flex flex-col gap-0.5 px-3 py-2">
         {filtered.map((ing) => {
           const uid = ing.metadata.uid;
           const isOpen = expanded.has(uid);
           const cls = className(ing);
-          const hostList = hosts(ing);
           const tls = isTLS(ing);
-          const external = externalAddress(ing);
+          const routes = flattenRoutes(ing);
+          const primary = routes[0];
 
           return (
             <ListRow
@@ -125,82 +105,79 @@ export default function IngressesPanel() {
               onToggle={() => toggleExpand(uid)}
               expandedContent={<IngressDetail ingress={ing} />}
             >
-              {/* Name */}
-              <button
-                type="button"
-                onClick={() => toggleExpand(uid)}
-                className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
-              >
-                {ing.metadata.name}
-              </button>
+              {/* Two-line content (mirrors the Swift ingress row) */}
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                {/* Line 1: name · namespace · class · TLS */}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleExpand(uid)}
+                    className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
+                  >
+                    {ing.metadata.name}
+                  </button>
 
-              {/* Namespace chip */}
-              <span
-                style={{
-                  fontFamily: "ui-monospace, monospace",
-                  fontSize: 10,
-                  color: "#6B6B73",
-                  background: "#050505",
-                  padding: "1px 5px",
-                  borderRadius: 4,
-                  border: "1px solid #1A1A1A",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {ing.metadata.namespace ?? "—"}
-              </span>
+                  <span
+                    style={{
+                      fontFamily: "ui-monospace, monospace",
+                      fontSize: 10,
+                      color: "#6B6B73",
+                      background: "#050505",
+                      padding: "1px 5px",
+                      borderRadius: 4,
+                      border: "1px solid #1A1A1A",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {ing.metadata.namespace ?? "—"}
+                  </span>
 
-              {/* Class — purple TagPill (only when set) */}
-              {cls !== "—" && <TagPill label={cls} />}
+                  {cls !== "—" && <TagPill label={cls} />}
 
-              {/* Hosts — dim, truncated */}
-              {hostList.length > 0 && (
-                <span
-                  style={{
-                    fontFamily: "ui-monospace, monospace",
-                    fontSize: 10,
-                    color: "#A1A1AA",
-                    whiteSpace: "nowrap",
-                    flexShrink: 1,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    minWidth: 0,
-                  }}
-                  title={hostList.join(", ")}
-                >
-                  {hostList.join(", ")}
-                </span>
-              )}
+                  {tls && (
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 3,
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: "#10B981",
+                        background: "rgba(16, 185, 129, 0.13)",
+                        padding: "1px 6px",
+                        borderRadius: 4,
+                        whiteSpace: "nowrap",
+                      }}
+                      title="TLS enabled"
+                    >
+                      <Lock size={9} strokeWidth={2.5} />
+                      TLS
+                    </span>
+                  )}
+                </div>
 
-              {/* Spacer */}
-              <span className="flex-1" />
-
-              {/* TLS badge */}
-              <StatusBadge
-                label={tls ? "TLS" : "no TLS"}
-                variant={tls ? "healthy" : "neutral"}
-                title={tls ? "TLS enabled" : "No TLS configured"}
-              />
-
-              {/* External address — dim */}
-              {external && (
-                <span
-                  style={{
-                    fontFamily: "ui-monospace, monospace",
-                    fontSize: 10,
-                    color: "#A1A1AA",
-                    whiteSpace: "nowrap",
-                    flexShrink: 1,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    minWidth: 0,
-                    maxWidth: "12rem",
-                  }}
-                  title={external}
-                >
-                  {external}
-                </span>
-              )}
+                {/* Line 2: primary route — host / → service:port */}
+                {primary && (
+                  <div className="flex min-w-0 items-center gap-1.5 font-mono text-xs">
+                    <span className="truncate" style={{ color: "#FFFFFF" }} title={primary.host}>
+                      {primary.host}
+                    </span>
+                    <span style={{ color: "#6B6B73", flexShrink: 0 }}>{primary.path}</span>
+                    <span style={{ color: "#6B6B73", flexShrink: 0 }}>→</span>
+                    <span
+                      className="truncate"
+                      style={{ color: "#A855F7", flexShrink: 0 }}
+                      title={`${primary.service}${primary.port ? `:${primary.port}` : ""}`}
+                    >
+                      {primary.service}
+                      {primary.port ? `:${primary.port}` : ""}
+                    </span>
+                    {routes.length > 1 && (
+                      <span style={{ color: "#6B6B73", flexShrink: 0 }}>+{routes.length - 1}</span>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Action strip — Errors / Logs / Explain */}
               <ActionButtonStrip
@@ -213,13 +190,14 @@ export default function IngressesPanel() {
         })}
       </div>
 
-      {/* Empty / filtered-to-zero states */}
-      {!isLoading && allIngresses.length === 0 && (
-        <p className="px-4 py-4 text-sm text-muted-foreground">No ingresses found</p>
-      )}
-      {!isLoading && allIngresses.length > 0 && filtered.length === 0 && (
-        <p className="px-4 py-4 text-sm text-muted-foreground">No ingresses match search</p>
-      )}
+        {/* Empty / filtered-to-zero states */}
+        {!isLoading && allIngresses.length === 0 && (
+          <p className="px-4 py-4 text-sm text-muted-foreground">No ingresses found</p>
+        )}
+        {!isLoading && allIngresses.length > 0 && filtered.length === 0 && (
+          <p className="px-4 py-4 text-sm text-muted-foreground">No ingresses match search</p>
+        )}
+      </div>
     </div>
   );
 }

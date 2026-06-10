@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { LoaderCircle, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
@@ -16,6 +16,7 @@ import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { ListRow } from "@/panels/components/ListRow";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
+import { PanelHeader } from "@/panels/components/PanelHeader";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import type { ActionBlock } from "@/lib/api";
 import type { Namespace } from "./types";
@@ -98,7 +99,6 @@ export default function NamespacesPanel() {
 
   const total = allNamespaces.length;
   const shown = filtered.length;
-  const countLabel = search.trim() && shown !== total ? `${shown} / ${total}` : `${total}`;
 
   const trimmedName = newName.trim();
   const nameValid = isValidNamespaceName(trimmedName);
@@ -141,53 +141,36 @@ export default function NamespacesPanel() {
   }
 
   return (
-    <div className="flex flex-col gap-0">
-      {/* Header */}
-      <div
-        className="flex items-center gap-3 px-4 py-3"
-        style={{ borderBottom: "1px solid #1A1A1A", background: "#141417" }}
+    <div className="flex h-full flex-col">
+      <PanelHeader
+        title="Namespaces"
+        subtitle="Cluster isolation"
+        count={shown !== total && search.trim() ? shown : total}
+        loading={isLoading}
       >
-        <div className="flex flex-col gap-0">
-          <span className="text-sm font-semibold leading-tight">Namespaces</span>
-          <span style={{ fontSize: 11, color: "#6B6B73" }}>Cluster isolation</span>
-        </div>
-        <span
-          style={{
-            fontFamily: "ui-monospace, monospace",
-            fontSize: 11,
-            color: "#6B6B73",
-            background: "#1A1A1A",
-            padding: "2px 6px",
-            borderRadius: 4,
-          }}
-        >
-          {countLabel}
-        </span>
-        {isLoading && (
-          <LoaderCircle className="size-4 animate-spin text-muted-foreground" aria-label="loading" />
-        )}
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search namespaces…"
-          className="ml-auto w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
         />
         <Button size="sm" onClick={openCreate}>
           <Plus className="size-3" />
           New
         </Button>
-      </div>
+      </PanelHeader>
 
-      {/* Error banner */}
-      {error && (
-        <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
-          {error}
-        </pre>
-      )}
+      <div className="flex-1 overflow-auto">
+        {/* Error banner */}
+        {error && (
+          <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+            {error}
+          </pre>
+        )}
 
-      {/* Row list */}
-      <div className="flex flex-col gap-0.5 px-3 py-2">
+        {/* Row list */}
+        <div className="flex flex-col gap-0.5 px-3 py-2">
         {filtered.map((ns) => {
           const k = ns.metadata.uid || ns.metadata.name;
           const isOpen = expanded.has(k);
@@ -260,13 +243,14 @@ export default function NamespacesPanel() {
         })}
       </div>
 
-      {/* Empty / filtered-to-zero states */}
-      {!isLoading && allNamespaces.length === 0 && (
-        <p className="px-4 py-4 text-sm text-muted-foreground">No namespaces found</p>
-      )}
-      {!isLoading && allNamespaces.length > 0 && filtered.length === 0 && (
-        <p className="px-4 py-4 text-sm text-muted-foreground">No namespaces match search</p>
-      )}
+        {/* Empty / filtered-to-zero states */}
+        {!isLoading && allNamespaces.length === 0 && (
+          <p className="px-4 py-4 text-sm text-muted-foreground">No namespaces found</p>
+        )}
+        {!isLoading && allNamespaces.length > 0 && filtered.length === 0 && (
+          <p className="px-4 py-4 text-sm text-muted-foreground">No namespaces match search</p>
+        )}
+      </div>
 
       {/* Create dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>

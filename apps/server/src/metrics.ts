@@ -28,6 +28,14 @@ export interface NodeMetricRow {
   memory: string;
 }
 
+export interface NodeDiskRow {
+  name: string;
+  /** Root filesystem total / used / available, in bytes. */
+  capacityBytes: number;
+  usedBytes: number;
+  availableBytes: number;
+}
+
 export interface MetricsResult<T> {
   available: boolean;
   items: T[];
@@ -209,6 +217,60 @@ export async function getNodeMetrics(
     return { available: true, items: parseKubectlTopNodes(res.stdout) };
   } catch (err) {
     console.warn(`[metrics] kubectl top nodes failed: ${String(err)}`);
+    return { available: false, items: [] };
+  }
+}
+
+/**
+ * Per-node root-filesystem usage from the kubelet Summary API
+ * (`/api/v1/nodes/<name>/proxy/stats/summary` → `node.fs`). One node whose
+ * kubelet proxy is blocked is simply omitted (not a hard failure), so the panel
+ * can still show disk capacity from `ephemeral-storage`. Never throws / 500s.
+ */
+export async function getNodeDisk(
+  context: string | null,
+): Promise<MetricsResult<NodeDiskRow>> {
+  try {
+    const list = await kubectl(context, [
+      "get",
+      "nodes",
+      "-o",
+      "jsonpath={.items[*].metadata.name}",
+    ]);
+    if (list.code !== 0) {
+      console.warn(`[metrics] node list for disk failed: ${list.stderr.trim()}`);
+      return { available: false, items: [] };
+    }
+    const names = list.stdout.trim().split(/\s+/).filter((n) => n !== "");
+    const rows = await Promise.all(
+      names.map(async (name): Promise<NodeDiskRow | null> => {
+        try {
+          const res = await kubectl(context, [
+            "get",
+            "--raw",
+            `/api/v1/nodes/${name}/proxy/stats/summary`,
+          ]);
+          if (res.code !== 0) return null;
+          const summary = JSON.parse(res.stdout) as {
+            node?: { fs?: { capacityBytes?: number; usedBytes?: number; availableBytes?: number } };
+          };
+          const fs = summary.node?.fs;
+          if (!fs || fs.capacityBytes == null || fs.usedBytes == null) return null;
+          return {
+            name,
+            capacityBytes: fs.capacityBytes,
+            usedBytes: fs.usedBytes,
+            availableBytes: fs.availableBytes ?? Math.max(0, fs.capacityBytes - fs.usedBytes),
+          };
+        } catch {
+          return null;
+        }
+      }),
+    );
+    const items = rows.filter((r): r is NodeDiskRow => r !== null);
+    return { available: items.length > 0, items };
+  } catch (err) {
+    console.warn(`[metrics] node disk failed: ${String(err)}`);
     return { available: false, items: [] };
   }
 }

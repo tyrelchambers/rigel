@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  LoaderCircle,
   ArrowUp,
   ArrowDown,
   RotateCcw,
@@ -27,6 +26,8 @@ import { ListRow } from "@/panels/components/ListRow";
 import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
+import { PanelHeader } from "@/panels/components/PanelHeader";
+import { LoadingState } from "@/panels/components/LoadingState";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import type { ActionBlock } from "@/lib/api";
 import type { Deployment } from "./types";
@@ -168,49 +169,35 @@ export default function DeploymentsPanel() {
   const scaleN = Math.max(0, Math.min(50, Math.floor(Number(scaleValue) || 0)));
 
   return (
-    <div className="flex flex-col gap-0">
-      {/* Header */}
-      <div
-        className="flex items-center gap-3 px-4 py-3"
-        style={{ borderBottom: "1px solid #1A1A1A", background: "#141417" }}
+    <div className="flex h-full flex-col">
+      <PanelHeader
+        title="Deployments"
+        subtitle="Rollouts & replicas"
+        count={filtered.length}
+        loading={isLoading}
       >
-        <div className="flex flex-col gap-0">
-          <span className="text-sm font-semibold leading-tight">Deployments</span>
-          <span style={{ fontSize: 11, color: "#6B6B73" }}>Rollouts &amp; replicas</span>
-        </div>
-        <span
-          style={{
-            fontFamily: "ui-monospace, monospace",
-            fontSize: 11,
-            color: "#6B6B73",
-            background: "#1A1A1A",
-            padding: "2px 6px",
-            borderRadius: 4,
-          }}
-        >
-          {filtered.length}
-        </span>
-        {isLoading && (
-          <LoaderCircle className="size-4 animate-spin text-muted-foreground" aria-label="loading" />
-        )}
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search deployments…"
-          className="ml-auto w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
         />
-      </div>
+      </PanelHeader>
 
-      {/* Error banner */}
-      {error && (
-        <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
-          {error}
-        </pre>
-      )}
+      <div className="flex-1 overflow-auto">
+        {/* Error banner */}
+        {error && (
+          <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+            {error}
+          </pre>
+        )}
 
-      {/* Row list */}
-      <div className="flex flex-col gap-0.5 px-3 py-2">
+        {/* Loading state — first load, before any deployments have streamed in */}
+        {isLoading && allDeployments.length === 0 && <LoadingState message="Loading deployments…" />}
+
+        {/* Row list */}
+        <div className="flex flex-col gap-0.5 px-3 py-2">
         {filtered.map((d) => {
           const k = key(d);
           const isOpen = expanded.has(k);
@@ -359,6 +346,7 @@ export default function DeploymentsPanel() {
       {!isLoading && allDeployments.length > 0 && filtered.length === 0 && (
         <p className="px-4 py-4 text-sm text-muted-foreground">No deployments match search</p>
       )}
+      </div>
 
       {/* Scale prompt */}
       <Dialog open={!!scaleTarget} onOpenChange={(o) => { if (!o) setScaleTarget(null); }}>

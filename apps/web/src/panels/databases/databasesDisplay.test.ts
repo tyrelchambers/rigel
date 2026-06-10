@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type {
+  CNPGBackup,
   CNPGCluster,
   CNPGScheduledBackup,
   DatabaseInstance,
@@ -13,6 +14,7 @@ import {
   detectKindFromImage,
   instanceFromCNPG,
   instanceFromWorkload,
+  latestCompletedBackup,
   matchPods,
   matchesDatabase,
   podNodes,
@@ -166,6 +168,64 @@ describe("instanceFromCNPG", () => {
     };
     const inst = instanceFromCNPG(cnpg(), [sb]);
     expect(inst.scheduledBackup).toBeUndefined();
+  });
+});
+
+// --- latestCompletedBackup + lastBackup precedence -------------------------
+
+function backup(overrides: Partial<CNPGBackup> = {}): CNPGBackup {
+  return {
+    metadata: { name: "b", namespace: "default", ...overrides.metadata },
+    spec: { cluster: { name: "pg" }, method: "plugin", ...overrides.spec },
+    status: { phase: "completed", stoppedAt: "2026-06-10T03:13:39Z", ...overrides.status },
+  };
+}
+
+describe("latestCompletedBackup", () => {
+  test("returns the newest completed backup's stoppedAt", () => {
+    const backups: CNPGBackup[] = [
+      backup({ metadata: { name: "old" }, status: { phase: "completed", stoppedAt: "2026-06-08T03:00:00Z" } }),
+      backup({ metadata: { name: "new" }, status: { phase: "completed", stoppedAt: "2026-06-10T03:13:39Z" } }),
+      backup({ metadata: { name: "mid" }, status: { phase: "completed", stoppedAt: "2026-06-09T03:00:00Z" } }),
+    ];
+    expect(latestCompletedBackup(backups, "pg", "default")).toBe("2026-06-10T03:13:39Z");
+  });
+
+  test("ignores failed/running backups and other clusters/namespaces", () => {
+    const backups: CNPGBackup[] = [
+      backup({ status: { phase: "failed", stoppedAt: undefined } }),
+      backup({ status: { phase: "running", stoppedAt: undefined } }),
+      backup({ metadata: { name: "other-cluster" }, spec: { cluster: { name: "pg2" } }, status: { phase: "completed", stoppedAt: "2099-01-01T00:00:00Z" } }),
+      backup({ metadata: { name: "other-ns", namespace: "prod" }, status: { phase: "completed", stoppedAt: "2099-01-01T00:00:00Z" } }),
+      backup({ status: { phase: "completed", stoppedAt: "2026-06-05T03:00:00Z" } }),
+    ];
+    expect(latestCompletedBackup(backups, "pg", "default")).toBe("2026-06-05T03:00:00Z");
+  });
+
+  test("returns undefined when no completed backups match", () => {
+    expect(latestCompletedBackup([], "pg", "default")).toBeUndefined();
+  });
+});
+
+describe("instanceFromCNPG lastBackup precedence", () => {
+  test("prefers the newest completed Backup object over status.lastSuccessfulBackup", () => {
+    // The real-world bug: cluster.status.lastSuccessfulBackup is stale (frozen
+    // at the legacy-method cutover) while plugin Backup objects keep completing.
+    const inst = instanceFromCNPG(
+      cnpg({ status: { readyInstances: 3, lastSuccessfulBackup: "2026-05-14T02:00:29Z" } }),
+      [],
+      [backup({ status: { phase: "completed", stoppedAt: "2026-06-10T03:13:39Z" } })],
+    );
+    expect(inst.lastBackup).toBe("2026-06-10T03:13:39Z");
+  });
+
+  test("falls back to status.lastSuccessfulBackup when no Backup objects exist", () => {
+    const inst = instanceFromCNPG(
+      cnpg({ status: { readyInstances: 3, lastSuccessfulBackup: "2026-05-14T02:00:29Z" } }),
+      [],
+      [],
+    );
+    expect(inst.lastBackup).toBe("2026-05-14T02:00:29Z");
   });
 });
 

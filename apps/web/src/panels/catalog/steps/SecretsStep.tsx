@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Copy, RefreshCw } from "lucide-react";
+import { Copy, RefreshCw, KeyRound, Check } from "lucide-react";
 import { generateSecret, type SecretFieldSpec } from "@helmsman/catalog";
 import { Button } from "@/components/ui/button";
 
@@ -24,61 +24,72 @@ export function SecretsStep({
 }) {
   const [copied, setCopied] = useState<string | null>(null);
   const set = (key: string, value: string) => setValues({ ...values, [key]: value });
-  const fieldClass =
-    "w-full rounded-md border bg-background px-3 py-1.5 font-mono text-sm outline-none focus:ring-2 focus:ring-ring";
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        This install needs the following values. Required fields must be filled before you
-        continue.
-      </p>
-      {specs.map((s) => {
-        const required = s.required ?? true;
-        return (
-          <div key={s.key} className="space-y-1">
-            <label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-              {s.label}
-              {required && <span className="text-destructive">*</span>}
-            </label>
-            {s.description && <p className="text-xs text-muted-foreground/80">{s.description}</p>}
-            <div className="flex items-center gap-1">
-              <input
-                className={fieldClass}
-                value={values[s.key] ?? ""}
-                onChange={(e) => set(s.key, e.target.value)}
-                placeholder={s.kind === "random" ? "(generated)" : ""}
-              />
-              {s.kind === "random" && (
-                <Button
+    <div className="wiz-step">
+      <div className="wiz-note">
+        <KeyRound aria-hidden />
+        <span>
+          This app needs a value for each field below. Strong random values are pre-filled — keep
+          them, regenerate, or type your own. Nothing is applied until you continue.
+        </span>
+      </div>
+
+      <div className="wiz-fields">
+        {specs.map((s) => {
+          const required = s.required ?? true;
+          const isRandom = s.kind === "random";
+          return (
+            <div key={s.key} className="wiz-field-card">
+              <div className="wiz-field-head">
+                <label className="wiz-field-label" htmlFor={`secret-${s.key}`}>
+                  {s.label}
+                  {required && <span className="req">*</span>}
+                </label>
+                <span className={`wiz-field-kind${isRandom ? " generated" : ""}`}>
+                  {isRandom ? "generated" : "required"}
+                </span>
+              </div>
+              {s.description && <p className="wiz-field-desc">{s.description}</p>}
+              <div className="wiz-input-group">
+                <input
+                  id={`secret-${s.key}`}
+                  className="wiz-input"
+                  value={values[s.key] ?? ""}
+                  onChange={(e) => set(s.key, e.target.value)}
+                  placeholder={isRandom ? "(generated)" : "enter a value…"}
+                />
+                {isRandom && (
+                  <button
+                    type="button"
+                    className="wiz-icon-btn"
+                    aria-label="Regenerate"
+                    title="Regenerate"
+                    onClick={() => set(s.key, generateSecret(s.length ?? 32, s.format ?? "alphanumeric"))}
+                  >
+                    <RefreshCw />
+                  </button>
+                )}
+                <button
                   type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Regenerate"
-                  onClick={() => set(s.key, generateSecret(s.length ?? 32, s.format ?? "alphanumeric"))}
+                  className="wiz-icon-btn"
+                  aria-label="Copy"
+                  title="Copy"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(values[s.key] ?? "");
+                    setCopied(s.key);
+                    setTimeout(() => setCopied(null), 1200);
+                  }}
                 >
-                  <RefreshCw />
-                </Button>
-              )}
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Copy"
-                onClick={() => {
-                  navigator.clipboard?.writeText(values[s.key] ?? "");
-                  setCopied(s.key);
-                  setTimeout(() => setCopied(null), 1200);
-                }}
-              >
-                <Copy />
-              </Button>
+                  {copied === s.key ? <Check className="text-[#10B981]" /> : <Copy />}
+                </button>
+              </div>
             </div>
-            {copied === s.key && <span className="text-xs text-muted-foreground">copied</span>}
-          </div>
-        );
-      })}
-      <div className="flex justify-between">
+          );
+        })}
+      </div>
+
+      <div className="wiz-footer">
         <Button type="button" variant="outline" onClick={onBack}>
           Back
         </Button>

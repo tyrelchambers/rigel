@@ -362,6 +362,41 @@ export function useNodeMetrics() {
   });
 }
 
+// Per-node disk usage from the kubelet Summary API.
+// GET /api/metrics/node-disk → { available, items: [{ name, ...Bytes }] }
+
+export interface NodeDiskItem {
+  name: string;
+  capacityBytes: number;
+  usedBytes: number;
+  availableBytes: number;
+}
+
+export interface NodeDiskResponse {
+  available: boolean;
+  items: NodeDiskItem[];
+}
+
+export async function fetchNodeDisk(): Promise<NodeDiskResponse> {
+  const res = await fetch("/api/metrics/node-disk");
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? res.statusText);
+  }
+  return res.json() as Promise<NodeDiskResponse>;
+}
+
+/** TanStack Query hook: polls per-node disk usage every 30s (changes slowly). */
+export function useNodeDisk() {
+  return useQuery<NodeDiskResponse, Error>({
+    queryKey: ["metrics", "node-disk"],
+    queryFn: fetchNodeDisk,
+    refetchInterval: 30_000,
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Signal bridge proxy — POST /api/signal (docs/parity/settings.md §7.1)
 // ---------------------------------------------------------------------------

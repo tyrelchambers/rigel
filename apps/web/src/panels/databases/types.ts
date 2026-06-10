@@ -52,6 +52,23 @@ export interface CNPGScheduledBackup {
   };
 }
 
+// --- Raw CNPG backup CRD (backups.postgresql.cnpg.io) ----------------------
+// The authoritative per-run record. CNPG does NOT update
+// `cluster.status.lastSuccessfulBackup` for plugin-method (barman-cloud)
+// backups, so the newest completed Backup object is the real "last backup".
+
+export interface CNPGBackup {
+  metadata: DatabaseMeta;
+  spec?: {
+    cluster?: { name?: string };
+    method?: string;
+  };
+  status?: {
+    phase?: string; // "completed" | "failed" | "running" | …
+    stoppedAt?: string; // RFC3339 — when the backup finished
+  };
+}
+
 // --- Raw Deployment / StatefulSet (image-detected) -------------------------
 
 export interface WorkloadDB {

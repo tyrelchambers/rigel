@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { LoaderCircle } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
@@ -7,6 +6,7 @@ import { ListRow } from "@/panels/components/ListRow";
 import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
+import { PanelHeader } from "@/panels/components/PanelHeader";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import type {
   PersistentVolumeClaim,
@@ -123,14 +123,6 @@ export default function StoragePanel() {
     [allSCs, search],
   );
 
-  const counts: Record<StorageKind, { total: number; shown: number }> = {
-    pvcs: { total: allPVCs.length, shown: filteredPVCs.length },
-    pvs: { total: allPVs.length, shown: filteredPVs.length },
-    storageclasses: { total: allSCs.length, shown: filteredSCs.length },
-  };
-  const { total, shown } = counts[activeKind];
-  const countLabel = search.trim() && shown !== total ? `${shown} / ${total}` : `${total}`;
-
   function toggleExpand(key: string) {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -145,40 +137,22 @@ export default function StoragePanel() {
   }
 
   return (
-    <div className="flex flex-col gap-0">
-      {/* Header */}
-      <div
-        className="flex items-center gap-3 px-4 py-3"
-        style={{ borderBottom: "1px solid #1A1A1A", background: "#141417" }}
+    <div className="flex h-full flex-col">
+      <PanelHeader
+        title="Storage"
+        subtitle="Claims · Volumes · Classes"
+        loading={isLoading}
       >
-        <div className="flex flex-col gap-0">
-          <span className="text-sm font-semibold leading-tight">Storage</span>
-          <span style={{ fontSize: 11, color: "#6B6B73" }}>Claims · Volumes · Classes</span>
-        </div>
-        <span
-          style={{
-            fontFamily: "ui-monospace, monospace",
-            fontSize: 11,
-            color: "#6B6B73",
-            background: "#1A1A1A",
-            padding: "2px 6px",
-            borderRadius: 4,
-          }}
-        >
-          {countLabel}
-        </span>
-        {isLoading && (
-          <LoaderCircle className="size-4 animate-spin text-muted-foreground" aria-label="loading" />
-        )}
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search…"
-          className="ml-auto w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
         />
-      </div>
+      </PanelHeader>
 
+      <div className="flex-1 overflow-auto">
       {/* Kind toggle pills */}
       <div className="flex items-center gap-1 px-4 py-2" style={{ borderBottom: "1px solid #1A1A1A" }}>
         {KIND_TABS.map((t) => (
@@ -482,6 +456,7 @@ export default function StoragePanel() {
       {!isLoading && activeKind === "storageclasses" && allSCs.length === 0 && (
         <p className="px-4 py-4 text-sm text-muted-foreground">No storage classes found</p>
       )}
+      </div>
     </div>
   );
 }

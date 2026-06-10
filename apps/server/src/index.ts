@@ -6,7 +6,7 @@ import { makeWsHandlers } from "./ws";
 import { buildCommand, PurgeActionError, type ActionBlock } from "./actions";
 import { applyManifest, installHelm, type HelmInstallRequest } from "./install";
 import { handlePurge, type PurgeRequest } from "./purge";
-import { getPodMetrics, getNodeMetrics } from "./metrics";
+import { getPodMetrics, getNodeMetrics, getNodeDisk } from "./metrics";
 import { handleUpdates, type UpdatesRequest } from "./updates";
 import { handleAssistant, type AssistantRequest } from "./assistant";
 import { handleSignal, type SignalRequest } from "./signal";
@@ -75,6 +75,13 @@ const server = Bun.serve({
     // GET /api/metrics/nodes — current node CPU/memory usage. Same graceful path.
     if (url.pathname === "/api/metrics/nodes" && req.method === "GET") {
       const result = await getNodeMetrics(context);
+      return Response.json(result);
+    }
+
+    // GET /api/metrics/node-disk — per-node root-fs usage from the kubelet
+    // Summary API. Graceful: { available:false, items:[] } when unreachable.
+    if (url.pathname === "/api/metrics/node-disk" && req.method === "GET") {
+      const result = await getNodeDisk(context);
       return Response.json(result);
     }
 

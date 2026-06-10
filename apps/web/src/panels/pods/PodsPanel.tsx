@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { LoaderCircle, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
@@ -9,6 +9,8 @@ import { useMetricsHistory } from "@/lib/useMetricsHistory";
 import { ListRow } from "@/panels/components/ListRow";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
+import { PanelHeader } from "@/panels/components/PanelHeader";
+import { LoadingState } from "@/panels/components/LoadingState";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import type { ActionBlock } from "@/lib/api";
 import type { Pod } from "./types";
@@ -50,9 +52,7 @@ export default function PodsPanel() {
     [allPods, search],
   );
 
-  const total = allPods.length;
   const shown = filtered.length;
-  const countLabel = search.trim() && shown !== total ? `${shown} / ${total}` : `${total}`;
 
   function podKey(pod: Pod): string {
     return pod.metadata.uid || `${pod.metadata.namespace}/${pod.metadata.name}`;
@@ -80,46 +80,32 @@ export default function PodsPanel() {
   }
 
   return (
-    <div className="flex flex-col gap-0">
-      {/* Header */}
-      <div
-        className="flex items-center gap-3 px-4 py-3"
-        style={{ borderBottom: "1px solid #1A1A1A", background: "#141417" }}
+    <div className="flex h-full flex-col">
+      <PanelHeader
+        title="Pods"
+        subtitle="Running containers"
+        count={shown}
+        loading={isLoading}
       >
-        <div className="flex flex-col gap-0">
-          <span className="text-sm font-semibold leading-tight">Pods</span>
-          <span style={{ fontSize: 11, color: "#6B6B73" }}>Running containers</span>
-        </div>
-        <span
-          style={{
-            fontFamily: "ui-monospace, monospace",
-            fontSize: 11,
-            color: "#6B6B73",
-            background: "#1A1A1A",
-            padding: "2px 6px",
-            borderRadius: 4,
-          }}
-        >
-          {countLabel}
-        </span>
-        {isLoading && (
-          <LoaderCircle className="size-4 animate-spin text-muted-foreground" aria-label="loading" />
-        )}
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search pods…"
-          className="ml-auto w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
         />
-      </div>
+      </PanelHeader>
 
+      <div className="flex-1 overflow-auto">
       {/* Error banner */}
       {error && (
         <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
           {error}
         </pre>
       )}
+
+      {/* Loading state — first load, before any pods have streamed in */}
+      {isLoading && allPods.length === 0 && <LoadingState message="Loading pods…" />}
 
       {/* Row list */}
       <div className="flex flex-col gap-0.5 px-3 py-2">
@@ -290,6 +276,7 @@ export default function PodsPanel() {
       {!isLoading && allPods.length > 0 && filtered.length === 0 && (
         <p className="px-4 py-4 text-sm text-muted-foreground">No pods match search</p>
       )}
+      </div>
 
       <ConfirmSheet
         action={pendingAction}

@@ -1,6 +1,5 @@
 import { useEffect, useMemo } from "react";
 import {
-  LoaderCircle,
   Globe,
   Signpost,
   Network,
@@ -15,6 +14,7 @@ import { subscribe, unsubscribe } from "@/lib/ws";
 import { ListRow } from "@/panels/components/ListRow";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { TagPill } from "@/panels/components/TagPill";
+import { PanelHeader } from "@/panels/components/PanelHeader";
 import type { StatusBadgeVariant } from "@/panels/components/StatusBadge";
 import type { Ingress } from "../ingresses/types";
 import type { Service } from "../services/types";
@@ -108,63 +108,51 @@ export default function ConnectivityPanel() {
   const firstLoad = isLoading && flows.length === 0;
 
   return (
-    <div className="flex flex-col gap-0">
-      {/* Header: title + legend */}
-      <div
-        className="flex items-center gap-3 px-4 py-3"
-        style={{ borderBottom: "1px solid #1A1A1A", background: "#141417" }}
-      >
-        <div className="flex flex-col gap-0">
-          <span className="text-sm font-semibold leading-tight">Connectivity</span>
-          <span style={{ fontSize: 11, color: "#6B6B73" }}>Ingress → Service → Pods</span>
-        </div>
-        {isLoading && (
-          <LoaderCircle
-            className="size-4 animate-spin text-muted-foreground"
-            aria-label="loading"
-          />
-        )}
+    <div className="flex h-full flex-col">
+      <PanelHeader title="Connectivity" subtitle="Ingress → Service → Pods" loading={isLoading}>
         <Legend />
+      </PanelHeader>
+
+      <div className="flex-1 overflow-auto">
+        {/* Error banner — keep last flows visible (stale OK). */}
+        {error && (
+          <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+            {error}
+          </pre>
+        )}
+
+        {firstLoad && (
+          <p className="px-4 py-4 text-sm text-muted-foreground">Loading connectivity…</p>
+        )}
+
+        {!firstLoad && flows.length === 0 && <EmptyState />}
+
+        {flows.length > 0 && (
+          <div className="flex flex-col gap-4 px-3 py-2">
+            {external.length > 0 && (
+              <Section title="External" count={external.length}>
+                {external.map((f) => (
+                  <FlowRow key={f.id} flow={f} />
+                ))}
+              </Section>
+            )}
+            {internal.length > 0 && (
+              <Section title="Internal" count={internal.length}>
+                {internal.map((f) => (
+                  <FlowRow key={f.id} flow={f} />
+                ))}
+              </Section>
+            )}
+          </div>
+        )}
       </div>
-
-      {/* Error banner — keep last flows visible (stale OK). */}
-      {error && (
-        <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
-          {error}
-        </pre>
-      )}
-
-      {firstLoad && (
-        <p className="px-4 py-4 text-sm text-muted-foreground">Loading connectivity…</p>
-      )}
-
-      {!firstLoad && flows.length === 0 && <EmptyState />}
-
-      {flows.length > 0 && (
-        <div className="flex flex-col gap-4 px-3 py-2">
-          {external.length > 0 && (
-            <Section title="External" count={external.length}>
-              {external.map((f) => (
-                <FlowRow key={f.id} flow={f} />
-              ))}
-            </Section>
-          )}
-          {internal.length > 0 && (
-            <Section title="Internal" count={internal.length}>
-              {internal.map((f) => (
-                <FlowRow key={f.id} flow={f} />
-              ))}
-            </Section>
-          )}
-        </div>
-      )}
     </div>
   );
 }
 
 function Legend() {
   return (
-    <div className="ml-auto flex items-center gap-4 text-xs text-muted-foreground">
+    <div className="flex items-center gap-4 text-xs text-muted-foreground">
       <span className="flex items-center gap-1.5">
         <span className={`size-2 rounded-full ${HEALTH_DOT.ok}`} /> Reachable
       </span>

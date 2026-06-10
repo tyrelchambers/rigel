@@ -24,7 +24,6 @@ import SettingsPanel from "./panels/settings/SettingsPanel";
 import AccountsPanel from "./panels/accounts/AccountsPanel";
 import { connectCluster } from "@/lib/ws";
 import NavStrip from "@/shell/NavStrip";
-import NamespaceBar from "@/shell/NamespaceBar";
 import StatusBar from "@/shell/StatusBar";
 import ChatPane, { type ChatPaneHandle } from "@/shell/ChatPane";
 import { CommandPalette, useCommandPalette } from "@/shell/CommandPalette";
@@ -64,53 +63,46 @@ export default function App() {
 
         {/* ── Content column ───────────────────────────────────────────────── */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, background: "#0A0A0A" }}>
-          {/* Namespace bar — only renders on namespace-scoped routes */}
-          <NamespaceBar />
-
-          {/* Routed panel */}
+          {/* Routed panel — the namespace selector now lives inside each
+              panel's PanelHeader (see panels/components/PanelHeader.tsx). */}
           <main style={{ flex: 1, overflow: "hidden", background: "#0A0A0A" }}>
             <Routes>
               {/* Logs owns its full-height scroll layout (no padded wrapper). */}
               <Route path="/logs" element={<LogsPanel />} />
 
-              {/* Root → Overview */}
+              {/* Root → Overview. Overview owns its own top bar + scroll area
+                  (full-bleed, like Logs), so it is not wrapped in <Padded>. */}
               <Route
                 path="/"
-                element={
-                  <Padded>
-                    <OverviewPanel onInvestigateCluster={handleInvestigateCluster} />
-                  </Padded>
-                }
+                element={<OverviewPanel onInvestigateCluster={handleInvestigateCluster} />}
               />
               <Route
                 path="/overview"
-                element={
-                  <Padded>
-                    <OverviewPanel onInvestigateCluster={handleInvestigateCluster} />
-                  </Padded>
-                }
+                element={<OverviewPanel onInvestigateCluster={handleInvestigateCluster} />}
               />
 
               {/* /health — registered but not shown in nav/palette */}
               <Route path="/health" element={<Padded><HealthPanel /></Padded>} />
 
-              <Route path="/pods" element={<Padded><PodsPanel /></Padded>} />
-              <Route path="/deployments" element={<Padded><DeploymentsPanel /></Padded>} />
-              <Route path="/workloads" element={<Padded><WorkloadsPanel /></Padded>} />
-              <Route path="/databases" element={<Padded><DatabasesPanel /></Padded>} />
-              <Route path="/rightsizing" element={<Padded><RightSizingPanel /></Padded>} />
-              <Route path="/namespaces" element={<Padded><NamespacesPanel /></Padded>} />
-              <Route path="/nodes" element={<Padded><NodesPanel /></Padded>} />
-              <Route path="/services" element={<Padded><ServicesPanel /></Padded>} />
-              <Route path="/ingresses" element={<Padded><IngressesPanel /></Padded>} />
-              <Route path="/connectivity" element={<Padded><ConnectivityPanel /></Padded>} />
-              <Route path="/configmaps" element={<Padded><ConfigMapsPanel /></Padded>} />
-              <Route path="/secrets" element={<Padded><SecretsPanel /></Padded>} />
-              <Route path="/storage" element={<Padded><StoragePanel /></Padded>} />
-              <Route path="/rbac" element={<Padded><RbacPanel /></Padded>} />
+              {/* Panels using the shared PanelHeader own their full-height
+                  scroll layout, so they are rendered without <Padded>. */}
+              <Route path="/pods" element={<PodsPanel />} />
+              <Route path="/deployments" element={<DeploymentsPanel />} />
+              <Route path="/workloads" element={<WorkloadsPanel />} />
+              <Route path="/databases" element={<DatabasesPanel />} />
+              <Route path="/rightsizing" element={<RightSizingPanel />} />
+              <Route path="/namespaces" element={<NamespacesPanel />} />
+              <Route path="/nodes" element={<NodesPanel />} />
+              <Route path="/services" element={<ServicesPanel />} />
+              <Route path="/ingresses" element={<IngressesPanel />} />
+              <Route path="/connectivity" element={<ConnectivityPanel />} />
+              <Route path="/configmaps" element={<ConfigMapsPanel />} />
+              <Route path="/secrets" element={<SecretsPanel />} />
+              <Route path="/storage" element={<StoragePanel />} />
+              <Route path="/rbac" element={<RbacPanel />} />
               <Route path="/catalog" element={<Padded><CatalogPanel /></Padded>} />
               <Route path="/accounts" element={<Padded><AccountsPanel /></Padded>} />
-              <Route path="/events" element={<Padded><EventsPanel /></Padded>} />
+              <Route path="/events" element={<EventsPanel />} />
               <Route path="/assistant" element={<Padded><AssistantPanel /></Padded>} />
               <Route path="/settings" element={<Padded><SettingsPanel /></Padded>} />
             </Routes>

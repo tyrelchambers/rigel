@@ -100,6 +100,77 @@ export function capacityValue(node: Node, key: string): string | undefined {
   return node.status?.capacity?.[key];
 }
 
+// ---------------------------------------------------------------------------
+// Numeric quantity parsing + formatting for the per-node usage bars.
+// Mirrors Swift `ResourceQuantity` (cpuCores / bytes / formatCores / formatBytes)
+// so the web NodeCard renders identical values.
+// ---------------------------------------------------------------------------
+
+/** Parse a CPU quantity into cores. "500m"→0.5, "1500000n"→0.0015, "4"→4. */
+export function parseCpuCores(value: string | undefined): number {
+  if (!value) return 0;
+  const s = value.trim();
+  if (s === "") return 0;
+  if (s.endsWith("m")) return (Number(s.slice(0, -1)) || 0) / 1_000;
+  if (s.endsWith("u")) return (Number(s.slice(0, -1)) || 0) / 1_000_000;
+  if (s.endsWith("n")) return (Number(s.slice(0, -1)) || 0) / 1_000_000_000;
+  return Number(s) || 0;
+}
+
+const DECIMAL_SUFFIX: Record<string, number> = {
+  K: 1e3,
+  M: 1e6,
+  G: 1e9,
+  T: 1e12,
+  P: 1e15,
+  E: 1e18,
+};
+
+/** Parse a memory quantity into bytes. Binary (Ki/Mi/Gi…) + decimal (K/M/G…). */
+export function parseBytes(value: string | undefined): number {
+  if (!value) return 0;
+  const s = value.trim();
+  if (s === "") return 0;
+  for (const [suf, mult] of Object.entries(BINARY_SUFFIX)) {
+    if (s.endsWith(suf)) return (Number(s.slice(0, -suf.length)) || 0) * mult;
+  }
+  for (const [suf, mult] of Object.entries(DECIMAL_SUFFIX)) {
+    if (s.endsWith(suf)) return (Number(s.slice(0, -1)) || 0) * mult;
+  }
+  return Number(s) || 0;
+}
+
+/** Format cores: <1 → "908 m"; <10 → "1.49"; else "12". (Swift formatCores.) */
+export function formatCoresValue(cores: number): string {
+  if (cores < 1) return `${Math.round(cores * 1000)} m`;
+  return cores >= 10 ? `${Math.round(cores)}` : cores.toFixed(2);
+}
+
+/** Format bytes into GiB/MiB/… with a space: "9.8 GiB", "441 GiB". (Swift formatBytes.) */
+export function formatBytesValue(b: number): string {
+  const units: Array<[number, string]> = [
+    [BINARY_SUFFIX.Ti, "TiB"],
+    [BINARY_SUFFIX.Gi, "GiB"],
+    [BINARY_SUFFIX.Mi, "MiB"],
+    [BINARY_SUFFIX.Ki, "KiB"],
+  ];
+  for (const [size, label] of units) {
+    if (b >= size) {
+      const v = b / size;
+      return v >= 10 ? `${Math.round(v)} ${label}` : `${(Math.round(v * 10) / 10).toFixed(1)} ${label}`;
+    }
+  }
+  return `${Math.round(b)} B`;
+}
+
+/** Usage-bar color by fraction: <0.7 green, <0.9 amber, else red; grey when no data. */
+export function usageColor(percent: number, hasMetrics: boolean): string {
+  if (!hasMetrics) return "#2A2A2A";
+  if (percent < 0.7) return "#10B981";
+  if (percent < 0.9) return "#F59E0B";
+  return "#EF4444";
+}
+
 /**
  * Case-insensitive substring match against node name and label keys/values.
  * Empty/blank query matches everything. Mirrors the Pods panel search.

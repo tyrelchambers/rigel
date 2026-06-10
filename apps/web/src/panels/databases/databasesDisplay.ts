@@ -4,6 +4,7 @@
 // See docs/parity/databases.md for the normative spec.
 
 import type {
+  CNPGBackup,
   CNPGCluster,
   CNPGScheduledBackup,
   DatabaseInstance,
@@ -110,12 +111,40 @@ export function walArchivingStatus(cluster: CNPGCluster): WalArchivingStatus {
 }
 
 /**
+ * Most recent successful backup timestamp for a cluster, taken from the newest
+ * completed `Backup` object (by `status.stoppedAt`). Returns undefined when the
+ * cluster has no completed Backup objects.
+ *
+ * This is the authoritative source: CNPG does NOT update
+ * `cluster.status.lastSuccessfulBackup` for plugin-method (barman-cloud)
+ * backups, so that field can be stale by weeks while backups run fine.
+ */
+export function latestCompletedBackup(
+  backups: CNPGBackup[],
+  clusterName: string,
+  namespace: string,
+): string | undefined {
+  let latest: string | undefined;
+  for (const b of backups) {
+    if (b.spec?.cluster?.name !== clusterName) continue;
+    if ((b.metadata.namespace ?? "default") !== namespace) continue;
+    if (b.status?.phase !== "completed") continue;
+    const at = b.status?.stoppedAt;
+    if (at && (latest === undefined || at > latest)) latest = at;
+  }
+  return latest;
+}
+
+/**
  * Build a normalized instance from a CNPG cluster. ScheduledBackups are matched
- * by `spec.cluster.name` against the cluster name + namespace.
+ * by `spec.cluster.name` against the cluster name + namespace. `lastBackup` is
+ * the newest completed Backup object, falling back to the cluster's
+ * `status.lastSuccessfulBackup` only when no Backup objects exist.
  */
 export function instanceFromCNPG(
   cluster: CNPGCluster,
   scheduledBackups: CNPGScheduledBackup[],
+  backups: CNPGBackup[] = [],
 ): DatabaseInstance {
   const name = cluster.metadata.name;
   const namespace = cluster.metadata.namespace ?? "default";
@@ -142,7 +171,9 @@ export function instanceFromCNPG(
     isHealthy,
     labelSelector: { "cnpg.io/cluster": name },
     cnpgPrimary: cluster.status?.currentPrimary,
-    lastBackup: cluster.status?.lastSuccessfulBackup,
+    lastBackup:
+      latestCompletedBackup(backups, name, namespace) ??
+      cluster.status?.lastSuccessfulBackup,
     scheduledBackup: schedule,
     walArchiving: walArchivingStatus(cluster),
   };
@@ -207,12 +238,13 @@ export function instanceFromWorkload(
 export function buildInstances(args: {
   cnpgClusters: CNPGCluster[];
   scheduledBackups: CNPGScheduledBackup[];
+  backups?: CNPGBackup[];
   deployments: WorkloadDB[];
   statefulSets: WorkloadDB[];
 }): DatabaseInstance[] {
   const out: DatabaseInstance[] = [];
   for (const c of args.cnpgClusters) {
-    out.push(instanceFromCNPG(c, args.scheduledBackups));
+    out.push(instanceFromCNPG(c, args.scheduledBackups, args.backups ?? []));
   }
   for (const d of args.deployments) {
     const inst = instanceFromWorkload(d, "deployment");

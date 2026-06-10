@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  LoaderCircle,
   RefreshCw,
   MoveVertical,
   Trash2,
@@ -25,6 +24,7 @@ import { ListRow } from "@/panels/components/ListRow";
 import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
+import { PanelHeader } from "@/panels/components/PanelHeader";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import type { ActionBlock } from "@/lib/api";
 import type { StatefulSet, DaemonSet, Job, CronJob, WorkloadKind } from "./types";
@@ -287,40 +287,23 @@ export default function WorkloadsPanel() {
   const label = kindLabel(activeKind);
 
   return (
-    <div className="flex flex-col gap-0">
-      {/* Header */}
-      <div
-        className="flex items-center gap-3 px-4 py-3"
-        style={{ borderBottom: "1px solid #1A1A1A", background: "#141417" }}
+    <div className="flex h-full flex-col">
+      <PanelHeader
+        title="Workloads"
+        subtitle="StatefulSets · DaemonSets · Jobs"
+        count={filteredCount}
+        loading={isLoading}
       >
-        <div className="flex flex-col gap-0">
-          <span className="text-sm font-semibold leading-tight">Workloads</span>
-          <span style={{ fontSize: 11, color: "#6B6B73" }}>StatefulSets · DaemonSets · Jobs</span>
-        </div>
-        <span
-          style={{
-            fontFamily: "ui-monospace, monospace",
-            fontSize: 11,
-            color: "#6B6B73",
-            background: "#1A1A1A",
-            padding: "2px 6px",
-            borderRadius: 4,
-          }}
-        >
-          {filteredCount}
-        </span>
-        {isLoading && (
-          <LoaderCircle className="size-4 animate-spin text-muted-foreground" aria-label="loading" />
-        )}
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={`Search ${label}…`}
-          className="ml-auto w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
         />
-      </div>
+      </PanelHeader>
 
+      <div className="flex-1 overflow-auto">
       {/* Kind toggle pills */}
       <div
         className="flex items-center gap-1 px-4 py-2"
@@ -762,6 +745,7 @@ export default function WorkloadsPanel() {
       {!isLoading && totalForActive > 0 && filteredCount === 0 && (
         <p className="px-4 py-4 text-sm text-muted-foreground">No {label} match search</p>
       )}
+      </div>
 
       {/* Scale prompt (StatefulSet) */}
       <Dialog open={!!scaleTarget} onOpenChange={(o) => { if (!o) setScaleTarget(null); }}>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { LoaderCircle, Eye, EyeOff, Plus, Pencil } from "lucide-react";
+import { Eye, EyeOff, Plus, Pencil } from "lucide-react";
 import type { Secret } from "@helmsman/k8s";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
@@ -10,6 +10,7 @@ import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
+import { PanelHeader } from "@/panels/components/PanelHeader";
 import { SecretEditor } from "./SecretEditor";
 import {
   relativeAge,
@@ -76,9 +77,7 @@ export default function SecretsPanel() {
     [allSecrets, search],
   );
 
-  const total = allSecrets.length;
   const shown = filtered.length;
-  const countLabel = search.trim() && shown !== total ? `${shown} / ${total}` : `${total}`;
 
   function toggleExpand(uid: string) {
     setExpanded((prev) => {
@@ -96,52 +95,35 @@ export default function SecretsPanel() {
   }
 
   return (
-    <div className="flex flex-col gap-0">
-      {/* Header */}
-      <div
-        className="flex items-center gap-3 px-4 py-3"
-        style={{ borderBottom: "1px solid #1A1A1A", background: "#141417" }}
+    <div className="flex h-full flex-col">
+      <PanelHeader
+        title="Secrets"
+        subtitle="Encrypted key/value pairs"
+        count={shown}
+        loading={isLoading}
       >
-        <div className="flex flex-col gap-0">
-          <span className="text-sm font-semibold leading-tight">Secrets</span>
-          <span style={{ fontSize: 11, color: "#6B6B73" }}>Encrypted key/value pairs</span>
-        </div>
-        <span
-          style={{
-            fontFamily: "ui-monospace, monospace",
-            fontSize: 11,
-            color: "#6B6B73",
-            background: "#1A1A1A",
-            padding: "2px 6px",
-            borderRadius: 4,
-          }}
-        >
-          {countLabel}
-        </span>
-        {isLoading && (
-          <LoaderCircle className="size-4 animate-spin text-muted-foreground" aria-label="loading" />
-        )}
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search secrets…"
-          className="ml-auto w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
         />
         <Button size="sm" onClick={openCreate}>
           <Plus className="size-4" aria-hidden /> New Secret
         </Button>
-      </div>
+      </PanelHeader>
 
-      {/* Error banner */}
-      {error && (
-        <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
-          {error}
-        </pre>
-      )}
+      <div className="flex-1 overflow-auto">
+        {/* Error banner */}
+        {error && (
+          <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+            {error}
+          </pre>
+        )}
 
-      {/* Row list */}
-      <div className="flex flex-col gap-0.5 px-3 py-2">
+        {/* Row list */}
+        <div className="flex flex-col gap-0.5 px-3 py-2">
         {filtered.map((secret) => {
           const uid = secret.metadata.uid;
           const isOpen = expanded.has(uid);
@@ -223,13 +205,14 @@ export default function SecretsPanel() {
         })}
       </div>
 
-      {/* Empty / filtered-to-zero states */}
-      {!isLoading && allSecrets.length === 0 && (
-        <p className="px-4 py-4 text-sm text-muted-foreground">No secrets found</p>
-      )}
-      {!isLoading && allSecrets.length > 0 && filtered.length === 0 && (
-        <p className="px-4 py-4 text-sm text-muted-foreground">No secrets match search</p>
-      )}
+        {/* Empty / filtered-to-zero states */}
+        {!isLoading && allSecrets.length === 0 && (
+          <p className="px-4 py-4 text-sm text-muted-foreground">No secrets found</p>
+        )}
+        {!isLoading && allSecrets.length > 0 && filtered.length === 0 && (
+          <p className="px-4 py-4 text-sm text-muted-foreground">No secrets match search</p>
+        )}
+      </div>
 
       <SecretEditor
         target={editTarget}

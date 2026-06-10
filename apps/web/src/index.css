@@ -164,6 +164,274 @@
     }
 }
 
+/* ─── Overview Panel ────────────────────────────────────────────────────────── */
+/* Faithful port of the Pencil "Overview Dashboard" design (clankerlocal.pen):
+ * full-bleed top bar + 24px-padded scroll area with metric rows. */
+
+.ov-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #0A0A0A;
+}
+
+/* Top bar — full-bleed, 86px, bottom hairline */
+.ov-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 86px;
+  flex-shrink: 0;
+  padding: 0 28px;
+  border-bottom: 1px solid #1A1A1A;
+  background: #0A0A0A;
+}
+
+.ov-title-col { display: flex; flex-direction: column; gap: 3px; }
+.ov-title-row { display: flex; align-items: center; gap: 10px; }
+.ov-title {
+  font-size: 22px;
+  font-weight: 600;
+  color: #FFFFFF;
+  line-height: 1.1;
+  letter-spacing: -0.3px;
+}
+.ov-subtitle { font-size: 12.5px; color: #A1A1AA; }
+.ov-ns-chip {
+  font-family: var(--font-mono, ui-monospace);
+  font-size: 11px;
+  color: #6B6B73;
+  background: #141417;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid #1A1A1A;
+}
+
+.ov-actions { display: flex; align-items: center; gap: 12px; }
+
+.ov-btn-purge,
+.ov-btn-investigate {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 120ms, border-color 120ms, box-shadow 120ms;
+}
+.ov-btn-purge {
+  background: rgba(239, 68, 68, 0.08);
+  color: #EF4444;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+.ov-btn-purge:hover { background: rgba(239, 68, 68, 0.16); border-color: rgba(239, 68, 68, 0.55); }
+.ov-btn-investigate {
+  background: #A855F7;
+  color: #0A0A0A;
+  border: 1px solid #A855F7;
+}
+.ov-btn-investigate:hover {
+  background: #9333EA;
+  border-color: #9333EA;
+  box-shadow: 0 0 18px rgba(168, 85, 247, 0.35);
+}
+.ov-btn-icon { width: 14px; height: 14px; flex-shrink: 0; }
+
+/* Scroll area */
+.ov-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px;
+}
+
+.ov-error {
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.07);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  padding: 10px 14px;
+  font-size: 11px;
+  font-family: var(--font-mono, ui-monospace);
+  color: #EF4444;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.ov-row { display: grid; gap: 20px; }
+.ov-row-3 { grid-template-columns: repeat(3, 1fr); }
+.ov-row-2 { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 1100px) {
+  .ov-row-3, .ov-row-2 { grid-template-columns: 1fr; }
+}
+
+/* Card shell — elevated gray surface with a defined border so cards read
+ * clearly against the #0A0A0A canvas (the design's #141417/#1A1A1A pair is too
+ * low-contrast to register on-screen). */
+.ov-card {
+  background: #17171C;
+  border: 1px solid #26262C;
+  border-radius: 8px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ov-card-hdr { display: flex; align-items: center; gap: 8px; }
+.ov-card-hdr-icon { width: 14px; height: 14px; color: #6B6B73; flex-shrink: 0; }
+.ov-card-hdr-label {
+  font-family: var(--font-mono, ui-monospace);
+  font-size: 11px;
+  color: #6B6B73;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* Gauge card */
+.ov-gauge-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.ov-gauge { position: relative; width: 108px; height: 108px; }
+.ov-gauge-pct {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono, ui-monospace);
+  font-size: 26px;
+  color: #FFFFFF;
+}
+.ov-gauge-raw { font-family: var(--font-mono, ui-monospace); font-size: 12px; color: #A1A1AA; }
+.ov-gauge-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 0 18px;
+}
+.ov-gauge-dash { width: 28px; height: 2px; border-radius: 1px; background: #2A2A2A; }
+.ov-gauge-empty-text { font-size: 12px; color: #6B6B73; text-align: center; line-height: 1.45; }
+
+/* Stat card (Deployments / Pods / Nodes) */
+.ov-stat-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+}
+.ov-stat-number { display: flex; align-items: flex-end; gap: 8px; }
+.ov-stat-big {
+  font-family: var(--font-mono, ui-monospace);
+  font-size: 42px;
+  color: #FFFFFF;
+  line-height: 1;
+}
+.ov-stat-word { font-size: 13px; color: #A1A1AA; padding-bottom: 7px; }
+.ov-stat-block { display: flex; flex-direction: column; gap: 7px; }
+
+.ov-statusline { display: flex; align-items: center; justify-content: space-between; }
+.ov-statusline-lbl { font-size: 12px; color: #A1A1AA; }
+
+.ov-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: var(--font-mono, ui-monospace);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.ov-chip-neutral { background: #050505; color: #A1A1AA; }
+.ov-chip-soft { background: rgba(255, 255, 255, 0.05); color: #A1A1AA; padding: 2px 9px; }
+.ov-chip-green { background: rgba(16, 185, 129, 0.13); color: #10B981; }
+.ov-chip-yellow { background: rgba(245, 158, 11, 0.13); color: #F59E0B; }
+.ov-chip-red { background: rgba(239, 68, 68, 0.13); color: #EF4444; }
+
+/* Summary card (Databases / Events) */
+.ov-sum-big { display: flex; align-items: flex-end; gap: 8px; }
+.ov-sum-n { font-size: 34px; font-weight: 700; color: #FFFFFF; line-height: 1; }
+.ov-sum-u { font-size: 13px; color: #A1A1AA; padding-bottom: 2px; }
+.ov-divider { height: 1px; background: #26262C; width: 100%; }
+
+/* Event activity chart */
+.ov-chart {
+  flex: 1;
+  min-height: 64px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid #1A1A1A;
+  display: flex;
+  align-items: stretch;
+  gap: 1px;
+  padding: 6px;
+}
+.ov-chart-empty {
+  flex: 1;
+  min-height: 64px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid #1A1A1A;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: #6B6B73;
+}
+.ov-bar-col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; }
+
+/* Recent warnings */
+.ov-warn-list { display: flex; flex-direction: column; gap: 8px; }
+.ov-warn-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  border-radius: 6px;
+  background: #0A0A0A;
+  border-left: 2px solid #EF4444;
+  padding: 12px 14px;
+}
+.ov-warn-reason {
+  width: 140px;
+  flex-shrink: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #EF4444;
+}
+.ov-warn-res {
+  width: 240px;
+  flex-shrink: 0;
+  font-family: var(--font-mono, ui-monospace);
+  font-size: 11px;
+  color: #6B6B73;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ov-warn-msg { flex: 1; min-width: 0; font-size: 12.5px; color: #A1A1AA; line-height: 1.45; }
+.ov-warn-time {
+  flex-shrink: 0;
+  font-family: var(--font-mono, ui-monospace);
+  font-size: 11px;
+  color: #6B6B73;
+}
+.ov-warn-foot { font-family: var(--font-mono, ui-monospace); font-size: 10.5px; color: #6B6B73; }
+.ov-warn-empty { font-size: 13px; color: #6B6B73; }
+
 /* ─── Catalog Panel ─────────────────────────────────────────────────────────── */
 
 @keyframes catalog-card-in {
@@ -1006,6 +1274,54 @@
   border: 1px solid #2A2A2A !important;
   border-radius: 14px !important;
   box-shadow: 0 24px 64px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04) !important;
+  /* Wide modal like the Swift wizard (960px); the shadcn sm:max-w-* cap would
+   * otherwise squeeze it to ~384px. */
+  width: min(940px, 94vw) !important;
+  max-width: none !important;
+}
+
+/* Step breadcrumb — mirrors the Swift StepIndicator (clickable, lowercase). */
+.wizard-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1px;
+}
+.wizard-crumb-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+.wizard-crumb {
+  font-family: var(--font-mono, ui-monospace);
+  font-size: 10px;
+  line-height: 1.4;
+  color: #6B6B73;
+  background: transparent;
+  border: none;
+  padding: 2px 7px;
+  border-radius: 5px;
+  cursor: default;
+  white-space: nowrap;
+  transition: color 120ms, background 120ms;
+}
+.wizard-crumb.visited {
+  color: #A1A1AA;
+  cursor: pointer;
+}
+.wizard-crumb.visited:hover {
+  background: #1C1C22;
+  color: #FFFFFF;
+}
+.wizard-crumb.current {
+  color: #C084FC;
+  background: rgba(168, 85, 247, 0.15);
+  font-weight: 600;
+}
+.wizard-crumb-sep {
+  font-family: var(--font-mono, ui-monospace);
+  font-size: 10px;
+  color: #6B6B73;
 }
 
 .wizard-header {
@@ -1167,4 +1483,200 @@
   color: #A1A1AA !important;
   font-size: 11px !important;
   line-height: 1.6 !important;
+}
+
+/* ─── Install Wizard — step content (Secrets / Review) ──────────────────────── */
+
+.wiz-step {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Intro note (accent-tinted panel with an icon) */
+.wiz-note {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  font-size: 12.5px;
+  color: #A1A1AA;
+  line-height: 1.5;
+  background: rgba(168, 85, 247, 0.06);
+  border: 1px solid rgba(168, 85, 247, 0.18);
+  border-radius: 8px;
+  padding: 11px 13px;
+}
+.wiz-note svg {
+  width: 15px;
+  height: 15px;
+  color: #A855F7;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* Secret field cards */
+.wiz-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.wiz-field-card {
+  background: #18181C;
+  border: 1px solid #26262C;
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.wiz-field-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.wiz-field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #FFFFFF;
+}
+.wiz-field-label .req {
+  color: #EF4444;
+}
+.wiz-field-kind {
+  margin-left: auto;
+  font-family: var(--font-mono, ui-monospace);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #6B6B73;
+  background: #050505;
+  border: 1px solid #2A2A2A;
+  padding: 2px 8px;
+  border-radius: 100px;
+}
+.wiz-field-kind.generated {
+  color: #C084FC;
+  background: rgba(168, 85, 247, 0.08);
+  border-color: rgba(168, 85, 247, 0.22);
+}
+.wiz-field-desc {
+  font-size: 12px;
+  color: #6B6B73;
+  line-height: 1.5;
+}
+.wiz-input-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #050505;
+  border: 1px solid #2A2A2A;
+  border-radius: 8px;
+  padding-right: 4px;
+  transition: border-color 120ms, box-shadow 120ms;
+}
+.wiz-input-group:focus-within {
+  border-color: rgba(168, 85, 247, 0.5);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.1);
+}
+.wiz-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  color: #FFFFFF !important;
+  font-family: var(--font-mono, ui-monospace);
+  font-size: 13px;
+  padding: 9px 12px;
+}
+.wiz-input::placeholder {
+  color: #6B6B73;
+}
+.wiz-icon-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #A1A1AA;
+  cursor: pointer;
+  transition: background 120ms, color 120ms;
+}
+.wiz-icon-btn svg {
+  width: 14px;
+  height: 14px;
+}
+.wiz-icon-btn:hover {
+  background: #1C1C22;
+  color: #FFFFFF;
+}
+.wiz-copied {
+  font-size: 11px;
+  color: #10B981;
+}
+
+/* Review — summary panel + resource chips + code block */
+.wiz-review-summary {
+  background: #18181C;
+  border: 1px solid #26262C;
+  border-radius: 10px;
+  padding: 16px 18px;
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 10px 16px;
+}
+.wiz-review-key {
+  font-size: 12.5px;
+  color: #6B6B73;
+}
+.wiz-review-val {
+  font-family: var(--font-mono, ui-monospace);
+  font-size: 12.5px;
+  color: #FFFFFF;
+  word-break: break-all;
+}
+.wiz-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6B6B73;
+  margin-bottom: 8px;
+}
+.wiz-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.wiz-chip {
+  font-family: var(--font-mono, ui-monospace);
+  font-size: 11px;
+  color: #C084FC;
+  background: rgba(168, 85, 247, 0.08);
+  border: 1px solid rgba(168, 85, 247, 0.22);
+  padding: 3px 10px;
+  border-radius: 100px;
+  white-space: nowrap;
+}
+.wiz-code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.wiz-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 14px;
+  border-top: 1px solid #1A1A1A;
 }

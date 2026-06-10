@@ -1,21 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   LoaderCircle,
+  Cpu,
+  MemoryStick,
+  Recycle,
   Layers,
   Box,
   Server,
   Database,
-  MessageSquareWarning,
+  CalendarClock,
   Activity,
   AlertTriangle,
-  Gauge,
   Trash2,
   Sparkles,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { useNodeMetrics } from "@/lib/api";
 import { PurgePickerSheet } from "@/panels/purge/PurgePickerSheet";
 import { PurgeSheet } from "@/panels/purge/PurgeSheet";
@@ -180,149 +182,139 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
   );
 
   return (
-    <div className="h-full space-y-4 overflow-auto">
-      {/* Header — mirrors OverviewPanel.swift header */}
-      <div className="flex items-center gap-3">
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2">
-            <h1 className="text-lg font-semibold">Overview</h1>
+    <div className="ov-root">
+      {/* Top bar — full-bleed header (Pencil "Top bar") */}
+      <div className="ov-topbar">
+        <div className="ov-title-col">
+          <div className="ov-title-row">
+            <h1 className="ov-title">Overview</h1>
             {isLoading && (
               <LoaderCircle className="size-4 animate-spin text-muted-foreground" aria-label="loading" />
             )}
+            {namespaceFilter && <span className="ov-ns-chip">{namespaceFilter}</span>}
           </div>
-          <span className="text-xs text-muted-foreground">Health at a glance</span>
+          <span className="ov-subtitle">Health at a glance</span>
         </div>
-        {namespaceFilter && (
-          <span
-            style={{
-              fontFamily: "ui-monospace, monospace",
-              fontSize: 11,
-              color: "#6B6B73",
-              background: "#141417",
-              padding: "2px 6px",
-              borderRadius: 4,
-              border: "1px solid #1A1A1A",
-            }}
-          >
-            {namespaceFilter}
-          </span>
-        )}
 
-        <div className="ml-auto flex items-center gap-2">
-          {/* Purge an app — destructive outline */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="border-red-600/40 text-red-500 hover:bg-red-600/10 hover:text-red-400"
-            onClick={() => setPickerOpen(true)}
-          >
-            <Trash2 className="size-3.5" />
+        <div className="ov-actions">
+          <button className="ov-btn-purge" onClick={() => setPickerOpen(true)}>
+            <Trash2 className="ov-btn-icon" />
             Purge an app
-          </Button>
-
-          {/* Investigate cluster — purple filled */}
-          <Button
-            size="sm"
-            className="bg-purple-600 hover:bg-purple-500 text-white"
-            onClick={onInvestigateCluster}
-          >
-            <Sparkles className="size-3.5" />
+          </button>
+          <button className="ov-btn-investigate" onClick={onInvestigateCluster}>
+            <Sparkles className="ov-btn-icon" />
             Investigate cluster
-          </Button>
+          </button>
         </div>
       </div>
 
-      {/* Error banner */}
-      {error && (
-        <pre className="rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
-          {error}
-        </pre>
-      )}
+      {/* Scroll area */}
+      <div className="ov-content">
+        {error && <pre className="ov-error">{error}</pre>}
 
-      {/* Gauges row (or metrics-unavailable fallback) */}
-      {hasMetrics ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {/* Row 1 — Gauges */}
+        <div className="ov-row ov-row-3">
           <GaugeCard
+            icon={Cpu}
             title="Cluster CPU"
-            fraction={totals.cpuFraction}
+            color="#60A5FA"
+            fraction={hasMetrics ? totals.cpuFraction : null}
             detail={`${formatCpu(totals.cpuUsed)} / ${formatCpu(totals.cpuAllocatable)}`}
+            emptyText="metrics-server unavailable — install it to see live CPU usage."
           />
           <GaugeCard
+            icon={MemoryStick}
             title="Cluster Memory"
-            fraction={totals.memFraction}
+            color="#A855F7"
+            fraction={hasMetrics ? totals.memFraction : null}
             detail={`${formatBytes(String(totals.memUsed))} / ${formatBytes(String(totals.memAllocatable))}`}
+            emptyText="metrics-server unavailable — install it to see live memory usage."
           />
           {/* Reclaimable: right-sizing data is not wired to the web store yet. */}
-          <Card title="Reclaimable" icon={<Gauge className="size-3.5" />}>
-            <div className="font-mono text-2xl">—</div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              no data yet — see the Right-Sizing panel for reclaimable memory.
-            </p>
-          </Card>
+          <GaugeCard
+            icon={Recycle}
+            title="Reclaimable"
+            color="#10B981"
+            fraction={null}
+            detail=""
+            emptyText="no data yet — see the Right-Sizing panel for reclaimable memory."
+          />
         </div>
-      ) : (
-        <Card title="Cluster Usage" icon={<Gauge className="size-3.5" />}>
-          <p className="text-sm text-muted-foreground">
-            metrics-server unavailable — install it to see live CPU/memory usage.
-          </p>
-        </Card>
-      )}
 
-      {/* Top row: Deployments | Pods | Nodes */}
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <Card title="Deployments" icon={<Layers className="size-3.5" />}>
-          <Metric value={deployments.length} caption={plural(deployments.length, "deployment")} />
-          <HealthLine label="Unhealthy" count={deployUnhealthy} tone="red" />
-        </Card>
+        {/* Row 2 — Stats: Deployments | Pods | Nodes */}
+        <div className="ov-row ov-row-3">
+          <StatCard
+            icon={Layers}
+            title="Deployments"
+            value={deployments.length}
+            caption={plural(deployments.length, "deployment")}
+          >
+            <HealthLine label="Unhealthy" count={deployUnhealthy} tone="red" neutralWhenZero />
+          </StatCard>
 
-        <Card title="Pods" icon={<Box className="size-3.5" />}>
-          <Metric value={pods.length} caption={plural(pods.length, "pod")} />
-          <HealthLine label="Running" count={phases.running} tone="green" />
-          <HealthLine label="Pending" count={phases.pending} tone="yellow" />
-          <HealthLine label="Failed" count={phases.failed} tone="red" />
-        </Card>
+          <StatCard icon={Box} title="Pods" value={pods.length} caption={plural(pods.length, "pod")}>
+            <HealthLine label="Running" count={phases.running} tone="green" />
+            <HealthLine label="Pending" count={phases.pending} tone="yellow" />
+            <HealthLine label="Failed" count={phases.failed} tone="red" />
+          </StatCard>
 
-        <Card title="Nodes" icon={<Server className="size-3.5" />}>
-          <Metric value={`${nodeReady.ready}/${nodeReady.total}`} caption="ready" />
-          <HealthLine label="Pressure conditions" count={pressure} tone="yellow" />
-        </Card>
-      </div>
-
-      {/* Middle row: Databases | Events */}
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <Card title="Databases" icon={<Database className="size-3.5" />}>
-          <Metric value={databases.length} caption={plural(databases.length, "instance")} />
-          <HealthLine label="Unhealthy" count={dbUnhealthy} tone="red" />
-        </Card>
-
-        <Card title="Events" icon={<MessageSquareWarning className="size-3.5" />}>
-          <Metric value={warnings.length} caption="warnings (last 500)" />
-          <HealthLine label="Total cached" count={events.length} tone="muted" />
-        </Card>
-      </div>
-
-      {/* Event timeline — 1h span, 60 stacked warning/normal buckets, display-only */}
-      <Card title="Event activity — last 1h" icon={<Activity className="size-3.5" />}>
-        <EventTimeline buckets={buckets} />
-      </Card>
-
-      {/* Recent warnings — up to 10, newest first */}
-      <div className="rounded-lg border p-3">
-        <div className="mb-2 flex items-center gap-2 border-b pb-2">
-          <AlertTriangle className="size-3.5 text-red-600" />
-          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Recent warnings
-          </span>
+          <StatCard
+            icon={Server}
+            title="Nodes"
+            value={`${nodeReady.ready}/${nodeReady.total}`}
+            caption="ready"
+          >
+            <HealthLine label="Pressure conditions" count={pressure} tone="yellow" neutralWhenZero />
+          </StatCard>
         </div>
-        {recentWarnings.length === 0 ? (
-          <p className="px-1.5 py-2 text-sm text-muted-foreground">No warning events.</p>
-        ) : (
-          <div className="space-y-px">
-            {recentWarnings.map((e) => (
-              <WarningRow key={e.metadata.uid} event={e} />
-            ))}
+
+        {/* Row 3 — Databases | Events */}
+        <div className="ov-row ov-row-2">
+          <SummaryCard
+            icon={Database}
+            title="Databases"
+            value={databases.length}
+            unit={plural(databases.length, "instance")}
+            statLabel="Unhealthy"
+            statCount={dbUnhealthy}
+            statTone={dbUnhealthy > 0 ? "red" : "neutral"}
+          />
+          <SummaryCard
+            icon={CalendarClock}
+            title="Events"
+            value={warnings.length}
+            unit="warnings (last 500)"
+            statLabel="Total cached"
+            statCount={events.length}
+            statTone="neutral"
+          />
+        </div>
+
+        {/* Event activity — 1h span, 60 stacked warning/normal buckets, display-only */}
+        <EventActivityCard buckets={buckets} />
+
+        {/* Recent warnings — up to 10, newest first */}
+        <div className="ov-card">
+          <div className="ov-card-hdr">
+            <AlertTriangle className="ov-card-hdr-icon" style={{ color: "#EF4444" }} />
+            <span className="ov-card-hdr-label">Recent warnings</span>
           </div>
-        )}
+          {recentWarnings.length === 0 ? (
+            <p className="ov-warn-empty">No warning events.</p>
+          ) : (
+            <>
+              <div className="ov-warn-list">
+                {recentWarnings.map((e) => (
+                  <WarningRow key={e.metadata.uid} event={e} />
+                ))}
+              </div>
+              <span className="ov-warn-foot">
+                Showing {recentWarnings.length} of {warnings.length}{" "}
+                {plural(warnings.length, "warning")}
+              </span>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Purge flow: pick → discover → typed-name confirm → execute. */}
@@ -344,199 +336,220 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
 // Presentational sub-components
 // ---------------------------------------------------------------------------
 
-/** Simple bordered card with an uppercase, tracked, icon-led title. */
-function Card({
-  title,
+/** Card header: tertiary icon + uppercase mono tracked label. */
+function CardHeader({ icon: Icon, title }: { icon: LucideIcon; title: string }) {
+  return (
+    <div className="ov-card-hdr">
+      <Icon className="ov-card-hdr-icon" />
+      <span className="ov-card-hdr-label">{title}</span>
+    </div>
+  );
+}
+
+/** Ring gauge card (108px donut). `fraction === null` renders the empty state. */
+function GaugeCard({
   icon,
+  title,
+  fraction,
+  color,
+  detail,
+  emptyText,
+}: {
+  icon: LucideIcon;
+  title: string;
+  fraction: number | null;
+  color: string;
+  detail: string;
+  emptyText: string;
+}) {
+  const RADIUS = 47;
+  const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+
+  return (
+    <div className="ov-card">
+      <CardHeader icon={icon} title={title} />
+      {fraction === null ? (
+        <div className="ov-gauge-empty">
+          <div className="ov-gauge-dash" />
+          <span className="ov-gauge-empty-text">{emptyText}</span>
+        </div>
+      ) : (
+        <div className="ov-gauge-body">
+          <div className="ov-gauge">
+            <svg width="108" height="108" viewBox="0 0 108 108" style={{ display: "block" }}>
+              <circle cx="54" cy="54" r={RADIUS} fill="none" stroke="#2A2A2A" strokeWidth="14" />
+              <circle
+                cx="54"
+                cy="54"
+                r={RADIUS}
+                fill="none"
+                stroke={color}
+                strokeWidth="14"
+                strokeLinecap="round"
+                strokeDasharray={`${CIRCUMFERENCE * clamp01(fraction)} ${CIRCUMFERENCE}`}
+                transform="rotate(-90 54 54)"
+                style={{ transition: "stroke-dasharray 0.4s ease" }}
+              />
+            </svg>
+            <div className="ov-gauge-pct">{Math.round(clamp01(fraction) * 100)}%</div>
+          </div>
+          <span className="ov-gauge-raw">{detail}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Stat card: large mono number + caption, then a block of status lines. */
+function StatCard({
+  icon,
+  title,
+  value,
+  caption,
   children,
 }: {
+  icon: LucideIcon;
   title: string;
-  icon: React.ReactNode;
+  value: number | string;
+  caption: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border p-3.5">
-      <div className="mb-2 flex items-center gap-1.5 text-muted-foreground">
-        {icon}
-        <span className="text-xs font-medium uppercase tracking-wide">{title}</span>
+    <div className="ov-card">
+      <CardHeader icon={icon} title={title} />
+      <div className="ov-stat-content">
+        <div className="ov-stat-number">
+          <span className="ov-stat-big">{value}</span>
+          <span className="ov-stat-word">{caption}</span>
+        </div>
+        <div className="ov-stat-block">{children}</div>
       </div>
-      {children}
     </div>
   );
 }
 
-/** Big monospace metric value with a small caption. */
-function Metric({ value, caption }: { value: number | string; caption: string }) {
-  return (
-    <div className="flex items-baseline gap-2">
-      <span className="font-mono text-2xl font-semibold">{value}</span>
-      <span className="text-xs text-muted-foreground">{caption}</span>
-    </div>
-  );
-}
-
-type Tone = "green" | "yellow" | "red" | "muted";
+type Tone = "green" | "yellow" | "red" | "neutral";
 
 const TONE_CLASS: Record<Tone, string> = {
-  green: "text-green-600 bg-green-600/15",
-  yellow: "text-yellow-600 bg-yellow-600/15",
-  red: "text-red-600 bg-red-600/15",
-  muted: "text-muted-foreground bg-muted",
+  green: "ov-chip-green",
+  yellow: "ov-chip-yellow",
+  red: "ov-chip-red",
+  neutral: "ov-chip-neutral",
 };
 
-/** A label + colored count chip line under a metric. */
-function HealthLine({ label, count, tone }: { label: string; count: number; tone: Tone }) {
+/** A label + count chip line. `neutralWhenZero` greys the chip when the count is 0. */
+function HealthLine({
+  label,
+  count,
+  tone,
+  neutralWhenZero,
+}: {
+  label: string;
+  count: number;
+  tone: Tone;
+  neutralWhenZero?: boolean;
+}) {
+  const chipTone = neutralWhenZero && count === 0 ? "neutral" : tone;
   return (
-    <div className="mt-1.5 flex items-center justify-between text-xs">
-      <span className="text-muted-foreground">{label}</span>
-      <span className={cn("rounded px-1.5 py-0.5 font-mono font-semibold", TONE_CLASS[tone])}>
-        {count}
-      </span>
+    <div className="ov-statusline">
+      <span className="ov-statusline-lbl">{label}</span>
+      <span className={cn("ov-chip", TONE_CLASS[chipTone])}>{count}</span>
     </div>
   );
 }
 
-/** Ring gauge: large centered donut (120px) matching RingGauge.swift. */
-function GaugeCard({
+/** Summary card (Databases / Events): big bold number + unit, divider, one stat line. */
+function SummaryCard({
+  icon,
   title,
-  fraction,
-  detail,
+  value,
+  unit,
+  statLabel,
+  statCount,
+  statTone,
 }: {
+  icon: LucideIcon;
   title: string;
-  fraction: number;
-  detail: string;
+  value: number | string;
+  unit: string;
+  statLabel: string;
+  statCount: number;
+  statTone: Tone;
 }) {
-  const pct = Math.round(Math.min(Math.max(fraction, 0), 1) * 100);
-  // SVG donut approach: 120px outer, ~16px track, accent arc
-  const RADIUS = 46;
-  const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
-  const arcLength = CIRCUMFERENCE * Math.min(Math.max(fraction, 0), 1);
-
   return (
-    <Card title={title} icon={<Gauge className="size-3.5" />}>
-      <div className="flex flex-col items-center gap-2 py-1">
-        {/* Donut ring — 120px */}
-        <div style={{ position: "relative", width: 120, height: 120 }}>
-          <svg width="120" height="120" viewBox="0 0 120 120" style={{ display: "block" }}>
-            {/* Track */}
-            <circle
-              cx="60" cy="60" r={RADIUS}
-              fill="none"
-              stroke="#1A1A2E"
-              strokeWidth="14"
-            />
-            {/* Arc */}
-            <circle
-              cx="60" cy="60" r={RADIUS}
-              fill="none"
-              stroke="#A855F7"
-              strokeWidth="14"
-              strokeLinecap="round"
-              strokeDasharray={`${arcLength} ${CIRCUMFERENCE}`}
-              strokeDashoffset={CIRCUMFERENCE / 4} /* start at top */
-              transform="rotate(-90 60 60)"
-              style={{ transition: "stroke-dasharray 0.4s ease" }}
-            />
-          </svg>
-          {/* Centered percentage */}
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <span
-              style={{
-                fontFamily: "ui-monospace, monospace",
-                fontSize: 22,
-                fontWeight: 700,
-                color: "#FFFFFF",
-                lineHeight: 1,
-              }}
-            >
-              {pct}%
-            </span>
-          </div>
-        </div>
-        {/* Label below ring */}
+    <div className="ov-card">
+      <CardHeader icon={icon} title={title} />
+      <div className="ov-sum-big">
+        <span className="ov-sum-n">{value}</span>
+        <span className="ov-sum-u">{unit}</span>
+      </div>
+      <div className="ov-divider" />
+      <div className="ov-statusline">
+        <span className="ov-statusline-lbl">{statLabel}</span>
         <span
-          style={{
-            fontSize: 10,
-            fontWeight: 600,
-            color: "#6B6B73",
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-            textAlign: "center",
-          }}
+          className={cn("ov-chip", statTone === "neutral" ? "ov-chip-soft" : TONE_CLASS[statTone])}
         >
-          {title}
-        </span>
-        {/* Raw value */}
-        <span
-          style={{
-            fontFamily: "ui-monospace, monospace",
-            fontSize: 11,
-            color: "#A1A1AA",
-            textAlign: "center",
-          }}
-        >
-          {detail}
+          {statCount}
         </span>
       </div>
-    </Card>
-  );
-}
-
-/** Stacked warning(red)/normal(green) histogram over the 1-hour window. */
-function EventTimeline({ buckets }: { buckets: EventBucket[] }) {
-  const max = Math.max(1, ...buckets.map((b) => b.warnings + b.normal));
-  return (
-    <div className="flex h-12 items-stretch gap-px rounded-md border bg-muted/30 p-1">
-      {buckets.map((b) => {
-        const total = b.warnings + b.normal;
-        const warnPct = (b.warnings / max) * 100;
-        const normPct = (b.normal / max) * 100;
-        return (
-          <div
-            key={b.index}
-            className="flex h-full flex-1 flex-col justify-end"
-            title={total > 0 ? `${b.warnings} warning, ${b.normal} normal` : undefined}
-          >
-            <div className="bg-green-600" style={{ height: `${normPct}%` }} />
-            <div className="bg-red-600" style={{ height: `${warnPct}%` }} />
-          </div>
-        );
-      })}
     </div>
   );
 }
 
-/** One recent-warning row: red bar | reason | target | message | age. */
+/** Event-activity card: stacked warning(red)/normal(green) histogram over the 1h window. */
+function EventActivityCard({ buckets }: { buckets: EventBucket[] }) {
+  const hasActivity = buckets.some((b) => b.warnings + b.normal > 0);
+  const max = Math.max(1, ...buckets.map((b) => b.warnings + b.normal));
+  return (
+    <div className="ov-card">
+      <CardHeader icon={Activity} title="Event activity — last 1h" />
+      {hasActivity ? (
+        <div className="ov-chart">
+          {buckets.map((b) => {
+            const total = b.warnings + b.normal;
+            const warnPct = (b.warnings / max) * 100;
+            const normPct = (b.normal / max) * 100;
+            return (
+              <div
+                key={b.index}
+                className="ov-bar-col"
+                title={total > 0 ? `${b.warnings} warning, ${b.normal} normal` : undefined}
+              >
+                <div style={{ height: `${normPct}%`, background: "#10B981" }} />
+                <div style={{ height: `${warnPct}%`, background: "#EF4444" }} />
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="ov-chart-empty">No event activity in the last hour</div>
+      )}
+    </div>
+  );
+}
+
+/** One recent-warning row: red left bar | reason | resource | message | age. */
 function WarningRow({ event }: { event: K8sEvent }) {
   const ts = when(event);
   const age = relativeAge(ts);
   const tooltip = absoluteWhen(ts) ?? undefined;
   return (
-    <div className="flex items-center gap-2 px-1.5 py-[3px]">
-      <span className="h-3 w-0.5 shrink-0 bg-red-600" aria-hidden />
-      <span className="w-[140px] shrink-0 truncate font-mono text-[10px]">
-        {event.reason ?? "—"}
-      </span>
-      <span className="w-[200px] shrink-0 truncate font-mono text-[10px] text-muted-foreground">
+    <div className="ov-warn-row">
+      <span className="ov-warn-reason">{event.reason ?? "—"}</span>
+      <span className="ov-warn-res" title={targetLabel(event)}>
         {targetLabel(event)}
       </span>
-      <span className="min-w-0 flex-1 truncate font-mono text-[11px]">
-        {event.message ?? "—"}
-      </span>
-      <span className="w-9 shrink-0 text-right font-mono text-[10px] text-muted-foreground" title={tooltip}>
+      <span className="ov-warn-msg">{event.message ?? "—"}</span>
+      <span className="ov-warn-time" title={tooltip}>
         {age}
       </span>
     </div>
   );
+}
+
+/** Clamp a fraction to [0, 1]. */
+function clamp01(n: number): number {
+  return Math.min(Math.max(n, 0), 1);
 }
 
 /** "kind/name" or "kind/name · namespace"; "—" if no name. */

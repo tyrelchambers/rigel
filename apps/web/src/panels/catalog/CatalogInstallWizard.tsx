@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   hasUnfilledMarkers,
+  isBaked,
   scanPlaceholders,
   substitute,
   validateManifestShape,
@@ -36,16 +37,6 @@ import { DoneStep } from "./steps/DoneStep";
 import { FailedStep } from "./steps/FailedStep";
 import { iconFor } from "./icons";
 
-// Steps in order for the stepper indicator
-const WIZARD_STEPS_ORDERED: WizardStep[] = [
-  "configure",
-  "secrets",
-  "review",
-  "applying",
-  "verifying",
-  "done",
-];
-
 const STEP_LABEL: Record<WizardStep, string> = {
   configure: "Configure",
   generating: "Generate",
@@ -57,10 +48,20 @@ const STEP_LABEL: Record<WizardStep, string> = {
   failed: "Failed",
 };
 
-// Which step index (0-based) in the ordered list
-function stepIndex(step: WizardStep): number {
-  return WIZARD_STEPS_ORDERED.indexOf(step);
-}
+// Short lowercase breadcrumb labels (mirror the Swift StepIndicator).
+const CRUMB_LABEL: Record<WizardStep, string> = {
+  configure: "configure",
+  generating: "generate",
+  secrets: "secrets",
+  review: "review",
+  applying: "apply",
+  verifying: "verify",
+  done: "done",
+  failed: "failed",
+};
+
+// Steps before the install runs — only these are navigable backward.
+const PRE_INSTALL: WizardStep[] = ["configure", "generating", "secrets", "review"];
 
 /**
  * Multi-step install wizard state machine
@@ -102,8 +103,37 @@ export function CatalogInstallWizard({
 
   const canAdvance = canAdvanceFromConfigure(app, config);
   const isHelm = app.install?.mode === "helm";
+  const appBaked = isBaked(app);
 
   const Icon = iconFor(app.iconSystemName);
+
+  // The breadcrumb only shows steps this install will actually go through:
+  // baked apps skip "generate"; apps with no secret placeholders skip "secrets".
+  const needsSecrets = useMemo(() => {
+    if (secretSpecs.length > 0) return true;
+    const rendered = renderArtifact(app, templateVars(config));
+    return rendered != null && scanPlaceholders(rendered).length > 0;
+  }, [app, config, secretSpecs.length]);
+
+  const order = useMemo<WizardStep[]>(() => {
+    // Not-yet-baked apps hand off to chat at the generate step — the pipeline
+    // doesn't continue in the wizard, so the breadcrumb stops there.
+    if (!appBaked) return ["configure", "generating"];
+    const o: WizardStep[] = ["configure"];
+    if (needsSecrets) o.push("secrets");
+    o.push("review", "applying", "verifying", "done");
+    return o;
+  }, [appBaked, needsSecrets]);
+
+  // "failed" collapses onto "apply" so the breadcrumb keeps a sensible current.
+  const currentFamily: WizardStep = step === "failed" ? "applying" : step;
+  const currentIndex = order.indexOf(currentFamily);
+
+  // Track the farthest step reached so visited steps stay navigable.
+  const [farthest, setFarthest] = useState(0);
+  useEffect(() => {
+    if (currentIndex > farthest) setFarthest(currentIndex);
+  }, [currentIndex, farthest]);
 
   // --- step transitions ----------------------------------------------------
 
@@ -185,15 +215,15 @@ export function CatalogInstallWizard({
     sendToChatPane(prompt);
   }
 
-  // Stepper visibility: show for normal flow steps; hide for generating/failed
-  const currentIndex = stepIndex(step);
-  const showStepper = step !== "generating" && step !== "failed";
+  // Hide the breadcrumb only on the terminal failed screen.
+  const showStepper = step !== "failed";
+  const canGoBack = PRE_INSTALL.includes(currentFamily);
 
   // --- render --------------------------------------------------------------
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="wizard-dialog max-h-[88vh] w-[min(600px,94vw)] max-w-none overflow-auto">
+      <DialogContent className="wizard-dialog max-h-[88vh] w-[min(940px,94vw)] max-w-none sm:max-w-none overflow-auto">
         <DialogHeader className="wizard-header">
           {/* App identity row */}
           <div className="wizard-app-row">
@@ -210,34 +240,31 @@ export function CatalogInstallWizard({
             </div>
           </div>
 
-          {/* Step progress dots */}
+          {/* Step breadcrumb (mirrors the Swift StepIndicator) */}
           {showStepper && (
-            <div className="wizard-stepper" role="list" aria-label="Installation steps">
-              {WIZARD_STEPS_ORDERED.map((s, i) => {
-                const isDone = i < currentIndex;
-                const isCurrent = s === step;
+            <div className="wizard-crumbs" role="list" aria-label="Installation steps">
+              {order.map((s, i) => {
+                const isCurrent = i === currentIndex;
+                const visited = i <= farthest;
+                const clickable = canGoBack && visited && i < currentIndex;
                 return (
-                  <div
-                    key={s}
-                    role="listitem"
-                    className={`wizard-step-dot${isCurrent ? " current" : ""}${isDone ? " done" : ""}`}
-                    aria-label={`${STEP_LABEL[s]}${isDone ? " (complete)" : isCurrent ? " (current)" : ""}`}
-                  >
-                    {isDone && (
-                      <svg viewBox="0 0 8 8" className="wizard-step-check" aria-hidden>
-                        <polyline points="1,4 3.2,6.2 7,1.8" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    )}
+                  <div key={s} className="wizard-crumb-item" role="listitem">
+                    <button
+                      type="button"
+                      className={`wizard-crumb${isCurrent ? " current" : ""}${
+                        visited && !isCurrent ? " visited" : ""
+                      }`}
+                      disabled={!clickable}
+                      onClick={() => clickable && setStep(s)}
+                      aria-current={isCurrent ? "step" : undefined}
+                      title={clickable ? `Go to ${STEP_LABEL[s]}` : STEP_LABEL[s]}
+                    >
+                      {CRUMB_LABEL[s]}
+                    </button>
+                    {i < order.length - 1 && <span className="wizard-crumb-sep" aria-hidden>›</span>}
                   </div>
                 );
               })}
-              {/* Connector lines between dots */}
-              <div className="wizard-stepper-track" aria-hidden>
-                <div
-                  className="wizard-stepper-fill"
-                  style={{ width: `${Math.max(0, (currentIndex / (WIZARD_STEPS_ORDERED.length - 1)) * 100)}%` }}
-                />
-              </div>
             </div>
           )}
         </DialogHeader>

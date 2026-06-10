@@ -24,67 +24,58 @@ export function ReviewStep({
 }) {
   const isHelm = app.install?.mode === "helm";
   const resources = isHelm ? [] : summarizeResources(artifact);
+  const lineCount = artifact.split("\n").length;
+
+  const summaryRows: Array<[string, string]> = [
+    ["Instance", values.instance],
+    ["Namespace", values.namespace],
+    ...(app.exposesIngress ? ([["Hostname", values.hostname || "—"]] as [string, string][]) : []),
+    ...(app.persistence ? ([["Storage", `${values.storageGiB} GiB`]] as [string, string][]) : []),
+    ["Mode", isHelm ? "helm" : "manifest"],
+  ];
 
   return (
-    <div className="space-y-4">
-      {/* Install summary */}
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-        <div className="text-muted-foreground">Instance</div>
-        <div className="font-mono">{values.instance}</div>
-        <div className="text-muted-foreground">Namespace</div>
-        <div className="font-mono">{values.namespace}</div>
-        {app.exposesIngress && (
-          <>
-            <div className="text-muted-foreground">Hostname</div>
-            <div className="font-mono">{values.hostname || "—"}</div>
-          </>
-        )}
-        {app.persistence && (
-          <>
-            <div className="text-muted-foreground">Storage</div>
-            <div className="font-mono">{values.storageGiB} GiB</div>
-          </>
-        )}
-        <div className="text-muted-foreground">Mode</div>
-        <div className="font-mono">{isHelm ? "helm" : "manifest"}</div>
+    <div className="wiz-step">
+      {/* Install summary panel */}
+      <div className="wiz-review-summary">
+        {summaryRows.map(([k, v]) => (
+          <div key={k} className="contents">
+            <div className="wiz-review-key">{k}</div>
+            <div className="wiz-review-val">{v}</div>
+          </div>
+        ))}
       </div>
 
       {/* Resource summary (manifest mode) */}
       {!isHelm && resources.length > 0 && (
-        <div className="space-y-1">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Resources
-          </h3>
-          <ul className="flex flex-wrap gap-1.5">
+        <div>
+          <h3 className="wiz-section-label">Resources</h3>
+          <div className="wiz-chips">
             {resources.map((r) => (
-              <li
-                key={r.kind}
-                className="rounded-full bg-muted px-2 py-0.5 text-xs font-mono text-muted-foreground"
-              >
+              <span key={r.kind} className="wiz-chip">
                 {r.kind} × {r.count}
-              </li>
+              </span>
             ))}
-          </ul>
+          </div>
         </div>
       )}
 
       {/* Manifest / values preview */}
-      <div className="space-y-1">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {isHelm ? "Values" : "Manifest"}
-        </h3>
-        <pre className="max-h-72 overflow-auto rounded-md bg-muted/40 p-3 text-xs font-mono whitespace-pre">
-          {artifact}
-        </pre>
+      <div>
+        <div className="wiz-code-head">
+          <h3 className="wiz-section-label" style={{ marginBottom: 0 }}>
+            {isHelm ? "values.yaml" : "Manifest"}
+          </h3>
+          <span style={{ fontFamily: "var(--font-mono, ui-monospace)", fontSize: 10, color: "#6B6B73" }}>
+            {lineCount} lines
+          </span>
+        </div>
+        <pre className="max-h-72 overflow-auto p-3 text-xs font-mono whitespace-pre">{artifact}</pre>
       </div>
 
-      {shapeError && (
-        <pre className="rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap">
-          {shapeError}
-        </pre>
-      )}
+      {shapeError && <pre className="wiz-error">{shapeError}</pre>}
 
-      <div className="flex justify-between">
+      <div className="wiz-footer">
         <Button type="button" variant="outline" onClick={onBack}>
           Back
         </Button>

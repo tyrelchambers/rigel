@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Database, LoaderCircle } from "lucide-react";
+import { Database } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
@@ -7,8 +7,10 @@ import { ListRow } from "@/panels/components/ListRow";
 import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
+import { PanelHeader } from "@/panels/components/PanelHeader";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import type {
+  CNPGBackup,
   CNPGCluster,
   CNPGScheduledBackup,
   DatabaseInstance,
@@ -47,12 +49,14 @@ export default function DatabasesPanel() {
     const ns = namespaceFilter ?? "*";
     subscribe("clusters.postgresql.cnpg.io", ns);
     subscribe("scheduledbackups.postgresql.cnpg.io", ns);
+    subscribe("backups.postgresql.cnpg.io", ns);
     subscribe("deployments", ns);
     subscribe("statefulsets", ns);
     subscribe("pods", ns);
     return () => {
       unsubscribe("clusters.postgresql.cnpg.io", ns);
       unsubscribe("scheduledbackups.postgresql.cnpg.io", ns);
+      unsubscribe("backups.postgresql.cnpg.io", ns);
       unsubscribe("deployments", ns);
       unsubscribe("statefulsets", ns);
       unsubscribe("pods", ns);
@@ -70,6 +74,9 @@ export default function DatabasesPanel() {
             string,
             CNPGScheduledBackup
           >,
+        ),
+        backups: Object.values(
+          (resources["backups.postgresql.cnpg.io"] ?? {}) as Record<string, CNPGBackup>,
         ),
         deployments: Object.values((resources["deployments"] ?? {}) as Record<string, WorkloadDB>),
         statefulSets: Object.values(
@@ -105,61 +112,44 @@ export default function DatabasesPanel() {
   }
 
   return (
-    <div className="flex flex-col gap-0">
-      {/* Header */}
-      <div
-        className="flex items-center gap-3 px-4 py-3"
-        style={{ borderBottom: "1px solid #1A1A1A", background: "#141417" }}
+    <div className="flex h-full flex-col">
+      <PanelHeader
+        title="Databases"
+        subtitle="CNPG clusters & image-detected"
+        count={filtered.length}
+        loading={isLoading}
       >
-        <div className="flex flex-col gap-0">
-          <span className="text-sm font-semibold leading-tight">Databases</span>
-          <span style={{ fontSize: 11, color: "#6B6B73" }}>CNPG clusters &amp; image-detected</span>
-        </div>
-        <span
-          style={{
-            fontFamily: "ui-monospace, monospace",
-            fontSize: 11,
-            color: "#6B6B73",
-            background: "#1A1A1A",
-            padding: "2px 6px",
-            borderRadius: 4,
-          }}
-        >
-          {filtered.length}
-        </span>
-        {isLoading && (
-          <LoaderCircle className="size-4 animate-spin text-muted-foreground" aria-label="loading" />
-        )}
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search databases…"
-          className="ml-auto w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
         />
-      </div>
+      </PanelHeader>
 
-      {/* Error banner — never hides the list. */}
-      {error && (
-        <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
-          {error}
-        </pre>
-      )}
+      <div className="flex-1 overflow-auto">
+        {/* Error banner — never hides the list. */}
+        {error && (
+          <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+            {error}
+          </pre>
+        )}
 
-      {/* Friendly empty state: no CNPG and nothing image-detected. */}
-      {showEmpty && (
-        <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
-          <Database className="size-8 text-muted-foreground" />
-          <p className="text-sm font-medium">No CloudNativePG clusters found</p>
-          <p className="max-w-md text-xs text-muted-foreground">
-            Install the CloudNativePG operator and create a Cluster resource, or deploy a
-            workload with a recognized database image to see it here.
-          </p>
-        </div>
-      )}
+        {/* Friendly empty state: no CNPG and nothing image-detected. */}
+        {showEmpty && (
+          <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
+            <Database className="size-8 text-muted-foreground" />
+            <p className="text-sm font-medium">No CloudNativePG clusters found</p>
+            <p className="max-w-md text-xs text-muted-foreground">
+              Install the CloudNativePG operator and create a Cluster resource, or deploy a
+              workload with a recognized database image to see it here.
+            </p>
+          </div>
+        )}
 
-      {/* Row list */}
-      <div className="flex flex-col gap-0.5 px-3 py-2">
+        {/* Row list */}
+        <div className="flex flex-col gap-0.5 px-3 py-2">
         {filtered.map((inst) => {
           const isOpen = expanded.has(inst.id);
           const matchedPods = matchPods(inst, pods);
@@ -257,10 +247,11 @@ export default function DatabasesPanel() {
         })}
       </div>
 
-      {/* Filtered-to-zero (but instances exist) */}
-      {!showEmpty && instances.length > 0 && filtered.length === 0 && (
-        <p className="px-4 py-4 text-sm text-muted-foreground">No databases match search</p>
-      )}
+        {/* Filtered-to-zero (but instances exist) */}
+        {!showEmpty && instances.length > 0 && filtered.length === 0 && (
+          <p className="px-4 py-4 text-sm text-muted-foreground">No databases match search</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -378,8 +369,11 @@ function DatabaseDetail({
           <div className="space-y-1 text-xs">
             <div className="flex gap-2">
               <span className="w-28 text-muted-foreground">Last backup</span>
-              <span className="font-mono select-text text-muted-foreground">
-                {instance.lastBackup ?? "never"}
+              <span
+                className="font-mono select-text text-muted-foreground"
+                title={instance.lastBackup ?? undefined}
+              >
+                {instance.lastBackup ? `${relativeAge(instance.lastBackup)} ago` : "never"}
               </span>
             </div>
             <div className="flex gap-2">

@@ -9,6 +9,11 @@ import {
   formatCpu,
   formatBytes,
   capacityValue,
+  parseCpuCores,
+  parseBytes,
+  formatCoresValue,
+  formatBytesValue,
+  usageColor,
   matchesSearch,
   sortNodes,
 } from "./nodeDisplay";
@@ -165,6 +170,54 @@ describe("matchesSearch", () => {
   });
   test("no match returns false", () => {
     expect(matchesSearch(n, "control-plane")).toBe(false);
+  });
+});
+
+describe("parseCpuCores", () => {
+  test("plain cores, milli, micro, nano", () => {
+    expect(parseCpuCores("4")).toBe(4);
+    expect(parseCpuCores("1500m")).toBeCloseTo(1.5);
+    expect(parseCpuCores("908m")).toBeCloseTo(0.908);
+    expect(parseCpuCores("1500000n")).toBeCloseTo(0.0015);
+    expect(parseCpuCores(undefined)).toBe(0);
+    expect(parseCpuCores("")).toBe(0);
+  });
+});
+
+describe("parseBytes", () => {
+  test("binary and decimal suffixes", () => {
+    expect(parseBytes("1Gi")).toBe(1024 ** 3);
+    expect(parseBytes("512Mi")).toBe(512 * 1024 ** 2);
+    expect(parseBytes("1G")).toBe(1e9);
+    expect(parseBytes("2048")).toBe(2048);
+    expect(parseBytes(undefined)).toBe(0);
+  });
+});
+
+describe("formatCoresValue", () => {
+  test("sub-core shows millicores; <10 two decimals; >=10 integer", () => {
+    expect(formatCoresValue(0.908)).toBe("908 m");
+    expect(formatCoresValue(1.49)).toBe("1.49");
+    expect(formatCoresValue(8)).toBe("8.00");
+    expect(formatCoresValue(12)).toBe("12");
+  });
+});
+
+describe("formatBytesValue", () => {
+  test("GiB with space; >=10 integer, <10 one decimal", () => {
+    expect(formatBytesValue(9.8 * 1024 ** 3)).toBe("9.8 GiB");
+    expect(formatBytesValue(19 * 1024 ** 3)).toBe("19 GiB");
+    expect(formatBytesValue(368109502464)).toBe("343 GiB");
+    expect(formatBytesValue(512 * 1024 ** 2)).toBe("512 MiB");
+  });
+});
+
+describe("usageColor", () => {
+  test("thresholds: green <70%, amber <90%, red else; grey without metrics", () => {
+    expect(usageColor(0.5, true)).toBe("#10B981");
+    expect(usageColor(0.8, true)).toBe("#F59E0B");
+    expect(usageColor(0.95, true)).toBe("#EF4444");
+    expect(usageColor(0.95, false)).toBe("#2A2A2A");
   });
 });
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { LoaderCircle, CircleDashed, FileArchive, Plus, Pencil } from "lucide-react";
+import { CircleDashed, FileArchive, Plus, Pencil } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
@@ -8,6 +8,7 @@ import { ListRow } from "@/panels/components/ListRow";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
+import { PanelHeader } from "@/panels/components/PanelHeader";
 import type { ConfigMap } from "./types";
 import { ConfigMapEditor } from "./ConfigMapEditor";
 import {
@@ -74,9 +75,7 @@ export default function ConfigMapsPanel() {
     [allConfigMaps, search],
   );
 
-  const total = allConfigMaps.length;
   const shown = filtered.length;
-  const countLabel = search.trim() && shown !== total ? `${shown} / ${total}` : `${total}`;
 
   function toggleExpand(uid: string) {
     setExpanded((prev) => {
@@ -92,52 +91,35 @@ export default function ConfigMapsPanel() {
   }
 
   return (
-    <div className="flex flex-col gap-0">
-      {/* Header */}
-      <div
-        className="flex items-center gap-3 px-4 py-3"
-        style={{ borderBottom: "1px solid #1A1A1A", background: "#141417" }}
+    <div className="flex h-full flex-col">
+      <PanelHeader
+        title="ConfigMaps"
+        subtitle="Configuration data"
+        count={shown}
+        loading={isLoading}
       >
-        <div className="flex flex-col gap-0">
-          <span className="text-sm font-semibold leading-tight">ConfigMaps</span>
-          <span style={{ fontSize: 11, color: "#6B6B73" }}>Configuration data</span>
-        </div>
-        <span
-          style={{
-            fontFamily: "ui-monospace, monospace",
-            fontSize: 11,
-            color: "#6B6B73",
-            background: "#1A1A1A",
-            padding: "2px 6px",
-            borderRadius: 4,
-          }}
-        >
-          {countLabel}
-        </span>
-        {isLoading && (
-          <LoaderCircle className="size-4 animate-spin text-muted-foreground" aria-label="loading" />
-        )}
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search configmaps…"
-          className="ml-auto w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
         />
         <Button size="sm" onClick={openCreate}>
           <Plus className="size-4" aria-hidden /> New ConfigMap
         </Button>
-      </div>
+      </PanelHeader>
 
-      {/* Error banner */}
-      {error && (
-        <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
-          {error}
-        </pre>
-      )}
+      <div className="flex-1 overflow-auto">
+        {/* Error banner */}
+        {error && (
+          <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+            {error}
+          </pre>
+        )}
 
-      {/* Row list */}
-      <div className="flex flex-col gap-0.5 px-3 py-2">
+        {/* Row list */}
+        <div className="flex flex-col gap-0.5 px-3 py-2">
         {filtered.map((cm) => {
           const uid = cm.metadata.uid;
           const isOpen = expanded.has(uid);
@@ -214,13 +196,14 @@ export default function ConfigMapsPanel() {
         })}
       </div>
 
-      {/* Empty / filtered-to-zero states */}
-      {!isLoading && allConfigMaps.length === 0 && (
-        <p className="px-4 py-4 text-sm text-muted-foreground">No configmaps found</p>
-      )}
-      {!isLoading && allConfigMaps.length > 0 && filtered.length === 0 && (
-        <p className="px-4 py-4 text-sm text-muted-foreground">No configmaps match search</p>
-      )}
+        {/* Empty / filtered-to-zero states */}
+        {!isLoading && allConfigMaps.length === 0 && (
+          <p className="px-4 py-4 text-sm text-muted-foreground">No configmaps found</p>
+        )}
+        {!isLoading && allConfigMaps.length > 0 && filtered.length === 0 && (
+          <p className="px-4 py-4 text-sm text-muted-foreground">No configmaps match search</p>
+        )}
+      </div>
 
       <ConfigMapEditor
         target={editTarget}

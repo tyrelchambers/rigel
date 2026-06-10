@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  LoaderCircle,
   Hourglass,
   Gauge,
   Copy,
@@ -15,6 +14,7 @@ import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { ListRow } from "@/panels/components/ListRow";
 import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
+import { PanelHeader } from "@/panels/components/PanelHeader";
 import type { StatusBadgeVariant } from "@/panels/components/StatusBadge";
 import type { ActionBlock } from "@/lib/api";
 import {
@@ -227,40 +227,23 @@ export default function RightSizingPanel() {
   }
 
   return (
-    <div className="flex flex-col gap-0">
-      {/* Header */}
-      <div
-        className="flex items-center gap-3 px-4 py-3"
-        style={{ borderBottom: "1px solid #1A1A1A", background: "#141417" }}
+    <div className="flex h-full flex-col">
+      <PanelHeader
+        title="Right-sizing"
+        subtitle="Resource recommendations"
+        count={filtered.length}
+        loading={isLoadingMetrics}
       >
-        <div className="flex flex-col gap-0">
-          <span className="text-sm font-semibold leading-tight">Right-sizing</span>
-          <span style={{ fontSize: 11, color: "#6B6B73" }}>Resource recommendations</span>
-        </div>
-        <span
-          style={{
-            fontFamily: "ui-monospace, monospace",
-            fontSize: 11,
-            color: "#6B6B73",
-            background: "#1A1A1A",
-            padding: "2px 6px",
-            borderRadius: 4,
-          }}
-        >
-          {filtered.length}
-        </span>
-        {isLoadingMetrics && (
-          <LoaderCircle className="size-4 animate-spin text-muted-foreground" aria-label="loading" />
-        )}
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search name or namespace…"
-          className="ml-auto w-64 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="w-64 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
         />
-      </div>
+      </PanelHeader>
 
+      <div className="flex-1 overflow-auto">
       {/* Control bar — sort pills */}
       <div
         className="flex items-center gap-2 px-4 py-2"
@@ -421,6 +404,7 @@ export default function RightSizingPanel() {
             </ListRow>
           );
         })}
+      </div>
       </div>
 
       <ConfirmSheet
