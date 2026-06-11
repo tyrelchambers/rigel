@@ -11,7 +11,8 @@
 //      catalog install wizard. No kubectl runs here.
 
 import { useEffect, useRef, useState } from "react";
-import { LoaderCircle, Check, ChevronDown, ChevronRight, AlertTriangle } from "lucide-react";
+import { useNavigate } from "react-router";
+import { LoaderCircle, Check, ChevronDown, ChevronRight, AlertTriangle, Key, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   signalBridgeManifest,
@@ -98,6 +99,7 @@ function AccountSection() {
 // ---------------------------------------------------------------------------
 
 function CopilotSection() {
+  const navigate = useNavigate();
   const { data: config } = useChatConfig();
   const setToken = useSetChatToken();
   const [token, setTokenInput] = useState("");
@@ -134,10 +136,23 @@ function CopilotSection() {
       </p>
 
       {envManaged ? (
-        <p className="mt-2 text-xs text-muted-foreground">
-          The token is set via the <code className="font-mono">CLAUDE_CODE_OAUTH_TOKEN</code>{" "}
-          environment variable and managed by your deployment — change it there.
-        </p>
+        <div className="mt-2 space-y-2">
+          <p className="text-xs text-muted-foreground">
+            The token is set via the <code className="font-mono">CLAUDE_CODE_OAUTH_TOKEN</code>{" "}
+            environment variable, sourced from a Secret in your deployment.
+          </p>
+          {config?.secret && (
+            <button
+              type="button"
+              onClick={() => navigate(`/secrets?q=${encodeURIComponent(config.secret!.name)}`)}
+              className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted"
+            >
+              <Key className="size-3" />
+              Edit Secret {config.secret.name}
+              <ArrowRight className="size-3" />
+            </button>
+          )}
+        </div>
       ) : (
         <div className="mt-2 flex items-center gap-2">
           <input

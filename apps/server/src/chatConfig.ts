@@ -55,12 +55,23 @@ export async function clearClaudeToken(): Promise<void> {
   }
 }
 
-/**
- * Chat-config status for the UI. `source` tells the Settings screen whether the
- * token is env-managed (read-only here) or set in-app (file, editable).
- */
-export async function chatConfig(): Promise<{ configured: boolean; source: "env" | "file" | null }> {
-  if (envToken()) return { configured: true, source: "env" };
-  if (await fileToken()) return { configured: true, source: "file" };
-  return { configured: false, source: null };
+// When the token env var is fed by a k8s Secret (Helm sets these), point the UI
+// straight at it so the user can edit it in the Secrets panel instead of hunting.
+const SECRET_NAME = process.env.HELMSMAN_CLAUDE_SECRET?.trim() || null;
+const SECRET_NS = process.env.POD_NAMESPACE?.trim() || null;
+
+export interface ChatConfigStatus {
+  configured: boolean;
+  /** "env" = deployment-managed (read-only here); "file" = set in-app (editable). */
+  source: "env" | "file" | null;
+  /** The Secret backing the token env var, when known — for a deep link. */
+  secret: { name: string; namespace: string } | null;
+}
+
+/** Chat-config status for the Settings screen / onboarding. */
+export async function chatConfig(): Promise<ChatConfigStatus> {
+  const secret = SECRET_NAME ? { name: SECRET_NAME, namespace: SECRET_NS ?? "default" } : null;
+  if (envToken()) return { configured: true, source: "env", secret };
+  if (await fileToken()) return { configured: true, source: "file", secret: null };
+  return { configured: false, source: null, secret: null };
 }

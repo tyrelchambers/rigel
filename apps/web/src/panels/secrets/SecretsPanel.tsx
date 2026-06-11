@@ -41,9 +41,21 @@ export default function SecretsPanel() {
   const isLoading = useCluster((s) => s.isLoading);
   const error = useCluster((s) => s.error);
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
+  const setNamespaceFilter = useCluster((s) => s.setNamespaceFilter);
 
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  // Deep link: /secrets?q=<name> (e.g. from the Settings AI section) seeds the
+  // search and shows all namespaces so the target secret is findable.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("q");
+    if (q) {
+      setSearch(q);
+      setNamespaceFilter(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Editor sheet: `editorOpen` true; `editTarget` null = create, else edit.
   const [editorOpen, setEditorOpen] = useState(false);

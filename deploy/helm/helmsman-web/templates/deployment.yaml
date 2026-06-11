@@ -73,6 +73,13 @@ spec:
                   name: {{ include "helmsman-web.claudeSecretName" . }}
                   key: {{ .Values.claude.existingSecretKey }}
                   optional: true
+            # Points the Settings UI at the Secret backing the token (deep link).
+            - name: HELMSMAN_CLAUDE_SECRET
+              value: {{ include "helmsman-web.claudeSecretName" . }}
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
             {{- end }}
           volumeMounts:
             # `claude` CLI runtime state — MUST be writable or chat tools break.

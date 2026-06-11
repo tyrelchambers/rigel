@@ -626,6 +626,8 @@ export interface ChatConfig {
   configured: boolean;
   /** "env" = managed by deployment env (read-only here); "file" = set in-app. */
   source: "env" | "file" | null;
+  /** The k8s Secret backing the token env var, when known (for a deep link). */
+  secret?: { name: string; namespace: string } | null;
 }
 
 async function fetchChatConfig(): Promise<ChatConfig> {
