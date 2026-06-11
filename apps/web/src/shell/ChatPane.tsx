@@ -21,11 +21,12 @@ import { Button } from "@/components/ui/button";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { PurgeSheet } from "@/panels/purge/PurgeSheet";
 import type { ActionBlock } from "@/lib/api";
-import { useChatConfig } from "@/lib/api";
+import { useChatConfig, useSuggestions } from "@/lib/api";
+import { SuggestedPromptsRow } from "@/panels/chat/SuggestedPromptsRow";
 import { Link } from "react-router";
 import { stripActionBlocks, type SuggestedAction } from "@/lib/actionBlocks";
 import { onChatEvent, sendChat, interruptChat } from "@/lib/ws";
-import { registerChatHandoff } from "@/lib/chatHandoff";
+import { registerChatHandoff, handoffToChat } from "@/lib/chatHandoff";
 import { useCluster } from "@/store/cluster";
 import { MessageBubble } from "@/panels/chat/MessageBubble";
 import { ThinkingPane } from "@/panels/chat/ThinkingPane";
@@ -215,6 +216,8 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
 
   // AI copilot config — drives the "not configured" empty-state below.
   const { data: chatConfig } = useChatConfig();
+  // Cluster-aware suggestion chips above the composer.
+  const { data: suggestions } = useSuggestions();
   const liveThinkingRef = useRef("");
   const turnStartedAtRef = useRef<Date | null>(null);
   const isAtBottomRef = useRef(true);
@@ -667,6 +670,14 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
         {/* ── Thinking pane ────────────────────────────────────────────────── */}
         {showThinkingPane && (
           <ThinkingPane liveThinking={liveThinking} turnStartedAt={turnStartedAt} />
+        )}
+
+        {/* ── Suggestion chips (cluster-aware) ─────────────────────────────── */}
+        {!isStreaming && (
+          <SuggestedPromptsRow
+            prompts={suggestions ?? []}
+            onTap={(p) => handoffToChat(p.prompt)}
+          />
         )}
 
         {/* ── Composer ─────────────────────────────────────────────────────── */}

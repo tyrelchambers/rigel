@@ -569,6 +569,35 @@ export function useCnpgPluginAvailable() {
 }
 
 // ---------------------------------------------------------------------------
+// Chat suggestion chips — GET /api/suggestions (computed server-side from
+// one-shot cluster reads). Mirrors the Swift SuggestedPromptsBuilder.
+// ---------------------------------------------------------------------------
+
+export type SuggestionKind = "pod" | "deploy" | "warn" | "node" | "investigate";
+
+export interface SuggestedPrompt {
+  id: string;
+  kind: SuggestionKind;
+  label: string;
+  prompt: string;
+}
+
+/** Cluster-aware chat suggestions, refreshed periodically. */
+export function useSuggestions() {
+  return useQuery<SuggestedPrompt[], Error>({
+    queryKey: ["suggestions"] as const,
+    queryFn: async () => {
+      const res = await fetch("/api/suggestions");
+      if (!res.ok) return [];
+      const data = (await res.json()) as { prompts?: SuggestedPrompt[] };
+      return data.prompts ?? [];
+    },
+    refetchInterval: 30_000,
+    staleTime: 20_000,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Browser auth — password login → httpOnly session cookie. GET /api/auth-status,
 // POST /api/login, POST /api/logout. Cookies are same-origin so fetch sends them.
 // ---------------------------------------------------------------------------

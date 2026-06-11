@@ -9,6 +9,7 @@ import { handlePurge, type PurgeRequest } from "./purge";
 import { getPodMetrics, getNodeMetrics, getNodeDisk } from "./metrics";
 import { handleUpdates, type UpdatesRequest } from "./updates";
 import { chatConfig, setClaudeToken } from "./chatConfig";
+import { buildSuggestions } from "./suggestions";
 import {
   passwordConfigured,
   passwordMatches,
@@ -142,6 +143,31 @@ const server = Bun.serve({
     if (url.pathname === "/api/cnpg-plugin" && req.method === "GET") {
       const probe = await kubectl(context, ["cnpg", "version"]);
       return Response.json({ available: probe.code === 0 });
+    }
+
+    // GET /api/suggestions — cluster-aware chat suggestion chips. One-shot reads
+    // (kept off the watch store so the namespace filter isn't disturbed); always
+    // returns { prompts } (degrades to just the "Investigate cluster" fallback).
+    if (url.pathname === "/api/suggestions" && req.method === "GET") {
+      const items = async (args: string[]): Promise<unknown[]> => {
+        const r = await kubectl(context, [...args, "-o", "json"]);
+        if (r.code !== 0) return [];
+        try {
+          return (JSON.parse(r.stdout) as { items?: unknown[] }).items ?? [];
+        } catch {
+          return [];
+        }
+      };
+      const [pods, deployments, nodes, events] = await Promise.all([
+        items(["get", "pods", "-A"]),
+        items(["get", "deployments", "-A"]),
+        items(["get", "nodes"]),
+        items(["get", "events", "-A", "--field-selector", "type=Warning"]),
+      ]);
+      return Response.json({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        prompts: buildSuggestions({ pods, deployments, nodes, events } as any),
+      });
     }
 
     // GET  /api/chat-config — is the AI copilot's Claude token configured?
