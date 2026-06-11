@@ -4,17 +4,24 @@
 // See docs/parity/databases.md for the normative spec.
 
 import type {
+  BackupInfo,
   CNPGBackup,
   CNPGCluster,
   CNPGScheduledBackup,
+  ConnectionInfo,
+  DatabaseAction,
+  DatabaseActionItem,
+  DatabaseCapabilities,
   DatabaseInstance,
   DatabaseKind,
   DatabasePod,
   DatabasePodRaw,
+  DatabaseSecret,
   DatabaseSource,
   WalArchivingStatus,
   WorkloadDB,
 } from "./types";
+import type { ActionBlock } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
 // Age
@@ -500,5 +507,409 @@ export function sourceBadgeLabel(source: DatabaseSource): string {
       return "DEPLOY";
     case "statefulset":
       return "STS";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Capabilities (action bar + connection + backup info)
+//
+// Pure helper mirroring the Swift `DatabaseOperatorRegistry` / `CNPGOperator` /
+// `NoOperator` in Sources/Helmsman/Panels/Databases/DatabaseOperator.swift and
+// `DatabasesViewModel.capabilities(for:)`. See docs/parity/databases-controls.md.
+// ---------------------------------------------------------------------------
+
+const PLUGIN_REASON = "Requires the kubectl-cnpg plugin";
+
+/**
+ * Connection port for an image-detected (NoOperator) instance. NOTE this is the
+ * NATIVE-protocol port and differs from `defaultPort()` (used for the display
+ * connection string) for clickhouse (9000 vs 8123). Mirrors
+ * `NoOperator.defaultPort(for:)` in Swift exactly.
+ */
+function operatorPort(kind: DatabaseKind): number {
+  switch (kind) {
+    case "postgres":
+      return 5432;
+    case "mysql":
+    case "mariadb":
+      return 3306;
+    case "mongo":
+      return 27017;
+    case "redis":
+    case "valkey":
+    case "keydb":
+    case "dragonfly":
+      return 6379;
+    case "clickhouse":
+      return 9000;
+    case "elasticsearch":
+    case "opensearch":
+      return 9200;
+    case "cassandra":
+    case "scylla":
+      return 9042;
+  }
+}
+
+/**
+ * Connection scheme for an image-detected (NoOperator) instance. Mirrors
+ * `NoOperator.scheme(for:)` — note elasticsearch/opensearch use "http" here
+ * (vs "https" in the display `defaultScheme()`).
+ */
+function operatorScheme(kind: DatabaseKind): string {
+  switch (kind) {
+    case "postgres":
+      return "postgresql";
+    case "mysql":
+    case "mariadb":
+      return "mysql";
+    case "mongo":
+      return "mongodb";
+    case "redis":
+    case "valkey":
+    case "keydb":
+    case "dragonfly":
+      return "redis";
+    case "clickhouse":
+      return "clickhouse";
+    case "elasticsearch":
+    case "opensearch":
+      return "http";
+    case "cassandra":
+    case "scylla":
+      return "cassandra";
+  }
+}
+
+/** Decode a base64 string to UTF-8, returning undefined on failure. */
+function decodeBase64(b64: string | undefined): string | undefined {
+  if (!b64) return undefined;
+  try {
+    return decodeURIComponent(escape(atob(b64)));
+  } catch {
+    return undefined;
+  }
+}
+
+/** Decode the `username` key from a named secret in the given namespace. */
+function usernameFromSecret(
+  secrets: DatabaseSecret[],
+  name: string,
+  namespace: string,
+): string | undefined {
+  const s = secrets.find(
+    (sec) => sec.metadata.name === name && (sec.metadata.namespace ?? "default") === namespace,
+  );
+  return decodeBase64(s?.data?.["username"]);
+}
+
+/** Raw container shape used for secret discovery (pod envFrom / env). */
+interface DiscoverPod {
+  metadata: { name: string; namespace?: string; labels?: Record<string, string> };
+  status?: { phase?: string };
+  spec?: {
+    containers?: Array<{
+      envFrom?: Array<{ secretRef?: { name?: string } }>;
+      env?: Array<{ valueFrom?: { secretKeyRef?: { name?: string } } }>;
+    }>;
+  };
+}
+
+/**
+ * First secret name referenced by any container's `envFrom[].secretRef` or
+ * `env[].valueFrom.secretKeyRef`, scanning pods in order. Mirrors
+ * `NoOperator.discoverSecret(in:)`.
+ */
+function discoverSecret(pods: DiscoverPod[]): string | undefined {
+  for (const pod of pods) {
+    for (const ct of pod.spec?.containers ?? []) {
+      const fromEnvFrom = ct.envFrom?.map((e) => e.secretRef?.name).find(Boolean);
+      if (fromEnvFrom) return fromEnvFrom;
+      const fromEnv = ct.env?.map((e) => e.valueFrom?.secretKeyRef?.name).find(Boolean);
+      if (fromEnv) return fromEnv;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Compute the action bar + connection/backup info for one instance. Mirrors the
+ * Swift operator registry: CNPG clusters use `cnpgCapabilities`, deployment /
+ * statefulset use `imageDetectedCapabilities`.
+ */
+export function capabilities(args: {
+  instance: DatabaseInstance;
+  pods: DatabasePodRaw[];
+  cnpgCluster?: CNPGCluster;
+  scheduledBackups: CNPGScheduledBackup[];
+  secrets: DatabaseSecret[];
+  cnpgPluginAvailable: boolean;
+}): DatabaseCapabilities {
+  return args.instance.source === "cnpg"
+    ? cnpgCapabilities(args)
+    : imageDetectedCapabilities(args);
+}
+
+function cnpgCapabilities(args: {
+  instance: DatabaseInstance;
+  pods: DatabasePodRaw[];
+  cnpgCluster?: CNPGCluster;
+  scheduledBackups: CNPGScheduledBackup[];
+  secrets: DatabaseSecret[];
+  cnpgPluginAvailable: boolean;
+}): DatabaseCapabilities {
+  const { instance } = args;
+  const pluginMissing = !args.cnpgPluginAvailable;
+
+  // Running pods of this cluster (by cnpg.io/cluster label + namespace).
+  const runningNames = args.pods
+    .filter(
+      (p) =>
+        (p.metadata.namespace ?? "default") === instance.namespace &&
+        p.metadata.labels?.["cnpg.io/cluster"] === instance.name &&
+        p.status?.phase === "Running",
+    )
+    .map((p) => p.metadata.name);
+
+  // A switchover only makes sense once a primary is elected — otherwise every
+  // pod would falsely look like a promotable standby.
+  const standby = instance.cnpgPrimary
+    ? runningNames
+        .filter((n) => n !== instance.cnpgPrimary)
+        .sort((a, b) => a.localeCompare(b))[0]
+    : undefined;
+
+  const items: DatabaseActionItem[] = [];
+  items.push({
+    action: { type: "backupNow" },
+    enabled: !pluginMissing,
+    disabledReason: pluginMissing ? PLUGIN_REASON : undefined,
+  });
+  if (standby) {
+    items.push({
+      action: { type: "switchover", to: standby },
+      enabled: !pluginMissing,
+      disabledReason: pluginMissing ? PLUGIN_REASON : undefined,
+    });
+  } else {
+    items.push({
+      action: { type: "switchover", to: "" },
+      enabled: false,
+      disabledReason: "No ready standby to promote",
+    });
+  }
+  if (instance.readyReplicas === 0) {
+    items.push({
+      action: { type: "hibernate", on: false }, // Resume
+      enabled: !pluginMissing,
+      disabledReason: pluginMissing ? PLUGIN_REASON : undefined,
+    });
+  } else {
+    items.push({
+      action: { type: "hibernate", on: true }, // Hibernate
+      enabled: !pluginMissing,
+      disabledReason: pluginMissing ? PLUGIN_REASON : undefined,
+    });
+  }
+  items.push({
+    action: { type: "scale", current: instance.desiredReplicas, desired: instance.desiredReplicas },
+    enabled: true,
+  });
+  items.push({ action: { type: "portForward" }, enabled: true });
+  items.push({ action: { type: "revealCredentials" }, enabled: true });
+  items.push({ action: { type: "copyDSN" }, enabled: true });
+
+  const cluster = args.cnpgCluster;
+  const schedule = args.scheduledBackups.find(
+    (sb) =>
+      sb.spec?.cluster?.name === instance.name &&
+      (sb.metadata.namespace ?? "default") === instance.namespace,
+  )?.spec?.schedule;
+  const walCond = (cluster?.status?.conditions ?? []).find(
+    (c) => c.type === "ContinuousArchiving",
+  );
+  const backupInfo: BackupInfo = {
+    lastBackup: instance.lastBackup,
+    schedule,
+    walArchivingHealthy: walCond ? walCond.status === "True" : undefined,
+  };
+
+  const secretName = `${instance.name}-app`;
+  const connection: ConnectionInfo = {
+    targetKind: "svc",
+    targetName: `${instance.name}-rw`,
+    namespace: instance.namespace,
+    port: 5432,
+    scheme: "postgresql",
+    secretName,
+    username: usernameFromSecret(args.secrets, secretName, instance.namespace),
+    dbName: "app",
+  };
+
+  return { actions: items, backupInfo, connection };
+}
+
+function imageDetectedCapabilities(args: {
+  instance: DatabaseInstance;
+  pods: DatabasePodRaw[];
+  secrets: DatabaseSecret[];
+}): DatabaseCapabilities {
+  const { instance } = args;
+  const matched = args.pods.filter(
+    (p) =>
+      (p.metadata.namespace ?? "default") === instance.namespace &&
+      Object.entries(instance.labelSelector).every(
+        ([k, v]) => p.metadata.labels?.[k] === v,
+      ),
+  );
+  const secretName = discoverSecret(matched as DiscoverPod[]);
+  // Prefer the first Running pod, else the first matched pod (Swift uses the
+  // same fallback when computing the connection target).
+  const target =
+    matched.find((p) => p.status?.phase === "Running") ?? matched[0];
+
+  const items: DatabaseActionItem[] = [];
+  items.push({
+    action: { type: "scale", current: instance.desiredReplicas, desired: instance.desiredReplicas },
+    enabled: true,
+  });
+  if (target) items.push({ action: { type: "portForward" }, enabled: true });
+  if (secretName) items.push({ action: { type: "revealCredentials" }, enabled: true });
+  items.push({ action: { type: "copyDSN" }, enabled: true });
+
+  const connection: ConnectionInfo | undefined = target
+    ? {
+        targetKind: "pod",
+        targetName: target.metadata.name,
+        namespace: instance.namespace,
+        port: operatorPort(instance.kind),
+        scheme: operatorScheme(instance.kind),
+        secretName,
+        username: undefined,
+        dbName: undefined,
+      }
+    : undefined;
+
+  return { actions: items, connection };
+}
+
+// ---------------------------------------------------------------------------
+// Action labels / icons / DSN
+// ---------------------------------------------------------------------------
+
+/** Button label for an action. Mirrors Swift `DatabaseAction.label`. */
+export function actionLabel(action: DatabaseAction): string {
+  switch (action.type) {
+    case "backupNow":
+      return "Back up";
+    case "switchover":
+      return "Switch over";
+    case "hibernate":
+      return action.on ? "Hibernate" : "Resume";
+    case "scale":
+      return "Scale";
+    case "portForward":
+      return "Port-forward";
+    case "revealCredentials":
+      return "Credentials";
+    case "copyDSN":
+      return "Copy DSN";
+  }
+}
+
+/**
+ * Build the DSN connection string. Mirrors Swift `DatabasesViewModel.dsn(for:)`:
+ * `{scheme}://{user@}{target}.{namespace}{.svc}:{port}{/dbname}`. The `.svc`
+ * suffix is added only for service targets (CNPG).
+ */
+export function dsn(c: ConnectionInfo): string {
+  const hostSuffix = c.targetKind === "svc" ? `.${c.namespace}.svc` : `.${c.namespace}`;
+  const userPart = c.username ? `${c.username}@` : "";
+  const dbPart = c.dbName ? `/${c.dbName}` : "";
+  return `${c.scheme}://${userPart}${c.targetName}${hostSuffix}:${c.port}${dbPart}`;
+}
+
+// ---------------------------------------------------------------------------
+// Action → ActionBlock (confirm-sheet) conversion
+//
+// Returns null for non-mutating actions (portForward / revealCredentials /
+// copyDSN) — those are handled directly in the UI layer. Mirrors the Swift
+// `DatabaseRow.perform(_:)` action routing + the kubectl argv in the spec.
+// ---------------------------------------------------------------------------
+
+export function actionToBlock(
+  action: DatabaseAction,
+  instance: DatabaseInstance,
+): ActionBlock | null {
+  const ns = instance.namespace;
+  const name = instance.name;
+
+  switch (action.type) {
+    case "backupNow":
+      return {
+        kind: "command",
+        label: `Back up ${name}`,
+        args: ["cnpg", "backup", name, "-n", ns],
+        destructive: false,
+      };
+
+    case "switchover":
+      if (!action.to) return null;
+      return {
+        kind: "command",
+        label: `Switch over ${name} → ${action.to}`,
+        args: ["cnpg", "promote", name, action.to, "-n", ns],
+        destructive: true,
+      };
+
+    case "hibernate":
+      return action.on
+        ? {
+            kind: "command",
+            label: `Hibernate ${name}`,
+            args: ["cnpg", "hibernate", "on", name, "-n", ns],
+            destructive: true,
+          }
+        : {
+            kind: "command",
+            label: `Resume ${name}`,
+            args: ["cnpg", "hibernate", "off", name, "-n", ns],
+            destructive: false,
+          };
+
+    case "scale":
+      if (instance.source === "cnpg") {
+        return {
+          kind: "command",
+          label: `Scale ${name} → ${action.desired}`,
+          args: [
+            "patch",
+            "cluster",
+            name,
+            "-n",
+            ns,
+            "--type=merge",
+            "-p",
+            `{"spec":{"instances":${action.desired}}}`,
+          ],
+          destructive: action.desired < action.current,
+        };
+      }
+      // Image-detected: target the real workload kind so a StatefulSet-backed
+      // DB scales `statefulset/<name>`, not `deployment/<name>` (server defaults
+      // resourceKind to deployment). Mirrors Swift `scaleWorkload(kind:…)`.
+      return {
+        kind: "scale",
+        name,
+        namespace: ns,
+        resourceKind: instance.source,
+        replicas: action.desired,
+      };
+
+    // Non-mutating — handled in the UI layer.
+    case "portForward":
+    case "revealCredentials":
+    case "copyDSN":
+      return null;
   }
 }

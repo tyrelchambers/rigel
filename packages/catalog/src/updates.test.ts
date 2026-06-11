@@ -631,6 +631,7 @@ describe("installedImages", () => {
         },
       ],
       [],
+      [],
       [
         {
           spec: {
@@ -664,6 +665,41 @@ describe("installedImages", () => {
   });
 
   test("omits apps with no matching container", () => {
-    expect(installedImages([app], [], [], [])).toEqual([]);
+    expect(installedImages([app], [], [], [], [])).toEqual([]);
+  });
+
+  test("annotation-bound workload supplies the running image over image match", () => {
+    const result = installedImages(
+      [app],
+      [
+        {
+          metadata: {
+            name: "mirror-plausible",
+            namespace: "analytics",
+            annotations: { "helmsman.dev/catalog-app": "plausible" },
+          },
+          spec: {
+            template: {
+              spec: {
+                containers: [
+                  { name: "plausible", image: "registry.internal/team/plausible:v2.0.0" },
+                ],
+              },
+            },
+          },
+        },
+      ],
+      [],
+      [],
+      [],
+    );
+    expect(result).toEqual([
+      {
+        appID: "plausible",
+        image: "registry.internal/team/plausible:v2.0.0",
+        repoURL: "https://github.com/plausible/analytics",
+        runningDigest: undefined,
+      },
+    ]);
   });
 });

@@ -20,7 +20,7 @@ import {
   signalApiUrl,
   parseRecipients,
 } from "@helmsman/k8s";
-import { useAssistantAction } from "@/lib/api";
+import { useAssistantAction, useChatConfig, useSetChatToken, useAuthStatus, useLogout } from "@/lib/api";
 import { fetchSignalQR, fetchSignalAccounts, sendSignalTest } from "@/lib/api";
 import {
   useSettings,
@@ -58,9 +58,119 @@ export default function SettingsPanel() {
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-4">
       <h1 className="text-lg font-semibold">Settings</h1>
+      <AccountSection />
+      <CopilotSection />
       <SignalSection derived={derived} applying={applying} setApplying={setApplying} />
       <SelfHostSection />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Account / session
+// ---------------------------------------------------------------------------
+
+function AccountSection() {
+  const { data: auth } = useAuthStatus();
+  const logout = useLogout();
+  // Only meaningful when the server enforces a password.
+  if (!auth?.authRequired) return null;
+  return (
+    <Card>
+      <div className="flex items-center gap-2">
+        <h2 className="text-sm font-semibold">Account</h2>
+        <span className="ml-auto text-xs text-muted-foreground">Signed in</span>
+        <button
+          type="button"
+          disabled={logout.isPending}
+          onClick={() => logout.mutate()}
+          className="rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
+        >
+          {logout.isPending ? "Signing out…" : "Sign out"}
+        </button>
+      </div>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AI copilot (the Helmsman) — Claude subscription token
+// ---------------------------------------------------------------------------
+
+function CopilotSection() {
+  const { data: config } = useChatConfig();
+  const setToken = useSetChatToken();
+  const [token, setTokenInput] = useState("");
+
+  const configured = config?.configured ?? false;
+  const envManaged = config?.source === "env";
+
+  async function save() {
+    await setToken.mutateAsync(token.trim());
+    setTokenInput("");
+  }
+
+  return (
+    <Card>
+      <div className="flex items-center gap-2">
+        <h2 className="text-sm font-semibold">The Helmsman (AI copilot)</h2>
+        <span
+          className={`ml-auto inline-flex items-center gap-1.5 text-xs ${
+            configured ? "text-green-500" : "text-muted-foreground"
+          }`}
+        >
+          <span
+            className={`inline-block size-2 rounded-full ${configured ? "bg-green-500" : "bg-muted-foreground/50"}`}
+          />
+          {configured ? (envManaged ? "configured (env)" : "configured") : "not configured"}
+        </span>
+      </div>
+
+      <p className="mt-1 text-xs text-muted-foreground">
+        Chat needs a Claude subscription token. On a machine with the Claude CLI, run{" "}
+        <code className="rounded bg-muted px-1 py-0.5 font-mono">claude setup-token</code> and paste
+        the <code className="rounded bg-muted px-1 py-0.5 font-mono">sk-ant-oat-…</code> token below.
+        Panels work without it; only chat is affected.
+      </p>
+
+      {envManaged ? (
+        <p className="mt-2 text-xs text-muted-foreground">
+          The token is set via the <code className="font-mono">CLAUDE_CODE_OAUTH_TOKEN</code>{" "}
+          environment variable and managed by your deployment — change it there.
+        </p>
+      ) : (
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            type="password"
+            value={token}
+            onChange={(e) => setTokenInput(e.target.value)}
+            placeholder="sk-ant-oat-…"
+            className="flex-1 rounded-md border bg-background px-3 py-1.5 font-mono text-xs outline-none focus:ring-2 focus:ring-ring"
+          />
+          <button
+            type="button"
+            disabled={!token.trim() || setToken.isPending}
+            onClick={save}
+            className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+          >
+            {setToken.isPending ? "Saving…" : "Save"}
+          </button>
+          {configured && (
+            <button
+              type="button"
+              disabled={setToken.isPending}
+              onClick={() => setToken.mutate("")}
+              className="rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+      {setToken.isError && (
+        <p className="mt-2 text-xs text-destructive">{setToken.error.message}</p>
+      )}
+    </Card>
   );
 }
 

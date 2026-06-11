@@ -61,6 +61,11 @@ export interface ActionBlock {
    */
   resourceKind?: string;
   /**
+   * linkCatalogApp only: the catalog app `id` the workload is bound to
+   * (value of the `helmsman.dev/catalog-app` annotation).
+   */
+  appID?: string;
+  /**
    * `command` only: literal kubectl args WITHOUT the `kubectl` binary or
    * `--context`. App prepends both.
    */
@@ -265,6 +270,42 @@ export function buildCommand(a: ActionBlock): string[] {
     // -----------------------------------------------------------------------
     case "deleteResource":
       return resolveDeleteResource(a);
+
+    // -----------------------------------------------------------------------
+    // linkCatalogApp — annotate <kind>/<name> helmsman.dev/catalog-app=<appID>
+    //   [helmsman.dev/catalog-container=<container>] -n <ns> --overwrite
+    // Binds a running workload to a catalog app (docs/parity/catalog-link-workload.md §6.1).
+    // --overwrite is REQUIRED so re-pointing an already-bound workload succeeds.
+    // -----------------------------------------------------------------------
+    case "linkCatalogApp": {
+      const wk = workloadKind(a);
+      const args = [
+        "annotate",
+        `${wk}/${target(a)}`,
+        `helmsman.dev/catalog-app=${a.appID ?? ""}`,
+      ];
+      if (a.container && a.container !== "") {
+        args.push(`helmsman.dev/catalog-container=${a.container}`);
+      }
+      args.push(...ns, "--overwrite");
+      return args;
+    }
+
+    // -----------------------------------------------------------------------
+    // unlinkCatalogApp — annotate <kind>/<name> helmsman.dev/catalog-app-
+    //   helmsman.dev/catalog-container- -n <ns>
+    // Removes both binding keys (trailing-dash removal; no --overwrite needed).
+    // -----------------------------------------------------------------------
+    case "unlinkCatalogApp": {
+      const wk = workloadKind(a);
+      return [
+        "annotate",
+        `${wk}/${target(a)}`,
+        "helmsman.dev/catalog-app-",
+        "helmsman.dev/catalog-container-",
+        ...ns,
+      ];
+    }
 
     // -----------------------------------------------------------------------
     // command — verbatim args (empty strings pre-filtered by Swift, we mirror)

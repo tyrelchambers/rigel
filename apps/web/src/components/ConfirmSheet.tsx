@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetFooter,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Terminal, Copy, Check } from "lucide-react";
 import { fetchPreviewCommand, useAction, type ActionBlock, type PurgeResult } from "@/lib/api";
 
 interface ConfirmSheetProps {
@@ -34,6 +35,7 @@ interface ConfirmSheetProps {
 export function ConfirmSheet({ action, open, onClose, onPurge }: ConfirmSheetProps) {
   const [previewCommand, setPreviewCommand] = useState<string[] | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const { mutate, isPending, isSuccess, isError, error, data, reset } = useAction();
 
@@ -85,6 +87,14 @@ export function ConfirmSheet({ action, open, onClose, onPurge }: ConfirmSheetPro
   const isDestructive = action?.destructive === true || isPurge;
   const commandString = previewCommand ? previewCommand.join(" ") : null;
 
+  function handleCopy() {
+    if (!commandString) return;
+    void navigator.clipboard.writeText(commandString).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+
   // Auto-close on success for non-purge actions (purge defers to onPurge callback)
   useEffect(() => {
     if (isSuccess && data && !("purge" in data && data.purge)) {
@@ -95,39 +105,56 @@ export function ConfirmSheet({ action, open, onClose, onPurge }: ConfirmSheetPro
   }, [isSuccess, data, reset, onClose]);
 
   return (
-    <Sheet open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
-      <SheetContent side="bottom">
-        <SheetHeader>
-          <SheetTitle>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
             {isPurge ? "Remove application" : (action?.label ?? "Confirm action")}
-          </SheetTitle>
-          <SheetDescription>
+          </DialogTitle>
+          <DialogDescription>
             {isPurge
               ? "This will open the application removal flow. No resources will be deleted until you confirm in the next step."
               : "Review the exact command before it runs. This cannot be undone."}
-          </SheetDescription>
-        </SheetHeader>
+          </DialogDescription>
+        </DialogHeader>
 
         {/* Command preview */}
         {!isPurge && (
-          <div className="px-4 py-2">
+          <div>
             {previewError ? (
               <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
                 {previewError}
               </p>
             ) : commandString ? (
-              <pre className="rounded-md bg-muted px-3 py-2 text-xs font-mono whitespace-pre-wrap break-all">
-                {commandString}
-              </pre>
+              <div className="overflow-hidden rounded-lg border border-border bg-background shadow-sm ring-1 ring-foreground/5">
+                <div className="flex items-center gap-2 border-b border-border/60 bg-muted/30 px-3 py-1.5">
+                  <Terminal className="size-3.5 text-muted-foreground" />
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Command
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCopy}
+                    className="ml-auto flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+                    {copied ? "Copied" : "Copy"}
+                  </button>
+                </div>
+                <pre className="px-3 py-2.5 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all text-foreground">
+                  <span className="select-none text-muted-foreground">$ </span>
+                  {commandString}
+                </pre>
+              </div>
             ) : (
-              <div className="h-8 rounded-md bg-muted animate-pulse" />
+              <div className="h-14 rounded-lg border border-border bg-muted/40 animate-pulse" />
             )}
           </div>
         )}
 
         {/* Result feedback */}
         {isSuccess && data && !("purge" in data && data.purge) && (
-          <div className="px-4 py-1">
+          <div>
             {"code" in data && data.code !== 0 ? (
               <pre className="rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap">
                 {data.stderr || data.stdout}
@@ -139,14 +166,14 @@ export function ConfirmSheet({ action, open, onClose, onPurge }: ConfirmSheetPro
         )}
 
         {isError && (
-          <div className="px-4 py-1">
+          <div>
             <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
               {error.message}
             </p>
           </div>
         )}
 
-        <SheetFooter>
+        <DialogFooter>
           <Button variant="outline" onClick={handleClose} disabled={isPending}>
             Cancel
           </Button>
@@ -157,8 +184,8 @@ export function ConfirmSheet({ action, open, onClose, onPurge }: ConfirmSheetPro
           >
             {isPending ? "Running…" : isPurge ? "Continue to removal" : "Execute"}
           </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

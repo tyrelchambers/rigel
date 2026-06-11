@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { motion } from "motion/react";
 import {
   LoaderCircle,
   ArrowUp,
@@ -19,6 +20,7 @@ import {
   type CatalogApp,
   type DeploymentLike,
   type StatefulSetLike,
+  type DaemonSetLike,
   type PodLike,
 } from "@helmsman/catalog";
 import { useCluster } from "@/store/cluster";
@@ -26,6 +28,7 @@ import { subscribe, unsubscribe } from "@/lib/ws";
 import { useUpdates, type UpdateResult, type ActionBlock } from "@/lib/api";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { iconFor } from "./icons";
+import { boundAppID, boundContainer } from "@helmsman/catalog";
 import {
   availableCategories,
   filterCatalog,
@@ -34,12 +37,14 @@ import {
 import { CatalogDetailSheet } from "./CatalogDetailSheet";
 import { CatalogInstallWizard } from "./CatalogInstallWizard";
 import { updateTargets, withTag, type UpdateTarget } from "./updateTargets";
+import { LinkWorkloadPickerSheet, type LinkSelection } from "./LinkWorkloadPickerSheet";
 
 // Watches the catalog needs cluster-wide (detection scans every namespace) plus
 // namespace/node lists for the wizard dropdowns.
 const WATCHES: Array<[string, string]> = [
   ["deployments", "*"],
   ["statefulsets", "*"],
+  ["daemonsets", "*"],
   ["pods", "*"],
   ["namespaces", "*"],
   ["nodes", "*"],
@@ -61,6 +66,8 @@ export default function CatalogPanel() {
   const [detailApp, setDetailApp] = useState<CatalogApp | null>(null);
   const [wizardApp, setWizardApp] = useState<CatalogApp | null>(null);
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
+  // The app whose Link workload picker is open, if any.
+  const [linkApp, setLinkApp] = useState<CatalogApp | null>(null);
 
   // Load the bundled catalog once.
   useEffect(() => {
@@ -83,11 +90,24 @@ export default function CatalogPanel() {
   }, []);
 
   const deployments = useMemo(
-    () => Object.values((resources["deployments"] ?? {}) as Record<string, DeploymentLike>),
+    () =>
+      Object.values(
+        (resources["deployments"] ?? {}) as Record<string, DeploymentLike>,
+      ),
     [resources],
   );
   const statefulSets = useMemo(
-    () => Object.values((resources["statefulsets"] ?? {}) as Record<string, StatefulSetLike>),
+    () =>
+      Object.values(
+        (resources["statefulsets"] ?? {}) as Record<string, StatefulSetLike>,
+      ),
+    [resources],
+  );
+  const daemonSets = useMemo(
+    () =>
+      Object.values(
+        (resources["daemonsets"] ?? {}) as Record<string, DaemonSetLike>,
+      ),
     [resources],
   );
   const pods = useMemo(
@@ -97,21 +117,48 @@ export default function CatalogPanel() {
 
   // Installed detection — pure, recomputed on every cache/catalog change.
   const installedIDs = useMemo(
-    () => installedAppIDs(catalog, deployments, statefulSets, pods),
-    [catalog, deployments, statefulSets, pods],
+    () => installedAppIDs(catalog, deployments, statefulSets, daemonSets, pods),
+    [catalog, deployments, statefulSets, daemonSets, pods],
   );
 
   // Update targets — the running image + workload coordinates for each
   // installed app, so we can both check for updates and emit a setImage action.
   const targets = useMemo(
-    () => updateTargets(catalog, deployments, statefulSets, pods),
-    [catalog, deployments, statefulSets, pods],
+    () => updateTargets(catalog, deployments, statefulSets, daemonSets, pods),
+    [catalog, deployments, statefulSets, daemonSets, pods],
   );
   const targetByApp = useMemo(() => {
     const m = new Map<string, UpdateTarget>();
     for (const t of targets) m.set(t.appID, t);
     return m;
   }, [targets]);
+
+  // Explicit annotation bindings (appID → bound workload coords). Only these
+  // show the "Unlink" affordance; image-matched apps are not bound. First in
+  // scan order (deployments → statefulSets → daemonSets) wins.
+  const boundByApp = useMemo(() => {
+    const m = new Map<
+      string,
+      { kind: "deployment" | "statefulset" | "daemonset"; name: string; namespace: string; container: string | null }
+    >();
+    const add = (
+      kind: "deployment" | "statefulset" | "daemonset",
+      meta: { name?: string; namespace?: string; annotations?: Record<string, string> } | undefined,
+    ) => {
+      const id = boundAppID(meta);
+      if (!id || !meta?.name || m.has(id)) return;
+      m.set(id, {
+        kind,
+        name: meta.name,
+        namespace: meta.namespace ?? "default",
+        container: boundContainer(meta),
+      });
+    };
+    for (const d of deployments) add("deployment", d.metadata);
+    for (const s of statefulSets) add("statefulset", s.metadata);
+    for (const ds of daemonSets) add("daemonset", ds.metadata);
+    return m;
+  }, [deployments, statefulSets, daemonSets]);
 
   // One batched /api/updates query for every installed image, cached for the
   // session (TanStack Query owns the TTL; the server does no persistent cache).
@@ -130,14 +177,44 @@ export default function CatalogPanel() {
       label: `Update ${target.appID} to ${latest}`,
       name: target.workloadName,
       namespace: target.namespace,
+      resourceKind: target.workloadKind,
       container: target.container,
       image: withTag(target.image, latest),
     });
   }
 
+  // Resolve a link picker selection → linkCatalogApp action through ConfirmSheet.
+  function onLinkPicked(sel: LinkSelection) {
+    setPendingAction({
+      kind: "linkCatalogApp",
+      label: `Link ${sel.kind}/${sel.name} to ${sel.appID}`,
+      name: sel.name,
+      namespace: sel.namespace,
+      resourceKind: sel.kind,
+      appID: sel.appID,
+      ...(sel.container ? { container: sel.container } : {}),
+    });
+  }
+
+  // Unlink the bound workload for an app → unlinkCatalogApp action.
+  function onUnlink(
+    appID: string,
+    binding: { kind: "deployment" | "statefulset" | "daemonset"; name: string; namespace: string },
+  ) {
+    setPendingAction({
+      kind: "unlinkCatalogApp",
+      label: `Unlink ${binding.kind}/${binding.name} from ${appID}`,
+      name: binding.name,
+      namespace: binding.namespace,
+      resourceKind: binding.kind,
+    });
+  }
+
   const namespaces = useMemo(
     () =>
-      Object.values((resources["namespaces"] ?? {}) as Record<string, NamedItem>)
+      Object.values(
+        (resources["namespaces"] ?? {}) as Record<string, NamedItem>,
+      )
         .map((n) => n.metadata?.name)
         .filter((n): n is string => !!n)
         .sort(),
@@ -152,7 +229,10 @@ export default function CatalogPanel() {
     [resources],
   );
 
-  const cats = useMemo(() => availableCategories(catalog, APP_CATEGORIES), [catalog]);
+  const cats = useMemo(
+    () => availableCategories(catalog, APP_CATEGORIES),
+    [catalog],
+  );
 
   const filtered = useMemo(
     () => filterCatalog(catalog, { scope, installedIDs, category, search }),
@@ -171,7 +251,9 @@ export default function CatalogPanel() {
         <div className="catalog-header-top">
           <div className="catalog-title-group">
             <h1 className="catalog-title">Apps</h1>
-            <p className="catalog-subtitle">Install and manage cluster applications</p>
+            <p className="catalog-subtitle">
+              Install and manage cluster applications
+            </p>
           </div>
 
           <div className="catalog-header-controls">
@@ -207,15 +289,26 @@ export default function CatalogPanel() {
                 aria-label="Search apps"
               />
               {isLoading && (
-                <LoaderCircle className="catalog-search-spinner" aria-label="loading" />
+                <LoaderCircle
+                  className="catalog-search-spinner"
+                  aria-label="loading"
+                />
               )}
             </div>
           </div>
         </div>
 
         {/* Category pill rail */}
-        <div className="catalog-category-rail" role="group" aria-label="Filter by category">
-          <CategoryPill active={category === null} label="All" onClick={() => setCategory(null)} />
+        <div
+          className="catalog-category-rail"
+          role="group"
+          aria-label="Filter by category"
+        >
+          <CategoryPill
+            active={category === null}
+            label="All"
+            onClick={() => setCategory(null)}
+          />
           {cats.map((c) => (
             <CategoryPill
               key={c}
@@ -228,9 +321,7 @@ export default function CatalogPanel() {
       </div>
 
       {/* Load error banner */}
-      {loadError && (
-        <pre className="catalog-error">{loadError}</pre>
-      )}
+      {loadError && <pre className="catalog-error">{loadError}</pre>}
 
       {/* Grid */}
       {isLoading ? (
@@ -255,6 +346,7 @@ export default function CatalogPanel() {
                 index={i}
                 onSelect={() => setDetailApp(app)}
                 onInstall={() => setWizardApp(app)}
+                onLink={() => setLinkApp(app)}
               >
                 {installed && target && (
                   <UpdateStatusRow
@@ -274,12 +366,32 @@ export default function CatalogPanel() {
         <CatalogDetailSheet
           app={detailApp}
           isInstalled={installedIDs.has(detailApp.id)}
+          binding={boundByApp.get(detailApp.id) ?? null}
           open
           onOpenChange={(open) => !open && setDetailApp(null)}
           onInstall={() => {
             setWizardApp(detailApp);
             setDetailApp(null);
           }}
+          onLink={() => {
+            setLinkApp(detailApp);
+            setDetailApp(null);
+          }}
+          onUnlink={() => {
+            const b = boundByApp.get(detailApp.id);
+            if (b) onUnlink(detailApp.id, b);
+            setDetailApp(null);
+          }}
+        />
+      )}
+
+      {/* Link workload picker */}
+      {linkApp && (
+        <LinkWorkloadPickerSheet
+          app={linkApp}
+          open
+          onClose={() => setLinkApp(null)}
+          onPick={onLinkPicked}
         />
       )}
 
@@ -334,6 +446,7 @@ function CatalogCard({
   index,
   onSelect,
   onInstall,
+  onLink,
   children,
 }: {
   app: CatalogApp;
@@ -341,17 +454,26 @@ function CatalogCard({
   index: number;
   onSelect: () => void;
   onInstall: () => void;
+  onLink: () => void;
   children?: ReactNode;
 }) {
   const Icon = iconFor(app.iconSystemName);
-  // Stagger: cap at first 12, then no delay
-  const delayMs = index < 12 ? index * 40 : 0;
-  const cardStyle = { animationDelay: `${delayMs}ms` } as React.CSSProperties;
 
   return (
-    <article
+    <motion.article
       className="catalog-card"
-      style={cardStyle}
+      // Reveal as the card scrolls into view, so the fade plays whether the card
+      // is above or below the fold. `once` keeps it from replaying on scroll-back.
+      initial={{ opacity: 0, y: 10 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "0px 0px -40px 0px" }}
+      // Stagger the cascade by index; cap the delay so cards far down the list
+      // still reveal promptly when scrolled into view.
+      transition={{
+        duration: 0.28,
+        ease: [0.2, 0, 0.2, 1],
+        delay: index * 0.05,
+      }}
       role="button"
       tabIndex={0}
       aria-label={`${app.name} — ${app.tagline}`}
@@ -389,16 +511,25 @@ function CatalogCard({
         <span className="catalog-chip catalog-chip-category">
           {categoryDisplayName(app.category)}
         </span>
-        <span className="catalog-chip catalog-chip-req" title={`CPU: ${app.requirements.cpuRequest}${app.requirements.cpuLimit ? ` → ${app.requirements.cpuLimit}` : ""}`}>
+        <span
+          className="catalog-chip catalog-chip-req"
+          title={`CPU: ${app.requirements.cpuRequest}${app.requirements.cpuLimit ? ` → ${app.requirements.cpuLimit}` : ""}`}
+        >
           <Cpu className="catalog-chip-icon" aria-hidden />
           {app.requirements.cpuRequest}
         </span>
-        <span className="catalog-chip catalog-chip-req" title={`Memory: ${app.requirements.memoryRequest}${app.requirements.memoryLimit ? ` → ${app.requirements.memoryLimit}` : ""}`}>
+        <span
+          className="catalog-chip catalog-chip-req"
+          title={`Memory: ${app.requirements.memoryRequest}${app.requirements.memoryLimit ? ` → ${app.requirements.memoryLimit}` : ""}`}
+        >
           <MemoryStick className="catalog-chip-icon" aria-hidden />
           {app.requirements.memoryRequest}
         </span>
         {app.requirements.storageGiB != null && (
-          <span className="catalog-chip catalog-chip-req" title={`Storage: ${app.requirements.storageGiB} GiB`}>
+          <span
+            className="catalog-chip catalog-chip-req"
+            title={`Storage: ${app.requirements.storageGiB} GiB`}
+          >
             <HardDrive className="catalog-chip-icon" aria-hidden />
             {app.requirements.storageGiB}Gi
           </span>
@@ -436,7 +567,23 @@ function CatalogCard({
           </button>
         )}
       </div>
-    </article>
+
+      {/* "Already installed? Link it…" — only on not-installed cards (the app is
+          running under a mirror/private image detection couldn't match). */}
+      {!isInstalled && (
+        <button
+          type="button"
+          className="catalog-link-affordance"
+          onClick={(e) => {
+            e.stopPropagation();
+            onLink();
+          }}
+          aria-label={`Link ${app.name} to a running workload`}
+        >
+          Already installed? Link it…
+        </button>
+      )}
+    </motion.article>
   );
 }
 
@@ -461,7 +608,9 @@ function UpdateStatusRow({
   }
 
   if (!result) {
-    return <div className="catalog-update-row catalog-update-dim">Not checked</div>;
+    return (
+      <div className="catalog-update-row catalog-update-dim">Not checked</div>
+    );
   }
 
   if (result.updateAvailable && result.latest) {
@@ -493,7 +642,9 @@ function UpdateStatusRow({
       <div className="catalog-update-row">
         <span
           className="catalog-update-chip catalog-update-chip-unknown"
-          title={result.reason ?? "Could not determine an update for this image"}
+          title={
+            result.reason ?? "Could not determine an update for this image"
+          }
         >
           <HelpCircle className="size-3 shrink-0" aria-hidden />
           version unknown
@@ -549,8 +700,8 @@ function EmptyState({ search, scope }: { search: string; scope: Scope }) {
         {scope === "installed" && !search
           ? "No apps installed yet"
           : search
-          ? `No results for "${search}"`
-          : "No apps in this category"}
+            ? `No results for "${search}"`
+            : "No apps in this category"}
       </p>
       <p className="catalog-empty-sub">
         {scope === "installed" && !search

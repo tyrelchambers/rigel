@@ -19,9 +19,16 @@ services:
       # Your kubeconfig (read-only). The cluster's API server URL in this file
       # must be reachable from inside the container — see README "Run in Docker".
       - ${HOME}/.kube/config:/kube/config:ro
-      # Claude subscription auth for the chat copilot (read-only). Optional —
-      # omit if you only need the read/observe panels.
-      - ${HOME}/.claude:/root/.claude:ro
+      # The chat copilot runs `claude` inside the container, which needs a
+      # WRITABLE home (it writes session-env/, todos, history under ~/.claude).
+      # Do NOT bind-mount the host ~/.claude read-only over it — that breaks the
+      # chat's Bash tool. Auth flows via CLAUDE_CODE_OAUTH_TOKEN above instead.
+      # `helmsman-claude` is a named volume so chat state persists across
+      # rebuilds while staying writable.
+      - helmsman-claude:/root/.claude
+
+volumes:
+  helmsman-claude:
     # If your kubeconfig points at a cluster on the host (kind/minikube/localhost),
     # uncomment to let the container reach the host. For a remote cluster IP/host,
     # the default bridge network is fine.

@@ -3,6 +3,7 @@ import type {
   CatalogApp,
   DeploymentLike,
   StatefulSetLike,
+  DaemonSetLike,
   PodLike,
 } from "@helmsman/catalog";
 import { updateTargets, withTag } from "./updateTargets";
@@ -67,12 +68,13 @@ describe("updateTargets", () => {
     const deployments = [
       deployment("plausible", "analytics", "plausible", "ghcr.io/plausible/community-edition:v2.1.4"),
     ];
-    const targets = updateTargets(apps, deployments, [], []);
+    const targets = updateTargets(apps, deployments, [], [], []);
     expect(targets).toEqual([
       {
         appID: "plausible",
         image: "ghcr.io/plausible/community-edition:v2.1.4",
         workloadName: "plausible",
+        workloadKind: "deployment",
         namespace: "analytics",
         container: "plausible",
         repoURL: "https://github.com/plausible/analytics",
@@ -81,10 +83,24 @@ describe("updateTargets", () => {
     ]);
   });
 
+  test("marks a StatefulSet-backed app so setImage targets statefulset/…", () => {
+    const apps = [app({ id: "signoz", matchImages: ["docker.io/signoz/signoz"] })];
+    const statefulSets: StatefulSetLike[] = [
+      {
+        metadata: { name: "signoz", namespace: "signoz" },
+        spec: { template: { spec: { containers: [{ name: "signoz", image: "docker.io/signoz/signoz:v0.126.1" }] } } },
+      } as StatefulSetLike,
+    ];
+    const targets = updateTargets(apps, [], statefulSets, [], []);
+    expect(targets[0]?.workloadKind).toBe("statefulset");
+    expect(targets[0]?.workloadName).toBe("signoz");
+    expect(targets[0]?.namespace).toBe("signoz");
+  });
+
   test("omits apps with no matching container", () => {
     const apps = [app({ id: "memos", matchImages: ["neosmemo/memos"] })];
     const deployments = [deployment("other", "default", "c", "nginx:latest")];
-    expect(updateTargets(apps, deployments, [], [])).toEqual([]);
+    expect(updateTargets(apps, deployments, [], [], [])).toEqual([]);
   });
 
   test("recovers the running digest from pod status", () => {
@@ -102,7 +118,100 @@ describe("updateTargets", () => {
         },
       } as PodLike,
     ];
-    const targets = updateTargets(apps, deployments, [] as StatefulSetLike[], pods);
+    const targets = updateTargets(apps, deployments, [] as StatefulSetLike[], [], pods);
     expect(targets[0]?.runningDigest).toBe("sha256:abc123");
+  });
+
+  // --- Annotation-first targeting (catalog-link-workload spec) -------------
+  test("annotated workload is the target over an image-matched candidate", () => {
+    const apps = [app({ id: "foo", matchImages: ["ghcr.io/foo/foo"] })];
+    // Image-matched deployment AND an annotated (mirror) deployment exist.
+    const deployments = [
+      deployment("image-foo", "a", "foo", "ghcr.io/foo/foo:1.0"),
+      {
+        metadata: { name: "mirror-foo", namespace: "apps", annotations: { "helmsman.dev/catalog-app": "foo" } },
+        spec: { template: { spec: { containers: [{ name: "app", image: "registry.internal/team/foo:2.0" }] } } },
+      } as DeploymentLike,
+    ];
+    const targets = updateTargets(apps, deployments, [], [], []);
+    expect(targets).toHaveLength(1);
+    expect(targets[0]?.workloadName).toBe("mirror-foo");
+    expect(targets[0]?.namespace).toBe("apps");
+    expect(targets[0]?.container).toBe("app");
+    expect(targets[0]?.image).toBe("registry.internal/team/foo:2.0");
+  });
+
+  test("annotated DaemonSet target carries workloadKind daemonset", () => {
+    const apps = [app({ id: "ne", matchImages: ["quay.io/prometheus/node-exporter"] })];
+    const daemonSets = [
+      {
+        metadata: { name: "node-exp", namespace: "mon", annotations: { "helmsman.dev/catalog-app": "ne" } },
+        spec: { template: { spec: { containers: [{ name: "node-exporter", image: "quay.io/prometheus/node-exporter:v1.8.0" }] } } },
+      } as DaemonSetLike,
+    ];
+    const targets = updateTargets(apps, [], [], daemonSets, []);
+    expect(targets[0]?.workloadKind).toBe("daemonset");
+    expect(targets[0]?.workloadName).toBe("node-exp");
+  });
+
+  test("catalog-container annotation selects that container on a multi-container workload", () => {
+    const apps = [app({ id: "multi", matchImages: ["ghcr.io/multi/main"] })];
+    const deployments = [
+      {
+        metadata: { name: "multi", namespace: "default", annotations: { "helmsman.dev/catalog-app": "multi", "helmsman.dev/catalog-container": "sidecar" } },
+        spec: { template: { spec: { containers: [
+          { name: "main", image: "ghcr.io/multi/main:1.0" },
+          { name: "sidecar", image: "ghcr.io/multi/sidecar:9.9" },
+        ] } } },
+      } as DeploymentLike,
+    ];
+    const targets = updateTargets(apps, deployments, [], [], []);
+    expect(targets[0]?.container).toBe("sidecar");
+    expect(targets[0]?.image).toBe("ghcr.io/multi/sidecar:9.9");
+  });
+
+  test("multi-container, no container annotation → matchImage-matching container", () => {
+    const apps = [app({ id: "multi", matchImages: ["ghcr.io/multi/main"] })];
+    const deployments = [
+      {
+        metadata: { name: "multi", namespace: "default", annotations: { "helmsman.dev/catalog-app": "multi" } },
+        spec: { template: { spec: { containers: [
+          { name: "sidecar", image: "ghcr.io/multi/sidecar:9.9" },
+          { name: "main", image: "ghcr.io/multi/main:1.0" },
+        ] } } },
+      } as DeploymentLike,
+    ];
+    const targets = updateTargets(apps, deployments, [], [], []);
+    expect(targets[0]?.container).toBe("main");
+  });
+
+  test("stale catalog-container naming a missing container falls back", () => {
+    const apps = [app({ id: "multi", matchImages: ["ghcr.io/multi/main"] })];
+    const deployments = [
+      {
+        metadata: { name: "multi", namespace: "default", annotations: { "helmsman.dev/catalog-app": "multi", "helmsman.dev/catalog-container": "ghost" } },
+        spec: { template: { spec: { containers: [
+          { name: "sidecar", image: "ghcr.io/multi/sidecar:9.9" },
+          { name: "main", image: "ghcr.io/multi/main:1.0" },
+        ] } } },
+      } as DeploymentLike,
+    ];
+    const targets = updateTargets(apps, deployments, [], [], []);
+    // Falls back: matchImage-matching container.
+    expect(targets[0]?.container).toBe("main");
+  });
+
+  test("two workloads with the same annotation → first in scan order wins", () => {
+    const apps = [app({ id: "dup", matchImages: [] })];
+    const deployments = [
+      { metadata: { name: "dep-dup", namespace: "a", annotations: { "helmsman.dev/catalog-app": "dup" } }, spec: { template: { spec: { containers: [{ name: "c", image: "img:1" }] } } } } as DeploymentLike,
+    ];
+    const statefulSets = [
+      { metadata: { name: "sts-dup", namespace: "b", annotations: { "helmsman.dev/catalog-app": "dup" } }, spec: { template: { spec: { containers: [{ name: "c", image: "img:2" }] } } } } as StatefulSetLike,
+    ];
+    const targets = updateTargets(apps, deployments, statefulSets, [], []);
+    expect(targets).toHaveLength(1);
+    expect(targets[0]?.workloadName).toBe("dep-dup");
+    expect(targets[0]?.workloadKind).toBe("deployment");
   });
 });

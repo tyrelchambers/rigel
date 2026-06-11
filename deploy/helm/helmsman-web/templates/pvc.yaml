@@ -1,0 +1,17 @@
+{{- if .Values.claudeHome.persistence.enabled -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "helmsman-web.fullname" . }}-claude
+  labels:
+    {{- include "helmsman-web.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- with .Values.claudeHome.persistence.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.claudeHome.persistence.size }}
+{{- end }}

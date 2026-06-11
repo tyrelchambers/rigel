@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ArrowUp,
   ArrowDown,
@@ -8,6 +8,9 @@ import {
   Undo2,
   Pause,
   Play,
+  Box,
+  Cpu,
+  MemoryStick,
 } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
@@ -433,23 +436,39 @@ function DeploymentDetail({
             {containers.map((c) => (
               <div
                 key={c.name}
-                className="rounded p-2 text-xs"
-                style={{ background: "#050505", border: "1px solid #1A1A1A" }}
+                className="overflow-hidden rounded-md text-xs"
+                style={{ background: "#0A0A0C", border: "1px solid #26262C" }}
               >
-                <div className="flex items-center gap-2">
+                {/* Header strip: container name + ports */}
+                <div
+                  className="flex items-center gap-2 px-2.5 py-1.5"
+                  style={{ background: "#101014", borderBottom: "1px solid #1A1A1A" }}
+                >
+                  <Box className="size-3 shrink-0 text-muted-foreground" />
                   <span className="font-mono font-medium text-primary">{c.name}</span>
                   {c.ports.length > 0 && (
-                    <span className="font-mono text-muted-foreground">
+                    <span className="ml-auto font-mono text-[10px] text-muted-foreground">
                       {c.ports.map((p) => `:${p}`).join(" ")}
                     </span>
                   )}
                 </div>
-                <div className="font-mono text-muted-foreground break-all">{c.image}</div>
-                <div className="font-mono text-muted-foreground">
-                  cpu req {c.cpuReq ?? "—"} / lim {c.cpuLim ?? "—"}
-                </div>
-                <div className="font-mono text-muted-foreground">
-                  mem req {c.memReq ?? "—"} / lim {c.memLim ?? "—"}
+                {/* Body: image + resource cells */}
+                <div className="space-y-2 px-2.5 py-2">
+                  <div className="font-mono text-[11px] text-muted-foreground break-all">{c.image}</div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <ResourceCell
+                      icon={<Cpu className="size-3 shrink-0 text-muted-foreground" />}
+                      label="CPU"
+                      req={c.cpuReq}
+                      lim={c.cpuLim}
+                    />
+                    <ResourceCell
+                      icon={<MemoryStick className="size-3 shrink-0 text-muted-foreground" />}
+                      label="MEM"
+                      req={c.memReq}
+                      lim={c.memLim}
+                    />
+                  </div>
                 </div>
               </div>
             ))}
@@ -470,28 +489,34 @@ function DeploymentDetail({
                 return (
                   <li
                     key={p.metadata.uid || p.metadata.name}
-                    className="flex items-center gap-2 rounded px-2 py-1 text-xs"
-                    style={{ background: "rgba(5,5,5,0.5)" }}
+                    className="group flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs transition-colors"
+                    style={{ background: "#0A0A0C", border: "1px solid #1A1A1A" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#2A2A2A")}
+                    onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#1A1A1A")}
                   >
                     <span
-                      className={`inline-block size-1.5 shrink-0 rounded-full ${phaseColorClass(p.status?.phase)}`}
+                      className={`inline-block size-2 shrink-0 rounded-full ${phaseColorClass(p.status?.phase)}`}
                       title={p.status?.phase ?? "Unknown"}
                     />
-                    <span className="font-mono text-muted-foreground truncate min-w-0">
+                    <span className="min-w-0 flex-1 truncate font-mono text-foreground/90">
                       {p.metadata.name}
                     </span>
                     {restarts > 0 && (
                       <span
-                        className="shrink-0 rounded-full px-1.5 text-[10px]"
+                        className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px]"
                         style={{ background: "rgba(245,158,11,0.15)", color: "#F59E0B" }}
+                        title={`${restarts} restart${restarts === 1 ? "" : "s"}`}
                       >
-                        ×{restarts}
+                        ↺{restarts}
                       </span>
                     )}
-                    <span className="ml-auto font-mono text-muted-foreground shrink-0">
+                    <span
+                      className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+                      style={{ background: "#141417", border: "1px solid #1A1A1A" }}
+                    >
                       {podReady(p)}
                     </span>
-                    <span className="font-mono text-muted-foreground shrink-0">
+                    <span className="shrink-0 font-mono text-[10px] text-muted-foreground tabular-nums">
                       {podAge(p.metadata.creationTimestamp)}
                     </span>
                   </li>
@@ -532,6 +557,37 @@ function DeploymentDetail({
           {paused ? "Resume" : "Pause"}
         </Button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * A defined request/limit cell for the container card — small uppercase label
+ * with an icon, then `req → lim` in mono. Reads as a compact data readout.
+ */
+function ResourceCell({
+  icon,
+  label,
+  req,
+  lim,
+}: {
+  icon: ReactNode;
+  label: string;
+  req: string | null | undefined;
+  lim: string | null | undefined;
+}) {
+  return (
+    <div
+      className="flex items-center gap-2 rounded px-2 py-1"
+      style={{ background: "#050505", border: "1px solid #1A1A1A" }}
+    >
+      {icon}
+      <span className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+        {label}
+      </span>
+      <span className="ml-auto font-mono text-[11px] text-foreground/90 tabular-nums">
+        {req ?? "—"} <span className="text-muted-foreground">→</span> {lim ?? "—"}
+      </span>
     </div>
   );
 }

@@ -8,10 +8,14 @@ import type {
   WorkloadDB,
 } from "./types";
 import {
+  actionLabel,
+  actionToBlock,
   buildInstances,
+  capabilities,
   compareInstances,
   connectionString,
   detectKindFromImage,
+  dsn,
   instanceFromCNPG,
   instanceFromWorkload,
   latestCompletedBackup,
@@ -24,6 +28,7 @@ import {
   sourceBadgeLabel,
   walArchivingStatus,
 } from "./databasesDisplay";
+import type { DatabaseSecret } from "./types";
 
 // --- fixtures --------------------------------------------------------------
 
@@ -417,5 +422,380 @@ describe("badge helpers", () => {
   test("readyColorClass switches on health", () => {
     expect(readyColorClass(true)).toContain("green");
     expect(readyColorClass(false)).toContain("red");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Capabilities + action bar
+// ---------------------------------------------------------------------------
+
+function cnpgInstance(overrides: Partial<DatabaseInstance> = {}): DatabaseInstance {
+  return {
+    id: "cnpg-1",
+    name: "pg",
+    namespace: "default",
+    kind: "postgres",
+    source: "cnpg",
+    desiredReplicas: 3,
+    readyReplicas: 3,
+    phaseText: "Cluster in healthy state",
+    isHealthy: true,
+    labelSelector: { "cnpg.io/cluster": "pg" },
+    cnpgPrimary: "pg-1",
+    ...overrides,
+  };
+}
+
+function imgInstance(overrides: Partial<DatabaseInstance> = {}): DatabaseInstance {
+  return {
+    id: "dep-1",
+    name: "my-redis",
+    namespace: "default",
+    kind: "redis",
+    source: "deployment",
+    desiredReplicas: 1,
+    readyReplicas: 1,
+    phaseText: "Healthy",
+    isHealthy: true,
+    labelSelector: { app: "my-redis" },
+    ...overrides,
+  };
+}
+
+function runningPod(name: string, labels: Record<string, string>): DatabasePodRaw {
+  return {
+    metadata: { name, namespace: "default", labels },
+    status: { phase: "Running" },
+  };
+}
+
+const b64 = (s: string) => btoa(s);
+
+describe("capabilities — CNPG", () => {
+  const cnpgPods = [
+    runningPod("pg-1", { "cnpg.io/cluster": "pg" }),
+    runningPod("pg-2", { "cnpg.io/cluster": "pg" }),
+    runningPod("pg-3", { "cnpg.io/cluster": "pg" }),
+  ];
+  const appSecret: DatabaseSecret = {
+    metadata: { name: "pg-app", namespace: "default" },
+    data: { username: b64("app"), password: b64("s3cr3t") },
+  };
+
+  function caps(pluginAvailable: boolean, inst = cnpgInstance(), pods = cnpgPods) {
+    return capabilities({
+      instance: inst,
+      pods,
+      cnpgCluster: undefined,
+      scheduledBackups: [],
+      secrets: [appSecret],
+      cnpgPluginAvailable: pluginAvailable,
+    });
+  }
+
+  function find(c: ReturnType<typeof caps>, type: string) {
+    return c.actions.find((a) => a.action.type === type);
+  }
+
+  test("with plugin + standby: all actions enabled", () => {
+    const c = caps(true);
+    expect(find(c, "backupNow")?.enabled).toBe(true);
+    const sw = find(c, "switchover");
+    expect(sw?.enabled).toBe(true);
+    expect(sw?.action).toEqual({ type: "switchover", to: "pg-2" }); // first non-primary sorted
+    expect(find(c, "hibernate")?.enabled).toBe(true);
+    expect(find(c, "scale")?.enabled).toBe(true);
+    expect(find(c, "portForward")?.enabled).toBe(true);
+    expect(find(c, "revealCredentials")?.enabled).toBe(true);
+    expect(find(c, "copyDSN")?.enabled).toBe(true);
+  });
+
+  test("without plugin: CNPG-specific actions disabled with plugin reason", () => {
+    const c = caps(false);
+    for (const t of ["backupNow", "switchover", "hibernate"]) {
+      const item = find(c, t);
+      expect(item?.enabled).toBe(false);
+    }
+    expect(find(c, "backupNow")?.disabledReason).toBe("Requires the kubectl-cnpg plugin");
+    // Non-CNPG actions remain enabled.
+    expect(find(c, "scale")?.enabled).toBe(true);
+    expect(find(c, "portForward")?.enabled).toBe(true);
+    expect(find(c, "copyDSN")?.enabled).toBe(true);
+  });
+
+  test("no standby (only primary running): switchover disabled with standby reason", () => {
+    const c = caps(true, cnpgInstance(), [runningPod("pg-1", { "cnpg.io/cluster": "pg" })]);
+    const sw = find(c, "switchover");
+    expect(sw?.enabled).toBe(false);
+    expect(sw?.disabledReason).toBe("No ready standby to promote");
+    expect(sw?.action).toEqual({ type: "switchover", to: "" });
+  });
+
+  test("no primary elected: switchover disabled even with running pods", () => {
+    const c = caps(true, cnpgInstance({ cnpgPrimary: undefined }));
+    expect(find(c, "switchover")?.enabled).toBe(false);
+    expect(find(c, "switchover")?.disabledReason).toBe("No ready standby to promote");
+  });
+
+  test("hibernated (readyReplicas === 0): show Resume, hide Hibernate", () => {
+    const c = caps(true, cnpgInstance({ readyReplicas: 0 }), []);
+    const hib = find(c, "hibernate");
+    expect(hib?.action).toEqual({ type: "hibernate", on: false }); // Resume
+    expect(actionLabel(hib!.action)).toBe("Resume");
+  });
+
+  test("healthy (readyReplicas > 0): show Hibernate, hide Resume", () => {
+    const c = caps(true);
+    const hib = find(c, "hibernate");
+    expect(hib?.action).toEqual({ type: "hibernate", on: true });
+    expect(actionLabel(hib!.action)).toBe("Hibernate");
+  });
+
+  test("unhealthy (ready < desired) does not block actions", () => {
+    const c = caps(true, cnpgInstance({ readyReplicas: 1, isHealthy: false }));
+    expect(find(c, "backupNow")?.enabled).toBe(true);
+    expect(find(c, "scale")?.enabled).toBe(true);
+  });
+
+  test("connection info: svc target, app secret, decoded username, dbName app", () => {
+    const c = caps(true);
+    expect(c.connection).toEqual({
+      targetKind: "svc",
+      targetName: "pg-rw",
+      namespace: "default",
+      port: 5432,
+      scheme: "postgresql",
+      secretName: "pg-app",
+      username: "app",
+      dbName: "app",
+    });
+  });
+
+  test("backup info: schedule + WAL from cluster condition", () => {
+    const cluster: CNPGCluster = {
+      metadata: { name: "pg", namespace: "default", uid: "x" },
+      status: { conditions: [{ type: "ContinuousArchiving", status: "True" }] },
+    };
+    const c = capabilities({
+      instance: cnpgInstance({ lastBackup: "2026-06-09T00:00:00Z" }),
+      pods: cnpgPods,
+      cnpgCluster: cluster,
+      scheduledBackups: [
+        { metadata: { name: "sb", namespace: "default" }, spec: { schedule: "0 4 * * *", cluster: { name: "pg" } } },
+      ],
+      secrets: [appSecret],
+      cnpgPluginAvailable: true,
+    });
+    expect(c.backupInfo).toEqual({
+      lastBackup: "2026-06-09T00:00:00Z",
+      schedule: "0 4 * * *",
+      walArchivingHealthy: true,
+    });
+  });
+});
+
+describe("capabilities — image-detected", () => {
+  const pod = {
+    metadata: { name: "my-redis-0", namespace: "default", labels: { app: "my-redis" } },
+    status: { phase: "Running" },
+    spec: { containers: [{ envFrom: [{ secretRef: { name: "redis-secret" } }] }] },
+  } as DatabasePodRaw;
+
+  test("deployment with running pod + secret: scale/port-forward/credentials/copy-dsn enabled", () => {
+    const c = capabilities({
+      instance: imgInstance(),
+      pods: [pod],
+      scheduledBackups: [],
+      secrets: [],
+      cnpgPluginAvailable: false,
+    });
+    const types = c.actions.map((a) => a.action.type);
+    expect(types).toEqual(["scale", "portForward", "revealCredentials", "copyDSN"]);
+    expect(c.actions.every((a) => a.enabled)).toBe(true);
+    expect(c.connection).toEqual({
+      targetKind: "pod",
+      targetName: "my-redis-0",
+      namespace: "default",
+      port: 6379,
+      scheme: "redis",
+      secretName: "redis-secret",
+      username: undefined,
+      dbName: undefined,
+    });
+  });
+
+  test("no running pods: port-forward omitted, no connection", () => {
+    const c = capabilities({
+      instance: imgInstance(),
+      pods: [],
+      scheduledBackups: [],
+      secrets: [],
+      cnpgPluginAvailable: false,
+    });
+    const types = c.actions.map((a) => a.action.type);
+    expect(types).not.toContain("portForward");
+    expect(c.connection).toBeUndefined();
+  });
+
+  test("no discoverable secret: credentials omitted", () => {
+    const noSecretPod = {
+      metadata: { name: "my-redis-0", namespace: "default", labels: { app: "my-redis" } },
+      status: { phase: "Running" },
+      spec: { containers: [{}] },
+    } as DatabasePodRaw;
+    const c = capabilities({
+      instance: imgInstance(),
+      pods: [noSecretPod],
+      scheduledBackups: [],
+      secrets: [],
+      cnpgPluginAvailable: false,
+    });
+    const types = c.actions.map((a) => a.action.type);
+    expect(types).not.toContain("revealCredentials");
+    expect(c.connection?.secretName).toBeUndefined();
+  });
+
+  test("statefulset: no CNPG-specific actions", () => {
+    const c = capabilities({
+      instance: imgInstance({ source: "statefulset" }),
+      pods: [pod],
+      scheduledBackups: [],
+      secrets: [],
+      cnpgPluginAvailable: true,
+    });
+    const types = c.actions.map((a) => a.action.type);
+    expect(types).not.toContain("backupNow");
+    expect(types).not.toContain("switchover");
+    expect(types).not.toContain("hibernate");
+  });
+
+  test("clickhouse uses native port 9000 (operator), not display 8123", () => {
+    const c = capabilities({
+      instance: imgInstance({ kind: "clickhouse" }),
+      pods: [pod],
+      scheduledBackups: [],
+      secrets: [],
+      cnpgPluginAvailable: false,
+    });
+    expect(c.connection?.port).toBe(9000);
+  });
+});
+
+describe("dsn / actionLabel / actionToBlock", () => {
+  test("dsn CNPG: scheme://user@target.ns.svc:port/db", () => {
+    expect(
+      dsn({
+        targetKind: "svc",
+        targetName: "pg-rw",
+        namespace: "default",
+        port: 5432,
+        scheme: "postgresql",
+        username: "app",
+        dbName: "app",
+      }),
+    ).toBe("postgresql://app@pg-rw.default.svc:5432/app");
+  });
+
+  test("dsn image-detected: no user, no svc suffix, no db", () => {
+    expect(
+      dsn({
+        targetKind: "pod",
+        targetName: "my-redis-0",
+        namespace: "default",
+        port: 6379,
+        scheme: "redis",
+      }),
+    ).toBe("redis://my-redis-0.default:6379");
+  });
+
+  test("actionLabel covers every variant", () => {
+    expect(actionLabel({ type: "backupNow" })).toBe("Back up");
+    expect(actionLabel({ type: "switchover", to: "x" })).toBe("Switch over");
+    expect(actionLabel({ type: "hibernate", on: true })).toBe("Hibernate");
+    expect(actionLabel({ type: "hibernate", on: false })).toBe("Resume");
+    expect(actionLabel({ type: "scale", current: 1, desired: 2 })).toBe("Scale");
+    expect(actionLabel({ type: "portForward" })).toBe("Port-forward");
+    expect(actionLabel({ type: "revealCredentials" })).toBe("Credentials");
+    expect(actionLabel({ type: "copyDSN" })).toBe("Copy DSN");
+  });
+
+  const inst = cnpgInstance();
+
+  test("backup → command, non-destructive", () => {
+    expect(actionToBlock({ type: "backupNow" }, inst)).toEqual({
+      kind: "command",
+      label: "Back up pg",
+      args: ["cnpg", "backup", "pg", "-n", "default"],
+      destructive: false,
+    });
+  });
+
+  test("switchover → command, destructive", () => {
+    expect(actionToBlock({ type: "switchover", to: "pg-2" }, inst)).toEqual({
+      kind: "command",
+      label: "Switch over pg → pg-2",
+      args: ["cnpg", "promote", "pg", "pg-2", "-n", "default"],
+      destructive: true,
+    });
+  });
+
+  test("switchover with empty target → null", () => {
+    expect(actionToBlock({ type: "switchover", to: "" }, inst)).toBeNull();
+  });
+
+  test("hibernate on → command, destructive", () => {
+    expect(actionToBlock({ type: "hibernate", on: true }, inst)).toEqual({
+      kind: "command",
+      label: "Hibernate pg",
+      args: ["cnpg", "hibernate", "on", "pg", "-n", "default"],
+      destructive: true,
+    });
+  });
+
+  test("resume (hibernate off) → command, non-destructive", () => {
+    expect(actionToBlock({ type: "hibernate", on: false }, inst)).toEqual({
+      kind: "command",
+      label: "Resume pg",
+      args: ["cnpg", "hibernate", "off", "pg", "-n", "default"],
+      destructive: false,
+    });
+  });
+
+  test("scale CNPG → patch command; destructive only when scaling down", () => {
+    expect(actionToBlock({ type: "scale", current: 3, desired: 5 }, inst)).toEqual({
+      kind: "command",
+      label: "Scale pg → 5",
+      args: ["patch", "cluster", "pg", "-n", "default", "--type=merge", "-p", '{"spec":{"instances":5}}'],
+      destructive: false,
+    });
+    expect(actionToBlock({ type: "scale", current: 3, desired: 1 }, inst)?.destructive).toBe(true);
+  });
+
+  test("scale deployment → scale block targets deployment", () => {
+    expect(actionToBlock({ type: "scale", current: 1, desired: 2 }, imgInstance())).toEqual({
+      kind: "scale",
+      name: "my-redis",
+      namespace: "default",
+      resourceKind: "deployment",
+      replicas: 2,
+    });
+  });
+
+  test("scale statefulset → scale block targets statefulset (not deployment)", () => {
+    expect(
+      actionToBlock({ type: "scale", current: 1, desired: 2 }, imgInstance({ source: "statefulset" })),
+    ).toEqual({
+      kind: "scale",
+      name: "my-redis",
+      namespace: "default",
+      resourceKind: "statefulset",
+      replicas: 2,
+    });
+  });
+
+  test("non-mutating actions → null", () => {
+    expect(actionToBlock({ type: "portForward" }, inst)).toBeNull();
+    expect(actionToBlock({ type: "revealCredentials" }, inst)).toBeNull();
+    expect(actionToBlock({ type: "copyDSN" }, inst)).toBeNull();
   });
 });

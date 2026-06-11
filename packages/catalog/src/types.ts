@@ -144,9 +144,44 @@ export function isBaked(app: CatalogApp): boolean {
   return Boolean(app.install?.manifest || app.install?.values);
 }
 
+// --- Shared annotation constants -------------------------------------------
+// A user can manually bind a catalog app to a running workload by annotating
+// the workload. These keys are part of the shared contract
+// (docs/parity/catalog-link-workload.md §2.1) — identical in the Swift app.
+// Neither app may rename or re-derive them.
+
+/** Annotation key whose value is the catalog app `id` a workload backs. */
+export const CATALOG_APP_ANNOTATION = "helmsman.dev/catalog-app";
+/** Annotation key whose value is the container name `setImage` targets. */
+export const CATALOG_CONTAINER_ANNOTATION = "helmsman.dev/catalog-container";
+
+/**
+ * The catalog app id a controller is explicitly bound to, or null.
+ * The ONLY reader of `CATALOG_APP_ANNOTATION` — detection/update functions call
+ * this so the key string appears in exactly one place. Mirrors Swift `boundAppID`.
+ */
+export function boundAppID(meta?: {
+  annotations?: Record<string, string>;
+}): string | null {
+  const v = meta?.annotations?.[CATALOG_APP_ANNOTATION];
+  return v && v.length > 0 ? v : null;
+}
+
+/**
+ * The bound container name, or null. The ONLY reader of
+ * `CATALOG_CONTAINER_ANNOTATION`. Mirrors Swift `boundContainer`.
+ */
+export function boundContainer(meta?: {
+  annotations?: Record<string, string>;
+}): string | null {
+  const v = meta?.annotations?.[CATALOG_CONTAINER_ANNOTATION];
+  return v && v.length > 0 ? v : null;
+}
+
 // --- Minimal cluster shapes used by installedAppIDs ------------------------
-// Subset of the Deployment / StatefulSet / Pod schemas — only the container
-// images are needed for installation detection.
+// Subset of the Deployment / StatefulSet / DaemonSet / Pod schemas — only the
+// container images (and the catalog binding annotations) are needed for
+// installation detection.
 
 interface ContainerLike {
   name?: string;
@@ -156,11 +191,16 @@ interface PodSpecTemplateLike {
   spec?: { containers?: ContainerLike[] };
 }
 export interface DeploymentLike {
-  metadata?: { name?: string; namespace?: string };
+  metadata?: { name?: string; namespace?: string; annotations?: Record<string, string> };
   spec?: { template?: PodSpecTemplateLike };
 }
 export interface StatefulSetLike {
-  metadata?: { name?: string; namespace?: string };
+  metadata?: { name?: string; namespace?: string; annotations?: Record<string, string> };
+  spec?: { template?: PodSpecTemplateLike };
+}
+/** A DaemonSet, scanned for catalog detection (kubectl set image daemonset/… is valid). */
+export interface DaemonSetLike {
+  metadata?: { name?: string; namespace?: string; annotations?: Record<string, string> };
   spec?: { template?: PodSpecTemplateLike };
 }
 /** A single entry in pod `status.containerStatuses` (subset). */

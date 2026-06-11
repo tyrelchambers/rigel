@@ -21,6 +21,8 @@ import { Button } from "@/components/ui/button";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { PurgeSheet } from "@/panels/purge/PurgeSheet";
 import type { ActionBlock } from "@/lib/api";
+import { useChatConfig } from "@/lib/api";
+import { Link } from "react-router";
 import { stripActionBlocks, type SuggestedAction } from "@/lib/actionBlocks";
 import { onChatEvent, sendChat, interruptChat } from "@/lib/ws";
 import { registerChatHandoff } from "@/lib/chatHandoff";
@@ -49,11 +51,20 @@ import {
   type MentionCandidate,
   type MentionKind,
 } from "@/panels/chat/mentions";
-import { loadChatHistory, saveChatHistory, clearChatHistory } from "@/panels/chat/chatHistory";
+import {
+  loadMostRecent,
+  loadSessions,
+  upsertSession,
+  deleteSession,
+  deriveTitle,
+  type ChatHistoryEntry,
+} from "@/panels/chat/chatHistory";
+import { ChatHistorySheet } from "@/panels/chat/ChatHistorySheet";
 import {
   appendTextDelta,
   stampThinking,
   makeMessage,
+  newId,
   isNearBottom,
   showJumpToNewest,
   elapsedSeconds,
@@ -146,17 +157,24 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   }, []);
 
   // ── Chat state (mirrors ChatPanel.tsx) ────────────────────────────────────
-  // Lazy init restores the most recent conversation from localStorage so a page
-  // refresh keeps the transcript (the slot is written before first render, so
-  // the persist effect below never wipes it on mount).
-  const [messages, setMessages] = useState<ChatMessage[]>(
-    () => loadChatHistory()?.messages ?? [],
-  );
+  // Restore the most recent conversation from localStorage on first render so a
+  // page refresh keeps the transcript. Read once into a ref to keep the lazy
+  // initializers consistent.
+  const bootRef = useRef<ChatHistoryEntry | null | undefined>(undefined);
+  if (bootRef.current === undefined) bootRef.current = loadMostRecent();
+  const boot = bootRef.current;
+
+  const [messages, setMessages] = useState<ChatMessage[]>(boot?.messages ?? []);
   const [inputText, setInputText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(
-    () => loadChatHistory()?.sessionId ?? null,
-  );
+  const [sessionId, setSessionId] = useState<string | null>(boot?.sessionId ?? null);
+  // Stable id for the active conversation (used as the history-entry key).
+  const [conversationId, setConversationId] = useState<string>(boot?.id ?? newId());
+  const createdAtRef = useRef<number>(boot?.createdAt ?? Date.now());
+
+  // Chat history modal.
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyEntries, setHistoryEntries] = useState<ChatHistoryEntry[]>([]);
   const [liveThinking, setLiveThinking] = useState("");
   const [isThinking, setIsThinking] = useState(false);
   const [turnStartedAt, setTurnStartedAt] = useState<Date | null>(null);
@@ -177,15 +195,26 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   modelConfigRef.current = modelConfig;
   const mentionCandidates = useMemo(() => buildMentions(resources), [resources]);
 
-  // Persist the conversation once each turn settles (not mid-stream, to avoid a
-  // write per token). Runs on mount too, re-saving the restored transcript.
+  // Persist the active conversation once each turn settles (not mid-stream, to
+  // avoid a write per token). Runs on mount too, re-saving the restored chat.
   useEffect(() => {
-    if (!isStreaming) saveChatHistory(messages, sessionId);
-  }, [messages, isStreaming, sessionId]);
+    if (isStreaming || messages.length === 0) return;
+    upsertSession({
+      id: conversationId,
+      title: deriveTitle(messages),
+      createdAt: createdAtRef.current,
+      updatedAt: Date.now(),
+      sessionId,
+      messages,
+    });
+  }, [messages, isStreaming, sessionId, conversationId]);
 
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // AI copilot config — drives the "not configured" empty-state below.
+  const { data: chatConfig } = useChatConfig();
   const liveThinkingRef = useRef("");
   const turnStartedAtRef = useRef<Date | null>(null);
   const isAtBottomRef = useRef(true);
@@ -374,7 +403,9 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   }
 
   function startNewChat() {
-    clearChatHistory();
+    // The previous conversation stays saved; this just begins a fresh one.
+    setConversationId(newId());
+    createdAtRef.current = Date.now();
     setMessages([]);
     setSessionId(null);
     setUsageLimit(null);
@@ -383,6 +414,33 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     setIsThinking(false);
     setLiveThinking("");
     liveThinkingRef.current = "";
+  }
+
+  // ── Chat history modal ─────────────────────────────────────────────────────
+  function openHistory() {
+    setHistoryEntries(loadSessions());
+    setHistoryOpen(true);
+  }
+  function resumeSession(e: ChatHistoryEntry) {
+    interruptChat();
+    setConversationId(e.id);
+    createdAtRef.current = e.createdAt;
+    setMessages(e.messages);
+    setSessionId(e.sessionId);
+    setUsageLimit(null);
+    setInputText("");
+    setIsStreaming(false);
+    setIsThinking(false);
+    setLiveThinking("");
+    liveThinkingRef.current = "";
+    setHistoryOpen(false);
+    setIsAtBottom(true);
+    isAtBottomRef.current = true;
+  }
+  function deleteHistoryEntry(e: ChatHistoryEntry) {
+    deleteSession(e.id);
+    setHistoryEntries(loadSessions());
+    if (e.id === conversationId) startNewChat();
   }
 
   async function copyConversation() {
@@ -493,8 +551,9 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
             <SquarePen size={11} style={{ color: "#A855F7" }} />
           </button>
 
-          {/* Chat history (placeholder icon — full history sheet deferred) */}
+          {/* Chat history */}
           <button
+            onClick={openHistory}
             title="Chat history"
             style={headerBtnStyle}
             aria-label="Chat history"
@@ -534,6 +593,50 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
               gap: 10,
             }}
           >
+            {chatConfig && !chatConfig.configured && messages.length === 0 && (
+              <div
+                style={{
+                  margin: "8px 0",
+                  padding: "14px",
+                  borderRadius: 10,
+                  background: "#141417",
+                  border: "1px solid #2A2A2A",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Sparkles size={15} style={{ color: "#A855F7" }} />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF" }}>
+                    The Helmsman copilot isn't set up yet
+                  </span>
+                </div>
+                <span style={{ fontSize: 12, color: "#A1A1AA", lineHeight: 1.5 }}>
+                  Chat needs a Claude subscription token. Run{" "}
+                  <code style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, color: "#A855F7" }}>
+                    claude setup-token
+                  </code>{" "}
+                  and add it in Settings — the rest of the app works without it.
+                </span>
+                <Link
+                  to="/settings"
+                  style={{
+                    alignSelf: "flex-start",
+                    marginTop: 2,
+                    padding: "5px 12px",
+                    borderRadius: 6,
+                    background: "#A855F7",
+                    color: "#FFFFFF",
+                    fontSize: 12,
+                    fontWeight: 500,
+                    textDecoration: "none",
+                  }}
+                >
+                  Open Settings
+                </Link>
+              </div>
+            )}
             {messages.map((m) => (
               <MessageBubble key={m.id} message={m} onAction={handleSuggestedAction} />
             ))}
@@ -593,6 +696,14 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
           target={purgeTarget}
           open={purgeTarget !== null}
           onClose={() => setPurgeTarget(null)}
+        />
+
+        <ChatHistorySheet
+          open={historyOpen}
+          entries={historyEntries}
+          onResume={resumeSession}
+          onDelete={deleteHistoryEntry}
+          onClose={() => setHistoryOpen(false)}
         />
       </div>
     </>
@@ -766,6 +877,11 @@ function PaneComposer({
       }
     }
     if (e.key === "Escape") {
+      if (modelOpen) {
+        e.preventDefault();
+        setModelOpen(false);
+        return;
+      }
       if (isStreaming) {
         e.preventDefault();
         onStop();
@@ -864,6 +980,30 @@ function PaneComposer({
         </div>
       )}
 
+      {/* Model picker menu — rendered outside the rounded container so its
+          upward-opening menu isn't clipped by the container's overflow:hidden. */}
+      {modelOpen && (
+        <>
+          <div style={{ position: "fixed", inset: 0, zIndex: 25 }} onClick={() => setModelOpen(false)} />
+          <div style={modelMenuStyle}>
+            <div style={modelSectionLabel}>MODEL</div>
+            {CLAUDE_MODELS.map((m) => (
+              <button key={m.id} type="button" onClick={() => onModelConfig({ ...modelConfig, model: m.id })} style={modelRowStyle(modelConfig.model === m.id)}>
+                {modelConfig.model === m.id ? <Check style={checkStyle} /> : <span style={{ width: 12 }} />}
+                {m.name}
+              </button>
+            ))}
+            <div style={{ ...modelSectionLabel, marginTop: 6 }}>EFFORT</div>
+            {CLAUDE_EFFORTS.map((ef) => (
+              <button key={ef.id} type="button" onClick={() => onModelConfig({ ...modelConfig, effort: ef.id })} style={modelRowStyle(modelConfig.effort === ef.id)}>
+                {modelConfig.effort === ef.id ? <Check style={checkStyle} /> : <span style={{ width: 12 }} />}
+                {ef.name}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
       {/* Rounded container */}
       <div style={{ background: "#0A0A0C", borderRadius: 10, border: "1px solid #2A2A2A", overflow: "hidden" }}>
         <textarea
@@ -888,27 +1028,6 @@ function PaneComposer({
           <button type="button" onClick={() => setModelOpen((o) => !o)} title="Choose model and reasoning effort" style={{ ...pillStyle, cursor: "pointer" }}>
             {modelLabel(modelConfig)}
           </button>
-          {modelOpen && (
-            <>
-              <div style={{ position: "fixed", inset: 0, zIndex: 25 }} onClick={() => setModelOpen(false)} />
-              <div style={modelMenuStyle}>
-                <div style={modelSectionLabel}>MODEL</div>
-                {CLAUDE_MODELS.map((m) => (
-                  <button key={m.id} type="button" onClick={() => onModelConfig({ ...modelConfig, model: m.id })} style={modelRowStyle(modelConfig.model === m.id)}>
-                    {modelConfig.model === m.id ? <Check style={checkStyle} /> : <span style={{ width: 12 }} />}
-                    {m.name}
-                  </button>
-                ))}
-                <div style={{ ...modelSectionLabel, marginTop: 6 }}>EFFORT</div>
-                {CLAUDE_EFFORTS.map((ef) => (
-                  <button key={ef.id} type="button" onClick={() => onModelConfig({ ...modelConfig, effort: ef.id })} style={modelRowStyle(modelConfig.effort === ef.id)}>
-                    {modelConfig.effort === ef.id ? <Check style={checkStyle} /> : <span style={{ width: 12 }} />}
-                    {ef.name}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
 
           {/* Commands pill — opens the / popover */}
           <button
@@ -1004,7 +1123,7 @@ function popRowStyle(active: boolean): React.CSSProperties {
 
 const modelMenuStyle: React.CSSProperties = {
   position: "absolute",
-  left: 8,
+  left: 12,
   bottom: "100%",
   marginBottom: 6,
   zIndex: 30,

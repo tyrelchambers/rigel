@@ -21,6 +21,7 @@ import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import type { ActionBlock } from "@/lib/api";
 import type { Namespace } from "./types";
 import type { Pod } from "../pods/types";
+import { phaseColorClass, readyText, restartCount, sortPods } from "../pods/podDisplay";
 import {
   relativeAge,
   phaseOf,
@@ -56,10 +57,15 @@ export default function NamespacesPanel() {
   const [newName, setNewName] = useState("");
 
   // Namespaces are CLUSTER-SCOPED: always watch '*', never the global
-  // namespaceFilter. No dependency array entries.
+  // namespaceFilter. Also watch pods cluster-wide so the count column is real
+  // and expanding a namespace can list its pods. No dependency array entries.
   useEffect(() => {
     subscribe("namespaces", "*");
-    return () => unsubscribe("namespaces", "*");
+    subscribe("pods", "*");
+    return () => {
+      unsubscribe("namespaces", "*");
+      unsubscribe("pods", "*");
+    };
   }, []);
 
   // Cmd+N / Ctrl+N opens the create dialog.
@@ -177,6 +183,9 @@ export default function NamespacesPanel() {
           const phase = phaseOf(ns);
           const count = podCountInNamespace(ns, pods);
           const age = relativeAge(ns.metadata.creationTimestamp);
+          const nsPods = sortPods(
+            (pods ?? []).filter((p) => (p.metadata.namespace ?? "default") === ns.metadata.name),
+          );
 
           return (
             <ListRow
@@ -184,6 +193,54 @@ export default function NamespacesPanel() {
               rowKey={k}
               isOpen={isOpen}
               onToggle={() => toggleExpand(k)}
+              expandedContent={
+                <div className="space-y-2">
+                  <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+                    Pods ({nsPods.length})
+                  </h3>
+                  {nsPods.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No pods in this namespace</p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {nsPods.map((p) => {
+                        const restarts = restartCount(p);
+                        return (
+                          <li
+                            key={p.metadata.uid || p.metadata.name}
+                            className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs transition-colors"
+                            style={{ background: "#0A0A0C", border: "1px solid #1A1A1A" }}
+                            onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#2A2A2A")}
+                            onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#1A1A1A")}
+                          >
+                            <span
+                              className={`inline-block size-2 shrink-0 rounded-full ${phaseColorClass(p.status?.phase)}`}
+                              title={p.status?.phase ?? "Unknown"}
+                            />
+                            <span className="min-w-0 flex-1 truncate font-mono text-foreground/90">
+                              {p.metadata.name}
+                            </span>
+                            {restarts > 0 && (
+                              <span
+                                className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px]"
+                                style={{ background: "rgba(245,158,11,0.15)", color: "#F59E0B" }}
+                                title={`${restarts} restart${restarts === 1 ? "" : "s"}`}
+                              >
+                                ↺{restarts}
+                              </span>
+                            )}
+                            <span
+                              className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+                              style={{ background: "#141417", border: "1px solid #1A1A1A" }}
+                            >
+                              {readyText(p)}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              }
             >
               {/* Name */}
               <button

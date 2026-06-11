@@ -1,4 +1,4 @@
-import { ExternalLink, Cpu, MemoryStick, HardDrive } from "lucide-react";
+import { ExternalLink, Cpu, MemoryStick, HardDrive, Link2, Unlink } from "lucide-react";
 import { categoryDisplayName, type CatalogApp } from "@helmsman/catalog";
 import {
   Sheet,
@@ -11,19 +11,36 @@ import {
 import { Button } from "@/components/ui/button";
 import { iconFor } from "./icons";
 
+/** A workload an app is explicitly bound to via the catalog-app annotation. */
+export interface CatalogBinding {
+  kind: "deployment" | "statefulset" | "daemonset";
+  name: string;
+  namespace: string;
+  container: string | null;
+}
+
 /** Detail sheet — full app info + Install button (docs/parity/catalog.md §"Detail Sheet"). */
 export function CatalogDetailSheet({
   app,
   isInstalled,
+  binding,
   open,
   onOpenChange,
   onInstall,
+  onLink,
+  onUnlink,
 }: {
   app: CatalogApp;
   isInstalled: boolean;
+  /** The workload this app is bound to via annotation, or null when unbound. */
+  binding: CatalogBinding | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onInstall: () => void;
+  /** Open the workload picker to bind this app to a running workload. */
+  onLink: () => void;
+  /** Remove the binding annotation(s) for this app. */
+  onUnlink: () => void;
 }) {
   const Icon = iconFor(app.iconSystemName);
   const links: Array<{ label: string; url: string | null | undefined }> = [
@@ -129,6 +146,44 @@ export function CatalogDetailSheet({
               <p className="detail-sheet-notes">{app.notes}</p>
             </div>
           )}
+
+          {/* Workload binding (Link / Unlink) — every app. */}
+          <div className="detail-sheet-section">
+            <h3 className="detail-sheet-section-label">Linked workload</h3>
+            {binding ? (
+              <div className="flex flex-col gap-2">
+                <p className="text-xs text-muted-foreground">
+                  Bound to{" "}
+                  <span className="font-mono text-foreground">
+                    {binding.kind}/{binding.name}
+                  </span>{" "}
+                  in <span className="font-mono text-foreground">{binding.namespace}</span>
+                  {binding.container && (
+                    <>
+                      {" "}
+                      · container{" "}
+                      <span className="font-mono text-foreground">{binding.container}</span>
+                    </>
+                  )}
+                </p>
+                <Button variant="outline" size="sm" onClick={onUnlink} className="self-start gap-1.5">
+                  <Unlink className="size-3.5" aria-hidden />
+                  Unlink
+                </Button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <p className="text-xs text-muted-foreground">
+                  Manually bind this app to a running workload when auto-detection
+                  can't match its image (mirror, private registry, or fork).
+                </p>
+                <Button variant="outline" size="sm" onClick={onLink} className="self-start gap-1.5">
+                  <Link2 className="size-3.5" aria-hidden />
+                  Link a workload…
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
 
         <SheetFooter className="detail-sheet-footer">

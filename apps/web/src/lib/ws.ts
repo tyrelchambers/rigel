@@ -3,6 +3,16 @@ import type { ChatEvent } from "@/panels/chat/types";
 
 let socket: WebSocket | null = null;
 
+/**
+ * Store key for a watched object: `namespace/name` for namespaced resources,
+ * bare `name` for cluster-scoped ones (nodes, namespaces). Namespace-qualified
+ * so same-named resources in different namespaces don't clobber each other when
+ * watching all namespaces.
+ */
+function resourceKey(o: { metadata: { name: string; namespace?: string } }): string {
+  return o.metadata.namespace ? `${o.metadata.namespace}/${o.metadata.name}` : o.metadata.name;
+}
+
 /** Raw frames queued while the socket is still CONNECTING; flushed on open. */
 const pendingFrames: string[] = [];
 /** Active watch subscriptions, re-sent on every (re)connect so first-load
@@ -97,13 +107,17 @@ export function connectCluster(): void {
     } else if (m.type === "logs" || m.type === "logs.error") {
       logListeners.forEach((cb) => cb(m as LogStreamMessage));
     } else if (m.type === "snapshot") {
-      // First payload for this subscription: clear loading and surface items.
+      // Authoritative full set for this subscription: REPLACE the kind's items
+      // (not merge) so switching namespace swaps the data instead of piling the
+      // new namespace on top of the old one.
       store.setLoading(false);
       store.setError(null);
-      for (const o of m.items) store.upsert(m.kind, o.metadata.name, o);
+      const items: Record<string, unknown> = {};
+      for (const o of m.items) items[resourceKey(o)] = o;
+      store.replaceKind(m.kind, items);
     } else if (m.type === "delta") {
-      if (m.event === "DELETED") store.remove(m.kind, m.object.metadata.name);
-      else store.upsert(m.kind, m.object.metadata.name, m.object);
+      if (m.event === "DELETED") store.remove(m.kind, resourceKey(m.object));
+      else store.upsert(m.kind, resourceKey(m.object), m.object);
     } else if (m.type === "error") {
       store.setLoading(false);
       store.setError(typeof m.message === "string" ? m.message : "watch failed");

@@ -190,6 +190,16 @@
   background: transparent;
 }
 
+/* ─── Databases detail: real monospace values ───────────────────────────────── */
+/* The app's `font-mono` resolves to the proportional Geist (theme choice), so DB
+ * detail values look sans. This unlayered descendant rule overrides `.font-mono`
+ * with a true monospace for the expanded detail only (beats Tailwind's layered
+ * utility regardless of class order). */
+.db-detail-mono .font-mono {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+}
+
 /* ─── Chat markdown (mirrors Swift MarkdownTheme.claudeK8s) ──────────────────── */
 .chat-md {
   font-size: 13px;
@@ -567,7 +577,6 @@
 }
 
 /* Everything above the atmosphere */
-.catalog-header,
 .catalog-grid,
 .catalog-empty,
 .catalog-error {
@@ -580,6 +589,10 @@
 .catalog-header {
   position: sticky;
   top: 0;
+  /* Above the grid (z-index:1) so scrolling cards pass UNDER the sticky header
+     instead of painting over it — Motion transforms on cards create stacking
+     contexts that would otherwise float above an equal-z-index header. */
+  z-index: 10;
   background: rgba(10, 10, 10, 0.88);
   backdrop-filter: blur(12px) saturate(1.4);
   -webkit-backdrop-filter: blur(12px) saturate(1.4);
@@ -787,9 +800,7 @@
     transform 150ms cubic-bezier(0.2, 0, 0, 1),
     border-color 150ms,
     box-shadow 150ms;
-  /* Mount animation */
-  animation: catalog-card-in 280ms cubic-bezier(0.2, 0, 0.2, 1) both;
-  opacity: 0;
+  /* Reveal (opacity/transform) is driven by Framer Motion whileInView — see CatalogCard */
 }
 
 .catalog-card:hover {
@@ -1049,6 +1060,25 @@
   transform: translateY(-1px);
 }
 .catalog-btn-install:active { transform: translateY(0); }
+
+/* "Already installed? Link it…" — secondary affordance below Install. */
+.catalog-link-affordance {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 6px;
+  padding: 2px 0;
+  background: transparent;
+  border: none;
+  font-size: 11px;
+  font-weight: 500;
+  color: #71717A;
+  cursor: pointer;
+  width: 100%;
+  transition: color 120ms;
+  letter-spacing: 0.1px;
+}
+.catalog-link-affordance:hover { color: #C9A2F9; }
 
 .catalog-btn-manage {
   display: inline-flex;

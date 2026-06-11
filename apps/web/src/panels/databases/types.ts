@@ -118,6 +118,63 @@ export type DatabaseKind =
 /** WAL archiving health (CNPG only). */
 export type WalArchivingStatus = "healthy" | "failing" | "unknown";
 
+// --- Raw Secret (credential discovery + username decode) -------------------
+// Minimal shape needed by the Databases panel; the full Secret type lives in
+// @helmsman/k8s but this keeps the panel free of workspace-package linking for
+// a type-only import (same rationale as the other models above).
+
+export interface DatabaseSecret {
+  metadata: { name: string; namespace?: string };
+  data?: Record<string, string>; // base64-encoded values
+}
+
+// --- Capabilities / action bar ---------------------------------------------
+// Mirrors the Swift `DatabaseAction`, `DatabaseActionItem`, `ConnectionInfo`,
+// `BackupInfo`, and `DatabaseCapabilities`. See docs/parity/databases-controls.md.
+
+/** One per-instance action. A discriminated union on `type`. */
+export type DatabaseAction =
+  | { type: "backupNow" }
+  | { type: "switchover"; to: string } // target standby pod name
+  | { type: "hibernate"; on: boolean } // on=true hibernate, on=false resume
+  | { type: "scale"; current: number; desired: number }
+  | { type: "portForward" }
+  | { type: "revealCredentials" }
+  | { type: "copyDSN" };
+
+/** An action plus its enabled/disabled state for the action bar. */
+export interface DatabaseActionItem {
+  action: DatabaseAction;
+  enabled: boolean;
+  disabledReason?: string;
+}
+
+/** Connection target used by port-forward, credentials, and DSN. */
+export interface ConnectionInfo {
+  targetKind: "svc" | "pod"; // "svc" for CNPG, "pod" for deployment/statefulset
+  targetName: string; // e.g. "my-cluster-rw", "my-postgres-0"
+  namespace: string;
+  port: number;
+  scheme: string; // e.g. "postgresql", "mysql", "redis"
+  secretName?: string; // e.g. "my-cluster-app" for CNPG
+  username?: string; // decoded from secret (CNPG only)
+  dbName?: string; // "app" for CNPG, undefined for image-detected
+}
+
+/** CNPG backup health summary (CNPG only). */
+export interface BackupInfo {
+  lastBackup?: string; // RFC3339 timestamp, undefined if none yet
+  schedule?: string; // cron string from ScheduledBackup
+  walArchivingHealthy?: boolean; // undefined if no ContinuousArchiving condition
+}
+
+/** Full capabilities for one instance: action bar + connection + backup info. */
+export interface DatabaseCapabilities {
+  actions: DatabaseActionItem[];
+  backupInfo?: BackupInfo; // CNPG only
+  connection?: ConnectionInfo;
+}
+
 /** A child pod matched to an instance by label selector. */
 export interface DatabasePod {
   name: string;

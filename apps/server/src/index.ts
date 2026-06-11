@@ -8,6 +8,14 @@ import { applyManifest, installHelm, type HelmInstallRequest } from "./install";
 import { handlePurge, type PurgeRequest } from "./purge";
 import { getPodMetrics, getNodeMetrics, getNodeDisk } from "./metrics";
 import { handleUpdates, type UpdatesRequest } from "./updates";
+import { chatConfig, setClaudeToken } from "./chatConfig";
+import {
+  passwordConfigured,
+  passwordMatches,
+  hasValidSession,
+  sessionSetCookie,
+  sessionClearCookie,
+} from "./session";
 import { handleAssistant, type AssistantRequest } from "./assistant";
 import { handleSignal, type SignalRequest } from "./signal";
 import { PortForwardManager, type TargetKind } from "./portForward";
@@ -15,7 +23,10 @@ import { checkAuth } from "./auth";
 
 const KUBECONFIG = resolveKubeconfigPath(process.env, homedir());
 const PORT = Number(process.env.PORT ?? 8787);
-const TOKEN = process.env.HELMSMAN_TOKEN ?? null;
+// Treat an empty/whitespace HELMSMAN_TOKEN as "unset" — compose/Helm commonly
+// pass it as "" which would otherwise make checkAuth() treat the bearer as open
+// and defeat the password gate.
+const TOKEN = process.env.HELMSMAN_TOKEN?.trim() || null;
 
 // Built web UI. Default resolves to apps/web/dist relative to this file, which
 // holds whether running from source (apps/server/src) or in the container
@@ -59,9 +70,44 @@ const server = Bun.serve({
       return serveStatic(url.pathname);
     }
 
-    // Auth gate: every non-health API/WS path requires a valid bearer token when TOKEN is set.
-    if (!checkAuth(req.headers.get("authorization") ?? undefined, TOKEN)) {
-      return new Response("unauthorized", { status: 401 });
+    // --- Auth endpoints (open) — drive the login screen / cookie session. ---
+    if (url.pathname === "/api/auth-status" && req.method === "GET") {
+      return Response.json({
+        authRequired: passwordConfigured(),
+        authenticated: hasValidSession(req, Date.now()),
+      });
+    }
+    if (url.pathname === "/api/login" && req.method === "POST") {
+      if (!passwordConfigured()) return Response.json({ ok: true });
+      const body = (await req.json().catch(() => ({}))) as { password?: unknown };
+      if (typeof body.password === "string" && passwordMatches(body.password)) {
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json", "Set-Cookie": sessionSetCookie(req, Date.now()) },
+        });
+      }
+      return new Response(JSON.stringify({ ok: false }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.pathname === "/api/logout" && req.method === "POST") {
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", "Set-Cookie": sessionClearCookie() },
+      });
+    }
+
+    // Auth gate: when a password (browser) and/or HELMSMAN_TOKEN (CLI) is set,
+    // every other /api + /ws request needs a valid session cookie OR bearer token.
+    if (passwordConfigured() || TOKEN !== null) {
+      // NOTE: checkAuth returns true when TOKEN is null (its "no bearer = open"
+      // rule), so only treat the bearer as proof of auth when a token is set —
+      // otherwise it would defeat the password gate.
+      const bearerOk = TOKEN !== null && checkAuth(req.headers.get("authorization") ?? undefined, TOKEN);
+      if (!hasValidSession(req, Date.now()) && !bearerOk) {
+        return new Response("unauthorized", { status: 401 });
+      }
     }
 
     // GET /api/metrics/pods?namespace=<ns|*> — current pod CPU/memory usage.
@@ -83,6 +129,28 @@ const server = Bun.serve({
     if (url.pathname === "/api/metrics/node-disk" && req.method === "GET") {
       const result = await getNodeDisk(context);
       return Response.json(result);
+    }
+
+    // GET /api/cnpg-plugin — is the `kubectl cnpg` plugin installed on the
+    // server? Mirrors the Swift `CNPGPluginProbe` (runs `kubectl cnpg version`).
+    // The Databases panel uses this to enable/disable CNPG-specific actions.
+    // Always HTTP 200; { available:false } when the plugin is missing.
+    if (url.pathname === "/api/cnpg-plugin" && req.method === "GET") {
+      const probe = await kubectl(context, ["cnpg", "version"]);
+      return Response.json({ available: probe.code === 0 });
+    }
+
+    // GET  /api/chat-config — is the AI copilot's Claude token configured?
+    // POST /api/chat-config { token } — set it (empty clears); env-set tokens
+    // take precedence and are not overwritten. Lets a self-hoster enable chat
+    // from the Settings screen without an env restart.
+    if (url.pathname === "/api/chat-config" && req.method === "GET") {
+      return Response.json(await chatConfig());
+    }
+    if (url.pathname === "/api/chat-config" && req.method === "POST") {
+      const body = (await req.json().catch(() => ({}))) as { token?: unknown };
+      await setClaudeToken(typeof body.token === "string" ? body.token : "");
+      return Response.json(await chatConfig());
     }
 
     // POST /api/action — execute or preview a chat action-block mutation.
@@ -368,6 +436,12 @@ const server = Bun.serve({
 });
 
 console.log(`helmsman server on :${server.port} (kubeconfig=${KUBECONFIG})`);
+if (!passwordConfigured() && TOKEN === null) {
+  console.warn(
+    "⚠️  helmsman: NO AUTH configured — anyone who can reach this can run cluster-admin commands. " +
+      "Set HELMSMAN_PASSWORD (browser login) before exposing it beyond a trusted/private network.",
+  );
+}
 
 // Shutdown hook: kill every port-forward child so no zombie kubectl survives the
 // server. SIGINT/SIGTERM both run stopAll() before exiting.

@@ -287,6 +287,79 @@ test("command with get logs args", () => {
 });
 
 // ---------------------------------------------------------------------------
+// linkCatalogApp / unlinkCatalogApp (catalog-link-workload spec)
+// ---------------------------------------------------------------------------
+test("linkCatalogApp daemonset maps to annotate … catalog-app=… --overwrite", () => {
+  expect(buildCommand({
+    kind: "linkCatalogApp",
+    resourceKind: "daemonset",
+    name: "node-exp",
+    namespace: "mon",
+    appID: "node-exporter",
+  })).toEqual([
+    "annotate", "daemonset/node-exp",
+    "helmsman.dev/catalog-app=node-exporter",
+    "-n", "mon", "--overwrite",
+  ]);
+});
+
+test("linkCatalogApp with container also sets catalog-container", () => {
+  expect(buildCommand({
+    kind: "linkCatalogApp",
+    resourceKind: "daemonset",
+    name: "node-exp",
+    namespace: "mon",
+    appID: "node-exporter",
+    container: "exporter",
+  })).toEqual([
+    "annotate", "daemonset/node-exp",
+    "helmsman.dev/catalog-app=node-exporter",
+    "helmsman.dev/catalog-container=exporter",
+    "-n", "mon", "--overwrite",
+  ]);
+});
+
+test("linkCatalogApp defaults resourceKind to deployment", () => {
+  expect(buildCommand({
+    kind: "linkCatalogApp",
+    name: "memos",
+    namespace: "default",
+    appID: "memos",
+  })).toEqual([
+    "annotate", "deployment/memos",
+    "helmsman.dev/catalog-app=memos",
+    "-n", "default", "--overwrite",
+  ]);
+});
+
+test("unlinkCatalogApp statefulset removes both binding keys", () => {
+  expect(buildCommand({
+    kind: "unlinkCatalogApp",
+    resourceKind: "statefulset",
+    name: "db",
+    namespace: "default",
+  })).toEqual([
+    "annotate", "statefulset/db",
+    "helmsman.dev/catalog-app-",
+    "helmsman.dev/catalog-container-",
+    "-n", "default",
+  ]);
+});
+
+test("unlinkCatalogApp defaults resourceKind to deployment", () => {
+  expect(buildCommand({
+    kind: "unlinkCatalogApp",
+    name: "memos",
+    namespace: "default",
+  })).toEqual([
+    "annotate", "deployment/memos",
+    "helmsman.dev/catalog-app-",
+    "helmsman.dev/catalog-container-",
+    "-n", "default",
+  ]);
+});
+
+// ---------------------------------------------------------------------------
 // purge — sentinel: throws PurgeActionError
 // ---------------------------------------------------------------------------
 test("purge throws PurgeActionError (not a kubectl command)", () => {

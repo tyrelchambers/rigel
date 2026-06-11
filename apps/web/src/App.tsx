@@ -23,6 +23,8 @@ import AssistantPanel from "./panels/assistant/AssistantPanel";
 import SettingsPanel from "./panels/settings/SettingsPanel";
 import AccountsPanel from "./panels/accounts/AccountsPanel";
 import { connectCluster } from "@/lib/ws";
+import { useAuthStatus } from "@/lib/api";
+import { LoginScreen } from "@/shell/LoginScreen";
 import NavStrip from "@/shell/NavStrip";
 import StatusBar from "@/shell/StatusBar";
 import ChatPane, { type ChatPaneHandle } from "@/shell/ChatPane";
@@ -37,8 +39,29 @@ function Padded({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * Scroll wrapper for panels with their OWN sticky header (e.g. Catalog). Only
+ * horizontal padding — a top pad would offset the sticky header below the
+ * scrollport edge, letting content leak through the gap above it. The panel
+ * supplies its own top/bottom spacing (see .catalog-header / .catalog-root).
+ */
+function PaddedX({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="h-full overflow-auto px-4">
+      {children}
+    </div>
+  );
+}
+
 export default function App() {
-  useEffect(() => { connectCluster(); }, []);
+  // Gate on built-in auth before connecting anything. authed=true when no
+  // password is required OR this browser holds a valid session cookie.
+  const { data: auth, isLoading: authLoading } = useAuthStatus();
+  const authed = auth ? !auth.authRequired || auth.authenticated : false;
+
+  useEffect(() => {
+    if (authed) connectCluster();
+  }, [authed]);
   const [paletteOpen, setPaletteOpen] = useCommandPalette();
 
   // The ChatPane exposes a send() handle so OverviewPanel's
@@ -49,6 +72,15 @@ export default function App() {
     chatHandleRef.current?.send(
       "Investigate the cluster's current health. Run kubectl read-only commands across nodes, pods, recent events, deployment status, and CNPG cluster health. Identify anything broken, broken-soon, or unusual. Be concise. Group findings by severity. If everything looks fine, say so briefly."
     );
+  }
+
+  // Auth gate: hold rendering until we know the auth state, then show the login
+  // screen when a password is required and this browser isn't signed in.
+  if (authLoading) {
+    return <div style={{ height: "100vh", background: "#0A0A0A" }} />;
+  }
+  if (auth?.authRequired && !auth.authenticated) {
+    return <LoginScreen />;
   }
 
   return (
@@ -100,7 +132,7 @@ export default function App() {
               <Route path="/secrets" element={<SecretsPanel />} />
               <Route path="/storage" element={<StoragePanel />} />
               <Route path="/rbac" element={<RbacPanel />} />
-              <Route path="/catalog" element={<Padded><CatalogPanel /></Padded>} />
+              <Route path="/catalog" element={<PaddedX><CatalogPanel /></PaddedX>} />
               <Route path="/accounts" element={<Padded><AccountsPanel /></Padded>} />
               <Route path="/events" element={<EventsPanel />} />
               <Route path="/assistant" element={<Padded><AssistantPanel /></Padded>} />

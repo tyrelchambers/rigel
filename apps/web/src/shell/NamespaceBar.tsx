@@ -7,10 +7,11 @@
  * read as ONE cohesive header element, rather than a separate full-bleed bar
  * above an inset sub-header.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "react-router";
 import { SquareDashed, ChevronDown, Check } from "lucide-react";
 import { useCluster } from "@/store/cluster";
+import { subscribe, unsubscribe } from "@/lib/ws";
 
 /**
  * Routes whose panels are namespace-scoped (mirrors PanelKind.isNamespaceScoped).
@@ -48,6 +49,13 @@ export function NamespaceSelector() {
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+
+  // The selector owns the namespaces watch so the dropdown is populated wherever
+  // it's shown (the per-resource panels don't subscribe "namespaces" themselves).
+  useEffect(() => {
+    subscribe("namespaces", "*");
+    return () => unsubscribe("namespaces", "*");
+  }, []);
 
   const allNamespaces: string[] = Object.keys(resources["namespaces"] ?? {}).sort((a, b) =>
     a.localeCompare(b),

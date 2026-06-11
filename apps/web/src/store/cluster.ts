@@ -20,6 +20,13 @@ interface ClusterState {
   setNamespaceFilter: (ns: string | null) => void;
   upsert: (kind: string, name: string, obj: unknown) => void;
   remove: (kind: string, name: string) => void;
+  /**
+   * Replace ALL items for a kind with a fresh set. Used when a watch snapshot
+   * arrives: a snapshot is the authoritative full set for the current
+   * subscription, so switching namespace (a new subscription → new snapshot)
+   * must swap the data, not merge onto the previous namespace's items.
+   */
+  replaceKind: (kind: string, items: Record<string, unknown>) => void;
 }
 
 export const useCluster = create<ClusterState>((set) => ({
@@ -40,4 +47,6 @@ export const useCluster = create<ClusterState>((set) => ({
       delete next[name];
       return { resources: { ...s.resources, [kind]: next } };
     }),
+  replaceKind: (kind, items) =>
+    set((s) => ({ resources: { ...s.resources, [kind]: items } })),
 }));

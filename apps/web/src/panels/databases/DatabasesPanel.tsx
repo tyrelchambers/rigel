@@ -9,18 +9,32 @@ import { StatusBadge } from "@/panels/components/StatusBadge";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
+import { ConfirmSheet } from "@/components/ConfirmSheet";
+import {
+  PortForwardDialog,
+  type PortForwardTarget,
+} from "@/panels/services/PortForwardDialog";
+import { useForwards, useCnpgPluginAvailable, type ActionBlock } from "@/lib/api";
 import type {
   CNPGBackup,
   CNPGCluster,
   CNPGScheduledBackup,
+  ConnectionInfo,
+  DatabaseAction,
+  DatabaseCapabilities,
   DatabaseInstance,
   DatabasePod,
   DatabasePodRaw,
+  DatabaseSecret,
   WorkloadDB,
 } from "./types";
 import {
+  actionLabel,
+  actionToBlock,
   buildInstances,
+  capabilities,
   connectionString,
+  dsn,
   matchPods,
   matchesDatabase,
   phaseDotClass,
@@ -32,7 +46,9 @@ import {
 } from "./databasesDisplay";
 
 // ---------------------------------------------------------------------------
-// READ-ONLY panel. No action blocks emitted. All mutations via chat → ConfirmSheet.
+// Per-instance action bar (backup / switchover / hibernate / scale / port-
+// forward / credentials / copy-DSN). Mutating actions route through the
+// ConfirmSheet; port-forward / credentials / copy-DSN are handled in-UI.
 // ---------------------------------------------------------------------------
 
 export default function DatabasesPanel() {
@@ -44,7 +60,15 @@ export default function DatabasesPanel() {
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  // Watch CNPG CRDs + image-detected workloads + pods.
+  const { data: cnpgPluginAvailable = false } = useCnpgPluginAvailable();
+  const { data: activeForwards = [] } = useForwards();
+
+  // Confirm-sheet + port-forward dialog state (panel-level so a collapsed row
+  // still completes an in-flight flow).
+  const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
+  const [pfTarget, setPfTarget] = useState<PortForwardTarget | null>(null);
+
+  // Watch CNPG CRDs + image-detected workloads + pods + secrets.
   useEffect(() => {
     const ns = namespaceFilter ?? "*";
     subscribe("clusters.postgresql.cnpg.io", ns);
@@ -53,6 +77,7 @@ export default function DatabasesPanel() {
     subscribe("deployments", ns);
     subscribe("statefulsets", ns);
     subscribe("pods", ns);
+    subscribe("secrets", ns);
     return () => {
       unsubscribe("clusters.postgresql.cnpg.io", ns);
       unsubscribe("scheduledbackups.postgresql.cnpg.io", ns);
@@ -60,6 +85,7 @@ export default function DatabasesPanel() {
       unsubscribe("deployments", ns);
       unsubscribe("statefulsets", ns);
       unsubscribe("pods", ns);
+      unsubscribe("secrets", ns);
     };
   }, [namespaceFilter]);
 
@@ -91,6 +117,29 @@ export default function DatabasesPanel() {
     [resources],
   );
 
+  // Raw resources needed for per-instance capability computation.
+  const cnpgClusters = useMemo(
+    () =>
+      Object.values(
+        (resources["clusters.postgresql.cnpg.io"] ?? {}) as Record<string, CNPGCluster>,
+      ),
+    [resources],
+  );
+  const scheduledBackups = useMemo(
+    () =>
+      Object.values(
+        (resources["scheduledbackups.postgresql.cnpg.io"] ?? {}) as Record<
+          string,
+          CNPGScheduledBackup
+        >,
+      ),
+    [resources],
+  );
+  const secrets = useMemo(
+    () => Object.values((resources["secrets"] ?? {}) as Record<string, DatabaseSecret>),
+    [resources],
+  );
+
   const filtered = useMemo(
     () => instances.filter((i) => matchesDatabase(i, search)),
     [instances, search],
@@ -109,6 +158,38 @@ export default function DatabasesPanel() {
 
   function askClaude(inst: DatabaseInstance, topic: "Errors" | "Logs" | "Explain") {
     handoffToChat(buildHandoffPrompt(inst.kind, inst.name, inst.namespace, topic));
+  }
+
+  // Route an action-bar click. Mutating actions open the ConfirmSheet; the
+  // non-mutating trio (port-forward / credentials / copy-DSN) is handled here.
+  function handleAction(
+    action: DatabaseAction,
+    instance: DatabaseInstance,
+    connection: ConnectionInfo | undefined,
+  ) {
+    switch (action.type) {
+      case "portForward":
+        if (connection) {
+          setPfTarget({
+            // The server's port-forward manager keys svc-vs-pod off targetKind,
+            // passing the target name in the `service` field for both.
+            service: connection.targetName,
+            namespace: connection.namespace,
+            remotePort: connection.port,
+          });
+        }
+        return;
+      case "copyDSN":
+        if (connection) void navigator.clipboard.writeText(dsn(connection));
+        return;
+      case "revealCredentials":
+        // Credentials are revealed inline in the detail section (no sheet).
+        return;
+      default: {
+        const block = actionToBlock(action, instance);
+        if (block) setPendingAction(block);
+      }
+    }
   }
 
   return (
@@ -155,6 +236,18 @@ export default function DatabasesPanel() {
           const matchedPods = matchPods(inst, pods);
           const ready = readyFraction(inst.readyReplicas, inst.desiredReplicas);
           const readyVariant = inst.isHealthy ? "healthy" : "error";
+          const caps = capabilities({
+            instance: inst,
+            pods,
+            cnpgCluster: cnpgClusters.find(
+              (c) =>
+                c.metadata.name === inst.name &&
+                (c.metadata.namespace ?? "default") === inst.namespace,
+            ),
+            scheduledBackups,
+            secrets,
+            cnpgPluginAvailable,
+          });
 
           return (
             <ListRow
@@ -163,7 +256,13 @@ export default function DatabasesPanel() {
               isOpen={isOpen}
               onToggle={() => toggle(inst.id)}
               expandedContent={
-                <DatabaseDetail instance={inst} matchedPods={matchedPods} />
+                <DatabaseDetail
+                  instance={inst}
+                  matchedPods={matchedPods}
+                  capabilities={caps}
+                  secrets={secrets}
+                  onAction={(a) => handleAction(a, inst, caps.connection)}
+                />
               }
             >
               {/* Name */}
@@ -252,6 +351,21 @@ export default function DatabasesPanel() {
           <p className="px-4 py-4 text-sm text-muted-foreground">No databases match search</p>
         )}
       </div>
+
+      {/* Confirm sheet for mutating actions (backup / switchover / hibernate /
+          resume / scale) — shows the exact kubectl command before running. */}
+      <ConfirmSheet
+        action={pendingAction}
+        open={!!pendingAction}
+        onClose={() => setPendingAction(null)}
+      />
+
+      {/* Port-forward dialog (reuses the Services flow). */}
+      <PortForwardDialog
+        target={pfTarget}
+        activeForwards={activeForwards}
+        onClose={() => setPfTarget(null)}
+      />
     </div>
   );
 }
@@ -274,15 +388,70 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
 function DatabaseDetail({
   instance,
   matchedPods,
+  capabilities: caps,
+  secrets,
+  onAction,
 }: {
   instance: DatabaseInstance;
   matchedPods: DatabasePod[];
+  capabilities: DatabaseCapabilities;
+  secrets: DatabaseSecret[];
+  onAction: (action: DatabaseAction) => void;
 }) {
   const nodes = podNodes(matchedPods);
   const wal = instance.walArchiving ?? "unknown";
+  const [showCreds, setShowCreds] = useState(false);
+
+  const credSecret =
+    caps.connection?.secretName != null
+      ? secrets.find(
+          (s) =>
+            s.metadata.name === caps.connection!.secretName &&
+            (s.metadata.namespace ?? "default") === instance.namespace,
+        )
+      : undefined;
+
+  function handleClick(action: DatabaseAction) {
+    if (action.type === "revealCredentials") setShowCreds((v) => !v);
+    onAction(action);
+  }
 
   return (
-    <div className="space-y-3">
+    // `db-detail-mono` (index.css) forces a TRUE monospace on every `font-mono`
+    // value inside: the app's `font-mono` is mapped to the proportional Geist
+    // (via @theme inline, so a runtime --font-mono override has no effect).
+    <div className="db-detail-mono space-y-3">
+      {/* ACTION BAR — above IMAGE. Disabled buttons show their reason as a
+          tooltip (or no tooltip for silent-disabled image-detected actions). */}
+      {caps.actions.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {caps.actions.map((item, i) => (
+            <button
+              key={`${item.action.type}-${i}`}
+              type="button"
+              disabled={!item.enabled}
+              onClick={item.enabled ? () => handleClick(item.action) : undefined}
+              title={item.disabledReason ?? actionLabel(item.action)}
+              className={
+                "rounded-sm border px-2 py-1 font-mono text-[11px] font-medium transition-colors " +
+                (item.enabled
+                  ? "border-border bg-muted/40 text-foreground hover:bg-muted"
+                  : "cursor-not-allowed border-border/50 bg-muted/20 text-muted-foreground/50")
+              }
+            >
+              {actionLabel(item.action)}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* CREDENTIALS (inline reveal, toggled by the Credentials action). */}
+      {showCreds && credSecret && (
+        <DetailRow label="CREDENTIALS">
+          <CredentialsReveal secret={credSecret} />
+        </DetailRow>
+      )}
+
       {/* IMAGE */}
       {instance.image && (
         <DetailRow label="IMAGE">
@@ -391,5 +560,40 @@ function DatabaseDetail({
         </DetailRow>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Credentials reveal — decodes the discovered secret's base64 values inline.
+// Mirrors the SecretsPanel reveal (purely client-side base64 decode).
+// ---------------------------------------------------------------------------
+
+function decode(b64: string): string | null {
+  try {
+    return decodeURIComponent(escape(atob(b64)));
+  } catch {
+    return null;
+  }
+}
+
+function CredentialsReveal({ secret }: { secret: DatabaseSecret }) {
+  const entries = Object.entries(secret.data ?? {}).sort(([a], [b]) => a.localeCompare(b));
+  if (entries.length === 0) {
+    return <span className="text-xs text-muted-foreground/70">No data keys</span>;
+  }
+  return (
+    <dl className="grid grid-cols-[10rem_1fr] gap-x-3 gap-y-0.5 text-xs font-mono">
+      {entries.map(([k, v]) => {
+        const value = decode(v);
+        return (
+          <div key={k} className="contents">
+            <dt className="select-text text-muted-foreground">{k}</dt>
+            <dd className="select-text break-all">
+              {value == null ? <span className="text-muted-foreground/70">{`<binary>`}</span> : value}
+            </dd>
+          </div>
+        );
+      })}
+    </dl>
   );
 }

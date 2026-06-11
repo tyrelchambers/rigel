@@ -20,6 +20,8 @@ export interface ActionBlock {
   requests?: string;
   limits?: string;
   resourceKind?: string;
+  /** linkCatalogApp only: catalog app id the workload is bound to. */
+  appID?: string;
   args?: string[];
   destructive?: boolean;
 }
@@ -522,5 +524,124 @@ export function useStopForward() {
   return useMutation<void, Error, string>({
     mutationFn: stopForward,
     onSettled: () => qc.invalidateQueries({ queryKey: PORT_FORWARD_KEY }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// CNPG plugin availability — GET /api/cnpg-plugin
+//
+// Mirrors the Swift `CNPGPluginProbe`. The Databases panel uses this to
+// enable/disable CNPG-specific actions (backup/switchover/hibernate/resume).
+// ---------------------------------------------------------------------------
+
+async function fetchCnpgPluginAvailable(): Promise<boolean> {
+  const res = await fetch("/api/cnpg-plugin");
+  if (!res.ok) return false;
+  const data = (await res.json()) as { available?: boolean };
+  return data.available === true;
+}
+
+/**
+ * Whether the `kubectl cnpg` plugin is installed on the server. Probed once and
+ * cached for the session (the plugin does not appear/disappear at runtime).
+ */
+export function useCnpgPluginAvailable() {
+  return useQuery({
+    queryKey: ["cnpg-plugin"] as const,
+    queryFn: fetchCnpgPluginAvailable,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Browser auth — password login → httpOnly session cookie. GET /api/auth-status,
+// POST /api/login, POST /api/logout. Cookies are same-origin so fetch sends them.
+// ---------------------------------------------------------------------------
+
+export interface AuthStatus {
+  /** True when an admin password is configured (login required). */
+  authRequired: boolean;
+  /** True when this browser holds a valid session cookie. */
+  authenticated: boolean;
+}
+
+export function useAuthStatus() {
+  return useQuery<AuthStatus, Error>({
+    queryKey: ["auth-status"] as const,
+    queryFn: async () => {
+      const res = await fetch("/api/auth-status");
+      if (!res.ok) return { authRequired: false, authenticated: false };
+      return (await res.json()) as AuthStatus;
+    },
+    staleTime: 60_000,
+  });
+}
+
+export function useLogin() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: async (password) => {
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (!res.ok) throw new Error("Incorrect password");
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["auth-status"] }),
+  });
+}
+
+export function useLogout() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, void>({
+    mutationFn: async () => {
+      await fetch("/api/logout", { method: "POST" });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["auth-status"] }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// AI copilot config — is the Claude token set? GET/POST /api/chat-config.
+// ---------------------------------------------------------------------------
+
+export interface ChatConfig {
+  /** True when the copilot has a usable token (env- or in-app-supplied). */
+  configured: boolean;
+  /** "env" = managed by deployment env (read-only here); "file" = set in-app. */
+  source: "env" | "file" | null;
+}
+
+async function fetchChatConfig(): Promise<ChatConfig> {
+  const res = await fetch("/api/chat-config");
+  if (!res.ok) return { configured: false, source: null };
+  return (await res.json()) as ChatConfig;
+}
+
+/** Whether the AI copilot is configured. Drives the chat empty-state + Settings. */
+export function useChatConfig() {
+  return useQuery({
+    queryKey: ["chat-config"] as const,
+    queryFn: fetchChatConfig,
+    staleTime: 30_000,
+  });
+}
+
+/** Set (or clear, with "") the in-app Claude token, then refresh chat-config. */
+export function useSetChatToken() {
+  const qc = useQueryClient();
+  return useMutation<ChatConfig, Error, string>({
+    mutationFn: async (token) => {
+      const res = await fetch("/api/chat-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      if (!res.ok) throw new Error((await res.text()) || "failed to save token");
+      return (await res.json()) as ChatConfig;
+    },
+    onSuccess: (data) => qc.setQueryData(["chat-config"], data),
   });
 }

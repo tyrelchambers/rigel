@@ -11,9 +11,18 @@ export type {
   CatalogApp,
   DeploymentLike,
   StatefulSetLike,
+  DaemonSetLike,
   PodLike,
 } from "./types";
-export { APP_CATEGORIES, categoryDisplayName, isBaked } from "./types";
+export {
+  APP_CATEGORIES,
+  categoryDisplayName,
+  isBaked,
+  CATALOG_APP_ANNOTATION,
+  CATALOG_CONTAINER_ANNOTATION,
+  boundAppID,
+  boundContainer,
+} from "./types";
 
 export { loadCatalog, CATALOG } from "./loader";
 

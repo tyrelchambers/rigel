@@ -5,8 +5,10 @@ import type {
   CatalogApp,
   DeploymentLike,
   StatefulSetLike,
+  DaemonSetLike,
   PodLike,
 } from "./types";
+import { boundAppID, boundContainer } from "./types";
 import type { InstalledImage } from "./updates";
 
 /**
@@ -72,17 +74,36 @@ export function repoPathsMatch(running: string, candidate: string): boolean {
 }
 
 /**
- * Set of catalog-app `id`s whose `matchImages` are found running in the
- * cluster. Scans container images across Deployments, StatefulSets, and loose
- * Pods. Pure — no side effects; recompute freely so the result tracks the watch
- * stream. Matching is host- and tag-insensitive. Mirrors Swift `installedAppIDs`.
+ * Set of catalog-app `id`s installed in the cluster. Two passes, annotation
+ * first:
+ *
+ *   1. Annotation pass (definitive). Any Deployment/StatefulSet/DaemonSet
+ *      carrying `helmsman.dev/catalog-app=<id>` IS that app's install,
+ *      regardless of image. (A value for an unknown id is added verbatim; it
+ *      just doesn't correspond to any card — no crash.)
+ *   2. Image pass (fallback). For apps not already matched, match `matchImages`
+ *      against running repo paths across Deployments/StatefulSets/DaemonSets/
+ *      Pods (host- and tag-insensitive), exactly as before.
+ *
+ * Pure — recompute freely so the result tracks the watch stream. Mirrors Swift
+ * `installedAppIDs`.
  */
 export function installedAppIDs(
   apps: CatalogApp[],
   deployments: DeploymentLike[],
   statefulSets: StatefulSetLike[],
+  daemonSets: DaemonSetLike[],
   pods: PodLike[],
 ): Set<string> {
+  const installed = new Set<string>();
+
+  // 1. Annotation pass — definitive, image not consulted.
+  for (const w of [...deployments, ...statefulSets, ...daemonSets]) {
+    const id = boundAppID(w.metadata);
+    if (id) installed.add(id);
+  }
+
+  // 2. Image pass — fallback for apps not bound by annotation.
   const runningRepos = new Set<string>();
   for (const d of deployments) {
     for (const c of d.spec?.template?.spec?.containers ?? []) {
@@ -94,14 +115,19 @@ export function installedAppIDs(
       if (c.image) runningRepos.add(imageRepoPath(c.image));
     }
   }
+  for (const ds of daemonSets) {
+    for (const c of ds.spec?.template?.spec?.containers ?? []) {
+      if (c.image) runningRepos.add(imageRepoPath(c.image));
+    }
+  }
   for (const p of pods) {
     for (const c of p.spec?.containers ?? []) {
       if (c.image) runningRepos.add(imageRepoPath(c.image));
     }
   }
 
-  const installed = new Set<string>();
   for (const app of apps) {
+    if (installed.has(app.id)) continue;
     const isInstalled = app.matchImages.some((raw) => {
       const candidate = imageRepoPath(raw);
       for (const running of runningRepos) {
@@ -128,18 +154,64 @@ export function runningImageDigest(imageID: string | undefined): string | null {
 }
 
 /**
+ * Pick the container image of an annotation-bound workload — mirrors the
+ * `updateTargets` container-selection rule (§3.3): the `catalog-container`
+ * annotation if it names an existing container; else the single container; else
+ * the first container whose image matches one of `matchImages`; else the first.
+ * Returns null when the workload has no usable container.
+ */
+function boundWorkloadImage(
+  meta: { annotations?: Record<string, string> } | undefined,
+  containers: Array<{ name?: string; image?: string }> | undefined,
+  matchImages: string[],
+): string | null {
+  const list = (containers ?? []).filter((c) => !!c.image);
+  if (list.length === 0) return null;
+  const wantContainer = boundContainer(meta);
+  if (wantContainer) {
+    const named = list.find((c) => c.name === wantContainer);
+    if (named?.image) return named.image;
+  }
+  if (list.length === 1) return list[0]!.image!;
+  for (const raw of matchImages) {
+    const candidate = imageRepoPath(raw);
+    const m = list.find((c) => c.image && repoPathsMatch(imageRepoPath(c.image), candidate));
+    if (m?.image) return m.image;
+  }
+  return list[0]!.image!;
+}
+
+/**
  * For each installed catalog app, the exact image reference it's running — the
- * full string (registry + repo + tag) of the first container that matched one
- * of the app's `matchImages`. This is what the update check needs: the running
- * *tag*, not just the repo path. Apps with no matching container are omitted.
+ * full string (registry + repo + tag) of the matched container. This is what
+ * the update check needs: the running *tag*, not just the repo path.
+ *
+ * Annotation wins (§3.3): an app bound to a workload via
+ * `helmsman.dev/catalog-app` uses that workload's container image (selected per
+ * `helmsman.dev/catalog-container` / single / matchImage / first), regardless of
+ * image match. Otherwise the running image is found by image match across
+ * Deployments/StatefulSets/DaemonSets/Pods. Apps with no match are omitted.
  * Mirrors Swift `installedImages`.
  */
 export function installedImages(
   apps: CatalogApp[],
   deployments: DeploymentLike[],
   statefulSets: StatefulSetLike[],
+  daemonSets: DaemonSetLike[],
   pods: PodLike[],
 ): InstalledImage[] {
+  // Bound workloads by app id, in scan order (deployments → sts → ds). First wins.
+  const boundByApp = new Map<
+    string,
+    { meta?: { annotations?: Record<string, string> }; containers?: Array<{ name?: string; image?: string }> }
+  >();
+  for (const w of [...deployments, ...statefulSets, ...daemonSets]) {
+    const id = boundAppID(w.metadata);
+    if (id && !boundByApp.has(id)) {
+      boundByApp.set(id, { meta: w.metadata, containers: w.spec?.template?.spec?.containers });
+    }
+  }
+
   // (normalized repo path, full image ref) for every running container.
   const running: Array<{ repo: string; full: string }> = [];
   const collect = (image: string | undefined) => {
@@ -149,6 +221,8 @@ export function installedImages(
     for (const c of d.spec?.template?.spec?.containers ?? []) collect(c.image);
   for (const s of statefulSets)
     for (const c of s.spec?.template?.spec?.containers ?? []) collect(c.image);
+  for (const ds of daemonSets)
+    for (const c of ds.spec?.template?.spec?.containers ?? []) collect(c.image);
   for (const p of pods) for (const c of p.spec?.containers ?? []) collect(c.image);
 
   // (normalized repo path, running digest) from pod *status* — the only place
@@ -169,6 +243,23 @@ export function installedImages(
 
   const out: InstalledImage[] = [];
   for (const app of apps) {
+    // 1. Annotation-bound workload wins.
+    const bound = boundByApp.get(app.id);
+    if (bound) {
+      const image = boundWorkloadImage(bound.meta, bound.containers, app.matchImages);
+      if (image) {
+        const repo = imageRepoPath(image);
+        const digest = podDigests.find((d) => repoPathsMatch(d.repo, repo))?.digest;
+        out.push({
+          appID: app.id,
+          image,
+          repoURL: app.repoURL ?? undefined,
+          runningDigest: digest,
+        });
+        continue;
+      }
+    }
+    // 2. Image-match fallback.
     for (const raw of app.matchImages) {
       const candidate = imageRepoPath(raw);
       const hit = running.find((r) => repoPathsMatch(r.repo, candidate));

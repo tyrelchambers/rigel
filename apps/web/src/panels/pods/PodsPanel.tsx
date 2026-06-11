@@ -335,12 +335,14 @@ function PodDetail({ pod }: PodDetailProps) {
               return (
                 <li
                   key={c.name}
-                  className="flex items-center gap-2 rounded px-2 py-1 text-xs"
-                  style={{ background: "rgba(5,5,5,0.5)", border: "1px solid #1A1A1A" }}
+                  className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs transition-colors"
+                  style={{ background: "#0A0A0C", border: "1px solid #1A1A1A" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#2A2A2A")}
+                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#1A1A1A")}
                 >
                   {/* Phase dot */}
                   <span
-                    className={`inline-block size-1.5 shrink-0 rounded-full ${phaseColorClass(
+                    className={`inline-block size-2 shrink-0 rounded-full ${phaseColorClass(
                       status?.state?.running ? "Running" : status?.state?.waiting ? "Pending" : undefined,
                     )}`}
                   />
@@ -348,19 +350,19 @@ function PodDetail({ pod }: PodDetailProps) {
                   <span className="font-mono text-muted-foreground truncate min-w-0 flex-1">{c.image ?? "—"}</span>
                   {cRestarts > 0 && (
                     <span
-                      style={{
-                        fontFamily: "ui-monospace, monospace",
-                        fontSize: 10,
-                        color: "#F59E0B",
-                        background: "rgba(245,158,11,0.12)",
-                        padding: "1px 5px",
-                        borderRadius: 4,
-                      }}
+                      className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px]"
+                      style={{ color: "#F59E0B", background: "rgba(245,158,11,0.15)" }}
+                      title={`${cRestarts} restart${cRestarts === 1 ? "" : "s"}`}
                     >
-                      ×{cRestarts}
+                      ↺{cRestarts}
                     </span>
                   )}
-                  <span className="font-mono text-muted-foreground shrink-0 text-[10px]">{phase}</span>
+                  <span
+                    className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+                    style={{ background: "#141417", border: "1px solid #1A1A1A" }}
+                  >
+                    {phase}
+                  </span>
                 </li>
               );
             })}

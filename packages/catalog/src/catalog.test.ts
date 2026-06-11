@@ -170,7 +170,7 @@ describe("installedAppIDs", () => {
     const pods = [
       { spec: { containers: [{ image: "docker.io/library/nextcloud:29" }] } },
     ];
-    const ids = installedAppIDs(apps, deployments, [], pods);
+    const ids = installedAppIDs(apps, deployments, [], [], pods);
     expect(ids.has("vaultwarden")).toBe(true);
     expect(ids.has("nextcloud")).toBe(true);
   });
@@ -193,10 +193,70 @@ describe("installedAppIDs", () => {
         installPromptTemplate: "",
       },
     ];
-    const ids = installedAppIDs(apps, [], [], [
+    const ids = installedAppIDs(apps, [], [], [], [
       { spec: { containers: [{ image: "nginx:latest" }] } },
     ]);
     expect(ids.size).toBe(0);
+  });
+
+  // --- Annotation-first detection (catalog-link-workload spec) -------------
+  test("annotation on a Deployment is a definitive match even with no image match", () => {
+    const apps: CatalogApp[] = [
+      {
+        id: "foo", name: "Foo", tagline: "", description: "", category: "other",
+        iconSystemName: "x", docsURL: "https://x", tags: [],
+        matchImages: ["ghcr.io/foo/foo"],
+        requirements: { cpuRequest: "100m", memoryRequest: "128Mi" },
+        persistence: false, exposesIngress: false, installPromptTemplate: "",
+      },
+    ];
+    const deployments = [
+      {
+        metadata: { name: "mirror-foo", namespace: "apps", annotations: { "helmsman.dev/catalog-app": "foo" } },
+        spec: { template: { spec: { containers: [{ image: "registry.internal/team/foo:1.0" }] } } },
+      },
+    ];
+    const ids = installedAppIDs(apps, deployments, [], [], []);
+    expect(ids.has("foo")).toBe(true);
+  });
+
+  test("annotation-definitive match holds for a StatefulSet and a DaemonSet", () => {
+    const apps: CatalogApp[] = [
+      { id: "bar", name: "Bar", tagline: "", description: "", category: "other", iconSystemName: "x", docsURL: "https://x", tags: [], matchImages: ["ghcr.io/bar/bar"], requirements: { cpuRequest: "100m", memoryRequest: "128Mi" }, persistence: false, exposesIngress: false, installPromptTemplate: "" },
+      { id: "baz", name: "Baz", tagline: "", description: "", category: "other", iconSystemName: "x", docsURL: "https://x", tags: [], matchImages: ["ghcr.io/baz/baz"], requirements: { cpuRequest: "100m", memoryRequest: "128Mi" }, persistence: false, exposesIngress: false, installPromptTemplate: "" },
+    ];
+    const statefulSets = [
+      { metadata: { name: "bar", namespace: "db", annotations: { "helmsman.dev/catalog-app": "bar" } }, spec: { template: { spec: { containers: [{ image: "private/bar:2" }] } } } },
+    ];
+    const daemonSets = [
+      { metadata: { name: "baz", namespace: "mon", annotations: { "helmsman.dev/catalog-app": "baz" } }, spec: { template: { spec: { containers: [{ image: "private/baz:3" }] } } } },
+    ];
+    const ids = installedAppIDs(apps, [], statefulSets, daemonSets, []);
+    expect(ids.has("bar")).toBe(true);
+    expect(ids.has("baz")).toBe(true);
+  });
+
+  test("with no annotation, detects an app whose image runs only on a DaemonSet", () => {
+    const apps: CatalogApp[] = [
+      { id: "node-exporter", name: "Node Exporter", tagline: "", description: "", category: "observability", iconSystemName: "x", docsURL: "https://x", tags: [], matchImages: ["quay.io/prometheus/node-exporter"], requirements: { cpuRequest: "100m", memoryRequest: "128Mi" }, persistence: false, exposesIngress: false, installPromptTemplate: "" },
+    ];
+    const daemonSets = [
+      { metadata: { name: "node-exp", namespace: "mon" }, spec: { template: { spec: { containers: [{ image: "quay.io/prometheus/node-exporter:v1.8.0" }] } } } },
+    ];
+    const ids = installedAppIDs(apps, [], [], daemonSets, []);
+    expect(ids.has("node-exporter")).toBe(true);
+  });
+
+  test("annotation value for an id not in the catalog does not crash detection", () => {
+    const apps: CatalogApp[] = [
+      { id: "real", name: "Real", tagline: "", description: "", category: "other", iconSystemName: "x", docsURL: "https://x", tags: [], matchImages: ["ghcr.io/real/real"], requirements: { cpuRequest: "100m", memoryRequest: "128Mi" }, persistence: false, exposesIngress: false, installPromptTemplate: "" },
+    ];
+    const deployments = [
+      { metadata: { name: "mystery", namespace: "apps", annotations: { "helmsman.dev/catalog-app": "not-a-real-app" } }, spec: { template: { spec: { containers: [{ image: "x:1" }] } } } },
+    ];
+    expect(() => installedAppIDs(apps, deployments, [], [], [])).not.toThrow();
+    const ids = installedAppIDs(apps, deployments, [], [], []);
+    expect(ids.has("real")).toBe(false);
   });
 });
 
