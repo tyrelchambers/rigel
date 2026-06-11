@@ -165,12 +165,55 @@ enum SuggestedActionResolver {
             // otherwise. Claude can only escalate (destructive: true), never relax.
             let destructive = isDestructive(args) || (s.destructive == true)
             return .action(.command(args: args, label: s.label, destructive: destructive))
+        case .linkCatalogApp:
+            guard let name = s.target else { return .unresolved("linkCatalogApp needs a workload name") }
+            guard let appID = s.appID, !appID.isEmpty else { return .unresolved("linkCatalogApp needs an appID") }
+            // Workload kind defaults to deployment; if a kind is named, prefer it,
+            // otherwise infer from which controller carries the name.
+            let kind = workloadKind(name: name, requested: s.resourceKind,
+                                    deployments: deployments, statefulSets: statefulSets, daemonSets: daemonSets)
+            guard let kind else { return .unresolved("workload \(ns)/\(name) isn't in the live cluster view") }
+            return .action(.linkCatalogApp(kind: kind, name: name, namespace: ns, appID: appID, container: s.container))
+        case .unlinkCatalogApp:
+            guard let name = s.target else { return .unresolved("unlinkCatalogApp needs a workload name") }
+            let kind = workloadKind(name: name, requested: s.resourceKind,
+                                    deployments: deployments, statefulSets: statefulSets, daemonSets: daemonSets)
+            guard let kind else { return .unresolved("workload \(ns)/\(name) isn't in the live cluster view") }
+            return .action(.unlinkCatalogApp(kind: kind, name: name, namespace: ns))
         case .purge:
             // Purge is handled upstream (MainWindow opens the typed-name purge
             // confirm sheet); it has no WorkloadAction mapping and must never
             // resolve into the generic confirm/execute path.
             return .unresolved("purge is handled by the dedicated app-removal sheet")
         }
+    }
+
+    /// Resolve a workload kind for a link/unlink action: a requested kind
+    /// (deployment|statefulset|daemonset) is honored when its controller carries
+    /// the name; otherwise the kind is inferred in scan order. nil when no
+    /// controller in the live view carries the name.
+    private static func workloadKind(
+        name: String,
+        requested: String?,
+        deployments: [Deployment],
+        statefulSets: [StatefulSet],
+        daemonSets: [DaemonSet]
+    ) -> String? {
+        let inDeploy = deployments.contains { $0.metadata.name == name }
+        let inSts = statefulSets.contains { $0.metadata.name == name }
+        let inDs = daemonSets.contains { $0.metadata.name == name }
+        if let requested = requested?.lowercased() {
+            switch requested {
+            case "deployment" where inDeploy:  return "deployment"
+            case "statefulset" where inSts:    return "statefulset"
+            case "daemonset" where inDs:       return "daemonset"
+            default: break
+            }
+        }
+        if inDeploy { return "deployment" }
+        if inSts { return "statefulset" }
+        if inDs { return "daemonset" }
+        return nil
     }
 
     /// Destructive kubectl verbs that force the red confirm sheet + acknowledge

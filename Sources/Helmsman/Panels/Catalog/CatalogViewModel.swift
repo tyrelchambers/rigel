@@ -44,6 +44,7 @@ final class CatalogViewModel {
             apps: store.apps,
             deployments: cache.deployments,
             statefulSets: cache.statefulSets,
+            daemonSets: cache.daemonSets,
             pods: cache.pods
         )
     }
@@ -88,12 +89,26 @@ final class CatalogViewModel {
             apps: [app],
             deployments: cache.deployments,
             statefulSets: cache.statefulSets,
+            daemonSets: cache.daemonSets,
             pods: cache.pods
         ).first else { return nil }
         return InstalledAppInfo(
             imageRef: item.image,
             version: ImageReference(item.image)?.tag ?? "—",
             status: updateStatus(for: app)
+        )
+    }
+
+    /// The workload a catalog app is explicitly bound to via the
+    /// `helmsman.dev/catalog-app` annotation, or nil if unbound. Reads `cache`
+    /// snapshots and recomputes on every access so the result tracks the watch
+    /// stream — after a link/unlink annotate the binding flips on the next tick.
+    func binding(for app: CatalogApp) -> WorkloadBinding? {
+        WorkloadBinding.find(
+            appID: app.id,
+            deployments: cache.deployments,
+            statefulSets: cache.statefulSets,
+            daemonSets: cache.daemonSets
         )
     }
 }

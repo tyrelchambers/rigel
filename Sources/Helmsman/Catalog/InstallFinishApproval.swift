@@ -48,7 +48,8 @@ enum InstallFinishApproval {
         // Destructive / out-of-scope / app-altering kinds always confirm.
         case .rollback, .setImage, .pause, .deletePod, .deleteWorkload,
              .cordon, .uncordon, .drain, .suspendCronJob,
-             .createNamespace, .deleteNamespace, .deleteResource, .purge:
+             .createNamespace, .deleteNamespace, .deleteResource, .purge,
+             .linkCatalogApp, .unlinkCatalogApp:
             return false
         }
     }

@@ -89,6 +89,14 @@ enum WorkloadAction: Identifiable {
     /// kubectl arguments only — the commander prepends `kubectl` + `--context`.
     /// `destructive` drives the red confirm + acknowledge gate.
     case command(args: [String], label: String, destructive: Bool)
+    /// Bind a running workload to a catalog app via `kubectl annotate … --overwrite`.
+    /// `kind` ∈ deployment|statefulset|daemonset. A non-nil `container` also sets
+    /// `helmsman.dev/catalog-container` (multi-container workloads). Pure metadata
+    /// write — not destructive.
+    case linkCatalogApp(kind: String, name: String, namespace: String, appID: String, container: String?)
+    /// Remove the catalog binding from a workload (`kubectl annotate … catalog-app-
+    /// catalog-container-`). Removes both keys; an absent key is a harmless no-op.
+    case unlinkCatalogApp(kind: String, name: String, namespace: String)
 
     var id: String {
         switch self {
@@ -129,6 +137,8 @@ enum WorkloadAction: Identifiable {
         case .cnpgHibernate(let c, let ns, let on): return "cnpg-hibernate-\(ns)/\(c)-\(on)"
         case .scaleCNPG(let c, let ns, _, let to): return "scale-cnpg-\(ns)/\(c)-\(to)"
         case .command(let args, _, _): return "command-\(args.joined(separator: " "))"
+        case .linkCatalogApp(let k, let n, let ns, let app, let c): return "link-\(k)-\(ns)/\(n)-\(app)-\(c ?? "_")"
+        case .unlinkCatalogApp(let k, let n, let ns): return "unlink-\(k)-\(ns)/\(n)"
         }
     }
 
@@ -184,6 +194,8 @@ enum WorkloadAction: Identifiable {
         case .cnpgHibernate(let c, _, let on): return on ? "Hibernate \(c)" : "Resume \(c)"
         case .scaleCNPG(let c, _, _, let to): return "Scale \(c) → \(to)"
         case .command(_, let label, _): return label
+        case .linkCatalogApp(let k, let n, _, let app, _): return "Link \(k)/\(n) → \(app)"
+        case .unlinkCatalogApp(let k, let n, _): return "Unlink \(k)/\(n)"
         }
     }
 
@@ -289,6 +301,11 @@ enum WorkloadAction: Identifiable {
         case .command(let args, _, let destructive):
             let warn = destructive ? " This is destructive — review the command carefully." : ""
             return "Runs `kubectl \(args.joined(separator: " "))`.\(warn)"
+        case .linkCatalogApp(let k, let n, let ns, let app, let c):
+            let cont = c.map { " Updates will target container \($0)." } ?? ""
+            return "Annotates \(k)/\(n) in namespace \(ns) as the install of catalog app \(app). Detection treats it as that app's install + update target, over any image match.\(cont)"
+        case .unlinkCatalogApp(let k, let n, let ns):
+            return "Removes the catalog binding annotations from \(k)/\(n) in namespace \(ns). Detection reverts to image match on the next watch tick."
         }
     }
 
@@ -313,6 +330,8 @@ enum WorkloadAction: Identifiable {
              .createNamespace,
              .setResources,
              .applyManifest,
+             .linkCatalogApp,
+             .unlinkCatalogApp,
              .cnpgBackupNow:
             return false
         case .scaleCNPG(_, _, let current, let to):
@@ -444,6 +463,17 @@ enum WorkloadAction: Identifiable {
             return [.args(["patch", "cluster", c, "-n", ns, "--type=merge", "-p", "{\"spec\":{\"instances\":\(to)}}"])]
         case .command(let args, _, _):
             return [.args(args)]
+        case .linkCatalogApp(let k, let n, let ns, let app, let container):
+            // One annotate with both key=value pairs; --overwrite REQUIRED so
+            // re-pointing an already-bound workload succeeds.
+            var args = ["annotate", "\(k)/\(n)", "\(CATALOG_APP_ANNOTATION)=\(app)"]
+            if let container { args.append("\(CATALOG_CONTAINER_ANNOTATION)=\(container)") }
+            args.append(contentsOf: ["-n", ns, "--overwrite"])
+            return [.args(args)]
+        case .unlinkCatalogApp(let k, let n, let ns):
+            // Trailing-dash removal of both keys (no --overwrite); a missing key
+            // is a harmless no-op.
+            return [.args(["annotate", "\(k)/\(n)", "\(CATALOG_APP_ANNOTATION)-", "\(CATALOG_CONTAINER_ANNOTATION)-", "-n", ns])]
         }
     }
 

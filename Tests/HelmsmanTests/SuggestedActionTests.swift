@@ -501,6 +501,67 @@ final class SuggestedActionTests: XCTestCase {
         XCTAssertTrue(reason.contains("args"))
     }
 
+    // MARK: - Catalog link / unlink
+
+    func test_resolve_linkCatalogApp_daemonset_buildsAnnotate() {
+        let ds = makeDaemonSet("node-exp", ns: "mon")
+        let action = parseOne(#"{"label":"Link","kind":"linkCatalogApp","name":"node-exp","resourceKind":"daemonset","namespace":"mon","appID":"node-exporter"}"#)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: [], daemonSets: [ds]) else {
+            return XCTFail("expected a resolved action")
+        }
+        XCTAssertEqual(wa.kubectlInvocations(), [.args([
+            "annotate", "daemonset/node-exp", "helmsman.dev/catalog-app=node-exporter", "-n", "mon", "--overwrite",
+        ])])
+    }
+
+    func test_resolve_linkCatalogApp_withContainer() {
+        let dep = makeDeployment("web")
+        let action = parseOne(#"{"label":"Link","kind":"linkCatalogApp","name":"web","namespace":"default","appID":"ghost","container":"ghost"}"#)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [dep], pods: [], nodes: []) else {
+            return XCTFail("expected a resolved action")
+        }
+        XCTAssertEqual(wa.kubectlInvocations().first?.args, [
+            "annotate", "deployment/web", "helmsman.dev/catalog-app=ghost", "helmsman.dev/catalog-container=ghost", "-n", "default", "--overwrite",
+        ])
+    }
+
+    func test_resolve_linkCatalogApp_defaultsKindToDeployment() {
+        let dep = makeDeployment("web")
+        // No resourceKind given → inferred from the controller carrying the name.
+        let action = parseOne(#"{"label":"Link","kind":"linkCatalogApp","name":"web","namespace":"default","appID":"ghost"}"#)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [dep], pods: [], nodes: []) else {
+            return XCTFail("expected a resolved action")
+        }
+        XCTAssertTrue(wa.kubectlInvocations().first!.args.contains("deployment/web"))
+    }
+
+    func test_resolve_linkCatalogApp_withoutAppID_isUnresolved() {
+        let dep = makeDeployment("web")
+        let action = parseOne(#"{"label":"Link","kind":"linkCatalogApp","name":"web","namespace":"default"}"#)
+        guard case .unresolved(let reason) = SuggestedActionResolver.resolve(action, deployments: [dep], pods: [], nodes: []) else {
+            return XCTFail("expected unresolved")
+        }
+        XCTAssertTrue(reason.contains("appID"), reason)
+    }
+
+    func test_resolve_unlinkCatalogApp_statefulset() {
+        let ss = makeStatefulSet("db")
+        let action = parseOne(#"{"label":"Unlink","kind":"unlinkCatalogApp","name":"db","resourceKind":"statefulset","namespace":"default"}"#)
+        guard case .action(let wa) = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: [], statefulSets: [ss]) else {
+            return XCTFail("expected a resolved action")
+        }
+        XCTAssertEqual(wa.kubectlInvocations(), [.args([
+            "annotate", "statefulset/db", "helmsman.dev/catalog-app-", "helmsman.dev/catalog-container-", "-n", "default",
+        ])])
+    }
+
+    func test_resolve_linkCatalogApp_unknownWorkload_isUnresolved() {
+        let action = parseOne(#"{"label":"Link","kind":"linkCatalogApp","name":"ghost","namespace":"default","appID":"ghost"}"#)
+        guard case .unresolved = SuggestedActionResolver.resolve(action, deployments: [], pods: [], nodes: []) else {
+            return XCTFail("expected unresolved")
+        }
+    }
+
     private func parseOne(_ json: String) -> SuggestedAction {
         let (_, actions, _) = SuggestedAction.parse(from: "```action\n\(json)\n```")
         return actions[0]

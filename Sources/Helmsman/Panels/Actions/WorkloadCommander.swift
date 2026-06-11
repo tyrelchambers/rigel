@@ -14,6 +14,22 @@ struct WorkloadCommander {
 
     let context: String?
 
+    /// kubectl plugins (invoked as `kubectl <plugin> …`, e.g. cnpg) REJECT
+    /// global flags placed before the plugin name ("flags cannot be placed
+    /// before plugin name"). For those, `--context` must come AFTER the plugin
+    /// name. Mirrors the web `buildKubectlArgs` (packages/k8s/src/run.ts).
+    static let kubectlPlugins: Set<String> = ["cnpg"]
+
+    /// Build the argv for one invocation, placing `--context` correctly for
+    /// plugin vs. builtin commands.
+    static func argv(context: String?, invocation args: [String]) -> [String] {
+        guard let context else { return args }
+        if let first = args.first, kubectlPlugins.contains(first) {
+            return [first, "--context", context] + args.dropFirst()
+        }
+        return ["--context", context] + args
+    }
+
     func run(_ action: WorkloadAction) async -> Result {
         guard let kubectl = resolveBinary("kubectl") else {
             return Result(stdout: "", stderr: "kubectl not found on PATH", exitCode: -1)
@@ -25,9 +41,7 @@ struct WorkloadCommander {
 
         var combinedStdout = ""
         for inv in invocations {
-            var args: [String] = []
-            if let context { args.append(contentsOf: ["--context", context]) }
-            args.append(contentsOf: inv.args)
+            let args = Self.argv(context: context, invocation: inv.args)
 
             do {
                 let data = try await runProcess(kubectl, args: args, stdin: inv.stdin)

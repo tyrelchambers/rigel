@@ -6,10 +6,17 @@ struct CatalogDetailSheet: View {
     let fit: FitResult
     /// Running-instance details when this app is installed; nil otherwise.
     var installed: CatalogViewModel.InstalledAppInfo? = nil
+    /// The workload this app is explicitly bound to (catalog-app annotation), or
+    /// nil when unbound. Reflects live cluster state; updates on the next tick.
+    var binding: WorkloadBinding? = nil
     let onClose: () -> Void
     /// Hands off the app plus the node the user pinned it to (nil = let the
     /// recommendation stand / Kubernetes schedule freely).
     let onInstall: (CatalogApp, String?) -> Void
+    /// Open the workload picker to bind this app to a running workload.
+    var onLink: (CatalogApp) -> Void = { _ in }
+    /// Remove the binding (routes through the confirm gate for the unlink command).
+    var onUnlink: (CatalogApp, WorkloadBinding) -> Void = { _, _ in }
 
     /// Node the user picked in the NODE FIT panel. nil = "Any".
     @State private var selectedNode: String? = nil
@@ -69,6 +76,7 @@ struct CatalogDetailSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 installedBlock
+                bindingBlock
                 if !app.description.isEmpty {
                     Text(app.description)
                         .font(Theme.Font.body(12))
@@ -174,6 +182,80 @@ struct CatalogDetailSheet: View {
                     RoundedRectangle(cornerRadius: Theme.Radius.sm)
                         .strokeBorder(Theme.Status.running.opacity(0.25), lineWidth: 1)
                 )
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+            }
+        }
+    }
+
+    /// Link / Unlink section, shown for EVERY app. When unbound: a Link button
+    /// that opens the workload picker. When bound: the bound kind/name (+
+    /// container) and an Unlink button. Reflects live cluster state — after a
+    /// link/unlink annotate the displayed binding flips on the next watch tick.
+    @ViewBuilder private var bindingBlock: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("WORKLOAD LINK")
+                .font(Theme.Font.mono(9, weight: .semibold))
+                .foregroundStyle(Theme.Foreground.tertiary)
+                .tracking(0.5)
+            if let binding {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Text(binding.kind)
+                            .font(Theme.Font.mono(9, weight: .semibold))
+                            .foregroundStyle(Theme.Accent.primary)
+                            .padding(.horizontal, 5).padding(.vertical, 2)
+                            .background(Theme.Accent.primaryDim)
+                            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                        Text("\(binding.namespace)/\(binding.name)")
+                            .font(Theme.Font.mono(11, weight: .medium))
+                            .foregroundStyle(Theme.Foreground.primary)
+                            .lineLimit(1).truncationMode(.middle)
+                        Spacer(minLength: 0)
+                    }
+                    if let container = binding.container {
+                        Text("container: \(container)")
+                            .font(Theme.Font.mono(10))
+                            .foregroundStyle(Theme.Foreground.secondary)
+                    }
+                    Button { onUnlink(app, binding) } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "link.badge.plus").font(.system(size: 10, weight: .medium))
+                            Text("Unlink").font(Theme.Font.body(11, weight: .medium))
+                        }
+                        .foregroundStyle(Theme.Status.failed)
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(Theme.Status.failed.opacity(0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Remove the catalog binding from \(binding.kind)/\(binding.name)")
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.Surface.sunken)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Auto-detection matches this app by image. If it runs under a mirror/private registry, a fork, or an unusual kind, bind it to the workload by hand.")
+                        .font(Theme.Font.body(11))
+                        .foregroundStyle(Theme.Foreground.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button { onLink(app) } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "link").font(.system(size: 10, weight: .medium))
+                            Text("Link a workload").font(Theme.Font.body(11, weight: .medium))
+                        }
+                        .foregroundStyle(Theme.Accent.primary)
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(Theme.Accent.primaryDim)
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Bind \(app.name) to a running workload")
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.Surface.sunken)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
             }
         }

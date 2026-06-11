@@ -52,6 +52,8 @@ struct MainWindow: View {
     @State private var pendingCatalogInstall: CatalogInstallWizardModel?
     @State private var purgePickerShown = false
     @State private var pendingPurge: PurgePlan?
+    /// The catalog app whose workload picker is open (Link flow), or nil.
+    @State private var pendingLink: CatalogApp?
 
     init() {
         let cache = ClusterCache()
@@ -349,6 +351,7 @@ struct MainWindow: View {
                 app: app,
                 fit: catalogVM.fit(for: app),
                 installed: catalogVM.installedInfo(for: app),
+                binding: catalogVM.binding(for: app),
                 onClose: { pendingCatalogDetail = nil },
                 onInstall: { app, pinnedNode in
                     pendingCatalogDetail = nil
@@ -359,6 +362,14 @@ struct MainWindow: View {
                         context: contextManager.active?.name,
                         initialNodePin: pinnedNode
                     )
+                },
+                onLink: { app in
+                    pendingCatalogDetail = nil
+                    pendingLink = app
+                },
+                onUnlink: { app, binding in
+                    pendingCatalogDetail = nil
+                    requestWorkload(.unlinkCatalogApp(kind: binding.kind, name: binding.name, namespace: binding.namespace))
                 }
             )
         }
@@ -397,6 +408,19 @@ struct MainWindow: View {
                     pendingPurge = plan
                 },
                 onCancel: { purgePickerShown = false }
+            )
+        }
+        .sheet(item: $pendingLink) { app in
+            LinkWorkloadPickerSheet(
+                app: app,
+                cache: cache,
+                onPick: { kind, name, ns, container in
+                    pendingLink = nil
+                    // Selection only — the confirm sheet shows the exact
+                    // `kubectl annotate …` command and is the gate that runs it.
+                    requestWorkload(.linkCatalogApp(kind: kind, name: name, namespace: ns, appID: app.id, container: container))
+                },
+                onCancel: { pendingLink = nil }
             )
         }
         .sheet(item: $pendingPurge) { plan in
@@ -632,7 +656,8 @@ struct MainWindow: View {
                 onSelect: { pendingCatalogDetail = $0 },
                 onUpdate: { handoffUpdate($0) },
                 onCheckNow: { Task { await updateScheduler.checkNow() } },
-                onCheckApp: { app in Task { await updateScheduler.checkNow(appID: app.id) } }
+                onCheckApp: { app in Task { await updateScheduler.checkNow(appID: app.id) } },
+                onLink: { pendingLink = $0 }
             )
         case .events:
             EventsPanel(viewModel: eventsVM) { event in
@@ -677,6 +702,7 @@ struct MainWindow: View {
             apps: [app],
             deployments: cache.deployments,
             statefulSets: cache.statefulSets,
+            daemonSets: cache.daemonSets,
             pods: cache.pods
         )
         guard let running = installed.first else {
@@ -688,7 +714,8 @@ struct MainWindow: View {
             currentImage: running.image,
             targetTag: latest,
             deployments: cache.deployments,
-            statefulSets: cache.statefulSets
+            statefulSets: cache.statefulSets,
+            daemonSets: cache.daemonSets
         )
         let (text, playbookMissing) = UpgradePlaybook.upgradeMessage(for: plan)
         if playbookMissing {

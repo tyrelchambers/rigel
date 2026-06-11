@@ -32,7 +32,8 @@ struct UpgradePlan {
         currentImage: String,
         targetTag: String,
         deployments: [Deployment],
-        statefulSets: [StatefulSet]
+        statefulSets: [StatefulSet],
+        daemonSets: [DaemonSet] = []
     ) -> UpgradePlan {
         let wantedRepo = imageRepoPath(currentImage)
         var targets: [ImageUpgradeTarget] = []
@@ -58,6 +59,10 @@ struct UpgradePlan {
         for s in statefulSets {
             scan(kind: "statefulset", name: s.metadata.name, namespace: s.metadata.namespace ?? "default",
                  containers: s.spec?.template?.spec?.containers ?? [])
+        }
+        for ds in daemonSets {
+            scan(kind: "daemonset", name: ds.metadata.name, namespace: ds.metadata.namespace ?? "default",
+                 containers: ds.spec?.template?.spec?.containers ?? [])
         }
 
         let currentTag = ImageReference(currentImage)?.tag ?? currentImage

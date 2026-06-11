@@ -81,6 +81,7 @@ final class UpdateScheduler {
             apps: catalog.apps,
             deployments: cache.deployments,
             statefulSets: cache.statefulSets,
+            daemonSets: cache.daemonSets,
             pods: cache.pods
         )
         if let appID { items = items.filter { $0.appID == appID } }

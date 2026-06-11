@@ -49,6 +49,13 @@ final class ClusterCache {
 
     var cnpgAvailable = true
     private(set) var cnpgPluginAvailable = false
+
+    /// Re-run the cnpg plugin probe (e.g. after an in-app install) and publish
+    /// the result. Mirrors the one-shot probe started in the watch fan-out.
+    func recheckCNPGPlugin() async {
+        let available = await CNPGPluginProbe().isAvailable()
+        await MainActor.run { self.cnpgPluginAvailable = available }
+    }
     var metricsAvailable = true
     var error: String? = nil
     var isLoading = false

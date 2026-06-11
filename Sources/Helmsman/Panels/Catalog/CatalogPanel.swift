@@ -9,6 +9,9 @@ struct CatalogPanel: View {
     var onCheckNow: () -> Void = {}
     /// Check a single installed app for updates (per-app recheck button).
     var onCheckApp: (CatalogApp) -> Void = { _ in }
+    /// Open the workload picker to link this app to a running workload —
+    /// surfaced only on cards auto-detection marks NOT installed.
+    var onLink: (CatalogApp) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -138,7 +141,8 @@ struct CatalogPanel: View {
                         checkPhase: viewModel.checkPhase(for: app),
                         onSelect: { onSelect(app) },
                         onUpdate: { onUpdate(app) },
-                        onCheck: { onCheckApp(app) }
+                        onCheck: { onCheckApp(app) },
+                        onLink: { onLink(app) }
                     )
                 }
             }
@@ -205,6 +209,7 @@ struct CatalogCard: View {
     let onSelect: () -> Void
     var onUpdate: () -> Void = {}
     var onCheck: () -> Void = {}
+    var onLink: () -> Void = {}
 
     @State private var hovering = false
 
@@ -258,7 +263,11 @@ struct CatalogCard: View {
             }
             // Per-app update/check state on its own full-width row so it never
             // competes with the chips above (which were wrapping mid-word).
-            if isInstalled { statusRow }
+            if isInstalled {
+                statusRow
+            } else {
+                linkAffordance   // "Already installed? Link it…" — not-installed only
+            }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -308,6 +317,23 @@ struct CatalogCard: View {
                 }
             }
         }
+    }
+
+    /// Secondary affordance for an app auto-detection missed: bind it to a
+    /// running workload by hand (mirror/private registry, fork, DaemonSet, …).
+    /// Shown ONLY on not-installed cards.
+    private var linkAffordance: some View {
+        Button(action: onLink) {
+            HStack(spacing: 4) {
+                Image(systemName: "link")
+                    .font(.system(size: 9, weight: .medium))
+                Text("Already installed? Link it…")
+                    .font(Theme.Font.mono(10, weight: .medium))
+            }
+            .foregroundStyle(Theme.Accent.primary)
+        }
+        .buttonStyle(.plain)
+        .help("Bind \(app.name) to a running workload auto-detection missed")
     }
 
     /// The left-hand status badge for an installed app's latest known result.

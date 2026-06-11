@@ -11,6 +11,27 @@ final class DatabasesViewModel {
     var error: String? { cache.error }
     var isLoading: Bool { cache.isLoading }
     var cnpgAvailable: Bool { cache.cnpgAvailable }
+    /// Whether the `kubectl-cnpg` plugin is installed (gates the CNPG actions).
+    var cnpgPluginAvailable: Bool { cache.cnpgPluginAvailable }
+
+    /// True while an in-app `kubectl-cnpg` install is running.
+    var installingPlugin = false
+    /// Stderr from the last failed install attempt, if any.
+    var pluginInstallError: String?
+
+    /// One-click install of the `kubectl-cnpg` plugin, then re-probe so the
+    /// CNPG actions light up without a restart.
+    @MainActor func installCNPGPlugin() async {
+        installingPlugin = true
+        pluginInstallError = nil
+        let result = await CNPGPluginInstaller().install()
+        if result.ok {
+            await cache.recheckCNPGPlugin()
+        } else {
+            pluginInstallError = result.output
+        }
+        installingPlugin = false
+    }
 
     /// Memoized on `cache.dataRevision`: building `instances` rescans cnpg
     /// clusters + every deployment/statefulset for DB images, so without this it

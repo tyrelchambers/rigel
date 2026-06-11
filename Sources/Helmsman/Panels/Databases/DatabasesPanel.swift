@@ -79,6 +79,9 @@ struct DatabasesPanel: View {
                         isExpanded: viewModel.isExpanded(inst),
                         nodes: viewModel.nodes(for: inst),
                         childPods: viewModel.isExpanded(inst) ? viewModel.pods(for: inst) : [],
+                        pluginMissing: inst.source == .cnpg && !viewModel.cnpgPluginAvailable,
+                        installingPlugin: viewModel.installingPlugin,
+                        onInstallPlugin: { Task { await viewModel.installCNPGPlugin() } },
                         onToggle: { viewModel.toggleExpansion(inst) },
                         onAction: onAction,
                         onPortForward: onPortForward,
@@ -98,6 +101,10 @@ private struct DatabaseRow: View {
     let isExpanded: Bool
     let nodes: [String]
     let childPods: [Pod]
+    /// CNPG instance whose `kubectl-cnpg` plugin isn't installed → offer install.
+    let pluginMissing: Bool
+    let installingPlugin: Bool
+    let onInstallPlugin: () -> Void
     let onToggle: () -> Void
     let onAction: (WorkloadAction) -> Void
     let onPortForward: (ConnectionInfo) -> Void
@@ -176,9 +183,33 @@ private struct DatabaseRow: View {
         .animation(.easeInOut(duration: 0.15), value: isExpanded)
     }
 
+    @ViewBuilder private var installPluginButton: some View {
+        Button(action: onInstallPlugin) {
+            HStack(spacing: 4) {
+                if installingPlugin {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: "arrow.down.circle")
+                }
+                Text(installingPlugin ? "Installing…" : "Install kubectl-cnpg")
+                    .font(Theme.Font.body(11, weight: .medium))
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 8).padding(.vertical, 4)
+        .background(Theme.Accent.primary.opacity(0.15))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm)
+            .strokeBorder(Theme.Accent.primary.opacity(0.4), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+        .foregroundStyle(Theme.Accent.primary)
+        .disabled(installingPlugin)
+        .help("Install the kubectl-cnpg plugin to enable CNPG actions")
+    }
+
     @ViewBuilder private var actionBar: some View {
-        if !capabilities.actions.isEmpty {
+        if pluginMissing || !capabilities.actions.isEmpty {
             HStack(spacing: 6) {
+                if pluginMissing { installPluginButton }
                 ForEach(capabilities.actions) { item in
                     Button { perform(item.action) } label: {
                         Label(item.action.label, systemImage: item.action.systemImage)

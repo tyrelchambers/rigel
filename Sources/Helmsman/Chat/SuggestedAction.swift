@@ -18,6 +18,14 @@ struct SuggestedAction: Identifiable, Decodable {
         /// purge confirm sheet (discovery against the live cache). Uses `name`
         /// (root deployment) + `namespace`. Never auto-executes.
         case purge
+        /// Bind a running workload to a catalog app via a durable annotation.
+        /// Uses `name` (workload), `resourceKind` (deployment|statefulset|
+        /// daemonset, default deployment), `namespace`, `appID`, and optional
+        /// `container`. Routes through the same confirm gate as every action.
+        case linkCatalogApp
+        /// Remove a catalog binding from a workload. Uses `name`, `resourceKind`,
+        /// `namespace`.
+        case unlinkCatalogApp
         /// Escape hatch: run a literal `kubectl` command (incl. plugins like
         /// `cnpg`) the typed kinds above don't model. Carries `args`.
         case command
@@ -46,8 +54,12 @@ struct SuggestedAction: Identifiable, Decodable {
     /// kubectl `--limits` quantity string, e.g. `cpu=500m,memory=1Gi` (setResources only).
     var limits: String?
     /// kubectl resource kind for `deleteResource`, e.g. "service", "configmap",
-    /// "secret", "pvc", "pv", "ingress", "clusterrole".
+    /// "secret", "pvc", "pv", "ingress", "clusterrole". Also the workload kind
+    /// for `linkCatalogApp`/`unlinkCatalogApp` (deployment|statefulset|daemonset).
     var resourceKind: String?
+    /// Catalog app id for `linkCatalogApp` — the value written to the
+    /// `helmsman.dev/catalog-app` annotation.
+    var appID: String?
     /// Literal `kubectl` arguments for the generic `command` kind — without the
     /// `kubectl` binary or `--context` (the app prepends both). e.g.
     /// `["cnpg", "destroy", "pg", "pg-1", "-n", "default"]`.
@@ -61,7 +73,7 @@ struct SuggestedAction: Identifiable, Decodable {
     var target: String? { name ?? deployment }
 
     private enum CodingKeys: String, CodingKey {
-        case label, kind, name, deployment, pod, node, namespace, replicas, env, container, image, requests, limits, resourceKind, args, destructive
+        case label, kind, name, deployment, pod, node, namespace, replicas, env, container, image, requests, limits, resourceKind, appID, args, destructive
     }
 
     init(from decoder: Decoder) throws {
@@ -81,6 +93,7 @@ struct SuggestedAction: Identifiable, Decodable {
         self.requests = try c.decodeIfPresent(String.self, forKey: .requests)
         self.limits = try c.decodeIfPresent(String.self, forKey: .limits)
         self.resourceKind = try c.decodeIfPresent(String.self, forKey: .resourceKind)
+        self.appID = try c.decodeIfPresent(String.self, forKey: .appID)
         self.args = try c.decodeIfPresent([String].self, forKey: .args)
         self.destructive = try c.decodeIfPresent(Bool.self, forKey: .destructive)
     }
@@ -107,6 +120,8 @@ struct SuggestedAction: Identifiable, Decodable {
         case .deleteNamespace: return "trash"
         case .deleteResource:  return "trash"
         case .purge:           return "trash"
+        case .linkCatalogApp:  return "link"
+        case .unlinkCatalogApp: return "link.badge.plus"
         case .command:         return "terminal"
         }
     }

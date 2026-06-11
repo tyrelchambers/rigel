@@ -60,4 +60,27 @@ final class WorkloadActionCNPGTests: XCTestCase {
         XCTAssertFalse(a.isHighRisk)
         XCTAssertFalse(a.needsAcknowledge)
     }
+
+    // MARK: - --context placement (kubectl plugins reject it before the name)
+
+    func test_argv_pluginCommand_contextAfterPluginName() {
+        // `kubectl --context X cnpg …` fails ("flags cannot be placed before
+        // plugin name"); the context must come AFTER `cnpg`.
+        let argv = WorkloadCommander.argv(context: "prod", invocation: ["cnpg", "backup", "pg", "-n", "default"])
+        XCTAssertEqual(argv, ["cnpg", "--context", "prod", "backup", "pg", "-n", "default"])
+    }
+
+    func test_argv_builtinCommand_contextPrepended() {
+        let argv = WorkloadCommander.argv(context: "prod", invocation: ["scale", "deployment/x", "--replicas=2", "-n", "default"])
+        XCTAssertEqual(argv, ["--context", "prod", "scale", "deployment/x", "--replicas=2", "-n", "default"])
+    }
+
+    func test_argv_noContext_isUnchanged() {
+        XCTAssertEqual(WorkloadCommander.argv(context: nil, invocation: ["cnpg", "version"]), ["cnpg", "version"])
+    }
+
+    func test_cnpgPluginInstaller_argvPipesScriptToBinDir() {
+        let argv = CNPGPluginInstaller.installArgv(binDir: "/opt/homebrew/bin")
+        XCTAssertEqual(argv, ["-c", "curl -sSfL \(CNPGPluginInstaller.scriptURL) | sh -s -- -b /opt/homebrew/bin"])
+    }
 }

@@ -171,6 +171,110 @@ final class InstallMatchTests: XCTestCase {
                        URL(string: "https://github.com/go-gitea/gitea")!)
     }
 
+    // MARK: - Annotation-first detection (catalog-link-workload)
+
+    func test_annotation_marksDeploymentInstalled_evenWithNoImageMatch() {
+        let apps = [app(id: "foo", images: ["foo/foo"])]
+        // Running image is a private-mirror path that doesn't match foo/foo.
+        let d = deployment(image: "registry.internal/mirror/something:1", appAnnotation: "foo")
+        let ids = installedAppIDs(apps: apps, deployments: [d], statefulSets: [], pods: [])
+        XCTAssertEqual(ids, ["foo"])
+    }
+
+    func test_annotation_marksStatefulSetInstalled() {
+        let apps = [app(id: "foo", images: ["nope/nope"])]
+        let s = statefulSet(image: "mirror/x:1", appAnnotation: "foo")
+        let ids = installedAppIDs(apps: apps, deployments: [], statefulSets: [s], pods: [])
+        XCTAssertEqual(ids, ["foo"])
+    }
+
+    func test_annotation_marksDaemonSetInstalled() {
+        let apps = [app(id: "foo", images: ["nope/nope"])]
+        let ds = daemonSet(image: "mirror/x:1", appAnnotation: "foo")
+        let ids = installedAppIDs(apps: apps, deployments: [], statefulSets: [], daemonSets: [ds], pods: [])
+        XCTAssertEqual(ids, ["foo"])
+    }
+
+    func test_noAnnotation_imageMatchOnDaemonSet() {
+        // An app whose image runs ONLY on a DaemonSet is now detected.
+        let apps = [app(id: "node-exporter", images: ["prom/node-exporter"])]
+        let ds = daemonSet(image: "prom/node-exporter:v1.8.1")
+        let ids = installedAppIDs(apps: apps, deployments: [], statefulSets: [], daemonSets: [ds], pods: [])
+        XCTAssertEqual(ids, ["node-exporter"])
+    }
+
+    func test_annotation_unknownAppID_doesNotCrash() {
+        let apps = [app(id: "foo", images: ["foo/foo"])]
+        let d = deployment(image: "foo/foo:1", appAnnotation: "ghost-app")
+        // ghost-app isn't in the catalog; it's added verbatim but corresponds to
+        // no card. foo is image-matched. No crash.
+        let ids = installedAppIDs(apps: apps, deployments: [d], statefulSets: [], pods: [])
+        XCTAssertTrue(ids.contains("foo"))
+        XCTAssertTrue(ids.contains("ghost-app"))
+    }
+
+    // MARK: - updateTargets (annotation-first, DaemonSets)
+
+    func test_updateTargets_annotationWinsOverImageMatch() {
+        let apps = [app(id: "foo", images: ["foo/foo"])]
+        // One image-matched deployment, plus an annotated statefulset on a
+        // mirror image. Annotation wins.
+        let imgMatch = deployment(image: "foo/foo:1")
+        let bound = statefulSet(image: "mirror/foo:2", appAnnotation: "foo")
+        let targets = updateTargets(apps: apps, deployments: [imgMatch], statefulSets: [bound], pods: [])
+        XCTAssertEqual(targets.count, 1)
+        XCTAssertEqual(targets[0].workloadKind, "statefulset")
+        XCTAssertEqual(targets[0].image, "mirror/foo:2")
+    }
+
+    func test_updateTargets_daemonsetKind() {
+        let apps = [app(id: "foo", images: ["foo/foo"])]
+        let ds = daemonSet(image: "mirror/foo:2", appAnnotation: "foo")
+        let targets = updateTargets(apps: apps, deployments: [], statefulSets: [], daemonSets: [ds], pods: [])
+        XCTAssertEqual(targets.first?.workloadKind, "daemonset")
+    }
+
+    func test_updateTargets_containerAnnotationSelectsContainer() {
+        let apps = [app(id: "foo", images: ["foo/foo"])]
+        let d = multiContainerDeployment(
+            containers: [("side", "busybox:1"), ("main", "foo/foo:1")],
+            appAnnotation: "foo", containerAnnotation: "side"
+        )
+        let targets = updateTargets(apps: apps, deployments: [d], statefulSets: [], pods: [])
+        XCTAssertEqual(targets.first?.container, "side")
+        XCTAssertEqual(targets.first?.image, "busybox:1")
+    }
+
+    func test_updateTargets_multiContainerNoAnnotation_picksMatchImageContainer() {
+        let apps = [app(id: "foo", images: ["foo/foo"])]
+        let d = multiContainerDeployment(
+            containers: [("side", "busybox:1"), ("main", "foo/foo:1")],
+            appAnnotation: "foo", containerAnnotation: nil
+        )
+        let targets = updateTargets(apps: apps, deployments: [d], statefulSets: [], pods: [])
+        // No container annotation → first matchImage-matching container.
+        XCTAssertEqual(targets.first?.container, "main")
+        XCTAssertEqual(targets.first?.image, "foo/foo:1")
+    }
+
+    func test_updateTargets_singleContainer_noAnnotationNeeded() {
+        let apps = [app(id: "foo", images: ["nope/nope"])]
+        let d = deployment(image: "mirror/x:1", appAnnotation: "foo")
+        let targets = updateTargets(apps: apps, deployments: [d], statefulSets: [], pods: [])
+        XCTAssertEqual(targets.first?.container, "c0")
+    }
+
+    func test_updateTargets_twoWorkloadsSameAnnotation_deterministicScanOrder() {
+        let apps = [app(id: "foo", images: ["foo/foo"])]
+        // Both a deployment and a statefulset carry catalog-app=foo. The
+        // deployment (earlier in scan order) wins.
+        let d = deployment(image: "mirror/d:1", appAnnotation: "foo")
+        let s = statefulSet(image: "mirror/s:1", appAnnotation: "foo")
+        let targets = updateTargets(apps: apps, deployments: [d], statefulSets: [s], pods: [])
+        XCTAssertEqual(targets.count, 1)
+        XCTAssertEqual(targets[0].workloadKind, "deployment")
+    }
+
     // MARK: - Fixture builders
 
     private func app(id: String, images: [String], repoURL: URL? = nil) -> CatalogApp {
@@ -200,22 +304,17 @@ final class InstallMatchTests: XCTestCase {
         )
     }
 
-    private func podTemplate(image: String) -> PodTemplate {
-        PodTemplate(
-            spec: PodSpec(
-                nodeName: nil,
-                containers: [Container(name: "c0", image: image, resources: nil, ports: nil)]
-            )
-        )
+    private func podTemplate(containers: [Container]) -> PodTemplate {
+        PodTemplate(spec: PodSpec(nodeName: nil, containers: containers))
     }
 
-    private func deployment(image: String) -> Deployment {
+    private func deployment(image: String, appAnnotation: String? = nil) -> Deployment {
         Deployment(
-            metadata: meta("deploy"),
+            metadata: meta("deploy", appAnnotation: appAnnotation),
             spec: DeploymentSpec(
                 replicas: 1,
                 selector: nil,
-                template: podTemplate(image: image),
+                template: podTemplate(containers: [Container(name: "c0", image: image, resources: nil, ports: nil)]),
                 strategy: nil,
                 paused: nil
             ),
@@ -223,10 +322,38 @@ final class InstallMatchTests: XCTestCase {
         )
     }
 
-    private func statefulSet(image: String) -> StatefulSet {
+    private func multiContainerDeployment(
+        containers: [(name: String, image: String)],
+        appAnnotation: String?,
+        containerAnnotation: String?
+    ) -> Deployment {
+        Deployment(
+            metadata: meta("deploy", appAnnotation: appAnnotation, containerAnnotation: containerAnnotation),
+            spec: DeploymentSpec(
+                replicas: 1,
+                selector: nil,
+                template: podTemplate(containers: containers.map { Container(name: $0.name, image: $0.image, resources: nil, ports: nil) }),
+                strategy: nil,
+                paused: nil
+            ),
+            status: nil
+        )
+    }
+
+    private func statefulSet(image: String, appAnnotation: String? = nil) -> StatefulSet {
         StatefulSet(
-            metadata: meta("sts"),
-            spec: StatefulSetSpec(replicas: 1, selector: nil, template: podTemplate(image: image)),
+            metadata: meta("sts", appAnnotation: appAnnotation),
+            spec: StatefulSetSpec(replicas: 1, selector: nil,
+                                  template: podTemplate(containers: [Container(name: "c0", image: image, resources: nil, ports: nil)])),
+            status: nil
+        )
+    }
+
+    private func daemonSet(image: String, appAnnotation: String? = nil) -> DaemonSet {
+        DaemonSet(
+            metadata: meta("ds", appAnnotation: appAnnotation),
+            spec: DaemonSet.Spec(selector: nil,
+                                 template: podTemplate(containers: [Container(name: "c0", image: image, resources: nil, ports: nil)])),
             status: nil
         )
     }
@@ -242,14 +369,17 @@ final class InstallMatchTests: XCTestCase {
         )
     }
 
-    private func meta(_ prefix: String) -> ObjectMeta {
-        ObjectMeta(
+    private func meta(_ prefix: String, appAnnotation: String? = nil, containerAnnotation: String? = nil) -> ObjectMeta {
+        var annotations: [String: String] = [:]
+        if let appAnnotation { annotations[CATALOG_APP_ANNOTATION] = appAnnotation }
+        if let containerAnnotation { annotations[CATALOG_CONTAINER_ANNOTATION] = containerAnnotation }
+        return ObjectMeta(
             name: "\(prefix)-\(UUID().uuidString)",
             namespace: "default",
             uid: UUID().uuidString,
             creationTimestamp: nil,
             labels: nil,
-            annotations: nil
+            annotations: annotations.isEmpty ? nil : annotations
         )
     }
 }
