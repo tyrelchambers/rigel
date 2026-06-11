@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Routes, Route } from "react-router";
 import OverviewPanel from "./panels/overview/OverviewPanel";
 import HealthPanel from "./panels/health/HealthPanel";
@@ -23,8 +23,9 @@ import AssistantPanel from "./panels/assistant/AssistantPanel";
 import SettingsPanel from "./panels/settings/SettingsPanel";
 import AccountsPanel from "./panels/accounts/AccountsPanel";
 import { connectCluster } from "@/lib/ws";
-import { useAuthStatus } from "@/lib/api";
+import { useAuthStatus, useChatConfig } from "@/lib/api";
 import { LoginScreen } from "@/shell/LoginScreen";
+import { OnboardingWizard } from "@/shell/OnboardingWizard";
 import NavStrip from "@/shell/NavStrip";
 import StatusBar from "@/shell/StatusBar";
 import ChatPane, { type ChatPaneHandle } from "@/shell/ChatPane";
@@ -64,6 +65,25 @@ export default function App() {
   }, [authed]);
   const [paletteOpen, setPaletteOpen] = useCommandPalette();
 
+  // First-run onboarding: auto-show once when set up is incomplete (no Claude
+  // token) and not previously dismissed; re-openable from Settings via an event.
+  const { data: chatConfig } = useChatConfig();
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  useEffect(() => {
+    const open = () => setShowOnboarding(true);
+    window.addEventListener("helmsman:open-setup", open);
+    return () => window.removeEventListener("helmsman:open-setup", open);
+  }, []);
+  useEffect(() => {
+    if (authed && chatConfig && !chatConfig.configured && !localStorage.getItem("helmsman_onboarded")) {
+      setShowOnboarding(true);
+    }
+  }, [authed, chatConfig]);
+  function closeOnboarding() {
+    setShowOnboarding(false);
+    localStorage.setItem("helmsman_onboarded", "1");
+  }
+
   // The ChatPane exposes a send() handle so OverviewPanel's
   // "Investigate cluster" button can inject a message.
   const chatHandleRef = useRef<ChatPaneHandle | null>(null);
@@ -85,6 +105,7 @@ export default function App() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#0A0A0A" }}>
+      {showOnboarding && <OnboardingWizard onClose={closeOnboarding} />}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
 
       {/* ── Main row: NavStrip + content column + ChatPane ─────────────────── */}

@@ -364,6 +364,20 @@ export function useNodeMetrics() {
   });
 }
 
+/** Onboarding: one-click install of the upstream metrics-server. */
+export function useInstallMetricsServer() {
+  const qc = useQueryClient();
+  return useMutation<ActionResponse, Error, void>({
+    mutationFn: async () => {
+      const res = await fetch("/api/install/metrics-server", { method: "POST" });
+      if (!res.ok) throw new Error((await res.text()) || "install failed");
+      return (await res.json()) as ActionResponse;
+    },
+    // metrics take a moment to flow; nudge the metrics queries after install.
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["metrics"] }),
+  });
+}
+
 // Per-node disk usage from the kubelet Summary API.
 // GET /api/metrics/node-disk → { available, items: [{ name, ...Bytes }] }
 

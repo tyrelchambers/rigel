@@ -28,6 +28,10 @@ const PORT = Number(process.env.PORT ?? 8787);
 // and defeat the password gate.
 const TOKEN = process.env.HELMSMAN_TOKEN?.trim() || null;
 
+// Upstream metrics-server manifest (onboarding one-click install).
+const METRICS_SERVER_URL =
+  "https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml";
+
 // Built web UI. Default resolves to apps/web/dist relative to this file, which
 // holds whether running from source (apps/server/src) or in the container
 // (/app/apps/server/src). Override with WEB_DIST if the layout differs.
@@ -210,6 +214,23 @@ const server = Bun.serve({
       }
       const result = await applyManifest(context, body.yaml);
       return Response.json(result);
+    }
+
+    // POST /api/install/metrics-server — one-click upstream metrics-server for
+    // the onboarding wizard (enables `kubectl top` → live metrics + right-sizing).
+    // Applies the official components.yaml, then best-effort adds
+    // --kubelet-insecure-tls (the common homelab/k3s/kind fix for self-signed
+    // kubelet certs). Always 200 with { code, stdout, stderr } from the apply.
+    if (url.pathname === "/api/install/metrics-server" && req.method === "POST") {
+      const apply = await kubectl(context, ["apply", "-f", METRICS_SERVER_URL]);
+      if (apply.code === 0) {
+        // Tolerate failure: not every cluster needs/accepts the flag.
+        await kubectl(context, [
+          "patch", "deployment", "metrics-server", "-n", "kube-system", "--type=json",
+          "-p", '[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]',
+        ]);
+      }
+      return Response.json(apply);
     }
 
     // POST /api/helm — catalog wizard HELM install. Runs repo add (idempotent)
