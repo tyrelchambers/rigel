@@ -123,6 +123,14 @@ export default function DeploymentsPanel() {
     }, 50);
   }, [focusRequest, allDeployments]);
 
+  useEffect(() => {
+    return () => {
+      if (useCluster.getState().focusRequest?.kind === "deployment") {
+        useCluster.getState().setFocusRequest(null);
+      }
+    };
+  }, []);
+
   function toggleExpand(d: Deployment) {
     const k = key(d);
     setExpanded((prev) => {
@@ -411,8 +419,8 @@ export default function DeploymentsPanel() {
                   <div className="space-y-1.5">
                     <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Environment</div>
                     <KeyValueEditor
-                      rows={c.env.map((e, i) => ({ id: `${c.name}-env-${i}`, key: e.key, value: e.value }))}
-                      onRowsChange={(rows: KVRow[]) => updateContainer(ci, { env: rows.map((r) => ({ key: r.key, value: r.value })) })}
+                      rows={c.env}
+                      onRowsChange={(rows: KVRow[]) => updateContainer(ci, { env: rows })}
                       keyPlaceholder="ENV_NAME"
                     />
                     {c.refEnvKeys.length > 0 && (

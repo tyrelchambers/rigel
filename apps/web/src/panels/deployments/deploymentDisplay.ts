@@ -233,7 +233,7 @@ export function sortDeployments(deployments: Deployment[]): Deployment[] {
 import type { ActionBlock } from "@/lib/api";
 
 /** One editable env row (plain string value only). */
-export interface EnvEdit { key: string; value: string }
+export interface EnvEdit { id: string; key: string; value: string }
 
 /** Editable view of a single container. */
 export interface ContainerEdit {
@@ -269,7 +269,7 @@ export function editModelFor(d: Deployment): DeploymentEdit {
         cpuLim: c.resources?.limits?.cpu ?? "",
         memReq: c.resources?.requests?.memory ?? "",
         memLim: c.resources?.limits?.memory ?? "",
-        env: env.filter((e: EnvVar) => e.valueFrom == null).map((e) => ({ key: e.name, value: e.value ?? "" })),
+        env: env.filter((e: EnvVar) => e.valueFrom == null).map((e) => ({ id: e.name, key: e.name, value: e.value ?? "" })),
         refEnvKeys: env.filter((e: EnvVar) => e.valueFrom != null).map((e) => e.name),
       };
     }),
@@ -311,10 +311,14 @@ export function diffDeployment(original: Deployment, edit: DeploymentEdit): Acti
     const limNow = quantityString(c.cpuLim, c.memLim);
     const reqOrig = quantityString(orig.resources?.requests?.cpu ?? "", orig.resources?.requests?.memory ?? "");
     const limOrig = quantityString(orig.resources?.limits?.cpu ?? "", orig.resources?.limits?.memory ?? "");
-    if (reqNow !== reqOrig || limNow !== limOrig) {
+    // kubectl set resources cannot cleanly REMOVE a request/limit, so a cleared
+    // field (→ "") is treated as "no change". Only non-empty, changed flags emit.
+    const reqChanged = reqNow !== "" && reqNow !== reqOrig;
+    const limChanged = limNow !== "" && limNow !== limOrig;
+    if (reqChanged || limChanged) {
       const a: ActionBlock = { kind: "setResources", name, namespace, container: c.name, label: `Update ${c.name} resources` };
-      if (reqNow) a.requests = reqNow;
-      if (limNow) a.limits = limNow;
+      if (reqChanged) a.requests = reqNow;
+      if (limChanged) a.limits = limNow;
       actions.push(a);
     }
 

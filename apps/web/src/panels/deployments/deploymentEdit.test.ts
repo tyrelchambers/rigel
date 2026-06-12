@@ -34,7 +34,7 @@ test("editModelFor splits plain vs ref env and reads replicas/image/resources", 
   expect(m.containers[0].cpuReq).toBe("100m");
   expect(m.containers[0].memLim).toBe("256Mi");
   expect(m.containers[0].cpuLim).toBe("");
-  expect(m.containers[0].env).toEqual([{ key: "LOG_LEVEL", value: "info" }]);
+  expect(m.containers[0].env).toEqual([{ id: "LOG_LEVEL", key: "LOG_LEVEL", value: "info" }]);
   expect(m.containers[0].refEnvKeys).toEqual(["DB_PASS"]);
 });
 
@@ -68,7 +68,7 @@ test("diffDeployment emits setResources when requests/limits change", () => {
   expect(diffDeployment(original, edit)).toEqual([
     {
       kind: "setResources", name: "web", namespace: "default", container: "app",
-      requests: "cpu=100m,memory=128Mi", limits: "cpu=500m,memory=256Mi",
+      limits: "cpu=500m,memory=256Mi",
       label: "Update app resources",
     },
   ]);
@@ -78,8 +78,8 @@ test("diffDeployment emits setEnv with adds, edits, and removals", () => {
   const original = dep();
   const edit = editModelFor(original);
   edit.containers[0].env = [
-    { key: "LOG_LEVEL", value: "debug" }, // modified
-    { key: "NEW", value: "1" },           // added
+    { id: "LOG_LEVEL", key: "LOG_LEVEL", value: "debug" }, // modified
+    { id: "NEW", key: "NEW", value: "1" },                 // added
   ];                                       // (LOG_LEVEL kept, original had only LOG_LEVEL plain)
   edit.containers[0].refEnvKeys = [];      // removed the DB_PASS ref var
   expect(diffDeployment(original, edit)).toEqual([
@@ -95,7 +95,7 @@ test("diffDeployment emits setEnv with adds, edits, and removals", () => {
 test("diffDeployment emits setEnv removal when a plain var is deleted", () => {
   const original = dep();
   const edit = editModelFor(original);
-  edit.containers[0].env = []; // dropped LOG_LEVEL; ref DB_PASS still kept
+  edit.containers[0].env = [] as import("./deploymentDisplay").EnvEdit[]; // dropped LOG_LEVEL; ref DB_PASS still kept
   const actions = diffDeployment(original, edit);
   expect(actions).toContainEqual(
     expect.objectContaining({ kind: "setEnv", unsetEnv: ["LOG_LEVEL"] }),
@@ -109,4 +109,26 @@ test("diffDeployment batches multiple changed dimensions in order", () => {
   edit.containers[0].image = "nginx:1.27";
   const kinds = diffDeployment(original, edit).map((a) => a.kind);
   expect(kinds).toEqual(["scale", "setImage"]);
+});
+
+test("diffDeployment ignores a cleared resource field (cannot remove via kubectl set resources)", () => {
+  const original = dep();
+  const edit = editModelFor(original);
+  edit.containers[0].cpuReq = ""; // clear CPU request
+  edit.containers[0].memReq = ""; // clear memory request
+  expect(diffDeployment(original, edit).filter((a) => a.kind === "setResources")).toEqual([]);
+});
+
+test("diffDeployment setResources includes both flags when both change to non-empty values", () => {
+  const original = dep();
+  const edit = editModelFor(original);
+  edit.containers[0].cpuReq = "200m"; // memReq stays 128Mi → requests=cpu=200m,memory=128Mi
+  edit.containers[0].memLim = "512Mi"; // limits=memory=512Mi (cpuLim still "")
+  expect(diffDeployment(original, edit)).toEqual([
+    {
+      kind: "setResources", name: "web", namespace: "default", container: "app",
+      requests: "cpu=200m,memory=128Mi", limits: "memory=512Mi",
+      label: "Update app resources",
+    },
+  ]);
 });

@@ -101,6 +101,14 @@ export default function SecretsPanel() {
     setFocusRequest(null);
   }, [focusRequest, allSecrets]);
 
+  useEffect(() => {
+    return () => {
+      if (useCluster.getState().focusRequest?.kind === "secret") {
+        useCluster.getState().setFocusRequest(null);
+      }
+    };
+  }, []);
+
   const shown = filtered.length;
 
   function toggleExpand(uid: string) {

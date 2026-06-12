@@ -188,7 +188,7 @@ export function ConfirmSheet({ action, actions, open, onClose, onPurge }: Confir
           <Button
             variant={isDestructive ? "destructive" : "default"}
             onClick={() => { void handleExecute(); }}
-            disabled={isPending || (!isPurge && !previewCommands && !previewError)}
+            disabled={isPending || (!isPurge && !previewCommands)}
           >
             {isPending ? "Running…" : isPurge ? "Continue to removal" : "Execute"}
           </Button>
