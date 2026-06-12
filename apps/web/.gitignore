@@ -1,5 +1,8 @@
 # Logs
-logs
+# Scoped to a root-level logs/ dir — a bare `logs` also matched the
+# src/panels/logs/ SOURCE directory, so the Logs panel never got committed
+# (local builds worked, clones/CI broke on the missing module).
+/logs
 *.log
 npm-debug.log*
 yarn-debug.log*
