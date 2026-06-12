@@ -1,4 +1,4 @@
-import type { Deployment, ContainerSummary } from "./types";
+import type { Deployment, ContainerSummary, EnvVar } from "./types";
 import type { Pod } from "../pods/types";
 
 /**
@@ -224,4 +224,125 @@ export function sortDeployments(deployments: Deployment[]): Deployment[] {
     if (ns !== 0) return ns;
     return a.metadata.name.localeCompare(b.metadata.name);
   });
+}
+
+// ---------------------------------------------------------------------------
+// Edit model + diff
+// ---------------------------------------------------------------------------
+
+import type { ActionBlock } from "@/lib/api";
+
+/** One editable env row (plain string value only). */
+export interface EnvEdit { key: string; value: string }
+
+/** Editable view of a single container. */
+export interface ContainerEdit {
+  name: string;
+  image: string;
+  cpuReq: string;
+  cpuLim: string;
+  memReq: string;
+  memLim: string;
+  /** Editable plain-value env vars. */
+  env: EnvEdit[];
+  /** Names of valueFrom (ref) env vars that are still present (read-only, removable). */
+  refEnvKeys: string[];
+}
+
+/** Editable view of a whole deployment. */
+export interface DeploymentEdit {
+  replicas: number;
+  containers: ContainerEdit[];
+}
+
+/** Build the mutable edit model from a deployment's live spec. */
+export function editModelFor(d: Deployment): DeploymentEdit {
+  const containers = d.spec?.template?.spec?.containers ?? [];
+  return {
+    replicas: desiredReplicas(d),
+    containers: containers.map((c) => {
+      const env = c.env ?? [];
+      return {
+        name: c.name,
+        image: c.image ?? "",
+        cpuReq: c.resources?.requests?.cpu ?? "",
+        cpuLim: c.resources?.limits?.cpu ?? "",
+        memReq: c.resources?.requests?.memory ?? "",
+        memLim: c.resources?.limits?.memory ?? "",
+        env: env.filter((e: EnvVar) => e.valueFrom == null).map((e) => ({ key: e.name, value: e.value ?? "" })),
+        refEnvKeys: env.filter((e: EnvVar) => e.valueFrom != null).map((e) => e.name),
+      };
+    }),
+  };
+}
+
+/** Join cpu/memory request or limit parts into a kubectl quantity string. */
+function quantityString(cpu: string, mem: string): string {
+  const parts: string[] = [];
+  if (cpu) parts.push(`cpu=${cpu}`);
+  if (mem) parts.push(`memory=${mem}`);
+  return parts.join(",");
+}
+
+/**
+ * Compute the discrete ActionBlocks needed to turn `original` into `edit`.
+ * Only changed dimensions produce actions; order is replicas → per-container
+ * (image → resources → env). Reuses the server's tested set-verb action kinds.
+ */
+export function diffDeployment(original: Deployment, edit: DeploymentEdit): ActionBlock[] {
+  const name = original.metadata.name;
+  const namespace = original.metadata.namespace ?? "default";
+  const actions: ActionBlock[] = [];
+
+  if (edit.replicas !== desiredReplicas(original)) {
+    actions.push({ kind: "scale", name, namespace, replicas: edit.replicas, label: `Scale ${name} to ${edit.replicas} replicas` });
+  }
+
+  const originalContainers = original.spec?.template?.spec?.containers ?? [];
+  for (const c of edit.containers) {
+    const orig = originalContainers.find((o) => o.name === c.name);
+    if (!orig) continue;
+
+    if (c.image !== (orig.image ?? "")) {
+      actions.push({ kind: "setImage", name, namespace, container: c.name, image: c.image, label: `Set ${c.name} image to ${c.image}` });
+    }
+
+    const reqNow = quantityString(c.cpuReq, c.memReq);
+    const limNow = quantityString(c.cpuLim, c.memLim);
+    const reqOrig = quantityString(orig.resources?.requests?.cpu ?? "", orig.resources?.requests?.memory ?? "");
+    const limOrig = quantityString(orig.resources?.limits?.cpu ?? "", orig.resources?.limits?.memory ?? "");
+    if (reqNow !== reqOrig || limNow !== limOrig) {
+      const a: ActionBlock = { kind: "setResources", name, namespace, container: c.name, label: `Update ${c.name} resources` };
+      if (reqNow) a.requests = reqNow;
+      if (limNow) a.limits = limNow;
+      actions.push(a);
+    }
+
+    // env diff: plain-value adds/edits + removals (plain dropped + ref dropped)
+    const origPlain = new Map((orig.env ?? []).filter((e) => e.valueFrom == null).map((e) => [e.name, e.value ?? ""] as const));
+    const origRefKeys = (orig.env ?? []).filter((e) => e.valueFrom != null).map((e) => e.name);
+    const setEnv: Record<string, string> = {};
+    for (const row of c.env) {
+      if (!row.key) continue;
+      if (origPlain.get(row.key) !== row.value) setEnv[row.key] = row.value;
+    }
+    const keptPlain = new Set(c.env.map((r) => r.key));
+    const removed: string[] = [];
+    for (const k of origPlain.keys()) if (!keptPlain.has(k)) removed.push(k);
+    // When env is completely cleared, remove all ref vars too; otherwise consult refEnvKeys.
+    if (c.env.length === 0) {
+      for (const k of origRefKeys) removed.push(k);
+    } else {
+      for (const k of origRefKeys) if (!c.refEnvKeys.includes(k)) removed.push(k);
+    }
+
+    if (Object.keys(setEnv).length > 0 || removed.length > 0) {
+      const a: ActionBlock = { kind: "setEnv", name, namespace, container: c.name, label: `Update ${c.name} environment` };
+      if (Object.keys(setEnv).length > 0) a.env = setEnv;
+      if (removed.length > 0) a.unsetEnv = removed.sort();
+      actions.push(a);
+    }
+  }
+
+  return actions;
 }
