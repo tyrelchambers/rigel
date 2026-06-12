@@ -47,11 +47,11 @@ describe("showJumpToNewest", () => {
 });
 
 describe("appendTextDelta", () => {
-  it("appends to the trailing assistant message", () => {
-    const msgs: ChatMessage[] = [{ id: "1", role: "assistant", text: "Here" }];
-    const next = appendTextDelta(msgs, " are the pods");
+  it("separates consecutive text blocks with a blank line", () => {
+    const msgs: ChatMessage[] = [{ id: "1", role: "assistant", text: "Let me investigate." }];
+    const next = appendTextDelta(msgs, "A pnpm monorepo.");
     expect(next).toHaveLength(1);
-    expect(next[0].text).toBe("Here are the pods");
+    expect(next[0].text).toBe("Let me investigate.\n\nA pnpm monorepo.");
   });
   it("starts a new assistant message when the last is a user message", () => {
     const msgs: ChatMessage[] = [{ id: "1", role: "user", text: "hi" }];

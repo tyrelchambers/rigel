@@ -59,19 +59,21 @@ function initial(): TurnState {
 }
 
 describe("chat event stream", () => {
-  it("accumulates interleaved thinking and text deltas", () => {
+  it("accumulates thinking, and joins separate text blocks with a blank line", () => {
     let s = initial();
     const events: ChatEvent[] = [
+      // thinking deltas concatenate raw…
       { type: "thinking", text: "Let me analyze" },
       { type: "thinking", text: " the pods" },
-      { type: "text", text: "Here are" },
-      { type: "text", text: " the pods" },
+      // …while each text event is a COMPLETE block → separated by a blank line.
+      { type: "text", text: "Looking now." },
+      { type: "text", text: "Here are the pods." },
     ];
     for (const e of events) s = reduce(s, e);
     expect(s.liveThinking).toBe("Let me analyze the pods");
     expect(s.messages).toHaveLength(1);
     expect(s.messages[0].role).toBe("assistant");
-    expect(s.messages[0].text).toBe("Here are the pods");
+    expect(s.messages[0].text).toBe("Looking now.\n\nHere are the pods.");
     expect(s.isStreaming).toBe(true);
   });
 

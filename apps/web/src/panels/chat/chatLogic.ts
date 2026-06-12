@@ -50,7 +50,12 @@ export function elapsedSeconds(start: Date, end: Date = new Date()): number {
 export function appendTextDelta(messages: ChatMessage[], delta: string): ChatMessage[] {
   const last = messages[messages.length - 1];
   if (last && last.role === "assistant") {
-    const updated = { ...last, text: last.text + delta };
+    // Each "text" event is a COMPLETE text block from the bridge (no partial
+    // token streaming), so separate consecutive blocks with a blank line —
+    // otherwise the segments Claude emits around tool calls run together
+    // ("…investigate.A pnpm monorepo.").
+    const sep = last.text && delta ? "\n\n" : "";
+    const updated = { ...last, text: last.text + sep + delta };
     return [...messages.slice(0, -1), updated];
   }
   return [...messages, { id: newId(), role: "assistant", text: delta }];
