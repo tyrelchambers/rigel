@@ -133,40 +133,19 @@ make run
 That compiles in debug, assembles `Helmsman.app` (ad-hoc signed with the bundled
 entitlements so notifications and Dock behavior work), and opens it.
 
-## Run in Docker (web)
+## Run in Docker / Kubernetes (web)
 
 A self-hostable web version of Helmsman lives in this repo as a TypeScript
 monorepo (`apps/web` React UI + `apps/server` Bun backend). It runs anywhere
 Docker does and is viewed in a browser — no macOS or Apple signing required.
 
 ```sh
-docker compose up --build
+HELMSMAN_PASSWORD=changeme docker compose up --build
 # then open http://localhost:8787
 ```
 
-Compose mounts two things read-only:
-
-- `~/.kube/config` → `/kube/config` — the cluster the web app talks to. **The API
-  server URL in your kubeconfig must be reachable from inside the container.** For
-  a remote cluster IP/hostname the default bridge network is fine; for a cluster on
-  the host (kind/minikube/`localhost`), uncomment the `extra_hosts` stanza in
-  `compose.yaml` (or use `network_mode: host`) and point the config at
-  `host.docker.internal`.
-- `~/.claude` → `/root/.claude` — your Claude subscription auth, used by the chat
-  copilot. Omit it if you only need the read/observe panels.
-
-Optionally set `HELMSMAN_TOKEN` to require an `Authorization: Bearer <token>` on
-the API/WS (the UI shell and `/api/health` stay open):
-
-```sh
-HELMSMAN_TOKEN=somesecret docker compose up --build
-```
-
-The single Bun server serves the built UI plus `/api/*` and `/ws` on port 8787.
-
-> Status: the web app is an in-progress port. Live panels currently include
-> **Pods** (with guarded delete) and the **chat** copilot; more panels are being
-> ported from the native app.
+See **[WEB.md](WEB.md)** for full installation (Docker + Helm), setup
+(cluster access, auth, AI token), and configuration reference.
 
 ### Make targets
 
