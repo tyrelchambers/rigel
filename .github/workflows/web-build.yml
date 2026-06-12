@@ -20,7 +20,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Build natively for amd64 (no QEMU): claude-code's installer bakes an
       # AVX2 Bun on the runner; under emulation it bakes the baseline build that

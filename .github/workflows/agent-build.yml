@@ -18,7 +18,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # No QEMU: build natively for amd64 so claude-code's installer detects the
       # runner's AVX2 CPU and bakes the AVX2 Bun build. Under QEMU emulation it
