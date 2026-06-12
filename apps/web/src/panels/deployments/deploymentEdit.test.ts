@@ -95,10 +95,10 @@ test("diffDeployment emits setEnv with adds, edits, and removals", () => {
 test("diffDeployment emits setEnv removal when a plain var is deleted", () => {
   const original = dep();
   const edit = editModelFor(original);
-  edit.containers[0].env = []; // dropped LOG_LEVEL
+  edit.containers[0].env = []; // dropped LOG_LEVEL; ref DB_PASS still kept
   const actions = diffDeployment(original, edit);
   expect(actions).toContainEqual(
-    expect.objectContaining({ kind: "setEnv", unsetEnv: ["DB_PASS", "LOG_LEVEL"] }),
+    expect.objectContaining({ kind: "setEnv", unsetEnv: ["LOG_LEVEL"] }),
   );
 });
 

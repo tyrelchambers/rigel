@@ -329,12 +329,7 @@ export function diffDeployment(original: Deployment, edit: DeploymentEdit): Acti
     const keptPlain = new Set(c.env.map((r) => r.key));
     const removed: string[] = [];
     for (const k of origPlain.keys()) if (!keptPlain.has(k)) removed.push(k);
-    // When env is completely cleared, remove all ref vars too; otherwise consult refEnvKeys.
-    if (c.env.length === 0) {
-      for (const k of origRefKeys) removed.push(k);
-    } else {
-      for (const k of origRefKeys) if (!c.refEnvKeys.includes(k)) removed.push(k);
-    }
+    for (const k of origRefKeys) if (!c.refEnvKeys.includes(k)) removed.push(k);
 
     if (Object.keys(setEnv).length > 0 || removed.length > 0) {
       const a: ActionBlock = { kind: "setEnv", name, namespace, container: c.name, label: `Update ${c.name} environment` };
