@@ -395,7 +395,7 @@ export default function DeploymentsPanel() {
                   <div className="space-y-1.5">
                     <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Environment</div>
                     <KeyValueEditor
-                      rows={c.env.map((e, i) => ({ id: `${c.name}-${i}-${e.key}`, key: e.key, value: e.value }))}
+                      rows={c.env.map((e, i) => ({ id: `${c.name}-env-${i}`, key: e.key, value: e.value }))}
                       onRowsChange={(rows: KVRow[]) => updateContainer(ci, { env: rows.map((r) => ({ key: r.key, value: r.value })) })}
                       keyPlaceholder="ENV_NAME"
                     />
