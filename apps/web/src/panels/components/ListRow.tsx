@@ -35,6 +35,7 @@ export interface ListRowProps {
 }
 
 export function ListRow({
+  rowKey,
   isOpen,
   onToggle,
   children,
@@ -46,6 +47,7 @@ export function ListRow({
     <>
       {/* Main row card */}
       <div
+        data-row-key={rowKey}
         className="relative overflow-hidden rounded-md"
         style={{
           background: isOpen ? "#141417" : "#050505",

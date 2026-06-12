@@ -70,6 +70,8 @@ export default function DeploymentsPanel() {
   const isLoading = useCluster((s) => s.isLoading);
   const error = useCluster((s) => s.error);
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
+  const focusRequest = useCluster((s) => s.focusRequest);
+  const setFocusRequest = useCluster((s) => s.setFocusRequest);
 
   const [search, setSearch] = useState("");
   const [pendingActions, setPendingActions] = useState<ActionBlock[] | null>(null);
@@ -106,6 +108,20 @@ export default function DeploymentsPanel() {
   function key(d: Deployment): string {
     return d.metadata.uid || `${d.metadata.namespace}/${d.metadata.name}`;
   }
+
+  useEffect(() => {
+    if (focusRequest?.kind !== "deployment") return;
+    const match = allDeployments.find(
+      (d) => (d.metadata.uid ?? `${d.metadata.namespace}/${d.metadata.name}`) === focusRequest.key,
+    );
+    if (!match) return; // not streamed yet; effect re-runs when allDeployments updates
+    const k = key(match);
+    setExpanded((prev) => new Set(prev).add(k));
+    setFocusRequest(null);
+    setTimeout(() => {
+      document.querySelector(`[data-row-key="${CSS.escape(k)}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 50);
+  }, [focusRequest, allDeployments]);
 
   function toggleExpand(d: Deployment) {
     const k = key(d);

@@ -42,6 +42,8 @@ export default function SecretsPanel() {
   const error = useCluster((s) => s.error);
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
   const setNamespaceFilter = useCluster((s) => s.setNamespaceFilter);
+  const focusRequest = useCluster((s) => s.focusRequest);
+  const setFocusRequest = useCluster((s) => s.setFocusRequest);
 
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -88,6 +90,16 @@ export default function SecretsPanel() {
     () => allSecrets.filter((s) => matchesSearch(s, search)),
     [allSecrets, search],
   );
+
+  useEffect(() => {
+    if (focusRequest?.kind !== "secret") return;
+    const match = allSecrets.find(
+      (s) => s.metadata.uid === focusRequest.key || s.metadata.name === focusRequest.key,
+    );
+    if (!match) return; // not streamed yet; effect re-runs when allSecrets updates
+    openEdit(match);
+    setFocusRequest(null);
+  }, [focusRequest, allSecrets]);
 
   const shown = filtered.length;
 
