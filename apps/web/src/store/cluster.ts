@@ -27,6 +27,9 @@ interface ClusterState {
    * must swap the data, not merge onto the previous namespace's items.
    */
   replaceKind: (kind: string, items: Record<string, unknown>) => void;
+  /** A request to focus/open a specific resource after navigation (set by the palette). */
+  focusRequest: { route: string; kind: string; key: string } | null;
+  setFocusRequest: (f: { route: string; kind: string; key: string } | null) => void;
 }
 
 export const useCluster = create<ClusterState>((set) => ({
@@ -49,4 +52,6 @@ export const useCluster = create<ClusterState>((set) => ({
     }),
   replaceKind: (kind, items) =>
     set((s) => ({ resources: { ...s.resources, [kind]: items } })),
+  focusRequest: null,
+  setFocusRequest: (focusRequest) => set({ focusRequest }),
 }));
