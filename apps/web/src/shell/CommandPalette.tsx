@@ -10,8 +10,10 @@ import { PANEL_META, NAV_GROUPS } from "./NavStrip";
 import {
   filterEntries,
   wrapIndex,
+  buildResourceEntries,
   type PaletteEntry,
 } from "./commandPaletteLogic";
+import { useCluster } from "@/store/cluster";
 
 // Build the flat, ordered entry list from the nav groups — same order as sidebar.
 function buildEntries(): PaletteEntry[] {
@@ -35,7 +37,7 @@ function buildEntries(): PaletteEntry[] {
   return entries;
 }
 
-const ALL_ENTRIES = buildEntries();
+const PANEL_ENTRIES = buildEntries();
 
 // ─── Palette modal ────────────────────────────────────────────────────────────
 
@@ -50,12 +52,16 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const [highlightIdx, setHighlightIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const setFocusRequest = useCluster((s) => s.setFocusRequest);
+  const [entries, setEntries] = useState<PaletteEntry[]>(PANEL_ENTRIES);
 
-  const filtered = filterEntries(ALL_ENTRIES, query);
+  const filtered = filterEntries(entries, query);
 
-  // Reset state each time it opens.
+  // Reset state and rebuild the combined entry list each time it opens.
   useEffect(() => {
     if (open) {
+      const resources = useCluster.getState().resources;
+      setEntries([...PANEL_ENTRIES, ...buildResourceEntries(resources)]);
       setQuery("");
       setHighlightIdx(0);
       // Defer focus until the element is rendered.
@@ -76,12 +82,15 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     row?.scrollIntoView({ block: "nearest" });
   }, [highlightIdx]);
 
-  const navigateTo = useCallback(
-    (route: string) => {
+  const selectEntry = useCallback(
+    (entry: PaletteEntry) => {
       onClose();
-      navigate(route);
+      navigate(entry.route);
+      if (entry.kind && entry.focusKey) {
+        setFocusRequest({ route: entry.route, kind: entry.kind, key: entry.focusKey });
+      }
     },
-    [navigate, onClose],
+    [navigate, onClose, setFocusRequest],
   );
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -101,7 +110,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     }
     if (e.key === "Enter") {
       const entry = filtered[highlightIdx];
-      if (entry) navigateTo(entry.route);
+      if (entry) selectEntry(entry);
     }
   }
 
@@ -164,7 +173,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search panels…"
+            placeholder="Search panels & resources…"
             style={{
               flex: 1,
               background: "transparent",
@@ -218,7 +227,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                   role="option"
                   aria-selected={isActive}
                   data-palette-idx={idx}
-                  onClick={() => navigateTo(entry.route)}
+                  onClick={() => selectEntry(entry)}
                   onMouseEnter={() => setHighlightIdx(idx)}
                   style={{
                     display: "flex",
