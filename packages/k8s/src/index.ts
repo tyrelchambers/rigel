@@ -3,8 +3,10 @@
 
 export {
   type SuggestedAction,
+  type SuggestedQuestion,
   ACTION_KINDS,
   extractActionBlocks,
+  extractQuestionBlocks,
   stripActionBlocks,
   parseSuggestedActions,
 } from "./actionBlocks";

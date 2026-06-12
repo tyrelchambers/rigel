@@ -641,7 +641,12 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
               </div>
             )}
             {messages.map((m) => (
-              <MessageBubble key={m.id} message={m} onAction={handleSuggestedAction} />
+              <MessageBubble
+                key={m.id}
+                message={m}
+                onAction={handleSuggestedAction}
+                onAnswer={(value) => handoffToChat(value)}
+              />
             ))}
             <div ref={bottomRef} style={{ height: 14 }} />
           </div>

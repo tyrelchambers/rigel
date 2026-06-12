@@ -2,14 +2,17 @@ import { useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { User, Sparkles, Settings, ChevronRight } from "lucide-react";
-import { parseSuggestedActions, type SuggestedAction } from "@/lib/actionBlocks";
+import { parseSuggestedActions, type SuggestedAction, type SuggestedQuestion } from "@/lib/actionBlocks";
 import { cn } from "@/lib/utils";
 import { SuggestedActionList } from "./SuggestedActionList";
+import { SuggestedQuestionList } from "./SuggestedQuestionList";
 import type { ChatMessage } from "./types";
 
 interface Props {
   message: ChatMessage;
   onAction: (action: SuggestedAction) => void;
+  /** Send a picked clarifying-question option as the next message. */
+  onAnswer?: (value: string) => void;
 }
 
 // Role color mirrors the Swift MessageBubble: user = pod-palette blue,
@@ -56,15 +59,15 @@ function ThinkingTrail({ thinking, seconds }: { thinking: string; seconds?: numb
  * blocks (stripped from display) and rendered as markdown; user/system text is
  * plain.
  */
-export function MessageBubble({ message, onAction }: Props) {
+export function MessageBubble({ message, onAction, onAnswer }: Props) {
   const { Icon, label, color } = ROLE_META[message.role];
   const isAssistant = message.role === "assistant";
   const isSystem = message.role === "system";
   const surface = cardSurface(message.role);
 
-  const { display, actions } = isAssistant
+  const { display, actions, questions } = isAssistant
     ? parseSuggestedActions(message.text)
-    : { display: message.text, actions: [] as SuggestedAction[] };
+    : { display: message.text, actions: [] as SuggestedAction[], questions: [] as SuggestedQuestion[] };
 
   return (
     <div className="flex items-start gap-2">
@@ -106,6 +109,9 @@ export function MessageBubble({ message, onAction }: Props) {
           </p>
         )}
         {isAssistant && <SuggestedActionList actions={actions} onAction={onAction} />}
+        {isAssistant && onAnswer && (
+          <SuggestedQuestionList questions={questions} onAnswer={onAnswer} />
+        )}
       </div>
     </div>
   );

@@ -1,5 +1,38 @@
 import { describe, it, expect } from "vitest";
-import { extractActionBlocks, stripActionBlocks, parseSuggestedActions } from "@/lib/actionBlocks";
+import {
+  extractActionBlocks,
+  extractQuestionBlocks,
+  stripActionBlocks,
+  parseSuggestedActions,
+} from "@/lib/actionBlocks";
+
+describe("extractQuestionBlocks", () => {
+  it("extracts a question with options (value defaults handled in UI)", () => {
+    const md =
+      'Pick one:\n\n```question\n{"question":"How should I proceed?","options":[{"label":"Both","value":"Do both"},{"label":"Just A"}]}\n```';
+    const qs = extractQuestionBlocks(md);
+    expect(qs).toHaveLength(1);
+    expect(qs[0].question).toBe("How should I proceed?");
+    expect(qs[0].options).toEqual([
+      { label: "Both", value: "Do both" },
+      { label: "Just A", value: undefined },
+    ]);
+  });
+
+  it("skips malformed or option-less question blocks", () => {
+    expect(extractQuestionBlocks("```question\nnot json\n```")).toEqual([]);
+    expect(extractQuestionBlocks('```question\n{"question":"x","options":[]}\n```')).toEqual([]);
+  });
+
+  it("parseSuggestedActions returns display + actions + questions", () => {
+    const md =
+      'Prose.\n\n```question\n{"question":"q?","options":[{"label":"A"}]}\n```';
+    const parsed = parseSuggestedActions(md);
+    expect(parsed.display).toBe("Prose.");
+    expect(parsed.actions).toEqual([]);
+    expect(parsed.questions).toHaveLength(1);
+  });
+});
 
 describe("extractActionBlocks", () => {
   it("extracts a single action block", () => {

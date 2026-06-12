@@ -2,6 +2,7 @@
 // (apps/web) and this bridge decode the fenced ```action JSON identically.
 export { extractActionBlocks } from "@helmsman/k8s/src/actionBlocks";
 import { effectiveClaudeToken } from "./chatConfig";
+import { systemPrompt } from "./systemPrompt";
 
 const READ_ONLY_ALLOWLIST = [
   "Bash(kubectl get *)",
@@ -59,6 +60,10 @@ export async function* runClaude(
   opts?: { model?: string; effort?: string },
 ): AsyncGenerator<ChatEvent> {
   const argv = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose"];
+  // Teach the model the action/question button contract (parity with Swift) and
+  // block AskUserQuestion (no UI here — it uses ```question blocks instead).
+  argv.push("--append-system-prompt", systemPrompt(context));
+  argv.push("--disallowedTools", "AskUserQuestion");
   // Apply the composer's model/effort selection as launch flags (validated so a
   // bad value can't inject arbitrary args or break the CLI).
   if (opts?.model && ALLOWED_MODELS.has(opts.model)) argv.push("--model", opts.model);

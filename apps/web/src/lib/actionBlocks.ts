@@ -3,8 +3,10 @@
 // ```action JSON identically (see docs/parity/contracts.md § 1).
 export {
   type SuggestedAction,
+  type SuggestedQuestion,
   ACTION_KINDS,
   extractActionBlocks,
+  extractQuestionBlocks,
   stripActionBlocks,
   parseSuggestedActions,
 } from "@helmsman/k8s";
