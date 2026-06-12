@@ -15,6 +15,8 @@ export interface ActionBlock {
   namespace?: string;
   replicas?: number;
   env?: Record<string, string>;
+  /** setEnv only: env var names to remove (kubectl `KEY-` unset syntax). */
+  unsetEnv?: string[];
   container?: string;
   image?: string;
   requests?: string;
