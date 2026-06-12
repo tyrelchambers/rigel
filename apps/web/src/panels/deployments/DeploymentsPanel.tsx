@@ -4,7 +4,7 @@ import {
   ArrowDown,
   RotateCcw,
   RefreshCw,
-  MoveVertical,
+  SlidersHorizontal,
   Undo2,
   Pause,
   Play,
@@ -32,7 +32,9 @@ import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { LoadingState } from "@/panels/components/LoadingState";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
+import { KeyValueEditor } from "@/panels/components/KeyValueEditor";
 import type { ActionBlock } from "@/lib/api";
+import type { KVRow } from "@helmsman/k8s";
 import type { Deployment } from "./types";
 import type { Pod } from "../pods/types";
 import {
@@ -49,10 +51,12 @@ import {
   isRedeploying,
   rolloutProgress,
   childPods,
-  desiredReplicas,
   totalReplicas,
   matchesSearch,
   sortDeployments,
+  editModelFor,
+  diffDeployment,
+  type DeploymentEdit,
 } from "./deploymentDisplay";
 import {
   relativeAge as podAge,
@@ -68,10 +72,10 @@ export default function DeploymentsPanel() {
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
 
   const [search, setSearch] = useState("");
-  const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
+  const [pendingActions, setPendingActions] = useState<ActionBlock[] | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [scaleTarget, setScaleTarget] = useState<Deployment | null>(null);
-  const [scaleValue, setScaleValue] = useState("1");
+  const [editTarget, setEditTarget] = useState<Deployment | null>(null);
+  const [editModel, setEditModel] = useState<DeploymentEdit | null>(null);
 
   useEffect(() => {
     const ns = namespaceFilter ?? "*";
@@ -116,51 +120,49 @@ export default function DeploymentsPanel() {
   // --- Mutation action builders --------------------------------------------
 
   function restart(d: Deployment) {
-    setPendingAction({
+    setPendingActions([{
       kind: "restart",
       name: d.metadata.name,
       namespace: d.metadata.namespace ?? "default",
       label: `Restart deployment ${d.metadata.name}`,
-    });
+    }]);
   }
 
   function rollback(d: Deployment) {
-    setPendingAction({
+    setPendingActions([{
       kind: "rollback",
       name: d.metadata.name,
       namespace: d.metadata.namespace ?? "default",
       label: `Rollback ${d.metadata.name} to previous version`,
-    });
+    }]);
   }
 
   function togglePause(d: Deployment) {
     const paused = d.spec?.paused === true;
-    setPendingAction({
+    setPendingActions([{
       kind: paused ? "resume" : "pause",
       name: d.metadata.name,
       namespace: d.metadata.namespace ?? "default",
       label: paused
         ? `Resume rollout of ${d.metadata.name}`
         : `Pause rollout of ${d.metadata.name}`,
-    });
+    }]);
   }
 
-  function openScale(d: Deployment) {
-    setScaleValue(String(desiredReplicas(d)));
-    setScaleTarget(d);
+  function openEdit(d: Deployment) {
+    setEditModel(editModelFor(d));
+    setEditTarget(d);
   }
 
-  function confirmScale() {
-    if (!scaleTarget) return;
-    const n = Math.max(0, Math.min(50, Math.floor(Number(scaleValue) || 0)));
-    setPendingAction({
-      kind: "scale",
-      name: scaleTarget.metadata.name,
-      namespace: scaleTarget.metadata.namespace ?? "default",
-      replicas: n,
-      label: `Scale ${scaleTarget.metadata.name} to ${n} replicas`,
-    });
-    setScaleTarget(null);
+  function saveEdit() {
+    if (!editTarget || !editModel) return;
+    const actions = diffDeployment(editTarget, editModel);
+    setEditTarget(null);
+    if (actions.length > 0) setPendingActions(actions);
+  }
+
+  function updateContainer(idx: number, patch: Partial<DeploymentEdit["containers"][number]>) {
+    setEditModel((m) => (m ? { ...m, containers: m.containers.map((c, i) => (i === idx ? { ...c, ...patch } : c)) } : m));
   }
 
   // --- Chat handoff -------------------------------------------------------
@@ -168,8 +170,6 @@ export default function DeploymentsPanel() {
   function askClaude(d: Deployment, topic: "Errors" | "Logs" | "Explain" | "Rollout") {
     handoffToChat(buildHandoffPrompt("deployment", d.metadata.name, d.metadata.namespace, topic));
   }
-
-  const scaleN = Math.max(0, Math.min(50, Math.floor(Number(scaleValue) || 0)));
 
   return (
     <div className="flex h-full flex-col">
@@ -235,8 +235,8 @@ export default function DeploymentsPanel() {
                   deployment={d}
                   pods={pods}
                   paused={paused}
+                  onEdit={() => openEdit(d)}
                   onRestart={() => restart(d)}
-                  onScale={() => openScale(d)}
                   onRollback={() => rollback(d)}
                   onTogglePause={() => togglePause(d)}
                 />
@@ -351,34 +351,87 @@ export default function DeploymentsPanel() {
       )}
       </div>
 
-      {/* Scale prompt */}
-      <Dialog open={!!scaleTarget} onOpenChange={(o) => { if (!o) setScaleTarget(null); }}>
-        <DialogContent>
+      {/* Config editor dialog */}
+      <Dialog open={!!editTarget} onOpenChange={(o) => { if (!o) setEditTarget(null); }}>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Scale {scaleTarget?.metadata.name}</DialogTitle>
-            <DialogDescription>Enter replica count (0–50).</DialogDescription>
+            <DialogTitle>Edit {editTarget?.metadata.name}</DialogTitle>
+            <DialogDescription>Changes are applied as kubectl commands you confirm next.</DialogDescription>
           </DialogHeader>
-          <input
-            type="number"
-            min={0}
-            max={50}
-            value={scaleValue}
-            onChange={(e) => setScaleValue(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") confirmScale(); }}
-            className="w-full rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
-            aria-label="Replica count"
-          />
+          {editModel && (
+            <div className="max-h-[60vh] space-y-4 overflow-auto">
+              <label className="flex items-center gap-2 text-sm">
+                <span className="w-24 text-muted-foreground">Replicas</span>
+                <input
+                  type="number" min={0} max={50} value={editModel.replicas}
+                  onChange={(e) => setEditModel({ ...editModel, replicas: Math.max(0, Math.min(50, Math.floor(Number(e.target.value) || 0))) })}
+                  className="w-24 rounded-md border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+                />
+              </label>
+              {editModel.containers.map((c, ci) => (
+                <div key={c.name} className="space-y-2 rounded-md border p-3">
+                  <div className="font-mono text-xs font-medium text-primary">{c.name}</div>
+                  <label className="flex items-center gap-2 text-xs">
+                    <span className="w-20 text-muted-foreground">Image</span>
+                    <input
+                      value={c.image}
+                      onChange={(e) => updateContainer(ci, { image: e.target.value })}
+                      className="flex-1 rounded-md border bg-background px-2.5 py-1.5 font-mono text-xs outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["cpuReq", "cpuLim", "memReq", "memLim"] as const).map((field) => (
+                      <label key={field} className="flex items-center gap-2 text-xs">
+                        <span className="w-16 text-muted-foreground">{field === "cpuReq" ? "CPU req" : field === "cpuLim" ? "CPU lim" : field === "memReq" ? "Mem req" : "Mem lim"}</span>
+                        <input
+                          value={c[field]}
+                          onChange={(e) => updateContainer(ci, { [field]: e.target.value })}
+                          placeholder={field.startsWith("cpu") ? "e.g. 250m" : "e.g. 256Mi"}
+                          className="flex-1 rounded-md border bg-background px-2 py-1 font-mono text-xs outline-none focus:ring-2 focus:ring-ring"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Environment</div>
+                    <KeyValueEditor
+                      rows={c.env.map((e, i) => ({ id: `${c.name}-${i}-${e.key}`, key: e.key, value: e.value }))}
+                      onRowsChange={(rows: KVRow[]) => updateContainer(ci, { env: rows.map((r) => ({ key: r.key, value: r.value })) })}
+                      keyPlaceholder="ENV_NAME"
+                    />
+                    {c.refEnvKeys.length > 0 && (
+                      <div className="space-y-1 pt-1">
+                        {c.refEnvKeys.map((k) => (
+                          <div key={k} className="flex items-center gap-2 rounded border border-dashed px-2 py-1 text-[11px] font-mono text-muted-foreground">
+                            <span>{k}</span>
+                            <span className="ml-1 text-[10px] uppercase tracking-wide">from ref · read-only</span>
+                            <button
+                              type="button"
+                              className="ml-auto text-destructive hover:underline"
+                              onClick={() => updateContainer(ci, { refEnvKeys: c.refEnvKeys.filter((x) => x !== k) })}
+                            >
+                              remove
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setScaleTarget(null)}>Cancel</Button>
-            <Button onClick={confirmScale}>Scale to {scaleN}</Button>
+            <Button variant="outline" onClick={() => setEditTarget(null)}>Cancel</Button>
+            <Button onClick={saveEdit}>Review changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <ConfirmSheet
-        action={pendingAction}
-        open={!!pendingAction}
-        onClose={() => setPendingAction(null)}
+        actions={pendingActions ?? undefined}
+        open={!!pendingActions}
+        onClose={() => setPendingActions(null)}
       />
     </div>
   );
@@ -393,7 +446,7 @@ interface DeploymentDetailProps {
   pods: Pod[];
   paused: boolean;
   onRestart: () => void;
-  onScale: () => void;
+  onEdit: () => void;
   onRollback: () => void;
   onTogglePause: () => void;
 }
@@ -403,7 +456,7 @@ function DeploymentDetail({
   pods,
   paused,
   onRestart,
-  onScale,
+  onEdit,
   onRollback,
   onTogglePause,
 }: DeploymentDetailProps) {
@@ -539,9 +592,9 @@ function DeploymentDetail({
           <RefreshCw className="size-3" />
           Restart
         </Button>
-        <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={onScale}>
-          <MoveVertical className="size-3" />
-          Scale
+        <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={onEdit}>
+          <SlidersHorizontal className="size-3" />
+          Edit config
         </Button>
         <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={onRollback}>
           <Undo2 className="size-3" />
