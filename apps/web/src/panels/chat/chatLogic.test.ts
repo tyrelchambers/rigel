@@ -10,6 +10,8 @@ import {
   thinkingVerb,
   makeMessage,
   AT_BOTTOM_THRESHOLD,
+  appendToolActivity,
+  applyToolResult,
 } from "./chatLogic";
 import { stripActionBlocks } from "@/lib/actionBlocks";
 import type { ChatMessage } from "./types";
@@ -126,5 +128,82 @@ describe("shortSessionId", () => {
   });
   it("returns null for no session", () => {
     expect(shortSessionId(null)).toBeNull();
+  });
+});
+
+describe("appendToolActivity", () => {
+  const ev = {
+    toolId: "tool-abc",
+    toolName: "Bash",
+    command: "kubectl get pods",
+    description: "List pods",
+    inputJSON: '{"command":"kubectl get pods"}',
+  };
+
+  it("appends a system message with status running", () => {
+    const next = appendToolActivity([], ev);
+    expect(next).toHaveLength(1);
+    expect(next[0].role).toBe("system");
+    expect(next[0].tool?.status).toBe("running");
+  });
+
+  it("carries the tool id, name, command, description and inputJSON", () => {
+    const next = appendToolActivity([], ev);
+    const tool = next[0].tool!;
+    expect(tool.id).toBe("tool-abc");
+    expect(tool.name).toBe("Bash");
+    expect(tool.command).toBe("kubectl get pods");
+    expect(tool.description).toBe("List pods");
+    expect(tool.inputJSON).toBe('{"command":"kubectl get pods"}');
+  });
+
+  it("preserves existing messages", () => {
+    const msgs: ChatMessage[] = [makeMessage("user", "hi")];
+    const next = appendToolActivity(msgs, ev);
+    expect(next).toHaveLength(2);
+    expect(next[0].role).toBe("user");
+  });
+});
+
+describe("applyToolResult", () => {
+  const base: ChatMessage[] = [
+    makeMessage("user", "do it"),
+    {
+      id: "sys-1",
+      role: "system",
+      text: "",
+      tool: {
+        id: "tool-abc",
+        name: "Bash",
+        command: "kubectl get pods",
+        inputJSON: "{}",
+        status: "running",
+      },
+    },
+    makeMessage("assistant", "done"),
+  ];
+
+  it("flips status to ok and sets output on success", () => {
+    const next = applyToolResult(base, "tool-abc", false, "out");
+    const toolMsg = next[1];
+    expect(toolMsg.tool?.status).toBe("ok");
+    expect(toolMsg.tool?.output).toBe("out");
+  });
+
+  it("flips status to error on failure", () => {
+    const next = applyToolResult(base, "tool-abc", true, "denied");
+    expect(next[1].tool?.status).toBe("error");
+    expect(next[1].tool?.output).toBe("denied");
+  });
+
+  it("leaves non-matching messages untouched", () => {
+    const next = applyToolResult(base, "tool-abc", false, "out");
+    expect(next[0]).toBe(base[0]);
+    expect(next[2]).toBe(base[2]);
+  });
+
+  it("is a no-op for an unknown tool id", () => {
+    const next = applyToolResult(base, "tool-unknown", false, "out");
+    expect(next).toEqual(base);
   });
 });

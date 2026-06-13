@@ -122,3 +122,40 @@ export function shortSessionId(sessionId: string | null): string | null {
 export function toActionBlock(action: SuggestedAction): ActionBlock {
   return action;
 }
+
+/** Append a system message carrying a running tool-activity card. */
+export function appendToolActivity(
+  messages: ChatMessage[],
+  ev: { toolId: string; toolName: string; command?: string; description?: string; inputJSON: string },
+): ChatMessage[] {
+  return [
+    ...messages,
+    {
+      id: newId(),
+      role: "system",
+      text: "",
+      tool: {
+        id: ev.toolId,
+        name: ev.toolName,
+        command: ev.command,
+        description: ev.description,
+        inputJSON: ev.inputJSON,
+        status: "running",
+      },
+    },
+  ];
+}
+
+/** Update the matching tool-activity card with its result (by tool id). */
+export function applyToolResult(
+  messages: ChatMessage[],
+  toolId: string,
+  isError: boolean,
+  output?: string,
+): ChatMessage[] {
+  return messages.map((m) =>
+    m.tool && m.tool.id === toolId
+      ? { ...m, tool: { ...m.tool, status: isError ? "error" : "ok", output } }
+      : m,
+  );
+}

@@ -3,6 +3,21 @@
 
 export type ChatRole = "user" | "assistant" | "system";
 
+/** A tool call and its result, carried on a system ChatMessage. */
+export interface ToolActivity {
+  id: string;
+  name: string;
+  /** Extracted Bash command, if applicable. */
+  command?: string;
+  /** Extracted Bash description, if applicable. */
+  description?: string;
+  /** Raw tool input JSON, for an expandable view. */
+  inputJSON: string;
+  status: "running" | "ok" | "error";
+  /** Result/stderr/denial text, populated when status is ok or error. */
+  output?: string;
+}
+
 /** A single chat message. `id` is a UUID used for scroll anchoring. */
 export interface ChatMessage {
   id: string;
@@ -12,6 +27,8 @@ export interface ChatMessage {
   thinking?: string;
   /** Seconds from turnStartedAt to turn end; undefined → not shown. */
   thinkingSeconds?: number;
+  /** Tool-activity card carried on system messages. */
+  tool?: ToolActivity;
 }
 
 /**
@@ -28,4 +45,8 @@ export type ChatEvent =
   | { type: "session"; sessionId: string }
   /** Usage-limit and stale-session signals (edge cases). */
   | { type: "usageLimit"; text?: string }
-  | { type: "sessionEnded"; text?: string };
+  | { type: "sessionEnded"; text?: string }
+  /** Tool call initiated by the assistant. */
+  | { type: "tool"; toolId: string; toolName: string; command?: string; description?: string; inputJSON: string }
+  /** Result of a tool call. */
+  | { type: "toolResult"; toolId: string; isError: boolean; output?: string };
