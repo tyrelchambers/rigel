@@ -1,5 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
-import { ExternalLink, Cpu, MemoryStick, HardDrive, Network, Link2, Unlink, ArrowDownToLine } from "lucide-react";
+import {
+  ExternalLink,
+  Cpu,
+  MemoryStick,
+  HardDrive,
+  Network,
+  Link2,
+  Unlink,
+  ArrowDownToLine,
+  RefreshCw,
+  Trash2,
+  ArrowUpCircle,
+  CheckCircle2,
+  HelpCircle,
+} from "lucide-react";
 import { categoryDisplayName, type CatalogApp } from "@helmsman/catalog";
 import {
   Dialog,
@@ -10,6 +24,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
+import type { UpdateResult } from "@/lib/api";
 import type { Node } from "@/panels/nodes/types";
 import type { Pod } from "@/panels/pods/types";
 import { iconFor } from "./icons";
@@ -39,6 +54,9 @@ export function CatalogDetailSheet({
   onInstall,
   onLink,
   onUnlink,
+  updateResult,
+  onUpdate,
+  onUninstall,
 }: {
   app: CatalogApp;
   isInstalled: boolean;
@@ -52,6 +70,12 @@ export function CatalogDetailSheet({
   onLink: () => void;
   /** Remove the binding annotation(s) for this app. */
   onUnlink: () => void;
+  /** Update-detection result for this app's running image (installed only). */
+  updateResult?: UpdateResult | null;
+  /** Apply an update to the latest available version (installed only). */
+  onUpdate?: (latest: string) => void;
+  /** Open the purge flow to uninstall this app's workload (installed only). */
+  onUninstall?: () => void;
 }) {
   const Icon = iconFor(app.iconSystemName);
 
@@ -117,6 +141,10 @@ export function CatalogDetailSheet({
     },
   ];
 
+  // Update availability for the installed status block + footer Update button.
+  const latest =
+    updateResult?.updateAvailable && updateResult.latest ? updateResult.latest : null;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -157,10 +185,41 @@ export function CatalogDetailSheet({
           </div>
         </div>
 
-        {/* ── Body: two columns (left info, right NODE FIT) ────────────────── */}
-        <div className="detail-sheet-cols">
+        {/* ── Body: two columns when installable (left info + right NODE FIT),
+              single info column when installed (management view). ─────────── */}
+        <div className={`detail-sheet-cols${isInstalled ? " detail-sheet-cols-single" : ""}`}>
           {/* Left column — info + REQUIREMENTS. */}
-          <div className="detail-sheet-left">
+          <div className={`detail-sheet-left${isInstalled ? " detail-sheet-left-single" : ""}`}>
+            {/* INSTALLED status block — Swift's `installedBlock`. Installed only. */}
+            {isInstalled && (
+              <div className="detail-sheet-installed-block">
+                <h3 className="detail-sheet-section-label">Installed</h3>
+                <div className="detail-sheet-installed-grid">
+                  <div className="detail-sheet-installed-row">
+                    <div className="detail-sheet-installed-field">
+                      <span className="detail-sheet-installed-flabel">Version</span>
+                      <span className="detail-sheet-installed-version">
+                        {updateResult?.currentTag ?? "—"}
+                      </span>
+                    </div>
+                    <div className="detail-sheet-installed-field">
+                      <span className="detail-sheet-installed-flabel">Status</span>
+                      <InstalledStatusLine result={updateResult} latest={latest} />
+                    </div>
+                  </div>
+                  <div className="detail-sheet-installed-field">
+                    <span className="detail-sheet-installed-flabel">Image</span>
+                    <span
+                      className="detail-sheet-installed-image"
+                      title={updateResult?.image ?? undefined}
+                    >
+                      {updateResult?.image ?? "—"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Category chip */}
             <div className="detail-sheet-chips">
               <span className="catalog-chip catalog-chip-category">
@@ -269,41 +328,129 @@ export function CatalogDetailSheet({
             </div>
           </div>
 
-          {/* Right column — NODE FIT (Swift rightColumn). */}
-          <div className="detail-sheet-right">
-            <NodeFitPanel
-              app={app}
-              fit={fit}
-              selectedNode={selectedNode}
-              onSelectNode={setSelectedNode}
-            />
-          </div>
+          {/* Right column — NODE FIT (Swift rightColumn). Install-only: a running
+              app has no placement decision to make, so it's hidden. */}
+          {!isInstalled && (
+            <div className="detail-sheet-right">
+              <NodeFitPanel
+                app={app}
+                fit={fit}
+                selectedNode={selectedNode}
+                onSelectNode={setSelectedNode}
+              />
+            </div>
+          )}
         </div>
 
         {/* ── Footer (bottom, full width) ──────────────────────────────────── */}
         <div className="detail-sheet-footer">
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            className="detail-sheet-cancel-btn"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={() => onInstall(selectedNode)}
-            disabled={!fit.anyFits}
-            className="detail-sheet-install-btn gap-1.5"
-            title={
-              fit.anyFits
-                ? "Start the install wizard"
-                : "No node has enough capacity for this app"
-            }
-          >
-            <ArrowDownToLine className="size-3.5" aria-hidden />
-            {selectedNode ? `Install on ${selectedNode}` : "Install on cluster"}
-          </Button>
+          {isInstalled ? (
+            <>
+              {latest && onUpdate && (
+                <Button
+                  onClick={() => onUpdate(latest)}
+                  className="detail-sheet-install-btn gap-1.5"
+                  title={`Update ${app.name} to ${latest}`}
+                >
+                  <RefreshCw className="size-3.5" aria-hidden />
+                  Update to {latest}
+                </Button>
+              )}
+              <Button
+                variant="destructive"
+                onClick={() => onUninstall?.()}
+                disabled={!onUninstall}
+                className="gap-1.5"
+                title={
+                  onUninstall
+                    ? `Uninstall ${app.name}`
+                    : "Can't resolve the installed workload to uninstall"
+                }
+              >
+                <Trash2 className="size-3.5" aria-hidden />
+                Uninstall
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                className="detail-sheet-cancel-btn"
+              >
+                Close
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                className="detail-sheet-cancel-btn"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => onInstall(selectedNode)}
+                disabled={!fit.anyFits}
+                className="detail-sheet-install-btn gap-1.5"
+                title={
+                  fit.anyFits
+                    ? "Start the install wizard"
+                    : "No node has enough capacity for this app"
+                }
+              >
+                <ArrowDownToLine className="size-3.5" aria-hidden />
+                {selectedNode ? `Install on ${selectedNode}` : "Install on cluster"}
+              </Button>
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * STATUS line inside the installed block — port of Swift's `installedStatusLine`:
+ * "current → latest" (pending tint) when an update is available, "up to date"
+ * (green) when current, "version unknown" (dim) when the checker couldn't decide,
+ * else "not checked".
+ */
+function InstalledStatusLine({
+  result,
+  latest,
+}: {
+  result?: UpdateResult | null;
+  latest: string | null;
+}) {
+  if (result && latest) {
+    return (
+      <span className="detail-sheet-installed-status detail-sheet-installed-status-update">
+        <ArrowUpCircle className="size-3 shrink-0" aria-hidden />
+        {result.currentTag ?? "?"} → {latest}
+      </span>
+    );
+  }
+  if (result?.kind === "unknown") {
+    return (
+      <span
+        className="detail-sheet-installed-status detail-sheet-installed-status-unknown"
+        title={result.reason ?? "Could not determine an update for this image"}
+      >
+        <HelpCircle className="size-3 shrink-0" aria-hidden />
+        version unknown
+      </span>
+    );
+  }
+  if (result) {
+    return (
+      <span className="detail-sheet-installed-status detail-sheet-installed-status-ok">
+        <CheckCircle2 className="size-3 shrink-0" aria-hidden />
+        up to date
+      </span>
+    );
+  }
+  return (
+    <span className="detail-sheet-installed-status detail-sheet-installed-status-dim">
+      not checked
+    </span>
   );
 }

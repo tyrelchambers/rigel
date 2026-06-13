@@ -1275,6 +1275,82 @@
   background: #141417;
 }
 
+/* Single-column management view (installed apps): no right NODE FIT column, so
+ * the left column owns the full width and drops its divider border. */
+.detail-sheet-left.detail-sheet-left-single {
+  border-right: none;
+}
+
+/* INSTALLED status block — Swift's `installedBlock`. Green-tinted box with
+ * VERSION / STATUS / IMAGE. */
+.detail-sheet-installed-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.detail-sheet-installed-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(52, 199, 89, 0.06);
+  border: 1px solid rgba(52, 199, 89, 0.25);
+}
+.detail-sheet-installed-row {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+.detail-sheet-installed-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.detail-sheet-installed-flabel {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #6B6B73;
+}
+.detail-sheet-installed-version {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  font-weight: 600;
+  color: #EDEDF0;
+}
+.detail-sheet-installed-image {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: #B0B0B8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.detail-sheet-installed-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  font-weight: 500;
+}
+.detail-sheet-installed-status-update {
+  color: #FFB340;
+}
+.detail-sheet-installed-status-ok {
+  color: #34C759;
+}
+.detail-sheet-installed-status-unknown {
+  color: #6B6B73;
+}
+.detail-sheet-installed-status-dim {
+  color: #6B6B73;
+}
+
 /* REQUIREMENTS block — Swift's `requirementsBlock` (row of small cells on a
  * sunken surface). */
 .detail-sheet-reqs {

@@ -36,6 +36,7 @@ import {
 } from "./catalogDisplay";
 import { CatalogDetailSheet } from "./CatalogDetailSheet";
 import { CatalogInstallWizard } from "./CatalogInstallWizard";
+import { PurgeSheet } from "@/panels/purge/PurgeSheet";
 import { updateTargets, withTag, type UpdateTarget } from "./updateTargets";
 import { LinkWorkloadPickerSheet, type LinkSelection } from "./LinkWorkloadPickerSheet";
 
@@ -71,6 +72,8 @@ export default function CatalogPanel() {
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
   // The app whose Link workload picker is open, if any.
   const [linkApp, setLinkApp] = useState<CatalogApp | null>(null);
+  // The workload targeted by the uninstall→purge flow, if any. null = closed.
+  const [purgeTarget, setPurgeTarget] = useState<{ name: string; namespace: string } | null>(null);
 
   // Load the bundled catalog once.
   useEffect(() => {
@@ -389,6 +392,33 @@ export default function CatalogPanel() {
             if (b) onUnlink(detailApp.id, b);
             setDetailApp(null);
           }}
+          updateResult={(() => {
+            const t = targetByApp.get(detailApp.id);
+            return t ? (resultByImage.get(t.image) ?? null) : null;
+          })()}
+          onUpdate={(latest) => {
+            const t = targetByApp.get(detailApp.id);
+            if (t) onUpdate(t, latest);
+            setDetailApp(null);
+          }}
+          onUninstall={(() => {
+            // Uninstall targets the app's installed workload. Prefer the
+            // explicit binding (name+namespace); else the image-matched
+            // UpdateTarget. If neither resolves, leave undefined so the
+            // Uninstall button disables rather than crashing.
+            const b = boundByApp.get(detailApp.id);
+            const t = targetByApp.get(detailApp.id);
+            const target = b
+              ? { name: b.name, namespace: b.namespace }
+              : t
+                ? { name: t.workloadName, namespace: t.namespace }
+                : null;
+            if (!target) return undefined;
+            return () => {
+              setDetailApp(null);
+              setPurgeTarget(target);
+            };
+          })()}
         />
       )}
 
@@ -419,6 +449,13 @@ export default function CatalogPanel() {
         action={pendingAction}
         open={!!pendingAction}
         onClose={() => setPendingAction(null)}
+      />
+
+      {/* Uninstall → typed-name purge confirm (from the Manage detail sheet) */}
+      <PurgeSheet
+        target={purgeTarget}
+        open={purgeTarget !== null}
+        onClose={() => setPurgeTarget(null)}
       />
     </div>
   );
