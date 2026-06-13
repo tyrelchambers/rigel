@@ -351,10 +351,6 @@ export default function CatalogPanel() {
                 isInstalled={installed}
                 index={i}
                 onSelect={() => setDetailApp(app)}
-                onInstall={() => {
-                  setWizardNodePin(null);
-                  setWizardApp(app);
-                }}
                 onLink={() => setLinkApp(app)}
               >
                 {installed && target && (
@@ -490,7 +486,6 @@ function CatalogCard({
   isInstalled,
   index,
   onSelect,
-  onInstall,
   onLink,
   children,
 }: {
@@ -498,7 +493,6 @@ function CatalogCard({
   isInstalled: boolean;
   index: number;
   onSelect: () => void;
-  onInstall: () => void;
   onLink: () => void;
   children?: ReactNode;
 }) {
@@ -519,16 +513,7 @@ function CatalogCard({
         ease: [0.2, 0, 0.2, 1],
         delay: index * 0.05,
       }}
-      role="button"
-      tabIndex={0}
       aria-label={`${app.name} — ${app.tagline}`}
-      onClick={onSelect}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onSelect();
-        }
-      }}
     >
       {/* Top row: icon + name/tagline + installed badge */}
       <div className="catalog-card-top">
@@ -604,7 +589,7 @@ function CatalogCard({
             className="catalog-btn-install"
             onClick={(e) => {
               e.stopPropagation();
-              onInstall();
+              onSelect();
             }}
             aria-label={`Install ${app.name}`}
           >
