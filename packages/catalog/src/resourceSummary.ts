@@ -34,6 +34,34 @@ function topLevelKind(doc: string): string | null {
   return null;
 }
 
+export interface ResourceRef { kind: string; name: string; namespace?: string }
+
+/** First column-0 `metadata:` block's 2-space-indented `name:`/`namespace:`. */
+function metaField(doc: string, field: "name" | "namespace"): string | undefined {
+  let inMeta = false;
+  for (const line of doc.split("\n")) {
+    if (line.length === 0) continue;
+    const col0 = !/\s/.test(line[0]);
+    if (col0) inMeta = line.startsWith("metadata:");
+    else if (inMeta && line.startsWith(`  ${field}:`)) {
+      const v = line.slice(`  ${field}:`.length).trim();
+      if (v.length > 0) return v;
+    }
+  }
+  return undefined;
+}
+
+/** Per-document {kind,name,namespace}. Docs without a top-level kind are skipped. */
+export function listResources(yaml: string): ResourceRef[] {
+  const out: ResourceRef[] = [];
+  for (const doc of splitDocuments(yaml)) {
+    const kind = topLevelKind(doc);
+    if (!kind) continue;
+    out.push({ kind, name: metaField(doc, "name") ?? "", namespace: metaField(doc, "namespace") });
+  }
+  return out;
+}
+
 /**
  * Count resources by kind across all documents, returned sorted by kind for a
  * stable display order. Documents without a top-level kind are ignored.
