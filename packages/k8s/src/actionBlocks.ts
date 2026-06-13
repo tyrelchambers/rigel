@@ -37,6 +37,8 @@ export interface SuggestedAction {
   args?: string[];
   /** command — Claude's destructive hint (app takes the stricter of this and inference). */
   destructive?: boolean;
+  /** applyManifest only — the paired yaml content, attached by the parser (not in the model's JSON). */
+  manifest?: string;
 }
 
 /**
@@ -72,43 +74,67 @@ export const ACTION_KINDS = [
   "deleteResource",
   "purge",
   "command",
+  "applyManifest",
 ] as const;
 
 /**
- * Extract fenced ```action blocks from markdown.
+ * Extract fenced action blocks from markdown.
  * Mirrors apps/server/src/claudeBridge.ts extractActionBlocks().
- * Malformed JSON blocks are skipped.
+ * Malformed JSON blocks are skipped. For `applyManifest` actions, the
+ * immediately-following yaml block is consumed and attached as `manifest`;
+ * if no yaml block follows, the action is dropped (incomplete).
  */
 export function extractActionBlocks(markdown: string): SuggestedAction[] {
   const out: SuggestedAction[] = [];
-  const re = /```action\s*\n([\s\S]*?)\n```/g;
+  const ACTION_FENCE = /```action\s*\n([\s\S]*?)\n```/g;
+  const YAML_FENCE = /^\s*```ya?ml\s*\n([\s\S]*?)\n```/;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(markdown))) {
+  while ((m = ACTION_FENCE.exec(markdown))) {
+    let action: SuggestedAction | null = null;
     try {
       const json = JSON.parse(m[1].trim());
       if (json && typeof json.label === "string" && typeof json.kind === "string") {
-        out.push(json as SuggestedAction);
+        action = json as SuggestedAction;
       }
     } catch {
       /* skip malformed JSON */
     }
+    if (!action) continue;
+    if (action.kind === "applyManifest") {
+      const ym = YAML_FENCE.exec(markdown.slice(ACTION_FENCE.lastIndex));
+      if (!ym) continue; // incomplete — drop
+      action.manifest = ym[1];
+    }
+    out.push(action);
   }
   return out;
 }
 
 /**
  * Remove action and question blocks from markdown for display. Other code
- * fences (```bash, ```yaml, …) are left intact.
+ * fences (bash, yaml, …) are left intact, UNLESS the yaml immediately follows
+ * an `applyManifest` action block (in which case both are stripped together).
  */
 export function stripActionBlocks(markdown: string): string {
-  return markdown
-    .replace(/```action\s*\n[\s\S]*?\n```/g, "")
+  const ACTION_WITH_OPT_YAML = /```action\s*\n([\s\S]*?)\n```(\s*\n```ya?ml\s*\n[\s\S]*?\n```)?/g;
+  let out = markdown.replace(
+    ACTION_WITH_OPT_YAML,
+    (_full, body: string, yamlTail: string | undefined) => {
+      try {
+        const json = JSON.parse(String(body).trim());
+        if (json?.kind === "applyManifest") return ""; // drop action + paired yaml
+      } catch { /* fall through */ }
+      return yamlTail ?? ""; // non-applyManifest: keep any following yaml
+    },
+  );
+  out = out
     .replace(/```question\s*\n[\s\S]*?\n```/g, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+  return out;
 }
 
-/** Extract fenced ```question blocks. Malformed/empty ones are skipped. */
+/** Extract fenced question blocks. Malformed/empty ones are skipped. */
 export function extractQuestionBlocks(markdown: string): SuggestedQuestion[] {
   const out: SuggestedQuestion[] = [];
   for (const m of markdown.matchAll(/```question\s*\n([\s\S]*?)\n```/g)) {
