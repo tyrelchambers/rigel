@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { ExternalLink, Cpu, MemoryStick, HardDrive, Link2, Unlink, ArrowDownToLine } from "lucide-react";
+import { ExternalLink, Cpu, MemoryStick, HardDrive, Network, Link2, Unlink, ArrowDownToLine } from "lucide-react";
 import { categoryDisplayName, type CatalogApp } from "@helmsman/catalog";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetFooter,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
@@ -26,7 +24,12 @@ export interface CatalogBinding {
   container: string | null;
 }
 
-/** Detail sheet — full app info + Install button (docs/parity/catalog.md §"Detail Sheet"). */
+/**
+ * Detail sheet — full app info + Install button (docs/parity/catalog.md
+ * §"Detail Sheet"). Two-column WIDE modal mirroring Swift's
+ * `CatalogDetailSheet`: header on top, a left info column + right NODE FIT
+ * column (380px in Swift, 360px here), and a footer with Cancel + Install.
+ */
 export function CatalogDetailSheet({
   app,
   isInstalled,
@@ -85,21 +88,49 @@ export function CatalogDetailSheet({
   ];
   const activeLinks = links.filter((l) => !!l.url);
 
+  // REQUIREMENTS cells — port of Swift's `requirementsBlock` (CPU / Memory /
+  // Storage / Ingress), moved out of the header chips into the left column.
+  const reqCells: Array<{ icon: typeof Cpu; label: string; value: string }> = [
+    {
+      icon: Cpu,
+      label: "CPU",
+      value:
+        app.requirements.cpuRequest +
+        (app.requirements.cpuLimit ? ` / ${app.requirements.cpuLimit}` : ""),
+    },
+    {
+      icon: MemoryStick,
+      label: "Memory",
+      value:
+        app.requirements.memoryRequest +
+        (app.requirements.memoryLimit ? ` / ${app.requirements.memoryLimit}` : ""),
+    },
+    {
+      icon: HardDrive,
+      label: "Storage",
+      value: app.requirements.storageGiB != null ? `${app.requirements.storageGiB} GiB` : "—",
+    },
+    {
+      icon: Network,
+      label: "Ingress",
+      value: app.exposesIngress ? "Yes" : "—",
+    },
+  ];
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="detail-sheet w-full overflow-auto sm:max-w-md">
-        <SheetHeader className="detail-sheet-header">
-          {/* Icon + title */}
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        showCloseButton={false}
+        className="detail-sheet detail-sheet-modal max-w-none sm:max-w-none"
+      >
+        {/* ── Header (top, full width) ─────────────────────────────────────── */}
+        <div className="detail-sheet-header">
           <div className="detail-sheet-hero">
-            <div
-              className="detail-sheet-icon"
-              style={{ background: "#26262C", border: "1px solid #2F2F36" }}
-              aria-hidden
-            >
+            <div className="detail-sheet-icon" aria-hidden>
               <Icon className="detail-sheet-icon-glyph" />
             </div>
             <div className="detail-sheet-title-group">
-              <SheetTitle className="detail-sheet-name">
+              <DialogTitle className="detail-sheet-name">
                 {app.name}
                 {isInstalled && (
                   <span className="detail-sheet-installed-badge" aria-label="Installed">
@@ -107,121 +138,139 @@ export function CatalogDetailSheet({
                     Installed
                   </span>
                 )}
-              </SheetTitle>
-              <SheetDescription className="detail-sheet-tagline">{app.tagline}</SheetDescription>
+              </DialogTitle>
+              <DialogDescription className="detail-sheet-tagline">
+                {app.tagline}
+              </DialogDescription>
             </div>
+            <button
+              type="button"
+              className="detail-sheet-close"
+              onClick={() => onOpenChange(false)}
+              aria-label="Close"
+              title="Close"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="size-3.5" aria-hidden>
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
           </div>
+        </div>
 
-          {/* Category + resource chips */}
-          <div className="detail-sheet-chips">
-            <span className="catalog-chip catalog-chip-category">
-              {categoryDisplayName(app.category)}
-            </span>
-            <span className="catalog-chip catalog-chip-req">
-              <Cpu className="catalog-chip-icon" aria-hidden />
-              {app.requirements.cpuRequest}
-              {app.requirements.cpuLimit ? ` → ${app.requirements.cpuLimit}` : ""}
-            </span>
-            <span className="catalog-chip catalog-chip-req">
-              <MemoryStick className="catalog-chip-icon" aria-hidden />
-              {app.requirements.memoryRequest}
-              {app.requirements.memoryLimit ? ` → ${app.requirements.memoryLimit}` : ""}
-            </span>
-            {app.requirements.storageGiB != null && (
-              <span className="catalog-chip catalog-chip-req">
-                <HardDrive className="catalog-chip-icon" aria-hidden />
-                {app.requirements.storageGiB} GiB
+        {/* ── Body: two columns (left info, right NODE FIT) ────────────────── */}
+        <div className="detail-sheet-cols">
+          {/* Left column — info + REQUIREMENTS. */}
+          <div className="detail-sheet-left">
+            {/* Category chip */}
+            <div className="detail-sheet-chips">
+              <span className="catalog-chip catalog-chip-category">
+                {categoryDisplayName(app.category)}
               </span>
+            </div>
+
+            {/* Description */}
+            {app.description && <p className="detail-sheet-description">{app.description}</p>}
+
+            {/* Links */}
+            {activeLinks.length > 0 && (
+              <div className="detail-sheet-section">
+                <h3 className="detail-sheet-section-label">Links</h3>
+                <div className="detail-sheet-links">
+                  {activeLinks.map((l) => (
+                    <a
+                      key={l.label}
+                      href={l.url ?? "#"}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="detail-sheet-link"
+                    >
+                      {l.label}
+                      <ExternalLink className="size-3" aria-hidden />
+                    </a>
+                  ))}
+                </div>
+              </div>
             )}
-          </div>
-        </SheetHeader>
 
-        <div className="detail-sheet-body">
-          {/* Description */}
-          <p className="detail-sheet-description">{app.description}</p>
+            {/* Tags */}
+            {app.tags.length > 0 && (
+              <div className="detail-sheet-section">
+                <h3 className="detail-sheet-section-label">Tags</h3>
+                <div className="detail-sheet-tags">
+                  {app.tags.map((t) => (
+                    <span key={t} className="detail-sheet-tag">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
-          {/* Links */}
-          {activeLinks.length > 0 && (
+            {/* Notes */}
+            {app.notes && (
+              <div className="detail-sheet-section">
+                <h3 className="detail-sheet-section-label">Notes</h3>
+                <p className="detail-sheet-notes">{app.notes}</p>
+              </div>
+            )}
+
+            {/* Workload binding (Link / Unlink) — every app. */}
             <div className="detail-sheet-section">
-              <div className="detail-sheet-links">
-                {activeLinks.map((l) => (
-                  <a
-                    key={l.label}
-                    href={l.url ?? "#"}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="detail-sheet-link"
-                  >
-                    {l.label}
-                    <ExternalLink className="size-3" aria-hidden />
-                  </a>
+              <h3 className="detail-sheet-section-label">Linked workload</h3>
+              {binding ? (
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    Bound to{" "}
+                    <span className="font-mono text-foreground">
+                      {binding.kind}/{binding.name}
+                    </span>{" "}
+                    in <span className="font-mono text-foreground">{binding.namespace}</span>
+                    {binding.container && (
+                      <>
+                        {" "}
+                        · container{" "}
+                        <span className="font-mono text-foreground">{binding.container}</span>
+                      </>
+                    )}
+                  </p>
+                  <Button variant="outline" size="sm" onClick={onUnlink} className="self-start gap-1.5">
+                    <Unlink className="size-3.5" aria-hidden />
+                    Unlink
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    Manually bind this app to a running workload when auto-detection
+                    can't match its image (mirror, private registry, or fork).
+                  </p>
+                  <Button variant="outline" size="sm" onClick={onLink} className="self-start gap-1.5">
+                    <Link2 className="size-3.5" aria-hidden />
+                    Link a workload…
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* Requirements — Swift's `requirementsBlock`. */}
+            <div className="detail-sheet-section">
+              <h3 className="detail-sheet-section-label">Requirements</h3>
+              <div className="detail-sheet-reqs">
+                {reqCells.map((cell) => (
+                  <div key={cell.label} className="detail-sheet-req-cell">
+                    <span className="detail-sheet-req-label">
+                      <cell.icon className="catalog-chip-icon" aria-hidden />
+                      {cell.label}
+                    </span>
+                    <span className="detail-sheet-req-value">{cell.value}</span>
+                  </div>
                 ))}
               </div>
             </div>
-          )}
-
-          {/* Tags */}
-          {app.tags.length > 0 && (
-            <div className="detail-sheet-section">
-              <h3 className="detail-sheet-section-label">Tags</h3>
-              <div className="detail-sheet-tags">
-                {app.tags.map((t) => (
-                  <span key={t} className="detail-sheet-tag">
-                    {t}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Notes */}
-          {app.notes && (
-            <div className="detail-sheet-section">
-              <h3 className="detail-sheet-section-label">Notes</h3>
-              <p className="detail-sheet-notes">{app.notes}</p>
-            </div>
-          )}
-
-          {/* Workload binding (Link / Unlink) — every app. */}
-          <div className="detail-sheet-section">
-            <h3 className="detail-sheet-section-label">Linked workload</h3>
-            {binding ? (
-              <div className="flex flex-col gap-2">
-                <p className="text-xs text-muted-foreground">
-                  Bound to{" "}
-                  <span className="font-mono text-foreground">
-                    {binding.kind}/{binding.name}
-                  </span>{" "}
-                  in <span className="font-mono text-foreground">{binding.namespace}</span>
-                  {binding.container && (
-                    <>
-                      {" "}
-                      · container{" "}
-                      <span className="font-mono text-foreground">{binding.container}</span>
-                    </>
-                  )}
-                </p>
-                <Button variant="outline" size="sm" onClick={onUnlink} className="self-start gap-1.5">
-                  <Unlink className="size-3.5" aria-hidden />
-                  Unlink
-                </Button>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                <p className="text-xs text-muted-foreground">
-                  Manually bind this app to a running workload when auto-detection
-                  can't match its image (mirror, private registry, or fork).
-                </p>
-                <Button variant="outline" size="sm" onClick={onLink} className="self-start gap-1.5">
-                  <Link2 className="size-3.5" aria-hidden />
-                  Link a workload…
-                </Button>
-              </div>
-            )}
           </div>
 
-          {/* NODE FIT — per-node capacity + pin-to-node (Swift rightColumn). */}
-          <div className="detail-sheet-section">
+          {/* Right column — NODE FIT (Swift rightColumn). */}
+          <div className="detail-sheet-right">
             <NodeFitPanel
               app={app}
               fit={fit}
@@ -231,7 +280,15 @@ export function CatalogDetailSheet({
           </div>
         </div>
 
-        <SheetFooter className="detail-sheet-footer">
+        {/* ── Footer (bottom, full width) ──────────────────────────────────── */}
+        <div className="detail-sheet-footer">
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            className="detail-sheet-cancel-btn"
+          >
+            Cancel
+          </Button>
           <Button
             onClick={() => onInstall(selectedNode)}
             disabled={!fit.anyFits}
@@ -245,8 +302,8 @@ export function CatalogDetailSheet({
             <ArrowDownToLine className="size-3.5" aria-hidden />
             {selectedNode ? `Install on ${selectedNode}` : "Install on cluster"}
           </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
