@@ -121,10 +121,23 @@ export function ConfirmSheet({ action, open, onClose, onPurge }: ConfirmSheetPro
     }
   }, [isSuccess, data, reset, onClose]);
 
+  // Swift: accent = isHighRisk ? Theme.Status.failed : Theme.Accent.primary
+  // The dialog border and header tint both follow `accent`.
+  const accentColor = isDestructive ? "#EF4444" : "#A855F7";
+  const accentBorder = isDestructive ? "rgba(239,68,68,0.5)" : "rgba(168,85,247,0.5)";
+  const accentHeaderBg = isDestructive ? "rgba(239,68,68,0.08)" : "rgba(168,85,247,0.08)";
+
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
-      <DialogContent>
-        <DialogHeader>
+      <DialogContent
+        className="overflow-hidden p-0 gap-0"
+        style={{ border: `1px solid ${accentBorder}` }}
+      >
+        {/* Swift header: accent.opacity(0.08) background, title + description */}
+        <DialogHeader
+          className="px-4 pt-4 pb-3"
+          style={{ background: accentHeaderBg, borderBottom: `1px solid ${accentColor}40` }}
+        >
           <DialogTitle>
             {isPurge
               ? "Remove application"
@@ -140,6 +153,8 @@ export function ConfirmSheet({ action, open, onClose, onPurge }: ConfirmSheetPro
               : "Review the exact command before it runs. This cannot be undone."}
           </DialogDescription>
         </DialogHeader>
+        {/* Body content wrapper with padding — mirrors Swift body_content padding(18) */}
+        <div className="p-4 flex flex-col gap-4">
 
         {/* Apply manifest resource summary */}
         {isApply && action?.manifest && (() => {
@@ -224,12 +239,18 @@ export function ConfirmSheet({ action, open, onClose, onPurge }: ConfirmSheetPro
           </div>
         )}
 
-        <DialogFooter>
+        </div>{/* end body content wrapper */}
+
+        {/* Swift footer: Theme.Surface.primary bg + subtle top border */}
+        <DialogFooter
+          className="-mx-0 -mb-0 rounded-b-none border-t border-border/40 bg-background/60 px-4 py-3"
+        >
           <Button variant="outline" onClick={handleClose} disabled={isPending || applyState.pending}>
             Cancel
           </Button>
+          {/* Swift Execute button: solid `accent` fill, always — not the dim destructive/10 variant */}
           <Button
-            variant={isDestructive ? "destructive" : "default"}
+            style={{ background: accentColor, color: "#FFFFFF", border: "none" }}
             onClick={isApply ? handleApply : handleExecute}
             disabled={isApply ? applyState.pending : (isPending || (!isPurge && !commandString && !previewError))}
           >
