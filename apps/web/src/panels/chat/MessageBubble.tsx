@@ -6,6 +6,7 @@ import { parseSuggestedActions, type SuggestedAction, type SuggestedQuestion } f
 import { cn } from "@/lib/utils";
 import { SuggestedActionList } from "./SuggestedActionList";
 import { SuggestedQuestionList } from "./SuggestedQuestionList";
+import { ToolCard } from "./ToolCard";
 import type { ChatMessage } from "./types";
 
 interface Props {
@@ -94,11 +95,13 @@ export function MessageBubble({ message, onAction, onAnswer }: Props) {
         {isAssistant && message.thinking ? (
           <ThinkingTrail thinking={message.thinking} seconds={message.thinkingSeconds} />
         ) : null}
-        {isAssistant ? (
+        {message.tool ? (
+          <ToolCard tool={message.tool} />
+        ) : isAssistant ? (
           <div className="chat-md select-text">
             <Markdown remarkPlugins={[remarkGfm]}>{display}</Markdown>
           </div>
-        ) : (
+        ) : display ? (
           <p
             className={cn(
               "whitespace-pre-wrap select-text",
@@ -107,7 +110,7 @@ export function MessageBubble({ message, onAction, onAnswer }: Props) {
           >
             {display}
           </p>
-        )}
+        ) : null}
         {isAssistant && <SuggestedActionList actions={actions} onAction={onAction} />}
         {isAssistant && onAnswer && (
           <SuggestedQuestionList questions={questions} onAnswer={onAnswer} />

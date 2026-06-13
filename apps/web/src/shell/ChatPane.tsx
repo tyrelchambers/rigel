@@ -63,6 +63,8 @@ import {
 import { ChatHistorySheet } from "@/panels/chat/ChatHistorySheet";
 import {
   appendTextDelta,
+  appendToolActivity,
+  applyToolResult,
   stampThinking,
   makeMessage,
   newId,
@@ -309,6 +311,12 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
           setIsStreaming(false);
           setSessionId(null);
           setAutoFocusComposer(true);
+          break;
+        case "tool":
+          setMessages((prev) => appendToolActivity(prev, event));
+          break;
+        case "toolResult":
+          setMessages((prev) => applyToolResult(prev, event.toolId, event.isError, event.output));
           break;
       }
     };

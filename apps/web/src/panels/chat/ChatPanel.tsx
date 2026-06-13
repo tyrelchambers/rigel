@@ -12,6 +12,8 @@ import { ThinkingPane } from "./ThinkingPane";
 import { ChatComposer } from "./ChatComposer";
 import {
   appendTextDelta,
+  appendToolActivity,
+  applyToolResult,
   stampThinking,
   makeMessage,
   isNearBottom,
@@ -109,6 +111,12 @@ export default function ChatPanel() {
           setIsStreaming(false);
           setSessionId(null);
           setAutoFocusComposer(true);
+          break;
+        case "tool":
+          setMessages((prev) => appendToolActivity(prev, event));
+          break;
+        case "toolResult":
+          setMessages((prev) => applyToolResult(prev, event.toolId, event.isError, event.output));
           break;
       }
     };
