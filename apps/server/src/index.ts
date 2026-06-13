@@ -38,15 +38,31 @@ const METRICS_SERVER_URL =
 // (/app/apps/server/src). Override with WEB_DIST if the layout differs.
 const WEB_DIST = process.env.WEB_DIST ?? new URL("../../web/dist", import.meta.url).pathname;
 
+/**
+ * Cache policy for the SPA: Vite fingerprints assets (e.g. `/assets/index-<hash>.js`),
+ * so those are safe to cache forever (a new build → a new filename). But
+ * `index.html` references the current hashed bundle, so it MUST NOT be cached —
+ * otherwise the browser keeps loading the previous build's JS after a redeploy
+ * (the classic "I rebuilt but still see the old UI" trap). Serve fingerprinted
+ * assets immutable; serve index.html (and SPA fallbacks) no-store.
+ */
+function cacheHeaders(pathname: string): HeadersInit {
+  if (pathname.startsWith("/assets/")) {
+    return { "Cache-Control": "public, max-age=31536000, immutable" };
+  }
+  return { "Cache-Control": "no-store, must-revalidate" };
+}
+
 /** Serve a file from the built web UI, falling back to index.html for SPA routes. */
 async function serveStatic(pathname: string): Promise<Response> {
   const rel = pathname === "/" ? "/index.html" : pathname;
   // Guard against path traversal escaping WEB_DIST.
   const safe = rel.split("/").filter((s) => s !== "..").join("/");
   const direct = Bun.file(`${WEB_DIST}/${safe}`);
-  if (await direct.exists()) return new Response(direct);
+  if (await direct.exists()) return new Response(direct, { headers: cacheHeaders(rel) });
+  // SPA fallback → index.html, which must always revalidate.
   const index = Bun.file(`${WEB_DIST}/index.html`);
-  if (await index.exists()) return new Response(index);
+  if (await index.exists()) return new Response(index, { headers: { "Cache-Control": "no-store, must-revalidate" } });
   return new Response("web UI not built (run `pnpm --filter web build`)", { status: 404 });
 }
 
