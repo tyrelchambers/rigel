@@ -9,7 +9,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Terminal, Copy, Check } from "lucide-react";
-import { fetchPreviewCommand, useAction, type ActionBlock, type PurgeResult } from "@/lib/api";
+import { fetchPreviewCommand, useAction, applyManifestYaml, type ActionBlock, type ActionResult, type PurgeResult } from "@/lib/api";
+import { listResources } from "@helmsman/catalog";
 
 interface ConfirmSheetProps {
   /** The action to confirm and optionally execute. */
@@ -36,6 +37,7 @@ export function ConfirmSheet({ action, open, onClose, onPurge }: ConfirmSheetPro
   const [previewCommand, setPreviewCommand] = useState<string[] | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [applyState, setApplyState] = useState<{ pending: boolean; result?: ActionResult; error?: string }>({ pending: false });
 
   const { mutate, isPending, isSuccess, isError, error, data, reset } = useAction();
 
@@ -44,12 +46,13 @@ export function ConfirmSheet({ action, open, onClose, onPurge }: ConfirmSheetPro
     if (!action || !open) {
       setPreviewCommand(null);
       setPreviewError(null);
+      setApplyState({ pending: false });
       reset();
       return;
     }
 
-    // purge has no kubectl preview
-    if (action.kind === "purge") {
+    // purge and applyManifest have no kubectl preview
+    if (action.kind === "purge" || action.kind === "applyManifest") {
       setPreviewCommand(null);
       setPreviewError(null);
       return;
@@ -63,6 +66,18 @@ export function ConfirmSheet({ action, open, onClose, onPurge }: ConfirmSheetPro
       .catch((err: Error) => { if (!cancelled) setPreviewError(err.message); });
     return () => { cancelled = true; };
   }, [action, open, reset]);
+
+  async function handleApply() {
+    if (!action?.manifest) return;
+    setApplyState({ pending: true });
+    try {
+      const result = await applyManifestYaml(action.manifest);
+      setApplyState({ pending: false, result });
+      if (result.code === 0) setTimeout(() => handleClose(), 1200);
+    } catch (e) {
+      setApplyState({ pending: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  }
 
   function handleExecute() {
     if (!action) return;
@@ -80,11 +95,13 @@ export function ConfirmSheet({ action, open, onClose, onPurge }: ConfirmSheetPro
 
   function handleClose() {
     reset();
+    setApplyState({ pending: false });
     onClose();
   }
 
   const isPurge = action?.kind === "purge";
-  const isDestructive = action?.destructive === true || isPurge;
+  const isApply = action?.kind === "applyManifest";
+  const isDestructive = action?.destructive === true || isPurge || isApply;
   const commandString = previewCommand ? previewCommand.join(" ") : null;
 
   function handleCopy() {
@@ -109,17 +126,51 @@ export function ConfirmSheet({ action, open, onClose, onPurge }: ConfirmSheetPro
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {isPurge ? "Remove application" : (action?.label ?? "Confirm action")}
+            {isPurge
+              ? "Remove application"
+              : isApply
+              ? (action?.label ?? "Apply manifest")
+              : (action?.label ?? "Confirm action")}
           </DialogTitle>
           <DialogDescription>
             {isPurge
               ? "This will open the application removal flow. No resources will be deleted until you confirm in the next step."
+              : isApply
+              ? "Review what will be created, then apply."
               : "Review the exact command before it runs. This cannot be undone."}
           </DialogDescription>
         </DialogHeader>
 
+        {/* Apply manifest resource summary */}
+        {isApply && action?.manifest && (() => {
+          const resources = listResources(action.manifest);
+          return (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                This will apply {resources.length} resource{resources.length === 1 ? "" : "s"}:
+              </p>
+              <ul className="max-h-60 space-y-1 overflow-auto rounded-md border bg-background/40 p-2 text-xs font-mono">
+                {resources.map((r, i) => (
+                  <li key={i} className="flex items-center gap-2">
+                    <span className="text-primary">{r.kind}</span>
+                    <span className="text-foreground">/{r.name || "—"}</span>
+                    {r.namespace && <span className="text-muted-foreground">({r.namespace})</span>}
+                  </li>
+                ))}
+              </ul>
+              {applyState.error && (
+                <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">{applyState.error}</p>
+              )}
+              {applyState.result && (applyState.result.code === 0
+                ? <p className="text-xs text-muted-foreground">Applied.</p>
+                : <pre className="rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap">{applyState.result.stderr || applyState.result.stdout}</pre>
+              )}
+            </div>
+          );
+        })()}
+
         {/* Command preview */}
-        {!isPurge && (
+        {!isPurge && !isApply && (
           <div>
             {previewError ? (
               <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
@@ -174,15 +225,21 @@ export function ConfirmSheet({ action, open, onClose, onPurge }: ConfirmSheetPro
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleClose} disabled={isPending}>
+          <Button variant="outline" onClick={handleClose} disabled={isPending || applyState.pending}>
             Cancel
           </Button>
           <Button
             variant={isDestructive ? "destructive" : "default"}
-            onClick={handleExecute}
-            disabled={isPending || (!isPurge && !commandString && !previewError)}
+            onClick={isApply ? handleApply : handleExecute}
+            disabled={isApply ? applyState.pending : (isPending || (!isPurge && !commandString && !previewError))}
           >
-            {isPending ? "Running…" : isPurge ? "Continue to removal" : "Execute"}
+            {isApply
+              ? (applyState.pending ? "Applying…" : "Apply")
+              : isPending
+              ? "Running…"
+              : isPurge
+              ? "Continue to removal"
+              : "Execute"}
           </Button>
         </DialogFooter>
       </DialogContent>
