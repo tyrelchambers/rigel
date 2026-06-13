@@ -40,10 +40,102 @@ const READ_ONLY_ALLOWLIST = [
 ];
 
 export interface ChatEvent {
-  type: "thinking" | "text" | "done" | "error" | "session";
+  type: "thinking" | "text" | "done" | "error" | "session" | "tool" | "toolResult";
   text?: string;
   /** Present on `session` events — the CLI session id (system init line). */
   sessionId?: string;
+  /** tool/toolResult: the tool_use id (correlates a call with its result). */
+  toolId?: string;
+  /** tool: tool name, e.g. "Bash". */
+  toolName?: string;
+  /** tool: extracted Bash command (input.command), when present. */
+  command?: string;
+  /** tool: extracted Bash description (input.description), when present. */
+  description?: string;
+  /** tool: JSON.stringify(input), for an expandable raw view. */
+  inputJSON?: string;
+  /** toolResult: true if the tool errored or was denied. */
+  isError?: boolean;
+  /** toolResult: short output/stderr/denial text (truncate to ~600 chars). */
+  output?: string;
+}
+
+/**
+ * Pure mapper: converts ONE parsed stream-json object from the claude CLI into
+ * zero or more ChatEvents. Extracted so it can be unit-tested without a live
+ * subprocess.
+ */
+export function mapClaudeEvent(ev: any): ChatEvent[] {
+  if (!ev || typeof ev !== "object") return [];
+
+  // system init → session id
+  if (ev.type === "system" && ev.subtype === "init" && typeof ev.session_id === "string") {
+    return [{ type: "session", sessionId: ev.session_id }];
+  }
+
+  // assistant message → text / thinking / tool_use blocks
+  if (ev.type === "assistant" && Array.isArray(ev.message?.content)) {
+    const events: ChatEvent[] = [];
+    for (const block of ev.message.content) {
+      if (block.type === "text") {
+        events.push({ type: "text", text: block.text });
+      } else if (block.type === "thinking") {
+        events.push({ type: "thinking", text: block.thinking });
+      } else if (block.type === "tool_use") {
+        events.push({
+          type: "tool",
+          toolId: block.id,
+          toolName: block.name,
+          command: block.input?.command,
+          description: block.input?.description,
+          inputJSON: JSON.stringify(block.input ?? {}),
+        });
+      }
+    }
+    return events;
+  }
+
+  // user message → tool_result blocks
+  if (ev.type === "user" && Array.isArray(ev.message?.content)) {
+    const events: ChatEvent[] = [];
+    for (const block of ev.message.content) {
+      if (block.type === "tool_result") {
+        let raw: string;
+        if (typeof block.content === "string") {
+          raw = block.content;
+        } else if (Array.isArray(block.content)) {
+          raw = block.content.map((c: any) => (typeof c === "object" && c.text ? c.text : "")).join("\n");
+        } else {
+          raw = "";
+        }
+        const output = raw.length > 600 ? raw.slice(0, 600) + "…" : raw;
+        events.push({
+          type: "toolResult",
+          toolId: block.tool_use_id,
+          isError: block.is_error === true,
+          output,
+        });
+      }
+    }
+    return events;
+  }
+
+  // result → permission denials (as toolResult isError) then done
+  if (ev.type === "result") {
+    const events: ChatEvent[] = [];
+    for (const d of ev.permission_denials ?? []) {
+      events.push({
+        type: "toolResult",
+        toolId: d.tool_use_id,
+        isError: true,
+        output: "Denied — not pre-approved (needs a confirm button, or isn't in the read allowlist)",
+      });
+    }
+    events.push({ type: "done" });
+    return events;
+  }
+
+  return [];
 }
 
 /**
@@ -138,16 +230,7 @@ export async function* runClaude(
       } catch {
         continue;
       }
-      if (ev.type === "system" && ev.subtype === "init" && typeof ev.session_id === "string") {
-        yield { type: "session", sessionId: ev.session_id };
-      } else if (ev.type === "assistant" && Array.isArray(ev.message?.content)) {
-        for (const block of ev.message.content) {
-          if (block.type === "text") yield { type: "text", text: block.text };
-          else if (block.type === "thinking") yield { type: "thinking", text: block.thinking };
-        }
-      } else if (ev.type === "result") {
-        yield { type: "done" };
-      }
+      for (const e of mapClaudeEvent(ev)) yield e;
     }
   }
 
