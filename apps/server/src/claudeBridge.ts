@@ -19,6 +19,24 @@ const READ_ONLY_ALLOWLIST = [
   "Bash(kubectl config get-contexts*)",
   "Bash(kubectl config current-context*)",
   "Bash(kubectl config view*)",
+  // Read-only text filters. Claude Code checks EACH subcommand of a pipe/&&
+  // chain independently, and only auto-allows a small built-in read-only set
+  // (grep/head/tail/jq/wc/…). The model routinely post-processes kubectl output
+  // with these, so without them a command like `kubectl get … | awk …` gets the
+  // WHOLE pipe denied — surfacing as a bogus "kubectl get needs approval".
+  // These are pure stream processors: they can't mutate the cluster (kubectl
+  // write verbs stay un-allowlisted, so `… | kubectl apply` is still denied and
+  // gated behind the action-button confirm). Deliberately excludes xargs/sh/
+  // bash/eval/tee/dd — anything that could invoke a write or a cluster mutation.
+  "Bash(awk *)",
+  "Bash(sed *)",
+  "Bash(cut *)",
+  "Bash(sort *)",
+  "Bash(uniq *)",
+  "Bash(column *)",
+  "Bash(tr *)",
+  "Bash(jq *)",
+  "Bash(yq *)",
 ];
 
 export interface ChatEvent {
