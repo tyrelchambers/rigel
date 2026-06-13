@@ -1,4 +1,5 @@
-import { ExternalLink, Cpu, MemoryStick, HardDrive, Link2, Unlink } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ExternalLink, Cpu, MemoryStick, HardDrive, Link2, Unlink, ArrowDownToLine } from "lucide-react";
 import { categoryDisplayName, type CatalogApp } from "@helmsman/catalog";
 import {
   Sheet,
@@ -9,7 +10,13 @@ import {
   SheetFooter,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { useCluster } from "@/store/cluster";
+import { subscribe, unsubscribe } from "@/lib/ws";
+import type { Node } from "@/panels/nodes/types";
+import type { Pod } from "@/panels/pods/types";
 import { iconFor } from "./icons";
+import { nodeFit } from "./nodeFit";
+import { NodeFitPanel } from "./NodeFitPanel";
 
 /** A workload an app is explicitly bound to via the catalog-app annotation. */
 export interface CatalogBinding {
@@ -36,13 +43,41 @@ export function CatalogDetailSheet({
   binding: CatalogBinding | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onInstall: () => void;
+  /** Hands off the app plus the node the user pinned it to (null = "Any"). */
+  onInstall: (nodePin: string | null) => void;
   /** Open the workload picker to bind this app to a running workload. */
   onLink: () => void;
   /** Remove the binding annotation(s) for this app. */
   onUnlink: () => void;
 }) {
   const Icon = iconFor(app.iconSystemName);
+
+  // Live nodes + pods while the sheet is open, so NODE FIT reflects current
+  // capacity. Nodes are cluster-scoped; fit against all pods cluster-wide
+  // (ns "*") — matching Swift, which fits against every node + pod.
+  const resources = useCluster((s) => s.resources);
+  useEffect(() => {
+    if (!open) return;
+    subscribe("nodes", "*");
+    subscribe("pods", "*");
+    return () => {
+      unsubscribe("nodes", "*");
+      unsubscribe("pods", "*");
+    };
+  }, [open]);
+
+  const nodes = useMemo(
+    () => Object.values((resources["nodes"] ?? {}) as Record<string, Node>),
+    [resources],
+  );
+  const pods = useMemo(
+    () => Object.values((resources["pods"] ?? {}) as Record<string, Pod>),
+    [resources],
+  );
+  const fit = useMemo(() => nodeFit(app, nodes, pods), [app, nodes, pods]);
+
+  // Node the user pinned in the NODE FIT panel. null = "Any".
+  const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const links: Array<{ label: string; url: string | null | undefined }> = [
     { label: "Docs", url: app.docsURL },
     { label: "Repo", url: app.repoURL },
@@ -184,14 +219,31 @@ export function CatalogDetailSheet({
               </div>
             )}
           </div>
+
+          {/* NODE FIT — per-node capacity + pin-to-node (Swift rightColumn). */}
+          <div className="detail-sheet-section">
+            <NodeFitPanel
+              app={app}
+              fit={fit}
+              selectedNode={selectedNode}
+              onSelectNode={setSelectedNode}
+            />
+          </div>
         </div>
 
         <SheetFooter className="detail-sheet-footer">
           <Button
-            onClick={onInstall}
-            className="detail-sheet-install-btn"
+            onClick={() => onInstall(selectedNode)}
+            disabled={!fit.anyFits}
+            className="detail-sheet-install-btn gap-1.5"
+            title={
+              fit.anyFits
+                ? "Start the install wizard"
+                : "No node has enough capacity for this app"
+            }
           >
-            {isInstalled ? "Reinstall" : "Install"}
+            <ArrowDownToLine className="size-3.5" aria-hidden />
+            {selectedNode ? `Install on ${selectedNode}` : "Install on cluster"}
           </Button>
         </SheetFooter>
       </SheetContent>

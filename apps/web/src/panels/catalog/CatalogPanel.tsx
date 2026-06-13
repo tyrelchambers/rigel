@@ -65,6 +65,9 @@ export default function CatalogPanel() {
   const [scope, setScope] = useState<Scope>("all");
   const [detailApp, setDetailApp] = useState<CatalogApp | null>(null);
   const [wizardApp, setWizardApp] = useState<CatalogApp | null>(null);
+  // Node pin carried from the detail sheet into the wizard's Configure step.
+  // null = "Any" (the default when launched straight from a card's Install).
+  const [wizardNodePin, setWizardNodePin] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
   // The app whose Link workload picker is open, if any.
   const [linkApp, setLinkApp] = useState<CatalogApp | null>(null);
@@ -345,7 +348,10 @@ export default function CatalogPanel() {
                 isInstalled={installed}
                 index={i}
                 onSelect={() => setDetailApp(app)}
-                onInstall={() => setWizardApp(app)}
+                onInstall={() => {
+                  setWizardNodePin(null);
+                  setWizardApp(app);
+                }}
                 onLink={() => setLinkApp(app)}
               >
                 {installed && target && (
@@ -369,7 +375,8 @@ export default function CatalogPanel() {
           binding={boundByApp.get(detailApp.id) ?? null}
           open
           onOpenChange={(open) => !open && setDetailApp(null)}
-          onInstall={() => {
+          onInstall={(nodePin) => {
+            setWizardNodePin(nodePin);
             setWizardApp(detailApp);
             setDetailApp(null);
           }}
@@ -402,6 +409,7 @@ export default function CatalogPanel() {
           namespaces={namespaces}
           nodeNames={nodeNames}
           clusterIssuers={[]}
+          initialNodePin={wizardNodePin}
           onClose={() => setWizardApp(null)}
         />
       )}

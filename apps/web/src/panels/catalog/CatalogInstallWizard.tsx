@@ -74,12 +74,15 @@ export function CatalogInstallWizard({
   namespaces,
   nodeNames,
   clusterIssuers,
+  initialNodePin = null,
   onClose,
 }: {
   app: CatalogApp;
   namespaces: string[];
   nodeNames: string[];
   clusterIssuers: string[];
+  /** Node the detail sheet pinned the install to; null = "Any". */
+  initialNodePin?: string | null;
   onClose: () => void;
 }) {
   const [step, setStep] = useState<WizardStep>("configure");
@@ -88,7 +91,7 @@ export function CatalogInstallWizard({
     instance: app.id,
     namespace: "default",
     hostname: "",
-    nodePin: null,
+    nodePin: initialNodePin,
     storageGiB: app.requirements.storageGiB ?? 0,
     clusterIssuer: "",
     notes: "",
