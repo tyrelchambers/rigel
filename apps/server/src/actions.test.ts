@@ -382,3 +382,7 @@ test("restart uses deployment field as fallback when name is absent", () => {
   expect(buildCommand({ kind: "restart", deployment: "old-api", namespace: "prod" }))
     .toEqual(["rollout", "restart", "deployment/old-api", "-n", "prod"]);
 });
+
+test("applyManifest is not a kubectl argv — buildCommand throws", () => {
+  expect(() => buildCommand({ kind: "applyManifest", label: "x" } as any)).toThrow();
+});

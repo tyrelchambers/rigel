@@ -72,6 +72,8 @@ export interface ActionBlock {
   args?: string[];
   /** `command` only: Claude's destructiveness hint. */
   destructive?: boolean;
+  /** applyManifest only — manifest YAML, applied via /api/apply. */
+  manifest?: string;
 }
 
 /** Thrown when `kind === "purge"` — not a kubectl command; caller opens purge flow. */
@@ -312,6 +314,12 @@ export function buildCommand(a: ActionBlock): string[] {
     // -----------------------------------------------------------------------
     case "command":
       return (a.args ?? []).filter((s) => s !== "");
+
+    // -----------------------------------------------------------------------
+    // applyManifest — NOT a kubectl argv; manifest is applied via /api/apply
+    // -----------------------------------------------------------------------
+    case "applyManifest":
+      throw new Error("applyManifest is applied via /api/apply (kubectl apply -f -), not /api/action");
 
     // -----------------------------------------------------------------------
     // purge — NOT a kubectl command; opens typed-name purge confirm sheet
