@@ -28,6 +28,10 @@ export interface Pod {
       name: string;
       image?: string;
       ports?: Array<{ containerPort: number; name?: string }>;
+      resources?: {
+        requests?: Record<string, string>;
+        limits?: Record<string, string>;
+      };
     }>;
   };
   status?: {

@@ -23,9 +23,16 @@ export interface NodeInfo {
   operatingSystem?: string;
 }
 
+export interface NodeTaint {
+  key: string;
+  value?: string;
+  effect: string; // "NoSchedule" | "NoExecute" | "PreferNoSchedule"
+}
+
 export interface NodeSpec {
   unschedulable?: boolean;
   podCIDR?: string;
+  taints?: NodeTaint[];
 }
 
 export interface NodeStatus {
