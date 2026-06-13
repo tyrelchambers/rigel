@@ -266,3 +266,20 @@ test("unknown event type → empty array", () => {
   expect(mapClaudeEvent(null)).toHaveLength(0);
   expect(mapClaudeEvent({})).toHaveLength(0);
 });
+
+import { readAllowlist } from "./claudeBridge";
+
+test("readAllowlist adds context-prefixed kubectl patterns when a context is set", () => {
+  const list = readAllowlist("default");
+  expect(list).toContain("Bash(kubectl get *)"); // base preserved
+  expect(list).toContain("Bash(kubectl --context default get *)"); // context-prefixed variant
+  expect(list).toContain("Bash(kubectl --context default config view*)");
+  // filter patterns are NOT context-prefixed (they don't take --context)
+  expect(list).toContain("Bash(awk *)");
+  expect(list).not.toContain("Bash(kubectl --context default awk *)");
+});
+
+test("readAllowlist returns the base list unchanged when context is null", () => {
+  expect(readAllowlist(null)).toContain("Bash(kubectl get *)");
+  expect(readAllowlist(null).some((p) => p.includes("--context"))).toBe(false);
+});

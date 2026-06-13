@@ -39,6 +39,23 @@ const READ_ONLY_ALLOWLIST = [
   "Bash(yq *)",
 ];
 
+/**
+ * The system prompt tells the model to "always pass `--context <ctx>`", and it
+ * often writes `kubectl --context <ctx> get …` — with the flag BEFORE the verb.
+ * The base patterns above only match `kubectl get …` (verb adjacent to kubectl),
+ * so every context-prefixed read was being DENIED. Since we know the selected
+ * context, emit the context-prefixed variant of each kubectl pattern too, so the
+ * read is allowlisted regardless of where the model puts `--context`. Filter
+ * patterns (awk/sed/…) are left untouched (they don't take `--context`).
+ */
+export function readAllowlist(context: string | null): string[] {
+  if (!context) return READ_ONLY_ALLOWLIST;
+  const prefixed = READ_ONLY_ALLOWLIST.filter((p) => p.startsWith("Bash(kubectl ")).map(
+    (p) => p.replace("Bash(kubectl ", `Bash(kubectl --context ${context} `),
+  );
+  return [...READ_ONLY_ALLOWLIST, ...prefixed];
+}
+
 export interface ChatEvent {
   type: "thinking" | "text" | "done" | "error" | "session" | "tool" | "toolResult";
   text?: string;
@@ -178,7 +195,7 @@ export async function* runClaude(
   // bad value can't inject arbitrary args or break the CLI).
   if (opts?.model && ALLOWED_MODELS.has(opts.model)) argv.push("--model", opts.model);
   if (opts?.effort && ALLOWED_EFFORTS.has(opts.effort)) argv.push("--effort", opts.effort);
-  for (const tool of READ_ONLY_ALLOWLIST) {
+  for (const tool of readAllowlist(context)) {
     argv.push("--allowedTools", tool);
   }
 
