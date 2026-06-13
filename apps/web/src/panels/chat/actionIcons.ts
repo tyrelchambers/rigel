@@ -18,6 +18,7 @@ import {
   FolderMinus,
   FlameKindling,
   Terminal,
+  PackagePlus,
   Wrench,
   type LucideIcon,
 } from "lucide-react";
@@ -44,6 +45,7 @@ const ICONS: Record<string, LucideIcon> = {
   deleteResource: Trash2,
   purge: FlameKindling,
   command: Terminal,
+  applyManifest: PackagePlus,
 };
 
 export function iconForKind(kind: string): LucideIcon {

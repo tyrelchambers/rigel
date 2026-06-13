@@ -24,6 +24,8 @@ export interface ActionBlock {
   appID?: string;
   args?: string[];
   destructive?: boolean;
+  /** applyManifest only — manifest YAML applied via /api/apply. */
+  manifest?: string;
 }
 
 export interface ActionResult {
@@ -67,6 +69,20 @@ async function executeAction(action: ActionBlock): Promise<ActionResponse> {
     throw new Error((err as { error?: string }).error ?? res.statusText);
   }
   return res.json() as Promise<ActionResponse>;
+}
+
+/** Apply a manifest set via the server's stdin `kubectl apply -f -`. */
+export async function applyManifestYaml(yaml: string): Promise<ActionResult> {
+  const res = await fetch("/api/apply", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ yaml }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? res.statusText);
+  }
+  return res.json() as Promise<ActionResult>;
 }
 
 /**
