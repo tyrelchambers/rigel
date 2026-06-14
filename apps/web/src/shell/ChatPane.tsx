@@ -19,10 +19,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Sparkles, Copy, SquarePen, Clock, ArrowDown, Box, Layers, Server, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
+import { BatchConfirmSheet, type BatchConfirmItem } from "@/components/BatchConfirmSheet";
 import { PurgeSheet } from "@/panels/purge/PurgeSheet";
 import type { ActionBlock, ActionResult } from "@/lib/api";
-import { useChatConfig, useSuggestions } from "@/lib/api";
-import { chatFeedback, visibleSummary } from "@/panels/chat/workloadResultReport";
+import { useChatConfig, useSuggestions, executeAction } from "@/lib/api";
+import { chatFeedback, visibleSummary, batchFeedback, type BatchRun } from "@/panels/chat/workloadResultReport";
 import { SuggestedPromptsRow } from "@/panels/chat/SuggestedPromptsRow";
 import { Link } from "react-router";
 import { stripActionBlocks, type SuggestedAction } from "@/lib/actionBlocks";
@@ -505,6 +506,60 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     });
   }
 
+  // ── Batch actions → BatchConfirmSheet → sequential execute ────────────────
+  const [pendingBatch, setPendingBatch] = useState<ActionBlock[] | null>(null);
+
+  function handleRunBatch(suggestions: SuggestedAction[]) {
+    // purge/applyManifest can't join a sequential batch (already excluded in the
+    // list UI; filter defensively).
+    const blocks = suggestions
+      .map(toActionBlock)
+      .filter((b) => b.kind !== "purge" && b.kind !== "applyManifest");
+    if (blocks.length === 0) return;
+    setPendingBatch(blocks);
+  }
+
+  // Run the confirmed batch sequentially, stopping at the first failure. Each
+  // action shows a ▶︎ preview then a ✓/✗ summary; one combined result is fed
+  // back into the session (parity with Swift executeBatch / batchFeedback).
+  async function executeBatch(items: BatchConfirmItem[]) {
+    setPendingBatch(null);
+    setIsStreaming(true);
+    setIsThinking(false);
+    setLiveThinking("");
+    liveThinkingRef.current = "";
+    const start = new Date();
+    setTurnStartedAt(start);
+    turnStartedAtRef.current = start;
+    setIsAtBottom(true);
+    isAtBottomRef.current = true;
+
+    const ran: BatchRun[] = [];
+    let failedAt = -1;
+    for (let i = 0; i < items.length; i++) {
+      const { action, commandString } = items[i]!;
+      setMessages((prev) => [...prev, makeMessage("system", `▶︎ ${commandString}`)]);
+      let result: ActionResult;
+      try {
+        const resp = await executeAction(action);
+        result = "code" in resp ? resp : { code: 1, stdout: "", stderr: "unexpected response" };
+      } catch (e) {
+        result = { code: 1, stdout: "", stderr: e instanceof Error ? e.message : String(e) };
+      }
+      setMessages((prev) => [...prev, makeMessage("system", visibleSummary(action.label ?? "Action", result))]);
+      ran.push({ commandString, result });
+      if (result.code !== 0) {
+        failedAt = i;
+        break;
+      }
+    }
+    const skipped = failedAt >= 0 ? items.slice(failedAt + 1).map((it) => it.commandString) : [];
+    sendChat(batchFeedback(ran, skipped), {
+      ...modelConfigRef.current,
+      sessionId: sessionIdRef.current ?? undefined,
+    });
+  }
+
   const shortId = shortSessionId(sessionId);
   const showThinkingPane = isStreaming && isThinking;
 
@@ -679,6 +734,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
                 key={m.id}
                 message={m}
                 onAction={handleSuggestedAction}
+                onRunBatch={handleRunBatch}
                 onAnswer={(value) => handoffToChat(value)}
               />
             ))}
@@ -742,6 +798,13 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
           }
           fromChat
           onResult={handleActionResult}
+        />
+
+        <BatchConfirmSheet
+          actions={pendingBatch ?? []}
+          open={!!pendingBatch}
+          onClose={() => setPendingBatch(null)}
+          onConfirm={executeBatch}
         />
 
         <PurgeSheet

@@ -58,3 +58,43 @@ export function visibleSummary(title: string, result: ActionResult): string {
   }
   return `✗ ${title} failed (exit ${result.code}):\n${clipShort(result.stderr)}`;
 }
+
+/** One executed action in a batch (its previewed command + result). */
+export interface BatchRun {
+  commandString: string;
+  result: ActionResult;
+}
+
+/**
+ * The single hidden message fed back into the session after a batch of actions
+ * ran (sequentially, stop-on-failure). Mirrors Swift's
+ * `WorkloadResultReport.batchFeedback`: a header, one line per executed action
+ * (success/FAILED + clipped output), the skipped queue, and a closing
+ * continue/diagnose line. `skipped` are the previewed commands of actions that
+ * never ran because an earlier one failed.
+ */
+export function batchFeedback(ran: BatchRun[], skipped: string[]): string {
+  const lines = [
+    "[Helmsman ran a queue of actions you proposed — the user approved and ran them together.]",
+    "",
+  ];
+  for (const { commandString, result } of ran) {
+    if (result.code === 0) {
+      lines.push(`• success: ${commandString}\n  output: ${clip(result.stdout, "(no output)")}`);
+    } else {
+      lines.push(`• FAILED (exit ${result.code}): ${commandString}\n  error: ${clip(result.stderr, "(no stderr)")}`);
+    }
+  }
+  if (skipped.length > 0) {
+    lines.push("");
+    lines.push("Stopped after a failure — these queued actions were NOT run:");
+    for (const cmd of skipped) lines.push(`• ${cmd}`);
+  }
+  lines.push("");
+  lines.push(
+    ran.some((r) => r.result.code !== 0)
+      ? "Diagnose the failure and propose a corrected next step for the remaining work."
+      : "Continue the task: confirm completion briefly, or proceed with the next step.",
+  );
+  return lines.join("\n");
+}

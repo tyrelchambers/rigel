@@ -12,6 +12,8 @@ import type { ChatMessage } from "./types";
 interface Props {
   message: ChatMessage;
   onAction: (action: SuggestedAction) => void;
+  /** Run the selected subset of actions as a batch. */
+  onRunBatch?: (actions: SuggestedAction[]) => void;
   /** Send a picked clarifying-question option as the next message. */
   onAnswer?: (value: string) => void;
 }
@@ -60,7 +62,7 @@ function ThinkingTrail({ thinking, seconds }: { thinking: string; seconds?: numb
  * blocks (stripped from display) and rendered as markdown; user/system text is
  * plain.
  */
-export function MessageBubble({ message, onAction, onAnswer }: Props) {
+export function MessageBubble({ message, onAction, onRunBatch, onAnswer }: Props) {
   const { Icon, label, color } = ROLE_META[message.role];
   const isAssistant = message.role === "assistant";
   const isSystem = message.role === "system";
@@ -111,7 +113,9 @@ export function MessageBubble({ message, onAction, onAnswer }: Props) {
             {display}
           </p>
         ) : null}
-        {isAssistant && <SuggestedActionList actions={actions} onAction={onAction} />}
+        {isAssistant && (
+          <SuggestedActionList actions={actions} onAction={onAction} onRunBatch={onRunBatch} />
+        )}
         {isAssistant && onAnswer && (
           <SuggestedQuestionList questions={questions} onAnswer={onAnswer} />
         )}

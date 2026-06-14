@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { chatFeedback, visibleSummary } from "./workloadResultReport";
+import { chatFeedback, visibleSummary, batchFeedback } from "./workloadResultReport";
 
 const ok = (stdout: string) => ({ code: 0, stdout, stderr: "" });
 const fail = (code: number, stderr: string) => ({ code, stdout: "", stderr });
@@ -45,5 +45,42 @@ describe("visibleSummary (the ✓/✗ system bubble)", () => {
     expect(visibleSummary("Delete svc postgres", fail(1, "forbidden"))).toBe(
       "✗ Delete svc postgres failed (exit 1):\nforbidden",
     );
+  });
+});
+
+describe("batchFeedback (mirrors Swift WorkloadResultReport.batchFeedback)", () => {
+  test("all success: header + per-action success lines + continue close, no skipped section", () => {
+    const msg = batchFeedback(
+      [
+        { commandString: "kubectl scale deploy/a --replicas=2", result: ok("scaled") },
+        { commandString: "kubectl rollout restart deploy/b", result: ok("") },
+      ],
+      [],
+    );
+    expect(msg).toContain("[Helmsman ran a queue of actions you proposed — the user approved and ran them together.]");
+    expect(msg).toContain("• success: kubectl scale deploy/a --replicas=2\n  output: scaled");
+    expect(msg).toContain("• success: kubectl rollout restart deploy/b\n  output: (no output)");
+    expect(msg).not.toContain("NOT run");
+    expect(msg).toContain("Continue the task");
+  });
+
+  test("mid-failure: FAILED line, skipped section, and diagnose close", () => {
+    const msg = batchFeedback(
+      [
+        { commandString: "kubectl scale deploy/a --replicas=2", result: ok("scaled") },
+        { commandString: "kubectl delete svc postgres", result: fail(1, "forbidden") },
+      ],
+      ["kubectl rollout restart deploy/c"],
+    );
+    expect(msg).toContain("• success: kubectl scale deploy/a --replicas=2");
+    expect(msg).toContain("• FAILED (exit 1): kubectl delete svc postgres\n  error: forbidden");
+    expect(msg).toContain("Stopped after a failure — these queued actions were NOT run:");
+    expect(msg).toContain("• kubectl rollout restart deploy/c");
+    expect(msg).toContain("Diagnose the failure");
+    expect(msg).not.toContain("Continue the task");
+  });
+
+  test("empty stderr on failure falls back to (no stderr)", () => {
+    expect(batchFeedback([{ commandString: "kubectl x", result: fail(2, "") }], [])).toContain("(no stderr)");
   });
 });

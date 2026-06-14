@@ -58,7 +58,7 @@ export async function fetchPreviewCommand(action: ActionBlock): Promise<string[]
 }
 
 /** Execute a chat action-block mutation via the server's guarded route. */
-async function executeAction(action: ActionBlock): Promise<ActionResponse> {
+export async function executeAction(action: ActionBlock): Promise<ActionResponse> {
   const res = await fetch("/api/action", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
