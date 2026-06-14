@@ -1,5 +1,15 @@
 import { test, expect } from "bun:test";
-import { extractActionBlocks, stripActionBlocks } from "./actionBlocks";
+import {
+  extractActionBlocks,
+  stripActionBlocks,
+  isDestructiveAction,
+  extractQuestionBlocks,
+  buildQuestionAnswer,
+} from "./actionBlocks";
+
+function questionBlock(json: unknown): string {
+  return ["```question", JSON.stringify(json), "```"].join("\n");
+}
 
 const MSG = [
   "I'll set up AFFiNE.",
@@ -29,4 +39,167 @@ test("a non-applyManifest action does NOT consume a following yaml block", () =>
 });
 test("applyManifest with no following yaml is dropped (incomplete)", () => {
   expect(extractActionBlocks(["```action", '{"kind":"applyManifest","label":"x"}', "```"].join("\n"))).toEqual([]);
+});
+
+test("isDestructiveAction: delete/drain/purge family is always destructive", () => {
+  for (const kind of ["deletePod", "deleteWorkload", "deleteNamespace", "deleteResource", "drain", "purge"]) {
+    expect(isDestructiveAction({ kind })).toBe(true);
+    // a false hint can never downgrade an inherently destructive kind
+    expect(isDestructiveAction({ kind, destructive: false })).toBe(true);
+  }
+});
+test("isDestructiveAction: non-destructive kinds follow the model's hint", () => {
+  expect(isDestructiveAction({ kind: "restart" })).toBe(false);
+  expect(isDestructiveAction({ kind: "scale" })).toBe(false);
+  expect(isDestructiveAction({ kind: "command" })).toBe(false);
+  expect(isDestructiveAction({ kind: "command", destructive: true })).toBe(true);
+});
+
+// --- question blocks: fields parsing -----------------------------------------
+
+test("extractQuestionBlocks: fieldless options still parse (no fields key)", () => {
+  const [q] = extractQuestionBlocks(
+    questionBlock({ question: "Pick one", options: [{ label: "A" }, { label: "B", value: "Bee" }] }),
+  );
+  expect(q.question).toBe("Pick one");
+  expect(q.options).toEqual([
+    { label: "A", value: undefined, fields: undefined },
+    { label: "B", value: "Bee", fields: undefined },
+  ]);
+});
+
+test("extractQuestionBlocks: well-formed fields keep name/label/placeholder/required in order", () => {
+  const [q] = extractQuestionBlocks(
+    questionBlock({
+      question: "How?",
+      options: [
+        {
+          label: "Deploy",
+          value: "Deploy it",
+          fields: [
+            { name: "hostname", label: "Public hostname", placeholder: "affine.example.com", required: true },
+            { name: "port", label: "Service port", placeholder: "3010", required: false },
+          ],
+        },
+      ],
+    }),
+  );
+  expect(q.options[0]!.fields).toEqual([
+    { name: "hostname", label: "Public hostname", placeholder: "affine.example.com", required: true },
+    { name: "port", label: "Service port", placeholder: "3010", required: false },
+  ]);
+});
+
+test("extractQuestionBlocks: required defaults to true when absent, honors explicit false", () => {
+  const [q] = extractQuestionBlocks(
+    questionBlock({
+      question: "How?",
+      options: [{ label: "X", fields: [{ name: "a" }, { name: "b", required: false }] }],
+    }),
+  );
+  expect(q.options[0]!.fields![0]!.required).toBe(true);
+  expect(q.options[0]!.fields![1]!.required).toBe(false);
+});
+
+test("extractQuestionBlocks: malformed fields dropped, survivors kept in order", () => {
+  const [q] = extractQuestionBlocks(
+    questionBlock({
+      question: "How?",
+      options: [
+        {
+          label: "X",
+          fields: [
+            "nope",
+            { name: 42 },
+            { label: "no name" },
+            { name: "host" },
+            { name: "port", label: 99, placeholder: true, required: "yes" },
+          ],
+        },
+      ],
+    }),
+  );
+  // non-object, non-string name, missing name → dropped. host kept; port kept
+  // but its bad label/placeholder dropped and bad required defaults to true.
+  expect(q.options[0]!.fields).toEqual([
+    { name: "host", label: undefined, placeholder: undefined, required: true },
+    { name: "port", label: undefined, placeholder: undefined, required: true },
+  ]);
+});
+
+test("extractQuestionBlocks: all-dropped fields degrade option to plain (fields undefined)", () => {
+  const [q] = extractQuestionBlocks(
+    questionBlock({ question: "How?", options: [{ label: "X", fields: [{ label: "no name" }, "bad"] }] }),
+  );
+  expect(q.options[0]!.fields).toBeUndefined();
+});
+
+test("extractQuestionBlocks: empty array fields degrades to plain", () => {
+  const [q] = extractQuestionBlocks(
+    questionBlock({ question: "How?", options: [{ label: "X", fields: [] }] }),
+  );
+  expect(q.options[0]!.fields).toBeUndefined();
+});
+
+test("extractQuestionBlocks: non-array fields is ignored (plain option)", () => {
+  const [q] = extractQuestionBlocks(
+    questionBlock({ question: "How?", options: [{ label: "X", fields: "nope" }] }),
+  );
+  expect(q.options).toHaveLength(1);
+  expect(q.options[0]!.fields).toBeUndefined();
+});
+
+// --- buildQuestionAnswer -----------------------------------------------------
+
+test("buildQuestionAnswer: fieldless equals today's `> question\\n value ?? label`", () => {
+  expect(buildQuestionAnswer("Q?", { label: "Lab" }, {})).toBe("> Q?\nLab");
+  expect(buildQuestionAnswer("Q?", { label: "Lab", value: "Val" }, {})).toBe("> Q?\nVal");
+});
+
+test("buildQuestionAnswer: with values emits name: value lines in field order", () => {
+  const option = {
+    label: "Deploy",
+    value: "Deploy AFFiNE and expose it",
+    fields: [
+      { name: "hostname", required: true },
+      { name: "port", required: false },
+    ],
+  };
+  expect(
+    buildQuestionAnswer(
+      "There's no AFFiNE in the cluster yet. How should I handle the Traefik ingress?",
+      option,
+      { hostname: "affine.example.com", port: "3010" },
+    ),
+  ).toBe(
+    [
+      "> There's no AFFiNE in the cluster yet. How should I handle the Traefik ingress?",
+      "Deploy AFFiNE and expose it",
+      "hostname: affine.example.com",
+      "port: 3010",
+    ].join("\n"),
+  );
+});
+
+test("buildQuestionAnswer: blank/whitespace field omitted; filled kept", () => {
+  const option = {
+    label: "Deploy",
+    value: "Deploy AFFiNE and expose it",
+    fields: [
+      { name: "hostname", required: true },
+      { name: "port", required: false },
+    ],
+  };
+  expect(
+    buildQuestionAnswer("There's no AFFiNE in the cluster yet. How should I handle the Traefik ingress?", option, {
+      hostname: "affine.example.com",
+      port: "   ",
+    }),
+  ).toBe(
+    [
+      "> There's no AFFiNE in the cluster yet. How should I handle the Traefik ingress?",
+      "Deploy AFFiNE and expose it",
+      "hostname: affine.example.com",
+    ].join("\n"),
+  );
 });

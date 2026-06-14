@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Terminal, Copy, Check } from "lucide-react";
 import { fetchPreviewCommand, useAction, applyManifestYaml, type ActionBlock, type ActionResult, type PurgeResult } from "@/lib/api";
 import { listResources } from "@helmsman/catalog";
+import { isDestructiveAction } from "@/lib/actionBlocks";
 
 interface ConfirmSheetProps {
   /** The action to confirm and optionally execute. */
@@ -24,6 +25,17 @@ interface ConfirmSheetProps {
    * typed-name purge confirm sheet instead.
    */
   onPurge?: (name: string | null, namespace: string) => void;
+  /**
+   * Set when this sheet was opened from the chat, so the run result is reported
+   * back to the parent (ChatPanel) which feeds it into the claude session.
+   */
+  fromChat?: boolean;
+  /**
+   * Fires after a chat-initiated action runs (success OR failure), with the
+   * result and the exact previewed command — parity with Swift's executeWorkload
+   * closing the loop. Only called when `fromChat` is set.
+   */
+  onResult?: (info: { action: ActionBlock; result: ActionResult; commandString: string }) => void;
 }
 
 /**
@@ -33,7 +45,7 @@ interface ConfirmSheetProps {
  * Usage:
  *   <ConfirmSheet action={pendingAction} open={!!pendingAction} onClose={() => setPendingAction(null)} />
  */
-export function ConfirmSheet({ action, open, onClose, onPurge }: ConfirmSheetProps) {
+export function ConfirmSheet({ action, open, onClose, onPurge, fromChat, onResult }: ConfirmSheetProps) {
   const [previewCommand, setPreviewCommand] = useState<string[] | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -68,26 +80,44 @@ export function ConfirmSheet({ action, open, onClose, onPurge }: ConfirmSheetPro
   }, [action, open, reset]);
 
   async function handleApply() {
-    if (!action?.manifest) return;
+    const act = action;
+    if (!act?.manifest) return;
+    const cmd = act.label ?? "kubectl apply -f -";
     setApplyState({ pending: true });
     try {
-      const result = await applyManifestYaml(action.manifest);
+      const result = await applyManifestYaml(act.manifest);
       setApplyState({ pending: false, result });
+      if (fromChat) onResult?.({ action: act, result, commandString: cmd });
       if (result.code === 0) setTimeout(() => handleClose(), 1200);
     } catch (e) {
-      setApplyState({ pending: false, error: e instanceof Error ? e.message : String(e) });
+      const message = e instanceof Error ? e.message : String(e);
+      setApplyState({ pending: false, error: message });
+      if (fromChat) onResult?.({ action: act, result: { code: 1, stdout: "", stderr: message }, commandString: cmd });
     }
   }
 
   function handleExecute() {
     if (!action) return;
-    mutate(action, {
+    const act = action;
+    const cmd = previewCommand ? previewCommand.join(" ") : (act.label ?? "kubectl");
+    mutate(act, {
       onSuccess: (result) => {
         // If the server signals this is a purge, defer to the purge flow
         if ("purge" in result && result.purge) {
           const p = result as PurgeResult;
           onPurge?.(p.name, p.namespace);
           onClose();
+          return;
+        }
+        // Close the loop: hand the result back to the chat session (parity with
+        // Swift executeWorkload) so the model knows it ran and can continue.
+        if (fromChat) onResult?.({ action: act, result: result as ActionResult, commandString: cmd });
+      },
+      onError: (err) => {
+        // A failed run still closes the loop so the model can diagnose it.
+        if (fromChat) {
+          const message = err instanceof Error ? err.message : String(err);
+          onResult?.({ action: act, result: { code: 1, stdout: "", stderr: message }, commandString: cmd });
         }
       },
     });
@@ -101,7 +131,9 @@ export function ConfirmSheet({ action, open, onClose, onPurge }: ConfirmSheetPro
 
   const isPurge = action?.kind === "purge";
   const isApply = action?.kind === "applyManifest";
-  const isDestructive = action?.destructive === true || isPurge || isApply;
+  // Destructive treatment follows the shared rule (delete/drain/purge family or
+  // the model's `destructive` hint), plus applyManifest which is app-specific.
+  const isDestructive = (action ? isDestructiveAction(action) : false) || isApply;
   const commandString = previewCommand ? previewCommand.join(" ") : null;
 
   function handleCopy() {

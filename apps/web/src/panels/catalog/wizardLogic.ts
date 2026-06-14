@@ -31,6 +31,24 @@ export interface ConfigureValues {
   notes: string;
 }
 
+/**
+ * Namespace options for the Configure-step dropdown — every cluster namespace,
+ * sorted, plus the current selection seeded at the top if the watch hasn't
+ * surfaced it yet, so the picker can always represent the chosen value. Mirrors
+ * the Swift `CatalogInstallWizardModel.namespaceOptions`. The web UI renders
+ * these in a real <select> (NOT an <input list> datalist — a datalist filters
+ * its suggestions by the field's current text, which made "default" hide every
+ * namespace except the ones containing that substring).
+ */
+export function namespaceOptions(namespaces: string[], current: string): string[] {
+  const opts = [...namespaces].sort((a, b) =>
+    a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }),
+  );
+  const cur = current.trim();
+  if (cur !== "" && !opts.includes(cur)) opts.unshift(cur);
+  return opts;
+}
+
 /** Configure-step gate (docs/parity/catalog.md §"Step 1: Configure"). */
 export function canAdvanceFromConfigure(app: CatalogApp, v: ConfigureValues): boolean {
   if (v.instance.trim() === "") return false;

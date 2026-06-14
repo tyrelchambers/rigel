@@ -4,11 +4,14 @@
 export {
   type SuggestedAction,
   type SuggestedQuestion,
+  type QuestionField,
   ACTION_KINDS,
   extractActionBlocks,
   extractQuestionBlocks,
   stripActionBlocks,
   parseSuggestedActions,
+  isDestructiveAction,
+  buildQuestionAnswer,
 } from "./actionBlocks";
 
 export {

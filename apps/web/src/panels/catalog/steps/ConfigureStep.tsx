@@ -1,6 +1,6 @@
 import type { CatalogApp } from "@helmsman/catalog";
 import { Button } from "@/components/ui/button";
-import type { ConfigureValues } from "../wizardLogic";
+import { namespaceOptions, type ConfigureValues } from "../wizardLogic";
 
 /**
  * Step 1 — Configure. Controlled form for instance / namespace / hostname /
@@ -49,17 +49,17 @@ export function ConfigureStep({
 
       <div className="space-y-1">
         <label className="text-xs font-medium text-muted-foreground">Namespace</label>
-        <input
+        <select
           className={fieldClass}
-          list="catalog-namespaces"
           value={values.namespace}
           onChange={(e) => update({ namespace: e.target.value })}
-        />
-        <datalist id="catalog-namespaces">
-          {namespaces.map((ns) => (
-            <option key={ns} value={ns} />
+        >
+          {namespaceOptions(namespaces, values.namespace).map((ns) => (
+            <option key={ns} value={ns}>
+              {ns}
+            </option>
           ))}
-        </datalist>
+        </select>
       </div>
 
       {app.exposesIngress && (

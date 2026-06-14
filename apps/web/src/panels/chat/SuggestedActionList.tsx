@@ -1,5 +1,5 @@
 import { ArrowRight } from "lucide-react";
-import type { SuggestedAction } from "@/lib/actionBlocks";
+import { type SuggestedAction, isDestructiveAction } from "@/lib/actionBlocks";
 import { iconForKind } from "./actionIcons";
 
 interface Props {
@@ -9,24 +9,28 @@ interface Props {
 
 /**
  * SuggestedActionList — one button per parsed action, shown below an assistant
- * message. Tapping opens the ConfirmSheet (single-action flow; the "Run
- * selected" batch flow is deferred for MVP).
+ * message (above any clarifying questions). Tapping opens the ConfirmSheet
+ * (single-action flow; the "Run selected" batch flow is deferred for MVP).
  *
- * Styled to match Swift's ActionRow: accent-coloured text/icon on a dim
- * translucent background with a faint accent border. Full-width, left-aligned,
- * stacked vertically — mirrors Swift's VStack layout.
+ * Pixel-for-pixel parity with Swift's ActionRow (MessageViews.swift):
+ *   VStack spacing 4 · HStack spacing 6 · padding 10h/7v · Radius.sm (4) ·
+ *   icon 11 semibold · label 12 semibold (multiline, leading) ·
+ *   Spacer(min 4) · arrow 9 semibold opacity 0.6.
+ *
+ * Non-destructive: accent purple (#A855F7) text/icon on primaryDim
+ * (rgba 168,85,247,0.15) with a 0.4 accent border. Destructive (delete/drain/
+ * purge family, or the model's `destructive` hint): red (#EF4444) on
+ * rgba(239,68,68,0.15) with a 0.4 red border. Hover darkens bg to 0.22; keyboard
+ * focus shows a 2px box-shadow ring.
  */
 export function SuggestedActionList({ actions, onAction }: Props) {
   if (actions.length === 0) return null;
   return (
-    <div className="mt-2 flex flex-col gap-2">
+    <div className="mt-1 flex flex-col gap-1">
       {actions.map((action, i) => {
         const Icon = iconForKind(action.kind);
-        const destructive = action.destructive === true || action.kind === "purge";
+        const destructive = isDestructiveAction(action);
 
-        // Swift: foregroundStyle(Theme.Accent.primary) + background(Theme.Accent.primaryDim)
-        // + strokeBorder(Theme.Accent.primary.opacity(0.4))
-        // Destructive: foreground Theme.Status.failed (#EF4444), dim rgba(239,68,68,0.15)
         const color = destructive ? "#EF4444" : "#A855F7";
         const bgColor = destructive ? "rgba(239,68,68,0.15)" : "rgba(168,85,247,0.15)";
         const bgHover = destructive ? "rgba(239,68,68,0.22)" : "rgba(168,85,247,0.22)";
@@ -41,7 +45,7 @@ export function SuggestedActionList({ actions, onAction }: Props) {
               color,
               background: bgColor,
               border: `1px solid ${borderColor}`,
-              borderRadius: "6px",
+              borderRadius: "4px",
               padding: "7px 10px",
               fontSize: "12px",
               fontWeight: 600,
@@ -67,9 +71,9 @@ export function SuggestedActionList({ actions, onAction }: Props) {
               (e.currentTarget as HTMLButtonElement).style.boxShadow = "none";
             }}
           >
-            <Icon size={12} style={{ flexShrink: 0 }} />
+            <Icon size={11} strokeWidth={2.5} style={{ flexShrink: 0 }} />
             <span style={{ flex: 1 }}>{action.label}</span>
-            <ArrowRight size={10} style={{ opacity: 0.6, flexShrink: 0 }} />
+            <ArrowRight size={9} strokeWidth={2.5} style={{ opacity: 0.6, flexShrink: 0 }} />
           </button>
         );
       })}

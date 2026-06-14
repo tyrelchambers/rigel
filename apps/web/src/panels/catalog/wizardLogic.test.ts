@@ -3,6 +3,7 @@ import type { CatalogApp, SecretFieldSpec } from "@helmsman/catalog";
 import type { Pod } from "../pods/types";
 import {
   canAdvanceFromConfigure,
+  namespaceOptions,
   templateVars,
   renderArtifact,
   resolveSecretSpecs,
@@ -40,6 +41,28 @@ const baseConfig: ConfigureValues = {
   clusterIssuer: "",
   notes: "",
 };
+
+describe("namespaceOptions", () => {
+  test("returns every namespace, sorted, regardless of the current value", () => {
+    const all = ["kube-system", "default", "fleet-default", "cert-manager"];
+    const opts = namespaceOptions(all, "default");
+    expect(opts).toEqual(["cert-manager", "default", "fleet-default", "kube-system"]);
+    // the bug was a datalist filtering to only namespaces matching "default";
+    // the full list must survive whatever the current selection is.
+    expect(opts.length).toBe(4);
+  });
+
+  test("seeds the current selection at the top if the watch hasn't surfaced it", () => {
+    const opts = namespaceOptions(["default", "kube-system"], "affine");
+    expect(opts[0]).toBe("affine");
+    expect(opts).toContain("default");
+  });
+
+  test("does not duplicate the current selection when already present", () => {
+    const opts = namespaceOptions(["default", "kube-system"], "default");
+    expect(opts.filter((n) => n === "default")).toHaveLength(1);
+  });
+});
 
 describe("canAdvanceFromConfigure", () => {
   test("requires instance and namespace", () => {

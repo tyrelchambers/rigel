@@ -37,6 +37,15 @@ const READ_ONLY_ALLOWLIST = [
   "Bash(tr *)",
   "Bash(jq *)",
   "Bash(yq *)",
+  // The model habitually appends an exit-code probe like `… ; echo "exit: $?"`
+  // or interleaves separators like `… ; echo "---PG---"; …`. Each segment of a
+  // `;`/`&&`/`|` chain is permission-checked independently, so an un-allowlisted
+  // `echo` got the WHOLE compound command denied — surfacing as a bogus approval
+  // prompt on a pure read. `echo`/`cat` only emit to stdout and can't mutate the
+  // cluster (kubectl write verbs stay un-allowlisted and gated behind the action
+  // confirm). A `>` redirect would still be flagged by the CLI as a separate op.
+  "Bash(echo *)",
+  "Bash(cat *)",
 ];
 
 /**
@@ -48,6 +57,26 @@ const READ_ONLY_ALLOWLIST = [
  * read is allowlisted regardless of where the model puts `--context`. Filter
  * patterns (awk/sed/…) are left untouched (they don't take `--context`).
  */
+/**
+ * Inline `--settings` JSON registering the PreToolUse Bash permission hook
+ * (apps/server/src/permissionHook.ts, resolved next to this file so it works both
+ * in the container and in local dev). The hook classifies each command and
+ * allows reads / denies cluster mutations — see commandPolicy.ts.
+ */
+export function permissionHookSettings(): string {
+  const hookPath = new URL("./permissionHook.ts", import.meta.url).pathname;
+  return JSON.stringify({
+    hooks: {
+      PreToolUse: [
+        {
+          matcher: "Bash",
+          hooks: [{ type: "command", command: `bun ${hookPath}` }],
+        },
+      ],
+    },
+  });
+}
+
 export function readAllowlist(context: string | null): string[] {
   if (!context) return READ_ONLY_ALLOWLIST;
   const prefixed = READ_ONLY_ALLOWLIST.filter((p) => p.startsWith("Bash(kubectl ")).map(
@@ -180,24 +209,54 @@ export function mapClaudeEvent(ev: any): ChatEvent[] {
 const ALLOWED_MODELS = new Set(["opus", "sonnet", "haiku"]);
 const ALLOWED_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
 
-export async function* runClaude(
+export interface RunClaudeOpts {
+  model?: string;
+  effort?: string;
+  /** Prior CLI session id — passed as `--resume` so the turn continues the same
+   * conversation (parity with Swift's ClaudeSession resume). Absent = fresh turn. */
+  sessionId?: string;
+}
+
+/**
+ * Build the `claude` CLI argv for one turn. Pure + exported so it can be unit
+ * tested without spawning a subprocess (mirrors Swift's `buildArguments`).
+ */
+export function buildClaudeArgs(
   prompt: string,
   context: string | null,
-  signal?: AbortSignal,
-  opts?: { model?: string; effort?: string },
-): AsyncGenerator<ChatEvent> {
+  opts?: RunClaudeOpts,
+): string[] {
   const argv = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose"];
   // Teach the model the action/question button contract (parity with Swift) and
   // block AskUserQuestion (no UI here — it uses ```question blocks instead).
   argv.push("--append-system-prompt", systemPrompt(context));
   argv.push("--disallowedTools", "AskUserQuestion");
+  // Denylist permissioning: a PreToolUse hook (commandPolicy) auto-allows every
+  // non-mutating Bash command — so reads run regardless of flag order — and DENIES
+  // kubectl/helm cluster mutations, feeding back a reason that steers the model to
+  // an approve-and-run `command` action block. The per-pattern read allowlist below
+  // stays as a fallback so reads keep working even if the hook ever fails to run.
+  argv.push("--settings", permissionHookSettings());
   // Apply the composer's model/effort selection as launch flags (validated so a
   // bad value can't inject arbitrary args or break the CLI).
   if (opts?.model && ALLOWED_MODELS.has(opts.model)) argv.push("--model", opts.model);
   if (opts?.effort && ALLOWED_EFFORTS.has(opts.effort)) argv.push("--effort", opts.effort);
+  // Resume the prior session so the model keeps conversation + action-result
+  // history across turns. Only when we actually have an id (first turn is fresh).
+  if (opts?.sessionId) argv.push("--resume", opts.sessionId);
   for (const tool of readAllowlist(context)) {
     argv.push("--allowedTools", tool);
   }
+  return argv;
+}
+
+export async function* runClaude(
+  prompt: string,
+  context: string | null,
+  signal?: AbortSignal,
+  opts?: RunClaudeOpts,
+): AsyncGenerator<ChatEvent> {
+  const argv = buildClaudeArgs(prompt, context, opts);
 
   // Token: explicit env wins; otherwise the in-app Settings token (persisted to
   // the claude home) is injected so chat works without an env restart.

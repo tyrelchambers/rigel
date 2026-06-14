@@ -308,15 +308,29 @@ struct SuggestedActionList: View {
 /// One tappable option in a clarifying question. Shows a hollow circle when
 /// unselected and a filled one when selected, so the same row serves both the
 /// instant-send single-question view and the radio-style batch view.
+///
+/// `glyph` swaps the leading symbol: the radio circle for choice options, a
+/// `pencil` for the lone always-open input case (§ 4.3). Both render at the same
+/// 10pt semibold size to keep the row metrics identical.
 private struct QuestionOptionRow: View {
+    enum Glyph { case radio, pencil }
+
     let label: String
     let selected: Bool
+    var glyph: Glyph = .radio
     let action: () -> Void
+
+    private var glyphName: String {
+        switch glyph {
+        case .pencil: return "pencil"
+        case .radio:  return selected ? "largecircle.fill.circle" : "circle"
+        }
+    }
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
-                Image(systemName: selected ? "largecircle.fill.circle" : "circle")
+                Image(systemName: glyphName)
                     .font(.system(size: 10, weight: .semibold))
                 Text(label)
                     .font(Theme.Font.body(12, weight: .semibold))
@@ -338,12 +352,111 @@ private struct QuestionOptionRow: View {
     }
 }
 
-/// A single clarifying question Claude raised, with its options as tappable
-/// buttons. Tapping one immediately sends that option's answer as the user's
-/// next message.
+/// The inline mini-form shown under a picked input-bearing option (§ 4.2) or
+/// always-open beneath the lone-input pencil row (§ 4.3). Renders one labelled
+/// text field per `Field` in array order plus a required-gated `↵` submit.
+/// Enter in any field submits when enabled. Reports values keyed by `field.name`.
+private struct QuestionFieldsForm: View {
+    let fields: [ClarifyingQuestion.Field]
+    let locked: Bool
+    let onSubmit: ([String: String]) -> Void
+
+    @State private var values: [String: String] = [:]
+
+    /// Submit gates on every REQUIRED field being non-empty (after trimming);
+    /// optional fields may be blank.
+    private var canSubmit: Bool {
+        guard !locked else { return false }
+        for field in fields where field.required {
+            let v = values[field.name] ?? ""
+            if v.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return false }
+        }
+        return true
+    }
+
+    private func submit() {
+        guard canSubmit else { return }
+        onSubmit(values)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(fields) { field in
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(field.displayLabel)
+                        .font(Theme.Font.body(11, weight: .medium))
+                        .foregroundStyle(Theme.Foreground.secondary)
+                    TextField(
+                        field.placeholder ?? "",
+                        text: Binding(
+                            get: { values[field.name] ?? "" },
+                            set: { values[field.name] = $0 }
+                        )
+                    )
+                    .textFieldStyle(.plain)
+                    .font(Theme.Font.body(12))
+                    .foregroundStyle(Theme.Foreground.primary)
+                    .padding(.horizontal, 8).padding(.vertical, 6)
+                    .background(Theme.Accent.primaryDim)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Theme.Radius.sm)
+                            .strokeBorder(Theme.Accent.primary.opacity(0.4), lineWidth: 1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                    .onSubmit(submit)   // Enter submits when enabled; no-op otherwise.
+                    .disabled(locked)
+                }
+            }
+
+            HStack {
+                Spacer()
+                Button(action: submit) {
+                    Image(systemName: "return")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Theme.Foreground.inverse)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(canSubmit ? Theme.Accent.primary : Theme.Foreground.tertiary)
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                        .opacity(canSubmit ? 1 : 0.5)
+                }
+                .buttonStyle(.plain)
+                .disabled(!canSubmit)
+                .help(canSubmit ? "Send answer" : "Fill every required field to submit")
+            }
+        }
+        .padding(.leading, 16)   // indent the form under its option row
+    }
+}
+
+/// A single clarifying question Claude raised. Three behaviors fall out of one
+/// schema (docs/parity/chat-input-fields.md § 4):
+///   (a) fieldless option → instant-send button (tap sends immediately);
+///   (b) input-bearing option in a 2+ option block → pick-to-expand mini-form,
+///       single-open radio semantics;
+///   (c) a block with EXACTLY ONE input-bearing option → always-open form with a
+///       pencil glyph (no radio, no tap).
+/// After a successful send the whole block locks to prevent a double-send.
 struct ClarifyingQuestionView: View {
     let question: ClarifyingQuestion
     let onAnswer: (String) -> Void
+
+    /// The option whose form is currently expanded (behavior b). Nil = none open.
+    @State private var expandedOptionID: UUID? = nil
+    @State private var submitted = false
+
+    /// True when the block is a single input-bearing option (behavior c).
+    private var loneInput: ClarifyingQuestion.Option? {
+        guard question.options.count == 1, let only = question.options.first, only.hasFields
+        else { return nil }
+        return only
+    }
+
+    private func send(option: ClarifyingQuestion.Option, values: [String: String]) {
+        guard !submitted else { return }
+        onAnswer(ClarifyingQuestion.buildQuestionAnswer(
+            question: question.question, option: option, values: values))
+        submitted = true
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -351,12 +464,39 @@ struct ClarifyingQuestionView: View {
                 .font(Theme.Font.body(12, weight: .medium))
                 .foregroundStyle(Theme.Foreground.primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            ForEach(question.options) { option in
-                QuestionOptionRow(label: option.label, selected: false) {
-                    onAnswer(option.answer)
+
+            if let only = loneInput {
+                // (c) Always-open lone input: pencil glyph, no tap, form shown.
+                QuestionOptionRow(label: only.label, selected: true, glyph: .pencil) {}
+                    .allowsHitTesting(false)
+                QuestionFieldsForm(fields: only.fields, locked: submitted) { values in
+                    send(option: only, values: values)
+                }
+            } else {
+                // (a)/(b) Choice rows; input-bearing ones expand on pick.
+                ForEach(question.options) { option in
+                    QuestionOptionRow(
+                        label: option.label,
+                        selected: expandedOptionID == option.id
+                    ) {
+                        if option.hasFields {
+                            // (b) Single-open radio: toggle/replace the open form.
+                            expandedOptionID = (expandedOptionID == option.id) ? nil : option.id
+                        } else {
+                            // (a) Fieldless → instant-send, byte-identical to today.
+                            send(option: option, values: [:])
+                        }
+                    }
+                    if option.hasFields, expandedOptionID == option.id {
+                        QuestionFieldsForm(fields: option.fields, locked: submitted) { values in
+                            send(option: option, values: values)
+                        }
+                    }
                 }
             }
         }
+        .opacity(submitted ? 0.55 : 1)
+        .disabled(submitted)
     }
 }
 

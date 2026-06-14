@@ -3,8 +3,9 @@ import { Sparkles, Copy, SquarePen, ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { PurgeSheet } from "@/panels/purge/PurgeSheet";
-import type { ActionBlock } from "@/lib/api";
+import type { ActionBlock, ActionResult } from "@/lib/api";
 import { stripActionBlocks, type SuggestedAction } from "@/lib/actionBlocks";
+import { chatFeedback, visibleSummary } from "./workloadResultReport";
 import { onChatEvent, sendChat, interruptChat } from "@/lib/ws";
 import { useCluster } from "@/store/cluster";
 import { MessageBubble } from "./MessageBubble";
@@ -165,7 +166,7 @@ export default function ChatPanel() {
     turnStartedAtRef.current = start;
     setIsAtBottom(true);
     isAtBottomRef.current = true;
-    sendChat(text);
+    sendChat(text, { sessionId: sessionId ?? undefined });
   }
 
   function handleStop() {
@@ -212,6 +213,25 @@ export default function ChatPanel() {
       return;
     }
     setPendingAction(block);
+  }
+
+  // Close the loop after a chat-proposed action runs (web analog of Swift's
+  // executeWorkload): show a visible ✓/✗ summary AND feed the full result back
+  // into the SAME session (no user bubble — the display:false equivalent) so the
+  // model knows it ran and can verify/continue.
+  function handleActionResult(info: { action: ActionBlock; result: ActionResult; commandString: string }) {
+    const title = info.action.label ?? "Action";
+    setMessages((prev) => [...prev, makeMessage("system", visibleSummary(title, info.result))]);
+    setIsStreaming(true);
+    setIsThinking(false);
+    setLiveThinking("");
+    liveThinkingRef.current = "";
+    const start = new Date();
+    setTurnStartedAt(start);
+    turnStartedAtRef.current = start;
+    setIsAtBottom(true);
+    isAtBottomRef.current = true;
+    sendChat(chatFeedback(info.commandString, info.result), { sessionId: sessionId ?? undefined });
   }
 
   const shortId = shortSessionId(sessionId);
@@ -294,6 +314,8 @@ export default function ChatPanel() {
         onPurge={(name, namespace) =>
           setPurgeTarget({ name: name ?? "", namespace })
         }
+        fromChat
+        onResult={handleActionResult}
       />
 
       <PurgeSheet

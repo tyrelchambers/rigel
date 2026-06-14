@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -5,6 +6,11 @@ import path from "node:path";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // Default to node; component tests opt into jsdom via a `@vitest-environment
+  // jsdom` file directive (keeps the pure-logic .test.ts suites in fast node).
+  test: {
+    environment: "node",
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

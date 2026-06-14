@@ -42,13 +42,33 @@ export interface SuggestedAction {
 }
 
 /**
+ * QuestionField — an optional named free-text input attached to a question
+ * option. The user's typed text maps to the AI's named variable (`name`), so the
+ * model knows which slot was filled. See docs/parity/chat-input-fields.md § 2.
+ */
+export interface QuestionField {
+  /** The AI's variable name. The user's typed text maps to it. Verbatim, no dedupe/trim. */
+  name: string;
+  /** Human label shown beside the field. Defaults to `name` at render time. */
+  label?: string;
+  /** Example/hint text inside the input. */
+  placeholder?: string;
+  /** Defaults to true. Submit is gated until every required field is non-empty. */
+  required?: boolean;
+}
+
+/**
  * SuggestedQuestion — the fenced ```question JSON Claude emits to ask the user
  * to choose between options. The app renders the prompt + one button per option;
  * the picked `value` (or `label`) is sent back as the user's next message.
+ *
+ * Each option may carry an optional `fields` array (free-text inputs). An option
+ * with surviving fields renders as a mini-form; a fieldless option is today's
+ * instant-send button. See docs/parity/chat-input-fields.md.
  */
 export interface SuggestedQuestion {
   question: string;
-  options: { label: string; value?: string }[];
+  options: { label: string; value?: string; fields?: QuestionField[] }[];
 }
 
 /** Valid action kinds (docs/parity/contracts.md § 1). */
@@ -76,6 +96,29 @@ export const ACTION_KINDS = [
   "command",
   "applyManifest",
 ] as const;
+
+/**
+ * Action kinds that are ALWAYS destructive regardless of the model's hint.
+ * Mirrors the Swift destructive detection (delete/drain/purge family).
+ */
+const ALWAYS_DESTRUCTIVE_KINDS = new Set<string>([
+  "deletePod",
+  "deleteWorkload",
+  "deleteNamespace",
+  "deleteResource",
+  "drain",
+  "purge",
+]);
+
+/**
+ * Whether an action should render/confirm with the destructive (red) treatment.
+ * True when the model flagged it (`destructive === true`) OR the kind is in the
+ * always-destructive family. The model's `false` can never downgrade an
+ * inherently destructive kind (we take the stricter of the two).
+ */
+export function isDestructiveAction(action: Pick<SuggestedAction, "kind" | "destructive">): boolean {
+  return action.destructive === true || ALWAYS_DESTRUCTIVE_KINDS.has(action.kind);
+}
 
 /**
  * Extract fenced action blocks from markdown.
@@ -134,6 +177,32 @@ export function stripActionBlocks(markdown: string): string {
   return out;
 }
 
+/**
+ * Validate + filter one option's `fields` array per the contract (§ 2):
+ * `fields` must be an array; each entry is kept only if it's an object with a
+ * string `name`. Per field, `label`/`placeholder` are kept only when strings;
+ * `required` is kept only when boolean, else defaults to `true`. Returns the
+ * surviving fields, or `undefined` when `fields` is absent, non-array, or every
+ * field was dropped — `undefined` degrades the option to a plain instant-send
+ * button (never an empty form).
+ */
+function parseQuestionFields(raw: unknown): QuestionField[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const fields: QuestionField[] = [];
+  for (const f of raw) {
+    if (!f || typeof f !== "object") continue;
+    const obj = f as { name?: unknown; label?: unknown; placeholder?: unknown; required?: unknown };
+    if (typeof obj.name !== "string") continue;
+    fields.push({
+      name: obj.name,
+      label: typeof obj.label === "string" ? obj.label : undefined,
+      placeholder: typeof obj.placeholder === "string" ? obj.placeholder : undefined,
+      required: typeof obj.required === "boolean" ? obj.required : true,
+    });
+  }
+  return fields.length > 0 ? fields : undefined;
+}
+
 /** Extract fenced question blocks. Malformed/empty ones are skipped. */
 export function extractQuestionBlocks(markdown: string): SuggestedQuestion[] {
   const out: SuggestedQuestion[] = [];
@@ -142,11 +211,12 @@ export function extractQuestionBlocks(markdown: string): SuggestedQuestion[] {
       const json = JSON.parse(m[1]!.trim());
       if (json && typeof json.question === "string" && Array.isArray(json.options)) {
         const options = json.options
-          .filter((o: unknown): o is { label: string; value?: unknown } =>
+          .filter((o: unknown): o is { label: string; value?: unknown; fields?: unknown } =>
             !!o && typeof (o as { label?: unknown }).label === "string")
-          .map((o: { label: string; value?: unknown }) => ({
+          .map((o: { label: string; value?: unknown; fields?: unknown }) => ({
             label: o.label,
             value: typeof o.value === "string" ? o.value : undefined,
+            fields: parseQuestionFields(o.fields),
           }));
         if (options.length > 0) out.push({ question: json.question, options });
       }
@@ -155,6 +225,33 @@ export function extractQuestionBlocks(markdown: string): SuggestedQuestion[] {
     }
   }
   return out;
+}
+
+/**
+ * buildQuestionAnswer — the SINGLE source of truth for the message string sent
+ * back to the AI when the user answers a ```question block (web; the Swift twin
+ * in ClarifyingQuestion.swift produces byte-identical output). See § 3.
+ *
+ *   > {question}
+ *   {option.value ?? option.label}
+ *   {field.name}: {value}   ← one line per field WITH a value, in field order
+ *
+ * A field whose value is blank/whitespace-only is omitted (this is how empty
+ * optionals disappear). Values are inserted verbatim (no escaping). For a
+ * fieldless option (or empty `values`) the output is byte-identical to today's
+ * `> question\n value ?? label`.
+ */
+export function buildQuestionAnswer(
+  question: string,
+  option: { label: string; value?: string; fields?: QuestionField[] },
+  values: Record<string, string>,
+): string {
+  const lines = [`> ${question}`, option.value ?? option.label];
+  for (const field of option.fields ?? []) {
+    const value = values[field.name];
+    if (value != null && value.trim() !== "") lines.push(`${field.name}: ${value}`);
+  }
+  return lines.join("\n");
 }
 
 /**

@@ -267,7 +267,37 @@ test("unknown event type → empty array", () => {
   expect(mapClaudeEvent({})).toHaveLength(0);
 });
 
-import { readAllowlist } from "./claudeBridge";
+import { readAllowlist, permissionHookSettings, buildClaudeArgs } from "./claudeBridge";
+
+test("buildClaudeArgs appends --resume only when a sessionId is given", () => {
+  const withId = buildClaudeArgs("hi", "default", { sessionId: "sess_abc" });
+  const i = withId.indexOf("--resume");
+  expect(i).toBeGreaterThan(-1);
+  expect(withId[i + 1]).toBe("sess_abc");
+
+  const fresh = buildClaudeArgs("hi", "default", {});
+  expect(fresh).not.toContain("--resume");
+  // base shape preserved
+  expect(fresh.slice(0, 3)).toEqual(["claude", "-p", "hi"]);
+});
+
+test("buildClaudeArgs still validates model/effort", () => {
+  const ok = buildClaudeArgs("hi", null, { model: "opus", effort: "high" });
+  expect(ok).toContain("--model");
+  expect(ok[ok.indexOf("--model") + 1]).toBe("opus");
+  const bad = buildClaudeArgs("hi", null, { model: "evil; rm -rf", effort: "nope" });
+  expect(bad).not.toContain("--model");
+  expect(bad).not.toContain("--effort");
+});
+
+test("permissionHookSettings registers a PreToolUse Bash hook with a resolvable bun command", () => {
+  const s = JSON.parse(permissionHookSettings());
+  const entry = s.hooks.PreToolUse[0];
+  expect(entry.matcher).toBe("Bash");
+  expect(entry.hooks[0].type).toBe("command");
+  // command invokes bun on an absolute path to the permission hook
+  expect(entry.hooks[0].command).toMatch(/^bun \/.*permissionHook\.ts$/);
+});
 
 test("readAllowlist adds context-prefixed kubectl patterns when a context is set", () => {
   const list = readAllowlist("default");
@@ -277,6 +307,9 @@ test("readAllowlist adds context-prefixed kubectl patterns when a context is set
   // filter patterns are NOT context-prefixed (they don't take --context)
   expect(list).toContain("Bash(awk *)");
   expect(list).not.toContain("Bash(kubectl --context default awk *)");
+  // echo/cat are read-only output builtins the model chains onto reads
+  expect(list).toContain("Bash(echo *)");
+  expect(list).toContain("Bash(cat *)");
 });
 
 test("readAllowlist returns the base list unchanged when context is null", () => {

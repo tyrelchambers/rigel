@@ -66,9 +66,12 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null)
         chatAborts.set(ws, ac);
         const model = typeof m.model === "string" ? m.model : undefined;
         const effort = typeof m.effort === "string" ? m.effort : undefined;
+        // Resume the prior session so the turn keeps conversation history. The
+        // client owns the id (from the `session` event); the server stays stateless.
+        const sessionId = typeof m.sessionId === "string" ? m.sessionId : undefined;
         (async () => {
           try {
-            for await (const event of runClaude(m.prompt, context, ac.signal, { model, effort })) {
+            for await (const event of runClaude(m.prompt, context, ac.signal, { model, effort, sessionId })) {
               ws.send(JSON.stringify({ type: "chat", event }));
             }
           } catch {

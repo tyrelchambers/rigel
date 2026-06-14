@@ -66,9 +66,24 @@ export function onLogLine(callback: LogCallback): () => void {
   };
 }
 
-/** Send a chat prompt to the server. {type:"chat", prompt, model?, effort?}. */
-export function sendChat(prompt: string, opts?: { model?: string; effort?: string }): void {
-  rawSend(JSON.stringify({ type: "chat", prompt, model: opts?.model, effort: opts?.effort }));
+/**
+ * Send a chat prompt to the server. {type:"chat", prompt, model?, effort?, sessionId?}.
+ * Pass the prior `sessionId` (captured from the `session` event) so the turn
+ * resumes the same conversation; omit it on the first turn for a fresh session.
+ */
+export function sendChat(
+  prompt: string,
+  opts?: { model?: string; effort?: string; sessionId?: string },
+): void {
+  rawSend(
+    JSON.stringify({
+      type: "chat",
+      prompt,
+      model: opts?.model,
+      effort: opts?.effort,
+      sessionId: opts?.sessionId,
+    }),
+  );
 }
 
 /** Request the server interrupt the current chat turn. */

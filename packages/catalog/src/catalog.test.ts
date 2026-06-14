@@ -16,9 +16,9 @@ import { isBaked, type CatalogApp } from "./types";
 // loader
 // ---------------------------------------------------------------------------
 describe("loadCatalog", () => {
-  test("loads 54 apps", async () => {
+  test("loads 55 apps", async () => {
     const apps = await loadCatalog();
-    expect(apps.length).toBe(54);
+    expect(apps.length).toBe(55);
     expect(apps).toBe(CATALOG);
   });
 

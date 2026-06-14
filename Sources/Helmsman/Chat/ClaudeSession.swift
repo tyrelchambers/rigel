@@ -162,6 +162,11 @@ actor ClaudeSession {
         {"question":"How should I proceed with the Longhorn cleanup?","options":[{"label":"Both A and B","value":"Do both — remove the dead disk config and drop the 7 volumes to 2 replicas"},{"label":"Just the disk entry"},{"label":"Hold off entirely"}]}
         ```
 
+        When you need an actual VALUE from the user (a hostname, port, size, name — not a choice between fixed answers), DON'T ask them to type it into prose. Attach a `fields` array to the relevant option: `"fields": [ { "name": "<your variable>", "label": "<human label, optional>", "placeholder": "<example, optional>", "required": <bool, defaults true> } ]`. The app renders a labelled text input per field; the user's typed text comes back to you as `name: value` lines under the chosen answer, so you know exactly which slot was filled. Mark optional inputs with `"required": false`. Use a single option whose only job is to collect inputs when you just need the value (it renders as an always-open form). Field example:
+        ```question
+        {"question":"There's no AFFiNE in the cluster yet. How should I handle the Traefik ingress?","options":[{"label":"Deploy AFFiNE too","value":"Deploy AFFiNE and expose it","fields":[{"name":"hostname","label":"Public hostname","placeholder":"affine.example.com","required":true},{"name":"port","label":"Service port","placeholder":"3010","required":false}]},{"label":"Just give me the Ingress YAML"}]}
+        ```
+
         Prefer `-o json` and pipe through `jq` when you need structured fields. Keep answers grounded in real command output, not assumptions.
         """
     }
