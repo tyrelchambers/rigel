@@ -16,6 +16,7 @@ import WorkloadsPanel from "./panels/workloads/WorkloadsPanel";
 import DatabasesPanel from "./panels/databases/DatabasesPanel";
 import RightSizingPanel from "./panels/rightsizing/RightSizingPanel";
 import RbacPanel from "./panels/rbac/RbacPanel";
+import CertificatesPanel from "./panels/certificates/CertificatesPanel";
 import CatalogPanel from "./panels/catalog/CatalogPanel";
 import EventsPanel from "./panels/events/EventsPanel";
 import LogsPanel from "./panels/logs/LogsPanel";
@@ -153,6 +154,7 @@ export default function App() {
               <Route path="/secrets" element={<SecretsPanel />} />
               <Route path="/storage" element={<StoragePanel />} />
               <Route path="/rbac" element={<RbacPanel />} />
+              <Route path="/certificates" element={<CertificatesPanel />} />
               <Route path="/catalog" element={<PaddedX><CatalogPanel /></PaddedX>} />
               <Route path="/accounts" element={<Padded><AccountsPanel /></Padded>} />
               <Route path="/events" element={<EventsPanel />} />
