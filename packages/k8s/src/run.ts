@@ -4,7 +4,7 @@
  * backup` fails with "flags cannot be placed before plugin name". For those the
  * flag must come AFTER the plugin name: `kubectl cnpg --context X backup`.
  */
-const KUBECTL_PLUGINS = new Set(["cnpg"]);
+const KUBECTL_PLUGINS = new Set(["cnpg", "cert-manager"]);
 
 /**
  * Build the kubectl argv with `--context <ctx>` when a context is set. For

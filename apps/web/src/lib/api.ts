@@ -584,6 +584,14 @@ export function useCnpgPluginAvailable() {
   });
 }
 
+/** Whether the `kubectl cert-manager` (cmctl) plugin is available on the server. */
+export async function fetchCertManagerPlugin(): Promise<boolean> {
+  const res = await fetch("/api/cert-manager-plugin");
+  if (!res.ok) return false;
+  const data = (await res.json()) as { available: boolean };
+  return data.available;
+}
+
 // ---------------------------------------------------------------------------
 // Chat suggestion chips — GET /api/suggestions (computed server-side from
 // one-shot cluster reads). Mirrors the Swift SuggestedPromptsBuilder.
