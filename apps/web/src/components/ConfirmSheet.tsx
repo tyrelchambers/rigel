@@ -27,7 +27,7 @@ interface ConfirmSheetProps {
   onPurge?: (name: string | null, namespace: string) => void;
   /**
    * Set when this sheet was opened from the chat, so the run result is reported
-   * back to the parent (ChatPanel) which feeds it into the claude session.
+   * back to the parent (ChatPane) which feeds it into the claude session.
    */
   fromChat?: boolean;
   /**

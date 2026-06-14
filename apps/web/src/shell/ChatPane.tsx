@@ -20,8 +20,9 @@ import { Sparkles, Copy, SquarePen, Clock, ArrowDown, Box, Layers, Server, Check
 import { Button } from "@/components/ui/button";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { PurgeSheet } from "@/panels/purge/PurgeSheet";
-import type { ActionBlock } from "@/lib/api";
+import type { ActionBlock, ActionResult } from "@/lib/api";
 import { useChatConfig, useSuggestions } from "@/lib/api";
+import { chatFeedback, visibleSummary } from "@/panels/chat/workloadResultReport";
 import { SuggestedPromptsRow } from "@/panels/chat/SuggestedPromptsRow";
 import { Link } from "react-router";
 import { stripActionBlocks, type SuggestedAction } from "@/lib/actionBlocks";
@@ -196,6 +197,10 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   }, []);
   const modelConfigRef = useRef<ModelConfig>(modelConfig);
   modelConfigRef.current = modelConfig;
+  // Mirror sessionId into a ref so the handoff `submit` closure (registered once)
+  // sends the CURRENT session id and resumes the conversation across turns.
+  const sessionIdRef = useRef<string | null>(sessionId);
+  sessionIdRef.current = sessionId;
   const mentionCandidates = useMemo(() => buildMentions(resources), [resources]);
 
   // Persist the active conversation once each turn settles (not mid-stream, to
@@ -248,7 +253,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
       turnStartedAtRef.current = start;
       setIsAtBottom(true);
       isAtBottomRef.current = true;
-      sendChat(prompt, modelConfigRef.current);
+      sendChat(prompt, { ...modelConfigRef.current, sessionId: sessionIdRef.current ?? undefined });
     };
     if (handleRef) handleRef.current = { send: submit };
     registerChatHandoff(submit);
@@ -401,7 +406,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     turnStartedAtRef.current = start;
     setIsAtBottom(true);
     isAtBottomRef.current = true;
-    sendChat(text, modelConfig);
+    sendChat(text, { ...modelConfig, sessionId: sessionId ?? undefined });
   }
 
   function handleStop() {
@@ -477,6 +482,27 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
       return;
     }
     setPendingAction(block);
+  }
+
+  // Close the loop after a chat-proposed action runs: show a visible ✓/✗ summary
+  // AND feed the full result back into the SAME session (no user bubble) so the
+  // model knows it ran and can verify/continue. Parity with Swift executeWorkload.
+  function handleActionResult(info: { action: ActionBlock; result: ActionResult; commandString: string }) {
+    const title = info.action.label ?? "Action";
+    setMessages((prev) => [...prev, makeMessage("system", visibleSummary(title, info.result))]);
+    setIsStreaming(true);
+    setIsThinking(false);
+    setLiveThinking("");
+    liveThinkingRef.current = "";
+    const start = new Date();
+    setTurnStartedAt(start);
+    turnStartedAtRef.current = start;
+    setIsAtBottom(true);
+    isAtBottomRef.current = true;
+    sendChat(chatFeedback(info.commandString, info.result), {
+      ...modelConfigRef.current,
+      sessionId: sessionIdRef.current ?? undefined,
+    });
   }
 
   const shortId = shortSessionId(sessionId);
@@ -714,6 +740,8 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
           onPurge={(name, namespace) =>
             setPurgeTarget({ name: name ?? "", namespace })
           }
+          fromChat
+          onResult={handleActionResult}
         />
 
         <PurgeSheet
