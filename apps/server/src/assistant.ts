@@ -23,6 +23,7 @@ import {
   type AssistantInstallConfig,
 } from "@helmsman/k8s/src/assistant";
 import { signalConfigUpdates } from "@helmsman/k8s/src/signal";
+import { normalizeAlertRule, parseAlertRules, serializeAlertRules, nextAlertRules, type SuggestedAlert } from "@helmsman/k8s";
 
 // ---------------------------------------------------------------------------
 // kubectl plumbing
@@ -104,7 +105,8 @@ export type AssistantAction =
   | "silence"
   | "unsilence"
   | "clearReport"
-  | "setSignal";
+  | "setSignal"
+  | "saveAlert" | "deleteAlert" | "toggleAlert";
 
 export interface AssistantRequest {
   action: AssistantAction;
@@ -129,6 +131,10 @@ export interface AssistantRequest {
   number?: string;
   recipients?: string;
   inbound?: boolean;
+  // alert rules (saveAlert/deleteAlert/toggleAlert)
+  alert?: SuggestedAlert;   // saveAlert payload (model block, validated server-side)
+  alertId?: string;          // delete/toggle
+  alertEnabled?: boolean;    // toggle
 }
 
 // ---------------------------------------------------------------------------
@@ -241,6 +247,29 @@ async function setSignal(
   return patchConfig(context, namespace, updates);
 }
 
+/** Read-modify-write the `alertRules` key of `assistant-config`. */
+async function mutateAlerts(
+  context: string | null,
+  namespace: string,
+  req: AssistantRequest,
+): Promise<RunResult> {
+  const existing = await readConfigMapData(context, namespace, "assistant-config");
+  const rules = parseAlertRules(existing["alertRules"]);
+  let next;
+  if (req.action === "saveAlert") {
+    if (!req.alert) throw new Error("saveAlert requires an `alert` payload.");
+    const rule = normalizeAlertRule(req.alert, crypto.randomUUID(), Date.now());
+    next = nextAlertRules(rules, { op: "add", rule });
+  } else if (req.action === "deleteAlert") {
+    if (!req.alertId) throw new Error("deleteAlert requires `alertId`.");
+    next = nextAlertRules(rules, { op: "delete", id: req.alertId });
+  } else {
+    if (!req.alertId) throw new Error("toggleAlert requires `alertId`.");
+    next = nextAlertRules(rules, { op: "toggle", id: req.alertId, enabled: req.alertEnabled === true });
+  }
+  return patchConfig(context, namespace, { alertRules: serializeAlertRules(next) });
+}
+
 async function setMode(
   context: string | null,
   namespace: string,
@@ -343,6 +372,10 @@ export async function handleAssistant(
       return clearReport(context, namespace);
     case "setSignal":
       return setSignal(context, namespace, req);
+    case "saveAlert":
+    case "deleteAlert":
+    case "toggleAlert":
+      return mutateAlerts(context, namespace, req);
     default:
       throw new Error(`unknown action: ${String(req.action)}`);
   }
