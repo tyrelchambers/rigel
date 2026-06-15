@@ -9,6 +9,7 @@ export {
   type QuestionField,
   ACTION_KINDS,
   extractActionBlocks,
+  extractAlertBlocks,
   extractQuestionBlocks,
   stripActionBlocks,
   parseSuggestedActions,

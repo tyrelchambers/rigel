@@ -736,6 +736,8 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
                 onAction={handleSuggestedAction}
                 onRunBatch={handleRunBatch}
                 onAnswer={(value) => handoffToChat(value)}
+                // TODO: source agent install namespace from the assistant panel state
+                agentNamespace="default"
               />
             ))}
             <div ref={bottomRef} style={{ height: 14 }} />

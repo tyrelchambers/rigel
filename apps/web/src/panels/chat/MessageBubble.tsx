@@ -2,10 +2,11 @@ import { useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { User, Sparkles, Settings, ChevronRight } from "lucide-react";
-import { parseSuggestedActions, type SuggestedAction, type SuggestedQuestion } from "@/lib/actionBlocks";
+import { parseSuggestedActions, type SuggestedAction, type SuggestedQuestion, type SuggestedAlert } from "@/lib/actionBlocks";
 import { cn } from "@/lib/utils";
 import { SuggestedActionList } from "./SuggestedActionList";
 import { SuggestedQuestionList } from "./SuggestedQuestionList";
+import { SuggestedAlertList } from "./SuggestedAlertList";
 import { ToolCard } from "./ToolCard";
 import type { ChatMessage } from "./types";
 
@@ -16,6 +17,8 @@ interface Props {
   onRunBatch?: (actions: SuggestedAction[]) => void;
   /** Send a picked clarifying-question option as the next message. */
   onAnswer?: (value: string) => void;
+  /** Namespace used when saving a suggested alert rule. */
+  agentNamespace?: string;
 }
 
 // Role color mirrors the Swift MessageBubble: user = pod-palette blue,
@@ -62,15 +65,15 @@ function ThinkingTrail({ thinking, seconds }: { thinking: string; seconds?: numb
  * blocks (stripped from display) and rendered as markdown; user/system text is
  * plain.
  */
-export function MessageBubble({ message, onAction, onRunBatch, onAnswer }: Props) {
+export function MessageBubble({ message, onAction, onRunBatch, onAnswer, agentNamespace }: Props) {
   const { Icon, label, color } = ROLE_META[message.role];
   const isAssistant = message.role === "assistant";
   const isSystem = message.role === "system";
   const surface = cardSurface(message.role);
 
-  const { display, actions, questions } = isAssistant
+  const { display, actions, questions, alerts } = isAssistant
     ? parseSuggestedActions(message.text)
-    : { display: message.text, actions: [] as SuggestedAction[], questions: [] as SuggestedQuestion[] };
+    : { display: message.text, actions: [] as SuggestedAction[], questions: [] as SuggestedQuestion[], alerts: [] as SuggestedAlert[] };
 
   return (
     <div className="flex items-start gap-2">
@@ -118,6 +121,9 @@ export function MessageBubble({ message, onAction, onRunBatch, onAnswer }: Props
         )}
         {isAssistant && onAnswer && (
           <SuggestedQuestionList questions={questions} onAnswer={onAnswer} />
+        )}
+        {isAssistant && (
+          <SuggestedAlertList alerts={alerts} namespace={agentNamespace ?? "default"} />
         )}
       </div>
     </div>
