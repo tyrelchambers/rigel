@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "main": "src/index.ts",
-  "scripts": { "build": "tsc --noEmit", "typecheck": "tsc --noEmit", "test": "bun test" },
+  "scripts": { "build": "tsc --noEmit", "typecheck": "tsc --noEmit", "test": "bun test", "check-updates": "bun run src/checkCatalogUpdates.ts" },
   "devDependencies": { "@types/bun": "latest", "typescript": "latest" }
 }
