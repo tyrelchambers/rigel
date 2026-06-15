@@ -1,5 +1,6 @@
 import { kubectl, kubectlApply } from "./kubectl.js";
 import type { SuggestedAction } from "./action.js";
+import { emptyAlertState, type AlertState } from "./alerts.js";
 
 /**
  * The agent's externally-visible state, persisted to the `assistant-state`
@@ -56,13 +57,14 @@ export interface AssistantState {
   /** Persisted monthly spend so the cap survives pod restarts and resets with
    * the billing month. */
   spend?: { month: string; spentUsd: number };
+  alertState?: AlertState;
   audit: AuditEntry[];
   queue: QueuedSuggestion[];
   report: string;
 }
 
 export function emptyState(): AssistantState {
-  return { updatedAt: "", audit: [], queue: [], report: "" };
+  return { updatedAt: "", audit: [], queue: [], report: "", alertState: emptyAlertState() };
 }
 
 /** Prepend an audit entry (newest first), cap the log, and stamp updatedAt.

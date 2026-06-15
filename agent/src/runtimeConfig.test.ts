@@ -1,5 +1,5 @@
-import { describe, expect, test, vi } from "vitest";
-import { parseWindow, inWindow, decideAutonomy, readRuntimeConfig } from "./runtimeConfig.js";
+import { describe, expect, it, test, vi } from "vitest";
+import { parseWindow, inWindow, decideAutonomy, readRuntimeConfig, parseAlertRulesFromConfig } from "./runtimeConfig.js";
 import { kubectl } from "./kubectl.js";
 import type { Config } from "./config.js";
 
@@ -56,6 +56,14 @@ describe("decideAutonomy", () => {
   });
   test("window mode with no window falls back to queue (safe)", () => {
     expect(decideAutonomy("window", undefined, 60)).toBe("queue");
+  });
+});
+
+describe("parseAlertRulesFromConfig", () => {
+  it("parses the alertRules key, empty when absent", () => {
+    expect(parseAlertRulesFromConfig({})).toEqual([]);
+    const json = JSON.stringify([{ id: "a", text: "t", target: { scope: "cluster" }, condition: { type: "crashLoop" }, enabled: true, cooldownMinutes: 5, createdAt: "" }]);
+    expect(parseAlertRulesFromConfig({ alertRules: json })).toHaveLength(1);
   });
 });
 
