@@ -8,7 +8,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Terminal, Copy, Check } from "lucide-react";
+import { Terminal, Copy, Check, AlertTriangle, Layers, Play, ArrowRight, CheckCircle2 } from "lucide-react";
 import { fetchPreviewCommand, useAction, applyManifestYaml, type ActionBlock, type ActionResult, type PurgeResult } from "@/lib/api";
 import { listResources } from "@helmsman/catalog";
 import { isDestructiveAction } from "@/lib/actionBlocks";
@@ -153,149 +153,192 @@ export function ConfirmSheet({ action, open, onClose, onPurge, fromChat, onResul
     }
   }, [isSuccess, data, reset, onClose]);
 
-  // Swift: accent = isHighRisk ? Theme.Status.failed : Theme.Accent.primary
-  // The dialog border and header tint both follow `accent`.
+  // Accent follows risk: destructive actions go red, everything else the
+  // brand purple. Header tint, icon chip, command prompt, and the primary
+  // button all key off this single color.
   const accentColor = isDestructive ? "#EF4444" : "#A855F7";
-  const accentBorder = isDestructive ? "rgba(239,68,68,0.5)" : "rgba(168,85,247,0.5)";
-  const accentHeaderBg = isDestructive ? "rgba(239,68,68,0.08)" : "rgba(168,85,247,0.08)";
+  const HeaderIcon = isApply ? Layers : isDestructive ? AlertTriangle : Terminal;
+  const riskLabel = isDestructive ? "Destructive" : isApply ? "Apply" : "Safe";
+
+  const title = isPurge
+    ? "Remove application"
+    : isApply
+    ? (action?.label ?? "Apply manifest")
+    : (action?.label ?? "Confirm action");
+  const description = isPurge
+    ? "Opens the application removal flow. Nothing is deleted until you confirm in the next step."
+    : isApply
+    ? "Review the resources below, then apply them to the cluster."
+    : "This is the exact command that will run against your cluster.";
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
       <DialogContent
-        className="overflow-hidden p-0 gap-0"
-        style={{ border: `1px solid ${accentBorder}` }}
+        showCloseButton={false}
+        className="overflow-hidden p-0 gap-0 sm:max-w-xl"
+        style={{ border: `1px solid ${accentColor}40`, boxShadow: "0 24px 60px -20px rgba(0,0,0,0.7), 0 8px 24px rgba(0,0,0,0.6)" }}
       >
-        {/* Swift header: accent.opacity(0.08) background, title + description */}
+        {/* Header — icon chip + title + risk pill over an accent-tinted wash */}
         <DialogHeader
-          className="px-4 pt-4 pb-3"
-          style={{ background: accentHeaderBg, borderBottom: `1px solid ${accentColor}40` }}
+          className="flex-row items-start gap-3.5 px-5 pb-4 pt-5"
+          style={{
+            background: `linear-gradient(180deg, ${accentColor}1A 0%, transparent 100%)`,
+            borderBottom: `1px solid ${accentColor}24`,
+          }}
         >
-          <DialogTitle>
-            {isPurge
-              ? "Remove application"
-              : isApply
-              ? (action?.label ?? "Apply manifest")
-              : (action?.label ?? "Confirm action")}
-          </DialogTitle>
-          <DialogDescription>
-            {isPurge
-              ? "This will open the application removal flow. No resources will be deleted until you confirm in the next step."
-              : isApply
-              ? "Review what will be created, then apply."
-              : "Review the exact command before it runs. This cannot be undone."}
-          </DialogDescription>
+          <div
+            className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg"
+            style={{ background: `${accentColor}22`, border: `1px solid ${accentColor}45` }}
+          >
+            <HeaderIcon className="size-[18px]" style={{ color: accentColor }} strokeWidth={2} />
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <DialogTitle className="truncate text-[15px] leading-snug">{title}</DialogTitle>
+            <DialogDescription className="text-[13px] leading-relaxed">{description}</DialogDescription>
+          </div>
+          <span
+            className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
+            style={{ background: `${accentColor}1F`, color: accentColor, border: `1px solid ${accentColor}3D` }}
+          >
+            {riskLabel}
+          </span>
         </DialogHeader>
-        {/* Body content wrapper with padding — mirrors Swift body_content padding(18) */}
-        <div className="p-4 flex flex-col gap-4">
+
+        {/* Body */}
+        <div className="flex flex-col gap-4 px-5 py-5">
 
         {/* Apply manifest resource summary */}
         {isApply && action?.manifest && (() => {
           const resources = listResources(action.manifest);
           return (
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2">
               <p className="text-xs text-muted-foreground">
-                This will apply {resources.length} resource{resources.length === 1 ? "" : "s"}:
+                Applies <span className="font-semibold text-foreground">{resources.length}</span> resource{resources.length === 1 ? "" : "s"}:
               </p>
-              <ul className="max-h-60 space-y-1 overflow-auto rounded-md border bg-background/40 p-2 text-xs font-mono">
+              <ul
+                className="max-h-60 space-y-0.5 overflow-auto rounded-lg p-1.5 text-xs"
+                style={{ background: "#08080A", border: "1px solid #26262C" }}
+              >
                 {resources.map((r, i) => (
-                  <li key={i} className="flex items-center gap-2">
-                    <span className="text-primary">{r.kind}</span>
-                    <span className="text-foreground">/{r.name || "—"}</span>
-                    {r.namespace && <span className="text-muted-foreground">({r.namespace})</span>}
+                  <li key={i} className="flex items-center gap-2 rounded-md px-2 py-1.5 font-mono hover:bg-white/[0.03]">
+                    <span className="shrink-0 font-semibold" style={{ color: accentColor }}>{r.kind}</span>
+                    <span className="truncate text-foreground/90">{r.name || "—"}</span>
+                    {r.namespace && <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">{r.namespace}</span>}
                   </li>
                 ))}
               </ul>
               {applyState.error && (
-                <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">{applyState.error}</p>
+                <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{applyState.error}</p>
               )}
               {applyState.result && (applyState.result.code === 0
-                ? <p className="text-xs text-muted-foreground">Applied.</p>
-                : <pre className="rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap">{applyState.result.stderr || applyState.result.stdout}</pre>
+                ? <p className="flex items-center gap-1.5 text-xs text-emerald-400"><CheckCircle2 className="size-3.5" /> Applied.</p>
+                : <pre className="rounded-lg bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap">{applyState.result.stderr || applyState.result.stdout}</pre>
               )}
             </div>
           );
         })()}
 
-        {/* Command preview */}
+        {/* Command preview — rendered as a small terminal window */}
         {!isPurge && !isApply && (
-          <div>
-            {previewError ? (
-              <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                {previewError}
-              </p>
-            ) : commandString ? (
-              <div className="overflow-hidden rounded-lg border border-border bg-background shadow-sm ring-1 ring-foreground/5">
-                <div className="flex items-center gap-2 border-b border-border/60 bg-muted/30 px-3 py-1.5">
-                  <Terminal className="size-3.5 text-muted-foreground" />
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Command
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleCopy}
-                    className="ml-auto flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  >
-                    {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-                    {copied ? "Copied" : "Copy"}
-                  </button>
-                </div>
-                <pre className="px-3 py-2.5 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all text-foreground">
-                  <span className="select-none text-muted-foreground">$ </span>
-                  {commandString}
-                </pre>
-              </div>
-            ) : (
-              <div className="h-14 rounded-lg border border-border bg-muted/40 animate-pulse" />
-            )}
-          </div>
+          previewError ? (
+            <p className="rounded-lg bg-destructive/10 px-3 py-2.5 text-xs text-destructive">
+              {previewError}
+            </p>
+          ) : commandString ? (
+            <div className="relative overflow-hidden rounded-xl" style={{ background: "#08080A", border: "1px solid #26262C" }}>
+              <button
+                type="button"
+                onClick={handleCopy}
+                aria-label={copied ? "Copied" : "Copy command"}
+                className="absolute right-2.5 top-2.5 flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+              >
+                {copied ? <Check className="size-3" style={{ color: "#28C840" }} /> : <Copy className="size-3" />}
+                {copied ? "Copied" : "Copy"}
+              </button>
+              <pre className="overflow-x-auto px-4 py-3.5 pr-16 font-mono text-[12.5px] leading-6 whitespace-pre-wrap break-all">
+                <span className="select-none font-semibold" style={{ color: accentColor }}>$ </span>
+                <HighlightedCommand command={commandString} accent={accentColor} />
+              </pre>
+            </div>
+          ) : (
+            // Skeleton sized like the command block so the layout doesn't jump.
+            <div className="space-y-2 rounded-xl px-4 py-4" style={{ background: "#08080A", border: "1px solid #26262C" }}>
+              <div className="h-3 w-4/5 animate-pulse rounded bg-white/10" />
+              <div className="h-3 w-1/2 animate-pulse rounded bg-white/[0.07]" />
+            </div>
+          )
         )}
 
         {/* Result feedback */}
         {isSuccess && data && !("purge" in data && data.purge) && (
-          <div>
-            {"code" in data && data.code !== 0 ? (
-              <pre className="rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap">
-                {data.stderr || data.stdout}
-              </pre>
-            ) : (
-              <p className="text-xs text-muted-foreground">Command succeeded.</p>
-            )}
-          </div>
+          "code" in data && data.code !== 0 ? (
+            <pre className="rounded-lg bg-destructive/10 px-3 py-2.5 text-xs font-mono text-destructive whitespace-pre-wrap">
+              {data.stderr || data.stdout}
+            </pre>
+          ) : (
+            <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-400">
+              <CheckCircle2 className="size-4" /> Command succeeded.
+            </p>
+          )
         )}
 
         {isError && (
-          <div>
-            <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              {error.message}
-            </p>
-          </div>
+          <p className="rounded-lg bg-destructive/10 px-3 py-2.5 text-xs text-destructive">
+            {error.message}
+          </p>
         )}
 
-        </div>{/* end body content wrapper */}
+        </div>{/* end body */}
 
-        {/* Swift footer: Theme.Surface.primary bg + subtle top border */}
+        {/* Footer */}
         <DialogFooter
-          className="-mx-0 -mb-0 rounded-b-none border-t border-border/40 bg-background/60 px-4 py-3"
+          className="mx-0 mb-0 border-t px-5 py-4"
+          style={{ borderColor: "#1F1F24", background: "#0C0C0F" }}
         >
           <Button variant="outline" onClick={handleClose} disabled={isPending || applyState.pending}>
             Cancel
           </Button>
-          {/* Swift Execute button: solid `accent` fill, always — not the dim destructive/10 variant */}
           <Button
+            className="gap-1.5 font-medium transition-transform active:scale-[0.98]"
             style={{ background: accentColor, color: "#FFFFFF", border: "none" }}
             onClick={isApply ? handleApply : handleExecute}
             disabled={isApply ? applyState.pending : (isPending || (!isPurge && !commandString && !previewError))}
           >
-            {isApply
-              ? (applyState.pending ? "Applying…" : "Apply")
-              : isPending
-              ? "Running…"
-              : isPurge
-              ? "Continue to removal"
-              : "Execute"}
+            {isApply ? (
+              applyState.pending ? "Applying…" : <><Layers className="size-3.5" /> Apply</>
+            ) : isPending ? (
+              "Running…"
+            ) : isPurge ? (
+              <>Continue to removal <ArrowRight className="size-3.5" /></>
+            ) : (
+              <><Play className="size-3.5 fill-current" /> Execute</>
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Renders a shell command with light syntax emphasis: the binary in the accent
+ * color, flags dimmed, everything else in the foreground. Whitespace is
+ * preserved so the `pre` still wraps/breaks naturally.
+ */
+function HighlightedCommand({ command, accent }: { command: string; accent: string }) {
+  const parts = command.split(/(\s+)/);
+  let sawBinary = false;
+  return (
+    <>
+      {parts.map((tok, i) => {
+        if (/^\s+$/.test(tok) || tok === "") return <span key={i}>{tok}</span>;
+        if (!sawBinary) {
+          sawBinary = true;
+          return <span key={i} style={{ color: accent }} className="font-medium">{tok}</span>;
+        }
+        if (tok.startsWith("-")) return <span key={i} className="text-muted-foreground">{tok}</span>;
+        return <span key={i} className="text-foreground/90">{tok}</span>;
+      })}
+    </>
   );
 }
