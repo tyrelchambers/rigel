@@ -273,6 +273,15 @@ test("deleteResource clusterrolebinding (cluster-scoped)", () => {
     .toEqual(["delete", "clusterrolebinding", "my-crb"]);
 });
 
+test("deleteResource maps cert-manager order/challenge to fully-qualified delete", () => {
+  expect(buildCommand({ kind: "deleteResource", resourceKind: "order", name: "app-tls-1-abc", namespace: "default" }))
+    .toEqual(["delete", "orders.acme.cert-manager.io", "app-tls-1-abc", "-n", "default"]);
+  expect(buildCommand({ kind: "deleteResource", resourceKind: "challenge", name: "app-tls-1-abc-0", namespace: "default" }))
+    .toEqual(["delete", "challenges.acme.cert-manager.io", "app-tls-1-abc-0", "-n", "default"]);
+  expect(buildCommand({ kind: "deleteResource", resourceKind: "certificaterequest", name: "app-tls-1", namespace: "default" }))
+    .toEqual(["delete", "certificaterequests.cert-manager.io", "app-tls-1", "-n", "default"]);
+});
+
 // ---------------------------------------------------------------------------
 // command
 // ---------------------------------------------------------------------------

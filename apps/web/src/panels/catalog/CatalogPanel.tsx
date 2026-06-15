@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { motion } from "motion/react";
+import { motion, useAnimationControls } from "motion/react";
 import {
   LoaderCircle,
   ArrowUp,
@@ -340,7 +340,7 @@ export default function CatalogPanel() {
         <EmptyState search={search} scope={scope} />
       ) : (
         <div className="catalog-grid">
-          {filtered.map((app, i) => {
+          {filtered.map((app) => {
             const installed = installedIDs.has(app.id);
             const target = targetByApp.get(app.id);
             const result = target ? resultByImage.get(target.image) : undefined;
@@ -349,7 +349,6 @@ export default function CatalogPanel() {
                 key={app.id}
                 app={app}
                 isInstalled={installed}
-                index={i}
                 onSelect={() => setDetailApp(app)}
                 onLink={() => setLinkApp(app)}
               >
@@ -481,37 +480,63 @@ function CategoryPill({
 
 // ─── App Card ─────────────────────────────────────────────────────────────────
 
+// Reveal batcher. Cards that scroll into view within the same short window form a
+// "batch" and cascade relative to ONE ANOTHER — so the stagger tracks what's
+// actually on screen, not a card's position in the full list. This fixes both
+// failure modes of an index-based delay: bottom cards no longer wait ~2.5s, and
+// the cascade size now scales with the viewport (a wide screen that shows 12 cards
+// at once cascades all 12, a narrow one cascades fewer) instead of a fixed cap.
+const REVEAL_BATCH_MS = 250; // entries within this window belong to the same wave
+const revealBatch = { startedAt: -Infinity, count: 0 };
+
+function nextRevealDelaySeconds(): number {
+  const now = performance.now();
+  if (now - revealBatch.startedAt > REVEAL_BATCH_MS) {
+    revealBatch.startedAt = now;
+    revealBatch.count = 0;
+  }
+  const position = revealBatch.count;
+  revealBatch.count += 1;
+  // Cap a single wave so an unusually tall viewport still finishes promptly.
+  return Math.min(position, 12) * 0.04;
+}
+
 function CatalogCard({
   app,
   isInstalled,
-  index,
   onSelect,
   onLink,
   children,
 }: {
   app: CatalogApp;
   isInstalled: boolean;
-  index: number;
   onSelect: () => void;
   onLink: () => void;
   children?: ReactNode;
 }) {
   const Icon = iconFor(app.iconSystemName);
+  const controls = useAnimationControls();
 
   return (
     <motion.article
       className="catalog-card"
       // Reveal as the card scrolls into view, so the fade plays whether the card
       // is above or below the fold. `once` keeps it from replaying on scroll-back.
+      // The stagger delay is assigned at the moment the card ENTERS the viewport
+      // (see nextRevealDelaySeconds) so cards revealed together cascade together.
       initial={{ opacity: 0, y: 10 }}
-      whileInView={{ opacity: 1, y: 0 }}
+      animate={controls}
       viewport={{ once: true, margin: "0px 0px -40px 0px" }}
-      // Stagger the cascade by index; cap the delay so cards far down the list
-      // still reveal promptly when scrolled into view.
-      transition={{
-        duration: 0.28,
-        ease: [0.2, 0, 0.2, 1],
-        delay: index * 0.05,
+      onViewportEnter={() => {
+        controls.start({
+          opacity: 1,
+          y: 0,
+          transition: {
+            duration: 0.28,
+            ease: [0.2, 0, 0.2, 1],
+            delay: nextRevealDelaySeconds(),
+          },
+        });
       }}
       aria-label={`${app.name} — ${app.tagline}`}
     >

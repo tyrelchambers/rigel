@@ -161,6 +161,16 @@ const server = Bun.serve({
       return Response.json({ available: probe.code === 0 });
     }
 
+    // GET /api/cert-manager-plugin — is the `kubectl cert-manager` plugin
+    // (cmctl) installed? The Certificates panel uses this to enable/disable the
+    // Force-renew action. `version --client` never touches the cluster and (unlike
+    // the `help` subcommand) still accepts the `--context` flag the wrapper inserts
+    // after the plugin name, so exit 0 ⇒ present. Always HTTP 200.
+    if (url.pathname === "/api/cert-manager-plugin" && req.method === "GET") {
+      const probe = await kubectl(context, ["cert-manager", "version", "--client"]);
+      return Response.json({ available: probe.code === 0 });
+    }
+
     // GET /api/suggestions — cluster-aware chat suggestion chips. One-shot reads
     // (kept off the watch store so the namespace filter isn't disturbed); always
     // returns { prompts } (degrades to just the "Investigate cluster" fallback).

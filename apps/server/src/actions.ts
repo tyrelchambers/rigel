@@ -115,6 +115,10 @@ function resolveDeleteResource(a: ActionBlock): string[] {
   if (rk === "ing") kubectl_kind = "ingress";
   if (rk === "cm") kubectl_kind = "configmap";
   if (rk === "persistentvolumeclaim") kubectl_kind = "pvc";
+  if (rk === "order") kubectl_kind = "orders.acme.cert-manager.io";
+  if (rk === "challenge") kubectl_kind = "challenges.acme.cert-manager.io";
+  if (rk === "certificaterequest") kubectl_kind = "certificaterequests.cert-manager.io";
+  if (rk === "certificate") kubectl_kind = "certificates.cert-manager.io";
 
   const nsFlags = ns ? ["-n", ns] : [];
   return ["delete", kubectl_kind, name, ...nsFlags];
