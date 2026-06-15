@@ -119,11 +119,6 @@ async function tick(
     await writeState(cfg.stateConfigMap, cfg.stateNamespace, state);
     return;
   }
-  if (!spend.canSpend()) {
-    log(`spend cap reached ($${cfg.spendCapUsd}) — idle (fail-closed)`);
-    await writeState(cfg.stateConfigMap, cfg.stateNamespace, state);
-    return;
-  }
 
   // Drop incidents the operator has silenced (known noise) — no detection,
   // no spend, no action on those fingerprints.
@@ -131,6 +126,8 @@ async function tick(
   const incidents = detection.incidents.filter((i) => !rc.silenced.has(fingerprint(i)));
 
   // Custom alert rules — deterministic, model-less, free-riding the fetch above.
+  // Runs before the spend-cap guard so alerts still fire even when AI budget is
+  // exhausted (alert evaluation costs nothing).
   const alertResult = evaluateAlertRules(
     rc.alertRules,
     detection.pods,
@@ -140,6 +137,13 @@ async function tick(
   );
   state = { ...state, alertState: alertResult.alertState };
   for (const ev of alertResult.events) notifications.push(ev.message);
+
+  if (!spend.canSpend()) {
+    log(`spend cap reached ($${cfg.spendCapUsd}) — remediation idle; alerts still active (fail-closed)`);
+    flushNotifications(rc, notifications);
+    await writeState(cfg.stateConfigMap, cfg.stateNamespace, state);
+    return;
+  }
 
   const present = new Set(incidents.map(fingerprint));
 
@@ -334,13 +338,7 @@ async function tick(
   await writeState(cfg.stateConfigMap, cfg.stateNamespace, state);
 
   // Best-effort outbound notification for what happened this tick.
-  if (notifications.length > 0) {
-    const text = `Helmsman assistant:\n${notifications.join("\n")}`;
-    if (rc.webhookUrl) void notifyWebhook(rc.webhookUrl, text);
-    if (rc.signalApiUrl && rc.signalNumber) {
-      void notifySignal(rc.signalApiUrl, rc.signalNumber, rc.signalRecipients, text);
-    }
-  }
+  flushNotifications(rc, notifications);
 
   // Two-way Signal: answer any inbound diagnosis questions / approval commands.
   // Gated on the kill-switch (we already returned above when disabled) and the
@@ -519,6 +517,16 @@ function previewCommand(action: SuggestedAction): string {
 
 function truncate(s: string, max = 2000): string {
   return s.length > max ? s.slice(0, max) + "…" : s;
+}
+
+/** Best-effort flush of this tick's notifications to the configured channels. */
+function flushNotifications(rc: RuntimeConfig, notifications: string[]): void {
+  if (notifications.length === 0) return;
+  const text = `Helmsman assistant:\n${notifications.join("\n")}`;
+  if (rc.webhookUrl) void notifyWebhook(rc.webhookUrl, text);
+  if (rc.signalApiUrl && rc.signalNumber) {
+    void notifySignal(rc.signalApiUrl, rc.signalNumber, rc.signalRecipients, text);
+  }
 }
 
 async function main(): Promise<void> {
