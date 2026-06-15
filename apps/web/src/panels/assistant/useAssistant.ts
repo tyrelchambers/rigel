@@ -13,11 +13,13 @@ import {
   silencedSet as deriveSilenced,
   computeLiveIssues,
   parseTokenExpiry,
+  parseAlertRules,
   ISSUED_AT_ANNOTATION,
   SECRET_NAME,
   type AssistantClusterState,
   type AssistantLiveIssue,
   type TokenExpiryStatus,
+  type AlertRule,
 } from "@helmsman/k8s";
 
 // Minimal shapes for the watched resources (we only read what we render).
@@ -72,6 +74,8 @@ export interface AssistantDerived {
   allNamespaceNames: string[];
   /** Stored backup YAML for a revert, keyed by backupRef. */
   backupYAML: (ref: string) => string | undefined;
+  /** Parsed alert rules from the assistant-config ConfigMap. */
+  alertRules: AlertRule[];
 }
 
 /**
@@ -171,6 +175,7 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
       tokenExpiry,
       allNamespaceNames: namespaces.map((n) => n.metadata.name).sort(),
       backupYAML: (ref) => configMap("assistant-backups")?.data?.[ref],
+      alertRules: parseAlertRules(configData["alertRules"]),
     };
   }, [deployments, pods, configMaps, secrets, namespaces, installNamespaceHint]);
 }

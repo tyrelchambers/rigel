@@ -286,6 +286,9 @@ export interface AssistantRequest {
   inbound?: boolean;
   // saveAlert payload (model block, validated server-side)
   alert?: SuggestedAlert;
+  // toggleAlert / deleteAlert fields
+  alertId?: string;
+  alertEnabled?: boolean;
 }
 
 /**

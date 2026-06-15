@@ -37,6 +37,7 @@ import {
   type AssistantQueuedSuggestion,
 } from "@helmsman/k8s";
 import { useAssistant, type AssistantDerived } from "./useAssistant";
+import { alertRuleSummary } from "@/lib/alerts";
 import {
   tokenLabel,
   tokenColorClass,
@@ -583,6 +584,9 @@ function ControlCenter(p: ControlProps) {
         )}
       </Section>
 
+      {/* Alert rules */}
+      <AlertsCard d={d} ns={ns} working={working} run={run} />
+
       {/* Autonomy & notifications */}
       <Card className="space-y-2">
         <p className="text-sm font-semibold">Autonomy &amp; notifications</p>
@@ -906,5 +910,72 @@ function Section({
       </div>
       {children}
     </div>
+  );
+}
+
+// --- Alerts card ------------------------------------------------------------
+
+function AlertsCard({
+  d,
+  ns,
+  working,
+  run,
+}: {
+  d: AssistantDerived;
+  ns: string;
+  working: boolean;
+  run: ControlProps["run"];
+}) {
+  return (
+    <Card className="space-y-2">
+      <p className="text-sm font-semibold">Alerts</p>
+      {d.alertRules.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No alerts yet. Ask in chat — e.g.{" "}
+          <em>"text me if any pod in default restarts more than 3 times in 5 minutes"</em>.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {d.alertRules.map((rule) => (
+            <div
+              key={rule.id}
+              className={`flex items-start justify-between gap-2 rounded-md border p-2 ${
+                rule.enabled ? "" : "opacity-50"
+              }`}
+            >
+              <div className="min-w-0 flex-1">
+                <span className="text-sm font-medium">{rule.text}</span>
+                <span className="text-sm text-muted-foreground"> — {alertRuleSummary(rule)}</span>
+                {!rule.enabled && (
+                  <span className="ml-2 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                    disabled
+                  </span>
+                )}
+              </div>
+              <div className="flex shrink-0 gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={working}
+                  onClick={() =>
+                    run({ action: "toggleAlert", namespace: ns, alertId: rule.id, alertEnabled: !rule.enabled })
+                  }
+                >
+                  {rule.enabled ? "Disable" : "Enable"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={working}
+                  onClick={() => run({ action: "deleteAlert", namespace: ns, alertId: rule.id })}
+                >
+                  Delete
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
   );
 }
