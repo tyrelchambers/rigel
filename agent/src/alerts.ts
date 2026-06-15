@@ -112,9 +112,10 @@ export function podMatchesTarget(pod: Pod, t: AlertTarget): boolean {
 export function deploymentMatchesTarget(dep: Dep, t: AlertTarget): boolean {
   if (t.scope !== "cluster" && t.scope !== "namespace" && t.scope !== "workload") return false;
   const meta = dep.metadata as Record<string, unknown> | undefined;
-  const ns: string = (meta?.namespace as string | undefined) ?? "default";
-  const name: string = (meta?.name as string | undefined) ?? "";
+  const ns: string = (meta?.["namespace"] as string | undefined) ?? "default";
+  const name: string = (meta?.["name"] as string | undefined) ?? "";
   if (t.namespace && ns !== t.namespace) return false;
+  if (t.labelSelector && !labelsMatch(meta?.["labels"] as Record<string, string> | undefined, t.labelSelector)) return false;
   if (t.scope === "workload") return name === t.name;
   return true;
 }
@@ -180,7 +181,7 @@ function degradedForMs(dep: Dep, now: number): number {
   const conditions = (status?.["conditions"] as Record<string, unknown>[] | undefined) ?? [];
   const cond = conditions.find((c) => c["type"] === "Available" || c["type"] === "Progressing");
   const ms = cond?.["lastTransitionTime"] ? Date.parse(cond["lastTransitionTime"] as string) : NaN;
-  return Number.isNaN(ms) ? now : now - ms;
+  return Number.isNaN(ms) ? 0 : now - ms;
 }
 
 /**

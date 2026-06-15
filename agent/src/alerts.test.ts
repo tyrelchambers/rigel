@@ -92,6 +92,11 @@ describe("duration conditions", () => {
     expect(evaluateAlertRules([r], [], [deployment("prod", "api", 3, 1, 20)], emptyAlertState(), T0).events).toHaveLength(1);
     expect(evaluateAlertRules([r], [], [deployment("prod", "api", 3, 3, 20)], emptyAlertState(), T0).events).toHaveLength(0);
   });
+  it("deploymentDegraded does NOT fire when status conditions are missing (unknown duration)", () => {
+    const r = rule({ target: { scope: "workload", kind: "Deployment", namespace: "prod", name: "api" }, condition: { type: "deploymentDegraded", minutes: 10 } });
+    const rawDep = { metadata: { name: "api", namespace: "prod" }, spec: { replicas: 3 }, status: { replicas: 3, readyReplicas: 0, conditions: [] } };
+    expect(evaluateAlertRules([r], [], [rawDep], emptyAlertState(), T0).events).toHaveLength(0);
+  });
 });
 
 describe("target matching", () => {
