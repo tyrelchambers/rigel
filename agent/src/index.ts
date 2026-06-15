@@ -1,4 +1,5 @@
 import { classifyRisk, RiskTier } from "./classifier.js";
+import { evaluateAlertRules, emptyAlertState } from "./alerts.js";
 import { loadConfig, type Config } from "./config.js";
 import { readRuntimeConfig, decideAutonomy, type RuntimeConfig } from "./runtimeConfig.js";
 import { notifyWebhook, notifySignal, receiveSignal } from "./notify.js";
@@ -52,24 +53,33 @@ function safeParse(s: string): unknown {
   }
 }
 
-async function detectAll(cfg: Config): Promise<Incident[]> {
-  const [pods, deps] = await Promise.all([
+function itemsOf(raw: unknown): Record<string, unknown>[] {
+  const list = raw as { items?: unknown[] };
+  return Array.isArray(list?.items) ? (list.items as Record<string, unknown>[]) : [];
+}
+
+async function detectAll(cfg: Config): Promise<{ incidents: Incident[]; pods: Record<string, unknown>[]; deps: Record<string, unknown>[] }> {
+  const [podsRes, depsRes] = await Promise.all([
     kubectl(["get", "pods", ...nsArgs(cfg), "-o", "json"]),
     kubectl(["get", "deployments", ...nsArgs(cfg), "-o", "json"]),
   ]);
+  const parsedPods = podsRes.code === 0 ? safeParse(podsRes.stdout) : { items: [] };
+  const parsedDeps = depsRes.code === 0 ? safeParse(depsRes.stdout) : { items: [] };
+  const pods = itemsOf(parsedPods);
+  const deps = itemsOf(parsedDeps);
   let incidents: Incident[] = [];
-  if (pods.code === 0) incidents.push(...detectUnhealthyPods(safeParse(pods.stdout)));
-  if (deps.code === 0) incidents.push(...detectDegradedDeployments(safeParse(deps.stdout)));
+  if (podsRes.code === 0) incidents.push(...detectUnhealthyPods(parsedPods));
+  if (depsRes.code === 0) incidents.push(...detectDegradedDeployments(parsedDeps));
   log(
-    `detect: pods exit=${pods.code} (${pods.stdout.length}b) deps exit=${deps.code} (${deps.stdout.length}b) → ${incidents.length} incident(s) before filter` +
+    `detect: pods exit=${podsRes.code} (${podsRes.stdout.length}b) deps exit=${depsRes.code} (${depsRes.stdout.length}b) → ${incidents.length} incident(s) before filter` +
       (incidents.length ? `: ${incidents.map((i) => `${i.namespace}/${i.name}:${i.reason}`).join(", ")}` : "") +
-      (pods.code !== 0 ? ` | pods stderr: ${pods.stderr.slice(0, 200)}` : ""),
+      (podsRes.code !== 0 ? ` | pods stderr: ${podsRes.stderr.slice(0, 200)}` : ""),
   );
   if (cfg.namespaces.length > 0) {
     const allow = new Set(cfg.namespaces);
     incidents = incidents.filter((i) => i.namespace === "" || allow.has(i.namespace));
   }
-  return incidents;
+  return { incidents, pods, deps };
 }
 
 interface LoopState {
@@ -117,7 +127,20 @@ async function tick(
 
   // Drop incidents the operator has silenced (known noise) — no detection,
   // no spend, no action on those fingerprints.
-  const incidents = (await detectAll(cfg)).filter((i) => !rc.silenced.has(fingerprint(i)));
+  const detection = await detectAll(cfg);
+  const incidents = detection.incidents.filter((i) => !rc.silenced.has(fingerprint(i)));
+
+  // Custom alert rules — deterministic, model-less, free-riding the fetch above.
+  const alertResult = evaluateAlertRules(
+    rc.alertRules,
+    detection.pods,
+    detection.deps,
+    state.alertState ?? emptyAlertState(),
+    now,
+  );
+  state = { ...state, alertState: alertResult.alertState };
+  for (const ev of alertResult.events) notifications.push(ev.message);
+
   const present = new Set(incidents.map(fingerprint));
 
   // Recovered incidents fall out of the debounce/handled tracking so a fresh
