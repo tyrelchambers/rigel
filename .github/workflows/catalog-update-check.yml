@@ -1,0 +1,28 @@
+name: Catalog update check
+
+# Weekly scan of every catalog app's pinned PRIMARY image for a newer stable
+# release (reuses @helmsman/catalog's UpdateResolver, releases-first). The
+# report lands in the run's job summary; results are CANDIDATES to verify
+# before re-pinning, so the job stays green and never blocks anything.
+
+on:
+  schedule:
+    - cron: "0 8 * * 1" # Mondays 08:00 UTC
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # No install step: the checker imports only in-package modules + the
+      # bundled catalog.json, so bun runs it straight from source.
+      - name: Check catalog images for newer versions
+        run: bun run packages/catalog/src/checkCatalogUpdates.ts | tee -a "$GITHUB_STEP_SUMMARY"

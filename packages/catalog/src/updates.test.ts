@@ -198,6 +198,43 @@ describe("pickLatestVersion", () => {
   test("null when running tag is not a version", () => {
     expect(pickLatestVersion(["1.0", "2.0"], "latest")).toBeNull();
   });
+
+  // ── scheme/flavor filtering: the registry tier must not pick tags that merely
+  // parse as a version (arch/variant/build/CI/timestamp tags). ──────────────
+  test("rejects arch-suffixed tag (flavor mismatch)", () => {
+    expect(pickLatestVersion(["v2.33.8", "v2.34.2-amd64"], "v2.33.8")).toBeNull();
+  });
+
+  test("rejects bare CI/build integer (fewer components)", () => {
+    expect(pickLatestVersion(["4.123.0", "39"], "4.123.0")).toBeNull();
+  });
+
+  test("rejects epoch/date-style tag (incomparable scheme)", () => {
+    expect(pickLatestVersion(["10.11.11", "2026061506"], "10.11.11")).toBeNull();
+  });
+
+  test("rejects 4-component build tag when running is 3-component semver", () => {
+    expect(pickLatestVersion(["v0.62.1", "v0.62.1.7"], "v0.62.1")).toBeNull();
+  });
+
+  test("rejects git-sha build suffix", () => {
+    expect(pickLatestVersion(["2.25.7", "2.26.4-24ab031"], "2.25.7")).toBeNull();
+  });
+
+  test("matches the running tag's variant suffix", () => {
+    expect(
+      pickLatestVersion(["16-alpine", "17-alpine", "17"], "16-alpine"),
+    ).toBe("17-alpine");
+  });
+
+  test("rejects a different edition of the same version line", () => {
+    expect(
+      pickLatestVersion(
+        ["26.6.0.1-community", "26.7.0.1-enterprise"],
+        "26.6.0.1-community",
+      ),
+    ).toBeNull();
+  });
 });
 
 describe("newestStableTag", () => {

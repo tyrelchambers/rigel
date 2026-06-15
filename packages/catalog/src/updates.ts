@@ -216,10 +216,63 @@ export function newestStableTag(availableTags: string[]): string | null {
 }
 
 /**
+ * The non-numeric "flavor" suffix of a tag — the arch / OS / edition / build
+ * text that trails the numeric core, normalized (leading `-_.` stripped,
+ * lowercased). Two tags share a flavor when this matches:
+ *
+ *   "v2.33.8" -> ""        "v2.34.2-amd64" -> "amd64"
+ *   "16-alpine" -> "alpine"  "26.6.0.1-community" -> "community"
+ *
+ * Used to keep the registry tier from "upgrading" across flavors (a multi-arch
+ * `:v2` pin must not jump to an arch-specific `:v3-amd64`, an `-alpine` pin must
+ * not jump to a `-bookworm`, the community edition must not jump to enterprise).
+ */
+export function tagFlavor(tag: string): string {
+  let s = tag.trim().toLowerCase();
+  if (s.startsWith("v")) s = s.slice(1);
+  let i = 0;
+  while (i < s.length && ((s[i] >= "0" && s[i] <= "9") || s[i] === ".")) i++;
+  return stripEdges(s.slice(i), "-_.");
+}
+
+/**
+ * Whether `candidateTag` is a plausible same-scheme upgrade of `currentTag` —
+ * not merely a string that parses as a higher version. Rejects the tags that
+ * make a naive registry scan lie: arch/OS/edition/build flavors that differ
+ * from what's running, date/epoch tags, bare CI integers, and trailing build
+ * components. Both versions are assumed already parsed from their tags.
+ */
+function isComparableUpgrade(
+  candidateTag: string,
+  candidate: ReleaseVersion,
+  currentTag: string,
+  current: ReleaseVersion,
+): boolean {
+  // Same arch/OS/edition/build flavor as the running tag.
+  if (tagFlavor(candidateTag) !== tagFlavor(currentTag)) return false;
+  // Comparable numeric scheme — rejects date/epoch tags (e.g. "2026061506")
+  // whose leading component is far wider than a semver major.
+  if (!schemeComparable(candidate, current)) return false;
+  // Not fewer components than what's running carries significantly — rejects a
+  // bare CI integer ("39") standing in for a 3-part semver ("4.123.0"), while a
+  // genuine `.0` patch ("2.2.0" vs "2.1.4") keeps its raw component count.
+  const curSig = trimmedTrailingZeros(current.components).length;
+  if (candidate.components.length < curSig) return false;
+  // Not deeper than a full semver unless the running tag is already that deep —
+  // rejects a 4-part build tag ("0.62.1.7") against a 3-part release ("0.62.1"),
+  // while still allowing a partial pin to gain a patch ("1.23" -> "1.23.1").
+  if (candidate.components.length > Math.max(current.components.length, 3)) {
+    return false;
+  }
+  return true;
+}
+
+/**
  * Given the running tag and every tag a registry reports, find the newest
- * *stable* release strictly newer than what's running. Null when nothing is
- * newer (or the running tag isn't a parseable version). Mirrors Swift
- * `newestStableUpgrade`. Exposed under the spec name `pickLatestVersion`.
+ * *stable* release strictly newer than what's running, ignoring tags whose
+ * scheme/flavor isn't a comparable upgrade (see `isComparableUpgrade`). Null
+ * when nothing is newer (or the running tag isn't a parseable version). Exposed
+ * under the spec name `pickLatestVersion`.
  */
 export function pickLatestVersion(
   availableTags: string[],
@@ -233,6 +286,7 @@ export function pickLatestVersion(
     const v = parseReleaseVersion(tag);
     if (!v || v.isPrerelease) continue;
     if (!versionLess(current, v)) continue;
+    if (!isComparableUpgrade(tag, v, currentTag, current)) continue;
     if (best === null || versionLess(best.version, v)) best = { tag, version: v };
   }
   return best?.tag ?? null;

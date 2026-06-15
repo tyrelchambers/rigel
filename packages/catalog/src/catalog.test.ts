@@ -11,6 +11,7 @@ import {
 import { summarizeResources } from "./resourceSummary";
 import { generateSecret } from "./randomSecret";
 import { isBaked, type CatalogApp } from "./types";
+import { manifestImages, unpinnedReason } from "./manifestImages";
 
 // ---------------------------------------------------------------------------
 // loader
@@ -425,5 +426,25 @@ describe("catalog baked manifests", () => {
     });
     const placeholders = scanPlaceholders(filled);
     expect(placeholders.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// image-pinning policy: every baked manifest image must be version-pinned
+// ---------------------------------------------------------------------------
+describe("image pinning policy", () => {
+  // A new app added with `image: foo/bar:latest` (or :stable/:main/…) fails
+  // here. Pin it to a concrete version tag or an @sha256 digest instead.
+  test("no manifest image uses a mutable/rolling tag", () => {
+    const offenders: string[] = [];
+    for (const app of CATALOG) {
+      const manifest = app.install?.manifest;
+      if (typeof manifest !== "string") continue;
+      for (const ref of manifestImages(manifest)) {
+        const reason = unpinnedReason(ref);
+        if (reason) offenders.push(`${app.id}: ${ref} — ${reason}`);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });
