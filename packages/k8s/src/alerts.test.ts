@@ -14,7 +14,7 @@ describe("normalizeAlertRule", () => {
     expect(r.id).toBe("id-1");
     expect(r.enabled).toBe(true);
     expect(r.createdAt).toBe(new Date(1_700_000_000_000).toISOString());
-    expect(r.cooldownMinutes).toBe(5); // notReady has no window → min 5
+    expect(r.cooldownMinutes).toBe(5); // minutes:2 is below the 5-min floor → 5
   });
   it("defaults cooldown to windowMinutes for podRestarts", () => {
     const r = normalizeAlertRule(
@@ -25,6 +25,12 @@ describe("normalizeAlertRule", () => {
   });
   it("throws on an unknown condition type", () => {
     expect(() => normalizeAlertRule({ ...block, condition: { type: "nope" } as any }, "x", 0)).toThrow();
+  });
+  it("throws when a workload/pod target omits namespace", () => {
+    const noNs = { scope: "workload" as const, kind: "Deployment" as const, name: "web" };
+    expect(() => normalizeAlertRule({ ...block, target: noNs }, "x", 0)).toThrow();
+    const podNoNs = { scope: "pod" as const, name: "web-1" };
+    expect(() => normalizeAlertRule({ ...block, target: podNoNs }, "x", 0)).toThrow();
   });
 });
 
