@@ -27,7 +27,7 @@ import { chatFeedback, visibleSummary, batchFeedback, type BatchRun } from "@/pa
 import { SuggestedPromptsRow } from "@/panels/chat/SuggestedPromptsRow";
 import { Link } from "react-router";
 import { stripActionBlocks, type SuggestedAction } from "@/lib/actionBlocks";
-import { onChatEvent, sendChat, interruptChat } from "@/lib/ws";
+import { onChatEvent, sendChat, interruptChat, subscribe, unsubscribe } from "@/lib/ws";
 import { registerChatHandoff, handoffToChat } from "@/lib/chatHandoff";
 import { useCluster } from "@/store/cluster";
 import { MessageBubble } from "@/panels/chat/MessageBubble";
@@ -189,6 +189,18 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
 
   const connected = useCluster((s) => s.connected);
   const resources = useCluster((s) => s.resources);
+
+  // Subscribe to deployments (all namespaces) so we can read the agent's
+  // install namespace without pulling in the full useAssistant hook.
+  useEffect(() => {
+    subscribe("deployments", "*");
+    return () => unsubscribe("deployments", "*");
+  }, []);
+  const agentNamespace = useCluster((s) => {
+    const deps = (s.resources["deployments"] ?? {}) as Record<string, { metadata?: { name?: string; namespace?: string } }>;
+    const agent = Object.values(deps).find((d) => d.metadata?.name === "helmsman-assistant");
+    return agent?.metadata?.namespace ?? "default";
+  });
 
   // Model/effort selection (persisted) + @-mention candidates from the store.
   const [modelConfig, setModelConfigState] = useState<ModelConfig>(() => loadModelConfig());
@@ -736,8 +748,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
                 onAction={handleSuggestedAction}
                 onRunBatch={handleRunBatch}
                 onAnswer={(value) => handoffToChat(value)}
-                // TODO: source agent install namespace from the assistant panel state
-                agentNamespace="default"
+                agentNamespace={agentNamespace}
               />
             ))}
             <div ref={bottomRef} style={{ height: 14 }} />
