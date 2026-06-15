@@ -58,7 +58,7 @@ function validateTarget(t: AlertTarget): void {
     throw new Error(`alert target scope "${t.scope}" requires a name`);
   }
   if (t.scope === "namespace" && !t.namespace) throw new Error(`namespace scope requires a namespace`);
-  if ((t.scope === "workload" || t.scope === "pod") && !t.namespace) {
+  if ((t.scope === "workload" || t.scope === "pod" || t.scope === "database") && !t.namespace) {
     throw new Error(`alert target scope "${t.scope}" requires a namespace`);
   }
 }
@@ -81,6 +81,9 @@ export function normalizeAlertRule(block: SuggestedAlert, id: string, nowMs: num
   if (typeof block?.text !== "string" || block.text.trim() === "") throw new Error("alert needs text");
   validateTarget(block.target);
   validateCondition(block.condition);
+  if (block.condition.type === "deploymentDegraded" && (block.target.scope === "pod" || block.target.scope === "database")) {
+    throw new Error('deploymentDegraded alerts require a cluster, namespace, or workload target');
+  }
   const windowMins = conditionWindowMinutes(block.condition);
   const cooldown = block.cooldownMinutes && block.cooldownMinutes > 0
     ? block.cooldownMinutes

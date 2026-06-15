@@ -32,6 +32,13 @@ describe("normalizeAlertRule", () => {
     const podNoNs = { scope: "pod" as const, name: "web-1" };
     expect(() => normalizeAlertRule({ ...block, target: podNoNs }, "x", 0)).toThrow();
   });
+  it("throws when a database target omits namespace", () => {
+    const noNs = { scope: "database" as const, name: "postgres" };
+    expect(() => normalizeAlertRule({ ...block, target: noNs }, "x", 0)).toThrow();
+  });
+  it("throws on deploymentDegraded with a pod/database target", () => {
+    expect(() => normalizeAlertRule({ ...block, target: { scope: "pod" as const, namespace: "prod", name: "p" }, condition: { type: "deploymentDegraded" as const, minutes: 5 } }, "x", 0)).toThrow();
+  });
 });
 
 describe("parse/serialize round-trip", () => {
