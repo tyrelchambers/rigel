@@ -51,6 +51,12 @@ const CONDITION_TYPES = new Set([
   "podRestarts", "crashLoop", "oomKilled", "pendingTooLong", "notReady", "deploymentDegraded",
 ]);
 
+function conditionFieldsValid(c: { type?: string; threshold?: unknown; windowMinutes?: unknown; minutes?: unknown }): boolean {
+  if (c.type === "podRestarts") return typeof c.threshold === "number" && c.threshold > 0 && typeof c.windowMinutes === "number" && c.windowMinutes > 0;
+  if (c.type === "pendingTooLong" || c.type === "notReady" || c.type === "deploymentDegraded") return typeof c.minutes === "number" && c.minutes >= 0;
+  return true; // crashLoop / oomKilled have no numeric fields
+}
+
 /** Tolerant parse of the alertRules JSON from assistant-config. Drops malformed. */
 export function parseAlertRules(json: string | undefined | null): AlertRule[] {
   if (!json) return [];
@@ -63,6 +69,7 @@ export function parseAlertRules(json: string | undefined | null): AlertRule[] {
     const r = raw as Partial<AlertRule>;
     if (typeof r.id !== "string" || !r.target || !r.condition) continue;
     if (!CONDITION_TYPES.has((r.condition as { type?: string }).type ?? "")) continue;
+    if (!conditionFieldsValid(r.condition as { type?: string; threshold?: unknown; windowMinutes?: unknown; minutes?: unknown })) continue;
     out.push({
       id: r.id,
       enabled: r.enabled !== false,
@@ -90,12 +97,9 @@ function labelsMatch(labels: Record<string, string> | undefined, selector: strin
 /** Does this pod fall under the rule's target? */
 export function podMatchesTarget(pod: Pod, t: AlertTarget): boolean {
   const meta = pod.metadata as Record<string, unknown> | undefined;
-  const status = pod.status as Record<string, unknown> | undefined;
-  const ns: string = (meta?.namespace as string | undefined) ?? "default";
-  const name: string = (meta?.name as string | undefined) ?? "";
-  const labels = meta?.labels as Record<string, string> | undefined;
-
-  void status; // unused here but satisfies linter if needed
+  const ns: string = (meta?.["namespace"] as string | undefined) ?? "default";
+  const name: string = (meta?.["name"] as string | undefined) ?? "";
+  const labels = meta?.["labels"] as Record<string, string> | undefined;
 
   if (t.namespace && ns !== t.namespace) return false;
   if (t.labelSelector && !labelsMatch(labels, t.labelSelector)) return false;
@@ -218,7 +222,8 @@ export function evaluateAlertRules(
   return { events, alertState: next };
 }
 
-/** Returns a non-empty detail string when the rule's condition is met, else "". */
+/** Returns a non-empty detail string when the rule's condition is met, else "".
+ * For podRestarts, also updates next.restartBaselines as a side effect (avoids a second pod scan). */
 function evaluateCondition(
   rule: AlertRule, pods: Pod[], deps: Dep[], prev: AlertState, next: AlertState, now: number,
 ): string {
@@ -254,6 +259,7 @@ function evaluateCondition(
         base = { count: current, since: new Date(now).toISOString() };
       }
       next.restartBaselines[key] = base;
+      // first-hit: one alert per rule per tick even if several pods qualify
       if (current - base.count >= c.threshold && !hit) {
         hit = `${ns}/${meta?.["name"]} restarted ${current - base.count}× in the last ${c.windowMinutes}m`;
       }

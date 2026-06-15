@@ -57,6 +57,9 @@ describe("crashLoop", () => {
     expect(evaluateAlertRules([rule({})], [pod("prod", "web", {})], [], emptyAlertState(), T0).events).toHaveLength(0);
     expect(evaluateAlertRules([rule({})], [pod("dev", "web", { waiting: "CrashLoopBackOff" })], [], emptyAlertState(), T0).events).toHaveLength(0);
   });
+  it("fires on ImagePullBackOff too", () => {
+    expect(evaluateAlertRules([rule({})], [pod("prod", "web", { waiting: "ImagePullBackOff" })], [], emptyAlertState(), T0).events).toHaveLength(1);
+  });
 });
 
 describe("podRestarts tumbling window", () => {
@@ -113,11 +116,23 @@ describe("target matching", () => {
   it("disabled rules never fire", () => {
     expect(evaluateAlertRules([rule({ enabled: false })], [pod("prod", "x", { waiting: "CrashLoopBackOff" })], [], emptyAlertState(), T0).events).toHaveLength(0);
   });
+  it("pod scope matches an exact pod name", () => {
+    const r = rule({ target: { scope: "pod", namespace: "prod", name: "web-1" }, condition: { type: "crashLoop" } });
+    expect(evaluateAlertRules([r], [pod("prod", "web-1", { waiting: "CrashLoopBackOff" }), pod("prod", "web-2", { waiting: "CrashLoopBackOff" })], [], emptyAlertState(), T0).events).toHaveLength(1);
+  });
+  it("cluster scope matches across namespaces", () => {
+    const r = rule({ target: { scope: "cluster" }, condition: { type: "crashLoop" } });
+    expect(evaluateAlertRules([r], [pod("dev", "a", { waiting: "CrashLoopBackOff" })], [], emptyAlertState(), T0).events).toHaveLength(1);
+  });
 });
 
 describe("parseAlertRules", () => {
   it("drops malformed and keeps valid", () => {
     expect(parseAlertRules("not json")).toEqual([]);
     expect(parseAlertRules(JSON.stringify([rule({})]))).toHaveLength(1);
+  });
+  it("drops a rule whose condition is missing required numeric fields", () => {
+    const bad = JSON.stringify([{ id: "x", text: "t", target: { scope: "cluster" }, condition: { type: "podRestarts" }, enabled: true, cooldownMinutes: 5, createdAt: "" }]);
+    expect(parseAlertRules(bad)).toEqual([]);
   });
 });
