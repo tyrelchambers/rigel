@@ -25,16 +25,16 @@ interface Props {
 // assistant = accent purple, system = tertiary grey.
 const ROLE_META = {
   user: { Icon: User, label: "You", color: "#60A5FA" },
-  assistant: { Icon: Sparkles, label: "Helmsman", color: "#A855F7" },
-  system: { Icon: Settings, label: "System", color: "#6B6B73" },
+  assistant: { Icon: Sparkles, label: "Helmsman", color: "var(--accent-primary)" },
+  system: { Icon: Settings, label: "System", color: "var(--fg-tertiary)" },
 } as const;
 
 /** Role-tinted card surface + border (assistant gets a faint purple wash). */
 function cardSurface(role: ChatMessage["role"]): { background: string; borderColor: string } {
   if (role === "assistant") {
-    return { background: "rgba(168, 85, 247, 0.06)", borderColor: "rgba(168, 85, 247, 0.2)" };
+    return { background: "rgba(56, 189, 248, 0.06)", borderColor: "rgba(56, 189, 248, 0.2)" };
   }
-  return { background: "#050505", borderColor: "#1A1A1A" };
+  return { background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" };
 }
 
 /** Collapsible "Thought for Ns" disclosure shown above an assistant message. */

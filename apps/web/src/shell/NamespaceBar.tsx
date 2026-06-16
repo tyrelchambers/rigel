@@ -75,8 +75,8 @@ export function NamespaceSelector() {
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <SquareDashed size={11} style={{ color: "#6B6B73", flexShrink: 0 }} />
-      <span style={{ fontSize: 11, color: "#6B6B73", fontWeight: 500 }}>Namespace</span>
+      <SquareDashed size={11} style={{ color: "var(--fg-tertiary)", flexShrink: 0 }} />
+      <span style={{ fontSize: 11, color: "var(--fg-tertiary)", fontWeight: 500 }}>Namespace</span>
 
       {/* Trigger + popover (popover anchored to this relative wrapper) */}
       <div style={{ position: "relative" }}>
@@ -87,8 +87,8 @@ export function NamespaceSelector() {
             alignItems: "center",
             gap: 6,
             padding: "5px 10px",
-            background: "#050505",
-            border: "1px solid #2A2A2A",
+            background: "var(--surface-sunken)",
+            border: "1px solid #34353A",
             borderRadius: 4,
             cursor: "pointer",
           }}
@@ -99,7 +99,7 @@ export function NamespaceSelector() {
               fontFamily: "'Geist Variable', ui-monospace, monospace",
               fontSize: 12,
               fontWeight: 500,
-              color: "#FFFFFF",
+              color: "var(--fg-primary)",
               whiteSpace: "nowrap",
               maxWidth: 200,
               overflow: "hidden",
@@ -108,7 +108,7 @@ export function NamespaceSelector() {
           >
             {currentLabel}
           </span>
-          <ChevronDown size={9} style={{ color: "#6B6B73", flexShrink: 0 }} strokeWidth={2.5} />
+          <ChevronDown size={9} style={{ color: "var(--fg-tertiary)", flexShrink: 0 }} strokeWidth={2.5} />
         </button>
 
         {open && (
@@ -128,8 +128,8 @@ export function NamespaceSelector() {
                 left: 0,
                 marginTop: 4,
                 zIndex: 50,
-                background: "#141417",
-                border: "1px solid #2A2A2A",
+                background: "var(--surface-elevated)",
+                border: "1px solid #34353A",
                 borderRadius: 6,
                 width: 260,
                 boxShadow: "0 8px 24px rgba(0,0,0,0.6)",
@@ -137,7 +137,7 @@ export function NamespaceSelector() {
               }}
             >
               {/* Search field */}
-              <div style={{ padding: "8px 10px", borderBottom: "1px solid #1A1A1A" }}>
+              <div style={{ padding: "8px 10px", borderBottom: "1px solid #26272B" }}>
                 <input
                   autoFocus
                   placeholder="Filter namespaces…"
@@ -148,9 +148,9 @@ export function NamespaceSelector() {
                     background: "transparent",
                     border: "none",
                     outline: "none",
-                    color: "#FFFFFF",
+                    color: "var(--fg-primary)",
                     fontSize: 12,
-                    fontFamily: "'Geist Variable', sans-serif",
+                    fontFamily: "'Manrope Variable', sans-serif",
                   }}
                 />
               </div>
@@ -175,7 +175,7 @@ export function NamespaceSelector() {
                     style={{
                       padding: "8px 10px",
                       fontSize: 12,
-                      color: "#6B6B73",
+                      color: "var(--fg-tertiary)",
                       fontStyle: "italic",
                     }}
                   >
@@ -212,19 +212,19 @@ function NamespaceRow({ label, active, onSelect }: NamespaceRowProps) {
         cursor: "pointer",
         textAlign: "left",
       }}
-      className="hover:bg-[#1C1C22] transition-colors"
+      className="hover:bg-[#1B1C1F] transition-colors"
     >
       <Check
         size={10}
         strokeWidth={2.5}
-        style={{ color: active ? "#A855F7" : "transparent", flexShrink: 0, width: 12 }}
+        style={{ color: active ? "var(--accent-primary)" : "transparent", flexShrink: 0, width: 12 }}
       />
       <span
         style={{
           fontFamily: "'Geist Variable', ui-monospace, monospace",
           fontSize: 12,
           fontWeight: active ? 600 : 400,
-          color: "#FFFFFF",
+          color: "var(--fg-primary)",
           whiteSpace: "nowrap",
           overflow: "hidden",
           textOverflow: "ellipsis",

@@ -154,7 +154,7 @@ export default function StoragePanel() {
 
       <div className="flex-1 overflow-auto">
       {/* Kind toggle pills */}
-      <div className="flex items-center gap-1 px-4 py-2" style={{ borderBottom: "1px solid #1A1A1A" }}>
+      <div className="flex items-center gap-1 px-4 py-2" style={{ borderBottom: "1px solid #26272B" }}>
         {KIND_TABS.map((t) => (
           <button
             key={t.kind}
@@ -211,11 +211,11 @@ export default function StoragePanel() {
                   style={{
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 10,
-                    color: "#6B6B73",
-                    background: "#050505",
+                    color: "var(--fg-tertiary)",
+                    background: "var(--surface-sunken)",
                     padding: "1px 5px",
                     borderRadius: 4,
-                    border: "1px solid #1A1A1A",
+                    border: "1px solid #26272B",
                     whiteSpace: "nowrap",
                   }}
                 >
@@ -230,7 +230,7 @@ export default function StoragePanel() {
                   style={{
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 10,
-                    color: "#A1A1AA",
+                    color: "var(--fg-secondary)",
                     whiteSpace: "nowrap",
                   }}
                 >
@@ -243,7 +243,7 @@ export default function StoragePanel() {
                     style={{
                       fontFamily: "ui-monospace, monospace",
                       fontSize: 10,
-                      color: "#6B6B73",
+                      color: "var(--fg-tertiary)",
                       whiteSpace: "nowrap",
                     }}
                   >
@@ -301,7 +301,7 @@ export default function StoragePanel() {
                   style={{
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 10,
-                    color: "#A1A1AA",
+                    color: "var(--fg-secondary)",
                     whiteSpace: "nowrap",
                   }}
                 >
@@ -314,7 +314,7 @@ export default function StoragePanel() {
                     style={{
                       fontFamily: "ui-monospace, monospace",
                       fontSize: 10,
-                      color: "#6B6B73",
+                      color: "var(--fg-tertiary)",
                       whiteSpace: "nowrap",
                     }}
                   >
@@ -331,7 +331,7 @@ export default function StoragePanel() {
                     style={{
                       fontFamily: "ui-monospace, monospace",
                       fontSize: 10,
-                      color: "#6B6B73",
+                      color: "var(--fg-tertiary)",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
@@ -391,7 +391,7 @@ export default function StoragePanel() {
                     style={{
                       fontFamily: "ui-monospace, monospace",
                       fontSize: 10,
-                      color: "#A1A1AA",
+                      color: "var(--fg-secondary)",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
@@ -410,7 +410,7 @@ export default function StoragePanel() {
                     style={{
                       fontFamily: "ui-monospace, monospace",
                       fontSize: 10,
-                      color: "#6B6B73",
+                      color: "var(--fg-tertiary)",
                       whiteSpace: "nowrap",
                     }}
                   >
@@ -424,7 +424,7 @@ export default function StoragePanel() {
                     style={{
                       fontFamily: "ui-monospace, monospace",
                       fontSize: 10,
-                      color: "#6B6B73",
+                      color: "var(--fg-tertiary)",
                       whiteSpace: "nowrap",
                     }}
                   >

@@ -22,10 +22,10 @@ interface StatusBadgeProps {
 }
 
 const COLORS: Record<StatusBadgeVariant, { text: string; bg: string }> = {
-  healthy: { text: "#10B981", bg: "rgba(16,185,129,0.12)" },
-  error:   { text: "#EF4444", bg: "rgba(239,68,68,0.12)" },
-  pending: { text: "#F59E0B", bg: "rgba(245,158,11,0.12)" },
-  neutral: { text: "#A1A1AA", bg: "rgba(161,161,170,0.12)" },
+  healthy: { text: "var(--status-running)", bg: "rgba(16,185,129,0.12)" },
+  error:   { text: "var(--status-failed)", bg: "rgba(239,68,68,0.12)" },
+  pending: { text: "var(--status-pending)", bg: "rgba(245,158,11,0.12)" },
+  neutral: { text: "var(--fg-secondary)", bg: "rgba(161,161,170,0.12)" },
 };
 
 export function StatusBadge({ label, variant = "neutral", title }: StatusBadgeProps) {

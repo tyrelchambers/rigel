@@ -69,11 +69,11 @@ function NamespaceChip({ namespace }: { namespace: string }) {
       style={{
         fontFamily: "ui-monospace, monospace",
         fontSize: 10,
-        color: "#6B6B73",
-        background: "#050505",
+        color: "var(--fg-tertiary)",
+        background: "var(--surface-sunken)",
         padding: "1px 5px",
         borderRadius: 4,
-        border: "1px solid #1A1A1A",
+        border: "1px solid #26272B",
         whiteSpace: "nowrap",
       }}
     >
@@ -274,7 +274,7 @@ export default function RbacPanel() {
       {/* Kind toggle pills */}
       <div
         className="flex items-center gap-1 overflow-x-auto px-4 py-2"
-        style={{ borderBottom: "1px solid #1A1A1A" }}
+        style={{ borderBottom: "1px solid #26272B" }}
       >
         {KIND_TABS.map((t) => (
           <button

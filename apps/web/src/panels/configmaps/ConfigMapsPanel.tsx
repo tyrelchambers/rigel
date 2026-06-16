@@ -149,11 +149,11 @@ export default function ConfigMapsPanel() {
                 style={{
                   fontFamily: "ui-monospace, monospace",
                   fontSize: 10,
-                  color: "#6B6B73",
-                  background: "#050505",
+                  color: "var(--fg-tertiary)",
+                  background: "var(--surface-sunken)",
                   padding: "1px 5px",
                   borderRadius: 4,
-                  border: "1px solid #1A1A1A",
+                  border: "1px solid #26272B",
                   whiteSpace: "nowrap",
                 }}
               >
@@ -171,7 +171,7 @@ export default function ConfigMapsPanel() {
                 style={{
                   fontFamily: "ui-monospace, monospace",
                   fontSize: 10,
-                  color: "#6B6B73",
+                  color: "var(--fg-tertiary)",
                   whiteSpace: "nowrap",
                 }}
               >
@@ -302,7 +302,7 @@ function ConfigMapDetail({ configMap, onEdit }: { configMap: ConfigMap; onEdit: 
       {/* Edit button */}
       <div
         className="flex items-center gap-2 border-t pt-3"
-        style={{ borderColor: "#1A1A1A" }}
+        style={{ borderColor: "var(--border-subtle)" }}
       >
         <span className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground mr-2">
           Manage

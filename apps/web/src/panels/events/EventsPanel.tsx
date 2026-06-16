@@ -143,7 +143,7 @@ export default function EventsPanel() {
       {/* Filter bar */}
       <div
         className="flex items-center gap-2 px-4 py-2"
-        style={{ borderBottom: "1px solid #1A1A1A" }}
+        style={{ borderBottom: "1px solid #26272B" }}
       >
         {FILTERS.map((f) => (
           <button
@@ -217,7 +217,7 @@ export default function EventsPanel() {
                 style={{
                   fontFamily: "ui-monospace, monospace",
                   fontSize: 10,
-                  color: "#6B6B73",
+                  color: "var(--fg-tertiary)",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
@@ -235,7 +235,7 @@ export default function EventsPanel() {
                   style={{
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 10,
-                    color: "#A1A1AA",
+                    color: "var(--fg-secondary)",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
@@ -256,7 +256,7 @@ export default function EventsPanel() {
                   style={{
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 10,
-                    color: "#F59E0B",
+                    color: "var(--status-pending)",
                     whiteSpace: "nowrap",
                     flexShrink: 0,
                   }}
@@ -271,7 +271,7 @@ export default function EventsPanel() {
                 style={{
                   fontFamily: "ui-monospace, monospace",
                   fontSize: 10,
-                  color: "#6B6B73",
+                  color: "var(--fg-tertiary)",
                   whiteSpace: "nowrap",
                   flexShrink: 0,
                 }}

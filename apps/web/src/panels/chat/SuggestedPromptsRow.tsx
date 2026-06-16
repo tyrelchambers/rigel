@@ -7,11 +7,11 @@ import { AlertTriangle, Layers, MessageSquareWarning, Server, Sparkles } from "l
 import type { SuggestedPrompt, SuggestionKind } from "@/lib/api";
 
 const META: Record<SuggestionKind, { Icon: typeof AlertTriangle; color: string }> = {
-  pod: { Icon: AlertTriangle, color: "#EF4444" },
-  deploy: { Icon: Layers, color: "#F59E0B" },
-  warn: { Icon: MessageSquareWarning, color: "#EF4444" },
-  node: { Icon: Server, color: "#F59E0B" },
-  investigate: { Icon: Sparkles, color: "#A855F7" },
+  pod: { Icon: AlertTriangle, color: "var(--status-failed)" },
+  deploy: { Icon: Layers, color: "var(--status-pending)" },
+  warn: { Icon: MessageSquareWarning, color: "var(--status-failed)" },
+  node: { Icon: Server, color: "var(--status-pending)" },
+  investigate: { Icon: Sparkles, color: "var(--accent-primary)" },
 };
 
 function rgba(hex: string, a: number): string {
@@ -34,8 +34,8 @@ export function SuggestedPromptsRow({
         gap: 6,
         overflowX: "auto",
         padding: "6px 12px",
-        borderTop: "1px solid #1A1A1A",
-        background: "#141417",
+        borderTop: "1px solid #26272B",
+        background: "var(--surface-elevated)",
       }}
     >
       {prompts.map((p) => {

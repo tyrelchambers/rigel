@@ -156,7 +156,7 @@ export function ConfirmSheet({ action, open, onClose, onPurge, fromChat, onResul
   // Accent follows risk: destructive actions go red, everything else the
   // brand purple. Header tint, icon chip, command prompt, and the primary
   // button all key off this single color.
-  const accentColor = isDestructive ? "#EF4444" : "#A855F7";
+  const accentColor = isDestructive ? "var(--status-failed)" : "var(--accent-primary)";
   const HeaderIcon = isApply ? Layers : isDestructive ? AlertTriangle : Terminal;
   const riskLabel = isDestructive ? "Destructive" : isApply ? "Apply" : "Safe";
 
@@ -217,7 +217,7 @@ export function ConfirmSheet({ action, open, onClose, onPurge, fromChat, onResul
               </p>
               <ul
                 className="max-h-60 space-y-0.5 overflow-auto rounded-lg p-1.5 text-xs"
-                style={{ background: "#08080A", border: "1px solid #26262C" }}
+                style={{ background: "#08080A", border: "1px solid #26272B" }}
               >
                 {resources.map((r, i) => (
                   <li key={i} className="flex items-center gap-2 rounded-md px-2 py-1.5 font-mono hover:bg-white/[0.03]">
@@ -245,7 +245,7 @@ export function ConfirmSheet({ action, open, onClose, onPurge, fromChat, onResul
               {previewError}
             </p>
           ) : commandString ? (
-            <div className="relative overflow-hidden rounded-xl" style={{ background: "#08080A", border: "1px solid #26262C" }}>
+            <div className="relative overflow-hidden rounded-xl" style={{ background: "#08080A", border: "1px solid #26272B" }}>
               <button
                 type="button"
                 onClick={handleCopy}
@@ -262,7 +262,7 @@ export function ConfirmSheet({ action, open, onClose, onPurge, fromChat, onResul
             </div>
           ) : (
             // Skeleton sized like the command block so the layout doesn't jump.
-            <div className="space-y-2 rounded-xl px-4 py-4" style={{ background: "#08080A", border: "1px solid #26262C" }}>
+            <div className="space-y-2 rounded-xl px-4 py-4" style={{ background: "#08080A", border: "1px solid #26272B" }}>
               <div className="h-3 w-4/5 animate-pulse rounded bg-white/10" />
               <div className="h-3 w-1/2 animate-pulse rounded bg-white/[0.07]" />
             </div>
@@ -300,7 +300,7 @@ export function ConfirmSheet({ action, open, onClose, onPurge, fromChat, onResul
           </Button>
           <Button
             className="gap-1.5 font-medium transition-transform active:scale-[0.98]"
-            style={{ background: accentColor, color: "#FFFFFF", border: "none" }}
+            style={{ background: accentColor, color: "var(--fg-primary)", border: "none" }}
             onClick={isApply ? handleApply : handleExecute}
             disabled={isApply ? applyState.pending : (isPending || (!isPurge && !commandString && !previewError))}
           >

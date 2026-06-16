@@ -135,7 +135,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           width: 580,
           maxWidth: "calc(100vw - 2rem)",
           maxHeight: "60vh",
-          background: "#141417",
+          background: "var(--surface-elevated)",
           border: "1px solid #2a2a2e",
           borderRadius: 12,
           display: "flex",
@@ -156,7 +156,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         >
           <Search
             size={14}
-            style={{ color: "#6B6B73", flexShrink: 0 }}
+            style={{ color: "var(--fg-tertiary)", flexShrink: 0 }}
           />
           <input
             ref={inputRef}
@@ -170,7 +170,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
               background: "transparent",
               border: "none",
               outline: "none",
-              color: "#fff",
+              color: "var(--fg-primary)",
               fontSize: 14,
               fontFamily: "var(--font-geist, system-ui, sans-serif)",
             }}
@@ -179,8 +179,8 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
             style={{
               fontSize: 10,
               fontFamily: "monospace",
-              color: "#6B6B73",
-              background: "#0A0A0C",
+              color: "var(--fg-tertiary)",
+              background: "var(--surface-sunken)",
               padding: "2px 5px",
               borderRadius: 4,
               letterSpacing: "0.04em",
@@ -202,7 +202,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                 textAlign: "center",
                 padding: 20,
                 fontSize: 12,
-                color: "#6B6B73",
+                color: "var(--fg-tertiary)",
                 fontFamily: "monospace",
               }}
             >
@@ -227,7 +227,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                     padding: "7px 10px",
                     borderRadius: 6,
                     cursor: "pointer",
-                    background: isActive ? "#A855F7" : "transparent",
+                    background: isActive ? "var(--accent-primary)" : "transparent",
                     transition: "background 80ms",
                   }}
                 >
@@ -237,7 +237,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                       style={{
                         flexShrink: 0,
                         width: 18,
-                        color: isActive ? "#fff" : "#6B6B73",
+                        color: isActive ? "var(--fg-inverse)" : "var(--fg-tertiary)",
                       }}
                     />
                   )}
@@ -246,7 +246,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                       style={{
                         fontSize: 13,
                         fontWeight: 500,
-                        color: isActive ? "#fff" : "#E4E4E7",
+                        color: isActive ? "var(--fg-inverse)" : "#E4E4E7",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
@@ -259,7 +259,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                         style={{
                           fontSize: 10,
                           fontFamily: "monospace",
-                          color: isActive ? "rgba(255,255,255,0.65)" : "#6B6B73",
+                          color: isActive ? "rgba(10,10,10,0.65)" : "var(--fg-tertiary)",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",
@@ -276,7 +276,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                       fontFamily: "monospace",
                       textTransform: "uppercase",
                       letterSpacing: "0.05em",
-                      color: isActive ? "rgba(255,255,255,0.6)" : "#4B4B55",
+                      color: isActive ? "rgba(10,10,10,0.6)" : "#4B4B55",
                     }}
                   >
                     {entry.group}

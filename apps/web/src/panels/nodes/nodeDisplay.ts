@@ -165,7 +165,7 @@ export function formatBytesValue(b: number): string {
 
 /** Usage-bar color by fraction: <0.7 green, <0.9 amber, else red; grey when no data. */
 export function usageColor(percent: number, hasMetrics: boolean): string {
-  if (!hasMetrics) return "#2A2A2A";
+  if (!hasMetrics) return "#34353A";
   if (percent < 0.7) return "#10B981";
   if (percent < 0.9) return "#F59E0B";
   return "#EF4444";

@@ -208,9 +208,9 @@ export default function NamespacesPanel() {
                           <li
                             key={p.metadata.uid || p.metadata.name}
                             className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs transition-colors"
-                            style={{ background: "#0A0A0C", border: "1px solid #1A1A1A" }}
-                            onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#2A2A2A")}
-                            onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#1A1A1A")}
+                            style={{ background: "var(--surface-sunken)", border: "1px solid #26272B" }}
+                            onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#34353A")}
+                            onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#26272B")}
                           >
                             <span
                               className={`inline-block size-2 shrink-0 rounded-full ${phaseColorClass(p.status?.phase)}`}
@@ -222,7 +222,7 @@ export default function NamespacesPanel() {
                             {restarts > 0 && (
                               <span
                                 className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px]"
-                                style={{ background: "rgba(245,158,11,0.15)", color: "#F59E0B" }}
+                                style={{ background: "rgba(245,158,11,0.15)", color: "var(--status-pending)" }}
                                 title={`${restarts} restart${restarts === 1 ? "" : "s"}`}
                               >
                                 ↺{restarts}
@@ -230,7 +230,7 @@ export default function NamespacesPanel() {
                             )}
                             <span
                               className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
-                              style={{ background: "#141417", border: "1px solid #1A1A1A" }}
+                              style={{ background: "var(--surface-elevated)", border: "1px solid #26272B" }}
                             >
                               {readyText(p)}
                             </span>
@@ -259,7 +259,7 @@ export default function NamespacesPanel() {
                 style={{
                   fontFamily: "ui-monospace, monospace",
                   fontSize: 10,
-                  color: "#6B6B73",
+                  color: "var(--fg-tertiary)",
                   whiteSpace: "nowrap",
                 }}
               >
@@ -274,7 +274,7 @@ export default function NamespacesPanel() {
                 style={{
                   fontFamily: "ui-monospace, monospace",
                   fontSize: 10,
-                  color: "#6B6B73",
+                  color: "var(--fg-tertiary)",
                   whiteSpace: "nowrap",
                 }}
               >

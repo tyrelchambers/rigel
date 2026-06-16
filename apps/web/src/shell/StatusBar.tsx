@@ -32,7 +32,7 @@ export default function StatusBar() {
   const nodeCount = Object.keys(resources["nodes"] ?? {}).length;
 
   const kubectlOk = connected && !error;
-  const statusColor = kubectlOk ? "#10B981" : "#EF4444";
+  const statusColor = kubectlOk ? "var(--status-running)" : "var(--status-failed)";
   const statusLabel = kubectlOk ? "kubectl: ok" : "kubectl: error";
 
   // Namespace label for left side — use context name or namespace filter
@@ -42,8 +42,8 @@ export default function StatusBar() {
     <div
       style={{
         height: 22,
-        background: "#050505",
-        borderTop: "1px solid #1A1A1A",
+        background: "var(--surface-sunken)",
+        borderTop: "1px solid #26272B",
         display: "flex",
         alignItems: "center",
         gap: 10,
@@ -85,7 +85,7 @@ export default function StatusBar() {
               flexShrink: 0,
             }}
           />
-          <MonoChip style={{ color: kubectlOk ? "#6B6B73" : "#EF4444" }} title={error ?? undefined}>
+          <MonoChip style={{ color: kubectlOk ? "var(--fg-tertiary)" : "var(--status-failed)" }} title={error ?? undefined}>
             {statusLabel}
           </MonoChip>
         </div>
@@ -110,7 +110,7 @@ export default function StatusBar() {
 
 function Sep() {
   return (
-    <span style={{ color: "#2A2A2A", fontSize: 10, userSelect: "none" }}>·</span>
+    <span style={{ color: "var(--border-strong)", fontSize: 10, userSelect: "none" }}>·</span>
   );
 }
 
@@ -124,7 +124,7 @@ function MonoChip({ children, style, ...rest }: MonoChipProps) {
       style={{
         fontFamily: "'Geist Variable', ui-monospace, monospace",
         fontSize: 10,
-        color: "#6B6B73",
+        color: "var(--fg-tertiary)",
         ...style,
       }}
       {...rest}
@@ -147,10 +147,10 @@ function HintChip({ kbd, children }: HintChipProps) {
           fontFamily: "'Geist Variable', ui-monospace, monospace",
           fontSize: 9,
           color: "#4B4B55",
-          background: "#141417",
+          background: "var(--surface-elevated)",
           padding: "1px 4px",
           borderRadius: 3,
-          border: "1px solid #1A1A1A",
+          border: "1px solid #26272B",
           lineHeight: 1.4,
         }}
       >

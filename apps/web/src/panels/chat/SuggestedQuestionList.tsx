@@ -10,10 +10,10 @@ interface Props {
   onAnswer: (value: string) => void;
 }
 
-const COLOR = "#A855F7";
-const BG = "rgba(168,85,247,0.15)";
-const BG_HOVER = "rgba(168,85,247,0.22)";
-const BORDER = "rgba(168,85,247,0.4)";
+const COLOR = "#38BDF8";
+const BG = "var(--accent-dim)";
+const BG_HOVER = "rgba(56, 189, 248,0.22)";
+const BORDER = "rgba(56, 189, 248,0.4)";
 
 const rowStyle: React.CSSProperties = {
   color: COLOR,
@@ -164,7 +164,7 @@ function QuestionForm({
  *
  * Pixel-for-pixel parity with Swift's QuestionOptionRow (MessageViews.swift):
  *   padding 10h/7v · Radius.sm (4) · radio circle 10 semibold · label 12 semibold ·
- *   accent purple (#A855F7) on primaryDim (rgba 168,85,247,0.15) with a 0.4 accent
+ *   accent purple (#38BDF8) on primaryDim (rgba 56, 189, 248,0.15) with a 0.4 accent
  *   border; hover 0.22; 2px focus ring.
  */
 export function SuggestedQuestionList({ questions, onAnswer }: Props) {

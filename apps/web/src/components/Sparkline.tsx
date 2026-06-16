@@ -10,7 +10,7 @@ import { valuesToPoints, pointsToLinePath, pointsToFillPath } from "./sparklineH
 interface SparklineProps {
   /** Data series. Needs at least 2 values to render. */
   values: number[];
-  /** Stroke + fill color (default: #A855F7 — the accent purple). */
+  /** Stroke + fill color (default: #38BDF8 — the accent purple). */
   color?: string;
   /** Width in px (default: 64). */
   width?: number;
@@ -21,7 +21,7 @@ interface SparklineProps {
 
 export function Sparkline({
   values,
-  color = "#A855F7",
+  color = "#38BDF8",
   width = 64,
   height = 20,
   className,

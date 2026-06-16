@@ -28,7 +28,7 @@ export function PanelHeader({ title, subtitle, count, loading, children }: Panel
   const scoped = useIsNamespaceScoped();
   return (
     <div
-      style={{ background: "#141417", borderBottom: "1px solid #1A1A1A", flexShrink: 0 }}
+      style={{ background: "var(--surface-elevated)", borderBottom: "1px solid #26272B", flexShrink: 0 }}
     >
       {scoped && (
         <div
@@ -44,15 +44,15 @@ export function PanelHeader({ title, subtitle, count, loading, children }: Panel
       <div className="flex items-center gap-3 px-4 py-3">
         <div className="flex flex-col gap-0">
           <span className="text-sm font-semibold leading-tight">{title}</span>
-          {subtitle && <span style={{ fontSize: 11, color: "#6B6B73" }}>{subtitle}</span>}
+          {subtitle && <span style={{ fontSize: 11, color: "var(--fg-tertiary)" }}>{subtitle}</span>}
         </div>
         {count != null && (
           <span
             style={{
               fontFamily: "ui-monospace, monospace",
               fontSize: 11,
-              color: "#6B6B73",
-              background: "#1A1A1A",
+              color: "var(--fg-tertiary)",
+              background: "var(--border-subtle)",
               padding: "2px 6px",
               borderRadius: 4,
             }}

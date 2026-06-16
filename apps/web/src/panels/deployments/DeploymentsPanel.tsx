@@ -256,11 +256,11 @@ export default function DeploymentsPanel() {
                 style={{
                   fontFamily: "ui-monospace, monospace",
                   fontSize: 10,
-                  color: "#6B6B73",
-                  background: "#050505",
+                  color: "var(--fg-tertiary)",
+                  background: "var(--surface-sunken)",
                   padding: "1px 5px",
                   borderRadius: 4,
-                  border: "1px solid #1A1A1A",
+                  border: "1px solid #26272B",
                   whiteSpace: "nowrap",
                 }}
               >
@@ -274,7 +274,7 @@ export default function DeploymentsPanel() {
                   style={{
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 10,
-                    color: "#A1A1AA",
+                    color: "var(--fg-secondary)",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
@@ -298,7 +298,7 @@ export default function DeploymentsPanel() {
                   {updated > 0 && (
                     <span
                       className="inline-flex items-center gap-0.5"
-                      style={{ color: "#10B981" }}
+                      style={{ color: "var(--status-running)" }}
                       title={`${updated} new pod(s) up`}
                     >
                       <ArrowUp className="size-2.5" />
@@ -308,7 +308,7 @@ export default function DeploymentsPanel() {
                   {Math.max(0, total - updated) > 0 && (
                     <span
                       className="inline-flex items-center gap-0.5"
-                      style={{ color: "#F59E0B" }}
+                      style={{ color: "var(--status-pending)" }}
                       title={`${Math.max(0, total - updated)} old terminating`}
                     >
                       <ArrowDown className="size-2.5" />
@@ -437,12 +437,12 @@ function DeploymentDetail({
               <div
                 key={c.name}
                 className="overflow-hidden rounded-md text-xs"
-                style={{ background: "#0A0A0C", border: "1px solid #26262C" }}
+                style={{ background: "var(--surface-sunken)", border: "1px solid #26272B" }}
               >
                 {/* Header strip: container name + ports */}
                 <div
                   className="flex items-center gap-2 px-2.5 py-1.5"
-                  style={{ background: "#101014", borderBottom: "1px solid #1A1A1A" }}
+                  style={{ background: "#101014", borderBottom: "1px solid #26272B" }}
                 >
                   <Box className="size-3 shrink-0 text-muted-foreground" />
                   <span className="font-mono font-medium text-primary">{c.name}</span>
@@ -490,9 +490,9 @@ function DeploymentDetail({
                   <li
                     key={p.metadata.uid || p.metadata.name}
                     className="group flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs transition-colors"
-                    style={{ background: "#0A0A0C", border: "1px solid #1A1A1A" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#2A2A2A")}
-                    onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#1A1A1A")}
+                    style={{ background: "var(--surface-sunken)", border: "1px solid #26272B" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#34353A")}
+                    onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#26272B")}
                   >
                     <span
                       className={`inline-block size-2 shrink-0 rounded-full ${phaseColorClass(p.status?.phase)}`}
@@ -504,7 +504,7 @@ function DeploymentDetail({
                     {restarts > 0 && (
                       <span
                         className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px]"
-                        style={{ background: "rgba(245,158,11,0.15)", color: "#F59E0B" }}
+                        style={{ background: "rgba(245,158,11,0.15)", color: "var(--status-pending)" }}
                         title={`${restarts} restart${restarts === 1 ? "" : "s"}`}
                       >
                         ↺{restarts}
@@ -512,7 +512,7 @@ function DeploymentDetail({
                     )}
                     <span
                       className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
-                      style={{ background: "#141417", border: "1px solid #1A1A1A" }}
+                      style={{ background: "var(--surface-elevated)", border: "1px solid #26272B" }}
                     >
                       {podReady(p)}
                     </span>
@@ -530,7 +530,7 @@ function DeploymentDetail({
       {/* Manage section — mutations via ConfirmSheet */}
       <div
         className="flex items-center gap-2 border-t pt-3"
-        style={{ borderColor: "#1A1A1A" }}
+        style={{ borderColor: "var(--border-subtle)" }}
       >
         <span className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground mr-2">
           Manage
@@ -579,7 +579,7 @@ function ResourceCell({
   return (
     <div
       className="flex items-center gap-2 rounded px-2 py-1"
-      style={{ background: "#050505", border: "1px solid #1A1A1A" }}
+      style={{ background: "var(--surface-sunken)", border: "1px solid #26272B" }}
     >
       {icon}
       <span className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">

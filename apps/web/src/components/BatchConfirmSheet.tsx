@@ -64,9 +64,9 @@ export function BatchConfirmSheet({ actions, open, onClose, onConfirm }: Props) 
   const destructive = actions.some((a) => isDestructiveAction(a));
   const loading = previews.length !== actions.length || previews.some((p) => p.command === null && p.error === null);
 
-  const accentColor = destructive ? "#EF4444" : "#A855F7";
-  const accentBorder = destructive ? "rgba(239,68,68,0.5)" : "rgba(168,85,247,0.5)";
-  const accentHeaderBg = destructive ? "rgba(239,68,68,0.08)" : "rgba(168,85,247,0.08)";
+  const accentColor = destructive ? "var(--status-failed)" : "var(--accent-primary)";
+  const accentBorder = destructive ? "rgba(239,68,68,0.5)" : "rgba(56, 189, 248,0.5)";
+  const accentHeaderBg = destructive ? "rgba(239,68,68,0.08)" : "rgba(56, 189, 248,0.08)";
 
   function handleConfirm() {
     onConfirm(
@@ -103,7 +103,7 @@ export function BatchConfirmSheet({ actions, open, onClose, onConfirm }: Props) 
                     <Terminal className="size-3.5 text-muted-foreground" />
                     <span className="text-[11px] font-semibold text-foreground">{action.label ?? action.kind}</span>
                     {isDestructiveAction(action) && (
-                      <span className="ml-auto text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#EF4444" }}>
+                      <span className="ml-auto text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--status-failed)" }}>
                         destructive
                       </span>
                     )}
@@ -127,7 +127,7 @@ export function BatchConfirmSheet({ actions, open, onClose, onConfirm }: Props) 
         <DialogFooter className="border-t border-border/40 bg-background/60 px-4 py-3">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button
-            style={{ background: accentColor, color: "#FFFFFF", border: "none" }}
+            style={{ background: accentColor, color: "var(--fg-primary)", border: "none" }}
             onClick={handleConfirm}
             disabled={loading}
           >

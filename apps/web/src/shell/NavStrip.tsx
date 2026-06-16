@@ -124,15 +124,15 @@ function NavGroupHeader({ title, collapsed, onToggle }: NavGroupHeaderProps) {
       title={collapsed ? `Expand ${title}` : `Collapse ${title}`}
     >
       <span
-        style={{ fontSize: "10px", color: "#6B6B73", letterSpacing: "0.06em" }}
+        style={{ fontSize: "10px", color: "var(--fg-tertiary)", letterSpacing: "0.06em" }}
         className="font-semibold uppercase"
       >
         {title}
       </span>
       {collapsed ? (
-        <ChevronRight size={10} style={{ color: "#6B6B73" }} strokeWidth={2.5} />
+        <ChevronRight size={10} style={{ color: "var(--fg-tertiary)" }} strokeWidth={2.5} />
       ) : (
-        <ChevronDown size={10} style={{ color: "#6B6B73" }} strokeWidth={2.5} />
+        <ChevronDown size={10} style={{ color: "var(--fg-tertiary)" }} strokeWidth={2.5} />
       )}
     </button>
   );
@@ -156,7 +156,7 @@ function NavButton({ panelKey }: NavButtonProps) {
           "flex items-center gap-2.5 px-2.5 h-8 w-full rounded-md transition-colors group",
           isActive
             ? "nav-btn-active"
-            : "nav-btn-idle hover:bg-[#141417]",
+            : "nav-btn-idle hover:bg-[#1B1C1F]",
         ].join(" ")
       }
     >
@@ -166,7 +166,7 @@ function NavButton({ panelKey }: NavButtonProps) {
             size={14}
             strokeWidth={isActive ? 2 : 1.75}
             style={{
-              color: isActive ? "#A855F7" : "#6B6B73",
+              color: isActive ? "var(--accent-primary)" : "var(--fg-tertiary)",
               flexShrink: 0,
               width: 20,
             }}
@@ -175,7 +175,7 @@ function NavButton({ panelKey }: NavButtonProps) {
           <span
             style={{
               fontSize: "13px",
-              color: isActive ? "#FFFFFF" : "#A1A1AA",
+              color: isActive ? "var(--fg-primary)" : "var(--fg-secondary)",
               fontWeight: isActive ? 600 : 500,
               whiteSpace: "nowrap",
               overflow: "hidden",
@@ -225,7 +225,7 @@ export default function NavStrip() {
       {/* Inject the selected-state background as a style so Tailwind doesn't purge it */}
       <style>{`
         .nav-btn-active {
-          background-color: rgba(168, 85, 247, 0.15);
+          background-color: rgba(56, 189, 248, 0.15);
         }
       `}</style>
       <nav
@@ -234,8 +234,8 @@ export default function NavStrip() {
           minWidth: 200,
           maxWidth: 200,
           height: "100%",
-          background: "#050505",
-          borderRight: "1px solid #1A1A1A",
+          background: "var(--surface-primary)",
+          borderRight: "1px solid var(--border-subtle)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",

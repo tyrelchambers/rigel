@@ -4,15 +4,15 @@ import type { ToolActivity } from "./types";
 import { cn } from "@/lib/utils";
 
 const STATUS_COLOR: Record<ToolActivity["status"], string> = {
-  running: "#A1A1AA",
-  ok: "#10B981",
-  error: "#EF4444",
+  running: "var(--fg-secondary)",
+  ok: "var(--status-running)",
+  error: "var(--status-failed)",
 };
 
 export function ToolCard({ tool }: { tool: ToolActivity }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="rounded-md border bg-background/40 px-2.5 py-1.5 text-xs" style={{ borderColor: "#26262C" }}>
+    <div className="rounded-md border bg-background/40 px-2.5 py-1.5 text-xs" style={{ borderColor: "var(--border-subtle)" }}>
       <div className="flex items-center gap-2">
         <Wrench className="size-3 shrink-0 text-muted-foreground" aria-hidden />
         <span className="font-mono font-medium text-foreground/90">{tool.name}</span>
@@ -25,7 +25,7 @@ export function ToolCard({ tool }: { tool: ToolActivity }) {
         />
       </div>
       {tool.command && (
-        <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all rounded bg-[#0A0A0C] px-2 py-1 font-mono text-[11px] text-foreground/90">
+        <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all rounded bg-[#0C0D0F] px-2 py-1 font-mono text-[11px] text-foreground/90">
           <span className="select-none text-muted-foreground">$ </span>{tool.command}
         </pre>
       )}

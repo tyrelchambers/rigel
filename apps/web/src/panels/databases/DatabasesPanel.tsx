@@ -279,11 +279,11 @@ export default function DatabasesPanel() {
                 style={{
                   fontFamily: "ui-monospace, monospace",
                   fontSize: 10,
-                  color: "#6B6B73",
-                  background: "#050505",
+                  color: "var(--fg-tertiary)",
+                  background: "var(--surface-sunken)",
                   padding: "1px 5px",
                   borderRadius: 4,
-                  border: "1px solid #1A1A1A",
+                  border: "1px solid #26272B",
                   whiteSpace: "nowrap",
                 }}
               >
@@ -301,7 +301,7 @@ export default function DatabasesPanel() {
                 style={{
                   fontFamily: "ui-monospace, monospace",
                   fontSize: 10,
-                  color: "#6B6B73",
+                  color: "var(--fg-tertiary)",
                   whiteSpace: "nowrap",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
@@ -319,7 +319,7 @@ export default function DatabasesPanel() {
                   style={{
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 10,
-                    color: "#6B6B73",
+                    color: "var(--fg-tertiary)",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",

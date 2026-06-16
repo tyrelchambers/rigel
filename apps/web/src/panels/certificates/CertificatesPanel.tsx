@@ -141,11 +141,11 @@ export default function CertificatesPanel() {
                   style={{
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 10,
-                    color: "#6B6B73",
-                    background: "#050505",
+                    color: "var(--fg-tertiary)",
+                    background: "var(--surface-sunken)",
                     padding: "1px 5px",
                     borderRadius: 4,
-                    border: "1px solid #1A1A1A",
+                    border: "1px solid #26272B",
                     whiteSpace: "nowrap",
                   }}
                 >
@@ -164,7 +164,7 @@ export default function CertificatesPanel() {
                     style={{
                       fontFamily: "ui-monospace, monospace",
                       fontSize: 10,
-                      color: "#6B6B73",
+                      color: "var(--fg-tertiary)",
                       whiteSpace: "nowrap",
                     }}
                     title={`Expires ${v.notAfter}`}
@@ -217,7 +217,7 @@ function StatusPill({ view }: { view: CertView }) {
   } else {
     label = "—";
     color = "#6B6B73";
-    background = "#141417";
+    background = "#1B1C1F";
   }
 
   return (
@@ -265,15 +265,15 @@ function SmallButton({
       style={{
         fontSize: 10,
         padding: "2px 7px",
-        color: "#A1A1AA",
-        background: "#141417",
-        border: "1px solid #1A1A1A",
+        color: "var(--fg-secondary)",
+        background: "var(--surface-elevated)",
+        border: "1px solid #26272B",
       }}
       onMouseEnter={(e) => {
-        if (!disabled) e.currentTarget.style.borderColor = "#2A2A2A";
+        if (!disabled) e.currentTarget.style.borderColor = "#34353A";
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = "#1A1A1A";
+        e.currentTarget.style.borderColor = "#26272B";
       }}
     >
       {label}
@@ -351,8 +351,8 @@ function CertDetail({
               <div key={req.name} className="space-y-1">
                 {/* CertificateRequest */}
                 <div className="flex items-center gap-2">
-                  <span style={{ color: "#A1A1AA" }}>{req.name}</span>
-                  <span style={{ color: req.ready ? "#10B981" : "#6B6B73" }}>
+                  <span style={{ color: "var(--fg-secondary)" }}>{req.name}</span>
+                  <span style={{ color: req.ready ? "var(--status-running)" : "var(--fg-tertiary)" }}>
                     {req.ready ? "ready" : req.reason || "pending"}
                   </span>
                 </div>
@@ -361,14 +361,14 @@ function CertDetail({
                 {req.order && (
                   <div className="ml-3 space-y-1">
                     <div className="flex items-center gap-2">
-                      <span style={{ color: "#6B6B73" }}>↳</span>
-                      <span style={{ color: "#A1A1AA" }}>{req.order.name}</span>
-                      <span style={{ color: "#6B6B73" }}>·</span>
-                      <span style={{ color: "#A1A1AA" }}>{req.order.state}</span>
+                      <span style={{ color: "var(--fg-tertiary)" }}>↳</span>
+                      <span style={{ color: "var(--fg-secondary)" }}>{req.order.name}</span>
+                      <span style={{ color: "var(--fg-tertiary)" }}>·</span>
+                      <span style={{ color: "var(--fg-secondary)" }}>{req.order.state}</span>
                       {req.order.reason && (
                         <>
-                          <span style={{ color: "#6B6B73" }}>·</span>
-                          <span style={{ color: "#6B6B73" }}>{req.order.reason}</span>
+                          <span style={{ color: "var(--fg-tertiary)" }}>·</span>
+                          <span style={{ color: "var(--fg-tertiary)" }}>{req.order.reason}</span>
                         </>
                       )}
                       <SmallButton label="Cancel order" onClick={() => cancelOrder(req.order!)} />
@@ -377,16 +377,16 @@ function CertDetail({
                     {/* Challenges */}
                     {req.order.challenges.map((ch) => (
                       <div key={ch.name} className="ml-4 flex items-center gap-2">
-                        <span style={{ color: "#6B6B73" }}>↳</span>
-                        <span style={{ color: "#A1A1AA" }}>{ch.type}</span>
-                        <span style={{ color: "#6B6B73" }}>·</span>
-                        <span style={{ color: "#A1A1AA" }}>{ch.dnsName}</span>
-                        <span style={{ color: "#6B6B73" }}>·</span>
-                        <span style={{ color: "#A1A1AA" }}>{ch.state}</span>
+                        <span style={{ color: "var(--fg-tertiary)" }}>↳</span>
+                        <span style={{ color: "var(--fg-secondary)" }}>{ch.type}</span>
+                        <span style={{ color: "var(--fg-tertiary)" }}>·</span>
+                        <span style={{ color: "var(--fg-secondary)" }}>{ch.dnsName}</span>
+                        <span style={{ color: "var(--fg-tertiary)" }}>·</span>
+                        <span style={{ color: "var(--fg-secondary)" }}>{ch.state}</span>
                         {ch.reason && (
                           <>
-                            <span style={{ color: "#6B6B73" }}>·</span>
-                            <span style={{ color: "#6B6B73" }}>{ch.reason}</span>
+                            <span style={{ color: "var(--fg-tertiary)" }}>·</span>
+                            <span style={{ color: "var(--fg-tertiary)" }}>{ch.reason}</span>
                           </>
                         )}
                         <SmallButton label="Cancel challenge" onClick={() => cancelChallenge(ch)} />
@@ -409,20 +409,20 @@ function CertDetail({
           className="grid gap-x-4 gap-y-0.5 text-xs font-mono"
           style={{ gridTemplateColumns: "6rem 1fr" }}
         >
-          <dt style={{ color: "#6B6B73" }}>DNS NAMES</dt>
-          <dd className="break-all" style={{ color: "#A1A1AA" }}>
+          <dt style={{ color: "var(--fg-tertiary)" }}>DNS NAMES</dt>
+          <dd className="break-all" style={{ color: "var(--fg-secondary)" }}>
             {view.dnsNames.join(", ") || "—"}
           </dd>
-          <dt style={{ color: "#6B6B73" }}>ISSUER</dt>
-          <dd style={{ color: "#A1A1AA" }}>{view.issuer}</dd>
-          <dt style={{ color: "#6B6B73" }}>SECRET</dt>
-          <dd className="break-all" style={{ color: "#A1A1AA" }}>{view.secretName || "—"}</dd>
-          <dt style={{ color: "#6B6B73" }}>NOT AFTER</dt>
-          <dd style={{ color: "#A1A1AA" }}>
+          <dt style={{ color: "var(--fg-tertiary)" }}>ISSUER</dt>
+          <dd style={{ color: "var(--fg-secondary)" }}>{view.issuer}</dd>
+          <dt style={{ color: "var(--fg-tertiary)" }}>SECRET</dt>
+          <dd className="break-all" style={{ color: "var(--fg-secondary)" }}>{view.secretName || "—"}</dd>
+          <dt style={{ color: "var(--fg-tertiary)" }}>NOT AFTER</dt>
+          <dd style={{ color: "var(--fg-secondary)" }}>
             {view.notAfter ? `${relativeAge(view.notAfter)} left` : "—"}
           </dd>
-          <dt style={{ color: "#6B6B73" }}>AGE</dt>
-          <dd style={{ color: "#A1A1AA" }}>
+          <dt style={{ color: "var(--fg-tertiary)" }}>AGE</dt>
+          <dd style={{ color: "var(--fg-secondary)" }}>
             {relativeAge(view.cert.metadata.creationTimestamp)} ago
           </dd>
         </dl>

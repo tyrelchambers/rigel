@@ -247,7 +247,7 @@ export default function RightSizingPanel() {
       {/* Control bar — sort pills */}
       <div
         className="flex items-center gap-2 px-4 py-2"
-        style={{ borderBottom: "1px solid #1A1A1A", background: "#141417" }}
+        style={{ borderBottom: "1px solid #26272B", background: "var(--surface-elevated)" }}
       >
         {SORT_PILLS.map((p) => (
           <button
@@ -260,8 +260,8 @@ export default function RightSizingPanel() {
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 10,
                     fontWeight: 500,
-                    color: "#050505",
-                    background: "#A855F7",
+                    color: "var(--surface-sunken)",
+                    background: "var(--accent-primary)",
                     padding: "3px 8px",
                     borderRadius: 4,
                     border: "none",
@@ -270,11 +270,11 @@ export default function RightSizingPanel() {
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 10,
                     fontWeight: 500,
-                    color: "#6B6B73",
-                    background: "#050505",
+                    color: "var(--fg-tertiary)",
+                    background: "var(--surface-sunken)",
                     padding: "3px 8px",
                     borderRadius: 4,
-                    border: "1px solid #2A2A2A",
+                    border: "1px solid #34353A",
                   }
             }
           >
@@ -288,7 +288,7 @@ export default function RightSizingPanel() {
         {metricsUnavailable && (
           <div
             className="flex items-center gap-2 rounded-md px-3 py-2 text-sm"
-            style={{ background: "#141417", border: "1px solid #2A2A2A", color: "#6B6B73" }}
+            style={{ background: "var(--surface-elevated)", border: "1px solid #34353A", color: "var(--fg-tertiary)" }}
           >
             <Gauge className="size-4 shrink-0" />
             Metrics unavailable — install metrics-server to see right-sizing.
@@ -299,14 +299,14 @@ export default function RightSizingPanel() {
         {!metricsUnavailable && isWarmingUp && (
           <div
             className="flex items-start gap-2 rounded-md px-3 py-2 text-sm"
-            style={{ background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.2)" }}
+            style={{ background: "rgba(56, 189, 248,0.08)", border: "1px solid rgba(56, 189, 248,0.2)" }}
           >
-            <Hourglass className="mt-0.5 size-4 shrink-0" style={{ color: "#A855F7" }} />
+            <Hourglass className="mt-0.5 size-4 shrink-0" style={{ color: "var(--accent-primary)" }} />
             <div>
               <div className="font-medium" style={{ color: "#d4b8f0", fontSize: 12 }}>
                 Collecting usage history — recommendations need ~{MIN_HOURS}h of data
               </div>
-              <div style={{ fontSize: 11, color: "#6B6B73", marginTop: 1 }}>
+              <div style={{ fontSize: 11, color: "var(--fg-tertiary)", marginTop: 1 }}>
                 Reading from local history, sampled every ~15s. So far: {maxHours}h of {MIN_HOURS}h.
                 Verdicts appear automatically once there's enough.
               </div>
@@ -316,7 +316,7 @@ export default function RightSizingPanel() {
 
         {/* Empty */}
         {!metricsUnavailable && filtered.length === 0 && (
-          <div className="flex flex-col items-center gap-2 py-12 text-center" style={{ color: "#6B6B73" }}>
+          <div className="flex flex-col items-center gap-2 py-12 text-center" style={{ color: "var(--fg-tertiary)" }}>
             <Gauge className="size-8" />
             <p className="text-sm font-medium">No workloads to analyze yet</p>
             <p style={{ fontSize: 11 }}>
@@ -365,11 +365,11 @@ export default function RightSizingPanel() {
                 style={{
                   fontFamily: "ui-monospace, monospace",
                   fontSize: 10,
-                  color: "#6B6B73",
-                  background: "#050505",
+                  color: "var(--fg-tertiary)",
+                  background: "var(--surface-sunken)",
                   padding: "1px 5px",
                   borderRadius: 4,
-                  border: "1px solid #1A1A1A",
+                  border: "1px solid #26272B",
                   whiteSpace: "nowrap",
                 }}
               >
@@ -388,7 +388,7 @@ export default function RightSizingPanel() {
                   style={{
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 10,
-                    color: "#F59E0B",
+                    color: "var(--status-pending)",
                     whiteSpace: "nowrap",
                   }}
                 >
@@ -444,7 +444,7 @@ function ContainerDetail({
   return (
     <div
       className="rounded-md p-3"
-      style={{ background: "#0A0A0A", border: "1px solid #2A2A2A" }}
+      style={{ background: "var(--surface-primary)", border: "1px solid #34353A" }}
     >
       {/* Container header */}
       <div className="flex items-center gap-2">
@@ -457,7 +457,7 @@ function ContainerDetail({
         />
         <span
           className="ml-auto font-mono"
-          style={{ fontSize: 10, color: "#6B6B73", whiteSpace: "nowrap" }}
+          style={{ fontSize: 10, color: "var(--fg-tertiary)", whiteSpace: "nowrap" }}
         >
           {insufficient
             ? `${result.hoursCovered}h/${MIN_HOURS}h`
@@ -466,7 +466,7 @@ function ContainerDetail({
       </div>
 
       {/* Rationale */}
-      <p className="mt-1" style={{ fontSize: 11, color: "#6B6B73" }}>
+      <p className="mt-1" style={{ fontSize: 11, color: "var(--fg-tertiary)" }}>
         {result.rationale}
       </p>
 
@@ -481,40 +481,40 @@ function ContainerDetail({
         >
           {/* Column headers */}
           <span />
-          <span style={{ color: "#6B6B73", fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          <span style={{ color: "var(--fg-tertiary)", fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
             req / limit
           </span>
           <span />
-          <span style={{ color: "#6B6B73", fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          <span style={{ color: "var(--fg-tertiary)", fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
             recommended
           </span>
-          <span style={{ color: "#6B6B73", fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          <span style={{ color: "var(--fg-tertiary)", fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
             observed
           </span>
 
           {/* CPU row */}
-          <span style={{ fontWeight: 600, color: "#6B6B73", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.05em" }}>CPU</span>
-          <span className="font-mono" style={{ color: "#A1A1AA" }}>
+          <span style={{ fontWeight: 600, color: "var(--fg-tertiary)", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.05em" }}>CPU</span>
+          <span className="font-mono" style={{ color: "var(--fg-secondary)" }}>
             {fmtCpu(result.cpuRequest)} / {fmtCpu(result.cpuLimit)}
           </span>
-          <span style={{ color: "#6B6B73" }}>→</span>
-          <span className="font-mono font-medium" style={{ color: "#A855F7" }}>
+          <span style={{ color: "var(--fg-tertiary)" }}>→</span>
+          <span className="font-mono font-medium" style={{ color: "var(--accent-primary)" }}>
             {fmtCpu(result.suggestedCpuRequest)} / {fmtCpu(result.suggestedCpuLimit)}
           </span>
-          <span className="font-mono" style={{ color: "#6B6B73" }}>
+          <span className="font-mono" style={{ color: "var(--fg-tertiary)" }}>
             peak {formatCpuCores(result.cpuPeak)} · typ {formatCpuCores(result.cpuTypical)}
           </span>
 
           {/* MEM row */}
-          <span style={{ fontWeight: 600, color: "#6B6B73", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.05em" }}>MEM</span>
-          <span className="font-mono" style={{ color: "#A1A1AA" }}>
+          <span style={{ fontWeight: 600, color: "var(--fg-tertiary)", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.05em" }}>MEM</span>
+          <span className="font-mono" style={{ color: "var(--fg-secondary)" }}>
             {fmtMem(result.memRequest)} / {fmtMem(result.memLimit)}
           </span>
-          <span style={{ color: "#6B6B73" }}>→</span>
-          <span className="font-mono font-medium" style={{ color: "#A855F7" }}>
+          <span style={{ color: "var(--fg-tertiary)" }}>→</span>
+          <span className="font-mono font-medium" style={{ color: "var(--accent-primary)" }}>
             {fmtMem(result.suggestedMemRequest)} / {fmtMem(result.suggestedMemLimit)}
           </span>
-          <span className="font-mono" style={{ color: "#6B6B73" }}>
+          <span className="font-mono" style={{ color: "var(--fg-tertiary)" }}>
             peak {formatMemBytes(result.memPeak)} · typ {formatMemBytes(result.memTypical)}
           </span>
         </div>

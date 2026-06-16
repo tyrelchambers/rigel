@@ -98,14 +98,14 @@ export default function App() {
   // Auth gate: hold rendering until we know the auth state, then show the login
   // screen when a password is required and this browser isn't signed in.
   if (authLoading) {
-    return <div style={{ height: "100vh", background: "#0A0A0A" }} />;
+    return <div style={{ height: "100vh", background: "var(--surface-primary)" }} />;
   }
   if (auth?.authRequired && !auth.authenticated) {
     return <LoginScreen />;
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#0A0A0A" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--surface-primary)" }}>
       {showOnboarding && <OnboardingWizard onClose={closeOnboarding} />}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
 
@@ -116,10 +116,10 @@ export default function App() {
         <NavStrip />
 
         {/* ── Content column ───────────────────────────────────────────────── */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, background: "#0A0A0A" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, background: "var(--surface-primary)" }}>
           {/* Routed panel — the namespace selector now lives inside each
               panel's PanelHeader (see panels/components/PanelHeader.tsx). */}
-          <main style={{ flex: 1, overflow: "hidden", background: "#0A0A0A" }}>
+          <main style={{ flex: 1, overflow: "hidden", background: "var(--surface-primary)" }}>
             <Routes>
               {/* Logs owns its full-height scroll layout (no padded wrapper). */}
               <Route path="/logs" element={<LogsPanel />} />

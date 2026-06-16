@@ -246,7 +246,7 @@ function NodeCard({
   const podsPct = maxPods > 0 ? podCount / maxPods : 0;
 
   return (
-    <div className="rounded-lg" style={{ background: "#141417", border: "1px solid #1A1A1A" }}>
+    <div className="rounded-lg" style={{ background: "var(--surface-elevated)", border: "1px solid #26272B" }}>
       <div className="flex cursor-pointer flex-col gap-2.5 px-3.5 py-3" onClick={onToggle}>
         {/* Title row */}
         <div className="flex items-center gap-2.5">
@@ -267,7 +267,7 @@ function NodeCard({
                 fontWeight: 600,
                 letterSpacing: 0.5,
                 textTransform: "uppercase",
-                color: "#F59E0B",
+                color: "var(--status-pending)",
                 background: "rgba(245, 158, 11, 0.12)",
                 padding: "1px 5px",
                 borderRadius: 4,
@@ -284,7 +284,7 @@ function NodeCard({
               gap: 5,
               fontSize: 11,
               fontWeight: 600,
-              color: ready ? "#10B981" : "#EF4444",
+              color: ready ? "var(--status-running)" : "var(--status-failed)",
               background: ready ? "rgba(16, 185, 129, 0.12)" : "rgba(239, 68, 68, 0.12)",
               padding: "2px 8px",
               borderRadius: 100,
@@ -296,7 +296,7 @@ function NodeCard({
                 width: 5,
                 height: 5,
                 borderRadius: "50%",
-                background: ready ? "#10B981" : "#EF4444",
+                background: ready ? "var(--status-running)" : "var(--status-failed)",
               }}
             />
             {ready ? "Ready" : "NotReady"}
@@ -348,7 +348,7 @@ function NodeCard({
       </div>
 
       {isOpen && (
-        <div className="border-t px-3.5 py-3" style={{ borderColor: "#1A1A1A" }}>
+        <div className="border-t px-3.5 py-3" style={{ borderColor: "var(--border-subtle)" }}>
           <NodeDetail node={node} cpuUsedCores={metrics ? cpuUse : undefined} memUsedBytes={metrics ? memUse : undefined} disk={disk} />
         </div>
       )}
@@ -357,7 +357,7 @@ function NodeCard({
 }
 
 function RoleChip({ role: r }: { role: "control-plane" | "worker" }) {
-  const color = r === "control-plane" ? "#A855F7" : "#A1A1AA";
+  const color = r === "control-plane" ? "var(--accent-primary)" : "var(--fg-secondary)";
   return (
     <span
       style={{
@@ -367,7 +367,7 @@ function RoleChip({ role: r }: { role: "control-plane" | "worker" }) {
         letterSpacing: 0.5,
         textTransform: "uppercase",
         color,
-        background: r === "control-plane" ? "rgba(168, 85, 247, 0.12)" : "rgba(255,255,255,0.06)",
+        background: r === "control-plane" ? "rgba(56, 189, 248, 0.12)" : "rgba(255,255,255,0.06)",
         padding: "2px 6px",
         borderRadius: 4,
         whiteSpace: "nowrap",
@@ -404,7 +404,7 @@ function NodeUsageBar({
             fontWeight: 600,
             letterSpacing: 0.5,
             textTransform: "uppercase",
-            color: "#6B6B73",
+            color: "var(--fg-tertiary)",
           }}
         >
           {title}
@@ -415,20 +415,20 @@ function NodeUsageBar({
             fontFamily: "ui-monospace, monospace",
             fontSize: 10,
             fontWeight: 500,
-            color: hasMetrics ? color : "#6B6B73",
+            color: hasMetrics ? color : "var(--fg-tertiary)",
           }}
         >
           {hasMetrics ? `${Math.round(percent * 100)}%` : "—"}
         </span>
       </div>
-      <div style={{ height: 6, borderRadius: 3, background: "#1A1A1A", marginTop: 4, overflow: "hidden" }}>
+      <div style={{ height: 6, borderRadius: 3, background: "var(--border-subtle)", marginTop: 4, overflow: "hidden" }}>
         <div style={{ height: "100%", width: `${width}%`, background: color, borderRadius: 3, transition: "width 0.4s ease" }} />
       </div>
       <div className="flex items-center gap-1" style={{ marginTop: 4 }}>
-        <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, fontWeight: 500, color: "#FFFFFF" }}>
+        <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, fontWeight: 500, color: "var(--fg-primary)" }}>
           {primaryText}
         </span>
-        <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, color: "#6B6B73" }}>
+        <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, color: "var(--fg-tertiary)" }}>
           {secondaryText}
         </span>
       </div>
@@ -512,7 +512,7 @@ function NodeDetail({
         <div className="space-y-2">
           <h3
             className="text-[9px] font-semibold uppercase tracking-[0.05em]"
-            style={{ color: "#F59E0B" }}
+            style={{ color: "var(--status-pending)" }}
           >
             Pressure
           </h3>
@@ -521,7 +521,7 @@ function NodeDetail({
               <li key={c.type} className="flex items-start gap-2 text-xs">
                 <span
                   className="mt-1 inline-block size-2 shrink-0 rounded-full"
-                  style={{ background: "#F59E0B" }}
+                  style={{ background: "var(--status-pending)" }}
                 />
                 <span className="font-mono font-medium">{c.type}</span>
                 {c.message && <span className="text-muted-foreground">{c.message}</span>}

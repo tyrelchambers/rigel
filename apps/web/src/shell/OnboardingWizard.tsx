@@ -21,10 +21,10 @@ export function OnboardingWizard({ onClose }: { onClose: () => void }) {
     <div style={overlay}>
       <div style={card}>
         <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-          <Sparkles size={18} style={{ color: "#A855F7" }} />
-          <span style={{ fontSize: 17, fontWeight: 600, color: "#FFFFFF" }}>Welcome to Helmsman</span>
+          <Sparkles size={18} style={{ color: "var(--accent-primary)" }} />
+          <span style={{ fontSize: 17, fontWeight: 600, color: "var(--fg-primary)" }}>Welcome to Helmsman</span>
         </div>
-        <span style={{ fontSize: 12.5, color: "#A1A1AA", lineHeight: 1.5 }}>
+        <span style={{ fontSize: 12.5, color: "var(--fg-secondary)", lineHeight: 1.5 }}>
           A minute of optional setup. Everything here can also be changed later in Settings — skip
           anything you don't need.
         </span>
@@ -33,7 +33,7 @@ export function OnboardingWizard({ onClose }: { onClose: () => void }) {
         <AssistantCard />
         <MetricsCard />
         <ToolCard
-          icon={<Bell size={15} style={{ color: "#A855F7" }} />}
+          icon={<Bell size={15} style={{ color: "var(--accent-primary)" }} />}
           title="Signal notifications"
           desc="Get cluster alerts on your phone. The linking flow (QR scan) lives in Settings."
           action={
@@ -68,11 +68,11 @@ function ToolCard({
     <div style={tool}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         {icon}
-        <span style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF" }}>{title}</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-primary)" }}>{title}</span>
         <div style={{ flex: 1 }} />
         {action}
       </div>
-      <span style={{ fontSize: 12, color: "#A1A1AA", lineHeight: 1.5 }}>{desc}</span>
+      <span style={{ fontSize: 12, color: "var(--fg-secondary)", lineHeight: 1.5 }}>{desc}</span>
       {children}
     </div>
   );
@@ -80,7 +80,7 @@ function ToolCard({
 
 function Done() {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "#10B981" }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--status-running)" }}>
       <Check size={13} /> Done
     </span>
   );
@@ -94,7 +94,7 @@ function TokenCard() {
 
   return (
     <ToolCard
-      icon={<Sparkles size={15} style={{ color: "#A855F7" }} />}
+      icon={<Sparkles size={15} style={{ color: "var(--accent-primary)" }} />}
       title="AI copilot (the Helmsman)"
       desc="Chat needs a Claude subscription token — run `claude setup-token` and paste the sk-ant-oat-… value."
       action={configured ? <Done /> : undefined}
@@ -126,7 +126,7 @@ function AssistantCard() {
   const install = useAssistantAction();
   return (
     <ToolCard
-      icon={<Bot size={15} style={{ color: "#A855F7" }} />}
+      icon={<Bot size={15} style={{ color: "var(--accent-primary)" }} />}
       title="Assistant agent"
       desc="An in-cluster agent that watches for problems and proposes remediations. Optional."
       action={
@@ -155,7 +155,7 @@ function MetricsCard() {
   const available = metrics.data?.available === true;
   return (
     <ToolCard
-      icon={<Activity size={15} style={{ color: "#A855F7" }} />}
+      icon={<Activity size={15} style={{ color: "var(--accent-primary)" }} />}
       title="metrics-server"
       desc="Enables live CPU/memory and Right-sizing. On homelab clusters the install also adds --kubelet-insecure-tls."
       action={
@@ -192,8 +192,8 @@ const card: React.CSSProperties = {
   width: "min(560px, 96vw)",
   maxHeight: "88vh",
   overflowY: "auto",
-  background: "#141417",
-  border: "1px solid #2A2A2A",
+  background: "var(--surface-elevated)",
+  border: "1px solid #34353A",
   borderRadius: 14,
   boxShadow: "0 24px 64px rgba(0,0,0,0.7)",
   padding: 22,
@@ -206,17 +206,17 @@ const tool: React.CSSProperties = {
   flexDirection: "column",
   gap: 8,
   padding: 14,
-  background: "#0A0A0C",
-  border: "1px solid #26262C",
+  background: "var(--surface-sunken)",
+  border: "1px solid #26272B",
   borderRadius: 10,
 };
 const input: React.CSSProperties = {
   flex: 1,
   padding: "7px 10px",
   borderRadius: 7,
-  background: "#0A0A0C",
-  border: "1px solid #2A2A2A",
-  color: "#FFFFFF",
+  background: "var(--surface-sunken)",
+  border: "1px solid #34353A",
+  color: "var(--fg-primary)",
   fontSize: 12,
   fontFamily: "ui-monospace, monospace",
   outline: "none",
@@ -224,8 +224,8 @@ const input: React.CSSProperties = {
 const primaryBtn: React.CSSProperties = {
   padding: "7px 16px",
   borderRadius: 8,
-  background: "#A855F7",
-  color: "#FFFFFF",
+  background: "var(--accent-primary)",
+  color: "var(--fg-inverse)",
   fontSize: 12.5,
   fontWeight: 500,
   border: "none",
@@ -234,11 +234,11 @@ const primaryBtn: React.CSSProperties = {
 const ghostBtn: React.CSSProperties = {
   padding: "5px 12px",
   borderRadius: 7,
-  background: "#1C1C22",
-  color: "#FFFFFF",
+  background: "var(--surface-elevated)",
+  color: "var(--fg-primary)",
   fontSize: 12,
   fontWeight: 500,
-  border: "1px solid #2A2A2A",
+  border: "1px solid #34353A",
   cursor: "pointer",
 };
-const errText: React.CSSProperties = { fontSize: 11, color: "#EF4444" };
+const errText: React.CSSProperties = { fontSize: 11, color: "var(--status-failed)" };

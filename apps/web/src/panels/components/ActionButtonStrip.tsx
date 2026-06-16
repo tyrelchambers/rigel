@@ -5,10 +5,10 @@
  * more panel-specific buttons) matching ActionButtonStrip.swift.
  *
  * Ghost buttons use:
- *   - border: 1px solid #1A1A1A
- *   - background: #141417
+ *   - border: 1px solid #26272B
+ *   - background: #1B1C1F
  *   - text: #A1A1AA
- *   - hover: bg #1A1A1A
+ *   - hover: bg #26272B
  *   - font: monospace 10px medium
  *
  * Usage:
@@ -53,14 +53,14 @@ function GhostButton({ Icon, label, title, onClick, destructive }: GhostButtonPr
       type="button"
       title={title}
       onClick={(e) => { e.stopPropagation(); onClick(e); }}
-      className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 transition-colors hover:bg-[#1A1A1A]"
+      className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 transition-colors hover:bg-[#26272B]"
       style={{
         fontFamily: "ui-monospace, monospace",
         fontSize: 10,
         fontWeight: 500,
-        color: destructive ? "#EF4444" : "#A1A1AA",
-        border: "1px solid #1A1A1A",
-        background: "#141417",
+        color: destructive ? "var(--status-failed)" : "var(--fg-secondary)",
+        border: "1px solid #26272B",
+        background: "var(--surface-elevated)",
       }}
     >
       <Icon className="size-2.5" />

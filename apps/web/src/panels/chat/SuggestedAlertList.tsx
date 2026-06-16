@@ -8,10 +8,10 @@ interface Props {
   namespace: string;
 }
 
-const COLOR = "#A855F7";
-const BG = "rgba(168,85,247,0.15)";
-const BG_HOVER = "rgba(168,85,247,0.22)";
-const BORDER = "rgba(168,85,247,0.4)";
+const COLOR = "#38BDF8";
+const BG = "var(--accent-dim)";
+const BG_HOVER = "rgba(56, 189, 248,0.22)";
+const BORDER = "rgba(56, 189, 248,0.4)";
 const COLOR_SAVED = "#22C55E";
 const BG_SAVED = "rgba(34,197,94,0.15)";
 const BORDER_SAVED = "rgba(34,197,94,0.4)";
@@ -110,7 +110,7 @@ export function SuggestedAlertList({ alerts, namespace }: Props) {
                 style={{
                   marginTop: "2px",
                   fontSize: "11px",
-                  color: "#EF4444",
+                  color: "var(--status-failed)",
                   paddingLeft: "4px",
                 }}
               >

@@ -232,7 +232,7 @@ export function CatalogInstallWizard({
           <div className="wizard-app-row">
             <div
               className="wizard-app-icon"
-              style={{ background: "#26262C", border: "1px solid #2F2F36" }}
+              style={{ background: "var(--border-subtle)", border: "1px solid #34353A" }}
               aria-hidden
             >
               <Icon className="wizard-app-icon-glyph" />

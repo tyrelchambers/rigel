@@ -10,17 +10,17 @@ import {
 import type { FitResult, NodeFitEntry } from "./nodeFit";
 
 // Theme constants — mirror the Swift Theme tokens the sheet uses.
-const ACCENT = "#A855F7";
-const ACCENT_DIM = "rgba(168,85,247,0.15)";
+const ACCENT = "#38BDF8";
+const ACCENT_DIM = "var(--accent-dim)";
 const GREEN = "#10B981"; // Theme.Status.running
 const AMBER = "#F59E0B"; // Theme.Status.pending
 const RED = "#EF4444"; // Theme.Status.failed
 const FG_PRIMARY = "#FFFFFF";
 const FG_SECONDARY = "#A1A1AA";
 const FG_TERTIARY = "#6B6B73";
-const BORDER = "#2A2A2A";
-const SURFACE_ELEVATED = "#141417";
-const SURFACE_SUNKEN = "#0A0A0A";
+const BORDER = "#34353A";
+const SURFACE_ELEVATED = "#1B1C1F";
+const SURFACE_SUNKEN = "#121315";
 
 /**
  * NODE FIT panel — port of `CatalogDetailSheet.swift`'s `rightColumn` /
@@ -200,7 +200,7 @@ function NodeFitCard({
   const borderColor = isSelected
     ? ACCENT
     : isRecommended
-      ? "rgba(168,85,247,0.5)"
+      ? "rgba(56, 189, 248,0.5)"
       : BORDER;
 
   const appDisk = (app.requirements.storageGiB ?? 0) * 1024 * 1024 * 1024;
@@ -384,7 +384,7 @@ function ResourceBar({
             bottom: 0,
             left: `${usedFrac * 100}%`,
             width: `${requestedFrac * 100}%`,
-            background: requestFits ? "rgba(168,85,247,0.7)" : "rgba(239,68,68,0.7)",
+            background: requestFits ? "rgba(56, 189, 248,0.7)" : "rgba(239,68,68,0.7)",
             borderRadius: 2,
           }}
         />

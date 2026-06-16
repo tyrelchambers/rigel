@@ -213,7 +213,7 @@ export default function LogsPanel() {
       <aside className="flex w-64 shrink-0 flex-col border-r">
         <div
           className="flex shrink-0 items-center gap-2 border-b px-3"
-          style={{ height: 42, background: "#141417" }}
+          style={{ height: 42, background: "var(--surface-elevated)" }}
         >
           <h2 className="text-sm font-semibold">Deployments</h2>
           <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-mono text-muted-foreground">
@@ -283,7 +283,7 @@ export default function LogsPanel() {
             {/* Header */}
             <div
               className="flex shrink-0 items-center gap-2 border-b px-3"
-              style={{ height: 42, background: "#141417" }}
+              style={{ height: 42, background: "var(--surface-elevated)" }}
             >
               <span
                 className="inline-block size-3 shrink-0 rounded-full"
@@ -309,7 +309,7 @@ export default function LogsPanel() {
             <div className="flex items-center gap-2 border-b px-3 py-1.5">
               <div
                 className="flex w-64 items-center gap-1.5 rounded-md border px-2 focus-within:ring-2 focus-within:ring-ring"
-                style={{ background: "#050505", height: 28 }}
+                style={{ background: "var(--surface-sunken)", height: 28 }}
               >
                 <Search className="size-3.5 shrink-0 text-muted-foreground" />
                 <input

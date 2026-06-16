@@ -121,11 +121,11 @@ export default function IngressesPanel() {
                     style={{
                       fontFamily: "ui-monospace, monospace",
                       fontSize: 10,
-                      color: "#6B6B73",
-                      background: "#050505",
+                      color: "var(--fg-tertiary)",
+                      background: "var(--surface-sunken)",
                       padding: "1px 5px",
                       borderRadius: 4,
-                      border: "1px solid #1A1A1A",
+                      border: "1px solid #26272B",
                       whiteSpace: "nowrap",
                     }}
                   >
@@ -142,7 +142,7 @@ export default function IngressesPanel() {
                         gap: 3,
                         fontSize: 10,
                         fontWeight: 600,
-                        color: "#10B981",
+                        color: "var(--status-running)",
                         background: "rgba(16, 185, 129, 0.13)",
                         padding: "1px 6px",
                         borderRadius: 4,
@@ -159,21 +159,21 @@ export default function IngressesPanel() {
                 {/* Line 2: primary route — host / → service:port */}
                 {primary && (
                   <div className="flex min-w-0 items-center gap-1.5 font-mono text-xs">
-                    <span className="truncate" style={{ color: "#FFFFFF" }} title={primary.host}>
+                    <span className="truncate" style={{ color: "var(--fg-primary)" }} title={primary.host}>
                       {primary.host}
                     </span>
-                    <span style={{ color: "#6B6B73", flexShrink: 0 }}>{primary.path}</span>
-                    <span style={{ color: "#6B6B73", flexShrink: 0 }}>→</span>
+                    <span style={{ color: "var(--fg-tertiary)", flexShrink: 0 }}>{primary.path}</span>
+                    <span style={{ color: "var(--fg-tertiary)", flexShrink: 0 }}>→</span>
                     <span
                       className="truncate"
-                      style={{ color: "#A855F7", flexShrink: 0 }}
+                      style={{ color: "var(--accent-primary)", flexShrink: 0 }}
                       title={`${primary.service}${primary.port ? `:${primary.port}` : ""}`}
                     >
                       {primary.service}
                       {primary.port ? `:${primary.port}` : ""}
                     </span>
                     {routes.length > 1 && (
-                      <span style={{ color: "#6B6B73", flexShrink: 0 }}>+{routes.length - 1}</span>
+                      <span style={{ color: "var(--fg-tertiary)", flexShrink: 0 }}>+{routes.length - 1}</span>
                     )}
                   </div>
                 )}
@@ -226,10 +226,10 @@ function IngressDetail({ ingress }: { ingress: Ingress }) {
             <tbody>
               {routes.map((r, i) => (
                 <tr key={`${r.host}-${r.path}-${i}`}>
-                  <td className="pr-4" style={{ color: "#6B6B73" }}>{r.host}</td>
+                  <td className="pr-4" style={{ color: "var(--fg-tertiary)" }}>{r.host}</td>
                   <td className="pr-2">{r.path}</td>
-                  <td className="px-2" style={{ color: "#6B6B73" }}>→</td>
-                  <td style={{ color: "#A1A1AA" }}>
+                  <td className="px-2" style={{ color: "var(--fg-tertiary)" }}>→</td>
+                  <td style={{ color: "var(--fg-secondary)" }}>
                     {r.service}
                     {r.port ? `:${r.port}` : ""}
                   </td>
@@ -246,7 +246,7 @@ function IngressDetail({ ingress }: { ingress: Ingress }) {
           <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
             TLS
           </h3>
-          <ul className="space-y-0.5 text-xs font-mono" style={{ color: "#A1A1AA" }}>
+          <ul className="space-y-0.5 text-xs font-mono" style={{ color: "var(--fg-secondary)" }}>
             {tlsEntries.map((t, i) => {
               const h = (t.hosts ?? []).join(", ") || "—";
               return (
@@ -268,12 +268,12 @@ function IngressDetail({ ingress }: { ingress: Ingress }) {
           className="grid gap-x-4 gap-y-0.5 text-xs font-mono"
           style={{ gridTemplateColumns: "6rem 1fr" }}
         >
-          <dt style={{ color: "#6B6B73" }}>CLASS</dt>
-          <dd style={{ color: "#A1A1AA" }}>{cls}</dd>
-          <dt style={{ color: "#6B6B73" }}>ADDRESS</dt>
-          <dd className="break-all" style={{ color: "#A1A1AA" }}>{external ?? "—"}</dd>
-          <dt style={{ color: "#6B6B73" }}>AGE</dt>
-          <dd style={{ color: "#A1A1AA" }}>{relativeAge(ingress.metadata.creationTimestamp)} ago</dd>
+          <dt style={{ color: "var(--fg-tertiary)" }}>CLASS</dt>
+          <dd style={{ color: "var(--fg-secondary)" }}>{cls}</dd>
+          <dt style={{ color: "var(--fg-tertiary)" }}>ADDRESS</dt>
+          <dd className="break-all" style={{ color: "var(--fg-secondary)" }}>{external ?? "—"}</dd>
+          <dt style={{ color: "var(--fg-tertiary)" }}>AGE</dt>
+          <dd style={{ color: "var(--fg-secondary)" }}>{relativeAge(ingress.metadata.creationTimestamp)} ago</dd>
         </dl>
       </div>
     </div>

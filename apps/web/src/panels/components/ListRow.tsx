@@ -2,7 +2,7 @@
  * ListRow — full-width row chrome for the native row-list pattern.
  *
  * Matches the visual language from DeploymentsPanel / the Swift native panels:
- * - Subtle `#1A1A1A` border + rounded corners
+ * - Subtle `#26272B` border + rounded corners
  * - Hover highlight (slightly lighter background)
  * - Optional expand chevron with accessible aria-expanded
  * - Optional `children` slot rendered below the row when expanded
@@ -48,8 +48,8 @@ export function ListRow({
       <div
         className="relative overflow-hidden rounded-md"
         style={{
-          background: isOpen ? "#141417" : "#050505",
-          border: "1px solid #1A1A1A",
+          background: isOpen ? "var(--surface-elevated)" : "var(--surface-sunken)",
+          border: "1px solid #26272B",
         }}
       >
         {/* Optional left-edge overlay (e.g. redeploying glow) */}
@@ -79,13 +79,13 @@ export function ListRow({
         {progress !== undefined && (
           <div
             className="absolute bottom-0 left-0 right-0"
-            style={{ height: 2.5, background: "#2A2A2A" }}
+            style={{ height: 2.5, background: "var(--border-strong)" }}
           >
             <div
               style={{
                 height: "100%",
                 width: `${Math.round(progress * 100)}%`,
-                background: "#10B981",
+                background: "var(--status-running)",
                 transition: "width 0.4s ease",
               }}
             />
@@ -97,7 +97,7 @@ export function ListRow({
       {isOpen && expandedContent && (
         <div
           className="rounded-b-md border-x border-b px-6 py-3"
-          style={{ borderColor: "#1A1A1A", background: "#0A0A0A" }}
+          style={{ borderColor: "var(--border-subtle)", background: "var(--surface-primary)" }}
         >
           {expandedContent}
         </div>

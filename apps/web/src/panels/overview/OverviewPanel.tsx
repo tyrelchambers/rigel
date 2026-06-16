@@ -225,7 +225,7 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
           <GaugeCard
             icon={MemoryStick}
             title="Cluster Memory"
-            color="#A855F7"
+            color="#38BDF8"
             fraction={hasMetrics ? totals.memFraction : null}
             detail={`${formatBytes(String(totals.memUsed))} / ${formatBytes(String(totals.memAllocatable))}`}
             emptyText="metrics-server unavailable — install it to see live memory usage."
@@ -296,7 +296,7 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
         {/* Recent warnings — up to 10, newest first */}
         <div className="ov-card">
           <div className="ov-card-hdr">
-            <AlertTriangle className="ov-card-hdr-icon" style={{ color: "#EF4444" }} />
+            <AlertTriangle className="ov-card-hdr-icon" style={{ color: "var(--status-failed)" }} />
             <span className="ov-card-hdr-label">Recent warnings</span>
           </div>
           {recentWarnings.length === 0 ? (
@@ -377,7 +377,7 @@ function GaugeCard({
         <div className="ov-gauge-body">
           <div className="ov-gauge">
             <svg width="108" height="108" viewBox="0 0 108 108" style={{ display: "block" }}>
-              <circle cx="54" cy="54" r={RADIUS} fill="none" stroke="#2A2A2A" strokeWidth="14" />
+              <circle cx="54" cy="54" r={RADIUS} fill="none" stroke="#34353A" strokeWidth="14" />
               <circle
                 cx="54"
                 cy="54"
@@ -515,8 +515,8 @@ function EventActivityCard({ buckets }: { buckets: EventBucket[] }) {
                 className="ov-bar-col"
                 title={total > 0 ? `${b.warnings} warning, ${b.normal} normal` : undefined}
               >
-                <div style={{ height: `${normPct}%`, background: "#10B981" }} />
-                <div style={{ height: `${warnPct}%`, background: "#EF4444" }} />
+                <div style={{ height: `${normPct}%`, background: "var(--status-running)" }} />
+                <div style={{ height: `${warnPct}%`, background: "var(--status-failed)" }} />
               </div>
             );
           })}

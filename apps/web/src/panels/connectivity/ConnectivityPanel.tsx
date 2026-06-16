@@ -179,7 +179,7 @@ function Section({
     <section className="space-y-1">
       <h2
         className="text-xs font-semibold uppercase tracking-wide"
-        style={{ color: "#6B6B73" }}
+        style={{ color: "var(--fg-tertiary)" }}
       >
         {title}{" "}
         <span className="font-mono">({count})</span>
@@ -214,7 +214,7 @@ function FlowRow({ flow }: { flow: Flow }) {
   const podsDisabled = flow.totalPods === 0;
   const tintClass = HEALTH_TEXT[flow.health];
   const healthColor =
-    flow.health === "ok" ? "#10B981" : flow.health === "warn" ? "#F59E0B" : "#EF4444";
+    flow.health === "ok" ? "var(--status-running)" : flow.health === "warn" ? "var(--status-pending)" : "var(--status-failed)";
 
   return (
     <ListRow
@@ -230,14 +230,14 @@ function FlowRow({ flow }: { flow: Flow }) {
             <>
               <Chip
                 icon={<Globe className="size-3.5 text-muted-foreground" />}
-                style={{ color: "#A1A1AA" }}
+                style={{ color: "var(--fg-secondary)" }}
               >
                 {flow.hosts.length > 0 ? flow.hosts.join(", ") : "(no host)"}
               </Chip>
               <Arrow />
               <Chip
                 icon={<Signpost className="size-3.5 text-muted-foreground" />}
-                style={{ color: "#A1A1AA" }}
+                style={{ color: "var(--fg-secondary)" }}
               >
                 {flow.ingressNames.join(", ")}
               </Chip>
@@ -247,7 +247,7 @@ function FlowRow({ flow }: { flow: Flow }) {
             <>
               <Chip
                 icon={<Lock className="size-3.5 text-muted-foreground" />}
-                style={{ color: "#6B6B73" }}
+                style={{ color: "var(--fg-tertiary)" }}
               >
                 cluster
               </Chip>
@@ -265,8 +265,8 @@ function FlowRow({ flow }: { flow: Flow }) {
               <TagPill label={`svc/${flow.serviceName}`} title={flow.serviceName} />
             ) : (
               <Chip
-                icon={<Network className="size-3.5" style={{ color: "#EF4444" }} />}
-                style={{ color: "#EF4444" }}
+                icon={<Network className="size-3.5" style={{ color: "var(--status-failed)" }} />}
+                style={{ color: "var(--status-failed)" }}
               >
                 svc/{flow.serviceName}
               </Chip>
@@ -304,7 +304,7 @@ function FlowRow({ flow }: { flow: Flow }) {
             style={{
               fontFamily: "ui-monospace, monospace",
               fontSize: 10,
-              color: "#6B6B73",
+              color: "var(--fg-tertiary)",
               whiteSpace: "nowrap",
             }}
           >

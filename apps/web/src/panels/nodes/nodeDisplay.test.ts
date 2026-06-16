@@ -217,7 +217,7 @@ describe("usageColor", () => {
     expect(usageColor(0.5, true)).toBe("#10B981");
     expect(usageColor(0.8, true)).toBe("#F59E0B");
     expect(usageColor(0.95, true)).toBe("#EF4444");
-    expect(usageColor(0.95, false)).toBe("#2A2A2A");
+    expect(usageColor(0.95, false)).toBe("#34353A");
   });
 });
 

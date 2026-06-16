@@ -602,8 +602,8 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
           height: "100%",
           display: "flex",
           flexDirection: "column",
-          background: "#141417",
-          borderLeft: "1px solid #1A1A1A",
+          background: "var(--surface-elevated)",
+          borderLeft: "1px solid #26272B",
           flexShrink: 0,
           position: "relative",
           overflow: "hidden",
@@ -616,16 +616,16 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
             alignItems: "center",
             gap: 6,
             padding: "10px 14px",
-            borderBottom: "1px solid #1A1A1A",
+            borderBottom: "1px solid #26272B",
             flexShrink: 0,
           }}
         >
-          <Sparkles size={13} style={{ color: "#A855F7", flexShrink: 0 }} />
+          <Sparkles size={13} style={{ color: "var(--accent-primary)", flexShrink: 0 }} />
           <span
             style={{
               fontSize: 13,
               fontWeight: 600,
-              color: "#FFFFFF",
+              color: "var(--fg-primary)",
               whiteSpace: "nowrap",
             }}
           >
@@ -652,7 +652,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
             style={headerBtnStyle}
             aria-label="New chat"
           >
-            <SquarePen size={11} style={{ color: "#A855F7" }} />
+            <SquarePen size={11} style={{ color: "var(--accent-primary)" }} />
           </button>
 
           {/* Chat history */}
@@ -671,8 +671,8 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
                 marginLeft: 4,
                 fontFamily: "ui-monospace, monospace",
                 fontSize: 10,
-                color: "#6B6B73",
-                background: "#0A0A0C",
+                color: "var(--fg-tertiary)",
+                background: "var(--surface-sunken)",
                 padding: "2px 6px",
                 borderRadius: 4,
               }}
@@ -703,22 +703,22 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
                   margin: "8px 0",
                   padding: "14px",
                   borderRadius: 10,
-                  background: "#141417",
-                  border: "1px solid #2A2A2A",
+                  background: "var(--surface-elevated)",
+                  border: "1px solid #34353A",
                   display: "flex",
                   flexDirection: "column",
                   gap: 8,
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <Sparkles size={15} style={{ color: "#A855F7" }} />
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF" }}>
+                  <Sparkles size={15} style={{ color: "var(--accent-primary)" }} />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-primary)" }}>
                     The Helmsman copilot isn't set up yet
                   </span>
                 </div>
-                <span style={{ fontSize: 12, color: "#A1A1AA", lineHeight: 1.5 }}>
+                <span style={{ fontSize: 12, color: "var(--fg-secondary)", lineHeight: 1.5 }}>
                   Chat needs a Claude subscription token. Run{" "}
-                  <code style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, color: "#A855F7" }}>
+                  <code style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, color: "var(--accent-primary)" }}>
                     claude setup-token
                   </code>{" "}
                   and add it in Settings — the rest of the app works without it.
@@ -730,8 +730,8 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
                     marginTop: 2,
                     padding: "5px 12px",
                     borderRadius: 6,
-                    background: "#A855F7",
-                    color: "#FFFFFF",
+                    background: "var(--accent-primary)",
+                    color: "var(--fg-inverse)",
                     fontSize: 12,
                     fontWeight: 500,
                     textDecoration: "none",
@@ -847,10 +847,10 @@ const headerBtnStyle: React.CSSProperties = {
   width: 22,
   height: 22,
   borderRadius: 4,
-  background: "#0A0A0C",
+  background: "var(--surface-sunken)",
   border: "none",
   cursor: "pointer",
-  color: "#A1A1AA",
+  color: "var(--fg-secondary)",
   flexShrink: 0,
 };
 
@@ -1029,8 +1029,8 @@ function PaneComposer({
     <div
       style={{
         padding: "8px 12px 10px",
-        borderTop: "1px solid #1A1A1A",
-        background: "#141417",
+        borderTop: "1px solid #26272B",
+        background: "var(--surface-elevated)",
         flexShrink: 0,
         position: "relative",
       }}
@@ -1050,14 +1050,14 @@ function PaneComposer({
                   onMouseEnter={() => setSel(i)}
                   style={popRowStyle(i === sel)}
                 >
-                  <span style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 12, fontWeight: 600, color: "#FFFFFF" }}>
+                  <span style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 12, fontWeight: 600, color: i === sel ? "var(--fg-inverse)" : "var(--fg-primary)" }}>
                     {commandDisplay(c)}
                   </span>
                   <span
                     style={{
                       marginLeft: "auto",
                       fontSize: 11,
-                      color: i === sel ? "rgba(255,255,255,0.8)" : "#6B6B73",
+                      color: i === sel ? "rgba(10,10,10,0.8)" : "var(--fg-tertiary)",
                       whiteSpace: "nowrap",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -1080,13 +1080,13 @@ function PaneComposer({
                     onMouseEnter={() => setSel(i)}
                     style={popRowStyle(i === sel)}
                   >
-                    <Icon style={{ width: 12, height: 12, color: i === sel ? "#FFFFFF" : "#A1A1AA", flexShrink: 0 }} />
+                    <Icon style={{ width: 12, height: 12, color: i === sel ? "var(--fg-inverse)" : "var(--fg-secondary)", flexShrink: 0 }} />
                     <span
                       style={{
                         fontFamily: "var(--font-mono, monospace)",
                         fontSize: 12,
                         fontWeight: 500,
-                        color: "#FFFFFF",
+                        color: i === sel ? "var(--fg-inverse)" : "var(--fg-primary)",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
@@ -1095,11 +1095,11 @@ function PaneComposer({
                       {c.name}
                     </span>
                     {c.namespace && (
-                      <span style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 10, color: i === sel ? "rgba(255,255,255,0.7)" : "#6B6B73", whiteSpace: "nowrap" }}>
+                      <span style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 10, color: i === sel ? "rgba(10,10,10,0.7)" : "var(--fg-tertiary)", whiteSpace: "nowrap" }}>
                         {c.namespace}
                       </span>
                     )}
-                    <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono, monospace)", fontSize: 9, fontWeight: 600, letterSpacing: 0.5, color: i === sel ? "rgba(255,255,255,0.7)" : "#6B6B73" }}>
+                    <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono, monospace)", fontSize: 9, fontWeight: 600, letterSpacing: 0.5, color: i === sel ? "rgba(10,10,10,0.7)" : "var(--fg-tertiary)" }}>
                       {MENTION_KIND_LABEL[c.kind]}
                     </span>
                   </button>
@@ -1133,7 +1133,7 @@ function PaneComposer({
       )}
 
       {/* Rounded container */}
-      <div style={{ background: "#0A0A0C", borderRadius: 10, border: "1px solid #2A2A2A", overflow: "hidden" }}>
+      <div style={{ background: "var(--surface-sunken)", borderRadius: 10, border: "1px solid #34353A", overflow: "hidden" }}>
         <textarea
           ref={textareaRef}
           value={value}
@@ -1176,12 +1176,12 @@ function PaneComposer({
           {/* Send / Stop */}
           {isStreaming ? (
             <button onClick={onStop} aria-label="Stop" style={sendBtnStyle("#EF4444")}>
-              <span style={{ display: "block", width: 10, height: 10, background: "#fff", borderRadius: 1 }} />
+              <span style={{ display: "block", width: 10, height: 10, background: "var(--fg-primary)", borderRadius: 1 }} />
             </button>
           ) : (
-            <button onClick={onSend} disabled={!canSend} aria-label="Send" style={sendBtnStyle(canSend ? "#A855F7" : "#2A2A2A")}>
+            <button onClick={onSend} disabled={!canSend} aria-label="Send" style={sendBtnStyle(canSend ? "var(--accent-primary)" : "var(--border-strong)")}>
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ display: "block" }}>
-                <path d="M6 10V2M6 2L2 6M6 2l4 4" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M6 10V2M6 2L2 6M6 2l4 4" stroke={canSend ? "#0A0A0A" : "#fff"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
           )}
@@ -1198,7 +1198,7 @@ const textareaStyle: React.CSSProperties = {
   border: "none",
   outline: "none",
   resize: "none",
-  color: "#FFFFFF",
+  color: "var(--fg-primary)",
   fontSize: 13,
   lineHeight: `${LINE_HEIGHT}px`,
   maxHeight: LINE_HEIGHT * MAX_LINES,
@@ -1208,11 +1208,11 @@ const textareaStyle: React.CSSProperties = {
 
 const pillStyle: React.CSSProperties = {
   fontSize: 10,
-  color: "#6B6B73",
-  background: "#141417",
+  color: "var(--fg-tertiary)",
+  background: "var(--surface-elevated)",
   padding: "2px 7px",
   borderRadius: 100,
-  border: "1px solid #2A2A2A",
+  border: "1px solid #34353A",
   whiteSpace: "nowrap",
   fontWeight: 500,
 };
@@ -1223,8 +1223,8 @@ const popoverStyle: React.CSSProperties = {
   right: 12,
   bottom: "100%",
   marginBottom: 6,
-  background: "#141417",
-  border: "1px solid #2A2A2A",
+  background: "var(--surface-elevated)",
+  border: "1px solid #34353A",
   borderRadius: 8,
   boxShadow: "0 12px 32px rgba(0,0,0,0.5)",
   overflow: "hidden",
@@ -1245,7 +1245,7 @@ function popRowStyle(active: boolean): React.CSSProperties {
     borderRadius: 6,
     border: "none",
     cursor: "pointer",
-    background: active ? "#A855F7" : "transparent",
+    background: active ? "var(--accent-primary)" : "transparent",
   };
 }
 
@@ -1255,8 +1255,8 @@ const modelMenuStyle: React.CSSProperties = {
   bottom: "100%",
   marginBottom: 6,
   zIndex: 30,
-  background: "#141417",
-  border: "1px solid #2A2A2A",
+  background: "var(--surface-elevated)",
+  border: "1px solid #34353A",
   borderRadius: 8,
   boxShadow: "0 12px 32px rgba(0,0,0,0.5)",
   padding: 6,
@@ -1267,7 +1267,7 @@ const modelSectionLabel: React.CSSProperties = {
   fontSize: 9,
   fontWeight: 600,
   letterSpacing: 0.5,
-  color: "#6B6B73",
+  color: "var(--fg-tertiary)",
   padding: "3px 8px 2px",
 };
 
@@ -1282,14 +1282,14 @@ function modelRowStyle(active: boolean): React.CSSProperties {
     borderRadius: 6,
     border: "none",
     cursor: "pointer",
-    background: active ? "#1C1C22" : "transparent",
-    color: active ? "#FFFFFF" : "#A1A1AA",
+    background: active ? "var(--surface-elevated)" : "transparent",
+    color: active ? "var(--fg-primary)" : "var(--fg-secondary)",
     fontSize: 12,
     fontWeight: 500,
   };
 }
 
-const checkStyle: React.CSSProperties = { width: 12, height: 12, color: "#A855F7", flexShrink: 0 };
+const checkStyle: React.CSSProperties = { width: 12, height: 12, color: "var(--accent-primary)", flexShrink: 0 };
 
 function sendBtnStyle(bg: string): React.CSSProperties {
   return {

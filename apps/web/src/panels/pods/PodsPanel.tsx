@@ -140,11 +140,11 @@ export default function PodsPanel() {
                 style={{
                   fontFamily: "ui-monospace, monospace",
                   fontSize: 10,
-                  color: "#6B6B73",
-                  background: "#050505",
+                  color: "var(--fg-tertiary)",
+                  background: "var(--surface-sunken)",
                   padding: "1px 5px",
                   borderRadius: 4,
-                  border: "1px solid #1A1A1A",
+                  border: "1px solid #26272B",
                   whiteSpace: "nowrap",
                 }}
               >
@@ -157,7 +157,7 @@ export default function PodsPanel() {
                   style={{
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 10,
-                    color: "#6B6B73",
+                    color: "var(--fg-tertiary)",
                     whiteSpace: "nowrap",
                     flexShrink: 1,
                     overflow: "hidden",
@@ -181,7 +181,7 @@ export default function PodsPanel() {
                     style={{
                       fontFamily: "ui-monospace, monospace",
                       fontSize: 10,
-                      color: "#A1A1AA",
+                      color: "var(--fg-secondary)",
                     }}
                   >
                     {podMetrics.cpuNow}m
@@ -197,7 +197,7 @@ export default function PodsPanel() {
                     style={{
                       fontFamily: "ui-monospace, monospace",
                       fontSize: 10,
-                      color: "#A1A1AA",
+                      color: "var(--fg-secondary)",
                     }}
                   >
                     {podMetrics.memNow}Mi
@@ -228,7 +228,7 @@ export default function PodsPanel() {
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 10,
                     fontWeight: 500,
-                    color: restarts >= 5 ? "#EF4444" : "#F59E0B",
+                    color: restarts >= 5 ? "var(--status-failed)" : "var(--status-pending)",
                     background: restarts >= 5 ? "rgba(239,68,68,0.12)" : "rgba(245,158,11,0.12)",
                     padding: "1px 5px",
                     borderRadius: 4,
@@ -336,9 +336,9 @@ function PodDetail({ pod }: PodDetailProps) {
                 <li
                   key={c.name}
                   className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs transition-colors"
-                  style={{ background: "#0A0A0C", border: "1px solid #1A1A1A" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#2A2A2A")}
-                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#1A1A1A")}
+                  style={{ background: "var(--surface-sunken)", border: "1px solid #26272B" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#34353A")}
+                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#26272B")}
                 >
                   {/* Phase dot */}
                   <span
@@ -351,7 +351,7 @@ function PodDetail({ pod }: PodDetailProps) {
                   {cRestarts > 0 && (
                     <span
                       className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px]"
-                      style={{ color: "#F59E0B", background: "rgba(245,158,11,0.15)" }}
+                      style={{ color: "var(--status-pending)", background: "rgba(245,158,11,0.15)" }}
                       title={`${cRestarts} restart${cRestarts === 1 ? "" : "s"}`}
                     >
                       ↺{cRestarts}
@@ -359,7 +359,7 @@ function PodDetail({ pod }: PodDetailProps) {
                   )}
                   <span
                     className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
-                    style={{ background: "#141417", border: "1px solid #1A1A1A" }}
+                    style={{ background: "var(--surface-elevated)", border: "1px solid #26272B" }}
                   >
                     {phase}
                   </span>

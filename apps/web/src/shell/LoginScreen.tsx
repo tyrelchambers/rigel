@@ -23,7 +23,7 @@ export function LoginScreen() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "#0A0A0A",
+        background: "var(--surface-primary)",
       }}
     >
       <form
@@ -34,17 +34,17 @@ export function LoginScreen() {
           flexDirection: "column",
           gap: 14,
           padding: 24,
-          background: "#141417",
-          border: "1px solid #2A2A2A",
+          background: "var(--surface-elevated)",
+          border: "1px solid #34353A",
           borderRadius: 12,
           boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Sparkles size={18} style={{ color: "#A855F7" }} />
-          <span style={{ fontSize: 16, fontWeight: 600, color: "#FFFFFF" }}>Helmsman</span>
+          <Sparkles size={18} style={{ color: "var(--accent-primary)" }} />
+          <span style={{ fontSize: 16, fontWeight: 600, color: "var(--fg-primary)" }}>Helmsman</span>
         </div>
-        <span style={{ fontSize: 12, color: "#A1A1AA" }}>Enter the admin password to continue.</span>
+        <span style={{ fontSize: 12, color: "var(--fg-secondary)" }}>Enter the admin password to continue.</span>
         <input
           type="password"
           autoFocus
@@ -54,15 +54,15 @@ export function LoginScreen() {
           style={{
             padding: "9px 12px",
             borderRadius: 8,
-            background: "#0A0A0C",
-            border: "1px solid #2A2A2A",
-            color: "#FFFFFF",
+            background: "var(--surface-sunken)",
+            border: "1px solid #34353A",
+            color: "var(--fg-primary)",
             fontSize: 13,
             outline: "none",
           }}
         />
         {login.isError && (
-          <span style={{ fontSize: 12, color: "#EF4444" }}>{login.error.message}</span>
+          <span style={{ fontSize: 12, color: "var(--status-failed)" }}>{login.error.message}</span>
         )}
         <button
           type="submit"
@@ -70,8 +70,8 @@ export function LoginScreen() {
           style={{
             padding: "9px 12px",
             borderRadius: 8,
-            background: "#A855F7",
-            color: "#FFFFFF",
+            background: "var(--accent-primary)",
+            color: "var(--fg-inverse)",
             fontSize: 13,
             fontWeight: 500,
             border: "none",

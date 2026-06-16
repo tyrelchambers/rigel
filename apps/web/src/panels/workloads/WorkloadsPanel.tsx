@@ -307,7 +307,7 @@ export default function WorkloadsPanel() {
       {/* Kind toggle pills */}
       <div
         className="flex items-center gap-1 px-4 py-2"
-        style={{ borderBottom: "1px solid #1A1A1A" }}
+        style={{ borderBottom: "1px solid #26272B" }}
       >
         {KINDS.map((k) => {
           const isActive = k === activeKind;
@@ -319,10 +319,10 @@ export default function WorkloadsPanel() {
               aria-pressed={isActive}
               className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors"
               style={{
-                background: isActive ? "#A855F7" : "#1A1A1A",
-                color: isActive ? "#fff" : "#6B6B73",
+                background: isActive ? "var(--accent-primary)" : "var(--border-subtle)",
+                color: isActive ? "var(--fg-inverse)" : "var(--fg-tertiary)",
                 border: "1px solid",
-                borderColor: isActive ? "#A855F7" : "#2A2A2A",
+                borderColor: isActive ? "var(--accent-primary)" : "var(--border-strong)",
               }}
             >
               {PILL_LABEL[k]}
@@ -330,8 +330,8 @@ export default function WorkloadsPanel() {
                 style={{
                   fontFamily: "ui-monospace, monospace",
                   fontSize: 10,
-                  color: isActive ? "rgba(255,255,255,0.7)" : "#6B6B73",
-                  background: isActive ? "rgba(255,255,255,0.15)" : "#050505",
+                  color: isActive ? "rgba(10,10,10,0.7)" : "var(--fg-tertiary)",
+                  background: isActive ? "rgba(255,255,255,0.15)" : "var(--surface-sunken)",
                   padding: "0 4px",
                   borderRadius: 3,
                 }}
@@ -373,7 +373,7 @@ export default function WorkloadsPanel() {
                   type="button"
                   onClick={() => toggleExpand(k)}
                   className="shrink-0 font-mono text-xs font-medium leading-none hover:underline"
-                  style={{ color: allReady ? "#10B981" : "#EF4444" }}
+                  style={{ color: allReady ? "var(--status-running)" : "var(--status-failed)" }}
                 >
                   {s.metadata.name}
                 </button>
@@ -383,11 +383,11 @@ export default function WorkloadsPanel() {
                   style={{
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 10,
-                    color: "#6B6B73",
-                    background: "#050505",
+                    color: "var(--fg-tertiary)",
+                    background: "var(--surface-sunken)",
                     padding: "1px 5px",
                     borderRadius: 4,
-                    border: "1px solid #1A1A1A",
+                    border: "1px solid #26272B",
                     whiteSpace: "nowrap",
                   }}
                 >
@@ -402,7 +402,7 @@ export default function WorkloadsPanel() {
                   style={{
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 10,
-                    color: "#6B6B73",
+                    color: "var(--fg-tertiary)",
                     whiteSpace: "nowrap",
                     flexShrink: 0,
                   }}
@@ -466,7 +466,7 @@ export default function WorkloadsPanel() {
                   type="button"
                   onClick={() => toggleExpand(k)}
                   className="shrink-0 font-mono text-xs font-medium leading-none hover:underline"
-                  style={{ color: allReady ? "#10B981" : "#EF4444" }}
+                  style={{ color: allReady ? "var(--status-running)" : "var(--status-failed)" }}
                 >
                   {d.metadata.name}
                 </button>
@@ -476,11 +476,11 @@ export default function WorkloadsPanel() {
                   style={{
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 10,
-                    color: "#6B6B73",
-                    background: "#050505",
+                    color: "var(--fg-tertiary)",
+                    background: "var(--surface-sunken)",
                     padding: "1px 5px",
                     borderRadius: 4,
-                    border: "1px solid #1A1A1A",
+                    border: "1px solid #26272B",
                     whiteSpace: "nowrap",
                   }}
                 >
@@ -495,7 +495,7 @@ export default function WorkloadsPanel() {
                   style={{
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 10,
-                    color: "#6B6B73",
+                    color: "var(--fg-tertiary)",
                     whiteSpace: "nowrap",
                     flexShrink: 0,
                   }}
@@ -561,11 +561,11 @@ export default function WorkloadsPanel() {
                   style={{
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 10,
-                    color: "#6B6B73",
-                    background: "#050505",
+                    color: "var(--fg-tertiary)",
+                    background: "var(--surface-sunken)",
                     padding: "1px 5px",
                     borderRadius: 4,
-                    border: "1px solid #1A1A1A",
+                    border: "1px solid #26272B",
                     whiteSpace: "nowrap",
                   }}
                 >
@@ -580,7 +580,7 @@ export default function WorkloadsPanel() {
                   style={{
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 10,
-                    color: "#6B6B73",
+                    color: "var(--fg-tertiary)",
                     whiteSpace: "nowrap",
                     flexShrink: 0,
                   }}
@@ -649,11 +649,11 @@ export default function WorkloadsPanel() {
                   style={{
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 10,
-                    color: "#6B6B73",
-                    background: "#050505",
+                    color: "var(--fg-tertiary)",
+                    background: "var(--surface-sunken)",
                     padding: "1px 5px",
                     borderRadius: 4,
-                    border: "1px solid #1A1A1A",
+                    border: "1px solid #26272B",
                     whiteSpace: "nowrap",
                   }}
                 >
@@ -672,7 +672,7 @@ export default function WorkloadsPanel() {
                     style={{
                       fontFamily: "ui-monospace, monospace",
                       fontSize: 10,
-                      color: "#6B6B73",
+                      color: "var(--fg-tertiary)",
                       whiteSpace: "nowrap",
                       flexShrink: 0,
                     }}

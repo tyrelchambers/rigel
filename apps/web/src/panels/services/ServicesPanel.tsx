@@ -161,11 +161,11 @@ export default function ServicesPanel() {
                 style={{
                   fontFamily: "ui-monospace, monospace",
                   fontSize: 10,
-                  color: "#6B6B73",
-                  background: "#050505",
+                  color: "var(--fg-tertiary)",
+                  background: "var(--surface-sunken)",
                   padding: "1px 5px",
                   borderRadius: 4,
-                  border: "1px solid #1A1A1A",
+                  border: "1px solid #26272B",
                   whiteSpace: "nowrap",
                 }}
               >
@@ -181,7 +181,7 @@ export default function ServicesPanel() {
                   style={{
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 10,
-                    color: "#A1A1AA",
+                    color: "var(--fg-secondary)",
                     whiteSpace: "nowrap",
                     flexShrink: 1,
                     overflow: "hidden",
@@ -199,7 +199,7 @@ export default function ServicesPanel() {
                   style={{
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 10,
-                    color: "#6B6B73",
+                    color: "var(--fg-tertiary)",
                     whiteSpace: "nowrap",
                     flexShrink: 1,
                     overflow: "hidden",
@@ -223,7 +223,7 @@ export default function ServicesPanel() {
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 10,
                     fontWeight: 500,
-                    color: "#10B981",
+                    color: "var(--status-running)",
                     background: "rgba(16,185,129,0.12)",
                     padding: "1px 5px",
                     borderRadius: 4,
@@ -250,7 +250,7 @@ export default function ServicesPanel() {
                   style={{
                     fontFamily: "ui-monospace, monospace",
                     fontSize: 10,
-                    color: "#A1A1AA",
+                    color: "var(--fg-secondary)",
                     whiteSpace: "nowrap",
                     flexShrink: 1,
                     overflow: "hidden",
@@ -332,7 +332,7 @@ function ServiceDetail({ service }: { service: Service }) {
               const node = p.nodePort != null ? `, NodePort: ${p.nodePort}` : "";
               const label = p.name ? `${p.name} ` : "";
               return (
-                <li key={`${p.port}-${i}`} style={{ color: "#A1A1AA" }}>
+                <li key={`${p.port}-${i}`} style={{ color: "var(--fg-secondary)" }}>
                   {label}({p.port} → {target} / {proto}{node})
                 </li>
               );
@@ -347,7 +347,7 @@ function ServiceDetail({ service }: { service: Service }) {
           <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
             Selector
           </h3>
-          <ul className="space-y-0.5 text-xs font-mono" style={{ color: "#A1A1AA" }}>
+          <ul className="space-y-0.5 text-xs font-mono" style={{ color: "var(--fg-secondary)" }}>
             {selectorEntries.map(([k, v]) => (
               <li key={k}>
                 {k}={v}
@@ -363,12 +363,12 @@ function ServiceDetail({ service }: { service: Service }) {
           <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
             External
           </h3>
-          <p className="text-xs font-mono break-all" style={{ color: "#A1A1AA" }}>{external}</p>
+          <p className="text-xs font-mono break-all" style={{ color: "var(--fg-secondary)" }}>{external}</p>
         </div>
       )}
 
       {/* Age */}
-      <div style={{ color: "#6B6B73", fontFamily: "ui-monospace, monospace", fontSize: 10 }}>
+      <div style={{ color: "var(--fg-tertiary)", fontFamily: "ui-monospace, monospace", fontSize: 10 }}>
         Age: {relativeAge(service.metadata.creationTimestamp)} ago
       </div>
     </div>

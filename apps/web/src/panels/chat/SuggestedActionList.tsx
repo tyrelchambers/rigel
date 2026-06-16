@@ -49,10 +49,10 @@ export function SuggestedActionList({ actions, onAction, onRunBatch }: Props) {
       {actions.map((action, i) => {
         const Icon = iconForKind(action.kind);
         const destructive = isDestructiveAction(action);
-        const color = destructive ? "#EF4444" : "#A855F7";
-        const bgColor = destructive ? "rgba(239,68,68,0.15)" : "rgba(168,85,247,0.15)";
-        const bgHover = destructive ? "rgba(239,68,68,0.22)" : "rgba(168,85,247,0.22)";
-        const borderColor = destructive ? "rgba(239,68,68,0.4)" : "rgba(168,85,247,0.4)";
+        const color = destructive ? "var(--status-failed)" : "var(--accent-primary)";
+        const bgColor = destructive ? "rgba(239,68,68,0.15)" : "var(--accent-dim)";
+        const bgHover = destructive ? "rgba(239,68,68,0.22)" : "rgba(56, 189, 248,0.22)";
+        const borderColor = destructive ? "rgba(239,68,68,0.4)" : "rgba(56, 189, 248,0.4)";
         const showCheckbox = showBatch && isBatchable(action);
         const selected = !deselected.has(i);
 
@@ -148,9 +148,9 @@ export function SuggestedActionList({ actions, onAction, onRunBatch }: Props) {
             onClick={runSelected}
             disabled={selectedIdx.length === 0}
             style={{
-              color: "#A855F7",
-              background: "rgba(168,85,247,0.15)",
-              border: "1px solid rgba(168,85,247,0.4)",
+              color: "var(--accent-primary)",
+              background: "var(--accent-dim)",
+              border: "1px solid rgba(56, 189, 248,0.4)",
               borderRadius: "4px",
               padding: "5px 10px",
               fontSize: "12px",
@@ -170,9 +170,9 @@ export function SuggestedActionList({ actions, onAction, onRunBatch }: Props) {
 
 function miniBtn(disabled: boolean): React.CSSProperties {
   return {
-    color: "#A855F7",
+    color: "var(--accent-primary)",
     background: "transparent",
-    border: "1px solid rgba(168,85,247,0.4)",
+    border: "1px solid rgba(56, 189, 248,0.4)",
     borderRadius: "4px",
     padding: "4px 8px",
     fontSize: "11px",
