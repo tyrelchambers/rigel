@@ -21,13 +21,20 @@ export function Card({ children, className }: { children: React.ReactNode; class
 export function Field({
   label,
   children,
+  labelWidth = "w-40",
 }: {
   label: string;
   children: React.ReactNode;
+  /** Tailwind width class for the label column. Use "w-auto" to size to content. */
+  labelWidth?: string;
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="w-40 shrink-0 text-sm text-muted-foreground">{label}</span>
+      <span
+        className={cn("shrink-0 whitespace-nowrap text-sm text-muted-foreground", labelWidth)}
+      >
+        {label}
+      </span>
       {children}
     </div>
   );

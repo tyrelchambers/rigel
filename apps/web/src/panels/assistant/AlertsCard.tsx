@@ -201,7 +201,7 @@ export function AlertsCard() {
 
       {/* New alert dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>New alert</DialogTitle>
             <DialogDescription>
@@ -211,7 +211,7 @@ export function AlertsCard() {
           </DialogHeader>
 
           <div className="space-y-3">
-            <Field label="Watch">
+            <Field label="Watch" labelWidth="w-auto">
               <select
                 value={scope}
                 onChange={(e) => handleScopeChange(e.target.value as AlertScope)}
@@ -226,7 +226,7 @@ export function AlertsCard() {
             </Field>
 
             {scope === "workload" && (
-              <Field label="Kind">
+              <Field label="Kind" labelWidth="w-auto">
                 <select
                   value={kind}
                   onChange={(e) => setKind(e.target.value as AlertKind)}
@@ -240,7 +240,7 @@ export function AlertsCard() {
             )}
 
             {needsNamespace && (
-              <Field label="Namespace">
+              <Field label="Namespace" labelWidth="w-auto">
                 <select
                   value={namespace}
                   onChange={(e) => setNamespace(e.target.value)}
@@ -260,7 +260,7 @@ export function AlertsCard() {
             )}
 
             {needsName && (
-              <Field label="Name">
+              <Field label="Name" labelWidth="w-auto">
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -270,7 +270,7 @@ export function AlertsCard() {
               </Field>
             )}
 
-            <Field label="When">
+            <Field label="When" labelWidth="w-auto">
               <select
                 value={condType}
                 onChange={(e) => setCondType(e.target.value as AlertCondType)}
@@ -287,7 +287,7 @@ export function AlertsCard() {
             </Field>
 
             {condType === "podRestarts" && (
-              <Field label="Threshold / window">
+              <Field label="Threshold / window" labelWidth="w-auto">
                 <div className="flex flex-1 items-center gap-2 text-sm">
                   <input
                     type="number"
@@ -314,7 +314,7 @@ export function AlertsCard() {
             {(condType === "pendingTooLong" ||
               condType === "notReady" ||
               condType === "deploymentDegraded") && (
-              <Field label="For (minutes)">
+              <Field label="For (minutes)" labelWidth="w-auto">
                 <input
                   type="number"
                   min={0}
@@ -325,20 +325,20 @@ export function AlertsCard() {
               </Field>
             )}
 
-            <Field label="Cooldown (min)">
-              <div className="flex flex-1 flex-col gap-0.5">
+            <Field label="Cooldown (min)" labelWidth="w-auto">
+              <div className="flex flex-1 items-center gap-2">
                 <input
                   type="number"
                   min={0}
                   value={cooldown}
                   onChange={(e) => setCooldown(Math.max(0, Number(e.target.value) || 0))}
-                  className={inputClass}
+                  className="w-16 rounded-md border bg-background px-2 py-1.5 font-mono text-sm outline-none focus:ring-2 focus:ring-ring"
                 />
                 <span className="text-xs text-muted-foreground">0 = default</span>
               </div>
             </Field>
 
-            <Field label="Label">
+            <Field label="Label" labelWidth="w-auto">
               <input
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
