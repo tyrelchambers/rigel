@@ -10,6 +10,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -155,7 +156,17 @@ export default function AssistantPanel() {
         <Sparkles className="size-5 text-primary" />
         <h1 className="text-lg font-semibold">Assistant</h1>
         {d.isInstalled && <StatusPill enabled={d.enabled} />}
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          {d.isInstalled && (
+            <Button
+              variant={d.enabled ? "destructive" : "default"}
+              size="sm"
+              disabled={working}
+              onClick={() => run({ action: "kill", namespace: ns, enabled: !d.enabled })}
+            >
+              {d.enabled ? "Pause agent" : "Resume agent"}
+            </Button>
+          )}
           {working && <LoaderCircle className="size-4 animate-spin text-muted-foreground" aria-label="working" />}
         </div>
       </div>
@@ -512,9 +523,11 @@ function ControlCenter(p: ControlProps) {
   const report = d.clusterState?.report ?? "";
   const status = d.clusterState?.status;
 
+  const [tab, setTab] = useState<"overview" | "needs" | "rules" | "activity" | "settings">("overview");
+
   return (
     <div className="space-y-3.5">
-      {/* Summary strip */}
+      {/* Summary strip — always visible */}
       <Card>
         <div className="flex flex-wrap gap-x-6 gap-y-2">
           <Stat label="Status" value={d.enabled ? "Active" : "Paused"} color={d.enabled ? "text-green-600 dark:text-green-400" : "text-muted-foreground"} />
@@ -527,248 +540,302 @@ function ControlCenter(p: ControlProps) {
         </div>
       </Card>
 
-      {/* Last report */}
-      {report && (
-        <Card>
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold">Last report</p>
-            <Button variant="ghost" size="sm" disabled={working} onClick={() => run({ action: "clearReport", namespace: ns })}>
-              Clear
-            </Button>
-          </div>
-          <p className="mt-1 select-text text-sm text-muted-foreground whitespace-pre-wrap">{report}</p>
-        </Card>
-      )}
+      {/* Pill tab bar */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <TabPill active={tab === "overview"} onClick={() => setTab("overview")}>Overview</TabPill>
+        <TabPill active={tab === "needs"} onClick={() => setTab("needs")} badge={queue.length + d.liveIssues.length}>Needs you</TabPill>
+        <TabPill active={tab === "rules"} onClick={() => setTab("rules")}>Rules</TabPill>
+        <TabPill active={tab === "activity"} onClick={() => setTab("activity")} badge={audit.length}>Activity</TabPill>
+        <TabPill active={tab === "settings"} onClick={() => setTab("settings")}>Settings</TabPill>
+      </div>
 
-      {/* Awaiting approval (queued suggestions) */}
-      {queue.length > 0 && (
-        <Section title={`Awaiting your approval (${queue.length})`}>
-          {queue.map((q: AssistantQueuedSuggestion) => (
-            <Card key={queuedSuggestionId(q)} className="space-y-1.5">
-              <p className="font-mono text-sm font-medium">{q.incident}</p>
-              <p className="text-sm">{q.suggestion}</p>
-              <p className="text-xs text-muted-foreground">{q.reason}</p>
-              {q.action && (
-                <Button size="sm" onClick={() => p.onRunSuggestion(q.action as ActionBlock)}>
-                  {q.action.label}
-                </Button>
-              )}
-            </Card>
-          ))}
-        </Section>
-      )}
-
-      {/* Live cluster issues */}
-      <Section title={`Live cluster issues (${d.liveIssues.length})`}>
-        {d.liveIssues.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Cluster is clean — nothing to remediate.</p>
-        ) : (
-          d.liveIssues.map((issue) => (
-            <Card key={issue.fingerprint}>
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="size-3.5 shrink-0 text-red-600 dark:text-red-400" />
-                <span className="truncate font-mono text-sm font-medium">{issue.location}</span>
-                <span className="ml-auto font-mono text-xs text-amber-600 dark:text-amber-400">{issue.reason}</span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  title="Silence this incident (agent stops acting on it)"
-                  disabled={working}
-                  onClick={() => run({ action: "silence", namespace: ns, fingerprint: issue.fingerprint })}
-                >
-                  <BellOff className="size-3.5 text-muted-foreground" />
+      {/* Tab: Overview */}
+      {tab === "overview" && (
+        <div className="space-y-3.5">
+          {report && (
+            <Card>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold">Last report</p>
+                <Button variant="ghost" size="sm" disabled={working} onClick={() => run({ action: "clearReport", namespace: ns })}>
+                  Clear
                 </Button>
               </div>
+              <p className="mt-1 select-text text-sm text-muted-foreground whitespace-pre-wrap">{report}</p>
             </Card>
-          ))
-        )}
-      </Section>
+          )}
 
-      {/* Alert rules */}
-      <AlertsCard d={d} ns={ns} working={working} run={run} />
-
-      {/* Autonomy & notifications */}
-      <Card className="space-y-2">
-        <p className="text-sm font-semibold">Autonomy &amp; notifications</p>
-        <p className="text-xs text-muted-foreground">How the agent acts on safe fixes.</p>
-        <div className="flex gap-1.5">
-          {([
-            ["Auto", "auto"],
-            ["Advisory", "advisory"],
-            ["Quiet-hours", "window"],
-          ] as const).map(([label, value]) => (
-            <Button
-              key={value}
-              size="sm"
-              variant={d.autonomyMode === value ? "default" : "secondary"}
-              disabled={working}
-              onClick={() => run({ action: "setMode", namespace: ns, mode: value, window: p.windowText })}
+          {queue.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setTab("needs")}
+              className="flex w-full items-center gap-2 rounded-lg border bg-card p-3 text-left hover:bg-muted/50"
             >
-              {label}
-            </Button>
-          ))}
+              <AlertTriangle className="size-4 text-amber-500" />
+              <span className="text-sm font-medium">
+                {queue.length} fix{queue.length === 1 ? "" : "es"} awaiting your approval
+              </span>
+              <ChevronRight className="ml-auto size-4 text-muted-foreground" />
+            </button>
+          )}
+
+          <Section
+            title="Recent activity"
+            right={
+              audit.length > 5 ? (
+                <Button variant="ghost" size="sm" onClick={() => setTab("activity")}>
+                  View all
+                </Button>
+              ) : undefined
+            }
+          >
+            <Card>
+              {audit.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No actions yet.</p>
+              ) : (
+                <div className="max-h-80 space-y-2 overflow-auto">
+                  {audit.slice(0, 5).map((e) => (
+                    <AuditRow key={auditEntryId(e)} e={e} {...p} />
+                  ))}
+                </div>
+              )}
+            </Card>
+          </Section>
+
+          {!report && queue.length === 0 && audit.length === 0 && (
+            <Card>
+              <p className="text-sm text-muted-foreground">
+                All quiet — the agent is watching and hasn't needed to act.
+              </p>
+            </Card>
+          )}
         </div>
-        {d.autonomyMode === "window" && (
-          <>
-            <Field label="Window">
-              <input value={p.windowText} onChange={(e) => p.setWindowText(e.target.value)} placeholder="22:00-07:00" className={inputClass} />
-              <Button variant="ghost" size="sm" disabled={working} onClick={() => run({ action: "setMode", namespace: ns, mode: "window", window: p.windowText })}>
+      )}
+
+      {/* Tab: Needs you */}
+      {tab === "needs" && (
+        <div className="space-y-3.5">
+          {queue.length > 0 && (
+            <Section title={`Awaiting your approval (${queue.length})`}>
+              {queue.map((q: AssistantQueuedSuggestion) => (
+                <Card key={queuedSuggestionId(q)} className="space-y-1.5">
+                  <p className="font-mono text-sm font-medium">{q.incident}</p>
+                  <p className="text-sm">{q.suggestion}</p>
+                  <p className="text-xs text-muted-foreground">{q.reason}</p>
+                  {q.action && (
+                    <Button size="sm" onClick={() => p.onRunSuggestion(q.action as ActionBlock)}>
+                      {q.action.label}
+                    </Button>
+                  )}
+                </Card>
+              ))}
+            </Section>
+          )}
+
+          <Section title={`Live cluster issues (${d.liveIssues.length})`}>
+            {d.liveIssues.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Cluster is clean — nothing to remediate.</p>
+            ) : (
+              d.liveIssues.map((issue) => (
+                <Card key={issue.fingerprint}>
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="size-3.5 shrink-0 text-red-600 dark:text-red-400" />
+                    <span className="truncate font-mono text-sm font-medium">{issue.location}</span>
+                    <span className="ml-auto font-mono text-xs text-amber-600 dark:text-amber-400">{issue.reason}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Silence this incident (agent stops acting on it)"
+                      disabled={working}
+                      onClick={() => run({ action: "silence", namespace: ns, fingerprint: issue.fingerprint })}
+                    >
+                      <BellOff className="size-3.5 text-muted-foreground" />
+                    </Button>
+                  </div>
+                </Card>
+              ))
+            )}
+          </Section>
+        </div>
+      )}
+
+      {/* Tab: Rules */}
+      {tab === "rules" && (
+        <div className="space-y-3.5">
+          <AlertsCard d={d} ns={ns} working={working} run={run} />
+
+          <Card className="space-y-2">
+            <p className="text-sm font-semibold">Autonomy &amp; notifications</p>
+            <p className="text-xs text-muted-foreground">How the agent acts on safe fixes.</p>
+            <div className="flex gap-1.5">
+              {([
+                ["Auto", "auto"],
+                ["Advisory", "advisory"],
+                ["Quiet-hours", "window"],
+              ] as const).map(([label, value]) => (
+                <Button
+                  key={value}
+                  size="sm"
+                  variant={d.autonomyMode === value ? "default" : "secondary"}
+                  disabled={working}
+                  onClick={() => run({ action: "setMode", namespace: ns, mode: value, window: p.windowText })}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+            {d.autonomyMode === "window" && (
+              <>
+                <Field label="Window">
+                  <input value={p.windowText} onChange={(e) => p.setWindowText(e.target.value)} placeholder="22:00-07:00" className={inputClass} />
+                  <Button variant="ghost" size="sm" disabled={working} onClick={() => run({ action: "setMode", namespace: ns, mode: "window", window: p.windowText })}>
+                    Save
+                  </Button>
+                </Field>
+                <p className="text-xs text-muted-foreground">
+                  Outside the window (agent timezone), safe fixes are queued for approval instead of
+                  auto-run.
+                </p>
+              </>
+            )}
+            <Field label="Notify webhook">
+              <input value={p.webhookText} onChange={(e) => p.setWebhookText(e.target.value)} placeholder="Slack/Discord/ntfy URL (optional)" className={inputClass} />
+              <Button variant="ghost" size="sm" disabled={working} onClick={() => run({ action: "setMode", namespace: ns, mode: d.autonomyMode, window: p.windowText })}>
                 Save
               </Button>
             </Field>
-            <p className="text-xs text-muted-foreground">
-              Outside the window (agent timezone), safe fixes are queued for approval instead of
-              auto-run.
+            <p className="border-t pt-2 text-xs text-muted-foreground">
+              Signal notifications are set up in the Settings tab.
             </p>
-          </>
-        )}
-        <Field label="Notify webhook">
-          <input value={p.webhookText} onChange={(e) => p.setWebhookText(e.target.value)} placeholder="Slack/Discord/ntfy URL (optional)" className={inputClass} />
-          <Button variant="ghost" size="sm" disabled={working} onClick={() => run({ action: "setMode", namespace: ns, mode: d.autonomyMode, window: p.windowText })}>
-            Save
-          </Button>
-        </Field>
-        <p className="border-t pt-2 text-xs text-muted-foreground">
-          Signal notifications are set up in the Settings tab.
-        </p>
-      </Card>
+          </Card>
 
-      {/* Silenced */}
-      {d.silenced.length > 0 && (
-        <Section title={`Silenced (${d.silenced.length})`}>
-          {d.silenced.map((fp) => (
-            <Card key={fp}>
-              <div className="flex items-center gap-2">
-                <BellOff className="size-3.5 shrink-0 text-muted-foreground" />
-                <span className="truncate font-mono text-xs text-muted-foreground">{fp}</span>
-                <Button variant="ghost" size="sm" className="ml-auto" disabled={working} onClick={() => run({ action: "unsilence", namespace: ns, fingerprint: fp })}>
-                  Unsilence
-                </Button>
-              </div>
-            </Card>
-          ))}
-        </Section>
+          {d.silenced.length > 0 && (
+            <Section title={`Silenced (${d.silenced.length})`}>
+              {d.silenced.map((fp) => (
+                <Card key={fp}>
+                  <div className="flex items-center gap-2">
+                    <BellOff className="size-3.5 shrink-0 text-muted-foreground" />
+                    <span className="truncate font-mono text-xs text-muted-foreground">{fp}</span>
+                    <Button variant="ghost" size="sm" className="ml-auto" disabled={working} onClick={() => run({ action: "unsilence", namespace: ns, fingerprint: fp })}>
+                      Unsilence
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+            </Section>
+          )}
+        </div>
       )}
 
-      {/* Activity */}
-      <Section
-        title={`Activity (${audit.length})`}
-        right={
-          audit.length > 10 ? (
-            <Button variant="ghost" size="sm" onClick={() => p.setShowAllActivity(true)}>
-              See all
-            </Button>
-          ) : undefined
-        }
-      >
-        <Card>
-          {audit.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No actions yet.</p>
-          ) : (
-            <div className="max-h-80 space-y-2 overflow-auto">
-              {audit.slice(0, 10).map((e) => (
-                <AuditRow key={auditEntryId(e)} e={e} {...p} />
-              ))}
-            </div>
-          )}
-        </Card>
-      </Section>
+      {/* Tab: Activity */}
+      {tab === "activity" && (
+        <div className="space-y-3.5">
+          <Section
+            title={`Activity (${audit.length})`}
+            right={
+              audit.length > 10 ? (
+                <Button variant="ghost" size="sm" onClick={() => p.setShowAllActivity(true)}>
+                  See all
+                </Button>
+              ) : undefined
+            }
+          >
+            <Card>
+              {audit.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No actions yet.</p>
+              ) : (
+                <div className="max-h-80 space-y-2 overflow-auto">
+                  {audit.slice(0, 10).map((e) => (
+                    <AuditRow key={auditEntryId(e)} e={e} {...p} />
+                  ))}
+                </div>
+              )}
+            </Card>
+          </Section>
+        </div>
+      )}
 
-      {/* Agent pod */}
-      <Card>
-        <p className="text-sm font-semibold">Agent pod</p>
-        {d.agentPod ? (
-          <div className="mt-1 flex items-center justify-between">
-            <div>
-              <p className="select-text font-mono text-sm text-muted-foreground">{d.agentPod.metadata.name}</p>
-              <div className="mt-1 flex items-center gap-2">
-                <span
-                  className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-medium ${
-                    d.agentPodReason
-                      ? "bg-red-500/15 text-red-600 dark:text-red-400"
-                      : d.agentPod.status?.phase === "Running"
-                        ? "bg-green-500/15 text-green-600 dark:text-green-400"
-                        : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  {d.agentPodReason ?? d.agentPod.status?.phase ?? "Unknown"}
-                </span>
-                <span className="font-mono text-[10px] text-muted-foreground">
-                  {d.agentPodRestarts} restart{d.agentPodRestarts === 1 ? "" : "s"}
-                </span>
+      {/* Tab: Settings */}
+      {tab === "settings" && (
+        <div className="space-y-3.5">
+          {/* Agent pod */}
+          <Card>
+            <p className="text-sm font-semibold">Agent pod</p>
+            {d.agentPod ? (
+              <div className="mt-1 flex items-center justify-between">
+                <div>
+                  <p className="select-text font-mono text-sm text-muted-foreground">{d.agentPod.metadata.name}</p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <span
+                      className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-medium ${
+                        d.agentPodReason
+                          ? "bg-red-500/15 text-red-600 dark:text-red-400"
+                          : d.agentPod.status?.phase === "Running"
+                            ? "bg-green-500/15 text-green-600 dark:text-green-400"
+                            : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {d.agentPodReason ?? d.agentPod.status?.phase ?? "Unknown"}
+                    </span>
+                    <span className="font-mono text-[10px] text-muted-foreground">
+                      {d.agentPodRestarts} restart{d.agentPodRestarts === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                </div>
               </div>
+            ) : (
+              <p className="mt-1 text-sm text-muted-foreground">
+                No agent pod found yet — it may still be scheduling or failing to pull the image.
+              </p>
+            )}
+          </Card>
+
+          {/* Credentials & maintenance */}
+          <Card className="space-y-2">
+            <p className="text-sm font-semibold">Credentials &amp; maintenance</p>
+            <p className="text-sm text-muted-foreground">
+              Update the subscription token (run <span className="font-mono">claude setup-token</span> and
+              paste it). Saving replaces the Secret and rolls the agent so it picks up the new token. Use
+              after a 401 / token expiry.
+            </p>
+            <input
+              type="password"
+              autoComplete="off"
+              value={p.newToken}
+              onChange={(e) => p.setNewToken(e.target.value)}
+              placeholder="New CLAUDE_CODE_OAUTH_TOKEN"
+              className={`w-full ${inputClass}`}
+            />
+            <div className="flex gap-2">
+              <Button
+                disabled={working || p.newToken.trim() === ""}
+                onClick={() => run({ action: "updateToken", namespace: ns, token: p.newToken.trim() }, () => p.setNewToken(""))}
+              >
+                Update token &amp; restart
+              </Button>
+              <Button variant="secondary" disabled={working} onClick={() => run({ action: "restart", namespace: ns })}>
+                <RotateCcw className="size-4" /> Restart agent
+              </Button>
             </div>
-          </div>
-        ) : (
-          <p className="mt-1 text-sm text-muted-foreground">
-            No agent pod found yet — it may still be scheduling or failing to pull the image.
-          </p>
-        )}
-      </Card>
+          </Card>
 
-      {/* Kill switch */}
-      <Card>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold">Kill switch</p>
-            <p className="text-sm text-muted-foreground">
-              {d.enabled ? "Agent is acting on incidents." : "Agent is paused — it will not act."}
-            </p>
-          </div>
-          <Button
-            variant={d.enabled ? "destructive" : "default"}
-            disabled={working}
-            onClick={() => run({ action: "kill", namespace: ns, enabled: !d.enabled })}
-          >
-            {d.enabled ? "Pause" : "Resume"}
-          </Button>
+          {/* Uninstall */}
+          <Card>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold">Uninstall</p>
+                <p className="text-sm text-muted-foreground">
+                  Removes the agent Deployment, RBAC, and token. Keeps the audit history.
+                </p>
+              </div>
+              <Button variant="destructive" disabled={working} onClick={() => p.setConfirmUninstall(true)}>
+                Uninstall
+              </Button>
+            </div>
+          </Card>
         </div>
-      </Card>
+      )}
 
-      {/* Credentials & maintenance */}
-      <Card className="space-y-2">
-        <p className="text-sm font-semibold">Credentials &amp; maintenance</p>
-        <p className="text-sm text-muted-foreground">
-          Update the subscription token (run <span className="font-mono">claude setup-token</span> and
-          paste it). Saving replaces the Secret and rolls the agent so it picks up the new token. Use
-          after a 401 / token expiry.
-        </p>
-        <input
-          type="password"
-          autoComplete="off"
-          value={p.newToken}
-          onChange={(e) => p.setNewToken(e.target.value)}
-          placeholder="New CLAUDE_CODE_OAUTH_TOKEN"
-          className={`w-full ${inputClass}`}
-        />
-        <div className="flex gap-2">
-          <Button
-            disabled={working || p.newToken.trim() === ""}
-            onClick={() => run({ action: "updateToken", namespace: ns, token: p.newToken.trim() }, () => p.setNewToken(""))}
-          >
-            Update token &amp; restart
-          </Button>
-          <Button variant="secondary" disabled={working} onClick={() => run({ action: "restart", namespace: ns })}>
-            <RotateCcw className="size-4" /> Restart agent
-          </Button>
-        </div>
-      </Card>
-
-      {/* Uninstall */}
-      <Card>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold">Uninstall</p>
-            <p className="text-sm text-muted-foreground">
-              Removes the agent Deployment, RBAC, and token. Keeps the audit history.
-            </p>
-          </div>
-          <Button variant="destructive" disabled={working} onClick={() => p.setConfirmUninstall(true)}>
-            Uninstall
-          </Button>
-        </div>
-      </Card>
-
+      {/* Uninstall confirm dialog — renders regardless of tab */}
       <Dialog open={p.confirmUninstall} onOpenChange={p.setConfirmUninstall}>
         <DialogContent>
           <DialogHeader>
@@ -794,7 +861,7 @@ function ControlCenter(p: ControlProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Full activity modal */}
+      {/* Full activity modal — renders regardless of tab */}
       <Dialog open={p.showAllActivity} onOpenChange={p.setShowAllActivity}>
         <DialogContent className="max-h-[80vh] overflow-auto sm:max-w-2xl">
           <DialogHeader>
@@ -883,6 +950,43 @@ function AuditRow({
 }
 
 // --- Bits -------------------------------------------------------------------
+
+function TabPill({
+  active,
+  onClick,
+  children,
+  badge,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  badge?: number;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors",
+        active
+          ? "bg-primary text-primary-foreground"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+      )}
+    >
+      {children}
+      {badge != null && badge > 0 && (
+        <span
+          className={cn(
+            "rounded-full px-1.5 text-[10px] font-semibold tabular-nums",
+            active ? "bg-primary-foreground/20" : "bg-muted-foreground/25",
+          )}
+        >
+          {badge}
+        </span>
+      )}
+    </button>
+  );
+}
 
 function Stat({ label, value, color }: { label: string; value: string; color: string }) {
   return (
