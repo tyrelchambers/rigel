@@ -39,6 +39,7 @@ import {
   type AlertScope,
 } from "@helmsman/k8s";
 import { useAssistant, type AssistantDerived } from "./useAssistant";
+import { AssistantSkeleton } from "./AssistantSkeleton";
 import { alertRuleSummary, type SuggestedAlert, type AlertTarget, type AlertCondition } from "@/lib/alerts";
 import {
   tokenLabel,
@@ -179,7 +180,9 @@ export default function AssistantPanel() {
         </pre>
       )}
 
-      {d.isInstalled ? (
+      {!d.hydrated ? (
+        <AssistantSkeleton />
+      ) : d.isInstalled ? (
         <ControlCenter
           d={d}
           ns={ns}

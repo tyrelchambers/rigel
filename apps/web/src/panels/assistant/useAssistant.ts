@@ -56,6 +56,8 @@ interface NamespaceLike {
 const POD_LABEL = "app.kubernetes.io/name";
 
 export interface AssistantDerived {
+  /** True once deployments, configmaps, and pods snapshots have all arrived. */
+  hydrated: boolean;
   isInstalled: boolean;
   installedNamespace: string | null;
   /** Namespace to read the agent's own resources from (install ns fallback). */
@@ -159,6 +161,7 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
     );
 
     return {
+      hydrated: !!resources["deployments"] && !!resources["configmaps"] && !!resources["pods"],
       isInstalled,
       installedNamespace,
       stateNamespace,
