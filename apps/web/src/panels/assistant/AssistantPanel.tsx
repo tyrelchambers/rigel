@@ -37,7 +37,7 @@ import {
   type AlertScope,
 } from "@helmsman/k8s";
 import { useAssistant, type AssistantDerived } from "./useAssistant";
-import { AssistantSkeleton } from "./AssistantSkeleton";
+import { LoadingState } from "@/panels/components/LoadingState";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { alertRuleSummary, type SuggestedAlert, type AlertTarget, type AlertCondition } from "@/lib/alerts";
 import {
@@ -177,7 +177,7 @@ export default function AssistantPanel() {
         )}
 
       {!d.hydrated ? (
-        <AssistantSkeleton />
+        <LoadingState message="Loading assistant…" />
       ) : d.isInstalled ? (
         <ControlCenter
           d={d}

@@ -161,7 +161,11 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
     );
 
     return {
-      hydrated: !!resources["deployments"] && !!resources["configmaps"] && !!resources["pods"],
+      // Ready as soon as the panel's STRUCTURAL data is in: deployments
+      // (installed-or-not) + the assistant ConfigMaps (the stats). Deliberately
+      // NOT gated on the pods watch — that can be hundreds of items cluster-wide
+      // and only feeds the live-issues count, which fills in a beat later.
+      hydrated: !!resources["deployments"] && !!resources["configmaps"],
       isInstalled,
       installedNamespace,
       stateNamespace,
