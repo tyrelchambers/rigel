@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  LoaderCircle,
-  Sparkles,
   AlertTriangle,
   BellOff,
   ChevronDown,
@@ -40,6 +38,7 @@ import {
 } from "@helmsman/k8s";
 import { useAssistant, type AssistantDerived } from "./useAssistant";
 import { AssistantSkeleton } from "./AssistantSkeleton";
+import { PanelHeader } from "@/panels/components/PanelHeader";
 import { alertRuleSummary, type SuggestedAlert, type AlertTarget, type AlertCondition } from "@/lib/alerts";
 import {
   tokenLabel,
@@ -152,14 +151,11 @@ export default function AssistantPanel() {
   }
 
   return (
-    <div className="space-y-3">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <Sparkles className="size-5 text-primary" />
-        <h1 className="text-lg font-semibold">Assistant</h1>
-        {d.isInstalled && <StatusPill enabled={d.enabled} />}
-        <div className="ml-auto flex items-center gap-2">
-          {d.isInstalled && (
+    <div className="flex h-full flex-col">
+      <PanelHeader title="Assistant" loading={working || !d.hydrated}>
+        {d.hydrated && d.isInstalled && (
+          <>
+            <StatusPill enabled={d.enabled} />
             <Button
               variant={d.enabled ? "destructive" : "default"}
               size="sm"
@@ -168,17 +164,17 @@ export default function AssistantPanel() {
             >
               {d.enabled ? "Pause agent" : "Resume agent"}
             </Button>
-          )}
-          {working && <LoaderCircle className="size-4 animate-spin text-muted-foreground" aria-label="working" />}
-        </div>
-      </div>
+          </>
+        )}
+      </PanelHeader>
 
-      {/* Error banner (selectable, monospace, red) — never includes the token. */}
-      {actionError && (
-        <pre className="select-text rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
-          {actionError}
-        </pre>
-      )}
+      <div className="flex-1 space-y-3 overflow-auto p-4">
+        {/* Error banner (selectable, monospace, red) — never includes the token. */}
+        {actionError && (
+          <pre className="select-text rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+            {actionError}
+          </pre>
+        )}
 
       {!d.hydrated ? (
         <AssistantSkeleton />
@@ -300,6 +296,7 @@ export default function AssistantPanel() {
         open={!!pendingAction}
         onClose={() => setPendingAction(null)}
       />
+      </div>
     </div>
   );
 }

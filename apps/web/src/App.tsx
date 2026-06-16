@@ -158,7 +158,7 @@ export default function App() {
               <Route path="/catalog" element={<PaddedX><CatalogPanel /></PaddedX>} />
               <Route path="/accounts" element={<Padded><AccountsPanel /></Padded>} />
               <Route path="/events" element={<EventsPanel />} />
-              <Route path="/assistant" element={<Padded><AssistantPanel /></Padded>} />
+              <Route path="/assistant" element={<AssistantPanel />} />
               <Route path="/settings" element={<Padded><SettingsPanel /></Padded>} />
             </Routes>
           </main>
