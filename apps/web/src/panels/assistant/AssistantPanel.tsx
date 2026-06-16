@@ -12,12 +12,11 @@ import { AssistantBody } from "./AssistantBody";
 // ---------------------------------------------------------------------------
 
 function AssistantHeader() {
-  const { d, ns, working, run } = useAssistantCtx();
-  const { ready, isInstalled } = d;
+  const { phase, d, ns, working, run } = useAssistantCtx();
 
   return (
-    <PanelHeader title="Assistant" loading={working || !ready.deployments}>
-      {ready.deployments && isInstalled && (
+    <PanelHeader title="Assistant" loading={working || phase === "loading"}>
+      {phase === "ready" && (
         <>
           <StatusPill enabled={d.enabled} />
           <Button

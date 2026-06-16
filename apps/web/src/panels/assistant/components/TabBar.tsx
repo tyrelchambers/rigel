@@ -5,13 +5,13 @@ import { useAssistantCtx } from "../AssistantContext";
 import { Bar, TabPill } from "./primitives";
 
 export function TabBar() {
-  const { d, tab, setTab } = useAssistantCtx();
-  const { ready, isInstalled } = d;
+  const { phase, d, tab, setTab } = useAssistantCtx();
+  const { ready } = d;
   const audit = d.clusterState?.audit ?? [];
   const queue = d.clusterState?.queue ?? [];
 
-  // Deployments not yet arrived — 5 skeleton pills.
-  if (!ready.deployments) {
+  // Loading — 5 skeleton pills.
+  if (phase === "loading") {
     return (
       <div className="flex flex-wrap items-center gap-1.5">
         {[1, 2, 3, 4, 5].map((i) => (
@@ -22,7 +22,7 @@ export function TabBar() {
   }
 
   // Not installed — single non-clickable "Set up" pill.
-  if (!isInstalled) {
+  if (phase === "install") {
     return (
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="flex items-center gap-1.5 rounded-full bg-muted px-3.5 py-1.5 text-sm font-medium text-muted-foreground">

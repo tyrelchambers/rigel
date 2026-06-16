@@ -6,8 +6,8 @@ import { Card, Stat, Bar } from "./primitives";
 import { spendLabel, tokenLabel, tokenColorClass, auditCount } from "../display";
 
 export function StatusStrip() {
-  const { d } = useAssistantCtx();
-  const { ready, isInstalled } = d;
+  const { phase, d } = useAssistantCtx();
+  const { ready } = d;
   const audit = d.clusterState?.audit ?? [];
   const queue = d.clusterState?.queue ?? [];
   const status = d.clusterState?.status;
@@ -15,8 +15,8 @@ export function StatusStrip() {
   // Skeleton value for any tile whose source hasn't arrived yet.
   const skelVal = <Bar className="h-4 w-12" />;
 
-  // When deployments haven't arrived: every tile value is a skeleton.
-  if (!ready.deployments) {
+  // Loading: every tile value is a skeleton.
+  if (phase === "loading") {
     return (
       <Card>
         <div className="flex flex-wrap gap-x-6 gap-y-2">
@@ -33,8 +33,8 @@ export function StatusStrip() {
     );
   }
 
-  // Deployments known but agent not installed.
-  if (!isInstalled) {
+  // Settled with no agent present — not installed.
+  if (phase === "install") {
     return (
       <Card>
         <div className="flex flex-wrap gap-x-6 gap-y-2">

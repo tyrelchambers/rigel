@@ -6,6 +6,7 @@ import {
   createContext,
   use,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -31,8 +32,19 @@ import { outcomeGlyph, outcomeColorClass, relativeTime } from "./display";
 
 export type TabKey = "overview" | "needs" | "rules" | "activity" | "settings";
 
+/**
+ * Coarse render phase, debounced so the Installer never flashes during load.
+ * - "loading": deployments not in yet, OR in but the agent hasn't appeared and
+ *   we haven't waited long enough to be sure it isn't there.
+ * - "install": deployments settled with no agent present → genuinely not installed.
+ * - "ready": the agent deployment exists → show the installed tabs.
+ */
+export type AssistantPhase = "loading" | "install" | "ready";
+
 export interface AssistantContextValue {
   d: AssistantDerived;
+  /** Debounced render phase (drives skeleton vs install vs installed). */
+  phase: AssistantPhase;
   ns: string;
   working: boolean;
   /** Currently selected tab (only meaningful when installed). */
@@ -301,6 +313,28 @@ export function AssistantProvider({ children }: { children: React.ReactNode }) {
 
   const ns = d.installedNamespace ?? installNamespace ?? "default";
 
+  // Debounce the "not installed" verdict. Deployments arrive as a stream of
+  // ADDED deltas (the server's first snapshot is empty), so the helmsman-assistant
+  // deployment can show up a moment after the first few deployments. Without this,
+  // `!isInstalled` reads true for that gap and the Installer flashes. So we only
+  // conclude "not installed" after deployments have been present (with no agent)
+  // for a beat; the instant the agent appears we jump straight to "ready".
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    if (d.isInstalled || !d.ready.deployments) {
+      setSettled(false);
+      return;
+    }
+    const t = setTimeout(() => setSettled(true), 1000);
+    return () => clearTimeout(t);
+  }, [d.isInstalled, d.ready.deployments]);
+
+  const phase: AssistantPhase = d.isInstalled
+    ? "ready"
+    : d.ready.deployments && settled
+      ? "install"
+      : "loading";
+
   const run = useCallback(
     (req: AssistantRequest, onDone?: () => void) => {
       setActionError(null);
@@ -345,6 +379,7 @@ export function AssistantProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AssistantContextValue>(
     () => ({
       d,
+      phase,
       ns,
       working,
       tab,
@@ -362,7 +397,7 @@ export function AssistantProvider({ children }: { children: React.ReactNode }) {
       setInstallNamespace,
     }),
     [
-      d, ns, working, tab, actionError, expanded,
+      d, phase, ns, working, tab, actionError, expanded,
       toggleExpanded, run, openRevert, runSuggestion,
       openUninstall, openAllActivity, openConfirmCreateNs,
       installNamespace,

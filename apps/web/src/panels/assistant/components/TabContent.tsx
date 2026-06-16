@@ -11,15 +11,15 @@ import { ActivityTab } from "../tabs/ActivityTab";
 import { SettingsTab } from "../tabs/SettingsTab";
 
 export function TabContent() {
-  const { d, tab } = useAssistantCtx();
-  const { ready, isInstalled } = d;
+  const { phase, d, tab } = useAssistantCtx();
+  const { ready } = d;
 
-  // ABSOLUTE REQUIREMENT: Installer NEVER renders while !ready.deployments.
-  if (!ready.deployments) {
+  // Phase-gated so the Installer never appears during load (debounced verdict).
+  if (phase === "loading") {
     return <ContentSkeleton />;
   }
 
-  if (!isInstalled) {
+  if (phase === "install") {
     return <InstallView />;
   }
 

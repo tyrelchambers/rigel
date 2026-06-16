@@ -172,11 +172,17 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
     );
 
     return {
+      // Readiness gates on ACTUAL DATA, not "a snapshot arrived". The server's
+      // watchManager sends an empty snapshot first (cold cache) then streams
+      // every object as an ADDED delta, so `!!resources[kind]` flips true while
+      // the list is still empty — which is exactly what made the Installer flash
+      // before real deployments (incl. helmsman-assistant) had arrived. Gate on
+      // non-empty data instead (and on the decoded assistant-state for stats).
       ready: {
-        deployments: !!resources["deployments"],
-        state:       !!resources["configmaps"],
-        pods:        !!resources["pods"],
-        secrets:     !!resources["secrets"],
+        deployments: deployments.length > 0,
+        state:       clusterState != null,
+        pods:        pods.length > 0,
+        secrets:     secrets.length > 0,
       },
       isInstalled,
       installedNamespace,
