@@ -55,9 +55,20 @@ interface NamespaceLike {
 
 const POD_LABEL = "app.kubernetes.io/name";
 
+export interface AssistantReady {
+  /** deployments snapshot has arrived → can determine installed-or-not + which tabs to show. */
+  deployments: boolean;
+  /** configmaps snapshot has arrived → stats, alerts, audit, queue, autonomy, silenced. */
+  state: boolean;
+  /** pods snapshot has arrived → live-issues count. */
+  pods: boolean;
+  /** secrets snapshot has arrived → token expiry. */
+  secrets: boolean;
+}
+
 export interface AssistantDerived {
-  /** True once deployments, configmaps, and pods snapshots have all arrived. */
-  hydrated: boolean;
+  /** Granular per-resource readiness (replaces the old single `hydrated` flag). */
+  ready: AssistantReady;
   isInstalled: boolean;
   installedNamespace: string | null;
   /** Namespace to read the agent's own resources from (install ns fallback). */
@@ -161,11 +172,12 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
     );
 
     return {
-      // Ready as soon as the panel's STRUCTURAL data is in: deployments
-      // (installed-or-not) + the assistant ConfigMaps (the stats). Deliberately
-      // NOT gated on the pods watch — that can be hundreds of items cluster-wide
-      // and only feeds the live-issues count, which fills in a beat later.
-      hydrated: !!resources["deployments"] && !!resources["configmaps"],
+      ready: {
+        deployments: !!resources["deployments"],
+        state:       !!resources["configmaps"],
+        pods:        !!resources["pods"],
+        secrets:     !!resources["secrets"],
+      },
       isInstalled,
       installedNamespace,
       stateNamespace,
