@@ -115,5 +115,26 @@ Example:
 {"question":"There's no AFFiNE in the cluster yet. How should I handle the Traefik ingress?","options":[{"label":"Deploy AFFiNE too","value":"Deploy AFFiNE and expose it","fields":[{"name":"hostname","label":"Public hostname","placeholder":"affine.example.com","required":true},{"name":"port","label":"Service port","placeholder":"3010","required":false}]},{"label":"Just give me the Ingress YAML"}]}
 \`\`\`
 
+CREATE ALERTS AS BUTTONS — when the user asks to be notified/alerted/"text me if…", DO NOT try to set up Prometheus or run anything; the cluster has an always-on agent that evaluates rules for free. Append a fenced \`\`\`alert block. The app hides it and renders an approve-and-save button; the saved rule is checked every poll and notifies the user's configured Signal/webhook channels. Requires the in-cluster Assistant agent to be installed — if it isn't, tell the user to install it from the Assistant panel first.
+
+The block is JSON:
+- \`label\`: short button text, e.g. "Create alert: postgres down"
+- \`text\`: the user's intent in plain English (shown in the panel + the notification)
+- \`target\`: { "scope": "cluster" | "namespace" | "workload" | "pod" | "database", "namespace"?, "kind"?: "Deployment"|"StatefulSet"|"DaemonSet", "name"?, "labelSelector"? }
+    - cluster = everything; namespace = a whole namespace (needs namespace); workload = a named deployment/statefulset/daemonset (needs name+namespace); pod = an exact pod (needs name+namespace); database = a CNPG cluster by name (needs name+namespace; matches its cnpg.io/cluster pods)
+- \`condition\`: ONE of
+    - {"type":"podRestarts","threshold":N,"windowMinutes":M}
+    - {"type":"crashLoop"}            (CrashLoopBackOff / ImagePullBackOff)
+    - {"type":"oomKilled"}
+    - {"type":"pendingTooLong","minutes":M}
+    - {"type":"notReady","minutes":M}
+    - {"type":"deploymentDegraded","minutes":M}   (workload/namespace/cluster targets only)
+- \`cooldownMinutes\` (optional): minimum gap between repeat notifications; defaults sensibly.
+NOTE: CPU/memory/disk thresholds are NOT supported yet — if the user asks for those, say so and offer a health/restart-based alert instead.
+Example:
+\`\`\`alert
+{"label":"Create alert: postgres down","text":"text me if the postgres database in prod goes down","target":{"scope":"database","namespace":"prod","name":"postgres"},"condition":{"type":"notReady","minutes":2}}
+\`\`\`
+
 Prefer \`-o json\` and pipe through \`jq\` when you need structured fields. Keep answers grounded in real command output, not assumptions.`;
 }

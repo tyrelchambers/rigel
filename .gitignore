@@ -31,3 +31,6 @@ dist/
 
 # Local secrets for docker compose (Claude OAuth token, etc.)
 .env
+
+# local visual-check scratch (playwright screenshots)
+apps/web/.shots/

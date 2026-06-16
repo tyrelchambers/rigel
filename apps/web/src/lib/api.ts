@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ActiveForward } from "@/panels/services/portForward";
+import type { SuggestedAlert } from "@helmsman/k8s";
 
 /**
  * ActionBlock mirrors the server-side ActionBlock interface and
@@ -255,7 +256,10 @@ export type AssistantAction =
   | "silence"
   | "unsilence"
   | "clearReport"
-  | "setSignal";
+  | "setSignal"
+  | "saveAlert"
+  | "deleteAlert"
+  | "toggleAlert";
 
 export interface AssistantRequest {
   action: AssistantAction;
@@ -280,6 +284,11 @@ export interface AssistantRequest {
   number?: string;
   recipients?: string;
   inbound?: boolean;
+  // saveAlert payload (model block, validated server-side)
+  alert?: SuggestedAlert;
+  // toggleAlert / deleteAlert fields
+  alertId?: string;
+  alertEnabled?: boolean;
 }
 
 /**

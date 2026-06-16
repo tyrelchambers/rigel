@@ -3,6 +3,8 @@
 // (apps/web) and the server bridge both consume these, so the parsing lives
 // once here. See docs/parity/contracts.md § 1 for the JSON schema.
 
+import type { SuggestedAlert } from "./alerts";
+
 /**
  * SuggestedAction — the fenced ```action JSON Claude emits for any cluster
  * mutation. The app hides the raw block and renders a one-click button that
@@ -172,6 +174,7 @@ export function stripActionBlocks(markdown: string): string {
   );
   out = out
     .replace(/```question\s*\n[\s\S]*?\n```/g, "")
+    .replace(/```alert\s*\n[\s\S]*?\n```/g, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
   return out;
@@ -227,6 +230,26 @@ export function extractQuestionBlocks(markdown: string): SuggestedQuestion[] {
   return out;
 }
 
+/** Extract fenced ```alert blocks. Malformed/incomplete ones are skipped. */
+export function extractAlertBlocks(markdown: string): SuggestedAlert[] {
+  const out: SuggestedAlert[] = [];
+  for (const m of markdown.matchAll(/```alert\s*\n([\s\S]*?)\n```/g)) {
+    try {
+      const json = JSON.parse(m[1]!.trim());
+      if (
+        json && typeof json.label === "string" && typeof json.text === "string" &&
+        json.target && typeof json.target === "object" &&
+        json.condition && typeof json.condition === "object"
+      ) {
+        out.push(json as SuggestedAlert);
+      }
+    } catch {
+      /* skip malformed JSON */
+    }
+  }
+  return out;
+}
+
 /**
  * buildQuestionAnswer — the SINGLE source of truth for the message string sent
  * back to the AI when the user answers a ```question block (web; the Swift twin
@@ -256,17 +279,19 @@ export function buildQuestionAnswer(
 
 /**
  * SuggestedAction.parse — split an assistant message into displayable markdown,
- * the extracted action blocks, and the question blocks. Mirrors the Swift
- * parse() that returns (display, actions[], questions[]).
+ * the extracted action blocks, question blocks, and alert blocks. Mirrors the
+ * Swift parse() that returns (display, actions[], questions[]).
  */
 export function parseSuggestedActions(text: string): {
   display: string;
   actions: SuggestedAction[];
   questions: SuggestedQuestion[];
+  alerts: SuggestedAlert[];
 } {
   return {
     display: stripActionBlocks(text),
     actions: extractActionBlocks(text),
     questions: extractQuestionBlocks(text),
+    alerts: extractAlertBlocks(text),
   };
 }

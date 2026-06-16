@@ -1,4 +1,5 @@
 import { classifyRisk, RiskTier } from "./classifier.js";
+import { evaluateAlertRules, emptyAlertState } from "./alerts.js";
 import { loadConfig, type Config } from "./config.js";
 import { readRuntimeConfig, decideAutonomy, type RuntimeConfig } from "./runtimeConfig.js";
 import { notifyWebhook, notifySignal, receiveSignal } from "./notify.js";
@@ -52,24 +53,33 @@ function safeParse(s: string): unknown {
   }
 }
 
-async function detectAll(cfg: Config): Promise<Incident[]> {
-  const [pods, deps] = await Promise.all([
+function itemsOf(raw: unknown): Record<string, unknown>[] {
+  const list = raw as { items?: unknown[] };
+  return Array.isArray(list?.items) ? (list.items as Record<string, unknown>[]) : [];
+}
+
+async function detectAll(cfg: Config): Promise<{ incidents: Incident[]; pods: Record<string, unknown>[]; deps: Record<string, unknown>[] }> {
+  const [podsRes, depsRes] = await Promise.all([
     kubectl(["get", "pods", ...nsArgs(cfg), "-o", "json"]),
     kubectl(["get", "deployments", ...nsArgs(cfg), "-o", "json"]),
   ]);
+  const parsedPods = podsRes.code === 0 ? safeParse(podsRes.stdout) : { items: [] };
+  const parsedDeps = depsRes.code === 0 ? safeParse(depsRes.stdout) : { items: [] };
+  const pods = itemsOf(parsedPods);
+  const deps = itemsOf(parsedDeps);
   let incidents: Incident[] = [];
-  if (pods.code === 0) incidents.push(...detectUnhealthyPods(safeParse(pods.stdout)));
-  if (deps.code === 0) incidents.push(...detectDegradedDeployments(safeParse(deps.stdout)));
+  if (podsRes.code === 0) incidents.push(...detectUnhealthyPods(parsedPods));
+  if (depsRes.code === 0) incidents.push(...detectDegradedDeployments(parsedDeps));
   log(
-    `detect: pods exit=${pods.code} (${pods.stdout.length}b) deps exit=${deps.code} (${deps.stdout.length}b) → ${incidents.length} incident(s) before filter` +
+    `detect: pods exit=${podsRes.code} (${podsRes.stdout.length}b) deps exit=${depsRes.code} (${depsRes.stdout.length}b) → ${incidents.length} incident(s) before filter` +
       (incidents.length ? `: ${incidents.map((i) => `${i.namespace}/${i.name}:${i.reason}`).join(", ")}` : "") +
-      (pods.code !== 0 ? ` | pods stderr: ${pods.stderr.slice(0, 200)}` : ""),
+      (podsRes.code !== 0 ? ` | pods stderr: ${podsRes.stderr.slice(0, 200)}` : ""),
   );
   if (cfg.namespaces.length > 0) {
     const allow = new Set(cfg.namespaces);
     incidents = incidents.filter((i) => i.namespace === "" || allow.has(i.namespace));
   }
-  return incidents;
+  return { incidents, pods, deps };
 }
 
 interface LoopState {
@@ -109,15 +119,32 @@ async function tick(
     await writeState(cfg.stateConfigMap, cfg.stateNamespace, state);
     return;
   }
+
+  // Drop incidents the operator has silenced (known noise) — no detection,
+  // no spend, no action on those fingerprints.
+  const detection = await detectAll(cfg);
+  const incidents = detection.incidents.filter((i) => !rc.silenced.has(fingerprint(i)));
+
+  // Custom alert rules — deterministic, model-less, free-riding the fetch above.
+  // Runs before the spend-cap guard so alerts still fire even when AI budget is
+  // exhausted (alert evaluation costs nothing).
+  const alertResult = evaluateAlertRules(
+    rc.alertRules,
+    detection.pods,
+    detection.deps,
+    state.alertState ?? emptyAlertState(),
+    now,
+  );
+  state = { ...state, alertState: alertResult.alertState };
+  for (const ev of alertResult.events) notifications.push(ev.message);
+
   if (!spend.canSpend()) {
-    log(`spend cap reached ($${cfg.spendCapUsd}) — idle (fail-closed)`);
+    log(`spend cap reached ($${cfg.spendCapUsd}) — remediation idle; alerts still active (fail-closed)`);
+    flushNotifications(rc, notifications);
     await writeState(cfg.stateConfigMap, cfg.stateNamespace, state);
     return;
   }
 
-  // Drop incidents the operator has silenced (known noise) — no detection,
-  // no spend, no action on those fingerprints.
-  const incidents = (await detectAll(cfg)).filter((i) => !rc.silenced.has(fingerprint(i)));
   const present = new Set(incidents.map(fingerprint));
 
   // Recovered incidents fall out of the debounce/handled tracking so a fresh
@@ -311,13 +338,7 @@ async function tick(
   await writeState(cfg.stateConfigMap, cfg.stateNamespace, state);
 
   // Best-effort outbound notification for what happened this tick.
-  if (notifications.length > 0) {
-    const text = `Helmsman assistant:\n${notifications.join("\n")}`;
-    if (rc.webhookUrl) void notifyWebhook(rc.webhookUrl, text);
-    if (rc.signalApiUrl && rc.signalNumber) {
-      void notifySignal(rc.signalApiUrl, rc.signalNumber, rc.signalRecipients, text);
-    }
-  }
+  flushNotifications(rc, notifications);
 
   // Two-way Signal: answer any inbound diagnosis questions / approval commands.
   // Gated on the kill-switch (we already returned above when disabled) and the
@@ -496,6 +517,16 @@ function previewCommand(action: SuggestedAction): string {
 
 function truncate(s: string, max = 2000): string {
   return s.length > max ? s.slice(0, max) + "…" : s;
+}
+
+/** Best-effort flush of this tick's notifications to the configured channels. */
+function flushNotifications(rc: RuntimeConfig, notifications: string[]): void {
+  if (notifications.length === 0) return;
+  const text = `Helmsman assistant:\n${notifications.join("\n")}`;
+  if (rc.webhookUrl) void notifyWebhook(rc.webhookUrl, text);
+  if (rc.signalApiUrl && rc.signalNumber) {
+    void notifySignal(rc.signalApiUrl, rc.signalNumber, rc.signalRecipients, text);
+  }
 }
 
 async function main(): Promise<void> {

@@ -1,12 +1,15 @@
 // kubectl wrappers, output parsing, and resource types are ported here
 // from Sources/Helmsman/Cluster/ via the parity orchestrator.
 
+export * from "./alerts";
+
 export {
   type SuggestedAction,
   type SuggestedQuestion,
   type QuestionField,
   ACTION_KINDS,
   extractActionBlocks,
+  extractAlertBlocks,
   extractQuestionBlocks,
   stripActionBlocks,
   parseSuggestedActions,

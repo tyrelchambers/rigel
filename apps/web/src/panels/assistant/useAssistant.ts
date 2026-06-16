@@ -13,11 +13,13 @@ import {
   silencedSet as deriveSilenced,
   computeLiveIssues,
   parseTokenExpiry,
+  parseAlertRules,
   ISSUED_AT_ANNOTATION,
   SECRET_NAME,
   type AssistantClusterState,
   type AssistantLiveIssue,
   type TokenExpiryStatus,
+  type AlertRule,
 } from "@helmsman/k8s";
 
 // Minimal shapes for the watched resources (we only read what we render).
@@ -53,7 +55,20 @@ interface NamespaceLike {
 
 const POD_LABEL = "app.kubernetes.io/name";
 
+export interface AssistantReady {
+  /** deployments snapshot has arrived → can determine installed-or-not + which tabs to show. */
+  deployments: boolean;
+  /** configmaps snapshot has arrived → stats, alerts, audit, queue, autonomy, silenced. */
+  state: boolean;
+  /** pods snapshot has arrived → live-issues count. */
+  pods: boolean;
+  /** secrets snapshot has arrived → token expiry. */
+  secrets: boolean;
+}
+
 export interface AssistantDerived {
+  /** Granular per-resource readiness (replaces the old single `hydrated` flag). */
+  ready: AssistantReady;
   isInstalled: boolean;
   installedNamespace: string | null;
   /** Namespace to read the agent's own resources from (install ns fallback). */
@@ -72,6 +87,8 @@ export interface AssistantDerived {
   allNamespaceNames: string[];
   /** Stored backup YAML for a revert, keyed by backupRef. */
   backupYAML: (ref: string) => string | undefined;
+  /** Parsed alert rules from the assistant-config ConfigMap. */
+  alertRules: AlertRule[];
 }
 
 /**
@@ -155,6 +172,18 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
     );
 
     return {
+      // Readiness gates on ACTUAL DATA, not "a snapshot arrived". The server's
+      // watchManager sends an empty snapshot first (cold cache) then streams
+      // every object as an ADDED delta, so `!!resources[kind]` flips true while
+      // the list is still empty — which is exactly what made the Installer flash
+      // before real deployments (incl. helmsman-assistant) had arrived. Gate on
+      // non-empty data instead (and on the decoded assistant-state for stats).
+      ready: {
+        deployments: deployments.length > 0,
+        state:       clusterState != null,
+        pods:        pods.length > 0,
+        secrets:     secrets.length > 0,
+      },
       isInstalled,
       installedNamespace,
       stateNamespace,
@@ -171,6 +200,7 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
       tokenExpiry,
       allNamespaceNames: namespaces.map((n) => n.metadata.name).sort(),
       backupYAML: (ref) => configMap("assistant-backups")?.data?.[ref],
+      alertRules: parseAlertRules(configData["alertRules"]),
     };
   }, [deployments, pods, configMaps, secrets, namespaces, installNamespaceHint]);
 }

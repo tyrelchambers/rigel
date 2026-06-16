@@ -1,10 +1,12 @@
-import { test, expect } from "bun:test";
+import { test, it, expect, describe } from "bun:test";
 import {
   extractActionBlocks,
   stripActionBlocks,
   isDestructiveAction,
   extractQuestionBlocks,
   buildQuestionAnswer,
+  extractAlertBlocks,
+  parseSuggestedActions,
 } from "./actionBlocks";
 
 function questionBlock(json: unknown): string {
@@ -202,4 +204,34 @@ test("buildQuestionAnswer: blank/whitespace field omitted; filled kept", () => {
       "hostname: affine.example.com",
     ].join("\n"),
   );
+});
+
+describe("extractAlertBlocks", () => {
+  const md = [
+    "Sure — I'll set that up.",
+    "```alert",
+    JSON.stringify({
+      label: "Alert: postgres down",
+      text: "text me if postgres in prod goes down",
+      target: { scope: "database", namespace: "prod", name: "postgres" },
+      condition: { type: "notReady", minutes: 2 },
+    }),
+    "```",
+  ].join("\n");
+
+  it("extracts a valid alert block", () => {
+    const alerts = extractAlertBlocks(md);
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]!.target.name).toBe("postgres");
+  });
+  it("drops blocks missing label/text/target/condition", () => {
+    expect(extractAlertBlocks("```alert\n{\"label\":\"x\"}\n```")).toEqual([]);
+    expect(extractAlertBlocks("```alert\nnot json\n```")).toEqual([]);
+  });
+  it("stripActionBlocks removes the alert fence from display text", () => {
+    expect(stripActionBlocks(md)).toBe("Sure — I'll set that up.");
+  });
+  it("parseSuggestedActions returns alerts alongside actions/questions", () => {
+    expect(parseSuggestedActions(md).alerts).toHaveLength(1);
+  });
 });

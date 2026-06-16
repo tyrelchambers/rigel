@@ -1,5 +1,6 @@
 import { kubectl } from "./kubectl.js";
 import type { Config } from "./config.js";
+import { parseAlertRules, type AlertRule } from "./alerts.js";
 
 /**
  * Live, human/Helmsman-editable control surface, read from the `assistant-config`
@@ -28,6 +29,12 @@ export interface RuntimeConfig {
   /** Two-way Signal: when on, the agent polls the bridge for inbound messages
    * and answers diagnosis questions / approval commands. Off by default. */
   signalInbound: boolean;
+  alertRules: AlertRule[];
+}
+
+/** Parse the `alertRules` JSON blob out of the assistant-config data map. */
+export function parseAlertRulesFromConfig(data: Record<string, string>): AlertRule[] {
+  return parseAlertRules(data["alertRules"]);
 }
 
 /** Parse "HH:MM-HH:MM" into minutes-of-day. Null on malformed input. */
@@ -60,12 +67,12 @@ export function decideAutonomy(
  * missing/unreadable — same as the kill-switch default. */
 export async function readRuntimeConfig(cfg: Config): Promise<RuntimeConfig> {
   const res = await kubectl(["get", "configmap", cfg.configConfigMap, "-n", cfg.stateNamespace, "-o", "json"]);
-  if (res.code !== 0) return { enabled: false, mode: "auto", silenced: new Set(), window: undefined, signalRecipients: [], signalInbound: false };
+  if (res.code !== 0) return { enabled: false, mode: "auto", silenced: new Set(), window: undefined, signalRecipients: [], signalInbound: false, alertRules: [] };
   let data: Record<string, string> = {};
   try {
     data = (JSON.parse(res.stdout) as { data?: Record<string, string> }).data ?? {};
   } catch {
-    return { enabled: false, mode: "auto", silenced: new Set(), window: undefined, signalRecipients: [], signalInbound: false };
+    return { enabled: false, mode: "auto", silenced: new Set(), window: undefined, signalRecipients: [], signalInbound: false, alertRules: [] };
   }
   const mode = (data.mode as AutonomyMode) || "auto";
   const silenced = new Set(
@@ -88,5 +95,6 @@ export async function readRuntimeConfig(cfg: Config): Promise<RuntimeConfig> {
     signalNumber: data.signalNumber && data.signalNumber.trim() ? data.signalNumber.trim() : undefined,
     signalRecipients,
     signalInbound: data.signalInbound === "true",
+    alertRules: parseAlertRulesFromConfig(data),
   };
 }
