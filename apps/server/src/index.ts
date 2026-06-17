@@ -300,6 +300,19 @@ const server = Bun.serve({
       return Response.json(result);
     }
 
+    // GET /api/resource?kind=&name=&namespace= — read-only `kubectl get <kind>
+    // <name> [-n ns] -o yaml`, for the "View YAML" viewer. Returns { code, yaml,
+    // stderr }. Omit namespace for cluster-scoped kinds.
+    if (url.pathname === "/api/resource" && req.method === "GET") {
+      const kind = url.searchParams.get("kind");
+      const name = url.searchParams.get("name");
+      const namespace = url.searchParams.get("namespace");
+      if (!kind || !name) return Response.json({ error: "missing kind or name" }, { status: 422 });
+      const args = ["get", kind, name, "-o", "yaml", ...(namespace ? ["-n", namespace] : [])];
+      const res = await kubectl(context, args);
+      return Response.json({ code: res.code, yaml: res.stdout, stderr: res.stderr });
+    }
+
     // POST /api/install/metrics-server — one-click upstream metrics-server for
     // the onboarding wizard (enables `kubectl top` → live metrics + right-sizing).
     // Applies the official components.yaml, then best-effort adds

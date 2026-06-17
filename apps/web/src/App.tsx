@@ -26,6 +26,7 @@ import AccountsPanel from "./panels/accounts/AccountsPanel";
 import ApplyYamlPanel from "./panels/apply/ApplyYamlPanel";
 import GitOpsPanel from "./panels/gitops/GitOpsPanel";
 import { TerminalDrawer, TOGGLE_TERMINAL_EVENT } from "@/shell/TerminalDrawer";
+import { ResourceYamlViewer } from "@/components/ResourceYamlViewer";
 import { connectCluster } from "@/lib/ws";
 import { useAuthStatus, useChatConfig } from "@/lib/api";
 import { LoginScreen } from "@/shell/LoginScreen";
@@ -246,6 +247,9 @@ export default function App() {
 
       {/* ── StatusBar — full width at the bottom ────────────────────────────── */}
       <StatusBar chatHidden={chatHidden} onToggleChat={toggleChat} />
+
+      {/* Global read-only YAML viewer (opened from any context menu). */}
+      <ResourceYamlViewer />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { Lock } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
+import { viewYaml } from "@/store/yamlViewer";
 import { ListRow } from "@/panels/components/ListRow";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { TagPill } from "@/panels/components/TagPill";
@@ -104,6 +105,7 @@ export default function IngressesPanel() {
               <ContextMenuItem onClick={() => askClaude(ing, "Logs")}>Ask Claude: Logs</ContextMenuItem>
               <ContextMenuItem onClick={() => askClaude(ing, "Explain")}>Ask Claude: Explain</ContextMenuItem>
               <ContextMenuSeparator />
+              <ContextMenuItem onClick={() => viewYaml("ingress", ing.metadata.name, ing.metadata.namespace)}>View YAML…</ContextMenuItem>
               <ContextMenuItem onClick={() => toggleExpand(uid)}>{isOpen ? "Collapse" : "Manage…"}</ContextMenuItem>
             </>
           );

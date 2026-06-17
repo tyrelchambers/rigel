@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { ListRow } from "@/panels/components/ListRow";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
+import { viewYaml } from "@/store/yamlViewer";
 import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { PanelHeader } from "@/panels/components/PanelHeader";
@@ -371,6 +372,9 @@ export default function RightSizingPanel() {
                   <ContextMenuSeparator />
                 </>
               )}
+              <ContextMenuItem onClick={() => viewYaml(w.kind, w.name, w.namespace)}>
+                View YAML…
+              </ContextMenuItem>
               <ContextMenuItem onClick={() => toggle(w)}>
                 {isOpen ? "Collapse" : "Details…"}
               </ContextMenuItem>

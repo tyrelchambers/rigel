@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
+import { viewYaml } from "@/store/yamlViewer";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { ListRow } from "@/panels/components/ListRow";
 import { TagPill } from "@/panels/components/TagPill";
@@ -196,6 +197,7 @@ export default function StoragePanel() {
                 <ContextMenuItem onClick={() => askClaude("persistentvolumeclaim", pvc.metadata.name, pvc.metadata.namespace, "Logs")}>Ask Claude: Logs</ContextMenuItem>
                 <ContextMenuItem onClick={() => askClaude("persistentvolumeclaim", pvc.metadata.name, pvc.metadata.namespace, "Explain")}>Ask Claude: Explain</ContextMenuItem>
                 <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => viewYaml("persistentvolumeclaim", pvc.metadata.name, pvc.metadata.namespace)}>View YAML…</ContextMenuItem>
                 <ContextMenuItem onClick={() => toggleExpand(k)}>{isOpen ? "Collapse" : "Manage…"}</ContextMenuItem>
               </>
             );
@@ -293,6 +295,7 @@ export default function StoragePanel() {
                 <ContextMenuItem onClick={() => askClaude("persistentvolume", pv.metadata.name, undefined, "Logs")}>Ask Claude: Logs</ContextMenuItem>
                 <ContextMenuItem onClick={() => askClaude("persistentvolume", pv.metadata.name, undefined, "Explain")}>Ask Claude: Explain</ContextMenuItem>
                 <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => viewYaml("persistentvolume", pv.metadata.name)}>View YAML…</ContextMenuItem>
                 <ContextMenuItem onClick={() => toggleExpand(k)}>{isOpen ? "Collapse" : "Manage…"}</ContextMenuItem>
               </>
             );
@@ -392,6 +395,7 @@ export default function StoragePanel() {
                 <ContextMenuItem onClick={() => askClaude("storageclass", sc.metadata.name, undefined, "Logs")}>Ask Claude: Logs</ContextMenuItem>
                 <ContextMenuItem onClick={() => askClaude("storageclass", sc.metadata.name, undefined, "Explain")}>Ask Claude: Explain</ContextMenuItem>
                 <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => viewYaml("storageclass", sc.metadata.name)}>View YAML…</ContextMenuItem>
                 <ContextMenuItem onClick={() => toggleExpand(k)}>{isOpen ? "Collapse" : "Manage…"}</ContextMenuItem>
               </>
             );

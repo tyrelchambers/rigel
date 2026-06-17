@@ -3,6 +3,7 @@ import { CircleDashed, FileArchive, Plus, Pencil } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
+import { viewYaml } from "@/store/yamlViewer";
 import { Button } from "@/components/ui/button";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { ListRow } from "@/panels/components/ListRow";
@@ -134,6 +135,7 @@ export default function ConfigMapsPanel() {
               <ContextMenuSeparator />
               <ContextMenuItem onClick={() => openEdit(cm)}>Edit…</ContextMenuItem>
               <ContextMenuSeparator />
+              <ContextMenuItem onClick={() => viewYaml("configmap", cm.metadata.name, cm.metadata.namespace)}>View YAML…</ContextMenuItem>
               <ContextMenuItem onClick={() => toggleExpand(uid)}>{isOpen ? "Collapse" : "Manage…"}</ContextMenuItem>
             </>
           );

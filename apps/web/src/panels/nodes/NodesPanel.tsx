@@ -8,6 +8,7 @@ import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, C
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
+import { viewYaml } from "@/store/yamlViewer";
 import { useNodeMetrics, useNodeDisk, type ActionBlock, type NodeDiskItem } from "@/lib/api";
 import type { Node } from "./types";
 import {
@@ -186,6 +187,7 @@ export default function NodesPanel() {
                 )}
                 <ContextMenuItem variant="destructive" onClick={() => drain(n)}>Drain…</ContextMenuItem>
                 <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => viewYaml("node", n.metadata.name)}>View YAML…</ContextMenuItem>
                 <ContextMenuItem onClick={() => toggleExpand(n)}>{expanded.has(k) ? "Collapse" : "Details…"}</ContextMenuItem>
               </ContextMenuContent>
             </ContextMenu>

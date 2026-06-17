@@ -10,6 +10,7 @@ import {
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
+import { viewYaml } from "@/store/yamlViewer";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -371,6 +372,8 @@ export default function WorkloadsPanel() {
                 <ContextMenuItem onClick={() => restartStatefulSet(s)}>Restart…</ContextMenuItem>
                 <ContextMenuItem onClick={() => openScale(s)}>Scale…</ContextMenuItem>
                 <ContextMenuItem variant="destructive" onClick={() => deleteStatefulSet(s)}>Delete…</ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => viewYaml("statefulset", s.metadata.name, s.metadata.namespace)}>View YAML…</ContextMenuItem>
               </>
             );
 
@@ -476,6 +479,8 @@ export default function WorkloadsPanel() {
                 <ContextMenuSeparator />
                 <ContextMenuItem onClick={() => restartDaemonSet(d)}>Restart…</ContextMenuItem>
                 <ContextMenuItem variant="destructive" onClick={() => deleteDaemonSet(d)}>Delete…</ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => viewYaml("daemonset", d.metadata.name, d.metadata.namespace)}>View YAML…</ContextMenuItem>
               </>
             );
 
@@ -573,6 +578,8 @@ export default function WorkloadsPanel() {
                 <ContextMenuItem onClick={() => askClaude("job", j.metadata.name, j.metadata.namespace, "Explain")}>Ask Claude: Explain</ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem variant="destructive" onClick={() => deleteJob(j)}>Delete…</ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => viewYaml("job", j.metadata.name, j.metadata.namespace)}>View YAML…</ContextMenuItem>
               </>
             );
 
@@ -678,6 +685,8 @@ export default function WorkloadsPanel() {
                   <ContextMenuItem onClick={() => suspendCronJob(c)}>Suspend…</ContextMenuItem>
                 )}
                 <ContextMenuItem variant="destructive" onClick={() => deleteCronJob(c)}>Delete…</ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => viewYaml("cronjob", c.metadata.name, c.metadata.namespace)}>View YAML…</ContextMenuItem>
               </>
             );
 

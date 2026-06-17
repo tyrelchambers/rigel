@@ -3,6 +3,7 @@ import { Database } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
+import { viewYaml } from "@/store/yamlViewer";
 import { ListRow } from "@/panels/components/ListRow";
 import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
@@ -251,6 +252,11 @@ export default function DatabasesPanel() {
           });
 
           const enabledActions = caps.actions.filter((item) => item.enabled);
+          // Map the detection source to the underlying k8s resource kind for the
+          // YAML viewer: CNPG clusters are the CRD; image-detected instances are
+          // their workload kind (deployment / statefulset).
+          const viewKind =
+            inst.source === "cnpg" ? "cluster.postgresql.cnpg.io" : inst.source;
           const rowMenu = (
             <>
               <ContextMenuItem onClick={() => askClaude(inst, "Errors")}>Ask Claude: Errors</ContextMenuItem>
@@ -266,6 +272,7 @@ export default function DatabasesPanel() {
                 </ContextMenuItem>
               ))}
               <ContextMenuSeparator />
+              <ContextMenuItem onClick={() => viewYaml(viewKind, inst.name, inst.namespace)}>View YAML…</ContextMenuItem>
               <ContextMenuItem onClick={() => toggle(inst.id)}>{isOpen ? "Collapse" : "Manage…"}</ContextMenuItem>
             </>
           );

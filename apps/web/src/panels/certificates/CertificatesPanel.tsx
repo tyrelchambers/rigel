@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
-import { ContextMenuItem } from "@/components/ui/context-menu";
+import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { ListRow } from "@/panels/components/ListRow";
 import { PanelHeader } from "@/panels/components/PanelHeader";
+import { viewYaml } from "@/store/yamlViewer";
 import type { ActionBlock } from "@/lib/api";
 import { fetchCertManagerPlugin } from "@/lib/api";
 import type {
@@ -119,6 +120,8 @@ export default function CertificatesPanel() {
             const isOpen = expanded.has(v.uid);
             const rowMenu = (
               <>
+                <ContextMenuItem onClick={() => viewYaml("certificate", v.name, v.namespace)}>View YAML…</ContextMenuItem>
+                <ContextMenuSeparator />
                 <ContextMenuItem onClick={() => toggleExpand(v.uid)}>{isOpen ? "Collapse" : "Details…"}</ContextMenuItem>
               </>
             );

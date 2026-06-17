@@ -3,7 +3,8 @@ import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { cn } from "@/lib/utils";
 import { ListRow } from "@/panels/components/ListRow";
-import { ContextMenuItem } from "@/components/ui/context-menu";
+import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
+import { viewYaml } from "@/store/yamlViewer";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import type { EventBucket, EventTypeFilter, K8sEvent } from "./types";
@@ -187,9 +188,19 @@ export default function EventsPanel() {
           const objLabel = involvedObjectLabel(event);
 
           const rowMenu = (
-            <ContextMenuItem onClick={() => toggleExpand(k)}>
-              {isOpen ? "Collapse" : "Details…"}
-            </ContextMenuItem>
+            <>
+              <ContextMenuSeparator />
+              <ContextMenuItem
+                onClick={() =>
+                  viewYaml("event", event.metadata.name, event.metadata.namespace)
+                }
+              >
+                View YAML…
+              </ContextMenuItem>
+              <ContextMenuItem onClick={() => toggleExpand(k)}>
+                {isOpen ? "Collapse" : "Details…"}
+              </ContextMenuItem>
+            </>
           );
 
           return (

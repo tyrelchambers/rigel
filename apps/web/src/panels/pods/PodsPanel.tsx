@@ -3,6 +3,7 @@ import { Trash2 } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
+import { viewYaml } from "@/store/yamlViewer";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { Sparkline } from "@/components/Sparkline";
 import { useMetricsHistory } from "@/lib/useMetricsHistory";
@@ -127,6 +128,7 @@ export default function PodsPanel() {
               <ContextMenuSeparator />
               <ContextMenuItem variant="destructive" onClick={() => handleDelete(pod)}>Delete…</ContextMenuItem>
               <ContextMenuSeparator />
+              <ContextMenuItem onClick={() => viewYaml("pod", pod.metadata.name, pod.metadata.namespace)}>View YAML…</ContextMenuItem>
               <ContextMenuItem onClick={() => toggleExpand(pod)}>{isOpen ? "Collapse" : "Manage…"}</ContextMenuItem>
             </>
           );

@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
+import { viewYaml } from "@/store/yamlViewer";
 import { ListRow } from "@/panels/components/ListRow";
 import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
@@ -236,6 +237,7 @@ export default function DeploymentsPanel() {
                 </>
               )}
               <ContextMenuSeparator />
+              <ContextMenuItem onClick={() => viewYaml("deployment", d.metadata.name, d.metadata.namespace)}>View YAML…</ContextMenuItem>
               <ContextMenuItem onClick={() => toggleExpand(d)}>{isOpen ? "Collapse" : "Manage…"}</ContextMenuItem>
             </>
           );

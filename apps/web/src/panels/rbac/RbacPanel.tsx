@@ -8,6 +8,7 @@ import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
+import { viewYaml } from "@/store/yamlViewer";
 import type {
   ServiceAccount,
   Role,
@@ -314,6 +315,8 @@ export default function RbacPanel() {
                 <ContextMenuItem onClick={() => askClaude("serviceaccount", sa.metadata.name, sa.metadata.namespace, "Errors")}>Ask Claude: Errors</ContextMenuItem>
                 <ContextMenuItem onClick={() => askClaude("serviceaccount", sa.metadata.name, sa.metadata.namespace, "Logs")}>Ask Claude: Logs</ContextMenuItem>
                 <ContextMenuItem onClick={() => askClaude("serviceaccount", sa.metadata.name, sa.metadata.namespace, "Explain")}>Ask Claude: Explain</ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => viewYaml("serviceaccount", sa.metadata.name, sa.metadata.namespace)}>View YAML…</ContextMenuItem>
               </>
             );
             return (
@@ -361,6 +364,7 @@ export default function RbacPanel() {
                 <ContextMenuItem onClick={() => askClaude("role", r.metadata.name, r.metadata.namespace, "Logs")}>Ask Claude: Logs</ContextMenuItem>
                 <ContextMenuItem onClick={() => askClaude("role", r.metadata.name, r.metadata.namespace, "Explain")}>Ask Claude: Explain</ContextMenuItem>
                 <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => viewYaml("role", r.metadata.name, r.metadata.namespace)}>View YAML…</ContextMenuItem>
                 <ContextMenuItem onClick={() => toggleExpand(k)}>{isOpen ? "Collapse" : "Details…"}</ContextMenuItem>
               </>
             );
@@ -409,6 +413,7 @@ export default function RbacPanel() {
                 <ContextMenuItem onClick={() => askClaude("rolebinding", rb.metadata.name, rb.metadata.namespace, "Logs")}>Ask Claude: Logs</ContextMenuItem>
                 <ContextMenuItem onClick={() => askClaude("rolebinding", rb.metadata.name, rb.metadata.namespace, "Explain")}>Ask Claude: Explain</ContextMenuItem>
                 <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => viewYaml("rolebinding", rb.metadata.name, rb.metadata.namespace)}>View YAML…</ContextMenuItem>
                 <ContextMenuItem onClick={() => toggleExpand(k)}>{isOpen ? "Collapse" : "Details…"}</ContextMenuItem>
               </>
             );
@@ -463,6 +468,7 @@ export default function RbacPanel() {
                 <ContextMenuItem onClick={() => askClaude("clusterrole", cr.metadata.name, undefined, "Logs")}>Ask Claude: Logs</ContextMenuItem>
                 <ContextMenuItem onClick={() => askClaude("clusterrole", cr.metadata.name, undefined, "Explain")}>Ask Claude: Explain</ContextMenuItem>
                 <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => viewYaml("clusterrole", cr.metadata.name)}>View YAML…</ContextMenuItem>
                 <ContextMenuItem onClick={() => toggleExpand(k)}>{isOpen ? "Collapse" : "Details…"}</ContextMenuItem>
               </>
             );
@@ -509,6 +515,7 @@ export default function RbacPanel() {
                 <ContextMenuItem onClick={() => askClaude("clusterrolebinding", crb.metadata.name, undefined, "Logs")}>Ask Claude: Logs</ContextMenuItem>
                 <ContextMenuItem onClick={() => askClaude("clusterrolebinding", crb.metadata.name, undefined, "Explain")}>Ask Claude: Explain</ContextMenuItem>
                 <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => viewYaml("clusterrolebinding", crb.metadata.name)}>View YAML…</ContextMenuItem>
                 <ContextMenuItem onClick={() => toggleExpand(k)}>{isOpen ? "Collapse" : "Details…"}</ContextMenuItem>
               </>
             );

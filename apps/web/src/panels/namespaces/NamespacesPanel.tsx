@@ -3,6 +3,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
+import { viewYaml } from "@/store/yamlViewer";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -196,6 +197,7 @@ export default function NamespacesPanel() {
               <ContextMenuSeparator />
               <ContextMenuItem variant="destructive" onClick={() => handleDelete(ns)}>Delete…</ContextMenuItem>
               <ContextMenuSeparator />
+              <ContextMenuItem onClick={() => viewYaml("namespace", ns.metadata.name)}>View YAML…</ContextMenuItem>
               <ContextMenuItem onClick={() => toggleExpand(k)}>{isOpen ? "Collapse" : "Manage…"}</ContextMenuItem>
             </>
           );
