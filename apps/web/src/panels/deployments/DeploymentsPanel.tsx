@@ -216,6 +216,7 @@ export default function DeploymentsPanel() {
           const updated = d.status?.updatedReplicas ?? 0;
           const paused = d.spec?.paused === true;
           const progress = rolloutProgress(d);
+          const linkedSrc = linkedSourceName(d);
 
           return (
             <ListRow
@@ -295,6 +296,32 @@ export default function DeploymentsPanel() {
 
               {/* Tag pill — shared accent purple */}
               {image && <TagPill label={imageTag(image)} title={image} />}
+
+              {/* Linked GitOps source — at-a-glance badge (only when linked) */}
+              {linkedSrc && (
+                <span
+                  title={`Linked to GitOps source: ${linkedSrc}`}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 3,
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: 10,
+                    color: "var(--accent-primary)",
+                    background: "var(--surface-sunken)",
+                    padding: "1px 5px",
+                    borderRadius: 4,
+                    border: "1px solid #26272B",
+                    whiteSpace: "nowrap",
+                    maxWidth: 160,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  <GitBranch className="size-2.5 shrink-0" />
+                  {linkedSrc}
+                </span>
+              )}
 
               {/* Spacer */}
               <span className="flex-1" />
