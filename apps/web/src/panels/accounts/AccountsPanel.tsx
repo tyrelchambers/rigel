@@ -28,6 +28,7 @@ import {
   type AddMode,
   type RegistryAccount,
 } from "./accountsLogic";
+import { GitHubConnectionCard } from "@/panels/gitops/GitHubConnectionCard";
 
 // ---------------------------------------------------------------------------
 // AccountsPanel — registry pull credentials (docs/parity/accounts.md).
@@ -115,6 +116,12 @@ export default function AccountsPanel() {
         <Button className="ml-auto" onClick={() => setShowAdd(true)}>
           Add account
         </Button>
+      </div>
+
+      {/* Source control — single GitHub PAT for GitOps (deploy from repos). */}
+      <div className="space-y-1.5">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Source control</p>
+        <GitHubConnectionCard />
       </div>
 
       {/* Watch / connection error banner */}

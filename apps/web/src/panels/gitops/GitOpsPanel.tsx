@@ -1,7 +1,8 @@
-// GitOps — deploy manifests from a GitHub repo. Connect a GitHub account once
-// (one PAT, stored as a cluster Secret), then add a source by PICKING a repo
-// from the account, and "Sync now": the server clones the repo, shows a kubectl
-// diff preview, and applies on confirm. Manual-trigger v1 (no polling/webhooks).
+// GitOps — deploy manifests from a GitHub repo. The GitHub PAT is managed in the
+// Accounts panel; here, "Add source" is a wizard that asks for the token first
+// (only if not connected), then lets you PICK a repo. "Sync now": the server
+// clones the repo, shows a kubectl diff preview, and applies on confirm.
+// Manual-trigger v1 (no polling/webhooks).
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -14,25 +15,23 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { PanelHeader } from "@/panels/components/PanelHeader";
-import { GitBranch, Plus, RefreshCw, Trash2, CheckCircle2, AlertTriangle, FolderGit2, KeyRound } from "lucide-react";
+import { GitBranch, Plus, RefreshCw, Trash2, CheckCircle2, AlertTriangle, FolderGit2 } from "lucide-react";
 import {
   useGitSources,
   useSaveSource,
   useDeleteSource,
   useGitHubAccount,
   useConnectGitHub,
-  useDisconnectGitHub,
   useGitHubRepos,
   syncSource,
   type GitSource,
   type GithubRepo,
   type SyncResult,
 } from "./gitApi";
+import { GITHUB_TOKEN_URL } from "./GitHubConnectionCard";
 
 export default function GitOpsPanel() {
   const { data: sources, isLoading } = useGitSources();
-  const { data: account } = useGitHubAccount();
-  const connected = account?.connected === true;
   const [addOpen, setAddOpen] = useState(false);
   const [syncing, setSyncing] = useState<GitSource | null>(null);
   const del = useDeleteSource();
@@ -40,16 +39,14 @@ export default function GitOpsPanel() {
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       <PanelHeader title="GitOps" subtitle="Deploy manifests from a Git repo" count={sources?.length} loading={isLoading}>
-        <Button size="sm" className="gap-1.5" onClick={() => setAddOpen(true)} disabled={!connected} title={connected ? undefined : "Connect GitHub first"}>
+        <Button size="sm" className="gap-1.5" onClick={() => setAddOpen(true)}>
           <Plus className="size-3.5" /> Add source
         </Button>
       </PanelHeader>
 
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-        <GitHubConnectionCard />
-
-        {connected && sources && sources.length === 0 && (
-          <div style={{ textAlign: "center", color: "var(--fg-tertiary)", padding: "40px 0", fontSize: 13 }}>
+        {sources && sources.length === 0 && (
+          <div style={{ textAlign: "center", color: "var(--fg-tertiary)", padding: "48px 0", fontSize: 13 }}>
             <FolderGit2 className="mx-auto mb-3 size-8 opacity-50" />
             No Git sources yet. Add a repo to deploy its manifests.
           </div>
@@ -67,68 +64,6 @@ export default function GitOpsPanel() {
 
       {addOpen && <AddSourceDialog onClose={() => setAddOpen(false)} />}
       {syncing && <SyncDialog source={syncing} onClose={() => setSyncing(null)} />}
-    </div>
-  );
-}
-
-/** Connect / show / disconnect the single account-level GitHub PAT. */
-function GitHubConnectionCard() {
-  const { data: account } = useGitHubAccount();
-  const connect = useConnectGitHub();
-  const disconnect = useDisconnectGitHub();
-  const [token, setToken] = useState("");
-
-  const cardStyle = { borderRadius: 12, border: "1px solid #26272B", background: "var(--surface-elevated)", padding: 14 } as const;
-
-  if (account?.connected) {
-    return (
-      <div style={cardStyle} className="flex items-center gap-3">
-        <GitBranch className="size-5" style={{ color: "var(--accent-primary)" }} />
-        <div className="flex flex-col">
-          <span className="text-sm font-semibold">Connected to GitHub</span>
-          <span className="text-xs" style={{ color: "var(--fg-tertiary)" }}>as {account.login ?? "—"}</span>
-        </div>
-        <Button size="sm" variant="ghost" className="ml-auto" onClick={() => disconnect.mutate()} disabled={disconnect.isPending}>
-          Disconnect
-        </Button>
-      </div>
-    );
-  }
-
-  async function handleConnect() {
-    try {
-      await connect.mutateAsync(token);
-      setToken("");
-    } catch {
-      /* error shown below */
-    }
-  }
-
-  return (
-    <div style={cardStyle} className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <GitBranch className="size-5" style={{ color: "var(--accent-primary)" }} />
-        <span className="text-sm font-semibold">Connect GitHub</span>
-        <span className="text-xs" style={{ color: "var(--fg-tertiary)" }}>token is stored as a cluster Secret, never shown again</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <KeyRound className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2" style={{ color: "var(--fg-tertiary)" }} />
-          <input
-            type="password"
-            value={token}
-            placeholder="ghp_… (needs repo + pull-request scope)"
-            onChange={(e) => setToken(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && token) handleConnect(); }}
-            spellCheck={false}
-            style={{ width: "100%", padding: "8px 10px 8px 30px", borderRadius: 8, background: "#08080A", border: "1px solid #26272B", color: "var(--fg-primary)", fontSize: 13, fontFamily: "ui-monospace, monospace", outline: "none" }}
-          />
-        </div>
-        <Button size="sm" onClick={handleConnect} disabled={!token || connect.isPending}>
-          {connect.isPending ? "Connecting…" : "Connect"}
-        </Button>
-      </div>
-      {connect.isError && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{connect.error.message}</p>}
     </div>
   );
 }
@@ -196,7 +131,81 @@ function repoToName(fullName: string): string {
   return repo.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
+/**
+ * Add-source wizard. Step 1 (only when GitHub isn't connected): ask for the PAT
+ * with a link to create one — saving it flips `connected`, which advances to
+ * step 2. Step 2: pick a repo (skeletons while the repo list loads).
+ */
 function AddSourceDialog({ onClose }: { onClose: () => void }) {
+  const { data: account, isLoading: acctLoading } = useGitHubAccount();
+  const connected = account?.connected === true;
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="sm:max-w-lg">
+        {acctLoading ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>Add Git source</DialogTitle>
+              <DialogDescription>Checking your GitHub connection…</DialogDescription>
+            </DialogHeader>
+            <div className="py-2"><FormSkeleton /></div>
+          </>
+        ) : connected ? (
+          <PickRepoStep onClose={onClose} />
+        ) : (
+          <ConnectStep onClose={onClose} />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Step 1 — ask for the PAT (with a create-token link). On success the parent
+ *  re-renders into PickRepoStep because `connected` flips. */
+function ConnectStep({ onClose }: { onClose: () => void }) {
+  const connect = useConnectGitHub();
+  const [token, setToken] = useState("");
+
+  async function handleConnect() {
+    try {
+      await connect.mutateAsync(token);
+    } catch {
+      /* error shown below */
+    }
+  }
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Connect GitHub</DialogTitle>
+        <DialogDescription>Helmsman needs a personal access token to list your repos and open PRs. It's stored as a cluster Secret.</DialogDescription>
+      </DialogHeader>
+      <div className="flex flex-col gap-3 py-1">
+        <a href={GITHUB_TOKEN_URL} target="_blank" rel="noreferrer" className="text-xs hover:underline" style={{ color: "var(--accent-primary)" }}>
+          Create a personal access token ↗ (classic, “repo” scope)
+        </a>
+        <input
+          type="password"
+          value={token}
+          placeholder="ghp_…"
+          autoFocus
+          onChange={(e) => setToken(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && token) handleConnect(); }}
+          spellCheck={false}
+          style={{ padding: "8px 10px", borderRadius: 8, background: "#08080A", border: "1px solid #26272B", color: "var(--fg-primary)", fontSize: 13, fontFamily: "ui-monospace, monospace", outline: "none" }}
+        />
+        {connect.isError && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{connect.error.message}</p>}
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose} disabled={connect.isPending}>Cancel</Button>
+        <Button onClick={handleConnect} disabled={!token || connect.isPending}>{connect.isPending ? "Connecting…" : "Connect & continue"}</Button>
+      </DialogFooter>
+    </>
+  );
+}
+
+/** Step 2 — pick a repo (skeletons while the list loads), then save the source. */
+function PickRepoStep({ onClose }: { onClose: () => void }) {
   const save = useSaveSource();
   const { data: repos, isLoading, isError, error } = useGitHubRepos(true);
   const [fullName, setFullName] = useState("");
@@ -228,43 +237,67 @@ function AddSourceDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Add Git source</DialogTitle>
-          <DialogDescription>Pick a repo from your GitHub account; its manifests deploy on Sync.</DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col gap-3 py-1">
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium" style={{ color: "var(--fg-secondary)" }}>Repository</span>
-            <select
-              value={fullName}
-              onChange={(e) => pickRepo(e.target.value)}
-              disabled={isLoading || isError}
-              style={{ padding: "8px 10px", borderRadius: 8, background: "#08080A", border: "1px solid #26272B", color: "var(--fg-primary)", fontSize: 13, outline: "none" }}
-            >
-              <option value="">{isLoading ? "Loading repos…" : isError ? "Failed to load repos" : "Select a repository…"}</option>
-              {repos?.map((r) => (
-                <option key={r.fullName} value={r.fullName}>{r.fullName}{r.private ? " (private)" : ""}</option>
-              ))}
-            </select>
-            {isError && <span className="text-xs text-destructive">{error.message}</span>}
-          </label>
-          <div className="flex gap-3">
-            <Field label="Name" value={name} onChange={setName} placeholder="my-app" />
-            <Field label="Branch" value={branch} onChange={setBranch} placeholder={selected?.defaultBranch ?? "main"} />
-            <Field label="Manifest path" value={path} onChange={setPath} placeholder="." />
-          </div>
-          {save.isError && (
-            <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{save.error.message}</p>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={save.isPending}>Cancel</Button>
-          <Button onClick={handleSave} disabled={!canSave}>{save.isPending ? "Saving…" : "Add source"}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <>
+      <DialogHeader>
+        <DialogTitle>Add Git source</DialogTitle>
+        <DialogDescription>Pick a repo from your GitHub account; its manifests deploy on Sync.</DialogDescription>
+      </DialogHeader>
+      <div className="flex flex-col gap-3 py-1">
+        {isLoading ? (
+          <FormSkeleton />
+        ) : (
+          <>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium" style={{ color: "var(--fg-secondary)" }}>Repository</span>
+              <select
+                value={fullName}
+                onChange={(e) => pickRepo(e.target.value)}
+                disabled={isError}
+                style={{ padding: "8px 10px", borderRadius: 8, background: "#08080A", border: "1px solid #26272B", color: "var(--fg-primary)", fontSize: 13, outline: "none" }}
+              >
+                <option value="">{isError ? "Failed to load repos" : "Select a repository…"}</option>
+                {repos?.map((r) => (
+                  <option key={r.fullName} value={r.fullName}>{r.fullName}{r.private ? " (private)" : ""}</option>
+                ))}
+              </select>
+              {isError && <span className="text-xs text-destructive">{error.message}</span>}
+            </label>
+            <div className="flex gap-3">
+              <Field label="Name" value={name} onChange={setName} placeholder="my-app" />
+              <Field label="Branch" value={branch} onChange={setBranch} placeholder={selected?.defaultBranch ?? "main"} />
+              <Field label="Manifest path" value={path} onChange={setPath} placeholder="." />
+            </div>
+          </>
+        )}
+        {save.isError && (
+          <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{save.error.message}</p>
+        )}
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose} disabled={save.isPending}>Cancel</Button>
+        <Button onClick={handleSave} disabled={!canSave}>{save.isPending ? "Saving…" : "Add source"}</Button>
+      </DialogFooter>
+    </>
+  );
+}
+
+/** Pulsing placeholders shown while the repo list loads. */
+function FormSkeleton() {
+  const bar = (w: string, h = 34) => (
+    <div className="animate-pulse rounded-md" style={{ width: w, height: h, background: "#1A1A1E" }} />
+  );
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5">
+        {bar("70px", 12)}
+        {bar("100%")}
+      </div>
+      <div className="flex gap-3">
+        {bar("100%")}
+        {bar("100%")}
+        {bar("100%")}
+      </div>
+    </div>
   );
 }
 
