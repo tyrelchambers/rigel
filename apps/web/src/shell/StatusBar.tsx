@@ -47,7 +47,7 @@ export default function StatusBar({ chatHidden, onToggleChat }: StatusBarProps =
   return (
     <div
       style={{
-        height: 22,
+        height: 24,
         background: "var(--surface-sunken)",
         borderTop: "1px solid #26272B",
         display: "flex",
@@ -91,7 +91,7 @@ export default function StatusBar({ chatHidden, onToggleChat }: StatusBarProps =
               flexShrink: 0,
             }}
           />
-          <MonoChip style={{ color: kubectlOk ? "var(--fg-tertiary)" : "var(--status-failed)" }} title={error ?? undefined}>
+          <MonoChip style={{ color: kubectlOk ? "var(--fg-secondary)" : "var(--status-failed)" }} title={error ?? undefined}>
             {statusLabel}
           </MonoChip>
         </div>
@@ -137,8 +137,8 @@ function MonoChip({ children, style, ...rest }: MonoChipProps) {
     <span
       style={{
         fontFamily: "'Geist Variable', ui-monospace, monospace",
-        fontSize: 10,
-        color: "var(--fg-tertiary)",
+        fontSize: 11,
+        color: "var(--fg-secondary)",
         ...style,
       }}
       {...rest}
@@ -165,12 +165,12 @@ function HintChip({ kbd, children, onClick }: HintChipProps) {
       <span
         style={{
           fontFamily: "'Geist Variable', ui-monospace, monospace",
-          fontSize: 9,
-          color: "#4B4B55",
+          fontSize: 10,
+          color: "var(--fg-tertiary)",
           background: "var(--surface-elevated)",
           padding: "1px 4px",
           borderRadius: 3,
-          border: "1px solid #26272B",
+          border: "1px solid var(--border-strong)",
           lineHeight: 1.4,
         }}
       >
@@ -179,8 +179,8 @@ function HintChip({ kbd, children, onClick }: HintChipProps) {
       <span
         style={{
           fontFamily: "'Geist Variable', ui-monospace, monospace",
-          fontSize: 10,
-          color: "#4B4B55",
+          fontSize: 11,
+          color: "var(--fg-secondary)",
         }}
       >
         {children}
