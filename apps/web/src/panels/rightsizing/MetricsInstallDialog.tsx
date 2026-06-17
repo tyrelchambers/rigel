@@ -46,7 +46,7 @@ export function MetricsInstallDialog({ open, onOpenChange, onInstall }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>Set up a metrics backend</DialogTitle>
           <DialogDescription>

@@ -201,7 +201,7 @@ export function AlertsCard() {
 
       {/* New alert dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>New alert</DialogTitle>
             <DialogDescription>

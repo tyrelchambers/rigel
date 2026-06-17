@@ -49,7 +49,7 @@ export function ResourceYamlViewer() {
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) close(); }}>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="max-w-3xl">
         <DialogHeader className="flex-row items-start gap-3">
           <FileCode className="mt-0.5 size-5 shrink-0" style={{ color: "var(--accent-primary)" }} />
           <div className="flex min-w-0 flex-1 flex-col">

@@ -197,7 +197,7 @@ function LinkDeploymentDialog({
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Link a deployment to {source.name}</DialogTitle>
           <DialogDescription>The workload is tagged with this source so the AI has context and can open fix-PRs.</DialogDescription>
@@ -272,7 +272,7 @@ function AddSourceDialog({ onClose }: { onClose: () => void }) {
   const connected = account?.connected === true;
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="max-w-2xl">
         {acctLoading ? (
           <>
             <DialogHeader>
@@ -559,7 +559,7 @@ function SyncDialog({ source, onClose }: { source: GitSource; onClose: () => voi
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Sync {source.name}</DialogTitle>
           <DialogDescription>{source.repoURL} · {source.branch} · {source.path}</DialogDescription>

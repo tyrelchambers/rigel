@@ -216,7 +216,7 @@ export function ConfirmSheet({ action, open, onClose, onPurge, fromChat, onResul
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
       <DialogContent
         showCloseButton={false}
-        className="overflow-hidden p-0 gap-0 sm:max-w-xl"
+        className="overflow-hidden p-0 gap-0 max-w-xl"
         style={{ border: `1px solid ${accentColor}40`, boxShadow: "0 24px 60px -20px rgba(0,0,0,0.7), 0 8px 24px rgba(0,0,0,0.6)" }}
       >
         {/* Header — icon chip + title + risk pill over an accent-tinted wash */}

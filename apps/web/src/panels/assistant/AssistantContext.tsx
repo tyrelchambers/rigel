@@ -185,7 +185,7 @@ function AssistantDialogs(p: DialogsProps) {
         open={!!p.pendingRevert}
         onOpenChange={(o) => !o && p.setPendingRevert(null)}
       >
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Revert "{p.pendingRevert?.label}"?</DialogTitle>
             <DialogDescription>
@@ -266,7 +266,7 @@ function AssistantDialogs(p: DialogsProps) {
 
       {/* Full activity modal */}
       <Dialog open={p.showAllActivity} onOpenChange={p.setShowAllActivity}>
-        <DialogContent className="max-h-[80vh] overflow-auto sm:max-w-2xl">
+        <DialogContent className="max-h-[80vh] overflow-auto max-w-2xl">
           <DialogHeader>
             <DialogTitle>Activity — {audit.length} entries</DialogTitle>
           </DialogHeader>
