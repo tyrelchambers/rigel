@@ -594,6 +594,23 @@ function CatalogCard({
       {/* Update status row (for installed apps) */}
       {children && <div className="catalog-card-update">{children}</div>}
 
+      {/* "Already installed? Link it…" — only on not-installed cards (the app is
+          running under a mirror/private image detection couldn't match). Sits
+          above the action footer so the link is offered before the Install CTA. */}
+      {!isInstalled && (
+        <button
+          type="button"
+          className="catalog-link-affordance"
+          onClick={(e) => {
+            e.stopPropagation();
+            onLink();
+          }}
+          aria-label={`Link ${app.name} to a running workload`}
+        >
+          Already installed? Link it…
+        </button>
+      )}
+
       {/* Action footer */}
       <div className="catalog-card-footer">
         {isInstalled ? (
@@ -622,22 +639,6 @@ function CatalogCard({
           </button>
         )}
       </div>
-
-      {/* "Already installed? Link it…" — only on not-installed cards (the app is
-          running under a mirror/private image detection couldn't match). */}
-      {!isInstalled && (
-        <button
-          type="button"
-          className="catalog-link-affordance"
-          onClick={(e) => {
-            e.stopPropagation();
-            onLink();
-          }}
-          aria-label={`Link ${app.name} to a running workload`}
-        >
-          Already installed? Link it…
-        </button>
-      )}
     </motion.article>
   );
 }
