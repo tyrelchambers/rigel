@@ -1,0 +1,109 @@
+---
+import { Icon } from "astro-icon/components";
+
+interface Item {
+  icon: string;
+  title: string;
+  desc: string;
+}
+interface Props {
+  id?: string;
+  eyebrowIcon: string;
+  eyebrow: string;
+  heading: string;
+  copy: string;
+  items: Item[];
+  reverse?: boolean;
+  variant?: "primary" | "sunken";
+}
+const {
+  id,
+  eyebrowIcon,
+  eyebrow,
+  heading,
+  copy,
+  items,
+  reverse = false,
+  variant = "primary",
+} = Astro.props;
+
+// Cards sit one surface step above the section so they read as raised tiles
+// on either background.
+const sectionBg = variant === "sunken" ? "bg-surface-sunken" : "bg-surface";
+const cardBg = variant === "sunken" ? "bg-surface" : "bg-surface-elevated";
+
+// Grid auto-placement fills tracks in order-modified order, so when `reverse`
+// flips the column order we must also flip the track widths — otherwise the
+// card grid lands in the narrow intro track and gets squished.
+const gridCols = reverse
+  ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)]"
+  : "lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)]";
+---
+
+<section
+  id={id}
+  class:list={[
+    "relative scroll-mt-20 overflow-hidden border-t border-line-subtle",
+    sectionBg,
+  ]}
+>
+  <div
+    class="glow anim-glow absolute size-[440px] opacity-[0.07]"
+    style={reverse ? "left:-7rem;top:4rem" : "right:-7rem;top:3rem"}
+  >
+  </div>
+
+  <div
+    class:list={[
+      "relative mx-auto grid max-w-[1200px] gap-12 px-6 py-20 sm:px-8 lg:gap-16 lg:py-24 lg:px-12",
+      gridCols,
+    ]}
+  >
+    <!-- intro column -->
+    <div data-reveal class:list={["lg:pt-2", reverse ? "lg:order-2" : ""]}>
+      <div class="flex items-center gap-2.5">
+        <Icon name={eyebrowIcon} class="size-[15px] text-accent" />
+        <span class="font-mono text-xs tracking-[0.15em] text-fg-tertiary"
+          >{eyebrow}</span
+        >
+      </div>
+      <h2
+        class="mt-5 text-[clamp(1.85rem,3.6vw,2.5rem)] font-bold leading-[1.08] tracking-[-0.03em] text-fg"
+      >
+        {heading}
+      </h2>
+      <p class="mt-5 max-w-[420px] text-[15.5px] leading-[1.65] text-fg-secondary">
+        {copy}
+      </p>
+    </div>
+
+    <!-- capability grid -->
+    <div
+      class:list={[
+        "grid gap-3.5 sm:grid-cols-2",
+        reverse ? "lg:order-1" : "",
+      ]}
+    >
+      {
+        items.map((it, i) => (
+          <article
+            data-reveal
+            style={`--reveal-delay:${i * 60}ms`}
+            class:list={[
+              "group flex flex-col gap-3 rounded-[10px] border border-line-subtle p-5 transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-1 hover:border-line-strong hover:shadow-[0_10px_34px_-14px_rgba(56,189,248,0.28)]",
+              cardBg,
+            ]}
+          >
+            <span class="grid size-[34px] place-items-center rounded-lg bg-accent/15 text-accent transition-colors group-hover:bg-accent/25">
+              <Icon name={it.icon} class="size-[18px]" />
+            </span>
+            <h3 class="text-[15px] font-semibold tracking-tight text-fg">
+              {it.title}
+            </h3>
+            <p class="text-[13.5px] leading-snug text-fg-secondary">{it.desc}</p>
+          </article>
+        ))
+      }
+    </div>
+  </div>
+</section>

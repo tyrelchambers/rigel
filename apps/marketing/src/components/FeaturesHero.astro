@@ -1,0 +1,100 @@
+---
+import { Icon } from "astro-icon/components";
+
+// Hard, honest numbers — the catalog ships 55 apps; the rest are qualities.
+const stats = [
+  { value: "55", label: "one-click apps" },
+  { value: "24/7", label: "autonomous watch" },
+  { value: "0", label: "lines of YAML" },
+  { value: "100%", label: "your hardware" },
+];
+
+// Quick-jump to each station on the ship. Anchors match the sections below.
+const stations = [
+  { icon: "lucide:message-square-text", label: "The Helmsman", href: "#helmsman" },
+  { icon: "lucide:moon-star", label: "The Night Watch", href: "#watch" },
+  { icon: "lucide:radar", label: "The Lookout", href: "#lookout" },
+  { icon: "lucide:anchor", label: "The Harbor", href: "#harbor" },
+  { icon: "lucide:layout-dashboard", label: "The Bridge", href: "#bridge" },
+  { icon: "lucide:wrench", label: "The Engine Room", href: "#engine" },
+  { icon: "lucide:gauge", label: "The Charts", href: "#charts" },
+  { icon: "lucide:shield-check", label: "Secure by default", href: "#secure" },
+];
+---
+
+<section id="top" class="chart-grid relative overflow-hidden bg-surface-sunken">
+  <!-- ambient glows -->
+  <div class="glow anim-glow absolute -left-40 -top-24 h-[420px] w-[960px]"></div>
+  <div
+    class="glow anim-glow absolute -right-24 top-40 size-[420px] opacity-[0.08]"
+    style="animation-delay:-4s"
+  >
+  </div>
+
+  <div
+    class="relative mx-auto max-w-[1200px] px-6 pb-16 pt-20 sm:px-8 lg:px-12 lg:pb-20 lg:pt-28"
+  >
+    <div class="flex items-center gap-2.5">
+      <Icon name="lucide:scroll-text" class="size-[15px] text-accent" />
+      <span class="font-mono text-xs tracking-[0.16em] text-fg-tertiary"
+        >THE SHIP'S MANIFEST</span
+      >
+    </div>
+
+    <h1
+      class="rise mt-5 max-w-[15ch] text-[clamp(2.6rem,7vw,3.875rem)] font-bold leading-[1.03] tracking-[-0.03em]"
+      style="animation-delay:0.05s"
+    >
+      <span class="block text-fg">Everything aboard.</span>
+      <span class="ink-gradient block">Every station crewed.</span>
+    </h1>
+
+    <p
+      class="rise mt-7 max-w-[620px] text-[17px] leading-relaxed text-fg-secondary"
+      style="animation-delay:0.15s"
+    >
+      A plain-English AI crew, a one-click app store, and a watch that never
+      sleeps. Here's everything Helmsman does, so you can self-host production
+      Kubernetes without an ops team.
+    </p>
+
+    <!-- stat band -->
+    <dl
+      class="rise mt-12 grid max-w-[760px] grid-cols-2 gap-px overflow-hidden rounded-xl border border-line-subtle bg-line-subtle sm:grid-cols-4"
+      style="animation-delay:0.25s"
+    >
+      {
+        stats.map((s) => (
+          <div class="flex flex-col gap-1 bg-surface px-5 py-5">
+            <dt class="font-mono text-[34px] font-bold leading-none tracking-tight text-fg">
+              {s.value}
+            </dt>
+            <dd class="text-[12.5px] text-fg-tertiary">{s.label}</dd>
+          </div>
+        ))
+      }
+    </dl>
+
+    <!-- station quick-nav -->
+    <nav
+      class="rise mt-9 flex flex-wrap gap-2.5"
+      aria-label="Jump to a station"
+      style="animation-delay:0.32s"
+    >
+      {
+        stations.map((s) => (
+          <a
+            href={s.href}
+            class="group inline-flex items-center gap-2 rounded-full border border-line-strong bg-surface-elevated px-3.5 py-2 text-[13px] text-fg-secondary transition-colors hover:border-accent/50 hover:text-fg"
+          >
+            <Icon
+              name={s.icon}
+              class="size-[14px] text-fg-tertiary transition-colors group-hover:text-accent"
+            />
+            {s.label}
+          </a>
+        ))
+      }
+    </nav>
+  </div>
+</section>

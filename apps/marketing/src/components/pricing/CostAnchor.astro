@@ -1,0 +1,118 @@
+---
+import { Icon } from "astro-icon/components";
+
+const sreLines = [
+  "Salary + benefits + payroll",
+  "On-call rotation & burnout",
+  "3-month ramp before they're useful",
+  "Sleeps, takes PTO, eventually leaves",
+];
+const crewLines = [
+  "Diagnoses, fixes & stands watch 24/7",
+  "On call every night, never burns out",
+  "Live the moment you install it",
+  "Cancel the day it stops earning its keep",
+];
+---
+
+<section
+  class="relative overflow-hidden border-t border-line-subtle bg-surface"
+>
+  <div
+    class="glow anim-glow absolute right-0 top-1/2 size-[480px] -translate-y-1/2 opacity-[0.07]"
+  >
+  </div>
+
+  <div
+    class="relative mx-auto max-w-[1100px] px-6 py-20 sm:px-8 lg:px-12 lg:py-24"
+  >
+    <div data-reveal class="mx-auto max-w-[640px] text-center">
+      <div class="flex items-center justify-center gap-2.5">
+        <Icon name="lucide:calculator" class="size-[15px] text-accent" />
+        <span class="font-mono text-xs tracking-[0.15em] text-fg-tertiary"
+          >DO THE MATH</span
+        >
+      </div>
+      <h2
+        class="mt-5 text-[clamp(1.85rem,3.6vw,2.5rem)] font-bold leading-[1.08] tracking-[-0.03em] text-fg"
+      >
+        The crew you couldn't afford — now you can.
+      </h2>
+      <p class="mx-auto mt-5 max-w-[520px] text-[15.5px] leading-[1.65] text-fg-secondary">
+        Helmsman does what you'd hire an SRE to do. Here's the same job, two ways.
+      </p>
+    </div>
+
+    <div class="mt-12 grid items-stretch gap-5 lg:grid-cols-[1fr_auto_1fr]">
+      <!-- the SRE -->
+      <div
+        data-reveal
+        class="flex flex-col rounded-2xl border border-line-subtle bg-surface-sunken p-7"
+      >
+        <span class="font-mono text-[11px] tracking-[0.14em] text-fg-tertiary"
+          >ONE JUNIOR SRE</span
+        >
+        <div class="mt-4 flex items-end gap-2">
+          <span class="text-[42px] font-bold leading-none tracking-tight text-fg-secondary"
+            >$150,000</span
+          >
+          <span class="pb-1.5 text-[13px] text-fg-tertiary">/ year</span>
+        </div>
+        <ul class="mt-6 flex flex-col gap-3">
+          {
+            sreLines.map((l) => (
+              <li class="flex items-start gap-2.5 text-[13.5px] text-fg-tertiary">
+                <Icon name="lucide:x" class="mt-0.5 size-[15px] shrink-0 text-failed/70" />
+                {l}
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+
+      <!-- vs -->
+      <div class="flex items-center justify-center py-2 lg:py-0">
+        <span
+          class="grid size-11 place-items-center rounded-full border border-line-strong bg-surface font-mono text-[12px] font-semibold tracking-[0.1em] text-fg-tertiary"
+          >vs</span
+        >
+      </div>
+
+      <!-- the crew -->
+      <div
+        data-reveal
+        style="--reveal-delay:120ms"
+        class="relative flex flex-col overflow-hidden rounded-2xl border border-accent/45 bg-surface-elevated p-7 shadow-[0_24px_70px_-34px_rgba(56,189,248,0.5)]"
+      >
+        <div class="glow absolute -right-16 -top-16 size-[200px] opacity-[0.16]"></div>
+        <span class="relative font-mono text-[11px] tracking-[0.14em] text-accent"
+          >HELMSMAN · FULL CREW</span
+        >
+        <div class="relative mt-4 flex items-end gap-2">
+          <span class="text-[42px] font-bold leading-none tracking-tight text-fg"
+            >$588</span
+          >
+          <span class="pb-1.5 text-[13px] text-fg-tertiary">/ year, per cluster</span>
+        </div>
+        <ul class="relative mt-6 flex flex-col gap-3">
+          {
+            crewLines.map((l) => (
+              <li class="flex items-start gap-2.5 text-[13.5px] text-fg-secondary">
+                <Icon name="lucide:check" class="mt-0.5 size-[15px] shrink-0 text-running" />
+                {l}
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+    </div>
+
+    <p
+      data-reveal
+      class="mt-8 text-center text-[14px] text-fg-secondary"
+    >
+      That's <span class="font-semibold text-fg">~$149,000 saved</span> per cluster,
+      every year — and the crew never sleeps.
+    </p>
+  </div>
+</section>

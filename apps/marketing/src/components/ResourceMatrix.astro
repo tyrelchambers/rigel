@@ -1,0 +1,126 @@
+---
+import { Icon } from "astro-icon/components";
+
+// Every Kubernetes resource Helmsman manages from its own panel. Order roughly
+// follows how often you reach for each one.
+const resources = [
+  {
+    icon: "lucide:boxes",
+    name: "Workloads",
+    desc: "Deployments, StatefulSets, DaemonSets, Jobs & CronJobs",
+  },
+  {
+    icon: "lucide:box",
+    name: "Pods",
+    desc: "Phase, restarts and live CPU / memory sparklines",
+  },
+  {
+    icon: "lucide:waypoints",
+    name: "Services",
+    desc: "Ports, endpoints and type at a glance",
+  },
+  {
+    icon: "lucide:globe",
+    name: "Ingresses",
+    desc: "Hosts, TLS and backend routing",
+  },
+  {
+    icon: "lucide:file-text",
+    name: "ConfigMaps",
+    desc: "Keys, values and sizes, searchable",
+  },
+  {
+    icon: "lucide:lock",
+    name: "Secrets",
+    desc: "Masked values, types and sizes",
+  },
+  {
+    icon: "lucide:hard-drive",
+    name: "Storage",
+    desc: "PVCs, access modes and capacity",
+  },
+  {
+    icon: "lucide:folders",
+    name: "Namespaces",
+    desc: "Create, delete and scope the whole console",
+  },
+  {
+    icon: "lucide:server",
+    name: "Nodes",
+    desc: "Capacity, status, cordon & drain",
+  },
+  {
+    icon: "lucide:shield",
+    name: "RBAC",
+    desc: "Roles, bindings and service accounts",
+  },
+  {
+    icon: "lucide:badge-check",
+    name: "Certificates",
+    desc: "cert-manager status and renewals",
+  },
+  {
+    icon: "lucide:activity",
+    name: "Events",
+    desc: "A live feed of what the cluster is doing",
+  },
+];
+---
+
+<section
+  id="bridge"
+  class="chart-grid relative scroll-mt-20 overflow-hidden border-t border-line-subtle bg-surface"
+>
+  <div
+    class="glow anim-glow absolute left-1/2 top-0 size-[600px] -translate-x-1/2 opacity-[0.06]"
+  >
+  </div>
+
+  <div
+    class="relative mx-auto max-w-[1200px] px-6 py-20 sm:px-8 lg:px-12 lg:py-24"
+  >
+    <div data-reveal class="max-w-[640px]">
+      <div class="flex items-center gap-2.5">
+        <Icon name="lucide:layout-dashboard" class="size-[15px] text-accent" />
+        <span class="font-mono text-xs tracking-[0.15em] text-fg-tertiary"
+          >THE BRIDGE</span
+        >
+      </div>
+      <h2
+        class="mt-5 text-[clamp(1.85rem,3.6vw,2.5rem)] font-bold leading-[1.08] tracking-[-0.03em] text-fg"
+      >
+        Every resource, one console.
+      </h2>
+      <p class="mt-5 max-w-[520px] text-[15.5px] leading-[1.65] text-fg-secondary">
+        No flipping between <code class="font-mono text-[13.5px] text-fg-secondary"
+          >kubectl get</code
+        > and a wall of YAML. Every core Kubernetes resource gets its own panel:
+        searchable, namespace-scoped, and one click from a fix.
+      </p>
+    </div>
+
+    <div
+      class="mt-10 grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-4"
+    >
+      {
+        resources.map((r, i) => (
+          <div
+            data-reveal
+            style={`--reveal-delay:${i * 45}ms`}
+            class="group rounded-lg border border-line-subtle bg-surface-elevated p-4 transition-[transform,border-color] duration-300 hover:-translate-y-0.5 hover:border-line-strong"
+          >
+            <div class="flex items-center gap-2.5">
+              <span class="grid size-7 place-items-center rounded-md bg-accent/10 text-accent transition-colors group-hover:bg-accent/20">
+                <Icon name={r.icon} class="size-[15px]" />
+              </span>
+              <span class="text-[14px] font-semibold text-fg">{r.name}</span>
+            </div>
+            <p class="mt-2.5 text-[12.5px] leading-snug text-fg-secondary">
+              {r.desc}
+            </p>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</section>

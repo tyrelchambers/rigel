@@ -1,0 +1,87 @@
+---
+import { Icon } from "astro-icon/components";
+
+// Root-absolute home anchors so the nav works from any page (e.g. /features),
+// not just the landing page.
+const links = [
+  { label: "The Crew", href: "/#crew" },
+  { label: "Features", href: "/features" },
+];
+---
+
+<header
+  class="sticky top-0 z-40 border-b border-line-subtle bg-surface-sunken/80 backdrop-blur-md"
+>
+  <nav
+    class="mx-auto flex max-w-[1200px] items-center justify-between px-6 py-4 sm:px-8 lg:px-12"
+    aria-label="Primary"
+  >
+    <a href="/#top" class="flex items-center gap-2.5">
+      <span
+        class="grid size-[30px] place-items-center rounded-lg border border-accent bg-accent/15 text-accent"
+      >
+        <Icon name="lucide:compass" class="size-[18px]" />
+      </span>
+      <span class="text-[18px] font-bold tracking-tight text-fg">Helmsman</span>
+    </a>
+
+    <ul class="hidden items-center gap-8 md:flex">
+      {
+        links.map((l) => (
+          <li>
+            <a
+              href={l.href}
+              class="text-sm text-fg-secondary transition-colors hover:text-fg"
+            >
+              {l.label}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+
+    <div class="hidden md:block">
+      <a
+        href="/#cta"
+        class="inline-flex items-center rounded-lg bg-accent px-4 py-2.5 text-[13.5px] font-semibold text-fg-inverse transition-colors hover:bg-accent-hover"
+      >
+        Take the helm
+      </a>
+    </div>
+
+    <!-- Mobile menu: native disclosure, no JS -->
+    <details class="group relative md:hidden">
+      <summary
+        class="flex size-10 cursor-pointer list-none items-center justify-center rounded-lg border border-line-strong text-fg [&::-webkit-details-marker]:hidden"
+        aria-label="Open menu"
+      >
+        <Icon name="lucide:menu" class="size-5 group-open:hidden" />
+        <Icon name="lucide:x" class="hidden size-5 group-open:block" />
+      </summary>
+      <div
+        class="absolute right-0 mt-3 w-56 rounded-xl border border-line-subtle bg-surface-elevated p-2 shadow-2xl shadow-black/50"
+      >
+        <ul class="flex flex-col">
+          {
+            links.map((l) => (
+              <li>
+                <a
+                  href={l.href}
+                  class="block rounded-md px-3 py-2.5 text-sm text-fg-secondary hover:bg-white/5 hover:text-fg"
+                >
+                  {l.label}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+        <a
+          href="/#cta"
+          class="mt-1 block rounded-md bg-accent px-3 py-2.5 text-center text-sm font-semibold text-fg-inverse"
+        >
+          Take the helm
+        </a>
+      </div>
+    </details>
+  </nav>
+</header>

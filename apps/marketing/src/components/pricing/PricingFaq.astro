@@ -1,0 +1,72 @@
+---
+import { Icon } from "astro-icon/components";
+
+const faqs = [
+  {
+    q: "Is the self-hosted version really free?",
+    a: "Yes. The Community edition is free forever — the full console, the 55-app catalog, the Helmsman chat and natural-language alerts, on a single cluster. No trial clock, no credit card.",
+  },
+  {
+    q: "What does “bring your own key” mean for AI?",
+    a: "Helmsman talks to Claude. On Community you connect your own Anthropic API key and pay Anthropic directly — typically a few cents to a couple of dollars per active session. On Team you can instead let us manage it: bundled tokens, one bill, no key to babysit.",
+  },
+  {
+    q: "What counts as a “cluster”?",
+    a: "One Kubernetes cluster, with any number of nodes and namespaces. Team is billed per connected cluster, per month.",
+  },
+  {
+    q: "Does my data ever leave my hardware?",
+    a: "No. Helmsman and the Night Watch agent run entirely inside your cluster. We never see your workloads, secrets or logs — that's the whole point of self-hosting.",
+  },
+  {
+    q: "Can I start on Community and upgrade later?",
+    a: "Absolutely. Drop in a license key to unlock the autonomous agent, multi-cluster, SSO and the rest of the crew — no reinstall, no migration.",
+  },
+  {
+    q: "What's the difference between the chat and the Night Watch?",
+    a: "The chat is hands-on: you ask, it investigates, you approve the fix. The Night Watch is autonomous — it stands watch around the clock and remediates within your guardrails, so you wake to a changelog instead of a 3am page.",
+  },
+];
+---
+
+<section
+  id="faq"
+  class="relative scroll-mt-20 overflow-hidden border-t border-line-subtle bg-surface"
+>
+  <div
+    class="relative mx-auto max-w-[820px] px-6 py-20 sm:px-8 lg:px-12 lg:py-24"
+  >
+    <div data-reveal class="text-center">
+      <div class="flex items-center justify-center gap-2.5">
+        <Icon name="lucide:life-buoy" class="size-[15px] text-accent" />
+        <span class="font-mono text-xs tracking-[0.15em] text-fg-tertiary"
+          >QUESTIONS FROM THE DOCK</span
+        >
+      </div>
+      <h2
+        class="mt-5 text-[clamp(1.85rem,3.6vw,2.5rem)] font-bold leading-[1.08] tracking-[-0.03em] text-fg"
+      >
+        Before you cast off.
+      </h2>
+    </div>
+
+    <div data-reveal class="mt-10 flex flex-col">
+      {
+        faqs.map((f) => (
+          <details class="group border-b border-line-subtle">
+            <summary class="flex cursor-pointer list-none items-center justify-between gap-4 py-5 text-[15.5px] font-semibold text-fg [&::-webkit-details-marker]:hidden">
+              {f.q}
+              <Icon
+                name="lucide:plus"
+                class="size-[18px] shrink-0 text-fg-tertiary transition-transform duration-200 group-open:rotate-45 group-open:text-accent"
+              />
+            </summary>
+            <p class="max-w-[680px] pb-5 text-[14px] leading-relaxed text-fg-secondary">
+              {f.a}
+            </p>
+          </details>
+        ))
+      }
+    </div>
+  </div>
+</section>

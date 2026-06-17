@@ -1,0 +1,160 @@
+---
+import { Icon } from "astro-icon/components";
+
+const tiers = ["Community", "Team", "Enterprise"];
+
+// Each value is either a boolean (✓ / —) or a string shown verbatim.
+interface Row {
+  label: string;
+  values: (boolean | string)[];
+}
+interface Group {
+  title: string;
+  rows: Row[];
+}
+const groups: Group[] = [
+  {
+    title: "The Console",
+    rows: [
+      { label: "Every resource panel (workloads → events)", values: [true, true, true] },
+      { label: "App catalog — 55 apps, one-click TLS", values: [true, true, true] },
+      { label: "Port-forward, live logs & timeline", values: [true, true, true] },
+      { label: "Connectivity map & right-sizing", values: [true, true, true] },
+    ],
+  },
+  {
+    title: "The Helmsman · AI",
+    rows: [
+      { label: "Plain-English chat & one-click fixes", values: [true, true, true] },
+      { label: "Model choice (Opus 4.8 / Sonnet)", values: [true, true, true] },
+      { label: "AI billing", values: ["Bring your own key", "BYO or managed", "BYO or managed"] },
+      { label: "Natural-language alerts (the Lookout)", values: [true, true, true] },
+    ],
+  },
+  {
+    title: "The Night Watch",
+    rows: [
+      { label: "Autonomous remediation agent", values: [false, true, true] },
+      { label: "Guardrails, spend caps & kill-switch", values: [false, true, true] },
+      { label: "Audit log with one-click revert", values: [false, true, true] },
+    ],
+  },
+  {
+    title: "Scale & access",
+    rows: [
+      { label: "Clusters", values: ["1", "Unlimited", "Unlimited"] },
+      { label: "Team members", values: ["1", "Unlimited", "Unlimited"] },
+      { label: "Single sign-on", values: [false, "OIDC", "SAML + OIDC"] },
+      { label: "Role-based access (RBAC)", values: [false, true, "Custom"] },
+    ],
+  },
+  {
+    title: "Operations & support",
+    rows: [
+      { label: "Air-gapped / offline licensing", values: [false, false, true] },
+      { label: "Uptime SLA", values: [false, false, "99.9%"] },
+      { label: "Support", values: ["Community", "Priority email", "Dedicated"] },
+      { label: "Security review & onboarding", values: [false, false, true] },
+    ],
+  },
+];
+---
+
+<section
+  id="compare"
+  class="relative scroll-mt-20 overflow-hidden border-t border-line-subtle bg-surface-sunken"
+>
+  <div
+    class="relative mx-auto max-w-[1100px] px-6 py-20 sm:px-8 lg:px-12 lg:py-24"
+  >
+    <div data-reveal class="mx-auto max-w-[600px] text-center">
+      <div class="flex items-center justify-center gap-2.5">
+        <Icon name="lucide:table-2" class="size-[15px] text-accent" />
+        <span class="font-mono text-xs tracking-[0.15em] text-fg-tertiary"
+          >COMPARE EVERY DECK</span
+        >
+      </div>
+      <h2
+        class="mt-5 text-[clamp(1.85rem,3.6vw,2.5rem)] font-bold leading-[1.08] tracking-[-0.03em] text-fg"
+      >
+        What's aboard each plan.
+      </h2>
+    </div>
+
+    <!-- Horizontal scroll on small screens; the grid keeps its shape. -->
+    <div data-reveal class="mt-12 overflow-x-auto">
+      <table class="w-full min-w-[640px] border-separate border-spacing-0 text-left">
+        <thead>
+          <tr>
+            <th class="sticky left-0 z-10 bg-surface-sunken py-3 pr-4 align-bottom">
+              <span class="font-mono text-[11px] tracking-[0.12em] text-fg-tertiary"
+                >FEATURE</span
+              >
+            </th>
+            {
+              tiers.map((t, i) => (
+                <th
+                  class:list={[
+                    "rounded-t-lg px-4 py-3 text-center align-bottom",
+                    i === 1 ? "bg-surface-elevated" : "",
+                  ]}
+                >
+                  <span
+                    class:list={[
+                      "text-[14px] font-bold tracking-tight",
+                      i === 1 ? "text-accent" : "text-fg",
+                    ]}
+                  >
+                    {t}
+                  </span>
+                </th>
+              ))
+            }
+          </tr>
+        </thead>
+        <tbody>
+          {
+            groups.map((g) => (
+              <>
+                <tr>
+                  <td
+                    colspan="4"
+                    class="sticky left-0 bg-surface-sunken pb-2 pt-7 font-mono text-[11px] tracking-[0.14em] text-accent"
+                  >
+                    {g.title}
+                  </td>
+                </tr>
+                {g.rows.map((r) => (
+                  <tr class="group">
+                    <td class="sticky left-0 z-10 border-t border-line-subtle bg-surface-sunken py-3.5 pr-4 text-[13.5px] text-fg-secondary">
+                      {r.label}
+                    </td>
+                    {r.values.map((v, i) => (
+                      <td
+                        class:list={[
+                          "border-t border-line-subtle px-4 py-3.5 text-center",
+                          i === 1 ? "bg-surface-elevated/60" : "",
+                        ]}
+                      >
+                        {typeof v === "string" ? (
+                          <span class="text-[13px] font-medium text-fg">{v}</span>
+                        ) : v ? (
+                          <Icon
+                            name="lucide:check"
+                            class="inline size-[18px] text-running"
+                          />
+                        ) : (
+                          <span class="inline-block h-px w-3.5 bg-line-strong align-middle" />
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>

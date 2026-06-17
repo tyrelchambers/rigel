@@ -1,0 +1,87 @@
+---
+import { Icon } from "astro-icon/components";
+
+const apps = [
+  { name: "Nextcloud", icon: "lucide:cloud", color: "#60A5FA", active: true },
+  { name: "Gitea", icon: "lucide:git-branch", color: "#34D399", active: false },
+  { name: "Vaultwarden", icon: "lucide:key-round", color: "#A855F7", active: false },
+  { name: "Plausible", icon: "lucide:chart-no-axes-column", color: "#FB923C", active: false },
+  { name: "Immich", icon: "lucide:image", color: "#EC4899", active: false },
+  { name: "Postgres", icon: "lucide:database", color: "#22D3EE", active: false },
+];
+---
+
+<div class="relative mx-auto w-full max-w-[480px] lg:pb-16">
+  <!-- app catalog -->
+  <div
+    class="rounded-lg border border-line-strong bg-surface shadow-2xl shadow-black/60"
+  >
+    <div class="flex items-center gap-3 border-b border-line-subtle px-4 py-3.5">
+      <span
+        class="grid size-[30px] place-items-center rounded-md border border-accent bg-accent/15 text-accent"
+      >
+        <Icon name="lucide:anchor" class="size-[15px]" />
+      </span>
+      <span class="flex-1 text-[15px] font-semibold text-fg">App Catalog</span>
+      <span class="font-mono text-[11px] text-fg-tertiary">55 apps</span>
+    </div>
+
+    <div class="flex flex-col gap-3 p-3.5">
+      <!-- nl search -->
+      <div
+        class="flex items-center gap-2.5 rounded-md border border-line-strong bg-surface-sunken px-3 py-2.5"
+      >
+        <Icon name="lucide:sparkles" class="size-[15px] shrink-0 text-accent" />
+        <span class="font-mono text-[13px] text-fg">I want to self-host nextcloud</span>
+        <span class="anim-cursor h-4 w-0.5 bg-accent"></span>
+      </div>
+
+      <!-- results grid -->
+      <div class="grid grid-cols-2 gap-2.5">
+        {
+          apps.map((a) => (
+            <div
+              class:list={[
+                "flex items-center gap-2.5 rounded-md border bg-surface-elevated p-2.5",
+                a.active ? "border-accent/50" : "border-line-subtle",
+              ]}
+            >
+              <span
+                class="grid size-[26px] shrink-0 place-items-center rounded"
+                style={`background:${a.color}26;color:${a.color}`}
+              >
+                <Icon name={a.icon} class="size-[14px]" />
+              </span>
+              <span class="flex-1 truncate text-[12.5px] font-medium text-fg">
+                {a.name}
+              </span>
+              {a.active && (
+                <Icon name="lucide:loader" class="size-3.5 text-accent" />
+              )}
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </div>
+
+  <!-- TLS toast -->
+  <div
+    class="mt-4 w-full rounded-lg border border-running bg-surface-elevated p-3.5 shadow-2xl shadow-black/70 lg:absolute lg:-bottom-4 lg:right-0 lg:mt-0 lg:w-[330px]"
+  >
+    <div class="flex items-center gap-2.5">
+      <span
+        class="grid size-[26px] place-items-center rounded-md bg-running/15 text-running"
+      >
+        <Icon name="lucide:shield-check" class="size-[15px]" />
+      </span>
+      <span class="flex-1 text-[13.5px] font-semibold text-fg"
+        >Deployed · TLS issued</span
+      >
+      <Icon name="lucide:check-check" class="size-[15px] text-running" />
+    </div>
+    <p class="mt-2 font-mono text-[11.5px] text-cyan">
+      https://nextcloud.harbor.local — live in 41s
+    </p>
+  </div>
+</div>

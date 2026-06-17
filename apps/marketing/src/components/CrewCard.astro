@@ -1,0 +1,27 @@
+---
+import { Icon } from "astro-icon/components";
+
+interface Props {
+  icon: string;
+  role: string;
+  desc: string;
+  meta: string;
+  delay?: number;
+}
+const { icon, role, desc, meta, delay = 0 } = Astro.props;
+---
+
+<article
+  data-reveal
+  style={`--reveal-delay:${delay}ms`}
+  class="flex flex-col gap-3 rounded-[10px] border border-line-subtle bg-surface p-[22px] transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-1 hover:border-line-strong hover:shadow-[0_10px_34px_-14px_rgba(56,189,248,0.28)]"
+>
+  <span
+    class="grid size-[34px] place-items-center rounded-lg bg-accent/15 text-accent"
+  >
+    <Icon name={icon} class="size-[18px]" />
+  </span>
+  <h3 class="font-mono text-[10.5px] tracking-[0.14em] text-accent">{role}</h3>
+  <p class="text-[13.5px] leading-snug text-fg-secondary">{desc}</p>
+  <span class="mt-auto pt-1 font-mono text-[10.5px] text-fg-tertiary">{meta}</span>
+</article>

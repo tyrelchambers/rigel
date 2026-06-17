@@ -1,0 +1,32 @@
+---
+import { Icon } from "astro-icon/components";
+import Base from "../layouts/Base.astro";
+import Nav from "../components/Nav.astro";
+import Footer from "../components/Footer.astro";
+---
+
+<Base title="Off the chart — Helmsman">
+  <Nav />
+  <main
+    id="main"
+    class="chart-grid mx-auto flex min-h-[60vh] max-w-[760px] flex-col items-center px-6 py-32 text-center"
+  >
+    <span class="font-mono text-sm tracking-[0.2em] text-accent">404 · OFF THE CHART</span>
+    <h1
+      class="mt-5 text-[clamp(2.4rem,7vw,3.5rem)] font-bold leading-tight tracking-tight text-fg"
+    >
+      You've sailed off the map.
+    </h1>
+    <p class="mt-5 max-w-md text-[16px] leading-relaxed text-fg-secondary">
+      This heading isn't on any of our charts. Let's get you back to safe harbor.
+    </p>
+    <a
+      href="/"
+      class="mt-9 inline-flex items-center gap-2.5 rounded-md bg-accent px-6 py-3.5 text-[15px] font-semibold text-fg-inverse transition-colors hover:bg-accent-hover"
+    >
+      <Icon name="lucide:anchor" class="size-4" />
+      Back to shore
+    </a>
+  </main>
+  <Footer />
+</Base>

@@ -1,0 +1,81 @@
+---
+import { Icon } from "astro-icon/components";
+
+const guards = [
+  {
+    icon: "lucide:file-check",
+    title: "Nothing runs unconfirmed",
+    desc: "Every mutation shows the exact kubectl command in a confirm sheet before it executes.",
+  },
+  {
+    icon: "lucide:key-round",
+    title: "Password & sessions",
+    desc: "Built-in login with httpOnly session cookies. Secure by default, no extra proxy required.",
+  },
+  {
+    icon: "lucide:server",
+    title: "Your keys, your cluster",
+    desc: "Self-hosted end to end. Your data and credentials never leave the hardware you control.",
+  },
+  {
+    icon: "lucide:folder-lock",
+    title: "Namespace scoping",
+    desc: "One shared namespace filter scopes the entire console to exactly what you want to touch.",
+  },
+];
+---
+
+<section
+  id="secure"
+  class="relative scroll-mt-20 overflow-hidden border-t border-line-subtle bg-surface-sunken"
+>
+  <div
+    class="glow anim-glow absolute -left-32 top-1/2 size-[460px] -translate-y-1/2 opacity-[0.07]"
+  >
+  </div>
+
+  <div
+    class="relative mx-auto max-w-[1200px] px-6 py-20 sm:px-8 lg:px-12 lg:py-24"
+  >
+    <div data-reveal class="max-w-[640px]">
+      <div class="flex items-center gap-2.5">
+        <Icon name="lucide:shield-check" class="size-[15px] text-accent" />
+        <span class="font-mono text-xs tracking-[0.15em] text-fg-tertiary"
+          >SECURE BY DEFAULT</span
+        >
+      </div>
+      <h2
+        class="mt-5 text-[clamp(1.85rem,3.6vw,2.5rem)] font-bold leading-[1.08] tracking-[-0.03em] text-fg"
+      >
+        You're always at the wheel.
+      </h2>
+      <p class="mt-5 max-w-[520px] text-[15.5px] leading-[1.65] text-fg-secondary">
+        Helmsman can do a lot, but it never acts behind your back. Approval is
+        explicit, access is yours alone, and everything runs on your own
+        infrastructure.
+      </p>
+    </div>
+
+    <div
+      class="mt-12 grid gap-px overflow-hidden rounded-xl border border-line-subtle bg-line-subtle sm:grid-cols-2 lg:grid-cols-4"
+    >
+      {
+        guards.map((g, i) => (
+          <div
+            data-reveal
+            style={`--reveal-delay:${i * 70}ms`}
+            class="flex flex-col gap-3.5 bg-surface-sunken p-6"
+          >
+            <span class="grid size-[34px] place-items-center rounded-lg bg-accent/15 text-accent">
+              <Icon name={g.icon} class="size-[18px]" />
+            </span>
+            <h3 class="text-[15px] font-semibold tracking-tight text-fg">
+              {g.title}
+            </h3>
+            <p class="text-[13px] leading-snug text-fg-secondary">{g.desc}</p>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</section>

@@ -1,0 +1,126 @@
+---
+import { Icon } from "astro-icon/components";
+
+interface Props {
+  name: string;
+  eyebrow: string;
+  eyebrowIcon: string;
+  price: string;
+  unit?: string;
+  blurb: string;
+  inheritsFrom?: string;
+  features: string[];
+  ctaLabel: string;
+  ctaHref: string;
+  featured?: boolean;
+  footnote?: string;
+}
+const {
+  name,
+  eyebrow,
+  eyebrowIcon,
+  price,
+  unit,
+  blurb,
+  inheritsFrom,
+  features,
+  ctaLabel,
+  ctaHref,
+  featured = false,
+  footnote,
+} = Astro.props;
+---
+
+<article
+  data-reveal
+  class:list={[
+    "relative flex flex-col rounded-2xl border p-7 transition-[transform,border-color,box-shadow] duration-300",
+    featured
+      ? "border-accent/55 bg-surface-elevated shadow-[0_24px_70px_-30px_rgba(56,189,248,0.45)] lg:-translate-y-3"
+      : "border-line-subtle bg-surface hover:-translate-y-1 hover:border-line-strong",
+  ]}
+>
+  {
+    featured && (
+      <span class="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-accent px-3 py-1 font-mono text-[10.5px] font-semibold tracking-[0.12em] text-fg-inverse shadow-[0_0_22px_-4px_rgba(56,189,248,0.7)]">
+        MOST POPULAR
+      </span>
+    )
+  }
+
+  <div class="flex items-center gap-2.5">
+    <span
+      class:list={[
+        "grid size-[30px] place-items-center rounded-lg",
+        featured
+          ? "border border-accent bg-accent/15 text-accent"
+          : "bg-accent/10 text-accent",
+      ]}
+    >
+      <Icon name={eyebrowIcon} class="size-[16px]" />
+    </span>
+    <span class="font-mono text-[11px] tracking-[0.15em] text-fg-tertiary"
+      >{eyebrow}</span
+    >
+  </div>
+
+  <h3 class="mt-5 text-[22px] font-bold tracking-tight text-fg">{name}</h3>
+  <p class="mt-2 min-h-[40px] text-[13.5px] leading-snug text-fg-secondary">
+    {blurb}
+  </p>
+
+  <div class="mt-5 flex items-end gap-1.5">
+    <span class="text-[40px] font-bold leading-none tracking-tight text-fg"
+      >{price}</span
+    >
+    {unit && <span class="pb-1 text-[13px] text-fg-tertiary">{unit}</span>}
+  </div>
+
+  <a
+    href={ctaHref}
+    class:list={[
+      "mt-6 inline-flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-[14px] font-semibold transition-[background-color,transform] duration-200 active:translate-y-0",
+      featured
+        ? "bg-accent text-fg-inverse shadow-[0_0_26px_-6px_rgba(56,189,248,0.6)] hover:-translate-y-0.5 hover:bg-accent-hover"
+        : "border border-line-strong text-fg hover:-translate-y-0.5 hover:bg-white/[0.05]",
+    ]}
+  >
+    {ctaLabel}
+    <Icon name="lucide:arrow-right" class="size-[15px]" />
+  </a>
+
+  <div class="mt-7 h-px bg-line-subtle"></div>
+
+  {
+    inheritsFrom && (
+      <p class="mt-5 text-[12px] font-medium text-fg-tertiary">
+        Everything in {inheritsFrom}, plus:
+      </p>
+    )
+  }
+  <ul class:list={["flex flex-col gap-3", inheritsFrom ? "mt-3.5" : "mt-5"]}>
+    {
+      features.map((f) => (
+        <li class="flex items-start gap-2.5">
+          <span
+            class:list={[
+              "mt-0.5 grid size-[18px] shrink-0 place-items-center rounded-full",
+              featured ? "bg-accent/20 text-accent" : "bg-running/15 text-running",
+            ]}
+          >
+            <Icon name="lucide:check" class="size-3" />
+          </span>
+          <span class="text-[13.5px] leading-snug text-fg-secondary">{f}</span>
+        </li>
+      ))
+    }
+  </ul>
+
+  {
+    footnote && (
+      <p class="mt-auto pt-6 text-[11.5px] leading-snug text-fg-tertiary">
+        {footnote}
+      </p>
+    )
+  }
+</article>

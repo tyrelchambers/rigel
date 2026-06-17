@@ -1,0 +1,125 @@
+---
+import { Icon } from "astro-icon/components";
+import Base from "../layouts/Base.astro";
+import Nav from "../components/Nav.astro";
+import Hero from "../components/Hero.astro";
+import CrewManifest from "../components/CrewManifest.astro";
+import FeaturePillar from "../components/FeaturePillar.astro";
+import ShowcasePillar from "../components/ShowcasePillar.astro";
+import FinalCta from "../components/FinalCta.astro";
+import Footer from "../components/Footer.astro";
+import ChatWindow from "../components/mocks/ChatWindow.astro";
+import WatchPanel from "../components/mocks/WatchPanel.astro";
+import LookoutMock from "../components/mocks/LookoutMock.astro";
+import HarborMock from "../components/mocks/HarborMock.astro";
+
+const navigatorPoints = [
+  {
+    icon: "lucide:search",
+    text: "Plain-English investigation across logs, events & dependencies",
+  },
+  {
+    icon: "lucide:mouse-pointer-click",
+    text: "Every fix is a one-click button. Nothing runs without your say-so",
+  },
+];
+
+const nightWatchPoints = [
+  {
+    icon: "lucide:shield-check",
+    text: "Stays inside the guardrails you set: spend caps, a kill-switch, and more",
+  },
+  {
+    icon: "lucide:moon",
+    text: "Wake to a clean changelog, not a 3am page",
+  },
+];
+
+const lookoutNegatives = ["no PromQL", "no Prometheus", "no YAML"];
+
+const harborFeatures = [
+  "One-click deploy from the catalog",
+  "Automatic TLS, issued and renewed",
+  "Runs on your hardware, so your data stays yours",
+];
+---
+
+<Base>
+  <Nav />
+  <main id="main">
+    <Hero />
+    <CrewManifest />
+
+    <FeaturePillar
+      id="features"
+      variant="primary"
+      eyebrowIcon="lucide:compass"
+      eyebrow="THE NAVIGATOR"
+      heading="A teammate, not a console."
+      copy="Ask in plain English. The Helmsman reads your logs, events and dependencies like a senior SRE, finds the cause, and proposes the fix as a one-click button. You stay at the wheel."
+      points={navigatorPoints}
+    >
+      <ChatWindow />
+    </FeaturePillar>
+
+    <FeaturePillar
+      variant="sunken"
+      reverse
+      eyebrowIcon="lucide:moon-star"
+      eyebrow="THE NIGHT WATCH"
+      heading="It watches while you're away."
+      copy="An in-cluster agent stands the night watch, catching drift and remediating within the guardrails you set. You wake up to a quiet morning instead of an incident."
+      points={nightWatchPoints}
+    >
+      <WatchPanel />
+    </FeaturePillar>
+
+    <ShowcasePillar
+      id="lookout"
+      variant="primary"
+      eyebrowIcon="lucide:radar"
+      eyebrow="THE LOOKOUT"
+      heading="Tell it what to worry about."
+      copy={"Describe what matters in plain English: “text me if the postgres database goes down.” Helmsman keeps watch on the horizon and pings you the moment it happens."}
+    >
+      <div slot="extras" class="flex flex-wrap gap-2.5">
+        {
+          lookoutNegatives.map((c) => (
+            <span class="flex items-center gap-1.5 rounded-full border border-line-strong bg-surface-elevated px-3 py-1.5 font-mono text-[11.5px] text-fg-secondary">
+              <Icon name="lucide:ban" class="size-3 text-fg-tertiary" />
+              {c}
+            </span>
+          ))
+        }
+      </div>
+      <LookoutMock />
+    </ShowcasePillar>
+
+    <ShowcasePillar
+      id="harbor"
+      variant="sunken"
+      reverse
+      eyebrowIcon="lucide:anchor"
+      eyebrow="THE HARBOR"
+      heading="Your own private cloud."
+      copy={"The catalog turns “I want to self-host X” into a running, TLS’d app in one click. Heroku ergonomics, docked at your hardware instead of someone else’s cloud."}
+    >
+      <div slot="extras" class="flex flex-col gap-3.5">
+        {
+          harborFeatures.map((t) => (
+            <div class="flex items-center gap-2.5">
+              <span class="grid size-5 shrink-0 place-items-center rounded bg-running/15 text-running">
+                <Icon name="lucide:check" class="size-3" />
+              </span>
+              <span class="text-[14.5px] text-fg-secondary">{t}</span>
+            </div>
+          ))
+        }
+      </div>
+      <HarborMock />
+    </ShowcasePillar>
+
+    <FinalCta />
+  </main>
+  <Footer />
+</Base>

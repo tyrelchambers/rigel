@@ -1,0 +1,69 @@
+---
+import { Icon } from "astro-icon/components";
+
+interface Props {
+  id?: string;
+  eyebrowIcon: string;
+  eyebrow: string;
+  heading: string;
+  copy: string;
+  reverse?: boolean;
+  variant?: "primary" | "sunken";
+}
+const {
+  id,
+  eyebrowIcon,
+  eyebrow,
+  heading,
+  copy,
+  reverse = false,
+  variant = "sunken",
+} = Astro.props;
+
+const bg = variant === "sunken" ? "bg-surface-sunken" : "bg-surface";
+---
+
+<section
+  id={id}
+  class:list={["chart-grid relative overflow-hidden border-t border-line-subtle", bg]}
+>
+  <div
+    class="glow anim-glow absolute size-[500px] opacity-[0.07]"
+    style={reverse ? "right:-8rem;top:4rem" : "left:-8rem;top:3rem"}
+  >
+  </div>
+
+  <div
+    class="relative mx-auto grid max-w-[1200px] items-center gap-14 px-6 py-24 sm:px-8 lg:grid-cols-2 lg:gap-20 lg:py-32 lg:px-12"
+  >
+    <!-- text -->
+    <div data-reveal class={reverse ? "lg:order-2" : ""}>
+      <div class="flex items-center gap-2.5">
+        <Icon name={eyebrowIcon} class="size-[15px] text-accent" />
+        <span class="font-mono text-[11.5px] tracking-[0.16em] text-fg-secondary"
+          >{eyebrow}</span
+        >
+      </div>
+      <h2
+        class="mt-5 text-[clamp(2.4rem,5.5vw,3.25rem)] font-bold leading-[1.05] tracking-[-0.035em] text-fg"
+      >
+        {heading}
+      </h2>
+      <p class="mt-5 max-w-[460px] text-[16.5px] leading-[1.7] text-fg-secondary">
+        {copy}
+      </p>
+      <div class="mt-8">
+        <slot name="extras" />
+      </div>
+    </div>
+
+    <!-- visual -->
+    <div
+      data-reveal
+      style="--reveal-delay:120ms"
+      class:list={["min-w-0", reverse ? "lg:order-1" : ""]}
+    >
+      <slot />
+    </div>
+  </div>
+</section>

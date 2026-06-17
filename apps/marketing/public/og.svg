@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" font-family="ui-sans-serif, system-ui, sans-serif">
+  <defs>
+    <radialGradient id="glow" cx="78%" cy="40%" r="55%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.22" />
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0" />
+    </radialGradient>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0V48" fill="none" stroke="#ffffff" stroke-opacity="0.03" />
+    </pattern>
+    <linearGradient id="ink" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#7dd3fc" />
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="#0c0d0f" />
+  <rect width="1200" height="630" fill="url(#grid)" />
+  <rect width="1200" height="630" fill="url(#glow)" />
+
+  <!-- compass mark -->
+  <g transform="translate(80 84)">
+    <rect width="56" height="56" rx="13" fill="#38bdf8" />
+    <g transform="translate(11 11)" fill="none" stroke="#0a0a0a" stroke-width="2.4"
+       stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="17" cy="17" r="14" />
+      <polygon points="22.9 11.1 19.9 20.1 10.9 22.9 13.9 13.9 22.9 11.1" fill="#0a0a0a" stroke="none" />
+    </g>
+    <text x="78" y="38" font-size="34" font-weight="700" fill="#ffffff" letter-spacing="-0.5">Helmsman</text>
+  </g>
+
+  <!-- decorative radar rings -->
+  <g transform="translate(940 330)" fill="none" stroke="#38bdf8" stroke-opacity="0.25">
+    <circle r="200" />
+    <circle r="140" stroke-opacity="0.18" />
+    <circle r="80" stroke-opacity="0.14" />
+    <circle r="10" fill="#38bdf8" stroke="none" />
+  </g>
+
+  <text x="80" y="330" font-size="86" font-weight="700" fill="url(#ink)" letter-spacing="-3">
+    You're the captain.
+  </text>
+  <text x="80" y="416" font-size="54" font-weight="700" fill="#a1a1aa" letter-spacing="-1.5">
+    The Helmsman runs the ship.
+  </text>
+  <text x="82" y="492" font-size="27" fill="#a1a1aa">
+    AI-native Kubernetes that investigates, watches, and fixes —
+  </text>
+  <text x="82" y="528" font-size="27" fill="#a1a1aa">
+    you just set the course.
+  </text>
+
+  <g transform="translate(82 560)">
+    <rect width="220" height="46" rx="9" fill="#38bdf8" />
+    <text x="110" y="30" font-size="20" font-weight="700" fill="#0a0a0a" text-anchor="middle">Take the helm →</text>
+  </g>
+</svg>

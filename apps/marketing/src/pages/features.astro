@@ -1,0 +1,270 @@
+---
+import Base from "../layouts/Base.astro";
+import Nav from "../components/Nav.astro";
+import FeaturesHero from "../components/FeaturesHero.astro";
+import CapabilitySection from "../components/CapabilitySection.astro";
+import ResourceMatrix from "../components/ResourceMatrix.astro";
+import SecureBand from "../components/SecureBand.astro";
+import DockBand from "../components/DockBand.astro";
+import FinalCta from "../components/FinalCta.astro";
+import Footer from "../components/Footer.astro";
+
+const helmsman = [
+  {
+    icon: "lucide:search",
+    title: "Plain-English investigation",
+    desc: "“Why is checkout crashing?” It reads your logs, events and dependencies like a senior SRE to find the cause.",
+  },
+  {
+    icon: "lucide:mouse-pointer-click",
+    title: "One-click fixes",
+    desc: "Every fix arrives as a button that shows the exact kubectl command before anything runs.",
+  },
+  {
+    icon: "lucide:at-sign",
+    title: "@-mention any resource",
+    desc: "Pull a pod, deployment or service straight into the conversation with autocomplete.",
+  },
+  {
+    icon: "lucide:brain",
+    title: "Watch it think",
+    desc: "A reasoning pane shows how the Helmsman got there, not just the answer.",
+  },
+  {
+    icon: "lucide:cpu",
+    title: "Choose your model",
+    desc: "Opus 4.8 or Sonnet, with Low or High effort. Pick the right model for the job.",
+  },
+  {
+    icon: "lucide:history",
+    title: "Picks up where you left off",
+    desc: "Saved chat history, and any panel can hand off to the chat with full context.",
+  },
+];
+
+const nightWatch = [
+  {
+    icon: "lucide:shield-check",
+    title: "Guardrails you define",
+    desc: "Spend caps, a kill-switch and scoped permissions. The agent only ever acts inside the lines.",
+  },
+  {
+    icon: "lucide:siren",
+    title: "Catches the usual suspects",
+    desc: "Crash-loops, OOM kills, pending pods and degraded rollouts, all caught automatically.",
+  },
+  {
+    icon: "lucide:hand",
+    title: "Asks when it's unsure",
+    desc: "A “Needs you” queue surfaces every decision the agent won't make on its own.",
+  },
+  {
+    icon: "lucide:save",
+    title: "Backs up before it touches",
+    desc: "Resource YAML is snapshotted before any change, so nothing is ever lost.",
+  },
+  {
+    icon: "lucide:rotate-ccw",
+    title: "One-click revert",
+    desc: "Every action is logged with before / after YAML and an undo button right beside it.",
+  },
+  {
+    icon: "lucide:scroll-text",
+    title: "Full audit trail",
+    desc: "An activity log of everything the watch has done, ready to review.",
+  },
+];
+
+const lookout = [
+  {
+    icon: "lucide:message-circle",
+    title: "Alerts in plain English",
+    desc: "“Text me if postgres goes down.” No PromQL, no expressions, nothing to learn.",
+  },
+  {
+    icon: "lucide:smartphone",
+    title: "Straight to your phone",
+    desc: "Signal and SMS notifications the second something on your watchlist breaks.",
+  },
+  {
+    icon: "lucide:radar",
+    title: "Always on the horizon",
+    desc: "Your words compile to a live watch that runs continuously in the background.",
+  },
+  {
+    icon: "lucide:ban",
+    title: "Nothing extra to run",
+    desc: "No Prometheus, no Alertmanager, no dashboards to babysit. Helmsman keeps watch for you.",
+  },
+];
+
+const harbor = [
+  {
+    icon: "lucide:package",
+    title: "55 apps, six categories",
+    desc: "Dev tools, databases, productivity, media, networking and observability, all ready to deploy.",
+  },
+  {
+    icon: "lucide:wand-sparkles",
+    title: "Guided install",
+    desc: "Pick namespace, hostname, storage and node fit, with every choice validated before it runs.",
+  },
+  {
+    icon: "lucide:lock",
+    title: "TLS, issued & renewed",
+    desc: "Every app gets HTTPS automatically. Certificates issue and renew themselves.",
+  },
+  {
+    icon: "lucide:refresh-cw",
+    title: "Stay current",
+    desc: "Update checks spot new versions and flag upgrades the moment they land upstream.",
+  },
+  {
+    icon: "lucide:trash-2",
+    title: "Clean uninstall",
+    desc: "The Grand Cleanse finds every resource, confirms by typed name and purges without a trace.",
+  },
+  {
+    icon: "lucide:server",
+    title: "On your hardware",
+    desc: "Heroku ergonomics, docked at your cluster. You keep control of your data and your bill.",
+  },
+];
+
+const engineRoom = [
+  {
+    icon: "lucide:cable",
+    title: "Port-forward",
+    desc: "Tunnel any service or pod to localhost, with local-port conflict detection.",
+  },
+  {
+    icon: "lucide:scroll-text",
+    title: "Live logs",
+    desc: "Stream pod logs in real time over a WebSocket, with configurable tail.",
+  },
+  {
+    icon: "lucide:move-vertical",
+    title: "Scale & restart",
+    desc: "Scale, restart, pause and resume rollouts, each from a single button.",
+  },
+  {
+    icon: "lucide:pencil",
+    title: "Edit env & images",
+    desc: "Set variables, swap container images and adjust requests & limits in place.",
+  },
+  {
+    icon: "lucide:server-cog",
+    title: "Node operations",
+    desc: "Cordon, uncordon and drain nodes safely, with sensible defaults baked in.",
+  },
+  {
+    icon: "lucide:clock",
+    title: "CronJob control",
+    desc: "Suspend, resume or trigger an on-demand run straight from the schedule.",
+  },
+];
+
+const charts = [
+  {
+    icon: "lucide:gauge",
+    title: "Overview dashboard",
+    desc: "Node, pod and deployment health at a glance, with a one-click “investigate this”.",
+  },
+  {
+    icon: "lucide:waypoints",
+    title: "Connectivity map",
+    desc: "See pod-to-pod and pod-to-service flows and spot where traffic is unhealthy.",
+  },
+  {
+    icon: "lucide:database",
+    title: "Database radar",
+    desc: "Auto-detects Postgres, MySQL and Supabase. Copy a DSN, reveal creds or port-forward.",
+  },
+  {
+    icon: "lucide:ruler",
+    title: "Right-sizing",
+    desc: "Flags over- and under-provisioned workloads and suggests the CPU / memory fix.",
+  },
+];
+---
+
+<Base
+  title="Features — Helmsman"
+  description="Everything Helmsman does: a plain-English AI ops crew, autonomous remediation, natural-language alerts, a 55-app catalog, and a console for every Kubernetes resource."
+>
+  <Nav />
+  <main id="main">
+    <FeaturesHero />
+
+    <CapabilitySection
+      id="helmsman"
+      variant="primary"
+      eyebrowIcon="lucide:message-square-text"
+      eyebrow="THE HELMSMAN"
+      heading="An ops engineer you can talk to."
+      copy="Ask in plain English. The Helmsman investigates your cluster like a senior SRE, then hands you the fix as a button. You stay at the wheel."
+      items={helmsman}
+    />
+
+    <CapabilitySection
+      id="watch"
+      variant="sunken"
+      reverse
+      eyebrowIcon="lucide:moon-star"
+      eyebrow="THE NIGHT WATCH"
+      heading="It heals the ship while you sleep."
+      copy="An agent runs inside your cluster, catching drift and failures around the clock and fixing what it safely can, always within the guardrails you set."
+      items={nightWatch}
+    />
+
+    <CapabilitySection
+      id="lookout"
+      variant="primary"
+      eyebrowIcon="lucide:radar"
+      eyebrow="THE LOOKOUT"
+      heading="Tell it what to worry about."
+      copy="Describe what matters in plain English. Helmsman compiles it to a live watch and pings your phone the moment it trips. No query language required."
+      items={lookout}
+    />
+
+    <CapabilitySection
+      id="harbor"
+      variant="sunken"
+      reverse
+      eyebrowIcon="lucide:anchor"
+      eyebrow="THE HARBOR"
+      heading="Self-host anything in one click."
+      copy="The catalog turns “I want to run X” into a live, TLS'd app on your own hardware, with Heroku ergonomics and none of the cloud bill."
+      items={harbor}
+    />
+
+    <ResourceMatrix />
+
+    <CapabilitySection
+      id="engine"
+      variant="sunken"
+      reverse
+      eyebrowIcon="lucide:wrench"
+      eyebrow="THE ENGINE ROOM"
+      heading="Drop into the machinery."
+      copy="When you want to get hands-on, every common operation is a click away. No kubectl incantations to memorize, no YAML to edit by hand."
+      items={engineRoom}
+    />
+
+    <CapabilitySection
+      id="charts"
+      variant="primary"
+      eyebrowIcon="lucide:gauge"
+      eyebrow="THE CHARTS"
+      heading="The view from the crow's nest."
+      copy="Read the state of the whole cluster at a glance, then send the Helmsman to investigate anything that looks off."
+      items={charts}
+    />
+
+    <SecureBand />
+    <DockBand />
+
+    <FinalCta />
+  </main>
+  <Footer />
+</Base>

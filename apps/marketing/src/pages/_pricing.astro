@@ -1,0 +1,153 @@
+---
+import { Icon } from "astro-icon/components";
+import Base from "../layouts/Base.astro";
+import Nav from "../components/Nav.astro";
+import PricingHero from "../components/pricing/PricingHero.astro";
+import PricingCard from "../components/pricing/PricingCard.astro";
+import CostAnchor from "../components/pricing/CostAnchor.astro";
+import CompareTable from "../components/pricing/CompareTable.astro";
+import PricingFaq from "../components/pricing/PricingFaq.astro";
+import FinalCta from "../components/FinalCta.astro";
+import Footer from "../components/Footer.astro";
+
+const tiers = [
+  {
+    name: "Community",
+    eyebrow: "SOLO VOYAGE",
+    eyebrowIcon: "lucide:sailboat",
+    price: "$0",
+    unit: "forever",
+    blurb: "Everything you need to self-host a single cluster on your own hardware.",
+    features: [
+      "The full console — every resource panel",
+      "Helmsman AI chat & one-click fixes",
+      "Natural-language alerts (the Lookout)",
+      "55-app catalog with automatic TLS",
+      "Single cluster · single user",
+      "Community support",
+    ],
+    ctaLabel: "Start self-hosting",
+    ctaHref: "/#cta",
+    footnote:
+      "Bring your own Anthropic key — you pay Anthropic directly, usually pennies per session.",
+  },
+  {
+    name: "Team",
+    eyebrow: "FULL CREW",
+    eyebrowIcon: "lucide:ship",
+    price: "$49",
+    unit: "/ cluster / month",
+    blurb: "Wake the whole crew: autonomous remediation, team access, and AI that just works.",
+    inheritsFrom: "Community",
+    features: [
+      "The Night Watch — autonomous remediation",
+      "Managed AI — bundled tokens, no key to manage",
+      "Multi-cluster from one console",
+      "SSO & role-based access control",
+      "Audit log with one-click revert",
+      "Unlimited team members",
+      "Priority email support",
+    ],
+    ctaLabel: "Start 14-day trial",
+    ctaHref: "/#cta",
+    featured: true,
+    footnote: "Billed per connected cluster. Save ~17% billed annually.",
+  },
+  {
+    name: "Enterprise",
+    eyebrow: "THE FLEET",
+    eyebrowIcon: "lucide:anchor",
+    price: "Custom",
+    unit: "talk to us",
+    blurb: "For fleets that need air-gapped installs, compliance, and a direct line.",
+    inheritsFrom: "Team",
+    features: [
+      "Air-gapped / offline licensing",
+      "SAML SSO & custom RBAC",
+      "Unlimited clusters & nodes",
+      "Audit export & retention policies",
+      "99.9% uptime SLA & dedicated support",
+      "Security review & guided onboarding",
+    ],
+    ctaLabel: "Contact sales",
+    ctaHref: "/#cta",
+    footnote: "Annual contract. Procurement, MSA and security questionnaires welcome.",
+  },
+];
+
+// The product-specific part of the model: two ways to power the AI.
+const aiBilling = [
+  {
+    icon: "lucide:key-round",
+    title: "Bring your own key",
+    desc: "Connect your own Anthropic API key. You pay Anthropic directly — your cost, your control. Free on every plan.",
+  },
+  {
+    icon: "lucide:sparkles",
+    title: "Managed AI",
+    desc: "Let us handle the key and bundle the tokens into one predictable bill. Available on Team and Enterprise.",
+  },
+];
+---
+
+<Base
+  title="Pricing — Helmsman"
+  description="Self-host Helmsman free, forever. Pay only when you want the autonomous crew, multi-cluster, SSO and managed AI. Community, Team and Enterprise plans."
+>
+  <Nav />
+  <main id="main">
+    <PricingHero />
+
+    <!-- tiers -->
+    <section class="relative overflow-hidden bg-surface-sunken">
+      <div
+        class="relative mx-auto grid max-w-[1100px] items-start gap-6 px-6 pb-16 sm:px-8 lg:grid-cols-3 lg:px-12"
+      >
+        {tiers.map((t) => <PricingCard {...t} />)}
+      </div>
+
+      <!-- how the AI is billed -->
+      <div class="relative mx-auto max-w-[1100px] px-6 pb-20 sm:px-8 lg:px-12">
+        <div
+          data-reveal
+          class="rounded-2xl border border-line-subtle bg-surface p-6 sm:p-8"
+        >
+          <div class="flex items-center gap-2.5">
+            <Icon name="lucide:cpu" class="size-[15px] text-accent" />
+            <span class="font-mono text-[11px] tracking-[0.15em] text-fg-tertiary"
+              >HOW THE AI IS BILLED</span
+            >
+          </div>
+          <p class="mt-3 max-w-[680px] text-[14.5px] leading-relaxed text-fg-secondary">
+            Helmsman runs on Claude. You're never locked in — pick whichever way
+            suits you, and switch any time.
+          </p>
+          <div class="mt-6 grid gap-4 sm:grid-cols-2">
+            {
+              aiBilling.map((o) => (
+                <div class="flex gap-3.5 rounded-xl border border-line-subtle bg-surface-elevated p-5">
+                  <span class="grid size-9 shrink-0 place-items-center rounded-lg bg-accent/15 text-accent">
+                    <Icon name={o.icon} class="size-[18px]" />
+                  </span>
+                  <div>
+                    <h3 class="text-[14.5px] font-semibold text-fg">{o.title}</h3>
+                    <p class="mt-1.5 text-[13px] leading-snug text-fg-secondary">
+                      {o.desc}
+                    </p>
+                  </div>
+                </div>
+              ))
+            }
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <CostAnchor />
+    <CompareTable />
+    <PricingFaq />
+
+    <FinalCta />
+  </main>
+  <Footer />
+</Base>

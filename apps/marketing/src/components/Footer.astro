@@ -1,0 +1,136 @@
+---
+import { Icon } from "astro-icon/components";
+
+// Root-absolute hrefs so the footer resolves correctly from any page.
+const columns = [
+    {
+        title: "PRODUCT",
+        links: [
+            { label: "Features", href: "/features" },
+            { label: "The Lookout", href: "/features#lookout" },
+            { label: "The Harbor", href: "/features#harbor" },
+            { label: "Changelog", href: "#" },
+        ],
+    },
+    {
+        title: "CREW",
+        links: [
+            { label: "The AI crew", href: "/#crew" },
+            { label: "Diagnostics", href: "/features#helmsman" },
+            { label: "Auto-fix", href: "/features#watch" },
+            { label: "Watchstanding", href: "/features#watch" },
+        ],
+    },
+    {
+        title: "RESOURCES",
+        links: [
+            { label: "Guides", href: "#" },
+            { label: "API reference", href: "#" },
+            { label: "Status", href: "#" },
+        ],
+    },
+    {
+        title: "COMPANY",
+        links: [
+            { label: "About", href: "#" },
+            { label: "Blog", href: "#" },
+            { label: "Careers", href: "#" },
+            { label: "Contact", href: "#" },
+        ],
+    },
+];
+
+const social = [
+    { icon: "lucide:github", label: "GitHub", href: "#" },
+    { icon: "lucide:twitter", label: "X / Twitter", href: "#" },
+    { icon: "lucide:rss", label: "RSS", href: "#" },
+];
+---
+
+<footer class="border-t border-line-subtle bg-surface">
+    <div class="mx-auto max-w-[1200px] px-6 py-16 sm:px-8 lg:px-12 lg:pt-20">
+        <div
+            class="flex flex-col gap-12 lg:flex-row lg:justify-between lg:gap-20"
+        >
+            <!-- brand -->
+            <div data-reveal class="max-w-[340px]">
+                <div class="flex items-center gap-3">
+                    <span
+                        class="grid size-10 place-items-center rounded-md bg-accent text-fg-inverse shadow-[0_0_18px_-2px_rgba(56,189,248,0.5)]"
+                    >
+                        <Icon name="lucide:ship-wheel" class="size-[23px]" />
+                    </span>
+                    <span class="text-3xl font-bold tracking-tight text-fg"
+                        >Helmsman</span
+                    >
+                </div>
+                <p class="mt-5 text-[13.5px] leading-relaxed text-fg-secondary">
+                    You're the captain — the Helmsman runs the ship. AI-native
+                    Kubernetes that diagnoses, fixes, and stands watch so you
+                    don't have to.
+                </p>
+                <div class="mt-5 flex items-center gap-2 text-fg-tertiary">
+                    <Icon
+                        name="lucide:anchor"
+                        class="size-[13px] text-accent"
+                    />
+                    <span class="font-mono text-[11px] tracking-[0.12em]"
+                        >EST. 2025</span
+                    >
+                </div>
+            </div>
+
+            <!-- link columns -->
+            <div
+                data-reveal
+                style="--reveal-delay:100ms"
+                class="grid grid-cols-2 gap-x-10 gap-y-10 sm:grid-cols-4 lg:gap-x-16"
+            >
+                {
+                    columns.map((col) => (
+                        <div class="flex flex-col gap-4">
+                            <span class="font-mono text-[11px] tracking-[0.12em] text-fg-tertiary">
+                                {col.title}
+                            </span>
+                            <ul class="flex flex-col gap-3.5">
+                                {col.links.map((l) => (
+                                    <li>
+                                        <a
+                                            href={l.href}
+                                            class="text-[13.5px] text-fg-secondary transition-colors hover:text-fg"
+                                        >
+                                            {l.label}
+                                        </a>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    ))
+                }
+            </div>
+        </div>
+
+        <div class="mt-14 h-px bg-line-subtle"></div>
+
+        <div
+            class="mt-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center"
+        >
+            <span class="text-[12.5px] text-fg-tertiary"
+                >©{new Date(Date.now()).getFullYear()} Helmsman</span
+            >
+            <div class="flex items-center gap-2">
+                {
+                    social.map((s) => (
+                        <a
+                            href={s.href}
+                            aria-label={s.label}
+                            class="grid size-9 place-items-center rounded-md border border-line-subtle text-fg-tertiary transition-colors hover:border-line-strong hover:text-fg"
+                        >
+                            <Icon name={s.icon} class="size-4" />
+                        </a>
+                    ))
+                }
+            </div>
+        </div>
+    </div>
+</footer>

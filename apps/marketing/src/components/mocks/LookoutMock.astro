@@ -1,0 +1,87 @@
+---
+import { Icon } from "astro-icon/components";
+
+const parsed = [
+  { icon: "lucide:message-square", label: "SMS" },
+  { icon: "lucide:database", label: "postgres-primary" },
+  { icon: "lucide:circle-x", label: "is down" },
+];
+---
+
+<div class="relative mx-auto w-full max-w-[480px] lg:pb-14">
+  <!-- faint sonar ring -->
+  <div
+    class="pointer-events-none absolute -right-6 top-24 hidden size-[150px] rounded-full border border-accent/40 opacity-50 lg:block"
+  >
+  </div>
+
+  <!-- alert composer -->
+  <div
+    class="relative rounded-lg border border-line-strong bg-surface shadow-2xl shadow-black/60"
+  >
+    <div
+      class="flex items-center gap-3 border-b border-line-subtle px-4 py-3.5"
+    >
+      <span
+        class="grid size-[30px] place-items-center rounded-md border border-accent bg-accent/15 text-accent"
+      >
+        <Icon name="lucide:radar" class="size-[15px]" />
+      </span>
+      <span class="flex-1 text-[15px] font-semibold text-fg">New alert</span>
+      <span class="font-mono text-[10.5px] tracking-[0.14em] text-fg-tertiary"
+        >DRAFT</span
+      >
+    </div>
+
+    <div class="flex flex-col gap-3.5 p-4">
+      <!-- nl input -->
+      <div
+        class="flex items-center gap-2.5 rounded-md border border-line-strong bg-surface-sunken px-3 py-3"
+      >
+        <Icon name="lucide:sparkles" class="size-[15px] shrink-0 text-accent" />
+        <span class="font-mono text-[13px] text-fg"
+          >text me if the postgres database goes down</span
+        >
+        <span class="anim-cursor h-[17px] w-0.5 bg-accent"></span>
+      </div>
+
+      <span class="font-mono text-[10px] tracking-[0.14em] text-fg-tertiary"
+        >PARSED</span
+      >
+      <div class="flex flex-wrap gap-2">
+        {
+          parsed.map((c) => (
+            <span class="flex items-center gap-1.5 rounded border border-line-subtle bg-surface-elevated px-2.5 py-1.5 text-[12px] text-fg-secondary">
+              <Icon name={c.icon} class="size-3 text-accent" />
+              {c.label}
+            </span>
+          ))
+        }
+      </div>
+
+      <p class="flex items-center gap-1.5 font-mono text-[11.5px] text-fg-tertiary">
+        <Icon name="lucide:check" class="size-3 text-running" />
+        compiled to a live watch — no PromQL written
+      </p>
+    </div>
+  </div>
+
+  <!-- SMS notification -->
+  <div
+    class="mt-4 w-full rounded-lg border border-line-strong bg-surface-elevated p-3.5 shadow-2xl shadow-black/70 lg:absolute lg:-bottom-2 lg:right-0 lg:mt-0 lg:w-[320px]"
+  >
+    <div class="flex items-center gap-2.5">
+      <span
+        class="grid size-7 place-items-center rounded-md bg-accent text-fg-inverse shadow-[0_0_14px_-2px_rgba(56,189,248,0.7)]"
+      >
+        <Icon name="lucide:anchor" class="size-[15px]" />
+      </span>
+      <span class="flex-1 text-[13.5px] font-semibold text-fg">Helmsman</span>
+      <span class="font-mono text-[11px] text-fg-tertiary">now</span>
+    </div>
+    <p class="mt-2.5 text-[13px] leading-relaxed text-fg-secondary">
+      ALERT — <span class="text-fg">postgres-primary</span> is DOWN. I'm standing
+      watch and already investigating the fix.
+    </p>
+  </div>
+</div>

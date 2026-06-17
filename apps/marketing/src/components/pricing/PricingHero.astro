@@ -1,0 +1,56 @@
+---
+import { Icon } from "astro-icon/components";
+---
+
+<section id="top" class="chart-grid relative overflow-hidden bg-surface-sunken">
+  <!-- ambient glows -->
+  <div class="glow anim-glow absolute -left-40 -top-24 h-[420px] w-[960px]"></div>
+  <div
+    class="glow anim-glow absolute -right-24 top-40 size-[420px] opacity-[0.08]"
+    style="animation-delay:-4s"
+  >
+  </div>
+
+  <div
+    class="relative mx-auto max-w-[760px] px-6 pb-14 pt-20 text-center sm:px-8 lg:px-12 lg:pb-16 lg:pt-28"
+  >
+    <div class="flex items-center justify-center gap-2.5">
+      <Icon name="lucide:scroll" class="size-[15px] text-accent" />
+      <span class="font-mono text-xs tracking-[0.16em] text-fg-tertiary"
+        >SHIP'S ARTICLES</span
+      >
+    </div>
+
+    <h1
+      class="rise mt-5 text-[clamp(2.6rem,7vw,3.875rem)] font-bold leading-[1.04] tracking-[-0.03em]"
+      style="animation-delay:0.05s"
+    >
+      <span class="block text-fg">Free to take the helm.</span>
+      <span class="ink-gradient block">Pay for the crew.</span>
+    </h1>
+
+    <p
+      class="rise mx-auto mt-7 max-w-[560px] text-[17px] leading-relaxed text-fg-secondary"
+      style="animation-delay:0.15s"
+    >
+      Self-host the full console free, forever — bring your own AI key. When
+      you're ready, wake the whole crew to stand watch 24/7. No ops team, no
+      cloud bill, no surprises.
+    </p>
+
+    <div
+      class="rise mt-7 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[13.5px] text-fg-tertiary"
+      style="animation-delay:0.25s"
+    >
+      <span class="flex items-center gap-1.5">
+        <Icon name="lucide:check" class="size-[14px] text-running" /> Open-core, self-hosted
+      </span>
+      <span class="flex items-center gap-1.5">
+        <Icon name="lucide:check" class="size-[14px] text-running" /> Your data never leaves
+      </span>
+      <span class="flex items-center gap-1.5">
+        <Icon name="lucide:check" class="size-[14px] text-running" /> Cancel anytime
+      </span>
+    </div>
+  </div>
+</section>

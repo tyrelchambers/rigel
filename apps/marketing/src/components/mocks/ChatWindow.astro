@@ -1,0 +1,88 @@
+---
+import { Icon } from "astro-icon/components";
+---
+
+<div
+  class="mx-auto w-full max-w-[540px] overflow-hidden rounded-lg border border-line-strong bg-surface-elevated shadow-2xl shadow-black/60"
+>
+  <!-- header -->
+  <div
+    class="flex items-center justify-between border-b border-line-subtle px-3.5 py-2.5"
+  >
+    <span class="flex items-center gap-2">
+      <Icon name="lucide:ship-wheel" class="size-4 text-accent" />
+      <span class="text-[13.5px] font-semibold text-fg">Helmsman</span>
+    </span>
+    <span class="font-mono text-[11px] text-fg-tertiary">47.6°N 122.3°W</span>
+  </div>
+
+  <!-- body -->
+  <div class="flex flex-col gap-3.5 p-[18px]">
+    <!-- user -->
+    <div class="flex justify-end">
+      <p
+        class="max-w-[78%] rounded-md border border-line-subtle bg-surface-sunken px-3 py-2.5 text-[13px] text-fg"
+      >
+        Why is checkout returning 502s?
+      </p>
+    </div>
+
+    <!-- assistant -->
+    <div class="flex items-start gap-2.5">
+      <span
+        class="grid size-[26px] shrink-0 place-items-center rounded-full bg-accent/15 text-accent"
+      >
+        <Icon name="lucide:compass" class="size-3.5" />
+      </span>
+      <div
+        class="flex flex-col gap-1 rounded-md border border-line-subtle bg-surface px-3 py-2.5 text-[13px] leading-relaxed text-fg-secondary"
+      >
+        <span
+          >Ingress is healthy. <span class="font-mono text-fg">checkout</span> has
+          2/3 replicas NotReady — the readiness probe on :8080 is failing.</span
+        >
+        <span
+          >Root cause: the new image points <span class="font-mono text-fg"
+            >DB_HOST</span
+          > at a service that no longer exists.</span
+        >
+      </div>
+    </div>
+
+    <!-- confirm sheet -->
+    <div
+      class="rounded-md border border-accent/25 bg-surface-sunken p-4 shadow-[0_0_40px_-12px_rgba(56,189,248,0.35)]"
+    >
+      <div class="flex items-center justify-between">
+        <span class="flex items-center gap-1.5 text-[13px] font-semibold text-fg">
+          <Icon name="lucide:wrench" class="size-3.5 text-accent" />
+          Proposed fix
+        </span>
+        <span class="font-mono text-[10px] tracking-wide text-fg-tertiary"
+          >1 ACTION</span
+        >
+      </div>
+      <div
+        class="mt-3 flex items-center gap-2 overflow-hidden rounded border border-line-subtle bg-surface px-2.5 py-2"
+      >
+        <Icon name="lucide:terminal" class="size-3.5 shrink-0 text-fg-tertiary" />
+        <code class="truncate font-mono text-[11.5px] text-fg-secondary"
+          >kubectl set env deploy/checkout DB_HOST=postgres-primary</code
+        >
+      </div>
+      <div class="mt-3 flex items-center gap-2.5">
+        <span
+          class="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md bg-accent px-3 py-2 text-[13px] font-semibold text-fg-inverse"
+        >
+          <Icon name="lucide:check" class="size-3.5" />
+          Approve
+        </span>
+        <span
+          class="inline-flex items-center justify-center rounded-md border border-line-strong px-3.5 py-2 text-[13px] text-fg-secondary"
+        >
+          Dismiss
+        </span>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,214 @@
+@import "tailwindcss";
+
+/* ─── Helmsman design tokens (clankerlocal.pen · midnight palette) ───────────
+ * Mirrors apps/web/src/index.css so the marketing site and the product app
+ * share one visual language.
+ *   Surface:  primary #121315 · elevated #1B1C1F · sunken #0C0D0F
+ *   Fg:       primary #FFFFFF · secondary #A1A1AA · tertiary #6B6B73 · inverse #0A0A0A
+ *   Border:   subtle #26272B · strong #34353A
+ *   Accent:   #38BDF8 (sky) · hover #0EA5E9 · soft #7DD3FC
+ *   Status:   running #10B981 · pending #F59E0B · failed #EF4444
+ * ──────────────────────────────────────────────────────────────────────── */
+@theme {
+  --color-surface: #121315;
+  --color-surface-elevated: #1b1c1f;
+  --color-surface-sunken: #0c0d0f;
+
+  --color-fg: #ffffff;
+  --color-fg-secondary: #a1a1aa;
+  --color-fg-tertiary: #6b6b73;
+  --color-fg-inverse: #0a0a0a;
+
+  --color-line-subtle: #26272b;
+  --color-line-strong: #34353a;
+
+  --color-accent: #38bdf8;
+  --color-accent-hover: #0ea5e9;
+  --color-accent-soft: #7dd3fc;
+
+  --color-running: #10b981;
+  --color-pending: #f59e0b;
+  --color-failed: #ef4444;
+  --color-cyan: #22d3ee;
+  --color-violet: #a855f7;
+
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    background-color: var(--color-surface-sunken);
+    color-scheme: dark;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-surface-sunken);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: color-mix(in srgb, var(--color-accent) 30%, transparent);
+    color: #fff;
+  }
+
+  /* Thin dark scrollbar to match the surface */
+  * {
+    scrollbar-color: var(--color-line-strong) transparent;
+  }
+}
+
+/* ─── Reusable cosmetics ─────────────────────────────────────────────────── */
+
+/* Faint nautical chart grid used behind the hero and showcase sections. */
+.chart-grid {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size: 128px 120px;
+}
+
+/* Soft sky glow blob. Place absolutely; size via width/height utilities. */
+.glow {
+  border-radius: 9999px;
+  background: var(--color-accent);
+  filter: blur(140px);
+  opacity: 0.1;
+  pointer-events: none;
+}
+
+/* Gradient ink for the big "Take the helm." headline (white → sky). */
+.ink-gradient {
+  background: linear-gradient(180deg, #ffffff 0%, #bae6fd 55%, #38bdf8 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ─── Motion ─────────────────────────────────────────────────────────────── */
+@keyframes sweep-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes ping-expand {
+  0% {
+    transform: scale(0.55);
+    opacity: 0.55;
+  }
+  70% {
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.25);
+    opacity: 0;
+  }
+}
+@keyframes blip-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.82);
+  }
+}
+@keyframes hub-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.06);
+  }
+}
+@keyframes cursor-blink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  50%,
+  95% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes glow-breathe {
+  0%,
+  100% {
+    opacity: 0.06;
+  }
+  50% {
+    opacity: 0.15;
+  }
+}
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .anim-sweep {
+    transform-origin: center;
+    animation: sweep-rotate 5s linear infinite;
+  }
+  .anim-ping {
+    animation: ping-expand 3s ease-out infinite;
+  }
+  .anim-blip {
+    animation: blip-pulse 2.4s ease-in-out infinite;
+  }
+  .anim-hub {
+    animation: hub-pulse 2.8s ease-in-out infinite;
+  }
+  .anim-cursor {
+    animation: cursor-blink 1.1s steps(1) infinite;
+  }
+  /* Slow breathing on the ambient glow blobs. */
+  .anim-glow {
+    animation: glow-breathe 9s ease-in-out infinite;
+  }
+
+  /* On-load entrance for above-the-fold hero content. */
+  .rise {
+    animation: rise-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* Scroll reveals — driven by an IntersectionObserver that toggles .is-visible
+     (see Base.astro). The hidden start state only applies when JS is active
+     (html.js), so without JS content stays visible. */
+  html.js [data-reveal] {
+    opacity: 0;
+    transform: translateY(24px);
+    transition:
+      opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    transition-delay: var(--reveal-delay, 0ms);
+  }
+  html.js [data-reveal].is-visible {
+    opacity: 1;
+    transform: none;
+  }
+}

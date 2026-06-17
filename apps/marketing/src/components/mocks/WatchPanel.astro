@@ -1,0 +1,117 @@
+---
+import { Icon } from "astro-icon/components";
+
+const log = [
+  {
+    icon: "lucide:triangle-alert",
+    color: "text-failed",
+    text: "ingress-nginx — 502 error spike detected",
+  },
+  {
+    icon: "lucide:search",
+    color: "text-pending",
+    text: "tracing upstream — checkout pod not ready",
+  },
+  {
+    icon: "lucide:wrench",
+    color: "text-accent",
+    text: "auto-remediating — restarted 2 unhealthy replicas",
+  },
+  {
+    icon: "lucide:circle-check",
+    color: "text-running",
+    text: "error rate back to 0.00% — verified & logged",
+  },
+];
+
+const guardrails = ["spend cap $50/mo", "no deletes", "kill-switch", "replicas ≤ 5"];
+---
+
+<div
+  class="mx-auto w-full max-w-[540px] overflow-hidden rounded-lg border border-line-strong bg-surface-elevated shadow-2xl shadow-black/60"
+>
+  <!-- header -->
+  <div
+    class="flex items-center justify-between border-b border-line-subtle px-3.5 py-2.5"
+  >
+    <span class="flex items-center gap-2">
+      <Icon name="lucide:radar" class="size-4 text-accent" />
+      <span class="text-[13.5px] font-semibold text-fg">Night Watch</span>
+    </span>
+    <span class="flex items-center gap-1.5 font-mono text-[11px] text-running">
+      <span class="anim-blip size-[7px] rounded-full bg-running"></span>
+      watching · 03:14 UTC
+    </span>
+  </div>
+
+  <!-- sonar band -->
+  <div
+    class="flex items-center justify-center border-b border-line-subtle bg-surface-sunken py-3.5"
+  >
+    <div class="relative size-[100px]">
+      <span
+        class="absolute inset-0 rounded-full border"
+        style="border-color:rgba(34,211,238,0.12)"></span>
+      <span
+        class="absolute inset-[18px] rounded-full border"
+        style="border-color:rgba(34,211,238,0.22)"></span>
+      <span
+        class="absolute inset-[33px] rounded-full border"
+        style="border-color:rgba(168,85,247,0.4)"></span>
+      <!-- rotating sweep: trailing wedge + crisp leading arm + tip -->
+      <span class="anim-sweep absolute inset-0">
+        <span
+          class="absolute inset-0 rounded-full"
+          style="-webkit-mask:radial-gradient(circle 50px at center, transparent 6px,#000 7px,#000 49px,transparent 50px);mask:radial-gradient(circle 50px at center, transparent 6px,#000 7px,#000 49px,transparent 50px);background:conic-gradient(from 0deg, rgba(34,211,238,0) 312deg, rgba(34,211,238,0.28) 358deg, rgba(34,211,238,0) 360deg)"
+        ></span>
+        <span
+          class="absolute left-1/2 top-0 h-1/2 w-px origin-bottom -translate-x-1/2"
+          style="background:linear-gradient(to top, rgba(34,211,238,0.95), rgba(34,211,238,0.15));box-shadow:0 0 8px rgba(34,211,238,0.75)"
+        ></span>
+        <span
+          class="absolute left-1/2 top-0 size-[5px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan"
+          style="box-shadow:0 0 8px 1px rgba(34,211,238,0.9)"
+        ></span>
+      </span>
+      <!-- center ping -->
+      <span
+        class="absolute left-1/2 top-1/2 size-[12px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent"
+        style="box-shadow:0 0 12px 1px rgba(168,85,247,0.7)"></span>
+      <span
+        class="anim-ping absolute left-1/2 top-1/2 size-[12px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan"
+      ></span>
+    </div>
+  </div>
+
+  <!-- body -->
+  <div class="flex flex-col gap-3.5 p-[18px]">
+    <ul class="flex flex-col gap-2.5">
+      {
+        log.map((row) => (
+          <li class="flex items-center gap-2.5">
+            <Icon name={row.icon} class={`size-[13px] shrink-0 ${row.color}`} />
+            <span class="font-mono text-[11.5px] text-fg-secondary">{row.text}</span>
+          </li>
+        ))
+      }
+    </ul>
+
+    <div class="h-px bg-line-subtle"></div>
+
+    <div class="flex flex-col gap-2.5">
+      <span class="font-mono text-[10px] tracking-[0.15em] text-fg-tertiary"
+        >ACTIVE GUARDRAILS</span
+      >
+      <div class="flex flex-wrap gap-2">
+        {
+          guardrails.map((g) => (
+            <span class="flex items-center gap-1.5 rounded-full border border-line-subtle bg-surface px-2.5 py-1 font-mono text-[10.5px] text-fg-secondary">
+              <Icon name="lucide:shield" class="size-3 text-accent" />
+              {g}
+            </span>
+          ))
+        }
+      </div>
+    </div>
+  </div>
+</div>

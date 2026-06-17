@@ -1,0 +1,55 @@
+---
+import { Icon } from "astro-icon/components";
+---
+
+<section
+  id="cta"
+  class="chart-grid relative overflow-hidden border-t border-line-subtle bg-surface-sunken"
+>
+  <div
+    class="glow anim-glow absolute left-1/2 top-1/2 size-[640px] -translate-x-1/2 -translate-y-1/2 opacity-[0.12]"
+  >
+  </div>
+
+  <div
+    class="relative mx-auto flex max-w-[820px] flex-col items-center px-6 py-28 text-center sm:px-8 lg:py-36"
+  >
+    <h2
+      data-reveal
+      class="ink-gradient text-[clamp(3rem,12vw,6.5rem)] font-bold leading-none tracking-[-0.04em]"
+    >
+      Take the helm.
+    </h2>
+
+    <p
+      data-reveal
+      style="--reveal-delay:100ms"
+      class="mt-6 max-w-[620px] text-[16.5px] leading-relaxed text-fg-secondary"
+    >
+      Self-host like you have an ops team: the crew you couldn't afford,
+      diagnosing, fixing, and standing watch around the clock.
+    </p>
+
+    <div
+      data-reveal
+      style="--reveal-delay:180ms"
+      class="mt-9 flex flex-wrap items-center justify-center gap-3.5"
+    >
+      <a
+        href="/#top"
+        class="inline-flex items-center gap-2.5 rounded-md bg-accent px-7 py-4 text-[15.5px] font-semibold text-fg-inverse shadow-[0_8px_20px_-6px_rgba(56,189,248,0.4),0_0_28px_-2px_rgba(56,189,248,0.45)] transition-[background-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:bg-accent-hover active:translate-y-0"
+      >
+        <Icon name="lucide:ship-wheel" class="size-[17px]" />
+        Take the helm
+        <Icon name="lucide:arrow-right" class="size-4" />
+      </a>
+      <a
+        href="/features"
+        class="inline-flex items-center gap-2.5 rounded-md border border-line-strong px-6 py-4 text-[15.5px] font-semibold text-fg transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-white/[0.05] active:translate-y-0"
+      >
+        <Icon name="lucide:compass" class="size-4" />
+        Explore features
+      </a>
+    </div>
+  </div>
+</section>

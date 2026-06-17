@@ -1,0 +1,158 @@
+---
+import { Icon } from "astro-icon/components";
+
+// 24 ticks every 15°. Cardinal ticks (every 6th) are the accent N/E/S/W marks.
+const ticks = Array.from({ length: 24 }, (_, i) => ({
+  angle: i * 15,
+  cardinal: i % 6 === 0,
+}));
+const cardinals = [
+  { label: "N", cls: "top-1.5 left-1/2 -translate-x-1/2 text-accent" },
+  { label: "E", cls: "right-2 top-1/2 -translate-y-1/2" },
+  { label: "S", cls: "bottom-1.5 left-1/2 -translate-x-1/2" },
+  { label: "W", cls: "left-2.5 top-1/2 -translate-y-1/2" },
+];
+---
+
+<div class="radar-host">
+  <div class="radar absolute">
+    <!-- soft base glow -->
+    <div
+      class="absolute left-1/2 top-1/2 size-[360px] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-25"
+      style="background: radial-gradient(circle, rgba(56,189,248,0.55), rgba(56,189,248,0) 65%)"
+    >
+    </div>
+
+    <!-- concentric rings -->
+    {
+      [
+        { s: 420, o: 0.5 },
+        { s: 310, o: 0.3 },
+        { s: 200, o: 0.24 },
+        { s: 90, o: 0.2 },
+      ].map((r) => (
+        <div
+          class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-fg-tertiary"
+          style={`width:${r.s}px;height:${r.s}px;opacity:${r.o}`}
+        />
+      ))
+    }
+
+    <!-- crosshair -->
+    <div
+      class="absolute left-[14px] top-1/2 h-px w-[392px] -translate-y-1/2 bg-fg-tertiary opacity-20"
+    >
+    </div>
+    <div
+      class="absolute left-1/2 top-[14px] h-[392px] w-px -translate-x-1/2 bg-fg-tertiary opacity-20"
+    >
+    </div>
+
+    <!-- tick ring -->
+    {
+      ticks.map((t) => (
+        <div
+          class="absolute inset-0"
+          style={`transform:rotate(${t.angle}deg)`}
+          aria-hidden="true"
+        >
+          <span
+            class={`absolute left-1/2 top-[9px] -translate-x-1/2 rounded-full ${t.cardinal ? "h-[9px] w-[2.5px] bg-accent opacity-90" : "h-[4px] w-[1.5px] bg-fg-tertiary opacity-40"}`}
+          />
+        </div>
+      ))
+    }
+
+    <!-- compass letters -->
+    {
+      cardinals.map((c) => (
+        <span
+          class={`absolute font-mono text-[12px] text-fg-tertiary ${c.cls}`}
+        >
+          {c.label}
+        </span>
+      ))
+    }
+
+    <!-- expanding pings -->
+    {
+      [120, 210, 310].map((s, i) => (
+        <div
+          class="anim-ping absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-accent"
+          style={`width:${s}px;height:${s}px;animation-delay:${i * 1}s`}
+        />
+      ))
+    }
+
+    <!-- rotating sweep -->
+    <div
+      class="anim-sweep absolute inset-0"
+      style="border-radius:9999px; -webkit-mask:radial-gradient(circle, transparent 8px, #000 9px); mask:radial-gradient(circle, transparent 8px, #000 9px); background:conic-gradient(from 0deg, rgba(56,189,248,0) 0deg, rgba(56,189,248,0) 300deg, rgba(56,189,248,0.05) 330deg, rgba(56,189,248,0.45) 358deg, rgba(56,189,248,0.9) 360deg)"
+    >
+      <!-- leading beam -->
+      <div
+        class="absolute left-1/2 top-0 h-1/2 w-px origin-bottom -translate-x-1/2 bg-accent"
+        style="box-shadow:0 0 14px 1px rgba(56,189,248,0.8)"
+      >
+      </div>
+    </div>
+
+    <!-- signal blip: db-01 -->
+    <div
+      class="absolute"
+      style="left:268px;top:140px"
+    >
+      <div class="anim-blip relative grid size-[26px] place-items-center">
+        <span class="absolute inset-0 rounded-full bg-accent opacity-40"></span>
+        <span class="relative size-[10px] rounded-full bg-accent"></span>
+      </div>
+      <span
+        class="absolute left-[30px] top-[7px] whitespace-nowrap font-mono text-[9.5px] text-accent"
+        >db-01</span
+      >
+    </div>
+
+    <!-- hub -->
+    <div
+      class="anim-hub absolute left-1/2 top-1/2 grid size-[44px] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full"
+      style="background:radial-gradient(circle, rgba(56,189,248,0.3), rgba(56,189,248,0) 70%)"
+    >
+      <span class="grid size-[26px] place-items-center rounded-full border border-accent/60">
+        <span
+          class="size-[14px] rounded-full bg-accent"
+          style="box-shadow:0 0 12px rgba(56,189,248,0.9)"></span>
+      </span>
+    </div>
+    <span
+      class="absolute left-1/2 top-[236px] -translate-x-1/2 whitespace-nowrap font-mono text-[12px] font-bold text-accent"
+      >HDG 000°</span
+    >
+
+    <!-- scan badge -->
+    <div
+      class="absolute left-[38px] top-[44px] flex items-center gap-1.5 rounded-full border border-line-strong bg-surface-elevated/90 px-2.5 py-1"
+    >
+      <Icon name="lucide:radar" class="size-3 text-accent" />
+      <span class="font-mono text-[10px] tracking-wide text-fg-secondary"
+        >SCANNING</span
+      >
+    </div>
+  </div>
+</div>
+
+<style>
+  /* Scale the fixed 420px radar to whatever width the column gives it. */
+  .radar-host {
+    container-type: size;
+    aspect-ratio: 1;
+    width: 100%;
+    max-width: 420px;
+    margin-inline: auto;
+  }
+  .radar {
+    width: 420px;
+    height: 420px;
+    transform-origin: top left;
+    transform: scale(calc(100cqw / 420));
+  }
+</style>
