@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Hourglass,
   Gauge,
@@ -8,7 +8,6 @@ import {
   Database,
 } from "lucide-react";
 import { useCluster } from "@/store/cluster";
-import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { Button } from "@/components/ui/button";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
@@ -28,12 +27,6 @@ import {
   verdictStyle,
   MIN_HOURS,
 } from "./displayHelper";
-import {
-  buildRightSizing,
-  windowStatsFromUsage,
-  type UsageRow,
-  type WorkloadObject,
-} from "./aggregate";
 import type {
   RightSizingResult,
   SortMode,
@@ -43,25 +36,12 @@ import type {
 } from "./types";
 import { MetricsInstallDialog } from "./MetricsInstallDialog";
 import {
-  loadBackendChoice,
-  saveBackendChoice,
   choiceSelectValue,
   backendValue,
   type BackendChoice,
 } from "./backendChoice";
+import { useRightSizing, type UsageBackend } from "./useRightSizing";
 import type { InstalledBackend } from "@helmsman/k8s";
-
-interface UsageBackend {
-  flavor: string;
-  namespace: string;
-  service: string;
-  port: number;
-}
-interface UsageResponse {
-  available: boolean;
-  backend: UsageBackend | null;
-  items: UsageRow[];
-}
 
 const KIND_BADGE: Record<WorkloadKind, string> = {
   deployment: "DEP",
@@ -113,111 +93,17 @@ function verdictLabel(v: Verdict): string {
   }
 }
 
-async function fetchUsageHistory(namespace: string, backend?: UsageBackend): Promise<UsageResponse> {
-  const params = new URLSearchParams({ namespace });
-  if (backend) {
-    params.set("bns", backend.namespace);
-    params.set("svc", backend.service);
-    params.set("port", String(backend.port));
-  }
-  const res = await fetch(`/api/metrics/usage?${params.toString()}`);
-  if (!res.ok) throw new Error(`usage fetch failed: ${res.status}`);
-  return res.json();
-}
-
-async function fetchBackends(): Promise<UsageBackend[]> {
-  try {
-    const res = await fetch("/api/metrics/backends");
-    if (!res.ok) return [];
-    const j = (await res.json()) as { backends?: UsageBackend[] };
-    return Array.isArray(j.backends) ? j.backends : [];
-  } catch {
-    return [];
-  }
-}
-
 export default function RightSizingPanel() {
-  const resources = useCluster((s) => s.resources);
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
 
   const [search, setSearch] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>("needs-attention");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
-
-  // Subscribe to the three workload kinds. Pod→workload attribution uses the
-  // backend's pod labels, so no pods watch is needed here.
-  useEffect(() => {
-    const ns = namespaceFilter ?? "*";
-    subscribe("deployments", ns);
-    subscribe("statefulsets", ns);
-    subscribe("daemonsets", ns);
-    return () => {
-      unsubscribe("deployments", ns);
-      unsubscribe("statefulsets", ns);
-      unsubscribe("daemonsets", ns);
-    };
-  }, [namespaceFilter]);
-
-  // --- Data source (Swift parity: per-context backend choice) -------------
-  // Single-context web app → bucket the choice under "default", like Settings.
-  const choiceContext = "default";
-  const [choice, setChoice] = useState<BackendChoice>(() => loadBackendChoice(choiceContext));
-  const [backends, setBackends] = useState<UsageBackend[]>([]);
   const [installOpen, setInstallOpen] = useState(false);
-  const [reloadKey, setReloadKey] = useState(0);
 
-  // Prometheus/VictoriaMetrics backends detected in the cluster, for the picker.
-  useEffect(() => {
-    let cancelled = false;
-    fetchBackends().then((b) => {
-      if (!cancelled) setBackends(b);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [reloadKey]);
-
-  // Usage history from the chosen (or auto-detected) metrics backend. This is
-  // the ONLY data source — there is no in-browser sampler. Survives reloads
-  // (the DB holds 30 days). `usage === null` means "still resolving" → we show a
-  // loader (never a flash of an empty/no-backend state); refreshed every 2 min.
-  const [usage, setUsage] = useState<UsageResponse | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    const ns = namespaceFilter ?? "*";
-    const explicit =
-      choice.kind === "prometheus"
-        ? { flavor: choice.flavor, namespace: choice.namespace, service: choice.service, port: choice.port }
-        : undefined;
-    setUsage(null); // reset to the loading state on source/namespace change
-    async function load() {
-      try {
-        const u = await fetchUsageHistory(ns, explicit);
-        if (!cancelled) setUsage(u);
-      } catch {
-        if (!cancelled) setUsage({ available: false, backend: null, items: [] });
-      }
-    }
-    load();
-    const id = setInterval(load, 120_000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [namespaceFilter, choice, reloadKey]);
-
-  const detecting = usage === null; // first query in flight
-  const usingBackend = usage?.available === true;
-  const noBackend = usage !== null && usage.available === false;
-
-  // Verdicts always come from the backend's 30-day history (one verdict engine).
-  const workloads = useMemo<WorkloadRightSizing[]>(() => {
-    if (!usingBackend || !usage) return [];
-    const byKind = resources as Record<string, Record<string, WorkloadObject>>;
-    const rows = usage.items;
-    return buildRightSizing(byKind, (ns, w, c) => windowStatsFromUsage(rows, ns, w, c));
-  }, [resources, usage, usingBackend]);
+  // Shared right-sizing pipeline (also feeds the Overview "Reclaimable" card).
+  const { workloads, usage, detecting, usingBackend, noBackend, backends, choice, setChoice, reload } = useRightSizing();
 
   // Source picker options: detected backends ∪ the current explicit choice (so a
   // just-installed backend not yet in the detected list still appears).
@@ -238,16 +124,14 @@ export default function RightSizingPanel() {
     const b = sourceOptions.find((o) => backendValue(o) === value);
     if (b) {
       const c: BackendChoice = { kind: "prometheus", namespace: b.namespace, service: b.service, port: b.port, flavor: b.flavor };
-      setChoice(c);
-      saveBackendChoice(choiceContext, c);
+      setChoice(c); // persists the choice
     }
   }
 
   function handleInstall(backend: InstalledBackend, yaml: string) {
     // Persist the choice optimistically, then route the apply through ConfirmSheet.
     const c: BackendChoice = { kind: "prometheus", namespace: backend.namespace, service: backend.service, port: backend.port, flavor: backend.flavor };
-    setChoice(c);
-    saveBackendChoice(choiceContext, c);
+    setChoice(c); // persists the choice
     setInstallOpen(false);
     setPendingAction({
       kind: "applyManifest",
@@ -557,7 +441,7 @@ export default function RightSizingPanel() {
         onClose={() => {
           setPendingAction(null);
           // Re-detect + re-query after any apply (e.g. a metrics-backend install).
-          setReloadKey((k) => k + 1);
+          reload();
         }}
       />
       <MetricsInstallDialog open={installOpen} onOpenChange={setInstallOpen} onInstall={handleInstall} />

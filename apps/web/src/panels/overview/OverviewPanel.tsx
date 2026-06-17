@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { useNodeMetrics } from "@/lib/api";
 import { PurgePickerSheet } from "@/panels/purge/PurgePickerSheet";
 import { PurgeSheet } from "@/panels/purge/PurgeSheet";
+import { useRightSizing } from "@/panels/rightsizing/useRightSizing";
 import type {
   Deployment,
   EventBucket,
@@ -145,6 +146,14 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
   const totals = useMemo(() => clusterResourceTotals(nodes, nodeMetrics), [nodes, nodeMetrics]);
   const hasMetrics = nodeMetricsData?.available === true && Object.keys(nodeMetrics).length > 0;
 
+  // Reclaimable memory — same right-sizing pipeline the Right-Sizing panel uses,
+  // summed across the current namespace scope.
+  const { workloads: rsWorkloads, usingBackend: rsBackend } = useRightSizing();
+  const reclaimBytes = useMemo(
+    () => rsWorkloads.reduce((sum, w) => sum + Math.max(0, w.reclaimableMemBytes), 0),
+    [rsWorkloads],
+  );
+
   const deployUnhealthy = unhealthyDeploymentCount(deployments);
   const phases = useMemo(() => phaseCounts(pods), [pods]);
   const nodeReady = nodeReadyCount(nodes);
@@ -230,14 +239,14 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
             detail={`${formatBytes(String(totals.memUsed))} / ${formatBytes(String(totals.memAllocatable))}`}
             emptyText="metrics-server unavailable — install it to see live memory usage."
           />
-          {/* Reclaimable: right-sizing data is not wired to the web store yet. */}
+          {/* Reclaimable memory from the right-sizing pipeline (shared hook). */}
           <GaugeCard
             icon={Recycle}
             title="Reclaimable"
             color="#10B981"
-            fraction={null}
-            detail=""
-            emptyText="no data yet — see the Right-Sizing panel for reclaimable memory."
+            fraction={rsBackend && totals.memAllocatable > 0 ? Math.min(1, reclaimBytes / totals.memAllocatable) : null}
+            detail={rsBackend ? `${formatBytes(String(reclaimBytes))} of ${formatBytes(String(totals.memAllocatable))}` : ""}
+            emptyText="connect a metrics backend in Right-Sizing to see reclaimable memory."
           />
         </div>
 
