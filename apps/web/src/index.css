@@ -441,16 +441,17 @@
 .ov-gauge-dash { width: 28px; height: 2px; border-radius: 1px; background: var(--border-strong); }
 .ov-gauge-empty-text { font-size: 12px; color: var(--fg-tertiary); text-align: center; line-height: 1.45; }
 
-/* Per-node ring gauges (CPU/Memory per node) */
-.ov-nodegrid { display: flex; flex-wrap: wrap; gap: 14px 18px; align-items: flex-start; padding-top: 6px; }
-.ov-node-gauge { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 84px; }
+/* Per-node ring gauges (CPU/Memory per node) — equal-width columns that fill the
+   card; auto-fit spreads a few nodes across the full width and wraps many. */
+.ov-nodegrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 16px 12px; align-items: start; padding-top: 6px; }
+.ov-node-gauge { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
 .ov-node-ring { position: relative; width: 68px; height: 68px; }
 .ov-node-pct {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   font-family: var(--font-mono, ui-monospace); font-size: 13px; font-weight: 600; color: var(--fg-primary);
 }
 .ov-node-name {
-  max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 10px; color: var(--fg-secondary);
 }
 .ov-node-detail { font-family: var(--font-mono, ui-monospace); font-size: 9px; color: var(--fg-tertiary); }
