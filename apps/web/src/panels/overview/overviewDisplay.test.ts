@@ -11,6 +11,7 @@ import {
   formatCpu,
   formatBytes,
   clusterResourceTotals,
+  perNodeResourceTotals,
   metricsAvailable,
 } from "./overviewDisplay";
 
@@ -33,6 +34,40 @@ function node(overrides: Partial<Node> = {}): Node {
     status: overrides.status,
   };
 }
+
+describe("perNodeResourceTotals", () => {
+  test("one entry per node, sorted by name, with per-node usage + fractions", () => {
+    const nodes = [
+      node({ metadata: { name: "n2" }, status: { allocatable: { cpu: "4", memory: "8Gi" } } }),
+      node({ metadata: { name: "n1" }, status: { allocatable: { cpu: "2", memory: "4Gi" } } }),
+    ];
+    const metrics = {
+      n1: { metadata: { name: "n1" }, usage: { cpu: "1", memory: "2Gi" } },
+      n2: { metadata: { name: "n2" }, usage: { cpu: "2", memory: "4Gi" } },
+    };
+    const rows = perNodeResourceTotals(nodes, metrics);
+    expect(rows.map((r) => r.name)).toEqual(["n1", "n2"]); // sorted
+    expect(rows[0].cpuFraction).toBeCloseTo(0.5); // n1: 1/2
+    expect(rows[0].memFraction).toBeCloseTo(0.5); // n1: 2Gi/4Gi
+    expect(rows[1].cpuFraction).toBeCloseTo(0.5); // n2: 2/4
+  });
+
+  test("node without metrics → usage 0, fraction 0, allocatable still parsed", () => {
+    const rows = perNodeResourceTotals([node({ metadata: { name: "n1" }, status: { allocatable: { cpu: "4", memory: "8Gi" } } })], {});
+    expect(rows[0].cpuUsed).toBe(0);
+    expect(rows[0].cpuFraction).toBe(0);
+    expect(rows[0].cpuAllocatable).toBe(4);
+  });
+
+  test("fractions clamp to [0,1] when usage exceeds allocatable", () => {
+    const rows = perNodeResourceTotals(
+      [node({ metadata: { name: "n1" }, status: { allocatable: { cpu: "1", memory: "1Gi" } } })],
+      { n1: { metadata: { name: "n1" }, usage: { cpu: "4", memory: "4Gi" } } },
+    );
+    expect(rows[0].cpuFraction).toBe(1);
+    expect(rows[0].memFraction).toBe(1);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // phaseCounts

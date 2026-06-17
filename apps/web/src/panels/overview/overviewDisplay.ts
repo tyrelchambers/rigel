@@ -248,6 +248,49 @@ export function clusterResourceTotals(
   };
 }
 
+/** Per-node CPU/memory utilization (one entry per node, allocatable + usage). */
+export interface NodeResourceTotals {
+  name: string;
+  cpuUsed: number;
+  cpuAllocatable: number;
+  cpuFraction: number;
+  memUsed: number;
+  memAllocatable: number;
+  memFraction: number;
+}
+
+/**
+ * Break the cluster totals down per node — one {used, allocatable, fraction}
+ * row per node for CPU and memory, sorted by node name for stable display.
+ * Same parsing/clamping rules as `clusterResourceTotals`; a node without a usage
+ * sample reports 0 used (fraction 0) but still contributes its allocatable.
+ */
+export function perNodeResourceTotals(
+  nodes: Node[],
+  nodeMetrics: Record<string, NodeMetrics>,
+): NodeResourceTotals[] {
+  return nodes
+    .map((node) => {
+      const cap = node.status?.capacity ?? {};
+      const alloc = node.status?.allocatable ?? {};
+      const cpuAllocatable = parseCpuQuantity(alloc.cpu ?? cap.cpu);
+      const memAllocatable = parseMemQuantity(alloc.memory ?? cap.memory);
+      const m = nodeMetrics[node.metadata.name];
+      const cpuUsed = m ? parseCpuQuantity(m.usage.cpu) : 0;
+      const memUsed = m ? parseMemQuantity(m.usage.memory) : 0;
+      return {
+        name: node.metadata.name,
+        cpuUsed,
+        cpuAllocatable,
+        cpuFraction: cpuAllocatable > 0 ? Math.min(cpuUsed / cpuAllocatable, 1) : 0,
+        memUsed,
+        memAllocatable,
+        memFraction: memAllocatable > 0 ? Math.min(memUsed / memAllocatable, 1) : 0,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 /**
  * Metrics are "available" when at least one node has a usage sample. Used to
  * decide between the gauges row and the metrics-server fallback card.

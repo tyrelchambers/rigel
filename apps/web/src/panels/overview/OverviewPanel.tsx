@@ -36,8 +36,10 @@ import {
   nodeReadyCount,
   nodePressureCount,
   clusterResourceTotals,
+  perNodeResourceTotals,
   formatCpu,
   formatBytes,
+  type NodeResourceTotals,
 } from "./overviewDisplay";
 import {
   sortEvents,
@@ -144,6 +146,7 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
 
   // --- Derived card data ---------------------------------------------------
   const totals = useMemo(() => clusterResourceTotals(nodes, nodeMetrics), [nodes, nodeMetrics]);
+  const perNode = useMemo(() => perNodeResourceTotals(nodes, nodeMetrics), [nodes, nodeMetrics]);
   const hasMetrics = nodeMetricsData?.available === true && Object.keys(nodeMetrics).length > 0;
 
   // Reclaimable memory — same right-sizing pipeline the Right-Sizing panel uses,
@@ -221,22 +224,24 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
       <div className="ov-content">
         {error && <pre className="ov-error">{error}</pre>}
 
-        {/* Row 1 — Gauges */}
+        {/* Row 1 — Per-node CPU/memory utilization + reclaimable */}
         <div className="ov-row ov-row-3">
-          <GaugeCard
+          <NodeGaugesCard
             icon={Cpu}
-            title="Cluster CPU"
+            title="CPU per node"
             color="#60A5FA"
-            fraction={hasMetrics ? totals.cpuFraction : null}
-            detail={`${formatCpu(totals.cpuUsed)} / ${formatCpu(totals.cpuAllocatable)}`}
+            nodes={perNode}
+            metric="cpu"
+            show={hasMetrics}
             emptyText="metrics-server unavailable — install it to see live CPU usage."
           />
-          <GaugeCard
+          <NodeGaugesCard
             icon={MemoryStick}
-            title="Cluster Memory"
+            title="Memory per node"
             color="#38BDF8"
-            fraction={hasMetrics ? totals.memFraction : null}
-            detail={`${formatBytes(String(totals.memUsed))} / ${formatBytes(String(totals.memAllocatable))}`}
+            nodes={perNode}
+            metric="memory"
+            show={hasMetrics}
             emptyText="metrics-server unavailable — install it to see live memory usage."
           />
           {/* Reclaimable memory from the right-sizing pipeline (shared hook). */}
@@ -405,6 +410,83 @@ function GaugeCard({
           <span className="ov-gauge-raw">{detail}</span>
         </div>
       )}
+    </div>
+  );
+}
+
+/** A card of per-node ring gauges for one metric (CPU or memory). */
+function NodeGaugesCard({
+  icon,
+  title,
+  color,
+  nodes,
+  metric,
+  show,
+  emptyText,
+}: {
+  icon: LucideIcon;
+  title: string;
+  color: string;
+  nodes: NodeResourceTotals[];
+  metric: "cpu" | "memory";
+  show: boolean;
+  emptyText: string;
+}) {
+  return (
+    <div className="ov-card">
+      <CardHeader icon={icon} title={title} />
+      {!show || nodes.length === 0 ? (
+        <div className="ov-gauge-empty">
+          <div className="ov-gauge-dash" />
+          <span className="ov-gauge-empty-text">{emptyText}</span>
+        </div>
+      ) : (
+        <div className="ov-nodegrid">
+          {nodes.map((n) => (
+            <NodeGauge
+              key={n.name}
+              name={n.name}
+              color={color}
+              fraction={metric === "cpu" ? n.cpuFraction : n.memFraction}
+              detail={
+                metric === "cpu"
+                  ? `${formatCpu(n.cpuUsed)}/${formatCpu(n.cpuAllocatable)}`
+                  : `${formatBytes(String(n.memUsed))}/${formatBytes(String(n.memAllocatable))}`
+              }
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** One small node ring (68px) with % in the center and a name + used/alloc below. */
+function NodeGauge({ name, fraction, color, detail }: { name: string; fraction: number; color: string; detail: string }) {
+  const R = 28;
+  const C = 2 * Math.PI * R;
+  return (
+    <div className="ov-node-gauge">
+      <div className="ov-node-ring">
+        <svg width="68" height="68" viewBox="0 0 68 68" style={{ display: "block" }}>
+          <circle cx="34" cy="34" r={R} fill="none" stroke="#34353A" strokeWidth="8" />
+          <circle
+            cx="34"
+            cy="34"
+            r={R}
+            fill="none"
+            stroke={color}
+            strokeWidth="8"
+            strokeLinecap="round"
+            strokeDasharray={`${C * clamp01(fraction)} ${C}`}
+            transform="rotate(-90 34 34)"
+            style={{ transition: "stroke-dasharray 0.4s ease" }}
+          />
+        </svg>
+        <div className="ov-node-pct">{Math.round(clamp01(fraction) * 100)}%</div>
+      </div>
+      <span className="ov-node-name" title={name}>{name}</span>
+      <span className="ov-node-detail">{detail}</span>
     </div>
   );
 }
