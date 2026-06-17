@@ -21,7 +21,7 @@ function ContextMenuContent({ className, ...props }: ContextMenuPrimitive.Popup.
         <ContextMenuPrimitive.Popup
           data-slot="context-menu-content"
           className={cn(
-            "min-w-48 rounded-lg bg-popover p-1 text-sm text-popover-foreground ring-1 ring-foreground/10 shadow-md outline-none",
+            "min-w-44 rounded-lg bg-popover p-1 text-xs text-popover-foreground ring-1 ring-foreground/10 shadow-md outline-none",
             className
           )}
           {...props}
@@ -40,9 +40,10 @@ function ContextMenuItem({
     <ContextMenuPrimitive.Item
       data-slot="context-menu-item"
       className={cn(
-        "flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 outline-none select-none data-highlighted:bg-muted data-highlighted:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:size-3.5 [&_svg]:shrink-0",
+        // --muted == --popover in this theme, so highlight with a visible white wash instead.
+        "flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-xs outline-none select-none transition-colors hover:bg-white/[0.07] hover:text-foreground data-highlighted:bg-white/[0.07] data-highlighted:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:size-3 [&_svg]:shrink-0",
         variant === "destructive" &&
-          "text-destructive data-highlighted:bg-destructive/10 data-highlighted:text-destructive",
+          "text-destructive hover:bg-destructive/10 hover:text-destructive data-highlighted:bg-destructive/10 data-highlighted:text-destructive",
         className
       )}
       {...props}
