@@ -19,7 +19,18 @@ export interface SaveSourceInput {
   repoURL: string;
   branch?: string;
   path?: string;
-  token?: string;
+}
+
+export interface GithubAccount {
+  connected: boolean;
+  login: string | null;
+}
+
+export interface GithubRepo {
+  fullName: string;
+  defaultBranch: string;
+  private: boolean;
+  cloneURL: string;
 }
 
 export interface SyncResult {
@@ -43,6 +54,48 @@ const json = (body: unknown): RequestInit => ({
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify(body),
 });
+
+// ── GitHub account (single PAT) ───────────────────────────────────────────────
+
+export function useGitHubAccount() {
+  return useQuery({
+    queryKey: ["github-account"],
+    queryFn: () => req<GithubAccount>("/api/git/account"),
+  });
+}
+
+export function useConnectGitHub() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (token: string) => req<GithubAccount>("/api/git/account", json({ token })),
+    onSuccess: (acct) => {
+      qc.setQueryData(["github-account"], acct);
+      qc.invalidateQueries({ queryKey: ["github-repos"] });
+    },
+  });
+}
+
+export function useDisconnectGitHub() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => req<GithubAccount>("/api/git/account", { method: "DELETE" }),
+    onSuccess: (acct) => {
+      qc.setQueryData(["github-account"], acct);
+      qc.removeQueries({ queryKey: ["github-repos"] });
+    },
+  });
+}
+
+/** The connected account's repos — only fetched once connected. */
+export function useGitHubRepos(enabled: boolean) {
+  return useQuery({
+    queryKey: ["github-repos"],
+    queryFn: () => req<{ repos: GithubRepo[] }>("/api/git/repos").then((r) => r.repos),
+    enabled,
+  });
+}
+
+// ── Sources ───────────────────────────────────────────────────────────────────
 
 export function useGitSources() {
   return useQuery({

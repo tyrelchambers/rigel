@@ -12,6 +12,9 @@ import {
   SOURCE_PATH_ANNOTATION,
   fixBranchName,
   safeRepoFilePath,
+  parseGithubRepos,
+  githubSecretJSON,
+  GITHUB_SECRET,
   type GitSource,
 } from "./gitSources";
 
@@ -91,6 +94,27 @@ test("safeRepoFilePath: normalizes and rejects traversal/absolute/empty", () => 
   expect(() => safeRepoFilePath("../secrets.yaml")).toThrow();
   expect(() => safeRepoFilePath("a/../../b")).toThrow();
   expect(() => safeRepoFilePath("")).toThrow();
+});
+
+test("parseGithubRepos: maps the GitHub API shape and skips junk", () => {
+  const api = [
+    { full_name: "me/app", default_branch: "main", private: false, clone_url: "https://github.com/me/app.git" },
+    { full_name: "org/svc", default_branch: "develop", private: true, clone_url: "https://github.com/org/svc.git" },
+    { nope: true },
+  ];
+  expect(parseGithubRepos(api)).toEqual([
+    { fullName: "me/app", defaultBranch: "main", private: false, cloneURL: "https://github.com/me/app.git" },
+    { fullName: "org/svc", defaultBranch: "develop", private: true, cloneURL: "https://github.com/org/svc.git" },
+  ]);
+  expect(parseGithubRepos("nonsense")).toEqual([]);
+  expect(parseGithubRepos(null)).toEqual([]);
+});
+
+test("githubSecretJSON: account Secret with token + login, named helmsman-github", () => {
+  const j = JSON.parse(githubSecretJSON("default", "ghp_x", "octocat"));
+  expect(j.kind).toBe("Secret");
+  expect(j.metadata.name).toBe(GITHUB_SECRET);
+  expect(j.stringData).toEqual({ token: "ghp_x", login: "octocat" });
 });
 
 test("parseGitSources: tolerates missing/garbage data", () => {

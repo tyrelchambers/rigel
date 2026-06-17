@@ -1,7 +1,8 @@
-// GitOps — deploy manifests from a GitHub repo. Add a source (repo + branch +
-// path + PAT), then "Sync now": the server clones the repo, shows a kubectl diff
-// preview, and applies on confirm. Manual-trigger v1 (no polling/webhooks).
-import { useEffect, useState } from "react";
+// GitOps — deploy manifests from a GitHub repo. Connect a GitHub account once
+// (one PAT, stored as a cluster Secret), then add a source by PICKING a repo
+// from the account, and "Sync now": the server clones the repo, shows a kubectl
+// diff preview, and applies on confirm. Manual-trigger v1 (no polling/webhooks).
+import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
@@ -13,18 +14,25 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { PanelHeader } from "@/panels/components/PanelHeader";
-import { GitBranch, Plus, RefreshCw, Trash2, CheckCircle2, AlertTriangle, FolderGit2 } from "lucide-react";
+import { GitBranch, Plus, RefreshCw, Trash2, CheckCircle2, AlertTriangle, FolderGit2, KeyRound } from "lucide-react";
 import {
   useGitSources,
   useSaveSource,
   useDeleteSource,
+  useGitHubAccount,
+  useConnectGitHub,
+  useDisconnectGitHub,
+  useGitHubRepos,
   syncSource,
   type GitSource,
+  type GithubRepo,
   type SyncResult,
 } from "./gitApi";
 
 export default function GitOpsPanel() {
   const { data: sources, isLoading } = useGitSources();
+  const { data: account } = useGitHubAccount();
+  const connected = account?.connected === true;
   const [addOpen, setAddOpen] = useState(false);
   const [syncing, setSyncing] = useState<GitSource | null>(null);
   const del = useDeleteSource();
@@ -32,14 +40,16 @@ export default function GitOpsPanel() {
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       <PanelHeader title="GitOps" subtitle="Deploy manifests from a Git repo" count={sources?.length} loading={isLoading}>
-        <Button size="sm" className="gap-1.5" onClick={() => setAddOpen(true)}>
+        <Button size="sm" className="gap-1.5" onClick={() => setAddOpen(true)} disabled={!connected} title={connected ? undefined : "Connect GitHub first"}>
           <Plus className="size-3.5" /> Add source
         </Button>
       </PanelHeader>
 
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-        {sources && sources.length === 0 && (
-          <div style={{ textAlign: "center", color: "var(--fg-tertiary)", padding: "48px 0", fontSize: 13 }}>
+        <GitHubConnectionCard />
+
+        {connected && sources && sources.length === 0 && (
+          <div style={{ textAlign: "center", color: "var(--fg-tertiary)", padding: "40px 0", fontSize: 13 }}>
             <FolderGit2 className="mx-auto mb-3 size-8 opacity-50" />
             No Git sources yet. Add a repo to deploy its manifests.
           </div>
@@ -57,6 +67,68 @@ export default function GitOpsPanel() {
 
       {addOpen && <AddSourceDialog onClose={() => setAddOpen(false)} />}
       {syncing && <SyncDialog source={syncing} onClose={() => setSyncing(null)} />}
+    </div>
+  );
+}
+
+/** Connect / show / disconnect the single account-level GitHub PAT. */
+function GitHubConnectionCard() {
+  const { data: account } = useGitHubAccount();
+  const connect = useConnectGitHub();
+  const disconnect = useDisconnectGitHub();
+  const [token, setToken] = useState("");
+
+  const cardStyle = { borderRadius: 12, border: "1px solid #26272B", background: "var(--surface-elevated)", padding: 14 } as const;
+
+  if (account?.connected) {
+    return (
+      <div style={cardStyle} className="flex items-center gap-3">
+        <GitBranch className="size-5" style={{ color: "var(--accent-primary)" }} />
+        <div className="flex flex-col">
+          <span className="text-sm font-semibold">Connected to GitHub</span>
+          <span className="text-xs" style={{ color: "var(--fg-tertiary)" }}>as {account.login ?? "—"}</span>
+        </div>
+        <Button size="sm" variant="ghost" className="ml-auto" onClick={() => disconnect.mutate()} disabled={disconnect.isPending}>
+          Disconnect
+        </Button>
+      </div>
+    );
+  }
+
+  async function handleConnect() {
+    try {
+      await connect.mutateAsync(token);
+      setToken("");
+    } catch {
+      /* error shown below */
+    }
+  }
+
+  return (
+    <div style={cardStyle} className="flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <GitBranch className="size-5" style={{ color: "var(--accent-primary)" }} />
+        <span className="text-sm font-semibold">Connect GitHub</span>
+        <span className="text-xs" style={{ color: "var(--fg-tertiary)" }}>token is stored as a cluster Secret, never shown again</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <KeyRound className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2" style={{ color: "var(--fg-tertiary)" }} />
+          <input
+            type="password"
+            value={token}
+            placeholder="ghp_… (needs repo + pull-request scope)"
+            onChange={(e) => setToken(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && token) handleConnect(); }}
+            spellCheck={false}
+            style={{ width: "100%", padding: "8px 10px 8px 30px", borderRadius: 8, background: "#08080A", border: "1px solid #26272B", color: "var(--fg-primary)", fontSize: 13, fontFamily: "ui-monospace, monospace", outline: "none" }}
+          />
+        </div>
+        <Button size="sm" onClick={handleConnect} disabled={!token || connect.isPending}>
+          {connect.isPending ? "Connecting…" : "Connect"}
+        </Button>
+      </div>
+      {connect.isError && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{connect.error.message}</p>}
     </div>
   );
 }
@@ -118,19 +190,37 @@ function SyncStatus({ source }: { source: GitSource }) {
   );
 }
 
+/** Slug a repo's name part for the source name (matches server sanitizeSourceName). */
+function repoToName(fullName: string): string {
+  const repo = fullName.split("/").pop() ?? fullName;
+  return repo.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
 function AddSourceDialog({ onClose }: { onClose: () => void }) {
   const save = useSaveSource();
+  const { data: repos, isLoading, isError, error } = useGitHubRepos(true);
+  const [fullName, setFullName] = useState("");
   const [name, setName] = useState("");
-  const [repoURL, setRepoURL] = useState("");
-  const [branch, setBranch] = useState("main");
+  const [branch, setBranch] = useState("");
   const [path, setPath] = useState(".");
-  const [token, setToken] = useState("");
 
-  const canSave = name.trim() !== "" && repoURL.trim() !== "" && !save.isPending;
+  const selected = useMemo<GithubRepo | undefined>(() => repos?.find((r) => r.fullName === fullName), [repos, fullName]);
+
+  function pickRepo(fn: string) {
+    setFullName(fn);
+    const r = repos?.find((x) => x.fullName === fn);
+    if (r) {
+      setName(repoToName(r.fullName));
+      setBranch(r.defaultBranch);
+    }
+  }
+
+  const canSave = !!selected && name.trim() !== "" && !save.isPending;
 
   async function handleSave() {
+    if (!selected) return;
     try {
-      await save.mutateAsync({ name, repoURL, branch, path, token: token || undefined });
+      await save.mutateAsync({ name, repoURL: selected.cloneURL, branch: branch || selected.defaultBranch, path });
       onClose();
     } catch {
       /* error shown below */
@@ -142,16 +232,29 @@ function AddSourceDialog({ onClose }: { onClose: () => void }) {
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Add Git source</DialogTitle>
-          <DialogDescription>Point Helmsman at a GitHub repo of manifests. The token is stored as a cluster Secret.</DialogDescription>
+          <DialogDescription>Pick a repo from your GitHub account; its manifests deploy on Sync.</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3 py-1">
-          <Field label="Name" value={name} onChange={setName} placeholder="my-app" />
-          <Field label="Repository URL" value={repoURL} onChange={setRepoURL} placeholder="https://github.com/me/my-app" />
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium" style={{ color: "var(--fg-secondary)" }}>Repository</span>
+            <select
+              value={fullName}
+              onChange={(e) => pickRepo(e.target.value)}
+              disabled={isLoading || isError}
+              style={{ padding: "8px 10px", borderRadius: 8, background: "#08080A", border: "1px solid #26272B", color: "var(--fg-primary)", fontSize: 13, outline: "none" }}
+            >
+              <option value="">{isLoading ? "Loading repos…" : isError ? "Failed to load repos" : "Select a repository…"}</option>
+              {repos?.map((r) => (
+                <option key={r.fullName} value={r.fullName}>{r.fullName}{r.private ? " (private)" : ""}</option>
+              ))}
+            </select>
+            {isError && <span className="text-xs text-destructive">{error.message}</span>}
+          </label>
           <div className="flex gap-3">
-            <Field label="Branch" value={branch} onChange={setBranch} placeholder="main" />
+            <Field label="Name" value={name} onChange={setName} placeholder="my-app" />
+            <Field label="Branch" value={branch} onChange={setBranch} placeholder={selected?.defaultBranch ?? "main"} />
             <Field label="Manifest path" value={path} onChange={setPath} placeholder="." />
           </div>
-          <Field label="Personal access token" value={token} onChange={setToken} placeholder="ghp_… (leave blank for public repos)" type="password" />
           {save.isError && (
             <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{save.error.message}</p>
           )}

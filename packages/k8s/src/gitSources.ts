@@ -21,8 +21,17 @@ export interface GitSource {
 }
 
 export const GIT_SOURCES_CONFIGMAP = "helmsman-git-sources";
-export const GIT_TOKENS_SECRET = "helmsman-git-tokens";
+/** Account-level GitHub PAT (+ login) used to list repos, clone, push, and open PRs. */
+export const GITHUB_SECRET = "helmsman-github";
 const MANAGED_BY = { "app.kubernetes.io/managed-by": "helmsman" };
+
+/** A repo from the GitHub API, normalized for the add-source picker. */
+export interface GithubRepo {
+  fullName: string;
+  defaultBranch: string;
+  private: boolean;
+  cloneURL: string;
+}
 
 // Provenance annotations stamped on every synced resource so a running workload
 // can be mapped back to the source repo + manifest dir (used by the AI fix flow).
@@ -139,13 +148,31 @@ export function gitSourcesConfigMapJSON(namespace: string, sources: GitSource[])
   });
 }
 
-/** Full Secret JSON (stringData) holding one PAT per source name. */
-export function gitTokensSecretJSON(namespace: string, tokens: Record<string, string>): string {
+/** Account Secret JSON (stringData) holding the GitHub PAT + the login it belongs to. */
+export function githubSecretJSON(namespace: string, token: string, login: string): string {
   return JSON.stringify({
     apiVersion: "v1",
     kind: "Secret",
-    metadata: { name: GIT_TOKENS_SECRET, namespace, labels: MANAGED_BY },
+    metadata: { name: GITHUB_SECRET, namespace, labels: MANAGED_BY },
     type: "Opaque",
-    stringData: tokens,
+    stringData: { token, login },
   });
+}
+
+/** Map the GitHub `/user/repos` response into our picker shape; skips malformed entries. */
+export function parseGithubRepos(json: unknown): GithubRepo[] {
+  if (!Array.isArray(json)) return [];
+  const out: GithubRepo[] = [];
+  for (const r of json) {
+    if (!r || typeof r !== "object") continue;
+    const o = r as Record<string, unknown>;
+    if (typeof o.full_name !== "string" || typeof o.clone_url !== "string") continue;
+    out.push({
+      fullName: o.full_name,
+      defaultBranch: typeof o.default_branch === "string" ? o.default_branch : "main",
+      private: o.private === true,
+      cloneURL: o.clone_url,
+    });
+  }
+  return out;
 }

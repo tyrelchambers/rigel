@@ -5,8 +5,9 @@ export * from "./alerts";
 
 export {
   type GitSource,
+  type GithubRepo,
   GIT_SOURCES_CONFIGMAP,
-  GIT_TOKENS_SECRET,
+  GITHUB_SECRET,
   SOURCE_REPO_ANNOTATION,
   SOURCE_PATH_ANNOTATION,
   provenanceAnnotations,
@@ -19,7 +20,8 @@ export {
   redactURL,
   parseGitSources,
   gitSourcesConfigMapJSON,
-  gitTokensSecretJSON,
+  githubSecretJSON,
+  parseGithubRepos,
 } from "./gitSources";
 
 export {

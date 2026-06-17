@@ -1,7 +1,8 @@
 // GitOps server I/O — clone a GitHub repo, diff/apply its manifests, and persist
 // source configs in-cluster. Source list lives in the `helmsman-git-sources`
-// ConfigMap; PATs live in the `helmsman-git-tokens` Secret. Repos are shallow-
-// cloned fresh into /tmp on each sync (manifests are small; avoids stale state).
+// ConfigMap; a single account-level GitHub PAT (+ login) lives in the
+// `helmsman-github` Secret and drives repo listing, clone, push, and PRs. Repos
+// are shallow-cloned fresh into /tmp on each sync (manifests are small).
 //
 // Reuses the existing apply pipeline conventions: kubectl is run via the argv
 // runner (no shell), manifests applied with `kubectl apply -f <dir> -R`, and a
@@ -11,18 +12,20 @@ import { dirname } from "node:path";
 import { kubectl, runProcess, type RunResult } from "@helmsman/k8s/src/run";
 import {
   GIT_SOURCES_CONFIGMAP,
-  GIT_TOKENS_SECRET,
+  GITHUB_SECRET,
   buildAuthedCloneURL,
   fixBranchName,
   gitSourcesConfigMapJSON,
-  gitTokensSecretJSON,
+  githubSecretJSON,
   normalizeManifestPath,
   parseGitSources,
+  parseGithubRepos,
   parseRepoSlug,
   provenanceAnnotations,
   redactURL,
   safeRepoFilePath,
   type GitSource,
+  type GithubRepo,
 } from "@helmsman/k8s/src/gitSources";
 import { applyManifest } from "./install";
 
@@ -56,32 +59,97 @@ export async function saveSources(context: string | null, sources: GitSource[]):
   return applyManifest(context, gitSourcesConfigMapJSON(STATE_NAMESPACE, sources));
 }
 
-/** Read all stored tokens, keyed by source name (decoded). Empty when absent. */
-async function loadTokens(context: string | null): Promise<Record<string, string>> {
-  const res = await kubectl(context, ["get", "secret", GIT_TOKENS_SECRET, "-n", STATE_NAMESPACE, "-o", "json"]);
-  if (res.code !== 0) return {};
+// ---------------------------------------------------------------------------
+// Account-level GitHub token: one PAT for listing repos + clone/push/PR.
+// ---------------------------------------------------------------------------
+
+async function readGithubSecret(context: string | null): Promise<{ token: string | null; login: string | null }> {
+  const res = await kubectl(context, ["get", "secret", GITHUB_SECRET, "-n", STATE_NAMESPACE, "-o", "json"]);
+  if (res.code !== 0) return { token: null, login: null };
   try {
     const secret = JSON.parse(res.stdout) as { data?: Record<string, string> };
-    const out: Record<string, string> = {};
-    for (const [k, v] of Object.entries(secret.data ?? {})) out[k] = Buffer.from(v, "base64").toString("utf8");
-    return out;
+    const dec = (k: string) => (secret.data?.[k] ? Buffer.from(secret.data[k]!, "base64").toString("utf8") : null);
+    return { token: dec("token"), login: dec("login") };
   } catch {
-    return {};
+    return { token: null, login: null };
   }
 }
 
-/** Read one source's token, or null. */
-export async function loadToken(context: string | null, name: string): Promise<string | null> {
-  const tokens = await loadTokens(context);
-  return tokens[name] ?? null;
+/** The stored GitHub PAT, or null — used by every clone/push/PR operation. */
+export async function loadGithubToken(context: string | null): Promise<string | null> {
+  return (await readGithubSecret(context)).token;
 }
 
-/** Set (or clear, when token is null) a source's token via read-modify-write. */
-export async function saveToken(context: string | null, name: string, token: string | null): Promise<RunResult> {
-  const tokens = await loadTokens(context);
-  if (token == null || token === "") delete tokens[name];
-  else tokens[name] = token;
-  return applyManifest(context, gitTokensSecretJSON(STATE_NAMESPACE, tokens));
+/** Connection status for the UI: a PAT is stored + which login it belongs to. */
+export async function githubAccountStatus(
+  context: string | null,
+): Promise<{ connected: boolean; login: string | null }> {
+  const acct = await readGithubSecret(context);
+  return { connected: acct.token != null, login: acct.login };
+}
+
+/** Validate a PAT against the GitHub API, then store it (with its login). */
+export async function connectGithub(
+  context: string | null,
+  token: string,
+): Promise<{ ok: boolean; login?: string; message?: string }> {
+  const user = await githubUser(token);
+  if (!user.ok || !user.login) return { ok: false, message: user.message ?? "invalid token" };
+  const res = await applyManifest(context, githubSecretJSON(STATE_NAMESPACE, token, user.login));
+  if (res.code !== 0) return { ok: false, message: res.stderr || "failed to store token" };
+  return { ok: true, login: user.login };
+}
+
+/** Remove the stored PAT. */
+export async function disconnectGithub(context: string | null): Promise<RunResult> {
+  return kubectl(context, ["delete", "secret", GITHUB_SECRET, "-n", STATE_NAMESPACE, "--ignore-not-found"]);
+}
+
+// --- GitHub REST helpers (no SDK; fetch + PAT) ------------------------------
+
+function githubHeaders(token: string): Record<string, string> {
+  return {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/vnd.github+json",
+    "User-Agent": "helmsman",
+    "X-GitHub-Api-Version": "2022-11-28",
+  };
+}
+
+/** GET /user → { ok, login }. Validates the token. */
+async function githubUser(token: string): Promise<{ ok: boolean; login?: string; message?: string }> {
+  try {
+    const res = await fetch("https://api.github.com/user", { headers: githubHeaders(token) });
+    const j = (await res.json().catch(() => ({}))) as { login?: string; message?: string };
+    if (!res.ok) return { ok: false, message: j.message ?? `GitHub ${res.status}` };
+    return { ok: true, login: j.login };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** List the user's repos (follows Link pagination, capped), newest-updated first. */
+export async function listGithubRepos(token: string): Promise<GithubRepo[]> {
+  const out: GithubRepo[] = [];
+  let url: string | null =
+    "https://api.github.com/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member";
+  for (let page = 0; url && page < 10; page++) {
+    const res: Response = await fetch(url, { headers: githubHeaders(token) });
+    if (!res.ok) break;
+    out.push(...parseGithubRepos(await res.json().catch(() => [])));
+    url = nextLink(res.headers.get("link"));
+  }
+  return out;
+}
+
+/** Extract the `rel="next"` URL from a GitHub Link header, or null. */
+function nextLink(header: string | null): string | null {
+  if (!header) return null;
+  for (const part of header.split(",")) {
+    const m = part.match(/<([^>]+)>;\s*rel="next"/);
+    if (m) return m[1]!;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
