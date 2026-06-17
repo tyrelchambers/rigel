@@ -7,6 +7,9 @@ import {
   redactURL,
   parseGitSources,
   gitSourcesConfigMapJSON,
+  provenanceAnnotations,
+  SOURCE_REPO_ANNOTATION,
+  SOURCE_PATH_ANNOTATION,
   type GitSource,
 } from "./gitSources";
 
@@ -60,6 +63,19 @@ test("parseGitSources / gitSourcesConfigMapJSON: round-trips sources, never carr
 
   const back = parseGitSources(cm.data["sources.json"]);
   expect(back).toEqual(sources);
+});
+
+test("provenanceAnnotations: kubectl annotate key=value pairs binding a workload to its source", () => {
+  const source: GitSource = { name: "my-app", repoURL: "https://github.com/me/my-app", branch: "main", path: "k8s/prod" };
+  expect(provenanceAnnotations(source)).toEqual([
+    `${SOURCE_REPO_ANNOTATION}=my-app`,
+    `${SOURCE_PATH_ANNOTATION}=k8s/prod`,
+  ]);
+  // root path normalizes to "."
+  expect(provenanceAnnotations({ ...source, path: "" })).toEqual([
+    `${SOURCE_REPO_ANNOTATION}=my-app`,
+    `${SOURCE_PATH_ANNOTATION}=.`,
+  ]);
 });
 
 test("parseGitSources: tolerates missing/garbage data", () => {

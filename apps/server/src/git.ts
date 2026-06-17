@@ -16,6 +16,7 @@ import {
   gitTokensSecretJSON,
   normalizeManifestPath,
   parseGitSources,
+  provenanceAnnotations,
   redactURL,
   type GitSource,
 } from "@helmsman/k8s/src/gitSources";
@@ -140,6 +141,13 @@ export async function diffSource(context: string | null, source: GitSource, toke
 export async function applySource(context: string | null, source: GitSource, token: string | null): Promise<GitOpResult> {
   const co = await ensureCheckout(source, token);
   if (!co.ok || !co.dir) return { code: 1, stdout: "", stderr: co.message };
-  const res = await kubectl(context, ["apply", "-f", manifestDir(co.dir, source), "-R"]);
+  const dir = manifestDir(co.dir, source);
+  const res = await kubectl(context, ["apply", "-f", dir, "-R"]);
+  if (res.code === 0) {
+    // Best-effort provenance: stamp the synced resources so they map back to
+    // this source (the AI fix flow reads these annotations). A failure here must
+    // not fail the sync itself.
+    await kubectl(context, ["annotate", "-f", dir, "-R", ...provenanceAnnotations(source), "--overwrite"]);
+  }
   return { ...res, sha: co.sha };
 }

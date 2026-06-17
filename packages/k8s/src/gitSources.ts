@@ -24,6 +24,19 @@ export const GIT_SOURCES_CONFIGMAP = "helmsman-git-sources";
 export const GIT_TOKENS_SECRET = "helmsman-git-tokens";
 const MANAGED_BY = { "app.kubernetes.io/managed-by": "helmsman" };
 
+// Provenance annotations stamped on every synced resource so a running workload
+// can be mapped back to the source repo + manifest dir (used by the AI fix flow).
+export const SOURCE_REPO_ANNOTATION = "helmsman.dev/source-repo";
+export const SOURCE_PATH_ANNOTATION = "helmsman.dev/source-path";
+
+/** `kubectl annotate key=value` pairs binding a workload to its git source. */
+export function provenanceAnnotations(source: GitSource): string[] {
+  return [
+    `${SOURCE_REPO_ANNOTATION}=${source.name}`,
+    `${SOURCE_PATH_ANNOTATION}=${normalizeManifestPath(source.path)}`,
+  ];
+}
+
 /** Normalize a display name to a DNS-1123-ish slug (lowercase, [a-z0-9-]). */
 export function sanitizeSourceName(name: string): string {
   return name
