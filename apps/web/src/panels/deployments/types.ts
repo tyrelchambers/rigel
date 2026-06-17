@@ -49,6 +49,7 @@ export interface Deployment {
     uid?: string;
     creationTimestamp?: string; // ISO 8601
     labels?: Record<string, string>;
+    annotations?: Record<string, string>;
   };
   spec?: DeploymentSpec;
   status?: DeploymentStatus;

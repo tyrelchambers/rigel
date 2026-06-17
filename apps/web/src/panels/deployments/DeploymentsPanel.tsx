@@ -11,6 +11,7 @@ import {
   Box,
   Cpu,
   MemoryStick,
+  GitBranch,
 } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
@@ -33,6 +34,8 @@ import { PanelHeader } from "@/panels/components/PanelHeader";
 import { LoadingState } from "@/panels/components/LoadingState";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import type { ActionBlock } from "@/lib/api";
+import { useGitSources, type GitSource } from "@/panels/gitops/gitApi";
+import { buildLinkAction, buildUnlinkAction, linkedSourceName, type WorkloadRef } from "@/panels/gitops/linkSource";
 import type { Deployment } from "./types";
 import type { Pod } from "../pods/types";
 import {
@@ -71,6 +74,8 @@ export default function DeploymentsPanel() {
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [scaleTarget, setScaleTarget] = useState<Deployment | null>(null);
+  // Registered GitOps sources, for the per-deployment "Link to GitHub" control.
+  const { data: gitSources } = useGitSources();
   const [scaleValue, setScaleValue] = useState("1");
 
   useEffect(() => {
@@ -235,6 +240,8 @@ export default function DeploymentsPanel() {
                   deployment={d}
                   pods={pods}
                   paused={paused}
+                  sources={gitSources ?? []}
+                  onAction={setPendingAction}
                   onRestart={() => restart(d)}
                   onScale={() => openScale(d)}
                   onRollback={() => rollback(d)}
@@ -392,6 +399,8 @@ interface DeploymentDetailProps {
   deployment: Deployment;
   pods: Pod[];
   paused: boolean;
+  sources: GitSource[];
+  onAction: (a: ActionBlock) => void;
   onRestart: () => void;
   onScale: () => void;
   onRollback: () => void;
@@ -402,6 +411,8 @@ function DeploymentDetail({
   deployment,
   pods,
   paused,
+  sources,
+  onAction,
   onRestart,
   onScale,
   onRollback,
@@ -409,6 +420,12 @@ function DeploymentDetail({
 }: DeploymentDetailProps) {
   const containers = containerSummaries(deployment);
   const sortedPods = [...pods].sort((a, b) => a.metadata.name.localeCompare(b.metadata.name));
+  const workloadRef: WorkloadRef = {
+    name: deployment.metadata.name,
+    namespace: deployment.metadata.namespace ?? "default",
+    kind: "deployment",
+  };
+  const linkedSource = linkedSourceName(deployment);
 
   return (
     <div className="space-y-4">
@@ -556,6 +573,38 @@ function DeploymentDetail({
           {paused ? <Play className="size-3" /> : <Pause className="size-3" />}
           {paused ? "Resume" : "Pause"}
         </Button>
+
+        {/* GitHub source link — gives the AI source context + enables fix-PRs. */}
+        <div className="ml-auto flex items-center gap-1.5">
+          <GitBranch className="size-3" style={{ color: "var(--accent-primary)" }} />
+          {linkedSource ? (
+            <>
+              <span className="text-xs text-muted-foreground">
+                <span className="font-mono text-foreground/90">{linkedSource}</span>
+              </span>
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => onAction(buildUnlinkAction(workloadRef))}>
+                Unlink
+              </Button>
+            </>
+          ) : sources.length > 0 ? (
+            <select
+              defaultValue=""
+              aria-label="Link to GitHub source"
+              onChange={(e) => {
+                const s = sources.find((x) => x.name === e.target.value);
+                if (s) onAction(buildLinkAction(workloadRef, s));
+              }}
+              className="h-7 rounded-md border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="">Link to GitHub…</option>
+              {sources.map((s) => (
+                <option key={s.name} value={s.name}>{s.name}</option>
+              ))}
+            </select>
+          ) : (
+            <span className="text-xs text-muted-foreground">Link to GitHub — add a source in GitOps</span>
+          )}
+        </div>
       </div>
     </div>
   );

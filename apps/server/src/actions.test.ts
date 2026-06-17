@@ -395,3 +395,21 @@ test("restart uses deployment field as fallback when name is absent", () => {
 test("applyManifest is not a kubectl argv — buildCommand throws", () => {
   expect(() => buildCommand({ kind: "applyManifest", label: "x" } as any)).toThrow();
 });
+
+// ---------------------------------------------------------------------------
+// linkSourceRepo / unlinkSourceRepo — annotate a workload with its GitOps source
+// ---------------------------------------------------------------------------
+test("linkSourceRepo annotates the workload with source-repo + source-path", () => {
+  expect(buildCommand({ kind: "linkSourceRepo", name: "api", namespace: "personal", source: "my-api", filePath: "k8s" }))
+    .toEqual(["annotate", "deployment/api", "helmsman.dev/source-repo=my-api", "helmsman.dev/source-path=k8s", "-n", "personal", "--overwrite"]);
+});
+
+test("linkSourceRepo respects the workload kind", () => {
+  expect(buildCommand({ kind: "linkSourceRepo", name: "pg", namespace: "default", source: "pgrepo", filePath: ".", resourceKind: "statefulset" }))
+    .toEqual(["annotate", "statefulset/pg", "helmsman.dev/source-repo=pgrepo", "helmsman.dev/source-path=.", "-n", "default", "--overwrite"]);
+});
+
+test("unlinkSourceRepo removes both annotations (trailing-dash)", () => {
+  expect(buildCommand({ kind: "unlinkSourceRepo", name: "api", namespace: "personal" }))
+    .toEqual(["annotate", "deployment/api", "helmsman.dev/source-repo-", "helmsman.dev/source-path-", "-n", "personal"]);
+});

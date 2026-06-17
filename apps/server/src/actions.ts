@@ -320,6 +320,39 @@ export function buildCommand(a: ActionBlock): string[] {
     }
 
     // -----------------------------------------------------------------------
+    // linkSourceRepo — annotate <kind>/<name> helmsman.dev/source-repo=<source>
+    //   helmsman.dev/source-path=<filePath> -n <ns> --overwrite
+    // Binds an existing workload to a GitOps source so the AI has source context
+    // (and can open fix-PRs). --overwrite re-points an already-linked workload.
+    // -----------------------------------------------------------------------
+    case "linkSourceRepo": {
+      const wk = workloadKind(a);
+      return [
+        "annotate",
+        `${wk}/${target(a)}`,
+        `helmsman.dev/source-repo=${a.source ?? ""}`,
+        `helmsman.dev/source-path=${a.filePath ?? "."}`,
+        ...ns,
+        "--overwrite",
+      ];
+    }
+
+    // -----------------------------------------------------------------------
+    // unlinkSourceRepo — annotate <kind>/<name> helmsman.dev/source-repo-
+    //   helmsman.dev/source-path- -n <ns> (trailing-dash removal)
+    // -----------------------------------------------------------------------
+    case "unlinkSourceRepo": {
+      const wk = workloadKind(a);
+      return [
+        "annotate",
+        `${wk}/${target(a)}`,
+        "helmsman.dev/source-repo-",
+        "helmsman.dev/source-path-",
+        ...ns,
+      ];
+    }
+
+    // -----------------------------------------------------------------------
     // command — verbatim args (empty strings pre-filtered by Swift, we mirror)
     // -----------------------------------------------------------------------
     case "command":

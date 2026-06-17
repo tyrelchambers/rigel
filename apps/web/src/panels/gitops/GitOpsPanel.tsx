@@ -15,7 +15,12 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { PanelHeader } from "@/panels/components/PanelHeader";
-import { GitBranch, Plus, RefreshCw, Trash2, CheckCircle2, AlertTriangle, FolderGit2 } from "lucide-react";
+import { GitBranch, Plus, RefreshCw, Trash2, CheckCircle2, AlertTriangle, FolderGit2, X } from "lucide-react";
+import { useCluster } from "@/store/cluster";
+import { subscribe, unsubscribe } from "@/lib/ws";
+import { ConfirmSheet } from "@/components/ConfirmSheet";
+import type { ActionBlock } from "@/lib/api";
+import type { Deployment } from "@/panels/deployments/types";
 import {
   useGitSources,
   useSaveSource,
@@ -29,12 +34,40 @@ import {
   type SyncResult,
 } from "./gitApi";
 import { GITHUB_TOKEN_URL } from "./GitHubConnectionCard";
+import { buildLinkAction, buildUnlinkAction, linkedSourceName, type WorkloadRef } from "./linkSource";
 
 export default function GitOpsPanel() {
   const { data: sources, isLoading } = useGitSources();
   const [addOpen, setAddOpen] = useState(false);
   const [syncing, setSyncing] = useState<GitSource | null>(null);
+  const [linkingSource, setLinkingSource] = useState<GitSource | null>(null);
+  const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
   const del = useDeleteSource();
+
+  // Workloads (for the per-source "linked deployments" view + link picker).
+  const namespaceFilter = useCluster((s) => s.namespaceFilter);
+  const resources = useCluster((s) => s.resources);
+  useEffect(() => {
+    const ns = namespaceFilter ?? "*";
+    subscribe("deployments", ns);
+    return () => unsubscribe("deployments", ns);
+  }, [namespaceFilter]);
+  const deployments = useMemo(
+    () => Object.values((resources["deployments"] ?? {}) as Record<string, Deployment>),
+    [resources],
+  );
+  /** sourceName → linked deployments. */
+  const linkedBySource = useMemo(() => {
+    const map = new Map<string, Deployment[]>();
+    for (const d of deployments) {
+      const src = linkedSourceName(d);
+      if (!src) continue;
+      const list = map.get(src);
+      if (list) list.push(d);
+      else map.set(src, [d]);
+    }
+    return map;
+  }, [deployments]);
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
@@ -55,8 +88,11 @@ export default function GitOpsPanel() {
           <SourceCard
             key={s.name}
             source={s}
+            linked={linkedBySource.get(s.name) ?? []}
             onSync={() => setSyncing(s)}
             onDelete={() => del.mutate(s.name)}
+            onLinkDeployment={() => setLinkingSource(s)}
+            onUnlink={(w) => setPendingAction(buildUnlinkAction(w))}
             deleting={del.isPending && del.variables === s.name}
           />
         ))}
@@ -64,19 +100,34 @@ export default function GitOpsPanel() {
 
       {addOpen && <AddSourceDialog onClose={() => setAddOpen(false)} />}
       {syncing && <SyncDialog source={syncing} onClose={() => setSyncing(null)} />}
+      {linkingSource && (
+        <LinkDeploymentDialog
+          source={linkingSource}
+          deployments={deployments}
+          onPick={(a) => { setPendingAction(a); setLinkingSource(null); }}
+          onClose={() => setLinkingSource(null)}
+        />
+      )}
+      <ConfirmSheet action={pendingAction} open={!!pendingAction} onClose={() => setPendingAction(null)} />
     </div>
   );
 }
 
 function SourceCard({
   source,
+  linked,
   onSync,
   onDelete,
+  onLinkDeployment,
+  onUnlink,
   deleting,
 }: {
   source: GitSource;
+  linked: Deployment[];
   onSync: () => void;
   onDelete: () => void;
+  onLinkDeployment: () => void;
+  onUnlink: (w: WorkloadRef) => void;
   deleting: boolean;
 }) {
   return (
@@ -101,7 +152,86 @@ function SourceCard({
           </Button>
         </div>
       </div>
+
+      {/* Linked workloads — the AI uses these links for context + fix-PRs. */}
+      <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t pt-2.5" style={{ borderColor: "var(--border-subtle)" }}>
+        <span className="text-[11px]" style={{ color: "var(--fg-tertiary)" }}>Linked:</span>
+        {linked.length === 0 && <span className="text-[11px]" style={{ color: "var(--fg-tertiary)" }}>none yet</span>}
+        {linked.map((d) => (
+          <span key={`${d.metadata.namespace}/${d.metadata.name}`} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-mono" style={{ background: "var(--surface-sunken)", border: "1px solid #26272B" }}>
+            {d.metadata.name}
+            <button
+              type="button"
+              aria-label={`Unlink ${d.metadata.name}`}
+              onClick={() => onUnlink({ name: d.metadata.name, namespace: d.metadata.namespace ?? "default", kind: "deployment" })}
+              className="opacity-60 hover:opacity-100"
+            >
+              <X className="size-3" />
+            </button>
+          </span>
+        ))}
+        <Button size="sm" variant="ghost" className="ml-auto h-6 gap-1 text-[11px]" onClick={onLinkDeployment}>
+          <Plus className="size-3" /> Link deployment
+        </Button>
+      </div>
     </div>
+  );
+}
+
+/** Pick a deployment to link to a source (lists those not already on this source). */
+function LinkDeploymentDialog({
+  source,
+  deployments,
+  onPick,
+  onClose,
+}: {
+  source: GitSource;
+  deployments: Deployment[];
+  onPick: (a: ActionBlock) => void;
+  onClose: () => void;
+}) {
+  const candidates = deployments
+    .filter((d) => linkedSourceName(d) !== source.name)
+    .sort((a, b) => a.metadata.name.localeCompare(b.metadata.name));
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Link a deployment to {source.name}</DialogTitle>
+          <DialogDescription>The workload is tagged with this source so the AI has context and can open fix-PRs.</DialogDescription>
+        </DialogHeader>
+        <div className="max-h-80 overflow-auto py-1">
+          {candidates.length === 0 ? (
+            <p className="px-1 py-6 text-center text-sm text-muted-foreground">No deployments available to link.</p>
+          ) : (
+            <ul className="flex flex-col gap-1">
+              {candidates.map((d) => {
+                const ref: WorkloadRef = { name: d.metadata.name, namespace: d.metadata.namespace ?? "default", kind: "deployment" };
+                const already = linkedSourceName(d);
+                return (
+                  <li key={`${ref.namespace}/${ref.name}`}>
+                    <button
+                      type="button"
+                      onClick={() => onPick(buildLinkAction(ref, source))}
+                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm hover:bg-white/[0.04]"
+                    >
+                      <GitBranch className="size-3.5 shrink-0" style={{ color: "var(--accent-primary)" }} />
+                      <span className="font-mono">{ref.name}</span>
+                      <span className="text-xs text-muted-foreground">{ref.namespace}</span>
+                      {already && <span className="ml-auto text-[10px] text-muted-foreground">re-point from {already}</span>}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
