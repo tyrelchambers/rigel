@@ -32,7 +32,7 @@ USER root
 # Best-effort (like claude): absence just disables those actions, it doesn't
 # break the build.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends curl ca-certificates bash git \
+ && apt-get install -y --no-install-recommends curl ca-certificates bash git jq \
  && rm -rf /var/lib/apt/lists/* \
  && ARCH="$(dpkg --print-architecture)" \
  && curl -fsSLo /usr/local/bin/kubectl "https://dl.k8s.io/release/$(curl -fsSL https://dl.k8s.io/release/stable.txt)/bin/linux/${ARCH}/kubectl" \
