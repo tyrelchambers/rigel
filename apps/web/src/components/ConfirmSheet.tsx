@@ -221,7 +221,7 @@ export function ConfirmSheet({ action, open, onClose, onPurge, fromChat, onResul
       >
         {/* Header — icon chip + title + risk pill over an accent-tinted wash */}
         <DialogHeader
-          className="flex-row items-start gap-3.5 px-5 pb-4 pt-5"
+          className="min-w-0 flex-row items-start gap-3.5 px-5 pb-4 pt-5"
           style={{
             background: `linear-gradient(180deg, ${accentColor}1A 0%, transparent 100%)`,
             borderBottom: `1px solid ${accentColor}24`,
@@ -234,7 +234,7 @@ export function ConfirmSheet({ action, open, onClose, onPurge, fromChat, onResul
             <HeaderIcon className="size-[18px]" style={{ color: accentColor }} strokeWidth={2} />
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <DialogTitle className="truncate text-[15px] leading-snug">{title}</DialogTitle>
+            <DialogTitle className="text-[15px] leading-snug line-clamp-2 break-words">{title}</DialogTitle>
             <DialogDescription className="text-[13px] leading-relaxed">{description}</DialogDescription>
           </div>
           <span
