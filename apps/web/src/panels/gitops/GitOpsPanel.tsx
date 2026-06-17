@@ -141,7 +141,7 @@ function AddSourceDialog({ onClose }: { onClose: () => void }) {
   const connected = account?.connected === true;
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-2xl">
         {acctLoading ? (
           <>
             <DialogHeader>
@@ -284,7 +284,7 @@ function PickRepoStep({ onClose }: { onClose: () => void }) {
 /** Pulsing placeholders shown while the repo list loads. */
 function FormSkeleton() {
   const bar = (w: string, h = 34) => (
-    <div className="animate-pulse rounded-md" style={{ width: w, height: h, background: "#1A1A1E" }} />
+    <div className="animate-pulse rounded-md" style={{ width: w, height: h, background: "rgba(255,255,255,0.10)" }} />
   );
   return (
     <div className="flex flex-col gap-3">
