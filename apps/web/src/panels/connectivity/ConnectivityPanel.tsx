@@ -12,6 +12,7 @@ import {
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { ListRow } from "@/panels/components/ListRow";
+import { ContextMenuItem } from "@/components/ui/context-menu";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { TagPill } from "@/panels/components/TagPill";
 import { PanelHeader } from "@/panels/components/PanelHeader";
@@ -216,11 +217,19 @@ function FlowRow({ flow }: { flow: Flow }) {
   const healthColor =
     flow.health === "ok" ? "var(--status-running)" : flow.health === "warn" ? "var(--status-pending)" : "var(--status-failed)";
 
+  const rowMenu = (
+    <>
+      <ContextMenuItem onClick={() => onSelectService(flow.serviceName, flow.namespace)}>View service</ContextMenuItem>
+      <ContextMenuItem disabled={podsDisabled} onClick={() => onSelectPods(flow)}>View pods</ContextMenuItem>
+    </>
+  );
+
   return (
     <ListRow
       rowKey={flow.id}
       isOpen={false}
       onToggle={() => {}}
+      contextMenu={rowMenu}
     >
       {/* Flex-col container so the issues line stacks below the main chain */}
       <div className="flex flex-1 flex-col gap-1 min-w-0">

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
+import { ContextMenuItem } from "@/components/ui/context-menu";
 import { ListRow } from "@/panels/components/ListRow";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import type { ActionBlock } from "@/lib/api";
@@ -116,6 +117,11 @@ export default function CertificatesPanel() {
         <div className="flex flex-col gap-0.5 px-3 py-2">
           {filtered.map((v) => {
             const isOpen = expanded.has(v.uid);
+            const rowMenu = (
+              <>
+                <ContextMenuItem onClick={() => toggleExpand(v.uid)}>{isOpen ? "Collapse" : "Details…"}</ContextMenuItem>
+              </>
+            );
 
             return (
               <ListRow
@@ -123,6 +129,7 @@ export default function CertificatesPanel() {
                 rowKey={v.uid}
                 isOpen={isOpen}
                 onToggle={() => toggleExpand(v.uid)}
+                contextMenu={rowMenu}
                 expandedContent={
                   <CertDetail view={v} onAction={setPendingAction} cmctlAvailable={cmctlAvailable} />
                 }

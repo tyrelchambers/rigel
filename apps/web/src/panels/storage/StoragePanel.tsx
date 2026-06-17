@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
+import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { ListRow } from "@/panels/components/ListRow";
 import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
@@ -189,12 +190,22 @@ export default function StoragePanel() {
             const modes = abbreviateAccessModes(pvcAccessModes(pvc));
             const capacity = pvcCapacity(pvc);
             const storageClass = pvc.spec?.storageClassName;
+            const rowMenu = (
+              <>
+                <ContextMenuItem onClick={() => askClaude("persistentvolumeclaim", pvc.metadata.name, pvc.metadata.namespace, "Errors")}>Ask Claude: Errors</ContextMenuItem>
+                <ContextMenuItem onClick={() => askClaude("persistentvolumeclaim", pvc.metadata.name, pvc.metadata.namespace, "Logs")}>Ask Claude: Logs</ContextMenuItem>
+                <ContextMenuItem onClick={() => askClaude("persistentvolumeclaim", pvc.metadata.name, pvc.metadata.namespace, "Explain")}>Ask Claude: Explain</ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => toggleExpand(k)}>{isOpen ? "Collapse" : "Manage…"}</ContextMenuItem>
+              </>
+            );
             return (
               <ListRow
                 key={k}
                 rowKey={k}
                 isOpen={isOpen}
                 onToggle={() => toggleExpand(k)}
+                contextMenu={rowMenu}
                 expandedContent={<PVCDetail pvc={pvc} />}
               >
                 {/* Name */}
@@ -276,12 +287,22 @@ export default function StoragePanel() {
             const reclaim = pv.spec?.persistentVolumeReclaimPolicy;
             const storageClass = pv.spec?.storageClassName;
             const claim = claimRef(pv);
+            const rowMenu = (
+              <>
+                <ContextMenuItem onClick={() => askClaude("persistentvolume", pv.metadata.name, undefined, "Errors")}>Ask Claude: Errors</ContextMenuItem>
+                <ContextMenuItem onClick={() => askClaude("persistentvolume", pv.metadata.name, undefined, "Logs")}>Ask Claude: Logs</ContextMenuItem>
+                <ContextMenuItem onClick={() => askClaude("persistentvolume", pv.metadata.name, undefined, "Explain")}>Ask Claude: Explain</ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => toggleExpand(k)}>{isOpen ? "Collapse" : "Manage…"}</ContextMenuItem>
+              </>
+            );
             return (
               <ListRow
                 key={k}
                 rowKey={k}
                 isOpen={isOpen}
                 onToggle={() => toggleExpand(k)}
+                contextMenu={rowMenu}
                 expandedContent={<PVDetail pv={pv} />}
               >
                 {/* Name */}
@@ -365,12 +386,22 @@ export default function StoragePanel() {
             const provisioner = sc.provisioner;
             const reclaim = sc.reclaimPolicy;
             const bindingMode = sc.volumeBindingMode;
+            const rowMenu = (
+              <>
+                <ContextMenuItem onClick={() => askClaude("storageclass", sc.metadata.name, undefined, "Errors")}>Ask Claude: Errors</ContextMenuItem>
+                <ContextMenuItem onClick={() => askClaude("storageclass", sc.metadata.name, undefined, "Logs")}>Ask Claude: Logs</ContextMenuItem>
+                <ContextMenuItem onClick={() => askClaude("storageclass", sc.metadata.name, undefined, "Explain")}>Ask Claude: Explain</ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => toggleExpand(k)}>{isOpen ? "Collapse" : "Manage…"}</ContextMenuItem>
+              </>
+            );
             return (
               <ListRow
                 key={k}
                 rowKey={k}
                 isOpen={isOpen}
                 onToggle={() => toggleExpand(k)}
+                contextMenu={rowMenu}
                 expandedContent={<SCDetail sc={sc} />}
               >
                 {/* Name */}

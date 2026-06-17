@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { ListRow } from "@/panels/components/ListRow";
+import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
@@ -361,12 +362,25 @@ export default function WorkloadsPanel() {
             const desired = statefulSetDesired(s);
             const allReady = ready === desired;
 
+            const rowMenu = (
+              <>
+                <ContextMenuItem onClick={() => askClaude("statefulset", s.metadata.name, s.metadata.namespace, "Errors")}>Ask Claude: Errors</ContextMenuItem>
+                <ContextMenuItem onClick={() => askClaude("statefulset", s.metadata.name, s.metadata.namespace, "Logs")}>Ask Claude: Logs</ContextMenuItem>
+                <ContextMenuItem onClick={() => askClaude("statefulset", s.metadata.name, s.metadata.namespace, "Explain")}>Ask Claude: Explain</ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => restartStatefulSet(s)}>Restart…</ContextMenuItem>
+                <ContextMenuItem onClick={() => openScale(s)}>Scale…</ContextMenuItem>
+                <ContextMenuItem variant="destructive" onClick={() => deleteStatefulSet(s)}>Delete…</ContextMenuItem>
+              </>
+            );
+
             return (
               <ListRow
                 key={k}
                 rowKey={k}
                 isOpen={isOpen}
                 onToggle={() => toggleExpand(k)}
+                contextMenu={rowMenu}
               >
                 {/* Name */}
                 <button
@@ -454,12 +468,24 @@ export default function WorkloadsPanel() {
             const desired = daemonSetDesired(d);
             const allReady = ready === desired;
 
+            const rowMenu = (
+              <>
+                <ContextMenuItem onClick={() => askClaude("daemonset", d.metadata.name, d.metadata.namespace, "Errors")}>Ask Claude: Errors</ContextMenuItem>
+                <ContextMenuItem onClick={() => askClaude("daemonset", d.metadata.name, d.metadata.namespace, "Logs")}>Ask Claude: Logs</ContextMenuItem>
+                <ContextMenuItem onClick={() => askClaude("daemonset", d.metadata.name, d.metadata.namespace, "Explain")}>Ask Claude: Explain</ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => restartDaemonSet(d)}>Restart…</ContextMenuItem>
+                <ContextMenuItem variant="destructive" onClick={() => deleteDaemonSet(d)}>Delete…</ContextMenuItem>
+              </>
+            );
+
             return (
               <ListRow
                 key={k}
                 rowKey={k}
                 isOpen={isOpen}
                 onToggle={() => toggleExpand(k)}
+                contextMenu={rowMenu}
               >
                 {/* Name */}
                 <button
@@ -540,12 +566,23 @@ export default function WorkloadsPanel() {
             const isOpen = expanded.has(k);
             const phase = jobPhase(j);
 
+            const rowMenu = (
+              <>
+                <ContextMenuItem onClick={() => askClaude("job", j.metadata.name, j.metadata.namespace, "Errors")}>Ask Claude: Errors</ContextMenuItem>
+                <ContextMenuItem onClick={() => askClaude("job", j.metadata.name, j.metadata.namespace, "Logs")}>Ask Claude: Logs</ContextMenuItem>
+                <ContextMenuItem onClick={() => askClaude("job", j.metadata.name, j.metadata.namespace, "Explain")}>Ask Claude: Explain</ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem variant="destructive" onClick={() => deleteJob(j)}>Delete…</ContextMenuItem>
+              </>
+            );
+
             return (
               <ListRow
                 key={k}
                 rowKey={k}
                 isOpen={isOpen}
                 onToggle={() => toggleExpand(k)}
+                contextMenu={rowMenu}
               >
                 {/* Name */}
                 <button
@@ -628,12 +665,29 @@ export default function WorkloadsPanel() {
             const active = cronJobActiveCount(c);
             const lastSched = lastScheduleAgo(c);
 
+            const rowMenu = (
+              <>
+                <ContextMenuItem onClick={() => askClaude("cronjob", c.metadata.name, c.metadata.namespace, "Errors")}>Ask Claude: Errors</ContextMenuItem>
+                <ContextMenuItem onClick={() => askClaude("cronjob", c.metadata.name, c.metadata.namespace, "Logs")}>Ask Claude: Logs</ContextMenuItem>
+                <ContextMenuItem onClick={() => askClaude("cronjob", c.metadata.name, c.metadata.namespace, "Explain")}>Ask Claude: Explain</ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => triggerCronJob(c)}>Trigger…</ContextMenuItem>
+                {suspended ? (
+                  <ContextMenuItem onClick={() => resumeCronJob(c)}>Resume…</ContextMenuItem>
+                ) : (
+                  <ContextMenuItem onClick={() => suspendCronJob(c)}>Suspend…</ContextMenuItem>
+                )}
+                <ContextMenuItem variant="destructive" onClick={() => deleteCronJob(c)}>Delete…</ContextMenuItem>
+              </>
+            );
+
             return (
               <ListRow
                 key={k}
                 rowKey={k}
                 isOpen={isOpen}
                 onToggle={() => toggleExpand(k)}
+                contextMenu={rowMenu}
               >
                 {/* Name */}
                 <button

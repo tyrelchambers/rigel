@@ -26,6 +26,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
+import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { ListRow } from "@/panels/components/ListRow";
 import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
@@ -217,6 +218,27 @@ export default function DeploymentsPanel() {
           const paused = d.spec?.paused === true;
           const progress = rolloutProgress(d);
           const linkedSrc = linkedSourceName(d);
+          const ctxRef: WorkloadRef = { name: d.metadata.name, namespace: d.metadata.namespace ?? "default", kind: "deployment" };
+          const rowMenu = (
+            <>
+              <ContextMenuItem onClick={() => askClaude(d, "Errors")}>Ask Claude: Errors</ContextMenuItem>
+              <ContextMenuItem onClick={() => askClaude(d, "Logs")}>Ask Claude: Logs</ContextMenuItem>
+              <ContextMenuItem onClick={() => askClaude(d, "Explain")}>Ask Claude: Explain</ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem onClick={() => restart(d)}>Restart…</ContextMenuItem>
+              <ContextMenuItem onClick={() => openScale(d)}>Scale…</ContextMenuItem>
+              <ContextMenuItem onClick={() => rollback(d)}>Rollback…</ContextMenuItem>
+              <ContextMenuItem onClick={() => togglePause(d)}>{paused ? "Resume rollout" : "Pause rollout"}</ContextMenuItem>
+              {linkedSrc && (
+                <>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem onClick={() => setPendingAction(buildUnlinkAction(ctxRef))}>Unlink from {linkedSrc}</ContextMenuItem>
+                </>
+              )}
+              <ContextMenuSeparator />
+              <ContextMenuItem onClick={() => toggleExpand(d)}>{isOpen ? "Collapse" : "Manage…"}</ContextMenuItem>
+            </>
+          );
 
           return (
             <ListRow
@@ -224,6 +246,7 @@ export default function DeploymentsPanel() {
               rowKey={k}
               isOpen={isOpen}
               onToggle={() => toggleExpand(d)}
+              contextMenu={rowMenu}
               progress={redeploying ? progress : undefined}
               overlay={
                 redeploying ? (

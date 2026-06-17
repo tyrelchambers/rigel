@@ -13,6 +13,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
+import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { ListRow } from "@/panels/components/ListRow";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
@@ -187,12 +188,25 @@ export default function NamespacesPanel() {
             (pods ?? []).filter((p) => (p.metadata.namespace ?? "default") === ns.metadata.name),
           );
 
+          const rowMenu = (
+            <>
+              <ContextMenuItem onClick={() => askClaude(ns, "Errors")}>Ask Claude: Errors</ContextMenuItem>
+              <ContextMenuItem onClick={() => askClaude(ns, "Logs")}>Ask Claude: Logs</ContextMenuItem>
+              <ContextMenuItem onClick={() => askClaude(ns, "Explain")}>Ask Claude: Explain</ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem variant="destructive" onClick={() => handleDelete(ns)}>Delete…</ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem onClick={() => toggleExpand(k)}>{isOpen ? "Collapse" : "Manage…"}</ContextMenuItem>
+            </>
+          );
+
           return (
             <ListRow
               key={k}
               rowKey={k}
               isOpen={isOpen}
               onToggle={() => toggleExpand(k)}
+              contextMenu={rowMenu}
               expandedContent={
                 <div className="space-y-2">
                   <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">

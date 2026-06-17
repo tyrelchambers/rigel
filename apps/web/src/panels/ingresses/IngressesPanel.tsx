@@ -4,6 +4,7 @@ import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { ListRow } from "@/panels/components/ListRow";
+import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { TagPill } from "@/panels/components/TagPill";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
@@ -97,12 +98,23 @@ export default function IngressesPanel() {
           const routes = flattenRoutes(ing);
           const primary = routes[0];
 
+          const rowMenu = (
+            <>
+              <ContextMenuItem onClick={() => askClaude(ing, "Errors")}>Ask Claude: Errors</ContextMenuItem>
+              <ContextMenuItem onClick={() => askClaude(ing, "Logs")}>Ask Claude: Logs</ContextMenuItem>
+              <ContextMenuItem onClick={() => askClaude(ing, "Explain")}>Ask Claude: Explain</ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem onClick={() => toggleExpand(uid)}>{isOpen ? "Collapse" : "Manage…"}</ContextMenuItem>
+            </>
+          );
+
           return (
             <ListRow
               key={uid}
               rowKey={uid}
               isOpen={isOpen}
               onToggle={() => toggleExpand(uid)}
+              contextMenu={rowMenu}
               expandedContent={<IngressDetail ingress={ing} />}
             >
               {/* Two-line content (mirrors the Swift ingress row) */}

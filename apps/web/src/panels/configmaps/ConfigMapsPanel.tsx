@@ -4,6 +4,7 @@ import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { Button } from "@/components/ui/button";
+import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { ListRow } from "@/panels/components/ListRow";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
@@ -125,12 +126,25 @@ export default function ConfigMapsPanel() {
           const isOpen = expanded.has(uid);
           const keys = keyCount(cm);
 
+          const rowMenu = (
+            <>
+              <ContextMenuItem onClick={() => askClaude(cm, "Errors")}>Ask Claude: Errors</ContextMenuItem>
+              <ContextMenuItem onClick={() => askClaude(cm, "Logs")}>Ask Claude: Logs</ContextMenuItem>
+              <ContextMenuItem onClick={() => askClaude(cm, "Explain")}>Ask Claude: Explain</ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem onClick={() => openEdit(cm)}>Edit…</ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem onClick={() => toggleExpand(uid)}>{isOpen ? "Collapse" : "Manage…"}</ContextMenuItem>
+            </>
+          );
+
           return (
             <ListRow
               key={uid}
               rowKey={uid}
               isOpen={isOpen}
               onToggle={() => toggleExpand(uid)}
+              contextMenu={rowMenu}
               expandedContent={
                 <ConfigMapDetail configMap={cm} onEdit={() => openEdit(cm)} />
               }

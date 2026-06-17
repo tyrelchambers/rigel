@@ -3,6 +3,7 @@ import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { cn } from "@/lib/utils";
 import { ListRow } from "@/panels/components/ListRow";
+import { ContextMenuItem } from "@/components/ui/context-menu";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import type { EventBucket, EventTypeFilter, K8sEvent } from "./types";
@@ -185,12 +186,19 @@ export default function EventsPanel() {
           const message = event.message ?? "—";
           const objLabel = involvedObjectLabel(event);
 
+          const rowMenu = (
+            <ContextMenuItem onClick={() => toggleExpand(k)}>
+              {isOpen ? "Collapse" : "Details…"}
+            </ContextMenuItem>
+          );
+
           return (
             <ListRow
               key={k}
               rowKey={k}
               isOpen={isOpen}
               onToggle={() => toggleExpand(k)}
+              contextMenu={rowMenu}
               expandedContent={
                 <div className="font-mono text-xs text-muted-foreground whitespace-pre-wrap break-words">
                   {message}

@@ -9,6 +9,7 @@ import { StatusBadge } from "@/panels/components/StatusBadge";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
+import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import {
   PortForwardDialog,
@@ -249,12 +250,33 @@ export default function DatabasesPanel() {
             cnpgPluginAvailable,
           });
 
+          const enabledActions = caps.actions.filter((item) => item.enabled);
+          const rowMenu = (
+            <>
+              <ContextMenuItem onClick={() => askClaude(inst, "Errors")}>Ask Claude: Errors</ContextMenuItem>
+              <ContextMenuItem onClick={() => askClaude(inst, "Logs")}>Ask Claude: Logs</ContextMenuItem>
+              <ContextMenuItem onClick={() => askClaude(inst, "Explain")}>Ask Claude: Explain</ContextMenuItem>
+              {enabledActions.length > 0 && <ContextMenuSeparator />}
+              {enabledActions.map((item, i) => (
+                <ContextMenuItem
+                  key={`${item.action.type}-${i}`}
+                  onClick={() => handleAction(item.action, inst, caps.connection)}
+                >
+                  {actionLabel(item.action)}
+                </ContextMenuItem>
+              ))}
+              <ContextMenuSeparator />
+              <ContextMenuItem onClick={() => toggle(inst.id)}>{isOpen ? "Collapse" : "Manage…"}</ContextMenuItem>
+            </>
+          );
+
           return (
             <ListRow
               key={inst.id}
               rowKey={inst.id}
               isOpen={isOpen}
               onToggle={() => toggle(inst.id)}
+              contextMenu={rowMenu}
               expandedContent={
                 <DatabaseDetail
                   instance={inst}

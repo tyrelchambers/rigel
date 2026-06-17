@@ -5,6 +5,7 @@ import { handoffToChat } from "@/lib/chatHandoff";
 import { ListRow } from "@/panels/components/ListRow";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
+import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import type {
@@ -308,12 +309,20 @@ export default function RbacPanel() {
             const k = rowKey(sa.metadata);
             const isOpen = expanded.has(k);
             const count = sa.secrets?.length ?? 0;
+            const rowMenu = (
+              <>
+                <ContextMenuItem onClick={() => askClaude("serviceaccount", sa.metadata.name, sa.metadata.namespace, "Errors")}>Ask Claude: Errors</ContextMenuItem>
+                <ContextMenuItem onClick={() => askClaude("serviceaccount", sa.metadata.name, sa.metadata.namespace, "Logs")}>Ask Claude: Logs</ContextMenuItem>
+                <ContextMenuItem onClick={() => askClaude("serviceaccount", sa.metadata.name, sa.metadata.namespace, "Explain")}>Ask Claude: Explain</ContextMenuItem>
+              </>
+            );
             return (
               <ListRow
                 key={k}
                 rowKey={k}
                 isOpen={isOpen}
                 onToggle={() => toggleExpand(k)}
+                contextMenu={rowMenu}
               >
                 <button
                   type="button"
@@ -346,12 +355,22 @@ export default function RbacPanel() {
             const k = rowKey(r.metadata);
             const isOpen = expanded.has(k);
             const count = r.rules?.length ?? 0;
+            const rowMenu = (
+              <>
+                <ContextMenuItem onClick={() => askClaude("role", r.metadata.name, r.metadata.namespace, "Errors")}>Ask Claude: Errors</ContextMenuItem>
+                <ContextMenuItem onClick={() => askClaude("role", r.metadata.name, r.metadata.namespace, "Logs")}>Ask Claude: Logs</ContextMenuItem>
+                <ContextMenuItem onClick={() => askClaude("role", r.metadata.name, r.metadata.namespace, "Explain")}>Ask Claude: Explain</ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => toggleExpand(k)}>{isOpen ? "Collapse" : "Details…"}</ContextMenuItem>
+              </>
+            );
             return (
               <ListRow
                 key={k}
                 rowKey={k}
                 isOpen={isOpen}
                 onToggle={() => toggleExpand(k)}
+                contextMenu={rowMenu}
                 expandedContent={<RulesDetail summary={rulesSummary(r.rules)} />}
               >
                 <button
@@ -384,12 +403,22 @@ export default function RbacPanel() {
           filteredRoleBindings.map((rb) => {
             const k = rowKey(rb.metadata);
             const isOpen = expanded.has(k);
+            const rowMenu = (
+              <>
+                <ContextMenuItem onClick={() => askClaude("rolebinding", rb.metadata.name, rb.metadata.namespace, "Errors")}>Ask Claude: Errors</ContextMenuItem>
+                <ContextMenuItem onClick={() => askClaude("rolebinding", rb.metadata.name, rb.metadata.namespace, "Logs")}>Ask Claude: Logs</ContextMenuItem>
+                <ContextMenuItem onClick={() => askClaude("rolebinding", rb.metadata.name, rb.metadata.namespace, "Explain")}>Ask Claude: Explain</ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => toggleExpand(k)}>{isOpen ? "Collapse" : "Details…"}</ContextMenuItem>
+              </>
+            );
             return (
               <ListRow
                 key={k}
                 rowKey={k}
                 isOpen={isOpen}
                 onToggle={() => toggleExpand(k)}
+                contextMenu={rowMenu}
                 expandedContent={
                   <BindingDetail
                     roleRef={roleRefLabel(rb.roleRef, "Role")}
@@ -428,12 +457,22 @@ export default function RbacPanel() {
             const k = rowKey(cr.metadata);
             const isOpen = expanded.has(k);
             const count = cr.rules?.length ?? 0;
+            const rowMenu = (
+              <>
+                <ContextMenuItem onClick={() => askClaude("clusterrole", cr.metadata.name, undefined, "Errors")}>Ask Claude: Errors</ContextMenuItem>
+                <ContextMenuItem onClick={() => askClaude("clusterrole", cr.metadata.name, undefined, "Logs")}>Ask Claude: Logs</ContextMenuItem>
+                <ContextMenuItem onClick={() => askClaude("clusterrole", cr.metadata.name, undefined, "Explain")}>Ask Claude: Explain</ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => toggleExpand(k)}>{isOpen ? "Collapse" : "Details…"}</ContextMenuItem>
+              </>
+            );
             return (
               <ListRow
                 key={k}
                 rowKey={k}
                 isOpen={isOpen}
                 onToggle={() => toggleExpand(k)}
+                contextMenu={rowMenu}
                 expandedContent={<RulesDetail summary={rulesSummary(cr.rules)} />}
               >
                 <button
@@ -464,12 +503,22 @@ export default function RbacPanel() {
           filteredClusterRoleBindings.map((crb) => {
             const k = rowKey(crb.metadata);
             const isOpen = expanded.has(k);
+            const rowMenu = (
+              <>
+                <ContextMenuItem onClick={() => askClaude("clusterrolebinding", crb.metadata.name, undefined, "Errors")}>Ask Claude: Errors</ContextMenuItem>
+                <ContextMenuItem onClick={() => askClaude("clusterrolebinding", crb.metadata.name, undefined, "Logs")}>Ask Claude: Logs</ContextMenuItem>
+                <ContextMenuItem onClick={() => askClaude("clusterrolebinding", crb.metadata.name, undefined, "Explain")}>Ask Claude: Explain</ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => toggleExpand(k)}>{isOpen ? "Collapse" : "Details…"}</ContextMenuItem>
+              </>
+            );
             return (
               <ListRow
                 key={k}
                 rowKey={k}
                 isOpen={isOpen}
                 onToggle={() => toggleExpand(k)}
+                contextMenu={rowMenu}
                 expandedContent={
                   <BindingDetail
                     roleRef={roleRefLabel(crb.roleRef, "ClusterRole")}

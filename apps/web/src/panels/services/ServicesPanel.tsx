@@ -4,6 +4,7 @@ import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { ListRow } from "@/panels/components/ListRow";
+import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
@@ -138,6 +139,23 @@ export default function ServicesPanel() {
           const external = externalAddress(svc);
           const isForwarding = forwardingUids.has(uid);
           const notExternalName = !isExternalName(svc);
+          const canForward = notExternalName && (svc.spec?.ports ?? []).length > 0;
+
+          const rowMenu = (
+            <>
+              <ContextMenuItem onClick={() => askClaude(svc, "Errors")}>Ask Claude: Errors</ContextMenuItem>
+              <ContextMenuItem onClick={() => askClaude(svc, "Logs")}>Ask Claude: Logs</ContextMenuItem>
+              <ContextMenuItem onClick={() => askClaude(svc, "Explain")}>Ask Claude: Explain</ContextMenuItem>
+              {canForward && (
+                <>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem onClick={() => openForwardDialog(svc)}>Forward…</ContextMenuItem>
+                </>
+              )}
+              <ContextMenuSeparator />
+              <ContextMenuItem onClick={() => toggleExpand(uid)}>{isOpen ? "Collapse" : "Manage…"}</ContextMenuItem>
+            </>
+          );
 
           return (
             <ListRow
@@ -145,6 +163,7 @@ export default function ServicesPanel() {
               rowKey={uid}
               isOpen={isOpen}
               onToggle={() => toggleExpand(uid)}
+              contextMenu={rowMenu}
               expandedContent={<ServiceDetail service={svc} />}
             >
               {/* Name */}

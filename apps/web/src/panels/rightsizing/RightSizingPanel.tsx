@@ -12,6 +12,7 @@ import { handoffToChat } from "@/lib/chatHandoff";
 import { Button } from "@/components/ui/button";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { ListRow } from "@/panels/components/ListRow";
+import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { PanelHeader } from "@/panels/components/PanelHeader";
@@ -357,6 +358,24 @@ export default function RightSizingPanel() {
         {usingBackend && filtered.map((w) => {
           const k = `${w.namespace}/${w.name}`;
           const isOpen = expanded.has(k);
+          // Per-container actions (Apply/Ask Claude) live in the expanded detail;
+          // a single-container workload can route Ask Claude straight from the row.
+          const soleContainer = w.containers.length === 1 ? w.containers[0] : null;
+          const rowMenu = (
+            <>
+              {soleContainer && (
+                <>
+                  <ContextMenuItem onClick={() => askClaude(w, soleContainer)}>
+                    Ask Claude
+                  </ContextMenuItem>
+                  <ContextMenuSeparator />
+                </>
+              )}
+              <ContextMenuItem onClick={() => toggle(w)}>
+                {isOpen ? "Collapse" : "Details…"}
+              </ContextMenuItem>
+            </>
+          );
 
           return (
             <ListRow
@@ -364,6 +383,7 @@ export default function RightSizingPanel() {
               rowKey={k}
               isOpen={isOpen}
               onToggle={() => toggle(w)}
+              contextMenu={rowMenu}
               expandedContent={
                 <div className="space-y-2">
                   {w.containers.map((c) => (

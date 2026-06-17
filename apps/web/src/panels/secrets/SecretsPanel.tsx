@@ -9,6 +9,7 @@ import { ListRow } from "@/panels/components/ListRow";
 import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
+import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { SecretEditor } from "./SecretEditor";
@@ -142,6 +143,17 @@ export default function SecretsPanel() {
           const displayType = secretTypeDisplayName(secret.type);
           const rawType = secret.type ?? "Opaque";
           const keys = keyCount(secret);
+          const rowMenu = (
+            <>
+              <ContextMenuItem onClick={() => askClaude(secret, "Errors")}>Ask Claude: Errors</ContextMenuItem>
+              <ContextMenuItem onClick={() => askClaude(secret, "Logs")}>Ask Claude: Logs</ContextMenuItem>
+              <ContextMenuItem onClick={() => askClaude(secret, "Explain")}>Ask Claude: Explain</ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem onClick={() => openEdit(secret)}>Edit…</ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem onClick={() => toggleExpand(uid)}>{isOpen ? "Collapse" : "Details…"}</ContextMenuItem>
+            </>
+          );
 
           return (
             <ListRow
@@ -149,6 +161,7 @@ export default function SecretsPanel() {
               rowKey={uid}
               isOpen={isOpen}
               onToggle={() => toggleExpand(uid)}
+              contextMenu={rowMenu}
               expandedContent={
                 <SecretDetail secret={secret} onEdit={() => openEdit(secret)} />
               }

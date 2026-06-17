@@ -7,6 +7,7 @@ import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { Sparkline } from "@/components/Sparkline";
 import { useMetricsHistory } from "@/lib/useMetricsHistory";
 import { ListRow } from "@/panels/components/ListRow";
+import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { PanelHeader } from "@/panels/components/PanelHeader";
@@ -118,12 +119,25 @@ export default function PodsPanel() {
           const podHistoryKey = `${pod.metadata.namespace ?? ""}/${pod.metadata.name}`;
           const podMetrics = metricsAvailable ? metricsHistory.get(podHistoryKey) : undefined;
 
+          const rowMenu = (
+            <>
+              <ContextMenuItem onClick={() => handoffToChat(buildHandoffPrompt("pod", pod.metadata.name, pod.metadata.namespace, "Errors"))}>Ask Claude: Errors</ContextMenuItem>
+              <ContextMenuItem onClick={() => handoffToChat(buildHandoffPrompt("pod", pod.metadata.name, pod.metadata.namespace, "Logs"))}>Ask Claude: Logs</ContextMenuItem>
+              <ContextMenuItem onClick={() => handoffToChat(buildHandoffPrompt("pod", pod.metadata.name, pod.metadata.namespace, "Explain"))}>Ask Claude: Explain</ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem variant="destructive" onClick={() => handleDelete(pod)}>Delete…</ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem onClick={() => toggleExpand(pod)}>{isOpen ? "Collapse" : "Manage…"}</ContextMenuItem>
+            </>
+          );
+
           return (
             <ListRow
               key={k}
               rowKey={k}
               isOpen={isOpen}
               onToggle={() => toggleExpand(pod)}
+              contextMenu={rowMenu}
               expandedContent={<PodDetail pod={pod} />}
             >
               {/* Name — phase/health-colored */}
