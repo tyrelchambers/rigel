@@ -17,7 +17,11 @@ export function matchesSearch(app: CatalogApp, query: string): boolean {
   );
 }
 
-/** Apply scope + category + search to the catalog, preserving order. */
+/**
+ * Apply scope + category + search to the catalog, sorted alphabetically by name
+ * (case-insensitive) — matches the Swift app's `filtered` ordering so the grid
+ * is stable regardless of the catalog.json insertion order.
+ */
 export function filterCatalog(
   catalog: CatalogApp[],
   opts: {
@@ -27,11 +31,13 @@ export function filterCatalog(
     search: string;
   },
 ): CatalogApp[] {
-  return catalog.filter((app) => {
-    if (opts.scope === "installed" && !opts.installedIDs.has(app.id)) return false;
-    if (opts.category && app.category !== opts.category) return false;
-    return matchesSearch(app, opts.search);
-  });
+  return catalog
+    .filter((app) => {
+      if (opts.scope === "installed" && !opts.installedIDs.has(app.id)) return false;
+      if (opts.category && app.category !== opts.category) return false;
+      return matchesSearch(app, opts.search);
+    })
+    .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
 }
 
 /** Categories present in the catalog, in the canonical pill order. */

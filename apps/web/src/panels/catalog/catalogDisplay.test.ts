@@ -100,6 +100,22 @@ describe("filterCatalog", () => {
     });
     expect(out.map((a) => a.id)).toEqual(["grafana"]);
   });
+
+  test("sorts results alphabetically by name (case-insensitive), ignoring catalog order", () => {
+    const unordered = [
+      app({ id: "zammad", name: "Zammad" }),
+      app({ id: "affine", name: "AFFiNE" }),
+      app({ id: "ntfy", name: "ntfy" }),
+      app({ id: "memos", name: "Memos" }),
+    ];
+    const out = filterCatalog(unordered, {
+      scope: "all",
+      installedIDs: new Set(),
+      category: null,
+      search: "",
+    });
+    expect(out.map((a) => a.name)).toEqual(["AFFiNE", "Memos", "ntfy", "Zammad"]);
+  });
 });
 
 describe("availableCategories", () => {

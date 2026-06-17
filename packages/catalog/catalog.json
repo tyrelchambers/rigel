@@ -2591,5 +2591,195 @@
         }
       ]
     }
+  },
+  {
+    "id": "directus",
+    "name": "Directus",
+    "tagline": "Headless CMS with instant REST & GraphQL APIs over any SQL DB.",
+    "description": "Directus wraps a SQL database with a real-time REST and GraphQL API plus a no-code admin app (Data Studio) for content, users, files, and permissions. It is database-first: it introspects your schema instead of imposing its own. This entry deploys Directus with a bundled Postgres and a PVC for uploaded files.",
+    "category": "dev-tools",
+    "iconSystemName": "curlybraces",
+    "docsURL": "https://directus.io/docs",
+    "repoURL": "https://github.com/directus/directus",
+    "homepageURL": "https://directus.io",
+    "tags": [
+      "cms",
+      "headless-cms",
+      "api",
+      "graphql",
+      "rest",
+      "low-code",
+      "backend"
+    ],
+    "matchImages": [
+      "directus/directus"
+    ],
+    "requirements": {
+      "cpuRequest": "100m",
+      "cpuLimit": "1000m",
+      "memoryRequest": "256Mi",
+      "memoryLimit": "1Gi",
+      "storageGiB": 10
+    },
+    "persistence": true,
+    "exposesIngress": true,
+    "notes": "Bundles its own postgres:16-alpine. Directus self-bootstraps and runs schema migrations on first boot — no init step. Uploaded files are stored on a local PVC at /directus/uploads; switch to S3-compatible object storage via STORAGE_* env if preferred.",
+    "installPromptTemplate": "Generate a Kubernetes manifest for **Directus** ({{instance}}) on the user's k3s cluster.\n\n## App\nDirectus ({{instance}}) — headless CMS with instant REST & GraphQL APIs over Postgres.\n\n## Target\n- Namespace: {{namespace}}\n- Ingress hostname: {{hostname}}\n- Node pin: {{nodeName}} (empty = no nodeSelector)\n- Storage: {{storage}}Gi (Postgres) plus a 10Gi uploads PVC\n- Notes: {{notes}}\n\n## Conventions\n- Deploy the `directus/directus` app (port 8055) behind a ClusterIP Service (port 80) and a traefik Ingress with cert-manager (`{{clusterIssuer}}`) + the redirect-https middleware (`{{redirectMiddleware}}`), TLS secret `{{instance}}-tls`.\n- Back it with a bundled `postgres:16-alpine` StatefulSet (DB_CLIENT=pg); Directus self-bootstraps and migrates on boot.\n- KEY and SECRET are random; ADMIN_EMAIL and ADMIN_PASSWORD seed the first admin; PUBLIC_URL=https://{{hostname}}. Mount a PVC at /directus/uploads.\n\n## Output\nReply with ONE fenced ```yaml multi-document manifest. Put the leading Secret first with sensitive values as `<FILL_ME_IN>`.",
+    "install": {
+      "mode": "manifest",
+      "manifest": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: {{instance}}-secrets\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: directus\n    app.kubernetes.io/instance: {{instance}}\ntype: Opaque\nstringData:\n  POSTGRES_PASSWORD: <FILL_ME_IN>\n  DIRECTUS_KEY: <FILL_ME_IN>\n  DIRECTUS_SECRET: <FILL_ME_IN>\n  ADMIN_EMAIL: <FILL_ME_IN>\n  ADMIN_PASSWORD: <FILL_ME_IN>\n---\napiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: {{instance}}-postgres\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: directus\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: postgres\nspec:\n  accessModes: [ReadWriteOnce]\n  resources:\n    requests:\n      storage: {{storage}}Gi\n---\napiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: {{instance}}-uploads\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: directus\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\nspec:\n  accessModes: [ReadWriteOnce]\n  resources:\n    requests:\n      storage: 10Gi\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: {{instance}}-db\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: directus\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: postgres\nspec:\n  type: ClusterIP\n  selector:\n    app.kubernetes.io/name: directus\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: postgres\n  ports:\n    - name: postgres\n      port: 5432\n      targetPort: 5432\n---\napiVersion: apps/v1\nkind: StatefulSet\nmetadata:\n  name: {{instance}}-db\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: directus\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: postgres\nspec:\n  serviceName: {{instance}}-db\n  replicas: 1\n  selector:\n    matchLabels:\n      app.kubernetes.io/name: directus\n      app.kubernetes.io/instance: {{instance}}\n      app.kubernetes.io/component: postgres\n  template:\n    metadata:\n      labels:\n        app.kubernetes.io/name: directus\n        app.kubernetes.io/instance: {{instance}}\n        app.kubernetes.io/component: postgres\n    spec:\n      securityContext:\n        runAsNonRoot: true\n        runAsUser: 999\n        fsGroup: 999\n      containers:\n        - name: postgres\n          image: postgres:16-alpine\n          env:\n            - name: POSTGRES_USER\n              value: directus\n            - name: POSTGRES_DB\n              value: directus\n            - name: POSTGRES_PASSWORD\n              valueFrom:\n                secretKeyRef:\n                  name: {{instance}}-secrets\n                  key: POSTGRES_PASSWORD\n            - name: PGDATA\n              value: /var/lib/postgresql/data/pgdata\n          ports:\n            - containerPort: 5432\n          readinessProbe:\n            exec:\n              command: [\"pg_isready\", \"-U\", \"directus\", \"-d\", \"directus\"]\n            initialDelaySeconds: 10\n            periodSeconds: 10\n          securityContext:\n            allowPrivilegeEscalation: false\n            capabilities:\n              drop: [ALL]\n          volumeMounts:\n            - name: data\n              mountPath: /var/lib/postgresql/data\n      volumes:\n        - name: data\n          persistentVolumeClaim:\n            claimName: {{instance}}-postgres\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: {{instance}}\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: directus\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\nspec:\n  type: ClusterIP\n  selector:\n    app.kubernetes.io/name: directus\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\n  ports:\n    - name: http\n      port: 80\n      targetPort: 8055\n---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: {{instance}}\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: directus\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\nspec:\n  replicas: 1\n  strategy:\n    type: Recreate\n  selector:\n    matchLabels:\n      app.kubernetes.io/name: directus\n      app.kubernetes.io/instance: {{instance}}\n      app.kubernetes.io/component: app\n  template:\n    metadata:\n      labels:\n        app.kubernetes.io/name: directus\n        app.kubernetes.io/instance: {{instance}}\n        app.kubernetes.io/component: app\n    spec:\n      securityContext:\n        runAsNonRoot: true\n        runAsUser: 1000\n        fsGroup: 1000\n      containers:\n        - name: directus\n          image: directus/directus:12.0.2\n          ports:\n            - containerPort: 8055\n          env:\n            - name: DB_CLIENT\n              value: pg\n            - name: DB_HOST\n              value: {{instance}}-db\n            - name: DB_PORT\n              value: \"5432\"\n            - name: DB_DATABASE\n              value: directus\n            - name: DB_USER\n              value: directus\n            - name: DB_PASSWORD\n              valueFrom:\n                secretKeyRef:\n                  name: {{instance}}-secrets\n                  key: POSTGRES_PASSWORD\n            - name: KEY\n              valueFrom:\n                secretKeyRef:\n                  name: {{instance}}-secrets\n                  key: DIRECTUS_KEY\n            - name: SECRET\n              valueFrom:\n                secretKeyRef:\n                  name: {{instance}}-secrets\n                  key: DIRECTUS_SECRET\n            - name: ADMIN_EMAIL\n              valueFrom:\n                secretKeyRef:\n                  name: {{instance}}-secrets\n                  key: ADMIN_EMAIL\n            - name: ADMIN_PASSWORD\n              valueFrom:\n                secretKeyRef:\n                  name: {{instance}}-secrets\n                  key: ADMIN_PASSWORD\n            - name: PUBLIC_URL\n              value: https://{{hostname}}\n            - name: WEBSOCKETS_ENABLED\n              value: \"true\"\n          resources:\n            requests:\n              cpu: 100m\n              memory: 256Mi\n            limits:\n              cpu: 1000m\n              memory: 1Gi\n          readinessProbe:\n            httpGet:\n              path: /server/health\n              port: 8055\n            initialDelaySeconds: 30\n            periodSeconds: 10\n          securityContext:\n            allowPrivilegeEscalation: false\n            capabilities:\n              drop: [ALL]\n          volumeMounts:\n            - name: uploads\n              mountPath: /directus/uploads\n      volumes:\n        - name: uploads\n          persistentVolumeClaim:\n            claimName: {{instance}}-uploads\n---\napiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: {{instance}}\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: directus\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\n  annotations:\n    cert-manager.io/cluster-issuer: {{clusterIssuer}}\n    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure\n    traefik.ingress.kubernetes.io/router.middlewares: {{redirectMiddleware}}\nspec:\n  ingressClassName: traefik\n  tls:\n    - hosts:\n        - {{hostname}}\n      secretName: {{instance}}-tls\n  rules:\n    - host: {{hostname}}\n      http:\n        paths:\n          - path: /\n            pathType: Prefix\n            backend:\n              service:\n                name: {{instance}}\n                port:\n                  number: 80\n",
+      "secrets": [
+        {
+          "key": "POSTGRES_PASSWORD",
+          "label": "Postgres password",
+          "description": "Password for the bundled Postgres database. Auto-generated; you never type it manually.",
+          "kind": "random",
+          "length": 32
+        },
+        {
+          "key": "DIRECTUS_KEY",
+          "label": "Directus instance key",
+          "description": "Unique key for this Directus instance (env KEY). Auto-generated.",
+          "kind": "random",
+          "length": 32
+        },
+        {
+          "key": "DIRECTUS_SECRET",
+          "label": "Directus JWT secret",
+          "description": "Secret used to sign access tokens (env SECRET). Auto-generated.",
+          "kind": "random",
+          "length": 64
+        },
+        {
+          "key": "ADMIN_EMAIL",
+          "label": "Admin email",
+          "description": "Email for the first administrator account, created on first boot.",
+          "kind": "user",
+          "required": true
+        },
+        {
+          "key": "ADMIN_PASSWORD",
+          "label": "Admin password",
+          "description": "Password for the first administrator account.",
+          "kind": "user",
+          "required": true
+        }
+      ]
+    }
+  },
+  {
+    "id": "unleash",
+    "name": "Unleash",
+    "tagline": "Open-source feature flags & remote configuration you self-host.",
+    "description": "Unleash is an open-source feature-flag and toggle-management platform for shipping code behind flags, gradual rollouts, A/B tests, and kill-switches without redeploying. The server is stateless and keeps all flag state in PostgreSQL, exposing a polished admin UI and SDK API. This entry pairs the server with a bundled Postgres.",
+    "category": "dev-tools",
+    "iconSystemName": "flag.fill",
+    "docsURL": "https://docs.getunleash.io",
+    "repoURL": "https://github.com/Unleash/unleash",
+    "homepageURL": "https://www.getunleash.io",
+    "tags": [
+      "feature-flags",
+      "feature-toggles",
+      "remote-config",
+      "ab-testing",
+      "rollout"
+    ],
+    "matchImages": [
+      "unleashorg/unleash-server"
+    ],
+    "requirements": {
+      "cpuRequest": "100m",
+      "cpuLimit": "500m",
+      "memoryRequest": "384Mi",
+      "memoryLimit": "768Mi",
+      "storageGiB": 5
+    },
+    "persistence": true,
+    "exposesIngress": true,
+    "notes": "The server is stateless — all flag state lives in the bundled postgres:16-alpine. First login is admin / unleash4all; change the password immediately after signing in. Unleash auto-runs DB migrations on boot. Open-source core; some enterprise features require a paid tier.",
+    "installPromptTemplate": "Generate a Kubernetes manifest for **Unleash** ({{instance}}) on the user's k3s cluster.\n\n## App\nUnleash ({{instance}}) — open-source feature-flag & remote-config server (stateless; flag state in Postgres).\n\n## Target\n- Namespace: {{namespace}}\n- Ingress hostname: {{hostname}}\n- Node pin: {{nodeName}} (empty = no nodeSelector)\n- Storage: {{storage}}Gi (Postgres)\n- Notes: {{notes}}\n\n## Conventions\n- Deploy the `unleashorg/unleash-server` app (port 4242) behind a ClusterIP Service (port 80) and a traefik Ingress with cert-manager (`{{clusterIssuer}}`) + redirect-https middleware (`{{redirectMiddleware}}`), TLS secret `{{instance}}-tls`.\n- Back it with a bundled `postgres:16-alpine` StatefulSet; point DATABASE_HOST/PORT/NAME/USERNAME/PASSWORD at it with DATABASE_SSL=false. Unleash auto-migrates on boot.\n- Default login is admin / unleash4all — change it after first sign-in.\n\n## Output\nReply with ONE fenced ```yaml multi-document manifest. Put the leading Secret first with the Postgres password as `<FILL_ME_IN>`.",
+    "install": {
+      "mode": "manifest",
+      "manifest": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: {{instance}}-secrets\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: unleash\n    app.kubernetes.io/instance: {{instance}}\ntype: Opaque\nstringData:\n  POSTGRES_PASSWORD: <FILL_ME_IN>\n---\napiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: {{instance}}-postgres\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: unleash\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: postgres\nspec:\n  accessModes: [ReadWriteOnce]\n  resources:\n    requests:\n      storage: {{storage}}Gi\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: {{instance}}-db\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: unleash\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: postgres\nspec:\n  type: ClusterIP\n  selector:\n    app.kubernetes.io/name: unleash\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: postgres\n  ports:\n    - name: postgres\n      port: 5432\n      targetPort: 5432\n---\napiVersion: apps/v1\nkind: StatefulSet\nmetadata:\n  name: {{instance}}-db\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: unleash\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: postgres\nspec:\n  serviceName: {{instance}}-db\n  replicas: 1\n  selector:\n    matchLabels:\n      app.kubernetes.io/name: unleash\n      app.kubernetes.io/instance: {{instance}}\n      app.kubernetes.io/component: postgres\n  template:\n    metadata:\n      labels:\n        app.kubernetes.io/name: unleash\n        app.kubernetes.io/instance: {{instance}}\n        app.kubernetes.io/component: postgres\n    spec:\n      securityContext:\n        runAsNonRoot: true\n        runAsUser: 999\n        fsGroup: 999\n      containers:\n        - name: postgres\n          image: postgres:16-alpine\n          env:\n            - name: POSTGRES_USER\n              value: unleash\n            - name: POSTGRES_DB\n              value: unleash\n            - name: POSTGRES_PASSWORD\n              valueFrom:\n                secretKeyRef:\n                  name: {{instance}}-secrets\n                  key: POSTGRES_PASSWORD\n            - name: PGDATA\n              value: /var/lib/postgresql/data/pgdata\n          ports:\n            - containerPort: 5432\n          readinessProbe:\n            exec:\n              command: [\"pg_isready\", \"-U\", \"unleash\", \"-d\", \"unleash\"]\n            initialDelaySeconds: 10\n            periodSeconds: 10\n          securityContext:\n            allowPrivilegeEscalation: false\n            capabilities:\n              drop: [ALL]\n          volumeMounts:\n            - name: data\n              mountPath: /var/lib/postgresql/data\n      volumes:\n        - name: data\n          persistentVolumeClaim:\n            claimName: {{instance}}-postgres\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: {{instance}}\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: unleash\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\nspec:\n  type: ClusterIP\n  selector:\n    app.kubernetes.io/name: unleash\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\n  ports:\n    - name: http\n      port: 80\n      targetPort: 4242\n---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: {{instance}}\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: unleash\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app.kubernetes.io/name: unleash\n      app.kubernetes.io/instance: {{instance}}\n      app.kubernetes.io/component: app\n  template:\n    metadata:\n      labels:\n        app.kubernetes.io/name: unleash\n        app.kubernetes.io/instance: {{instance}}\n        app.kubernetes.io/component: app\n    spec:\n      securityContext:\n        runAsNonRoot: true\n        runAsUser: 1000\n        fsGroup: 1000\n      containers:\n        - name: unleash\n          image: unleashorg/unleash-server:8.0.1\n          ports:\n            - containerPort: 4242\n          env:\n            - name: DATABASE_HOST\n              value: {{instance}}-db\n            - name: DATABASE_PORT\n              value: \"5432\"\n            - name: DATABASE_NAME\n              value: unleash\n            - name: DATABASE_USERNAME\n              value: unleash\n            - name: DATABASE_PASSWORD\n              valueFrom:\n                secretKeyRef:\n                  name: {{instance}}-secrets\n                  key: POSTGRES_PASSWORD\n            - name: DATABASE_SSL\n              value: \"false\"\n          resources:\n            requests:\n              cpu: 100m\n              memory: 384Mi\n            limits:\n              cpu: 500m\n              memory: 768Mi\n          readinessProbe:\n            httpGet:\n              path: /health\n              port: 4242\n            initialDelaySeconds: 20\n            periodSeconds: 10\n          securityContext:\n            allowPrivilegeEscalation: false\n            capabilities:\n              drop: [ALL]\n---\napiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: {{instance}}\n  namespace: {{namespace}}\n  labels:\n    app.kubernetes.io/name: unleash\n    app.kubernetes.io/instance: {{instance}}\n    app.kubernetes.io/component: app\n  annotations:\n    cert-manager.io/cluster-issuer: {{clusterIssuer}}\n    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure\n    traefik.ingress.kubernetes.io/router.middlewares: {{redirectMiddleware}}\nspec:\n  ingressClassName: traefik\n  tls:\n    - hosts:\n        - {{hostname}}\n      secretName: {{instance}}-tls\n  rules:\n    - host: {{hostname}}\n      http:\n        paths:\n          - path: /\n            pathType: Prefix\n            backend:\n              service:\n                name: {{instance}}\n                port:\n                  number: 80\n",
+      "secrets": [
+        {
+          "key": "POSTGRES_PASSWORD",
+          "label": "Postgres password",
+          "description": "Password for the bundled Postgres database that stores all flag state. Auto-generated; you never type it manually.",
+          "kind": "random",
+          "length": 32
+        }
+      ]
+    }
+  },
+  {
+    "id": "weblate",
+    "name": "Weblate",
+    "tagline": "Self-hosted continuous localization and translation management.",
+    "description": "Weblate is a web-based continuous-localization platform for translating software, websites, and documentation, with tight Git integration, translation memory, machine-translation suggestions, and quality checks. It is built on Django with Celery workers, backed by Postgres and Redis. This entry installs the official Helm chart with bundled Postgres and Redis.",
+    "category": "productivity",
+    "iconSystemName": "globe",
+    "docsURL": "https://docs.weblate.org",
+    "repoURL": "https://github.com/WeblateOrg/weblate",
+    "homepageURL": "https://weblate.org",
+    "tags": [
+      "translation",
+      "localization",
+      "i18n",
+      "l10n",
+      "git"
+    ],
+    "matchImages": [
+      "weblate/weblate"
+    ],
+    "requirements": {
+      "cpuRequest": "500m",
+      "cpuLimit": "2000m",
+      "memoryRequest": "1Gi",
+      "memoryLimit": "3Gi",
+      "storageGiB": 20
+    },
+    "persistence": true,
+    "exposesIngress": true,
+    "notes": "Installed via the official Helm chart with bundled Postgres + Redis. NOTE: the chart's bundled databases pull from Bitnami's deprecated `bitnamilegacy` registry (no further updates) — for production, point Weblate at an external managed Postgres/Redis instead. The Django SECRET_KEY is auto-generated by the image on first boot and persisted to the data PVC — do not set it.",
+    "installPromptTemplate": "Generate a Kubernetes manifest for **Weblate** ({{instance}}) on the user's k3s cluster.\n\n## App\nWeblate ({{instance}}) — web-based continuous-localization platform (Django + Celery, Postgres + Redis).\n\n## Target\n- Namespace: {{namespace}}\n- Ingress hostname: {{hostname}}\n- Node pin: {{nodeName}} (empty = no nodeSelector)\n- Storage: {{storage}}Gi\n- Notes: {{notes}}\n\n## Conventions\n- Install via the official Helm chart `weblate/weblate`.\n- values.yaml: `ingress.enabled: true`, `ingress.ingressClassName: traefik`, host `{{hostname}}`, `ingress.annotations` include `cert-manager.io/cluster-issuer: {{clusterIssuer}}` and the traefik redirect-https middleware (`{{redirectMiddleware}}`); `ingress.tls` secret `{{instance}}-tls`.\n- `siteDomain: {{hostname}}`, plus `adminEmail`/`adminPassword` for the first admin. Keep bundled `postgresql.enabled: true` and `redis.enabled: true` and set their passwords. `persistence.enabled: true` size `{{storage}}Gi`.\n- The Django SECRET_KEY is auto-generated by the image on first boot (persisted to the data PVC) — do not set it.\n\n## Output\nThis app installs via its official Helm chart. Reply with ONE fenced ```yaml block holding a tuned values.yaml (placeholder secrets as `<FILL_ME_IN>`), plus a ```secrets block if needed. Do NOT emit helm commands and do NOT emit apiVersion/kind resources.",
+    "install": {
+      "mode": "helm",
+      "repoName": "weblate",
+      "repoURL": "https://helm.weblate.org",
+      "chart": "weblate",
+      "version": "0.5.30",
+      "values": "image:\n  repository: weblate/weblate\ningress:\n  enabled: true\n  ingressClassName: traefik\n  annotations:\n    cert-manager.io/cluster-issuer: {{clusterIssuer}}\n    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure\n    traefik.ingress.kubernetes.io/router.middlewares: {{redirectMiddleware}}\n  hosts:\n    - host: {{hostname}}\n      paths:\n        - path: /\n          pathType: Prefix\n  tls:\n    - secretName: {{instance}}-tls\n      hosts:\n        - {{hostname}}\nsiteDomain: {{hostname}}\nsiteTitle: Weblate\nadminEmail: <FILL_ME_IN>\nadminUser: admin\nadminPassword: <FILL_ME_IN>\npostgresql:\n  enabled: true\n  auth:\n    postgresPassword: <FILL_ME_IN>\nredis:\n  enabled: true\n  auth:\n    enabled: true\n    password: <FILL_ME_IN>\npersistence:\n  enabled: true\n  size: {{storage}}Gi\n  accessMode: ReadWriteOnce\n",
+      "secrets": [
+        {
+          "key": "adminEmail",
+          "label": "Admin email",
+          "description": "Email for the initial 'admin' user.",
+          "kind": "user",
+          "required": true
+        },
+        {
+          "key": "adminPassword",
+          "label": "Admin password",
+          "description": "Password for the initial 'admin' user, set on first boot.",
+          "kind": "user",
+          "required": true
+        },
+        {
+          "key": "postgresPassword",
+          "label": "Postgres password",
+          "description": "Password for the bundled PostgreSQL. Auto-generated.",
+          "kind": "random",
+          "length": 32
+        },
+        {
+          "key": "password",
+          "label": "Redis password",
+          "description": "Password for the bundled Redis. Auto-generated.",
+          "kind": "random",
+          "length": 32
+        }
+      ]
+    }
   }
 ]

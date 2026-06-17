@@ -17,9 +17,9 @@ import { manifestImages, unpinnedReason } from "./manifestImages";
 // loader
 // ---------------------------------------------------------------------------
 describe("loadCatalog", () => {
-  test("loads 55 apps", async () => {
+  test("loads 58 apps", async () => {
     const apps = await loadCatalog();
-    expect(apps.length).toBe(55);
+    expect(apps.length).toBe(58);
     expect(apps).toBe(CATALOG);
   });
 
