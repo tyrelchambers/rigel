@@ -7,6 +7,7 @@
  */
 import { useEffect, useState } from "react";
 import { useCluster } from "@/store/cluster";
+import { TOGGLE_TERMINAL_EVENT } from "@/shell/TerminalDrawer";
 
 interface HealthData {
   context?: string;
@@ -106,6 +107,9 @@ export default function StatusBar({ chatHidden, onToggleChat }: StatusBarProps =
         <HintChip kbd="⌘K">Commands</HintChip>
         <HintChip kbd="/">Search</HintChip>
         <HintChip kbd="⌘L">Chat</HintChip>
+        <HintChip kbd="⌃`" onClick={() => window.dispatchEvent(new Event(TOGGLE_TERMINAL_EVENT))}>
+          Terminal
+        </HintChip>
         {onToggleChat && (
           <HintChip kbd="⌘J" onClick={onToggleChat}>
             {chatHidden ? "Show chat" : "Hide chat"}

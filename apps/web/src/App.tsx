@@ -24,8 +24,8 @@ import AssistantPanel from "./panels/assistant/AssistantPanel";
 import SettingsPanel from "./panels/settings/SettingsPanel";
 import AccountsPanel from "./panels/accounts/AccountsPanel";
 import ApplyYamlPanel from "./panels/apply/ApplyYamlPanel";
-import TerminalPanel from "./panels/terminal/TerminalPanel";
 import GitOpsPanel from "./panels/gitops/GitOpsPanel";
+import { TerminalDrawer, TOGGLE_TERMINAL_EVENT } from "@/shell/TerminalDrawer";
 import { connectCluster } from "@/lib/ws";
 import { useAuthStatus, useChatConfig } from "@/lib/api";
 import { LoginScreen } from "@/shell/LoginScreen";
@@ -34,6 +34,13 @@ import NavStrip from "@/shell/NavStrip";
 import StatusBar from "@/shell/StatusBar";
 import ChatPane, { type ChatPaneHandle } from "@/shell/ChatPane";
 import { CommandPalette, useCommandPalette } from "@/shell/CommandPalette";
+
+function readTerminalOpen(): boolean {
+  try { return localStorage.getItem("helmsman.terminal.open") === "1"; } catch { return false; }
+}
+function persistTerminalOpen(open: boolean): void {
+  try { localStorage.setItem("helmsman.terminal.open", open ? "1" : "0"); } catch { /* ignore */ }
+}
 
 /** Wrapper for panels that need padding + vertical scroll. */
 function Padded({ children }: { children: React.ReactNode }) {
@@ -132,6 +139,28 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [toggleChat]);
 
+  // Terminal drawer — bottom-mounted persistent shell. Toggled with ⌃` and from
+  // the StatusBar chip / nav item / command palette via the shared event. Kept
+  // mounted so the PTY + scrollback survive hide/show.
+  const [terminalOpen, setTerminalOpen] = useState<boolean>(readTerminalOpen);
+  const toggleTerminal = useCallback(() => setTerminalOpen((o) => { persistTerminalOpen(!o); return !o; }), []);
+  const closeTerminal = useCallback(() => { persistTerminalOpen(false); setTerminalOpen(false); }, []);
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      // ⌃` — the terminal-toggle muscle memory. Plain Ctrl only (no ⌘/Alt).
+      if (e.ctrlKey && !e.metaKey && !e.altKey && e.key === "`") {
+        e.preventDefault();
+        toggleTerminal();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    window.addEventListener(TOGGLE_TERMINAL_EVENT, toggleTerminal);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener(TOGGLE_TERMINAL_EVENT, toggleTerminal);
+    };
+  }, [toggleTerminal]);
+
   // Auth gate: hold rendering until we know the auth state, then show the login
   // screen when a password is required and this browser isn't signed in.
   if (authLoading) {
@@ -194,7 +223,6 @@ export default function App() {
               <Route path="/certificates" element={<CertificatesPanel />} />
               <Route path="/catalog" element={<PaddedX><CatalogPanel /></PaddedX>} />
               <Route path="/apply" element={<ApplyYamlPanel />} />
-              <Route path="/terminal" element={<TerminalPanel />} />
               <Route path="/gitops" element={<GitOpsPanel />} />
               <Route path="/accounts" element={<Padded><AccountsPanel /></Padded>} />
               <Route path="/events" element={<EventsPanel />} />
@@ -202,6 +230,10 @@ export default function App() {
               <Route path="/settings" element={<Padded><SettingsPanel /></Padded>} />
             </Routes>
           </main>
+
+          {/* Bottom-mounted terminal drawer — overlays the bottom of the content
+              area (above the StatusBar), kept mounted so the shell persists. */}
+          <TerminalDrawer open={terminalOpen} onClose={closeTerminal} />
         </div>
 
         {/* ── ChatPane — right side; toggle with ⌘J. Kept mounted (display:none

@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router";
 import { Search } from "lucide-react";
 import { PANEL_META, NAV_GROUPS } from "./NavStrip";
+import { TOGGLE_TERMINAL_EVENT } from "./TerminalDrawer";
 import {
   filterEntries,
   wrapIndex,
@@ -76,10 +77,15 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     row?.scrollIntoView({ block: "nearest" });
   }, [highlightIdx]);
 
-  const navigateTo = useCallback(
-    (route: string) => {
+  const activate = useCallback(
+    (entry: PaletteEntry) => {
       onClose();
-      navigate(route);
+      // The terminal entry opens the bottom drawer rather than navigating.
+      if (entry.id === "terminal") {
+        window.dispatchEvent(new Event(TOGGLE_TERMINAL_EVENT));
+        return;
+      }
+      navigate(entry.route);
     },
     [navigate, onClose],
   );
@@ -101,7 +107,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     }
     if (e.key === "Enter") {
       const entry = filtered[highlightIdx];
-      if (entry) navigateTo(entry.route);
+      if (entry) activate(entry);
     }
   }
 
@@ -218,7 +224,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                   role="option"
                   aria-selected={isActive}
                   data-palette-idx={idx}
-                  onClick={() => navigateTo(entry.route)}
+                  onClick={() => activate(entry)}
                   onMouseEnter={() => setHighlightIdx(idx)}
                   style={{
                     display: "flex",
