@@ -33,7 +33,6 @@ import {
   ChevronDown,
   AppWindow,
   FilePlus2,
-  SquareTerminal,
 } from "lucide-react";
 // Note: MessageSquare (chat) and Activity (health) are intentionally absent —
 // chat is the always-visible right pane (not a route), and health is nav-hidden.
@@ -46,7 +45,6 @@ import {
   revealPanel,
   type NavCollapseState,
 } from "./navCollapse";
-import { TOGGLE_TERMINAL_EVENT } from "@/shell/TerminalDrawer";
 
 // ─── Panel metadata ───────────────────────────────────────────────────────────
 
@@ -79,7 +77,6 @@ export const PANEL_META: Record<string, PanelMeta> = {
   logs:         { route: "/logs",         title: "Logs",         subtitle: "Container output",      icon: ScrollText },
   catalog:      { route: "/catalog",      title: "Apps",         subtitle: "Install apps",          icon: AppWindow },
   apply:        { route: "/apply",        title: "Apply YAML",   subtitle: "Create from manifest",  icon: FilePlus2 },
-  terminal:     { route: "/terminal",     title: "Terminal",     subtitle: "Bottom shell (⌃`)",      icon: SquareTerminal },
   gitops:       { route: "/gitops",       title: "GitOps",       subtitle: "Deploy from Git",       icon: GitBranch },
   accounts:     { route: "/accounts",     title: "Accounts",     subtitle: "Registry credentials",  icon: UserRoundKey },
   settings:     { route: "/settings",     title: "Settings",     subtitle: "Preferences",           icon: Settings },
@@ -104,7 +101,7 @@ export const NAV_GROUPS: NavGroup[] = [
   { title: "Security & Certs", panels: ["certificates"] },
   { title: "Observability", panels: ["events", "logs"] },
   { title: "Self-host", panels: ["catalog"] },
-  { title: "Tools", panels: ["terminal", "apply", "gitops"] },
+  { title: "Tools", panels: ["apply", "gitops"] },
   { title: "System", panels: ["accounts", "settings"] },
 ];
 
@@ -153,23 +150,6 @@ function NavButton({ panelKey }: NavButtonProps) {
   const meta = PANEL_META[panelKey];
   if (!meta) return null;
   const Icon = meta.icon;
-
-  // The terminal isn't a route — it's the bottom drawer. Render it as a button
-  // that fires the toggle event (App owns the drawer's open state).
-  if (panelKey === "terminal") {
-    return (
-      <button
-        onClick={() => window.dispatchEvent(new Event(TOGGLE_TERMINAL_EVENT))}
-        title={meta.title}
-        className="flex items-center gap-2.5 px-2.5 h-8 w-full rounded-md transition-colors group nav-btn-idle hover:bg-[#1B1C1F]"
-      >
-        <Icon size={14} strokeWidth={1.75} style={{ color: "var(--fg-tertiary)", flexShrink: 0, width: 20 }} className="group-hover:!text-[#A1A1AA]" />
-        <span style={{ fontSize: "13px", color: "var(--fg-secondary)", fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} className="group-hover:!text-white">
-          {meta.title}
-        </span>
-      </button>
-    );
-  }
 
   return (
     <NavLink
