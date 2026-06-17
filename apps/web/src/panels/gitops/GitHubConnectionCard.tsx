@@ -53,7 +53,7 @@ export function GitHubConnectionCard() {
         <span className="text-xs text-muted-foreground">connect to deploy from your repos (GitOps)</span>
       </div>
       <a href={GITHUB_TOKEN_URL} target="_blank" rel="noreferrer" className="inline-block text-xs hover:underline" style={{ color: "var(--accent-primary)" }}>
-        Create a personal access token ↗ (classic, “repo” scope)
+        Create a personal access token (classic, “repo” scope)
       </a>
       <div className="flex items-center gap-2">
         <input

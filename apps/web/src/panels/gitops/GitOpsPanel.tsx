@@ -182,7 +182,7 @@ function ConnectStep({ onClose }: { onClose: () => void }) {
       </DialogHeader>
       <div className="flex flex-col gap-3 py-1">
         <a href={GITHUB_TOKEN_URL} target="_blank" rel="noreferrer" className="text-xs hover:underline" style={{ color: "var(--accent-primary)" }}>
-          Create a personal access token ↗ (classic, “repo” scope)
+          Create a personal access token (classic, “repo” scope)
         </a>
         <input
           type="password"
