@@ -461,25 +461,25 @@ function NodeGaugesCard({
   );
 }
 
-/** One small node ring (68px) with % in the center and a name + used/alloc below. */
+/** One node ring (104px) with % in the center and a name + used/alloc below. */
 function NodeGauge({ name, fraction, color, detail }: { name: string; fraction: number; color: string; detail: string }) {
-  const R = 28;
+  const R = 44;
   const C = 2 * Math.PI * R;
   return (
     <div className="ov-node-gauge">
       <div className="ov-node-ring">
-        <svg width="68" height="68" viewBox="0 0 68 68" style={{ display: "block" }}>
-          <circle cx="34" cy="34" r={R} fill="none" stroke="#34353A" strokeWidth="8" />
+        <svg width="100%" height="100%" viewBox="0 0 104 104" style={{ display: "block" }}>
+          <circle cx="52" cy="52" r={R} fill="none" stroke="#34353A" strokeWidth="12" />
           <circle
-            cx="34"
-            cy="34"
+            cx="52"
+            cy="52"
             r={R}
             fill="none"
             stroke={color}
-            strokeWidth="8"
+            strokeWidth="12"
             strokeLinecap="round"
             strokeDasharray={`${C * clamp01(fraction)} ${C}`}
-            transform="rotate(-90 34 34)"
+            transform="rotate(-90 52 52)"
             style={{ transition: "stroke-dasharray 0.4s ease" }}
           />
         </svg>
