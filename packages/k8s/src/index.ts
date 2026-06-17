@@ -4,6 +4,20 @@
 export * from "./alerts";
 
 export {
+  type GitSource,
+  GIT_SOURCES_CONFIGMAP,
+  GIT_TOKENS_SECRET,
+  sanitizeSourceName,
+  normalizeManifestPath,
+  parseRepoSlug,
+  buildAuthedCloneURL,
+  redactURL,
+  parseGitSources,
+  gitSourcesConfigMapJSON,
+  gitTokensSecretJSON,
+} from "./gitSources";
+
+export {
   type MetricsInstallBackend,
   type InstalledBackend,
   METRICS_SERVICE_NAME,

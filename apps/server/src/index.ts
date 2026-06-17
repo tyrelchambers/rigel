@@ -6,6 +6,8 @@ import { makeWsHandlers } from "./ws";
 import { buildCommand, PurgeActionError, type ActionBlock } from "./actions";
 import { applyManifest, installHelm, type HelmInstallRequest } from "./install";
 import { handlePurge, type PurgeRequest } from "./purge";
+import { loadSources, saveSources, saveToken, loadToken, diffSource, applySource } from "./git";
+import { sanitizeSourceName, normalizeManifestPath, type GitSource } from "@helmsman/k8s/src/gitSources";
 import { getPodMetrics, getNodeMetrics, getNodeDisk } from "./metrics";
 import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusMetrics";
 import { handleUpdates, type UpdatesRequest } from "./updates";
@@ -344,6 +346,95 @@ const server = Bun.serve({
         values: body.values,
       });
       return Response.json(result);
+    }
+
+    // ── GitOps: deploy manifests from a GitHub repo (feature 3a) ──────────────
+    // GET /api/git/sources — list configured sources (never includes tokens).
+    if (url.pathname === "/api/git/sources" && req.method === "GET") {
+      return Response.json({ sources: await loadSources(context) });
+    }
+
+    // POST /api/git/sources — add or update a source. Body:
+    // { name, repoURL, branch?, path?, token? }. Token (if given) is stored in
+    // the helmsman-git-tokens Secret, never echoed back.
+    if (url.pathname === "/api/git/sources" && req.method === "POST") {
+      let body: { name?: string; repoURL?: string; branch?: string; path?: string; token?: string };
+      try {
+        body = (await req.json()) as typeof body;
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      if (!body.name || !body.repoURL) {
+        return Response.json({ error: "missing name or repoURL" }, { status: 422 });
+      }
+      const name = sanitizeSourceName(body.name);
+      if (!name) return Response.json({ error: "invalid name" }, { status: 422 });
+      let path: string;
+      try {
+        path = normalizeManifestPath(body.path ?? ".");
+      } catch (e) {
+        return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 422 });
+      }
+      const sources = await loadSources(context);
+      const existing = sources.find((s) => s.name === name);
+      const next: GitSource = {
+        name,
+        repoURL: body.repoURL.trim(),
+        branch: body.branch?.trim() || "main",
+        path,
+        lastSyncedSha: existing?.lastSyncedSha,
+        lastSyncedAt: existing?.lastSyncedAt,
+        lastStatus: existing?.lastStatus,
+        lastMessage: existing?.lastMessage,
+      };
+      const merged = existing ? sources.map((s) => (s.name === name ? next : s)) : [...sources, next];
+      const saved = await saveSources(context, merged);
+      if (saved.code !== 0) return Response.json({ error: saved.stderr || "failed to save sources" }, { status: 500 });
+      if (typeof body.token === "string" && body.token !== "") {
+        const t = await saveToken(context, name, body.token);
+        if (t.code !== 0) return Response.json({ error: t.stderr || "failed to save token" }, { status: 500 });
+      }
+      return Response.json({ sources: merged });
+    }
+
+    // DELETE /api/git/sources?name= — remove a source and its token.
+    if (url.pathname === "/api/git/sources" && req.method === "DELETE") {
+      const name = url.searchParams.get("name");
+      if (!name) return Response.json({ error: "missing name" }, { status: 422 });
+      const sources = await loadSources(context);
+      const merged = sources.filter((s) => s.name !== name);
+      await saveSources(context, merged);
+      await saveToken(context, name, null);
+      return Response.json({ sources: merged });
+    }
+
+    // POST /api/git/sync — { name, dryRun? }. dryRun → kubectl diff (preview);
+    // otherwise clone + apply, then record the synced sha/status on the source.
+    if (url.pathname === "/api/git/sync" && req.method === "POST") {
+      let body: { name?: string; dryRun?: boolean };
+      try {
+        body = (await req.json()) as typeof body;
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      if (!body.name) return Response.json({ error: "missing name" }, { status: 422 });
+      const sources = await loadSources(context);
+      const source = sources.find((s) => s.name === body.name);
+      if (!source) return Response.json({ error: "unknown source" }, { status: 404 });
+      const token = await loadToken(context, source.name);
+      if (body.dryRun === true) {
+        return Response.json(await diffSource(context, source, token));
+      }
+      const res = await applySource(context, source, token);
+      const updated: GitSource = {
+        ...source,
+        lastSyncedSha: res.sha ?? source.lastSyncedSha,
+        lastSyncedAt: new Date().toISOString(),
+        lastStatus: res.code === 0 ? "ok" : "error",
+        lastMessage: res.code === 0 ? "" : (res.stderr || res.stdout).slice(0, 500),
+      };
+      await saveSources(context, sources.map((s) => (s.name === source.name ? updated : s)));
+      return Response.json(res);
     }
 
     // POST /api/purge — full app-removal flow (docs/parity/purge.md).
