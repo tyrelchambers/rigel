@@ -74,6 +74,12 @@ export interface ActionBlock {
   destructive?: boolean;
   /** applyManifest only — manifest YAML, applied via /api/apply. */
   manifest?: string;
+  /** proposeRepoFix only — git source name, repo file path, PR title/body, new content. */
+  source?: string;
+  filePath?: string;
+  title?: string;
+  body?: string;
+  content?: string;
 }
 
 /** Thrown when `kind === "purge"` — not a kubectl command; caller opens purge flow. */
@@ -330,6 +336,12 @@ export function buildCommand(a: ActionBlock): string[] {
     // -----------------------------------------------------------------------
     case "purge":
       throw new PurgeActionError(target(a));
+
+    // -----------------------------------------------------------------------
+    // proposeRepoFix — NOT a kubectl command; opens a PR via /api/git/propose-fix
+    // -----------------------------------------------------------------------
+    case "proposeRepoFix":
+      throw new Error("proposeRepoFix opens a pull request via /api/git/propose-fix, not /api/action");
 
     // -----------------------------------------------------------------------
     default:

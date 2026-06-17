@@ -10,6 +10,8 @@ import {
   provenanceAnnotations,
   SOURCE_REPO_ANNOTATION,
   SOURCE_PATH_ANNOTATION,
+  fixBranchName,
+  safeRepoFilePath,
   type GitSource,
 } from "./gitSources";
 
@@ -76,6 +78,19 @@ test("provenanceAnnotations: kubectl annotate key=value pairs binding a workload
     `${SOURCE_REPO_ANNOTATION}=my-app`,
     `${SOURCE_PATH_ANNOTATION}=.`,
   ]);
+});
+
+test("fixBranchName: helmsman/fix-<slug>-<suffix>, falls back to 'change'", () => {
+  expect(fixBranchName("Bump api memory limit!", "a1b2c3")).toBe("helmsman/fix-bump-api-memory-limit-a1b2c3");
+  expect(fixBranchName("", "x9")).toBe("helmsman/fix-change-x9");
+});
+
+test("safeRepoFilePath: normalizes and rejects traversal/absolute/empty", () => {
+  expect(safeRepoFilePath("k8s/api.yaml")).toBe("k8s/api.yaml");
+  expect(safeRepoFilePath("/deploy/api.yaml")).toBe("deploy/api.yaml");
+  expect(() => safeRepoFilePath("../secrets.yaml")).toThrow();
+  expect(() => safeRepoFilePath("a/../../b")).toThrow();
+  expect(() => safeRepoFilePath("")).toThrow();
 });
 
 test("parseGitSources: tolerates missing/garbage data", () => {

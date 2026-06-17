@@ -8,8 +8,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Terminal, Copy, Check, AlertTriangle, Layers, Play, ArrowRight, CheckCircle2 } from "lucide-react";
-import { fetchPreviewCommand, useAction, applyManifestYaml, type ActionBlock, type ActionResult, type PurgeResult } from "@/lib/api";
+import { Terminal, Copy, Check, AlertTriangle, Layers, Play, ArrowRight, CheckCircle2, GitPullRequest, ExternalLink } from "lucide-react";
+import { fetchPreviewCommand, useAction, applyManifestYaml, proposeRepoFix, type ActionBlock, type ActionResult, type PurgeResult, type RepoFixResponse } from "@/lib/api";
 import { listResources } from "@helmsman/catalog";
 import { isDestructiveAction } from "@/lib/actionBlocks";
 
@@ -50,6 +50,8 @@ export function ConfirmSheet({ action, open, onClose, onPurge, fromChat, onResul
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [applyState, setApplyState] = useState<{ pending: boolean; result?: ActionResult; error?: string }>({ pending: false });
+  // proposeRepoFix: two-step diff preview → open PR.
+  const [fix, setFix] = useState<{ phase: "diffing" | "preview" | "opening" | "done"; diff?: string; result?: RepoFixResponse; error?: string }>({ phase: "diffing" });
 
   const { mutate, isPending, isSuccess, isError, error, data, reset } = useAction();
 
@@ -63,8 +65,8 @@ export function ConfirmSheet({ action, open, onClose, onPurge, fromChat, onResul
       return;
     }
 
-    // purge and applyManifest have no kubectl preview
-    if (action.kind === "purge" || action.kind === "applyManifest") {
+    // purge, applyManifest, and proposeRepoFix have no kubectl preview
+    if (action.kind === "purge" || action.kind === "applyManifest" || action.kind === "proposeRepoFix") {
       setPreviewCommand(null);
       setPreviewError(null);
       return;
@@ -93,6 +95,38 @@ export function ConfirmSheet({ action, open, onClose, onPurge, fromChat, onResul
       const message = e instanceof Error ? e.message : String(e);
       setApplyState({ pending: false, error: message });
       if (fromChat) onResult?.({ action: act, result: { code: 1, stdout: "", stderr: message }, commandString: cmd });
+    }
+  }
+
+  // proposeRepoFix: fetch the git diff preview when the sheet opens.
+  useEffect(() => {
+    if (!action || !open || action.kind !== "proposeRepoFix") return;
+    setFix({ phase: "diffing" });
+    let cancelled = false;
+    proposeRepoFix(action, true)
+      .then((r) => { if (!cancelled) setFix({ phase: "preview", diff: r.diff, error: r.ok ? undefined : r.message }); })
+      .catch((e: Error) => { if (!cancelled) setFix({ phase: "preview", error: e.message }); });
+    return () => { cancelled = true; };
+  }, [action, open]);
+
+  async function handlePropose() {
+    const act = action;
+    if (!act) return;
+    setFix((f) => ({ ...f, phase: "opening" }));
+    const label = act.title ?? act.label ?? "Propose fix";
+    try {
+      const r = await proposeRepoFix(act, false);
+      setFix({ phase: "done", result: r, error: r.ok ? undefined : r.message });
+      if (fromChat) {
+        const result: ActionResult = r.ok
+          ? { code: 0, stdout: `Opened pull request: ${r.prUrl}`, stderr: "" }
+          : { code: 1, stdout: "", stderr: r.message ?? "failed to open PR" };
+        onResult?.({ action: act, result, commandString: label });
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      setFix({ phase: "done", error: message });
+      if (fromChat) onResult?.({ action: act, result: { code: 1, stdout: "", stderr: message }, commandString: label });
     }
   }
 
@@ -126,13 +160,16 @@ export function ConfirmSheet({ action, open, onClose, onPurge, fromChat, onResul
   function handleClose() {
     reset();
     setApplyState({ pending: false });
+    setFix({ phase: "diffing" });
     onClose();
   }
 
   const isPurge = action?.kind === "purge";
   const isApply = action?.kind === "applyManifest";
+  const isFix = action?.kind === "proposeRepoFix";
   // Destructive treatment follows the shared rule (delete/drain/purge family or
   // the model's `destructive` hint), plus applyManifest which is app-specific.
+  // A proposeRepoFix only opens a PR (nothing applied), so it is NOT destructive.
   const isDestructive = (action ? isDestructiveAction(action) : false) || isApply;
   const commandString = previewCommand ? previewCommand.join(" ") : null;
 
@@ -157,16 +194,20 @@ export function ConfirmSheet({ action, open, onClose, onPurge, fromChat, onResul
   // brand purple. Header tint, icon chip, command prompt, and the primary
   // button all key off this single color.
   const accentColor = isDestructive ? "var(--status-failed)" : "var(--accent-primary)";
-  const HeaderIcon = isApply ? Layers : isDestructive ? AlertTriangle : Terminal;
-  const riskLabel = isDestructive ? "Destructive" : isApply ? "Apply" : "Safe";
+  const HeaderIcon = isFix ? GitPullRequest : isApply ? Layers : isDestructive ? AlertTriangle : Terminal;
+  const riskLabel = isDestructive ? "Destructive" : isApply ? "Apply" : isFix ? "Pull request" : "Safe";
 
   const title = isPurge
     ? "Remove application"
+    : isFix
+    ? (action?.title ?? action?.label ?? "Propose fix")
     : isApply
     ? (action?.label ?? "Apply manifest")
     : (action?.label ?? "Confirm action");
   const description = isPurge
     ? "Opens the application removal flow. Nothing is deleted until you confirm in the next step."
+    : isFix
+    ? "Review the change below, then open a pull request. Nothing is applied to the cluster — you merge & sync."
     : isApply
     ? "Review the resources below, then apply them to the cluster."
     : "This is the exact command that will run against your cluster.";
@@ -238,8 +279,37 @@ export function ConfirmSheet({ action, open, onClose, onPurge, fromChat, onResul
           );
         })()}
 
+        {/* proposeRepoFix — git diff preview + PR result */}
+        {isFix && action && (
+          <div className="flex flex-col gap-2">
+            <p className="text-xs text-muted-foreground">
+              <span className="font-semibold text-foreground">{action.source}</span>
+              {" · "}
+              <span className="font-mono">{action.filePath}</span>
+            </p>
+            {fix.phase === "diffing" && <p className="text-xs text-muted-foreground">Cloning repo and computing diff…</p>}
+            {fix.error && fix.phase !== "done" && (
+              <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive whitespace-pre-wrap">{fix.error}</p>
+            )}
+            {(fix.phase === "preview" || fix.phase === "opening") && fix.diff && (
+              <pre className="max-h-72 overflow-auto rounded-lg p-3 text-xs font-mono whitespace-pre-wrap" style={{ background: "#08080A", border: "1px solid #26272B" }}>
+                {fix.diff}
+              </pre>
+            )}
+            {fix.phase === "done" && (
+              fix.result?.ok ? (
+                <a href={fix.result.prUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-sm font-medium text-emerald-400 hover:underline">
+                  <CheckCircle2 className="size-4" /> Pull request opened <ExternalLink className="size-3.5" />
+                </a>
+              ) : (
+                <pre className="rounded-lg bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap">{fix.error ?? "Failed to open PR."}</pre>
+              )
+            )}
+          </div>
+        )}
+
         {/* Command preview — rendered as a small terminal window */}
-        {!isPurge && !isApply && (
+        {!isPurge && !isApply && !isFix && (
           previewError ? (
             <p className="rounded-lg bg-destructive/10 px-3 py-2.5 text-xs text-destructive">
               {previewError}
@@ -295,25 +365,35 @@ export function ConfirmSheet({ action, open, onClose, onPurge, fromChat, onResul
           className="mx-0 mb-0 border-t px-5 py-4"
           style={{ borderColor: "#1F1F24", background: "#0C0C0F" }}
         >
-          <Button variant="outline" onClick={handleClose} disabled={isPending || applyState.pending}>
-            Cancel
+          <Button variant="outline" onClick={handleClose} disabled={isPending || applyState.pending || fix.phase === "opening"}>
+            {isFix && fix.phase === "done" ? "Close" : "Cancel"}
           </Button>
-          <Button
-            className="gap-1.5 font-medium transition-transform active:scale-[0.98]"
-            style={{ background: accentColor, color: "var(--fg-primary)", border: "none" }}
-            onClick={isApply ? handleApply : handleExecute}
-            disabled={isApply ? applyState.pending : (isPending || (!isPurge && !commandString && !previewError))}
-          >
-            {isApply ? (
-              applyState.pending ? "Applying…" : <><Layers className="size-3.5" /> Apply</>
-            ) : isPending ? (
-              "Running…"
-            ) : isPurge ? (
-              <>Continue to removal <ArrowRight className="size-3.5" /></>
-            ) : (
-              <><Play className="size-3.5 fill-current" /> Execute</>
-            )}
-          </Button>
+          {!(isFix && fix.phase === "done") && (
+            <Button
+              className="gap-1.5 font-medium transition-transform active:scale-[0.98]"
+              style={{ background: accentColor, color: "var(--fg-primary)", border: "none" }}
+              onClick={isFix ? handlePropose : isApply ? handleApply : handleExecute}
+              disabled={
+                isFix
+                  ? fix.phase !== "preview" || !!fix.error
+                  : isApply
+                  ? applyState.pending
+                  : isPending || (!isPurge && !commandString && !previewError)
+              }
+            >
+              {isFix ? (
+                fix.phase === "opening" ? "Opening PR…" : <><GitPullRequest className="size-3.5" /> Open PR</>
+              ) : isApply ? (
+                applyState.pending ? "Applying…" : <><Layers className="size-3.5" /> Apply</>
+              ) : isPending ? (
+                "Running…"
+              ) : isPurge ? (
+                <>Continue to removal <ArrowRight className="size-3.5" /></>
+              ) : (
+                <><Play className="size-3.5 fill-current" /> Execute</>
+              )}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

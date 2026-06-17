@@ -40,6 +40,19 @@ Special kinds:
 - `command` — escape hatch for kubectl (incl. plugins like `cnpg`) the typed
   kinds don't model.
 
+Web-only kinds (NOT in the Swift app — the web client is the primary going
+forward and the contract intentionally diverges here):
+- `applyManifest` — install/self-host a new app. The `action` block is
+  IMMEDIATELY followed by a ` ```yaml ` block; the parser attaches it as
+  `manifest` and the app applies it via `kubectl apply -f -`.
+- `proposeRepoFix` — fix a GitOps-managed app via pull request. Fields:
+  `source` (git source name), `filePath` (manifest path in the repo), `title`,
+  `body`. The `action` block is IMMEDIATELY followed by a fenced code block with
+  the COMPLETE new file content (attached as `content`). The confirm sheet shows
+  a `git diff` and, on confirm, branches/commits/pushes and opens a PR via
+  `/api/git/propose-fix` — nothing is applied to the cluster. Used when a broken
+  workload carries the `helmsman.dev/source-repo` annotation (stamped on sync).
+
 Examples:
 
 ```action

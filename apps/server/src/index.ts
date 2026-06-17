@@ -6,7 +6,7 @@ import { makeWsHandlers } from "./ws";
 import { buildCommand, PurgeActionError, type ActionBlock } from "./actions";
 import { applyManifest, installHelm, type HelmInstallRequest } from "./install";
 import { handlePurge, type PurgeRequest } from "./purge";
-import { loadSources, saveSources, saveToken, loadToken, diffSource, applySource } from "./git";
+import { loadSources, saveSources, saveToken, loadToken, diffSource, applySource, previewRepoFix, proposeRepoFix } from "./git";
 import { sanitizeSourceName, normalizeManifestPath, type GitSource } from "@helmsman/k8s/src/gitSources";
 import { getPodMetrics, getNodeMetrics, getNodeDisk } from "./metrics";
 import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusMetrics";
@@ -435,6 +435,28 @@ const server = Bun.serve({
       };
       await saveSources(context, sources.map((s) => (s.name === source.name ? updated : s)));
       return Response.json(res);
+    }
+
+    // POST /api/git/propose-fix — AI fix → pull request (feature 3c). Body:
+    // { source, filePath, content, title, body?, dryRun? }. dryRun → git diff
+    // preview; otherwise branch + commit + push + open a PR via the GitHub API.
+    if (url.pathname === "/api/git/propose-fix" && req.method === "POST") {
+      let body: { source?: string; filePath?: string; content?: string; title?: string; body?: string; dryRun?: boolean };
+      try {
+        body = (await req.json()) as typeof body;
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      if (!body.source || !body.filePath || typeof body.content !== "string" || !body.title) {
+        return Response.json({ error: "missing source, filePath, content, or title" }, { status: 422 });
+      }
+      const sources = await loadSources(context);
+      const source = sources.find((s) => s.name === body.source);
+      if (!source) return Response.json({ error: "unknown source" }, { status: 404 });
+      const token = await loadToken(context, source.name);
+      const input = { source, token, filePath: body.filePath, content: body.content, title: body.title, body: body.body };
+      if (body.dryRun === true) return Response.json(await previewRepoFix(input));
+      return Response.json(await proposeRepoFix(input));
     }
 
     // POST /api/purge — full app-removal flow (docs/parity/purge.md).

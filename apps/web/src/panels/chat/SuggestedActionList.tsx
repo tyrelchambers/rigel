@@ -11,9 +11,10 @@ interface Props {
   onRunBatch?: (actions: SuggestedAction[]) => void;
 }
 
-// purge has no kubectl preview (typed-name PurgeSheet) and applyManifest uses a
-// different endpoint — neither can join a sequential batch, so they stay single-only.
-const NON_BATCHABLE = new Set(["purge", "applyManifest"]);
+// purge (typed-name PurgeSheet), applyManifest (different endpoint), and
+// proposeRepoFix (opens a PR, not a kubectl run) can't join a sequential batch,
+// so they stay single-only.
+const NON_BATCHABLE = new Set(["purge", "applyManifest", "proposeRepoFix"]);
 const isBatchable = (a: SuggestedAction) => !NON_BATCHABLE.has(a.kind);
 
 /**

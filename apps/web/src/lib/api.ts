@@ -27,6 +27,12 @@ export interface ActionBlock {
   destructive?: boolean;
   /** applyManifest only — manifest YAML applied via /api/apply. */
   manifest?: string;
+  /** proposeRepoFix only — git source, repo file path, PR title/body, new content. */
+  source?: string;
+  filePath?: string;
+  title?: string;
+  body?: string;
+  content?: string;
 }
 
 export interface ActionResult {
@@ -88,6 +94,39 @@ export async function applyManifestYaml(yaml: string, dryRun = false): Promise<A
     throw new Error((err as { error?: string }).error ?? res.statusText);
   }
   return res.json() as Promise<ActionResult>;
+}
+
+export interface RepoFixResponse {
+  ok: boolean;
+  diff?: string; // dryRun preview
+  prUrl?: string; // after a real propose
+  branch?: string;
+  message?: string;
+}
+
+/**
+ * Preview (dryRun) or open a PR for a `proposeRepoFix` action. dryRun returns a
+ * `git diff` of the proposed change; a real call branches/commits/pushes and
+ * opens a pull request, returning its URL.
+ */
+export async function proposeRepoFix(action: ActionBlock, dryRun: boolean): Promise<RepoFixResponse> {
+  const res = await fetch("/api/git/propose-fix", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      source: action.source,
+      filePath: action.filePath,
+      content: action.content,
+      title: action.title ?? action.label,
+      body: action.body,
+      dryRun,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? res.statusText);
+  }
+  return res.json() as Promise<RepoFixResponse>;
 }
 
 /**

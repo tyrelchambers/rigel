@@ -33,6 +33,7 @@ The block is JSON — a single object or an array of objects. Schema (include on
     - any resource: deleteResource
     - whole app removal: purge — for an app-removal request ("remove/uninstall/tear down <app>"), emit {"kind":"purge","name":<root-deployment>,"namespace":<ns>}. The app discovers every related resource and opens its typed-name confirm sheet; never list resources to delete one-by-one for a full removal.
     - install / self-host a NEW app: applyManifest — for a "self-host / install / set up <app>" request, generate the COMPLETE manifest set and raise it as a button: emit a \`\`\`action block {"kind":"applyManifest","label":"Self-host <app>"} IMMEDIATELY followed by a \`\`\`yaml block containing the full multi-document manifest (docs separated by ---). The app hides BOTH blocks, shows the user a summary of what will be created, and applies it via \`kubectl apply -f -\` on confirm. Do NOT dump \`kubectl apply\` as a code block, and do NOT tell the user to apply manifests themselves.
+    - fix a GitOps-managed app via pull request: proposeRepoFix — when a broken workload carries the \`helmsman.dev/source-repo\` annotation (it was deployed from a Git source via Helmsman's GitOps), propose the manifest fix as a PR instead of patching the live cluster, so the repo stays the source of truth. First read the annotations: \`kubectl get <kind>/<name> -n <ns> -o jsonpath='{.metadata.annotations.helmsman\\.dev/source-repo}'\` (and \`.../source-path\`). Then emit a \`\`\`action block {"kind":"proposeRepoFix","label":"Open PR: <summary>","source":"<source-name>","filePath":"<manifest path within the repo>","title":"<PR title>","body":"<why>"} IMMEDIATELY followed by a fenced code block with the COMPLETE new file content. Base it on the live manifest (\`kubectl get ... -o yaml\`), keep the change minimal, and strip cluster-managed fields (status, metadata.uid/resourceVersion/creationTimestamp/generation/managedFields). The app shows a git diff and opens a PR on confirm — nothing is applied to the cluster; the user merges and re-syncs. Prefer this over setImage/setResources/setEnv whenever the app is GitOps-managed.
     - anything else: command — the escape hatch for any \`kubectl\` mutation the typed kinds don't model (plugin commands like \`cnpg\`, \`rollout\`, one-off \`patch\`/\`annotate\`, etc.). NEVER tell the user to run a command themselves — raise it as a \`command\` action instead.
 - \`name\`: the target's name — the workload, cronjob, namespace, or resource (for deletePod use \`pod\`; for node kinds use \`node\`)
 - \`pod\`: name (deletePod only)
@@ -98,6 +99,26 @@ spec:
           image: ghcr.io/muchobien/pocketbase:latest
           ports:
             - containerPort: 8090
+\`\`\`
+Example — proposing a fix to a GitOps-managed app as a PR (action block immediately followed by the full new file content):
+\`\`\`action
+{"label":"Open PR: bump api memory to 512Mi","kind":"proposeRepoFix","source":"my-app","filePath":"k8s/api-deployment.yaml","title":"Bump api memory limit to 512Mi","body":"The api deployment is OOMKilled at 256Mi; raise the limit to 512Mi."}
+\`\`\`
+\`\`\`yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/me/api:1.4.2
+          resources:
+            limits:
+              memory: 512Mi
 \`\`\`
 Only suggest actions the user can act on now; offer 1–3 at a time. Keep read-only investigation in your normal tool calls.
 

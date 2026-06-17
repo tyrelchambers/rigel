@@ -10,6 +10,8 @@ export {
   SOURCE_REPO_ANNOTATION,
   SOURCE_PATH_ANNOTATION,
   provenanceAnnotations,
+  fixBranchName,
+  safeRepoFilePath,
   sanitizeSourceName,
   normalizeManifestPath,
   parseRepoSlug,

@@ -43,6 +43,32 @@ test("applyManifest with no following yaml is dropped (incomplete)", () => {
   expect(extractActionBlocks(["```action", '{"kind":"applyManifest","label":"x"}', "```"].join("\n"))).toEqual([]);
 });
 
+const FIX_MSG = [
+  "The api deployment is OOMKilled. I'll bump its memory limit.",
+  "```action", '{"kind":"proposeRepoFix","label":"Open PR: bump api memory","source":"my-app","filePath":"k8s/api.yaml","title":"Bump api memory limit","body":"OOMKilled; raise to 512Mi"}', "```",
+  "```yaml", "apiVersion: apps/v1", "kind: Deployment", "metadata:", "  name: api", "```",
+  "Review the PR before merging.",
+].join("\n");
+
+test("proposeRepoFix attaches the paired file content + parses fields", () => {
+  const [a] = extractActionBlocks(FIX_MSG);
+  expect(a.kind).toBe("proposeRepoFix");
+  expect(a.source).toBe("my-app");
+  expect(a.filePath).toBe("k8s/api.yaml");
+  expect(a.title).toBe("Bump api memory limit");
+  expect(a.content).toContain("kind: Deployment");
+});
+test("proposeRepoFix strips action + paired content, keeps prose", () => {
+  const s = stripActionBlocks(FIX_MSG);
+  expect(s).not.toContain("```action");
+  expect(s).not.toContain("kind: Deployment");
+  expect(s).toContain("OOMKilled");
+  expect(s).toContain("Review the PR before merging.");
+});
+test("proposeRepoFix with no following block is dropped (incomplete)", () => {
+  expect(extractActionBlocks(["```action", '{"kind":"proposeRepoFix","label":"x","source":"a","filePath":"f"}', "```"].join("\n"))).toEqual([]);
+});
+
 test("isDestructiveAction: delete/drain/purge family is always destructive", () => {
   for (const kind of ["deletePod", "deleteWorkload", "deleteNamespace", "deleteResource", "drain", "purge"]) {
     expect(isDestructiveAction({ kind })).toBe(true);

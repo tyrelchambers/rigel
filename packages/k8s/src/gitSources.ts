@@ -60,6 +60,33 @@ export function normalizeManifestPath(path: string): string {
   return segments.join("/");
 }
 
+/** Branch name for an AI-proposed fix PR: helmsman/fix-<slug>-<suffix>. */
+export function fixBranchName(title: string, suffix: string): string {
+  const slug =
+    title
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40)
+      .replace(/-+$/, "") || "change";
+  return `helmsman/fix-${slug}-${suffix}`;
+}
+
+/**
+ * Validate a manifest FILE path within a repo: strip a leading slash, require a
+ * non-empty path, and reject any traversal so a fix can't escape the checkout.
+ */
+export function safeRepoFilePath(filePath: string): string {
+  const trimmed = (filePath ?? "").trim().replace(/^\/+/, "").replace(/\/+$/, "");
+  if (trimmed === "") throw new Error("file path is required");
+  const segments = trimmed.split("/");
+  if (segments.some((s) => s === ".." || s === "")) {
+    throw new Error(`invalid file path: ${filePath}`);
+  }
+  return segments.join("/");
+}
+
 /** Extract { owner, repo } from an https or scp-style GitHub URL, else null. */
 export function parseRepoSlug(repoURL: string): { owner: string; repo: string } | null {
   const cleaned = repoURL.trim().replace(/\.git$/, "");

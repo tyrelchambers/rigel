@@ -41,6 +41,16 @@ export interface SuggestedAction {
   destructive?: boolean;
   /** applyManifest only — the paired yaml content, attached by the parser (not in the model's JSON). */
   manifest?: string;
+  /** proposeRepoFix only — the git source name the workload was deployed from. */
+  source?: string;
+  /** proposeRepoFix only — path of the manifest file to change, within the repo. */
+  filePath?: string;
+  /** proposeRepoFix only — pull-request title. */
+  title?: string;
+  /** proposeRepoFix only — pull-request body. */
+  body?: string;
+  /** proposeRepoFix only — the paired NEW file content, attached by the parser. */
+  content?: string;
 }
 
 /**
@@ -97,6 +107,7 @@ export const ACTION_KINDS = [
   "purge",
   "command",
   "applyManifest",
+  "proposeRepoFix",
 ] as const;
 
 /**
@@ -133,6 +144,8 @@ export function extractActionBlocks(markdown: string): SuggestedAction[] {
   const out: SuggestedAction[] = [];
   const ACTION_FENCE = /```action\s*\n([\s\S]*?)\n```/g;
   const YAML_FENCE = /^\s*```ya?ml\s*\n([\s\S]*?)\n```/;
+  // proposeRepoFix's new file content may be any language (yaml/json/…).
+  const ANY_FENCE = /^\s*```[^\n]*\n([\s\S]*?)\n```/;
   let m: RegExpExecArray | null;
   while ((m = ACTION_FENCE.exec(markdown))) {
     let action: SuggestedAction | null = null;
@@ -149,6 +162,10 @@ export function extractActionBlocks(markdown: string): SuggestedAction[] {
       const ym = YAML_FENCE.exec(markdown.slice(ACTION_FENCE.lastIndex));
       if (!ym) continue; // incomplete — drop
       action.manifest = ym[1];
+    } else if (action.kind === "proposeRepoFix") {
+      const cm = markdown.slice(ACTION_FENCE.lastIndex).match(ANY_FENCE);
+      if (!cm) continue; // incomplete — drop
+      action.content = cm[1];
     }
     out.push(action);
   }
@@ -161,15 +178,18 @@ export function extractActionBlocks(markdown: string): SuggestedAction[] {
  * an `applyManifest` action block (in which case both are stripped together).
  */
 export function stripActionBlocks(markdown: string): string {
-  const ACTION_WITH_OPT_YAML = /```action\s*\n([\s\S]*?)\n```(\s*\n```ya?ml\s*\n[\s\S]*?\n```)?/g;
+  // Optional tail = any fenced block immediately following the action; dropped
+  // together with applyManifest/proposeRepoFix (their paired content), kept
+  // otherwise (a normal yaml/bash block that just happens to follow).
+  const ACTION_WITH_OPT_BLOCK = /```action\s*\n([\s\S]*?)\n```(\s*\n```[^\n]*\n[\s\S]*?\n```)?/g;
   let out = markdown.replace(
-    ACTION_WITH_OPT_YAML,
-    (_full, body: string, yamlTail: string | undefined) => {
+    ACTION_WITH_OPT_BLOCK,
+    (_full, body: string, blockTail: string | undefined) => {
       try {
         const json = JSON.parse(String(body).trim());
-        if (json?.kind === "applyManifest") return ""; // drop action + paired yaml
+        if (json?.kind === "applyManifest" || json?.kind === "proposeRepoFix") return ""; // drop action + paired block
       } catch { /* fall through */ }
-      return yamlTail ?? ""; // non-applyManifest: keep any following yaml
+      return blockTail ?? ""; // other actions: keep any following block
     },
   );
   out = out
