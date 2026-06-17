@@ -18,6 +18,21 @@ test("buildApplyArgs: apply -f - without context", () => {
   expect(buildApplyArgs(null)).toEqual(["apply", "-f", "-"]);
 });
 
+test("buildApplyArgs: server-side dry run appends --dry-run=server", () => {
+  expect(buildApplyArgs("kind-test", true)).toEqual([
+    "--context",
+    "kind-test",
+    "apply",
+    "-f",
+    "-",
+    "--dry-run=server",
+  ]);
+});
+
+test("buildApplyArgs: no dry-run flag unless requested", () => {
+  expect(buildApplyArgs(null, false)).toEqual(["apply", "-f", "-"]);
+});
+
 // ---------------------------------------------------------------------------
 // helm upgrade --install (helm mode)
 // ---------------------------------------------------------------------------

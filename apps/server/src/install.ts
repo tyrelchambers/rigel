@@ -11,21 +11,27 @@
 
 import { buildKubectlArgs, type RunResult } from "@helmsman/k8s/src/run";
 
-/** Build the kubectl argv (verb onward) for a stdin apply. Exported for tests. */
-export function buildApplyArgs(context: string | null): string[] {
-  return buildKubectlArgs(context, ["apply", "-f", "-"]);
+/**
+ * Build the kubectl argv (verb onward) for a stdin apply. Exported for tests.
+ * `dryRun` appends `--dry-run=server` so the apiserver validates/admits the
+ * manifest without persisting it (used by the Apply YAML panel's Validate).
+ */
+export function buildApplyArgs(context: string | null, dryRun = false): string[] {
+  return buildKubectlArgs(context, ["apply", "-f", "-", ...(dryRun ? ["--dry-run=server"] : [])]);
 }
 
 /**
- * Run `kubectl [--context ctx] apply -f -`, feeding `yaml` on STDIN. The YAML is
- * NEVER interpolated into a shell — it is written to the process's stdin pipe.
+ * Run `kubectl [--context ctx] apply -f - [--dry-run=server]`, feeding `yaml` on
+ * STDIN. The YAML is NEVER interpolated into a shell — it is written to the
+ * process's stdin pipe. With `dryRun`, the apiserver validates without applying.
  * Returns { code, stdout, stderr }; code -1 when the kubectl binary is missing.
  */
 export async function applyManifest(
   context: string | null,
   yaml: string,
+  dryRun = false,
 ): Promise<RunResult> {
-  const args = buildApplyArgs(context);
+  const args = buildApplyArgs(context, dryRun);
   try {
     const proc = Bun.spawn(["kubectl", ...args], {
       stdin: "pipe",

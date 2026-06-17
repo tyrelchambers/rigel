@@ -72,12 +72,16 @@ export async function executeAction(action: ActionBlock): Promise<ActionResponse
   return res.json() as Promise<ActionResponse>;
 }
 
-/** Apply a manifest set via the server's stdin `kubectl apply -f -`. */
-export async function applyManifestYaml(yaml: string): Promise<ActionResult> {
+/**
+ * Apply a manifest set via the server's stdin `kubectl apply -f -`. With
+ * `dryRun`, the apiserver validates the manifest (--dry-run=server) without
+ * persisting it — used by the Apply YAML panel's Validate button.
+ */
+export async function applyManifestYaml(yaml: string, dryRun = false): Promise<ActionResult> {
   const res = await fetch("/api/apply", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ yaml }),
+    body: JSON.stringify({ yaml, dryRun }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
