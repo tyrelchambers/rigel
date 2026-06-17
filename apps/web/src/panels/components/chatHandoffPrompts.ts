@@ -35,3 +35,35 @@ export function buildHandoffPrompt(
       return `Show the rollout status and recent rollout history of ${kind} ${name} in namespace ${ns}.`;
   }
 }
+
+/**
+ * Build the "Move a deployment (+ related resources) to another namespace" chat
+ * handoff prompt — there's no native k8s move, so the AI recreates everything in
+ * the target namespace then deletes the originals, each step gated through the
+ * confirm flow. Ported from the Swift ContextHandoffBuilder.moveDeploymentPrompt.
+ */
+export function moveToNamespacePrompt(name: string, srcNamespace: string | undefined, targetNamespace: string): string {
+  const src = srcNamespace ?? "default";
+  return [
+    `Move the deployment **${name}** from namespace **${src}** to namespace **${targetNamespace}**, along with its related resources.`,
+    ``,
+    `There is no native "move" in Kubernetes — recreate each resource in \`${targetNamespace}\`, then delete the original in \`${src}\`. Work step by step and let me confirm each change via the app's action buttons (or \`kubectl apply\` so the confirm modal gates it) — don't ask me to type "yes".`,
+    ``,
+    `## Steps`,
+    `1. If namespace \`${targetNamespace}\` doesn't exist, create it first.`,
+    `2. Discover what belongs to this deployment using read-only \`kubectl get -o yaml\`:`,
+    `   - the Deployment \`${name}\` itself;`,
+    `   - **Services** whose selector matches its pod labels;`,
+    `   - **ConfigMaps** and **Secrets** referenced by the pod spec (\`envFrom\`, \`env[].valueFrom\`, volumes, \`imagePullSecrets\`);`,
+    `   - **Ingresses** that route to the matched Service(s);`,
+    `   - **PersistentVolumeClaims** used by the pods.`,
+    `3. For each, produce a clean manifest for \`${targetNamespace}\`: set \`metadata.namespace: ${targetNamespace}\` and strip server-assigned fields (\`resourceVersion\`, \`uid\`, \`creationTimestamp\`, \`status\`, and a Service's \`spec.clusterIP\`/\`clusterIPs\`). Apply them to the new namespace.`,
+    `4. Verify the new deployment's pods come up healthy in \`${targetNamespace}\`.`,
+    `5. Only then delete the originals from \`${src}\`.`,
+    ``,
+    `## Important`,
+    `- **PVCs: the data does NOT follow.** A recreated PVC binds to a new, empty volume. STOP and explain this before touching any PVC — confirm whether to recreate empty, skip storage, or manually rebind the existing PV. Do not delete the source PVC unless I explicitly agree.`,
+    `- Anything still referencing \`${src}/${name}\` (or its Services) by namespace will break until updated — call out anything you can't see.`,
+    `- Surface the discovery first, then propose the apply/delete actions; don't bulk-delete before the new namespace is confirmed working.`,
+  ].join("\n");
+}

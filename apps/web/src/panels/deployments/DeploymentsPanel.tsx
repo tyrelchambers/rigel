@@ -34,7 +34,7 @@ import { StatusBadge } from "@/panels/components/StatusBadge";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { LoadingState } from "@/panels/components/LoadingState";
-import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
+import { buildHandoffPrompt, moveToNamespacePrompt } from "@/panels/components/chatHandoffPrompts";
 import type { ActionBlock } from "@/lib/api";
 import { useGitSources, type GitSource } from "@/panels/gitops/gitApi";
 import { buildLinkAction, buildUnlinkAction, linkedSourceName, type WorkloadRef } from "@/panels/gitops/linkSource";
@@ -76,6 +76,7 @@ export default function DeploymentsPanel() {
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [scaleTarget, setScaleTarget] = useState<Deployment | null>(null);
+  const [moveTarget, setMoveTarget] = useState<Deployment | null>(null);
   // Registered GitOps sources, for the per-deployment "Link to GitHub" control.
   const { data: gitSources } = useGitSources();
   const [scaleValue, setScaleValue] = useState("1");
@@ -101,6 +102,14 @@ export default function DeploymentsPanel() {
     () => Object.values((resources["pods"] ?? {}) as Record<string, Pod>),
     [resources],
   );
+  // Known namespaces (for the Move-to-namespace suggestions) — from loaded
+  // deployments + any namespaces in the store.
+  const namespaceOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const d of allDeployments) set.add(d.metadata.namespace ?? "default");
+    for (const name of Object.keys(resources["namespaces"] ?? {})) set.add(name);
+    return [...set].sort();
+  }, [allDeployments, resources]);
   const filtered = useMemo(
     () => allDeployments.filter((d) => matchesSearch(d, search)),
     [allDeployments, search],
@@ -238,6 +247,7 @@ export default function DeploymentsPanel() {
               )}
               <ContextMenuSeparator />
               <ContextMenuItem onClick={() => viewYaml("deployment", d.metadata.name, d.metadata.namespace)}>View YAML…</ContextMenuItem>
+              <ContextMenuItem onClick={() => setMoveTarget(d)}>Move to namespace…</ContextMenuItem>
               <ContextMenuItem onClick={() => toggleExpand(d)}>{isOpen ? "Collapse" : "Manage…"}</ContextMenuItem>
             </>
           );
@@ -439,7 +449,75 @@ export default function DeploymentsPanel() {
         open={!!pendingAction}
         onClose={() => setPendingAction(null)}
       />
+
+      {moveTarget && (
+        <MoveToNamespaceDialog
+          deployment={moveTarget}
+          namespaces={namespaceOptions}
+          onClose={() => setMoveTarget(null)}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * Move-to-namespace — picks a target namespace, then hands a clone-then-delete
+ * plan to the chat copilot (no native k8s move; each step is gated). Mirrors the
+ * Swift DeploymentMoveSheet → moveDeploymentPrompt handoff.
+ */
+function MoveToNamespaceDialog({
+  deployment,
+  namespaces,
+  onClose,
+}: {
+  deployment: Deployment;
+  namespaces: string[];
+  onClose: () => void;
+}) {
+  const src = deployment.metadata.namespace ?? "default";
+  const [target, setTarget] = useState("");
+  const trimmed = target.trim();
+  const valid = trimmed !== "" && trimmed !== src;
+
+  function submit() {
+    if (!valid) return;
+    handoffToChat(moveToNamespacePrompt(deployment.metadata.name, src, trimmed));
+    onClose();
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Move {deployment.metadata.name} to another namespace</DialogTitle>
+          <DialogDescription>
+            From <span className="font-mono">{src}</span>. There's no native move — the Helmsman will recreate it (and related resources) in the target namespace, then delete the originals, with each step confirmed in chat.
+          </DialogDescription>
+        </DialogHeader>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground">Target namespace</span>
+          <input
+            list="ns-move-options"
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+            placeholder="e.g. staging"
+            autoFocus
+            spellCheck={false}
+            className="w-full rounded-md border bg-background px-3 py-1.5 text-sm font-mono outline-none focus:ring-2 focus:ring-ring"
+          />
+          <datalist id="ns-move-options">
+            {namespaces.filter((n) => n !== src).map((n) => <option key={n} value={n} />)}
+          </datalist>
+          {trimmed === src && <span className="text-xs text-destructive">Pick a namespace different from the source.</span>}
+        </label>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={submit} disabled={!valid}>Plan move in chat</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
