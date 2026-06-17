@@ -4,6 +4,17 @@
 export * from "./alerts";
 
 export {
+  type MetricsInstallBackend,
+  type InstalledBackend,
+  METRICS_SERVICE_NAME,
+  metricsBackendPort,
+  metricsBackendTitle,
+  resultingBackend,
+  namespaceValid,
+  renderMetricsInstallManifest,
+} from "./metricsInstall";
+
+export {
   type SuggestedAction,
   type SuggestedQuestion,
   type QuestionField,

@@ -7,6 +7,7 @@ import { buildCommand, PurgeActionError, type ActionBlock } from "./actions";
 import { applyManifest, installHelm, type HelmInstallRequest } from "./install";
 import { handlePurge, type PurgeRequest } from "./purge";
 import { getPodMetrics, getNodeMetrics, getNodeDisk } from "./metrics";
+import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusMetrics";
 import { handleUpdates, type UpdatesRequest } from "./updates";
 import { chatConfig, setClaudeToken } from "./chatConfig";
 import { buildSuggestions } from "./suggestions";
@@ -149,6 +150,31 @@ const server = Bun.serve({
     // Summary API. Graceful: { available:false, items:[] } when unreachable.
     if (url.pathname === "/api/metrics/node-disk" && req.method === "GET") {
       const result = await getNodeDisk(context);
+      return Response.json(result);
+    }
+
+    // GET /api/metrics/usage?namespace=<ns|*> — 30-day per-pod/container usage
+    // history from a detected Prometheus/VictoriaMetrics backend, for
+    // right-sizing. Always HTTP 200; { available:false } when no backend exists.
+    // GET /api/metrics/backends — Prometheus/VictoriaMetrics backends detected in
+    // the cluster, for the right-sizing source picker.
+    if (url.pathname === "/api/metrics/backends" && req.method === "GET") {
+      const backends = await detectAllBackends(context);
+      return Response.json({ backends });
+    }
+
+    if (url.pathname === "/api/metrics/usage" && req.method === "GET") {
+      const ns = url.searchParams.get("namespace") ?? "*";
+      // Optional explicit backend (bns/svc/port) from the picker; else auto-detect.
+      const bns = url.searchParams.get("bns");
+      const svc = url.searchParams.get("svc");
+      const portStr = url.searchParams.get("port");
+      const port = Number(portStr);
+      const explicit =
+        bns && svc && portStr && Number.isFinite(port)
+          ? { namespace: bns, service: svc, port, flavor: flavorForPort(port) }
+          : undefined;
+      const result = await getUsageHistory(context, ns, explicit);
       return Response.json(result);
     }
 

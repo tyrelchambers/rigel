@@ -2,11 +2,9 @@ import { describe, test, expect } from "vitest";
 import {
   containerResources,
   podBelongsTo,
-  ingestSamples,
-  windowStatsFor,
+  windowStatsFromUsage,
   buildRightSizing,
-  type PodMetric,
-  type SampleStore,
+  type UsageRow,
   type WorkloadObject,
 } from "./aggregate";
 
@@ -45,41 +43,6 @@ describe("podBelongsTo", () => {
   });
 });
 
-describe("ingest + windowStats", () => {
-  const metrics: PodMetric[] = [
-    { namespace: "default", name: "web-1", cpu: "100", memory: "100Mi" },
-    { namespace: "default", name: "web-2", cpu: "200", memory: "150Mi" },
-    { namespace: "default", name: "api-1", cpu: "50", memory: "64Mi" },
-  ];
-
-  test("sums pod metrics per workload into one sample", () => {
-    const store: SampleStore = new Map();
-    ingestSamples(store, metrics, [{ namespace: "default", name: "web" }], 0);
-    const stats = windowStatsFor(store, "default", "web", "web");
-    // cpu: (100+200)/1000 cores; mem: (100+150)Mi
-    expect(stats.cpuPeak).toBeCloseTo(0.3);
-    expect(stats.memPeak).toBe(250 * MiB);
-    expect(stats.hoursCovered).toBe(1);
-  });
-
-  test("hoursCovered counts distinct hour buckets", () => {
-    const store: SampleStore = new Map();
-    const hour = 60 * 60 * 1000;
-    ingestSamples(store, metrics, [{ namespace: "default", name: "web" }], 0);
-    ingestSamples(store, metrics, [{ namespace: "default", name: "web" }], hour);
-    ingestSamples(store, metrics, [{ namespace: "default", name: "web" }], 2 * hour);
-    const stats = windowStatsFor(store, "default", "web", "web");
-    expect(stats.hoursCovered).toBe(3);
-  });
-
-  test("no matching pods → empty stats (hoursCovered 0)", () => {
-    const store: SampleStore = new Map();
-    ingestSamples(store, metrics, [{ namespace: "default", name: "redis" }], 0);
-    const stats = windowStatsFor(store, "default", "redis", "redis");
-    expect(stats.hoursCovered).toBe(0);
-  });
-});
-
 describe("buildRightSizing", () => {
   const dep: WorkloadObject = {
     metadata: { name: "web", namespace: "default" },
@@ -102,9 +65,8 @@ describe("buildRightSizing", () => {
 
   test("builds one row per workload with verdicts", () => {
     const byKind = { deployments: { web: dep } };
-    const store: SampleStore = new Map();
-    // No samples yet → insufficient data
-    const rows = buildRightSizing(byKind, store);
+    // No usage rows → empty stats → insufficient data
+    const rows = buildRightSizing(byKind, (ns, w, c) => windowStatsFromUsage([], ns, w, c));
     expect(rows).toHaveLength(1);
     expect(rows[0].kind).toBe("deployment");
     expect(rows[0].name).toBe("web");
@@ -115,6 +77,33 @@ describe("buildRightSizing", () => {
     const byKind = {
       deployments: { empty: { metadata: { name: "empty", namespace: "default" } } },
     };
-    expect(buildRightSizing(byKind, new Map())).toHaveLength(0);
+    expect(buildRightSizing(byKind, (ns, w, c) => windowStatsFromUsage([], ns, w, c))).toHaveLength(0);
+  });
+});
+
+describe("windowStatsFromUsage", () => {
+  const rows: UsageRow[] = [
+    { namespace: "default", pod: "web-1", container: "web", cpuPeak: 0.4, cpuTypical: 0.2, memPeak: 200 * MiB, memTypical: 120 * MiB, hoursCovered: 720 },
+    { namespace: "default", pod: "web-2", container: "web", cpuPeak: 0.6, cpuTypical: 0.3, memPeak: 180 * MiB, memTypical: 100 * MiB, hoursCovered: 700 },
+    { namespace: "default", pod: "api-1", container: "api", cpuPeak: 0.1, cpuTypical: 0.05, memPeak: 64 * MiB, memTypical: 32 * MiB, hoursCovered: 720 },
+  ];
+
+  test("takes the worst-case across the workload's pods (max)", () => {
+    const ws = windowStatsFromUsage(rows, "default", "web", "web");
+    expect(ws.cpuPeak).toBeCloseTo(0.6);
+    expect(ws.cpuTypical).toBeCloseTo(0.3);
+    expect(ws.memPeak).toBe(200 * MiB);
+    expect(ws.memTypical).toBe(120 * MiB);
+    expect(ws.hoursCovered).toBe(720);
+  });
+
+  test("matches pods by the <name>-* convention and ignores other workloads", () => {
+    const ws = windowStatsFromUsage(rows, "default", "web", "web");
+    // api-1 must not bleed into web's stats
+    expect(ws.memPeak).toBe(200 * MiB);
+  });
+
+  test("no matching pods → empty stats (hoursCovered 0)", () => {
+    expect(windowStatsFromUsage(rows, "default", "redis", "redis").hoursCovered).toBe(0);
   });
 });

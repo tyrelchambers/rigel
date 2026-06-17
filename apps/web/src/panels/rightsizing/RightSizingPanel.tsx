@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Hourglass,
   Gauge,
   Copy,
   MessageSquare,
   Check,
+  Database,
 } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
@@ -29,9 +30,8 @@ import {
 } from "./displayHelper";
 import {
   buildRightSizing,
-  ingestSamples,
-  type PodMetric,
-  type SampleStore,
+  windowStatsFromUsage,
+  type UsageRow,
   type WorkloadObject,
 } from "./aggregate";
 import type {
@@ -41,10 +41,26 @@ import type {
   WorkloadKind,
   WorkloadRightSizing,
 } from "./types";
+import { MetricsInstallDialog } from "./MetricsInstallDialog";
+import {
+  loadBackendChoice,
+  saveBackendChoice,
+  choiceSelectValue,
+  backendValue,
+  type BackendChoice,
+} from "./backendChoice";
+import type { InstalledBackend } from "@helmsman/k8s";
 
-interface PodMetricsResponse {
+interface UsageBackend {
+  flavor: string;
+  namespace: string;
+  service: string;
+  port: number;
+}
+interface UsageResponse {
   available: boolean;
-  items: PodMetric[];
+  backend: UsageBackend | null;
+  items: UsageRow[];
 }
 
 const KIND_BADGE: Record<WorkloadKind, string> = {
@@ -97,10 +113,27 @@ function verdictLabel(v: Verdict): string {
   }
 }
 
-async function fetchPodMetrics(namespace: string): Promise<PodMetricsResponse> {
-  const res = await fetch(`/api/metrics/pods?namespace=${encodeURIComponent(namespace)}`);
-  if (!res.ok) throw new Error(`metrics fetch failed: ${res.status}`);
+async function fetchUsageHistory(namespace: string, backend?: UsageBackend): Promise<UsageResponse> {
+  const params = new URLSearchParams({ namespace });
+  if (backend) {
+    params.set("bns", backend.namespace);
+    params.set("svc", backend.service);
+    params.set("port", String(backend.port));
+  }
+  const res = await fetch(`/api/metrics/usage?${params.toString()}`);
+  if (!res.ok) throw new Error(`usage fetch failed: ${res.status}`);
   return res.json();
+}
+
+async function fetchBackends(): Promise<UsageBackend[]> {
+  try {
+    const res = await fetch("/api/metrics/backends");
+    if (!res.ok) return [];
+    const j = (await res.json()) as { backends?: UsageBackend[] };
+    return Array.isArray(j.backends) ? j.backends : [];
+  } catch {
+    return [];
+  }
 }
 
 export default function RightSizingPanel() {
@@ -112,85 +145,148 @@ export default function RightSizingPanel() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
 
-  // Subscribe to the three workload kinds + pods (pods drive metric attribution).
+  // Subscribe to the three workload kinds. Pod→workload attribution uses the
+  // backend's pod labels, so no pods watch is needed here.
   useEffect(() => {
     const ns = namespaceFilter ?? "*";
     subscribe("deployments", ns);
     subscribe("statefulsets", ns);
     subscribe("daemonsets", ns);
-    subscribe("pods", ns);
     return () => {
       unsubscribe("deployments", ns);
       unsubscribe("statefulsets", ns);
       unsubscribe("daemonsets", ns);
-      unsubscribe("pods", ns);
     };
   }, [namespaceFilter]);
 
-  // Poll current pod metrics every 15s.
-  const [metrics, setMetrics] = useState<PodMetricsResponse | null>(null);
-  const [isLoadingMetrics, setLoadingMetrics] = useState(true);
+  // --- Data source (Swift parity: per-context backend choice) -------------
+  // Single-context web app → bucket the choice under "default", like Settings.
+  const choiceContext = "default";
+  const [choice, setChoice] = useState<BackendChoice>(() => loadBackendChoice(choiceContext));
+  const [backends, setBackends] = useState<UsageBackend[]>([]);
+  const [installOpen, setInstallOpen] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  // Prometheus/VictoriaMetrics backends detected in the cluster, for the picker.
+  useEffect(() => {
+    let cancelled = false;
+    fetchBackends().then((b) => {
+      if (!cancelled) setBackends(b);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
+
+  // Usage history from the chosen (or auto-detected) metrics backend. This is
+  // the ONLY data source — there is no in-browser sampler. Survives reloads
+  // (the DB holds 30 days). `usage === null` means "still resolving" → we show a
+  // loader (never a flash of an empty/no-backend state); refreshed every 2 min.
+  const [usage, setUsage] = useState<UsageResponse | null>(null);
   useEffect(() => {
     let cancelled = false;
     const ns = namespaceFilter ?? "*";
-    async function poll() {
+    const explicit =
+      choice.kind === "prometheus"
+        ? { flavor: choice.flavor, namespace: choice.namespace, service: choice.service, port: choice.port }
+        : undefined;
+    setUsage(null); // reset to the loading state on source/namespace change
+    async function load() {
       try {
-        const data = await fetchPodMetrics(ns);
-        if (!cancelled) {
-          setMetrics(data);
-          setLoadingMetrics(false);
-        }
+        const u = await fetchUsageHistory(ns, explicit);
+        if (!cancelled) setUsage(u);
       } catch {
-        if (!cancelled) setLoadingMetrics(false);
+        if (!cancelled) setUsage({ available: false, backend: null, items: [] });
       }
     }
-    poll();
-    const id = setInterval(poll, 15_000);
+    load();
+    const id = setInterval(load, 120_000);
     return () => {
       cancelled = true;
       clearInterval(id);
     };
-  }, [namespaceFilter]);
+  }, [namespaceFilter, choice, reloadKey]);
 
-  // Rolling in-memory sample accumulator (mirrors the local-history backend).
-  const sampleStore = useRef<SampleStore>(new Map());
+  const detecting = usage === null; // first query in flight
+  const usingBackend = usage?.available === true;
+  const noBackend = usage !== null && usage.available === false;
 
-  // Fold each fresh metrics poll into the accumulator, then recompute verdicts.
+  // Verdicts always come from the backend's 30-day history (one verdict engine).
   const workloads = useMemo<WorkloadRightSizing[]>(() => {
+    if (!usingBackend || !usage) return [];
     const byKind = resources as Record<string, Record<string, WorkloadObject>>;
-    const allNames: Array<{ namespace: string; name: string }> = [];
-    for (const watchKind of ["deployments", "statefulsets", "daemonsets"]) {
-      for (const obj of Object.values(byKind[watchKind] ?? {})) {
-        allNames.push({
-          namespace: obj.metadata.namespace ?? "default",
-          name: obj.metadata.name,
-        });
-      }
-    }
-    if (metrics?.available && metrics.items.length > 0) {
-      ingestSamples(sampleStore.current, metrics.items, allNames);
-    }
-    return buildRightSizing(byKind, sampleStore.current);
-    // metrics drives re-aggregation; resources drives the workload set.
-  }, [resources, metrics]);
+    const rows = usage.items;
+    return buildRightSizing(byKind, (ns, w, c) => windowStatsFromUsage(rows, ns, w, c));
+  }, [resources, usage, usingBackend]);
 
-  const filtered = useMemo(
-    () => sortWorkloads(workloads.filter((w) => matchesSearch(w, search)), sortMode),
-    [workloads, search, sortMode],
+  // Source picker options: detected backends ∪ the current explicit choice (so a
+  // just-installed backend not yet in the detected list still appears).
+  const sourceOptions = useMemo<UsageBackend[]>(() => {
+    const out = [...backends];
+    if (
+      choice.kind === "prometheus" &&
+      !out.some((b) => b.namespace === choice.namespace && b.service === choice.service && b.port === choice.port)
+    ) {
+      out.push({ flavor: choice.flavor, namespace: choice.namespace, service: choice.service, port: choice.port });
+    }
+    return out;
+  }, [backends, choice]);
+
+  const selectValue = choiceSelectValue(choice, usage?.backend ?? null);
+
+  function pickSource(value: string) {
+    const b = sourceOptions.find((o) => backendValue(o) === value);
+    if (b) {
+      const c: BackendChoice = { kind: "prometheus", namespace: b.namespace, service: b.service, port: b.port, flavor: b.flavor };
+      setChoice(c);
+      saveBackendChoice(choiceContext, c);
+    }
+  }
+
+  function handleInstall(backend: InstalledBackend, yaml: string) {
+    // Persist the choice optimistically, then route the apply through ConfirmSheet.
+    const c: BackendChoice = { kind: "prometheus", namespace: backend.namespace, service: backend.service, port: backend.port, flavor: backend.flavor };
+    setChoice(c);
+    saveBackendChoice(choiceContext, c);
+    setInstallOpen(false);
+    setPendingAction({
+      kind: "applyManifest",
+      manifest: yaml,
+      label: `Install ${backend.flavor} metrics backend`,
+      name: backend.service,
+      namespace: backend.namespace,
+    });
+  }
+
+  // Scope to the selected namespace. The shared store also holds cross-namespace
+  // workloads (e.g. the chat pane keeps a deployments "*" watch alive), so we
+  // filter here as a safeguard — matching the Swift panel's `filtered`.
+  const inNamespace = useMemo(
+    () => workloads.filter((w) => namespaceFilter == null || w.namespace === namespaceFilter),
+    [workloads, namespaceFilter],
   );
 
-  // Warming-up: at least one workload, but none has ≥24h of history yet.
+  const filtered = useMemo(
+    () => sortWorkloads(inNamespace.filter((w) => matchesSearch(w, search)), sortMode),
+    [inNamespace, search, sortMode],
+  );
+
+  // A backend is connected but hasn't scraped ~24h yet → every row reads
+  // "Gathering data"; show a banner explaining the wait.
   const isWarmingUp =
-    workloads.length > 0 &&
-    workloads.every((w) =>
+    usingBackend &&
+    inNamespace.length > 0 &&
+    inNamespace.every((w) =>
       w.containers.every((c) => c.hoursCovered < MIN_HOURS),
     );
-  const maxHours = workloads.reduce(
+  const maxHours = inNamespace.reduce(
     (m, w) => Math.max(m, ...w.containers.map((c) => c.hoursCovered), 0),
     0,
   );
-
-  const metricsUnavailable = metrics != null && metrics.available === false;
+  const loading = detecting;
+  const sourceLabel = usage?.backend
+    ? `${usage.backend.flavor} · ${usage.backend.namespace}/${usage.backend.service}`
+    : "";
 
   function toggle(w: WorkloadRightSizing) {
     const k = `${w.namespace}/${w.name}`;
@@ -232,7 +328,7 @@ export default function RightSizingPanel() {
         title="Right-sizing"
         subtitle="Resource recommendations"
         count={filtered.length}
-        loading={isLoadingMetrics}
+        loading={loading}
       >
         <input
           type="text"
@@ -246,13 +342,14 @@ export default function RightSizingPanel() {
       <div className="flex-1 overflow-auto">
       {/* Control bar — sort pills */}
       <div
-        className="flex items-center gap-2 px-4 py-2"
+        className="flex flex-wrap items-center gap-2 px-4 py-2"
         style={{ borderBottom: "1px solid #26272B", background: "var(--surface-elevated)" }}
       >
         {SORT_PILLS.map((p) => (
           <button
             key={p.mode}
             type="button"
+            className="whitespace-nowrap"
             onClick={() => setSortMode(p.mode)}
             style={
               sortMode === p.mode
@@ -281,22 +378,71 @@ export default function RightSizingPanel() {
             {p.label}
           </button>
         ))}
+        <span className="flex-1" />
+        {sourceOptions.length > 0 && (
+          <>
+            <span className="whitespace-nowrap" style={{ fontFamily: "ui-monospace, monospace", fontSize: 10, color: "var(--fg-tertiary)" }}>
+              Source
+            </span>
+            <select
+              value={selectValue}
+              onChange={(e) => pickSource(e.target.value)}
+              title="Right-sizing data source"
+              className="max-w-[240px] rounded-md border bg-background px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-ring"
+              style={{ fontFamily: "ui-monospace, monospace" }}
+            >
+              {sourceOptions.map((b) => (
+                <option key={backendValue(b)} value={backendValue(b)}>
+                  {b.flavor} · {b.service}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
+        <button
+          type="button"
+          onClick={() => setInstallOpen(true)}
+          className="whitespace-nowrap rounded-md border px-2 py-1 text-xs hover:bg-muted"
+        >
+          Set up…
+        </button>
       </div>
 
       <div className="flex flex-col gap-0.5 px-3 py-2">
-        {/* Metrics unavailable */}
-        {metricsUnavailable && (
+        {/* Detecting / loading the backend — keeps the panel from flashing an
+            empty or no-backend state before the first query resolves. */}
+        {loading && (
           <div
             className="flex items-center gap-2 rounded-md px-3 py-2 text-sm"
-            style={{ background: "var(--surface-elevated)", border: "1px solid #34353A", color: "var(--fg-tertiary)" }}
+            style={{ color: "var(--fg-tertiary)" }}
           >
-            <Gauge className="size-4 shrink-0" />
-            Metrics unavailable — install metrics-server to see right-sizing.
+            <Hourglass className="size-4 shrink-0 animate-pulse" style={{ color: "var(--accent-primary)" }} />
+            Loading usage history…
           </div>
         )}
 
-        {/* Warming up banner */}
-        {!metricsUnavailable && isWarmingUp && (
+        {/* No metrics backend → prompt to install one (no in-browser fallback). */}
+        {noBackend && (
+          <div className="flex flex-col items-center gap-3 py-12 text-center" style={{ color: "var(--fg-tertiary)" }}>
+            <Database className="size-8" style={{ color: "var(--accent-primary)" }} />
+            <div>
+              <p className="text-sm font-medium" style={{ color: "var(--fg-secondary)" }}>
+                No metrics backend connected
+              </p>
+              <p className="mx-auto mt-1 max-w-md" style={{ fontSize: 11 }}>
+                Right-sizing reads 30 days of usage from a Prometheus or VictoriaMetrics store.
+                Install a lightweight one in a click — it scrapes container usage and keeps the history.
+              </p>
+            </div>
+            <Button onClick={() => setInstallOpen(true)}>
+              <Database className="size-3.5" />
+              Set up a metrics backend
+            </Button>
+          </div>
+        )}
+
+        {/* Backend connected but still scraping its first ~24h. */}
+        {usingBackend && isWarmingUp && (
           <div
             className="flex items-start gap-2 rounded-md px-3 py-2 text-sm"
             style={{ background: "rgba(56, 189, 248,0.08)", border: "1px solid rgba(56, 189, 248,0.2)" }}
@@ -307,26 +453,24 @@ export default function RightSizingPanel() {
                 Collecting usage history — recommendations need ~{MIN_HOURS}h of data
               </div>
               <div style={{ fontSize: 11, color: "var(--fg-tertiary)", marginTop: 1 }}>
-                Reading from local history, sampled every ~15s. So far: {maxHours}h of {MIN_HOURS}h.
-                Verdicts appear automatically once there's enough.
+                Reading from {sourceLabel}, which scrapes continuously. So far: {maxHours}h of{" "}
+                {MIN_HOURS}h. Verdicts appear automatically once there's enough.
               </div>
             </div>
           </div>
         )}
 
-        {/* Empty */}
-        {!metricsUnavailable && filtered.length === 0 && (
+        {/* No workloads to analyze (backend present, not warming). */}
+        {usingBackend && !isWarmingUp && filtered.length === 0 && (
           <div className="flex flex-col items-center gap-2 py-12 text-center" style={{ color: "var(--fg-tertiary)" }}>
             <Gauge className="size-8" />
-            <p className="text-sm font-medium">No workloads to analyze yet</p>
-            <p style={{ fontSize: 11 }}>
-              Usage history builds over time; confident verdicts need ~{MIN_HOURS}h of data.
-            </p>
+            <p className="text-sm font-medium">No workloads to analyze</p>
+            <p style={{ fontSize: 11 }}>Nothing matches the current namespace or search.</p>
           </div>
         )}
 
         {/* Workload rows */}
-        {!metricsUnavailable && filtered.map((w) => {
+        {usingBackend && filtered.map((w) => {
           const k = `${w.namespace}/${w.name}`;
           const isOpen = expanded.has(k);
 
@@ -410,8 +554,13 @@ export default function RightSizingPanel() {
       <ConfirmSheet
         action={pendingAction}
         open={!!pendingAction}
-        onClose={() => setPendingAction(null)}
+        onClose={() => {
+          setPendingAction(null);
+          // Re-detect + re-query after any apply (e.g. a metrics-backend install).
+          setReloadKey((k) => k + 1);
+        }}
       />
+      <MetricsInstallDialog open={installOpen} onOpenChange={setInstallOpen} onInstall={handleInstall} />
     </div>
   );
 }
