@@ -22,6 +22,7 @@ import {
 } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { Button } from "@/components/ui/button";
+import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem } from "@/components/ui/context-menu";
 import { LoadingState } from "@/panels/components/LoadingState";
 import type { Deployment } from "../deployments/types";
 import {
@@ -66,6 +67,9 @@ export default function LogsPanel() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const linesRef = useRef<LogLine[]>(lines);
   linesRef.current = lines;
+  // The log line last right-clicked — read by the single shared context menu
+  // (one menu for the whole list, so we don't mount 5000 ContextMenu roots).
+  const ctxLineRef = useRef<LogLine | null>(null);
 
   // Subscribe to the deployments watch for the sidebar list. Pods are streamed
   // implicitly via the kubectl logs label selector (not watched here).
@@ -394,6 +398,10 @@ export default function LogsPanel() {
                 {lines.length === 0 && !error && (
                   <LoadingState message="Waiting for log output…" />
                 )}
+                {/* One context menu for the whole list; each line records itself
+                    on right-click via ctxLineRef (avoids a menu per line). */}
+                <ContextMenu>
+                  <ContextMenuTrigger>
                 {filtered.map((l) => {
                   const expanded = expandedLines.has(l.id);
                   const color = podColor(l.sourcePod);
@@ -402,6 +410,7 @@ export default function LogsPanel() {
                     <div
                       key={l.id}
                       onClick={() => toggleExpand(l.id)}
+                      onContextMenu={() => { ctxLineRef.current = l; }}
                       className="group flex min-h-[18px] cursor-default items-start gap-2 border-l-2 px-2 py-0.5 hover:bg-muted/50"
                       style={{ borderLeftColor: color }}
                     >
@@ -438,6 +447,16 @@ export default function LogsPanel() {
                     </div>
                   );
                 })}
+                  </ContextMenuTrigger>
+                  <ContextMenuContent>
+                    <ContextMenuItem onClick={() => { const l = ctxLineRef.current; if (l) askClaude(l); }}>
+                      Ask Claude about this line
+                    </ContextMenuItem>
+                    <ContextMenuItem onClick={() => { const l = ctxLineRef.current; if (l) void navigator.clipboard.writeText(l.text); }}>
+                      Copy line
+                    </ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
               </div>
 
               {/* Jump to latest (only when scrolled up) */}

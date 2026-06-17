@@ -4,6 +4,7 @@ import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
+import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
@@ -156,21 +157,38 @@ export default function NodesPanel() {
             ? nodeMetricsData.items.find((m) => m.name === n.metadata.name)
             : undefined;
           return (
-            <NodeCard
-              key={k}
-              node={n}
-              isOpen={expanded.has(k)}
-              onToggle={() => toggleExpand(n)}
-              metrics={nodeMetrics}
-              disk={diskByNode.get(n.metadata.name)}
-              podCount={podCounts.get(n.metadata.name) ?? 0}
-              onErrors={() => handoffToChat(buildHandoffPrompt("node", n.metadata.name, undefined, "Errors"))}
-              onLogs={() => handoffToChat(buildHandoffPrompt("node", n.metadata.name, undefined, "Logs"))}
-              onExplain={() => handoffToChat(buildHandoffPrompt("node", n.metadata.name, undefined, "Explain"))}
-              onCordon={() => cordon(n)}
-              onUncordon={() => uncordon(n)}
-              onDrain={() => drain(n)}
-            />
+            <ContextMenu key={k}>
+              <ContextMenuTrigger>
+                <NodeCard
+                  node={n}
+                  isOpen={expanded.has(k)}
+                  onToggle={() => toggleExpand(n)}
+                  metrics={nodeMetrics}
+                  disk={diskByNode.get(n.metadata.name)}
+                  podCount={podCounts.get(n.metadata.name) ?? 0}
+                  onErrors={() => handoffToChat(buildHandoffPrompt("node", n.metadata.name, undefined, "Errors"))}
+                  onLogs={() => handoffToChat(buildHandoffPrompt("node", n.metadata.name, undefined, "Logs"))}
+                  onExplain={() => handoffToChat(buildHandoffPrompt("node", n.metadata.name, undefined, "Explain"))}
+                  onCordon={() => cordon(n)}
+                  onUncordon={() => uncordon(n)}
+                  onDrain={() => drain(n)}
+                />
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                <ContextMenuItem onClick={() => handoffToChat(buildHandoffPrompt("node", n.metadata.name, undefined, "Errors"))}>Ask Claude: Errors</ContextMenuItem>
+                <ContextMenuItem onClick={() => handoffToChat(buildHandoffPrompt("node", n.metadata.name, undefined, "Logs"))}>Ask Claude: Logs</ContextMenuItem>
+                <ContextMenuItem onClick={() => handoffToChat(buildHandoffPrompt("node", n.metadata.name, undefined, "Explain"))}>Ask Claude: Explain</ContextMenuItem>
+                <ContextMenuSeparator />
+                {isCordoned(n) ? (
+                  <ContextMenuItem onClick={() => uncordon(n)}>Uncordon</ContextMenuItem>
+                ) : (
+                  <ContextMenuItem onClick={() => cordon(n)}>Cordon</ContextMenuItem>
+                )}
+                <ContextMenuItem variant="destructive" onClick={() => drain(n)}>Drain…</ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => toggleExpand(n)}>{expanded.has(k) ? "Collapse" : "Details…"}</ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
           );
         })}
       </div>
