@@ -3,6 +3,7 @@ import { WatchManager } from "./watchManager";
 import type { WatchEvent } from "@helmsman/k8s/src/watch";
 import { runClaude } from "./claudeBridge";
 import { LogStreamManager, type LogTarget } from "./logStream";
+import { TerminalSession } from "./terminal";
 
 export function makeWsHandlers(mgr: WatchManager, context: string | null = null) {
   const unsubs = new WeakMap<ServerWebSocket<any>, Map<string, () => void>>();
@@ -10,15 +11,19 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null)
   const logStreams = new WeakMap<ServerWebSocket<any>, LogStreamManager>();
   // Abort handle for the in-flight chat turn — aborted on Stop/new-turn/close.
   const chatAborts = new WeakMap<ServerWebSocket<any>, AbortController>();
+  // One interactive PTY shell per connection — killed on term.stop/close.
+  const terminals = new WeakMap<ServerWebSocket<any>, TerminalSession>();
   return {
     open(ws: ServerWebSocket<any>) {
       unsubs.set(ws, new Map());
       logStreams.set(ws, new LogStreamManager(ws, context));
+      terminals.set(ws, new TerminalSession(ws));
     },
     close(ws: ServerWebSocket<any>) {
       unsubs.get(ws)?.forEach((u) => u());
       logStreams.get(ws)?.stop();
       chatAborts.get(ws)?.abort();
+      terminals.get(ws)?.stop();
     },
     message(ws: ServerWebSocket<any>, raw: string | Buffer) {
       const m = JSON.parse(String(raw));
@@ -81,6 +86,14 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null)
       } else if (m.type === "chat-interrupt") {
         // Stop button: kill the running claude subprocess for this connection.
         chatAborts.get(ws)?.abort();
+      } else if (m.type === "term.start") {
+        terminals.get(ws)?.start(Number(m.cols), Number(m.rows));
+      } else if (m.type === "term.input" && typeof m.data === "string") {
+        terminals.get(ws)?.write(m.data);
+      } else if (m.type === "term.resize") {
+        terminals.get(ws)?.resize(Number(m.cols), Number(m.rows));
+      } else if (m.type === "term.stop") {
+        terminals.get(ws)?.stop();
       }
     },
   };

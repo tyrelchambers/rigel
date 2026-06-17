@@ -24,6 +24,7 @@ import AssistantPanel from "./panels/assistant/AssistantPanel";
 import SettingsPanel from "./panels/settings/SettingsPanel";
 import AccountsPanel from "./panels/accounts/AccountsPanel";
 import ApplyYamlPanel from "./panels/apply/ApplyYamlPanel";
+import TerminalPanel from "./panels/terminal/TerminalPanel";
 import { connectCluster } from "@/lib/ws";
 import { useAuthStatus, useChatConfig } from "@/lib/api";
 import { LoginScreen } from "@/shell/LoginScreen";
@@ -192,6 +193,7 @@ export default function App() {
               <Route path="/certificates" element={<CertificatesPanel />} />
               <Route path="/catalog" element={<PaddedX><CatalogPanel /></PaddedX>} />
               <Route path="/apply" element={<ApplyYamlPanel />} />
+              <Route path="/terminal" element={<TerminalPanel />} />
               <Route path="/accounts" element={<Padded><AccountsPanel /></Padded>} />
               <Route path="/events" element={<EventsPanel />} />
               <Route path="/assistant" element={<AssistantPanel />} />

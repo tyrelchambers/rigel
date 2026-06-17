@@ -99,6 +99,45 @@ export function onChatEvent(callback: ChatEventCallback): () => void {
   };
 }
 
+/** An event from the interactive PTY shell (Terminal panel). */
+export interface TermMessage {
+  type: "term";
+  event: "data" | "exit" | "error";
+  data?: string; // present on "data"
+  code?: number; // present on "exit"
+  message?: string; // present on "error"
+}
+type TermCallback = (msg: TermMessage) => void;
+let termListeners: TermCallback[] = [];
+
+/** Start the interactive shell at the given size. {type:"term.start", cols, rows}. */
+export function sendTermStart(cols: number, rows: number): void {
+  rawSend(JSON.stringify({ type: "term.start", cols, rows }));
+}
+
+/** Forward keystrokes / pasted text to the shell. {type:"term.input", data}. */
+export function sendTermInput(data: string): void {
+  rawSend(JSON.stringify({ type: "term.input", data }));
+}
+
+/** Propagate a terminal resize to the PTY. {type:"term.resize", cols, rows}. */
+export function sendTermResize(cols: number, rows: number): void {
+  rawSend(JSON.stringify({ type: "term.resize", cols, rows }));
+}
+
+/** Kill the shell for this connection. {type:"term.stop"}. */
+export function sendTermStop(): void {
+  rawSend(JSON.stringify({ type: "term.stop" }));
+}
+
+/** Subscribe to inbound terminal events. Returns an unsubscribe fn. */
+export function onTermEvent(callback: TermCallback): () => void {
+  termListeners.push(callback);
+  return () => {
+    termListeners = termListeners.filter((c) => c !== callback);
+  };
+}
+
 export function connectCluster(): void {
   socket = new WebSocket(`ws://${location.host}/ws`);
   const store = useCluster.getState();
@@ -121,6 +160,8 @@ export function connectCluster(): void {
       chatListeners.forEach((cb) => cb(m.event as ChatEvent));
     } else if (m.type === "logs" || m.type === "logs.error") {
       logListeners.forEach((cb) => cb(m as LogStreamMessage));
+    } else if (m.type === "term") {
+      termListeners.forEach((cb) => cb(m as TermMessage));
     } else if (m.type === "snapshot") {
       // Authoritative full set for this subscription: REPLACE the kind's items
       // (not merge) so switching namespace swaps the data instead of piling the
