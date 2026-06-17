@@ -14,6 +14,7 @@ import {
   safeRepoFilePath,
   parseGithubRepos,
   githubSecretJSON,
+  parseRepoContents,
   GITHUB_SECRET,
   type GitSource,
 } from "./gitSources";
@@ -115,6 +116,22 @@ test("githubSecretJSON: account Secret with token + login, named helmsman-github
   expect(j.kind).toBe("Secret");
   expect(j.metadata.name).toBe(GITHUB_SECRET);
   expect(j.stringData).toEqual({ token: "ghp_x", login: "octocat" });
+});
+
+test("parseRepoContents: maps dir/file entries, dirs first then alphabetical, drops other types", () => {
+  const api = [
+    { name: "deploy.yaml", path: "deploy.yaml", type: "file" },
+    { name: "base", path: "base", type: "dir" },
+    { name: "apps", path: "apps", type: "dir" },
+    { name: "link", path: "link", type: "symlink" },
+  ];
+  expect(parseRepoContents(api)).toEqual([
+    { name: "apps", path: "apps", type: "dir" },
+    { name: "base", path: "base", type: "dir" },
+    { name: "deploy.yaml", path: "deploy.yaml", type: "file" },
+  ]);
+  expect(parseRepoContents("nope")).toEqual([]);
+  expect(parseRepoContents(null)).toEqual([]);
 });
 
 test("parseGitSources: tolerates missing/garbage data", () => {

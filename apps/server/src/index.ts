@@ -8,7 +8,7 @@ import { applyManifest, installHelm, type HelmInstallRequest } from "./install";
 import { handlePurge, type PurgeRequest } from "./purge";
 import {
   loadSources, saveSources, diffSource, applySource, previewRepoFix, proposeRepoFix,
-  loadGithubToken, githubAccountStatus, connectGithub, disconnectGithub, listGithubRepos,
+  loadGithubToken, githubAccountStatus, connectGithub, disconnectGithub, listGithubRepos, listRepoTree,
 } from "./git";
 import { sanitizeSourceName, normalizeManifestPath, type GitSource } from "@helmsman/k8s/src/gitSources";
 import { getPodMetrics, getNodeMetrics, getNodeDisk } from "./metrics";
@@ -383,6 +383,18 @@ const server = Bun.serve({
       const token = await loadGithubToken(context);
       if (!token) return Response.json({ error: "GitHub not connected" }, { status: 409 });
       return Response.json({ repos: await listGithubRepos(token) });
+    }
+
+    // GET /api/git/repo-tree?repo=owner/repo&branch=&path= — one directory level
+    // of a repo (the add-source folder browser).
+    if (url.pathname === "/api/git/repo-tree" && req.method === "GET") {
+      const repo = url.searchParams.get("repo");
+      const branch = url.searchParams.get("branch");
+      const path = url.searchParams.get("path") ?? "";
+      if (!repo || !branch) return Response.json({ error: "missing repo or branch" }, { status: 422 });
+      const token = await loadGithubToken(context);
+      if (!token) return Response.json({ error: "GitHub not connected" }, { status: 409 });
+      return Response.json({ entries: await listRepoTree(token, repo, branch, path) });
     }
 
     // GET /api/git/sources — list configured sources (never includes tokens).

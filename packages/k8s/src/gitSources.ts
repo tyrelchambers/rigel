@@ -33,6 +33,13 @@ export interface GithubRepo {
   cloneURL: string;
 }
 
+/** One entry in a repo directory listing (GitHub contents API). */
+export interface RepoEntry {
+  name: string;
+  path: string;
+  type: "dir" | "file";
+}
+
 // Provenance annotations stamped on every synced resource so a running workload
 // can be mapped back to the source repo + manifest dir (used by the AI fix flow).
 export const SOURCE_REPO_ANNOTATION = "helmsman.dev/source-repo";
@@ -157,6 +164,24 @@ export function githubSecretJSON(namespace: string, token: string, login: string
     type: "Opaque",
     stringData: { token, login },
   });
+}
+
+/**
+ * Map a GitHub contents-API directory listing into {name, path, type} entries,
+ * keeping only dirs/files, sorted dirs-first then alphabetical by name. Used by
+ * the add-source folder browser (one level per request).
+ */
+export function parseRepoContents(json: unknown): RepoEntry[] {
+  if (!Array.isArray(json)) return [];
+  const out: RepoEntry[] = [];
+  for (const e of json) {
+    if (!e || typeof e !== "object") continue;
+    const o = e as Record<string, unknown>;
+    if (typeof o.name !== "string" || typeof o.path !== "string") continue;
+    if (o.type !== "dir" && o.type !== "file") continue;
+    out.push({ name: o.name, path: o.path, type: o.type });
+  }
+  return out.sort((a, b) => (a.type !== b.type ? (a.type === "dir" ? -1 : 1) : a.name.localeCompare(b.name)));
 }
 
 /** Map the GitHub `/user/repos` response into our picker shape; skips malformed entries. */

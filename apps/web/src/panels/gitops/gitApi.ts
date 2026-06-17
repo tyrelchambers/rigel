@@ -33,6 +33,12 @@ export interface GithubRepo {
   cloneURL: string;
 }
 
+export interface RepoEntry {
+  name: string;
+  path: string;
+  type: "dir" | "file";
+}
+
 export interface SyncResult {
   code: number;
   stdout: string;
@@ -92,6 +98,18 @@ export function useGitHubRepos(enabled: boolean) {
     queryKey: ["github-repos"],
     queryFn: () => req<{ repos: GithubRepo[] }>("/api/git/repos").then((r) => r.repos),
     enabled,
+  });
+}
+
+/** One directory level of a repo (the folder browser). Cached per (repo, branch, path). */
+export function useRepoTree(repo: string, branch: string, path: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["repo-tree", repo, branch, path],
+    queryFn: () =>
+      req<{ entries: RepoEntry[] }>(
+        `/api/git/repo-tree?repo=${encodeURIComponent(repo)}&branch=${encodeURIComponent(branch)}&path=${encodeURIComponent(path)}`,
+      ).then((r) => r.entries),
+    enabled: enabled && !!repo && !!branch,
   });
 }
 

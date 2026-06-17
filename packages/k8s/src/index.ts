@@ -6,6 +6,7 @@ export * from "./alerts";
 export {
   type GitSource,
   type GithubRepo,
+  type RepoEntry,
   GIT_SOURCES_CONFIGMAP,
   GITHUB_SECRET,
   SOURCE_REPO_ANNOTATION,
@@ -22,6 +23,7 @@ export {
   gitSourcesConfigMapJSON,
   githubSecretJSON,
   parseGithubRepos,
+  parseRepoContents,
 } from "./gitSources";
 
 export {

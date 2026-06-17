@@ -20,12 +20,14 @@ import {
   normalizeManifestPath,
   parseGitSources,
   parseGithubRepos,
+  parseRepoContents,
   parseRepoSlug,
   provenanceAnnotations,
   redactURL,
   safeRepoFilePath,
   type GitSource,
   type GithubRepo,
+  type RepoEntry,
 } from "@helmsman/k8s/src/gitSources";
 import { applyManifest } from "./install";
 
@@ -126,6 +128,25 @@ async function githubUser(token: string): Promise<{ ok: boolean; login?: string;
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : String(e) };
   }
+}
+
+/**
+ * List one directory level of a repo (GitHub contents API) — the add-source
+ * folder browser. `ownerRepo` is "owner/repo"; empty path = repo root.
+ */
+export async function listRepoTree(
+  token: string,
+  ownerRepo: string,
+  branch: string,
+  path: string,
+): Promise<RepoEntry[]> {
+  const [owner, repo] = ownerRepo.split("/");
+  if (!owner || !repo) return [];
+  const clean = path.replace(/^\/+|\/+$/g, "");
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${clean}?ref=${encodeURIComponent(branch)}`;
+  const res = await fetch(url, { headers: githubHeaders(token) });
+  if (!res.ok) return [];
+  return parseRepoContents(await res.json().catch(() => []));
 }
 
 /** List the user's repos (follows Link pagination, capped), newest-updated first. */
