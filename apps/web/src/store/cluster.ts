@@ -2,6 +2,27 @@ import { create } from "zustand";
 
 type ResourceMap = Record<string, Record<string, unknown>>; // kind -> name -> object
 
+// Persist the shared namespace selection across reloads. Guarded so the store
+// can still be imported in non-browser contexts (tests). `null`/absent = "all".
+const NS_FILTER_KEY = "helmsman_namespace_filter";
+
+function readNamespaceFilter(): string | null {
+  try {
+    return localStorage.getItem(NS_FILTER_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeNamespaceFilter(ns: string | null): void {
+  try {
+    if (ns == null) localStorage.removeItem(NS_FILTER_KEY);
+    else localStorage.setItem(NS_FILTER_KEY, ns);
+  } catch {
+    // non-browser / storage disabled — keep in-memory only
+  }
+}
+
 interface ClusterState {
   connected: boolean;
   resources: ResourceMap;
@@ -34,11 +55,14 @@ export const useCluster = create<ClusterState>((set) => ({
   resources: {},
   isLoading: false,
   error: null,
-  namespaceFilter: null, // null = All namespaces (non-empty first view)
+  namespaceFilter: readNamespaceFilter(), // null = All namespaces; restored from localStorage
   setConnected: (connected) => set({ connected }),
   setLoading: (isLoading) => set({ isLoading }),
   setError: (error) => set({ error }),
-  setNamespaceFilter: (namespaceFilter) => set({ namespaceFilter }),
+  setNamespaceFilter: (namespaceFilter) => {
+    writeNamespaceFilter(namespaceFilter);
+    set({ namespaceFilter });
+  },
   upsert: (kind, name, obj) =>
     set((s) => ({ resources: { ...s.resources, [kind]: { ...s.resources[kind], [name]: obj } } })),
   remove: (kind, name) =>

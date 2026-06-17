@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Routes, Route } from "react-router";
 import OverviewPanel from "./panels/overview/OverviewPanel";
 import HealthPanel from "./panels/health/HealthPanel";
@@ -95,6 +95,40 @@ export default function App() {
     );
   }
 
+  // Chat-pane visibility — toggle with ⌘J / Ctrl+J, persisted across reloads.
+  // The pane is kept mounted (hidden via display:none) so the conversation and
+  // its live watches survive hiding/showing.
+  const [chatHidden, setChatHidden] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("helmsman.chat.hidden") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleChat = useCallback(() => {
+    setChatHidden((h) => {
+      const next = !h;
+      try {
+        localStorage.setItem("helmsman.chat.hidden", next ? "1" : "0");
+      } catch {
+        /* ignore quota / private-browsing errors */
+      }
+      return next;
+    });
+  }, []);
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      // ⌘J (mac) / Ctrl+J — toggle the chat pane. preventDefault covers the
+      // Windows/Linux "open downloads" default.
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "j") {
+        e.preventDefault();
+        toggleChat();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [toggleChat]);
+
   // Auth gate: hold rendering until we know the auth state, then show the login
   // screen when a password is required and this browser isn't signed in.
   if (authLoading) {
@@ -164,15 +198,16 @@ export default function App() {
           </main>
         </div>
 
-        {/* ── ChatPane — always visible, right side ─────────────────────────── */}
-        <div style={{ position: "relative", flexShrink: 0 }}>
+        {/* ── ChatPane — right side; toggle with ⌘J. Kept mounted (display:none
+            when hidden) so the conversation + live watches persist. ────────── */}
+        <div style={{ position: "relative", flexShrink: 0, display: chatHidden ? "none" : "block" }}>
           <ChatPane handleRef={chatHandleRef} />
         </div>
 
       </div>
 
       {/* ── StatusBar — full width at the bottom ────────────────────────────── */}
-      <StatusBar />
+      <StatusBar chatHidden={chatHidden} onToggleChat={toggleChat} />
     </div>
   );
 }

@@ -13,7 +13,12 @@ interface HealthData {
   ok?: boolean;
 }
 
-export default function StatusBar() {
+interface StatusBarProps {
+  chatHidden?: boolean;
+  onToggleChat?: () => void;
+}
+
+export default function StatusBar({ chatHidden, onToggleChat }: StatusBarProps = {}) {
   const connected = useCluster((s) => s.connected);
   const resources = useCluster((s) => s.resources);
   const error = useCluster((s) => s.error);
@@ -101,6 +106,11 @@ export default function StatusBar() {
         <HintChip kbd="⌘K">Commands</HintChip>
         <HintChip kbd="/">Search</HintChip>
         <HintChip kbd="⌘L">Chat</HintChip>
+        {onToggleChat && (
+          <HintChip kbd="⌘J" onClick={onToggleChat}>
+            {chatHidden ? "Show chat" : "Hide chat"}
+          </HintChip>
+        )}
       </div>
     </div>
   );
@@ -137,11 +147,17 @@ function MonoChip({ children, style, ...rest }: MonoChipProps) {
 interface HintChipProps {
   kbd: string;
   children: string;
+  onClick?: () => void;
 }
 
-function HintChip({ kbd, children }: HintChipProps) {
+function HintChip({ kbd, children, onClick }: HintChipProps) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+    <div
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      title={onClick ? `${children} (${kbd})` : undefined}
+      style={{ display: "flex", alignItems: "center", gap: 3, cursor: onClick ? "pointer" : undefined }}
+    >
       <span
         style={{
           fontFamily: "'Geist Variable', ui-monospace, monospace",
