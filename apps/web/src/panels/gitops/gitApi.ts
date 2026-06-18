@@ -125,6 +125,18 @@ export function useRepoTree(repo: string, branch: string, path: string, enabled:
   });
 }
 
+/** Read one repo file's text (null path = disabled). Server holds the token. */
+export function useRepoFile(repo: string, branch: string, path: string | null) {
+  return useQuery({
+    queryKey: ["repo-file", repo, branch, path],
+    queryFn: () =>
+      req<{ content: string }>(
+        `/api/git/repo-file?repo=${encodeURIComponent(repo)}&branch=${encodeURIComponent(branch)}&path=${encodeURIComponent(path!)}`,
+      ),
+    enabled: !!path,
+  });
+}
+
 // ── Sources ───────────────────────────────────────────────────────────────────
 
 export function useGitSources() {
