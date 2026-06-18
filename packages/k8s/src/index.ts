@@ -5,8 +5,13 @@ export * from "./alerts";
 
 export {
   type GitSource,
+  type GitDeployment,
+  type ResolvedTarget,
   type GithubRepo,
   type RepoEntry,
+  resolveTarget,
+  findByDeployment,
+  upsertDeployment,
   GIT_SOURCES_CONFIGMAP,
   GITHUB_SECRET,
   SOURCE_REPO_ANNOTATION,

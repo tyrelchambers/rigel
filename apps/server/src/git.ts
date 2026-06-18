@@ -26,6 +26,7 @@ import {
   redactURL,
   safeRepoFilePath,
   type GitSource,
+  type ResolvedTarget,
   type GithubRepo,
   type RepoEntry,
 } from "@helmsman/k8s/src/gitSources";
@@ -185,36 +186,36 @@ export interface CheckoutResult {
 }
 
 /**
- * Shallow-clone the source's branch fresh into /tmp and return the checked-out
+ * Shallow-clone the target's branch fresh into /tmp and return the checked-out
  * directory + HEAD sha. The token is embedded only for the clone, then scrubbed
  * from the stored remote so it isn't left at rest in .git/config.
  */
 export async function ensureCheckout(
-  source: GitSource,
+  target: ResolvedTarget,
   token: string | null,
   shallow = true,
 ): Promise<CheckoutResult> {
-  const dir = repoDir(source.name);
-  const authed = buildAuthedCloneURL(source.repoURL, token);
+  const dir = repoDir(target.name);
+  const authed = buildAuthedCloneURL(target.repoURL, token);
   await rm(dir, { recursive: true, force: true });
   await mkdir(REPO_ROOT, { recursive: true });
 
   const depth = shallow ? ["--depth", "1"] : [];
-  const clone = await runGit(["clone", ...depth, "--single-branch", "--branch", source.branch, authed, dir]);
+  const clone = await runGit(["clone", ...depth, "--single-branch", "--branch", target.branch, authed, dir]);
   if (clone.code !== 0) {
     return { ok: false, message: redactURL(clone.stderr || clone.stdout || "git clone failed") };
   }
   // Scrub the token from the persisted remote.
-  await runGit(["-C", dir, "remote", "set-url", "origin", source.repoURL]);
+  await runGit(["-C", dir, "remote", "set-url", "origin", target.repoURL]);
 
   const head = await runGit(["-C", dir, "rev-parse", "HEAD"]);
   const sha = head.code === 0 ? head.stdout.trim() : undefined;
   return { ok: true, sha, dir, message: "ok" };
 }
 
-/** Absolute manifest directory for a checked-out source. */
-function manifestDir(dir: string, source: GitSource): string {
-  const path = normalizeManifestPath(source.path);
+/** Absolute manifest directory for a checked-out target. */
+function manifestDir(dir: string, target: ResolvedTarget): string {
+  const path = normalizeManifestPath(target.path);
   return path === "." ? dir : `${dir}/${path}`;
 }
 
@@ -226,26 +227,26 @@ export interface GitOpResult extends RunResult {
  * Clone + `kubectl diff -f <dir> -R` (the pre-apply preview). kubectl diff exits
  * 1 when differences exist and 0 when none — both are success here; >1 is error.
  */
-export async function diffSource(context: string | null, source: GitSource, token: string | null): Promise<GitOpResult> {
-  const co = await ensureCheckout(source, token);
+export async function diffSource(context: string | null, target: ResolvedTarget, token: string | null): Promise<GitOpResult> {
+  const co = await ensureCheckout(target, token);
   if (!co.ok || !co.dir) return { code: 1, stdout: "", stderr: co.message };
-  const res = await kubectl(context, ["diff", "-f", manifestDir(co.dir, source), "-R"]);
+  const res = await kubectl(context, ["diff", "-f", manifestDir(co.dir, target), "-R"]);
   // Normalize: diff-present (1) is not an error for our purposes.
   const code = res.code === 1 ? 0 : res.code;
   return { code, stdout: res.stdout, stderr: res.stderr, sha: co.sha };
 }
 
 /** Clone + `kubectl apply -f <dir> -R`. Returns the apply result + synced sha. */
-export async function applySource(context: string | null, source: GitSource, token: string | null): Promise<GitOpResult> {
-  const co = await ensureCheckout(source, token);
+export async function applySource(context: string | null, target: ResolvedTarget, token: string | null): Promise<GitOpResult> {
+  const co = await ensureCheckout(target, token);
   if (!co.ok || !co.dir) return { code: 1, stdout: "", stderr: co.message };
-  const dir = manifestDir(co.dir, source);
+  const dir = manifestDir(co.dir, target);
   const res = await kubectl(context, ["apply", "-f", dir, "-R"]);
   if (res.code === 0) {
     // Best-effort provenance: stamp the synced resources so they map back to
-    // this source (the AI fix flow reads these annotations). A failure here must
-    // not fail the sync itself.
-    await kubectl(context, ["annotate", "-f", dir, "-R", ...provenanceAnnotations(source), "--overwrite"]);
+    // this deployment (the AI fix flow reads these annotations). A failure here
+    // must not fail the sync itself.
+    await kubectl(context, ["annotate", "-f", dir, "-R", ...provenanceAnnotations(target), "--overwrite"]);
   }
   return { ...res, sha: co.sha };
 }
@@ -255,7 +256,7 @@ export async function applySource(context: string | null, source: GitSource, tok
 // ---------------------------------------------------------------------------
 
 export interface RepoFixInput {
-  source: GitSource;
+  source: ResolvedTarget;
   token: string | null;
   filePath: string;
   content: string;
