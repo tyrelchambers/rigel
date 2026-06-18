@@ -12,6 +12,7 @@ import { Terminal, Copy, Check, AlertTriangle, Layers, Play, ArrowRight, CheckCi
 import { fetchPreviewCommand, useAction, applyManifestYaml, proposeRepoFix, type ActionBlock, type ActionResult, type PurgeResult, type RepoFixResponse } from "@/lib/api";
 import { listResources } from "@helmsman/catalog";
 import { isDestructiveAction } from "@/lib/actionBlocks";
+import { DiffView } from "@/components/DiffView";
 
 interface ConfirmSheetProps {
   /** The action to confirm and optionally execute. */
@@ -292,9 +293,7 @@ export function ConfirmSheet({ action, open, onClose, onPurge, fromChat, onResul
               <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive whitespace-pre-wrap">{fix.error}</p>
             )}
             {(fix.phase === "preview" || fix.phase === "opening") && fix.diff && (
-              <pre className="max-h-72 overflow-auto rounded-lg p-3 text-xs font-mono whitespace-pre-wrap" style={{ background: "#08080A", border: "1px solid #26272B" }}>
-                {fix.diff}
-              </pre>
+              <DiffView diff={fix.diff} />
             )}
             {fix.phase === "done" && (
               fix.result?.ok ? (
