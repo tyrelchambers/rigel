@@ -127,6 +127,7 @@ export default function LogsPanel() {
   // scroll-driven stickToBottom updates).
   const collapsePod = useMemo(() => distinctPods(lines).length <= 1, [lines]);
   const containers = useMemo(() => distinctContainers(lines), [lines]);
+  const pods = useMemo(() => distinctPods(lines), [lines]);
   // Auto-follow: when stuck to the bottom, jam to the latest line BEFORE paint
   // (useLayoutEffect) so the view doesn't flash mid-scroll. `overflow-anchor:
   // none` on the scroller stops the browser from shifting scrollTop when sorted
@@ -427,6 +428,24 @@ export default function LogsPanel() {
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
+              )}
+              {pods.length > 1 && (
+                <div className="flex items-center gap-1">
+                  {pods.map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setIsolatedPod((cur) => (cur === p ? "" : p))}
+                      aria-pressed={isolatedPod === p}
+                      title={`Isolate ${p}`}
+                      className={`max-w-[120px] truncate rounded-full border px-2 py-0.5 font-mono text-[10px] ${
+                        isolatedPod === p ? "border-primary bg-primary/15" : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
               )}
               {/* One always-mounted status region announces regex errors (a real
                   state change worth hearing). The line count is ambient, not
