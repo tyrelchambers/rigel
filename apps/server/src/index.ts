@@ -8,7 +8,7 @@ import { applyManifest, installHelm, type HelmInstallRequest } from "./install";
 import { handlePurge, type PurgeRequest } from "./purge";
 import {
   loadSources, saveSources, diffSource, applySource, previewRepoFix, proposeRepoFix,
-  loadGithubToken, githubAccountStatus, connectGithub, disconnectGithub, listGithubRepos, listRepoTree,
+  loadGithubToken, githubAccountStatus, connectGithub, disconnectGithub, listGithubRepos, listRepoTree, readRepoFile,
 } from "./git";
 import {
   sanitizeSourceName,
@@ -432,6 +432,20 @@ const server = Bun.serve({
       const token = await loadGithubToken(context);
       if (!token) return Response.json({ error: "GitHub not connected" }, { status: 409 });
       return Response.json({ entries: await listRepoTree(token, repo, branch, path) });
+    }
+
+    // GET /api/git/repo-file?repo=owner/repo&branch=&path= — one file's text
+    // (server holds the token). Powers the GitOps file editor.
+    if (url.pathname === "/api/git/repo-file" && req.method === "GET") {
+      const repo = url.searchParams.get("repo");
+      const branch = url.searchParams.get("branch");
+      const path = url.searchParams.get("path");
+      if (!repo || !branch || !path) return Response.json({ error: "missing repo, branch, or path" }, { status: 422 });
+      const token = await loadGithubToken(context);
+      if (!token) return Response.json({ error: "GitHub not connected" }, { status: 409 });
+      const r = await readRepoFile(token, repo, branch, path);
+      if (!r.ok) return Response.json({ error: r.message ?? "could not read file" }, { status: 422 });
+      return Response.json({ content: r.content });
     }
 
     // GET /api/git/sources — list configured sources (never includes tokens).
