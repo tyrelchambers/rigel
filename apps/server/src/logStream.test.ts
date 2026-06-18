@@ -91,3 +91,31 @@ test("a fresh start supersedes (kills) the previous selection", () => {
   expect(spawned[0].killed).toBe(true);
   expect(mgr.activeCount).toBe(1);
 });
+
+test("buildLogsArgs: container uses -c and omits --all-containers", () => {
+  const t: LogTarget = { namespace: "default", labelSelector: "app=web", container: "app" };
+  const args = buildLogsArgs(t, 200);
+  expect(args).toContain("-c");
+  expect(args[args.indexOf("-c") + 1]).toBe("app");
+  expect(args).not.toContain("--all-containers=true");
+});
+
+test("buildLogsArgs: previous drops -f and adds --previous", () => {
+  const t: LogTarget = { namespace: "default", labelSelector: "app=web", previous: true };
+  const args = buildLogsArgs(t, 200);
+  expect(args).not.toContain("-f");
+  expect(args).toContain("--previous");
+});
+
+test("buildLogsArgs: since adds --since=<v>", () => {
+  const t: LogTarget = { namespace: "default", pod: "web-0", since: "5m" };
+  expect(buildLogsArgs(t, 100)).toContain("--since=5m");
+});
+
+test("buildLogsArgs: default (no container/previous/since) is unchanged", () => {
+  const t: LogTarget = { namespace: "default", labelSelector: "app=web" };
+  expect(buildLogsArgs(t, 200)).toEqual([
+    "logs", "-f", "--timestamps", "--prefix=true", "--all-containers=true",
+    "-n", "default", "-l", "app=web", "--max-log-requests=20", "--tail=200",
+  ]);
+});
