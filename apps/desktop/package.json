@@ -1,0 +1,24 @@
+{
+  "name": "desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Helmsman desktop (Electron) — wraps the Node server + built SPA into a macOS app",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "dev": "pnpm build && electron .",
+    "smoke": "pnpm build && HELMSMAN_SMOKE=1 electron ."
+  },
+  "dependencies": {
+    "node-pty": "1.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "electron": "latest",
+    "esbuild": "latest",
+    "fix-path": "latest",
+    "tsx": "latest",
+    "typescript": "latest"
+  }
+}
