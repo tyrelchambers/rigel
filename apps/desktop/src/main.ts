@@ -20,9 +20,10 @@ const DESKTOP_DIR = join(__dirname, ".."); // apps/desktop (dist/..)
 const APPS_DIR = join(DESKTOP_DIR, ".."); // apps
 // The server is re-bundled BY THE DESKTOP BUILD to dist/server.mjs (see build.mjs
 // for why we can't fork apps/server's TS or its own ESM bundle under Electron's
-// utility loader). It lives next to this file (dist/) so its `import "node-pty"`
-// resolves from apps/desktop/node_modules.
-const SERVER_BUNDLE_DEV = join(__dirname, "server.mjs");
+// utility loader). We fork via server-entry.mjs (a thin parent-death watchdog
+// wrapper that imports server.mjs) so the server self-terminates if the Electron
+// main process is killed with SIGKILL. Both files live in dist/ next to main.js.
+const SERVER_BUNDLE_DEV = join(__dirname, "server-entry.mjs");
 const WEB_DIST_DEV = join(APPS_DIR, "web", "dist");
 
 const SMOKE = process.env.HELMSMAN_SMOKE === "1";
@@ -103,10 +104,10 @@ function forkServer(port: number): UtilityProcess {
 
   if (app.isPackaged) {
     // ── PACKAGED branch (compiled, not run, in this task) ──────────────────
-    // The packaging task copies the desktop-built server.mjs, node-pty, and the
+    // The packaging task copies server-entry.mjs + server.mjs, node-pty, and the
     // built SPA under process.resourcesPath. cwd must be a dir from which
     // `node-pty` resolves (i.e. it has a node_modules/node-pty alongside).
-    entry = join(process.resourcesPath, "server", "server.mjs");
+    entry = join(process.resourcesPath, "server", "server-entry.mjs");
     cwd = join(process.resourcesPath, "server");
     env.WEB_DIST = join(process.resourcesPath, "web", "dist");
   } else {
@@ -182,6 +183,10 @@ function createWindow(port: number): BrowserWindow {
     return { action: "deny" };
   });
 
+  // Null out the mainWindow reference when this window is destroyed so we don't
+  // hold a stale BrowserWindow handle after it is closed.
+  win.on("closed", () => { if (mainWindow === win) mainWindow = null; });
+
   void win.loadURL(`http://127.0.0.1:${port}`);
   return win;
 }
@@ -192,7 +197,17 @@ async function boot(): Promise<void> {
   serverPort = await findFreePort();
   console.log(`[helmsman] starting server on 127.0.0.1:${serverPort}`);
   serverProc = forkServer(serverPort);
-  await waitForHealth(serverPort);
+
+  // C1: race the health wait against the child's own exit so we fail fast if
+  // the server crashes before becoming healthy (bad WEB_DIST, port conflict,
+  // etc.) rather than polling a dead port for the full 15 s timeout.
+  const exited = new Promise<never>((_, reject) => {
+    serverProc!.once("exit", (code) =>
+      reject(new Error(`server exited before healthy (code=${code})`))
+    );
+  });
+  await Promise.race([waitForHealth(serverPort), exited]);
+
   console.log(`[helmsman] server healthy on :${serverPort}`);
 
   mainWindow = createWindow(serverPort);
@@ -223,8 +238,8 @@ async function runSmoke(port: number): Promise<void> {
 }
 
 // Open ws://127.0.0.1:<port>/ws, start a PTY, run `echo DESKTOP_PTY_OK`, and
-// resolve when a {type:"term",event:"data"} frame contains the marker. Node 26
-// (Electron's runtime) has a global WebSocket.
+// resolve when a {type:"term",event:"data"} frame contains the marker. Node 22
+// (Electron 42's runtime) has a global WebSocket.
 function ptyUnderElectron(port: number): Promise<void> {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
@@ -263,10 +278,15 @@ function ptyUnderElectron(port: number): Promise<void> {
 }
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────
-app.whenReady().then(boot).catch((err) => {
-  console.error("[helmsman] failed to start:", err);
+app.whenReady().then(boot).catch((err: unknown) => {
+  console.error("[helmsman] failed to start:", err instanceof Error ? err.message : err);
   app.quit();
 });
+
+// C2: best-effort sync cleanup for catchable main-process exits (uncaught
+// exceptions, normal exit). Does NOT cover SIGKILL of the Electron main —
+// see the parent-death watchdog in dist/server-entry.mjs for that case.
+process.on("exit", () => { try { serverProc?.kill(); } catch { /* noop */ } });
 
 // macOS: stay in the dock when all windows close (do NOT quit).
 app.on("window-all-closed", () => {
@@ -274,22 +294,31 @@ app.on("window-all-closed", () => {
 });
 
 // macOS: recreate the window when the dock icon is clicked and none exist.
+// M3: if the server has died (serverProc === null), re-boot instead of opening
+// a window that points at a dead port.
 app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0 && serverPort) {
+  if (BrowserWindow.getAllWindows().length > 0) return;
+  if (serverProc) {
     mainWindow = createWindow(serverPort);
+  } else {
+    void boot().catch((err: unknown) =>
+      console.error("[helmsman] re-boot failed:", err instanceof Error ? err.message : err)
+    );
   }
 });
 
-// On quit, SIGTERM the server child. The server's SIGTERM hook runs
-// portForwards.stopAll() then process.exit(0), reaping its kubectl children, so
-// nothing is orphaned.
-app.on("before-quit", () => {
-  if (serverProc) {
-    try {
-      serverProc.kill();
-    } catch {
-      /* already gone */
-    }
-    serverProc = null;
-  }
+// On quit, SIGTERM the server child and wait for it to actually exit before
+// allowing the Electron process to terminate. This gives the server's SIGTERM
+// hook time to run portForwards.stopAll() and reap its kubectl/PTY children.
+// A 3 s timeout prevents a stuck child from hanging the quit indefinitely.
+let quitting = false;
+app.on("before-quit", (event) => {
+  if (!serverProc || quitting) return;
+  quitting = true;
+  event.preventDefault();
+  const child = serverProc;
+  const finish = () => { try { app.exit(0); } catch { /* noop */ } };
+  const t = setTimeout(finish, 3000);
+  child.once("exit", () => { clearTimeout(t); finish(); });
+  try { child.kill(); } catch { clearTimeout(t); finish(); }
 });
