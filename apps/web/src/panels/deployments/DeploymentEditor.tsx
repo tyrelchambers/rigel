@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import type { KVRow } from "@helmsman/k8s";
+import type { KVRow, Secret, ConfigMap } from "@helmsman/k8s";
+import { useCluster } from "@/store/cluster";
+import { subscribe, unsubscribe } from "@/lib/ws";
+import { EnvRefEditor } from "./EnvRefEditor";
 import {
   Sheet,
   SheetContent,
@@ -50,6 +53,26 @@ export function DeploymentEditor({ target, open, onClose, onApplied }: Deploymen
   const [pendingActions, setPendingActions] = useState<ActionBlock[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+
+  const ns = target?.metadata.namespace ?? "default";
+  const resources = useCluster((s) => s.resources);
+
+  // While open, watch secrets + configmaps in the deployment's namespace so the
+  // ref pickers list real resources. Unsubscribed on close.
+  useEffect(() => {
+    if (!open || !target) return;
+    subscribe("secrets", ns);
+    subscribe("configmaps", ns);
+    return () => {
+      unsubscribe("secrets", ns);
+      unsubscribe("configmaps", ns);
+    };
+  }, [open, target, ns]);
+
+  const secrets = (Object.values((resources["secrets"] ?? {}) as Record<string, Secret>))
+    .filter((s) => (s.metadata.namespace ?? "default") === ns);
+  const configMaps = (Object.values((resources["configmaps"] ?? {}) as Record<string, ConfigMap>))
+    .filter((c) => (c.metadata.namespace ?? "default") === ns);
 
   // (Re)seed the form each time the sheet opens on a target.
   useEffect(() => {
@@ -166,6 +189,13 @@ export function DeploymentEditor({ target, open, onClose, onApplied }: Deploymen
                       rows={c.env}
                       onRowsChange={(rows: KVRow[]) => updateContainer(ci, { env: rows })}
                       keyPlaceholder="ENV_NAME"
+                    />
+                    <div className="pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">From Secret / ConfigMap</div>
+                    <EnvRefEditor
+                      rows={c.envRefs}
+                      secrets={secrets}
+                      configMaps={configMaps}
+                      onChange={(rows) => updateContainer(ci, { envRefs: rows })}
                     />
                     {c.otherRefKeys.length > 0 && (
                       <div className="space-y-1 pt-1">
