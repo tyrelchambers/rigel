@@ -36,6 +36,7 @@ import {
   detectLevel,
   splitHighlight,
   distinctPods,
+  distinctContainers,
   sortByTimestamp,
   formatTimestamp,
   podColor,
@@ -64,6 +65,7 @@ export default function LogsPanel() {
   const [error, setError] = useState<string | null>(null);
   const [stickToBottom, setStickToBottom] = useState(true);
   const [expandedLines, setExpandedLines] = useState<Set<string>>(new Set());
+  const [selectedContainer, setSelectedContainer] = useState("");
 
   // Refs so the WS callback and scroll handlers read live values without
   // re-subscribing on every state change.
@@ -108,7 +110,7 @@ export default function LogsPanel() {
       }
       if (isPausedRef.current) return; // process continues; we just drop the line
       if (typeof m.line !== "string") return;
-      const line = toLogLine(m.line);
+      const line = toLogLine(m.line, m.container);
       setLines((prev) => appendLines(prev, [line]));
     });
     return off;
@@ -124,13 +126,14 @@ export default function LogsPanel() {
   // Auto-scroll to the bottom when new lines arrive and the user is at bottom.
   const query = useMemo(() => buildLogQuery(filter, useRegex), [filter, useRegex]);
   const filtered = useMemo(
-    () => sortByTimestamp(filterLines(lines, { hideProbes, errorsOnly, query })),
-    [lines, hideProbes, errorsOnly, query],
+    () => sortByTimestamp(filterLines(lines, { hideProbes, errorsOnly, query, container: selectedContainer })),
+    [lines, hideProbes, errorsOnly, query, selectedContainer],
   );
   // Single-pod streams hide the 150px pod column. Memoized: distinctPods walks
   // the whole buffer, and the bare body would re-run it on every render (incl.
   // scroll-driven stickToBottom updates).
   const collapsePod = useMemo(() => distinctPods(lines).length <= 1, [lines]);
+  const containers = useMemo(() => distinctContainers(lines), [lines]);
   // Auto-follow: when stuck to the bottom, jam to the latest line BEFORE paint
   // (useLayoutEffect) so the view doesn't flash mid-scroll. `overflow-anchor:
   // none` on the scroller stops the browser from shifting scrollTop when sorted
@@ -370,6 +373,20 @@ export default function LogsPanel() {
               >
                 <CircleAlert />
               </Button>
+              {containers.length > 1 && (
+                <select
+                  value={selectedContainer}
+                  onChange={(e) => setSelectedContainer(e.target.value)}
+                  aria-label="Filter by container"
+                  className="rounded-md border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+                  style={{ height: 28 }}
+                >
+                  <option value="">All containers</option>
+                  {containers.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              )}
               {/* One always-mounted status region announces regex errors (a real
                   state change worth hearing). The line count is ambient, not
                   aria-live, so it doesn't announce on every incoming line. */}
