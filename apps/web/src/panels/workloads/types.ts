@@ -93,3 +93,17 @@ export type Workload = StatefulSet | DaemonSet | Job | CronJob;
 
 /** The four resource kinds shown in the toggle bar. */
 export type WorkloadKind = "statefulsets" | "daemonsets" | "jobs" | "cronjobs";
+
+/** Chat-handoff topics offered on each workload row. */
+export type WorkloadTopic = "Errors" | "Logs" | "Explain";
+
+/**
+ * Signature of the panel's chat-handoff helper, passed down to row components
+ * so each row can open the copilot for its resource.
+ */
+export type AskClaudeFn = (
+  kind: string,
+  name: string,
+  namespace: string | undefined,
+  topic: WorkloadTopic,
+) => void;

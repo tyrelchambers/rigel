@@ -1,52 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  RefreshCw,
-  MoveVertical,
-  Trash2,
-  Play,
-  Pause,
-  Zap,
-} from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
-import { viewYaml } from "@/store/yamlViewer";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
-import { ListRow } from "@/panels/components/ListRow";
-import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
-import { TagPill } from "@/panels/components/TagPill";
-import { StatusBadge } from "@/panels/components/StatusBadge";
-import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import type { ActionBlock } from "@/lib/api";
-import type { StatefulSet, DaemonSet, Job, CronJob, WorkloadKind } from "./types";
+import type { StatefulSet, DaemonSet, Job, CronJob, WorkloadKind, WorkloadTopic } from "./types";
 import {
-  relativeAge,
-  readyFraction,
-  statefulSetReady,
-  statefulSetDesired,
-  daemonSetReady,
-  daemonSetDesired,
   jobPhase,
-  jobCompletionsLabel,
-  lastScheduleAgo,
-  cronJobActiveCount,
-  isCronJobSuspended,
+  statefulSetDesired,
   generateTriggerJobName,
   matchesSearch,
   sortWorkloads,
   kindLabel,
 } from "./workloadsDisplay";
+import { StatefulSetRow } from "./StatefulSetRow";
+import { DaemonSetRow } from "./DaemonSetRow";
+import { JobRow } from "./JobRow";
+import { CronJobRow } from "./CronJobRow";
+import { WorkloadScaleDialog } from "./WorkloadScaleDialog";
 
 const KINDS: WorkloadKind[] = ["statefulsets", "daemonsets", "jobs", "cronjobs"];
 
@@ -56,19 +29,6 @@ const PILL_LABEL: Record<WorkloadKind, string> = {
   jobs: "Jobs",
   cronjobs: "CronJobs",
 };
-
-/** Map job phase to StatusBadge variant. */
-function jobPhaseVariant(phase: string): "healthy" | "error" | "pending" | "neutral" {
-  switch (phase) {
-    case "Complete":
-    case "Running":
-      return "healthy";
-    case "Failed":
-      return "error";
-    default:
-      return "pending";
-  }
-}
 
 export default function WorkloadsPanel() {
   const resources = useCluster((s) => s.resources);
@@ -167,7 +127,7 @@ export default function WorkloadsPanel() {
 
   // --- Chat handoff ----------------------------------------------------------
 
-  function askClaude(kind: string, name: string, namespace: string | undefined, topic: "Errors" | "Logs" | "Explain") {
+  function askClaude(kind: string, name: string, namespace: string | undefined, topic: WorkloadTopic) {
     handoffToChat(buildHandoffPrompt(kind, name, namespace, topic));
   }
 
@@ -358,107 +318,18 @@ export default function WorkloadsPanel() {
         {activeKind === "statefulsets" &&
           filteredStatefulSets.map((s) => {
             const k = rowKey(s.metadata.name, s.metadata.namespace, s.metadata.uid);
-            const isOpen = expanded.has(k);
-            const ready = statefulSetReady(s);
-            const desired = statefulSetDesired(s);
-            const allReady = ready === desired;
-
-            const rowMenu = (
-              <>
-                <ContextMenuItem onClick={() => askClaude("statefulset", s.metadata.name, s.metadata.namespace, "Errors")}>Ask Claude: Errors</ContextMenuItem>
-                <ContextMenuItem onClick={() => askClaude("statefulset", s.metadata.name, s.metadata.namespace, "Logs")}>Ask Claude: Logs</ContextMenuItem>
-                <ContextMenuItem onClick={() => askClaude("statefulset", s.metadata.name, s.metadata.namespace, "Explain")}>Ask Claude: Explain</ContextMenuItem>
-                <ContextMenuSeparator />
-                <ContextMenuItem onClick={() => restartStatefulSet(s)}>Restart…</ContextMenuItem>
-                <ContextMenuItem onClick={() => openScale(s)}>Scale…</ContextMenuItem>
-                <ContextMenuItem variant="destructive" onClick={() => deleteStatefulSet(s)}>Delete…</ContextMenuItem>
-                <ContextMenuSeparator />
-                <ContextMenuItem onClick={() => viewYaml("statefulset", s.metadata.name, s.metadata.namespace)}>View YAML…</ContextMenuItem>
-              </>
-            );
-
             return (
-              <ListRow
+              <StatefulSetRow
                 key={k}
-                rowKey={k}
-                isOpen={isOpen}
-                onToggle={() => toggleExpand(k)}
-                contextMenu={rowMenu}
-              >
-                {/* Name */}
-                <button
-                  type="button"
-                  onClick={() => toggleExpand(k)}
-                  className="shrink-0 font-mono text-xs font-medium leading-none hover:underline"
-                  style={{ color: allReady ? "var(--status-running)" : "var(--status-failed)" }}
-                >
-                  {s.metadata.name}
-                </button>
-
-                {/* Namespace chip */}
-                <span
-                  style={{
-                    fontFamily: "ui-monospace, monospace",
-                    fontSize: 10,
-                    color: "var(--fg-tertiary)",
-                    background: "var(--surface-sunken)",
-                    padding: "1px 5px",
-                    borderRadius: 4,
-                    border: "1px solid #26272B",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {s.metadata.namespace ?? "default"}
-                </span>
-
-                {/* Spacer */}
-                <span className="flex-1" />
-
-                {/* Age */}
-                <span
-                  style={{
-                    fontFamily: "ui-monospace, monospace",
-                    fontSize: 10,
-                    color: "var(--fg-tertiary)",
-                    whiteSpace: "nowrap",
-                    flexShrink: 0,
-                  }}
-                >
-                  {relativeAge(s.metadata.creationTimestamp)}
-                </span>
-
-                {/* Ready badge */}
-                <StatusBadge
-                  label={readyFraction(ready, desired)}
-                  variant={allReady ? "healthy" : "error"}
-                  title={`Ready: ${ready}/${desired}`}
-                />
-
-                {/* Actions */}
-                <ActionButtonStrip
-                  onErrors={(e) => { e.stopPropagation(); askClaude("statefulset", s.metadata.name, s.metadata.namespace, "Errors"); }}
-                  onLogs={(e) => { e.stopPropagation(); askClaude("statefulset", s.metadata.name, s.metadata.namespace, "Logs"); }}
-                  onExplain={(e) => { e.stopPropagation(); askClaude("statefulset", s.metadata.name, s.metadata.namespace, "Explain"); }}
-                  extra={[
-                    {
-                      label: "Restart",
-                      Icon: RefreshCw,
-                      onClick: (e) => { e.stopPropagation(); restartStatefulSet(s); },
-                    },
-                    {
-                      label: "Scale",
-                      Icon: MoveVertical,
-                      onClick: (e) => { e.stopPropagation(); openScale(s); },
-                    },
-                    {
-                      label: "Delete",
-                      Icon: Trash2,
-                      onClick: (e) => { e.stopPropagation(); deleteStatefulSet(s); },
-                      destructive: true,
-                    },
-                  ]}
-                />
-              </ListRow>
+                s={s}
+                k={k}
+                isOpen={expanded.has(k)}
+                toggleExpand={toggleExpand}
+                askClaude={askClaude}
+                restartStatefulSet={restartStatefulSet}
+                openScale={openScale}
+                deleteStatefulSet={deleteStatefulSet}
+              />
             );
           })}
 
@@ -466,101 +337,17 @@ export default function WorkloadsPanel() {
         {activeKind === "daemonsets" &&
           filteredDaemonSets.map((d) => {
             const k = rowKey(d.metadata.name, d.metadata.namespace, d.metadata.uid);
-            const isOpen = expanded.has(k);
-            const ready = daemonSetReady(d);
-            const desired = daemonSetDesired(d);
-            const allReady = ready === desired;
-
-            const rowMenu = (
-              <>
-                <ContextMenuItem onClick={() => askClaude("daemonset", d.metadata.name, d.metadata.namespace, "Errors")}>Ask Claude: Errors</ContextMenuItem>
-                <ContextMenuItem onClick={() => askClaude("daemonset", d.metadata.name, d.metadata.namespace, "Logs")}>Ask Claude: Logs</ContextMenuItem>
-                <ContextMenuItem onClick={() => askClaude("daemonset", d.metadata.name, d.metadata.namespace, "Explain")}>Ask Claude: Explain</ContextMenuItem>
-                <ContextMenuSeparator />
-                <ContextMenuItem onClick={() => restartDaemonSet(d)}>Restart…</ContextMenuItem>
-                <ContextMenuItem variant="destructive" onClick={() => deleteDaemonSet(d)}>Delete…</ContextMenuItem>
-                <ContextMenuSeparator />
-                <ContextMenuItem onClick={() => viewYaml("daemonset", d.metadata.name, d.metadata.namespace)}>View YAML…</ContextMenuItem>
-              </>
-            );
-
             return (
-              <ListRow
+              <DaemonSetRow
                 key={k}
-                rowKey={k}
-                isOpen={isOpen}
-                onToggle={() => toggleExpand(k)}
-                contextMenu={rowMenu}
-              >
-                {/* Name */}
-                <button
-                  type="button"
-                  onClick={() => toggleExpand(k)}
-                  className="shrink-0 font-mono text-xs font-medium leading-none hover:underline"
-                  style={{ color: allReady ? "var(--status-running)" : "var(--status-failed)" }}
-                >
-                  {d.metadata.name}
-                </button>
-
-                {/* Namespace chip */}
-                <span
-                  style={{
-                    fontFamily: "ui-monospace, monospace",
-                    fontSize: 10,
-                    color: "var(--fg-tertiary)",
-                    background: "var(--surface-sunken)",
-                    padding: "1px 5px",
-                    borderRadius: 4,
-                    border: "1px solid #26272B",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {d.metadata.namespace ?? "default"}
-                </span>
-
-                {/* Spacer */}
-                <span className="flex-1" />
-
-                {/* Age */}
-                <span
-                  style={{
-                    fontFamily: "ui-monospace, monospace",
-                    fontSize: 10,
-                    color: "var(--fg-tertiary)",
-                    whiteSpace: "nowrap",
-                    flexShrink: 0,
-                  }}
-                >
-                  {relativeAge(d.metadata.creationTimestamp)}
-                </span>
-
-                {/* Ready badge */}
-                <StatusBadge
-                  label={readyFraction(ready, desired)}
-                  variant={allReady ? "healthy" : "error"}
-                  title={`Ready: ${ready}/${desired}`}
-                />
-
-                {/* Actions */}
-                <ActionButtonStrip
-                  onErrors={(e) => { e.stopPropagation(); askClaude("daemonset", d.metadata.name, d.metadata.namespace, "Errors"); }}
-                  onLogs={(e) => { e.stopPropagation(); askClaude("daemonset", d.metadata.name, d.metadata.namespace, "Logs"); }}
-                  onExplain={(e) => { e.stopPropagation(); askClaude("daemonset", d.metadata.name, d.metadata.namespace, "Explain"); }}
-                  extra={[
-                    {
-                      label: "Restart",
-                      Icon: RefreshCw,
-                      onClick: (e) => { e.stopPropagation(); restartDaemonSet(d); },
-                    },
-                    {
-                      label: "Delete",
-                      Icon: Trash2,
-                      onClick: (e) => { e.stopPropagation(); deleteDaemonSet(d); },
-                      destructive: true,
-                    },
-                  ]}
-                />
-              </ListRow>
+                d={d}
+                k={k}
+                isOpen={expanded.has(k)}
+                toggleExpand={toggleExpand}
+                askClaude={askClaude}
+                restartDaemonSet={restartDaemonSet}
+                deleteDaemonSet={deleteDaemonSet}
+              />
             );
           })}
 
@@ -568,98 +355,16 @@ export default function WorkloadsPanel() {
         {activeKind === "jobs" &&
           filteredJobs.map((j) => {
             const k = rowKey(j.metadata.name, j.metadata.namespace, j.metadata.uid);
-            const isOpen = expanded.has(k);
-            const phase = jobPhase(j);
-
-            const rowMenu = (
-              <>
-                <ContextMenuItem onClick={() => askClaude("job", j.metadata.name, j.metadata.namespace, "Errors")}>Ask Claude: Errors</ContextMenuItem>
-                <ContextMenuItem onClick={() => askClaude("job", j.metadata.name, j.metadata.namespace, "Logs")}>Ask Claude: Logs</ContextMenuItem>
-                <ContextMenuItem onClick={() => askClaude("job", j.metadata.name, j.metadata.namespace, "Explain")}>Ask Claude: Explain</ContextMenuItem>
-                <ContextMenuSeparator />
-                <ContextMenuItem variant="destructive" onClick={() => deleteJob(j)}>Delete…</ContextMenuItem>
-                <ContextMenuSeparator />
-                <ContextMenuItem onClick={() => viewYaml("job", j.metadata.name, j.metadata.namespace)}>View YAML…</ContextMenuItem>
-              </>
-            );
-
             return (
-              <ListRow
+              <JobRow
                 key={k}
-                rowKey={k}
-                isOpen={isOpen}
-                onToggle={() => toggleExpand(k)}
-                contextMenu={rowMenu}
-              >
-                {/* Name */}
-                <button
-                  type="button"
-                  onClick={() => toggleExpand(k)}
-                  className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
-                >
-                  {j.metadata.name}
-                </button>
-
-                {/* Namespace chip */}
-                <span
-                  style={{
-                    fontFamily: "ui-monospace, monospace",
-                    fontSize: 10,
-                    color: "var(--fg-tertiary)",
-                    background: "var(--surface-sunken)",
-                    padding: "1px 5px",
-                    borderRadius: 4,
-                    border: "1px solid #26272B",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {j.metadata.namespace ?? "default"}
-                </span>
-
-                {/* Spacer */}
-                <span className="flex-1" />
-
-                {/* Age */}
-                <span
-                  style={{
-                    fontFamily: "ui-monospace, monospace",
-                    fontSize: 10,
-                    color: "var(--fg-tertiary)",
-                    whiteSpace: "nowrap",
-                    flexShrink: 0,
-                  }}
-                >
-                  {relativeAge(j.metadata.creationTimestamp)}
-                </span>
-
-                {/* Completions */}
-                <StatusBadge
-                  label={jobCompletionsLabel(j)}
-                  variant="neutral"
-                  title={`Completions: ${jobCompletionsLabel(j)}`}
-                />
-
-                {/* Phase badge */}
-                <StatusBadge
-                  label={phase}
-                  variant={jobPhaseVariant(phase)}
-                />
-
-                {/* Actions */}
-                <ActionButtonStrip
-                  onErrors={(e) => { e.stopPropagation(); askClaude("job", j.metadata.name, j.metadata.namespace, "Errors"); }}
-                  onLogs={(e) => { e.stopPropagation(); askClaude("job", j.metadata.name, j.metadata.namespace, "Logs"); }}
-                  onExplain={(e) => { e.stopPropagation(); askClaude("job", j.metadata.name, j.metadata.namespace, "Explain"); }}
-                  extra={[
-                    {
-                      label: "Delete",
-                      Icon: Trash2,
-                      onClick: (e) => { e.stopPropagation(); deleteJob(j); },
-                      destructive: true,
-                    },
-                  ]}
-                />
-              </ListRow>
+                j={j}
+                k={k}
+                isOpen={expanded.has(k)}
+                toggleExpand={toggleExpand}
+                askClaude={askClaude}
+                deleteJob={deleteJob}
+              />
             );
           })}
 
@@ -667,136 +372,19 @@ export default function WorkloadsPanel() {
         {activeKind === "cronjobs" &&
           filteredCronJobs.map((c) => {
             const k = rowKey(c.metadata.name, c.metadata.namespace, c.metadata.uid);
-            const isOpen = expanded.has(k);
-            const suspended = isCronJobSuspended(c);
-            const active = cronJobActiveCount(c);
-            const lastSched = lastScheduleAgo(c);
-
-            const rowMenu = (
-              <>
-                <ContextMenuItem onClick={() => askClaude("cronjob", c.metadata.name, c.metadata.namespace, "Errors")}>Ask Claude: Errors</ContextMenuItem>
-                <ContextMenuItem onClick={() => askClaude("cronjob", c.metadata.name, c.metadata.namespace, "Logs")}>Ask Claude: Logs</ContextMenuItem>
-                <ContextMenuItem onClick={() => askClaude("cronjob", c.metadata.name, c.metadata.namespace, "Explain")}>Ask Claude: Explain</ContextMenuItem>
-                <ContextMenuSeparator />
-                <ContextMenuItem onClick={() => triggerCronJob(c)}>Trigger…</ContextMenuItem>
-                {suspended ? (
-                  <ContextMenuItem onClick={() => resumeCronJob(c)}>Resume…</ContextMenuItem>
-                ) : (
-                  <ContextMenuItem onClick={() => suspendCronJob(c)}>Suspend…</ContextMenuItem>
-                )}
-                <ContextMenuItem variant="destructive" onClick={() => deleteCronJob(c)}>Delete…</ContextMenuItem>
-                <ContextMenuSeparator />
-                <ContextMenuItem onClick={() => viewYaml("cronjob", c.metadata.name, c.metadata.namespace)}>View YAML…</ContextMenuItem>
-              </>
-            );
-
             return (
-              <ListRow
+              <CronJobRow
                 key={k}
-                rowKey={k}
-                isOpen={isOpen}
-                onToggle={() => toggleExpand(k)}
-                contextMenu={rowMenu}
-              >
-                {/* Name */}
-                <button
-                  type="button"
-                  onClick={() => toggleExpand(k)}
-                  className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
-                >
-                  {c.metadata.name}
-                </button>
-
-                {/* Namespace chip */}
-                <span
-                  style={{
-                    fontFamily: "ui-monospace, monospace",
-                    fontSize: 10,
-                    color: "var(--fg-tertiary)",
-                    background: "var(--surface-sunken)",
-                    padding: "1px 5px",
-                    borderRadius: 4,
-                    border: "1px solid #26272B",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {c.metadata.namespace ?? "default"}
-                </span>
-
-                {/* Schedule — purple TagPill */}
-                {c.spec?.schedule && <TagPill label={c.spec.schedule} title="Schedule" />}
-
-                {/* Spacer */}
-                <span className="flex-1" />
-
-                {/* Last schedule */}
-                {lastSched && (
-                  <span
-                    style={{
-                      fontFamily: "ui-monospace, monospace",
-                      fontSize: 10,
-                      color: "var(--fg-tertiary)",
-                      whiteSpace: "nowrap",
-                      flexShrink: 0,
-                    }}
-                    title="Last scheduled"
-                  >
-                    {lastSched}
-                  </span>
-                )}
-
-                {/* Active count */}
-                {active > 0 && (
-                  <StatusBadge
-                    label={`${active} active`}
-                    variant="healthy"
-                    title={`${active} active job(s)`}
-                  />
-                )}
-
-                {/* Suspended badge */}
-                {suspended && (
-                  <StatusBadge
-                    label="Suspended"
-                    variant="pending"
-                  />
-                )}
-
-                {/* Actions */}
-                <ActionButtonStrip
-                  onErrors={(e) => { e.stopPropagation(); askClaude("cronjob", c.metadata.name, c.metadata.namespace, "Errors"); }}
-                  onLogs={(e) => { e.stopPropagation(); askClaude("cronjob", c.metadata.name, c.metadata.namespace, "Logs"); }}
-                  onExplain={(e) => { e.stopPropagation(); askClaude("cronjob", c.metadata.name, c.metadata.namespace, "Explain"); }}
-                  extra={[
-                    {
-                      label: "Trigger",
-                      Icon: Zap,
-                      onClick: (e) => { e.stopPropagation(); triggerCronJob(c); },
-                    },
-                    ...(suspended
-                      ? [
-                          {
-                            label: "Resume",
-                            Icon: Play,
-                            onClick: (e: React.MouseEvent) => { e.stopPropagation(); resumeCronJob(c); },
-                          },
-                        ]
-                      : [
-                          {
-                            label: "Suspend",
-                            Icon: Pause,
-                            onClick: (e: React.MouseEvent) => { e.stopPropagation(); suspendCronJob(c); },
-                          },
-                        ]),
-                    {
-                      label: "Delete",
-                      Icon: Trash2,
-                      onClick: (e) => { e.stopPropagation(); deleteCronJob(c); },
-                      destructive: true,
-                    },
-                  ]}
-                />
-              </ListRow>
+                c={c}
+                k={k}
+                isOpen={expanded.has(k)}
+                toggleExpand={toggleExpand}
+                askClaude={askClaude}
+                triggerCronJob={triggerCronJob}
+                suspendCronJob={suspendCronJob}
+                resumeCronJob={resumeCronJob}
+                deleteCronJob={deleteCronJob}
+              />
             );
           })}
       </div>
@@ -811,28 +399,14 @@ export default function WorkloadsPanel() {
       </div>
 
       {/* Scale prompt (StatefulSet) */}
-      <Dialog open={!!scaleTarget} onOpenChange={(o) => { if (!o) setScaleTarget(null); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Scale {scaleTarget?.metadata.name}</DialogTitle>
-            <DialogDescription>Enter replica count (0–50).</DialogDescription>
-          </DialogHeader>
-          <input
-            type="number"
-            min={0}
-            max={50}
-            value={scaleValue}
-            onChange={(e) => setScaleValue(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") confirmScale(); }}
-            className="w-full rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
-            aria-label="Replica count"
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setScaleTarget(null)}>Cancel</Button>
-            <Button onClick={confirmScale}>Scale to {scaleN}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <WorkloadScaleDialog
+        target={scaleTarget}
+        value={scaleValue}
+        onValueChange={setScaleValue}
+        onConfirm={confirmScale}
+        onClose={() => setScaleTarget(null)}
+        scaleN={scaleN}
+      />
 
       <ConfirmSheet
         action={pendingAction}
