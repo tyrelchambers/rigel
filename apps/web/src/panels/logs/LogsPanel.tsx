@@ -535,7 +535,7 @@ export default function LogsPanel() {
 
             {/* Error banner */}
             {error && (
-              <pre className="border-b bg-destructive/10 px-3 py-2 font-mono text-xs text-destructive whitespace-pre-wrap break-all">
+              <pre role="alert" aria-live="assertive" className="border-b bg-destructive/10 px-3 py-2 font-mono text-xs text-destructive whitespace-pre-wrap break-all">
                 {error}
               </pre>
             )}
@@ -576,9 +576,13 @@ export default function LogsPanel() {
                   return (
                     <div
                       key={l.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={expanded}
                       onClick={() => toggleExpand(l.id)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleExpand(l.id); } }}
                       onContextMenu={() => { ctxLineRef.current = l; }}
-                      className="group flex min-h-[18px] cursor-default items-start gap-2 border-l-2 px-2 py-0.5 hover:bg-muted/50"
+                      className="group flex min-h-[18px] cursor-pointer items-start gap-2 border-l-2 px-2 py-0.5 hover:bg-muted/50 focus:bg-muted/60 focus:outline-none"
                       style={{ borderLeftColor: color }}
                     >
                       {!collapsePod && (
