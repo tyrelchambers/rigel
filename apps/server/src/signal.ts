@@ -100,8 +100,10 @@ async function waitForForwardReady(proc: ChildProcess): Promise<void> {
       reject(new PortForwardError("port-forward produced no output"));
       return;
     }
+    let stdoutBuf = "";
     proc.stdout.on("data", (buf: Buffer) => {
-      if (buf.toString("utf8").includes("Forwarding from")) resolve();
+      stdoutBuf += buf.toString("utf8");
+      if (stdoutBuf.includes("Forwarding from")) resolve();
     });
     proc.stdout.on("end", () => {
       reject(new PortForwardError(stderrChunks.join("").trim() || "port-forward exited"));

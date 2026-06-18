@@ -273,9 +273,11 @@ export class PortForwardManager {
     // Drain stderr in the background for the failure message.
     proc.stderr?.on("data", (buf: Buffer) => stderrChunks.push(buf.toString("utf8")));
 
-    // Watch stdout for the ready line.
+    // Watch stdout for the ready line (accumulate across chunk boundaries).
+    let stdoutBuf = "";
     proc.stdout?.on("data", (buf: Buffer) => {
-      if (buf.toString("utf8").includes("Forwarding from")) {
+      stdoutBuf += buf.toString("utf8");
+      if (stdoutBuf.includes("Forwarding from")) {
         const live = this.forwards.get(f.id);
         if (live && live.status === "starting") live.status = "running";
       }

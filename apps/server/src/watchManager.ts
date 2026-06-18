@@ -18,12 +18,12 @@ type Watch = {
 };
 
 export class WatchManager {
-  private context: string | null;
   private watches = new Map<string, Watch>();
 
-  constructor(context: string | null) {
-    this.context = context;
-  }
+  constructor(
+    private context: string | null,
+    private spawnFn: typeof spawn = spawn,
+  ) {}
 
   subscribe(
     sub: Sub,
@@ -55,7 +55,7 @@ export class WatchManager {
       "-o",
       "json",
     ];
-    const proc = spawn(argv[0], argv.slice(1), { stdio: ["ignore", "pipe", "ignore"] });
+    const proc = this.spawnFn(argv[0], argv.slice(1), { stdio: ["ignore", "pipe", "ignore"] });
     const cache = new Map<string, any>();
     const listeners = new Set<(e: WatchEvent) => void>();
     const parser = new WatchEventParser();
@@ -67,6 +67,7 @@ export class WatchManager {
         for (const l of listeners) l(e);
       });
     });
+    proc.on("error", () => this.stop(key)); // ENOENT / spawn failure: tear down rather than crash the server
     return w;
   }
 
