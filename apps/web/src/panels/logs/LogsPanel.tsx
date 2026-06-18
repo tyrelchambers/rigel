@@ -127,7 +127,10 @@ export default function LogsPanel() {
     () => sortByTimestamp(filterLines(lines, { hideProbes, errorsOnly, query })),
     [lines, hideProbes, errorsOnly, query],
   );
-  const collapsePod = distinctPods(lines).length <= 1;
+  // Single-pod streams hide the 150px pod column. Memoized: distinctPods walks
+  // the whole buffer, and the bare body would re-run it on every render (incl.
+  // scroll-driven stickToBottom updates).
+  const collapsePod = useMemo(() => distinctPods(lines).length <= 1, [lines]);
   // Auto-follow: when stuck to the bottom, jam to the latest line BEFORE paint
   // (useLayoutEffect) so the view doesn't flash mid-scroll. `overflow-anchor:
   // none` on the scroller stops the browser from shifting scrollTop when sorted
@@ -367,10 +370,14 @@ export default function LogsPanel() {
               >
                 <CircleAlert />
               </Button>
-              {query.error ? (
-                <span className="font-mono text-[10px] text-destructive" role="status">invalid pattern</span>
-              ) : (
-                <span className="font-mono text-[10px] tabular-nums text-muted-foreground" aria-live="polite">
+              {/* One always-mounted status region announces regex errors (a real
+                  state change worth hearing). The line count is ambient, not
+                  aria-live, so it doesn't announce on every incoming line. */}
+              <span className="font-mono text-[10px] text-destructive" role="status">
+                {query.error ? "invalid pattern" : ""}
+              </span>
+              {!query.error && (
+                <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
                   {filtered.length.toLocaleString()} / {lines.length.toLocaleString()} lines
                 </span>
               )}
