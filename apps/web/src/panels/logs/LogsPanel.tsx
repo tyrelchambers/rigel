@@ -82,6 +82,9 @@ export default function LogsPanel() {
   const stickRef = useRef(stickToBottom);
   stickRef.current = stickToBottom;
   const scrollRef = useRef<HTMLDivElement>(null);
+  // True for the one scroll event our own scrollToIndex() triggers, so onScroll
+  // doesn't misread a mid-commit geometry and spuriously unstick auto-follow.
+  const programmaticScrollRef = useRef(false);
   const linesRef = useRef<LogLine[]>(lines);
   linesRef.current = lines;
   // The log line last right-clicked — read by the single shared context menu
@@ -149,6 +152,7 @@ export default function LogsPanel() {
   // lines insert mid-list, which would otherwise trip onScroll → unstick.
   useLayoutEffect(() => {
     if (stickRef.current && filtered.length > 0) {
+      programmaticScrollRef.current = true;
       rowVirtualizer.scrollToIndex(filtered.length - 1, { align: "end" });
     }
   }, [filtered, rowVirtualizer]);
@@ -209,11 +213,20 @@ export default function LogsPanel() {
 
   const jumpToLatest = useCallback(() => {
     setStickToBottom(true);
-    if (filtered.length > 0) rowVirtualizer.scrollToIndex(filtered.length - 1, { align: "end" });
+    if (filtered.length > 0) {
+      programmaticScrollRef.current = true;
+      rowVirtualizer.scrollToIndex(filtered.length - 1, { align: "end" });
+    }
   }, [filtered.length, rowVirtualizer]);
 
-  // Disable auto-scroll once the user scrolls up; re-enable at the bottom.
+  // Disable auto-scroll once the user scrolls up; re-enable at the bottom. Skip
+  // the scroll event our own scrollToIndex() fired (its geometry can read as
+  // not-quite-bottom mid-commit and would otherwise unstick auto-follow).
   const onScroll = useCallback(() => {
+    if (programmaticScrollRef.current) {
+      programmaticScrollRef.current = false;
+      return;
+    }
     const el = scrollRef.current;
     if (!el) return;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
