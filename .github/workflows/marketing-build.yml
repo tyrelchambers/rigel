@@ -69,5 +69,12 @@ jobs:
           echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
 
-      - name: Restart deployment
-        run: kubectl rollout restart deployment/helmsman-marketing -n default
+      - name: Apply manifests and roll out
+        run: |
+          # Create/update the Deployment + Service (idempotent — works on the
+          # first deploy and every subsequent one). The Ingress is intentionally
+          # left out: it depends on the domain + ingress-nginx/cert-manager, so
+          # it's applied manually from apps/marketing/k8s/ingress.yaml when ready.
+          kubectl apply -f apps/marketing/k8s/deployment.yaml -f apps/marketing/k8s/service.yaml
+          # Force a re-pull of the freshly-pushed :latest image.
+          kubectl rollout restart deployment/helmsman-marketing -n default
