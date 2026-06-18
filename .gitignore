@@ -35,3 +35,6 @@ dist/
 
 # local visual-check scratch (playwright screenshots)
 apps/web/.shots/
+
+# Git worktrees (isolated workspaces)
+.worktrees/
