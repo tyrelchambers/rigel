@@ -339,3 +339,17 @@ describe("filterLines container", () => {
     expect(filterLines(ls, base).length).toBe(2);
   });
 });
+
+describe("filterLines pod isolation", () => {
+  const ls = [
+    { id: "1", sourcePod: "web-a", timestamp: null, text: "a", colorIndex: 0 },
+    { id: "2", sourcePod: "web-b", timestamp: null, text: "b", colorIndex: 0 },
+  ];
+  const base = { hideProbes: false, errorsOnly: false, query: buildLogQuery("", false) };
+  it("keeps only the isolated pod when set", () => {
+    expect(filterLines(ls, { ...base, pod: "web-b" }).map((l) => l.text)).toEqual(["b"]);
+  });
+  it("empty/undefined pod keeps everything", () => {
+    expect(filterLines(ls, base).length).toBe(2);
+  });
+});

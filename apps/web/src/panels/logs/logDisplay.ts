@@ -141,6 +141,8 @@ export interface FilterOptions {
   query: LogQuery;
   /** When non-empty, keep only lines from this container (live client-side filter). */
   container?: string;
+  /** When non-empty, keep only lines from this pod (client-side isolation). */
+  pod?: string;
 }
 
 /**
@@ -154,6 +156,7 @@ export function filterLines(lines: LogLine[], opts: FilterOptions): LogLine[] {
     if (opts.errorsOnly && !isErrorLine(l.text)) return false;
     if (!opts.query.test(l.text)) return false;
     if (opts.container && l.container !== opts.container) return false;
+    if (opts.pod && l.sourcePod !== opts.pod) return false;
     return true;
   });
 }
@@ -235,7 +238,12 @@ export function replicasUnhealthy(d: Deployment): boolean {
  * sorted by key. Returns null when there are no matchLabels (the panel then
  * shows the "deployment has no spec.selector.matchLabels" error).
  */
-export function labelSelector(d: Deployment): string | null {
+/** Anything with `spec.selector.matchLabels` (Deployment/StatefulSet/DaemonSet). */
+export interface Selectable {
+  spec?: { selector?: { matchLabels?: Record<string, string> } };
+}
+
+export function labelSelector(d: Selectable): string | null {
   const labels = d.spec?.selector?.matchLabels ?? {};
   const keys = Object.keys(labels).sort();
   if (keys.length === 0) return null;
