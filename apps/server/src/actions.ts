@@ -372,6 +372,24 @@ export function buildCommand(a: ActionBlock): string[] {
     }
 
     // -----------------------------------------------------------------------
+    // setEnvRef — patch container env vars whose value comes from a Secret or
+    // ConfigMap key. Strategic merge keys containers + env by `name`, so it
+    // adds/updates only the referenced vars. (kubectl set env can't rename a
+    // referenced key, hence the patch.)
+    // -----------------------------------------------------------------------
+    case "setEnvRef": {
+      const wk = workloadKind(a);
+      const env = (a.envRefs ?? []).map((r) => ({
+        name: r.name,
+        valueFrom: r.source === "configMap"
+          ? { configMapKeyRef: { name: r.resourceName, key: r.key } }
+          : { secretKeyRef: { name: r.resourceName, key: r.key } },
+      }));
+      const patch = JSON.stringify({ spec: { template: { spec: { containers: [{ name: a.container, env }] } } } });
+      return ["patch", `${wk}/${target(a)}`, ...ns, "--type=strategic", "-p", patch];
+    }
+
+    // -----------------------------------------------------------------------
     // command — verbatim args (empty strings pre-filtered by Swift, we mirror)
     // -----------------------------------------------------------------------
     case "command":

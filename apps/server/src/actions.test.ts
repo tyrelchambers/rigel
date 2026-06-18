@@ -476,3 +476,33 @@ test("setImagePullSecrets honors resourceKind", () => {
     "-p", '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"reg"}]}}}}',
   ]);
 });
+
+// ---------------------------------------------------------------------------
+// setEnvRef
+// ---------------------------------------------------------------------------
+test("setEnvRef patches a secretKeyRef env var via strategic merge", () => {
+  expect(
+    buildCommand({
+      kind: "setEnvRef", name: "web", namespace: "default", container: "app",
+      envRefs: [{ name: "DB_PASSWORD", source: "secret", resourceName: "app-db", key: "password" }],
+    }),
+  ).toEqual([
+    "patch", "deployment/web", "-n", "default", "--type=strategic",
+    "-p", '{"spec":{"template":{"spec":{"containers":[{"name":"app","env":[{"name":"DB_PASSWORD","valueFrom":{"secretKeyRef":{"name":"app-db","key":"password"}}}]}]}}}}',
+  ]);
+});
+
+test("setEnvRef supports configMapKeyRef and multiple refs", () => {
+  expect(
+    buildCommand({
+      kind: "setEnvRef", name: "web", namespace: "default", container: "app",
+      envRefs: [
+        { name: "LOG_LEVEL", source: "configMap", resourceName: "app-config", key: "log.level" },
+        { name: "TOKEN", source: "secret", resourceName: "app-secrets", key: "token" },
+      ],
+    }),
+  ).toEqual([
+    "patch", "deployment/web", "-n", "default", "--type=strategic",
+    "-p", '{"spec":{"template":{"spec":{"containers":[{"name":"app","env":[{"name":"LOG_LEVEL","valueFrom":{"configMapKeyRef":{"name":"app-config","key":"log.level"}}},{"name":"TOKEN","valueFrom":{"secretKeyRef":{"name":"app-secrets","key":"token"}}}]}]}}}}',
+  ]);
+});
