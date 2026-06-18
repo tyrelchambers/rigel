@@ -10,6 +10,8 @@ import {
   ArrowDown,
   AlignLeft,
   Sparkles,
+  Regex,
+  CircleAlert,
 } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import {
@@ -31,6 +33,9 @@ import {
   appendLines,
   filterLines,
   buildLogQuery,
+  detectLevel,
+  splitHighlight,
+  distinctPods,
   sortByTimestamp,
   formatTimestamp,
   podColor,
@@ -41,7 +46,6 @@ import {
   replicasUnhealthy,
   labelSelector,
   lineContext,
-  isErrorLine,
 } from "./logDisplay";
 
 export default function LogsPanel() {
@@ -55,7 +59,6 @@ export default function LogsPanel() {
   const [hideProbes, setHideProbes] = useState(false);
   const [errorsOnly, setErrorsOnly] = useState(false);
   const [useRegex, setUseRegex] = useState(false);
-  void setErrorsOnly; void setUseRegex; // wired to toolbar buttons in a later task
   const [isPaused, setIsPaused] = useState(false);
   const [wrapLines, setWrapLines] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -124,6 +127,7 @@ export default function LogsPanel() {
     () => sortByTimestamp(filterLines(lines, { hideProbes, errorsOnly, query })),
     [lines, hideProbes, errorsOnly, query],
   );
+  const collapsePod = distinctPods(lines).length <= 1;
   // Auto-follow: when stuck to the bottom, jam to the latest line BEFORE paint
   // (useLayoutEffect) so the view doesn't flash mid-scroll. `overflow-anchor:
   // none` on the scroller stops the browser from shifting scrollTop when sorted
@@ -317,7 +321,9 @@ export default function LogsPanel() {
             {/* Toolbar */}
             <div className="flex items-center gap-2 border-b px-3 py-1.5">
               <div
-                className="flex w-64 items-center gap-1.5 rounded-md border px-2 focus-within:ring-2 focus-within:ring-ring"
+                className={`flex w-64 items-center gap-1.5 rounded-md border px-2 focus-within:ring-2 focus-within:ring-ring ${
+                  query.error ? "border-destructive ring-1 ring-destructive" : ""
+                }`}
                 style={{ background: "var(--surface-sunken)", height: 28 }}
               >
                 <Search className="size-3.5 shrink-0 text-muted-foreground" />
@@ -342,8 +348,36 @@ export default function LogsPanel() {
                 )}
               </div>
               <Button
+                variant={useRegex ? "secondary" : "ghost"}
+                size="icon-sm"
+                aria-label="Use regular expression"
+                aria-pressed={useRegex}
+                title="Regex filter"
+                onClick={() => setUseRegex((r) => !r)}
+              >
+                <Regex />
+              </Button>
+              <Button
+                variant={errorsOnly ? "secondary" : "ghost"}
+                size="icon-sm"
+                aria-label="Errors only"
+                aria-pressed={errorsOnly}
+                title="Show only error / fatal / panic lines"
+                onClick={() => setErrorsOnly((e) => !e)}
+              >
+                <CircleAlert />
+              </Button>
+              {query.error ? (
+                <span className="font-mono text-[10px] text-destructive" role="status">invalid pattern</span>
+              ) : (
+                <span className="font-mono text-[10px] tabular-nums text-muted-foreground" aria-live="polite">
+                  {filtered.length.toLocaleString()} / {lines.length.toLocaleString()} lines
+                </span>
+              )}
+              <Button
                 variant={wrapLines ? "secondary" : "ghost"}
                 size="icon-sm"
+                className="ml-auto"
                 aria-label="Wrap lines"
                 aria-pressed={wrapLines}
                 title="Wrap lines (⌥⌘W)"
@@ -410,7 +444,12 @@ export default function LogsPanel() {
                 {filtered.map((l) => {
                   const expanded = expandedLines.has(l.id);
                   const color = podColor(l.sourcePod);
-                  const err = isErrorLine(l.text);
+                  const level = detectLevel(l.text);
+                  const levelClass =
+                    level === "error" ? "text-red-600 dark:text-red-400"
+                    : level === "warn" ? "text-amber-600 dark:text-amber-400"
+                    : "";
+                  const segments = splitHighlight(l.text, query.ranges(l.text));
                   return (
                     <div
                       key={l.id}
@@ -419,22 +458,32 @@ export default function LogsPanel() {
                       className="group flex min-h-[18px] cursor-default items-start gap-2 border-l-2 px-2 py-0.5 hover:bg-muted/50"
                       style={{ borderLeftColor: color }}
                     >
-                      <span
-                        className="w-[150px] shrink-0 truncate"
-                        style={{ color }}
-                        title={l.sourcePod}
-                      >
-                        {l.sourcePod}
-                      </span>
+                      {!collapsePod && (
+                        <span
+                          className="w-[150px] shrink-0 truncate"
+                          style={{ color }}
+                          title={l.sourcePod}
+                        >
+                          {l.sourcePod}
+                        </span>
+                      )}
                       <span className="w-[80px] shrink-0 text-muted-foreground">
                         {formatTimestamp(l.timestamp)}
                       </span>
                       <span
                         className={`flex-1 ${
                           wrapLines || expanded ? "whitespace-pre-wrap break-all" : "truncate"
-                        } ${err ? "text-red-600 dark:text-red-400" : ""}`}
+                        } ${levelClass}`}
                       >
-                        {l.text}
+                        {segments.map((seg, i) =>
+                          seg.mark ? (
+                            <mark key={i} className="rounded-sm bg-yellow-300/70 text-black dark:bg-yellow-400/80">
+                              {seg.text}
+                            </mark>
+                          ) : (
+                            <span key={i}>{seg.text}</span>
+                          ),
+                        )}
                       </span>
                       {/* Ask Claude — revealed on row hover. */}
                       <button
