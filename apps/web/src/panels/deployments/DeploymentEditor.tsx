@@ -5,13 +5,13 @@ import { subscribe, unsubscribe } from "@/lib/ws";
 import { EnvRefEditor } from "./EnvRefEditor";
 import { ImagePullSecretsField } from "./ImagePullSecretsField";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetFooter,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { KeyValueEditor } from "../components/KeyValueEditor";
 import { BatchConfirmSheet, type BatchConfirmItem } from "@/components/BatchConfirmSheet";
@@ -26,7 +26,7 @@ import {
 // ---------------------------------------------------------------------------
 // DeploymentEditor — inline config editor for a Deployment. Edits replicas,
 // per-container image, CPU/memory requests+limits, and plain-value environment
-// variables in a guided form (shadcn Sheet, same pattern as IngressEditor /
+// variables in a guided form (shadcn Dialog, same pattern as IngressEditor /
 // ConfigMapEditor). On "Review changes" it diffs the form against the live spec
 // (`diffDeployment`) into discrete ActionBlocks (scale / setImage / setResources
 // / setEnv) and hands them to BatchConfirmSheet, which previews the exact kubectl
@@ -132,14 +132,14 @@ export function DeploymentEditor({ target, open, onClose, onApplied }: Deploymen
 
   return (
     <>
-      <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-        <SheetContent side="bottom" className="max-h-[92vh] overflow-auto">
-          <SheetHeader>
-            <SheetTitle>Edit {target?.metadata.name}</SheetTitle>
-            <SheetDescription>
+      <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>Edit {target?.metadata.name}</DialogTitle>
+            <DialogDescription>
               Changes are applied as kubectl commands you review and confirm next. A cleared resource field is left unchanged.
-            </SheetDescription>
-          </SheetHeader>
+            </DialogDescription>
+          </DialogHeader>
 
           {model && (
             <div className="space-y-4 px-4 py-2">
@@ -236,12 +236,12 @@ export function DeploymentEditor({ target, open, onClose, onApplied }: Deploymen
             </pre>
           )}
 
-          <SheetFooter>
+          <DialogFooter>
             <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
             <Button onClick={review} disabled={busy || !model}>{busy ? "Applying…" : "Review changes"}</Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <BatchConfirmSheet
         actions={pendingActions ?? []}
