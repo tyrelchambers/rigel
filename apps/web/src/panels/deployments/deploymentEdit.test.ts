@@ -138,6 +138,36 @@ test("diffDeployment setResources includes both flags when both change to non-em
   ]);
 });
 
+test("editModelFor routes fieldRef/resourceFieldRef env vars to otherRefKeys, not envRefs", () => {
+  const d: Deployment = {
+    metadata: { name: "web", namespace: "default", uid: "u2" },
+    spec: {
+      replicas: 1,
+      template: {
+        spec: {
+          containers: [
+            {
+              name: "app",
+              image: "nginx:1.25",
+              env: [
+                { name: "POD_IP", valueFrom: { fieldRef: { fieldPath: "status.podIP" } } },
+                { name: "CPU_LIMIT", valueFrom: { resourceFieldRef: { resource: "limits.cpu", containerName: "app" } } },
+                { name: "DB_PASS", valueFrom: { secretKeyRef: { name: "db", key: "pass" } } },
+              ],
+            },
+          ],
+        },
+      },
+    },
+  };
+  const m = editModelFor(d);
+  expect(m.containers[0].otherRefKeys).toEqual(["POD_IP", "CPU_LIMIT"]);
+  expect(m.containers[0].envRefs).toEqual([
+    { id: "DB_PASS", name: "DB_PASS", source: "secret", resourceName: "db", key: "pass" },
+  ]);
+  expect(m.containers[0].env).toEqual([]);
+});
+
 test("diffDeployment emits setImagePullSecrets when the list changes", () => {
   const original = dep();
   const edit = editModelFor(original);
@@ -153,8 +183,9 @@ test("diffDeployment emits setImagePullSecrets when the list changes", () => {
 
 test("diffDeployment ignores image-pull-secret reordering (set comparison)", () => {
   const original = dep();
-  const edit = editModelFor(original); // ["ghcr-secret"]
-  edit.imagePullSecrets = ["ghcr-secret"];
+  original.spec!.template!.spec!.imagePullSecrets = [{ name: "a" }, { name: "b" }];
+  const edit = editModelFor(original);
+  edit.imagePullSecrets = ["b", "a"]; // reversed order, same set
   expect(diffDeployment(original, edit)).toEqual([]);
 });
 
