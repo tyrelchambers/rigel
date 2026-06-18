@@ -6,6 +6,7 @@ import { Icon } from "astro-icon/components";
 const links = [
   { label: "The Crew", href: "/#crew" },
   { label: "Features", href: "/features" },
+  { label: "Docs", href: "/docs" },
 ];
 ---
 
@@ -42,7 +43,7 @@ const links = [
 
     <div class="hidden md:block">
       <a
-        href="/#cta"
+        href="/docs/getting-started"
         class="inline-flex items-center rounded-lg bg-accent px-4 py-2.5 text-[13.5px] font-semibold text-fg-inverse transition-colors hover:bg-accent-hover"
       >
         Take the helm
@@ -76,7 +77,7 @@ const links = [
           }
         </ul>
         <a
-          href="/#cta"
+          href="/docs/getting-started"
           class="mt-1 block rounded-md bg-accent px-3 py-2.5 text-center text-sm font-semibold text-fg-inverse"
         >
           Take the helm
