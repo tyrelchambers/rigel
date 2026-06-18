@@ -89,6 +89,10 @@ describe("filterLines", () => {
     const out = filterLines(lines, opts({ errorsOnly: true })).map((l) => l.text);
     expect(out).toEqual(["ERROR something broke"]);
   });
+  it("errorsOnly + hideProbes compose (probe error lines would drop, none here)", () => {
+    const out = filterLines(lines, opts({ errorsOnly: true, hideProbes: true })).map((l) => l.text);
+    expect(out).toEqual(["ERROR something broke"]);
+  });
 });
 
 describe("sortByTimestamp", () => {
@@ -243,7 +247,10 @@ describe("detectLevel", () => {
   });
   it("detects info and debug", () => {
     expect(detectLevel("INFO started")).toBe("info");
-    expect(detectLevel("debug trace here")).toBe("debug");
+    expect(detectLevel("debug here")).toBe("debug");
+  });
+  it("does not color a /trace URL path as debug", () => {
+    expect(detectLevel("GET /api/trace/foo HTTP/1.1")).toBeNull();
   });
   it("returns null when no level token is present", () => {
     expect(detectLevel("just a plain line")).toBeNull();
@@ -276,6 +283,11 @@ describe("splitHighlight", () => {
       { text: "abc", mark: true },
       { text: "d", mark: true },
       { text: "e", mark: false },
+    ]);
+  });
+  it("a range fully inside an earlier range is subsumed", () => {
+    expect(splitHighlight("abcde", [[0, 5], [1, 3]])).toEqual([
+      { text: "abcde", mark: true },
     ]);
   });
 });

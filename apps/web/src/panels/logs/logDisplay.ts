@@ -163,7 +163,7 @@ export function detectLevel(text: string): LogLevel | null {
   if (/\b(?:error|fatal|panic)\b/i.test(text)) return "error";
   if (/\b(?:warn|warning)\b/i.test(text)) return "warn";
   if (/\binfo\b/i.test(text)) return "info";
-  if (/\b(?:debug|trace)\b/i.test(text)) return "debug";
+  if (/\bdebug\b/i.test(text)) return "debug";
   return null;
 }
 
