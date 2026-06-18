@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Search,
   WrapText,
@@ -128,6 +129,14 @@ export default function LogsPanel() {
     () => sortByTimestamp(filterLines(lines, { hideProbes, errorsOnly, query, container: selectedContainer, pod: isolatedPod })),
     [lines, hideProbes, errorsOnly, query, selectedContainer, isolatedPod],
   );
+  const rowVirtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 18,
+    overscan: 24,
+    getItemKey: (i) => filtered[i].id,
+  });
+
   // Single-pod streams hide the 150px pod column. Memoized: distinctPods walks
   // the whole buffer, and the bare body would re-run it on every render (incl.
   // scroll-driven stickToBottom updates).
@@ -139,10 +148,10 @@ export default function LogsPanel() {
   // none` on the scroller stops the browser from shifting scrollTop when sorted
   // lines insert mid-list, which would otherwise trip onScroll → unstick.
   useLayoutEffect(() => {
-    if (stickRef.current && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (stickRef.current && filtered.length > 0) {
+      rowVirtualizer.scrollToIndex(filtered.length - 1, { align: "end" });
     }
-  }, [filtered]);
+  }, [filtered, rowVirtualizer]);
 
   // --- Actions --------------------------------------------------------------
 
@@ -200,8 +209,8 @@ export default function LogsPanel() {
 
   const jumpToLatest = useCallback(() => {
     setStickToBottom(true);
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, []);
+    if (filtered.length > 0) rowVirtualizer.scrollToIndex(filtered.length - 1, { align: "end" });
+  }, [filtered.length, rowVirtualizer]);
 
   // Disable auto-scroll once the user scrolls up; re-enable at the bottom.
   const onScroll = useCallback(() => {
@@ -598,70 +607,57 @@ export default function LogsPanel() {
                     on right-click via ctxLineRef (avoids a menu per line). */}
                 <ContextMenu>
                   <ContextMenuTrigger>
-                {filtered.map((l) => {
-                  const expanded = expandedLines.has(l.id);
-                  const color = podColor(l.sourcePod);
-                  const level = detectLevel(l.text);
-                  const levelClass =
-                    level === "error" ? "text-red-600 dark:text-red-400"
-                    : level === "warn" ? "text-amber-600 dark:text-amber-400"
-                    : "";
-                  const segments = splitHighlight(l.text, query.ranges(l.text));
-                  return (
-                    <div
-                      key={l.id}
-                      role="button"
-                      tabIndex={0}
-                      aria-expanded={expanded}
-                      onClick={() => toggleExpand(l.id)}
-                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleExpand(l.id); } }}
-                      onContextMenu={() => { ctxLineRef.current = l; }}
-                      className="group flex min-h-[18px] cursor-pointer items-start gap-2 border-l-2 px-2 py-0.5 hover:bg-muted/50 focus:bg-muted/60 focus:outline-none"
-                      style={{ borderLeftColor: color }}
-                    >
-                      {!collapsePod && (
-                        <span
-                          className="w-[150px] shrink-0 truncate"
-                          style={{ color }}
-                          title={l.sourcePod}
-                        >
-                          {l.sourcePod}
-                        </span>
-                      )}
-                      <span className="w-[80px] shrink-0 text-muted-foreground">
-                        {formatTimestamp(l.timestamp)}
-                      </span>
-                      <span
-                        className={`flex-1 ${
-                          wrapLines || expanded ? "whitespace-pre-wrap break-all" : "truncate"
-                        } ${levelClass}`}
-                      >
-                        {segments.map((seg, i) =>
-                          seg.mark ? (
-                            <mark key={i} className="rounded-sm bg-yellow-300/70 text-black dark:bg-yellow-400/80">
-                              {seg.text}
-                            </mark>
-                          ) : (
-                            <span key={i}>{seg.text}</span>
-                          ),
-                        )}
-                      </span>
-                      {/* Ask Claude — revealed on row hover. */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          askClaude(l);
-                        }}
-                        aria-label="Ask Claude about this line"
-                        title="Ask Claude about this line"
-                        className="shrink-0 text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100"
-                      >
-                        <Sparkles className="size-3.5" />
-                      </button>
+                    <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative", width: "100%" }}>
+                      {rowVirtualizer.getVirtualItems().map((vi) => {
+                        const l = filtered[vi.index];
+                        const expanded = expandedLines.has(l.id);
+                        const color = podColor(l.sourcePod);
+                        const level = detectLevel(l.text);
+                        const levelClass =
+                          level === "error" ? "text-red-600 dark:text-red-400"
+                          : level === "warn" ? "text-amber-600 dark:text-amber-400"
+                          : "";
+                        const segments = splitHighlight(l.text, query.ranges(l.text));
+                        return (
+                          <div
+                            key={vi.key}
+                            data-index={vi.index}
+                            ref={rowVirtualizer.measureElement}
+                            role="button"
+                            tabIndex={0}
+                            aria-expanded={expanded}
+                            onClick={() => toggleExpand(l.id)}
+                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleExpand(l.id); } }}
+                            onContextMenu={() => { ctxLineRef.current = l; }}
+                            className="group flex min-h-[18px] cursor-pointer items-start gap-2 border-l-2 px-2 py-0.5 hover:bg-muted/50 focus:bg-muted/60 focus:outline-none"
+                            style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vi.start}px)`, borderLeftColor: color }}
+                          >
+                            {!collapsePod && (
+                              <span className="w-[150px] shrink-0 truncate" style={{ color }} title={l.sourcePod}>{l.sourcePod}</span>
+                            )}
+                            <span className="w-[80px] shrink-0 text-muted-foreground">{formatTimestamp(l.timestamp)}</span>
+                            <span className={`flex-1 ${wrapLines || expanded ? "whitespace-pre-wrap break-all" : "truncate"} ${levelClass}`}>
+                              {segments.map((seg, i) =>
+                                seg.mark ? (
+                                  <mark key={i} className="rounded-sm bg-yellow-300/70 text-black dark:bg-yellow-400/80">{seg.text}</mark>
+                                ) : (
+                                  <span key={i}>{seg.text}</span>
+                                ),
+                              )}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); askClaude(l); }}
+                              aria-label="Ask Claude about this line"
+                              title="Ask Claude about this line"
+                              className="shrink-0 text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100"
+                            >
+                              <Sparkles className="size-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
                   </ContextMenuTrigger>
                   <ContextMenuContent>
                     <ContextMenuItem onClick={() => { const l = ctxLineRef.current; if (l) askClaude(l); }}>
