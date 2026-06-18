@@ -27,7 +27,7 @@ import { handoffToChat } from "@/lib/chatHandoff";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem } from "@/components/ui/context-menu";
 import { LoadingState } from "@/panels/components/LoadingState";
-import type { Deployment } from "../deployments/types";
+import { type LogKind, LOG_KINDS, type SidebarItem, buildSidebarItems } from "./logTargets";
 import {
   type LogLine,
   toLogLine,
@@ -41,12 +41,6 @@ import {
   sortByTimestamp,
   formatTimestamp,
   podColor,
-  deploymentColor,
-  deploymentKey,
-  sortDeployments,
-  replicaText,
-  replicasUnhealthy,
-  labelSelector,
   lineContext,
 } from "./logDisplay";
 
@@ -55,7 +49,10 @@ export default function LogsPanel() {
   const isLoading = useCluster((s) => s.isLoading);
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
 
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [logKind, setLogKind] = useState<LogKind>("deployments");
+  const [sidebarSearch, setSidebarSearch] = useState("");
+  const [selectedItem, setSelectedItem] = useState<SidebarItem | null>(null);
+  const [isolatedPod, setIsolatedPod] = useState("");
   const [lines, setLines] = useState<LogLine[]>([]);
   const [filter, setFilter] = useState("");
   const [hideProbes, setHideProbes] = useState(false);
@@ -84,26 +81,18 @@ export default function LogsPanel() {
   // (one menu for the whole list, so we don't mount 5000 ContextMenu roots).
   const ctxLineRef = useRef<LogLine | null>(null);
 
-  // Subscribe to the deployments watch for the sidebar list. Pods are streamed
-  // implicitly via the kubectl logs label selector (not watched here).
+  // Subscribe to the active kind watch for the sidebar list.
   useEffect(() => {
     const ns = namespaceFilter ?? "*";
-    subscribe("deployments", ns);
-    return () => unsubscribe("deployments", ns);
-  }, [namespaceFilter]);
+    subscribe(logKind, ns);
+    return () => unsubscribe(logKind, ns);
+  }, [namespaceFilter, logKind]);
 
-  const deployments = useMemo(
-    () =>
-      sortDeployments(
-        Object.values((resources["deployments"] ?? {}) as Record<string, Deployment>),
-      ),
-    [resources],
+  const items = useMemo(
+    () => buildSidebarItems(resources, logKind, sidebarSearch),
+    [resources, logKind, sidebarSearch],
   );
-
-  const selected = useMemo(
-    () => deployments.find((d) => deploymentKey(d) === selectedKey) ?? null,
-    [deployments, selectedKey],
-  );
+  const selectedKey = selectedItem?.key ?? null;
 
   // Inbound log lines: append (unless paused) and append errors to the banner.
   useEffect(() => {
@@ -130,8 +119,8 @@ export default function LogsPanel() {
   // Auto-scroll to the bottom when new lines arrive and the user is at bottom.
   const query = useMemo(() => buildLogQuery(filter, useRegex), [filter, useRegex]);
   const filtered = useMemo(
-    () => sortByTimestamp(filterLines(lines, { hideProbes, errorsOnly, query, container: selectedContainer })),
-    [lines, hideProbes, errorsOnly, query, selectedContainer],
+    () => sortByTimestamp(filterLines(lines, { hideProbes, errorsOnly, query, container: selectedContainer, pod: isolatedPod })),
+    [lines, hideProbes, errorsOnly, query, selectedContainer, isolatedPod],
   );
   // Single-pod streams hide the 150px pod column. Memoized: distinctPods walks
   // the whole buffer, and the bare body would re-run it on every render (incl.
@@ -150,14 +139,13 @@ export default function LogsPanel() {
 
   // --- Actions --------------------------------------------------------------
 
-  // (Re)issue the kubectl-logs stream for a deployment with the current options.
+  // (Re)issue the kubectl-logs stream for a SidebarItem with the current options.
   // `previous` is a one-shot (no -f) dump of the crashed container; in that mode
   // the selected container (if any) is passed to the server as -c.
   const startStream = useCallback(
-    (d: Deployment, o: { previous: boolean; since: string; tailLines: number; container: string }) => {
-      const selector = labelSelector(d);
-      if (!selector) {
-        setError("deployment has no spec.selector.matchLabels");
+    (item: SidebarItem, o: { previous: boolean; since: string; tailLines: number; container: string }) => {
+      if (!item.selector && !item.pod) {
+        setError("no label selector or pod to tail");
         return;
       }
       sendLogsStop();
@@ -167,8 +155,9 @@ export default function LogsPanel() {
       setStickToBottom(true);
       sendLogsStart(
         [{
-          namespace: d.metadata.namespace ?? "default",
-          labelSelector: selector,
+          namespace: item.namespace,
+          labelSelector: item.selector ?? undefined,
+          pod: item.pod ?? undefined,
           previous: o.previous,
           since: o.since || undefined,
           container: o.previous && o.container ? o.container : undefined,
@@ -179,16 +168,17 @@ export default function LogsPanel() {
     [],
   );
 
-  const selectDeployment = useCallback((d: Deployment) => {
-    setSelectedKey(deploymentKey(d));
+  const selectItem = useCallback((item: SidebarItem) => {
+    setSelectedItem(item);
     setSelectedContainer("");
     setPrevious(false);
-    startStream(d, { previous: false, since, tailLines, container: "" });
+    setIsolatedPod("");
+    startStream(item, { previous: false, since, tailLines, container: "" });
   }, [startStream, since, tailLines]);
 
   const closeStream = useCallback(() => {
     sendLogsStop();
-    setSelectedKey(null);
+    setSelectedItem(null);
     setLines([]);
     setExpandedLines(new Set());
     setError(null);
@@ -232,23 +222,23 @@ export default function LogsPanel() {
     if (next.since !== undefined) setSince(next.since);
     if (next.previous !== undefined) setPrevious(next.previous);
     if (next.container !== undefined) setSelectedContainer(next.container);
-    if (selected) startStream(selected, { previous: p, since: s, tailLines: t, container: c });
+    if (selectedItem) startStream(selectedItem, { previous: p, since: s, tailLines: t, container: c });
   }
 
   // Ask Claude about a line: hand the line + 5 before/after (11 total) to chat.
   const askClaude = useCallback(
     (line: LogLine) => {
       const ctx = lineContext(linesRef.current, line.id);
-      const ns = selected?.metadata.namespace ?? "default";
-      const name = selected?.metadata.name ?? "deployment";
+      const ns = selectedItem?.namespace ?? "default";
+      const name = selectedItem?.name ?? "source";
       const block = ctx
         .map((l) => `${l.sourcePod} ${formatTimestamp(l.timestamp)} ${l.text}`.trim())
         .join("\n");
       handoffToChat(
-        `Investigate this log line from deployment ${name} in namespace ${ns}:\n\n${line.text}\n\nSurrounding context:\n${block}`,
+        `Investigate this log line from ${name} in namespace ${ns}:\n\n${line.text}\n\nSurrounding context:\n${block}`,
       );
     },
-    [selected],
+    [selectedItem],
   );
 
   // ⌥⌘W toggles wrap lines (only meaningful while a stream is open).
@@ -271,54 +261,61 @@ export default function LogsPanel() {
           className="flex shrink-0 items-center gap-2 border-b px-3"
           style={{ height: 42, background: "var(--surface-elevated)" }}
         >
-          <h2 className="text-sm font-semibold">Deployments</h2>
+          <h2 className="text-sm font-semibold">Sources</h2>
           <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-mono text-muted-foreground">
-            {deployments.length}
+            {items.length}
           </span>
         </div>
+        <div className="flex shrink-0 border-b text-xs">
+          {LOG_KINDS.map(({ kind, label }) => (
+            <button
+              key={kind}
+              type="button"
+              onClick={() => { setLogKind(kind); setSelectedItem(null); }}
+              aria-pressed={logKind === kind}
+              className={`flex-1 py-1.5 ${logKind === kind ? "border-b-2 border-primary font-medium" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="shrink-0 border-b px-2 py-1.5">
+          <input
+            type="text"
+            value={sidebarSearch}
+            onChange={(e) => setSidebarSearch(e.target.value)}
+            placeholder="Search…"
+            aria-label="Search sources"
+            className="w-full rounded-md border bg-background px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
         <div className="flex-1 overflow-auto">
-          {isLoading && deployments.length === 0 ? (
-            <LoadingState message="Loading deployments…" />
-          ) : deployments.length === 0 ? (
-            <p className="px-3 py-4 text-xs text-muted-foreground">No deployments</p>
+          {isLoading && items.length === 0 ? (
+            <LoadingState message="Loading…" />
+          ) : items.length === 0 ? (
+            <p className="px-3 py-4 text-xs text-muted-foreground">No sources</p>
           ) : (
             <ul>
-              {deployments.map((d) => {
-                const k = deploymentKey(d);
-                const ns = d.metadata.namespace ?? "default";
-                const accent = deploymentColor(ns, d.metadata.name);
-                const isSel = k === selectedKey;
-                return (
-                  <li key={k}>
-                    <button
-                      type="button"
-                      onClick={() => selectDeployment(d)}
-                      className={`flex w-full items-center gap-2 border-l-2 px-3 py-1.5 text-left hover:bg-muted ${
-                        isSel ? "bg-muted" : ""
-                      }`}
-                      style={{ borderLeftColor: accent }}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate font-mono text-xs font-medium">
-                          {d.metadata.name}
-                        </div>
-                        <div className="truncate font-mono text-[10px] text-muted-foreground">
-                          {ns}
-                        </div>
-                      </div>
-                      <span
-                        className={`font-mono text-[10px] ${
-                          replicasUnhealthy(d)
-                            ? "text-red-600 dark:text-red-400"
-                            : "text-muted-foreground"
-                        }`}
-                      >
-                        {replicaText(d)}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
+              {items.map((it) => (
+                <li key={it.key}>
+                  <button
+                    type="button"
+                    onClick={() => selectItem(it)}
+                    className={`flex w-full items-center gap-2 border-l-2 px-3 py-1.5 text-left hover:bg-muted ${
+                      it.key === selectedKey ? "bg-muted" : ""
+                    }`}
+                    style={{ borderLeftColor: podColor(it.name) }}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-mono text-xs font-medium">{it.name}</div>
+                      <div className="truncate font-mono text-[10px] text-muted-foreground">{it.namespace}</div>
+                    </div>
+                    <span className={`font-mono text-[10px] ${it.unhealthy ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}>
+                      {it.statusText}
+                    </span>
+                  </button>
+                </li>
+              ))}
             </ul>
           )}
         </div>
@@ -326,12 +323,12 @@ export default function LogsPanel() {
 
       {/* Stream pane */}
       <section className="flex min-w-0 flex-1 flex-col">
-        {!selected ? (
+        {!selectedItem ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center text-muted-foreground">
             <AlignLeft className="size-8" />
-            <p className="text-sm font-medium">Pick a deployment to tail its logs</p>
+            <p className="text-sm font-medium">Pick a source to tail its logs</p>
             <p className="text-xs">
-              Click any deployment on the left to open a live log stream here.
+              Click any item on the left to open a live log stream here.
             </p>
           </div>
         ) : (
@@ -343,11 +340,11 @@ export default function LogsPanel() {
             >
               <span
                 className="inline-block size-3 shrink-0 rounded-full"
-                style={{ backgroundColor: deploymentColor(selected.metadata.namespace ?? "default", selected.metadata.name) }}
+                style={{ backgroundColor: podColor(selectedItem.name) }}
               />
-              <span className="font-mono text-sm font-semibold">{selected.metadata.name}</span>
+              <span className="font-mono text-sm font-semibold">{selectedItem.name}</span>
               <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                {selected.metadata.namespace ?? "default"}
+                {selectedItem.namespace}
               </span>
               <Button
                 variant="ghost"
