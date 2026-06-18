@@ -6,7 +6,7 @@
 // the guarded ConfirmSheet (no new mutation path).
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Copy, Check, FileCode, Pencil, Play } from "lucide-react";
+import { Copy, Check, FileCode, Pencil, Play, X } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -72,9 +72,9 @@ export function ResourceYamlViewer() {
   return (
     <>
       <Dialog open onOpenChange={(o) => { if (!o) close(); }}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader className="flex-row items-start gap-3">
-            <FileCode className="mt-0.5 size-5 shrink-0" style={{ color: "var(--accent-primary)" }} />
+        <DialogContent showCloseButton={false} className="max-w-4xl">
+          <DialogHeader className="flex-row items-center gap-3">
+            <FileCode className="size-5 shrink-0" style={{ color: "var(--accent-primary)" }} />
             <div className="flex min-w-0 flex-1 flex-col">
               <DialogTitle className="truncate font-mono text-[15px]">{title}</DialogTitle>
               <DialogDescription className="text-xs">
@@ -96,6 +96,9 @@ export function ResourceYamlViewer() {
                 {copied ? "Copied" : "Copy"}
               </Button>
             )}
+            <Button variant="ghost" size="icon-sm" className="shrink-0 text-muted-foreground" onClick={close} aria-label="Close">
+              <X className="size-4" />
+            </Button>
           </DialogHeader>
 
           {isLoading ? (
@@ -104,17 +107,17 @@ export function ResourceYamlViewer() {
             <pre className="max-h-[60vh] overflow-auto rounded-lg bg-destructive/10 p-3 text-xs font-mono text-destructive whitespace-pre-wrap">
               {error instanceof Error ? error.message : String(error)}
             </pre>
-          ) : editing ? (
-            <div style={{ height: "65vh", borderRadius: 8, overflow: "hidden", border: "1px solid #26272B" }}>
-              <YamlEditor value={draft} onChange={setDraft} schema={schema ?? null} />
-            </div>
           ) : (
-            <pre
-              className="max-h-[65vh] overflow-auto rounded-lg p-3 text-xs font-mono leading-5 whitespace-pre"
-              style={{ background: "#08080A", border: "1px solid #26272B" }}
-            >
-              {data}
-            </pre>
+            <div style={{ height: "65vh", borderRadius: 8, overflow: "hidden", border: "1px solid #26272B" }}>
+              {/* Edit mode is schema-aware; read-only view is syntax-highlight only
+                  (no validation squiggles on a manifest you can't edit). */}
+              <YamlEditor
+                value={editing ? draft : (data ?? "")}
+                onChange={editing ? setDraft : undefined}
+                readOnly={!editing}
+                schema={editing ? (schema ?? null) : null}
+              />
+            </div>
           )}
         </DialogContent>
       </Dialog>
