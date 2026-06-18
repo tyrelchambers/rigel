@@ -22,6 +22,7 @@ import {
   selectorString,
   matchesSearch,
   sortDeployments,
+  namespaceOptions,
 } from "./deploymentDisplay";
 
 function dep(overrides: Partial<Deployment> = {}): Deployment {
@@ -275,5 +276,13 @@ describe("hasErrorPods", () => {
   });
   test("false with no matching pods", () => {
     expect(hasErrorPods(dep({ spec: { selector: { matchLabels: { app: "web" } } } }), [])).toBe(false);
+  });
+});
+
+describe("namespaceOptions", () => {
+  test("merges, dedupes and sorts deployment + store namespaces", () => {
+    const a = dep({ metadata: { name: "x", namespace: "prod", uid: "1" } });
+    const b = dep({ metadata: { name: "y", namespace: "dev", uid: "2" } });
+    expect(namespaceOptions([a, b], { staging: {}, prod: {} })).toEqual(["dev", "prod", "staging"]);
   });
 });
