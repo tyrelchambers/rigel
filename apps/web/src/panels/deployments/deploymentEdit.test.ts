@@ -137,3 +137,32 @@ test("diffDeployment setResources includes both flags when both change to non-em
     },
   ]);
 });
+
+test("diffDeployment emits setImagePullSecrets when the list changes", () => {
+  const original = dep();
+  const edit = editModelFor(original);
+  edit.imagePullSecrets = ["ghcr-secret", "dockerhub"];
+  expect(diffDeployment(original, edit)).toEqual([
+    {
+      kind: "setImagePullSecrets", name: "web", namespace: "default",
+      imagePullSecrets: ["ghcr-secret", "dockerhub"],
+      label: "Set image pull secrets: ghcr-secret, dockerhub",
+    },
+  ]);
+});
+
+test("diffDeployment ignores image-pull-secret reordering (set comparison)", () => {
+  const original = dep();
+  const edit = editModelFor(original); // ["ghcr-secret"]
+  edit.imagePullSecrets = ["ghcr-secret"];
+  expect(diffDeployment(original, edit)).toEqual([]);
+});
+
+test("diffDeployment emits a clear label when image pull secrets are removed", () => {
+  const original = dep();
+  const edit = editModelFor(original);
+  edit.imagePullSecrets = [];
+  expect(diffDeployment(original, edit)).toEqual([
+    { kind: "setImagePullSecrets", name: "web", namespace: "default", imagePullSecrets: [], label: "Clear image pull secrets" },
+  ]);
+});

@@ -391,5 +391,21 @@ export function diffDeployment(original: Deployment, edit: DeploymentEdit): Acti
     }
   }
 
+  // imagePullSecrets — order-insensitive set comparison; emit the full desired list.
+  const origIPS = (original.spec?.template?.spec?.imagePullSecrets ?? []).map((s) => s.name);
+  const editIPS = edit.imagePullSecrets;
+  const ipsChanged =
+    origIPS.length !== editIPS.length ||
+    [...origIPS].sort().join(" ") !== [...editIPS].sort().join(" ");
+  if (ipsChanged) {
+    actions.push({
+      kind: "setImagePullSecrets",
+      name,
+      namespace,
+      imagePullSecrets: editIPS,
+      label: editIPS.length ? `Set image pull secrets: ${editIPS.join(", ")}` : "Clear image pull secrets",
+    });
+  }
+
   return actions;
 }
