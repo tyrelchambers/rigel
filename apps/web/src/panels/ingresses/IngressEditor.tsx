@@ -24,6 +24,8 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { KeyValueEditor } from "../components/KeyValueEditor";
+import { YamlEditor } from "@/components/YamlEditorLazy";
+import { useClusterYamlSchema } from "@/lib/useClusterYamlSchema";
 import { Plus, Minus } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -71,6 +73,7 @@ export function IngressEditor({ target, open, onClose, onApplied }: IngressEdito
   const [yamlText, setYamlText] = useState("");
   const [busy, setBusy] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const { data: schema } = useClusterYamlSchema();
 
   // (Re)seed the form each time the sheet opens on a target.
   useEffect(() => {
@@ -326,12 +329,9 @@ export function IngressEditor({ target, open, onClose, onApplied }: IngressEdito
             <p className="text-xs text-muted-foreground">
               Edit the manifest directly. Switching back to <b>Form</b> rebuilds this from the fields (raw edits are discarded). Applied with <code className="font-mono">kubectl apply -f -</code>.
             </p>
-            <textarea
-              value={yamlText}
-              spellCheck={false}
-              onChange={(e) => setYamlText(e.target.value)}
-              className="h-[52vh] w-full resize-none rounded-md border bg-background px-3 py-2 text-xs font-mono outline-none focus:ring-2 focus:ring-ring"
-            />
+            <div className="h-[52vh] w-full overflow-hidden rounded-md border" style={{ background: "#0B0C0E", borderColor: "#26272B" }}>
+              <YamlEditor value={yamlText} onChange={setYamlText} schema={schema ?? null} />
+            </div>
           </div>
         )}
 
