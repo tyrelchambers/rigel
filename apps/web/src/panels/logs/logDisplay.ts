@@ -141,6 +141,8 @@ export interface FilterOptions {
   query: LogQuery;
   /** When non-empty, keep only lines from this container (live client-side filter). */
   container?: string;
+  /** When non-empty, keep only lines from this pod (client-side isolation). */
+  pod?: string;
 }
 
 /**
@@ -154,6 +156,7 @@ export function filterLines(lines: LogLine[], opts: FilterOptions): LogLine[] {
     if (opts.errorsOnly && !isErrorLine(l.text)) return false;
     if (!opts.query.test(l.text)) return false;
     if (opts.container && l.container !== opts.container) return false;
+    if (opts.pod && l.sourcePod !== opts.pod) return false;
     return true;
   });
 }
