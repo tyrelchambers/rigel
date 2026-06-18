@@ -31,6 +31,10 @@
  * deleteNamespace  delete namespace <name>
  * deleteResource   varies by resourceKind (see resolveDeleteResource); RBAC cluster-scoped
  *                  kinds (clusterrole/clusterrolebinding) have no -n flag.
+ * setImagePullSecrets patch <workloadKind>/<name> -n <ns> --type=merge -p {"spec":{"template":{"spec":{"imagePullSecrets":[{"name":...}]}}}}
+ *                    Full desired list (merge patch replaces the array; [] clears).
+ * setEnvRef        patch <workloadKind>/<name> -n <ns> --type=strategic -p {... containers[].env[] valueFrom secret/configMapKeyRef ...}
+ *                    Per-container; strategic merge keys containers+env by name. Requires container.
  * command          args[] verbatim (pre-filtered empty strings by Swift)
  * purge            throws PurgeActionError — handled by the client purge flow, not kubectl.
  */
@@ -82,6 +86,10 @@ export interface ActionBlock {
   title?: string;
   body?: string;
   content?: string;
+  /** setImagePullSecrets only — desired full list of imagePullSecret names. */
+  imagePullSecrets?: string[];
+  /** setEnvRef only — env vars sourced from a Secret/ConfigMap key. */
+  envRefs?: Array<{ name: string; source: "secret" | "configMap"; resourceName: string; key: string }>;
 }
 
 /** Thrown when `kind === "purge"` — not a kubectl command; caller opens purge flow. */
@@ -353,6 +361,37 @@ export function buildCommand(a: ActionBlock): string[] {
         "helmsman.dev/source-path-",
         ...ns,
       ];
+    }
+
+    // -----------------------------------------------------------------------
+    // setImagePullSecrets — patch spec.template.spec.imagePullSecrets (full
+    // desired list). JSON merge patch replaces the array, so detach/clear works
+    // by sending a shorter list or [].
+    // -----------------------------------------------------------------------
+    case "setImagePullSecrets": {
+      const wk = workloadKind(a);
+      const list = (a.imagePullSecrets ?? []).map((n) => ({ name: n }));
+      const patch = JSON.stringify({ spec: { template: { spec: { imagePullSecrets: list } } } });
+      return ["patch", `${wk}/${target(a)}`, ...ns, "--type=merge", "-p", patch];
+    }
+
+    // -----------------------------------------------------------------------
+    // setEnvRef — patch container env vars whose value comes from a Secret or
+    // ConfigMap key. Strategic merge keys containers + env by `name`, so it
+    // adds/updates only the referenced vars. (kubectl set env can't rename a
+    // referenced key, hence the patch.)
+    // -----------------------------------------------------------------------
+    case "setEnvRef": {
+      if (!a.container) throw new Error("setEnvRef requires a container name (strategic-merge key)");
+      const wk = workloadKind(a);
+      const env = (a.envRefs ?? []).map((r) => ({
+        name: r.name,
+        valueFrom: r.source === "configMap"
+          ? { configMapKeyRef: { name: r.resourceName, key: r.key } }
+          : { secretKeyRef: { name: r.resourceName, key: r.key } },
+      }));
+      const patch = JSON.stringify({ spec: { template: { spec: { containers: [{ name: a.container, env }] } } } });
+      return ["patch", `${wk}/${target(a)}`, ...ns, "--type=strategic", "-p", patch];
     }
 
     // -----------------------------------------------------------------------

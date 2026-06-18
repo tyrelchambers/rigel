@@ -20,6 +20,7 @@ function dep(): Deployment {
               resources: { requests: { cpu: "100m", memory: "128Mi" }, limits: { memory: "256Mi" } },
             },
           ],
+          imagePullSecrets: [{ name: "ghcr-secret" }],
         },
       },
     },
@@ -35,7 +36,11 @@ test("editModelFor splits plain vs ref env and reads replicas/image/resources", 
   expect(m.containers[0].memLim).toBe("256Mi");
   expect(m.containers[0].cpuLim).toBe("");
   expect(m.containers[0].env).toEqual([{ id: "LOG_LEVEL", key: "LOG_LEVEL", value: "info" }]);
-  expect(m.containers[0].refEnvKeys).toEqual(["DB_PASS"]);
+  expect(m.containers[0].envRefs).toEqual([
+    { id: "DB_PASS", name: "DB_PASS", source: "secret", resourceName: "db", key: "pass" },
+  ]);
+  expect(m.containers[0].otherRefKeys).toEqual([]);
+  expect(m.imagePullSecrets).toEqual(["ghcr-secret"]);
 });
 
 test("diffDeployment returns empty when nothing changed", () => {
@@ -81,7 +86,7 @@ test("diffDeployment emits setEnv with adds, edits, and removals", () => {
     { id: "LOG_LEVEL", key: "LOG_LEVEL", value: "debug" }, // modified
     { id: "NEW", key: "NEW", value: "1" },                 // added
   ];                                       // (LOG_LEVEL kept, original had only LOG_LEVEL plain)
-  edit.containers[0].refEnvKeys = [];      // removed the DB_PASS ref var
+  edit.containers[0].envRefs = [];          // removed the DB_PASS ref var
   expect(diffDeployment(original, edit)).toEqual([
     {
       kind: "setEnv", name: "web", namespace: "default", container: "app",
@@ -129,6 +134,114 @@ test("diffDeployment setResources includes both flags when both change to non-em
       kind: "setResources", name: "web", namespace: "default", container: "app",
       requests: "cpu=200m,memory=128Mi", limits: "memory=512Mi",
       label: "Update app resources",
+    },
+  ]);
+});
+
+test("editModelFor routes fieldRef/resourceFieldRef env vars to otherRefKeys, not envRefs", () => {
+  const d: Deployment = {
+    metadata: { name: "web", namespace: "default", uid: "u2" },
+    spec: {
+      replicas: 1,
+      template: {
+        spec: {
+          containers: [
+            {
+              name: "app",
+              image: "nginx:1.25",
+              env: [
+                { name: "POD_IP", valueFrom: { fieldRef: { fieldPath: "status.podIP" } } },
+                { name: "CPU_LIMIT", valueFrom: { resourceFieldRef: { resource: "limits.cpu", containerName: "app" } } },
+                { name: "DB_PASS", valueFrom: { secretKeyRef: { name: "db", key: "pass" } } },
+              ],
+            },
+          ],
+        },
+      },
+    },
+  };
+  const m = editModelFor(d);
+  expect(m.containers[0].otherRefKeys).toEqual(["POD_IP", "CPU_LIMIT"]);
+  expect(m.containers[0].envRefs).toEqual([
+    { id: "DB_PASS", name: "DB_PASS", source: "secret", resourceName: "db", key: "pass" },
+  ]);
+  expect(m.containers[0].env).toEqual([]);
+});
+
+test("diffDeployment emits setImagePullSecrets when the list changes", () => {
+  const original = dep();
+  const edit = editModelFor(original);
+  edit.imagePullSecrets = ["ghcr-secret", "dockerhub"];
+  expect(diffDeployment(original, edit)).toEqual([
+    {
+      kind: "setImagePullSecrets", name: "web", namespace: "default",
+      imagePullSecrets: ["ghcr-secret", "dockerhub"],
+      label: "Set image pull secrets: ghcr-secret, dockerhub",
+    },
+  ]);
+});
+
+test("diffDeployment ignores image-pull-secret reordering (set comparison)", () => {
+  const original = dep();
+  original.spec!.template!.spec!.imagePullSecrets = [{ name: "a" }, { name: "b" }];
+  const edit = editModelFor(original);
+  edit.imagePullSecrets = ["b", "a"]; // reversed order, same set
+  expect(diffDeployment(original, edit)).toEqual([]);
+});
+
+test("diffDeployment emits a clear label when image pull secrets are removed", () => {
+  const original = dep();
+  const edit = editModelFor(original);
+  edit.imagePullSecrets = [];
+  expect(diffDeployment(original, edit)).toEqual([
+    { kind: "setImagePullSecrets", name: "web", namespace: "default", imagePullSecrets: [], label: "Clear image pull secrets" },
+  ]);
+});
+
+test("diffDeployment emits setEnvRef when a new secret ref is added", () => {
+  const original = dep();
+  const edit = editModelFor(original);
+  edit.containers[0].envRefs.push({ id: "API_KEY", name: "API_KEY", source: "secret", resourceName: "api", key: "key" });
+  expect(diffDeployment(original, edit)).toEqual([
+    {
+      kind: "setEnvRef", name: "web", namespace: "default", container: "app",
+      envRefs: [{ name: "API_KEY", source: "secret", resourceName: "api", key: "key" }],
+      label: "Reference secrets/config in app environment",
+    },
+  ]);
+});
+
+test("diffDeployment skips incomplete env ref rows", () => {
+  const original = dep();
+  const edit = editModelFor(original);
+  edit.containers[0].envRefs.push({ id: "X", name: "X", source: "secret", resourceName: "", key: "" });
+  expect(diffDeployment(original, edit)).toEqual([]);
+});
+
+test("diffDeployment unsets an env var when its ref is removed", () => {
+  const original = dep();
+  const edit = editModelFor(original);
+  edit.containers[0].envRefs = []; // removes DB_PASS (a secretKeyRef)
+  expect(diffDeployment(original, edit)).toEqual([
+    {
+      kind: "setEnv", name: "web", namespace: "default", container: "app",
+      unsetEnv: ["DB_PASS"], label: "Update app environment",
+    },
+  ]);
+});
+
+test("diffDeployment converting a plain var to a ref unsets then setEnvRefs, in order", () => {
+  const original = dep();
+  const edit = editModelFor(original);
+  // move LOG_LEVEL from plain to a configmap ref
+  edit.containers[0].env = [];
+  edit.containers[0].envRefs.push({ id: "LOG_LEVEL", name: "LOG_LEVEL", source: "configMap", resourceName: "cfg", key: "level" });
+  expect(diffDeployment(original, edit)).toEqual([
+    { kind: "setEnv", name: "web", namespace: "default", container: "app", unsetEnv: ["LOG_LEVEL"], label: "Update app environment" },
+    {
+      kind: "setEnvRef", name: "web", namespace: "default", container: "app",
+      envRefs: [{ name: "LOG_LEVEL", source: "configMap", resourceName: "cfg", key: "level" }],
+      label: "Reference secrets/config in app environment",
     },
   ]);
 });

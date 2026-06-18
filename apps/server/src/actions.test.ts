@@ -446,3 +446,75 @@ test("unlinkSourceRepo removes both annotations (trailing-dash)", () => {
   expect(buildCommand({ kind: "unlinkSourceRepo", name: "api", namespace: "personal" }))
     .toEqual(["annotate", "deployment/api", "helmsman.dev/source-repo-", "helmsman.dev/source-path-", "-n", "personal"]);
 });
+
+// ---------------------------------------------------------------------------
+// setImagePullSecrets
+// ---------------------------------------------------------------------------
+test("setImagePullSecrets patches the pod template imagePullSecrets array", () => {
+  expect(
+    buildCommand({ kind: "setImagePullSecrets", name: "web", namespace: "default", imagePullSecrets: ["ghcr-secret"] }),
+  ).toEqual([
+    "patch", "deployment/web", "-n", "default", "--type=merge",
+    "-p", '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"ghcr-secret"}]}}}}',
+  ]);
+});
+
+test("setImagePullSecrets with empty list clears the array", () => {
+  expect(
+    buildCommand({ kind: "setImagePullSecrets", name: "web", namespace: "default", imagePullSecrets: [] }),
+  ).toEqual([
+    "patch", "deployment/web", "-n", "default", "--type=merge",
+    "-p", '{"spec":{"template":{"spec":{"imagePullSecrets":[]}}}}',
+  ]);
+});
+
+test("setImagePullSecrets honors resourceKind", () => {
+  expect(
+    buildCommand({ kind: "setImagePullSecrets", name: "pg", namespace: "db", imagePullSecrets: ["reg"], resourceKind: "statefulset" }),
+  ).toEqual([
+    "patch", "statefulset/pg", "-n", "db", "--type=merge",
+    "-p", '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"reg"}]}}}}',
+  ]);
+});
+
+// ---------------------------------------------------------------------------
+// setEnvRef
+// ---------------------------------------------------------------------------
+test("setEnvRef patches a secretKeyRef env var via strategic merge", () => {
+  expect(
+    buildCommand({
+      kind: "setEnvRef", name: "web", namespace: "default", container: "app",
+      envRefs: [{ name: "DB_PASSWORD", source: "secret", resourceName: "app-db", key: "password" }],
+    }),
+  ).toEqual([
+    "patch", "deployment/web", "-n", "default", "--type=strategic",
+    "-p", '{"spec":{"template":{"spec":{"containers":[{"name":"app","env":[{"name":"DB_PASSWORD","valueFrom":{"secretKeyRef":{"name":"app-db","key":"password"}}}]}]}}}}',
+  ]);
+});
+
+test("setEnvRef supports configMapKeyRef and multiple refs", () => {
+  expect(
+    buildCommand({
+      kind: "setEnvRef", name: "web", namespace: "default", container: "app",
+      envRefs: [
+        { name: "LOG_LEVEL", source: "configMap", resourceName: "app-config", key: "log.level" },
+        { name: "TOKEN", source: "secret", resourceName: "app-secrets", key: "token" },
+      ],
+    }),
+  ).toEqual([
+    "patch", "deployment/web", "-n", "default", "--type=strategic",
+    "-p", '{"spec":{"template":{"spec":{"containers":[{"name":"app","env":[{"name":"LOG_LEVEL","valueFrom":{"configMapKeyRef":{"name":"app-config","key":"log.level"}}},{"name":"TOKEN","valueFrom":{"secretKeyRef":{"name":"app-secrets","key":"token"}}}]}]}}}}',
+  ]);
+});
+
+test("setEnvRef honors resourceKind", () => {
+  expect(
+    buildCommand({
+      kind: "setEnvRef", name: "pg", namespace: "db", container: "db", resourceKind: "statefulset",
+      envRefs: [{ name: "PGPASS", source: "secret", resourceName: "pg-secret", key: "password" }],
+    }),
+  ).toEqual([
+    "patch", "statefulset/pg", "-n", "db", "--type=strategic",
+    "-p", '{"spec":{"template":{"spec":{"containers":[{"name":"db","env":[{"name":"PGPASS","valueFrom":{"secretKeyRef":{"name":"pg-secret","key":"password"}}}]}]}}}}',
+  ]);
+});

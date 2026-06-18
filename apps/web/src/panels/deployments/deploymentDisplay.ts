@@ -1,4 +1,4 @@
-import type { Deployment, ContainerSummary, EnvVar } from "./types";
+import type { Deployment, ContainerSummary } from "./types";
 import type { Pod } from "../pods/types";
 import type { ActionBlock } from "@/lib/api";
 
@@ -234,6 +234,15 @@ export function sortDeployments(deployments: Deployment[]): Deployment[] {
 /** One editable env row (plain string value only). */
 export interface EnvEdit { id: string; key: string; value: string }
 
+/** One editable env-from-resource row (Secret/ConfigMap key reference). */
+export interface EnvRefEdit {
+  id: string;
+  name: string;
+  source: "secret" | "configMap";
+  resourceName: string;
+  key: string;
+}
+
 /** Editable view of a single container. */
 export interface ContainerEdit {
   name: string;
@@ -244,13 +253,17 @@ export interface ContainerEdit {
   memLim: string;
   /** Editable plain-value env vars. */
   env: EnvEdit[];
-  /** Names of valueFrom (ref) env vars that are still present (read-only, removable). */
-  refEnvKeys: string[];
+  /** Editable env vars sourced from a Secret/ConfigMap key. */
+  envRefs: EnvRefEdit[];
+  /** Names of non-secret/non-configmap valueFrom env vars (fieldRef/resourceFieldRef): read-only, removable. */
+  otherRefKeys: string[];
 }
 
 /** Editable view of a whole deployment. */
 export interface DeploymentEdit {
   replicas: number;
+  /** Pod-level imagePullSecret names (private registry auth, e.g. GHCR). */
+  imagePullSecrets: string[];
   containers: ContainerEdit[];
 }
 
@@ -259,8 +272,21 @@ export function editModelFor(d: Deployment): DeploymentEdit {
   const containers = d.spec?.template?.spec?.containers ?? [];
   return {
     replicas: desiredReplicas(d),
+    imagePullSecrets: (d.spec?.template?.spec?.imagePullSecrets ?? []).map((s) => s.name),
     containers: containers.map((c) => {
       const env = c.env ?? [];
+      const envRefs: EnvRefEdit[] = [];
+      const otherRefKeys: string[] = [];
+      for (const e of env) {
+        const vf = e.valueFrom;
+        if (vf?.secretKeyRef) {
+          envRefs.push({ id: e.name, name: e.name, source: "secret", resourceName: vf.secretKeyRef.name, key: vf.secretKeyRef.key });
+        } else if (vf?.configMapKeyRef) {
+          envRefs.push({ id: e.name, name: e.name, source: "configMap", resourceName: vf.configMapKeyRef.name, key: vf.configMapKeyRef.key });
+        } else if (vf != null) {
+          otherRefKeys.push(e.name);
+        }
+      }
       return {
         name: c.name,
         image: c.image ?? "",
@@ -268,8 +294,9 @@ export function editModelFor(d: Deployment): DeploymentEdit {
         cpuLim: c.resources?.limits?.cpu ?? "",
         memReq: c.resources?.requests?.memory ?? "",
         memLim: c.resources?.limits?.memory ?? "",
-        env: env.filter((e: EnvVar) => e.valueFrom == null).map((e) => ({ id: e.name, key: e.name, value: e.value ?? "" })),
-        refEnvKeys: env.filter((e: EnvVar) => e.valueFrom != null).map((e) => e.name),
+        env: env.filter((e) => e.valueFrom == null).map((e) => ({ id: e.name, key: e.name, value: e.value ?? "" })),
+        envRefs,
+        otherRefKeys,
       };
     }),
   };
@@ -321,7 +348,7 @@ export function diffDeployment(original: Deployment, edit: DeploymentEdit): Acti
       actions.push(a);
     }
 
-    // env diff: plain-value adds/edits + removals (plain dropped + ref dropped)
+    // env diff — plain value adds/edits + removals, then secret/configMap refs.
     const origPlain = new Map((orig.env ?? []).filter((e) => e.valueFrom == null).map((e) => [e.name, e.value ?? ""] as const));
     const origRefKeys = (orig.env ?? []).filter((e) => e.valueFrom != null).map((e) => e.name);
     const setEnv: Record<string, string> = {};
@@ -330,16 +357,54 @@ export function diffDeployment(original: Deployment, edit: DeploymentEdit): Acti
       if (origPlain.get(row.key) !== row.value) setEnv[row.key] = row.value;
     }
     const keptPlain = new Set(c.env.map((r) => r.key));
+    const keptRefNames = new Set<string>([...c.envRefs.map((r) => r.name), ...c.otherRefKeys]);
     const removed: string[] = [];
     for (const k of origPlain.keys()) if (!keptPlain.has(k)) removed.push(k);
-    for (const k of origRefKeys) if (!c.refEnvKeys.includes(k)) removed.push(k);
+    for (const k of origRefKeys) if (!keptRefNames.has(k)) removed.push(k);
 
+    // setEnv (plain adds/edits + removals) is pushed BEFORE setEnvRef so a
+    // plain→ref conversion unsets the plain entry first (avoids value+valueFrom).
     if (Object.keys(setEnv).length > 0 || removed.length > 0) {
       const a: ActionBlock = { kind: "setEnv", name, namespace, container: c.name, label: `Update ${c.name} environment` };
       if (Object.keys(setEnv).length > 0) a.env = setEnv;
       if (removed.length > 0) a.unsetEnv = removed.sort();
       actions.push(a);
     }
+
+    // secret/configMap key refs — emit added/changed ones as one strategic patch.
+    const origRefs = new Map<string, { source: "secret" | "configMap"; resourceName: string; key: string }>();
+    for (const e of orig.env ?? []) {
+      const vf = e.valueFrom;
+      if (vf?.secretKeyRef) origRefs.set(e.name, { source: "secret", resourceName: vf.secretKeyRef.name, key: vf.secretKeyRef.key });
+      else if (vf?.configMapKeyRef) origRefs.set(e.name, { source: "configMap", resourceName: vf.configMapKeyRef.name, key: vf.configMapKeyRef.key });
+    }
+    const envRefsOut: Array<{ name: string; source: "secret" | "configMap"; resourceName: string; key: string }> = [];
+    for (const r of c.envRefs) {
+      if (!r.name || !r.resourceName || !r.key) continue; // skip incomplete rows
+      const o = origRefs.get(r.name);
+      if (!o || o.source !== r.source || o.resourceName !== r.resourceName || o.key !== r.key) {
+        envRefsOut.push({ name: r.name, source: r.source, resourceName: r.resourceName, key: r.key });
+      }
+    }
+    if (envRefsOut.length > 0) {
+      actions.push({ kind: "setEnvRef", name, namespace, container: c.name, envRefs: envRefsOut, label: `Reference secrets/config in ${c.name} environment` });
+    }
+  }
+
+  // imagePullSecrets — order-insensitive set comparison; emit the full desired list.
+  const origIPS = (original.spec?.template?.spec?.imagePullSecrets ?? []).map((s) => s.name);
+  const editIPS = edit.imagePullSecrets;
+  const ipsChanged =
+    origIPS.length !== editIPS.length ||
+    [...origIPS].sort().join(" ") !== [...editIPS].sort().join(" ");
+  if (ipsChanged) {
+    actions.push({
+      kind: "setImagePullSecrets",
+      name,
+      namespace,
+      imagePullSecrets: editIPS,
+      label: editIPS.length ? `Set image pull secrets: ${editIPS.join(", ")}` : "Clear image pull secrets",
+    });
   }
 
   return actions;

@@ -35,6 +35,10 @@ export interface ActionBlock {
   title?: string;
   body?: string;
   content?: string;
+  /** setImagePullSecrets only — desired full list of imagePullSecret names. */
+  imagePullSecrets?: string[];
+  /** setEnvRef only — env vars sourced from a Secret/ConfigMap key. */
+  envRefs?: Array<{ name: string; source: "secret" | "configMap"; resourceName: string; key: string }>;
 }
 
 export interface ActionResult {

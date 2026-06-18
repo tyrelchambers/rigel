@@ -1,13 +1,17 @@
 import { useEffect, useState } from "react";
-import type { KVRow } from "@helmsman/k8s";
+import type { KVRow, Secret, ConfigMap } from "@helmsman/k8s";
+import { useCluster } from "@/store/cluster";
+import { subscribe, unsubscribe } from "@/lib/ws";
+import { EnvRefEditor } from "./EnvRefEditor";
+import { ImagePullSecretsField } from "./ImagePullSecretsField";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetFooter,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { KeyValueEditor } from "../components/KeyValueEditor";
 import { BatchConfirmSheet, type BatchConfirmItem } from "@/components/BatchConfirmSheet";
@@ -22,7 +26,7 @@ import {
 // ---------------------------------------------------------------------------
 // DeploymentEditor — inline config editor for a Deployment. Edits replicas,
 // per-container image, CPU/memory requests+limits, and plain-value environment
-// variables in a guided form (shadcn Sheet, same pattern as IngressEditor /
+// variables in a guided form (shadcn Dialog, same pattern as IngressEditor /
 // ConfigMapEditor). On "Review changes" it diffs the form against the live spec
 // (`diffDeployment`) into discrete ActionBlocks (scale / setImage / setResources
 // / setEnv) and hands them to BatchConfirmSheet, which previews the exact kubectl
@@ -50,6 +54,29 @@ export function DeploymentEditor({ target, open, onClose, onApplied }: Deploymen
   const [pendingActions, setPendingActions] = useState<ActionBlock[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+
+  const ns = target?.metadata.namespace ?? "default";
+  const resources = useCluster((s) => s.resources);
+
+  // While open, watch secrets + configmaps in the deployment's namespace so the
+  // ref pickers list real resources. Unsubscribed on close.
+  // `ns` already captures everything we need from `target` (its namespace), so
+  // keying on `ns` (a string) avoids a re-subscribe whenever `target`'s identity
+  // changes for the same deployment. `open` gates whether a target exists.
+  useEffect(() => {
+    if (!open) return;
+    subscribe("secrets", ns);
+    subscribe("configmaps", ns);
+    return () => {
+      unsubscribe("secrets", ns);
+      unsubscribe("configmaps", ns);
+    };
+  }, [open, ns]);
+
+  const secrets = (Object.values((resources["secrets"] ?? {}) as Record<string, Secret>))
+    .filter((s) => (s.metadata.namespace ?? "default") === ns);
+  const configMaps = (Object.values((resources["configmaps"] ?? {}) as Record<string, ConfigMap>))
+    .filter((c) => (c.metadata.namespace ?? "default") === ns);
 
   // (Re)seed the form each time the sheet opens on a target.
   useEffect(() => {
@@ -105,14 +132,14 @@ export function DeploymentEditor({ target, open, onClose, onApplied }: Deploymen
 
   return (
     <>
-      <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-        <SheetContent side="bottom" className="max-h-[92vh] overflow-auto">
-          <SheetHeader>
-            <SheetTitle>Edit {target?.metadata.name}</SheetTitle>
-            <SheetDescription>
+      <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>Edit {target?.metadata.name}</DialogTitle>
+            <DialogDescription>
               Changes are applied as kubectl commands you review and confirm next. A cleared resource field is left unchanged.
-            </SheetDescription>
-          </SheetHeader>
+            </DialogDescription>
+          </DialogHeader>
 
           {model && (
             <div className="space-y-4 px-4 py-2">
@@ -167,16 +194,23 @@ export function DeploymentEditor({ target, open, onClose, onApplied }: Deploymen
                       onRowsChange={(rows: KVRow[]) => updateContainer(ci, { env: rows })}
                       keyPlaceholder="ENV_NAME"
                     />
-                    {c.refEnvKeys.length > 0 && (
+                    <div className="pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">From Secret / ConfigMap</div>
+                    <EnvRefEditor
+                      rows={c.envRefs}
+                      secrets={secrets}
+                      configMaps={configMaps}
+                      onChange={(rows) => updateContainer(ci, { envRefs: rows })}
+                    />
+                    {c.otherRefKeys.length > 0 && (
                       <div className="space-y-1 pt-1">
-                        {c.refEnvKeys.map((k) => (
+                        {c.otherRefKeys.map((k) => (
                           <div key={k} className="flex items-center gap-2 rounded border border-dashed px-2 py-1 text-[11px] font-mono text-muted-foreground">
                             <span>{k}</span>
                             <span className="ml-1 text-[10px] uppercase tracking-wide">from ref · read-only</span>
                             <button
                               type="button"
                               className="ml-auto text-destructive hover:underline"
-                              onClick={() => updateContainer(ci, { refEnvKeys: c.refEnvKeys.filter((x) => x !== k) })}
+                              onClick={() => updateContainer(ci, { otherRefKeys: c.otherRefKeys.filter((x) => x !== k) })}
                             >
                               remove
                             </button>
@@ -187,6 +221,12 @@ export function DeploymentEditor({ target, open, onClose, onApplied }: Deploymen
                   </div>
                 </div>
               ))}
+
+              <ImagePullSecretsField
+                value={model.imagePullSecrets}
+                secrets={secrets}
+                onChange={(next) => setModel({ ...model, imagePullSecrets: next })}
+              />
             </div>
           )}
 
@@ -196,12 +236,12 @@ export function DeploymentEditor({ target, open, onClose, onApplied }: Deploymen
             </pre>
           )}
 
-          <SheetFooter>
+          <DialogFooter>
             <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
             <Button onClick={review} disabled={busy || !model}>{busy ? "Applying…" : "Review changes"}</Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <BatchConfirmSheet
         actions={pendingActions ?? []}

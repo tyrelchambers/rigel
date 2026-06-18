@@ -91,6 +91,9 @@ export const ACTION_KINDS = [
   "setEnv",
   "setImage",
   "setResources",
+  // web-only kinds (no Swift equivalent) — kubectl patch under the hood
+  "setImagePullSecrets",
+  "setEnvRef",
   "pause",
   "resume",
   "deletePod",
