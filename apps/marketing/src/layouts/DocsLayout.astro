@@ -1,0 +1,103 @@
+---
+import { getCollection } from "astro:content";
+import { Icon } from "astro-icon/components";
+import Base from "./Base.astro";
+import Nav from "../components/Nav.astro";
+import Footer from "../components/Footer.astro";
+
+interface Props {
+  title: string;
+  description?: string;
+}
+const { title, description } = Astro.props;
+
+// Build the sidebar from the docs collection: sort by order, then group by
+// category in the canonical order ("Get started" before "Guides").
+const categoryOrder = ["Get started", "Guides"] as const;
+const entries = (await getCollection("docs")).sort(
+  (a, b) => a.data.order - b.data.order,
+);
+const groups = categoryOrder.map((category) => ({
+  category,
+  items: entries.filter((e) => e.data.category === category),
+}));
+
+const current = Astro.url.pathname.replace(/\/$/, "");
+---
+
+<Base title={`${title} — Helmsman Docs`} description={description}>
+  <Nav />
+  <main id="main" class="bg-surface-sunken">
+    <div
+      class="mx-auto grid max-w-[1200px] gap-10 px-6 py-12 sm:px-8 lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-14 lg:px-12 lg:py-16"
+    >
+      <!-- sidebar -->
+      <aside class="lg:sticky lg:top-24 lg:h-fit lg:self-start">
+        <nav aria-label="Docs" class="flex flex-col gap-7">
+          {
+            groups.map((group) => (
+              <div class="flex flex-col gap-2.5">
+                <span class="font-mono text-[11px] tracking-[0.14em] text-fg-tertiary">
+                  {group.category.toUpperCase()}
+                </span>
+                <ul class="flex flex-col gap-0.5">
+                  {group.items.map((item) => {
+                    const href = `/docs/${item.id}`;
+                    const active = current === href;
+                    return (
+                      <li>
+                        <a
+                          href={href}
+                          aria-current={active ? "page" : undefined}
+                          class:list={[
+                            "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13.5px] transition-colors",
+                            active
+                              ? "bg-accent/12 text-fg"
+                              : "text-fg-secondary hover:bg-white/5 hover:text-fg",
+                          ]}
+                        >
+                          <Icon
+                            name={item.data.icon}
+                            class:list={[
+                              "size-4 shrink-0",
+                              active ? "text-accent" : "text-fg-tertiary",
+                            ]}
+                          />
+                          <span>{item.data.title}</span>
+                        </a>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))
+          }
+        </nav>
+      </aside>
+
+      <!-- content -->
+      <article class="min-w-0">
+        <header class="mb-8 border-b border-line-subtle pb-7">
+          <h1
+            class="text-[2rem] font-bold leading-tight tracking-[-0.02em] text-fg"
+          >
+            {title}
+          </h1>
+          {
+            description && (
+              <p class="mt-3 text-[15.5px] leading-relaxed text-fg-secondary">
+                {description}
+              </p>
+            )
+          }
+        </header>
+        <div
+          class="prose prose-invert prose-docs max-w-none prose-headings:scroll-mt-24 prose-headings:tracking-[-0.02em] prose-a:font-medium prose-pre:text-[13px]"
+        >
+          <slot />
+        </div>
+      </article>
+    </div>
+  </main>
+  <Footer />
+</Base>

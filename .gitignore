@@ -13,8 +13,9 @@ build/
 # Assembled .app bundle (built by `make app`)
 Helmsman.app/
 
-# Internal planning docs
-docs/
+# Internal planning docs (repo-root only — must not match nested app dirs
+# such as apps/marketing/src/content/docs or apps/marketing/src/pages/docs).
+/docs/
 
 # Node / pnpm
 node_modules/

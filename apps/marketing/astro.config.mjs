@@ -14,4 +14,6 @@ export default defineConfig({
   // No raster image optimization is used (SVG/CSS only), so skip the sharp
   // service entirely — keeps the build dependency-free and fast.
   image: { service: passthroughImageService() },
+  // Dark Shiki theme for code blocks in the ported docs.
+  markdown: { shikiConfig: { theme: "github-dark" } },
 });

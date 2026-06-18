@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 /* ─── Helmsman design tokens (clankerlocal.pen · midnight palette) ───────────
  * Mirrors apps/web/src/index.css so the marketing site and the product app
@@ -93,6 +94,85 @@
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+/* ─── Docs prose ─────────────────────────────────────────────────────────────
+ * Tunes `prose prose-invert` (Tailwind Typography) to the nautical theme so
+ * ported Markdown reads on the dark surface. Only overrides what's needed. */
+.prose-docs {
+  --tw-prose-body: var(--color-fg-secondary);
+  --tw-prose-headings: var(--color-fg);
+  --tw-prose-lead: var(--color-fg-secondary);
+  --tw-prose-links: var(--color-accent);
+  --tw-prose-bold: var(--color-fg);
+  --tw-prose-counters: var(--color-fg-tertiary);
+  --tw-prose-bullets: var(--color-line-strong);
+  --tw-prose-hr: var(--color-line-subtle);
+  --tw-prose-quotes: var(--color-fg-secondary);
+  --tw-prose-quote-borders: var(--color-accent);
+  --tw-prose-captions: var(--color-fg-tertiary);
+  --tw-prose-code: var(--color-fg);
+  --tw-prose-pre-code: var(--color-fg);
+  --tw-prose-pre-bg: var(--color-surface-elevated);
+  --tw-prose-th-borders: var(--color-line-subtle);
+  --tw-prose-td-borders: var(--color-line-subtle);
+}
+
+.prose-docs a {
+  text-decoration-color: color-mix(
+    in srgb,
+    var(--color-accent) 45%,
+    transparent
+  );
+  text-underline-offset: 2px;
+  transition: color 0.15s ease;
+}
+.prose-docs a:hover {
+  color: var(--color-accent-hover);
+}
+
+/* Inline code reads as a chip on the elevated surface. */
+.prose-docs :not(pre) > code {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 0.85em;
+  background-color: var(--color-surface-elevated);
+  border: 1px solid var(--color-line-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0.15em 0.4em;
+}
+/* Typography wraps inline code in backticks via ::before/::after — drop them. */
+.prose-docs :not(pre) > code::before,
+.prose-docs :not(pre) > code::after {
+  content: none;
+}
+
+/* Fenced blocks: elevated surface, subtle border, monospace. */
+.prose-docs pre {
+  font-family: var(--font-mono);
+  background-color: var(--color-surface-elevated);
+  border: 1px solid var(--color-line-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.prose-docs blockquote {
+  border-left-color: var(--color-accent);
+  background-color: color-mix(in srgb, var(--color-accent) 6%, transparent);
+  border-radius: var(--radius-md);
+  padding: 0.25rem 1rem;
+  font-style: normal;
+}
+.prose-docs blockquote p:first-of-type::before,
+.prose-docs blockquote p:last-of-type::after {
+  content: none;
+}
+
+.prose-docs table {
+  font-size: 0.9em;
+}
+.prose-docs thead,
+.prose-docs tbody tr {
+  border-color: var(--color-line-subtle);
 }
 
 /* ─── Motion ─────────────────────────────────────────────────────────────── */
