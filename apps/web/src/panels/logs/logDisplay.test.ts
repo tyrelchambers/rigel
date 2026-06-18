@@ -5,6 +5,8 @@ import {
   filterLines,
   buildLogQuery,
   detectLevel,
+  splitHighlight,
+  distinctPods,
   sortByTimestamp,
   formatTimestamp,
   podColor,
@@ -248,5 +250,42 @@ describe("detectLevel", () => {
   });
   it("prioritizes error over lower levels", () => {
     expect(detectLevel("INFO then ERROR")).toBe("error");
+  });
+});
+
+describe("splitHighlight", () => {
+  it("no ranges → one plain segment", () => {
+    expect(splitHighlight("hello", [])).toEqual([{ text: "hello", mark: false }]);
+  });
+  it("one mid-string range → plain/mark/plain", () => {
+    expect(splitHighlight("hello", [[1, 3]])).toEqual([
+      { text: "h", mark: false },
+      { text: "el", mark: true },
+      { text: "lo", mark: false },
+    ]);
+  });
+  it("range at start and end", () => {
+    expect(splitHighlight("abcd", [[0, 1], [3, 4]])).toEqual([
+      { text: "a", mark: true },
+      { text: "bc", mark: false },
+      { text: "d", mark: true },
+    ]);
+  });
+  it("overlapping ranges are clamped, not duplicated", () => {
+    expect(splitHighlight("abcde", [[0, 3], [2, 4]])).toEqual([
+      { text: "abc", mark: true },
+      { text: "d", mark: true },
+      { text: "e", mark: false },
+    ]);
+  });
+});
+
+describe("distinctPods", () => {
+  it("returns unique pods in first-seen order", () => {
+    const ls = [mkLine("a", "p1"), mkLine("b", "p2"), mkLine("c", "p1")];
+    expect(distinctPods(ls)).toEqual(["p1", "p2"]);
+  });
+  it("empty → []", () => {
+    expect(distinctPods([])).toEqual([]);
   });
 });

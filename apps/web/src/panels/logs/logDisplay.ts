@@ -246,3 +246,41 @@ export function lineContext(lines: LogLine[], lineId: string): LogLine[] {
   const end = Math.min(lines.length, idx + 6); // inclusive of +5
   return lines.slice(start, end);
 }
+
+/** A run of text that is either plain or highlighted (a query match). */
+export interface TextSegment { text: string; mark: boolean }
+
+/**
+ * Split `text` into plain/marked segments using highlight ranges `[start,end)`.
+ * Ranges may be unsorted or overlapping; they are sorted and clamped so no
+ * character is emitted twice. Returns a single plain segment when no ranges.
+ */
+export function splitHighlight(text: string, ranges: Array<[number, number]>): TextSegment[] {
+  if (ranges.length === 0) return [{ text, mark: false }];
+  const sorted = [...ranges].sort((a, b) => a[0] - b[0]);
+  const segs: TextSegment[] = [];
+  let pos = 0;
+  for (const [start, end] of sorted) {
+    const s = Math.max(pos, start);
+    if (s > pos) segs.push({ text: text.slice(pos, s), mark: false });
+    if (end > s) {
+      segs.push({ text: text.slice(s, end), mark: true });
+      pos = end;
+    }
+  }
+  if (pos < text.length) segs.push({ text: text.slice(pos), mark: false });
+  return segs;
+}
+
+/** Distinct `sourcePod` names across the lines, in first-seen order. */
+export function distinctPods(lines: LogLine[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const l of lines) {
+    if (!seen.has(l.sourcePod)) {
+      seen.add(l.sourcePod);
+      out.push(l.sourcePod);
+    }
+  }
+  return out;
+}
