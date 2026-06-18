@@ -1,6 +1,3 @@
-# Optional public ingress. Needs ingress-nginx + cert-manager in the cluster.
-# Edit the host, then apply. Until then the Service is reachable in-cluster /
-# via port-forward only.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -12,17 +9,18 @@ metadata:
     cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: nginx
-  tls:
-    - hosts: [helmsman.sh]
-      secretName: helmsman-marketing-tls
   rules:
-    - host: helmsman.sh
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: helmsman-marketing
-                port:
-                  number: 80
+  - host: helmsman.run
+    http:
+      paths:
+      - backend:
+          service:
+            name: helmsman-marketing
+            port:
+              number: 80
+        path: /
+        pathType: Prefix
+  tls:
+  - hosts:
+    - helmsman.run
+    secretName: helmsman-marketing-tls
