@@ -151,6 +151,22 @@ export function filterLines(lines: LogLine[], opts: FilterOptions): LogLine[] {
   });
 }
 
+/** Conventional log levels recognized for coloring. */
+export type LogLevel = "error" | "warn" | "info" | "debug";
+
+/**
+ * Detect a conventional level token in a line (word-boundary, case-insensitive),
+ * or null. Priority: error (incl. fatal/panic) → warn → info → debug. Used only
+ * for coloring; the substring `isErrorLine` still drives the errors-only filter.
+ */
+export function detectLevel(text: string): LogLevel | null {
+  if (/\b(?:error|fatal|panic)\b/i.test(text)) return "error";
+  if (/\b(?:warn|warning)\b/i.test(text)) return "warn";
+  if (/\binfo\b/i.test(text)) return "info";
+  if (/\b(?:debug|trace)\b/i.test(text)) return "debug";
+  return null;
+}
+
 /**
  * Stable sort by parsed timestamp ascending, so lines from multiple replicas
  * (whose initial `--tail` batches arrive grouped per-pod) are merged into one

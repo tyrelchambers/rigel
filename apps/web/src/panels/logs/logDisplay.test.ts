@@ -4,6 +4,7 @@ import {
   appendLines,
   filterLines,
   buildLogQuery,
+  detectLevel,
   sortByTimestamp,
   formatTimestamp,
   podColor,
@@ -225,5 +226,27 @@ describe("buildLogQuery", () => {
     expect(q.error).not.toBeNull();
     expect(q.test("(")).toBe(false);
     expect(q.ranges("(")).toEqual([]);
+  });
+});
+
+describe("detectLevel", () => {
+  it("detects error/fatal/panic as error", () => {
+    expect(detectLevel("ERROR boom")).toBe("error");
+    expect(detectLevel("fatal: nope")).toBe("error");
+    expect(detectLevel("panic: x")).toBe("error");
+  });
+  it("detects warn/warning", () => {
+    expect(detectLevel("WARN low disk")).toBe("warn");
+    expect(detectLevel("warning: deprecated")).toBe("warn");
+  });
+  it("detects info and debug", () => {
+    expect(detectLevel("INFO started")).toBe("info");
+    expect(detectLevel("debug trace here")).toBe("debug");
+  });
+  it("returns null when no level token is present", () => {
+    expect(detectLevel("just a plain line")).toBeNull();
+  });
+  it("prioritizes error over lower levels", () => {
+    expect(detectLevel("INFO then ERROR")).toBe("error");
   });
 });
