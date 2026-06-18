@@ -235,7 +235,12 @@ export function replicasUnhealthy(d: Deployment): boolean {
  * sorted by key. Returns null when there are no matchLabels (the panel then
  * shows the "deployment has no spec.selector.matchLabels" error).
  */
-export function labelSelector(d: Deployment): string | null {
+/** Anything with `spec.selector.matchLabels` (Deployment/StatefulSet/DaemonSet). */
+export interface Selectable {
+  spec?: { selector?: { matchLabels?: Record<string, string> } };
+}
+
+export function labelSelector(d: Selectable): string | null {
   const labels = d.spec?.selector?.matchLabels ?? {};
   const keys = Object.keys(labels).sort();
   if (keys.length === 0) return null;
