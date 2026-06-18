@@ -47,7 +47,7 @@ import { checkAuth } from "./auth";
 const KUBECONFIG = resolveKubeconfigPath(process.env, homedir());
 const PORT = Number(process.env.PORT ?? 8787);
 // Electron sets 127.0.0.1 (loopback-only); Docker/Helm keep 0.0.0.0.
-const HOST = process.env.HOST ?? process.env.HOSTNAME ?? "0.0.0.0";
+const HOST = process.env.HOST ?? "0.0.0.0"; // Electron pins 127.0.0.1; Docker/Helm keep 0.0.0.0
 // Treat an empty/whitespace HELMSMAN_TOKEN as "unset" — compose/Helm commonly
 // pass it as "" which would otherwise make checkAuth() treat the bearer as open
 // and defeat the password gate.
@@ -840,24 +840,30 @@ const httpServer = serve({ fetch: handler, port: PORT, hostname: HOST }, (info) 
 const wss = new WebSocketServer({ noServer: true });
 const wsHandlers = makeWsHandlers(mgr, context);
 httpServer.on("upgrade", (req: IncomingMessage, socket, head) => {
-  const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
-  if (url.pathname !== "/ws") {
-    socket.destroy();
-    return;
-  }
-  // Replicate the same auth gate the HTTP routes use (cookie session or bearer).
-  if (passwordConfigured() || TOKEN !== null) {
-    const reqLike = new Request(url, { headers: req.headers as any });
-    const bearerOk = TOKEN !== null && checkAuth(reqLike.headers.get("authorization") ?? undefined, TOKEN);
-    if (!hasValidSession(reqLike, Date.now()) && !bearerOk) {
-      socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+  try {
+    const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+    if (url.pathname !== "/ws") {
       socket.destroy();
       return;
     }
+    // Replicate the same auth gate the HTTP routes use (cookie session or bearer).
+    if (passwordConfigured() || TOKEN !== null) {
+      const reqLike = new Request(url, { headers: req.headers as any });
+      const bearerOk = TOKEN !== null && checkAuth(reqLike.headers.get("authorization") ?? undefined, TOKEN);
+      if (!hasValidSession(reqLike, Date.now()) && !bearerOk) {
+        socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+        socket.destroy();
+        return;
+      }
+    }
+    wss.handleUpgrade(req, socket, head, (client) => wss.emit("connection", client));
+  } catch {
+    try { socket.destroy(); } catch { /* already gone */ }
   }
-  wss.handleUpgrade(req, socket, head, (client) => wss.emit("connection", client));
 });
+wss.on("error", (err) => console.error("websocket server error:", err));
 wss.on("connection", (client) => {
+  client.on("error", () => { try { client.close(); } catch { /* already gone */ } });
   wsHandlers.open(client);
   client.on("message", (data) => wsHandlers.message(client, data as any));
   client.on("close", () => wsHandlers.close(client));

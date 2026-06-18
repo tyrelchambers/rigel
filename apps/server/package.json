@@ -9,6 +9,6 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
-  "dependencies": { "@helmsman/k8s": "workspace:*", "@helmsman/catalog": "workspace:*", "@hono/node-server": "1.19.14", "hono": "4.12.24", "node-pty": "latest", "ws": "latest" },
+  "dependencies": { "@helmsman/k8s": "workspace:*", "@helmsman/catalog": "workspace:*", "@hono/node-server": "latest", "hono": "latest", "node-pty": "latest", "ws": "latest" },
   "devDependencies": { "@types/node": "latest", "@types/ws": "latest", "esbuild": "latest", "tsx": "latest", "typescript": "latest", "vitest": "^4.1.8" }
 }
