@@ -409,3 +409,18 @@ export function diffDeployment(original: Deployment, edit: DeploymentEdit): Acti
 
   return actions;
 }
+
+/**
+ * Distinct namespaces for the move-to-namespace picker: every loaded
+ * deployment's namespace (defaulting to "default") plus any namespaces present
+ * in the store, deduped and sorted.
+ */
+export function namespaceOptions(
+  deployments: Deployment[],
+  namespacesByName: Record<string, unknown>,
+): string[] {
+  const set = new Set<string>();
+  for (const d of deployments) set.add(d.metadata.namespace ?? "default");
+  for (const name of Object.keys(namespacesByName ?? {})) set.add(name);
+  return [...set].sort();
+}

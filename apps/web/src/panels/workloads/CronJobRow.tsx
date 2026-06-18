@@ -1,0 +1,149 @@
+import { Zap, Play, Pause, Trash2 } from "lucide-react";
+import { ListRow } from "@/panels/components/ListRow";
+import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
+import { StatusBadge } from "@/panels/components/StatusBadge";
+import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
+import { TagPill } from "@/panels/components/TagPill";
+import { viewYaml } from "@/store/yamlViewer";
+import { isCronJobSuspended, cronJobActiveCount, lastScheduleAgo } from "./workloadsDisplay";
+import type { CronJob, AskClaudeFn } from "./types";
+
+interface CronJobRowProps {
+  c: CronJob;
+  k: string;
+  isOpen: boolean;
+  toggleExpand: (k: string) => void;
+  askClaude: AskClaudeFn;
+  triggerCronJob: (c: CronJob) => void;
+  suspendCronJob: (c: CronJob) => void;
+  resumeCronJob: (c: CronJob) => void;
+  deleteCronJob: (c: CronJob) => void;
+}
+
+/** One CronJob row. Extracted verbatim from WorkloadsPanel. */
+export function CronJobRow({ c, k, isOpen, toggleExpand, askClaude, triggerCronJob, suspendCronJob, resumeCronJob, deleteCronJob }: CronJobRowProps) {
+  const suspended = isCronJobSuspended(c);
+  const active = cronJobActiveCount(c);
+  const lastSched = lastScheduleAgo(c);
+
+  const rowMenu = (
+    <>
+      <ContextMenuItem onClick={() => askClaude("cronjob", c.metadata.name, c.metadata.namespace, "Errors")}>Ask Claude: Errors</ContextMenuItem>
+      <ContextMenuItem onClick={() => askClaude("cronjob", c.metadata.name, c.metadata.namespace, "Logs")}>Ask Claude: Logs</ContextMenuItem>
+      <ContextMenuItem onClick={() => askClaude("cronjob", c.metadata.name, c.metadata.namespace, "Explain")}>Ask Claude: Explain</ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem onClick={() => triggerCronJob(c)}>Trigger…</ContextMenuItem>
+      {suspended ? (
+        <ContextMenuItem onClick={() => resumeCronJob(c)}>Resume…</ContextMenuItem>
+      ) : (
+        <ContextMenuItem onClick={() => suspendCronJob(c)}>Suspend…</ContextMenuItem>
+      )}
+      <ContextMenuItem variant="destructive" onClick={() => deleteCronJob(c)}>Delete…</ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem onClick={() => viewYaml("cronjob", c.metadata.name, c.metadata.namespace)}>View YAML…</ContextMenuItem>
+    </>
+  );
+
+  return (
+    <ListRow rowKey={k} isOpen={isOpen} onToggle={() => toggleExpand(k)} contextMenu={rowMenu}>
+      {/* Name */}
+      <button
+        type="button"
+        onClick={() => toggleExpand(k)}
+        className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
+      >
+        {c.metadata.name}
+      </button>
+
+      {/* Namespace chip */}
+      <span
+        style={{
+          fontFamily: "ui-monospace, monospace",
+          fontSize: 10,
+          color: "var(--fg-tertiary)",
+          background: "var(--surface-sunken)",
+          padding: "1px 5px",
+          borderRadius: 4,
+          border: "1px solid #26272B",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {c.metadata.namespace ?? "default"}
+      </span>
+
+      {/* Schedule — purple TagPill */}
+      {c.spec?.schedule && <TagPill label={c.spec.schedule} title="Schedule" />}
+
+      {/* Spacer */}
+      <span className="flex-1" />
+
+      {/* Last schedule */}
+      {lastSched && (
+        <span
+          style={{
+            fontFamily: "ui-monospace, monospace",
+            fontSize: 10,
+            color: "var(--fg-tertiary)",
+            whiteSpace: "nowrap",
+            flexShrink: 0,
+          }}
+          title="Last scheduled"
+        >
+          {lastSched}
+        </span>
+      )}
+
+      {/* Active count */}
+      {active > 0 && (
+        <StatusBadge
+          label={`${active} active`}
+          variant="healthy"
+          title={`${active} active job(s)`}
+        />
+      )}
+
+      {/* Suspended badge */}
+      {suspended && (
+        <StatusBadge
+          label="Suspended"
+          variant="pending"
+        />
+      )}
+
+      {/* Actions */}
+      <ActionButtonStrip
+        onErrors={(e) => { e.stopPropagation(); askClaude("cronjob", c.metadata.name, c.metadata.namespace, "Errors"); }}
+        onLogs={(e) => { e.stopPropagation(); askClaude("cronjob", c.metadata.name, c.metadata.namespace, "Logs"); }}
+        onExplain={(e) => { e.stopPropagation(); askClaude("cronjob", c.metadata.name, c.metadata.namespace, "Explain"); }}
+        extra={[
+          {
+            label: "Trigger",
+            Icon: Zap,
+            onClick: (e) => { e.stopPropagation(); triggerCronJob(c); },
+          },
+          ...(suspended
+            ? [
+                {
+                  label: "Resume",
+                  Icon: Play,
+                  onClick: (e: React.MouseEvent) => { e.stopPropagation(); resumeCronJob(c); },
+                },
+              ]
+            : [
+                {
+                  label: "Suspend",
+                  Icon: Pause,
+                  onClick: (e: React.MouseEvent) => { e.stopPropagation(); suspendCronJob(c); },
+                },
+              ]),
+          {
+            label: "Delete",
+            Icon: Trash2,
+            onClick: (e) => { e.stopPropagation(); deleteCronJob(c); },
+            destructive: true,
+          },
+        ]}
+      />
+    </ListRow>
+  );
+}

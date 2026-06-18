@@ -90,6 +90,19 @@ export function jobPhaseColorClass(phase: string): string {
   }
 }
 
+/** Map a job phase to a StatusBadge variant. */
+export function jobPhaseVariant(phase: string): "healthy" | "error" | "pending" | "neutral" {
+  switch (phase) {
+    case "Complete":
+    case "Running":
+      return "healthy";
+    case "Failed":
+      return "error";
+    default:
+      return "pending";
+  }
+}
+
 /**
  * Wall-clock job duration ("42s" / "5m" / "1h"), or null when not started.
  * Mirrors `Job.duration`. Pass `now` for test determinism (used as the end

@@ -17,6 +17,7 @@ import {
   daemonSetDesired,
   compareWorkloads,
   sortWorkloads,
+  jobPhaseVariant,
 } from "./workloadsDisplay";
 
 const NOW = 1_686_789_123_000; // fixed Date.now() in ms
@@ -36,6 +37,20 @@ function cron(overrides: Partial<CronJob> = {}): CronJob {
     status: overrides.status,
   };
 }
+
+describe("jobPhaseVariant", () => {
+  test("Complete and Running map to healthy", () => {
+    expect(jobPhaseVariant("Complete")).toBe("healthy");
+    expect(jobPhaseVariant("Running")).toBe("healthy");
+  });
+  test("Failed maps to error", () => {
+    expect(jobPhaseVariant("Failed")).toBe("error");
+  });
+  test("other phases map to pending", () => {
+    expect(jobPhaseVariant("Pending")).toBe("pending");
+    expect(jobPhaseVariant("Suspended")).toBe("pending");
+  });
+});
 
 describe("jobPhase", () => {
   test("Suspended when spec.suspend === true (wins over everything)", () => {
