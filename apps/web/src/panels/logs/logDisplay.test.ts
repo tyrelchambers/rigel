@@ -7,6 +7,7 @@ import {
   detectLevel,
   splitHighlight,
   distinctPods,
+  distinctContainers,
   sortByTimestamp,
   formatTimestamp,
   podColor,
@@ -299,5 +300,42 @@ describe("distinctPods", () => {
   });
   it("empty → []", () => {
     expect(distinctPods([])).toEqual([]);
+  });
+});
+
+describe("toLogLine container", () => {
+  it("plumbs the container argument onto the line", () => {
+    const l = toLogLine("[pod/web-0/app] 2026-06-09T17:15:42.000Z hi", "app");
+    expect(l.container).toBe("app");
+    expect(l.text).toBe("hi");
+  });
+  it("defaults container to empty string when omitted", () => {
+    expect(toLogLine("plain line").container).toBe("");
+  });
+});
+
+describe("distinctContainers", () => {
+  it("unique containers in first-seen order, skipping empties", () => {
+    const ls = [
+      { id: "1", sourcePod: "p", timestamp: null, text: "a", colorIndex: 0, container: "app" },
+      { id: "2", sourcePod: "p", timestamp: null, text: "b", colorIndex: 0, container: "sidecar" },
+      { id: "3", sourcePod: "p", timestamp: null, text: "c", colorIndex: 0, container: "app" },
+      { id: "4", sourcePod: "p", timestamp: null, text: "d", colorIndex: 0, container: "" },
+    ];
+    expect(distinctContainers(ls)).toEqual(["app", "sidecar"]);
+  });
+});
+
+describe("filterLines container", () => {
+  const ls = [
+    { id: "1", sourcePod: "p", timestamp: null, text: "a", colorIndex: 0, container: "app" },
+    { id: "2", sourcePod: "p", timestamp: null, text: "b", colorIndex: 0, container: "sidecar" },
+  ];
+  const base = { hideProbes: false, errorsOnly: false, query: buildLogQuery("", false) };
+  it("keeps only the selected container when set", () => {
+    expect(filterLines(ls, { ...base, container: "sidecar" }).map((l) => l.text)).toEqual(["b"]);
+  });
+  it("empty/undefined container keeps everything", () => {
+    expect(filterLines(ls, base).length).toBe(2);
   });
 });

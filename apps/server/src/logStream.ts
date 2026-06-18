@@ -27,6 +27,10 @@ export interface LogTarget {
   /** Single pod name. Mutually exclusive with `labelSelector`. */
   pod?: string;
   container?: string;
+  /** Fetch the previous (crashed) container instance; implies a one-shot (no -f). */
+  previous?: boolean;
+  /** kubectl --since window, e.g. "5m" or "1h". */
+  since?: string;
 }
 
 interface SpawnedLog {
@@ -34,27 +38,28 @@ interface SpawnedLog {
 }
 
 /**
- * Build the kubectl argv (without the `kubectl` binary, without `--context`)
- * for one log target. Mirrors the Swift tail command exactly:
- *   logs -f --timestamps --prefix=true --all-containers=true
- *        -n <ns> (-l <selector> | <pod>)
- *        --max-log-requests=20 --tail=<n>
+ * Build the kubectl argv (without the `kubectl` binary / `--context`) for one
+ * log target. Default mirrors the Swift tail command:
+ *   logs -f --timestamps --prefix=true --all-containers=true -n <ns>
+ *        (-l <selector> | <pod>) --max-log-requests=20 --tail=<n>
+ * Extensions: `container` → `-c <c>` in place of `--all-containers`; `previous`
+ * → `--previous` and DROP `-f` (a dead container can't be followed); `since` →
+ * `--since=<v>`.
  */
 export function buildLogsArgs(target: LogTarget, tailLines: number): string[] {
-  const args = [
-    "logs",
-    "-f",
-    "--timestamps",
-    "--prefix=true",
-    "--all-containers=true",
-    "-n",
-    target.namespace,
-  ];
+  const args = ["logs"];
+  if (!target.previous) args.push("-f"); // --previous is a one-shot dump
+  args.push("--timestamps", "--prefix=true");
+  if (target.container) args.push("-c", target.container);
+  else args.push("--all-containers=true");
+  args.push("-n", target.namespace);
   if (target.labelSelector) {
     args.push("-l", target.labelSelector);
   } else if (target.pod) {
     args.push(target.pod);
   }
+  if (target.previous) args.push("--previous");
+  if (target.since) args.push(`--since=${target.since}`);
   args.push("--max-log-requests=20", `--tail=${tailLines}`);
   return args;
 }

@@ -12,6 +12,7 @@ import {
   Sparkles,
   Regex,
   CircleAlert,
+  History,
 } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import {
@@ -36,6 +37,7 @@ import {
   detectLevel,
   splitHighlight,
   distinctPods,
+  distinctContainers,
   sortByTimestamp,
   formatTimestamp,
   podColor,
@@ -64,6 +66,10 @@ export default function LogsPanel() {
   const [error, setError] = useState<string | null>(null);
   const [stickToBottom, setStickToBottom] = useState(true);
   const [expandedLines, setExpandedLines] = useState<Set<string>>(new Set());
+  const [selectedContainer, setSelectedContainer] = useState("");
+  const [tailLines, setTailLines] = useState(200);
+  const [since, setSince] = useState("");
+  const [previous, setPrevious] = useState(false);
 
   // Refs so the WS callback and scroll handlers read live values without
   // re-subscribing on every state change.
@@ -108,7 +114,7 @@ export default function LogsPanel() {
       }
       if (isPausedRef.current) return; // process continues; we just drop the line
       if (typeof m.line !== "string") return;
-      const line = toLogLine(m.line);
+      const line = toLogLine(m.line, m.container);
       setLines((prev) => appendLines(prev, [line]));
     });
     return off;
@@ -124,13 +130,14 @@ export default function LogsPanel() {
   // Auto-scroll to the bottom when new lines arrive and the user is at bottom.
   const query = useMemo(() => buildLogQuery(filter, useRegex), [filter, useRegex]);
   const filtered = useMemo(
-    () => sortByTimestamp(filterLines(lines, { hideProbes, errorsOnly, query })),
-    [lines, hideProbes, errorsOnly, query],
+    () => sortByTimestamp(filterLines(lines, { hideProbes, errorsOnly, query, container: selectedContainer })),
+    [lines, hideProbes, errorsOnly, query, selectedContainer],
   );
   // Single-pod streams hide the 150px pod column. Memoized: distinctPods walks
   // the whole buffer, and the bare body would re-run it on every render (incl.
   // scroll-driven stickToBottom updates).
   const collapsePod = useMemo(() => distinctPods(lines).length <= 1, [lines]);
+  const containers = useMemo(() => distinctContainers(lines), [lines]);
   // Auto-follow: when stuck to the bottom, jam to the latest line BEFORE paint
   // (useLayoutEffect) so the view doesn't flash mid-scroll. `overflow-anchor:
   // none` on the scroller stops the browser from shifting scrollTop when sorted
@@ -143,22 +150,41 @@ export default function LogsPanel() {
 
   // --- Actions --------------------------------------------------------------
 
-  const selectDeployment = useCallback((d: Deployment) => {
-    const key = deploymentKey(d);
-    sendLogsStop(); // cancel any previous stream
-    setLines([]);
-    setExpandedLines(new Set());
-    setError(null);
-    setSelectedKey(key);
-    setStickToBottom(true);
+  // (Re)issue the kubectl-logs stream for a deployment with the current options.
+  // `previous` is a one-shot (no -f) dump of the crashed container; in that mode
+  // the selected container (if any) is passed to the server as -c.
+  const startStream = useCallback(
+    (d: Deployment, o: { previous: boolean; since: string; tailLines: number; container: string }) => {
+      const selector = labelSelector(d);
+      if (!selector) {
+        setError("deployment has no spec.selector.matchLabels");
+        return;
+      }
+      sendLogsStop();
+      setLines([]);
+      setExpandedLines(new Set());
+      setError(null);
+      setStickToBottom(true);
+      sendLogsStart(
+        [{
+          namespace: d.metadata.namespace ?? "default",
+          labelSelector: selector,
+          previous: o.previous,
+          since: o.since || undefined,
+          container: o.previous && o.container ? o.container : undefined,
+        }],
+        o.tailLines,
+      );
+    },
+    [],
+  );
 
-    const selector = labelSelector(d);
-    if (!selector) {
-      setError("deployment has no spec.selector.matchLabels");
-      return;
-    }
-    sendLogsStart([{ namespace: d.metadata.namespace ?? "default", labelSelector: selector }], 200);
-  }, []);
+  const selectDeployment = useCallback((d: Deployment) => {
+    setSelectedKey(deploymentKey(d));
+    setSelectedContainer("");
+    setPrevious(false);
+    startStream(d, { previous: false, since, tailLines, container: "" });
+  }, [startStream, since, tailLines]);
 
   const closeStream = useCallback(() => {
     sendLogsStop();
@@ -194,6 +220,20 @@ export default function LogsPanel() {
       return next;
     });
   }, []);
+
+  function reissue(next: { tailLines?: number; since?: string; previous?: boolean; container?: string }) {
+    // Compute the effective next values BEFORE setState (async) so the re-issued
+    // stream uses the intended values, not the stale render-scope ones.
+    const t = next.tailLines ?? tailLines;
+    const s = next.since ?? since;
+    const p = next.previous ?? previous;
+    const c = next.container ?? selectedContainer;
+    if (next.tailLines !== undefined) setTailLines(next.tailLines);
+    if (next.since !== undefined) setSince(next.since);
+    if (next.previous !== undefined) setPrevious(next.previous);
+    if (next.container !== undefined) setSelectedContainer(next.container);
+    if (selected) startStream(selected, { previous: p, since: s, tailLines: t, container: c });
+  }
 
   // Ask Claude about a line: hand the line + 5 before/after (11 total) to chat.
   const askClaude = useCallback(
@@ -370,6 +410,27 @@ export default function LogsPanel() {
               >
                 <CircleAlert />
               </Button>
+              {containers.length > 1 && (
+                <select
+                  value={selectedContainer}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    // Live: client-side filter. Previous mode: the prior-instance
+                    // dump was fetched per-container (-c), so re-issue to fetch the
+                    // newly-picked container instead of filtering an empty buffer.
+                    if (previous) reissue({ container: v });
+                    else setSelectedContainer(v);
+                  }}
+                  aria-label="Filter by container"
+                  className="rounded-md border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+                  style={{ height: 28 }}
+                >
+                  <option value="">All containers</option>
+                  {containers.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              )}
               {/* One always-mounted status region announces regex errors (a real
                   state change worth hearing). The line count is ambient, not
                   aria-live, so it doesn't announce on every incoming line. */}
@@ -381,6 +442,38 @@ export default function LogsPanel() {
                   {filtered.length.toLocaleString()} / {lines.length.toLocaleString()} lines
                 </span>
               )}
+              <select
+                value={tailLines}
+                onChange={(e) => reissue({ tailLines: Number(e.target.value) })}
+                aria-label="Tail size"
+                className="rounded-md border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+                style={{ height: 28 }}
+              >
+                <option value={200}>200</option>
+                <option value={500}>500</option>
+                <option value={1000}>1000</option>
+              </select>
+              <select
+                value={since}
+                onChange={(e) => reissue({ since: e.target.value })}
+                aria-label="Since"
+                className="rounded-md border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+                style={{ height: 28 }}
+              >
+                <option value="">All time</option>
+                <option value="5m">5m</option>
+                <option value="1h">1h</option>
+              </select>
+              <Button
+                variant={previous ? "secondary" : "ghost"}
+                size="icon-sm"
+                aria-label="Previous (crashed) container logs"
+                aria-pressed={previous}
+                title="Show the previous (crashed) container instance"
+                onClick={() => reissue({ previous: !previous })}
+              >
+                <History />
+              </Button>
               <Button
                 variant={wrapLines ? "secondary" : "ghost"}
                 size="icon-sm"
@@ -407,6 +500,7 @@ export default function LogsPanel() {
                 size="icon-sm"
                 aria-label={isPaused ? "Resume" : "Pause"}
                 title={isPaused ? "Resume" : "Pause"}
+                disabled={previous}
                 onClick={() => setIsPaused((p) => !p)}
               >
                 {isPaused ? <Play /> : <Pause />}
@@ -427,6 +521,11 @@ export default function LogsPanel() {
               <pre className="border-b bg-destructive/10 px-3 py-2 font-mono text-xs text-destructive whitespace-pre-wrap break-all">
                 {error}
               </pre>
+            )}
+            {previous && (
+              <div className="border-b bg-amber-500/10 px-3 py-1.5 font-mono text-[11px] text-amber-700 dark:text-amber-400" role="status">
+                previous instance · not live — showing the crashed container's last logs
+              </div>
             )}
 
             {/* Log scroll area. The scroller is absolutely positioned so its
