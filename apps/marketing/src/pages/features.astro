@@ -28,7 +28,7 @@ const helmsman = [
   {
     icon: "lucide:brain",
     title: "Watch it think",
-    desc: "A reasoning pane shows how the Helmsman got there, not just the answer.",
+    desc: "A reasoning pane shows how the AI got there, not just the answer.",
   },
   {
     icon: "lucide:cpu",
@@ -88,7 +88,7 @@ const lookout = [
   },
   {
     icon: "lucide:radar",
-    title: "Always on the horizon",
+    title: "Always on",
     desc: "Your words compile to a live watch that runs continuously in the background.",
   },
   {
@@ -127,7 +127,7 @@ const harbor = [
   {
     icon: "lucide:server",
     title: "On your hardware",
-    desc: "Heroku ergonomics, docked at your cluster. You keep control of your data and your bill.",
+    desc: "Heroku ergonomics, on your own cluster. You keep control of your data and your bill.",
   },
 ];
 
@@ -190,7 +190,7 @@ const charts = [
 
 <Base
   title="Features — Helmsman"
-  description="Everything Helmsman does: a plain-English AI ops crew, autonomous remediation, natural-language alerts, a 55-app catalog, and a console for every Kubernetes resource."
+  description="Everything Helmsman does: a plain-English AI ops assistant, autonomous remediation, natural-language alerts, a 55-app catalog, and a console for every Kubernetes resource."
 >
   <Nav />
   <main id="main">
@@ -200,9 +200,9 @@ const charts = [
       id="helmsman"
       variant="primary"
       eyebrowIcon="lucide:message-square-text"
-      eyebrow="THE HELMSMAN"
+      eyebrow="AI CHAT"
       heading="An ops engineer you can talk to."
-      copy="Ask in plain English. The Helmsman investigates your cluster like a senior SRE, then hands you the fix as a button. You stay at the wheel."
+      copy="Ask in plain English. The AI investigates your cluster like a senior SRE, then hands you the fix as a button. You stay in control."
       items={helmsman}
     />
 
@@ -211,8 +211,8 @@ const charts = [
       variant="sunken"
       reverse
       eyebrowIcon="lucide:moon-star"
-      eyebrow="THE NIGHT WATCH"
-      heading="It heals the ship while you sleep."
+      eyebrow="AUTONOMOUS AGENT"
+      heading="It fixes things while you sleep."
       copy="An agent runs inside your cluster, catching drift and failures around the clock and fixing what it safely can, always within the guardrails you set."
       items={nightWatch}
     />
@@ -221,7 +221,7 @@ const charts = [
       id="lookout"
       variant="primary"
       eyebrowIcon="lucide:radar"
-      eyebrow="THE LOOKOUT"
+      eyebrow="SMART ALERTS"
       heading="Tell it what to worry about."
       copy="Describe what matters in plain English. Helmsman compiles it to a live watch and pings your phone the moment it trips. No query language required."
       items={lookout}
@@ -232,7 +232,7 @@ const charts = [
       variant="sunken"
       reverse
       eyebrowIcon="lucide:anchor"
-      eyebrow="THE HARBOR"
+      eyebrow="APP CATALOG"
       heading="Self-host anything in one click."
       copy="The catalog turns “I want to run X” into a live, TLS'd app on your own hardware, with Heroku ergonomics and none of the cloud bill."
       items={harbor}
@@ -245,7 +245,7 @@ const charts = [
       variant="sunken"
       reverse
       eyebrowIcon="lucide:wrench"
-      eyebrow="THE ENGINE ROOM"
+      eyebrow="HANDS-ON CONTROLS"
       heading="Drop into the machinery."
       copy="When you want to get hands-on, every common operation is a click away. No kubectl incantations to memorize, no YAML to edit by hand."
       items={engineRoom}
@@ -255,9 +255,9 @@ const charts = [
       id="charts"
       variant="primary"
       eyebrowIcon="lucide:gauge"
-      eyebrow="THE CHARTS"
-      heading="The view from the crow's nest."
-      copy="Read the state of the whole cluster at a glance, then send the Helmsman to investigate anything that looks off."
+      eyebrow="CLUSTER OVERVIEW"
+      heading="The whole cluster at a glance."
+      copy="Read the state of everything in one place, then send the AI to investigate anything that looks off."
       items={charts}
     />
 

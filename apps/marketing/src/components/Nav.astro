@@ -1,10 +1,11 @@
 ---
 import { Icon } from "astro-icon/components";
+import Logo from "./Logo.astro";
 
 // Root-absolute home anchors so the nav works from any page (e.g. /features),
 // not just the landing page.
 const links = [
-  { label: "The Crew", href: "/#crew" },
+  { label: "Overview", href: "/#crew" },
   { label: "Features", href: "/features" },
   { label: "Docs", href: "/docs" },
 ];
@@ -18,11 +19,7 @@ const links = [
     aria-label="Primary"
   >
     <a href="/#top" class="flex items-center gap-2.5">
-      <span
-        class="grid size-[30px] place-items-center rounded-lg border border-accent bg-accent/15 text-accent"
-      >
-        <Icon name="lucide:compass" class="size-[18px]" />
-      </span>
+      <Logo class="size-[26px] text-fg" />
       <span class="text-[18px] font-bold tracking-tight text-fg">Helmsman</span>
     </a>
 
@@ -46,7 +43,7 @@ const links = [
         href="/docs/getting-started"
         class="inline-flex items-center rounded-lg bg-accent px-4 py-2.5 text-[13.5px] font-semibold text-fg-inverse transition-colors hover:bg-accent-hover"
       >
-        Take the helm
+        Get started
       </a>
     </div>
 
@@ -80,7 +77,7 @@ const links = [
           href="/docs/getting-started"
           class="mt-1 block rounded-md bg-accent px-3 py-2.5 text-center text-sm font-semibold text-fg-inverse"
         >
-          Take the helm
+          Get started
         </a>
       </div>
     </details>

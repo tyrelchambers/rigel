@@ -9,16 +9,16 @@ const stats = [
   { value: "100%", label: "your hardware" },
 ];
 
-// Quick-jump to each station on the ship. Anchors match the sections below.
+// Quick-jump to each feature section. Anchors match the sections below.
 const stations = [
-  { icon: "lucide:message-square-text", label: "The Helmsman", href: "#helmsman" },
-  { icon: "lucide:moon-star", label: "The Night Watch", href: "#watch" },
-  { icon: "lucide:radar", label: "The Lookout", href: "#lookout" },
-  { icon: "lucide:anchor", label: "The Harbor", href: "#harbor" },
-  { icon: "lucide:layout-dashboard", label: "The Bridge", href: "#bridge" },
-  { icon: "lucide:wrench", label: "The Engine Room", href: "#engine" },
-  { icon: "lucide:gauge", label: "The Charts", href: "#charts" },
-  { icon: "lucide:shield-check", label: "Secure by default", href: "#secure" },
+  { icon: "lucide:message-square-text", label: "AI chat", href: "#helmsman" },
+  { icon: "lucide:moon-star", label: "Autonomous agent", href: "#watch" },
+  { icon: "lucide:radar", label: "Smart alerts", href: "#lookout" },
+  { icon: "lucide:anchor", label: "App catalog", href: "#harbor" },
+  { icon: "lucide:layout-dashboard", label: "The console", href: "#bridge" },
+  { icon: "lucide:wrench", label: "Hands-on controls", href: "#engine" },
+  { icon: "lucide:gauge", label: "Cluster overview", href: "#charts" },
+  { icon: "lucide:shield-check", label: "Built-in auth", href: "#secure" },
 ];
 ---
 
@@ -37,7 +37,7 @@ const stations = [
     <div class="flex items-center gap-2.5">
       <Icon name="lucide:scroll-text" class="size-[15px] text-accent" />
       <span class="font-mono text-xs tracking-[0.16em] text-fg-tertiary"
-        >THE SHIP'S MANIFEST</span
+        >EVERYTHING IT DOES</span
       >
     </div>
 
@@ -45,17 +45,17 @@ const stations = [
       class="rise mt-5 max-w-[15ch] text-[clamp(2.6rem,7vw,3.875rem)] font-bold leading-[1.03] tracking-[-0.03em]"
       style="animation-delay:0.05s"
     >
-      <span class="block text-fg">Everything aboard.</span>
-      <span class="ink-gradient block">Every station crewed.</span>
+      <span class="block text-fg">Everything it does.</span>
+      <span class="ink-gradient block">Every layer, covered.</span>
     </h1>
 
     <p
       class="rise mt-7 max-w-[620px] text-[17px] leading-relaxed text-fg-secondary"
       style="animation-delay:0.15s"
     >
-      A plain-English AI crew, a one-click app store, and a watch that never
-      sleeps. Here's everything Helmsman does, so you can self-host production
-      Kubernetes without an ops team.
+      A plain-English AI assistant, a one-click app store, and an agent that
+      never sleeps. Here's everything Helmsman does, so you can self-host
+      production Kubernetes without an ops team.
     </p>
 
     <!-- stat band -->
@@ -75,10 +75,10 @@ const stations = [
       }
     </dl>
 
-    <!-- station quick-nav -->
+    <!-- feature quick-nav -->
     <nav
       class="rise mt-9 flex flex-wrap gap-2.5"
-      aria-label="Jump to a station"
+      aria-label="Jump to a feature"
       style="animation-delay:0.32s"
     >
       {
