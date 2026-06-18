@@ -11,6 +11,8 @@ export interface YamlTarget {
   namespace?: string;
   /** Optional display title (defaults to `kind/name`). */
   title?: string;
+  /** When true, the viewer offers an Edit→Apply flow (live-resource editing). */
+  editable?: boolean;
 }
 
 interface YamlViewerState {
@@ -28,4 +30,11 @@ export const useYamlViewer = create<YamlViewerState>((set) => ({
 /** Open the YAML viewer for a resource — callable from anywhere (context menus). */
 export function viewYaml(kind: string, name: string, namespace?: string, title?: string): void {
   useYamlViewer.getState().open({ kind, name, namespace, title });
+}
+
+/** Open the YAML viewer in EDITABLE mode — same viewer, plus an Edit→Apply flow
+ *  that re-applies the manifest through the guarded ConfirmSheet. Separate entry
+ *  point from viewYaml so read-only callers are untouched. */
+export function editYaml(kind: string, name: string, namespace?: string, title?: string): void {
+  useYamlViewer.getState().open({ kind, name, namespace, title, editable: true });
 }
