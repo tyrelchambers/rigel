@@ -59,15 +59,18 @@ export function DeploymentEditor({ target, open, onClose, onApplied }: Deploymen
 
   // While open, watch secrets + configmaps in the deployment's namespace so the
   // ref pickers list real resources. Unsubscribed on close.
+  // `ns` already captures everything we need from `target` (its namespace), so
+  // keying on `ns` (a string) avoids a re-subscribe whenever `target`'s identity
+  // changes for the same deployment. `open` gates whether a target exists.
   useEffect(() => {
-    if (!open || !target) return;
+    if (!open) return;
     subscribe("secrets", ns);
     subscribe("configmaps", ns);
     return () => {
       unsubscribe("secrets", ns);
       unsubscribe("configmaps", ns);
     };
-  }, [open, target, ns]);
+  }, [open, ns]);
 
   const secrets = (Object.values((resources["secrets"] ?? {}) as Record<string, Secret>))
     .filter((s) => (s.metadata.namespace ?? "default") === ns);
