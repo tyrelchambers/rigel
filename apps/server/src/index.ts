@@ -1,4 +1,10 @@
 import { homedir } from "node:os";
+import { createReadStream } from "node:fs";
+import { stat } from "node:fs/promises";
+import { Readable } from "node:stream";
+import { IncomingMessage } from "node:http";
+import { serve } from "@hono/node-server";
+import { WebSocketServer } from "ws";
 import { resolveKubeconfigPath } from "./kubeconfig";
 import { kubectl } from "@helmsman/k8s/src/run";
 import { WatchManager } from "./watchManager";
@@ -40,6 +46,8 @@ import { checkAuth } from "./auth";
 
 const KUBECONFIG = resolveKubeconfigPath(process.env, homedir());
 const PORT = Number(process.env.PORT ?? 8787);
+// Electron sets 127.0.0.1 (loopback-only); Docker/Helm keep 0.0.0.0.
+const HOST = process.env.HOST ?? process.env.HOSTNAME ?? "0.0.0.0";
 // Treat an empty/whitespace HELMSMAN_TOKEN as "unset" — compose/Helm commonly
 // pass it as "" which would otherwise make checkAuth() treat the bearer as open
 // and defeat the password gate.
@@ -69,16 +77,27 @@ function cacheHeaders(pathname: string): HeadersInit {
   return { "Cache-Control": "no-store, must-revalidate" };
 }
 
+/** True when `full` exists and is a regular file. */
+async function isFile(full: string): Promise<boolean> {
+  return stat(full).then((s) => s.isFile()).catch(() => false);
+}
+
+/** Stream a file's bytes as a Fetch Response body. */
+function fileResponse(full: string, headers: HeadersInit): Response {
+  const body = Readable.toWeb(createReadStream(full)) as unknown as BodyInit;
+  return new Response(body, { headers });
+}
+
 /** Serve a file from the built web UI, falling back to index.html for SPA routes. */
 async function serveStatic(pathname: string): Promise<Response> {
   const rel = pathname === "/" ? "/index.html" : pathname;
   // Guard against path traversal escaping WEB_DIST.
   const safe = rel.split("/").filter((s) => s !== "..").join("/");
-  const direct = Bun.file(`${WEB_DIST}/${safe}`);
-  if (await direct.exists()) return new Response(direct, { headers: cacheHeaders(rel) });
+  const direct = `${WEB_DIST}/${safe}`;
+  if (await isFile(direct)) return fileResponse(direct, cacheHeaders(rel));
   // SPA fallback → index.html, which must always revalidate.
-  const index = Bun.file(`${WEB_DIST}/index.html`);
-  if (await index.exists()) return new Response(index, { headers: { "Cache-Control": "no-store, must-revalidate" } });
+  const index = `${WEB_DIST}/index.html`;
+  if (await isFile(index)) return fileResponse(index, { "Cache-Control": "no-store, must-revalidate" });
   return new Response("web UI not built (run `pnpm --filter web build`)", { status: 404 });
 }
 
@@ -92,9 +111,8 @@ const mgr = new WatchManager(context);
 // survives. The forwards bind the SERVER's 127.0.0.1 — see the module caveat.
 const portForwards = new PortForwardManager(context);
 
-const server = Bun.serve({
-  port: PORT,
-  async fetch(req, srv) {
+async function handler(req: Request): Promise<Response> {
+  {
     const url = new URL(req.url);
 
     if (url.pathname === "/api/health") {
@@ -797,23 +815,53 @@ const server = Bun.serve({
       return Response.json({ error: "unknown action" }, { status: 422 });
     }
 
+    // Real /ws upgrades are intercepted at the HTTP layer below (before this
+    // handler runs); a plain GET to /ws reaching here is not a WebSocket.
     if (url.pathname === "/ws") {
-      if (srv.upgrade(req)) return; // handled by websocket
       return new Response("expected websocket", { status: 426 });
     }
 
     return new Response("not found", { status: 404 });
-  },
-  websocket: makeWsHandlers(mgr, context),
+  }
+}
+
+const httpServer = serve({ fetch: handler, port: PORT, hostname: HOST }, (info) => {
+  console.log(`helmsman server on :${info.port} (kubeconfig=${KUBECONFIG})`);
+  if (!passwordConfigured() && TOKEN === null) {
+    console.warn(
+      "⚠️  helmsman: NO AUTH configured — anyone who can reach this can run cluster-admin commands. " +
+        "Set HELMSMAN_PASSWORD (browser login) before exposing it beyond a trusted/private network.",
+    );
+  }
 });
 
-console.log(`helmsman server on :${server.port} (kubeconfig=${KUBECONFIG})`);
-if (!passwordConfigured() && TOKEN === null) {
-  console.warn(
-    "⚠️  helmsman: NO AUTH configured — anyone who can reach this can run cluster-admin commands. " +
-      "Set HELMSMAN_PASSWORD (browser login) before exposing it beyond a trusted/private network.",
-  );
-}
+// WebSocket upgrade wiring. node-server hands us the underlying Node http.Server,
+// so we intercept the HTTP `upgrade` event ourselves and drive the `ws` server.
+const wss = new WebSocketServer({ noServer: true });
+const wsHandlers = makeWsHandlers(mgr, context);
+httpServer.on("upgrade", (req: IncomingMessage, socket, head) => {
+  const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+  if (url.pathname !== "/ws") {
+    socket.destroy();
+    return;
+  }
+  // Replicate the same auth gate the HTTP routes use (cookie session or bearer).
+  if (passwordConfigured() || TOKEN !== null) {
+    const reqLike = new Request(url, { headers: req.headers as any });
+    const bearerOk = TOKEN !== null && checkAuth(reqLike.headers.get("authorization") ?? undefined, TOKEN);
+    if (!hasValidSession(reqLike, Date.now()) && !bearerOk) {
+      socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+      socket.destroy();
+      return;
+    }
+  }
+  wss.handleUpgrade(req, socket, head, (client) => wss.emit("connection", client));
+});
+wss.on("connection", (client) => {
+  wsHandlers.open(client);
+  client.on("message", (data) => wsHandlers.message(client, data as any));
+  client.on("close", () => wsHandlers.close(client));
+});
 
 // Shutdown hook: kill every port-forward child so no zombie kubectl survives the
 // server. SIGINT/SIGTERM both run stopAll() before exiting.

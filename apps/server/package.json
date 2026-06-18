@@ -4,11 +4,11 @@
   "type": "module",
   "scripts": {
     "postinstall": "node scripts/fix-node-pty.mjs",
-    "dev": "bun --watch src/index.ts",
-    "build": "bun build src/index.ts --target=bun --outdir=dist",
+    "dev": "tsx watch src/index.ts",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --external:node-pty --outfile=dist/server.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
-  "dependencies": { "@helmsman/k8s": "workspace:*", "@helmsman/catalog": "workspace:*", "node-pty": "latest" },
-  "devDependencies": { "@types/bun": "latest", "@types/node": "latest", "typescript": "latest", "vitest": "^4.1.8" }
+  "dependencies": { "@helmsman/k8s": "workspace:*", "@helmsman/catalog": "workspace:*", "@hono/node-server": "1.19.14", "hono": "4.12.24", "node-pty": "latest", "ws": "latest" },
+  "devDependencies": { "@types/node": "latest", "@types/ws": "latest", "esbuild": "latest", "tsx": "latest", "typescript": "latest", "vitest": "^4.1.8" }
 }

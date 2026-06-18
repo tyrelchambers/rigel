@@ -1,4 +1,4 @@
-import type { ServerWebSocket } from "bun";
+import type { WebSocket } from "ws";
 import { WatchManager } from "./watchManager";
 import type { WatchEvent } from "@helmsman/k8s/src/watch";
 import { runClaude } from "./claudeBridge";
@@ -6,26 +6,26 @@ import { LogStreamManager, type LogTarget } from "./logStream";
 import { TerminalSession } from "./terminal";
 
 export function makeWsHandlers(mgr: WatchManager, context: string | null = null) {
-  const unsubs = new WeakMap<ServerWebSocket<any>, Map<string, () => void>>();
+  const unsubs = new WeakMap<WebSocket, Map<string, () => void>>();
   // One kubectl-logs stream manager per connection — killed on logs.stop/close.
-  const logStreams = new WeakMap<ServerWebSocket<any>, LogStreamManager>();
+  const logStreams = new WeakMap<WebSocket, LogStreamManager>();
   // Abort handle for the in-flight chat turn — aborted on Stop/new-turn/close.
-  const chatAborts = new WeakMap<ServerWebSocket<any>, AbortController>();
+  const chatAborts = new WeakMap<WebSocket, AbortController>();
   // One interactive PTY shell per connection — killed on term.stop/close.
-  const terminals = new WeakMap<ServerWebSocket<any>, TerminalSession>();
+  const terminals = new WeakMap<WebSocket, TerminalSession>();
   return {
-    open(ws: ServerWebSocket<any>) {
+    open(ws: WebSocket) {
       unsubs.set(ws, new Map());
       logStreams.set(ws, new LogStreamManager(ws, context));
       terminals.set(ws, new TerminalSession(ws));
     },
-    close(ws: ServerWebSocket<any>) {
+    close(ws: WebSocket) {
       unsubs.get(ws)?.forEach((u) => u());
       logStreams.get(ws)?.stop();
       chatAborts.get(ws)?.abort();
       terminals.get(ws)?.stop();
     },
-    message(ws: ServerWebSocket<any>, raw: string | Buffer) {
+    message(ws: WebSocket, raw: string | Buffer) {
       const m = JSON.parse(String(raw));
       const map = unsubs.get(ws)!;
       if (m.type === "subscribe") {
