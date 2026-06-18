@@ -45,7 +45,7 @@ Pod isolation and the container picker filter in place (live); changing tail siz
 
 ---
 
-## Ask the Helmsman about a line
+## Ask the AI about a line
 
 Hover a line for a **✨ Ask** button, or right-click for **Ask about this line** / **Copy line**. "Ask" hands the line plus ±5 surrounding lines (11 total) to the chat copilot with the source + namespace, so it can investigate in context.
 

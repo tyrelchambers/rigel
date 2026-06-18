@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 132 132" fill="none">
+  <title>Helmsman</title>
+  <path d="M30 46l68-16 4 66-60 6z m68-16l-56 72" stroke="#FFFFFF" stroke-width="3"
+        stroke-linecap="round" stroke-linejoin="round" />
+  <circle cx="30" cy="46" r="7" fill="#FFFFFF" />
+  <circle cx="98" cy="30" r="7" fill="#FFFFFF" />
+  <circle cx="102" cy="96" r="7" fill="#FFFFFF" />
+  <circle cx="42" cy="102" r="7" fill="#FFFFFF" />
+</svg>

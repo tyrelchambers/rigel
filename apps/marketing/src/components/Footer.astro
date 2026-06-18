@@ -1,5 +1,6 @@
 ---
 import { Icon } from "astro-icon/components";
+import Logo from "./Logo.astro";
 
 // Root-absolute hrefs so the footer resolves correctly from any page.
 const columns = [
@@ -7,18 +8,18 @@ const columns = [
         title: "PRODUCT",
         links: [
             { label: "Features", href: "/features" },
-            { label: "The Lookout", href: "/features#lookout" },
-            { label: "The Harbor", href: "/features#harbor" },
+            { label: "Smart alerts", href: "/features#lookout" },
+            { label: "App catalog", href: "/features#harbor" },
             { label: "Changelog", href: "#" },
         ],
     },
     {
-        title: "CREW",
+        title: "FEATURES",
         links: [
-            { label: "The AI crew", href: "/#crew" },
+            { label: "AI assistant", href: "/#crew" },
             { label: "Diagnostics", href: "/features#helmsman" },
             { label: "Auto-fix", href: "/features#watch" },
-            { label: "Watchstanding", href: "/features#watch" },
+            { label: "Autonomous agent", href: "/features#watch" },
         ],
     },
     {
@@ -55,18 +56,14 @@ const social = [
             <!-- brand -->
             <div data-reveal class="max-w-[340px]">
                 <div class="flex items-center gap-3">
-                    <span
-                        class="grid size-10 place-items-center rounded-md bg-accent text-fg-inverse shadow-[0_0_18px_-2px_rgba(56,189,248,0.5)]"
-                    >
-                        <Icon name="lucide:ship-wheel" class="size-[23px]" />
-                    </span>
+                    <Logo class="size-[34px] text-fg" />
                     <span class="text-3xl font-bold tracking-tight text-fg"
                         >Helmsman</span
                     >
                 </div>
                 <p class="mt-5 text-[13.5px] leading-relaxed text-fg-secondary">
-                    You're the captain — the Helmsman runs the ship. AI-native
-                    Kubernetes that diagnoses, fixes, and stands watch so you
+                    Self-host production Kubernetes without an ops team.
+                    AI-native: it diagnoses, fixes, and monitors so you
                     don't have to.
                 </p>
                 <div class="mt-5 flex items-center gap-2 text-fg-tertiary">

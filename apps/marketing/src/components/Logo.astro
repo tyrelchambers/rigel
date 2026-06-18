@@ -1,0 +1,29 @@
+---
+// Helmsman constellation mark. Source of truth: /assets/brand/logo-constellation.svg
+// Single-color via `currentColor` — set a light text color on the dark site. Stroke/dot
+// weights are bumped from the source so the mark reads at small sizes.
+interface Props {
+  class?: string;
+}
+const { class: className } = Astro.props;
+---
+
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 132 132"
+  fill="none"
+  class={className}
+  aria-hidden="true"
+>
+  <path
+    d="M30 46l68-16 4 66-60 6z m68-16l-56 72"
+    stroke="currentColor"
+    stroke-width="9"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <circle cx="30" cy="46" r="10" fill="currentColor" />
+  <circle cx="98" cy="30" r="10" fill="currentColor" />
+  <circle cx="102" cy="96" r="10" fill="currentColor" />
+  <circle cx="42" cy="102" r="10" fill="currentColor" />
+</svg>

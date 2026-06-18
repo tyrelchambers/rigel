@@ -6,9 +6,9 @@ order: 1
 icon: "lucide:rocket"
 ---
 
-Helmsman is a self-hostable, AI-native Kubernetes admin UI — you're the captain, it runs the ship. This guide is the onboarding entry point: it gets Helmsman running in your cluster (or on a single host), logs you in, and connects the optional AI copilot.
+Helmsman is a self-hostable, AI-native Kubernetes admin UI — it diagnoses, monitors, and fixes your cluster with your approval. This guide is the onboarding entry point: it gets Helmsman running in your cluster (or on a single host), logs you in, and connects the optional AI copilot.
 
-Helmsman runs as a single [Bun](https://bun.sh) server (`apps/server`) that serves the React UI (`apps/web`) plus `/api/*` and `/ws` on **port 8787**. It drives `kubectl` and `helm` through a confirm gate, and an optional chat copilot ("the Helmsman") suggests and runs the commands you approve.
+Helmsman runs as a single [Bun](https://bun.sh) server (`apps/server`) that serves the React UI (`apps/web`) plus `/api/*` and `/ws` on **port 8787**. It drives `kubectl` and `helm` through a confirm gate, and an optional AI chat copilot suggests and runs the commands you approve.
 
 > ⚠️ **Helmsman is a cluster-admin tool.** It can read everything and — through a confirm gate — install, scale, and delete across the cluster. Protect it with a password and never expose it publicly without TLS (ideally behind an SSO proxy).
 

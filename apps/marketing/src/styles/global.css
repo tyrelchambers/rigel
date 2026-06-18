@@ -88,7 +88,7 @@
   pointer-events: none;
 }
 
-/* Gradient ink for the big "Take the helm." headline (white → sky). */
+/* Gradient ink for the big closing-CTA headline (white → sky). */
 .ink-gradient {
   background: linear-gradient(180deg, #ffffff 0%, #bae6fd 55%, #38bdf8 100%);
   -webkit-background-clip: text;
