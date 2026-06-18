@@ -13,6 +13,8 @@ import {
   Regex,
   CircleAlert,
   History,
+  Download,
+  Copy,
 } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import {
@@ -42,6 +44,9 @@ import {
   formatTimestamp,
   podColor,
   lineContext,
+  streamStats,
+  buildLogText,
+  MAX_LINES,
 } from "./logDisplay";
 
 export default function LogsPanel() {
@@ -67,6 +72,7 @@ export default function LogsPanel() {
   const [tailLines, setTailLines] = useState(200);
   const [since, setSince] = useState("");
   const [previous, setPrevious] = useState(false);
+  const [droppedWhilePaused, setDroppedWhilePaused] = useState(0);
 
   // Refs so the WS callback and scroll handlers read live values without
   // re-subscribing on every state change.
@@ -101,7 +107,7 @@ export default function LogsPanel() {
         setError(m.message ?? "log stream failed");
         return;
       }
-      if (isPausedRef.current) return; // process continues; we just drop the line
+      if (isPausedRef.current) { setDroppedWhilePaused((d) => d + 1); return; } // process continues; we just drop the line
       if (typeof m.line !== "string") return;
       const line = toLogLine(m.line, m.container);
       setLines((prev) => appendLines(prev, [line]));
@@ -151,6 +157,7 @@ export default function LogsPanel() {
       }
       sendLogsStop();
       setLines([]);
+      setDroppedWhilePaused(0);
       setExpandedLines(new Set());
       setError(null);
       setStickToBottom(true);
@@ -188,6 +195,7 @@ export default function LogsPanel() {
   const clear = useCallback(() => {
     setLines([]);
     setExpandedLines(new Set());
+    setDroppedWhilePaused(0);
   }, []);
 
   const jumpToLatest = useCallback(() => {
@@ -211,6 +219,23 @@ export default function LogsPanel() {
       return next;
     });
   }, []);
+
+  const stats = useMemo(() => streamStats(lines), [lines]);
+
+  const copyAll = useCallback(() => {
+    void navigator.clipboard.writeText(buildLogText(filtered));
+  }, [filtered]);
+
+  const downloadAll = useCallback(() => {
+    const name = selectedItem ? `${selectedItem.namespace}-${selectedItem.name}` : "logs";
+    const blob = new Blob([buildLogText(filtered)], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${name}.log`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [filtered, selectedItem]);
 
   function reissue(next: { tailLines?: number; since?: string; previous?: boolean; container?: string }) {
     // Compute the effective next values BEFORE setState (async) so the re-issued
@@ -455,8 +480,11 @@ export default function LogsPanel() {
                 {query.error ? "invalid pattern" : ""}
               </span>
               {!query.error && (
-                <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
-                  {filtered.length.toLocaleString()} / {lines.length.toLocaleString()} lines
+                <span className="flex items-center gap-2 font-mono text-[10px] tabular-nums text-muted-foreground">
+                  <span>{filtered.length.toLocaleString()} / {stats.total.toLocaleString()} lines</span>
+                  {stats.errors > 0 && <span className="text-red-600 dark:text-red-400">{stats.errors.toLocaleString()} err</span>}
+                  {stats.total >= MAX_LINES && <span className="rounded bg-amber-500/15 px-1 text-amber-700 dark:text-amber-400">buffer full</span>}
+                  {droppedWhilePaused > 0 && <span className="text-amber-700 dark:text-amber-400">paused · {droppedWhilePaused.toLocaleString()} dropped</span>}
                 </span>
               )}
               <select
@@ -518,9 +546,15 @@ export default function LogsPanel() {
                 aria-label={isPaused ? "Resume" : "Pause"}
                 title={isPaused ? "Resume" : "Pause"}
                 disabled={previous}
-                onClick={() => setIsPaused((p) => !p)}
+                onClick={() => setIsPaused((p) => { if (p) setDroppedWhilePaused(0); return !p; })}
               >
                 {isPaused ? <Play /> : <Pause />}
+              </Button>
+              <Button variant="ghost" size="icon-sm" aria-label="Copy visible logs" title="Copy visible logs" onClick={copyAll}>
+                <Copy />
+              </Button>
+              <Button variant="ghost" size="icon-sm" aria-label="Download logs" title="Download .log" onClick={downloadAll}>
+                <Download />
               </Button>
               <Button
                 variant="ghost"
