@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { Lock } from "lucide-react";
+import { Lock, Pencil } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { viewYaml } from "@/store/yamlViewer";
 import { ListRow } from "@/panels/components/ListRow";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
+import { Button } from "@/components/ui/button";
 import { TagPill } from "@/panels/components/TagPill";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import type { Ingress } from "./types";
+import { IngressEditor } from "./IngressEditor";
 import {
   relativeAge,
   className,
@@ -33,6 +35,11 @@ export default function IngressesPanel() {
 
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [editTarget, setEditTarget] = useState<Ingress | null>(null);
+
+  function openEdit(ing: Ingress) {
+    setEditTarget(ing);
+  }
 
   useEffect(() => {
     const ns = namespaceFilter ?? "*";
@@ -105,6 +112,7 @@ export default function IngressesPanel() {
               <ContextMenuItem onClick={() => askClaude(ing, "Logs")}>Ask Claude: Logs</ContextMenuItem>
               <ContextMenuItem onClick={() => askClaude(ing, "Explain")}>Ask Claude: Explain</ContextMenuItem>
               <ContextMenuSeparator />
+              <ContextMenuItem onClick={() => openEdit(ing)}>Edit…</ContextMenuItem>
               <ContextMenuItem onClick={() => viewYaml("ingress", ing.metadata.name, ing.metadata.namespace)}>View YAML…</ContextMenuItem>
               <ContextMenuItem onClick={() => toggleExpand(uid)}>{isOpen ? "Collapse" : "Manage…"}</ContextMenuItem>
             </>
@@ -117,7 +125,7 @@ export default function IngressesPanel() {
               isOpen={isOpen}
               onToggle={() => toggleExpand(uid)}
               contextMenu={rowMenu}
-              expandedContent={<IngressDetail ingress={ing} />}
+              expandedContent={<IngressDetail ingress={ing} onEdit={() => openEdit(ing)} />}
             >
               {/* Two-line content (mirrors the Swift ingress row) */}
               <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -212,6 +220,13 @@ export default function IngressesPanel() {
           <p className="px-4 py-4 text-sm text-muted-foreground">No ingresses match search</p>
         )}
       </div>
+
+      <IngressEditor
+        target={editTarget}
+        open={editTarget != null}
+        onClose={() => setEditTarget(null)}
+        onApplied={() => setEditTarget(null)}
+      />
     </div>
   );
 }
@@ -220,7 +235,7 @@ export default function IngressesPanel() {
 // Expanded detail: ROUTES, TLS (if any), DETAILS
 // ---------------------------------------------------------------------------
 
-function IngressDetail({ ingress }: { ingress: Ingress }) {
+function IngressDetail({ ingress, onEdit }: { ingress: Ingress; onEdit: () => void }) {
   const routes = flattenRoutes(ingress);
   const tlsEntries = ingress.spec?.tls ?? [];
   const cls = className(ingress);
@@ -228,6 +243,14 @@ function IngressDetail({ ingress }: { ingress: Ingress }) {
 
   return (
     <div className="space-y-3">
+      {/* Manage */}
+      <div className="flex items-center justify-end">
+        <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={onEdit}>
+          <Pencil className="size-3" />
+          Edit
+        </Button>
+      </div>
+
       {/* ROUTES */}
       <div className="space-y-1">
         <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">

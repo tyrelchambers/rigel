@@ -193,6 +193,21 @@ export {
   rowsToConfigMapData,
 } from "./configmapSecretEditor";
 
+export {
+  type IngressLike,
+  type IngressInput,
+  type IngressRuleInput,
+  type IngressPathInput,
+  type IngressTLSInput,
+  IMPLEMENTATION_SPECIFIC,
+  blankPath,
+  blankRule,
+  blankTLS,
+  ingressToInput,
+  canSubmitIngress,
+  buildIngressYAML,
+} from "./ingressEditor";
+
 /** Kubernetes ObjectMeta (subset used by the web panels). */
 export interface ObjectMeta {
   name: string;

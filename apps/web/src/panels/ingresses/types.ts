@@ -60,6 +60,8 @@ export interface Ingress {
     namespace?: string;
     uid: string;
     creationTimestamp?: string; // ISO 8601
+    labels?: Record<string, string> | null;
+    annotations?: Record<string, string> | null;
   };
   spec?: IngressSpec;
   status?: IngressStatus;
