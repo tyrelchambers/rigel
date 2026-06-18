@@ -1,4 +1,4 @@
-import { test, expect } from "bun:test";
+import { test, expect } from "vitest";
 import { validateInstall } from "./assistant";
 
 // Install validation (mirrors Swift AssistantViewModel.install() guards). The

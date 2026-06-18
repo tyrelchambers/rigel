@@ -1,4 +1,4 @@
-import { test, expect } from "bun:test";
+import { test, expect } from "vitest";
 import { applyEvent } from "./watchManager";
 
 test("ADDED then MODIFIED upserts; DELETED removes", () => {

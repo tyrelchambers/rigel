@@ -1,4 +1,5 @@
 import { WatchEventParser, type WatchEvent } from "@helmsman/k8s/src/watch";
+import { spawn, type ChildProcess } from "node:child_process";
 
 export function applyEvent(cache: Map<string, any>, e: WatchEvent): void {
   const name = e.object?.metadata?.name;
@@ -11,7 +12,7 @@ type Sub = { kind: string; namespace: string };
 const subKey = (s: Sub) => `${s.kind}/${s.namespace}`;
 
 type Watch = {
-  proc: ReturnType<typeof Bun.spawn>;
+  proc: ChildProcess;
   cache: Map<string, any>;
   listeners: Set<(e: WatchEvent) => void>;
 };
@@ -54,24 +55,18 @@ export class WatchManager {
       "-o",
       "json",
     ];
-    const proc = Bun.spawn(argv, { stdout: "pipe" });
+    const proc = spawn(argv[0], argv.slice(1), { stdio: ["ignore", "pipe", "ignore"] });
     const cache = new Map<string, any>();
     const listeners = new Set<(e: WatchEvent) => void>();
     const parser = new WatchEventParser();
     const w: Watch = { proc, cache, listeners };
     this.watches.set(key, w);
-    (async () => {
-      const reader = proc.stdout.getReader();
-      const dec = new TextDecoder();
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        parser.push(dec.decode(value), (e) => {
-          applyEvent(cache, e);
-          for (const l of listeners) l(e);
-        });
-      }
-    })();
+    proc.stdout!.on("data", (buf: Buffer) => {
+      parser.push(buf.toString("utf8"), (e) => {
+        applyEvent(cache, e);
+        for (const l of listeners) l(e);
+      });
+    });
     return w;
   }
 

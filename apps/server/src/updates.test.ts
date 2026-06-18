@@ -1,4 +1,4 @@
-import { test, expect, describe } from "bun:test";
+import { test, expect, describe } from "vitest";
 import { handleUpdates } from "./updates";
 import { UpdateResolver, type TagSource } from "@helmsman/catalog";
 

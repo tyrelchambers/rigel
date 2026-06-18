@@ -1,4 +1,4 @@
-import { test, expect } from "bun:test";
+import { test, expect } from "vitest";
 import { mapClaudeEvent } from "./claudeBridge";
 
 // ---------------------------------------------------------------------------
@@ -290,13 +290,15 @@ test("buildClaudeArgs still validates model/effort", () => {
   expect(bad).not.toContain("--effort");
 });
 
-test("permissionHookSettings registers a PreToolUse Bash hook with a resolvable bun command", () => {
+test("permissionHookSettings registers a PreToolUse Bash hook run under Node (tsx)", () => {
   const s = JSON.parse(permissionHookSettings());
   const entry = s.hooks.PreToolUse[0];
   expect(entry.matcher).toBe("Bash");
   expect(entry.hooks[0].type).toBe("command");
-  // command invokes bun on an absolute path to the permission hook
-  expect(entry.hooks[0].command).toMatch(/^bun \/.*permissionHook\.ts$/);
+  // command runs the permission hook under Node via tsx (no Bun in the Electron build)
+  expect(entry.hooks[0].command).toMatch(/^node --import tsx \/.*permissionHook\.ts$/);
+  expect(entry.hooks[0].command).toContain("node --import tsx");
+  expect(entry.hooks[0].command).not.toMatch(/^bun /);
 });
 
 test("readAllowlist adds context-prefixed kubectl patterns when a context is set", () => {

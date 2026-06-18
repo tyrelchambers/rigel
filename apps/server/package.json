@@ -3,11 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "postinstall": "node scripts/fix-node-pty.mjs",
     "dev": "bun --watch src/index.ts",
     "build": "bun build src/index.ts --target=bun --outdir=dist",
     "typecheck": "tsc --noEmit",
-    "test": "bun test"
+    "test": "vitest run --passWithNoTests"
   },
-  "dependencies": { "@helmsman/k8s": "workspace:*", "@helmsman/catalog": "workspace:*" },
-  "devDependencies": { "@types/bun": "latest", "typescript": "latest" }
+  "dependencies": { "@helmsman/k8s": "workspace:*", "@helmsman/catalog": "workspace:*", "node-pty": "latest" },
+  "devDependencies": { "@types/bun": "latest", "@types/node": "latest", "typescript": "latest", "vitest": "^4.1.8" }
 }

@@ -7,7 +7,7 @@
 // the file written from the Settings screen is used.
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { unlink } from "node:fs/promises";
+import { readFile, unlink, writeFile } from "node:fs/promises";
 
 const TOKEN_FILE = join(homedir(), ".claude", "helmsman-oauth-token");
 
@@ -18,11 +18,10 @@ function envToken(): string | null {
 
 async function fileToken(): Promise<string | null> {
   try {
-    const f = Bun.file(TOKEN_FILE);
-    if (!(await f.exists())) return null;
-    const t = (await f.text()).trim();
+    const t = (await readFile(TOKEN_FILE, "utf8")).trim();
     return t || null;
   } catch {
+    // ENOENT (file absent) or any read error → treat as no token.
     return null;
   }
 }
@@ -39,12 +38,8 @@ export async function setClaudeToken(token: string): Promise<void> {
     await clearClaudeToken();
     return;
   }
-  await Bun.write(TOKEN_FILE, t);
-  try {
-    await Bun.spawn(["chmod", "600", TOKEN_FILE]).exited;
-  } catch {
-    /* best-effort hardening */
-  }
+  // mode 0o600 replaces the prior chmod-spawn: owner read/write only.
+  await writeFile(TOKEN_FILE, t, { mode: 0o600 });
 }
 
 export async function clearClaudeToken(): Promise<void> {

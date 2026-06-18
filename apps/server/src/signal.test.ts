@@ -1,4 +1,4 @@
-import { test, expect } from "bun:test";
+import { test, expect } from "vitest";
 import { handleSignal } from "./signal";
 import { signalConfigUpdates } from "@helmsman/k8s/src/signal";
 

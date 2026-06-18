@@ -9,7 +9,8 @@
 // Commands are built from typed argv arrays — no shell, no free-form strings —
 // mirroring the Swift WorkloadCommander / HelmCommander invocations.
 
-import { buildKubectlArgs, type RunResult } from "@helmsman/k8s/src/run";
+import { buildKubectlArgs, runProcess, runProcessWithStdin, type RunResult } from "@helmsman/k8s/src/run";
+import { unlink, writeFile } from "node:fs/promises";
 
 /**
  * Build the kubectl argv (verb onward) for a stdin apply. Exported for tests.
@@ -32,24 +33,7 @@ export async function applyManifest(
   dryRun = false,
 ): Promise<RunResult> {
   const args = buildApplyArgs(context, dryRun);
-  try {
-    const proc = Bun.spawn(["kubectl", ...args], {
-      stdin: "pipe",
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    proc.stdin.write(yaml);
-    await proc.stdin.end();
-    const [stdout, stderr] = await Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-    ]);
-    const code = await proc.exited;
-    return { code, stdout, stderr };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { code: -1, stdout: "", stderr: `kubectl not found: ${message}` };
-  }
+  return runProcessWithStdin("kubectl", args, yaml);
 }
 
 export interface HelmInstallRequest {
@@ -89,14 +73,8 @@ export function buildHelmArgs(
   };
 }
 
-async function runHelm(args: string[]): Promise<RunResult> {
-  const proc = Bun.spawn(["helm", ...args], { stdout: "pipe", stderr: "pipe" });
-  const [stdout, stderr] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ]);
-  const code = await proc.exited;
-  return { code, stdout, stderr };
+function runHelm(args: string[]): Promise<RunResult> {
+  return runProcess("helm", args);
 }
 
 /** True when a `helm repo add` failure is the benign "already exists" case. */
@@ -117,7 +95,7 @@ export async function installHelm(
   let valuesFile: string | null = null;
   try {
     valuesFile = `${process.env.TMPDIR ?? "/tmp"}/helmsman-values-${req.releaseName}-${Date.now()}.yaml`;
-    await Bun.write(valuesFile, req.values);
+    await writeFile(valuesFile, req.values);
 
     const args = buildHelmArgs(req, context, valuesFile);
 
@@ -149,7 +127,6 @@ export async function installHelm(
   } finally {
     if (valuesFile) {
       try {
-        const { unlink } = await import("node:fs/promises");
         await unlink(valuesFile);
       } catch {
         // best-effort cleanup

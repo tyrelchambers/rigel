@@ -14,6 +14,8 @@
 // can show "Port-forward failed: <stderr>".
 
 import { buildKubectlArgs } from "@helmsman/k8s/src/run";
+import { spawn, type ChildProcess } from "node:child_process";
+import { once } from "node:events";
 import {
   SIGNAL_BRIDGE_NAME,
   SIGNAL_BRIDGE_PORT,
@@ -60,9 +62,9 @@ async function withPortForward<T>(
     namespace,
   ]);
 
-  let proc: ReturnType<typeof Bun.spawn>;
+  let proc: ChildProcess;
   try {
-    proc = Bun.spawn(["kubectl", ...args], { stdout: "pipe", stderr: "pipe" });
+    proc = spawn("kubectl", args, { stdio: ["ignore", "pipe", "pipe"] });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     throw new PortForwardError(`kubectl not found: ${message}`);
@@ -75,7 +77,7 @@ async function withPortForward<T>(
     proc.kill();
     // Drain so the child fully exits (avoids zombie/EPIPE on the next forward).
     try {
-      await proc.exited;
+      if (proc.exitCode === null && proc.signalCode === null) await once(proc, "close");
     } catch {
       /* already gone */
     }
@@ -87,50 +89,26 @@ async function withPortForward<T>(
  * Rejects with a PortForwardError carrying the captured stderr if the process
  * exits before becoming ready, or after a 10s ceiling.
  */
-async function waitForForwardReady(proc: ReturnType<typeof Bun.spawn>): Promise<void> {
+async function waitForForwardReady(proc: ChildProcess): Promise<void> {
   const stderrChunks: string[] = [];
-  const stderrReader = proc.stderr instanceof ReadableStream ? proc.stderr.getReader() : null;
-  const stdoutReader = proc.stdout instanceof ReadableStream ? proc.stdout.getReader() : null;
-  const decoder = new TextDecoder();
 
   // Capture stderr in the background for the error message.
-  if (stderrReader) {
-    (async () => {
-      try {
-        for (;;) {
-          const { done, value } = await stderrReader.read();
-          if (done) break;
-          if (value) stderrChunks.push(decoder.decode(value));
-        }
-      } catch {
-        /* reader closed on kill */
-      }
-    })();
-  }
+  proc.stderr?.on("data", (buf: Buffer) => stderrChunks.push(buf.toString("utf8")));
 
   const ready = new Promise<void>((resolve, reject) => {
-    if (!stdoutReader) {
+    if (!proc.stdout) {
       reject(new PortForwardError("port-forward produced no output"));
       return;
     }
-    (async () => {
-      try {
-        for (;;) {
-          const { done, value } = await stdoutReader.read();
-          if (done) break;
-          if (value && decoder.decode(value).includes("Forwarding from")) {
-            resolve();
-            return;
-          }
-        }
-        reject(new PortForwardError(stderrChunks.join("").trim() || "port-forward exited"));
-      } catch {
-        reject(new PortForwardError(stderrChunks.join("").trim() || "port-forward closed"));
-      }
-    })();
+    proc.stdout.on("data", (buf: Buffer) => {
+      if (buf.toString("utf8").includes("Forwarding from")) resolve();
+    });
+    proc.stdout.on("end", () => {
+      reject(new PortForwardError(stderrChunks.join("").trim() || "port-forward exited"));
+    });
   });
 
-  const exitedFirst = proc.exited.then(() => {
+  const exitedFirst = once(proc, "close").then(() => {
     throw new PortForwardError(stderrChunks.join("").trim() || "port-forward exited early");
   });
 

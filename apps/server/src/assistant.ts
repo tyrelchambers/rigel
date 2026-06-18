@@ -10,7 +10,7 @@
 // single setting change never clobbers concurrent edits (kill-switch vs mode
 // vs silenced…), exactly like the Swift `patchConfig`.
 
-import { buildKubectlArgs, kubectl, type RunResult } from "@helmsman/k8s/src/run";
+import { buildKubectlArgs, kubectl, runProcessWithStdin, type RunResult } from "@helmsman/k8s/src/run";
 import {
   DEFAULT_INSTALL_CONFIG,
   SECRET_NAME,
@@ -40,26 +40,9 @@ export async function runKubectlStdin(
   stdin: string | null,
 ): Promise<RunResult> {
   const full = buildKubectlArgs(context, args);
-  try {
-    const proc = Bun.spawn(["kubectl", ...full], {
-      stdin: stdin != null ? "pipe" : "ignore",
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    if (stdin != null) {
-      proc.stdin!.write(stdin);
-      await proc.stdin!.end();
-    }
-    const [stdout, stderr] = await Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-    ]);
-    const code = await proc.exited;
-    return { code, stdout, stderr };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { code: -1, stdout: "", stderr: `kubectl not found: ${message}` };
-  }
+  // An empty closed stdin is harmless for the commands that pass `null` here
+  // (get/rollout/delete don't read stdin); apply/delete -f - get the real YAML.
+  return runProcessWithStdin("kubectl", full, stdin ?? "");
 }
 
 /** Throw with the kubectl stderr when a step failed (non-zero exit). */
