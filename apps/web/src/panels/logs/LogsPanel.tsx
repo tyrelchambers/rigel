@@ -30,6 +30,7 @@ import { handoffToChat } from "@/lib/chatHandoff";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem } from "@/components/ui/context-menu";
 import { LoadingState } from "@/panels/components/LoadingState";
+import { NamespaceSelector } from "@/shell/NamespaceBar";
 import { type LogKind, LOG_KINDS, type SidebarItem, buildSidebarItems } from "./logTargets";
 import {
   type LogLine,
@@ -313,6 +314,11 @@ export default function LogsPanel() {
           <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-mono text-muted-foreground">
             {items.length}
           </span>
+        </div>
+        {/* Namespace filter — drives the shared store namespaceFilter that scopes
+            the per-kind watch (the sidebar list narrows to the chosen namespace). */}
+        <div className="shrink-0 border-b px-3 py-2">
+          <NamespaceSelector />
         </div>
         <div className="flex shrink-0 border-b text-xs">
           {LOG_KINDS.map(({ kind, label }) => (
