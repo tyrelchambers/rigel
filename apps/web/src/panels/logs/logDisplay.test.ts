@@ -3,6 +3,7 @@ import {
   toLogLine,
   appendLines,
   filterLines,
+  buildLogQuery,
   sortByTimestamp,
   formatTimestamp,
   podColor,
@@ -188,5 +189,32 @@ describe("lineContext", () => {
     const ctx = lineContext(lines, "id1");
     expect(ctx[0].text).toBe("l0");
     expect(ctx.length).toBe(7); // 0..6
+  });
+});
+
+describe("buildLogQuery", () => {
+  it("empty query matches everything with no ranges", () => {
+    const q = buildLogQuery("", false);
+    expect(q.error).toBeNull();
+    expect(q.test("anything")).toBe(true);
+    expect(q.ranges("anything")).toEqual([]);
+  });
+  it("substring is case-insensitive and returns match ranges", () => {
+    const q = buildLogQuery("err", false);
+    expect(q.test("ERROR here")).toBe(true);
+    expect(q.test("clean")).toBe(false);
+    expect(q.ranges("ERROR err")).toEqual([[0, 3], [6, 9]]);
+  });
+  it("regex mode matches and ranges the pattern", () => {
+    const q = buildLogQuery("e\\d+", true);
+    expect(q.error).toBeNull();
+    expect(q.test("code e42 ok")).toBe(true);
+    expect(q.ranges("e1 e22")).toEqual([[0, 2], [3, 6]]);
+  });
+  it("invalid regex sets error and matches nothing", () => {
+    const q = buildLogQuery("(", true);
+    expect(q.error).not.toBeNull();
+    expect(q.test("(")).toBe(false);
+    expect(q.ranges("(")).toEqual([]);
   });
 });

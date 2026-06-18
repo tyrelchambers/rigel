@@ -66,6 +66,61 @@ export function toLogLine(raw: string): LogLine {
 }
 
 /**
+ * A compiled filter query, built once per filter change and reused for both
+ * line filtering (`test`) and highlight rendering (`ranges`). Empty query
+ * matches everything with no highlights. In regex mode an invalid pattern sets
+ * `error` and matches nothing (no silent fallback to substring).
+ */
+export interface LogQuery {
+  error: string | null;
+  test: (text: string) => boolean;
+  ranges: (text: string) => Array<[number, number]>;
+}
+
+/** Build a LogQuery from the raw filter text and the regex toggle. */
+export function buildLogQuery(query: string, useRegex: boolean): LogQuery {
+  if (query === "") {
+    return { error: null, test: () => true, ranges: () => [] };
+  }
+  if (useRegex) {
+    let re: RegExp;
+    try {
+      re = new RegExp(query, "gi");
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : "invalid pattern", test: () => false, ranges: () => [] };
+    }
+    return {
+      error: null,
+      test: (text) => { re.lastIndex = 0; return re.test(text); },
+      ranges: (text) => {
+        re.lastIndex = 0;
+        const out: Array<[number, number]> = [];
+        for (const m of text.matchAll(re)) {
+          const start = m.index ?? 0;
+          if (m[0].length > 0) out.push([start, start + m[0].length]);
+        }
+        return out;
+      },
+    };
+  }
+  const needle = query.toLowerCase();
+  return {
+    error: null,
+    test: (text) => text.toLowerCase().includes(needle),
+    ranges: (text) => {
+      const out: Array<[number, number]> = [];
+      const hay = text.toLowerCase();
+      let i = hay.indexOf(needle);
+      while (i >= 0) {
+        out.push([i, i + needle.length]);
+        i = hay.indexOf(needle, i + needle.length);
+      }
+      return out;
+    },
+  };
+}
+
+/**
  * Append `incoming` to `lines`, capping at MAX_LINES (drop oldest). Returns a
  * NEW array (never mutates the input) so React state updates are seen.
  */
