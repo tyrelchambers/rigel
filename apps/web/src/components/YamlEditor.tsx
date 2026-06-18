@@ -61,12 +61,26 @@ export default function YamlEditor({ value, onChange, readOnly, schema, height =
       options={{
         readOnly,
         minimap: { enabled: false },
-        fontSize: 12.5,
+        fontSize: 13,
+        lineHeight: 21,
         lineNumbers: "on",
+        lineDecorationsWidth: 14,
+        lineNumbersMinChars: 3,
         tabSize: 2,
         scrollBeyondLastLine: false,
         automaticLayout: true,
         fontFamily: "ui-monospace, 'Geist Mono', monospace",
+        fontLigatures: true,
+        padding: { top: 14, bottom: 14 },
+        renderLineHighlight: "all",
+        roundedSelection: true,
+        smoothScrolling: true,
+        cursorBlinking: "smooth",
+        cursorSmoothCaretAnimation: "on",
+        guides: { indentation: true, bracketPairs: false },
+        overviewRulerLanes: 0,
+        scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10, useShadows: false },
+        stickyScroll: { enabled: false },
       }}
       loading={<div style={{ padding: 16, fontSize: 13, color: "var(--fg-tertiary)" }}>Loading editor…</div>}
     />

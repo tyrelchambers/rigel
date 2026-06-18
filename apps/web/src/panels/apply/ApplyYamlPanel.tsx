@@ -14,17 +14,21 @@ import { listResources } from "@helmsman/catalog";
 import { isYamlFilename, readYamlFile } from "./readYamlFile";
 import { CheckCircle2, Layers, LoaderCircle, Play, Upload } from "lucide-react";
 
-const PLACEHOLDER = `# Paste, type, or upload a Kubernetes manifest (multi-doc with --- supported)
+// Seeded into the editor as a starting template — real, editable content the
+// user can overwrite or clear (not a fake overlay). Multi-doc YAML is supported.
+const DEFAULT_MANIFEST = `# Edit this manifest, paste your own, or upload a file.
+# Multi-document YAML (separated by ---) is supported.
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: example
   namespace: default
 data:
-  hello: world`;
+  hello: world
+`;
 
 export default function ApplyYamlPanel() {
-  const [yaml, setYaml] = useState("");
+  const [yaml, setYaml] = useState(DEFAULT_MANIFEST);
   const [validate, setValidate] = useState<{ pending: boolean; result?: ActionResult; error?: string }>({ pending: false });
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -98,25 +102,36 @@ export default function ApplyYamlPanel() {
           style={{
             flex: 1,
             minHeight: 0,
-            borderRadius: 10,
+            borderRadius: 12,
             overflow: "hidden",
+            background: "#0B0C0E",
             border: `1px solid ${dragOver ? "var(--accent-primary)" : "#26272B"}`,
+            boxShadow: dragOver
+              ? "0 0 0 3px color-mix(in srgb, var(--accent-primary) 18%, transparent)"
+              : "inset 0 1px 0 rgba(255,255,255,0.02)",
             position: "relative",
+            transition: "border-color 120ms ease, box-shadow 120ms ease",
           }}
         >
-          {yaml === "" && (
-            <pre
+          <YamlEditor value={yaml} onChange={onChange} schema={schema ?? null} />
+
+          {/* Drag-and-drop affordance — only while a file is over the editor. */}
+          {dragOver && (
+            <div
               aria-hidden
               style={{
-                position: "absolute", inset: 0, margin: 0, padding: "8px 14px 8px 62px",
-                pointerEvents: "none", zIndex: 1, color: "var(--fg-tertiary)",
-                fontFamily: "ui-monospace, 'Geist Mono', monospace", fontSize: 12.5, lineHeight: 1.5,
+                position: "absolute", inset: 0, zIndex: 2, pointerEvents: "none",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                background: "color-mix(in srgb, var(--accent-primary) 10%, rgba(11,12,14,0.72))",
+                backdropFilter: "blur(1px)",
               }}
             >
-              {PLACEHOLDER}
-            </pre>
+              <span className="flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium"
+                style={{ background: "#15161A", border: "1px solid var(--accent-primary)", color: "var(--accent-primary)" }}>
+                <Upload className="size-3.5" /> Drop a .yaml file to load it
+              </span>
+            </div>
           )}
-          <YamlEditor value={yaml} onChange={onChange} schema={schema ?? null} />
         </div>
 
         {uploadError && (
