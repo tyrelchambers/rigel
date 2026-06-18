@@ -6,7 +6,7 @@
  *   - Header: "✦ Helmsman" left; copy / new-chat / history buttons right.
  *   - Transcript (scrollable, pinned-bottom autoscroll).
  *   - ThinkingPane while streaming.
- *   - ChatComposer with placeholder "Ask Helmsman…  (/ for commands, @ to mention a resource)".
+ *   - PaneComposer with placeholder "Ask Helmsman…  (/ for commands, @ to mention a resource)".
  *   - Composer footer: model label ("Opus 4.8 · High") + "</> commands" + send button.
  *
  * Width: resizable via drag on the left edge (280–520px), persisted to
@@ -858,7 +858,8 @@ const headerBtnStyle: React.CSSProperties = {
 
 const PLACEHOLDER = "Ask Helmsman…  (/ for commands, @ to mention a resource)";
 const LINE_HEIGHT = 20;
-const MAX_LINES = 8;
+const MIN_LINES = 3;
+const MAX_LINES = 14;
 
 interface PaneComposerProps {
   ref?: React.RefObject<HTMLTextAreaElement | null>;
@@ -914,8 +915,9 @@ function PaneComposer({
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
+    const min = LINE_HEIGHT * MIN_LINES;
     const max = LINE_HEIGHT * MAX_LINES;
-    el.style.height = `${Math.min(el.scrollHeight, max)}px`;
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, min), max)}px`;
   }, [value, textareaRef]);
 
   // Active "/" (leading) or "@<token>" trigger from the text up to the caret.
@@ -1137,7 +1139,7 @@ function PaneComposer({
         <textarea
           ref={textareaRef}
           value={value}
-          rows={1}
+          rows={MIN_LINES}
           disabled={disabled}
           placeholder={PLACEHOLDER}
           onChange={(e) => {
@@ -1201,6 +1203,7 @@ const textareaStyle: React.CSSProperties = {
   color: "var(--fg-primary)",
   fontSize: 13,
   lineHeight: `${LINE_HEIGHT}px`,
+  minHeight: LINE_HEIGHT * MIN_LINES,
   maxHeight: LINE_HEIGHT * MAX_LINES,
   padding: "10px 10px 0",
   fontFamily: "var(--font-geist, system-ui, sans-serif)",
