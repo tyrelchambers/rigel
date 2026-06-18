@@ -5,6 +5,7 @@ import {
   RotateCcw,
   RefreshCw,
   MoveVertical,
+  SlidersHorizontal,
   Undo2,
   Pause,
   Play,
@@ -38,6 +39,7 @@ import { buildHandoffPrompt, moveToNamespacePrompt } from "@/panels/components/c
 import type { ActionBlock } from "@/lib/api";
 import { useGitSources, type GitDeployment } from "@/panels/gitops/gitApi";
 import { buildLinkAction, buildUnlinkAction, linkedSourceName, type WorkloadRef } from "@/panels/gitops/linkSource";
+import { DeploymentEditor } from "./DeploymentEditor";
 import type { Deployment } from "./types";
 import type { Pod } from "../pods/types";
 import {
@@ -71,11 +73,14 @@ export default function DeploymentsPanel() {
   const isLoading = useCluster((s) => s.isLoading);
   const error = useCluster((s) => s.error);
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
+  const focusRequest = useCluster((s) => s.focusRequest);
+  const setFocusRequest = useCluster((s) => s.setFocusRequest);
 
   const [search, setSearch] = useState("");
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [scaleTarget, setScaleTarget] = useState<Deployment | null>(null);
+  const [editTarget, setEditTarget] = useState<Deployment | null>(null);
   const [moveTarget, setMoveTarget] = useState<Deployment | null>(null);
   // Registered GitOps deployments (flattened across repos), for the per-deployment
   // "Link to GitHub" control.
@@ -119,6 +124,30 @@ export default function DeploymentsPanel() {
     () => allDeployments.filter((d) => matchesSearch(d, search)),
     [allDeployments, search],
   );
+
+  // Cmd-K focus: expand + scroll to a deployment picked in the command palette.
+  useEffect(() => {
+    if (focusRequest?.kind !== "deployment") return;
+    const match = allDeployments.find(
+      (d) => (d.metadata.uid ?? `${d.metadata.namespace}/${d.metadata.name}`) === focusRequest.key,
+    );
+    if (!match) return; // not streamed yet; effect re-runs when allDeployments updates
+    const k = key(match);
+    setExpanded((prev) => new Set(prev).add(k));
+    setFocusRequest(null);
+    setTimeout(() => {
+      document.querySelector(`[data-row-key="${CSS.escape(k)}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 50);
+  }, [focusRequest, allDeployments]);
+
+  // Drop a stale deployment focus request if we leave before it resolves.
+  useEffect(() => {
+    return () => {
+      if (useCluster.getState().focusRequest?.kind === "deployment") {
+        useCluster.getState().setFocusRequest(null);
+      }
+    };
+  }, []);
 
   function key(d: Deployment): string {
     return d.metadata.uid || `${d.metadata.namespace}/${d.metadata.name}`;
@@ -169,6 +198,10 @@ export default function DeploymentsPanel() {
   function openScale(d: Deployment) {
     setScaleValue(String(desiredReplicas(d)));
     setScaleTarget(d);
+  }
+
+  function openEdit(d: Deployment) {
+    setEditTarget(d);
   }
 
   function confirmScale() {
@@ -242,6 +275,7 @@ export default function DeploymentsPanel() {
               <ContextMenuSeparator />
               <ContextMenuItem onClick={() => restart(d)}>Restart…</ContextMenuItem>
               <ContextMenuItem onClick={() => openScale(d)}>Scale…</ContextMenuItem>
+              <ContextMenuItem onClick={() => openEdit(d)}>Edit config…</ContextMenuItem>
               <ContextMenuItem onClick={() => rollback(d)}>Rollback…</ContextMenuItem>
               <ContextMenuItem onClick={() => togglePause(d)}>{paused ? "Resume rollout" : "Pause rollout"}</ContextMenuItem>
               {linkedSrc && (
@@ -285,6 +319,7 @@ export default function DeploymentsPanel() {
                   onAction={setPendingAction}
                   onRestart={() => restart(d)}
                   onScale={() => openScale(d)}
+                  onEdit={() => openEdit(d)}
                   onRollback={() => rollback(d)}
                   onTogglePause={() => togglePause(d)}
                 />
@@ -455,6 +490,12 @@ export default function DeploymentsPanel() {
         onClose={() => setPendingAction(null)}
       />
 
+      <DeploymentEditor
+        target={editTarget}
+        open={!!editTarget}
+        onClose={() => setEditTarget(null)}
+      />
+
       {moveTarget && (
         <MoveToNamespaceDialog
           deployment={moveTarget}
@@ -538,6 +579,7 @@ interface DeploymentDetailProps {
   onAction: (a: ActionBlock) => void;
   onRestart: () => void;
   onScale: () => void;
+  onEdit: () => void;
   onRollback: () => void;
   onTogglePause: () => void;
 }
@@ -550,6 +592,7 @@ function DeploymentDetail({
   onAction,
   onRestart,
   onScale,
+  onEdit,
   onRollback,
   onTogglePause,
 }: DeploymentDetailProps) {
@@ -694,6 +737,10 @@ function DeploymentDetail({
         <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={onScale}>
           <MoveVertical className="size-3" />
           Scale
+        </Button>
+        <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={onEdit}>
+          <SlidersHorizontal className="size-3" />
+          Edit config
         </Button>
         <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={onRollback}>
           <Undo2 className="size-3" />

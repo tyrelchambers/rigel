@@ -1,8 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, test } from "vitest";
 import {
   filterEntries,
   scoreEntry,
   wrapIndex,
+  buildResourceEntries,
   type PaletteEntry,
 } from "./commandPaletteLogic";
 
@@ -127,4 +128,30 @@ describe("wrapIndex", () => {
     expect(wrapIndex(5, 5)).toBe(0);
     expect(wrapIndex(10, 5)).toBe(0);
   });
+});
+
+test("buildResourceEntries indexes deployments, pods, nodes, secrets with focus payloads", () => {
+  const resources = {
+    deployments: { web: { metadata: { name: "web", namespace: "default", uid: "d1" } } },
+    pods: { "web-abc": { metadata: { name: "web-abc", namespace: "default", uid: "p1" } } },
+    nodes: { node1: { metadata: { name: "node1", uid: "n1" } } },
+    secrets: { db: { metadata: { name: "db", namespace: "default", uid: "s1" } } },
+  };
+  const entries = buildResourceEntries(resources);
+  const dep = entries.find((e) => e.kind === "deployment");
+  expect(dep).toMatchObject({ title: "web", route: "/deployments", group: "Deployments", focusKey: "d1" });
+  expect(entries.some((e) => e.kind === "pod" && e.title === "web-abc")).toBe(true);
+  expect(entries.some((e) => e.kind === "node" && e.route === "/nodes")).toBe(true);
+  expect(entries.some((e) => e.kind === "secret" && e.route === "/secrets")).toBe(true);
+});
+
+test("buildResourceEntries caps pods at 200", () => {
+  const pods: Record<string, unknown> = {};
+  for (let i = 0; i < 250; i++) pods[`p${i}`] = { metadata: { name: `p${i}`, namespace: "default", uid: `p${i}` } };
+  const entries = buildResourceEntries({ pods });
+  expect(entries.filter((e) => e.kind === "pod").length).toBe(200);
+});
+
+test("buildResourceEntries tolerates missing kinds", () => {
+  expect(buildResourceEntries({})).toEqual([]);
 });

@@ -47,6 +47,8 @@ export interface ActionBlock {
   namespace?: string;
   replicas?: number;
   env?: Record<string, string>;
+  /** setEnv only: env var names to remove (kubectl `KEY-` unset syntax). */
+  unsetEnv?: string[];
   container?: string;
   image?: string;
   /** kubectl --requests quantity string e.g. "cpu=250m,memory=512Mi". */
@@ -173,10 +175,11 @@ export function buildCommand(a: ActionBlock): string[] {
     // setDeploymentEnv: ["set","env","deployment/<name>","-n",ns,...sorted_pairs]
     // -----------------------------------------------------------------------
     case "setEnv": {
-      const pairs = Object.entries(a.env ?? {})
-        .map(([k, v]) => `${k}=${v}`)
-        .sort();
-      return ["set", "env", `deployment/${target(a)}`, ...ns, ...pairs];
+      const sets = Object.entries(a.env ?? {}).map(([k, v]) => `${k}=${v}`);
+      const unsets = (a.unsetEnv ?? []).map((k) => `${k}-`);
+      const pairs = [...sets, ...unsets].sort();
+      const containers = a.container ? [`--containers=${a.container}`] : [];
+      return ["set", "env", `deployment/${target(a)}`, ...containers, ...ns, ...pairs];
     }
 
     // -----------------------------------------------------------------------

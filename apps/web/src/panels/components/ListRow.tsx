@@ -41,6 +41,7 @@ export interface ListRowProps {
 }
 
 export function ListRow({
+  rowKey,
   isOpen,
   onToggle,
   children,
@@ -100,13 +101,13 @@ export function ListRow({
       {/* Main row card — wrapped in a right-click context menu when items given. */}
       {contextMenu ? (
         <ContextMenu>
-          <ContextMenuTrigger className={cardClass} style={cardStyle}>
+          <ContextMenuTrigger className={cardClass} style={cardStyle} data-row-key={rowKey}>
             {cardInner}
           </ContextMenuTrigger>
           <ContextMenuContent>{contextMenu}</ContextMenuContent>
         </ContextMenu>
       ) : (
-        <div className={cardClass} style={cardStyle}>
+        <div className={cardClass} style={cardStyle} data-row-key={rowKey}>
           {cardInner}
         </div>
       )}

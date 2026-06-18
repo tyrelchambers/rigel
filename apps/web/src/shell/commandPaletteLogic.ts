@@ -9,6 +9,45 @@ export interface PaletteEntry {
   subtitle: string;
   route: string;
   group: string;
+  /** Resource kind for resource entries ("deployment" | "pod" | "node" | "secret"); absent for panel entries. */
+  kind?: string;
+  /** Stable key (uid) used to focus the resource after navigation. */
+  focusKey?: string;
+}
+
+interface ResourceMeta { kind: string; route: string; group: string; label: string; cap?: number }
+
+const RESOURCE_KINDS: Array<{ store: string } & ResourceMeta> = [
+  { store: "deployments", kind: "deployment", route: "/deployments", group: "Deployments", label: "Deployment" },
+  { store: "pods", kind: "pod", route: "/pods", group: "Pods", label: "Pod", cap: 200 },
+  { store: "nodes", kind: "node", route: "/nodes", group: "Nodes", label: "Node" },
+  { store: "secrets", kind: "secret", route: "/secrets", group: "Secrets", label: "Secret" },
+];
+
+type MetaObj = { metadata?: { name?: string; namespace?: string; uid?: string } };
+
+/** Build palette entries for live cluster resources from the store's resource map. */
+export function buildResourceEntries(resources: Record<string, Record<string, unknown>>): PaletteEntry[] {
+  const out: PaletteEntry[] = [];
+  for (const rk of RESOURCE_KINDS) {
+    const items = Object.values((resources[rk.store] ?? {}) as Record<string, MetaObj>);
+    const capped = rk.cap ? items.slice(0, rk.cap) : items;
+    for (const obj of capped) {
+      const name = obj.metadata?.name;
+      if (!name) continue;
+      const ns = obj.metadata?.namespace;
+      out.push({
+        id: `${rk.kind}-${obj.metadata?.uid ?? name}`,
+        title: name,
+        subtitle: ns ? `${rk.label} · ${ns}` : rk.label,
+        route: rk.route,
+        group: rk.group,
+        kind: rk.kind,
+        focusKey: obj.metadata?.uid ?? name,
+      });
+    }
+  }
+  return out;
 }
 
 /**
