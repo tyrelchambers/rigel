@@ -28,6 +28,8 @@ export interface LogLine {
   timestamp: Date | null;
   text: string;
   colorIndex: number; // 0-7
+  /** Source container (from the server's per-line attribution). "" when unknown. */
+  container?: string;
 }
 
 /** Hex color for a pod, via the shared FNV-1a palette index. */
@@ -53,8 +55,9 @@ function nextId(): string {
   return `line-${_counter}`;
 }
 
-/** Build a LogLine (with id) from a raw kubectl `--prefix --timestamps` line. */
-export function toLogLine(raw: string): LogLine {
+/** Build a LogLine (with id) from a raw kubectl `--prefix --timestamps` line.
+ *  `container` is the server-attributed container for this line (may be ""). */
+export function toLogLine(raw: string, container = ""): LogLine {
   const p = parseLogLine(raw);
   return {
     id: nextId(),
@@ -62,6 +65,7 @@ export function toLogLine(raw: string): LogLine {
     timestamp: p.timestamp,
     text: p.text,
     colorIndex: p.colorIndex,
+    container,
   };
 }
 
@@ -135,6 +139,8 @@ export interface FilterOptions {
   hideProbes: boolean;
   errorsOnly: boolean;
   query: LogQuery;
+  /** When non-empty, keep only lines from this container (live client-side filter). */
+  container?: string;
 }
 
 /**
@@ -147,6 +153,7 @@ export function filterLines(lines: LogLine[], opts: FilterOptions): LogLine[] {
     if (opts.hideProbes && isProbeLine(l.text)) return false;
     if (opts.errorsOnly && !isErrorLine(l.text)) return false;
     if (!opts.query.test(l.text)) return false;
+    if (opts.container && l.container !== opts.container) return false;
     return true;
   });
 }
@@ -280,6 +287,20 @@ export function distinctPods(lines: LogLine[]): string[] {
     if (!seen.has(l.sourcePod)) {
       seen.add(l.sourcePod);
       out.push(l.sourcePod);
+    }
+  }
+  return out;
+}
+
+/** Distinct non-empty `container` names across the lines, in first-seen order. */
+export function distinctContainers(lines: LogLine[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const l of lines) {
+    const c = l.container ?? "";
+    if (c && !seen.has(c)) {
+      seen.add(c);
+      out.push(c);
     }
   }
   return out;

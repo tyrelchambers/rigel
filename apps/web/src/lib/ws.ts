@@ -46,6 +46,8 @@ export interface LogTarget {
   labelSelector?: string;
   pod?: string;
   container?: string;
+  previous?: boolean;
+  since?: string;
 }
 
 /** Start streaming logs for the given targets. {type:"logs.start", targets, tailLines}. */
