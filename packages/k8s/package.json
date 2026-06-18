@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "main": "src/index.ts",
-  "scripts": { "build": "tsc --noEmit", "typecheck": "tsc --noEmit", "test": "bun test" },
-  "devDependencies": { "@types/bun": "latest", "typescript": "latest" }
+  "scripts": { "build": "tsc --noEmit", "typecheck": "tsc --noEmit", "test": "vitest run --passWithNoTests" },
+  "devDependencies": { "@types/node": "latest", "typescript": "latest", "vitest": "^4.1.8" }
 }

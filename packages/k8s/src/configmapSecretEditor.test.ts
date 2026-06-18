@@ -1,4 +1,4 @@
-import { test, expect, describe } from "bun:test";
+import { test, expect, describe } from "vitest";
 import type { ConfigMap, Secret } from "./index";
 import {
   CREATABLE_SECRET_TYPES,

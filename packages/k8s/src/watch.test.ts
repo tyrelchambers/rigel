@@ -1,4 +1,4 @@
-import { test, expect } from "bun:test";
+import { test, expect } from "vitest";
 import { WatchEventParser } from "./watch";
 
 test("emits one event per complete JSON object across chunk boundaries", () => {

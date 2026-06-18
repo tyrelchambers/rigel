@@ -1,3 +1,5 @@
+import { spawn } from "node:child_process";
+
 /**
  * kubectl plugins (invoked as `kubectl <plugin> …`, e.g. the cnpg plugin)
  * REJECT global flags placed before the plugin name — `kubectl --context X cnpg
@@ -21,15 +23,58 @@ export function buildKubectlArgs(context: string | null, args: string[]): string
 
 export interface RunResult { code: number; stdout: string; stderr: string }
 
-/** Run a binary to completion via Bun.spawn (argv array — no shell). */
-export async function runProcess(bin: string, args: string[]): Promise<RunResult> {
-  const proc = Bun.spawn([bin, ...args], { stdout: "pipe", stderr: "pipe" });
-  const [stdout, stderr] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ]);
-  const code = await proc.exited;
-  return { code, stdout, stderr };
+/** Run a binary to completion via node:child_process spawn (argv array — no shell). */
+export function runProcess(bin: string, args: string[]): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const proc = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
+    const outChunks: Buffer[] = [];
+    const errChunks: Buffer[] = [];
+
+    proc.stdout.on("data", (chunk: Buffer) => outChunks.push(chunk));
+    proc.stderr.on("data", (chunk: Buffer) => errChunks.push(chunk));
+
+    proc.on("error", (err: Error) => {
+      resolve({ code: -1, stdout: "", stderr: err.message });
+    });
+
+    proc.on("close", (code: number | null) => {
+      resolve({
+        code: code ?? -1,
+        stdout: Buffer.concat(outChunks).toString("utf8"),
+        stderr: Buffer.concat(errChunks).toString("utf8"),
+      });
+    });
+  });
+}
+
+/**
+ * Run a binary to completion, piping `input` to its stdin.
+ * Use for commands like `kubectl apply -f -` that read from stdin.
+ */
+export function runProcessWithStdin(bin: string, args: string[], input: string): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const proc = spawn(bin, args, { stdio: ["pipe", "pipe", "pipe"] });
+    const outChunks: Buffer[] = [];
+    const errChunks: Buffer[] = [];
+
+    proc.stdout.on("data", (chunk: Buffer) => outChunks.push(chunk));
+    proc.stderr.on("data", (chunk: Buffer) => errChunks.push(chunk));
+
+    proc.on("error", (err: Error) => {
+      resolve({ code: -1, stdout: "", stderr: err.message });
+    });
+
+    proc.on("close", (code: number | null) => {
+      resolve({
+        code: code ?? -1,
+        stdout: Buffer.concat(outChunks).toString("utf8"),
+        stderr: Buffer.concat(errChunks).toString("utf8"),
+      });
+    });
+
+    proc.stdin.write(input);
+    proc.stdin.end();
+  });
 }
 
 export const kubectl = (context: string | null, args: string[]) =>

@@ -1,4 +1,4 @@
-import { test, expect } from "bun:test";
+import { test, expect } from "vitest";
 import { stripStatusBlock } from "./manifestClean";
 
 test("stripStatusBlock drops a top-level status block, keeps the rest", () => {

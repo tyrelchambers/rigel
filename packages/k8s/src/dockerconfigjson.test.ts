@@ -1,4 +1,4 @@
-import { test, expect, describe } from "bun:test";
+import { test, expect, describe } from "vitest";
 import type { Secret } from "./index";
 import {
   DOCKER_HUB_KEY,
@@ -110,7 +110,7 @@ describe("dockerconfigjsonToSecret", () => {
     expect(secret.metadata.name).toBe("helmsman-dockerhub");
     expect(secret.metadata.namespace).toBe("default");
     expect(secret.metadata.labels?.[MANAGED_BY_LABEL]).toBe(MANAGED_BY_VALUE);
-    expect(secret.data?.[DOCKERCONFIGJSON_KEY]).toBeString();
+    expect(typeof secret.data?.[DOCKERCONFIGJSON_KEY]).toBe("string");
   });
 });
 
@@ -202,12 +202,12 @@ describe("displayRegistry", () => {
 describe("isValidDNS1123Subdomain", () => {
   test("accepts valid names", () => {
     for (const n of ["helmsman-dockerhub", "a", "a.b.c", "reg-1"]) {
-      expect(isValidDNS1123Subdomain(n)).toBeTrue();
+      expect(isValidDNS1123Subdomain(n)).toBe(true);
     }
   });
   test("rejects invalid names", () => {
     for (const n of ["", "Helmsman", "-bad", "bad-", "under_score", "a".repeat(254)]) {
-      expect(isValidDNS1123Subdomain(n)).toBeFalse();
+      expect(isValidDNS1123Subdomain(n)).toBe(false);
     }
   });
 });

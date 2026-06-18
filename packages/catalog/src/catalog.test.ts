@@ -1,4 +1,4 @@
-import { test, expect, describe } from "bun:test";
+import { test, expect, describe } from "vitest";
 import { loadCatalog, CATALOG } from "./loader";
 import { substitute } from "./substitute";
 import { installedAppIDs, imageRepoPath, repoPathsMatch } from "./detection";

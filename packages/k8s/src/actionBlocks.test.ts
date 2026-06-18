@@ -1,4 +1,4 @@
-import { test, it, expect, describe } from "bun:test";
+import { test, it, expect, describe } from "vitest";
 import {
   extractActionBlocks,
   stripActionBlocks,
