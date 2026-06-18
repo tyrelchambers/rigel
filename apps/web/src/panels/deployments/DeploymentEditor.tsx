@@ -3,6 +3,7 @@ import type { KVRow, Secret, ConfigMap } from "@helmsman/k8s";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { EnvRefEditor } from "./EnvRefEditor";
+import { ImagePullSecretsField } from "./ImagePullSecretsField";
 import {
   Sheet,
   SheetContent,
@@ -220,6 +221,12 @@ export function DeploymentEditor({ target, open, onClose, onApplied }: Deploymen
                   </div>
                 </div>
               ))}
+
+              <ImagePullSecretsField
+                value={model.imagePullSecrets}
+                secrets={secrets}
+                onChange={(next) => setModel({ ...model, imagePullSecrets: next })}
+              />
             </div>
           )}
 
