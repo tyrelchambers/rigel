@@ -52,9 +52,13 @@ describe("buildSidebarItems", () => {
     expect(items[0]).toMatchObject({ statusText: "Running", unhealthy: false, pod: "web-abc", selector: null });
     expect(items[1]).toMatchObject({ statusText: "CrashLoopBackOff", unhealthy: true, pod: "web-def" });
   });
-  it("search filters by name/namespace (case-insensitive)", () => {
-    expect(buildSidebarItems(resources, "pods", "DEF").map((i) => i.name)).toEqual(["web-def"]);
-    expect(buildSidebarItems(resources, "pods", "kube").length).toBe(0);
+  it("search matches by name (case-insensitive)", () => {
+    expect(buildSidebarItems(resources, "pods", "ABC").map((i) => i.name)).toEqual(["web-abc"]);
+    expect(buildSidebarItems(resources, "pods", "zzz").length).toBe(0);
+  });
+  it("search matches by namespace", () => {
+    // fluentd lives in kube-system → searching the namespace finds it.
+    expect(buildSidebarItems(resources, "daemonsets", "kube-system").map((i) => i.name)).toEqual(["fluentd"]);
   });
   it("empty kind → []", () => {
     expect(buildSidebarItems(resources, "statefulsets", "")).toEqual([]);

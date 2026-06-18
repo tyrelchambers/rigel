@@ -67,7 +67,7 @@ export function buildSidebarItems(
   for (const o of Object.values(raw)) {
     const name = o.metadata?.name ?? "";
     const namespace = o.metadata?.namespace ?? "default";
-    if (q && !name.toLowerCase().includes(q)) continue;
+    if (q && !name.toLowerCase().includes(q) && !namespace.toLowerCase().includes(q)) continue;
     const { statusText, unhealthy } = statusFor(kind, o);
     items.push({
       key: `${namespace}/${name}`,
