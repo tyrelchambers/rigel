@@ -166,3 +166,51 @@ test("diffDeployment emits a clear label when image pull secrets are removed", (
     { kind: "setImagePullSecrets", name: "web", namespace: "default", imagePullSecrets: [], label: "Clear image pull secrets" },
   ]);
 });
+
+test("diffDeployment emits setEnvRef when a new secret ref is added", () => {
+  const original = dep();
+  const edit = editModelFor(original);
+  edit.containers[0].envRefs.push({ id: "API_KEY", name: "API_KEY", source: "secret", resourceName: "api", key: "key" });
+  expect(diffDeployment(original, edit)).toEqual([
+    {
+      kind: "setEnvRef", name: "web", namespace: "default", container: "app",
+      envRefs: [{ name: "API_KEY", source: "secret", resourceName: "api", key: "key" }],
+      label: "Reference secrets/config in app environment",
+    },
+  ]);
+});
+
+test("diffDeployment skips incomplete env ref rows", () => {
+  const original = dep();
+  const edit = editModelFor(original);
+  edit.containers[0].envRefs.push({ id: "X", name: "X", source: "secret", resourceName: "", key: "" });
+  expect(diffDeployment(original, edit)).toEqual([]);
+});
+
+test("diffDeployment unsets an env var when its ref is removed", () => {
+  const original = dep();
+  const edit = editModelFor(original);
+  edit.containers[0].envRefs = []; // removes DB_PASS (a secretKeyRef)
+  expect(diffDeployment(original, edit)).toEqual([
+    {
+      kind: "setEnv", name: "web", namespace: "default", container: "app",
+      unsetEnv: ["DB_PASS"], label: "Update app environment",
+    },
+  ]);
+});
+
+test("diffDeployment converting a plain var to a ref unsets then setEnvRefs, in order", () => {
+  const original = dep();
+  const edit = editModelFor(original);
+  // move LOG_LEVEL from plain to a configmap ref
+  edit.containers[0].env = [];
+  edit.containers[0].envRefs.push({ id: "LOG_LEVEL", name: "LOG_LEVEL", source: "configMap", resourceName: "cfg", key: "level" });
+  expect(diffDeployment(original, edit)).toEqual([
+    { kind: "setEnv", name: "web", namespace: "default", container: "app", unsetEnv: ["LOG_LEVEL"], label: "Update app environment" },
+    {
+      kind: "setEnvRef", name: "web", namespace: "default", container: "app",
+      envRefs: [{ name: "LOG_LEVEL", source: "configMap", resourceName: "cfg", key: "level" }],
+      label: "Reference secrets/config in app environment",
+    },
+  ]);
+});
