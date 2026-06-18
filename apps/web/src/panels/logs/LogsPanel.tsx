@@ -125,9 +125,9 @@ export default function LogsPanel() {
   // Single-pod streams hide the 150px pod column. Memoized: distinctPods walks
   // the whole buffer, and the bare body would re-run it on every render (incl.
   // scroll-driven stickToBottom updates).
-  const collapsePod = useMemo(() => distinctPods(lines).length <= 1, [lines]);
-  const containers = useMemo(() => distinctContainers(lines), [lines]);
   const pods = useMemo(() => distinctPods(lines), [lines]);
+  const collapsePod = pods.length <= 1;
+  const containers = useMemo(() => distinctContainers(lines), [lines]);
   // Auto-follow: when stuck to the bottom, jam to the latest line BEFORE paint
   // (useLayoutEffect) so the view doesn't flash mid-scroll. `overflow-anchor:
   // none` on the scroller stops the browser from shifting scrollTop when sorted
@@ -272,7 +272,7 @@ export default function LogsPanel() {
             <button
               key={kind}
               type="button"
-              onClick={() => { setLogKind(kind); setSelectedItem(null); }}
+              onClick={() => { sendLogsStop(); setLines([]); setLogKind(kind); setSelectedItem(null); }}
               aria-pressed={logKind === kind}
               className={`flex-1 py-1.5 ${logKind === kind ? "border-b-2 border-primary font-medium" : "text-muted-foreground hover:text-foreground"}`}
             >
@@ -438,9 +438,10 @@ export default function LogsPanel() {
                       onClick={() => setIsolatedPod((cur) => (cur === p ? "" : p))}
                       aria-pressed={isolatedPod === p}
                       title={`Isolate ${p}`}
-                      className={`max-w-[120px] truncate rounded-full border px-2 py-0.5 font-mono text-[10px] ${
+                      className={`max-w-[120px] truncate rounded-full border-l-2 border px-2 py-0.5 font-mono text-[10px] ${
                         isolatedPod === p ? "border-primary bg-primary/15" : "text-muted-foreground hover:text-foreground"
                       }`}
+                      style={{ borderLeftColor: podColor(p) }}
                     >
                       {p}
                     </button>
