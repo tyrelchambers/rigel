@@ -36,7 +36,7 @@ import { PanelHeader } from "@/panels/components/PanelHeader";
 import { LoadingState } from "@/panels/components/LoadingState";
 import { buildHandoffPrompt, moveToNamespacePrompt } from "@/panels/components/chatHandoffPrompts";
 import type { ActionBlock } from "@/lib/api";
-import { useGitSources, type GitSource } from "@/panels/gitops/gitApi";
+import { useGitSources, type GitDeployment } from "@/panels/gitops/gitApi";
 import { buildLinkAction, buildUnlinkAction, linkedSourceName, type WorkloadRef } from "@/panels/gitops/linkSource";
 import type { Deployment } from "./types";
 import type { Pod } from "../pods/types";
@@ -77,8 +77,13 @@ export default function DeploymentsPanel() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [scaleTarget, setScaleTarget] = useState<Deployment | null>(null);
   const [moveTarget, setMoveTarget] = useState<Deployment | null>(null);
-  // Registered GitOps sources, for the per-deployment "Link to GitHub" control.
+  // Registered GitOps deployments (flattened across repos), for the per-deployment
+  // "Link to GitHub" control.
   const { data: gitSources } = useGitSources();
+  const linkTargets = useMemo(
+    () => (gitSources ?? []).flatMap((r) => r.deployments.map((dep) => ({ repo: r.name, dep }))),
+    [gitSources],
+  );
   const [scaleValue, setScaleValue] = useState("1");
 
   useEffect(() => {
@@ -276,7 +281,7 @@ export default function DeploymentsPanel() {
                   deployment={d}
                   pods={pods}
                   paused={paused}
-                  sources={gitSources ?? []}
+                  linkTargets={linkTargets}
                   onAction={setPendingAction}
                   onRestart={() => restart(d)}
                   onScale={() => openScale(d)}
@@ -529,7 +534,7 @@ interface DeploymentDetailProps {
   deployment: Deployment;
   pods: Pod[];
   paused: boolean;
-  sources: GitSource[];
+  linkTargets: { repo: string; dep: GitDeployment }[];
   onAction: (a: ActionBlock) => void;
   onRestart: () => void;
   onScale: () => void;
@@ -541,7 +546,7 @@ function DeploymentDetail({
   deployment,
   pods,
   paused,
-  sources,
+  linkTargets,
   onAction,
   onRestart,
   onScale,
@@ -716,23 +721,23 @@ function DeploymentDetail({
                 Unlink
               </Button>
             </>
-          ) : sources.length > 0 ? (
+          ) : linkTargets.length > 0 ? (
             <select
               defaultValue=""
-              aria-label="Link to GitHub source"
+              aria-label="Link to GitHub deployment"
               onChange={(e) => {
-                const s = sources.find((x) => x.name === e.target.value);
-                if (s) onAction(buildLinkAction(workloadRef, s));
+                const t = linkTargets.find((x) => x.dep.name === e.target.value);
+                if (t) onAction(buildLinkAction(workloadRef, t.dep));
               }}
               className="h-7 rounded-md border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">Link to GitHub…</option>
-              {sources.map((s) => (
-                <option key={s.name} value={s.name}>{s.name}</option>
+              {linkTargets.map((t) => (
+                <option key={t.dep.name} value={t.dep.name}>{t.repo}/{t.dep.name}</option>
               ))}
             </select>
           ) : (
-            <span className="text-xs text-muted-foreground">Link to GitHub — add a source in GitOps</span>
+            <span className="text-xs text-muted-foreground">Link to GitHub — add a deployment in GitOps</span>
           )}
         </div>
       </div>

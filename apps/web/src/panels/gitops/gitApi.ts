@@ -3,10 +3,9 @@
 // a cluster Secret server-side).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-export interface GitSource {
+/** One independently-syncable manifest dir within a repo. */
+export interface GitDeployment {
   name: string;
-  repoURL: string;
-  branch: string;
   path: string;
   lastSyncedSha?: string;
   lastSyncedAt?: string;
@@ -14,11 +13,24 @@ export interface GitSource {
   lastMessage?: string;
 }
 
+export interface GitSource {
+  name: string;
+  repoURL: string;
+  branch: string;
+  deployments: GitDeployment[];
+}
+
 export interface SaveSourceInput {
   name: string;
   repoURL: string;
   branch?: string;
-  path?: string;
+  deployments?: { name: string; path: string }[];
+}
+
+export interface SaveDeploymentInput {
+  repo: string;
+  name: string;
+  path: string;
 }
 
 export interface GithubAccount {
@@ -139,7 +151,29 @@ export function useDeleteSource() {
   });
 }
 
-/** Sync a source: dryRun → kubectl diff preview; otherwise clone + apply. */
-export function syncSource(name: string, dryRun: boolean): Promise<SyncResult> {
-  return req<SyncResult>("/api/git/sync", json({ name, dryRun }));
+/** Add or update one deployment under an existing repo. */
+export function useSaveDeployment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SaveDeploymentInput) =>
+      req<{ sources: GitSource[] }>("/api/git/sources/deployment", json(input)),
+    onSuccess: (r) => qc.setQueryData(["git-sources"], r.sources),
+  });
+}
+
+export function useDeleteDeployment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ repo, name }: { repo: string; name: string }) =>
+      req<{ sources: GitSource[] }>(
+        `/api/git/sources/deployment?repo=${encodeURIComponent(repo)}&name=${encodeURIComponent(name)}`,
+        { method: "DELETE" },
+      ),
+    onSuccess: (r) => qc.setQueryData(["git-sources"], r.sources),
+  });
+}
+
+/** Sync one deployment: dryRun → kubectl diff preview; otherwise clone + apply. */
+export function syncDeployment(repo: string, deployment: string, dryRun: boolean): Promise<SyncResult> {
+  return req<SyncResult>("/api/git/sync", json({ repo, deployment, dryRun }));
 }

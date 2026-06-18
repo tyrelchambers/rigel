@@ -8,6 +8,9 @@ import {
   parseGitSources,
   gitSourcesConfigMapJSON,
   provenanceAnnotations,
+  resolveTarget,
+  findByDeployment,
+  upsertDeployment,
   SOURCE_REPO_ANNOTATION,
   SOURCE_PATH_ANNOTATION,
   fixBranchName,
@@ -56,10 +59,23 @@ test("redactURL: masks embedded credentials", () => {
   expect(redactURL("https://github.com/me/app.git")).toBe("https://github.com/me/app.git");
 });
 
-test("parseGitSources / gitSourcesConfigMapJSON: round-trips sources, never carries tokens", () => {
+test("parseGitSources / gitSourcesConfigMapJSON: round-trips repo→deployments, never carries tokens", () => {
   const sources: GitSource[] = [
-    { name: "app-one", repoURL: "https://github.com/me/app-one", branch: "main", path: "k8s" },
-    { name: "app-two", repoURL: "https://github.com/me/app-two", branch: "prod", path: ".", lastSyncedSha: "abc123" },
+    {
+      name: "monorepo",
+      repoURL: "https://github.com/me/monorepo",
+      branch: "main",
+      deployments: [
+        { name: "marketing", path: "apps/marketing/k8s" },
+        { name: "server", path: "apps/server/k8s", lastSyncedSha: "abc123", lastStatus: "ok" },
+      ],
+    },
+    {
+      name: "app-two",
+      repoURL: "https://github.com/me/app-two",
+      branch: "prod",
+      deployments: [{ name: "app-two", path: "." }],
+    },
   ];
   const cmJSON = gitSourcesConfigMapJSON("default", sources);
   const cm = JSON.parse(cmJSON);
@@ -71,15 +87,73 @@ test("parseGitSources / gitSourcesConfigMapJSON: round-trips sources, never carr
   expect(back).toEqual(sources);
 });
 
-test("provenanceAnnotations: kubectl annotate key=value pairs binding a workload to its source", () => {
-  const source: GitSource = { name: "my-app", repoURL: "https://github.com/me/my-app", branch: "main", path: "k8s/prod" };
-  expect(provenanceAnnotations(source)).toEqual([
-    `${SOURCE_REPO_ANNOTATION}=my-app`,
+test("parseGitSources: migrates the legacy flat shape to one deployment named after the old source", () => {
+  // Pre-refactor sources.json: each source has a top-level `path`, no `deployments`.
+  const legacy = JSON.stringify([
+    { name: "helmsman-marketing", repoURL: "https://github.com/me/helmsman", branch: "master", path: "apps/marketing/k8s", lastSyncedSha: "deadbee", lastStatus: "ok" },
+    { name: "bare", repoURL: "https://github.com/me/bare", branch: "main" }, // no path → "."
+  ]);
+  expect(parseGitSources(legacy)).toEqual([
+    {
+      name: "helmsman-marketing",
+      repoURL: "https://github.com/me/helmsman",
+      branch: "master",
+      deployments: [{ name: "helmsman-marketing", path: "apps/marketing/k8s", lastSyncedSha: "deadbee", lastStatus: "ok" }],
+    },
+    {
+      name: "bare",
+      repoURL: "https://github.com/me/bare",
+      branch: "main",
+      deployments: [{ name: "bare", path: "." }],
+    },
+  ]);
+});
+
+test("resolveTarget: flattens (repo, deployment) into the clone/apply work-shape", () => {
+  const repo: GitSource = {
+    name: "monorepo",
+    repoURL: "https://github.com/me/monorepo",
+    branch: "main",
+    deployments: [{ name: "marketing", path: "apps/marketing/k8s" }],
+  };
+  expect(resolveTarget(repo, repo.deployments[0]!)).toEqual({
+    name: "marketing",
+    repoURL: "https://github.com/me/monorepo",
+    branch: "main",
+    path: "apps/marketing/k8s",
+  });
+});
+
+test("findByDeployment: locates the repo + deployment for a deployment name", () => {
+  const sources: GitSource[] = [
+    { name: "a", repoURL: "https://github.com/me/a", branch: "main", deployments: [{ name: "a-web", path: "web" }] },
+    { name: "b", repoURL: "https://github.com/me/b", branch: "main", deployments: [{ name: "b-api", path: "api" }, { name: "b-ui", path: "ui" }] },
+  ];
+  expect(findByDeployment(sources, "b-ui")).toEqual({ repo: sources[1]!, dep: sources[1]!.deployments[1]! });
+  expect(findByDeployment(sources, "nope")).toBeNull();
+});
+
+test("upsertDeployment: appends new names, updates path in place preserving sync state", () => {
+  const list = [{ name: "web", path: "web", lastSyncedSha: "abc", lastStatus: "ok" as const }];
+  // new name → appended
+  expect(upsertDeployment(list, { name: "api", path: "api" })).toEqual([
+    { name: "web", path: "web", lastSyncedSha: "abc", lastStatus: "ok" },
+    { name: "api", path: "api" },
+  ]);
+  // existing name → only path changes, lastSynced* preserved
+  expect(upsertDeployment(list, { name: "web", path: "deploy/web" })).toEqual([
+    { name: "web", path: "deploy/web", lastSyncedSha: "abc", lastStatus: "ok" },
+  ]);
+});
+
+test("provenanceAnnotations: binds a workload to its synced deployment (name + path)", () => {
+  expect(provenanceAnnotations({ name: "marketing", repoURL: "https://github.com/me/r", branch: "main", path: "k8s/prod" })).toEqual([
+    `${SOURCE_REPO_ANNOTATION}=marketing`,
     `${SOURCE_PATH_ANNOTATION}=k8s/prod`,
   ]);
   // root path normalizes to "."
-  expect(provenanceAnnotations({ ...source, path: "" })).toEqual([
-    `${SOURCE_REPO_ANNOTATION}=my-app`,
+  expect(provenanceAnnotations({ name: "marketing", repoURL: "https://github.com/me/r", branch: "main", path: "" })).toEqual([
+    `${SOURCE_REPO_ANNOTATION}=marketing`,
     `${SOURCE_PATH_ANNOTATION}=.`,
   ]);
 });

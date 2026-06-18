@@ -10,7 +10,15 @@ import {
   loadSources, saveSources, diffSource, applySource, previewRepoFix, proposeRepoFix,
   loadGithubToken, githubAccountStatus, connectGithub, disconnectGithub, listGithubRepos, listRepoTree,
 } from "./git";
-import { sanitizeSourceName, normalizeManifestPath, type GitSource } from "@helmsman/k8s/src/gitSources";
+import {
+  sanitizeSourceName,
+  normalizeManifestPath,
+  resolveTarget,
+  findByDeployment,
+  upsertDeployment,
+  type GitSource,
+  type GitDeployment,
+} from "@helmsman/k8s/src/gitSources";
 import { getPodMetrics, getNodeMetrics, getNodeDisk } from "./metrics";
 import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusMetrics";
 import { handleUpdates, type UpdatesRequest } from "./updates";
@@ -415,10 +423,12 @@ const server = Bun.serve({
       return Response.json({ sources: await loadSources(context) });
     }
 
-    // POST /api/git/sources — add or update a source. Body:
-    // { name, repoURL, branch?, path? }. Auth uses the account-level GitHub PAT.
+    // POST /api/git/sources — add or update a REPO source. Body:
+    // { name, repoURL, branch?, deployments?: [{ name, path }] }. Deployments are
+    // merged by name (each one's lastSynced* state is preserved; existing
+    // deployments not listed are kept). Auth uses the account-level GitHub PAT.
     if (url.pathname === "/api/git/sources" && req.method === "POST") {
-      let body: { name?: string; repoURL?: string; branch?: string; path?: string };
+      let body: { name?: string; repoURL?: string; branch?: string; deployments?: { name?: string; path?: string }[] };
       try {
         body = (await req.json()) as typeof body;
       } catch {
@@ -429,23 +439,36 @@ const server = Bun.serve({
       }
       const name = sanitizeSourceName(body.name);
       if (!name) return Response.json({ error: "invalid name" }, { status: 422 });
-      let path: string;
+
+      // Normalize + validate the incoming deployments.
+      let incoming: GitDeployment[];
       try {
-        path = normalizeManifestPath(body.path ?? ".");
+        incoming = (body.deployments ?? []).map((d) => {
+          const depName = sanitizeSourceName(d.name ?? "");
+          if (!depName) throw new Error("invalid deployment name");
+          return { name: depName, path: normalizeManifestPath(d.path ?? ".") };
+        });
       } catch (e) {
         return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 422 });
       }
+      const dup = incoming.find((d, i) => incoming.findIndex((x) => x.name === d.name) !== i);
+      if (dup) return Response.json({ error: `duplicate deployment name: ${dup.name}` }, { status: 422 });
+
       const sources = await loadSources(context);
+      // A deployment name is a global id — it can't already belong to another repo.
+      for (const d of incoming) {
+        const owner = findByDeployment(sources, d.name);
+        if (owner && owner.repo.name !== name) {
+          return Response.json({ error: `deployment "${d.name}" is already used by repo "${owner.repo.name}"` }, { status: 409 });
+        }
+      }
       const existing = sources.find((s) => s.name === name);
+      const deployments = incoming.reduce((acc, d) => upsertDeployment(acc, d), existing?.deployments ?? []);
       const next: GitSource = {
         name,
         repoURL: body.repoURL.trim(),
-        branch: body.branch?.trim() || "main",
-        path,
-        lastSyncedSha: existing?.lastSyncedSha,
-        lastSyncedAt: existing?.lastSyncedAt,
-        lastStatus: existing?.lastStatus,
-        lastMessage: existing?.lastMessage,
+        branch: body.branch?.trim() || existing?.branch || "main",
+        deployments,
       };
       const merged = existing ? sources.map((s) => (s.name === name ? next : s)) : [...sources, next];
       const saved = await saveSources(context, merged);
@@ -453,7 +476,52 @@ const server = Bun.serve({
       return Response.json({ sources: merged });
     }
 
-    // DELETE /api/git/sources?name= — remove a source.
+    // POST /api/git/sources/deployment — add or update ONE deployment under a repo.
+    // Body: { repo, name, path }. Preserves the deployment's lastSynced* on update.
+    if (url.pathname === "/api/git/sources/deployment" && req.method === "POST") {
+      let body: { repo?: string; name?: string; path?: string };
+      try {
+        body = (await req.json()) as typeof body;
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      if (!body.repo || !body.name) return Response.json({ error: "missing repo or name" }, { status: 422 });
+      const depName = sanitizeSourceName(body.name);
+      if (!depName) return Response.json({ error: "invalid name" }, { status: 422 });
+      let path: string;
+      try {
+        path = normalizeManifestPath(body.path ?? ".");
+      } catch (e) {
+        return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 422 });
+      }
+      const sources = await loadSources(context);
+      const repo = sources.find((s) => s.name === body.repo);
+      if (!repo) return Response.json({ error: "unknown repo" }, { status: 404 });
+      const owner = findByDeployment(sources, depName);
+      if (owner && owner.repo.name !== repo.name) {
+        return Response.json({ error: `deployment "${depName}" is already used by repo "${owner.repo.name}"` }, { status: 409 });
+      }
+      const updatedRepo: GitSource = { ...repo, deployments: upsertDeployment(repo.deployments, { name: depName, path }) };
+      const merged = sources.map((s) => (s.name === repo.name ? updatedRepo : s));
+      const saved = await saveSources(context, merged);
+      if (saved.code !== 0) return Response.json({ error: saved.stderr || "failed to save sources" }, { status: 500 });
+      return Response.json({ sources: merged });
+    }
+
+    // DELETE /api/git/sources/deployment?repo=&name= — remove one deployment.
+    if (url.pathname === "/api/git/sources/deployment" && req.method === "DELETE") {
+      const repoName = url.searchParams.get("repo");
+      const depName = url.searchParams.get("name");
+      if (!repoName || !depName) return Response.json({ error: "missing repo or name" }, { status: 422 });
+      const sources = await loadSources(context);
+      const merged = sources.map((s) =>
+        s.name === repoName ? { ...s, deployments: s.deployments.filter((d) => d.name !== depName) } : s,
+      );
+      await saveSources(context, merged);
+      return Response.json({ sources: merged });
+    }
+
+    // DELETE /api/git/sources?name= — remove a whole repo (and its deployments).
     if (url.pathname === "/api/git/sources" && req.method === "DELETE") {
       const name = url.searchParams.get("name");
       if (!name) return Response.json({ error: "missing name" }, { status: 422 });
@@ -463,32 +531,36 @@ const server = Bun.serve({
       return Response.json({ sources: merged });
     }
 
-    // POST /api/git/sync — { name, dryRun? }. dryRun → kubectl diff (preview);
-    // otherwise clone + apply, then record the synced sha/status on the source.
+    // POST /api/git/sync — { repo, deployment, dryRun? }. dryRun → kubectl diff
+    // (preview); otherwise clone + apply, then record the synced sha/status on
+    // that deployment.
     if (url.pathname === "/api/git/sync" && req.method === "POST") {
-      let body: { name?: string; dryRun?: boolean };
+      let body: { repo?: string; deployment?: string; dryRun?: boolean };
       try {
         body = (await req.json()) as typeof body;
       } catch {
         return Response.json({ error: "invalid JSON body" }, { status: 400 });
       }
-      if (!body.name) return Response.json({ error: "missing name" }, { status: 422 });
+      if (!body.repo || !body.deployment) return Response.json({ error: "missing repo or deployment" }, { status: 422 });
       const sources = await loadSources(context);
-      const source = sources.find((s) => s.name === body.name);
-      if (!source) return Response.json({ error: "unknown source" }, { status: 404 });
+      const repo = sources.find((s) => s.name === body.repo);
+      const dep = repo?.deployments.find((d) => d.name === body.deployment);
+      if (!repo || !dep) return Response.json({ error: "unknown deployment" }, { status: 404 });
       const token = await loadGithubToken(context);
+      const target = resolveTarget(repo, dep);
       if (body.dryRun === true) {
-        return Response.json(await diffSource(context, source, token));
+        return Response.json(await diffSource(context, target, token));
       }
-      const res = await applySource(context, source, token);
-      const updated: GitSource = {
-        ...source,
-        lastSyncedSha: res.sha ?? source.lastSyncedSha,
+      const res = await applySource(context, target, token);
+      const updatedDep: GitDeployment = {
+        ...dep,
+        lastSyncedSha: res.sha ?? dep.lastSyncedSha,
         lastSyncedAt: new Date().toISOString(),
         lastStatus: res.code === 0 ? "ok" : "error",
         lastMessage: res.code === 0 ? "" : (res.stderr || res.stdout).slice(0, 500),
       };
-      await saveSources(context, sources.map((s) => (s.name === source.name ? updated : s)));
+      const updatedRepo: GitSource = { ...repo, deployments: repo.deployments.map((d) => (d.name === dep.name ? updatedDep : d)) };
+      await saveSources(context, sources.map((s) => (s.name === repo.name ? updatedRepo : s)));
       return Response.json(res);
     }
 
@@ -506,10 +578,12 @@ const server = Bun.serve({
         return Response.json({ error: "missing source, filePath, content, or title" }, { status: 422 });
       }
       const sources = await loadSources(context);
-      const source = sources.find((s) => s.name === body.source);
-      if (!source) return Response.json({ error: "unknown source" }, { status: 404 });
+      // `source` is the deployment's provenance id (the value of the
+      // helmsman.dev/source-repo annotation stamped on the workload).
+      const found = findByDeployment(sources, body.source);
+      if (!found) return Response.json({ error: "unknown source" }, { status: 404 });
       const token = await loadGithubToken(context);
-      const input = { source, token, filePath: body.filePath, content: body.content, title: body.title, body: body.body };
+      const input = { source: resolveTarget(found.repo, found.dep), token, filePath: body.filePath, content: body.content, title: body.title, body: body.body };
       if (body.dryRun === true) return Response.json(await previewRepoFix(input));
       return Response.json(await proposeRepoFix(input));
     }

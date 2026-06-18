@@ -6,18 +6,73 @@
 // Everything here is pure (no I/O) so it is unit-tested directly; the server's
 // git.ts does the cloning/applying and reads/writes the ConfigMap + Secret.
 
-export interface GitSource {
-  /** DNS-safe slug; also the repo workdir name and token Secret key. */
+/**
+ * One independently-syncable manifest directory within a repo. The `name` is the
+ * unit of sync, the `/tmp/helmsman-repos/<name>` workdir, and the provenance id
+ * stamped on synced workloads — so it is globally unique across all repos.
+ */
+export interface GitDeployment {
+  /** Globally-unique DNS slug; workdir name + provenance id. */
   name: string;
-  /** Remote URL, e.g. https://github.com/owner/repo(.git). */
-  repoURL: string;
-  branch: string;
   /** Manifest directory within the repo ("." = root). */
   path: string;
   lastSyncedSha?: string;
   lastSyncedAt?: string;
   lastStatus?: "ok" | "error";
   lastMessage?: string;
+}
+
+/** A GitOps source = one repo plus its independently-deployable manifest dirs. */
+export interface GitSource {
+  /** DNS-safe slug identifying the repo. */
+  name: string;
+  /** Remote URL, e.g. https://github.com/owner/repo(.git). */
+  repoURL: string;
+  branch: string;
+  /** One or more independently-syncable deployments in this repo. */
+  deployments: GitDeployment[];
+}
+
+/**
+ * The flat work-shape the clone/diff/apply helpers operate on: one deployment
+ * resolved against its repo. Structurally the legacy single-path source, so the
+ * server's checkout/diff/apply logic is unchanged.
+ */
+export interface ResolvedTarget {
+  name: string;
+  repoURL: string;
+  branch: string;
+  path: string;
+}
+
+/** Flatten a (repo, deployment) pair into the work-shape the server helpers take. */
+export function resolveTarget(repo: GitSource, dep: GitDeployment): ResolvedTarget {
+  return { name: dep.name, repoURL: repo.repoURL, branch: repo.branch, path: dep.path };
+}
+
+/**
+ * Upsert a deployment into a list by name. When the name already exists, only its
+ * `path` changes — the entry's `lastSynced*` state is preserved (so editing a
+ * deployment's folder doesn't wipe its sync history).
+ */
+export function upsertDeployment(list: GitDeployment[], dep: { name: string; path: string }): GitDeployment[] {
+  const idx = list.findIndex((d) => d.name === dep.name);
+  if (idx === -1) return [...list, { name: dep.name, path: dep.path }];
+  const next = list.slice();
+  next[idx] = { ...list[idx]!, path: dep.path };
+  return next;
+}
+
+/** Find the repo + deployment owning a (globally-unique) deployment name, or null. */
+export function findByDeployment(
+  sources: GitSource[],
+  deploymentName: string,
+): { repo: GitSource; dep: GitDeployment } | null {
+  for (const repo of sources) {
+    const dep = repo.deployments.find((d) => d.name === deploymentName);
+    if (dep) return { repo, dep };
+  }
+  return null;
 }
 
 export const GIT_SOURCES_CONFIGMAP = "helmsman-git-sources";
@@ -45,11 +100,11 @@ export interface RepoEntry {
 export const SOURCE_REPO_ANNOTATION = "helmsman.dev/source-repo";
 export const SOURCE_PATH_ANNOTATION = "helmsman.dev/source-path";
 
-/** `kubectl annotate key=value` pairs binding a workload to its git source. */
-export function provenanceAnnotations(source: GitSource): string[] {
+/** `kubectl annotate key=value` pairs binding a workload to its synced deployment. */
+export function provenanceAnnotations(target: ResolvedTarget): string[] {
   return [
-    `${SOURCE_REPO_ANNOTATION}=${source.name}`,
-    `${SOURCE_PATH_ANNOTATION}=${normalizeManifestPath(source.path)}`,
+    `${SOURCE_REPO_ANNOTATION}=${target.name}`,
+    `${SOURCE_PATH_ANNOTATION}=${normalizeManifestPath(target.path)}`,
   ];
 }
 
@@ -129,7 +184,41 @@ export function redactURL(url: string): string {
   return url.replace(/(https?:\/\/[^/:@]+:)[^@]+@/, "$1***@");
 }
 
-/** Decode the source list from the ConfigMap's `sources.json`. Tolerant. */
+/** Coerce one stored deployment entry, keeping only known fields; null if unusable. */
+function normalizeDeployment(raw: unknown): GitDeployment | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  if (typeof o.name !== "string") return null;
+  const dep: GitDeployment = { name: o.name, path: typeof o.path === "string" ? o.path : "." };
+  if (typeof o.lastSyncedSha === "string") dep.lastSyncedSha = o.lastSyncedSha;
+  if (typeof o.lastSyncedAt === "string") dep.lastSyncedAt = o.lastSyncedAt;
+  if (o.lastStatus === "ok" || o.lastStatus === "error") dep.lastStatus = o.lastStatus;
+  if (typeof o.lastMessage === "string") dep.lastMessage = o.lastMessage;
+  return dep;
+}
+
+/**
+ * Coerce one stored source entry to the current repo→deployments shape. A legacy
+ * flat source ({…, path, lastSynced*}) is migrated to a single deployment named
+ * after the old source, so existing provenance annotations keep resolving.
+ */
+function normalizeSource(raw: unknown): GitSource | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  if (typeof o.name !== "string" || typeof o.repoURL !== "string") return null;
+  const branch = typeof o.branch === "string" ? o.branch : "main";
+  if (Array.isArray(o.deployments)) {
+    const deployments = o.deployments
+      .map(normalizeDeployment)
+      .filter((d): d is GitDeployment => d !== null);
+    return { name: o.name, repoURL: o.repoURL, branch, deployments };
+  }
+  const dep = normalizeDeployment(o); // legacy: o carries name + path + lastSynced*
+  return { name: o.name, repoURL: o.repoURL, branch, deployments: dep ? [dep] : [] };
+}
+
+/** Decode the source list from the ConfigMap's `sources.json`. Tolerant; migrates
+ *  the legacy single-path shape to repo→deployments on read. */
 export function parseGitSources(dataJSON: string | undefined | null): GitSource[] {
   if (!dataJSON) return [];
   let obj: unknown;
@@ -139,10 +228,7 @@ export function parseGitSources(dataJSON: string | undefined | null): GitSource[
     return [];
   }
   if (!Array.isArray(obj)) return [];
-  return obj.filter(
-    (s): s is GitSource =>
-      !!s && typeof (s as GitSource).name === "string" && typeof (s as GitSource).repoURL === "string",
-  );
+  return obj.map(normalizeSource).filter((s): s is GitSource => s !== null);
 }
 
 /** Full ConfigMap JSON for `kubectl apply -f -`. Holds only non-secret config. */
