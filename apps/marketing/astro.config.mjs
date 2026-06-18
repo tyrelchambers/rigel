@@ -9,7 +9,7 @@ import icon from "astro-icon";
 // @tailwindcss/vite plugin, which isn't yet compatible with Astro 6's
 // Rolldown-powered Vite 8.
 export default defineConfig({
-  site: "https://helmsman.sh",
+  site: "https://helmsman.run",
   integrations: [icon()],
   // No raster image optimization is used (SVG/CSS only), so skip the sharp
   // service entirely — keeps the build dependency-free and fast.
