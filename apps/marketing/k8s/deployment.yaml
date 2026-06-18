@@ -1,0 +1,48 @@
+# Helmsman marketing site — static Astro served by nginx.
+# Image is built + pushed by .github/workflows/marketing-build.yml, which also
+# runs `kubectl rollout restart deployment/helmsman-marketing -n default`.
+#
+# Apply everything in this dir:  kubectl apply -f apps/marketing/k8s/
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: helmsman-marketing
+  namespace: default
+  labels:
+    app: helmsman-marketing
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: helmsman-marketing
+  template:
+    metadata:
+      labels:
+        app: helmsman-marketing
+    spec:
+      containers:
+        - name: web
+          image: ghcr.io/tyrelchambers/helmsman-marketing:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
