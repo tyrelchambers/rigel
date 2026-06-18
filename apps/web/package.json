@@ -31,6 +31,7 @@
     "@helmsman/catalog": "workspace:*",
     "@helmsman/k8s": "workspace:*",
     "@tanstack/react-query": "^5.101.0",
+    "@tanstack/react-virtual": "^3.14.3",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "class-variance-authority": "^0.7.1",

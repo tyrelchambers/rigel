@@ -18,6 +18,8 @@ import {
   replicasUnhealthy,
   labelSelector,
   lineContext,
+  streamStats,
+  buildLogText,
   MAX_LINES,
   type LogLine,
 } from "./logDisplay";
@@ -351,5 +353,32 @@ describe("filterLines pod isolation", () => {
   });
   it("empty/undefined pod keeps everything", () => {
     expect(filterLines(ls, base).length).toBe(2);
+  });
+});
+
+describe("streamStats", () => {
+  it("counts total and error lines", () => {
+    const ls = [
+      { id: "1", sourcePod: "p", timestamp: null, text: "ok", colorIndex: 0 },
+      { id: "2", sourcePod: "p", timestamp: null, text: "ERROR boom", colorIndex: 0 },
+      { id: "3", sourcePod: "p", timestamp: null, text: "panic!", colorIndex: 0 },
+    ];
+    expect(streamStats(ls)).toEqual({ total: 3, errors: 2 });
+  });
+  it("empty → zeros", () => {
+    expect(streamStats([])).toEqual({ total: 0, errors: 0 });
+  });
+});
+
+describe("buildLogText", () => {
+  it("joins pod, HH:MM:SS, and text per line", () => {
+    const ts = new Date("2026-06-09T17:15:42.000Z");
+    const ls = [
+      { id: "1", sourcePod: "web-0", timestamp: ts, text: "hello", colorIndex: 0 },
+      { id: "2", sourcePod: "web-1", timestamp: null, text: "world", colorIndex: 0 },
+    ];
+    const out = buildLogText(ls).split("\n");
+    expect(out[0]).toBe(`web-0 ${formatTimestamp(ts)} hello`);
+    expect(out[1]).toBe("web-1 world");
   });
 });
