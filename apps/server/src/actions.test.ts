@@ -446,3 +446,33 @@ test("unlinkSourceRepo removes both annotations (trailing-dash)", () => {
   expect(buildCommand({ kind: "unlinkSourceRepo", name: "api", namespace: "personal" }))
     .toEqual(["annotate", "deployment/api", "helmsman.dev/source-repo-", "helmsman.dev/source-path-", "-n", "personal"]);
 });
+
+// ---------------------------------------------------------------------------
+// setImagePullSecrets
+// ---------------------------------------------------------------------------
+test("setImagePullSecrets patches the pod template imagePullSecrets array", () => {
+  expect(
+    buildCommand({ kind: "setImagePullSecrets", name: "web", namespace: "default", imagePullSecrets: ["ghcr-secret"] }),
+  ).toEqual([
+    "patch", "deployment/web", "-n", "default", "--type=merge",
+    "-p", '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"ghcr-secret"}]}}}}',
+  ]);
+});
+
+test("setImagePullSecrets with empty list clears the array", () => {
+  expect(
+    buildCommand({ kind: "setImagePullSecrets", name: "web", namespace: "default", imagePullSecrets: [] }),
+  ).toEqual([
+    "patch", "deployment/web", "-n", "default", "--type=merge",
+    "-p", '{"spec":{"template":{"spec":{"imagePullSecrets":[]}}}}',
+  ]);
+});
+
+test("setImagePullSecrets honors resourceKind", () => {
+  expect(
+    buildCommand({ kind: "setImagePullSecrets", name: "pg", namespace: "db", imagePullSecrets: ["reg"], resourceKind: "statefulset" }),
+  ).toEqual([
+    "patch", "statefulset/pg", "-n", "db", "--type=merge",
+    "-p", '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"reg"}]}}}}',
+  ]);
+});

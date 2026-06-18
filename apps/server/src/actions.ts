@@ -360,6 +360,18 @@ export function buildCommand(a: ActionBlock): string[] {
     }
 
     // -----------------------------------------------------------------------
+    // setImagePullSecrets — patch spec.template.spec.imagePullSecrets (full
+    // desired list). JSON merge patch replaces the array, so detach/clear works
+    // by sending a shorter list or [].
+    // -----------------------------------------------------------------------
+    case "setImagePullSecrets": {
+      const wk = workloadKind(a);
+      const list = (a.imagePullSecrets ?? []).map((n) => ({ name: n }));
+      const patch = JSON.stringify({ spec: { template: { spec: { imagePullSecrets: list } } } });
+      return ["patch", `${wk}/${target(a)}`, ...ns, "--type=merge", "-p", patch];
+    }
+
+    // -----------------------------------------------------------------------
     // command — verbatim args (empty strings pre-filtered by Swift, we mirror)
     // -----------------------------------------------------------------------
     case "command":
