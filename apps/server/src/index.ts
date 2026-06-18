@@ -24,6 +24,8 @@ import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusM
 import { handleUpdates, type UpdatesRequest } from "./updates";
 import { chatConfig, setClaudeToken } from "./chatConfig";
 import { buildSuggestions } from "./suggestions";
+import { getClusterYamlSchema } from "./clusterSchema";
+import { stripStatusBlock } from "@helmsman/k8s/src/manifestClean";
 import {
   passwordConfigured,
   passwordMatches,
@@ -308,17 +310,31 @@ const server = Bun.serve({
       return Response.json(result);
     }
 
-    // GET /api/resource?kind=&name=&namespace= — read-only `kubectl get <kind>
-    // <name> [-n ns] -o yaml`, for the "View YAML" viewer. Returns { code, yaml,
-    // stderr }. Omit namespace for cluster-scoped kinds.
+    // GET /api/resource?kind=&name=&namespace=[&clean=1] — read-only
+    // `kubectl get <kind> <name> [-n ns] -o yaml`, for the "View YAML" viewer.
+    // Pass clean=1 to strip managedFields + status block (for the live editor).
+    // Returns { code, yaml, stderr }. Omit namespace for cluster-scoped kinds.
     if (url.pathname === "/api/resource" && req.method === "GET") {
       const kind = url.searchParams.get("kind");
       const name = url.searchParams.get("name");
       const namespace = url.searchParams.get("namespace");
+      const clean = url.searchParams.get("clean") === "1";
       if (!kind || !name) return Response.json({ error: "missing kind or name" }, { status: 422 });
-      const args = ["get", kind, name, "-o", "yaml", ...(namespace ? ["-n", namespace] : [])];
+      const args = [
+        "get", kind, name, "-o", "yaml",
+        ...(clean ? ["--show-managed-fields=false"] : []),
+        ...(namespace ? ["-n", namespace] : []),
+      ];
       const res = await kubectl(context, args);
-      return Response.json({ code: res.code, yaml: res.stdout, stderr: res.stderr });
+      const yamlOut = clean && res.code === 0 ? stripStatusBlock(res.stdout) : res.stdout;
+      return Response.json({ code: res.code, yaml: yamlOut, stderr: res.stderr });
+    }
+
+    // GET /api/openapi-schema — the live cluster's OpenAPI v2 converted to a
+    // monaco-yaml JSON Schema (cached per context). { schema } or { schema: null }
+    // when unavailable; the client then edits lint-only (no static fallback).
+    if (url.pathname === "/api/openapi-schema" && req.method === "GET") {
+      return Response.json({ schema: await getClusterYamlSchema(context) });
     }
 
     // POST /api/install/metrics-server — one-click upstream metrics-server for
