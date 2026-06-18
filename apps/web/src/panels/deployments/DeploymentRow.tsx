@@ -4,7 +4,7 @@ import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
-import { viewYaml } from "@/store/yamlViewer";
+import { viewYaml, editYaml } from "@/store/yamlViewer";
 import type { ActionBlock } from "@/lib/api";
 import type { GitDeployment } from "@/panels/gitops/gitApi";
 import { buildUnlinkAction, linkedSourceName, type WorkloadRef } from "@/panels/gitops/linkSource";
@@ -86,6 +86,7 @@ export function DeploymentRow({
       )}
       <ContextMenuSeparator />
       <ContextMenuItem onClick={() => viewYaml("deployment", d.metadata.name, d.metadata.namespace)}>View YAML…</ContextMenuItem>
+      <ContextMenuItem onClick={() => editYaml("deployment", d.metadata.name, d.metadata.namespace)}>Edit YAML…</ContextMenuItem>
       <ContextMenuItem onClick={() => setMoveTarget(d)}>Move to namespace…</ContextMenuItem>
       <ContextMenuItem onClick={() => toggleExpand(d)}>{isOpen ? "Collapse" : "Manage…"}</ContextMenuItem>
     </>
