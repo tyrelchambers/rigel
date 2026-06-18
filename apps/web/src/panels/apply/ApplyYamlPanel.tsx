@@ -1,32 +1,42 @@
-// Apply YAML — paste an arbitrary multi-doc manifest, validate it against the
-// apiserver (kubectl apply --dry-run=server), then apply it through the same
-// guarded ConfirmSheet every other mutation uses. Cluster-wide: the namespace
-// comes from each document (kubectl uses the manifest's / current-context default
-// when omitted), so this panel is NOT namespace-scoped.
-import { useState } from "react";
+// Apply YAML — paste/type/UPLOAD an arbitrary multi-doc manifest in a Monaco
+// editor (k8s schema-aware when the cluster schema is available), validate it
+// against the apiserver (kubectl apply --dry-run=server), then apply it through
+// the same guarded ConfirmSheet every other mutation uses. Cluster-wide: the
+// namespace comes from each document, so this panel is NOT namespace-scoped.
+import { useRef, useState } from "react";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { Button } from "@/components/ui/button";
+import { YamlEditor } from "@/components/YamlEditorLazy";
+import { useClusterYamlSchema } from "@/lib/useClusterYamlSchema";
 import { applyManifestYaml, type ActionBlock, type ActionResult } from "@/lib/api";
 import { listResources } from "@helmsman/catalog";
-import { CheckCircle2, Layers, LoaderCircle, Play } from "lucide-react";
+import { isYamlFilename, readYamlFile } from "./readYamlFile";
+import { CheckCircle2, Layers, LoaderCircle, Play, Upload } from "lucide-react";
 
-const PLACEHOLDER = `# Paste a Kubernetes manifest (multi-doc with --- supported)
+// Seeded into the editor as a starting template — real, editable content the
+// user can overwrite or clear (not a fake overlay). Multi-doc YAML is supported.
+const DEFAULT_MANIFEST = `# Edit this manifest, paste your own, or upload a file.
+# Multi-document YAML (separated by ---) is supported.
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: example
   namespace: default
 data:
-  hello: world`;
+  hello: world
+`;
 
 export default function ApplyYamlPanel() {
-  const [yaml, setYaml] = useState("");
+  const [yaml, setYaml] = useState(DEFAULT_MANIFEST);
   const [validate, setValidate] = useState<{ pending: boolean; result?: ActionResult; error?: string }>({ pending: false });
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const { data: schema } = useClusterYamlSchema();
 
-  const trimmed = yaml.trim();
-  const hasContent = trimmed.length > 0;
+  const hasContent = yaml.trim().length > 0;
 
   async function handleValidate() {
     if (!hasContent) return;
@@ -50,9 +60,32 @@ export default function ApplyYamlPanel() {
     if (validate.result || validate.error) setValidate({ pending: false });
   }
 
+  async function loadFile(file: File | undefined) {
+    if (!file) return;
+    setUploadError(null);
+    try {
+      onChange(await readYamlFile(file));
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  const yamlDrop = (e: React.DragEvent) =>
+    Array.from(e.dataTransfer.files).find((f) => isYamlFilename(f.name));
+
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      <PanelHeader title="Apply YAML" subtitle="Create or update resources from a pasted manifest">
+      <PanelHeader title="Apply YAML" subtitle="Create or update resources from a pasted, typed, or uploaded manifest">
+        <input
+          ref={fileInput}
+          type="file"
+          accept=".yaml,.yml,text/yaml"
+          hidden
+          onChange={(e) => { void loadFile(e.target.files?.[0]); e.target.value = ""; }}
+        />
+        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => fileInput.current?.click()}>
+          <Upload className="size-3.5" /> Upload
+        </Button>
         <Button variant="outline" size="sm" onClick={handleValidate} disabled={!hasContent || validate.pending}>
           {validate.pending ? <><LoaderCircle className="size-3.5 animate-spin" /> Validating…</> : "Validate"}
         </Button>
@@ -62,31 +95,50 @@ export default function ApplyYamlPanel() {
       </PanelHeader>
 
       <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 12, padding: 16 }}>
-        <textarea
-          value={yaml}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={PLACEHOLDER}
-          spellCheck={false}
-          autoCapitalize="off"
-          autoCorrect="off"
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false); }}
+          onDrop={(e) => { e.preventDefault(); setDragOver(false); void loadFile(yamlDrop(e)); }}
           style={{
             flex: 1,
             minHeight: 0,
-            resize: "none",
-            width: "100%",
-            padding: "12px 14px",
-            borderRadius: 10,
-            background: "#08080A",
-            border: "1px solid #26272B",
-            color: "var(--fg-primary)",
-            fontFamily: "ui-monospace, 'Geist Mono', monospace",
-            fontSize: 12.5,
-            lineHeight: 1.6,
-            tabSize: 2,
-            outline: "none",
+            borderRadius: 12,
+            overflow: "hidden",
+            background: "#0B0C0E",
+            border: `1px solid ${dragOver ? "var(--accent-primary)" : "#26272B"}`,
+            boxShadow: dragOver
+              ? "0 0 0 3px color-mix(in srgb, var(--accent-primary) 18%, transparent)"
+              : "inset 0 1px 0 rgba(255,255,255,0.02)",
+            position: "relative",
+            transition: "border-color 120ms ease, box-shadow 120ms ease",
           }}
-        />
+        >
+          <YamlEditor value={yaml} onChange={onChange} schema={schema ?? null} />
 
+          {/* Drag-and-drop affordance — only while a file is over the editor. */}
+          {dragOver && (
+            <div
+              aria-hidden
+              style={{
+                position: "absolute", inset: 0, zIndex: 2, pointerEvents: "none",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                background: "color-mix(in srgb, var(--accent-primary) 10%, rgba(11,12,14,0.72))",
+                backdropFilter: "blur(1px)",
+              }}
+            >
+              <span className="flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium"
+                style={{ background: "#15161A", border: "1px solid var(--accent-primary)", color: "var(--accent-primary)" }}>
+                <Upload className="size-3.5" /> Drop a .yaml file to load it
+              </span>
+            </div>
+          )}
+        </div>
+
+        {uploadError && (
+          <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive" style={{ flexShrink: 0 }}>
+            {uploadError}
+          </p>
+        )}
         <ValidationResult state={validate} yaml={yaml} />
       </div>
 
@@ -98,15 +150,11 @@ export default function ApplyYamlPanel() {
 /** Renders the dry-run outcome: a green resource summary on success, the
  *  apiserver's error on failure, or a transport error. */
 function ValidationResult({ state, yaml }: { state: { pending: boolean; result?: ActionResult; error?: string }; yaml: string }) {
-  if (state.error) {
-    return <ResultBox tone="error">{state.error}</ResultBox>;
-  }
+  if (state.error) return <ResultBox tone="error">{state.error}</ResultBox>;
   if (!state.result) return null;
-
   if (state.result.code !== 0) {
     return <ResultBox tone="error">{state.result.stderr || state.result.stdout || "Validation failed."}</ResultBox>;
   }
-
   const resources = listResources(yaml);
   return (
     <div className="flex flex-col gap-1.5" style={{ flexShrink: 0 }}>
@@ -114,10 +162,7 @@ function ValidationResult({ state, yaml }: { state: { pending: boolean; result?:
         <CheckCircle2 className="size-3.5" /> Valid — {resources.length} resource{resources.length === 1 ? "" : "s"} (dry run, nothing applied).
       </p>
       {resources.length > 0 && (
-        <ul
-          className="max-h-32 space-y-0.5 overflow-auto rounded-lg p-1.5 text-xs"
-          style={{ background: "#08080A", border: "1px solid #26272B" }}
-        >
+        <ul className="max-h-32 space-y-0.5 overflow-auto rounded-lg p-1.5 text-xs" style={{ background: "#08080A", border: "1px solid #26272B" }}>
           {resources.map((r, i) => (
             <li key={i} className="flex items-center gap-2 rounded-md px-2 py-1 font-mono">
               <Layers className="size-3 shrink-0" style={{ color: "var(--accent-primary)" }} />
@@ -136,12 +181,7 @@ function ResultBox({ tone, children }: { tone: "error"; children: React.ReactNod
   return (
     <pre
       className="max-h-40 overflow-auto whitespace-pre-wrap rounded-lg px-3 py-2.5 text-xs font-mono"
-      style={{
-        flexShrink: 0,
-        background: tone === "error" ? "rgba(248,113,113,0.10)" : "#08080A",
-        color: "var(--status-failed)",
-        border: "1px solid rgba(248,113,113,0.25)",
-      }}
+      style={{ flexShrink: 0, background: tone === "error" ? "rgba(248,113,113,0.10)" : "#08080A", color: "var(--status-failed)", border: "1px solid rgba(248,113,113,0.25)" }}
     >
       {children}
     </pre>

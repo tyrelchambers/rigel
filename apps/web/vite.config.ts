@@ -24,4 +24,7 @@ export default defineConfig({
       "/ws": { target: "ws://localhost:8787", ws: true },
     },
   },
+  optimizeDeps: {
+    include: ["monaco-editor", "@monaco-editor/react", "monaco-yaml"],
+  },
 });

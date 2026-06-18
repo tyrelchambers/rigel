@@ -1,11 +1,13 @@
 // One card per Git repo — its metadata, "Add deployment"/remove actions, and the
 // list of independently-syncable deployment rows.
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { GitBranch, Plus, Trash2 } from "lucide-react";
 import type { Deployment } from "@/panels/deployments/types";
 import { useDeleteDeployment, type GitSource, type GitDeployment } from "./gitApi";
 import type { WorkloadRef } from "./linkSource";
 import { DeploymentRow } from "./DeploymentRow";
+import { GitOpsFileEditDialog } from "./GitOpsFileEditDialog";
 
 export function RepoCard({
   source,
@@ -27,6 +29,7 @@ export function RepoCard({
   deleting: boolean;
 }) {
   const delDep = useDeleteDeployment();
+  const [editingDep, setEditingDep] = useState<GitDeployment | null>(null);
   return (
     <div style={{ borderRadius: 12, border: "1px solid #26272B", background: "var(--surface-elevated)", padding: 14 }}>
       <div className="flex items-start gap-3">
@@ -60,6 +63,7 @@ export function RepoCard({
             dep={dep}
             linked={linkedByDeployment.get(dep.name) ?? []}
             onSync={() => onSync(dep)}
+            onEditFiles={() => setEditingDep(dep)}
             onLink={() => onLink(dep)}
             onUnlink={onUnlink}
             onDelete={() => delDep.mutate({ repo: source.name, name: dep.name })}
@@ -67,6 +71,10 @@ export function RepoCard({
           />
         ))}
       </div>
+
+      {editingDep && (
+        <GitOpsFileEditDialog repo={source} dep={editingDep} onClose={() => setEditingDep(null)} />
+      )}
     </div>
   );
 }

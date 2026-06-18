@@ -3,6 +3,8 @@
 
 export * from "./alerts";
 
+export { openapiV2ToYamlSchema, gvkApiVersion } from "./openapiSchema";
+
 export {
   type GitSource,
   type GitDeployment,
@@ -192,6 +194,8 @@ export {
   seedSecretRows,
   rowsToConfigMapData,
 } from "./configmapSecretEditor";
+
+export { stripStatusBlock } from "./manifestClean";
 
 export {
   type IngressLike,

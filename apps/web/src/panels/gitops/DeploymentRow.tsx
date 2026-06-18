@@ -1,7 +1,7 @@
 // One row per deployment within a RepoCard — its sync status, "Sync now", and the
 // linked-workloads chips. Independently syncable.
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Trash2, CheckCircle2, AlertTriangle, X, Plus, Boxes } from "lucide-react";
+import { RefreshCw, Trash2, CheckCircle2, AlertTriangle, X, Plus, Boxes, FileCode } from "lucide-react";
 import type { Deployment } from "@/panels/deployments/types";
 import type { GitDeployment } from "./gitApi";
 import type { WorkloadRef } from "./linkSource";
@@ -10,6 +10,7 @@ export function DeploymentRow({
   dep,
   linked,
   onSync,
+  onEditFiles,
   onLink,
   onUnlink,
   onDelete,
@@ -18,6 +19,7 @@ export function DeploymentRow({
   dep: GitDeployment;
   linked: Deployment[];
   onSync: () => void;
+  onEditFiles: () => void;
   onLink: () => void;
   onUnlink: (w: WorkloadRef) => void;
   onDelete: () => void;
@@ -33,6 +35,9 @@ export function DeploymentRow({
           <SyncStatus dep={dep} />
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={onEditFiles}>
+            <FileCode className="size-3.5" /> Edit files
+          </Button>
           <Button size="sm" variant="outline" className="gap-1.5" onClick={onSync}>
             <RefreshCw className="size-3.5" /> Sync now
           </Button>

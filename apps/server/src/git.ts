@@ -150,6 +150,32 @@ export async function listRepoTree(
   return parseRepoContents(await res.json().catch(() => []));
 }
 
+/** Read a single file's text from a repo via the GitHub contents API — mirrors
+ *  listRepoTree but for one blob. Returns the decoded UTF-8 content. Path is
+ *  guarded by safeRepoFilePath (no traversal). */
+export async function readRepoFile(
+  token: string,
+  ownerRepo: string,
+  branch: string,
+  path: string,
+): Promise<{ ok: boolean; content?: string; message?: string }> {
+  let rel: string;
+  try {
+    rel = safeRepoFilePath(path);
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : String(e) };
+  }
+  const [owner, repo] = ownerRepo.split("/");
+  if (!owner || !repo) return { ok: false, message: "bad repo" };
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${rel}?ref=${encodeURIComponent(branch)}`;
+  const res = await fetch(url, { headers: githubHeaders(token) });
+  if (!res.ok) return { ok: false, message: `GitHub ${res.status}` };
+  const j = (await res.json().catch(() => ({}))) as { content?: string; encoding?: string };
+  if (typeof j.content !== "string") return { ok: false, message: "not a file" };
+  const decoded = j.encoding === "base64" ? Buffer.from(j.content, "base64").toString("utf8") : j.content;
+  return { ok: true, content: decoded };
+}
+
 /** List the user's repos (follows Link pagination, capped), newest-updated first. */
 export async function listGithubRepos(token: string): Promise<GithubRepo[]> {
   const out: GithubRepo[] = [];

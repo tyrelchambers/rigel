@@ -12,7 +12,7 @@ import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { PanelHeader } from "@/panels/components/PanelHeader";
-import { viewYaml } from "@/store/yamlViewer";
+import { viewYaml, editYaml } from "@/store/yamlViewer";
 import { SecretEditor } from "./SecretEditor";
 import {
   relativeAge,
@@ -175,6 +175,7 @@ export default function SecretsPanel() {
               <ContextMenuItem onClick={() => openEdit(secret)}>Edit…</ContextMenuItem>
               <ContextMenuSeparator />
               <ContextMenuItem onClick={() => viewYaml("secret", secret.metadata.name, secret.metadata.namespace)}>View YAML…</ContextMenuItem>
+              <ContextMenuItem onClick={() => editYaml("secret", secret.metadata.name, secret.metadata.namespace)}>Edit YAML…</ContextMenuItem>
               <ContextMenuItem onClick={() => toggleExpand(uid)}>{isOpen ? "Collapse" : "Details…"}</ContextMenuItem>
             </>
           );
