@@ -66,6 +66,61 @@ export function toLogLine(raw: string): LogLine {
 }
 
 /**
+ * A compiled filter query, built once per filter change and reused for both
+ * line filtering (`test`) and highlight rendering (`ranges`). Empty query
+ * matches everything with no highlights. In regex mode an invalid pattern sets
+ * `error` and matches nothing (no silent fallback to substring).
+ */
+export interface LogQuery {
+  error: string | null;
+  test: (text: string) => boolean;
+  ranges: (text: string) => Array<[number, number]>;
+}
+
+/** Build a LogQuery from the raw filter text and the regex toggle. */
+export function buildLogQuery(query: string, useRegex: boolean): LogQuery {
+  if (query === "") {
+    return { error: null, test: () => true, ranges: () => [] };
+  }
+  if (useRegex) {
+    let re: RegExp;
+    try {
+      re = new RegExp(query, "gi");
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : "invalid pattern", test: () => false, ranges: () => [] };
+    }
+    return {
+      error: null,
+      test: (text) => { re.lastIndex = 0; return re.test(text); },
+      ranges: (text) => {
+        re.lastIndex = 0;
+        const out: Array<[number, number]> = [];
+        for (const m of text.matchAll(re)) {
+          const start = m.index ?? 0;
+          if (m[0].length > 0) out.push([start, start + m[0].length]);
+        }
+        return out;
+      },
+    };
+  }
+  const needle = query.toLowerCase();
+  return {
+    error: null,
+    test: (text) => text.toLowerCase().includes(needle),
+    ranges: (text) => {
+      const out: Array<[number, number]> = [];
+      const hay = text.toLowerCase();
+      let i = hay.indexOf(needle);
+      while (i >= 0) {
+        out.push([i, i + needle.length]);
+        i = hay.indexOf(needle, i + needle.length);
+      }
+      return out;
+    },
+  };
+}
+
+/**
  * Append `incoming` to `lines`, capping at MAX_LINES (drop oldest). Returns a
  * NEW array (never mutates the input) so React state updates are seen.
  */
@@ -75,18 +130,41 @@ export function appendLines(lines: LogLine[], incoming: LogLine[]): LogLine[] {
   return next;
 }
 
+/** Filters applied to the live line buffer before rendering. */
+export interface FilterOptions {
+  hideProbes: boolean;
+  errorsOnly: boolean;
+  query: LogQuery;
+}
+
 /**
- * Apply the probe filter (when `hideProbes`) and the case-insensitive substring
- * `filter` (when non-empty). Both predicates are independent; order is
- * irrelevant. Mirrors the Swift `filteredLines` computed property.
+ * Apply the probe, errors-only, and text-query filters (all independent and
+ * order-irrelevant). Mirrors the Swift `filteredLines`, extended with
+ * errors-only + regex. Build `query` once with `buildLogQuery`.
  */
-export function filterLines(lines: LogLine[], filter: string, hideProbes: boolean): LogLine[] {
-  const needle = filter.trim().toLowerCase();
+export function filterLines(lines: LogLine[], opts: FilterOptions): LogLine[] {
   return lines.filter((l) => {
-    if (hideProbes && isProbeLine(l.text)) return false;
-    if (needle && !l.text.toLowerCase().includes(needle)) return false;
+    if (opts.hideProbes && isProbeLine(l.text)) return false;
+    if (opts.errorsOnly && !isErrorLine(l.text)) return false;
+    if (!opts.query.test(l.text)) return false;
     return true;
   });
+}
+
+/** Conventional log levels recognized for coloring. */
+export type LogLevel = "error" | "warn" | "info" | "debug";
+
+/**
+ * Detect a conventional level token in a line (word-boundary, case-insensitive),
+ * or null. Priority: error (incl. fatal/panic) → warn → info → debug. Used only
+ * for coloring; the substring `isErrorLine` still drives the errors-only filter.
+ */
+export function detectLevel(text: string): LogLevel | null {
+  if (/\b(?:error|fatal|panic)\b/i.test(text)) return "error";
+  if (/\b(?:warn|warning)\b/i.test(text)) return "warn";
+  if (/\binfo\b/i.test(text)) return "info";
+  if (/\bdebug\b/i.test(text)) return "debug";
+  return null;
 }
 
 /**
@@ -167,4 +245,42 @@ export function lineContext(lines: LogLine[], lineId: string): LogLine[] {
   const start = Math.max(0, idx - 5);
   const end = Math.min(lines.length, idx + 6); // inclusive of +5
   return lines.slice(start, end);
+}
+
+/** A run of text that is either plain or highlighted (a query match). */
+export interface TextSegment { text: string; mark: boolean }
+
+/**
+ * Split `text` into plain/marked segments using highlight ranges `[start,end)`.
+ * Ranges may be unsorted or overlapping; they are sorted and clamped so no
+ * character is emitted twice. Returns a single plain segment when no ranges.
+ */
+export function splitHighlight(text: string, ranges: Array<[number, number]>): TextSegment[] {
+  if (ranges.length === 0) return [{ text, mark: false }];
+  const sorted = [...ranges].sort((a, b) => a[0] - b[0]);
+  const segs: TextSegment[] = [];
+  let pos = 0;
+  for (const [start, end] of sorted) {
+    const s = Math.max(pos, start);
+    if (s > pos) segs.push({ text: text.slice(pos, s), mark: false });
+    if (end > s) {
+      segs.push({ text: text.slice(s, end), mark: true });
+      pos = end;
+    }
+  }
+  if (pos < text.length) segs.push({ text: text.slice(pos), mark: false });
+  return segs;
+}
+
+/** Distinct `sourcePod` names across the lines, in first-seen order. */
+export function distinctPods(lines: LogLine[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const l of lines) {
+    if (!seen.has(l.sourcePod)) {
+      seen.add(l.sourcePod);
+      out.push(l.sourcePod);
+    }
+  }
+  return out;
 }

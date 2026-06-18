@@ -3,6 +3,10 @@ import {
   toLogLine,
   appendLines,
   filterLines,
+  buildLogQuery,
+  detectLevel,
+  splitHighlight,
+  distinctPods,
   sortByTimestamp,
   formatTimestamp,
   podColor,
@@ -61,20 +65,33 @@ describe("filterLines", () => {
     mkLine("User-Agent: kube-probe/1.28"),
     mkLine("ERROR something broke"),
   ];
+  const opts = (over: Partial<{ hideProbes: boolean; errorsOnly: boolean; query: string; regex: boolean }> = {}) => ({
+    hideProbes: over.hideProbes ?? false,
+    errorsOnly: over.errorsOnly ?? false,
+    query: buildLogQuery(over.query ?? "", over.regex ?? false),
+  });
   it("hides probe noise when hideProbes is on", () => {
-    const out = filterLines(lines, "", true).map((l) => l.text);
+    const out = filterLines(lines, opts({ hideProbes: true })).map((l) => l.text);
     expect(out).toEqual(["processing user request", "ERROR something broke"]);
   });
   it("case-insensitive substring filter", () => {
-    const out = filterLines(lines, "error", false).map((l) => l.text);
+    const out = filterLines(lines, opts({ query: "error" })).map((l) => l.text);
     expect(out).toEqual(["ERROR something broke"]);
   });
-  it("applies both filters together", () => {
-    const out = filterLines(lines, "request", true).map((l) => l.text);
+  it("applies hideProbes + query together", () => {
+    const out = filterLines(lines, opts({ hideProbes: true, query: "request" })).map((l) => l.text);
     expect(out).toEqual(["processing user request"]);
   });
-  it("empty filter + hideProbes off returns everything", () => {
-    expect(filterLines(lines, "", false).length).toBe(4);
+  it("empty filter + everything off returns everything", () => {
+    expect(filterLines(lines, opts()).length).toBe(4);
+  });
+  it("errorsOnly keeps only error/fatal/panic lines", () => {
+    const out = filterLines(lines, opts({ errorsOnly: true })).map((l) => l.text);
+    expect(out).toEqual(["ERROR something broke"]);
+  });
+  it("errorsOnly + hideProbes compose (probe error lines would drop, none here)", () => {
+    const out = filterLines(lines, opts({ errorsOnly: true, hideProbes: true })).map((l) => l.text);
+    expect(out).toEqual(["ERROR something broke"]);
   });
 });
 
@@ -188,5 +205,99 @@ describe("lineContext", () => {
     const ctx = lineContext(lines, "id1");
     expect(ctx[0].text).toBe("l0");
     expect(ctx.length).toBe(7); // 0..6
+  });
+});
+
+describe("buildLogQuery", () => {
+  it("empty query matches everything with no ranges", () => {
+    const q = buildLogQuery("", false);
+    expect(q.error).toBeNull();
+    expect(q.test("anything")).toBe(true);
+    expect(q.ranges("anything")).toEqual([]);
+  });
+  it("substring is case-insensitive and returns match ranges", () => {
+    const q = buildLogQuery("err", false);
+    expect(q.test("ERROR here")).toBe(true);
+    expect(q.test("clean")).toBe(false);
+    expect(q.ranges("ERROR err")).toEqual([[0, 3], [6, 9]]);
+  });
+  it("regex mode matches and ranges the pattern", () => {
+    const q = buildLogQuery("e\\d+", true);
+    expect(q.error).toBeNull();
+    expect(q.test("code e42 ok")).toBe(true);
+    expect(q.ranges("e1 e22")).toEqual([[0, 2], [3, 6]]);
+  });
+  it("invalid regex sets error and matches nothing", () => {
+    const q = buildLogQuery("(", true);
+    expect(q.error).not.toBeNull();
+    expect(q.test("(")).toBe(false);
+    expect(q.ranges("(")).toEqual([]);
+  });
+});
+
+describe("detectLevel", () => {
+  it("detects error/fatal/panic as error", () => {
+    expect(detectLevel("ERROR boom")).toBe("error");
+    expect(detectLevel("fatal: nope")).toBe("error");
+    expect(detectLevel("panic: x")).toBe("error");
+  });
+  it("detects warn/warning", () => {
+    expect(detectLevel("WARN low disk")).toBe("warn");
+    expect(detectLevel("warning: deprecated")).toBe("warn");
+  });
+  it("detects info and debug", () => {
+    expect(detectLevel("INFO started")).toBe("info");
+    expect(detectLevel("debug here")).toBe("debug");
+  });
+  it("does not color a /trace URL path as debug", () => {
+    expect(detectLevel("GET /api/trace/foo HTTP/1.1")).toBeNull();
+  });
+  it("returns null when no level token is present", () => {
+    expect(detectLevel("just a plain line")).toBeNull();
+  });
+  it("prioritizes error over lower levels", () => {
+    expect(detectLevel("INFO then ERROR")).toBe("error");
+  });
+});
+
+describe("splitHighlight", () => {
+  it("no ranges → one plain segment", () => {
+    expect(splitHighlight("hello", [])).toEqual([{ text: "hello", mark: false }]);
+  });
+  it("one mid-string range → plain/mark/plain", () => {
+    expect(splitHighlight("hello", [[1, 3]])).toEqual([
+      { text: "h", mark: false },
+      { text: "el", mark: true },
+      { text: "lo", mark: false },
+    ]);
+  });
+  it("range at start and end", () => {
+    expect(splitHighlight("abcd", [[0, 1], [3, 4]])).toEqual([
+      { text: "a", mark: true },
+      { text: "bc", mark: false },
+      { text: "d", mark: true },
+    ]);
+  });
+  it("overlapping ranges are clamped, not duplicated", () => {
+    expect(splitHighlight("abcde", [[0, 3], [2, 4]])).toEqual([
+      { text: "abc", mark: true },
+      { text: "d", mark: true },
+      { text: "e", mark: false },
+    ]);
+  });
+  it("a range fully inside an earlier range is subsumed", () => {
+    expect(splitHighlight("abcde", [[0, 5], [1, 3]])).toEqual([
+      { text: "abcde", mark: true },
+    ]);
+  });
+});
+
+describe("distinctPods", () => {
+  it("returns unique pods in first-seen order", () => {
+    const ls = [mkLine("a", "p1"), mkLine("b", "p2"), mkLine("c", "p1")];
+    expect(distinctPods(ls)).toEqual(["p1", "p2"]);
+  });
+  it("empty → []", () => {
+    expect(distinctPods([])).toEqual([]);
   });
 });
