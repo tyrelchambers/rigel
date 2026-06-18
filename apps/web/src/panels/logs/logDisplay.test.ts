@@ -62,20 +62,29 @@ describe("filterLines", () => {
     mkLine("User-Agent: kube-probe/1.28"),
     mkLine("ERROR something broke"),
   ];
+  const opts = (over: Partial<{ hideProbes: boolean; errorsOnly: boolean; query: string; regex: boolean }> = {}) => ({
+    hideProbes: over.hideProbes ?? false,
+    errorsOnly: over.errorsOnly ?? false,
+    query: buildLogQuery(over.query ?? "", over.regex ?? false),
+  });
   it("hides probe noise when hideProbes is on", () => {
-    const out = filterLines(lines, "", true).map((l) => l.text);
+    const out = filterLines(lines, opts({ hideProbes: true })).map((l) => l.text);
     expect(out).toEqual(["processing user request", "ERROR something broke"]);
   });
   it("case-insensitive substring filter", () => {
-    const out = filterLines(lines, "error", false).map((l) => l.text);
+    const out = filterLines(lines, opts({ query: "error" })).map((l) => l.text);
     expect(out).toEqual(["ERROR something broke"]);
   });
-  it("applies both filters together", () => {
-    const out = filterLines(lines, "request", true).map((l) => l.text);
+  it("applies hideProbes + query together", () => {
+    const out = filterLines(lines, opts({ hideProbes: true, query: "request" })).map((l) => l.text);
     expect(out).toEqual(["processing user request"]);
   });
-  it("empty filter + hideProbes off returns everything", () => {
-    expect(filterLines(lines, "", false).length).toBe(4);
+  it("empty filter + everything off returns everything", () => {
+    expect(filterLines(lines, opts()).length).toBe(4);
+  });
+  it("errorsOnly keeps only error/fatal/panic lines", () => {
+    const out = filterLines(lines, opts({ errorsOnly: true })).map((l) => l.text);
+    expect(out).toEqual(["ERROR something broke"]);
   });
 });
 

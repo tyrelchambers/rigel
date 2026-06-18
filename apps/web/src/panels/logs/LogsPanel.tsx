@@ -30,6 +30,7 @@ import {
   toLogLine,
   appendLines,
   filterLines,
+  buildLogQuery,
   sortByTimestamp,
   formatTimestamp,
   podColor,
@@ -52,6 +53,9 @@ export default function LogsPanel() {
   const [lines, setLines] = useState<LogLine[]>([]);
   const [filter, setFilter] = useState("");
   const [hideProbes, setHideProbes] = useState(false);
+  const [errorsOnly, setErrorsOnly] = useState(false);
+  const [useRegex, setUseRegex] = useState(false);
+  void setErrorsOnly; void setUseRegex; // wired to toolbar buttons in a later task
   const [isPaused, setIsPaused] = useState(false);
   const [wrapLines, setWrapLines] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -115,9 +119,10 @@ export default function LogsPanel() {
   }, []);
 
   // Auto-scroll to the bottom when new lines arrive and the user is at bottom.
+  const query = useMemo(() => buildLogQuery(filter, useRegex), [filter, useRegex]);
   const filtered = useMemo(
-    () => sortByTimestamp(filterLines(lines, filter, hideProbes)),
-    [lines, filter, hideProbes],
+    () => sortByTimestamp(filterLines(lines, { hideProbes, errorsOnly, query })),
+    [lines, hideProbes, errorsOnly, query],
   );
   // Auto-follow: when stuck to the bottom, jam to the latest line BEFORE paint
   // (useLayoutEffect) so the view doesn't flash mid-scroll. `overflow-anchor:

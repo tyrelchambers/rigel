@@ -130,16 +130,23 @@ export function appendLines(lines: LogLine[], incoming: LogLine[]): LogLine[] {
   return next;
 }
 
+/** Filters applied to the live line buffer before rendering. */
+export interface FilterOptions {
+  hideProbes: boolean;
+  errorsOnly: boolean;
+  query: LogQuery;
+}
+
 /**
- * Apply the probe filter (when `hideProbes`) and the case-insensitive substring
- * `filter` (when non-empty). Both predicates are independent; order is
- * irrelevant. Mirrors the Swift `filteredLines` computed property.
+ * Apply the probe, errors-only, and text-query filters (all independent and
+ * order-irrelevant). Mirrors the Swift `filteredLines`, extended with
+ * errors-only + regex. Build `query` once with `buildLogQuery`.
  */
-export function filterLines(lines: LogLine[], filter: string, hideProbes: boolean): LogLine[] {
-  const needle = filter.trim().toLowerCase();
+export function filterLines(lines: LogLine[], opts: FilterOptions): LogLine[] {
   return lines.filter((l) => {
-    if (hideProbes && isProbeLine(l.text)) return false;
-    if (needle && !l.text.toLowerCase().includes(needle)) return false;
+    if (opts.hideProbes && isProbeLine(l.text)) return false;
+    if (opts.errorsOnly && !isErrorLine(l.text)) return false;
+    if (!opts.query.test(l.text)) return false;
     return true;
   });
 }
