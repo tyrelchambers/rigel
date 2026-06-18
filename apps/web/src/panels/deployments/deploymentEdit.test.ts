@@ -20,6 +20,7 @@ function dep(): Deployment {
               resources: { requests: { cpu: "100m", memory: "128Mi" }, limits: { memory: "256Mi" } },
             },
           ],
+          imagePullSecrets: [{ name: "ghcr-secret" }],
         },
       },
     },
@@ -35,7 +36,11 @@ test("editModelFor splits plain vs ref env and reads replicas/image/resources", 
   expect(m.containers[0].memLim).toBe("256Mi");
   expect(m.containers[0].cpuLim).toBe("");
   expect(m.containers[0].env).toEqual([{ id: "LOG_LEVEL", key: "LOG_LEVEL", value: "info" }]);
-  expect(m.containers[0].refEnvKeys).toEqual(["DB_PASS"]);
+  expect(m.containers[0].envRefs).toEqual([
+    { id: "DB_PASS", name: "DB_PASS", source: "secret", resourceName: "db", key: "pass" },
+  ]);
+  expect(m.containers[0].otherRefKeys).toEqual([]);
+  expect(m.imagePullSecrets).toEqual(["ghcr-secret"]);
 });
 
 test("diffDeployment returns empty when nothing changed", () => {
@@ -81,7 +86,7 @@ test("diffDeployment emits setEnv with adds, edits, and removals", () => {
     { id: "LOG_LEVEL", key: "LOG_LEVEL", value: "debug" }, // modified
     { id: "NEW", key: "NEW", value: "1" },                 // added
   ];                                       // (LOG_LEVEL kept, original had only LOG_LEVEL plain)
-  edit.containers[0].refEnvKeys = [];      // removed the DB_PASS ref var
+  edit.containers[0].envRefs = [];          // removed the DB_PASS ref var
   expect(diffDeployment(original, edit)).toEqual([
     {
       kind: "setEnv", name: "web", namespace: "default", container: "app",

@@ -167,16 +167,16 @@ export function DeploymentEditor({ target, open, onClose, onApplied }: Deploymen
                       onRowsChange={(rows: KVRow[]) => updateContainer(ci, { env: rows })}
                       keyPlaceholder="ENV_NAME"
                     />
-                    {c.refEnvKeys.length > 0 && (
+                    {c.otherRefKeys.length > 0 && (
                       <div className="space-y-1 pt-1">
-                        {c.refEnvKeys.map((k) => (
+                        {c.otherRefKeys.map((k) => (
                           <div key={k} className="flex items-center gap-2 rounded border border-dashed px-2 py-1 text-[11px] font-mono text-muted-foreground">
                             <span>{k}</span>
                             <span className="ml-1 text-[10px] uppercase tracking-wide">from ref · read-only</span>
                             <button
                               type="button"
                               className="ml-auto text-destructive hover:underline"
-                              onClick={() => updateContainer(ci, { refEnvKeys: c.refEnvKeys.filter((x) => x !== k) })}
+                              onClick={() => updateContainer(ci, { otherRefKeys: c.otherRefKeys.filter((x) => x !== k) })}
                             >
                               remove
                             </button>
