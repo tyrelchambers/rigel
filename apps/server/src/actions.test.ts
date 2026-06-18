@@ -506,3 +506,15 @@ test("setEnvRef supports configMapKeyRef and multiple refs", () => {
     "-p", '{"spec":{"template":{"spec":{"containers":[{"name":"app","env":[{"name":"LOG_LEVEL","valueFrom":{"configMapKeyRef":{"name":"app-config","key":"log.level"}}},{"name":"TOKEN","valueFrom":{"secretKeyRef":{"name":"app-secrets","key":"token"}}}]}]}}}}',
   ]);
 });
+
+test("setEnvRef honors resourceKind", () => {
+  expect(
+    buildCommand({
+      kind: "setEnvRef", name: "pg", namespace: "db", container: "db", resourceKind: "statefulset",
+      envRefs: [{ name: "PGPASS", source: "secret", resourceName: "pg-secret", key: "password" }],
+    }),
+  ).toEqual([
+    "patch", "statefulset/pg", "-n", "db", "--type=strategic",
+    "-p", '{"spec":{"template":{"spec":{"containers":[{"name":"db","env":[{"name":"PGPASS","valueFrom":{"secretKeyRef":{"name":"pg-secret","key":"password"}}}]}]}}}}',
+  ]);
+});

@@ -31,6 +31,10 @@
  * deleteNamespace  delete namespace <name>
  * deleteResource   varies by resourceKind (see resolveDeleteResource); RBAC cluster-scoped
  *                  kinds (clusterrole/clusterrolebinding) have no -n flag.
+ * setImagePullSecrets patch <workloadKind>/<name> -n <ns> --type=merge -p {"spec":{"template":{"spec":{"imagePullSecrets":[{"name":...}]}}}}
+ *                    Full desired list (merge patch replaces the array; [] clears).
+ * setEnvRef        patch <workloadKind>/<name> -n <ns> --type=strategic -p {... containers[].env[] valueFrom secret/configMapKeyRef ...}
+ *                    Per-container; strategic merge keys containers+env by name. Requires container.
  * command          args[] verbatim (pre-filtered empty strings by Swift)
  * purge            throws PurgeActionError — handled by the client purge flow, not kubectl.
  */
@@ -378,6 +382,7 @@ export function buildCommand(a: ActionBlock): string[] {
     // referenced key, hence the patch.)
     // -----------------------------------------------------------------------
     case "setEnvRef": {
+      if (!a.container) throw new Error("setEnvRef requires a container name (strategic-merge key)");
       const wk = workloadKind(a);
       const env = (a.envRefs ?? []).map((r) => ({
         name: r.name,
