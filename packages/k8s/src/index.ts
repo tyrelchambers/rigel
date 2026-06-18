@@ -195,6 +195,8 @@ export {
   rowsToConfigMapData,
 } from "./configmapSecretEditor";
 
+export { stripStatusBlock } from "./manifestClean";
+
 export {
   type IngressLike,
   type IngressInput,
