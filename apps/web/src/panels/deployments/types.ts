@@ -4,11 +4,23 @@
 // Kept local to the web app so the panel does not depend on workspace-package
 // linking for a type-only import (same pattern as pods/types.ts).
 
+export interface EnvKeyRef {
+  name: string;
+  key: string;
+}
+
+export interface EnvValueFrom {
+  secretKeyRef?: EnvKeyRef;
+  configMapKeyRef?: EnvKeyRef;
+  fieldRef?: { fieldPath?: string };
+  resourceFieldRef?: { resource?: string; containerName?: string };
+}
+
 export interface EnvVar {
   name: string;
   value?: string;
   /** Present for secret/configMap/field refs. When set, the value is not a plain string. */
-  valueFrom?: unknown;
+  valueFrom?: EnvValueFrom;
 }
 
 export interface Container {
@@ -26,7 +38,10 @@ export interface PodTemplate {
   metadata?: {
     labels?: Record<string, string>;
   };
-  spec?: { containers: Container[] };
+  spec?: {
+    containers: Container[];
+    imagePullSecrets?: Array<{ name: string }>;
+  };
 }
 
 export interface DeploymentSpec {
