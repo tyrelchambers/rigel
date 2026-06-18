@@ -221,14 +221,18 @@ export default function LogsPanel() {
     });
   }, []);
 
-  function reissue(next: { tailLines?: number; since?: string; previous?: boolean }) {
+  function reissue(next: { tailLines?: number; since?: string; previous?: boolean; container?: string }) {
+    // Compute the effective next values BEFORE setState (async) so the re-issued
+    // stream uses the intended values, not the stale render-scope ones.
     const t = next.tailLines ?? tailLines;
     const s = next.since ?? since;
     const p = next.previous ?? previous;
+    const c = next.container ?? selectedContainer;
     if (next.tailLines !== undefined) setTailLines(next.tailLines);
     if (next.since !== undefined) setSince(next.since);
     if (next.previous !== undefined) setPrevious(next.previous);
-    if (selected) startStream(selected, { previous: p, since: s, tailLines: t, container: selectedContainer });
+    if (next.container !== undefined) setSelectedContainer(next.container);
+    if (selected) startStream(selected, { previous: p, since: s, tailLines: t, container: c });
   }
 
   // Ask Claude about a line: hand the line + 5 before/after (11 total) to chat.
@@ -409,7 +413,14 @@ export default function LogsPanel() {
               {containers.length > 1 && (
                 <select
                   value={selectedContainer}
-                  onChange={(e) => setSelectedContainer(e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    // Live: client-side filter. Previous mode: the prior-instance
+                    // dump was fetched per-container (-c), so re-issue to fetch the
+                    // newly-picked container instead of filtering an empty buffer.
+                    if (previous) reissue({ container: v });
+                    else setSelectedContainer(v);
+                  }}
                   aria-label="Filter by container"
                   className="rounded-md border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
                   style={{ height: 28 }}
