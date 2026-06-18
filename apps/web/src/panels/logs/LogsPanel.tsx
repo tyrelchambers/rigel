@@ -12,6 +12,7 @@ import {
   Sparkles,
   Regex,
   CircleAlert,
+  History,
 } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import {
@@ -66,6 +67,9 @@ export default function LogsPanel() {
   const [stickToBottom, setStickToBottom] = useState(true);
   const [expandedLines, setExpandedLines] = useState<Set<string>>(new Set());
   const [selectedContainer, setSelectedContainer] = useState("");
+  const [tailLines, setTailLines] = useState(200);
+  const [since, setSince] = useState("");
+  const [previous, setPrevious] = useState(false);
 
   // Refs so the WS callback and scroll handlers read live values without
   // re-subscribing on every state change.
@@ -146,22 +150,41 @@ export default function LogsPanel() {
 
   // --- Actions --------------------------------------------------------------
 
-  const selectDeployment = useCallback((d: Deployment) => {
-    const key = deploymentKey(d);
-    sendLogsStop(); // cancel any previous stream
-    setLines([]);
-    setExpandedLines(new Set());
-    setError(null);
-    setSelectedKey(key);
-    setStickToBottom(true);
+  // (Re)issue the kubectl-logs stream for a deployment with the current options.
+  // `previous` is a one-shot (no -f) dump of the crashed container; in that mode
+  // the selected container (if any) is passed to the server as -c.
+  const startStream = useCallback(
+    (d: Deployment, o: { previous: boolean; since: string; tailLines: number; container: string }) => {
+      const selector = labelSelector(d);
+      if (!selector) {
+        setError("deployment has no spec.selector.matchLabels");
+        return;
+      }
+      sendLogsStop();
+      setLines([]);
+      setExpandedLines(new Set());
+      setError(null);
+      setStickToBottom(true);
+      sendLogsStart(
+        [{
+          namespace: d.metadata.namespace ?? "default",
+          labelSelector: selector,
+          previous: o.previous,
+          since: o.since || undefined,
+          container: o.previous && o.container ? o.container : undefined,
+        }],
+        o.tailLines,
+      );
+    },
+    [],
+  );
 
-    const selector = labelSelector(d);
-    if (!selector) {
-      setError("deployment has no spec.selector.matchLabels");
-      return;
-    }
-    sendLogsStart([{ namespace: d.metadata.namespace ?? "default", labelSelector: selector }], 200);
-  }, []);
+  const selectDeployment = useCallback((d: Deployment) => {
+    setSelectedKey(deploymentKey(d));
+    setSelectedContainer("");
+    setPrevious(false);
+    startStream(d, { previous: false, since, tailLines, container: "" });
+  }, [startStream, since, tailLines]);
 
   const closeStream = useCallback(() => {
     sendLogsStop();
@@ -197,6 +220,16 @@ export default function LogsPanel() {
       return next;
     });
   }, []);
+
+  function reissue(next: { tailLines?: number; since?: string; previous?: boolean }) {
+    const t = next.tailLines ?? tailLines;
+    const s = next.since ?? since;
+    const p = next.previous ?? previous;
+    if (next.tailLines !== undefined) setTailLines(next.tailLines);
+    if (next.since !== undefined) setSince(next.since);
+    if (next.previous !== undefined) setPrevious(next.previous);
+    if (selected) startStream(selected, { previous: p, since: s, tailLines: t, container: selectedContainer });
+  }
 
   // Ask Claude about a line: hand the line + 5 before/after (11 total) to chat.
   const askClaude = useCallback(
@@ -398,6 +431,38 @@ export default function LogsPanel() {
                   {filtered.length.toLocaleString()} / {lines.length.toLocaleString()} lines
                 </span>
               )}
+              <select
+                value={tailLines}
+                onChange={(e) => reissue({ tailLines: Number(e.target.value) })}
+                aria-label="Tail size"
+                className="rounded-md border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+                style={{ height: 28 }}
+              >
+                <option value={200}>200</option>
+                <option value={500}>500</option>
+                <option value={1000}>1000</option>
+              </select>
+              <select
+                value={since}
+                onChange={(e) => reissue({ since: e.target.value })}
+                aria-label="Since"
+                className="rounded-md border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+                style={{ height: 28 }}
+              >
+                <option value="">All time</option>
+                <option value="5m">5m</option>
+                <option value="1h">1h</option>
+              </select>
+              <Button
+                variant={previous ? "secondary" : "ghost"}
+                size="icon-sm"
+                aria-label="Previous (crashed) container logs"
+                aria-pressed={previous}
+                title="Show the previous (crashed) container instance"
+                onClick={() => reissue({ previous: !previous })}
+              >
+                <History />
+              </Button>
               <Button
                 variant={wrapLines ? "secondary" : "ghost"}
                 size="icon-sm"
@@ -424,6 +489,7 @@ export default function LogsPanel() {
                 size="icon-sm"
                 aria-label={isPaused ? "Resume" : "Pause"}
                 title={isPaused ? "Resume" : "Pause"}
+                disabled={previous}
                 onClick={() => setIsPaused((p) => !p)}
               >
                 {isPaused ? <Play /> : <Pause />}
@@ -444,6 +510,11 @@ export default function LogsPanel() {
               <pre className="border-b bg-destructive/10 px-3 py-2 font-mono text-xs text-destructive whitespace-pre-wrap break-all">
                 {error}
               </pre>
+            )}
+            {previous && (
+              <div className="border-b bg-amber-500/10 px-3 py-1.5 font-mono text-[11px] text-amber-700 dark:text-amber-400" role="status">
+                previous instance · not live — showing the crashed container's last logs
+              </div>
             )}
 
             {/* Log scroll area. The scroller is absolutely positioned so its
