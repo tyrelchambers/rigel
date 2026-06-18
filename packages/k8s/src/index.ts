@@ -3,6 +3,8 @@
 
 export * from "./alerts";
 
+export { openapiV2ToYamlSchema, gvkApiVersion } from "./openapiSchema";
+
 export {
   type GitSource,
   type GitDeployment,
