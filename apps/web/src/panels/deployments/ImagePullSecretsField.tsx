@@ -50,10 +50,13 @@ export function ImagePullSecretsField({ value, secrets, onChange }: ImagePullSec
           const name = e.target.value;
           if (name && !value.includes(name)) onChange([...value, name]);
         }}
-        className={selectClass}
+        className={`${selectClass} disabled:opacity-60`}
         aria-label="Add image pull secret"
+        disabled={available.length === 0}
       >
-        <option value="">+ Add registry secret…</option>
+        <option value="">
+          {available.length === 0 ? "No registry secrets available" : "+ Add registry secret…"}
+        </option>
         {available.map((s) => (
           <option key={s.metadata.name} value={s.metadata.name}>{s.metadata.name}</option>
         ))}
