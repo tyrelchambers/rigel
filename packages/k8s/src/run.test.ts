@@ -45,3 +45,10 @@ test("runProcessWithStdin pipes input to the process and returns stdout", async 
   expect(result.code).toBe(0);
   expect(result.stdout).toBe("piped-input");
 });
+
+// EPIPE guard: a child that exits immediately without reading stdin must not
+// crash the process — runProcessWithStdin must resolve with a numeric code.
+test("runProcessWithStdin resolves (EPIPE guard) when child exits before draining a large stdin", async () => {
+  const result = await runProcessWithStdin("sh", ["-c", "exit 0"], "x".repeat(1024 * 1024));
+  expect(typeof result.code).toBe("number");
+});
