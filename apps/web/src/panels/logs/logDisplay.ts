@@ -300,6 +300,20 @@ export function distinctPods(lines: LogLine[]): string[] {
   return out;
 }
 
+/** Aggregate counts for the stats readout. */
+export function streamStats(lines: LogLine[]): { total: number; errors: number } {
+  let errors = 0;
+  for (const l of lines) if (isErrorLine(l.text)) errors++;
+  return { total: lines.length, errors };
+}
+
+/** Render lines as plain text ("pod HH:MM:SS text" per line) for copy/download. */
+export function buildLogText(lines: LogLine[]): string {
+  return lines
+    .map((l) => [l.sourcePod, formatTimestamp(l.timestamp), l.text].filter(Boolean).join(" "))
+    .join("\n");
+}
+
 /** Distinct non-empty `container` names across the lines, in first-seen order. */
 export function distinctContainers(lines: LogLine[]): string[] {
   const seen = new Set<string>();

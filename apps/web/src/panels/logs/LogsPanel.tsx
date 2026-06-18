@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Search,
   WrapText,
@@ -13,6 +14,8 @@ import {
   Regex,
   CircleAlert,
   History,
+  Download,
+  Copy,
 } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import {
@@ -42,6 +45,9 @@ import {
   formatTimestamp,
   podColor,
   lineContext,
+  streamStats,
+  buildLogText,
+  MAX_LINES,
 } from "./logDisplay";
 
 export default function LogsPanel() {
@@ -67,6 +73,7 @@ export default function LogsPanel() {
   const [tailLines, setTailLines] = useState(200);
   const [since, setSince] = useState("");
   const [previous, setPrevious] = useState(false);
+  const [droppedWhilePaused, setDroppedWhilePaused] = useState(0);
 
   // Refs so the WS callback and scroll handlers read live values without
   // re-subscribing on every state change.
@@ -75,6 +82,9 @@ export default function LogsPanel() {
   const stickRef = useRef(stickToBottom);
   stickRef.current = stickToBottom;
   const scrollRef = useRef<HTMLDivElement>(null);
+  // True for the one scroll event our own scrollToIndex() triggers, so onScroll
+  // doesn't misread a mid-commit geometry and spuriously unstick auto-follow.
+  const programmaticScrollRef = useRef(false);
   const linesRef = useRef<LogLine[]>(lines);
   linesRef.current = lines;
   // The log line last right-clicked — read by the single shared context menu
@@ -101,7 +111,7 @@ export default function LogsPanel() {
         setError(m.message ?? "log stream failed");
         return;
       }
-      if (isPausedRef.current) return; // process continues; we just drop the line
+      if (isPausedRef.current) { setDroppedWhilePaused((d) => d + 1); return; } // process continues; we just drop the line
       if (typeof m.line !== "string") return;
       const line = toLogLine(m.line, m.container);
       setLines((prev) => appendLines(prev, [line]));
@@ -122,6 +132,14 @@ export default function LogsPanel() {
     () => sortByTimestamp(filterLines(lines, { hideProbes, errorsOnly, query, container: selectedContainer, pod: isolatedPod })),
     [lines, hideProbes, errorsOnly, query, selectedContainer, isolatedPod],
   );
+  const rowVirtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 18,
+    overscan: 24,
+    getItemKey: (i) => filtered[i].id,
+  });
+
   // Single-pod streams hide the 150px pod column. Memoized: distinctPods walks
   // the whole buffer, and the bare body would re-run it on every render (incl.
   // scroll-driven stickToBottom updates).
@@ -133,10 +151,11 @@ export default function LogsPanel() {
   // none` on the scroller stops the browser from shifting scrollTop when sorted
   // lines insert mid-list, which would otherwise trip onScroll → unstick.
   useLayoutEffect(() => {
-    if (stickRef.current && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (stickRef.current && filtered.length > 0) {
+      programmaticScrollRef.current = true;
+      rowVirtualizer.scrollToIndex(filtered.length - 1, { align: "end" });
     }
-  }, [filtered]);
+  }, [filtered, rowVirtualizer]);
 
   // --- Actions --------------------------------------------------------------
 
@@ -151,6 +170,7 @@ export default function LogsPanel() {
       }
       sendLogsStop();
       setLines([]);
+      setDroppedWhilePaused(0);
       setExpandedLines(new Set());
       setError(null);
       setStickToBottom(true);
@@ -188,15 +208,25 @@ export default function LogsPanel() {
   const clear = useCallback(() => {
     setLines([]);
     setExpandedLines(new Set());
+    setDroppedWhilePaused(0);
   }, []);
 
   const jumpToLatest = useCallback(() => {
     setStickToBottom(true);
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, []);
+    if (filtered.length > 0) {
+      programmaticScrollRef.current = true;
+      rowVirtualizer.scrollToIndex(filtered.length - 1, { align: "end" });
+    }
+  }, [filtered.length, rowVirtualizer]);
 
-  // Disable auto-scroll once the user scrolls up; re-enable at the bottom.
+  // Disable auto-scroll once the user scrolls up; re-enable at the bottom. Skip
+  // the scroll event our own scrollToIndex() fired (its geometry can read as
+  // not-quite-bottom mid-commit and would otherwise unstick auto-follow).
   const onScroll = useCallback(() => {
+    if (programmaticScrollRef.current) {
+      programmaticScrollRef.current = false;
+      return;
+    }
     const el = scrollRef.current;
     if (!el) return;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
@@ -211,6 +241,23 @@ export default function LogsPanel() {
       return next;
     });
   }, []);
+
+  const stats = useMemo(() => streamStats(lines), [lines]);
+
+  const copyAll = useCallback(() => {
+    void navigator.clipboard.writeText(buildLogText(filtered));
+  }, [filtered]);
+
+  const downloadAll = useCallback(() => {
+    const name = selectedItem ? `${selectedItem.namespace}-${selectedItem.name}` : "logs";
+    const blob = new Blob([buildLogText(filtered)], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${name}.log`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [filtered, selectedItem]);
 
   function reissue(next: { tailLines?: number; since?: string; previous?: boolean; container?: string }) {
     // Compute the effective next values BEFORE setState (async) so the re-issued
@@ -455,8 +502,11 @@ export default function LogsPanel() {
                 {query.error ? "invalid pattern" : ""}
               </span>
               {!query.error && (
-                <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
-                  {filtered.length.toLocaleString()} / {lines.length.toLocaleString()} lines
+                <span className="flex items-center gap-2 font-mono text-[10px] tabular-nums text-muted-foreground">
+                  <span>{filtered.length.toLocaleString()} / {stats.total.toLocaleString()} lines</span>
+                  {stats.errors > 0 && <span className="text-red-600 dark:text-red-400">{stats.errors.toLocaleString()} err</span>}
+                  {stats.total >= MAX_LINES && <span className="rounded bg-amber-500/15 px-1 text-amber-700 dark:text-amber-400">buffer full</span>}
+                  {droppedWhilePaused > 0 && <span className="text-amber-700 dark:text-amber-400">paused · {droppedWhilePaused.toLocaleString()} dropped</span>}
                 </span>
               )}
               <select
@@ -518,9 +568,15 @@ export default function LogsPanel() {
                 aria-label={isPaused ? "Resume" : "Pause"}
                 title={isPaused ? "Resume" : "Pause"}
                 disabled={previous}
-                onClick={() => setIsPaused((p) => !p)}
+                onClick={() => setIsPaused((p) => { if (p) setDroppedWhilePaused(0); return !p; })}
               >
                 {isPaused ? <Play /> : <Pause />}
+              </Button>
+              <Button variant="ghost" size="icon-sm" aria-label="Copy visible logs" title="Copy visible logs" onClick={copyAll}>
+                <Copy />
+              </Button>
+              <Button variant="ghost" size="icon-sm" aria-label="Download logs" title="Download .log" onClick={downloadAll}>
+                <Download />
               </Button>
               <Button
                 variant="ghost"
@@ -535,7 +591,7 @@ export default function LogsPanel() {
 
             {/* Error banner */}
             {error && (
-              <pre className="border-b bg-destructive/10 px-3 py-2 font-mono text-xs text-destructive whitespace-pre-wrap break-all">
+              <pre role="alert" aria-live="assertive" className="border-b bg-destructive/10 px-3 py-2 font-mono text-xs text-destructive whitespace-pre-wrap break-all">
                 {error}
               </pre>
             )}
@@ -564,66 +620,57 @@ export default function LogsPanel() {
                     on right-click via ctxLineRef (avoids a menu per line). */}
                 <ContextMenu>
                   <ContextMenuTrigger>
-                {filtered.map((l) => {
-                  const expanded = expandedLines.has(l.id);
-                  const color = podColor(l.sourcePod);
-                  const level = detectLevel(l.text);
-                  const levelClass =
-                    level === "error" ? "text-red-600 dark:text-red-400"
-                    : level === "warn" ? "text-amber-600 dark:text-amber-400"
-                    : "";
-                  const segments = splitHighlight(l.text, query.ranges(l.text));
-                  return (
-                    <div
-                      key={l.id}
-                      onClick={() => toggleExpand(l.id)}
-                      onContextMenu={() => { ctxLineRef.current = l; }}
-                      className="group flex min-h-[18px] cursor-default items-start gap-2 border-l-2 px-2 py-0.5 hover:bg-muted/50"
-                      style={{ borderLeftColor: color }}
-                    >
-                      {!collapsePod && (
-                        <span
-                          className="w-[150px] shrink-0 truncate"
-                          style={{ color }}
-                          title={l.sourcePod}
-                        >
-                          {l.sourcePod}
-                        </span>
-                      )}
-                      <span className="w-[80px] shrink-0 text-muted-foreground">
-                        {formatTimestamp(l.timestamp)}
-                      </span>
-                      <span
-                        className={`flex-1 ${
-                          wrapLines || expanded ? "whitespace-pre-wrap break-all" : "truncate"
-                        } ${levelClass}`}
-                      >
-                        {segments.map((seg, i) =>
-                          seg.mark ? (
-                            <mark key={i} className="rounded-sm bg-yellow-300/70 text-black dark:bg-yellow-400/80">
-                              {seg.text}
-                            </mark>
-                          ) : (
-                            <span key={i}>{seg.text}</span>
-                          ),
-                        )}
-                      </span>
-                      {/* Ask Claude — revealed on row hover. */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          askClaude(l);
-                        }}
-                        aria-label="Ask Claude about this line"
-                        title="Ask Claude about this line"
-                        className="shrink-0 text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100"
-                      >
-                        <Sparkles className="size-3.5" />
-                      </button>
+                    <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative", width: "100%" }}>
+                      {rowVirtualizer.getVirtualItems().map((vi) => {
+                        const l = filtered[vi.index];
+                        const expanded = expandedLines.has(l.id);
+                        const color = podColor(l.sourcePod);
+                        const level = detectLevel(l.text);
+                        const levelClass =
+                          level === "error" ? "text-red-600 dark:text-red-400"
+                          : level === "warn" ? "text-amber-600 dark:text-amber-400"
+                          : "";
+                        const segments = splitHighlight(l.text, query.ranges(l.text));
+                        return (
+                          <div
+                            key={vi.key}
+                            data-index={vi.index}
+                            ref={rowVirtualizer.measureElement}
+                            role="button"
+                            tabIndex={0}
+                            aria-expanded={expanded}
+                            onClick={() => toggleExpand(l.id)}
+                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleExpand(l.id); } }}
+                            onContextMenu={() => { ctxLineRef.current = l; }}
+                            className="group flex min-h-[18px] cursor-pointer items-start gap-2 border-l-2 px-2 py-0.5 hover:bg-muted/50 focus:bg-muted/60 focus:outline-none"
+                            style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vi.start}px)`, borderLeftColor: color }}
+                          >
+                            {!collapsePod && (
+                              <span className="w-[150px] shrink-0 truncate" style={{ color }} title={l.sourcePod}>{l.sourcePod}</span>
+                            )}
+                            <span className="w-[80px] shrink-0 text-muted-foreground">{formatTimestamp(l.timestamp)}</span>
+                            <span className={`flex-1 ${wrapLines || expanded ? "whitespace-pre-wrap break-all" : "truncate"} ${levelClass}`}>
+                              {segments.map((seg, i) =>
+                                seg.mark ? (
+                                  <mark key={i} className="rounded-sm bg-yellow-300/70 text-black dark:bg-yellow-400/80">{seg.text}</mark>
+                                ) : (
+                                  <span key={i}>{seg.text}</span>
+                                ),
+                              )}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); askClaude(l); }}
+                              aria-label="Ask Claude about this line"
+                              title="Ask Claude about this line"
+                              className="shrink-0 text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100"
+                            >
+                              <Sparkles className="size-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
                   </ContextMenuTrigger>
                   <ContextMenuContent>
                     <ContextMenuItem onClick={() => { const l = ctxLineRef.current; if (l) askClaude(l); }}>
