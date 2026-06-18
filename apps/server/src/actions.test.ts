@@ -70,6 +70,39 @@ test("setEnv maps to set env deployment with sorted key=value pairs", () => {
   ]);
 });
 
+test("setEnv appends sorted KEY- removals alongside sets", () => {
+  const result = buildCommand({
+    kind: "setEnv",
+    name: "memos",
+    namespace: "default",
+    env: { LOG_LEVEL: "debug" },
+    unsetEnv: ["OLD_FLAG", "DEPRECATED"],
+  });
+  expect(result).toEqual([
+    "set", "env", "deployment/memos", "-n", "default",
+    "DEPRECATED-", "LOG_LEVEL=debug", "OLD_FLAG-",
+  ]);
+});
+
+test("setEnv with only removals", () => {
+  expect(buildCommand({
+    kind: "setEnv",
+    name: "memos",
+    namespace: "default",
+    unsetEnv: ["GONE"],
+  })).toEqual(["set", "env", "deployment/memos", "-n", "default", "GONE-"]);
+});
+
+test("setEnv scopes to a single container with --containers", () => {
+  expect(buildCommand({
+    kind: "setEnv",
+    name: "web",
+    namespace: "default",
+    container: "app",
+    env: { A: "1" },
+  })).toEqual(["set", "env", "deployment/web", "--containers=app", "-n", "default", "A=1"]);
+});
+
 // ---------------------------------------------------------------------------
 // setImage
 // ---------------------------------------------------------------------------

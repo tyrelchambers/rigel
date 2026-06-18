@@ -4,10 +4,18 @@
 // Kept local to the web app so the panel does not depend on workspace-package
 // linking for a type-only import (same pattern as pods/types.ts).
 
+export interface EnvVar {
+  name: string;
+  value?: string;
+  /** Present for secret/configMap/field refs. When set, the value is not a plain string. */
+  valueFrom?: unknown;
+}
+
 export interface Container {
   name: string;
   image?: string;
   ports?: Array<{ containerPort: number; name?: string }>;
+  env?: EnvVar[];
   resources?: {
     requests?: Record<string, string>;
     limits?: Record<string, string>;
