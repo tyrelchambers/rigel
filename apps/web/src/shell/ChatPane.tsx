@@ -17,7 +17,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Copy, SquarePen, Clock, ArrowDown } from "lucide-react";
-import { Link } from "react-router";
+import { useUiStore } from "@/store/ui";
 import { Button } from "@/components/ui/button";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { BatchConfirmSheet, type BatchConfirmItem } from "@/components/BatchConfirmSheet";
@@ -88,6 +88,8 @@ interface ChatPaneProps {
 }
 
 export default function ChatPane({ handleRef }: ChatPaneProps) {
+  const setSettingsOpen = useUiStore((s) => s.setSettingsOpen);
+
   // ── Width / resize state ──────────────────────────────────────────────────
   const [paneWidth, setPaneWidth] = useState<number>(() => loadPaneWidth());
   const resizingRef = useRef(false);
@@ -733,18 +735,24 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
             }}
           >
             <span style={{ lineHeight: 1.4 }}>Add an API key to start chatting.</span>
-            <Link
-              to="/settings"
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
               style={{
                 marginLeft: "auto",
                 color: "var(--accent-primary)",
                 fontWeight: 500,
                 textDecoration: "none",
                 whiteSpace: "nowrap",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: 0,
+                fontSize: "inherit",
               }}
             >
               Open Settings
-            </Link>
+            </button>
           </div>
         )}
 

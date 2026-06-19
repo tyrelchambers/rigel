@@ -8,7 +8,7 @@
  * "About you" step that cannot be skipped or dismissed until completed.
  */
 import { useEffect, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router";
+import { useUiStore } from "@/store/ui";
 import { Sparkles, Check, Bot, Activity, Bell } from "lucide-react";
 import {
   useChatConfig,
@@ -30,7 +30,7 @@ export function OnboardingWizard({
   requireAboutYou: boolean;
   onAboutYouDone?: () => void;
 }) {
-  const navigate = useNavigate();
+  const setSettingsOpen = useUiStore((s) => s.setSettingsOpen);
   const [aboutDone, setAboutDone] = useState(!requireAboutYou);
   const [i, setI] = useState(0);
 
@@ -46,7 +46,7 @@ export function OnboardingWizard({
           title="Signal notifications"
           desc="Get cluster alerts on your phone. The linking flow (QR scan) lives in Settings."
           action={
-            <button type="button" onClick={() => { onClose(); navigate("/settings"); }} style={ghostBtn}>
+            <button type="button" onClick={() => { onClose(); setSettingsOpen(true); }} style={ghostBtn}>
               Set up in Settings
             </button>
           }

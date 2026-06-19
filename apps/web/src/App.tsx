@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useUiStore } from "@/store/ui";
 import { Routes, Route } from "react-router";
 import OverviewPanel from "./panels/overview/OverviewPanel";
 import HealthPanel from "./panels/health/HealthPanel";
@@ -73,7 +74,8 @@ export default function App() {
     connectCluster();
   }, []);
   const [paletteOpen, setPaletteOpen] = useCommandPalette();
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsOpen = useUiStore((s) => s.settingsOpen);
+  const setSettingsOpen = useUiStore((s) => s.setSettingsOpen);
 
   // Whole-sidebar collapse (icon-only rail). Owned here, persisted on change,
   // driven by the GlobalHeader toggle. Distinct from the per-group nav collapse.
