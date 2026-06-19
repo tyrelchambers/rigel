@@ -1,14 +1,14 @@
 ---
-title: "GitOps — deploy from a Git repo"
+title: "GitOps: deploy from a Git repo"
 description: "Deploy and sync applications straight from a Git repository."
 category: "Guides"
 order: 3
 icon: "lucide:git-branch"
 ---
 
-Rigel can deploy Kubernetes manifests straight from a **GitHub repo**, and — once an app is linked to its repo — let the AI propose fixes as **pull requests**. It's a lightweight, manual-trigger GitOps: you stay in control (every apply is previewed with a diff and confirmed), the repo stays the source of truth.
+Rigel can deploy Kubernetes manifests straight from a **GitHub repo**, and, once an app is linked to its repo, let the AI propose fixes as **pull requests**. It's a lightweight, manual-trigger GitOps: you stay in control (every apply is previewed with a diff and confirmed), the repo stays the source of truth.
 
-> Sync is **manual** ("Sync now") — there's no background polling or webhooks yet. See [Current limitations](#current-limitations).
+> Sync is **manual** ("Sync now"); there's no background polling or webhooks yet. See [Current limitations](#current-limitations).
 
 A repo can hold **several independently-deployable apps** (e.g. a monorepo with `apps/marketing/k8s`, `apps/web/k8s`, `apps/server/k8s`). GitOps models this directly: one **repo** owns a shared branch + token and a list of named **deployments** (manifest folders), each with its own **Sync now**, sync status, and workload links. You don't register the same repo three times.
 
@@ -18,11 +18,11 @@ A repo can hold **several independently-deployable apps** (e.g. a monorepo with 
 
 GitOps uses a **single account-level GitHub Personal Access Token (PAT)** for everything: listing your repos, cloning, applying, and opening fix-PRs. It's managed in one place: **Accounts → Source control → GitHub**.
 
-* Click **Create a personal access token** — it links to GitHub's classic-token page pre-scoped to `**repo**` (which covers clone/push **and** opening PRs).
+* Click **Create a personal access token**, which links to GitHub's classic-token page pre-scoped to `**repo**` (which covers clone/push **and** opening PRs).
 * Paste the `ghp_…` token and **Connect**. Rigel validates it against the GitHub API (`/user`) and shows **"Connected as \<you\>"**.
 * The token is stored as a cluster **Secret** (`helmsman-github`) and is never shown again or returned to the browser.
 
-> You don't have to visit Accounts first — the **Add repo** flow will prompt you for the token the first time if you're not connected yet.
+> You don't have to visit Accounts first; the **Add repo** flow will prompt you for the token the first time if you're not connected yet.
 
 To revoke, click **Disconnect** (deletes the Secret).
 
@@ -32,13 +32,13 @@ To revoke, click **Disconnect** (deletes the Secret).
 
 Open **GitOps → Add repo**. It's a short wizard:
 
-1. **Connect** — only shown if GitHub isn't connected yet (same token step as above).
-2. **Pick a repo** — a searchable list of your repos (type to filter). Selecting one auto-fills the **Repo name** and **Branch** (the repo's default branch).
-3. **Queue deployments** — a folder browser. It starts at the repo **root** and loads one level at a time; click a folder to descend, use the breadcrumb to go back up. Click **Add this folder** to turn the current folder into a **deployment** — repeat for as many folders as you want. Each is auto-named from its path (e.g. `apps/marketing/k8s` → `marketing`); the name is editable and is a **globally-unique** id across all repos. **Add repo** saves them all.
+1. **Connect**, only shown if GitHub isn't connected yet (same token step as above).
+2. **Pick a repo**, a searchable list of your repos (type to filter). Selecting one auto-fills the **Repo name** and **Branch** (the repo's default branch).
+3. **Queue deployments**, a folder browser. It starts at the repo **root** and loads one level at a time; click a folder to descend, use the breadcrumb to go back up. Click **Add this folder** to turn the current folder into a **deployment**, and repeat for as many folders as you want. Each is auto-named from its path (e.g. `apps/marketing/k8s` → `marketing`); the name is editable and is a **globally-unique** id across all repos. **Add repo** saves them all.
 
 To add more later, each repo card has **Add deployment** (the same folder browser scoped to that repo).
 
-Sources are stored in the `helmsman-git-sources` **ConfigMap** (no tokens — those stay in the Secret), so they survive restarts. Repos created before this change are migrated automatically to a single deployment named after the old source, so existing links keep working.
+Sources are stored in the `helmsman-git-sources` **ConfigMap** (no tokens, since those stay in the Secret), so they survive restarts. Repos created before this change are migrated automatically to a single deployment named after the old source, so existing links keep working.
 
 ---
 
@@ -47,19 +47,19 @@ Sources are stored in the `helmsman-git-sources` **ConfigMap** (no tokens — th
 Each **deployment** row has its own **Sync now** button. Syncing:
 
 1. Shallow-clones the repo's branch into the container.
-2. Runs `kubectl diff` on that deployment's folder and shows you exactly **what will change** (a preview — nothing is applied yet).
+2. Runs `kubectl diff` on that deployment's folder and shows you exactly **what will change** (a preview, nothing is applied yet).
 3. On **Apply**, runs `kubectl apply -f <folder> -R` against the cluster.
 4. Records the last-synced commit, time, and status on that deployment row.
 
-On a successful sync, the applied resources are **stamped** with provenance annotations — `helmsman.dev/source-repo` (the **deployment** name) and `helmsman.dev/source-path` — so Rigel (and the AI) can map a running workload back to its repo + folder. See [Linking](#4-link-an-existing-workload-to-a-deployment).
+On a successful sync, the applied resources are **stamped** with provenance annotations, `helmsman.dev/source-repo` (the **deployment** name) and `helmsman.dev/source-path`, so Rigel (and the AI) can map a running workload back to its repo + folder. See [Linking](#4-link-an-existing-workload-to-a-deployment).
 
-> **Manual only.** There's no auto-sync on push yet — you click Sync. Removed manifests are **not** pruned from the cluster.
+> **Manual only.** There's no auto-sync on push yet, so you click Sync. Removed manifests are **not** pruned from the cluster.
 
 ---
 
 ## 4. Link an existing workload to a deployment
 
-If you deployed an app some other way (manually, catalog, an existing cluster) and want the AI to understand it — and be able to open fix-PRs — **link the workload to a GitOps deployment**. Linking just stamps the same `helmsman.dev/source-repo` annotation that a sync would; it doesn't move or re-deploy anything.
+If you deployed an app some other way (manually, catalog, an existing cluster) and want the AI to understand it (and be able to open fix-PRs), **link the workload to a GitOps deployment**. Linking just stamps the same `helmsman.dev/source-repo` annotation that a sync would; it doesn't move or re-deploy anything.
 
 Linking is **bidirectional**:
 
@@ -77,7 +77,7 @@ Every link is run through the standard confirm sheet (it's a `kubectl annotate` 
 Once a workload is linked to a deployment, the chat copilot can fix it **in the repo** instead of patching the live cluster:
 
 1. You ask the AI about a broken app (e.g. an OOMKilled deployment). It reads the `helmsman.dev/source-repo` annotation to find the deployment → its repo + folder.
-2. It proposes the change as an **Open PR** button. Clicking it opens the confirm sheet with a **readable diff** of the manifest change — a GitHub-style unified diff with old/new line-number gutters, color-coded additions/removals, hunk separators, a `+/−` change summary, and a copy button. Nothing is applied to the cluster.
+2. It proposes the change as an **Open PR** button. Clicking it opens the confirm sheet with a **readable diff** of the manifest change, a GitHub-style unified diff with old/new line-number gutters, color-coded additions/removals, hunk separators, a `+/−` change summary, and a copy button. Nothing is applied to the cluster.
 3. On confirm, Rigel creates a branch, commits the change, pushes, and **opens a pull request** via the GitHub API. You get the PR link.
 4. You review and merge on GitHub, then **Sync now** to roll it out.
 
@@ -100,12 +100,12 @@ API endpoints (all behind the same session auth as the rest of the app): `GET/PO
 
 ## Current limitations
 
-* **Manual sync only** — no background polling or push-webhook auto-deploy yet.
-* **No pruning** — manifests deleted from the repo aren't removed from the cluster on sync.
-* **Per-deployment, not whole-repo** — there's no "sync all deployments in this repo" button yet; you sync each one.
-* **Single branch per repo** — all deployments in a repo share its branch (no per-deployment branch).
-* **Link UI is Deployments-only** — StatefulSets/DaemonSets need a UI affordance (the action supports them).
-* **Classic PAT, `repo` scope** — fine-grained tokens aren't wired into the create-token link yet.
+* **Manual sync only**: no background polling or push-webhook auto-deploy yet.
+* **No pruning**: manifests deleted from the repo aren't removed from the cluster on sync.
+* **Per-deployment, not whole-repo**: there's no "sync all deployments in this repo" button yet; you sync each one.
+* **Single branch per repo**: all deployments in a repo share its branch (no per-deployment branch).
+* **Link UI is Deployments-only**: StatefulSets/DaemonSets need a UI affordance (the action supports them).
+* **Classic PAT, `repo` scope**: fine-grained tokens aren't wired into the create-token link yet.
 
 ---
 

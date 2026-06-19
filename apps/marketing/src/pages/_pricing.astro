@@ -19,17 +19,17 @@ const tiers = [
     unit: "forever",
     blurb: "Everything you need to self-host a single cluster on your own hardware.",
     features: [
-      "The full console — every resource panel",
+      "The full console, every resource panel",
       "Rigel AI chat & one-click fixes",
       "Natural-language alerts (the Lookout)",
-      "55-app catalog with automatic TLS",
+      "58-app self-hosting catalog",
       "Single cluster · single user",
       "Community support",
     ],
     ctaLabel: "Start self-hosting",
     ctaHref: "/#cta",
     footnote:
-      "Bring your own Anthropic key — you pay Anthropic directly, usually pennies per session.",
+      "Bring your own AI provider key, so you pay the provider directly, usually pennies per session.",
   },
   {
     name: "Team",
@@ -40,8 +40,8 @@ const tiers = [
     blurb: "Wake the whole crew: autonomous remediation, team access, and AI that just works.",
     inheritsFrom: "Community",
     features: [
-      "The Night Watch — autonomous remediation",
-      "Managed AI — bundled tokens, no key to manage",
+      "The Night Watch, autonomous remediation",
+      "Managed AI with bundled tokens, no key to manage",
       "Multi-cluster from one console",
       "SSO & role-based access control",
       "Audit log with one-click revert",
@@ -80,7 +80,7 @@ const aiBilling = [
   {
     icon: "lucide:key-round",
     title: "Bring your own key",
-    desc: "Connect your own Anthropic API key. You pay Anthropic directly — your cost, your control. Free on every plan.",
+    desc: "Connect your own AI provider key. You pay the provider directly, so it's your cost and your control. Free on every plan.",
   },
   {
     icon: "lucide:sparkles",
@@ -91,7 +91,7 @@ const aiBilling = [
 ---
 
 <Base
-  title="Pricing — Rigel"
+  title="Pricing for Rigel"
   description="Self-host Rigel free, forever. Pay only when you want the autonomous crew, multi-cluster, SSO and managed AI. Community, Team and Enterprise plans."
 >
   <Nav />
@@ -119,8 +119,8 @@ const aiBilling = [
             >
           </div>
           <p class="mt-3 max-w-[680px] text-[14.5px] leading-relaxed text-fg-secondary">
-            Rigel runs on Claude. You're never locked in — pick whichever way
-            suits you, and switch any time.
+            Bring your own AI provider, or let us manage it. You're never locked
+            in, so pick whichever way suits you and switch any time.
           </p>
           <div class="mt-6 grid gap-4 sm:grid-cols-2">
             {

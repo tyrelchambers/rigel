@@ -1,0 +1,45 @@
+---
+import { Icon } from "astro-icon/components";
+
+// One catalog app, as a raised tile. Links out to the project when a URL is
+// known. Visual style matches the ResourceMatrix / CapabilitySection cards.
+interface Props {
+  name: string;
+  tagline: string;
+  icon: string;
+  href?: string | null;
+}
+const { name, tagline, icon, href } = Astro.props;
+
+const Tag = href ? "a" : "div";
+const linkAttrs = href
+  ? { href, target: "_blank", rel: "noopener noreferrer" }
+  : {};
+---
+
+<Tag
+  {...linkAttrs}
+  class="group flex flex-col gap-2.5 rounded-[10px] border border-line-subtle bg-surface-elevated p-4 transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-[0_10px_30px_-16px_rgba(56,189,248,0.3)]"
+>
+  <div class="flex items-center gap-2.5">
+    <span
+      class="grid size-9 shrink-0 place-items-center rounded-lg bg-accent/10 text-accent transition-colors group-hover:bg-accent/20"
+    >
+      <Icon name={icon} class="size-[18px]" />
+    </span>
+    <span class="flex-1 truncate text-[14px] font-semibold tracking-tight text-fg"
+      >{name}</span
+    >
+    {
+      href && (
+        <Icon
+          name="lucide:arrow-up-right"
+          class="size-4 text-fg-tertiary opacity-0 transition-opacity group-hover:opacity-100"
+        />
+      )
+    }
+  </div>
+  <p class="line-clamp-2 text-[12.5px] leading-snug text-fg-secondary">
+    {tagline}
+  </p>
+</Tag>

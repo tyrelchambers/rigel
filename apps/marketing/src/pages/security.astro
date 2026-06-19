@@ -1,0 +1,217 @@
+---
+import { Icon } from "astro-icon/components";
+import Base from "../layouts/Base.astro";
+import Nav from "../components/Nav.astro";
+import PageHeader from "../components/PageHeader.astro";
+import CapabilitySection from "../components/CapabilitySection.astro";
+import FinalCta from "../components/FinalCta.astro";
+import Footer from "../components/Footer.astro";
+
+// Every claim here is backed by the code: guarded AI mutations, built-in auth
+// on API + WS, no telemetry, bring-your-own AI token, and agent guardrails.
+// Deliberately NOT claimed: encryption at rest, compliance certs, pen-tests.
+
+const approval = [
+  {
+    icon: "lucide:bot",
+    title: "The AI can't act on its own",
+    desc: "Mutating commands are blocked for the assistant. Every fix it finds comes back as a button, never a silent change.",
+  },
+  {
+    icon: "lucide:file-check",
+    title: "Approve before anything changes",
+    desc: "Cluster changes go through an explicit confirmation, and the assistant's actions show you the exact command first.",
+  },
+  {
+    icon: "lucide:eye",
+    title: "Read first, write second",
+    desc: "Live cluster data streams in over a read-only path. Changes run through a separate, guarded path on your server.",
+  },
+];
+
+const access = [
+  {
+    icon: "lucide:key-round",
+    title: "Built-in login",
+    desc: "A password login issues a session out of the box. No extra reverse proxy required to lock the UI down.",
+  },
+  {
+    icon: "lucide:cookie",
+    title: "Hardened sessions",
+    desc: "httpOnly, SameSite session cookies protect both the REST API and the live WebSocket, not just one of them.",
+  },
+  {
+    icon: "lucide:shield-check",
+    title: "Secure by default",
+    desc: "The Helm chart generates a strong random password on install. There is no blank-password default to forget.",
+  },
+  {
+    icon: "lucide:folder-lock",
+    title: "Scoped to what you touch",
+    desc: "A shared namespace filter scopes the whole console, and cluster RBAC still applies to everything you do.",
+  },
+];
+
+const data = [
+  {
+    icon: "lucide:server",
+    title: "Self-hosted, end to end",
+    desc: "Rigel runs in your cluster against an in-cluster kubeconfig. The browser only ever talks to your own server.",
+  },
+  {
+    icon: "lucide:radar",
+    title: "No telemetry, ever",
+    desc: "No analytics, no tracking pixels, no phone-home. Nothing about your cluster is reported back to us.",
+  },
+  {
+    icon: "lucide:cpu",
+    title: "Bring your own AI key",
+    desc: "Chat runs on an AI provider key you supply. That is the only place cluster context ever leaves your hardware.",
+  },
+  {
+    icon: "lucide:bell",
+    title: "Notifications you run",
+    desc: "Alerts go through a Signal bridge you run yourself, not a third-party paging service.",
+  },
+];
+
+const agent = [
+  {
+    icon: "lucide:circle-dollar-sign",
+    title: "Spend caps",
+    desc: "A hard dollar limit bounds what the autonomous agent can ever spend on its own.",
+  },
+  {
+    icon: "lucide:power",
+    title: "A kill-switch that fails closed",
+    desc: "Turn the agent off at any time. If it can't read its own config, it disables itself rather than guess.",
+  },
+  {
+    icon: "lucide:folder-lock",
+    title: "Namespace-scoped",
+    desc: "It only ever acts inside the namespaces you put on its allowlist.",
+  },
+  {
+    icon: "lucide:save",
+    title: "Backs up before it touches",
+    desc: "Resource YAML is snapshotted before any change, so nothing the agent does is one-way.",
+  },
+  {
+    icon: "lucide:rotate-ccw",
+    title: "Audit log with revert",
+    desc: "Every action the agent takes is logged with a before-and-after snapshot, so it can be rolled back.",
+  },
+];
+
+const faqs = [
+  {
+    q: "Does my cluster data leave my hardware?",
+    a: "It lives on your own server, and for chat it goes to the AI provider you configure, using your own key. Update checks send just the image names you already run to public registries to spot new versions. Anything else, like GitOps to your own Git host, only happens for integrations you turn on. Nothing phones home on its own.",
+  },
+  {
+    q: "What can the AI do on its own?",
+    a: "In chat, nothing that changes the cluster. Mutating commands are blocked and come back as buttons you approve. The optional autonomous agent can act, but only within the spend cap, namespaces, and kill-switch you set, and it backs up and logs everything it does.",
+  },
+  {
+    q: "Where are credentials stored?",
+    a: "As standard Kubernetes Secrets in your own cluster. Rigel does not add its own encryption layer, so if your policy requires encryption at rest, enable it at the etcd or KMS layer the way you would for any other Secret.",
+  },
+  {
+    q: "Do I have to expose Rigel to the internet?",
+    a: "No. It's protected by the built-in login from the first install, so you decide whether to reach it over your VPN, keep it cluster-internal, or put it behind an SSO proxy.",
+  },
+];
+---
+
+<Base
+  title="Security & control in Rigel"
+  description="How Rigel keeps you in control: explicit approval before any change, built-in auth on the API and WebSocket, no telemetry, bring-your-own AI key, and a fully guarded autonomous agent. All self-hosted on your own hardware."
+>
+  <Nav />
+  <main id="main">
+    <PageHeader
+      eyebrowIcon="lucide:shield-check"
+      eyebrow="SECURITY"
+      title="Built to earn cluster access."
+      subtitle="Handing a tool the keys to your cluster is a big ask. Rigel is built so that you stay the one in control: it asks before it acts, it runs entirely on your hardware, and it reports nothing back to us."
+    />
+
+    <CapabilitySection
+      id="approval"
+      variant="primary"
+      eyebrowIcon="lucide:hand"
+      eyebrow="APPROVAL FIRST"
+      heading="Nothing happens without you."
+      copy="Rigel can investigate deeply and propose fixes, but the decision to change anything is always yours. The assistant proposes; you approve."
+      items={approval}
+    />
+
+    <CapabilitySection
+      id="access"
+      variant="sunken"
+      reverse
+      eyebrowIcon="lucide:lock"
+      eyebrow="ACCESS CONTROL"
+      heading="Access is yours alone."
+      copy="Authentication is built in and on by default, covering every way into the app, so the console isn't open the moment it's deployed."
+      items={access}
+    />
+
+    <CapabilitySection
+      id="data"
+      variant="primary"
+      eyebrowIcon="lucide:server"
+      eyebrow="DATA BOUNDARY"
+      heading="Your data stays on your hardware."
+      copy="Rigel is self-hosted from end to end. The only thing that leaves your cluster is what you choose to send to the AI, on your own key."
+      items={data}
+    />
+
+    <CapabilitySection
+      id="agent"
+      variant="sunken"
+      reverse
+      eyebrowIcon="lucide:shield"
+      eyebrow="AGENT GUARDRAILS"
+      heading="The autonomous agent, on a leash."
+      copy="The optional agent that fixes things while you're away runs inside hard limits you set, and it can never paint itself into a corner."
+      items={agent}
+    />
+
+    <!-- FAQ -->
+    <section class="border-t border-line-subtle bg-surface">
+      <div class="mx-auto max-w-[760px] px-6 py-20 sm:px-8 lg:py-24">
+        <div data-reveal class="flex items-center gap-2.5">
+          <Icon name="lucide:message-circle-question" class="size-[15px] text-accent" />
+          <span class="font-mono text-xs tracking-[0.15em] text-fg-tertiary"
+            >STRAIGHT ANSWERS</span
+          >
+        </div>
+        <h2
+          data-reveal
+          class="mt-5 text-[clamp(1.85rem,3.6vw,2.5rem)] font-bold leading-[1.08] tracking-[-0.03em] text-fg"
+        >
+          The questions security teams ask.
+        </h2>
+
+        <dl class="mt-10 flex flex-col gap-8">
+          {
+            faqs.map((f, i) => (
+              <div data-reveal style={`--reveal-delay:${i * 50}ms`}>
+                <dt class="text-[16px] font-semibold tracking-tight text-fg">
+                  {f.q}
+                </dt>
+                <dd class="mt-2.5 text-[14.5px] leading-relaxed text-fg-secondary">
+                  {f.a}
+                </dd>
+              </div>
+            ))
+          }
+        </dl>
+      </div>
+    </section>
+
+    <FinalCta />
+  </main>
+  <Footer />
+</Base>

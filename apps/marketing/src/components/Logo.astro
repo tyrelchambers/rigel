@@ -1,6 +1,6 @@
 ---
 // Rigel constellation mark. Source of truth: /assets/brand/logo-constellation.svg
-// Single-color via `currentColor` — set a light text color on the dark site. Stroke/dot
+// Single-color via `currentColor`, so set a light text color on the dark site. Stroke/dot
 // weights are bumped from the source so the mark reads at small sizes.
 interface Props {
   class?: string;
@@ -11,6 +11,8 @@ const { class: className } = Astro.props;
 <svg
   xmlns="http://www.w3.org/2000/svg"
   viewBox="0 0 132 132"
+  width="32"
+  height="32"
   fill="none"
   class={className}
   aria-hidden="true"

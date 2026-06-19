@@ -1,0 +1,155 @@
+---
+import { Icon } from "astro-icon/components";
+import { CATALOG } from "@helmsman/catalog";
+import Base from "../layouts/Base.astro";
+import Nav from "../components/Nav.astro";
+import PageHeader from "../components/PageHeader.astro";
+import AppCard from "../components/AppCard.astro";
+import FinalCta from "../components/FinalCta.astro";
+import Footer from "../components/Footer.astro";
+import { CATEGORY_META, iconForApp } from "../lib/catalog-icons";
+
+// Render the real catalog at build time, grouped into its categories.
+const apps = CATALOG;
+const total = apps.length;
+
+const categories = Object.keys(CATEGORY_META)
+  .sort((a, b) => CATEGORY_META[a].order - CATEGORY_META[b].order)
+  .map((key) => ({
+    key,
+    ...CATEGORY_META[key],
+    apps: apps
+      .filter((a) => a.category === key)
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  }))
+  .filter((c) => c.apps.length > 0);
+
+const linkFor = (a: (typeof apps)[number]) =>
+  a.homepageURL || a.repoURL || a.docsURL || null;
+
+const benefits = [
+  {
+    icon: "lucide:wand-sparkles",
+    title: "Skip the YAML",
+    desc: "Pick an app, fill in a few guided fields, and Rigel installs it. No hand-written manifests or charts to wrangle.",
+  },
+  {
+    icon: "lucide:sliders-horizontal",
+    title: "Guided, not guesswork",
+    desc: "Rigel walks you through namespace, hostname and storage, with sensible defaults from each app's recommended settings.",
+  },
+  {
+    icon: "lucide:refresh-cw",
+    title: "Tells you when to update",
+    desc: "Rigel watches upstream and flags a new version the moment one ships, so apps don't quietly rot.",
+  },
+  {
+    icon: "lucide:trash-2",
+    title: "Removes every trace",
+    desc: "Uninstall finds all of an app's resources and purges them, with no orphaned leftovers.",
+  },
+];
+---
+
+<Base
+  title="App catalog for Rigel"
+  description={`Self-host ${total} curated apps on your own cluster in one click. Rigel installs each app with sensible defaults and tracks updates, with Heroku ergonomics on your own hardware.`}
+>
+  <Nav />
+  <main id="main">
+    <PageHeader
+      eyebrowIcon="lucide:anchor"
+      eyebrow="APP CATALOG"
+      title={`Self-host ${total} apps in one click.`}
+      subtitle="Pick an app, answer a few guided questions, and Rigel installs it on your cluster with sensible defaults. Your hardware, your data, none of the cloud bill."
+    />
+
+    <!-- stat band + category quick-nav -->
+    <section class="border-t border-line-subtle bg-surface">
+      <div class="mx-auto max-w-[1200px] px-6 py-12 sm:px-8 lg:px-12">
+        <div
+          class="grid gap-px overflow-hidden rounded-xl border border-line-subtle bg-line-subtle sm:grid-cols-2 lg:grid-cols-4"
+        >
+          {
+            benefits.map((b) => (
+              <div class="flex flex-col gap-3 bg-surface p-5">
+                <span class="grid size-9 place-items-center rounded-lg bg-accent/10 text-accent">
+                  <Icon name={b.icon} class="size-[18px]" />
+                </span>
+                <span class="text-[14px] font-semibold tracking-tight text-fg">
+                  {b.title}
+                </span>
+                <p class="text-[12.5px] leading-snug text-fg-secondary">
+                  {b.desc}
+                </p>
+              </div>
+            ))
+          }
+        </div>
+
+        <nav class="mt-9 flex flex-wrap gap-2.5" aria-label="Jump to a category">
+          {
+            categories.map((c) => (
+              <a
+                href={`#${c.key}`}
+                class="group inline-flex items-center gap-2 rounded-full border border-line-strong bg-surface-elevated px-3.5 py-2 text-[13px] text-fg-secondary transition-colors hover:border-accent/50 hover:text-fg"
+              >
+                <Icon
+                  name={c.icon}
+                  class="size-[14px] text-fg-tertiary transition-colors group-hover:text-accent"
+                />
+                {c.label}
+                <span class="font-mono text-[11px] text-fg-tertiary">
+                  {c.apps.length}
+                </span>
+              </a>
+            ))
+          }
+        </nav>
+      </div>
+    </section>
+
+    <!-- category sections -->
+    {
+      categories.map((c, ci) => (
+        <section
+          id={c.key}
+          class:list={[
+            "scroll-mt-20 border-t border-line-subtle",
+            ci % 2 === 0 ? "bg-surface-sunken" : "bg-surface",
+          ]}
+        >
+          <div class="mx-auto max-w-[1200px] px-6 py-16 sm:px-8 lg:px-12 lg:py-20">
+            <div data-reveal class="flex items-center gap-3">
+              <span class="grid size-9 place-items-center rounded-lg bg-accent/15 text-accent">
+                <Icon name={c.icon} class="size-[18px]" />
+              </span>
+              <h2 class="text-[clamp(1.4rem,2.6vw,1.85rem)] font-bold tracking-[-0.02em] text-fg">
+                {c.label}
+              </h2>
+              <span class="font-mono text-[12px] text-fg-tertiary">
+                {c.apps.length} apps
+              </span>
+            </div>
+
+            <div class="mt-8 grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+              {c.apps.map((a, i) => (
+                <div data-reveal style={`--reveal-delay:${(i % 3) * 60}ms`}>
+                  <AppCard
+                    name={a.name}
+                    tagline={a.tagline}
+                    icon={iconForApp(a)}
+                    href={linkFor(a)}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      ))
+    }
+
+    <FinalCta />
+  </main>
+  <Footer />
+</Base>

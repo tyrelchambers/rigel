@@ -11,7 +11,7 @@ interface Props {
 }
 
 const {
-  title = "Rigel — Self-host Kubernetes without an ops team",
+  title = "Rigel: Self-host Kubernetes without an ops team",
   description = "Self-host production Kubernetes without a dedicated ops team. Rigel diagnoses issues, monitors your cluster, and applies the fixes you approve.",
 } = Astro.props;
 
@@ -23,6 +23,8 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Dark canvas on first paint, so reloads don't flash white before CSS. -->
+    <meta name="color-scheme" content="dark" />
     <!-- Flag JS synchronously so the scroll-reveal start state never flashes
          (and content stays visible when JS is unavailable). -->
     <script is:inline>

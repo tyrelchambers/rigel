@@ -1,0 +1,40 @@
+---
+import Base from "../layouts/Base.astro";
+import Nav from "../components/Nav.astro";
+import PageHeader from "../components/PageHeader.astro";
+import FinalCta from "../components/FinalCta.astro";
+import Footer from "../components/Footer.astro";
+---
+
+<Base
+  title="About Rigel"
+  description="Rigel is an AI-native, self-hostable Kubernetes admin UI that diagnoses, fixes, and monitors your cluster so you can run production Kubernetes without an ops team."
+>
+  <Nav />
+  <main id="main">
+    <PageHeader
+      eyebrowIcon="lucide:anchor"
+      eyebrow="ABOUT"
+      title="Run Kubernetes without an ops team."
+      subtitle="Rigel is an AI-native, self-hostable admin UI for your cluster. It reads your logs and events like a senior SRE, hands you fixes as buttons you approve, and keeps watch around the clock, so a small team can run production Kubernetes with confidence."
+    />
+
+    <section class="mx-auto max-w-[760px] px-6 py-16 sm:px-8 lg:py-20">
+      <div class="flex flex-col gap-6 text-fg-secondary">
+        <p class="text-[17px] leading-relaxed">
+          Most Kubernetes tooling assumes you already have an ops team.
+          Rigel is built for the rest of us: developers and small teams
+          who want production-grade infrastructure without the headcount.
+        </p>
+        <p class="text-[17px] leading-relaxed">
+          Everything runs on your own hardware, every mutation is shown as the
+          exact command before it runs, and nothing happens without your
+          approval. You keep control of your data and your bill.
+        </p>
+      </div>
+    </section>
+
+    <FinalCta />
+  </main>
+  <Footer />
+</Base>

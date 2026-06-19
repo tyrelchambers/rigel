@@ -33,7 +33,7 @@ const helmsman = [
   {
     icon: "lucide:cpu",
     title: "Choose your model",
-    desc: "Opus 4.8 or Sonnet, with Low or High effort. Pick the right model for the job.",
+    desc: "Match the model and effort level to the job, from a quick look to a deep dig.",
   },
   {
     icon: "lucide:history",
@@ -84,7 +84,7 @@ const lookout = [
   {
     icon: "lucide:smartphone",
     title: "Straight to your phone",
-    desc: "Signal and SMS notifications the second something on your watchlist breaks.",
+    desc: "Signal notifications the second something on your watchlist breaks.",
   },
   {
     icon: "lucide:radar",
@@ -101,18 +101,18 @@ const lookout = [
 const harbor = [
   {
     icon: "lucide:package",
-    title: "55 apps, six categories",
+    title: "58 apps, six categories",
     desc: "Dev tools, databases, productivity, media, networking and observability, all ready to deploy.",
   },
   {
     icon: "lucide:wand-sparkles",
     title: "Guided install",
-    desc: "Pick namespace, hostname, storage and node fit, with every choice validated before it runs.",
+    desc: "Pick namespace, hostname, storage and node fit, with sensible defaults filled in.",
   },
   {
-    icon: "lucide:lock",
-    title: "TLS, issued & renewed",
-    desc: "Every app gets HTTPS automatically. Certificates issue and renew themselves.",
+    icon: "lucide:sliders-horizontal",
+    title: "Sensible defaults",
+    desc: "Every app ships with sane CPU, memory and storage settings, so you're not guessing at limits.",
   },
   {
     icon: "lucide:refresh-cw",
@@ -189,8 +189,8 @@ const charts = [
 ---
 
 <Base
-  title="Features — Rigel"
-  description="Everything Rigel does: a plain-English AI ops assistant, autonomous remediation, natural-language alerts, a 55-app catalog, and a console for every Kubernetes resource."
+  title="Features for Rigel"
+  description="Everything Rigel does: a plain-English AI ops assistant, autonomous remediation, natural-language alerts, a 58-app catalog, and a console for every Kubernetes resource."
 >
   <Nav />
   <main id="main">
@@ -234,7 +234,7 @@ const charts = [
       eyebrowIcon="lucide:anchor"
       eyebrow="APP CATALOG"
       heading="Self-host anything in one click."
-      copy="The catalog turns “I want to run X” into a live, TLS'd app on your own hardware, with Heroku ergonomics and none of the cloud bill."
+      copy="The catalog turns “I want to run X” into a running app on your own hardware, with Heroku ergonomics and none of the cloud bill."
       items={harbor}
     />
 
