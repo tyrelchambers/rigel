@@ -1,9 +1,7 @@
 import { homedir } from "node:os";
-import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
-import { Readable } from "node:stream";
 import { IncomingMessage } from "node:http";
 import { serve } from "@hono/node-server";
+import { serveStatic } from "./staticFiles";
 import { WebSocketServer } from "ws";
 import { resolveKubeconfigPath } from "./kubeconfig";
 import { kubectl } from "@helmsman/k8s/src/run";
@@ -62,45 +60,6 @@ const METRICS_SERVER_URL =
 // (/app/apps/server/src). Override with WEB_DIST if the layout differs.
 const WEB_DIST = process.env.WEB_DIST ?? new URL("../../web/dist", import.meta.url).pathname;
 
-/**
- * Cache policy for the SPA: Vite fingerprints assets (e.g. `/assets/index-<hash>.js`),
- * so those are safe to cache forever (a new build → a new filename). But
- * `index.html` references the current hashed bundle, so it MUST NOT be cached —
- * otherwise the browser keeps loading the previous build's JS after a redeploy
- * (the classic "I rebuilt but still see the old UI" trap). Serve fingerprinted
- * assets immutable; serve index.html (and SPA fallbacks) no-store.
- */
-function cacheHeaders(pathname: string): HeadersInit {
-  if (pathname.startsWith("/assets/")) {
-    return { "Cache-Control": "public, max-age=31536000, immutable" };
-  }
-  return { "Cache-Control": "no-store, must-revalidate" };
-}
-
-/** True when `full` exists and is a regular file. */
-async function isFile(full: string): Promise<boolean> {
-  return stat(full).then((s) => s.isFile()).catch(() => false);
-}
-
-/** Stream a file's bytes as a Fetch Response body. */
-function fileResponse(full: string, headers: HeadersInit): Response {
-  const body = Readable.toWeb(createReadStream(full)) as unknown as BodyInit;
-  return new Response(body, { headers });
-}
-
-/** Serve a file from the built web UI, falling back to index.html for SPA routes. */
-async function serveStatic(pathname: string): Promise<Response> {
-  const rel = pathname === "/" ? "/index.html" : pathname;
-  // Guard against path traversal escaping WEB_DIST.
-  const safe = rel.split("/").filter((s) => s !== "..").join("/");
-  const direct = `${WEB_DIST}/${safe}`;
-  if (await isFile(direct)) return fileResponse(direct, cacheHeaders(rel));
-  // SPA fallback → index.html, which must always revalidate.
-  const index = `${WEB_DIST}/index.html`;
-  if (await isFile(index)) return fileResponse(index, { "Cache-Control": "no-store, must-revalidate" });
-  return new Response("web UI not built (run `pnpm --filter web build`)", { status: 404 });
-}
-
 const ctxRes = await kubectl(null, ["config", "current-context"]);
 const context = ctxRes.code === 0 ? ctxRes.stdout.trim() : null;
 
@@ -122,7 +81,7 @@ async function handler(req: Request): Promise<Response> {
     // Serve the built web UI for everything that isn't an API or WS path. The UI
     // shell loads without auth; the /api/* and /ws calls it makes are gated below.
     if (!url.pathname.startsWith("/api/") && url.pathname !== "/ws") {
-      return serveStatic(url.pathname);
+      return serveStatic(WEB_DIST, url.pathname);
     }
 
     // --- Auth endpoints (open) — drive the login screen / cookie session. ---
