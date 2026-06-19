@@ -9,7 +9,7 @@
 // Trust model: the server has no built-in auth. It's bound to loopback
 // (HOST=127.0.0.1) and is only ever reachable by this desktop app on the same
 // machine.
-import { app, BrowserWindow, ipcMain, shell, utilityProcess, type UtilityProcess } from "electron";
+import { app, BrowserWindow, ipcMain, nativeImage, shell, utilityProcess, type UtilityProcess } from "electron";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { InstallStore } from "./installStore";
@@ -33,6 +33,10 @@ const APPS_DIR = join(DESKTOP_DIR, ".."); // apps
 // main process is killed with SIGKILL. Both files live in dist/ next to main.js.
 const SERVER_BUNDLE_DEV = join(__dirname, "server-entry.mjs");
 const WEB_DIST_DEV = join(APPS_DIR, "web", "dist");
+// The Rigel app icon. The packaged .app embeds build/icon.icns via
+// electron-builder, but `electron .` (dev) shows the default Electron dock icon
+// unless we set it ourselves — see boot().
+const APP_ICON = join(DESKTOP_DIR, "build", "icon.png");
 
 const SMOKE = process.env.HELMSMAN_SMOKE === "1";
 
@@ -225,6 +229,13 @@ function createWindow(port: number): BrowserWindow {
 // ── Boot ─────────────────────────────────────────────────────────────────
 async function boot(): Promise<void> {
   applyLoginPath();
+
+  // Dev dock icon (macOS). The packaged .app embeds build/icon.icns, so this is
+  // only needed in dev, where Electron otherwise shows its default icon.
+  if (process.platform === "darwin" && !app.isPackaged && app.dock) {
+    const icon = nativeImage.createFromPath(APP_ICON);
+    if (!icon.isEmpty()) app.dock.setIcon(icon);
+  }
 
   // ── Signup IPC ──────────────────────────────────────────────────────────
   // Instantiate once per boot; userData is stable across the app's lifetime.

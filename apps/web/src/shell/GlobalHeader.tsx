@@ -41,12 +41,11 @@ export function GlobalHeader({ sidebarCollapsed, onToggleSidebar, onOpenSearch }
         borderBottom: "1px solid var(--border-subtle)",
       }}
     >
-      {/* Rigel brand lockup */}
+      {/* Rigel brand mark */}
       <div
-        style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0, color: "var(--fg-primary)" }}
+        style={{ display: "flex", alignItems: "center", flexShrink: 0, color: "var(--fg-primary)" }}
       >
         <RigelMark size={18} />
-        <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: "0.01em" }}>Rigel</span>
       </div>
 
       {/* Sidebar collapse toggle (icon-only ghost button) */}
