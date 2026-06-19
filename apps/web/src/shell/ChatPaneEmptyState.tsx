@@ -6,7 +6,7 @@
  * component never reads the store.
  */
 import { Sparkles } from "lucide-react";
-import { useUiStore } from "@/store/ui";
+import { useNavigate } from "react-router";
 
 interface ChatPaneEmptyStateProps {
   /** Whether to render the empty state (copilot unconfigured + no messages). */
@@ -14,7 +14,7 @@ interface ChatPaneEmptyStateProps {
 }
 
 export function ChatPaneEmptyState({ show }: ChatPaneEmptyStateProps) {
-  const setSettingsOpen = useUiStore((s) => s.setSettingsOpen);
+  const navigate = useNavigate();
   if (!show) return null;
   return (
     <div
@@ -44,7 +44,7 @@ export function ChatPaneEmptyState({ show }: ChatPaneEmptyStateProps) {
       </span>
       <button
         type="button"
-        onClick={() => setSettingsOpen(true)}
+        onClick={() => navigate("/settings")}
         style={{
           alignSelf: "flex-start",
           marginTop: 2,

@@ -1,13 +1,14 @@
-// Settings panel — Signal notifications bridge + self-host install defaults.
-// Web port of the Swift Settings panel (docs/parity/settings.md).
+// Settings page — AI agents + Signal notifications bridge + self-host defaults.
 //
-// Two cards:
-//   1. Signal bridge — deploy signal-cli-rest, link a phone (QR via a brief
+// Sections:
+//   1. AI agents — connect/configure the AI backend (Claude today; others
+//      coming soon). See agents/AgentsTab.
+//   2. Signal bridge — deploy signal-cli-rest, link a phone (QR via a brief
 //      server-side port-forward), configure recipients, send a test, and toggle
 //      two-way replies. The 5-state status machine (notDeployed → deploying →
 //      starting → ready → linked) is derived from the live deployments watch +
 //      the assistant-config ConfigMap.
-//   2. Self-host defaults — per-kubectl-context localStorage values fed into the
+//   3. Self-host defaults — per-kubectl-context localStorage values fed into the
 //      catalog install wizard. No kubectl runs here.
 
 import { useEffect, useRef, useState } from "react";
@@ -29,6 +30,7 @@ import {
   EMPTY_SELF_HOST_DEFAULTS,
   type SelfHostDefaults,
 } from "./useSettings";
+import { AgentsTab } from "./agents/AgentsTab";
 
 // The kubectl context keys the self-host localStorage. The server resolves the
 // active context; the client reads it once from /api/health-adjacent state.
@@ -457,5 +459,25 @@ export function SelfHostSection() {
         )}
       </div>
     </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Settings page — stacks the sections under a single route (/settings).
+// ---------------------------------------------------------------------------
+
+export default function SettingsPanel() {
+  // Signal section owns an "applying" flag while a manifest is being applied;
+  // useSettings derives the live status from it + the cluster watches.
+  const [applying, setApplying] = useState(false);
+  const derived = useSettings(applying);
+
+  return (
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
+      <h1 style={{ fontSize: 20, fontWeight: 700, color: "var(--fg-primary)" }}>Settings</h1>
+      <AgentsTab />
+      <SelfHostSection />
+      <SignalSection derived={derived} applying={applying} setApplying={setApplying} />
+    </div>
   );
 }

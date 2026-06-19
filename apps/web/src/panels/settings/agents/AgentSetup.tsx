@@ -32,27 +32,27 @@ export function AgentSetup({ agent, onBack }: { agent: AgentView; onBack: () => 
   }
 
   return (
-    <div className="flex flex-col" style={{ gap: 22 }}>
+    <div className="flex flex-col" style={{ gap: 16 }}>
       {/* Back */}
       <button
         type="button"
         onClick={onBack}
         className="inline-flex items-center self-start transition-opacity hover:opacity-80"
-        style={{ gap: 7, fontSize: 16, fontWeight: 500, color: MUTED }}
+        style={{ gap: 6, fontSize: 13, fontWeight: 500, color: MUTED }}
       >
-        <ChevronLeft size={18} /> Back
+        <ChevronLeft size={15} /> Back
       </button>
 
       {/* Header: mark + name + status pill, then the vendor line */}
-      <div className="flex flex-col" style={{ gap: 8 }}>
+      <div className="flex flex-col" style={{ gap: 6 }}>
         <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center" style={{ gap: 12, color: "#FFFFFF" }}>
-            <AgentGlyph id={agent.id} size={26} />
-            <span style={{ fontSize: 28, fontWeight: 700, color: "#FFFFFF" }}>{agent.label}</span>
+          <div className="flex items-center" style={{ gap: 10, color: "#FFFFFF" }}>
+            <AgentGlyph id={agent.id} size={20} />
+            <span style={{ fontSize: 18, fontWeight: 700, color: "#FFFFFF" }}>{agent.label}</span>
           </div>
           <StatusPill connection={agent.connection} comingSoon={comingSoon} />
         </div>
-        <p style={{ fontSize: 15, color: MUTED }}>
+        <p style={{ fontSize: 13, color: MUTED }}>
           {agent.vendor} · Credentials stay local and are never uploaded.
         </p>
       </div>
@@ -63,17 +63,17 @@ export function AgentSetup({ agent, onBack }: { agent: AgentView; onBack: () => 
           href={agent.installUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center self-start rounded-[9px] border border-white/[0.08] transition-colors hover:bg-white/[0.04]"
-          style={{ gap: 8, padding: "10px 16px", fontSize: 14, fontWeight: 600, color: "#4FB0F2" }}
+          className="inline-flex items-center self-start rounded-lg border border-white/[0.08] transition-colors hover:bg-white/[0.04]"
+          style={{ gap: 7, padding: "8px 14px", fontSize: 13, fontWeight: 600, color: "#4FB0F2" }}
         >
           {agent.installLabel}
-          <ExternalLink size={15} />
+          <ExternalLink size={14} />
         </a>
       </StepCard>
 
       {/* Step 2 — Authenticate */}
       <StepCard n={2} heading="Authenticate" desc={`Choose how Rigel authenticates with ${agent.label}.`}>
-        <div className="flex flex-col" style={{ gap: 10 }}>
+        <div className="flex flex-col" style={{ gap: 8 }}>
           {agent.authMethods.map((m) => {
             const selected = method === m;
             const copy = METHOD_COPY[m];
@@ -83,19 +83,19 @@ export function AgentSetup({ agent, onBack }: { agent: AgentView; onBack: () => 
                   type="button"
                   disabled={comingSoon}
                   onClick={() => setMethod(m)}
-                  className="flex w-full items-center rounded-[10px] border text-left transition-colors disabled:cursor-not-allowed"
+                  className="flex w-full items-center rounded-lg border text-left transition-colors disabled:cursor-not-allowed"
                   style={{
-                    gap: 13,
-                    padding: "14px 16px",
+                    gap: 11,
+                    padding: "11px 13px",
                     borderColor: selected ? ACCENT : "rgba(255,255,255,0.08)",
                     background: selected ? "rgba(59,155,232,0.09)" : "transparent",
                     opacity: comingSoon ? 0.6 : 1,
                   }}
                 >
                   <Radio selected={selected} />
-                  <span className="flex flex-col" style={{ gap: 3 }}>
-                    <span style={{ fontSize: 15, fontWeight: 600, color: "#FFFFFF" }}>{copy.title}</span>
-                    <span style={{ fontSize: 13, color: MUTED }}>{copy.sub(agent.vendor)}</span>
+                  <span className="flex flex-col" style={{ gap: 2 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF" }}>{copy.title}</span>
+                    <span style={{ fontSize: 12, color: MUTED }}>{copy.sub(agent.vendor)}</span>
                   </span>
                 </button>
 
@@ -106,8 +106,8 @@ export function AgentSetup({ agent, onBack }: { agent: AgentView; onBack: () => 
                     disabled={comingSoon}
                     onChange={(e) => setSecret(e.target.value)}
                     placeholder={agent.id === "claude" ? "sk-ant-…" : "API key"}
-                    className="mt-2 w-full rounded-[10px] border border-white/[0.08] bg-black/20 font-mono outline-none focus:border-[#3B9BE8]"
-                    style={{ padding: "12px 14px", fontSize: 13, color: "#FFFFFF" }}
+                    className="mt-2 w-full rounded-lg border border-white/[0.08] bg-black/20 font-mono outline-none focus:border-[#3B9BE8]"
+                    style={{ padding: "9px 12px", fontSize: 12, color: "#FFFFFF" }}
                   />
                 )}
               </div>
@@ -117,20 +117,20 @@ export function AgentSetup({ agent, onBack }: { agent: AgentView; onBack: () => 
       </StepCard>
 
       {comingSoon && (
-        <p style={{ fontSize: 13, color: MUTED }}>
+        <p style={{ fontSize: 12, color: MUTED }}>
           This agent isn't connectable yet. We're building its runner. For now, use Claude.
         </p>
       )}
 
-      {save.isError && <p style={{ fontSize: 13, color: "var(--destructive)" }}>{save.error.message}</p>}
+      {save.isError && <p style={{ fontSize: 12, color: "var(--destructive)" }}>{save.error.message}</p>}
 
       {/* Footer */}
-      <div className="flex items-center justify-end" style={{ gap: 10 }}>
+      <div className="flex items-center justify-end" style={{ gap: 8 }}>
         <button
           type="button"
           onClick={onBack}
-          className="rounded-[10px] transition-colors hover:bg-white/[0.04]"
-          style={{ padding: "13px 20px", fontSize: 15, fontWeight: 600, color: MUTED }}
+          className="rounded-lg transition-colors hover:bg-white/[0.04]"
+          style={{ padding: "9px 16px", fontSize: 13, fontWeight: 600, color: MUTED }}
         >
           Cancel
         </button>
@@ -138,8 +138,8 @@ export function AgentSetup({ agent, onBack }: { agent: AgentView; onBack: () => 
           type="button"
           disabled={saveDisabled}
           onClick={onSave}
-          className="rounded-[10px] transition-opacity disabled:opacity-40"
-          style={{ padding: "13px 28px", fontSize: 15, fontWeight: 700, color: "#06151C", background: "#5FC9EC" }}
+          className="rounded-lg transition-opacity disabled:opacity-40"
+          style={{ padding: "9px 22px", fontSize: 13, fontWeight: 700, color: "#06151C", background: "#5FC9EC" }}
         >
           {save.isPending ? "Saving…" : "Save"}
         </button>
@@ -152,9 +152,9 @@ export function AgentSetup({ agent, onBack }: { agent: AgentView; onBack: () => 
 function StatusPill({ connection, comingSoon }: { connection: AgentView["connection"]; comingSoon: boolean }) {
   if (connection === "connected") {
     return (
-      <span className="inline-flex shrink-0 items-center rounded-full" style={{ gap: 7, padding: "6px 13px", background: "rgba(52,208,127,0.12)" }}>
-        <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#34D07F" }} />
-        <span style={{ fontSize: 13, fontWeight: 600, color: "#34D07F" }}>Connected</span>
+      <span className="inline-flex shrink-0 items-center rounded-full" style={{ gap: 6, padding: "5px 11px", background: "rgba(52,208,127,0.12)" }}>
+        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#34D07F" }} />
+        <span style={{ fontSize: 12, fontWeight: 600, color: "#34D07F" }}>Connected</span>
       </span>
     );
   }
@@ -162,7 +162,7 @@ function StatusPill({ connection, comingSoon }: { connection: AgentView["connect
     return (
       <span
         className="inline-flex shrink-0 items-center rounded-full"
-        style={{ padding: "6px 13px", fontSize: 13, fontWeight: 600, color: MUTED, background: "rgba(255,255,255,0.06)" }}
+        style={{ padding: "5px 11px", fontSize: 12, fontWeight: 600, color: MUTED, background: "rgba(255,255,255,0.06)" }}
       >
         Coming soon
       </span>
@@ -174,17 +174,17 @@ function StatusPill({ connection, comingSoon }: { connection: AgentView["connect
 /** A numbered step card: badge + heading, description, then its children. */
 function StepCard({ n, heading, desc, children }: { n: number; heading: string; desc: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col rounded-[14px] border border-white/[0.08]" style={{ gap: 16, padding: 24, background: "#161618" }}>
-      <div className="flex items-center" style={{ gap: 12 }}>
+    <div className="flex flex-col rounded-xl border border-white/[0.08]" style={{ gap: 12, padding: 16, background: "#161618" }}>
+      <div className="flex items-center" style={{ gap: 10 }}>
         <span
           className="inline-flex items-center justify-center rounded-full"
-          style={{ width: 26, height: 26, fontSize: 13, fontWeight: 700, color: "#FFFFFF", background: "rgba(255,255,255,0.08)" }}
+          style={{ width: 22, height: 22, fontSize: 12, fontWeight: 700, color: "#FFFFFF", background: "rgba(255,255,255,0.08)" }}
         >
           {n}
         </span>
-        <span style={{ fontSize: 16, fontWeight: 700, color: "#FFFFFF" }}>{heading}</span>
+        <span style={{ fontSize: 14, fontWeight: 700, color: "#FFFFFF" }}>{heading}</span>
       </div>
-      <p style={{ fontSize: 14, lineHeight: 1.5, color: MUTED }}>{desc}</p>
+      <p style={{ fontSize: 13, lineHeight: 1.5, color: MUTED }}>{desc}</p>
       {children}
     </div>
   );
@@ -195,9 +195,9 @@ function Radio({ selected }: { selected: boolean }) {
   return (
     <span
       className="inline-flex shrink-0 items-center justify-center rounded-full"
-      style={{ width: 20, height: 20, border: `2px solid ${selected ? ACCENT : "#54545C"}` }}
+      style={{ width: 18, height: 18, border: `2px solid ${selected ? ACCENT : "#54545C"}` }}
     >
-      {selected && <span style={{ width: 9, height: 9, borderRadius: "50%", background: ACCENT }} />}
+      {selected && <span style={{ width: 8, height: 8, borderRadius: "50%", background: ACCENT }} />}
     </span>
   );
 }

@@ -1,18 +1,16 @@
-// Reusable modal shell matching the Pencil "Connect AI Agent" design:
+// Reusable modal shell built on the shared graphite Dialog primitive:
 //   • <Modal>     — title on the left, X on the right, content below.
 //   • <TabModal>  — same header, but a tab row sits in the header and the
 //                   active panel renders in the body below.
-// The header shares the modal's graphite body color and is set off only by a
-// hairline bottom border; generous body padding gives the content room.
+// Background, corner radius, hairline ring, shadow and top-anchored position
+// all come from DialogContent (the app-wide default). This component only adds
+// the header bar (hairline-separated) and padded body.
 import { useState, type ReactNode } from "react";
 import { XIcon } from "lucide-react";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "./dialog";
 import { cn } from "@/lib/utils";
 
-const MODAL_BG = "#101012";
 const HEADER_BORDER = "rgba(255,255,255,0.07)";
-// Outer drop shadow + a 1px inset hairline border (replaces the dialog's ring).
-const MODAL_SHADOW = "0 30px 80px rgba(0,0,0,0.44), inset 0 0 0 1px rgba(255,255,255,0.10)";
 const MUTED = "#8C8C95";
 
 interface FrameProps {
@@ -37,7 +35,6 @@ function ModalFrame({ open, onOpenChange, title, header, maxWidth = "!max-w-2xl"
           "flex max-h-[85vh] w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0",
           maxWidth,
         )}
-        style={{ background: MODAL_BG, borderRadius: 20, boxShadow: MODAL_SHADOW }}
       >
         {/* Accessible title (the visible one lives in the header) */}
         <DialogTitle className="sr-only">{title}</DialogTitle>
@@ -45,20 +42,20 @@ function ModalFrame({ open, onOpenChange, title, header, maxWidth = "!max-w-2xl"
         {/* Header bar — same graphite as the body, set off by a hairline */}
         <div
           className="flex shrink-0 items-center justify-between gap-4"
-          style={{ borderBottom: `1px solid ${HEADER_BORDER}`, padding: "16px 20px" }}
+          style={{ borderBottom: `1px solid ${HEADER_BORDER}`, padding: "14px 18px" }}
         >
           <div className="min-w-0 flex-1">{header}</div>
           <DialogClose
-            className="flex shrink-0 items-center justify-center rounded-[9px] transition-colors hover:bg-white/[0.05]"
-            style={{ width: 34, height: 34 }}
+            className="flex shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-white/[0.05]"
+            style={{ width: 30, height: 30 }}
           >
-            <XIcon className="size-5" style={{ color: MUTED }} />
+            <XIcon className="size-4" style={{ color: MUTED }} />
             <span className="sr-only">Close</span>
           </DialogClose>
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto" style={{ padding: "44px 40px 48px" }}>
+        <div className="flex-1 overflow-y-auto" style={{ padding: "24px 24px 28px" }}>
           {children}
         </div>
       </DialogContent>
@@ -82,7 +79,7 @@ export function Modal({ open, onOpenChange, title, maxWidth, children }: ModalPr
       onOpenChange={onOpenChange}
       title={title}
       maxWidth={maxWidth}
-      header={<h2 style={{ fontSize: 18, fontWeight: 700, color: "#FFFFFF" }}>{title}</h2>}
+      header={<h2 style={{ fontSize: 15, fontWeight: 600, color: "#FFFFFF" }}>{title}</h2>}
     >
       {children}
     </ModalFrame>
@@ -127,9 +124,9 @@ export function TabModal({ open, onOpenChange, title, tabs, defaultTab, maxWidth
                 onClick={() => setActive(t.id)}
                 className="transition-colors hover:bg-white/[0.04]"
                 style={{
-                  padding: "9px 16px",
-                  borderRadius: 10,
-                  fontSize: 15,
+                  padding: "7px 12px",
+                  borderRadius: 8,
+                  fontSize: 13,
                   fontWeight: isActive ? 600 : 500,
                   color: isActive ? "#FFFFFF" : MUTED,
                   background: isActive ? "rgba(255,255,255,0.08)" : "transparent",

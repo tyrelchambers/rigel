@@ -16,8 +16,8 @@
  * ChatPanel.tsx — only the outer shell chrome and layout differ.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router";
 import { Copy, SquarePen, Clock, ArrowDown } from "lucide-react";
-import { useUiStore } from "@/store/ui";
 import { Button } from "@/components/ui/button";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { BatchConfirmSheet, type BatchConfirmItem } from "@/components/BatchConfirmSheet";
@@ -88,7 +88,7 @@ interface ChatPaneProps {
 }
 
 export default function ChatPane({ handleRef }: ChatPaneProps) {
-  const setSettingsOpen = useUiStore((s) => s.setSettingsOpen);
+  const navigate = useNavigate();
 
   // ── Width / resize state ──────────────────────────────────────────────────
   const [paneWidth, setPaneWidth] = useState<number>(() => loadPaneWidth());
@@ -737,7 +737,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
             <span style={{ lineHeight: 1.4 }}>Add an API key to start chatting.</span>
             <button
               type="button"
-              onClick={() => setSettingsOpen(true)}
+              onClick={() => navigate("/settings")}
               style={{
                 marginLeft: "auto",
                 color: "var(--accent-primary)",

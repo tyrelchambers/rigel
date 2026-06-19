@@ -14,7 +14,6 @@ import {
   type PaletteEntry,
 } from "./commandPaletteLogic";
 import { useCluster } from "@/store/cluster";
-import { useUiStore } from "@/store/ui";
 
 // Build the flat, ordered entry list from the nav groups — same order as sidebar.
 function buildEntries(): PaletteEntry[] {
@@ -54,7 +53,6 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const setFocusRequest = useCluster((s) => s.setFocusRequest);
-  const setSettingsOpen = useUiStore((s) => s.setSettingsOpen);
   const [entries, setEntries] = useState<PaletteEntry[]>(PANEL_ENTRIES);
 
   const filtered = filterEntries(entries, query);
@@ -87,17 +85,12 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const selectEntry = useCallback(
     (entry: PaletteEntry) => {
       onClose();
-      // Settings is a modal, not a route — open it instead of navigating.
-      if (entry.id === "settings") {
-        setSettingsOpen(true);
-        return;
-      }
       navigate(entry.route);
       if (entry.kind && entry.focusKey) {
         setFocusRequest({ route: entry.route, kind: entry.kind, key: entry.focusKey });
       }
     },
-    [navigate, onClose, setFocusRequest, setSettingsOpen],
+    [navigate, onClose, setFocusRequest],
   );
 
   function handleKeyDown(e: React.KeyboardEvent) {
