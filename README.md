@@ -149,6 +149,9 @@ This produces unsigned arm64 and x64 DMGs under `apps/desktop/release/`. Code-si
 and notarization require an Apple Developer certificate and are a documented follow-up —
 not yet implemented.
 
+To cut a downloadable release (tag → CI builds the DMGs → draft GitHub Release),
+see **[RELEASING.md](RELEASING.md)**.
+
 ### Develop
 
 Run the web UI and server in parallel during development:
