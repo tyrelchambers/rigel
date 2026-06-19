@@ -28,7 +28,7 @@ The YAML is piped to `kubectl` over **stdin** — never interpolated into a shel
 
 ## Namespaces
 
-The namespace comes from **each document's** `metadata.namespace`. If a document omits it, `kubectl` falls back to the default/current namespace — Helmsman surfaces this rather than silently injecting one, so set `namespace:` explicitly when it matters.
+The namespace comes from **each document's** `metadata.namespace`. If a document omits it, `kubectl` falls back to the default/current namespace — Rigel surfaces this rather than silently injecting one, so set `namespace:` explicitly when it matters.
 
 ---
 
@@ -36,7 +36,7 @@ The namespace comes from **each document's** `metadata.namespace`. If a document
 
 - **Apply semantics** — this is `kubectl apply`, i.e. **create-or-update**. Re-applying an edited manifest updates the existing resource.
 - **No delete here** — to remove resources use the relevant resource panel (or "Purge an app" for a whole app).
-- Same RBAC as the rest of Helmsman — the apply runs as the app's ServiceAccount.
+- Same RBAC as the rest of Rigel — the apply runs as the app's ServiceAccount.
 
 ---
 

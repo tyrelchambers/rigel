@@ -6,7 +6,7 @@ order: 3
 icon: "lucide:git-branch"
 ---
 
-Helmsman can deploy Kubernetes manifests straight from a **GitHub repo**, and — once an app is linked to its repo — let the AI propose fixes as **pull requests**. It's a lightweight, manual-trigger GitOps: you stay in control (every apply is previewed with a diff and confirmed), the repo stays the source of truth.
+Rigel can deploy Kubernetes manifests straight from a **GitHub repo**, and — once an app is linked to its repo — let the AI propose fixes as **pull requests**. It's a lightweight, manual-trigger GitOps: you stay in control (every apply is previewed with a diff and confirmed), the repo stays the source of truth.
 
 > Sync is **manual** ("Sync now") — there's no background polling or webhooks yet. See [Current limitations](#current-limitations).
 
@@ -19,7 +19,7 @@ A repo can hold **several independently-deployable apps** (e.g. a monorepo with 
 GitOps uses a **single account-level GitHub Personal Access Token (PAT)** for everything: listing your repos, cloning, applying, and opening fix-PRs. It's managed in one place: **Accounts → Source control → GitHub**.
 
 * Click **Create a personal access token** — it links to GitHub's classic-token page pre-scoped to `**repo**` (which covers clone/push **and** opening PRs).
-* Paste the `ghp_…` token and **Connect**. Helmsman validates it against the GitHub API (`/user`) and shows **"Connected as \<you\>"**.
+* Paste the `ghp_…` token and **Connect**. Rigel validates it against the GitHub API (`/user`) and shows **"Connected as \<you\>"**.
 * The token is stored as a cluster **Secret** (`helmsman-github`) and is never shown again or returned to the browser.
 
 > You don't have to visit Accounts first — the **Add repo** flow will prompt you for the token the first time if you're not connected yet.
@@ -51,7 +51,7 @@ Each **deployment** row has its own **Sync now** button. Syncing:
 3. On **Apply**, runs `kubectl apply -f <folder> -R` against the cluster.
 4. Records the last-synced commit, time, and status on that deployment row.
 
-On a successful sync, the applied resources are **stamped** with provenance annotations — `helmsman.dev/source-repo` (the **deployment** name) and `helmsman.dev/source-path` — so Helmsman (and the AI) can map a running workload back to its repo + folder. See [Linking](#4-link-an-existing-workload-to-a-deployment).
+On a successful sync, the applied resources are **stamped** with provenance annotations — `helmsman.dev/source-repo` (the **deployment** name) and `helmsman.dev/source-path` — so Rigel (and the AI) can map a running workload back to its repo + folder. See [Linking](#4-link-an-existing-workload-to-a-deployment).
 
 > **Manual only.** There's no auto-sync on push yet — you click Sync. Removed manifests are **not** pruned from the cluster.
 
@@ -78,7 +78,7 @@ Once a workload is linked to a deployment, the chat copilot can fix it **in the 
 
 1. You ask the AI about a broken app (e.g. an OOMKilled deployment). It reads the `helmsman.dev/source-repo` annotation to find the deployment → its repo + folder.
 2. It proposes the change as an **Open PR** button. Clicking it opens the confirm sheet with a **readable diff** of the manifest change — a GitHub-style unified diff with old/new line-number gutters, color-coded additions/removals, hunk separators, a `+/−` change summary, and a copy button. Nothing is applied to the cluster.
-3. On confirm, Helmsman creates a branch, commits the change, pushes, and **opens a pull request** via the GitHub API. You get the PR link.
+3. On confirm, Rigel creates a branch, commits the change, pushes, and **opens a pull request** via the GitHub API. You get the PR link.
 4. You review and merge on GitHub, then **Sync now** to roll it out.
 
 This keeps the repo as the source of truth and keeps a human in the loop (PR review). It needs the workload **linked to a deployment** (§4) and the account PAT with `repo` scope (§1).
