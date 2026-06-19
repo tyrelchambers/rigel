@@ -7,6 +7,7 @@
   "scripts": {
     "build": "pnpm --filter web build && node build.mjs",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
     "dev": "pnpm build && electron .",
     "smoke": "pnpm build && HELMSMAN_SMOKE=1 electron .",
     "dist": "pnpm build && electron-builder --mac --arm64",
@@ -22,6 +23,7 @@
     "esbuild": "latest",
     "fix-path": "latest",
     "tsx": "latest",
-    "typescript": "latest"
+    "typescript": "latest",
+    "vitest": "latest"
   }
 }

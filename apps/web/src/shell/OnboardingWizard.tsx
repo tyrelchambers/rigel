@@ -3,6 +3,9 @@
  * (dismissible; re-openable from Settings via the "helmsman:open-setup" event).
  * A guided front-end over existing endpoints — captures the Claude token and
  * offers one-click installs of the Assistant, metrics-server, and Signal.
+ *
+ * When `requireAboutYou` is true (desktop first run), prepends a required
+ * "About you" step that cannot be skipped or dismissed until completed.
  */
 import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
@@ -14,24 +17,30 @@ import {
   useNodeMetrics,
   useInstallMetricsServer,
 } from "@/lib/api";
+import { Stepper } from "./onboarding/Stepper";
+import { AboutYouStep } from "./onboarding/AboutYouStep";
+import { rigel } from "@/lib/desktop";
 
-export function OnboardingWizard({ onClose }: { onClose: () => void }) {
+export function OnboardingWizard({
+  onClose,
+  requireAboutYou,
+  onAboutYouDone,
+}: {
+  onClose: () => void;
+  requireAboutYou: boolean;
+  onAboutYouDone?: () => void;
+}) {
   const navigate = useNavigate();
-  return (
-    <div style={overlay}>
-      <div style={card}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-          <Sparkles size={18} style={{ color: "var(--accent-primary)" }} />
-          <span style={{ fontSize: 17, fontWeight: 600, color: "var(--fg-primary)" }}>Welcome to Rigel</span>
-        </div>
-        <span style={{ fontSize: 12.5, color: "var(--fg-secondary)", lineHeight: 1.5 }}>
-          A minute of optional setup. Everything here can also be changed later in Settings — skip
-          anything you don't need.
-        </span>
+  const [aboutDone, setAboutDone] = useState(!requireAboutYou);
+  const [i, setI] = useState(0);
 
-        <TokenCard />
-        <AssistantCard />
-        <MetricsCard />
+  const optionalSteps: { label: string; node: ReactNode }[] = [
+    { label: "AI copilot", node: <TokenCard /> },
+    { label: "Assistant", node: <AssistantCard /> },
+    { label: "Metrics", node: <MetricsCard /> },
+    {
+      label: "Notifications",
+      node: (
         <ToolCard
           icon={<Bell size={15} style={{ color: "var(--accent-primary)" }} />}
           title="Signal notifications"
@@ -42,10 +51,86 @@ export function OnboardingWizard({ onClose }: { onClose: () => void }) {
             </button>
           }
         />
+      ),
+    },
+  ];
 
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
-          <button type="button" onClick={onClose} style={primaryBtn}>Done</button>
+  const steps: { label: string; node: ReactNode }[] =
+    requireAboutYou && !aboutDone
+      ? [
+          {
+            label: "About you",
+            node: (
+              <AboutYouStep
+                submitSignup={(d) => rigel!.submitSignup(d)}
+                onDone={() => {
+                  setAboutDone(true);
+                  onAboutYouDone?.();
+                  // The steps array collapses to optionalSteps (About-you removed),
+                  // so reset to index 0 — the first optional step (AI copilot).
+                  setI(0);
+                }}
+              />
+            ),
+          },
+          ...optionalSteps,
+        ]
+      : optionalSteps;
+
+  // While the About-you step is active, the wizard is non-dismissible.
+  const locked = requireAboutYou && !aboutDone;
+
+  function handleBackdropClick() {
+    if (!locked) onClose();
+  }
+
+  const isFirst = i === 0;
+  const isLast = i === steps.length - 1;
+  // Don't show Back/Skip/Next/Done while on the locked About-you step — it has its own "Continue →".
+  const showFooter = !locked;
+
+  return (
+    <div style={overlay} onClick={handleBackdropClick}>
+      <div style={card} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+          <Sparkles size={18} style={{ color: "var(--accent-primary)" }} />
+          <span style={{ fontSize: 17, fontWeight: 600, color: "var(--fg-primary)" }}>Welcome to Rigel</span>
         </div>
+
+        {!locked && (
+          <span style={{ fontSize: 12.5, color: "var(--fg-secondary)", lineHeight: 1.5 }}>
+            A minute of optional setup. Everything here can also be changed later in Settings — skip
+            anything you don't need.
+          </span>
+        )}
+
+        <Stepper labels={steps.map((s) => s.label)} current={i} />
+
+        {steps[i].node}
+
+        {showFooter && (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+            <div>
+              {!isFirst && (
+                <button type="button" onClick={() => setI((n) => n - 1)} style={ghostBtn}>
+                  Back
+                </button>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              {!isLast && (
+                <button type="button" onClick={() => setI((n) => n + 1)} style={ghostBtn}>
+                  Skip
+                </button>
+              )}
+              {isLast ? (
+                <button type="button" onClick={onClose} style={primaryBtn}>Done</button>
+              ) : (
+                <button type="button" onClick={() => setI((n) => n + 1)} style={primaryBtn}>Next →</button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

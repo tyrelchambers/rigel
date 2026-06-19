@@ -10,6 +10,8 @@ export default defineConfig({
   // jsdom` file directive (keeps the pure-logic .test.ts suites in fast node).
   test: {
     environment: "node",
+    globals: true,
+    setupFiles: ["./src/test-setup.ts"],
   },
   resolve: {
     alias: {
