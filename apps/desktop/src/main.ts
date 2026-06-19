@@ -16,7 +16,10 @@ import { InstallStore } from "./installStore";
 import { submitSignup, deliver } from "./signup";
 
 const SIGNUP_ENDPOINT = "https://api.rigel.run";
-const SIGNUP_APP_KEY = "REPLACE_WITH_RIGEL_SIGNUPS_APP_KEY"; // set to the APP_KEY in the rigel-signups Secret before shipping
+// Shared key for the signups endpoint — deliberately baked into the client
+// (obfuscation, NOT real auth; the endpoint is a public signup). Must match the
+// APP_KEY in the `rigel-signups` k8s Secret.
+const SIGNUP_APP_KEY = "3f0be9f2807280c51284681d4424e3883dab9650c1ae081c";
 
 // ── Layout ────────────────────────────────────────────────────────────────
 // In dev, __dirname is apps/desktop/dist. The server source and built web SPA
