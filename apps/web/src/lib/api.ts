@@ -305,6 +305,7 @@ export type AssistantAction =
   | "silence"
   | "unsilence"
   | "clearReport"
+  | "clearActivity"
   | "setSignal"
   | "saveAlert"
   | "deleteAlert"

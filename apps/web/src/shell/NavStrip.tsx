@@ -144,9 +144,11 @@ function NavGroupHeader({ title, collapsed, onToggle }: NavGroupHeaderProps) {
 
 interface NavButtonProps {
   panelKey: string;
+  /** Icon-only rail mode: hide the label, center the icon. */
+  collapsed?: boolean;
 }
 
-function NavButton({ panelKey }: NavButtonProps) {
+function NavButton({ panelKey, collapsed = false }: NavButtonProps) {
   const meta = PANEL_META[panelKey];
   if (!meta) return null;
   const Icon = meta.icon;
@@ -157,7 +159,9 @@ function NavButton({ panelKey }: NavButtonProps) {
       title={meta.title}
       className={({ isActive }) =>
         [
-          "flex items-center gap-2.5 px-2.5 h-8 w-full rounded-md transition-colors group",
+          collapsed
+            ? "flex items-center justify-center h-8 w-full rounded-md transition-colors group"
+            : "flex items-center gap-2.5 px-2.5 h-8 w-full rounded-md transition-colors group",
           isActive
             ? "nav-btn-active"
             : "nav-btn-idle hover:bg-[#1B1C1F]",
@@ -176,19 +180,21 @@ function NavButton({ panelKey }: NavButtonProps) {
             }}
             className={!isActive ? "group-hover:!text-[#A1A1AA]" : ""}
           />
-          <span
-            style={{
-              fontSize: "13px",
-              color: isActive ? "var(--fg-primary)" : "var(--fg-secondary)",
-              fontWeight: isActive ? 600 : 500,
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-            className={!isActive ? "group-hover:!text-white" : ""}
-          >
-            {meta.title}
-          </span>
+          {!collapsed && (
+            <span
+              style={{
+                fontSize: "13px",
+                color: isActive ? "var(--fg-primary)" : "var(--fg-secondary)",
+                fontWeight: isActive ? 600 : 500,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+              className={!isActive ? "group-hover:!text-white" : ""}
+            >
+              {meta.title}
+            </span>
+          )}
         </>
       )}
     </NavLink>
@@ -197,7 +203,7 @@ function NavButton({ panelKey }: NavButtonProps) {
 
 // ─── NavStrip ─────────────────────────────────────────────────────────────────
 
-export default function NavStrip() {
+export default function NavStrip({ collapsed = false }: { collapsed?: boolean }) {
   const location = useLocation();
   const activePanelKey = routeToPanelKey(location.pathname);
 
@@ -234,15 +240,16 @@ export default function NavStrip() {
       `}</style>
       <nav
         style={{
-          width: 200,
-          minWidth: 200,
-          maxWidth: 200,
+          width: collapsed ? 52 : 200,
+          minWidth: collapsed ? 52 : 200,
+          maxWidth: collapsed ? 52 : 200,
           height: "100%",
           background: "var(--surface-primary)",
           borderRight: "1px solid var(--border-subtle)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
+          transition: "width 150ms ease, min-width 150ms ease, max-width 150ms ease",
         }}
       >
         <div
@@ -256,8 +263,31 @@ export default function NavStrip() {
             paddingRight: 8,
           }}
         >
-          {NAV_GROUPS.map((group) => {
+          {NAV_GROUPS.map((group, groupIdx) => {
             const groupKey = group.title ?? "_pinned";
+
+            // ── Icon-only rail: render every panel as an icon, hide the titled
+            // group headers, and keep visual separation with a thin divider.
+            if (collapsed) {
+              return (
+                <div key={groupKey}>
+                  {group.title && groupIdx > 0 && (
+                    <div
+                      style={{
+                        height: 1,
+                        margin: "8px 6px",
+                        background: "var(--border-subtle)",
+                      }}
+                    />
+                  )}
+                  <div className="space-y-0.5">
+                    {group.panels.map((p) => (
+                      <NavButton key={p} panelKey={p} collapsed />
+                    ))}
+                  </div>
+                </div>
+              );
+            }
 
             if (!group.title) {
               // Pinned group — always visible, no header
@@ -270,16 +300,16 @@ export default function NavStrip() {
               );
             }
 
-            const collapsed = isCollapsed(collapseState, group.title);
+            const groupCollapsed = isCollapsed(collapseState, group.title);
 
             return (
               <div key={groupKey}>
                 <NavGroupHeader
                   title={group.title}
-                  collapsed={collapsed}
+                  collapsed={groupCollapsed}
                   onToggle={() => handleToggle(group.title!)}
                 />
-                {!collapsed && (
+                {!groupCollapsed && (
                   <div className="mt-0.5 space-y-0.5">
                     {group.panels.map((p) => (
                       <NavButton key={p} panelKey={p} />

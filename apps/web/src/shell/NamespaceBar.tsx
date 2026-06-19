@@ -29,6 +29,7 @@ export const NAMESPACE_SCOPED_ROUTES = new Set([
   "/storage",
   "/rbac",
   "/events",
+  "/logs",
 ]);
 
 /** True when the current route is namespace-scoped. */

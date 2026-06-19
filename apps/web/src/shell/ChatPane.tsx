@@ -16,7 +16,8 @@
  * ChatPanel.tsx — only the outer shell chrome and layout differ.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Sparkles, Copy, SquarePen, Clock, ArrowDown } from "lucide-react";
+import { Copy, SquarePen, Clock, ArrowDown } from "lucide-react";
+import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { BatchConfirmSheet, type BatchConfirmItem } from "@/components/BatchConfirmSheet";
@@ -69,6 +70,38 @@ import {
   TAIL_SCROLL_THROTTLE_MS,
 } from "@/panels/chat/chatLogic";
 import type { ChatEvent, ChatMessage } from "@/panels/chat/types";
+
+// ── RigelMark ───────────────────────────────────────────────────────────────
+/**
+ * Inline Rigel constellation logo (from assets/brand/logo-constellation.svg).
+ * The source file fills with dark navy (#0B1F3A) which is invisible on the dark
+ * chat surface, so we re-draw it here with `currentColor` for stroke/fill and
+ * let the parent set the color (here: var(--accent-primary)).
+ */
+function RigelMark({ size = 15 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 132 132"
+      fill="none"
+      style={{ flexShrink: 0 }}
+      aria-hidden
+    >
+      <path
+        d="M30 46l68-16 4 66-60 6z m68-16l-56 72"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="30" cy="46" r="7" fill="currentColor" />
+      <circle cx="98" cy="30" r="7" fill="currentColor" />
+      <circle cx="102" cy="96" r="7" fill="currentColor" />
+      <circle cx="42" cy="102" r="7" fill="currentColor" />
+    </svg>
+  );
+}
 
 // ── ChatPane ──────────────────────────────────────────────────────────────────
 
@@ -197,8 +230,11 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // AI copilot config — drives the "not configured" empty-state below.
+  // AI copilot config — drives the "not configured" empty-state below and
+  // disables the composer when no AI token/API key is configured. Treat the
+  // loading state (chatConfig == null) as enabled to avoid a disabled flash.
   const { data: chatConfig } = useChatConfig();
+  const notConfigured = chatConfig != null && !chatConfig.configured;
   // Cluster-aware suggestion chips above the composer.
   const { data: suggestions } = useSuggestions();
   const liveThinkingRef = useRef("");
@@ -354,7 +390,9 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   // ── Send / interrupt ──────────────────────────────────────────────────────
   function handleSend() {
     const text = inputText.trim();
-    if (!text || usageLimit) return;
+    // Drop the send entirely when there's no AI token/API key: appending the
+    // user bubble would leave a message that never gets a reply.
+    if (!text || usageLimit || notConfigured) return;
 
     // Client-handled slash commands (mirror SlashCommand): these never reach the
     // model. Unknown / arg-bearing commands fall through to Claude as a prompt.
@@ -583,7 +621,9 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
             flexShrink: 0,
           }}
         >
-          <Sparkles size={13} style={{ color: "var(--accent-primary)", flexShrink: 0 }} />
+          <span style={{ color: "var(--accent-primary)", display: "flex", flexShrink: 0 }}>
+            <RigelMark size={15} />
+          </span>
           <span
             style={{
               fontSize: 13,
@@ -592,7 +632,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
               whiteSpace: "nowrap",
             }}
           >
-            Rigel
+            Rigel assistant
           </span>
 
           <div style={{ flex: 1 }} />
@@ -710,6 +750,35 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
           />
         )}
 
+        {/* ── "no API key" hint (above the composer) ───────────────────────── */}
+        {notConfigured && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "8px 14px 0",
+              fontSize: 12,
+              color: "var(--fg-secondary)",
+              flexShrink: 0,
+            }}
+          >
+            <span style={{ lineHeight: 1.4 }}>Add an API key to start chatting.</span>
+            <Link
+              to="/settings"
+              style={{
+                marginLeft: "auto",
+                color: "var(--accent-primary)",
+                fontWeight: 500,
+                textDecoration: "none",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Open Settings
+            </Link>
+          </div>
+        )}
+
         {/* ── Composer ─────────────────────────────────────────────────────── */}
         <PaneComposer
           ref={composerRef}
@@ -718,7 +787,8 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
           onSend={handleSend}
           onStop={handleStop}
           isStreaming={isStreaming}
-          disabled={!connected || !!usageLimit}
+          disabled={!connected || !!usageLimit || notConfigured}
+          notConfigured={notConfigured}
           modelConfig={modelConfig}
           onModelConfig={setModelConfig}
           mentionCandidates={mentionCandidates}

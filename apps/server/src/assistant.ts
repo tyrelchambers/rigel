@@ -19,6 +19,7 @@ import {
   manifestYAML,
   mergedConfigMapJSON,
   clearedReportConfigMapJSON,
+  clearedStateConfigMapJSON,
   silencedSet,
   type AssistantInstallConfig,
 } from "@helmsman/k8s/src/assistant";
@@ -88,6 +89,7 @@ export type AssistantAction =
   | "silence"
   | "unsilence"
   | "clearReport"
+  | "clearActivity"
   | "setSignal"
   | "saveAlert" | "deleteAlert" | "toggleAlert";
 
@@ -320,6 +322,17 @@ async function clearReport(context: string | null, namespace: string): Promise<R
   return result;
 }
 
+/** Read-modify-write `assistant-state`, emptying the `audit` history array. */
+async function clearActivity(context: string | null, namespace: string): Promise<RunResult> {
+  const data = await readConfigMapData(context, namespace, "assistant-state");
+  const cmJSON = clearedStateConfigMapJSON(namespace, data["state.json"], { audit: [] });
+  // Nothing to clear (no state yet) is a no-op success.
+  if (cmJSON == null) return { code: 0, stdout: "", stderr: "" };
+  const result = await applyStdin(context, cmJSON);
+  ensureOk(result, "Failed to clear activity");
+  return result;
+}
+
 // ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
@@ -353,6 +366,8 @@ export async function handleAssistant(
       return silenceIncident(context, namespace, req.fingerprint ?? "", false);
     case "clearReport":
       return clearReport(context, namespace);
+    case "clearActivity":
+      return clearActivity(context, namespace);
     case "setSignal":
       return setSignal(context, namespace, req);
     case "saveAlert":

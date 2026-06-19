@@ -1,5 +1,6 @@
 import { CheckCircle2, Circle, CircleSlash } from "lucide-react";
 import type { CatalogApp } from "@helmsman/catalog";
+import { InfoTooltip } from "@/components/InfoTooltip";
 import {
   formatBytesValue,
   formatCoresValue,
@@ -42,7 +43,7 @@ export function NodeFitPanel({
   return (
     <div className="flex flex-col gap-3">
       {/* Header + summary dot */}
-      <div className="flex items-center">
+      <div className="flex items-center" style={{ gap: 6 }}>
         <span
           style={{
             fontFamily: "ui-monospace, monospace",
@@ -54,20 +55,17 @@ export function NodeFitPanel({
         >
           NODE FIT
         </span>
+        <InfoTooltip label="Pick a node to pin this app to, or leave it on Any to let the recommendation stand." />
         <span className="flex-1" />
         <FitSummary fit={fit} />
       </div>
 
       {fit.perNode.length === 0 ? (
         <p style={{ fontSize: 11, color: FG_TERTIARY }}>
-          No nodes visible — is the cluster reachable?
+          No nodes visible. Is the cluster reachable?
         </p>
       ) : (
         <>
-          <p style={{ fontSize: 11, color: FG_SECONDARY }}>
-            Pick a node to pin this app to, or leave it on Any to let the
-            recommendation stand.
-          </p>
           <AnyNodeRow
             recommendedName={fit.recommended?.node.metadata.name ?? null}
             isSelected={selectedNode === null}

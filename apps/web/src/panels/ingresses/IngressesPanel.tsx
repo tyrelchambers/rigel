@@ -4,9 +4,11 @@ import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { viewYaml } from "@/store/yamlViewer";
+import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { ListRow } from "@/panels/components/ListRow";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { Button } from "@/components/ui/button";
+import type { ActionBlock } from "@/lib/api";
 import { TagPill } from "@/panels/components/TagPill";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
@@ -36,9 +38,21 @@ export default function IngressesPanel() {
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [editTarget, setEditTarget] = useState<Ingress | null>(null);
+  const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
 
   function openEdit(ing: Ingress) {
     setEditTarget(ing);
+  }
+
+  function handleDelete(ing: Ingress) {
+    setPendingAction({
+      kind: "deleteResource",
+      resourceKind: "ingress",
+      name: ing.metadata.name,
+      namespace: ing.metadata.namespace,
+      destructive: true,
+      label: `Delete ingress ${ing.metadata.name}`,
+    });
   }
 
   useEffect(() => {
@@ -115,6 +129,8 @@ export default function IngressesPanel() {
               <ContextMenuItem onClick={() => openEdit(ing)}>Edit…</ContextMenuItem>
               <ContextMenuItem onClick={() => viewYaml("ingress", ing.metadata.name, ing.metadata.namespace)}>View YAML…</ContextMenuItem>
               <ContextMenuItem onClick={() => toggleExpand(uid)}>{isOpen ? "Collapse" : "Manage…"}</ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem variant="destructive" onClick={() => handleDelete(ing)}>Delete…</ContextMenuItem>
             </>
           );
 
@@ -226,6 +242,12 @@ export default function IngressesPanel() {
         open={editTarget != null}
         onClose={() => setEditTarget(null)}
         onApplied={() => setEditTarget(null)}
+      />
+
+      <ConfirmSheet
+        action={pendingAction}
+        open={!!pendingAction}
+        onClose={() => setPendingAction(null)}
       />
     </div>
   );

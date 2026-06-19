@@ -35,6 +35,8 @@ import NavStrip from "@/shell/NavStrip";
 import StatusBar from "@/shell/StatusBar";
 import ChatPane, { type ChatPaneHandle } from "@/shell/ChatPane";
 import { CommandPalette, useCommandPalette } from "@/shell/CommandPalette";
+import { GlobalHeader } from "@/shell/GlobalHeader";
+import { loadSidebarCollapsed, saveSidebarCollapsed } from "@/shell/navCollapse";
 
 function readTerminalOpen(): boolean {
   try { return localStorage.getItem("helmsman.terminal.open") === "1"; } catch { return false; }
@@ -71,6 +73,17 @@ export default function App() {
     connectCluster();
   }, []);
   const [paletteOpen, setPaletteOpen] = useCommandPalette();
+
+  // Whole-sidebar collapse (icon-only rail). Owned here, persisted on change,
+  // driven by the GlobalHeader toggle. Distinct from the per-group nav collapse.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(loadSidebarCollapsed);
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((v) => {
+      const next = !v;
+      saveSidebarCollapsed(next);
+      return next;
+    });
+  }, []);
 
   // First-run onboarding: auto-show once when set up is incomplete (no Claude
   // token) and not previously dismissed; re-openable from Settings via an event.
@@ -183,11 +196,18 @@ export default function App() {
       )}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
 
+      {/* ── Global header — slim full-width bar above the whole app ─────────── */}
+      <GlobalHeader
+        sidebarCollapsed={sidebarCollapsed}
+        onToggleSidebar={toggleSidebar}
+        onOpenSearch={() => setPaletteOpen(true)}
+      />
+
       {/* ── Main row: NavStrip + content column + ChatPane ─────────────────── */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
 
         {/* ── Sidebar ──────────────────────────────────────────────────────── */}
-        <NavStrip />
+        <NavStrip collapsed={sidebarCollapsed} />
 
         {/* ── Content column ───────────────────────────────────────────────── */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, background: "var(--surface-primary)" }}>

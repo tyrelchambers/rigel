@@ -12,6 +12,7 @@ import {
   SheetFooter,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { InfoTooltip } from "@/components/InfoTooltip";
 import {
   accountsFromSecrets,
   accountId,
@@ -104,11 +105,9 @@ export default function AccountsPanel() {
     <div className="space-y-3">
       {/* Header */}
       <div className="flex items-start gap-3">
-        <div>
+        <div className="flex items-center gap-2">
           <h1 className="text-lg font-semibold">Accounts</h1>
-          <p className="text-sm text-muted-foreground">
-            Registry pull credentials for catalog installs (Docker Hub, ghcr.io, quay.io).
-          </p>
+          <InfoTooltip label="Registry pull credentials for catalog installs (Docker Hub, ghcr.io, quay.io)." />
         </div>
         {isLoading && (
           <LoaderCircle className="mt-1 size-4 animate-spin text-muted-foreground" aria-label="loading" />

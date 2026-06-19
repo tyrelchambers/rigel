@@ -1,17 +1,16 @@
 /**
  * PanelHeader — the unified header used by every list panel.
  *
- * It combines the namespace selector ("main header") and the panel
- * title/subtitle/count + actions ("sub header") into ONE cohesive element:
- * a single full-bleed band, left-aligned, with one bottom border. On
- * namespace-scoped routes the namespace row appears above the title row; on
- * cluster-wide routes it is omitted and only the title row shows.
+ * A single full-bleed band, left-aligned, with one bottom border: the panel
+ * title, an optional "?" tooltip describing the panel, the item-count chip,
+ * a loading spinner, and right-aligned actions. Namespace selection lives in
+ * the global header now, so this header no longer carries a namespace row.
  *
  * Panels render this as the fixed top of a full-height column, with the list
- * scrolling underneath — so the header (and namespace selector) stays put.
+ * scrolling underneath, so the header stays put.
  */
 import { LoaderCircle } from "lucide-react";
-import { NamespaceSelector, useIsNamespaceScoped } from "@/shell/NamespaceBar";
+import { InfoTooltip } from "@/components/InfoTooltip";
 
 interface PanelHeaderProps {
   title: string;
@@ -25,27 +24,13 @@ interface PanelHeaderProps {
 }
 
 export function PanelHeader({ title, subtitle, count, loading, children }: PanelHeaderProps) {
-  const scoped = useIsNamespaceScoped();
   return (
     <div
       style={{ background: "var(--surface-elevated)", borderBottom: "1px solid #26272B", flexShrink: 0 }}
     >
-      {scoped && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            padding: "10px 16px 0",
-          }}
-        >
-          <NamespaceSelector />
-        </div>
-      )}
-      <div className="flex items-center gap-3 px-4 py-3">
-        <div className="flex flex-col gap-0">
-          <span className="text-sm font-semibold leading-tight">{title}</span>
-          {subtitle && <span style={{ fontSize: 11, color: "var(--fg-tertiary)" }}>{subtitle}</span>}
-        </div>
+      <div className="flex items-center gap-2 px-4 py-2">
+        <span className="text-sm font-semibold leading-tight">{title}</span>
+        {subtitle && <InfoTooltip label={subtitle} />}
         {count != null && (
           <span
             style={{

@@ -121,3 +121,27 @@ export function saveCollapsed(state: NavCollapseState): void {
     // ignore quota / private-browsing errors
   }
 }
+
+// ─── Sidebar collapse (icon-only rail) ───────────────────────────────────────
+// Separate from the per-group collapse above: this is the whole-sidebar
+// collapsed/expanded toggle driven by the GlobalHeader.
+
+export const SIDEBAR_COLLAPSE_KEY = "helmsman.sidebar.collapsed";
+
+/** Load the whole-sidebar collapsed flag; defaults to expanded (false). */
+export function loadSidebarCollapsed(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_COLLAPSE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+/** Persist the whole-sidebar collapsed flag as "true"/"false". */
+export function saveSidebarCollapsed(collapsed: boolean): void {
+  try {
+    localStorage.setItem(SIDEBAR_COLLAPSE_KEY, collapsed ? "true" : "false");
+  } catch {
+    // ignore quota / private-browsing errors
+  }
+}
