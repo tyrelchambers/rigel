@@ -22,8 +22,8 @@ export function SettingsModal({ open, onOpenChange }: { open: boolean; onOpenCha
       id: "about",
       label: "About",
       content: (
-        <p style={{ fontSize: 13, color: "var(--fg-secondary)" }}>
-          Rigel — a self-hostable, AI-native Kubernetes admin UI.
+        <p style={{ fontSize: 15, color: "#8C8C95" }}>
+          Rigel, a self-hostable, AI-native Kubernetes admin UI.
         </p>
       ),
     },
@@ -35,7 +35,7 @@ export function SettingsModal({ open, onOpenChange }: { open: boolean; onOpenCha
       onOpenChange={onOpenChange}
       title="Settings"
       defaultTab="agents"
-      maxWidth="!max-w-3xl"
+      maxWidth="!max-w-4xl"
       tabs={tabs}
     />
   );
