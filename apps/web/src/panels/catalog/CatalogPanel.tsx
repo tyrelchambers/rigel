@@ -27,6 +27,7 @@ import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { useUpdates, type UpdateResult, type ActionBlock } from "@/lib/api";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
+import { InfoTooltip } from "@/components/InfoTooltip";
 import { iconFor } from "./icons";
 import { boundAppID, boundContainer } from "@helmsman/catalog";
 import {
@@ -256,10 +257,10 @@ export default function CatalogPanel() {
       <div className="catalog-header">
         <div className="catalog-header-top">
           <div className="catalog-title-group">
-            <h1 className="catalog-title">Apps</h1>
-            <p className="catalog-subtitle">
-              Install and manage cluster applications
-            </p>
+            <div className="flex items-center gap-2">
+              <h1 className="catalog-title">Apps</h1>
+              <InfoTooltip label="Install and manage cluster applications" />
+            </div>
           </div>
 
           <div className="catalog-header-controls">

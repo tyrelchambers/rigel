@@ -1,5 +1,13 @@
 import { useCluster } from "@/store/cluster";
 import type { ChatEvent } from "@/panels/chat/types";
+import {
+  LINGER_MS,
+  finishLinger,
+  planSubscribe,
+  planUnsubscribe,
+  subKey,
+  type SubRegistry,
+} from "./wsSubscriptions";
 
 let socket: WebSocket | null = null;
 
@@ -15,9 +23,20 @@ function resourceKey(o: { metadata: { name: string; namespace?: string } }): str
 
 /** Raw frames queued while the socket is still CONNECTING; flushed on open. */
 const pendingFrames: string[] = [];
-/** Active watch subscriptions, re-sent on every (re)connect so first-load
- *  panels (which mount before the socket is OPEN) and reconnects get their data. */
-const activeSubs = new Map<string, { kind: string; namespace: string }>();
+/** Ref-counted watch subscriptions, keyed by `${kind}/${namespace}`. Re-sent on
+ *  every (re)connect so first-load panels (which mount before the socket is
+ *  OPEN) and reconnects get their data. Entries linger briefly after their last
+ *  unsubscribe so a tab switch can reuse the warm watch (see wsSubscriptions). */
+const activeSubs: SubRegistry = new Map();
+
+/** Send a subscribe/unsubscribe control frame if the socket is OPEN. Unlike
+ *  rawSend these are not buffered: the onopen re-send loop replays active subs,
+ *  and a lingering teardown that misses the window is harmless. */
+function sendSubFrame(type: "subscribe" | "unsubscribe", kind: string, namespace: string): void {
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type, kind, namespace }));
+  }
+}
 
 /** Send now if the socket is OPEN, else buffer until it opens. */
 function rawSend(frame: string): void {
@@ -146,16 +165,28 @@ export function connectCluster(): void {
   socket.onopen = () => {
     store.setConnected(true);
     store.setError(null);
-    // (Re)send every active watch subscription — panels mount before the
-    // socket opens, so their initial subscribe() calls would otherwise be lost.
+    // (Re)send every in-use watch subscription. Panels mount before the socket
+    // opens, so their initial subscribe() calls would otherwise be lost. Skip
+    // entries that are lingering with refs 0; those are on their way out.
     for (const sub of activeSubs.values()) {
-      socket!.send(JSON.stringify({ type: "subscribe", kind: sub.kind, namespace: sub.namespace }));
+      if (sub.refs > 0) {
+        socket!.send(JSON.stringify({ type: "subscribe", kind: sub.kind, namespace: sub.namespace }));
+      }
     }
     // Drain any chat/log frames buffered while connecting.
     while (pendingFrames.length) socket!.send(pendingFrames.shift()!);
   };
-  socket.onclose = () => store.setConnected(false);
-  socket.onerror = () => store.setError("websocket connection failed");
+  // Clear the global loading flag on close/error too: a cold subscribe sets it
+  // and only a snapshot clears it, so a socket that drops before any snapshot
+  // arrives would otherwise leave every panel spinning forever.
+  socket.onclose = () => {
+    store.setConnected(false);
+    store.setLoading(false);
+  };
+  socket.onerror = () => {
+    store.setError("websocket connection failed");
+    store.setLoading(false);
+  };
   socket.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
     if (m.type === "chat" && m.event) {
@@ -184,19 +215,34 @@ export function connectCluster(): void {
 }
 
 export function subscribe(kind: string, namespace = "default"): void {
-  const store = useCluster.getState();
-  store.setLoading(true);
-  store.setError(null);
-  // Record the subscription so it is (re)sent on open/reconnect. If the socket
-  // is already OPEN send immediately; otherwise the onopen flush handles it.
-  activeSubs.set(`${kind}/${namespace}`, { kind, namespace });
-  if (socket && socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({ type: "subscribe", kind, namespace }));
+  // Warm reuse (entry already exists) cancels any pending teardown, bumps the
+  // ref count and sends nothing. The server is still subscribed and the store
+  // still holds the data, so a tab switch is instant. Only a cold subscribe
+  // (the first ref) toggles loading and sends the subscribe frame.
+  const { sendSubscribe, toggleLoading, clearedTimer } = planSubscribe(activeSubs, kind, namespace);
+  if (clearedTimer) clearTimeout(clearedTimer);
+  if (toggleLoading) {
+    const store = useCluster.getState();
+    store.setLoading(true);
+    store.setError(null);
   }
+  // If the socket is not OPEN yet, the onopen re-send loop will send this.
+  if (sendSubscribe) sendSubFrame("subscribe", kind, namespace);
 }
 export function unsubscribe(kind: string, namespace = "default"): void {
-  activeSubs.delete(`${kind}/${namespace}`);
-  if (socket && socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({ type: "unsubscribe", kind, namespace }));
-  }
+  // Decrement the ref count. The watch is only torn down once nothing relies on
+  // it, and even then only after a linger grace period: if a subscribe arrives
+  // during the linger it revives the entry and the timer below is cancelled.
+  const { startLinger } = planUnsubscribe(activeSubs, kind, namespace);
+  if (!startLinger) return;
+  const entry = activeSubs.get(subKey(kind, namespace));
+  if (!entry) return;
+  entry.lingerTimer = setTimeout(() => {
+    const { sendUnsubscribe } = finishLinger(activeSubs, kind, namespace);
+    // Best-effort: sendSubFrame is a no-op if the socket isn't OPEN. If a
+    // reconnect races the linger, this frame may be dropped, but that's safe:
+    // the server releases every subscription on socket close (per-connection
+    // cleanup is the source of truth), so a reconnect never strands a watch.
+    if (sendUnsubscribe) sendSubFrame("unsubscribe", kind, namespace);
+  }, LINGER_MS);
 }

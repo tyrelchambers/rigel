@@ -10,8 +10,17 @@ import {
   Cpu,
   MemoryStick,
   GitBranch,
+  Settings2,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import type { ActionBlock } from "@/lib/api";
 import type { GitDeployment } from "@/panels/gitops/gitApi";
 import { buildLinkAction, buildUnlinkAction, linkedSourceName, type WorkloadRef } from "@/panels/gitops/linkSource";
@@ -185,34 +194,38 @@ export function DeploymentDetail({
         className="flex items-center gap-2 border-t pt-3"
         style={{ borderColor: "var(--border-subtle)" }}
       >
-        <span className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground mr-2">
-          Manage
-        </span>
-        <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={onRestart}>
-          <RefreshCw className="size-3" />
-          Restart
-        </Button>
-        <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={onScale}>
-          <MoveVertical className="size-3" />
-          Scale
-        </Button>
-        <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={onEdit}>
-          <SlidersHorizontal className="size-3" />
-          Edit config
-        </Button>
-        <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={onRollback}>
-          <Undo2 className="size-3" />
-          Rollback
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 gap-1.5 text-xs"
-          onClick={onTogglePause}
-        >
-          {paused ? <Play className="size-3" /> : <Pause className="size-3" />}
-          {paused ? "Resume" : "Pause"}
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={<Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" />}
+          >
+            <Settings2 className="size-3" />
+            Manage
+            <ChevronDown className="size-3 opacity-60" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="text-xs">
+            <DropdownMenuItem onClick={onRestart}>
+              <RefreshCw />
+              Restart
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onScale}>
+              <MoveVertical />
+              Scale
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onEdit}>
+              <SlidersHorizontal />
+              Edit config
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onRollback}>
+              <Undo2 />
+              Rollback
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onTogglePause}>
+              {paused ? <Play /> : <Pause />}
+              {paused ? "Resume" : "Pause"}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* GitHub source link — gives the AI source context + enables fix-PRs. */}
         <div className="ml-auto flex items-center gap-1.5">

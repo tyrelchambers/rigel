@@ -34,6 +34,7 @@ import {
 // ── PaneComposer ─────────────────────────────────────────────────────────────
 
 const PLACEHOLDER = "Ask Rigel…  (/ for commands, @ to mention a resource)";
+const PLACEHOLDER_UNCONFIGURED = "Connect an API key in Settings to chat";
 const LINE_HEIGHT = 20;
 const MIN_LINES = 3;
 const MAX_LINES = 14;
@@ -46,6 +47,8 @@ interface PaneComposerProps {
   onStop: () => void;
   isStreaming: boolean;
   disabled?: boolean;
+  /** True when there's no AI token/API key — drives the disabled placeholder. */
+  notConfigured?: boolean;
   modelConfig: ModelConfig;
   onModelConfig: (c: ModelConfig) => void;
   mentionCandidates: MentionCandidate[];
@@ -72,6 +75,7 @@ export function PaneComposer({
   onStop,
   isStreaming,
   disabled,
+  notConfigured,
   modelConfig,
   onModelConfig,
   mentionCandidates,
@@ -299,7 +303,7 @@ export function PaneComposer({
           value={value}
           rows={MIN_LINES}
           disabled={disabled}
-          placeholder={PLACEHOLDER}
+          placeholder={notConfigured ? PLACEHOLDER_UNCONFIGURED : PLACEHOLDER}
           onChange={(e) => {
             onChange(e.target.value);
             setCaret(e.target.selectionStart ?? 0);
@@ -308,7 +312,10 @@ export function PaneComposer({
           onClick={syncCaret}
           onSelect={syncCaret}
           onKeyDown={handleKeyDown}
-          style={textareaStyle}
+          style={{
+            ...textareaStyle,
+            ...(disabled ? { opacity: 0.6, cursor: "not-allowed" } : null),
+          }}
         />
         {/* Control row */}
         <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px 8px", position: "relative" }}>

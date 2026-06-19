@@ -6,6 +6,7 @@ import {
   buildCertViews,
   matchesSearch,
   sortCertViews,
+  expiryLabel,
 } from "./certificatesDisplay";
 import type { Certificate, CertificateRequest, Order, Challenge } from "./types";
 
@@ -22,6 +23,32 @@ describe("isReady / isIssuing", () => {
   it("reads the Issuing condition", () => {
     expect(isIssuing(cert({ name: "a" }, { conditions: [{ type: "Issuing", status: "True" }] }))).toBe(true);
     expect(isIssuing(cert({ name: "a" }))).toBe(false);
+  });
+});
+
+describe("expiryLabel", () => {
+  const now = Date.parse("2026-06-19T00:00:00Z");
+  const iso = (deltaSeconds: number) => new Date(now + deltaSeconds * 1000).toISOString();
+
+  it("returns a dash for missing or unparseable input", () => {
+    expect(expiryLabel(undefined, now)).toBe("—");
+    expect(expiryLabel("not-a-date", now)).toBe("—");
+  });
+
+  it("formats future expiry as 'in <largest unit>'", () => {
+    expect(expiryLabel(iso(344 * 86400), now)).toBe("in 344d");
+    expect(expiryLabel(iso(3 * 3600), now)).toBe("in 3h");
+    expect(expiryLabel(iso(5 * 60), now)).toBe("in 5m");
+    expect(expiryLabel(iso(45), now)).toBe("in 45s");
+  });
+
+  it("treats exactly-now as not yet expired", () => {
+    expect(expiryLabel(iso(0), now)).toBe("in 0s");
+  });
+
+  it("formats past expiry as 'expired <largest unit> ago'", () => {
+    expect(expiryLabel(iso(-5 * 60), now)).toBe("expired 5m ago");
+    expect(expiryLabel(iso(-2 * 86400), now)).toBe("expired 2d ago");
   });
 });
 

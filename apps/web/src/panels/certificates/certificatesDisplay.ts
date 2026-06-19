@@ -6,6 +6,32 @@ import type {
 // Re-export the shared relativeAge so the panel imports one age formatter.
 export { relativeAge } from "../pods/podDisplay";
 
+/** Largest sensible unit for a duration in seconds ("344d" / "3h" / "5m" / "5s"). */
+function compactDuration(seconds: number): string {
+  if (seconds < 60) return `${Math.floor(seconds)}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
+  return `${Math.floor(seconds / 86400)}d`;
+}
+
+/**
+ * Future-aware expiry label for a certificate `notAfter` timestamp. Unlike the
+ * past-only `relativeAge`, this distinguishes "not yet expired" from "already
+ * expired":
+ *   - undefined / unparseable → "—"
+ *   - future  → "in 344d", "in 3h", "in 5m", "in 5s"
+ *   - past    → "expired 5m ago", "expired 2d ago"
+ * Unit thresholds mirror `relativeAge` (s < 60, m < 3600, h < 86400, else d).
+ */
+export function expiryLabel(iso: string | undefined, now: number = Date.now()): string {
+  if (!iso) return "—";
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return "—";
+  const dt = (then - now) / 1000; // seconds until expiry (negative once expired)
+  if (dt >= 0) return `in ${compactDuration(dt)}`;
+  return `expired ${compactDuration(-dt)} ago`;
+}
+
 const CERT_NAME_ANNOTATION = "cert-manager.io/certificate-name";
 
 function condition(conds: Condition[] | undefined, type: string): Condition | undefined {

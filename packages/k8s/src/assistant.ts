@@ -564,13 +564,14 @@ export function mergedConfigMapJSON(
 }
 
 /**
- * Produce the `assistant-state` ConfigMap JSON with `report` cleared. Returns
- * null when the existing state.json is missing/unparseable (nothing to clear).
- * Mirrors Swift `clearReport`.
+ * Produce the `assistant-state` ConfigMap JSON with `patch` shallow-merged into
+ * the parsed state.json (the rest of state is preserved). Returns null when the
+ * existing state.json is missing/unparseable (nothing to clear).
  */
-export function clearedReportConfigMapJSON(
+export function clearedStateConfigMapJSON(
   namespace: string,
   stateJSON: string | undefined | null,
+  patch: Record<string, unknown>,
 ): string | null {
   if (!stateJSON) return null;
   let obj: unknown;
@@ -580,7 +581,7 @@ export function clearedReportConfigMapJSON(
     return null;
   }
   if (typeof obj !== "object" || obj === null) return null;
-  const next = { ...(obj as Record<string, unknown>), report: "" };
+  const next = { ...(obj as Record<string, unknown>), ...patch };
   return JSON.stringify({
     apiVersion: "v1",
     kind: "ConfigMap",
@@ -591,4 +592,15 @@ export function clearedReportConfigMapJSON(
     },
     data: { "state.json": JSON.stringify(next) },
   });
+}
+
+/**
+ * Produce the `assistant-state` ConfigMap JSON with `report` cleared.
+ * Mirrors Swift `clearReport`.
+ */
+export function clearedReportConfigMapJSON(
+  namespace: string,
+  stateJSON: string | undefined | null,
+): string | null {
+  return clearedStateConfigMapJSON(namespace, stateJSON, { report: "" });
 }

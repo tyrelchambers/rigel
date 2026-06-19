@@ -19,6 +19,7 @@ import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { cn } from "@/lib/utils";
 import { useNodeMetrics } from "@/lib/api";
+import { InfoTooltip } from "@/components/InfoTooltip";
 import { PurgePickerSheet } from "@/panels/purge/PurgePickerSheet";
 import { PurgeSheet } from "@/panels/purge/PurgeSheet";
 import { useRightSizing } from "@/panels/rightsizing/useRightSizing";
@@ -200,12 +201,12 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
         <div className="ov-title-col">
           <div className="ov-title-row">
             <h1 className="ov-title">Overview</h1>
+            <InfoTooltip label="Health at a glance" />
             {isLoading && (
               <LoaderCircle className="size-4 animate-spin text-muted-foreground" aria-label="loading" />
             )}
             {namespaceFilter && <span className="ov-ns-chip">{namespaceFilter}</span>}
           </div>
-          <span className="ov-subtitle">Health at a glance</span>
         </div>
 
         <div className="ov-actions">

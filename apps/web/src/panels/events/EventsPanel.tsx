@@ -7,6 +7,16 @@ import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-m
 import { viewYaml } from "@/store/yamlViewer";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { PanelHeader } from "@/panels/components/PanelHeader";
+import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Trash2 } from "lucide-react";
 import type { EventBucket, EventTypeFilter, K8sEvent } from "./types";
 import {
   absoluteWhen,
@@ -56,6 +66,26 @@ function eventVariant(type: string | null | undefined): StatusBadgeVariant {
   return "neutral";
 }
 
+/**
+ * Local time range covering one timeline bucket, e.g. "2:15 - 2:16 PM".
+ * `start` is epoch ms; each bucket spans 60s. Drops the meridiem on the start
+ * time when both ends share it, so the range reads cleanly.
+ */
+function bucketTimeRange(start: number): string {
+  const opts: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
+  const from = new Date(start).toLocaleTimeString(undefined, opts);
+  const to = new Date(start + 60_000).toLocaleTimeString(undefined, opts);
+  // "2:15 PM" + "2:16 PM" → "2:15 - 2:16 PM" when both share the meridiem.
+  // Split on any whitespace: ICU emits a narrow no-break space (U+202F)
+  // before the meridiem in many locales, not a plain space.
+  const fromParts = from.split(/\s/);
+  const toParts = to.split(/\s/);
+  if (fromParts.length === 2 && toParts.length === 2 && fromParts[1] === toParts[1]) {
+    return `${fromParts[0]} - ${to}`;
+  }
+  return `${from} - ${to}`;
+}
+
 /** "kind/name" or "kind/name · namespace"; "—" if no name. */
 function involvedObjectLabel(event: K8sEvent): string {
   const io = event.involvedObject;
@@ -72,6 +102,7 @@ export default function EventsPanel() {
   const isLoading = useCluster((s) => s.isLoading);
   const error = useCluster((s) => s.error);
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
+  const clearKind = useCluster((s) => s.clearKind);
 
   // Initial filter state is "Warning" per the Swift EventsViewModel.
   const [typeFilter, setTypeFilter] = useState<EventTypeFilter>("Warning");
@@ -139,6 +170,20 @@ export default function EventsPanel() {
           placeholder="Search events…"
           className="w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
         />
+        {/*
+          Clears the LOCAL view only. Kubernetes events are ephemeral and
+          re-stream from the server watch, so this does not delete Event objects
+          server-side; the next snapshot/delta may repopulate the list.
+        */}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-1.5"
+          disabled={allEvents.length === 0}
+          onClick={() => clearKind("events")}
+        >
+          <Trash2 className="size-3.5" /> Clear
+        </Button>
       </PanelHeader>
 
       <div className="flex-1 overflow-auto">
@@ -316,25 +361,65 @@ function EventTimeline({ buckets }: { buckets: EventBucket[] }) {
   const max = Math.max(1, ...buckets.map((b) => b.warnings + b.normal));
   return (
     <div className="flex h-12 items-stretch gap-px rounded-md border bg-muted/30 p-1">
-      {buckets.map((b) => {
-        const total = b.warnings + b.normal;
-        const warnPct = (b.warnings / max) * 100;
-        const normPct = (b.normal / max) * 100;
-        return (
-          <div
-            key={b.index}
-            className="flex h-full flex-1 flex-col justify-end"
-            title={
-              total > 0
-                ? `${b.warnings} warning, ${b.normal} normal`
-                : undefined
-            }
-          >
-            <div className="bg-green-600" style={{ height: `${normPct}%` }} />
-            <div className="bg-red-600" style={{ height: `${warnPct}%` }} />
-          </div>
-        );
-      })}
+      {buckets.map((b) => (
+        <TimelineBar key={b.index} bucket={b} max={max} />
+      ))}
     </div>
+  );
+}
+
+/**
+ * One timeline bar. Empty buckets are inert (no popover, no pointer). Buckets
+ * with events become a Popover trigger that reveals a compact detail card on
+ * hover (Base UI `openOnHover`), showing the bucket's local time range and the
+ * warning/normal/total counts.
+ */
+function TimelineBar({ bucket, max }: { bucket: EventBucket; max: number }) {
+  const total = bucket.warnings + bucket.normal;
+  const warnPct = (bucket.warnings / max) * 100;
+  const normPct = (bucket.normal / max) * 100;
+
+  const stack = (
+    <>
+      <div className="bg-green-600" style={{ height: `${normPct}%` }} />
+      <div className="bg-red-600" style={{ height: `${warnPct}%` }} />
+    </>
+  );
+
+  // Empty bucket → plain, non-interactive column.
+  if (total === 0) {
+    return <div className="flex h-full flex-1 flex-col justify-end">{stack}</div>;
+  }
+
+  return (
+    <Popover>
+      {/*
+        The bar div is the trigger. `nativeButton={false}` since the rendered
+        element is a <div>, not a <button>. `openOnHover` reveals the detail on
+        hover with a short delay; click still works as a fallback.
+      */}
+      <PopoverTrigger
+        nativeButton={false}
+        openOnHover
+        delay={120}
+        render={
+          <div className="flex h-full flex-1 cursor-pointer flex-col justify-end rounded-[1px] outline-none transition-colors hover:bg-foreground/10 data-[popup-open]:bg-foreground/15" />
+        }
+      >
+        {stack}
+      </PopoverTrigger>
+      <PopoverContent side="top" className="w-auto min-w-44 gap-1.5 p-2.5">
+        <PopoverHeader>
+          <PopoverTitle className="text-xs">{bucketTimeRange(bucket.start)}</PopoverTitle>
+          <PopoverDescription className="text-[11px]">
+            {total} event{total === 1 ? "" : "s"} this minute
+          </PopoverDescription>
+        </PopoverHeader>
+        <div className="flex flex-col gap-0.5 font-mono text-[11px]">
+          <span className="text-red-600">{bucket.warnings} warning{bucket.warnings === 1 ? "" : "s"}</span>
+          <span className="text-green-600">{bucket.normal} normal</span>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

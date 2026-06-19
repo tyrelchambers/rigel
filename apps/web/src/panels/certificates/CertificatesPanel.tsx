@@ -19,6 +19,7 @@ import type {
 } from "./types";
 import {
   relativeAge,
+  expiryLabel,
   buildCertViews,
   sortCertViews,
   matchesSearch,
@@ -179,7 +180,7 @@ export default function CertificatesPanel() {
                     }}
                     title={`Expires ${v.notAfter}`}
                   >
-                    exp {relativeAge(v.notAfter)} ago
+                    exp {expiryLabel(v.notAfter)}
                   </span>
                 )}
               </ListRow>
@@ -429,7 +430,7 @@ function CertDetail({
           <dd className="break-all" style={{ color: "var(--fg-secondary)" }}>{view.secretName || "—"}</dd>
           <dt style={{ color: "var(--fg-tertiary)" }}>NOT AFTER</dt>
           <dd style={{ color: "var(--fg-secondary)" }}>
-            {view.notAfter ? `${relativeAge(view.notAfter)} left` : "—"}
+            {expiryLabel(view.notAfter)}
           </dd>
           <dt style={{ color: "var(--fg-tertiary)" }}>AGE</dt>
           <dd style={{ color: "var(--fg-secondary)" }}>
