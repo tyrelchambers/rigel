@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rigel-signups
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rigel-signups
+  template:
+    metadata:
+      labels:
+        app: rigel-signups
+    spec:
+      containers:
+        - name: signups
+          image: ghcr.io/tyrelchambers/rigel-signups:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: rigel-signups
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
