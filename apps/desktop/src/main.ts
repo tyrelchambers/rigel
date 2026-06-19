@@ -9,9 +9,14 @@
 // Trust model: the server is forked WITHOUT HELMSMAN_PASSWORD/HELMSMAN_TOKEN, so
 // it runs auth-off — it's bound to loopback (HOST=127.0.0.1) and is only ever
 // reachable by this desktop app on the same machine.
-import { app, BrowserWindow, shell, utilityProcess, type UtilityProcess } from "electron";
+import { app, BrowserWindow, ipcMain, shell, utilityProcess, type UtilityProcess } from "electron";
 import { createServer } from "node:net";
 import { join } from "node:path";
+import { InstallStore } from "./installStore";
+import { submitSignup, deliver } from "./signup";
+
+const SIGNUP_ENDPOINT = "https://api.rigel.run";
+const SIGNUP_APP_KEY = "REPLACE_WITH_RIGEL_SIGNUPS_APP_KEY"; // set to the APP_KEY in the rigel-signups Secret before shipping
 
 // ── Layout ────────────────────────────────────────────────────────────────
 // In dev, __dirname is apps/desktop/dist. The server source and built web SPA
@@ -219,6 +224,18 @@ function createWindow(port: number): BrowserWindow {
 // ── Boot ─────────────────────────────────────────────────────────────────
 async function boot(): Promise<void> {
   applyLoginPath();
+
+  // ── Signup IPC ──────────────────────────────────────────────────────────
+  // Instantiate once per boot; userData is stable across the app's lifetime.
+  const installStore = new InstallStore(app.getPath("userData"));
+  // Background retry of any undelivered signup (offline on a previous run).
+  void deliver(installStore, fetch, SIGNUP_ENDPOINT, SIGNUP_APP_KEY);
+
+  ipcMain.handle("rigel:needs-signup", () => !installStore.captured);
+  ipcMain.handle("rigel:submit-signup", (_e, data: { name: string; email: string }) =>
+    submitSignup(installStore, fetch, SIGNUP_ENDPOINT, SIGNUP_APP_KEY, data.name, data.email, app.getVersion(), process.platform),
+  );
+
   serverPort = await findFreePort();
   console.log(`[helmsman] starting server on 127.0.0.1:${serverPort}`);
   serverProc = forkServer(serverPort);
