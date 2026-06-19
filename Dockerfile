@@ -1,11 +1,13 @@
-# Helmsman Web — single self-hostable container.
+# Rigel Web — single self-hostable container.
 # Stage 1 (node) builds the React UI with pnpm; stage 2 (also node) runs the
 # API/WS server via tsx, which also serves the built UI. The server shells out
 # to kubectl (and claude, for chat) against a mounted kubeconfig.
 
 # ---- Stage 1: build the web UI + install the server's runtime deps ----
-FROM node:22-slim AS build
-RUN corepack enable
+FROM node:26-slim AS build
+# Node 25+ no longer bundles corepack, so install pnpm directly (pin to the
+# repo's packageManager version so the frozen lockfile resolves cleanly).
+RUN npm install -g pnpm@11.4.0
 WORKDIR /app
 
 # node-pty 1.1.0 ships prebuilt binaries only for darwin-* and win32-* — there
@@ -46,7 +48,7 @@ RUN pnpm --filter web build
 # ---- Stage 2: runtime (node) ----
 # Same base as Stage 1 (node:22-slim, same Debian/glibc), so node-pty's native
 # linux prebuild built in Stage 1 stays ABI-compatible when copied over.
-FROM node:22-slim
+FROM node:26-slim
 USER root
 
 # kubectl + helm + kubectl-cnpg + cmctl + claude.
