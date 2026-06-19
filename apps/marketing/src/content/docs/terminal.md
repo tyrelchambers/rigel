@@ -1,12 +1,12 @@
 ---
 title: "Terminal — interactive cluster shell"
-description: "An interactive shell into your cluster, right inside Helmsman."
+description: "An interactive shell into your cluster, right inside Rigel."
 category: "Guides"
 order: 4
 icon: "lucide:square-terminal"
 ---
 
-A Rancher-style **interactive shell**, docked as a drawer at the bottom of the screen, for running one-off `kubectl` / `helm` / shell commands without leaving whatever panel you're on. It's a real terminal (colors, line editing, interactive programs like `kubectl edit`), wired to the same cluster the rest of Helmsman uses.
+A Rancher-style **interactive shell**, docked as a drawer at the bottom of the screen, for running one-off `kubectl` / `helm` / shell commands without leaving whatever panel you're on. It's a real terminal (colors, line editing, interactive programs like `kubectl edit`), wired to the same cluster the rest of Rigel uses.
 
 ---
 
@@ -41,12 +41,12 @@ kubectl get deploy api -n personal -o json | jq '.spec.template.spec.containers[
 helm list -A
 ```
 
-> ⚠️ This is a **full shell with the app's cluster access** (Helmsman is a cluster-admin tool). Anyone who can log in can run anything here — protect Helmsman with auth and network controls as usual.
+> ⚠️ This is a **full shell with the app's cluster access** (Rigel is a cluster-admin tool). Anyone who can log in can run anything here — protect Rigel with auth and network controls as usual.
 
 ---
 
 ## Notes & limitations
 
 * **Single shell (v1)** — one terminal session per connection. Multiple tabs/sessions are a planned extension.
-* Runs **in the Helmsman server container** under the app's context (not an isolated per-user sandbox).
+* Runs **in the Rigel server container** under the app's context (not an isolated per-user sandbox).
 * Behind the same session auth as the rest of the app; the terminal streams over the authenticated `/ws` WebSocket.

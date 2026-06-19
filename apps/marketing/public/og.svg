@@ -17,18 +17,20 @@
   <rect width="1200" height="630" fill="url(#grid)" />
   <rect width="1200" height="630" fill="url(#glow)" />
 
-  <!-- compass mark -->
-  <g transform="translate(80 84)">
-    <rect width="56" height="56" rx="13" fill="#38bdf8" />
-    <g transform="translate(11 11)" fill="none" stroke="#0a0a0a" stroke-width="2.4"
-       stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="17" cy="17" r="14" />
-      <polygon points="22.9 11.1 19.9 20.1 10.9 22.9 13.9 13.9 22.9 11.1" fill="#0a0a0a" stroke="none" />
-    </g>
-    <text x="78" y="38" font-size="34" font-weight="700" fill="#ffffff" letter-spacing="-0.5">Helmsman</text>
+  <!-- brand: constellation mark + wordmark -->
+  <g transform="translate(80 80)">
+    <svg width="54" height="54" viewBox="0 0 132 132" fill="none">
+      <path d="M30 46l68-16 4 66-60 6z m68-16l-56 72" stroke="#38bdf8" stroke-width="9"
+            stroke-linecap="round" stroke-linejoin="round" />
+      <circle cx="30" cy="46" r="10" fill="#38bdf8" />
+      <circle cx="98" cy="30" r="10" fill="#38bdf8" />
+      <circle cx="102" cy="96" r="10" fill="#38bdf8" />
+      <circle cx="42" cy="102" r="10" fill="#38bdf8" />
+    </svg>
+    <text x="70" y="38" font-size="34" font-weight="700" fill="#ffffff" letter-spacing="-0.5">Rigel</text>
   </g>
 
-  <!-- decorative radar rings -->
+  <!-- decorative star rings -->
   <g transform="translate(940 330)" fill="none" stroke="#38bdf8" stroke-opacity="0.25">
     <circle r="200" />
     <circle r="140" stroke-opacity="0.18" />
@@ -36,21 +38,22 @@
     <circle r="10" fill="#38bdf8" stroke="none" />
   </g>
 
-  <text x="80" y="330" font-size="86" font-weight="700" fill="url(#ink)" letter-spacing="-3">
-    You're the captain.
+  <text x="80" y="322" font-size="74" font-weight="700" fill="url(#ink)" letter-spacing="-2.5">
+    Run production Kubernetes
   </text>
-  <text x="80" y="416" font-size="54" font-weight="700" fill="#a1a1aa" letter-spacing="-1.5">
-    The Helmsman runs the ship.
-  </text>
-  <text x="82" y="492" font-size="27" fill="#a1a1aa">
-    AI-native Kubernetes that investigates, watches, and fixes —
-  </text>
-  <text x="82" y="528" font-size="27" fill="#a1a1aa">
-    you just set the course.
+  <text x="80" y="406" font-size="74" font-weight="700" fill="#a1a1aa" letter-spacing="-2.5">
+    without an ops team.
   </text>
 
-  <g transform="translate(82 560)">
-    <rect width="220" height="46" rx="9" fill="#38bdf8" />
-    <text x="110" y="30" font-size="20" font-weight="700" fill="#0a0a0a" text-anchor="middle">Take the helm →</text>
+  <text x="82" y="476" font-size="27" fill="#a1a1aa">
+    AI-native Kubernetes you self-host — it diagnoses, watches,
+  </text>
+  <text x="82" y="512" font-size="27" fill="#a1a1aa">
+    and fixes your cluster, with your approval.
+  </text>
+
+  <g transform="translate(82 548)">
+    <rect width="196" height="46" rx="9" fill="#38bdf8" />
+    <text x="98" y="30" font-size="20" font-weight="700" fill="#0a0a0a" text-anchor="middle">Get started →</text>
   </g>
 </svg>

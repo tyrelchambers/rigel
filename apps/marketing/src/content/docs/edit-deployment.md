@@ -6,7 +6,7 @@ order: 6
 icon: "lucide:layers"
 ---
 
-Edit a Deployment's most-changed settings — replica count, per-container image, CPU/memory requests & limits, environment variables, **image-pull secrets**, and env vars **referenced from a Secret/ConfigMap key** — from a guided form, without hand-writing YAML. Like the rest of Helmsman's mutations, nothing hits the cluster until you review the exact `kubectl` commands and confirm.
+Edit a Deployment's most-changed settings — replica count, per-container image, CPU/memory requests & limits, environment variables, **image-pull secrets**, and env vars **referenced from a Secret/ConfigMap key** — from a guided form, without hand-writing YAML. Like the rest of Rigel's mutations, nothing hits the cluster until you review the exact `kubectl` commands and confirm.
 
 **Where:** **Deployments** panel → right-click a row → **Edit config…**, or expand a row → **Manage** → **Edit config**.
 
@@ -14,7 +14,7 @@ Edit a Deployment's most-changed settings — replica count, per-container image
 
 ## How it works
 
-The editor opens in a **wide centered dialog**. It's seeded from the Deployment's live spec, so you're editing what's actually running. You change fields, click **Review changes**, and Helmsman diffs the form against the live spec into a small set of discrete actions — it only emits a command for what you actually changed. Each action is previewed as its **exact** `**kubectl**` **command** in the confirm step (the same batch-confirm flow the chat copilot uses), then run in order. The watch refreshes the panel automatically.
+The editor opens in a **wide centered dialog**. It's seeded from the Deployment's live spec, so you're editing what's actually running. You change fields, click **Review changes**, and Rigel diffs the form against the live spec into a small set of discrete actions — it only emits a command for what you actually changed. Each action is previewed as its **exact** `**kubectl**` **command** in the confirm step (the same batch-confirm flow the chat copilot uses), then run in order. The watch refreshes the panel automatically.
 
 ### What you can edit
 
