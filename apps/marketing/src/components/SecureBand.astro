@@ -8,14 +8,14 @@ const guards = [
     desc: "Every change is confirmed before it runs, and the assistant's fixes show you the exact command first.",
   },
   {
-    icon: "lucide:key-round",
-    title: "Password & sessions",
-    desc: "Built-in login with httpOnly session cookies. Protected out of the box, no extra proxy required.",
+    icon: "lucide:laptop",
+    title: "Runs on your Mac",
+    desc: "A local desktop app, not a server. There's nothing exposed to the internet and no login to manage; it talks to your clusters straight from your machine.",
   },
   {
     icon: "lucide:server",
     title: "Your keys, your cluster",
-    desc: "Self-hosted end to end. Your data and credentials never leave the hardware you control.",
+    desc: "Your kubeconfig and credentials stay on your machine and in your clusters. Nothing is sent to us.",
   },
   {
     icon: "lucide:folder-lock",
@@ -41,7 +41,7 @@ const guards = [
       <div class="flex items-center gap-2.5">
         <Icon name="lucide:shield-check" class="size-[15px] text-accent" />
         <span class="font-mono text-xs tracking-[0.15em] text-fg-tertiary"
-          >BUILT-IN AUTH</span
+          >PRIVATE BY DEFAULT</span
         >
       </div>
       <h2
@@ -51,8 +51,8 @@ const guards = [
       </h2>
       <p class="mt-5 max-w-[520px] text-[15.5px] leading-[1.65] text-fg-secondary">
         Rigel can do a lot, but it never acts behind your back. Approval is
-        explicit, access is yours alone, and everything runs on your own
-        infrastructure.
+        explicit, it runs entirely on your own machine, and nothing it touches
+        leaves your control.
       </p>
     </div>
 

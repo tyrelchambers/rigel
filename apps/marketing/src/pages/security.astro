@@ -7,142 +7,138 @@ import CapabilitySection from "../components/CapabilitySection.astro";
 import FinalCta from "../components/FinalCta.astro";
 import Footer from "../components/Footer.astro";
 
-// Every claim here is backed by the code: guarded AI mutations, built-in auth
-// on API + WS, no telemetry, bring-your-own AI token, and agent guardrails.
-// Deliberately NOT claimed: encryption at rest, compliance certs, pen-tests.
-
 const approval = [
   {
     icon: "lucide:bot",
-    title: "The AI can't act on its own",
-    desc: "Mutating commands are blocked for the assistant. Every fix it finds comes back as a button, never a silent change.",
+    title: "The chat can't change anything",
+    desc: "The assistant's write commands are blocked. When it finds a fix, you get a button with the exact command on it, not a change that already happened.",
   },
   {
     icon: "lucide:file-check",
-    title: "Approve before anything changes",
-    desc: "Cluster changes go through an explicit confirmation, and the assistant's actions show you the exact command first.",
+    title: "You confirm every change",
+    desc: "Anything that touches the cluster shows you the exact command and waits for you to say yes.",
   },
   {
     icon: "lucide:eye",
-    title: "Read first, write second",
-    desc: "Live cluster data streams in over a read-only path. Changes run through a separate, guarded path on your server.",
+    title: "Reading and writing are separate",
+    desc: "Live cluster data comes in over a read-only stream. Changes go through a different, guarded path that only you trigger.",
   },
 ];
 
 const access = [
   {
-    icon: "lucide:key-round",
-    title: "Built-in login",
-    desc: "A password login issues a session out of the box. No extra reverse proxy required to lock the UI down.",
+    icon: "lucide:laptop",
+    title: "Runs on your Mac",
+    desc: "It's an app on your machine, not a server. Nothing listens on the network, so there's no public surface to attack.",
   },
   {
-    icon: "lucide:cookie",
-    title: "Hardened sessions",
-    desc: "httpOnly, SameSite session cookies protect both the REST API and the live WebSocket, not just one of them.",
+    icon: "lucide:plug",
+    title: "Connects out, never in",
+    desc: "Rigel reaches your clusters from your Mac using the kubeconfig you already have. There's no Rigel server in the middle to lock down.",
   },
   {
     icon: "lucide:shield-check",
-    title: "Secure by default",
-    desc: "The Helm chart generates a strong random password on install. There is no blank-password default to forget.",
+    title: "It can only do what you can",
+    desc: "Rigel acts as you. If your kubeconfig and your cluster's RBAC don't allow something, neither does Rigel.",
   },
   {
     icon: "lucide:folder-lock",
-    title: "Scoped to what you touch",
-    desc: "A shared namespace filter scopes the whole console, and cluster RBAC still applies to everything you do.",
+    title: "Scoped to what you're touching",
+    desc: "Pick a namespace and the whole app narrows to it. Your cluster's RBAC still applies on top of that.",
   },
 ];
 
 const data = [
   {
-    icon: "lucide:server",
-    title: "Self-hosted, end to end",
-    desc: "Rigel runs in your cluster against an in-cluster kubeconfig. The browser only ever talks to your own server.",
+    icon: "lucide:laptop",
+    title: "Local, end to end",
+    desc: "Rigel runs on your Mac and uses your kubeconfig to reach your clusters directly. There's no Rigel server in between.",
   },
   {
     icon: "lucide:radar",
-    title: "No telemetry, ever",
-    desc: "No analytics, no tracking pixels, no phone-home. Nothing about your cluster is reported back to us.",
+    title: "No telemetry",
+    desc: "No analytics, no tracking, no phone-home. We don't see anything about your cluster.",
   },
   {
     icon: "lucide:cpu",
-    title: "Bring your own AI key",
-    desc: "Chat runs on an AI provider key you supply. That is the only place cluster context ever leaves your hardware.",
+    title: "Your own AI key",
+    desc: "Chat uses an AI key you provide. That's the one place your cluster's details ever leave your machine.",
   },
   {
     icon: "lucide:bell",
     title: "Notifications you run",
-    desc: "Alerts go through a Signal bridge you run yourself, not a third-party paging service.",
+    desc: "Alerts go out through a Signal bridge you run yourself, not a third-party paging service.",
   },
 ];
 
 const agent = [
   {
     icon: "lucide:circle-dollar-sign",
-    title: "Spend caps",
-    desc: "A hard dollar limit bounds what the autonomous agent can ever spend on its own.",
+    title: "Spend cap",
+    desc: "A hard dollar limit on what the agent can spend on its own.",
   },
   {
     icon: "lucide:power",
-    title: "A kill-switch that fails closed",
-    desc: "Turn the agent off at any time. If it can't read its own config, it disables itself rather than guess.",
+    title: "Kill-switch",
+    desc: "Turn it off whenever you want. If it can't even read its own config, it shuts itself down rather than guess.",
   },
   {
     icon: "lucide:folder-lock",
     title: "Namespace-scoped",
-    desc: "It only ever acts inside the namespaces you put on its allowlist.",
+    desc: "It only acts in the namespaces you've put on its allowlist.",
   },
   {
     icon: "lucide:save",
-    title: "Backs up before it touches",
-    desc: "Resource YAML is snapshotted before any change, so nothing the agent does is one-way.",
+    title: "Backs up first",
+    desc: "It snapshots a resource's YAML before changing it, so nothing it does is one-way.",
   },
   {
     icon: "lucide:rotate-ccw",
-    title: "Audit log with revert",
-    desc: "Every action the agent takes is logged with a before-and-after snapshot, so it can be rolled back.",
+    title: "Logged, with undo",
+    desc: "Every action is recorded with a before-and-after, so you can roll it back.",
   },
 ];
 
 const faqs = [
   {
-    q: "Does my cluster data leave my hardware?",
-    a: "It lives on your own server, and for chat it goes to the AI provider you configure, using your own key. Update checks send just the image names you already run to public registries to spot new versions. Anything else, like GitOps to your own Git host, only happens for integrations you turn on. Nothing phones home on its own.",
+    q: "Does my cluster data leave my machine?",
+    a: "It stays on your Mac and in your clusters. For chat, it goes to the AI provider you set up, using your own key. Update checks send just the image names you already run to public registries to spot new versions. Anything else, like GitOps to your own Git host, only happens if you turn it on. Nothing phones home.",
   },
   {
     q: "What can the AI do on its own?",
-    a: "In chat, nothing that changes the cluster. Mutating commands are blocked and come back as buttons you approve. The optional autonomous agent can act, but only within the spend cap, namespaces, and kill-switch you set, and it backs up and logs everything it does.",
+    a: "In chat, nothing that changes the cluster. Write commands are blocked, and fixes come back as buttons you approve. The optional agent can act, but only inside the spend cap, namespaces, and kill-switch you set, and it backs up and logs everything.",
   },
   {
-    q: "Where are credentials stored?",
-    a: "As standard Kubernetes Secrets in your own cluster. Rigel does not add its own encryption layer, so if your policy requires encryption at rest, enable it at the etcd or KMS layer the way you would for any other Secret.",
+    q: "Where are my credentials stored?",
+    a: "Your kubeconfig stays right where it already lives on your Mac. The AI key you give Rigel is stored locally by the app. Rigel doesn't add its own encryption on top, so treat them like any other credential on your machine.",
   },
   {
-    q: "Do I have to expose Rigel to the internet?",
-    a: "No. It's protected by the built-in login from the first install, so you decide whether to reach it over your VPN, keep it cluster-internal, or put it behind an SSO proxy.",
+    q: "Do I have to expose anything to the internet?",
+    a: "No. Rigel is a desktop app, so there's nothing to expose. It connects out to your clusters from your Mac, and you don't open any ports or stand up a server.",
   },
 ];
 ---
 
 <Base
   title="Security & control in Rigel"
-  description="How Rigel keeps you in control: explicit approval before any change, built-in auth on the API and WebSocket, no telemetry, bring-your-own AI key, and a fully guarded autonomous agent. All self-hosted on your own hardware."
+  description="How Rigel handles access to your cluster: it runs on your Mac, asks before it changes anything, sends no telemetry, uses your own AI key, and keeps the autonomous agent inside hard limits."
 >
   <Nav />
   <main id="main">
     <PageHeader
       eyebrowIcon="lucide:shield-check"
       eyebrow="SECURITY"
-      title="Built to earn cluster access."
-      subtitle="Handing a tool the keys to your cluster is a big ask. Rigel is built so that you stay the one in control: it asks before it acts, it runs entirely on your hardware, and it reports nothing back to us."
+      title="You stay in control."
+      subtitle="Giving any tool access to your cluster is a real decision, so here's exactly how Rigel works. It runs on your own Mac, it asks before it changes anything, and it never reports back to us."
     />
 
     <CapabilitySection
       id="approval"
       variant="primary"
       eyebrowIcon="lucide:hand"
-      eyebrow="APPROVAL FIRST"
-      heading="Nothing happens without you."
-      copy="Rigel can investigate deeply and propose fixes, but the decision to change anything is always yours. The assistant proposes; you approve."
+      eyebrow="APPROVAL"
+      heading="Nothing changes without your say-so."
+      copy="Rigel can dig through your cluster and suggest fixes, but it doesn't make the change itself. It hands you the exact command and waits for you to click."
       items={approval}
     />
 
@@ -151,9 +147,9 @@ const faqs = [
       variant="sunken"
       reverse
       eyebrowIcon="lucide:lock"
-      eyebrow="ACCESS CONTROL"
-      heading="Access is yours alone."
-      copy="Authentication is built in and on by default, covering every way into the app, so the console isn't open the moment it's deployed."
+      eyebrow="RUNS LOCALLY"
+      heading="It runs on your Mac, nowhere else."
+      copy="Rigel isn't a server you have to stand up and protect. It's an app on your machine that talks to your clusters directly, so there's nothing exposed to the internet."
       items={access}
     />
 
@@ -161,9 +157,9 @@ const faqs = [
       id="data"
       variant="primary"
       eyebrowIcon="lucide:server"
-      eyebrow="DATA BOUNDARY"
-      heading="Your data stays on your hardware."
-      copy="Rigel is self-hosted from end to end. The only thing that leaves your cluster is what you choose to send to the AI, on your own key."
+      eyebrow="YOUR DATA"
+      heading="Your data doesn't go anywhere."
+      copy="Rigel runs on your Mac. The only thing that ever leaves is what you choose to send to the AI, using your own key."
       items={data}
     />
 
@@ -173,8 +169,8 @@ const faqs = [
       reverse
       eyebrowIcon="lucide:shield"
       eyebrow="AGENT GUARDRAILS"
-      heading="The autonomous agent, on a leash."
-      copy="The optional agent that fixes things while you're away runs inside hard limits you set, and it can never paint itself into a corner."
+      heading="The agent has hard limits."
+      copy="The optional agent that fixes things while you're away only works inside the limits you set, and it keeps a record of everything it does."
       items={agent}
     />
 
@@ -184,14 +180,14 @@ const faqs = [
         <div data-reveal class="flex items-center gap-2.5">
           <Icon name="lucide:message-circle-question" class="size-[15px] text-accent" />
           <span class="font-mono text-xs tracking-[0.15em] text-fg-tertiary"
-            >STRAIGHT ANSWERS</span
+            >COMMON QUESTIONS</span
           >
         </div>
         <h2
           data-reveal
           class="mt-5 text-[clamp(1.85rem,3.6vw,2.5rem)] font-bold leading-[1.08] tracking-[-0.03em] text-fg"
         >
-          The questions security teams ask.
+          Questions people ask.
         </h2>
 
         <dl class="mt-10 flex flex-col gap-8">

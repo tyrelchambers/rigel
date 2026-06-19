@@ -55,3 +55,37 @@ test("rate-limited → 429", async () => {
   const { app } = make({ allow: () => false });
   expect((await post(app, valid)).status).toBe(429);
 });
+
+test("CORS preflight from the marketing origin is allowed", async () => {
+  const { app } = make();
+  const res = await app.request("/signups", {
+    method: "OPTIONS",
+    headers: {
+      origin: "https://rigel.run",
+      "access-control-request-method": "POST",
+      "access-control-request-headers": "content-type,x-rigel-key",
+    },
+  });
+  expect(res.status).toBe(204);
+  expect(res.headers.get("access-control-allow-origin")).toBe("https://rigel.run");
+});
+
+test("CORS reflects an allowed origin on the actual POST", async () => {
+  const { app } = make();
+  const res = await app.request("/signups", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-rigel-key": "secret", origin: "https://rigel.run" },
+    body: JSON.stringify(valid),
+  });
+  expect(res.status).toBe(200);
+  expect(res.headers.get("access-control-allow-origin")).toBe("https://rigel.run");
+});
+
+test("CORS does not allow an unknown origin", async () => {
+  const { app } = make();
+  const res = await app.request("/signups", {
+    method: "OPTIONS",
+    headers: { origin: "https://evil.example", "access-control-request-method": "POST" },
+  });
+  expect(res.headers.get("access-control-allow-origin")).not.toBe("https://evil.example");
+});

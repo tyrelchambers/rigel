@@ -1,0 +1,87 @@
+---
+// Early-access waitlist form. Posts name + email to the signups API — the SAME
+// endpoint the desktop first-run uses (apps/signups at api.rigel.run), so all
+// interest lands in one list. The app key is deliberately baked in: it's
+// obfuscation, not real auth (public signup behind a per-IP rate limit), and
+// matches apps/desktop/src/main.ts SIGNUP_APP_KEY + the rigel-signups Secret.
+---
+
+<form id="early-access-form" class="mt-9 flex w-full max-w-[480px] flex-col gap-3">
+  <div class="flex flex-col gap-3 sm:flex-row">
+    <label class="sr-only" for="ea-name">Your name</label>
+    <input
+      id="ea-name"
+      type="text"
+      name="name"
+      required
+      autocomplete="name"
+      placeholder="Your name"
+      class="min-w-0 flex-1 rounded-md border border-line-strong bg-white/[0.03] px-4 py-3 text-[15px] text-fg outline-none transition-colors placeholder:text-fg-tertiary focus:border-accent"
+    />
+    <label class="sr-only" for="ea-email">Email address</label>
+    <input
+      id="ea-email"
+      type="email"
+      name="email"
+      required
+      autocomplete="email"
+      placeholder="you@company.com"
+      class="min-w-0 flex-1 rounded-md border border-line-strong bg-white/[0.03] px-4 py-3 text-[15px] text-fg outline-none transition-colors placeholder:text-fg-tertiary focus:border-accent"
+    />
+  </div>
+  <button
+    type="submit"
+    class="inline-flex items-center justify-center gap-2.5 rounded-md bg-accent px-7 py-3.5 text-[15.5px] font-semibold text-fg-inverse transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-accent-hover active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
+  >
+    Get early access
+  </button>
+  <p id="ea-msg" role="status" aria-live="polite" class="min-h-[1.25rem] text-[13.5px] text-fg-secondary"></p>
+</form>
+
+<script>
+  const ENDPOINT = "https://api.rigel.run/signups";
+  const APP_KEY = "3f0be9f2807280c51284681d4424e3883dab9650c1ae081c";
+
+  const form = document.getElementById("early-access-form") as HTMLFormElement | null;
+  const msg = document.getElementById("ea-msg");
+  const btn = form?.querySelector<HTMLButtonElement>("button[type=submit]") ?? null;
+
+  if (form && msg && btn) {
+    const idle = btn.textContent;
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const data = new FormData(form);
+      const name = String(data.get("name") ?? "").trim();
+      const email = String(data.get("email") ?? "").trim();
+      if (!name || !email) return;
+
+      btn.disabled = true;
+      btn.textContent = "Sending…";
+      msg.textContent = "";
+      msg.style.color = "";
+
+      try {
+        const res = await fetch(ENDPOINT, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-rigel-key": APP_KEY },
+          body: JSON.stringify({
+            installId: crypto.randomUUID(),
+            name,
+            email,
+            appVersion: "waitlist",
+            platform: "web",
+          }),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        form.reset();
+        msg.textContent = "You're on the list. We'll email you the moment Rigel ships.";
+      } catch {
+        msg.textContent = "Something went wrong — please try again in a moment.";
+        msg.style.color = "#f87171";
+      } finally {
+        btn.disabled = false;
+        btn.textContent = idle;
+      }
+    });
+  }
+</script>
