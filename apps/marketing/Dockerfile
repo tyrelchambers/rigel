@@ -19,6 +19,11 @@ COPY apps/marketing/package.json ./apps/marketing/
 # Install only the marketing app's dependency subset.
 RUN pnpm install --frozen-lockfile --filter @helmsman/marketing...
 
+# The /catalog page imports @helmsman/catalog at build time (its `main` is
+# src/index.ts), so the package SOURCE must be present, not just its
+# package.json. Without this, `astro build` fails to resolve the entry.
+COPY packages/catalog ./packages/catalog
+
 # Build the static output to apps/marketing/dist.
 COPY apps/marketing ./apps/marketing
 RUN pnpm --filter @helmsman/marketing build
