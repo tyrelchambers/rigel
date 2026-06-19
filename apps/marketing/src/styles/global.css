@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
-/* ─── Helmsman design tokens (clankerlocal.pen · midnight palette) ───────────
+/* ─── Rigel design tokens (clankerlocal.pen · midnight palette) ───────────
  * Mirrors apps/web/src/index.css so the marketing site and the product app
  * share one visual language.
  *   Surface:  primary #121315 · elevated #1B1C1F · sunken #0C0D0F

@@ -1,6 +1,6 @@
 ---
 title: "Right-click actions (context menus)"
-description: "Right-click any resource for context-menu actions and quick Ask-the-Helmsman handoff."
+description: "Right-click any resource for context-menu actions and quick Ask-the-Rigel handoff."
 category: "Guides"
 order: 8
 icon: "lucide:mouse-pointer-click"

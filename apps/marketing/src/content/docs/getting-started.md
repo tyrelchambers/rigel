@@ -1,18 +1,18 @@
 ---
 title: "Getting Started"
-description: "Install Helmsman into a Kubernetes cluster (Helm) or a single host (Docker), then log in and connect the AI copilot."
+description: "Install Rigel into a Kubernetes cluster (Helm) or a single host (Docker), then log in and connect the AI copilot."
 category: "Get started"
 order: 1
 icon: "lucide:rocket"
 ---
 
-Helmsman is a self-hostable, AI-native Kubernetes admin UI — it diagnoses, monitors, and fixes your cluster with your approval. This guide is the onboarding entry point: it gets Helmsman running in your cluster (or on a single host), logs you in, and connects the optional AI copilot.
+Rigel is a self-hostable, AI-native Kubernetes admin UI — it diagnoses, monitors, and fixes your cluster with your approval. This guide is the onboarding entry point: it gets Rigel running in your cluster (or on a single host), logs you in, and connects the optional AI copilot.
 
-Helmsman runs as a single [Bun](https://bun.sh) server (`apps/server`) that serves the React UI (`apps/web`) plus `/api/*` and `/ws` on **port 8787**. It drives `kubectl` and `helm` through a confirm gate, and an optional AI chat copilot suggests and runs the commands you approve.
+Rigel runs as a single [Bun](https://bun.sh) server (`apps/server`) that serves the React UI (`apps/web`) plus `/api/*` and `/ws` on **port 8787**. It drives `kubectl` and `helm` through a confirm gate, and an optional AI chat copilot suggests and runs the commands you approve.
 
-> ⚠️ **Helmsman is a cluster-admin tool.** It can read everything and — through a confirm gate — install, scale, and delete across the cluster. Protect it with a password and never expose it publicly without TLS (ideally behind an SSO proxy).
+> ⚠️ **Rigel is a cluster-admin tool.** It can read everything and — through a confirm gate — install, scale, and delete across the cluster. Protect it with a password and never expose it publicly without TLS (ideally behind an SSO proxy).
 
-This guide covers installing Helmsman **into a Kubernetes cluster** with the Helm chart. For a single-host / laptop setup, see [Docker (single host)](#docker-single-host) at the end.
+This guide covers installing Rigel **into a Kubernetes cluster** with the Helm chart. For a single-host / laptop setup, see [Docker (single host)](#docker-single-host) at the end.
 
 ---
 
@@ -20,7 +20,7 @@ This guide covers installing Helmsman **into a Kubernetes cluster** with the Hel
 
 * A Kubernetes cluster and `kubectl` access to it.
 * **Helm 3.8+** (OCI registry support is required to pull the chart).
-* Permission to create a ServiceAccount and a cluster-admin ClusterRoleBinding in the install namespace (Helmsman needs broad RBAC to be fully functional — see [RBAC & permissions](#rbac-permissions)).
+* Permission to create a ServiceAccount and a cluster-admin ClusterRoleBinding in the install namespace (Rigel needs broad RBAC to be fully functional — see [RBAC & permissions](#rbac-permissions)).
 
 Optional, for richer data:
 
@@ -76,7 +76,7 @@ Log in with that password. The login sets an `httpOnly` session cookie that also
 
 ## Cluster access
 
-When running **in-cluster**, Helmsman does **not** need a kubeconfig. The container entrypoint detects the mounted ServiceAccount token and synthesizes a kubeconfig pointing at the in-cluster API server (`kubectl` shells out, so unlike client-go it needs an explicit kubeconfig). `automountServiceAccountToken` is on for the pod.
+When running **in-cluster**, Rigel does **not** need a kubeconfig. The container entrypoint detects the mounted ServiceAccount token and synthesizes a kubeconfig pointing at the in-cluster API server (`kubectl` shells out, so unlike client-go it needs an explicit kubeconfig). `automountServiceAccountToken` is on for the pod.
 
 To instead target a **different / remote cluster**, mount a kubeconfig as a Secret and point the chart at it:
 
@@ -93,7 +93,7 @@ The Secret must have a key named `config` holding the kubeconfig file. When set,
 
 ## RBAC & permissions
 
-Helmsman installs arbitrary Helm charts, applies manifests, scales, and deletes any resource **on confirmed request** — so to be *fully* functional it needs `cluster-admin`. The chart binds the ServiceAccount to the built-in `cluster-admin` ClusterRole by default.
+Rigel installs arbitrary Helm charts, applies manifests, scales, and deletes any resource **on confirmed request** — so to be *fully* functional it needs `cluster-admin`. The chart binds the ServiceAccount to the built-in `cluster-admin` ClusterRole by default.
 
 | Goal | Values |
 |------|--------|
@@ -102,13 +102,13 @@ Helmsman installs arbitrary Helm charts, applies manifests, scales, and deletes 
 | Read-mostly | `rbac.clusterAdmin=false` (binds the built-in `view` role; mutations/installs will be denied) |
 | Manage RBAC yourself | `rbac.create=false`, `serviceAccount.name=<existing-sa>` |
 
-The right way to lock Helmsman down is **app auth + network controls** (below), not narrowing the RBAC — a narrowed role just makes parts of the UI fail with permission errors.
+The right way to lock Rigel down is **app auth + network controls** (below), not narrowing the RBAC — a narrowed role just makes parts of the UI fail with permission errors.
 
 ---
 
 ## Auth
 
-Helmsman ships **secure by default** because it can scale/delete/install cluster-wide. A built-in browser login (admin password → `httpOnly` session cookie) protects both `/api` and `/ws`.
+Rigel ships **secure by default** because it can scale/delete/install cluster-wide. A built-in browser login (admin password → `httpOnly` session cookie) protects both `/api` and `/ws`.
 
 | Mode | How |
 |------|-----|

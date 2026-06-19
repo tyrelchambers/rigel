@@ -26,3 +26,7 @@ apps/web/.shots/
 
 # Git worktrees (isolated workspaces)
 .worktrees/
+
+# Swift build output + locally built macOS app
+.build/
+Helmsman.app/
