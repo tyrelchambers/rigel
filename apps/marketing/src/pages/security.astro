@@ -70,8 +70,8 @@ const data = [
   },
   {
     icon: "lucide:bell",
-    title: "Notifications stay internal",
-    desc: "Alerts go through your own in-cluster Signal service, so even your pages don't route through a third party.",
+    title: "Notifications you run",
+    desc: "Alerts go through a Signal bridge you run yourself, not a third-party paging service.",
   },
 ];
 
@@ -99,14 +99,14 @@ const agent = [
   {
     icon: "lucide:rotate-ccw",
     title: "Audit log with revert",
-    desc: "Every action the agent takes is logged with a before and after, and can be rolled back in one click.",
+    desc: "Every action the agent takes is logged with a before-and-after snapshot, so it can be rolled back.",
   },
 ];
 
 const faqs = [
   {
     q: "Does my cluster data leave my hardware?",
-    a: "Only in two places: it lives on your own server, and for chat it goes to the AI provider you configure, using your own key. Update checks send just the image names you already run to public registries to spot new versions. Nothing else leaves.",
+    a: "It lives on your own server, and for chat it goes to the AI provider you configure, using your own key. Update checks send just the image names you already run to public registries to spot new versions. Anything else, like GitOps to your own Git host, only happens for integrations you turn on. Nothing phones home on its own.",
   },
   {
     q: "What can the AI do on its own?",

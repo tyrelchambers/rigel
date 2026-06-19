@@ -30,13 +30,13 @@ const linkFor = (a: (typeof apps)[number]) =>
 const benefits = [
   {
     icon: "lucide:wand-sparkles",
-    title: "No YAML, no Helm values",
-    desc: "Pick an app, answer a few plain questions, and Rigel generates and applies the manifests.",
+    title: "Skip the YAML",
+    desc: "Pick an app, fill in a few guided fields, and Rigel installs it. No hand-written manifests or charts to wrangle.",
   },
   {
-    icon: "lucide:shield-check",
-    title: "Checked before it runs",
-    desc: "Namespace, hostname, storage and node fit are validated before anything touches the cluster.",
+    icon: "lucide:sliders-horizontal",
+    title: "Guided, not guesswork",
+    desc: "Rigel walks you through namespace, hostname and storage, with sensible defaults from each app's recommended settings.",
   },
   {
     icon: "lucide:refresh-cw",
@@ -53,7 +53,7 @@ const benefits = [
 
 <Base
   title="App catalog for Rigel"
-  description={`Self-host ${total} curated apps on your own cluster in one click. Rigel generates the manifests, installs with sensible defaults, and tracks updates, with Heroku ergonomics on your own hardware.`}
+  description={`Self-host ${total} curated apps on your own cluster in one click. Rigel installs each app with sensible defaults and tracks updates, with Heroku ergonomics on your own hardware.`}
 >
   <Nav />
   <main id="main">
@@ -61,7 +61,7 @@ const benefits = [
       eyebrowIcon="lucide:anchor"
       eyebrow="APP CATALOG"
       title={`Self-host ${total} apps in one click.`}
-      subtitle="Pick an app, answer a few guided questions, and Rigel generates the manifests and deploys it to your cluster with sensible defaults. Your hardware, your data, none of the cloud bill."
+      subtitle="Pick an app, answer a few guided questions, and Rigel installs it on your cluster with sensible defaults. Your hardware, your data, none of the cloud bill."
     />
 
     <!-- stat band + category quick-nav -->

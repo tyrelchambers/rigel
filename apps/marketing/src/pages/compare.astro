@@ -22,9 +22,9 @@ const groups: Group[] = [
   {
     title: "AI & automation",
     rows: [
-      { label: "Plain-English AI assistant", values: [true, "Paid preview", "Paid add-on", "Alpha plugin"] },
-      { label: "Autonomous remediation (fixes on its own)", values: [true, "Approval only", false, false] },
-      { label: "Natural-language alerts (SMS / Signal)", values: [true, false, false, false] },
+      { label: "Plain-English AI assistant", values: [true, "Paid (Prime)", "Paid (Plus)", "Alpha plugin"] },
+      { label: "Autonomous remediation (fixes on its own)", values: [true, false, false, false] },
+      { label: "Natural-language alerts (Signal)", values: [true, false, false, false] },
     ],
   },
   {
@@ -32,18 +32,17 @@ const groups: Group[] = [
     rows: [
       { label: "Live resource panels", values: [true, true, true, true] },
       { label: "Workload actions (scale, restart, edit)", values: [true, true, true, true] },
-      { label: "RBAC management in the UI", values: [true, true, "View only", true] },
       { label: "Port-forward from the UI", values: [true, "Via shell", true, true] },
       { label: "Live log streaming", values: [true, true, true, true] },
       { label: "In-browser pod terminal", values: [true, true, true, true] },
-      { label: "Multi-cluster / fleet", values: ["Team plan", true, true, true] },
+      { label: "Multi-cluster / fleet", values: ["Single cluster", true, true, true] },
     ],
   },
   {
     title: "Self-hosting",
     rows: [
       { label: "One-click app catalog", values: [true, "Helm only", "Helm only", false] },
-      { label: "Guided install, no Helm values", values: [true, "Helm values", "Helm values", false] },
+      { label: "Clean uninstall", values: [true, "Helm uninstall", "Helm uninstall", false] },
     ],
   },
   {
@@ -65,7 +64,7 @@ const shines = [
   {
     name: "Lens",
     icon: "lucide:monitor",
-    note: "The most polished Kubernetes desktop IDE. Fast multi-cluster browsing, one-click logs, an integrated terminal, and the new Prism AI copilot make it a powerful cockpit on your laptop.",
+    note: "The most polished Kubernetes desktop IDE. Fast multi-cluster browsing, one-click logs, an integrated terminal, and the Prism AI copilot make it a powerful cockpit on your laptop.",
   },
   {
     name: "Headlamp",
