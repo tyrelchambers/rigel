@@ -1,7 +1,7 @@
 import type { WebSocket } from "ws";
 import { WatchManager } from "./watchManager";
 import type { WatchEvent } from "@helmsman/k8s/src/watch";
-import { runClaude } from "./claudeBridge";
+import { runAgent } from "./runAgent";
 import { LogStreamManager, type LogTarget } from "./logStream";
 import { TerminalSession } from "./terminal";
 
@@ -76,7 +76,7 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null)
         const sessionId = typeof m.sessionId === "string" ? m.sessionId : undefined;
         (async () => {
           try {
-            for await (const event of runClaude(m.prompt, context, ac.signal, { model, effort, sessionId })) {
+            for await (const event of runAgent(m.prompt, context, ac.signal, { model, effort, sessionId })) {
               ws.send(JSON.stringify({ type: "chat", event }));
             }
           } catch {
