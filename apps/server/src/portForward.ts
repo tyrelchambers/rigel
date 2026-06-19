@@ -1,7 +1,8 @@
 // Port-forward subprocess manager — server side of docs/parity/portforward.md.
 //
 // Manages the lifecycle of `kubectl port-forward` subprocesses spawned via
-// Bun.spawn (argv array — NO shell). Tracks active forwards in memory, allocates
+// node:child_process spawn (argv array — NO shell). Tracks active forwards in
+// memory, allocates
 // free local ports, monitors kubectl's stdout for the "Forwarding from
 // 127.0.0.1:<port>" ready line, captures stderr for failures, and tears every
 // child down on explicit stop and on server shutdown (no zombie kubectl).
@@ -13,6 +14,8 @@
 // this does not.
 
 import { buildKubectlArgs } from "@helmsman/k8s/src/run";
+import { spawn, type ChildProcess } from "node:child_process";
+import { once } from "node:events";
 import { connect } from "node:net";
 
 /** Server-side loopback bind address. kubectl defaults to this; constant by design. */
@@ -103,7 +106,7 @@ export function isValidLocalPort(port: number): boolean {
 // ---------------------------------------------------------------------------
 
 interface TrackedForward extends ActiveForward {
-  proc: ReturnType<typeof Bun.spawn> | null;
+  proc: ChildProcess | null;
 }
 
 export interface StartResult {
@@ -201,9 +204,9 @@ export class PortForwardManager {
       ),
     );
 
-    let proc: ReturnType<typeof Bun.spawn>;
+    let proc: ChildProcess;
     try {
-      proc = Bun.spawn(["kubectl", ...args], { stdout: "pipe", stderr: "pipe" });
+      proc = spawn("kubectl", args, { stdio: ["ignore", "pipe", "pipe"] });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       // ENOENT etc. — kubectl not on PATH.
@@ -246,9 +249,10 @@ export class PortForwardManager {
 
   private async terminate(f: TrackedForward): Promise<void> {
     if (!f.proc) return;
+    const proc = f.proc;
     try {
-      f.proc.kill(); // SIGTERM
-      await f.proc.exited;
+      proc.kill(); // SIGTERM
+      if (proc.exitCode === null && proc.signalCode === null) await once(proc, "close");
     } catch {
       /* already gone */
     } finally {
@@ -264,58 +268,39 @@ export class PortForwardManager {
   private monitor(f: TrackedForward): void {
     const proc = f.proc;
     if (!proc) return;
-    const decoder = new TextDecoder();
     const stderrChunks: string[] = [];
 
     // Drain stderr in the background for the failure message.
-    if (proc.stderr instanceof ReadableStream) {
-      const reader = proc.stderr.getReader();
-      (async () => {
-        try {
-          for (;;) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            if (value) stderrChunks.push(decoder.decode(value));
-          }
-        } catch {
-          /* reader closed on kill */
-        }
-      })();
-    }
+    proc.stderr?.on("data", (buf: Buffer) => stderrChunks.push(buf.toString("utf8")));
 
-    // Watch stdout for the ready line.
-    if (proc.stdout instanceof ReadableStream) {
-      const reader = proc.stdout.getReader();
-      (async () => {
-        try {
-          for (;;) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            if (value && decoder.decode(value).includes("Forwarding from")) {
-              const live = this.forwards.get(f.id);
-              if (live && live.status === "starting") live.status = "running";
-              return;
-            }
-          }
-        } catch {
-          /* reader closed on kill */
-        }
-      })();
-    }
+    // Watch stdout for the ready line (accumulate across chunk boundaries).
+    let stdoutBuf = "";
+    proc.stdout?.on("data", (buf: Buffer) => {
+      stdoutBuf += buf.toString("utf8");
+      if (stdoutBuf.includes("Forwarding from")) {
+        const live = this.forwards.get(f.id);
+        if (live && live.status === "starting") live.status = "running";
+      }
+    });
+
+    const fail = () => {
+      const live = this.forwards.get(f.id);
+      if (live && live.status === "starting") {
+        live.status = "failed";
+        live.failureMessage =
+          stderrChunks.join("").trim().split("\n")[0] || "port-forward exited";
+      }
+    };
+
+    // spawn delivers ENOENT (kubectl missing) asynchronously as an "error" event
+    // (no "close" follows when the child never started), so flip to "failed" here.
+    proc.on("error", (err: Error) => {
+      stderrChunks.push(err.message);
+      fail();
+    });
 
     // If the process exits while still "starting", it failed to bind.
-    proc.exited
-      .then(() => {
-        const live = this.forwards.get(f.id);
-        if (live && live.status === "starting") {
-          live.status = "failed";
-          live.failureMessage =
-            stderrChunks.join("").trim().split("\n")[0] || "port-forward exited";
-        }
-      })
-      .catch(() => {
-        /* ignore */
-      });
+    proc.on("close", fail);
   }
 }
 

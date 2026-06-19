@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "main": "src/index.ts",
-  "scripts": { "build": "tsc --noEmit", "typecheck": "tsc --noEmit", "test": "bun test", "check-updates": "bun run src/checkCatalogUpdates.ts" },
-  "devDependencies": { "@types/bun": "latest", "typescript": "latest" }
+  "scripts": { "build": "tsc --noEmit", "typecheck": "tsc --noEmit", "test": "vitest run --passWithNoTests", "check-updates": "node --import tsx src/checkCatalogUpdates.ts" },
+  "devDependencies": { "@types/node": "latest", "tsx": "latest", "typescript": "latest", "vitest": "^4.1.8" }
 }

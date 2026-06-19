@@ -25,7 +25,7 @@ interface Props {
 // assistant = accent purple, system = tertiary grey.
 const ROLE_META = {
   user: { Icon: User, label: "You", color: "#60A5FA" },
-  assistant: { Icon: Sparkles, label: "Helmsman", color: "var(--accent-primary)" },
+  assistant: { Icon: Sparkles, label: "Rigel", color: "var(--accent-primary)" },
   system: { Icon: Settings, label: "System", color: "var(--fg-tertiary)" },
 } as const;
 

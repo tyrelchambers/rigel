@@ -68,7 +68,7 @@ function ConnectStep({ onClose }: { onClose: () => void }) {
     <>
       <DialogHeader>
         <DialogTitle>Connect GitHub</DialogTitle>
-        <DialogDescription>Helmsman needs a personal access token to list your repos and open PRs. It's stored as a cluster Secret.</DialogDescription>
+        <DialogDescription>Rigel needs a personal access token to list your repos and open PRs. It's stored as a cluster Secret.</DialogDescription>
       </DialogHeader>
       <div className="flex flex-col gap-3 py-1">
         <a href={GITHUB_TOKEN_URL} target="_blank" rel="noreferrer" className="text-xs hover:underline" style={{ color: "var(--accent-primary)" }}>

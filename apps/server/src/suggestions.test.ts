@@ -1,4 +1,4 @@
-import { test, expect } from "bun:test";
+import { test, expect } from "vitest";
 import { buildSuggestions, groupWarnings } from "./suggestions";
 
 test("always includes the Investigate fallback last", () => {

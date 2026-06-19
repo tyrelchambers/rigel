@@ -6,8 +6,8 @@
 //   dryRun=false → EXECUTE: helm uninstall (if helm-managed) first, then a
 //                  `kubectl delete` per selected resource, re-checking guardrails.
 //
-// All binaries are spawned via Bun.spawn argv arrays (no shell); the `--context`
-// flag is prepended by `kubectl` / `buildKubectlArgs` in @helmsman/k8s. Pure
+// All binaries are spawned via node:child_process argv arrays (no shell); the
+// `--context` flag is prepended by `kubectl` / `buildKubectlArgs` in @helmsman/k8s. Pure
 // discovery/guardrail/helm logic lives in @helmsman/k8s/src/purge.
 //
 // See docs/parity/purge.md for the normative spec.
@@ -74,7 +74,7 @@ export type PurgeResponse = DiscoverResponse | ExecuteResponse;
 
 /**
  * Injectable process runners (so discovery/execution are testable without
- * spawning real binaries). Defaults wire to the real kubectl/helm via Bun.spawn.
+ * spawning real binaries). Defaults wire to the real kubectl/helm via node:child_process.
  *   - kubectlRun: argv WITHOUT the leading `kubectl`; `--context` is prepended.
  *   - helmRun:    full argv passed to `helm` (caller prepends `--kube-context`).
  */

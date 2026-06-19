@@ -1,6 +1,6 @@
 // Builds the messages produced after a chat-proposed action runs (with the
 // user's approval), mirroring Swift's WorkloadResultReport. This is what closes
-// the loop: the model proposes → the user approves + Helmsman runs → the result
+// the loop: the model proposes → the user approves + Rigel runs → the result
 // returns to the SAME claude session so the model can verify and continue.
 import type { ActionResult } from "@/lib/api";
 
@@ -20,7 +20,7 @@ function clip(s: string, fallback: string): string {
 export function chatFeedback(commandString: string, result: ActionResult): string {
   if (result.code === 0) {
     return [
-      "[Helmsman executed the action you proposed — the user approved it.]",
+      "[Rigel executed the action you proposed — the user approved it.]",
       "Command:",
       commandString,
       "Status: success",
@@ -31,7 +31,7 @@ export function chatFeedback(commandString: string, result: ActionResult): strin
     ].join("\n");
   }
   return [
-    "[Helmsman ran the action you proposed — the user approved it — but it FAILED.]",
+    "[Rigel ran the action you proposed — the user approved it — but it FAILED.]",
     "Command:",
     commandString,
     `Exit code: ${result.code}`,
@@ -75,7 +75,7 @@ export interface BatchRun {
  */
 export function batchFeedback(ran: BatchRun[], skipped: string[]): string {
   const lines = [
-    "[Helmsman ran a queue of actions you proposed — the user approved and ran them together.]",
+    "[Rigel ran a queue of actions you proposed — the user approved and ran them together.]",
     "",
   ];
   for (const { commandString, result } of ran) {

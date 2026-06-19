@@ -1,4 +1,4 @@
-import { test, expect } from "bun:test";
+import { test, expect } from "vitest";
 import { listResources } from "./resourceSummary";
 
 test("listResources returns kind/name/namespace per document", () => {

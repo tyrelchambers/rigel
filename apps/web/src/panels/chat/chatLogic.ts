@@ -92,7 +92,7 @@ export function thinkingVerb(cycleIndex: number): string {
 
 const ROLE_LABEL: Record<ChatRole, string> = {
   user: "You",
-  assistant: "Helmsman",
+  assistant: "Rigel",
   system: "System",
 };
 

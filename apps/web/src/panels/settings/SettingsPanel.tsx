@@ -95,7 +95,7 @@ function AccountSection() {
 }
 
 // ---------------------------------------------------------------------------
-// AI copilot (the Helmsman) — Claude subscription token
+// AI copilot (Rigel) — Claude subscription token
 // ---------------------------------------------------------------------------
 
 function CopilotSection() {
@@ -115,7 +115,7 @@ function CopilotSection() {
   return (
     <Card>
       <div className="flex items-center gap-2">
-        <h2 className="text-sm font-semibold">The Helmsman (AI copilot)</h2>
+        <h2 className="text-sm font-semibold">Rigel (AI copilot)</h2>
         <span
           className={`ml-auto inline-flex items-center gap-1.5 text-xs ${
             configured ? "text-green-500" : "text-muted-foreground"

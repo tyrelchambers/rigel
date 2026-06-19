@@ -4,5 +4,8 @@ packages:
 allowBuilds:
   esbuild: true
   sharp: true
+  node-pty: true
+  # Windows-only installer pulled in by electron-builder; never built on macOS.
+  electron-winstaller: false
 minimumReleaseAgeExclude:
   - '@iconify-json/lucide@1.2.113'

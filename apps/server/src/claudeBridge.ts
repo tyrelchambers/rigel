@@ -3,6 +3,9 @@
 export { extractActionBlocks } from "@helmsman/k8s/src/actionBlocks";
 import { effectiveClaudeToken } from "./chatConfig";
 import { systemPrompt } from "./systemPrompt";
+import { spawn } from "node:child_process";
+import { createInterface } from "node:readline";
+import { fileURLToPath } from "node:url";
 
 const READ_ONLY_ALLOWLIST = [
   "Bash(kubectl get *)",
@@ -64,13 +67,19 @@ const READ_ONLY_ALLOWLIST = [
  * allows reads / denies cluster mutations — see commandPolicy.ts.
  */
 export function permissionHookSettings(): string {
-  const hookPath = new URL("./permissionHook.ts", import.meta.url).pathname;
+  // Dev/Docker default: run the .ts hook via Node + tsx, resolved next to this
+  // bundle. The packaged desktop app has NO node/tsx on PATH, so it sets
+  // HELMSMAN_HOOK_CMD to run the prebuilt .mjs hook via Electron-as-node
+  // (electron --run-as-node). Honoring the env override there keeps dev/Docker
+  // on the default while letting the packaged app inject a self-contained command.
+  const hookPath = fileURLToPath(new URL("./permissionHook.ts", import.meta.url));
+  const command = process.env.HELMSMAN_HOOK_CMD || `node --import tsx ${hookPath}`;
   return JSON.stringify({
     hooks: {
       PreToolUse: [
         {
           matcher: "Bash",
-          hooks: [{ type: "command", command: `bun ${hookPath}` }],
+          hooks: [{ type: "command", command }],
         },
       ],
     },
@@ -267,10 +276,27 @@ export async function* runClaude(
   };
   if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;
 
-  const proc = Bun.spawn(argv, {
-    stdout: "pipe",
-    stderr: "pipe",
+  const proc = spawn(argv[0], argv.slice(1), {
+    stdio: ["ignore", "pipe", "pipe"],
     env,
+  });
+
+  // Accumulate stderr from spawn time so it's available for the error path even
+  // though the stream is consumed live (Node Readables don't replay).
+  const stderrChunks: Buffer[] = [];
+  proc.stderr!.on("data", (buf: Buffer) => stderrChunks.push(buf));
+
+  // Capture the exit code up front: the "close" event can fire before the
+  // stdout reader loop below finishes draining, so awaiting it afterwards would
+  // hang. This promise latches the code regardless of ordering. An "error"
+  // (e.g. claude not on PATH → ENOENT, where "close" never fires) resolves it
+  // too, with the message captured as stderr so the error path surfaces it.
+  const exitPromise: Promise<number | null> = new Promise((resolve) => {
+    proc.once("close", (code) => resolve(code));
+    proc.once("error", (err: Error) => {
+      stderrChunks.push(Buffer.from(err.message));
+      resolve(-1);
+    });
   });
 
   // Stop: aborting kills the claude subprocess; the stdout reader then ends and
@@ -287,30 +313,22 @@ export async function* runClaude(
     else signal.addEventListener("abort", onAbort, { once: true });
   }
 
-  const reader = proc.stdout.getReader();
-  const dec = new TextDecoder();
-  let buf = "";
-
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value);
-    let nl: number;
-    while ((nl = buf.indexOf("\n")) >= 0) {
-      const line = buf.slice(0, nl);
-      buf = buf.slice(nl + 1);
-      if (!line.trim()) continue;
-      let ev: any;
-      try {
-        ev = JSON.parse(line);
-      } catch {
-        continue;
-      }
-      for (const e of mapClaudeEvent(ev)) yield e;
+  // Newline-delimited stream-json: each stdout line is one CLI event object.
+  // readline's async iterator pulls lines as the generator's consumer pulls
+  // events, and ends when stdout closes (process exit or kill on abort).
+  const rl = createInterface({ input: proc.stdout! });
+  for await (const line of rl) {
+    if (!line.trim()) continue;
+    let ev: any;
+    try {
+      ev = JSON.parse(line);
+    } catch {
+      continue;
     }
+    for (const e of mapClaudeEvent(ev)) yield e;
   }
 
-  const exitCode = await proc.exited;
+  const exitCode = await exitPromise;
   if (signal) signal.removeEventListener("abort", onAbort);
   if (signal?.aborted) {
     // Interrupted by the user — end the turn quietly, not as an error.
@@ -318,7 +336,7 @@ export async function* runClaude(
     return;
   }
   if (exitCode !== 0) {
-    const errText = await new Response(proc.stderr).text();
+    const errText = Buffer.concat(stderrChunks).toString("utf8");
     yield { type: "error", text: errText.trim() || `claude exited with code ${exitCode}` };
   }
 }

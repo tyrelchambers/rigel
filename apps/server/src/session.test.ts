@@ -1,4 +1,4 @@
-import { test, expect } from "bun:test";
+import { test, expect } from "vitest";
 import { issueSession, sessionValid } from "./session";
 
 const NOW = 1_700_000_000_000;

@@ -1,12 +1,12 @@
-# Helmsman
+# Rigel
 
-A native macOS control center for Kubernetes, with a built-in Claude copilot.
+A Kubernetes control center with a built-in Claude copilot — available as a **macOS desktop app** (Electron) and a **self-hostable web app**.
 
-Helmsman gives you a fast, read-at-a-glance view of your cluster across purpose-built
+Rigel gives you a fast, read-at-a-glance view of your cluster across purpose-built
 panels, and pairs it with a persistent Claude chat that can investigate problems and
 run changes for you — every mutation gated behind an explicit confirmation.
 
-> The name comes from *kubernetes* — Greek for "helmsman," the one who steers the ship.
+> Rigel is one of the brightest stars in the night sky — a fixed point to navigate by.
 
 ## What it does
 
@@ -38,15 +38,14 @@ run changes for you — every mutation gated behind an explicit confirmation.
   relevant `describe`/logs/events context straight into the chat.
 - **Guarded actions** — restarts, scaling, deletes, and secret edits run through a
   confirmation sheet that shows the exact `kubectl` command before it executes.
-- **Notifications** — desktop alerts for unhealthy pods and warning events, plus
-  optional webhook and Signal delivery from the in-cluster assistant (see below).
+- **Notifications** — webhook and Signal delivery from the in-cluster assistant (see below).
 
 ## The Assistant — autonomous remediation
 
 The **Assistant** is an optional agent that runs **inside** your cluster, detects
 incidents, has Claude diagnose them, and auto-remediates only the **safe tier** under
 deterministic guardrails. Destructive actions are blocked by RBAC and instead surface
-in Helmsman as suggestions for you to approve. It authenticates with your **Claude
+in Rigel as suggestions for you to approve. It authenticates with your **Claude
 subscription** — no API key — via a token from `claude setup-token`.
 
 - **Guided install** — the Assistant tab installs the agent's RBAC cage, ConfigMaps,
@@ -58,7 +57,7 @@ subscription** — no API key — via a token from `claude setup-token`.
   (per-resource/hour, nightly total, per-incident attempt caps), a spend cap, a
   **kill-switch** for an instant stop, backup-before-mutate, and fail-closed on any
   model or exec error.
-- **Full visibility in Helmsman** — live incidents, an audit timeline, the queue of
+- **Full visibility in Rigel** — live incidents, an audit timeline, the queue of
   suggested fixes you can run, one-click revert from automatic backups, namespace
   scoping, and a silence list — all read from the agent's `assistant-state` /
   `assistant-config` ConfigMaps.
@@ -68,8 +67,6 @@ and pushed to GHCR by CI.
 
 ## Notifications
 
-- **Desktop** — Helmsman surfaces unhealthy pods and warning events as macOS
-  notifications while it's running.
 - **Webhook** — point the assistant at a **Slack / Discord / ntfy** URL (Assistant tab)
   to get pushed about incidents and the actions it takes.
 - **Signal** — for self-hosted push to your phone, the **Settings** tab deploys a
@@ -84,29 +81,34 @@ and pushed to GHCR by CI.
 
 ## Architecture at a glance
 
-- SwiftUI app targeting **macOS 14+**.
-- `ClusterCache` owns one watch per resource type; panel view models read from it.
-- `KubectlClient` wraps `kubectl` for one-shot gets, raw API calls, and long-lived watches.
-- `ClaudeSession` runs the `claude` CLI in `stream-json` mode with a curated tool allowlist.
-- **`HelmsmanMCP`** — a bundled MCP server that exposes structured cluster tools to Claude:
-  `list_unhealthy_pods`, `list_degraded_deployments`, `recent_warning_events`, `get_pod_logs`.
-- **Assistant agent** (`agent/`) — a standalone TypeScript service that runs in-cluster,
-  driven by `claude -p`. It coordinates with Helmsman entirely through ConfigMaps
-  (`assistant-state`, `assistant-config`, `assistant-backups`), so the app stays a thin,
-  observable control surface over it.
-- **Signal bridge** — Helmsman applies a `signal-cli-rest-api` Deployment/Service and
-  talks to it over a short-lived `kubectl port-forward` to fetch the link QR and send
-  test messages; the agent reaches it in-cluster via its service FQDN. With two-way
-  enabled (`signalInbound`), the agent also polls the bridge for inbound messages and
-  answers diagnosis questions / `approve` commands — see
-  [`agent/README.md`](agent/README.md#two-way-signal-texting-the-assistant).
+Rigel is a **pnpm monorepo** written in TypeScript:
+
+- **`apps/web`** — React 19 + Vite SPA. All cluster panels, the chat copilot, the
+  catalog wizard, and the Assistant UI live here.
+- **`apps/server`** — Node.js backend using `@hono/node-server` and `ws`. Runs the
+  guarded `kubectl` commands, streams the `claude` CLI for chat (in `stream-json` mode
+  with a curated tool allowlist), and manages interactive PTY sessions via `node-pty`.
+- **`apps/desktop`** — Electron shell. Forks the Node server (auth disabled, loopback
+  only) and loads the built SPA in a `BrowserWindow`. Produces `.app` / `.dmg`
+  distributables via `electron-builder`.
+- **`packages/k8s`** — shared Kubernetes client utilities (watch helpers, resource
+  types).
+- **`packages/catalog`** — the installable-apps catalog (also bundled into the server).
+- **`agent/`** — the in-cluster Assistant agent (TypeScript); coordinates with Rigel
+  entirely through ConfigMaps (`assistant-state`, `assistant-config`,
+  `assistant-backups`), keeping the UI a thin, observable control surface.
+- **`apps/CONTRACTS.md`** — the chat action-block contract between the server and the
+  web UI (action blocks, question blocks, suggested actions).
+
+The **Signal bridge** is a `signal-cli-rest-api` Deployment/Service applied by
+Rigel. The UI reaches it over a short-lived `kubectl port-forward`; the agent
+reaches it in-cluster via its service FQDN. See
+[`agent/README.md`](agent/README.md#two-way-signal-texting-the-assistant).
 
 ## Prerequisites
 
-- **macOS 14 (Sonoma) or later**
-- **Swift toolchain** (Xcode 16+ / Swift 6)
-- **`kubectl`** on your `PATH`, with a working kubeconfig (Helmsman uses your current
-  context and contexts from `~/.kube/config`)
+- **`kubectl`** on your `PATH`, with a working kubeconfig (Rigel uses your current
+  context and all contexts from `~/.kube/config`)
 - **`claude` CLI** on your `PATH` — required for the chat copilot. The panels work
   without it; only the chat needs it.
 
@@ -122,64 +124,65 @@ For the **Assistant** agent and **Signal** notifications:
 - **A default StorageClass** — the Signal bridge requests a small PersistentVolume so
   the device link survives pod restarts.
 
+To **build from source**, you also need:
+
+- **Node.js 20+** and **pnpm 9+**
+
 ## Getting started
 
-Clone, then build and launch the app bundle:
+### Desktop app (macOS)
+
+Install dependencies, then run in development mode:
 
 ```sh
-make run
+pnpm install
+pnpm --filter desktop dev
 ```
 
-That compiles in debug, assembles `Helmsman.app` (ad-hoc signed with the bundled
-entitlements so notifications and Dock behavior work), and opens it.
+To build a distributable `.dmg`:
 
-## Run in Docker / Kubernetes (web)
+```sh
+pnpm --filter desktop dist
+```
 
-A self-hostable web version of Helmsman lives in this repo as a TypeScript
-monorepo (`apps/web` React UI + `apps/server` Bun backend). It runs anywhere
-Docker does and is viewed in a browser — no macOS or Apple signing required.
+This produces unsigned arm64 and x64 DMGs under `apps/desktop/release/`. Code-signing
+and notarization require an Apple Developer certificate and are a documented follow-up —
+not yet implemented.
+
+### Self-host (Docker / Kubernetes)
 
 ```sh
 HELMSMAN_PASSWORD=changeme docker compose up --build
 # then open http://localhost:8787
 ```
 
-See **[WEB.md](WEB.md)** for full installation (Docker + Helm), setup
-(cluster access, auth, AI token), and configuration reference.
+See **[WEB.md](WEB.md)** for full installation (Docker + Helm), setup (cluster access,
+auth, AI token), and configuration reference.
 
-### Make targets
+### Develop
 
-| Target          | What it does                                              |
-| --------------- | -------------------------------------------------------- |
-| `make build`    | `swift build` (debug)                                    |
-| `make app`      | Build + assemble & sign `Helmsman.app`                   |
-| `make run`      | `make app`, then open the app                            |
-| `make release`  | Release build                                            |
-| `make release-app` / `make release-run` | Release `.app` / build + open    |
-| `make clean`    | Clean SwiftPM artifacts and the `.app` bundle            |
-
-You can also run directly via SwiftPM during development:
+Run the web UI and server in parallel during development:
 
 ```sh
-swift build
-swift run Helmsman
+# React SPA (Vite dev server, hot-reload)
+pnpm --filter web dev
+
+# Node backend (restarts on file changes)
+pnpm --filter @helmsman/server dev   # uses tsx watch internally
 ```
 
-(`make run` is recommended — it produces a properly signed bundle, which some macOS
-features such as notifications require.)
-
-### Running tests
+Run tests and type-checks across the monorepo:
 
 ```sh
-swift test
+pnpm -r test       # vitest
+pnpm -r typecheck
 ```
 
 ## Notes
 
-- Helmsman stores chat sessions and its generated MCP config under
-  `~/Library/Application Support/com.tyrelchambers.helmsman/`.
 - All cluster mutations from the app are surfaced and confirmed before they run —
-  Helmsman never changes your cluster without an explicit click.
+  Rigel never changes your cluster without an explicit click.
 - The **Assistant** agent is the one exception by design: in **Auto** mode it applies
   safe-tier fixes on its own, within the guardrails above. Use **Advisory** mode or the
   kill-switch if you'd rather approve everything.
+- The `claude` CLI keeps its own state (sessions, OAuth token) under `~/.claude`.

@@ -1,4 +1,4 @@
-import { test, expect } from "bun:test";
+import { test, expect } from "vitest";
 import { TerminalSession } from "./terminal";
 
 /** Concatenate the decoded payloads of every `term`/`data` frame. */
@@ -19,9 +19,9 @@ async function waitFor(pred: () => boolean, timeoutMs = 8000): Promise<void> {
   }
 }
 
-// Real PTY (Bun 1.3.5+ native terminal). No mocks — the session is pure I/O glue,
-// so the meaningful test is that bytes actually flow and the shell exits cleanly.
-test("TerminalSession streams shell output and reports exit", async () => {
+// Real PTY (node-pty). No mocks — the session is pure I/O glue, so the
+// meaningful test is that bytes actually flow and the shell exits cleanly.
+test("TerminalSession streams shell output and reports exit", { timeout: 15000 }, async () => {
   const frames: string[] = [];
   // TerminalSession only ever calls ws.send(string), so a minimal stub suffices.
   const sess = new TerminalSession({ send: (s: string) => frames.push(s) } as never);

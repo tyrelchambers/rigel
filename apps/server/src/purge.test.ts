@@ -1,4 +1,4 @@
-import { test, expect } from "bun:test";
+import { test, expect } from "vitest";
 import { discover, execute, type PurgeRunners } from "./purge";
 import type { RunResult } from "@helmsman/k8s/src/run";
 

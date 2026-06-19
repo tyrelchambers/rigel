@@ -1,4 +1,8 @@
 import { homedir } from "node:os";
+import { IncomingMessage } from "node:http";
+import { serve } from "@hono/node-server";
+import { serveStatic } from "./staticFiles";
+import { WebSocketServer } from "ws";
 import { resolveKubeconfigPath } from "./kubeconfig";
 import { kubectl } from "@helmsman/k8s/src/run";
 import { WatchManager } from "./watchManager";
@@ -40,6 +44,8 @@ import { checkAuth } from "./auth";
 
 const KUBECONFIG = resolveKubeconfigPath(process.env, homedir());
 const PORT = Number(process.env.PORT ?? 8787);
+// Electron sets 127.0.0.1 (loopback-only); Docker/Helm keep 0.0.0.0.
+const HOST = process.env.HOST ?? "0.0.0.0"; // Electron pins 127.0.0.1; Docker/Helm keep 0.0.0.0
 // Treat an empty/whitespace HELMSMAN_TOKEN as "unset" — compose/Helm commonly
 // pass it as "" which would otherwise make checkAuth() treat the bearer as open
 // and defeat the password gate.
@@ -54,34 +60,6 @@ const METRICS_SERVER_URL =
 // (/app/apps/server/src). Override with WEB_DIST if the layout differs.
 const WEB_DIST = process.env.WEB_DIST ?? new URL("../../web/dist", import.meta.url).pathname;
 
-/**
- * Cache policy for the SPA: Vite fingerprints assets (e.g. `/assets/index-<hash>.js`),
- * so those are safe to cache forever (a new build → a new filename). But
- * `index.html` references the current hashed bundle, so it MUST NOT be cached —
- * otherwise the browser keeps loading the previous build's JS after a redeploy
- * (the classic "I rebuilt but still see the old UI" trap). Serve fingerprinted
- * assets immutable; serve index.html (and SPA fallbacks) no-store.
- */
-function cacheHeaders(pathname: string): HeadersInit {
-  if (pathname.startsWith("/assets/")) {
-    return { "Cache-Control": "public, max-age=31536000, immutable" };
-  }
-  return { "Cache-Control": "no-store, must-revalidate" };
-}
-
-/** Serve a file from the built web UI, falling back to index.html for SPA routes. */
-async function serveStatic(pathname: string): Promise<Response> {
-  const rel = pathname === "/" ? "/index.html" : pathname;
-  // Guard against path traversal escaping WEB_DIST.
-  const safe = rel.split("/").filter((s) => s !== "..").join("/");
-  const direct = Bun.file(`${WEB_DIST}/${safe}`);
-  if (await direct.exists()) return new Response(direct, { headers: cacheHeaders(rel) });
-  // SPA fallback → index.html, which must always revalidate.
-  const index = Bun.file(`${WEB_DIST}/index.html`);
-  if (await index.exists()) return new Response(index, { headers: { "Cache-Control": "no-store, must-revalidate" } });
-  return new Response("web UI not built (run `pnpm --filter web build`)", { status: 404 });
-}
-
 const ctxRes = await kubectl(null, ["config", "current-context"]);
 const context = ctxRes.code === 0 ? ctxRes.stdout.trim() : null;
 
@@ -92,9 +70,8 @@ const mgr = new WatchManager(context);
 // survives. The forwards bind the SERVER's 127.0.0.1 — see the module caveat.
 const portForwards = new PortForwardManager(context);
 
-const server = Bun.serve({
-  port: PORT,
-  async fetch(req, srv) {
+async function handler(req: Request): Promise<Response> {
+  {
     const url = new URL(req.url);
 
     if (url.pathname === "/api/health") {
@@ -104,7 +81,7 @@ const server = Bun.serve({
     // Serve the built web UI for everything that isn't an API or WS path. The UI
     // shell loads without auth; the /api/* and /ws calls it makes are gated below.
     if (!url.pathname.startsWith("/api/") && url.pathname !== "/ws") {
-      return serveStatic(url.pathname);
+      return serveStatic(WEB_DIST, url.pathname);
     }
 
     // --- Auth endpoints (open) — drive the login screen / cookie session. ---
@@ -797,23 +774,59 @@ const server = Bun.serve({
       return Response.json({ error: "unknown action" }, { status: 422 });
     }
 
+    // Real /ws upgrades are intercepted at the HTTP layer below (before this
+    // handler runs); a plain GET to /ws reaching here is not a WebSocket.
     if (url.pathname === "/ws") {
-      if (srv.upgrade(req)) return; // handled by websocket
       return new Response("expected websocket", { status: 426 });
     }
 
     return new Response("not found", { status: 404 });
-  },
-  websocket: makeWsHandlers(mgr, context),
+  }
+}
+
+const httpServer = serve({ fetch: handler, port: PORT, hostname: HOST }, (info) => {
+  console.log(`helmsman server on :${info.port} (kubeconfig=${KUBECONFIG})`);
+  if (!passwordConfigured() && TOKEN === null) {
+    console.warn(
+      "⚠️  helmsman: NO AUTH configured — anyone who can reach this can run cluster-admin commands. " +
+        "Set HELMSMAN_PASSWORD (browser login) before exposing it beyond a trusted/private network.",
+    );
+  }
 });
 
-console.log(`helmsman server on :${server.port} (kubeconfig=${KUBECONFIG})`);
-if (!passwordConfigured() && TOKEN === null) {
-  console.warn(
-    "⚠️  helmsman: NO AUTH configured — anyone who can reach this can run cluster-admin commands. " +
-      "Set HELMSMAN_PASSWORD (browser login) before exposing it beyond a trusted/private network.",
-  );
-}
+// WebSocket upgrade wiring. node-server hands us the underlying Node http.Server,
+// so we intercept the HTTP `upgrade` event ourselves and drive the `ws` server.
+const wss = new WebSocketServer({ noServer: true });
+const wsHandlers = makeWsHandlers(mgr, context);
+httpServer.on("upgrade", (req: IncomingMessage, socket, head) => {
+  try {
+    const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+    if (url.pathname !== "/ws") {
+      socket.destroy();
+      return;
+    }
+    // Replicate the same auth gate the HTTP routes use (cookie session or bearer).
+    if (passwordConfigured() || TOKEN !== null) {
+      const reqLike = new Request(url, { headers: req.headers as any });
+      const bearerOk = TOKEN !== null && checkAuth(reqLike.headers.get("authorization") ?? undefined, TOKEN);
+      if (!hasValidSession(reqLike, Date.now()) && !bearerOk) {
+        socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+        socket.destroy();
+        return;
+      }
+    }
+    wss.handleUpgrade(req, socket, head, (client) => wss.emit("connection", client));
+  } catch {
+    try { socket.destroy(); } catch { /* already gone */ }
+  }
+});
+wss.on("error", (err) => console.error("websocket server error:", err));
+wss.on("connection", (client) => {
+  client.on("error", () => { try { client.close(); } catch { /* already gone */ } });
+  wsHandlers.open(client);
+  client.on("message", (data) => wsHandlers.message(client, data as any));
+  client.on("close", () => wsHandlers.close(client));
+});
 
 // Shutdown hook: kill every port-forward child so no zombie kubectl survives the
 // server. SIGINT/SIGTERM both run stopAll() before exiting.

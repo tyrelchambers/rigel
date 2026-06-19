@@ -1,4 +1,4 @@
-import { test, expect, describe } from "bun:test";
+import { test, expect, describe } from "vitest";
 import { classifyCommand } from "./commandPolicy";
 
 const allow = (cmd: string) => expect(classifyCommand(cmd).decision).toBe("allow");

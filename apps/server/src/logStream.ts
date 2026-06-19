@@ -14,6 +14,7 @@
 // when present (multi-pod `-l` streams), else echoed from the target.
 
 import { buildKubectlArgs } from "@helmsman/k8s/src/run";
+import { spawn, type ChildProcess } from "node:child_process";
 
 /** Minimal sink for outbound JSON frames (a ServerWebSocket satisfies this). */
 interface JsonSink {
@@ -34,7 +35,7 @@ export interface LogTarget {
 }
 
 interface SpawnedLog {
-  proc: ReturnType<typeof Bun.spawn>;
+  proc: ChildProcess;
 }
 
 /**
@@ -78,7 +79,7 @@ export class LogStreamManager {
   constructor(
     private ws: JsonSink,
     private context: string | null,
-    private spawnFn: typeof Bun.spawn = Bun.spawn,
+    private spawnFn: typeof spawn = spawn,
   ) {}
 
   /** Start one kubectl-logs process per target. Replaces any current streams. */
@@ -91,9 +92,9 @@ export class LogStreamManager {
 
   private spawnOne(target: LogTarget, tailLines: number): void {
     const argv = buildKubectlArgs(this.context, buildLogsArgs(target, tailLines));
-    let proc: ReturnType<typeof Bun.spawn>;
+    let proc: ChildProcess;
     try {
-      proc = this.spawnFn(["kubectl", ...argv], { stdout: "pipe", stderr: "pipe" });
+      proc = this.spawnFn("kubectl", argv, { stdio: ["ignore", "pipe", "pipe"] });
     } catch (err) {
       this.sendError(target.namespace, err instanceof Error ? err.message : String(err));
       return;
@@ -101,42 +102,39 @@ export class LogStreamManager {
     const entry: SpawnedLog = { proc };
     this.procs.push(entry);
 
-    void this.pumpStdout(target, proc.stdout as ReadableStream<Uint8Array>);
-    void this.pumpStderr(target, proc.stderr as ReadableStream<Uint8Array>);
+    // spawn delivers ENOENT (kubectl missing) asynchronously as an "error" event.
+    proc.on("error", (err: Error) => this.sendError(target.namespace, err.message));
+    this.pumpStdout(target, proc);
+    this.pumpStderr(target, proc);
   }
 
   /** Read stdout line-by-line, parse the prefix, and forward each line. */
-  private async pumpStdout(target: LogTarget, stream: ReadableStream<Uint8Array>): Promise<void> {
-    const reader = stream.getReader();
-    const decoder = new TextDecoder();
+  private pumpStdout(target: LogTarget, proc: ChildProcess): void {
     let buf = "";
-    try {
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        let nl: number;
-        while ((nl = buf.indexOf("\n")) >= 0) {
-          const raw = buf.slice(0, nl);
-          buf = buf.slice(nl + 1);
-          if (raw.length > 0) this.forward(target, raw);
-        }
+    proc.stdout?.on("data", (chunk: Buffer) => {
+      buf += chunk.toString("utf8");
+      let nl: number;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const raw = buf.slice(0, nl);
+        buf = buf.slice(nl + 1);
+        if (raw.length > 0) this.forward(target, raw);
       }
+    });
+    proc.stdout?.on("end", () => {
       if (buf.length > 0) this.forward(target, buf);
-    } catch {
-      // Stream torn down (process killed on stop/close) — nothing to forward.
-    }
+    });
   }
 
   /** Surface kubectl stderr (auth/selector errors) as a logs.error message. */
-  private async pumpStderr(target: LogTarget, stream: ReadableStream<Uint8Array>): Promise<void> {
-    try {
-      const text = await new Response(stream).text();
-      const msg = text.trim();
+  private pumpStderr(target: LogTarget, proc: ChildProcess): void {
+    const chunks: Buffer[] = [];
+    proc.stderr?.on("data", (chunk: Buffer) => chunks.push(chunk));
+    const emit = () => {
+      const msg = Buffer.concat(chunks).toString("utf8").trim();
       if (msg) this.sendError(target.namespace, msg);
-    } catch {
-      // ignore — process likely killed
-    }
+      chunks.length = 0;
+    };
+    proc.stderr?.on("end", emit);
   }
 
   /** Attribute one raw line to its pod/container and ship it to the client. */

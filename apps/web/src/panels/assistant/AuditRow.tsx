@@ -66,7 +66,7 @@ export function AuditRow({ e }: { e: AssistantAuditEntry }) {
       {isOpen && e.analysis && (
         <div className="mt-1 border-t pt-1">
           <p className="font-mono text-[9px] uppercase text-muted-foreground">
-            Helmsman's analysis
+            Rigel's analysis
           </p>
           <p className="select-text whitespace-pre-wrap text-xs text-muted-foreground">
             {e.analysis}

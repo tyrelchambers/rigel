@@ -1,4 +1,7 @@
-import { test, expect } from "bun:test";
+import { test, expect } from "vitest";
+import { spawn } from "node:child_process";
+import { EventEmitter } from "node:events";
+import { Readable } from "node:stream";
 import { buildLogsArgs, LogStreamManager, type LogTarget } from "./logStream";
 
 test("buildLogsArgs: deployment label selector matches the Swift tail command", () => {
@@ -26,22 +29,27 @@ test("buildLogsArgs: single pod uses the pod name (no -l)", () => {
   expect(args).toContain("--tail=50");
 });
 
-// Fake Bun.spawn: records the argv and exposes a killed flag + scripted stdout.
+// Fake node:child_process spawn: records the argv (bin + args, as the original
+// Bun-shaped test asserted on a combined array) and exposes a killed flag plus a
+// scripted stdout. Returns a ChildProcess-shaped stub: stdout/stderr are Node
+// Readables and `on("close", …)` is emitted after stdout drains.
 function fakeSpawn(lines: string[]) {
   const spawned: { argv: string[]; killed: boolean }[] = [];
-  const fn = ((argv: string[]) => {
-    const rec = { argv, killed: false };
+  const fn = ((bin: string, args: string[]) => {
+    const rec = { argv: [bin, ...args], killed: false };
     spawned.push(rec);
-    const stdout = new ReadableStream<Uint8Array>({
-      start(controller) {
-        const enc = new TextEncoder();
-        for (const l of lines) controller.enqueue(enc.encode(l + "\n"));
-        controller.close();
-      },
-    });
-    const stderr = new ReadableStream<Uint8Array>({ start: (c) => c.close() });
-    return { stdout, stderr, kill: () => { rec.killed = true; } } as any;
-  }) as unknown as typeof Bun.spawn;
+    const stdout = Readable.from(lines.map((l) => l + "\n"));
+    const stderr = Readable.from([]);
+    const proc = new EventEmitter() as any;
+    proc.stdout = stdout;
+    proc.stderr = stderr;
+    proc.kill = () => {
+      rec.killed = true;
+    };
+    // Emit "close" once stdout finishes so any `once(proc, "close")` resolves.
+    stdout.on("end", () => proc.emit("close", 0));
+    return proc;
+  }) as unknown as typeof spawn;
   return { fn, spawned };
 }
 

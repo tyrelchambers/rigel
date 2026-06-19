@@ -1,4 +1,4 @@
-import { test, expect } from "bun:test";
+import { test, expect } from "vitest";
 import { extractActionBlocks } from "./claudeBridge";
 
 test("extracts fenced action blocks as parsed objects", () => {

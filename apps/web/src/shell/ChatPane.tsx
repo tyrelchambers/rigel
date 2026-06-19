@@ -3,10 +3,10 @@
  * level alongside the routed content column; never a route.
  *
  * Chrome mirrors ChatView.swift:
- *   - Header: "✦ Helmsman" left; copy / new-chat / history buttons right.
+ *   - Header: "✦ Rigel" left; copy / new-chat / history buttons right.
  *   - Transcript (scrollable, pinned-bottom autoscroll).
  *   - ThinkingPane while streaming.
- *   - PaneComposer with placeholder "Ask Helmsman…  (/ for commands, @ to mention a resource)".
+ *   - PaneComposer with placeholder "Ask Rigel…  (/ for commands, @ to mention a resource)".
  *   - Composer footer: model label ("Opus 4.8 · High") + "</> commands" + send button.
  *
  * Width: resizable via drag on the left edge (280–520px), persisted to
@@ -592,7 +592,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
               whiteSpace: "nowrap",
             }}
           >
-            Helmsman
+            Rigel
           </span>
 
           <div style={{ flex: 1 }} />

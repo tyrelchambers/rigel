@@ -5,9 +5,9 @@
 // digests → GitHub Releases. Scope is each app's PRIMARY images (those matching
 // its `matchImages`), so bundled postgres/redis sidecars don't add noise.
 //
-//   bun run src/checkCatalogUpdates.ts              # markdown report
-//   bun run src/checkCatalogUpdates.ts --json       # machine-readable
-//   bun run src/checkCatalogUpdates.ts --fail-on-updates   # exit 1 if any update (CI)
+//   node --import tsx src/checkCatalogUpdates.ts              # markdown report
+//   node --import tsx src/checkCatalogUpdates.ts --json       # machine-readable
+//   node --import tsx src/checkCatalogUpdates.ts --fail-on-updates   # exit 1 if any update (CI)
 //
 // Network failures are per-image and never abort the run (resolver returns
 // null → reported as "couldn't determine").

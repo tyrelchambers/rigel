@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect } from "vitest";
 import { normalizeAlertRule, parseAlertRules, serializeAlertRules, nextAlertRules, alertRuleSummary } from "./alerts";
 
 const block = {
