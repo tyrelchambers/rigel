@@ -6,9 +6,9 @@
 // relative /api/* (fetch) + /ws (WebSocket) using location.host, so pointing a
 // window at http://127.0.0.1:<port> "just works" with zero web-app changes.
 //
-// Trust model: the server is forked WITHOUT HELMSMAN_PASSWORD/HELMSMAN_TOKEN, so
-// it runs auth-off — it's bound to loopback (HOST=127.0.0.1) and is only ever
-// reachable by this desktop app on the same machine.
+// Trust model: the server has no built-in auth. It's bound to loopback
+// (HOST=127.0.0.1) and is only ever reachable by this desktop app on the same
+// machine.
 import { app, BrowserWindow, ipcMain, shell, utilityProcess, type UtilityProcess } from "electron";
 import { createServer } from "node:net";
 import { join } from "node:path";
@@ -101,8 +101,6 @@ function forkServer(port: number): UtilityProcess {
     ...process.env,
     PORT: String(port),
     HOST: "127.0.0.1", // loopback-only; the server reads this (see server index.ts)
-    // Deliberately NOT setting HELMSMAN_PASSWORD / HELMSMAN_TOKEN → server runs
-    // auth-off for the trusted local desktop.
   };
   // Make sure the (possibly fixed) login PATH reaches the child explicitly.
   if (process.env.PATH) env.PATH = process.env.PATH;

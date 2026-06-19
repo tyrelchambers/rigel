@@ -21,7 +21,7 @@ import {
   signalApiUrl,
   parseRecipients,
 } from "@helmsman/k8s";
-import { useAssistantAction, useChatConfig, useSetChatToken, useAuthStatus, useLogout } from "@/lib/api";
+import { useAssistantAction, useChatConfig, useSetChatToken } from "@/lib/api";
 import { fetchSignalQR, fetchSignalAccounts, sendSignalTest } from "@/lib/api";
 import {
   useSettings,
@@ -59,38 +59,10 @@ export default function SettingsPanel() {
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-4">
       <h1 className="text-lg font-semibold">Settings</h1>
-      <AccountSection />
       <CopilotSection />
       <SignalSection derived={derived} applying={applying} setApplying={setApplying} />
       <SelfHostSection />
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Account / session
-// ---------------------------------------------------------------------------
-
-function AccountSection() {
-  const { data: auth } = useAuthStatus();
-  const logout = useLogout();
-  // Only meaningful when the server enforces a password.
-  if (!auth?.authRequired) return null;
-  return (
-    <Card>
-      <div className="flex items-center gap-2">
-        <h2 className="text-sm font-semibold">Account</h2>
-        <span className="ml-auto text-xs text-muted-foreground">Signed in</span>
-        <button
-          type="button"
-          disabled={logout.isPending}
-          onClick={() => logout.mutate()}
-          className="rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
-        >
-          {logout.isPending ? "Signing out…" : "Sign out"}
-        </button>
-      </div>
-    </Card>
   );
 }
 

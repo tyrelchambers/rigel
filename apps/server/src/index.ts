@@ -30,26 +30,14 @@ import { chatConfig, setClaudeToken } from "./chatConfig";
 import { buildSuggestions } from "./suggestions";
 import { getClusterYamlSchema } from "./clusterSchema";
 import { stripStatusBlock } from "@helmsman/k8s/src/manifestClean";
-import {
-  passwordConfigured,
-  passwordMatches,
-  hasValidSession,
-  sessionSetCookie,
-  sessionClearCookie,
-} from "./session";
 import { handleAssistant, type AssistantRequest } from "./assistant";
 import { handleSignal, type SignalRequest } from "./signal";
 import { PortForwardManager, type TargetKind } from "./portForward";
-import { checkAuth } from "./auth";
 
 const KUBECONFIG = resolveKubeconfigPath(process.env, homedir());
 const PORT = Number(process.env.PORT ?? 8787);
 // Electron sets 127.0.0.1 (loopback-only); Docker/Helm keep 0.0.0.0.
 const HOST = process.env.HOST ?? "0.0.0.0"; // Electron pins 127.0.0.1; Docker/Helm keep 0.0.0.0
-// Treat an empty/whitespace HELMSMAN_TOKEN as "unset" — compose/Helm commonly
-// pass it as "" which would otherwise make checkAuth() treat the bearer as open
-// and defeat the password gate.
-const TOKEN = process.env.HELMSMAN_TOKEN?.trim() || null;
 
 // Upstream metrics-server manifest (onboarding one-click install).
 const METRICS_SERVER_URL =
@@ -78,50 +66,9 @@ async function handler(req: Request): Promise<Response> {
       return Response.json({ ok: true, kubeconfig: KUBECONFIG });
     }
 
-    // Serve the built web UI for everything that isn't an API or WS path. The UI
-    // shell loads without auth; the /api/* and /ws calls it makes are gated below.
+    // Serve the built web UI for everything that isn't an API or WS path.
     if (!url.pathname.startsWith("/api/") && url.pathname !== "/ws") {
       return serveStatic(WEB_DIST, url.pathname);
-    }
-
-    // --- Auth endpoints (open) — drive the login screen / cookie session. ---
-    if (url.pathname === "/api/auth-status" && req.method === "GET") {
-      return Response.json({
-        authRequired: passwordConfigured(),
-        authenticated: hasValidSession(req, Date.now()),
-      });
-    }
-    if (url.pathname === "/api/login" && req.method === "POST") {
-      if (!passwordConfigured()) return Response.json({ ok: true });
-      const body = (await req.json().catch(() => ({}))) as { password?: unknown };
-      if (typeof body.password === "string" && passwordMatches(body.password)) {
-        return new Response(JSON.stringify({ ok: true }), {
-          status: 200,
-          headers: { "Content-Type": "application/json", "Set-Cookie": sessionSetCookie(req, Date.now()) },
-        });
-      }
-      return new Response(JSON.stringify({ ok: false }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-    if (url.pathname === "/api/logout" && req.method === "POST") {
-      return new Response(JSON.stringify({ ok: true }), {
-        status: 200,
-        headers: { "Content-Type": "application/json", "Set-Cookie": sessionClearCookie() },
-      });
-    }
-
-    // Auth gate: when a password (browser) and/or HELMSMAN_TOKEN (CLI) is set,
-    // every other /api + /ws request needs a valid session cookie OR bearer token.
-    if (passwordConfigured() || TOKEN !== null) {
-      // NOTE: checkAuth returns true when TOKEN is null (its "no bearer = open"
-      // rule), so only treat the bearer as proof of auth when a token is set —
-      // otherwise it would defeat the password gate.
-      const bearerOk = TOKEN !== null && checkAuth(req.headers.get("authorization") ?? undefined, TOKEN);
-      if (!hasValidSession(req, Date.now()) && !bearerOk) {
-        return new Response("unauthorized", { status: 401 });
-      }
     }
 
     // GET /api/metrics/pods?namespace=<ns|*> — current pod CPU/memory usage.
@@ -786,12 +733,6 @@ async function handler(req: Request): Promise<Response> {
 
 const httpServer = serve({ fetch: handler, port: PORT, hostname: HOST }, (info) => {
   console.log(`helmsman server on :${info.port} (kubeconfig=${KUBECONFIG})`);
-  if (!passwordConfigured() && TOKEN === null) {
-    console.warn(
-      "⚠️  helmsman: NO AUTH configured — anyone who can reach this can run cluster-admin commands. " +
-        "Set HELMSMAN_PASSWORD (browser login) before exposing it beyond a trusted/private network.",
-    );
-  }
 });
 
 // WebSocket upgrade wiring. node-server hands us the underlying Node http.Server,
@@ -804,16 +745,6 @@ httpServer.on("upgrade", (req: IncomingMessage, socket, head) => {
     if (url.pathname !== "/ws") {
       socket.destroy();
       return;
-    }
-    // Replicate the same auth gate the HTTP routes use (cookie session or bearer).
-    if (passwordConfigured() || TOKEN !== null) {
-      const reqLike = new Request(url, { headers: req.headers as any });
-      const bearerOk = TOKEN !== null && checkAuth(reqLike.headers.get("authorization") ?? undefined, TOKEN);
-      if (!hasValidSession(reqLike, Date.now()) && !bearerOk) {
-        socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
-        socket.destroy();
-        return;
-      }
     }
     wss.handleUpgrade(req, socket, head, (client) => wss.emit("connection", client));
   } catch {

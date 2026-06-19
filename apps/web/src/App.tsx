@@ -28,9 +28,8 @@ import GitOpsPanel from "./panels/gitops/GitOpsPanel";
 import { TerminalDrawer, TOGGLE_TERMINAL_EVENT } from "@/shell/TerminalDrawer";
 import { ResourceYamlViewer } from "@/components/ResourceYamlViewer";
 import { connectCluster } from "@/lib/ws";
-import { useAuthStatus, useChatConfig } from "@/lib/api";
+import { useChatConfig } from "@/lib/api";
 import { rigel } from "@/lib/desktop";
-import { LoginScreen } from "@/shell/LoginScreen";
 import { OnboardingWizard } from "@/shell/OnboardingWizard";
 import NavStrip from "@/shell/NavStrip";
 import StatusBar from "@/shell/StatusBar";
@@ -68,14 +67,9 @@ function PaddedX({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  // Gate on built-in auth before connecting anything. authed=true when no
-  // password is required OR this browser holds a valid session cookie.
-  const { data: auth, isLoading: authLoading } = useAuthStatus();
-  const authed = auth ? !auth.authRequired || auth.authenticated : false;
-
   useEffect(() => {
-    if (authed) connectCluster();
-  }, [authed]);
+    connectCluster();
+  }, []);
   const [paletteOpen, setPaletteOpen] = useCommandPalette();
 
   // First-run onboarding: auto-show once when set up is incomplete (no Claude
@@ -100,12 +94,12 @@ export default function App() {
         return;
       }
       // Existing optional-onboarding condition:
-      if (authed && chatConfig && !chatConfig.configured && !localStorage.getItem("helmsman_onboarded")) {
+      if (chatConfig && !chatConfig.configured && !localStorage.getItem("helmsman_onboarded")) {
         setShowOnboarding(true);
       }
     })();
     return () => { cancelled = true; };
-  }, [authed, chatConfig]);
+  }, [chatConfig]);
   function closeOnboarding() {
     if (requireAboutYou) return; // guarded until About-you is complete
     setShowOnboarding(false);
@@ -177,15 +171,6 @@ export default function App() {
       window.removeEventListener(TOGGLE_TERMINAL_EVENT, toggleTerminal);
     };
   }, [toggleTerminal]);
-
-  // Auth gate: hold rendering until we know the auth state, then show the login
-  // screen when a password is required and this browser isn't signed in.
-  if (authLoading) {
-    return <div style={{ height: "100vh", background: "var(--surface-primary)" }} />;
-  }
-  if (auth?.authRequired && !auth.authenticated) {
-    return <LoginScreen />;
-  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--surface-primary)" }}>

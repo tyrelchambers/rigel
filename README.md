@@ -1,6 +1,6 @@
 # Rigel
 
-A Kubernetes control center with a built-in Claude copilot — available as a **macOS desktop app** (Electron) and a **self-hostable web app**.
+A Kubernetes control center with a built-in Claude copilot, available as a **macOS desktop app** (Electron).
 
 Rigel gives you a fast, read-at-a-glance view of your cluster across purpose-built
 panels, and pairs it with a persistent Claude chat that can investigate problems and
@@ -148,16 +148,6 @@ pnpm --filter desktop dist
 This produces unsigned arm64 and x64 DMGs under `apps/desktop/release/`. Code-signing
 and notarization require an Apple Developer certificate and are a documented follow-up —
 not yet implemented.
-
-### Self-host (Docker / Kubernetes)
-
-```sh
-HELMSMAN_PASSWORD=changeme docker compose up --build
-# then open http://localhost:8787
-```
-
-See **[WEB.md](WEB.md)** for full installation (Docker + Helm), setup (cluster access,
-auth, AI token), and configuration reference.
 
 ### Develop
 

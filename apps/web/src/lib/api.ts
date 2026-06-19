@@ -680,55 +680,6 @@ export function useSuggestions() {
 }
 
 // ---------------------------------------------------------------------------
-// Browser auth — password login → httpOnly session cookie. GET /api/auth-status,
-// POST /api/login, POST /api/logout. Cookies are same-origin so fetch sends them.
-// ---------------------------------------------------------------------------
-
-export interface AuthStatus {
-  /** True when an admin password is configured (login required). */
-  authRequired: boolean;
-  /** True when this browser holds a valid session cookie. */
-  authenticated: boolean;
-}
-
-export function useAuthStatus() {
-  return useQuery<AuthStatus, Error>({
-    queryKey: ["auth-status"] as const,
-    queryFn: async () => {
-      const res = await fetch("/api/auth-status");
-      if (!res.ok) return { authRequired: false, authenticated: false };
-      return (await res.json()) as AuthStatus;
-    },
-    staleTime: 60_000,
-  });
-}
-
-export function useLogin() {
-  const qc = useQueryClient();
-  return useMutation<void, Error, string>({
-    mutationFn: async (password) => {
-      const res = await fetch("/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
-      });
-      if (!res.ok) throw new Error("Incorrect password");
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["auth-status"] }),
-  });
-}
-
-export function useLogout() {
-  const qc = useQueryClient();
-  return useMutation<void, Error, void>({
-    mutationFn: async () => {
-      await fetch("/api/logout", { method: "POST" });
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["auth-status"] }),
-  });
-}
-
-// ---------------------------------------------------------------------------
 // AI copilot config — is the Claude token set? GET/POST /api/chat-config.
 // ---------------------------------------------------------------------------
 
