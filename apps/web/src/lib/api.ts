@@ -724,3 +724,64 @@ export function useSetChatToken() {
     onSuccess: (data) => qc.setQueryData(["chat-config"], data),
   });
 }
+
+// ── Agents (multi-backend settings) ──────────────────────────────────────────
+export type AgentId = "claude" | "codex" | "gemini" | "opencode" | "openrouter";
+export type AgentAuthMethod = "subscription" | "apiKey";
+export type AgentConnection = "connected" | "notConnected" | "comingSoon";
+
+export interface AgentView {
+  id: AgentId;
+  label: string;
+  vendor: string;
+  status: "available" | "comingSoon";
+  connection: AgentConnection;
+  authMethods: AgentAuthMethod[];
+  authMethod: AgentAuthMethod;
+  installUrl: string;
+  installLabel: string;
+}
+export interface AgentsResponse {
+  activeAgentId: AgentId;
+  agents: AgentView[];
+}
+
+async function fetchAgents(): Promise<AgentsResponse> {
+  const res = await fetch("/api/agents");
+  if (!res.ok) throw new Error("failed to load agents");
+  return (await res.json()) as AgentsResponse;
+}
+
+export function useAgents() {
+  return useQuery({
+    queryKey: ["agents"] as const,
+    queryFn: fetchAgents,
+    staleTime: 30_000,
+  });
+}
+
+export interface SetAgentAuthVars {
+  id: AgentId;
+  authMethod: AgentAuthMethod;
+  secret?: string;
+}
+
+export function useSetAgentAuth() {
+  const qc = useQueryClient();
+  return useMutation<AgentView, Error, SetAgentAuthVars>({
+    mutationFn: async ({ id, authMethod, secret }) => {
+      const res = await fetch(`/api/agents/${id}/auth`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ authMethod, secret }),
+      });
+      if (!res.ok) throw new Error((await res.text()) || "failed to save");
+      return (await res.json()) as AgentView;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agents"] }),
+  });
+}
+
+export function connectionLabel(c: AgentConnection): string {
+  return c === "connected" ? "Connected" : c === "notConnected" ? "Not connected" : "Coming soon";
+}
