@@ -70,38 +70,7 @@ import {
   TAIL_SCROLL_THROTTLE_MS,
 } from "@/panels/chat/chatLogic";
 import type { ChatEvent, ChatMessage } from "@/panels/chat/types";
-
-// ── RigelMark ───────────────────────────────────────────────────────────────
-/**
- * Inline Rigel constellation logo (from assets/brand/logo-constellation.svg).
- * The source file fills with dark navy (#0B1F3A) which is invisible on the dark
- * chat surface, so we re-draw it here with `currentColor` for stroke/fill and
- * let the parent set the color (here: var(--accent-primary)).
- */
-function RigelMark({ size = 15 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 132 132"
-      fill="none"
-      style={{ flexShrink: 0 }}
-      aria-hidden
-    >
-      <path
-        d="M30 46l68-16 4 66-60 6z m68-16l-56 72"
-        stroke="currentColor"
-        strokeWidth="3"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx="30" cy="46" r="7" fill="currentColor" />
-      <circle cx="98" cy="30" r="7" fill="currentColor" />
-      <circle cx="102" cy="96" r="7" fill="currentColor" />
-      <circle cx="42" cy="102" r="7" fill="currentColor" />
-    </svg>
-  );
-}
+import { RigelMark } from "@/components/RigelMark";
 
 // ── ChatPane ──────────────────────────────────────────────────────────────────
 

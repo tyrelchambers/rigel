@@ -11,6 +11,7 @@
 import { PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 import { NamespaceSelector, useIsNamespaceScoped } from "./NamespaceBar";
 import { useCluster } from "@/store/cluster";
+import { RigelMark } from "@/components/RigelMark";
 
 interface GlobalHeaderProps {
   sidebarCollapsed: boolean;
@@ -40,6 +41,14 @@ export function GlobalHeader({ sidebarCollapsed, onToggleSidebar, onOpenSearch }
         borderBottom: "1px solid var(--border-subtle)",
       }}
     >
+      {/* Rigel brand lockup */}
+      <div
+        style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0, color: "var(--fg-primary)" }}
+      >
+        <RigelMark size={18} />
+        <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: "0.01em" }}>Rigel</span>
+      </div>
+
       {/* Sidebar collapse toggle (icon-only ghost button) */}
       <button
         onClick={onToggleSidebar}
