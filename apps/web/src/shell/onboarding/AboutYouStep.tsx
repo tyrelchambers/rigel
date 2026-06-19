@@ -36,7 +36,8 @@ export function AboutYouStep({
   const [busy, setBusy] = useState(false);
   const valid = name.trim().length > 0 && EMAIL.test(email.trim());
 
-  async function submit() {
+  async function submit(e?: React.FormEvent) {
+    e?.preventDefault();
     if (!valid || busy) return;
     setBusy(true);
     try {
@@ -48,7 +49,7 @@ export function AboutYouStep({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <span style={{ fontSize: 12.5, color: "var(--fg-secondary)", lineHeight: 1.5 }}>
         Tell us who you are to get started — so we know who's using Rigel.
       </span>
@@ -68,14 +69,13 @@ export function AboutYouStep({
       </label>
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <button
-          type="button"
+          type="submit"
           disabled={!valid || busy}
-          onClick={submit}
           style={{ ...primaryBtnStyle, opacity: !valid || busy ? 0.6 : 1 }}
         >
           {busy ? "Saving…" : "Continue →"}
         </button>
       </div>
-    </div>
+    </form>
   );
 }

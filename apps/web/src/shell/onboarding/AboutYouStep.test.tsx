@@ -22,3 +22,34 @@ test("Continue is disabled until name + valid email, then submits and advances",
   await waitFor(() => expect(submit).toHaveBeenCalledWith({ name: "Jane", email: "jane@acme.com" }));
   await waitFor(() => expect(onDone).toHaveBeenCalled());
 });
+
+test("pressing Enter in a field submits (Continue) when valid", async () => {
+  const submit = vi.fn().mockResolvedValue({ ok: true });
+  const onDone = vi.fn();
+  render(<AboutYouStep submitSignup={submit} onDone={onDone} />);
+
+  fireEvent.change(screen.getByLabelText(/name/i), { target: { value: "Jane" } });
+  fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "jane@acme.com" } });
+
+  // Enter inside the form triggers its submit handler (native browser behavior).
+  const form = screen.getByLabelText(/email/i).closest("form");
+  expect(form).not.toBeNull();
+  fireEvent.submit(form!);
+
+  await waitFor(() => expect(submit).toHaveBeenCalledWith({ name: "Jane", email: "jane@acme.com" }));
+  await waitFor(() => expect(onDone).toHaveBeenCalled());
+});
+
+test("Enter does nothing while the form is invalid", async () => {
+  const submit = vi.fn().mockResolvedValue({ ok: true });
+  const onDone = vi.fn();
+  render(<AboutYouStep submitSignup={submit} onDone={onDone} />);
+
+  fireEvent.change(screen.getByLabelText(/name/i), { target: { value: "Jane" } });
+  // email still empty → invalid
+  const form = screen.getByLabelText(/email/i).closest("form");
+  fireEvent.submit(form!);
+
+  expect(submit).not.toHaveBeenCalled();
+  expect(onDone).not.toHaveBeenCalled();
+});

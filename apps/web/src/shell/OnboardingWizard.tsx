@@ -7,7 +7,7 @@
  * When `requireAboutYou` is true (desktop first run), prepends a required
  * "About you" step that cannot be skipped or dismissed until completed.
  */
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { Sparkles, Check, Bot, Activity, Bell } from "lucide-react";
 import {
@@ -88,6 +88,24 @@ export function OnboardingWizard({
   const isLast = i === steps.length - 1;
   // Don't show Back/Skip/Next/Done while on the locked About-you step — it has its own "Continue →".
   const showFooter = !locked;
+
+  // Enter advances to the next step (or finishes on the last). It yields to the
+  // focused control so it never discards typed input or double-fires: a focused
+  // input/textarea lets that step's own form handle Enter (About-you "Continue",
+  // token "Save"), and a focused button gets its native click instead.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "Enter" || e.isComposing) return;
+      const tag = (document.activeElement as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "BUTTON" || tag === "A") return;
+      if (locked) return; // the About-you gate owns its own submit
+      e.preventDefault();
+      if (isLast) onClose();
+      else setI((n) => n + 1);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [locked, isLast, onClose]);
 
   return (
     <div style={overlay} onClick={handleBackdropClick}>
@@ -185,7 +203,13 @@ function TokenCard() {
       action={configured ? <Done /> : undefined}
     >
       {!configured && (
-        <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (token.trim() && !setToken.isPending) setToken.mutate(token.trim());
+          }}
+          style={{ display: "flex", gap: 8, marginTop: 2 }}
+        >
           <input
             type="password"
             value={token}
@@ -194,14 +218,13 @@ function TokenCard() {
             style={input}
           />
           <button
-            type="button"
+            type="submit"
             disabled={!token.trim() || setToken.isPending}
-            onClick={() => setToken.mutate(token.trim())}
             style={{ ...ghostBtn, opacity: !token.trim() || setToken.isPending ? 0.6 : 1 }}
           >
             {setToken.isPending ? "Saving…" : "Save"}
           </button>
-        </div>
+        </form>
       )}
     </ToolCard>
   );
