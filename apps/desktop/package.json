@@ -5,7 +5,7 @@
   "description": "Rigel desktop (Electron) — wraps the Node server + built SPA into a macOS app",
   "main": "dist/main.js",
   "scripts": {
-    "build": "node build.mjs",
+    "build": "pnpm --filter web build && node build.mjs",
     "typecheck": "tsc --noEmit",
     "dev": "pnpm build && electron .",
     "smoke": "pnpm build && HELMSMAN_SMOKE=1 electron .",
