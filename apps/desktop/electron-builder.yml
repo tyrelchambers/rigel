@@ -1,5 +1,5 @@
-appId: com.tyrelchambers.helmsman
-productName: Helmsman
+appId: com.tyrelchambers.rigel
+productName: Rigel
 copyright: Copyright © 2026 Tyrel Chambers
 
 # Output the packaged .app / .dmg under apps/desktop/release/ (gitignored).

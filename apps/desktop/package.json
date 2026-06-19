@@ -2,7 +2,7 @@
   "name": "desktop",
   "private": true,
   "version": "0.1.0",
-  "description": "Helmsman desktop (Electron) — wraps the Node server + built SPA into a macOS app",
+  "description": "Rigel desktop (Electron) — wraps the Node server + built SPA into a macOS app",
   "main": "dist/main.js",
   "scripts": {
     "build": "node build.mjs",

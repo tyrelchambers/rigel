@@ -1,8 +1,8 @@
-// Helmsman desktop — Electron main process.
+// Rigel desktop — Electron main process.
 //
-// Boots the Helmsman Node server (apps/server) as a child of this Electron app,
+// Boots the Rigel Node server (apps/server) as a child of this Electron app,
 // waits for it to report healthy, then loads a BrowserWindow at the local server
-// URL. The renderer is the UNMODIFIED Helmsman SPA: it talks to the server over
+// URL. The renderer is the UNMODIFIED Rigel SPA: it talks to the server over
 // relative /api/* (fetch) + /ws (WebSocket) using location.host, so pointing a
 // window at http://127.0.0.1:<port> "just works" with zero web-app changes.
 //
@@ -124,7 +124,7 @@ function forkServer(port: number): UtilityProcess {
     // executable behave as plain Node, so the hook runs with zero external deps.
     //
     // CRUCIAL: we do NOT put ELECTRON_RUN_AS_NODE in the forked server's env —
-    // utilityProcess.fork launches an Electron "Helmsman Helper" with
+    // utilityProcess.fork launches an Electron "Rigel Helper" with
     // `--type=utility`, and ELECTRON_RUN_AS_NODE=1 in its env makes that helper
     // refuse the flag ("bad option: --type=utility") and the server never starts.
     // Instead we INLINE the env var into the hook command string itself. claude
@@ -191,7 +191,7 @@ function createWindow(port: number): BrowserWindow {
     height: 900,
     minWidth: 960,
     minHeight: 640,
-    title: "Helmsman",
+    title: "Rigel",
     show: !SMOKE, // headless smoke run keeps the window hidden
     backgroundColor: "#0b0f14",
     webPreferences: {

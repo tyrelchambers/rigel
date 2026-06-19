@@ -1,12 +1,12 @@
-# Helmsman
+# Rigel
 
 A Kubernetes control center with a built-in Claude copilot — available as a **macOS desktop app** (Electron) and a **self-hostable web app**.
 
-Helmsman gives you a fast, read-at-a-glance view of your cluster across purpose-built
+Rigel gives you a fast, read-at-a-glance view of your cluster across purpose-built
 panels, and pairs it with a persistent Claude chat that can investigate problems and
 run changes for you — every mutation gated behind an explicit confirmation.
 
-> The name comes from *kubernetes* — Greek for "helmsman," the one who steers the ship.
+> Rigel is one of the brightest stars in the night sky — a fixed point to navigate by.
 
 ## What it does
 
@@ -45,7 +45,7 @@ run changes for you — every mutation gated behind an explicit confirmation.
 The **Assistant** is an optional agent that runs **inside** your cluster, detects
 incidents, has Claude diagnose them, and auto-remediates only the **safe tier** under
 deterministic guardrails. Destructive actions are blocked by RBAC and instead surface
-in Helmsman as suggestions for you to approve. It authenticates with your **Claude
+in Rigel as suggestions for you to approve. It authenticates with your **Claude
 subscription** — no API key — via a token from `claude setup-token`.
 
 - **Guided install** — the Assistant tab installs the agent's RBAC cage, ConfigMaps,
@@ -57,7 +57,7 @@ subscription** — no API key — via a token from `claude setup-token`.
   (per-resource/hour, nightly total, per-incident attempt caps), a spend cap, a
   **kill-switch** for an instant stop, backup-before-mutate, and fail-closed on any
   model or exec error.
-- **Full visibility in Helmsman** — live incidents, an audit timeline, the queue of
+- **Full visibility in Rigel** — live incidents, an audit timeline, the queue of
   suggested fixes you can run, one-click revert from automatic backups, namespace
   scoping, and a silence list — all read from the agent's `assistant-state` /
   `assistant-config` ConfigMaps.
@@ -81,7 +81,7 @@ and pushed to GHCR by CI.
 
 ## Architecture at a glance
 
-Helmsman is a **pnpm monorepo** written in TypeScript:
+Rigel is a **pnpm monorepo** written in TypeScript:
 
 - **`apps/web`** — React 19 + Vite SPA. All cluster panels, the chat copilot, the
   catalog wizard, and the Assistant UI live here.
@@ -94,20 +94,20 @@ Helmsman is a **pnpm monorepo** written in TypeScript:
 - **`packages/k8s`** — shared Kubernetes client utilities (watch helpers, resource
   types).
 - **`packages/catalog`** — the installable-apps catalog (also bundled into the server).
-- **`agent/`** — the in-cluster Assistant agent (TypeScript); coordinates with Helmsman
+- **`agent/`** — the in-cluster Assistant agent (TypeScript); coordinates with Rigel
   entirely through ConfigMaps (`assistant-state`, `assistant-config`,
   `assistant-backups`), keeping the UI a thin, observable control surface.
 - **`apps/CONTRACTS.md`** — the chat action-block contract between the server and the
   web UI (action blocks, question blocks, suggested actions).
 
 The **Signal bridge** is a `signal-cli-rest-api` Deployment/Service applied by
-Helmsman. The UI reaches it over a short-lived `kubectl port-forward`; the agent
+Rigel. The UI reaches it over a short-lived `kubectl port-forward`; the agent
 reaches it in-cluster via its service FQDN. See
 [`agent/README.md`](agent/README.md#two-way-signal-texting-the-assistant).
 
 ## Prerequisites
 
-- **`kubectl`** on your `PATH`, with a working kubeconfig (Helmsman uses your current
+- **`kubectl`** on your `PATH`, with a working kubeconfig (Rigel uses your current
   context and all contexts from `~/.kube/config`)
 - **`claude` CLI** on your `PATH` — required for the chat copilot. The panels work
   without it; only the chat needs it.
@@ -181,7 +181,7 @@ pnpm -r typecheck
 ## Notes
 
 - All cluster mutations from the app are surfaced and confirmed before they run —
-  Helmsman never changes your cluster without an explicit click.
+  Rigel never changes your cluster without an explicit click.
 - The **Assistant** agent is the one exception by design: in **Auto** mode it applies
   safe-tier fixes on its own, within the guardrails above. Use **Advisory** mode or the
   kill-switch if you'd rather approve everything.
