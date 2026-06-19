@@ -1,0 +1,250 @@
+---
+import { Icon } from "astro-icon/components";
+import Base from "../layouts/Base.astro";
+import Nav from "../components/Nav.astro";
+import PageHeader from "../components/PageHeader.astro";
+import FinalCta from "../components/FinalCta.astro";
+import Footer from "../components/Footer.astro";
+
+const tools = ["Rigel", "Rancher", "Lens", "Headlamp"];
+
+// Each value is a boolean (check / dash) or a string shown verbatim (a caveat
+// or tier). Competitor facts verified against primary sources, June 2026.
+interface Row {
+  label: string;
+  values: (boolean | string)[];
+}
+interface Group {
+  title: string;
+  rows: Row[];
+}
+const groups: Group[] = [
+  {
+    title: "AI & automation",
+    rows: [
+      { label: "Plain-English AI assistant", values: [true, "Paid preview", "Paid add-on", "Alpha plugin"] },
+      { label: "Autonomous remediation (fixes on its own)", values: [true, "Approval only", false, false] },
+      { label: "Natural-language alerts (SMS / Signal)", values: [true, false, false, false] },
+    ],
+  },
+  {
+    title: "Cluster management",
+    rows: [
+      { label: "Live resource panels", values: [true, true, true, true] },
+      { label: "Workload actions (scale, restart, edit)", values: [true, true, true, true] },
+      { label: "RBAC management in the UI", values: [true, true, "View only", true] },
+      { label: "Port-forward from the UI", values: [true, "Via shell", true, true] },
+      { label: "Live log streaming", values: [true, true, true, true] },
+      { label: "In-browser pod terminal", values: [true, true, true, true] },
+      { label: "Multi-cluster / fleet", values: ["Team plan", true, true, true] },
+    ],
+  },
+  {
+    title: "Self-hosting",
+    rows: [
+      { label: "One-click app catalog", values: [true, "Helm only", "Helm only", false] },
+      { label: "Automatic per-app TLS", values: [true, false, false, false] },
+    ],
+  },
+  {
+    title: "Model & licensing",
+    rows: [
+      { label: "Deployment model", values: ["Web + desktop", "Self-host web", "Desktop app", "Web + desktop"] },
+      { label: "License", values: ["Source available", "Apache-2.0", "Proprietary", "Apache-2.0"] },
+    ],
+  },
+];
+
+// Fair credit: where each competitor genuinely leads.
+const shines = [
+  {
+    name: "Rancher",
+    icon: "lucide:layers",
+    note: "The benchmark for multi-cluster and fleet management. It imports, provisions, and operates many clusters from one pane, with Fleet GitOps that scales to thousands. Apache-2.0, with a mature, battle-tested console.",
+  },
+  {
+    name: "Lens",
+    icon: "lucide:monitor",
+    note: "The most polished Kubernetes desktop IDE. Fast multi-cluster browsing, one-click logs, an integrated terminal, and the new Prism AI copilot make it a powerful cockpit on your laptop.",
+  },
+  {
+    name: "Headlamp",
+    icon: "lucide:puzzle",
+    note: "A clean, vendor-neutral CNCF project with standout extensibility. A rich plugin model, RBAC-aware access, and both desktop and in-cluster web deployment, all under Apache-2.0.",
+  },
+];
+---
+
+<Base
+  title="How Rigel compares to Rancher, Lens & Headlamp"
+  description="An honest, side-by-side look at Rigel versus Rancher, Lens, and Headlamp: AI diagnostics, autonomous remediation, natural-language alerts, the self-hosting catalog, and how each tool is deployed and licensed."
+>
+  <Nav />
+  <main id="main">
+    <PageHeader
+      eyebrowIcon="lucide:table-2"
+      eyebrow="COMPARISON"
+      title="How Rigel compares."
+      subtitle="Rancher, Lens, and Headlamp are all excellent at managing a cluster. Rigel adds the part they leave to you: an AI that investigates and fixes problems, alerts in plain English, and a one-click catalog to self-host your own apps."
+    />
+
+    <!-- intro -->
+    <section class="border-t border-line-subtle bg-surface">
+      <div class="mx-auto max-w-[760px] px-6 py-14 sm:px-8 lg:py-16">
+        <p class="text-[17px] leading-relaxed text-fg-secondary">
+          Most Kubernetes UIs show you the cluster and hand you the controls.
+          Rigel does that too, with a panel for every resource, but it also
+          brings an ops engineer to the table: ask a question in plain English
+          and it reads your logs and events to find the cause, hands you the
+          fix as a button, and keeps watch around the clock so problems get
+          caught while you sleep. The table below is an honest read of where
+          each tool stands, including where the others lead.
+        </p>
+      </div>
+    </section>
+
+    <!-- matrix -->
+    <section class="border-t border-line-subtle bg-surface-sunken">
+      <div class="mx-auto max-w-[1000px] px-6 py-16 sm:px-8 lg:px-12 lg:py-20">
+        <div data-reveal class="overflow-x-auto">
+          <table class="w-full min-w-[680px] border-separate border-spacing-0 text-left">
+            <thead>
+              <tr>
+                <th class="sticky left-0 z-10 bg-surface-sunken py-3 pr-4 align-bottom">
+                  <span class="font-mono text-[11px] tracking-[0.12em] text-fg-tertiary"
+                    >CAPABILITY</span
+                  >
+                </th>
+                {
+                  tools.map((t, i) => (
+                    <th
+                      class:list={[
+                        "rounded-t-lg px-4 py-3 text-center align-bottom",
+                        i === 0 ? "bg-surface-elevated" : "",
+                      ]}
+                    >
+                      <span
+                        class:list={[
+                          "text-[14px] font-bold tracking-tight",
+                          i === 0 ? "text-accent" : "text-fg",
+                        ]}
+                      >
+                        {t}
+                      </span>
+                    </th>
+                  ))
+                }
+              </tr>
+            </thead>
+            <tbody>
+              {
+                groups.map((g) => (
+                  <>
+                    <tr>
+                      <td
+                        colspan={tools.length + 1}
+                        class="sticky left-0 bg-surface-sunken pb-2 pt-7 font-mono text-[11px] tracking-[0.14em] text-accent"
+                      >
+                        {g.title}
+                      </td>
+                    </tr>
+                    {g.rows.map((r) => (
+                      <tr class="group">
+                        <td class="sticky left-0 z-10 border-t border-line-subtle bg-surface-sunken py-3.5 pr-4 text-[13.5px] text-fg-secondary">
+                          {r.label}
+                        </td>
+                        {r.values.map((v, i) => (
+                          <td
+                            class:list={[
+                              "border-t border-line-subtle px-4 py-3.5 text-center",
+                              i === 0 ? "bg-surface-elevated/60" : "",
+                            ]}
+                          >
+                            {typeof v === "string" ? (
+                              <span
+                                class:list={[
+                                  "text-[13px] font-medium",
+                                  i === 0 ? "text-fg" : "text-fg-secondary",
+                                ]}
+                              >
+                                {v}
+                              </span>
+                            ) : v ? (
+                              <Icon
+                                name="lucide:check"
+                                class="inline size-[18px] text-running"
+                              />
+                            ) : (
+                              <span class="inline-block h-px w-3.5 bg-line-strong align-middle" />
+                            )}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+        <p class="mt-5 text-[12.5px] text-fg-tertiary">
+          <Icon name="lucide:check" class="inline size-[14px] text-running" /> built-in
+          &nbsp;·&nbsp; <span
+            class="inline-block h-px w-3 bg-line-strong align-middle"></span> not
+          available &nbsp;·&nbsp; text = caveat or tier. Competitor details verified
+          June 2026; features change, so check their docs for the latest.
+        </p>
+      </div>
+    </section>
+
+    <!-- fair credit -->
+    <section class="border-t border-line-subtle bg-surface">
+      <div class="mx-auto max-w-[1100px] px-6 py-16 sm:px-8 lg:px-12 lg:py-20">
+        <div data-reveal class="max-w-[620px]">
+          <div class="flex items-center gap-2.5">
+            <Icon name="lucide:scale" class="size-[15px] text-accent" />
+            <span class="font-mono text-xs tracking-[0.15em] text-fg-tertiary"
+              >CREDIT WHERE IT'S DUE</span
+            >
+          </div>
+          <h2
+            class="mt-5 text-[clamp(1.85rem,3.6vw,2.5rem)] font-bold leading-[1.08] tracking-[-0.03em] text-fg"
+          >
+            Where the others shine.
+          </h2>
+          <p class="mt-5 text-[15.5px] leading-[1.65] text-fg-secondary">
+            These are good tools. If your needs center on what they do best,
+            they're the right call, and we'll say so.
+          </p>
+        </div>
+
+        <div class="mt-10 grid gap-3.5 sm:grid-cols-3">
+          {
+            shines.map((s, i) => (
+              <article
+                data-reveal
+                style={`--reveal-delay:${i * 60}ms`}
+                class="flex flex-col gap-3 rounded-[10px] border border-line-subtle bg-surface-elevated p-5"
+              >
+                <div class="flex items-center gap-2.5">
+                  <span class="grid size-[34px] place-items-center rounded-lg bg-accent/15 text-accent">
+                    <Icon name={s.icon} class="size-[18px]" />
+                  </span>
+                  <h3 class="text-[15px] font-semibold tracking-tight text-fg">
+                    {s.name}
+                  </h3>
+                </div>
+                <p class="text-[13.5px] leading-snug text-fg-secondary">
+                  {s.note}
+                </p>
+              </article>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    <FinalCta />
+  </main>
+  <Footer />
+</Base>

@@ -1,0 +1,134 @@
+---
+import { Icon } from "astro-icon/components";
+import { CATALOG } from "@helmsman/catalog";
+import Base from "../layouts/Base.astro";
+import Nav from "../components/Nav.astro";
+import PageHeader from "../components/PageHeader.astro";
+import AppCard from "../components/AppCard.astro";
+import FinalCta from "../components/FinalCta.astro";
+import Footer from "../components/Footer.astro";
+import { CATEGORY_META, iconForApp } from "../lib/catalog-icons";
+
+// Render the real catalog at build time, grouped into its categories.
+const apps = CATALOG;
+const total = apps.length;
+
+const categories = Object.keys(CATEGORY_META)
+  .sort((a, b) => CATEGORY_META[a].order - CATEGORY_META[b].order)
+  .map((key) => ({
+    key,
+    ...CATEGORY_META[key],
+    apps: apps
+      .filter((a) => a.category === key)
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  }))
+  .filter((c) => c.apps.length > 0);
+
+const linkFor = (a: (typeof apps)[number]) =>
+  a.homepageURL || a.repoURL || a.docsURL || null;
+
+const stats = [
+  { value: String(total), label: "one-click apps" },
+  { value: String(categories.length), label: "categories" },
+  { value: "TLS", label: "issued & renewed" },
+  { value: "100%", label: "your hardware" },
+];
+---
+
+<Base
+  title="App catalog for Rigel"
+  description={`Self-host ${total} apps on your own cluster in one click. Rigel's catalog handles the install, automatic TLS, and updates, with Heroku ergonomics on your own hardware.`}
+>
+  <Nav />
+  <main id="main">
+    <PageHeader
+      eyebrowIcon="lucide:anchor"
+      eyebrow="APP CATALOG"
+      title={`Self-host ${total} apps in one click.`}
+      subtitle="Pick an app, answer a few guided questions, and Rigel deploys it to your cluster with HTTPS issued automatically. Your hardware, your data, none of the cloud bill."
+    />
+
+    <!-- stat band + category quick-nav -->
+    <section class="border-t border-line-subtle bg-surface">
+      <div class="mx-auto max-w-[1200px] px-6 py-12 sm:px-8 lg:px-12">
+        <dl
+          class="grid max-w-[760px] grid-cols-2 gap-px overflow-hidden rounded-xl border border-line-subtle bg-line-subtle sm:grid-cols-4"
+        >
+          {
+            stats.map((s) => (
+              <div class="flex flex-col gap-1 bg-surface px-5 py-5">
+                <dt class="font-mono text-[30px] font-bold leading-none tracking-tight text-fg">
+                  {s.value}
+                </dt>
+                <dd class="text-[12.5px] text-fg-tertiary">{s.label}</dd>
+              </div>
+            ))
+          }
+        </dl>
+
+        <nav class="mt-9 flex flex-wrap gap-2.5" aria-label="Jump to a category">
+          {
+            categories.map((c) => (
+              <a
+                href={`#${c.key}`}
+                class="group inline-flex items-center gap-2 rounded-full border border-line-strong bg-surface-elevated px-3.5 py-2 text-[13px] text-fg-secondary transition-colors hover:border-accent/50 hover:text-fg"
+              >
+                <Icon
+                  name={c.icon}
+                  class="size-[14px] text-fg-tertiary transition-colors group-hover:text-accent"
+                />
+                {c.label}
+                <span class="font-mono text-[11px] text-fg-tertiary">
+                  {c.apps.length}
+                </span>
+              </a>
+            ))
+          }
+        </nav>
+      </div>
+    </section>
+
+    <!-- category sections -->
+    {
+      categories.map((c, ci) => (
+        <section
+          id={c.key}
+          class:list={[
+            "scroll-mt-20 border-t border-line-subtle",
+            ci % 2 === 0 ? "bg-surface-sunken" : "bg-surface",
+          ]}
+        >
+          <div class="mx-auto max-w-[1200px] px-6 py-16 sm:px-8 lg:px-12 lg:py-20">
+            <div data-reveal class="flex items-center gap-3">
+              <span class="grid size-9 place-items-center rounded-lg bg-accent/15 text-accent">
+                <Icon name={c.icon} class="size-[18px]" />
+              </span>
+              <h2 class="text-[clamp(1.4rem,2.6vw,1.85rem)] font-bold tracking-[-0.02em] text-fg">
+                {c.label}
+              </h2>
+              <span class="font-mono text-[12px] text-fg-tertiary">
+                {c.apps.length} apps
+              </span>
+            </div>
+
+            <div class="mt-8 grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+              {c.apps.map((a, i) => (
+                <div data-reveal style={`--reveal-delay:${(i % 3) * 60}ms`}>
+                  <AppCard
+                    name={a.name}
+                    tagline={a.tagline}
+                    icon={iconForApp(a)}
+                    href={linkFor(a)}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      ))
+    }
+
+    <FinalCta />
+  </main>
+  <Footer />
+</Base>
