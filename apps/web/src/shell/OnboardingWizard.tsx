@@ -66,7 +66,9 @@ export function OnboardingWizard({
                 onDone={() => {
                   setAboutDone(true);
                   onAboutYouDone?.();
-                  setI(1);
+                  // The steps array collapses to optionalSteps (About-you removed),
+                  // so reset to index 0 — the first optional step (AI copilot).
+                  setI(0);
                 }}
               />
             ),
