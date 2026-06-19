@@ -67,13 +67,19 @@ const READ_ONLY_ALLOWLIST = [
  * allows reads / denies cluster mutations — see commandPolicy.ts.
  */
 export function permissionHookSettings(): string {
+  // Dev/Docker default: run the .ts hook via Node + tsx, resolved next to this
+  // bundle. The packaged desktop app has NO node/tsx on PATH, so it sets
+  // HELMSMAN_HOOK_CMD to run the prebuilt .mjs hook via Electron-as-node
+  // (electron --run-as-node). Honoring the env override there keeps dev/Docker
+  // on the default while letting the packaged app inject a self-contained command.
   const hookPath = fileURLToPath(new URL("./permissionHook.ts", import.meta.url));
+  const command = process.env.HELMSMAN_HOOK_CMD || `node --import tsx ${hookPath}`;
   return JSON.stringify({
     hooks: {
       PreToolUse: [
         {
           matcher: "Bash",
-          hooks: [{ type: "command", command: `node --import tsx ${hookPath}` }],
+          hooks: [{ type: "command", command }],
         },
       ],
     },

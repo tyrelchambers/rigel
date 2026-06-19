@@ -69,6 +69,22 @@ const permissionHookBundle = build({
   logLevel: "info",
 });
 
+// Same self-contained hook bundle, but emitted with a `.mjs` extension. The
+// PACKAGED desktop app has no node/tsx on PATH, so it overrides the hook command
+// (via HELMSMAN_HOOK_CMD in main.ts) to run THIS file directly with Electron's
+// own Node (`electron --run-as-node permissionHook.mjs`) — no tsx needed, since
+// `.mjs` is plain ESM. Dev/Docker keep using the `.ts` above (default command).
+const permissionHookMjsBundle = build({
+  entryPoints: ["../server/src/permissionHook.ts"],
+  outfile: "dist/permissionHook.mjs",
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  target: "node22",
+  allowOverwrite: true,
+  logLevel: "info",
+});
+
 // C2 / parent-death watchdog: dist/server-entry.mjs is what forkServer actually
 // forks. It captures the parent (Electron main) PID at startup and polls every
 // 2 s; if the parent is gone (SIGKILL, crash) it sends itself SIGTERM so the
@@ -88,4 +104,4 @@ await import("./server.mjs");
 `,
 );
 
-await Promise.all([electronBundles, serverBundle, permissionHookBundle]);
+await Promise.all([electronBundles, serverBundle, permissionHookBundle, permissionHookMjsBundle]);

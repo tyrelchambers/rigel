@@ -30,6 +30,15 @@ node_modules/
 dist/
 **/dist/
 
+# electron-builder packaged output (.app/.dmg)
+release/
+apps/desktop/release/
+
+# …but keep the desktop app's electron-builder buildResources (committed icon),
+# which the broad `build/` rule (Xcode section) would otherwise ignore.
+!apps/desktop/build/
+!apps/desktop/build/**
+
 # Local secrets for docker compose (Claude OAuth token, etc.)
 .env
 
