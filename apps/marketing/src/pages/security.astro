@@ -66,7 +66,7 @@ const data = [
   {
     icon: "lucide:cpu",
     title: "Bring your own AI key",
-    desc: "Chat runs through the Claude CLI on your own Anthropic token. That is the only place cluster context goes off your hardware.",
+    desc: "Chat runs on an AI provider key you supply. That is the only place cluster context ever leaves your hardware.",
   },
   {
     icon: "lucide:bell",
@@ -106,7 +106,7 @@ const agent = [
 const faqs = [
   {
     q: "Does my cluster data leave my hardware?",
-    a: "Only in two places: it lives on your own server, and for chat it goes to Anthropic through the Claude CLI using your token. Update checks send just the image names you already run to public registries to spot new versions. Nothing else leaves.",
+    a: "Only in two places: it lives on your own server, and for chat it goes to the AI provider you configure, using your own key. Update checks send just the image names you already run to public registries to spot new versions. Nothing else leaves.",
   },
   {
     q: "What can the AI do on its own?",
