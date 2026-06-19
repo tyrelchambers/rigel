@@ -5,17 +5,6 @@ node_modules
 **/.vite
 **/*.tsbuildinfo
 
-# Swift app (not part of the web image)
-Sources
-Tests
-Resources
-Helmsman.app
-.build
-.swiftpm
-Package.swift
-Package.resolved
-Makefile
-
 # Repo cruft
 .git
 .github

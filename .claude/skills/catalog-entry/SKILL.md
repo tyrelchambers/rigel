@@ -5,7 +5,7 @@ description: Use when adding a new app to the Helmsman catalog (catalog.json) or
 
 # Catalog Entry — research, verify, write
 
-Produces and verifies Helmsman catalog entries (`Sources/Helmsman/Resources/catalog.json`).
+Produces and verifies Helmsman catalog entries (`packages/catalog/catalog.json`).
 Design: `docs/superpowers/specs/2026-06-02-catalog-entry-automation-design.md`.
 
 **Core principle:** generation is fuzzy (subagents, on the user's subscription — never
@@ -50,7 +50,7 @@ Run these three concurrently in one message. Each returns JSON only.
 
 ### 2. Synthesize the draft entry (you, the main agent)
 Merge the three results into a `CatalogApp` object matching the schema in
-`Sources/Helmsman/Catalog/CatalogApp.swift`:
+`packages/catalog/src/types.ts`:
 `id, name, tagline, description, category, iconSystemName, docsURL, repoURL, homepageURL,
 tags, matchImages, requirements{cpuRequest,cpuLimit,memoryRequest,memoryLimit,storageGiB},
 persistence, exposesIngress, notes, installPromptTemplate, install?`.
@@ -102,7 +102,7 @@ schema.
 - **All checks pass →** insert the entry into `catalog.json` with a SURGICAL string insert
   that preserves the file's existing formatting (do NOT `json.load`/`json.dump` the whole
   file — that reformats unrelated entries; insert the new object text before the closing
-  `]`). Then run `swift test --filter CatalogStoreTests` to confirm the bundled catalog
+  `]`). Then run `pnpm --filter @helmsman/catalog test` to confirm the bundled catalog
   still decodes. Report what each check returned.
 - **Any check fails →** re-dispatch ONLY the relevant research agent with the failure text
   as feedback (e.g. "helm show chart failed: chart not found" → install-method;
@@ -134,7 +134,7 @@ in-app install never re-runs an LLM or scrapes generated YAML. So **persist** th
   `installPromptTemplate` as the legacy fallback.
 - **Verify the baked form** before writing: substitute sample `{{vars}}` + dummy secret
   values, assert no `<FILL_ME_IN>`/`{{` survive, then run the Step-4 harness on the result
-  (`manifest-validate` / `helm-render` + `image`). Then `swift test --filter CatalogStoreTests`.
+  (`manifest-validate` / `helm-render` + `image`). Then `pnpm --filter @helmsman/catalog test`.
 - An entry with a baked artifact is `isBaked` — the wizard installs it deterministically
   (substitute + apply, no Claude). Migrate apps to baked one at a time; `outline` is the
   reference example.
