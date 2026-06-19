@@ -31,7 +31,7 @@ export function ChatPaneEmptyState({ show }: ChatPaneEmptyStateProps) {
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <Sparkles size={15} style={{ color: "var(--accent-primary)" }} />
         <span style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-primary)" }}>
-          The Helmsman copilot isn't set up yet
+          The Rigel copilot isn't set up yet
         </span>
       </div>
       <span style={{ fontSize: 12, color: "var(--fg-secondary)", lineHeight: 1.5 }}>

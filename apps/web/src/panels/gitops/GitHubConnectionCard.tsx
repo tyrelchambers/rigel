@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useGitHubAccount, useConnectGitHub, useDisconnectGitHub } from "./gitApi";
 
 /** Classic PAT with the `repo` scope (covers clone/push + opening PRs). */
-export const GITHUB_TOKEN_URL = "https://github.com/settings/tokens/new?description=Helmsman&scopes=repo";
+export const GITHUB_TOKEN_URL = "https://github.com/settings/tokens/new?description=Rigel&scopes=repo";
 
 const inputClass =
   "flex-1 rounded-md border bg-background px-3 py-1.5 text-sm font-mono outline-none focus:ring-2 focus:ring-ring";

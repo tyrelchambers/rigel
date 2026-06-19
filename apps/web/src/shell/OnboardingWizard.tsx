@@ -22,7 +22,7 @@ export function OnboardingWizard({ onClose }: { onClose: () => void }) {
       <div style={card}>
         <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
           <Sparkles size={18} style={{ color: "var(--accent-primary)" }} />
-          <span style={{ fontSize: 17, fontWeight: 600, color: "var(--fg-primary)" }}>Welcome to Helmsman</span>
+          <span style={{ fontSize: 17, fontWeight: 600, color: "var(--fg-primary)" }}>Welcome to Rigel</span>
         </div>
         <span style={{ fontSize: 12.5, color: "var(--fg-secondary)", lineHeight: 1.5 }}>
           A minute of optional setup. Everything here can also be changed later in Settings — skip
@@ -95,7 +95,7 @@ function TokenCard() {
   return (
     <ToolCard
       icon={<Sparkles size={15} style={{ color: "var(--accent-primary)" }} />}
-      title="AI copilot (the Helmsman)"
+      title="AI copilot (Rigel)"
       desc="Chat needs a Claude subscription token — run `claude setup-token` and paste the sk-ant-oat-… value."
       action={configured ? <Done /> : undefined}
     >

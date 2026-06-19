@@ -346,8 +346,8 @@ export async function proposeRepoFix(input: RepoFixInput): Promise<RepoFixResult
   await runGit(["-C", co.dir, "add", rel]);
   const commit = await runGit([
     "-C", co.dir,
-    "-c", "user.email=helmsman@users.noreply.github.com",
-    "-c", "user.name=Helmsman",
+    "-c", "user.email=rigel@users.noreply.github.com",
+    "-c", "user.name=Rigel",
     "commit", "-m", input.title,
   ]);
   if (commit.code !== 0) {

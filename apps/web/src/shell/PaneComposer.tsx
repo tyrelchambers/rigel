@@ -33,7 +33,7 @@ import {
 
 // ── PaneComposer ─────────────────────────────────────────────────────────────
 
-const PLACEHOLDER = "Ask Helmsman…  (/ for commands, @ to mention a resource)";
+const PLACEHOLDER = "Ask Rigel…  (/ for commands, @ to mention a resource)";
 const LINE_HEIGHT = 20;
 const MIN_LINES = 3;
 const MAX_LINES = 14;

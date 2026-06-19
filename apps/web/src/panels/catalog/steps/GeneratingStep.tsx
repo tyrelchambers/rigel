@@ -26,7 +26,7 @@ export function GeneratingStep({
         <span className="font-medium">{app.name} needs a generated manifest</span>
       </div>
       <p className="text-sm text-muted-foreground">
-        This app isn't baked with a deterministic manifest yet. Hand off to the Helmsman chat to
+        This app isn't baked with a deterministic manifest yet. Hand off to Rigel chat to
         generate and apply the install interactively.
       </p>
       <div className="space-y-1">
