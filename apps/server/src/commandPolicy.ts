@@ -69,7 +69,7 @@ const APPROVAL_HINT =
 
 const BLOCKED_HINT =
   "kubectl port-forward / proxy can't run in this chat — they block with no terminal. " +
-  "Do NOT retry it. Tell the user to use Helmsman's built-in port-forward feature instead.";
+  "Do NOT retry it. Tell the user to use Rigel's built-in port-forward feature instead.";
 
 /** First non-flag token after the binary = the verb. Skips global flags + values. */
 function findVerb(tokens: string[]): { verb: string | null; sub: string | null } {

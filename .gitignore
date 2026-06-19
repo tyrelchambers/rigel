@@ -18,6 +18,14 @@ node_modules/
 dist/
 **/dist/
 
+# Leftover Swift build artifacts (Swift app removed; safe to `rm -rf` locally)
+.build/
+Helmsman.app/
+
+# electron-builder packaged output (.app/.dmg)
+release/
+apps/desktop/release/
+
 # Local secrets for docker compose (Claude OAuth token, etc.)
 .env
 

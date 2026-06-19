@@ -1,0 +1,79 @@
+appId: com.tyrelchambers.rigel
+productName: Rigel
+copyright: Copyright © 2026 Tyrel Chambers
+
+# Output the packaged .app / .dmg under apps/desktop/release/ (gitignored).
+directories:
+  output: release
+  buildResources: build
+
+# ── App bundle contents (packed into app.asar) ───────────────────────────────
+# Only the Electron main + preload bundles and package.json go inside the asar.
+# The server, its node-pty native addon, and the SPA ship UNPACKED as
+# extraResources (see below) so the forked Node server and node-pty's native
+# binary resolve and run outside the asar. Never include src/.
+files:
+  - dist/main.js
+  - dist/preload.js
+  - package.json
+
+# ── Unpacked resources (Contents/Resources/) ─────────────────────────────────
+# main.ts's packaged branch forks resources/server/server-entry.mjs with
+# cwd = resources/server and reads the SPA from resources/web/dist.
+extraResources:
+  # Desktop-bundled Node server + its parent-death watchdog entry.
+  - from: dist/server.mjs
+    to: server/server.mjs
+  - from: dist/server-entry.mjs
+    to: server/server-entry.mjs
+  # Chat permission hook — both the .ts (default path, unused here) and the
+  # .mjs the packaged app runs via electron --run-as-node (HELMSMAN_HOOK_CMD).
+  - from: dist/permissionHook.ts
+    to: server/permissionHook.ts
+  - from: dist/permissionHook.mjs
+    to: server/permissionHook.mjs
+  # node-pty as a real, unpacked package tree next to the server's cwd so
+  # `import "node-pty"` resolves from resources/server/node_modules/node-pty.
+  # Includes lib/, prebuilds/ (pty.node + spawn-helper) — the native addon and
+  # spawn-helper MUST live on the real filesystem (not an asar) to load/exec.
+  - from: node_modules/node-pty
+    to: server/node_modules/node-pty
+    filter:
+      - "**/*"
+      - "!**/*.ts"
+      - "!**/*.map"
+      - "!src/**"
+      - "!deps/**"
+      - "!scripts/**"
+  # Built SPA (apps/web/dist) served by the Node server at WEB_DIST.
+  - from: ../web/dist
+    to: web/dist
+
+# Native node-pty is shipped unpacked via extraResources (above), so no asar
+# unpacking is needed for it. Re-state the intent defensively in case node-pty
+# is ever pulled into the asar by a future files change.
+asarUnpack:
+  - "**/node-pty/**"
+
+# node-pty's N-API prebuild already works under Electron's Node (verified).
+# Do NOT rebuild — @electron/rebuild would break the system-Node server tests
+# that share the same node-pty ABI.
+npmRebuild: false
+
+# Ensure node-pty's darwin spawn-helper keeps its executable bit in the packaged
+# app (electron-builder usually preserves modes; the hook chmod +x's it to be safe).
+afterPack: ./afterPack.cjs
+
+mac:
+  category: public.app-category.developer-tools
+  icon: build/icon.icns
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+  # UNSIGNED / ad-hoc build: code-signing + notarization are deferred (need the
+  # user's Apple Developer ID certificate). identity:null makes electron-builder
+  # ad-hoc sign locally so it builds without certs. See report for the signing
+  # follow-up (set identity + afterSign notarize + secrets).
+  identity: null

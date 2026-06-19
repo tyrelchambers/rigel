@@ -1,0 +1,26 @@
+{
+  "name": "signups",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node --import tsx src/index.ts",
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "hono": "latest",
+    "@hono/node-server": "latest",
+    "pg": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/pg": "latest",
+    "pg-mem": "latest",
+    "vitest": "latest",
+    "tsx": "latest",
+    "esbuild": "latest",
+    "typescript": "latest"
+  }
+}

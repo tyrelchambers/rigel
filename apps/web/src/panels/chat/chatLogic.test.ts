@@ -117,7 +117,7 @@ describe("transcript", () => {
     ];
     const out = transcript(msgs, stripActionBlocks);
     expect(out).toContain("You: restart web");
-    expect(out).toContain("Helmsman: Sure.");
+    expect(out).toContain("Rigel: Sure.");
     expect(out).not.toContain("```action");
   });
 });

@@ -2,13 +2,16 @@
   "name": "desktop",
   "private": true,
   "version": "0.1.0",
-  "description": "Helmsman desktop (Electron) — wraps the Node server + built SPA into a macOS app",
+  "description": "Rigel desktop (Electron) — wraps the Node server + built SPA into a macOS app",
   "main": "dist/main.js",
   "scripts": {
-    "build": "node build.mjs",
+    "build": "pnpm --filter web build && node build.mjs",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
     "dev": "pnpm build && electron .",
-    "smoke": "pnpm build && HELMSMAN_SMOKE=1 electron ."
+    "smoke": "pnpm build && HELMSMAN_SMOKE=1 electron .",
+    "dist": "pnpm build && electron-builder --mac --arm64",
+    "dist:all": "pnpm build && electron-builder --mac --arm64 --x64"
   },
   "dependencies": {
     "node-pty": "1.1.0"
@@ -16,9 +19,11 @@
   "devDependencies": {
     "@types/node": "latest",
     "electron": "latest",
+    "electron-builder": "latest",
     "esbuild": "latest",
     "fix-path": "latest",
     "tsx": "latest",
-    "typescript": "latest"
+    "typescript": "latest",
+    "vitest": "latest"
   }
 }

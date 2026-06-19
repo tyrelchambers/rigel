@@ -410,7 +410,7 @@ function DeleteConfirmSheet({
           </SheetDescription>
         </SheetHeader>
         <div className="px-4 py-2 text-sm text-muted-foreground">
-          This removes the account from Helmsman&apos;s list. The Secret will remain in the cluster
+          This removes the account from Rigel&apos;s list. The Secret will remain in the cluster
           (use the Secrets panel to delete it if needed).
         </div>
         <SheetFooter>

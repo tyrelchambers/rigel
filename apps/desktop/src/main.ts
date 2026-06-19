@@ -1,17 +1,25 @@
-// Helmsman desktop — Electron main process.
+// Rigel desktop — Electron main process.
 //
-// Boots the Helmsman Node server (apps/server) as a child of this Electron app,
+// Boots the Rigel Node server (apps/server) as a child of this Electron app,
 // waits for it to report healthy, then loads a BrowserWindow at the local server
-// URL. The renderer is the UNMODIFIED Helmsman SPA: it talks to the server over
+// URL. The renderer is the UNMODIFIED Rigel SPA: it talks to the server over
 // relative /api/* (fetch) + /ws (WebSocket) using location.host, so pointing a
 // window at http://127.0.0.1:<port> "just works" with zero web-app changes.
 //
 // Trust model: the server is forked WITHOUT HELMSMAN_PASSWORD/HELMSMAN_TOKEN, so
 // it runs auth-off — it's bound to loopback (HOST=127.0.0.1) and is only ever
 // reachable by this desktop app on the same machine.
-import { app, BrowserWindow, shell, utilityProcess, type UtilityProcess } from "electron";
+import { app, BrowserWindow, ipcMain, shell, utilityProcess, type UtilityProcess } from "electron";
 import { createServer } from "node:net";
 import { join } from "node:path";
+import { InstallStore } from "./installStore";
+import { submitSignup, deliver } from "./signup";
+
+const SIGNUP_ENDPOINT = "https://api.rigel.run";
+// Shared key for the signups endpoint — deliberately baked into the client
+// (obfuscation, NOT real auth; the endpoint is a public signup). Must match the
+// APP_KEY in the `rigel-signups` k8s Secret.
+const SIGNUP_APP_KEY = "3f0be9f2807280c51284681d4424e3883dab9650c1ae081c";
 
 // ── Layout ────────────────────────────────────────────────────────────────
 // In dev, __dirname is apps/desktop/dist. The server source and built web SPA
@@ -103,13 +111,38 @@ function forkServer(port: number): UtilityProcess {
   let cwd: string;
 
   if (app.isPackaged) {
-    // ── PACKAGED branch (compiled, not run, in this task) ──────────────────
-    // The packaging task copies server-entry.mjs + server.mjs, node-pty, and the
-    // built SPA under process.resourcesPath. cwd must be a dir from which
-    // `node-pty` resolves (i.e. it has a node_modules/node-pty alongside).
-    entry = join(process.resourcesPath, "server", "server-entry.mjs");
-    cwd = join(process.resourcesPath, "server");
+    // ── PACKAGED branch ────────────────────────────────────────────────────
+    // electron-builder copies (extraResources) the desktop server artifacts to
+    // resources/server/ (server-entry.mjs + server.mjs + permissionHook.{ts,mjs})
+    // with node-pty fully unpacked at resources/server/node_modules/node-pty, and
+    // the built SPA to resources/web/dist. We fork server-entry.mjs (keeping the
+    // parent-death watchdog) with cwd = resources/server so the server's
+    // `import "node-pty"` resolves from resources/server/node_modules/node-pty
+    // (an unpacked, executable native addon — never inside an asar).
+    const serverDir = join(process.resourcesPath, "server");
+    entry = join(serverDir, "server-entry.mjs");
+    cwd = serverDir;
     env.WEB_DIST = join(process.resourcesPath, "web", "dist");
+
+    // ── Permission-hook fix for the packaged app ───────────────────────────
+    // A packaged GUI app has NO node/tsx on PATH, so the chat hook's default
+    // command (`node --import tsx permissionHook.ts`) would silently fail and
+    // mutation-gating would break. Instead, run the prebuilt .mjs hook via
+    // Electron's OWN Node binary: ELECTRON_RUN_AS_NODE=1 makes the Electron
+    // executable behave as plain Node, so the hook runs with zero external deps.
+    //
+    // CRUCIAL: we do NOT put ELECTRON_RUN_AS_NODE in the forked server's env —
+    // utilityProcess.fork launches an Electron "Rigel Helper" with
+    // `--type=utility`, and ELECTRON_RUN_AS_NODE=1 in its env makes that helper
+    // refuse the flag ("bad option: --type=utility") and the server never starts.
+    // Instead we INLINE the env var into the hook command string itself. claude
+    // runs PreToolUse hook commands via a shell, so a leading `ELECTRON_RUN_AS_NODE=1`
+    // assignment applies to JUST the hook subprocess — not the server, not kubectl/
+    // helm/git/claude (which aren't Electron and would ignore it anyway). Paths are
+    // single-quoted because a macOS .app path contains spaces.
+    const hookMjs = join(serverDir, "permissionHook.mjs");
+    const shq = (p: string) => `'${p.replace(/'/g, "'\\''")}'`;
+    env.HELMSMAN_HOOK_CMD = `ELECTRON_RUN_AS_NODE=1 ${shq(process.execPath)} ${shq(hookMjs)}`;
   } else {
     // ── DEV branch ─────────────────────────────────────────────────────────
     // Fork the desktop-bundled server (dist/server.mjs). cwd = apps/desktop so
@@ -166,7 +199,7 @@ function createWindow(port: number): BrowserWindow {
     height: 900,
     minWidth: 960,
     minHeight: 640,
-    title: "Helmsman",
+    title: "Rigel",
     show: !SMOKE, // headless smoke run keeps the window hidden
     backgroundColor: "#0b0f14",
     webPreferences: {
@@ -194,6 +227,18 @@ function createWindow(port: number): BrowserWindow {
 // ── Boot ─────────────────────────────────────────────────────────────────
 async function boot(): Promise<void> {
   applyLoginPath();
+
+  // ── Signup IPC ──────────────────────────────────────────────────────────
+  // Instantiate once per boot; userData is stable across the app's lifetime.
+  const installStore = new InstallStore(app.getPath("userData"));
+  // Background retry of any undelivered signup (offline on a previous run).
+  void deliver(installStore, fetch, SIGNUP_ENDPOINT, SIGNUP_APP_KEY);
+
+  ipcMain.handle("rigel:needs-signup", () => !installStore.captured);
+  ipcMain.handle("rigel:submit-signup", (_e, data: { name: string; email: string }) =>
+    submitSignup(installStore, fetch, SIGNUP_ENDPOINT, SIGNUP_APP_KEY, data.name, data.email, app.getVersion(), process.platform),
+  );
+
   serverPort = await findFreePort();
   console.log(`[helmsman] starting server on 127.0.0.1:${serverPort}`);
   serverProc = forkServer(serverPort);

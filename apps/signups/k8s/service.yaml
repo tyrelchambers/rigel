@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: rigel-signups
+  namespace: default
+spec:
+  selector:
+    app: rigel-signups
+  ports:
+    - port: 80
+      targetPort: 8080

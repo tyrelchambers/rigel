@@ -201,7 +201,7 @@ export async function handleSignal(
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               message:
-                req.message ?? "✅ Helmsman test notification — Signal is wired up.",
+                req.message ?? "✅ Rigel test notification — Signal is wired up.",
               number,
               recipients,
             }),

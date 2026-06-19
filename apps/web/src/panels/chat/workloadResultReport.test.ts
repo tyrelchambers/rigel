@@ -7,7 +7,7 @@ const fail = (code: number, stderr: string) => ({ code, stdout: "", stderr });
 describe("chatFeedback (model-facing, mirrors Swift WorkloadResultReport)", () => {
   test("success: header, command echo, status, output", () => {
     const msg = chatFeedback("kubectl --context default get pods", ok("pod/a\npod/b"));
-    expect(msg).toContain("[Helmsman executed the action you proposed — the user approved it.]");
+    expect(msg).toContain("[Rigel executed the action you proposed — the user approved it.]");
     expect(msg).toContain("kubectl --context default get pods");
     expect(msg).toContain("Status: success");
     expect(msg).toContain("pod/a\npod/b");
@@ -57,7 +57,7 @@ describe("batchFeedback (mirrors Swift WorkloadResultReport.batchFeedback)", () 
       ],
       [],
     );
-    expect(msg).toContain("[Helmsman ran a queue of actions you proposed — the user approved and ran them together.]");
+    expect(msg).toContain("[Rigel ran a queue of actions you proposed — the user approved and ran them together.]");
     expect(msg).toContain("• success: kubectl scale deploy/a --replicas=2\n  output: scaled");
     expect(msg).toContain("• success: kubectl rollout restart deploy/b\n  output: (no output)");
     expect(msg).not.toContain("NOT run");

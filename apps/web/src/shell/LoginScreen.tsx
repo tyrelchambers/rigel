@@ -42,7 +42,7 @@ export function LoginScreen() {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Sparkles size={18} style={{ color: "var(--accent-primary)" }} />
-          <span style={{ fontSize: 16, fontWeight: 600, color: "var(--fg-primary)" }}>Helmsman</span>
+          <span style={{ fontSize: 16, fontWeight: 600, color: "var(--fg-primary)" }}>Rigel</span>
         </div>
         <span style={{ fontSize: 12, color: "var(--fg-secondary)" }}>Enter the admin password to continue.</span>
         <input

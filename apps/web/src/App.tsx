@@ -29,6 +29,7 @@ import { TerminalDrawer, TOGGLE_TERMINAL_EVENT } from "@/shell/TerminalDrawer";
 import { ResourceYamlViewer } from "@/components/ResourceYamlViewer";
 import { connectCluster } from "@/lib/ws";
 import { useAuthStatus, useChatConfig } from "@/lib/api";
+import { rigel } from "@/lib/desktop";
 import { LoginScreen } from "@/shell/LoginScreen";
 import { OnboardingWizard } from "@/shell/OnboardingWizard";
 import NavStrip from "@/shell/NavStrip";
@@ -79,19 +80,34 @@ export default function App() {
 
   // First-run onboarding: auto-show once when set up is incomplete (no Claude
   // token) and not previously dismissed; re-openable from Settings via an event.
+  // On desktop, prepends a required "About you" step when needsSignup() is true.
   const { data: chatConfig } = useChatConfig();
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [requireAboutYou, setRequireAboutYou] = useState(false);
   useEffect(() => {
     const open = () => setShowOnboarding(true);
     window.addEventListener("helmsman:open-setup", open);
     return () => window.removeEventListener("helmsman:open-setup", open);
   }, []);
   useEffect(() => {
-    if (authed && chatConfig && !chatConfig.configured && !localStorage.getItem("helmsman_onboarded")) {
-      setShowOnboarding(true);
-    }
+    let cancelled = false;
+    (async () => {
+      const needs = rigel ? await rigel.needsSignup() : false;
+      if (cancelled) return;
+      if (needs) {
+        setRequireAboutYou(true);
+        setShowOnboarding(true);
+        return;
+      }
+      // Existing optional-onboarding condition:
+      if (authed && chatConfig && !chatConfig.configured && !localStorage.getItem("helmsman_onboarded")) {
+        setShowOnboarding(true);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [authed, chatConfig]);
   function closeOnboarding() {
+    if (requireAboutYou) return; // guarded until About-you is complete
     setShowOnboarding(false);
     localStorage.setItem("helmsman_onboarded", "1");
   }
@@ -173,7 +189,13 @@ export default function App() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--surface-primary)" }}>
-      {showOnboarding && <OnboardingWizard onClose={closeOnboarding} />}
+      {showOnboarding && (
+        <OnboardingWizard
+          onClose={closeOnboarding}
+          requireAboutYou={requireAboutYou}
+          onAboutYouDone={() => setRequireAboutYou(false)}
+        />
+      )}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
 
       {/* ── Main row: NavStrip + content column + ChatPane ─────────────────── */}

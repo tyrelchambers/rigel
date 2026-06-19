@@ -43,7 +43,7 @@ export function MoveToNamespaceDialog({
         <DialogHeader>
           <DialogTitle>Move {deployment.metadata.name} to another namespace</DialogTitle>
           <DialogDescription>
-            From <span className="font-mono">{src}</span>. There's no native move — the Helmsman will recreate it (and related resources) in the target namespace, then delete the originals, with each step confirmed in chat.
+            From <span className="font-mono">{src}</span>. There's no native move — Rigel will recreate it (and related resources) in the target namespace, then delete the originals, with each step confirmed in chat.
           </DialogDescription>
         </DialogHeader>
         <label className="flex flex-col gap-1">

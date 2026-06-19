@@ -10,7 +10,7 @@
 export type ChatTopic = "Errors" | "Logs" | "Explain" | "Rollout";
 
 /**
- * Build the Helmsman chat prompt for a given topic + resource.
+ * Build the Rigel chat prompt for a given topic + resource.
  *
  * @param kind       - Kubernetes resource kind, lowercase (e.g. "deployment", "pod")
  * @param name       - Resource name
