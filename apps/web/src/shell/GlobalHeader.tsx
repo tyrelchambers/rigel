@@ -8,7 +8,7 @@
  *
  * Inline styles + CSS custom properties to match App.tsx / NavStrip.tsx.
  */
-import { PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Search, Settings } from "lucide-react";
 import { NamespaceSelector, useIsNamespaceScoped } from "./NamespaceBar";
 import { useCluster } from "@/store/cluster";
 import { RigelMark } from "@/components/RigelMark";
@@ -18,9 +18,11 @@ interface GlobalHeaderProps {
   onToggleSidebar: () => void;
   /** Opens the existing CommandPalette (reuses App's setPaletteOpen). */
   onOpenSearch: () => void;
+  /** Opens the SettingsModal. */
+  onOpenSettings: () => void;
 }
 
-export function GlobalHeader({ sidebarCollapsed, onToggleSidebar, onOpenSearch }: GlobalHeaderProps) {
+export function GlobalHeader({ sidebarCollapsed, onToggleSidebar, onOpenSearch, onOpenSettings }: GlobalHeaderProps) {
   const connected = useCluster((s) => s.connected);
   const namespaceScoped = useIsNamespaceScoped();
 
@@ -115,6 +117,28 @@ export function GlobalHeader({ sidebarCollapsed, onToggleSidebar, onOpenSearch }
         >
           ⌘K
         </span>
+      </button>
+
+      {/* Settings */}
+      <button
+        onClick={onOpenSettings}
+        title="Settings"
+        aria-label="Settings"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 28,
+          height: 28,
+          borderRadius: 6,
+          background: "transparent",
+          border: "none",
+          cursor: "pointer",
+          flexShrink: 0,
+        }}
+        className="hover:bg-[#1B1C1F] transition-colors"
+      >
+        <Settings size={16} style={{ color: "var(--fg-secondary)" }} />
       </button>
 
       {/* Connection status indicator */}

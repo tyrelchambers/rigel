@@ -21,7 +21,7 @@ import CatalogPanel from "./panels/catalog/CatalogPanel";
 import EventsPanel from "./panels/events/EventsPanel";
 import LogsPanel from "./panels/logs/LogsPanel";
 import AssistantPanel from "./panels/assistant/AssistantPanel";
-import SettingsPanel from "./panels/settings/SettingsPanel";
+import { SettingsModal } from "@/panels/settings/SettingsModal";
 import AccountsPanel from "./panels/accounts/AccountsPanel";
 import ApplyYamlPanel from "./panels/apply/ApplyYamlPanel";
 import GitOpsPanel from "./panels/gitops/GitOpsPanel";
@@ -73,6 +73,7 @@ export default function App() {
     connectCluster();
   }, []);
   const [paletteOpen, setPaletteOpen] = useCommandPalette();
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Whole-sidebar collapse (icon-only rail). Owned here, persisted on change,
   // driven by the GlobalHeader toggle. Distinct from the per-group nav collapse.
@@ -195,19 +196,21 @@ export default function App() {
         />
       )}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <SettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
 
       {/* ── Global header — slim full-width bar above the whole app ─────────── */}
       <GlobalHeader
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={toggleSidebar}
         onOpenSearch={() => setPaletteOpen(true)}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
 
       {/* ── Main row: NavStrip + content column + ChatPane ─────────────────── */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
 
         {/* ── Sidebar ──────────────────────────────────────────────────────── */}
-        <NavStrip collapsed={sidebarCollapsed} />
+        <NavStrip collapsed={sidebarCollapsed} onOpenSettings={() => setSettingsOpen(true)} />
 
         {/* ── Content column ───────────────────────────────────────────────── */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, background: "var(--surface-primary)" }}>
@@ -255,7 +258,6 @@ export default function App() {
               <Route path="/accounts" element={<Padded><AccountsPanel /></Padded>} />
               <Route path="/events" element={<EventsPanel />} />
               <Route path="/assistant" element={<AssistantPanel />} />
-              <Route path="/settings" element={<Padded><SettingsPanel /></Padded>} />
             </Routes>
           </main>
 

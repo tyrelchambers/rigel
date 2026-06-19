@@ -142,16 +142,41 @@ function NavGroupHeader({ title, collapsed, onToggle }: NavGroupHeaderProps) {
   );
 }
 
-interface NavButtonProps {
+type NavButtonProps = {
   panelKey: string;
   /** Icon-only rail mode: hide the label, center the icon. */
   collapsed?: boolean;
-}
+  /** Action override: renders a button instead of a NavLink route. */
+  onClick?: () => void;
+};
 
-function NavButton({ panelKey, collapsed = false }: NavButtonProps) {
+function NavButton({ panelKey, collapsed = false, onClick }: NavButtonProps) {
   const meta = PANEL_META[panelKey];
   if (!meta) return null;
   const Icon = meta.icon;
+
+  // Action item (e.g. Settings opens a modal, not a route).
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        title={meta.title}
+        className={
+          collapsed
+            ? "flex items-center justify-center h-8 w-full rounded-md transition-colors group nav-btn-idle hover:bg-[#1B1C1F]"
+            : "flex items-center gap-2.5 px-2.5 h-8 w-full rounded-md transition-colors group nav-btn-idle hover:bg-[#1B1C1F]"
+        }
+      >
+        <Icon size={14} strokeWidth={1.75} style={{ color: "var(--fg-tertiary)", flexShrink: 0, width: 20 }} className="group-hover:!text-[#A1A1AA]" />
+        {!collapsed && (
+          <span style={{ fontSize: "13px", color: "var(--fg-secondary)", fontWeight: 500 }} className="group-hover:!text-white">
+            {meta.title}
+          </span>
+        )}
+      </button>
+    );
+  }
 
   return (
     <NavLink
@@ -203,7 +228,13 @@ function NavButton({ panelKey, collapsed = false }: NavButtonProps) {
 
 // ─── NavStrip ─────────────────────────────────────────────────────────────────
 
-export default function NavStrip({ collapsed = false }: { collapsed?: boolean }) {
+export default function NavStrip({
+  collapsed = false,
+  onOpenSettings,
+}: {
+  collapsed?: boolean;
+  onOpenSettings: () => void;
+}) {
   const location = useLocation();
   const activePanelKey = routeToPanelKey(location.pathname);
 
@@ -281,9 +312,13 @@ export default function NavStrip({ collapsed = false }: { collapsed?: boolean })
                     />
                   )}
                   <div className="space-y-0.5">
-                    {group.panels.map((p) => (
-                      <NavButton key={p} panelKey={p} collapsed />
-                    ))}
+                    {group.panels.map((p) =>
+                      p === "settings" ? (
+                        <NavButton key={p} panelKey={p} collapsed onClick={onOpenSettings} />
+                      ) : (
+                        <NavButton key={p} panelKey={p} collapsed />
+                      ),
+                    )}
                   </div>
                 </div>
               );
@@ -293,9 +328,13 @@ export default function NavStrip({ collapsed = false }: { collapsed?: boolean })
               // Pinned group — always visible, no header
               return (
                 <div key={groupKey} className="space-y-0.5">
-                  {group.panels.map((p) => (
-                    <NavButton key={p} panelKey={p} />
-                  ))}
+                  {group.panels.map((p) =>
+                    p === "settings" ? (
+                      <NavButton key={p} panelKey={p} onClick={onOpenSettings} />
+                    ) : (
+                      <NavButton key={p} panelKey={p} />
+                    ),
+                  )}
                 </div>
               );
             }
@@ -311,9 +350,13 @@ export default function NavStrip({ collapsed = false }: { collapsed?: boolean })
                 />
                 {!groupCollapsed && (
                   <div className="mt-0.5 space-y-0.5">
-                    {group.panels.map((p) => (
-                      <NavButton key={p} panelKey={p} />
-                    ))}
+                    {group.panels.map((p) =>
+                      p === "settings" ? (
+                        <NavButton key={p} panelKey={p} onClick={onOpenSettings} />
+                      ) : (
+                        <NavButton key={p} panelKey={p} />
+                      ),
+                    )}
                   </div>
                 )}
               </div>
