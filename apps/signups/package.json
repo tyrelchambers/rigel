@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "node --import tsx src/index.ts",
-    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --external:pg-native --outfile=dist/signups.mjs",
+    "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
