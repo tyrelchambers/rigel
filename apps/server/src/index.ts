@@ -53,6 +53,25 @@ const context = ctxRes.code === 0 ? ctxRes.stdout.trim() : null;
 
 const mgr = new WatchManager(context);
 
+// Pre-warm the always-present built-in kinds so the first client subscribe is an
+// instant warm hit (cache already populated, no LIST/spawn on the critical path).
+// These are pinned watches: kept fresh from their delta streams and never
+// idle-stopped. Deliberately excludes "events" (high volume) and any CRD
+// (cert-manager / cnpg) — those stay on-demand.
+const CORE_KINDS = [
+  "pods",
+  "deployments",
+  "statefulsets",
+  "daemonsets",
+  "services",
+  "ingresses",
+  "configmaps",
+  "secrets",
+  "namespaces",
+  "nodes",
+];
+mgr.prewarm(CORE_KINDS, "*");
+
 // Port-forward subprocess registry (docs/parity/portforward.md). One instance
 // for the server's lifetime; killed wholesale on shutdown so no zombie kubectl
 // survives. The forwards bind the SERVER's 127.0.0.1 — see the module caveat.
