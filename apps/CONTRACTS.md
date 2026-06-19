@@ -1,9 +1,9 @@
-# Shared contracts (manager-owned — handed identically to both apps)
+# Chat action-block contract
 
-These three surfaces MUST be byte-identical across the Swift and web apps.
-Neither sub-agent may re-derive or extend them per app.
+The web app's chat action-block contract, implemented in
+`packages/k8s/src/actionBlocks.ts`.
 
-## 1. Chat action-block protocol
+## Chat action-block protocol
 
 Claude never runs mutations itself. For any cluster change it appends a fenced
 ` ```action ` block; the app hides the raw block, renders a one-click button, and
@@ -40,8 +40,7 @@ Special kinds:
 - `command` — escape hatch for kubectl (incl. plugins like `cnpg`) the typed
   kinds don't model.
 
-Web-only kinds (NOT in the Swift app — the web client is the primary going
-forward and the contract intentionally diverges here):
+Additional kinds:
 - `applyManifest` — install/self-host a new app. The `action` block is
   IMMEDIATELY followed by a ` ```yaml ` block; the parser attaches it as
   `manifest` and the app applies it via `kubectl apply -f -`.
@@ -67,29 +66,3 @@ Examples:
 {"label":"Drain node worker-3","kind":"drain","node":"worker-3"}
 ```
 
-## 2. MCP tools (`helmsman` server)
-
-The copilot reads the cluster through purpose-built MCP tools (plus the
-read-only kubectl allowlist). Current tools (`Sources/HelmsmanMCP/main.swift`):
-- `list_unhealthy_pods` — pods not Running/Ready, with reasons.
-- `list_degraded_deployments` — deployments with unavailable replicas.
-- `recent_warning_events` — recent Warning events.
-- `get_pod_logs` — logs for a named pod (requires `name`).
-
-Tool names/shapes are part of the contract — keep identical names and input
-schemas across apps.
-
-## 3. catalog.json schema
-
-`Sources/Helmsman/Resources/catalog.json` — top level `{ "apps": [ … ] }`
-(54 entries). Each app:
-- `id`, `name`, `tagline`, `description`, `category`, `iconSystemName`.
-- `docsURL`, `repoURL`, `homepageURL`, `tags`.
-- `install` — `{ "mode": "manifest" | "helm", … }`. For `manifest`, an inline
-  multi-doc YAML `manifest` string with template vars `{{instance}}`,
-  `{{namespace}}`, `{{storage}}` (and others a panel may substitute).
-- `matchImages` — image refs used to detect an installed instance.
-- `requirements`, `persistence` (bool/int), `exposesIngress` (bool), `notes`,
-  `installPromptTemplate`.
-
-When porting catalog logic, preserve the exact key names and template-var syntax.

@@ -1,7 +1,10 @@
-# Web app — domain notes (for the parity web builder/implementer)
+# Web app — domain notes
 
-TypeScript monorepo. `apps/web` (frontend), `apps/server` (Bun backend),
+TypeScript monorepo. `apps/web` (frontend), `apps/server` (Node backend),
 shared `packages/k8s` + `packages/catalog`.
+
+`apps/desktop` is the Electron shell that forks the Node server and loads the
+SPA — no separate server process needed for the desktop build.
 
 ## Stack & conventions
 - React 19 + Vite + TypeScript. Tailwind v4 (via `@tailwindcss/vite`, `@import
@@ -20,20 +23,20 @@ shared `packages/k8s` + `packages/catalog`.
 - **REST `/api/*`** — one-shot mutations (scale/restart/delete/edit/port-forward)
   and catalog installs. The server runs the guarded kubectl.
 
-## Guarded actions (MUST match the Swift behavior)
+## Guarded actions
 - Every mutation goes through a confirm **Sheet** (shadcn `sheet`) that shows the
   EXACT kubectl command before it runs. Never mutate without it.
 - Chat action blocks render as buttons that open the same confirm sheet. The
-  action-block JSON schema is fixed — see `docs/parity/contracts.md`. Do not
+  action-block JSON schema is fixed — see `apps/CONTRACTS.md`. Do not
   invent new `kind` values.
 
-## When BUILDING from a parity spec
-- Implement to the normative spec in `docs/parity/<feature>.md` exactly — same
-  columns, actions, edge cases, and kubectl commands the extractor recorded.
-- Put panel UI in `apps/web/src/panels/<name>/`, server routes in
-  `apps/server/src/`, shared parsing/types in `packages/k8s`.
+## Where things go
+- Panel UI → `apps/web/src/panels/<name>/`
+- Server routes → `apps/server/src/`
+- Shared parsing/types → `packages/k8s`
 
 ## Build / test
 - `pnpm --filter web build`, `pnpm --filter web test` (vitest),
   `pnpm --filter web typecheck`.
-- `pnpm --filter @helmsman/server test` (bun test), `… build`.
+- `pnpm --filter @helmsman/server test` (vitest), `… build`.
+  Server dev: `tsx watch src/index.ts`.
