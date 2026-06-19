@@ -10,7 +10,6 @@ const columns = [
             { label: "Features", href: "/features" },
             { label: "Smart alerts", href: "/features#lookout" },
             { label: "App catalog", href: "/features#harbor" },
-            { label: "Changelog", href: "#" },
         ],
     },
     {
@@ -25,26 +24,24 @@ const columns = [
     {
         title: "RESOURCES",
         links: [
-            { label: "Guides", href: "#" },
-            { label: "API reference", href: "#" },
-            { label: "Status", href: "#" },
-        ],
-    },
-    {
-        title: "COMPANY",
-        links: [
-            { label: "About", href: "#" },
-            { label: "Blog", href: "#" },
-            { label: "Careers", href: "#" },
-            { label: "Contact", href: "#" },
+            { label: "Docs", href: "/docs" },
+            { label: "Changelog", href: "/changelog" },
+            { label: "About", href: "/about" },
         ],
     },
 ];
 
 const social = [
-    { icon: "lucide:github", label: "GitHub", href: "#" },
-    { icon: "lucide:twitter", label: "X / Twitter", href: "#" },
-    { icon: "lucide:rss", label: "RSS", href: "#" },
+    {
+        icon: "lucide:github",
+        label: "GitHub",
+        href: "https://github.com/tyrelchambers/rigel",
+    },
+    {
+        icon: "lucide:twitter",
+        label: "X / Twitter",
+        href: "https://x.com/imtyrelchambers",
+    },
 ];
 ---
 
@@ -81,7 +78,7 @@ const social = [
             <div
                 data-reveal
                 style="--reveal-delay:100ms"
-                class="grid grid-cols-2 gap-x-10 gap-y-10 sm:grid-cols-4 lg:gap-x-16"
+                class="grid grid-cols-2 gap-x-10 gap-y-10 sm:grid-cols-3 lg:gap-x-16"
             >
                 {
                     columns.map((col) => (
@@ -121,6 +118,8 @@ const social = [
                         <a
                             href={s.href}
                             aria-label={s.label}
+                            target="_blank"
+                            rel="noopener noreferrer"
                             class="grid size-9 place-items-center rounded-md border border-line-subtle text-fg-tertiary transition-colors hover:border-line-strong hover:text-fg"
                         >
                             <Icon name={s.icon} class="size-4" />

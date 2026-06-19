@@ -1,0 +1,52 @@
+---
+import { Icon } from "astro-icon/components";
+
+// Shared hero band for standalone pages (about, changelog, …). Mirrors the
+// look of FeaturesHero so secondary pages feel of-a-piece with the site.
+interface Props {
+  eyebrow: string;
+  eyebrowIcon?: string;
+  title: string;
+  subtitle?: string;
+}
+
+const {
+  eyebrow,
+  eyebrowIcon = "lucide:anchor",
+  title,
+  subtitle,
+} = Astro.props;
+---
+
+<section class="chart-grid relative overflow-hidden bg-surface-sunken">
+  <div class="glow anim-glow absolute -left-40 -top-24 h-[420px] w-[960px]"></div>
+
+  <div
+    class="relative mx-auto max-w-[1200px] px-6 pb-16 pt-20 sm:px-8 lg:px-12 lg:pb-20 lg:pt-28"
+  >
+    <div class="flex items-center gap-2.5">
+      <Icon name={eyebrowIcon} class="size-[15px] text-accent" />
+      <span class="font-mono text-xs tracking-[0.16em] text-fg-tertiary"
+        >{eyebrow}</span
+      >
+    </div>
+
+    <h1
+      class="rise mt-5 max-w-[18ch] text-[clamp(2.6rem,7vw,3.875rem)] font-bold leading-[1.03] tracking-[-0.03em] text-fg"
+      style="animation-delay:0.05s"
+    >
+      {title}
+    </h1>
+
+    {
+      subtitle && (
+        <p
+          class="rise mt-7 max-w-[620px] text-[17px] leading-relaxed text-fg-secondary"
+          style="animation-delay:0.15s"
+        >
+          {subtitle}
+        </p>
+      )
+    }
+  </div>
+</section>

@@ -141,7 +141,7 @@
   border-radius: var(--radius-sm);
   padding: 0.15em 0.4em;
 }
-/* Typography wraps inline code in backticks via ::before/::after — drop them. */
+/* Typography wraps inline code in backticks via ::before/::after, so drop them. */
 .prose-docs :not(pre) > code::before,
 .prose-docs :not(pre) > code::after {
   content: none;
@@ -276,7 +276,7 @@
     animation: rise-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
-  /* Scroll reveals — driven by an IntersectionObserver that toggles .is-visible
+  /* Scroll reveals, driven by an IntersectionObserver that toggles .is-visible
      (see Base.astro). The hidden start state only applies when JS is active
      (html.js), so without JS content stays visible. */
   html.js [data-reveal] {

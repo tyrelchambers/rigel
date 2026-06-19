@@ -33,7 +33,7 @@ const sectionBg = variant === "sunken" ? "bg-surface-sunken" : "bg-surface";
 const cardBg = variant === "sunken" ? "bg-surface" : "bg-surface-elevated";
 
 // Grid auto-placement fills tracks in order-modified order, so when `reverse`
-// flips the column order we must also flip the track widths — otherwise the
+// flips the column order we must also flip the track widths, otherwise the
 // card grid lands in the narrow intro track and gets squished.
 const gridCols = reverse
   ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)]"

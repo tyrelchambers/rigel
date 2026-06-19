@@ -6,11 +6,11 @@ order: 1
 icon: "lucide:rocket"
 ---
 
-Rigel is a self-hostable, AI-native Kubernetes admin UI — it diagnoses, monitors, and fixes your cluster with your approval. This guide is the onboarding entry point: it gets Rigel running in your cluster (or on a single host), logs you in, and connects the optional AI copilot.
+Rigel is a self-hostable, AI-native Kubernetes admin UI that diagnoses, monitors, and fixes your cluster with your approval. This guide is the onboarding entry point: it gets Rigel running in your cluster (or on a single host), logs you in, and connects the optional AI copilot.
 
 Rigel runs as a single [Bun](https://bun.sh) server (`apps/server`) that serves the React UI (`apps/web`) plus `/api/*` and `/ws` on **port 8787**. It drives `kubectl` and `helm` through a confirm gate, and an optional AI chat copilot suggests and runs the commands you approve.
 
-> ⚠️ **Rigel is a cluster-admin tool.** It can read everything and — through a confirm gate — install, scale, and delete across the cluster. Protect it with a password and never expose it publicly without TLS (ideally behind an SSO proxy).
+> ⚠️ **Rigel is a cluster-admin tool.** It can read everything and, through a confirm gate, install, scale, and delete across the cluster. Protect it with a password and never expose it publicly without TLS (ideally behind an SSO proxy).
 
 This guide covers installing Rigel **into a Kubernetes cluster** with the Helm chart. For a single-host / laptop setup, see [Docker (single host)](#docker-single-host) at the end.
 
@@ -20,13 +20,13 @@ This guide covers installing Rigel **into a Kubernetes cluster** with the Helm c
 
 * A Kubernetes cluster and `kubectl` access to it.
 * **Helm 3.8+** (OCI registry support is required to pull the chart).
-* Permission to create a ServiceAccount and a cluster-admin ClusterRoleBinding in the install namespace (Rigel needs broad RBAC to be fully functional — see [RBAC & permissions](#rbac-permissions)).
+* Permission to create a ServiceAccount and a cluster-admin ClusterRoleBinding in the install namespace (Rigel needs broad RBAC to be fully functional, see [RBAC & permissions](#rbac-permissions)).
 
 Optional, for richer data:
 
-* **metrics-server** — enables CPU/memory sparklines for pods and nodes, and powers the Right-sizing panel.
-* **CloudNativePG (CNPG)** — enables the Databases panel.
-* A **default StorageClass** — only needed if you enable persistence for the chat copilot's home, or use the in-app Signal bridge.
+* **metrics-server**, enables CPU/memory sparklines for pods and nodes, and powers the Right-sizing panel.
+* **CloudNativePG (CNPG)**, enables the Databases panel.
+* A **default StorageClass**, only needed if you enable persistence for the chat copilot's home, or use the in-app Signal bridge.
 
 ---
 
@@ -59,7 +59,7 @@ kubectl port-forward svc/hm-helmsman-web 8787:8787
 # then open http://localhost:8787
 ```
 
-For real exposure, enable the Ingress instead — see [Expose via Ingress](#expose-via-ingress).
+For real exposure, enable the Ingress instead, see [Expose via Ingress](#expose-via-ingress).
 
 ## First login
 
@@ -93,7 +93,7 @@ The Secret must have a key named `config` holding the kubeconfig file. When set,
 
 ## RBAC & permissions
 
-Rigel installs arbitrary Helm charts, applies manifests, scales, and deletes any resource **on confirmed request** — so to be *fully* functional it needs `cluster-admin`. The chart binds the ServiceAccount to the built-in `cluster-admin` ClusterRole by default.
+Rigel installs arbitrary Helm charts, applies manifests, scales, and deletes any resource **on confirmed request**, so to be *fully* functional it needs `cluster-admin`. The chart binds the ServiceAccount to the built-in `cluster-admin` ClusterRole by default.
 
 | Goal | Values |
 |------|--------|
@@ -102,7 +102,7 @@ Rigel installs arbitrary Helm charts, applies manifests, scales, and deletes any
 | Read-mostly | `rbac.clusterAdmin=false` (binds the built-in `view` role; mutations/installs will be denied) |
 | Manage RBAC yourself | `rbac.create=false`, `serviceAccount.name=<existing-sa>` |
 
-The right way to lock Rigel down is **app auth + network controls** (below), not narrowing the RBAC — a narrowed role just makes parts of the UI fail with permission errors.
+The right way to lock Rigel down is **app auth + network controls** (below), not narrowing the RBAC, because a narrowed role just makes parts of the UI fail with permission errors.
 
 ---
 
@@ -112,19 +112,19 @@ Rigel ships **secure by default** because it can scale/delete/install cluster-wi
 
 | Mode | How |
 |------|-----|
-| Generated password (default) | Set nothing — the chart creates `hm-helmsman-web-auth` with a random `HELMSMAN_PASSWORD`. Retrieve it as shown in [First login](#first-login). |
+| Generated password (default) | Set nothing, and the chart creates `hm-helmsman-web-auth` with a random `HELMSMAN_PASSWORD`. Retrieve it as shown in [First login](#first-login). |
 | Choose your own password | `--set auth.password=<your-password>` (templated into the Secret). |
 | Bring your own Secret | `--set auth.existingSecret=<secret>` with keys `HELMSMAN_PASSWORD` (and optional `HELMSMAN_TOKEN`). |
 | SSO in front | `--set auth.disable=true` and front it with oauth2-proxy / Cloudflare Access. ⚠️ With `auth.disable=true` and **no** proxy, anyone who can reach it runs cluster-admin commands. |
 | Stable logins across restarts/replicas | `--set auth.sessionSecret=<random>` (otherwise a new signing secret is generated per pod, invalidating sessions on restart). |
 
-`auth.token` (a bearer token, `Authorization: Bearer …`) is for non-browser / CLI callers only — the browser UI uses the password.
+`auth.token` (a bearer token, `Authorization: Bearer …`) is for non-browser / CLI callers only. The browser UI uses the password.
 
 ---
 
 ## AI chat token (optional)
 
-The chat copilot shells out to the `claude` CLI and authenticates with a **Claude subscription — no API key**. The read/observe panels work without it; only the chat needs it.
+The chat copilot shells out to the `claude` CLI and authenticates with a **Claude subscription (no API key)**. The read/observe panels work without it; only the chat needs it.
 
 ```sh
 claude setup-token   # on a machine signed into your Claude plan → prints an sk-ant-oat… token
@@ -157,7 +157,7 @@ helm upgrade hm oci://ghcr.io/tyrelchambers/charts/helmsman-web --version 0.1.0 
   --set ingress.hosts[0].paths[0].pathType=Prefix
 ```
 
-Add TLS via `ingress.tls` (and annotations such as cert-manager's `cert-manager.io/cluster-issuer`). For anything beyond a trusted private network, terminate TLS and put auth in front. A values file is cleaner than `--set` for ingress/TLS — see [Using a values file](#using-a-values-file).
+Add TLS via `ingress.tls` (and annotations such as cert-manager's `cert-manager.io/cluster-issuer`). For anything beyond a trusted private network, terminate TLS and put auth in front. A values file is cleaner than `--set` for ingress/TLS, so see [Using a values file](#using-a-values-file).
 
 ---
 
@@ -230,7 +230,7 @@ To bump just the app image without a chart change, `--set image.tag=<tag>` (or `
 helm uninstall hm
 ```
 
-This removes the Deployment, Service, ServiceAccount, ClusterRoleBinding, and chart-generated Secrets. A persisted claude-home PVC (if enabled) and any BYO Secrets are left in place — delete them manually if you want them gone.
+This removes the Deployment, Service, ServiceAccount, ClusterRoleBinding, and chart-generated Secrets. A persisted claude-home PVC (if enabled) and any BYO Secrets are left in place, so delete them manually if you want them gone.
 
 ---
 
@@ -253,4 +253,4 @@ HELMSMAN_PASSWORD=changeme docker compose up --build
 # open http://localhost:8787
 ```
 
-`compose.yaml` mounts your `~/.kube/config` read-only at `/kube/config` and keeps the chat copilot's writable home in the `helmsman-claude` named volume. ⚠️ The API-server URL in that kubeconfig must be reachable **from inside the container** — for kind/minikube/`localhost`, uncomment the `extra_hosts` stanza in `compose.yaml` and point the config at `host.docker.internal`. For the AI chat, put `CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat…` in a `.env` next to `compose.yaml` (Compose auto-loads it).
+`compose.yaml` mounts your `~/.kube/config` read-only at `/kube/config` and keeps the chat copilot's writable home in the `helmsman-claude` named volume. ⚠️ The API-server URL in that kubeconfig must be reachable **from inside the container**. For kind/minikube/`localhost`, uncomment the `extra_hosts` stanza in `compose.yaml` and point the config at `host.docker.internal`. For the AI chat, put `CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat…` in a `.env` next to `compose.yaml` (Compose auto-loads it).

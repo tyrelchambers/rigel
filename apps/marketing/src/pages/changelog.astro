@@ -1,0 +1,65 @@
+---
+import Base from "../layouts/Base.astro";
+import Nav from "../components/Nav.astro";
+import PageHeader from "../components/PageHeader.astro";
+import Footer from "../components/Footer.astro";
+
+// Stub: hand-maintained for now. Wire to GitHub releases when there's a
+// public release cadence to pull from.
+const releases: { date: string; version: string; notes: string[] }[] = [];
+---
+
+<Base
+  title="Changelog for Rigel"
+  description="What's new in Rigel: releases, features, and fixes."
+>
+  <Nav />
+  <main id="main">
+    <PageHeader
+      eyebrowIcon="lucide:scroll-text"
+      eyebrow="CHANGELOG"
+      title="What's new."
+      subtitle="Releases, features, and fixes as they ship."
+    />
+
+    <section class="mx-auto max-w-[760px] px-6 py-16 sm:px-8 lg:py-20">
+      {
+        releases.length === 0 ? (
+          <div class="rounded-xl border border-line-subtle bg-surface-elevated px-6 py-10 text-center">
+            <p class="text-[15px] text-fg-secondary">
+              Release notes are on the way. Watch the
+              <a
+                href="https://github.com/tyrelchambers/rigel/releases"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-accent underline-offset-2 hover:underline"
+              >
+                GitHub releases
+              </a>
+              in the meantime.
+            </p>
+          </div>
+        ) : (
+          <ol class="flex flex-col gap-12">
+            {releases.map((r) => (
+              <li class="flex flex-col gap-3">
+                <div class="flex items-baseline gap-3">
+                  <span class="font-mono text-sm font-bold text-fg">
+                    {r.version}
+                  </span>
+                  <span class="text-[12.5px] text-fg-tertiary">{r.date}</span>
+                </div>
+                <ul class="flex flex-col gap-2 text-fg-secondary">
+                  {r.notes.map((n) => (
+                    <li class="text-[15px] leading-relaxed">{n}</li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ol>
+        )
+      }
+    </section>
+  </main>
+  <Footer />
+</Base>
