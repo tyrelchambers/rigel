@@ -2,6 +2,16 @@ appId: com.tyrelchambers.rigel
 productName: Rigel
 copyright: Copyright © 2026 Tyrel Chambers
 
+# Where `--publish` uploads the installers. electron-builder creates a DRAFT
+# GitHub Release named for the version (tag v<version>) and uploads the .dmg
+# files plus latest-mac.yml (the auto-update manifest, ready for a future
+# electron-updater hookup). The draft is published manually after a sanity check.
+publish:
+  provider: github
+  owner: tyrelchambers
+  repo: rigel
+  releaseType: draft
+
 # Output the packaged .app / .dmg under apps/desktop/release/ (gitignored).
 directories:
   output: release

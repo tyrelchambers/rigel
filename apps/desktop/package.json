@@ -11,7 +11,8 @@
     "dev": "pnpm build && electron .",
     "smoke": "pnpm build && HELMSMAN_SMOKE=1 electron .",
     "dist": "pnpm build && electron-builder --mac --arm64",
-    "dist:all": "pnpm build && electron-builder --mac --arm64 --x64"
+    "dist:all": "pnpm build && electron-builder --mac --arm64 --x64",
+    "release": "pnpm build && electron-builder --mac --arm64 --x64 --publish always"
   },
   "dependencies": {
     "node-pty": "1.1.0"
