@@ -27,17 +27,33 @@ const categories = Object.keys(CATEGORY_META)
 const linkFor = (a: (typeof apps)[number]) =>
   a.homepageURL || a.repoURL || a.docsURL || null;
 
-const stats = [
-  { value: String(total), label: "one-click apps" },
-  { value: String(categories.length), label: "categories" },
-  { value: "TLS", label: "issued & renewed" },
-  { value: "100%", label: "your hardware" },
+const benefits = [
+  {
+    icon: "lucide:wand-sparkles",
+    title: "No YAML, no Helm values",
+    desc: "Pick an app, answer a few plain questions, and Rigel generates and applies the manifests.",
+  },
+  {
+    icon: "lucide:shield-check",
+    title: "Checked before it runs",
+    desc: "Namespace, hostname, storage and node fit are validated before anything touches the cluster.",
+  },
+  {
+    icon: "lucide:refresh-cw",
+    title: "Tells you when to update",
+    desc: "Rigel watches upstream and flags a new version the moment one ships, so apps don't quietly rot.",
+  },
+  {
+    icon: "lucide:trash-2",
+    title: "Removes every trace",
+    desc: "Uninstall finds all of an app's resources and purges them, with no orphaned leftovers.",
+  },
 ];
 ---
 
 <Base
   title="App catalog for Rigel"
-  description={`Self-host ${total} apps on your own cluster in one click. Rigel's catalog handles the install, automatic TLS, and updates, with Heroku ergonomics on your own hardware.`}
+  description={`Self-host ${total} curated apps on your own cluster in one click. Rigel generates the manifests, installs with sensible defaults, and tracks updates, with Heroku ergonomics on your own hardware.`}
 >
   <Nav />
   <main id="main">
@@ -45,26 +61,31 @@ const stats = [
       eyebrowIcon="lucide:anchor"
       eyebrow="APP CATALOG"
       title={`Self-host ${total} apps in one click.`}
-      subtitle="Pick an app, answer a few guided questions, and Rigel deploys it to your cluster with HTTPS issued automatically. Your hardware, your data, none of the cloud bill."
+      subtitle="Pick an app, answer a few guided questions, and Rigel generates the manifests and deploys it to your cluster with sensible defaults. Your hardware, your data, none of the cloud bill."
     />
 
     <!-- stat band + category quick-nav -->
     <section class="border-t border-line-subtle bg-surface">
       <div class="mx-auto max-w-[1200px] px-6 py-12 sm:px-8 lg:px-12">
-        <dl
-          class="grid max-w-[760px] grid-cols-2 gap-px overflow-hidden rounded-xl border border-line-subtle bg-line-subtle sm:grid-cols-4"
+        <div
+          class="grid gap-px overflow-hidden rounded-xl border border-line-subtle bg-line-subtle sm:grid-cols-2 lg:grid-cols-4"
         >
           {
-            stats.map((s) => (
-              <div class="flex flex-col gap-1 bg-surface px-5 py-5">
-                <dt class="font-mono text-[30px] font-bold leading-none tracking-tight text-fg">
-                  {s.value}
-                </dt>
-                <dd class="text-[12.5px] text-fg-tertiary">{s.label}</dd>
+            benefits.map((b) => (
+              <div class="flex flex-col gap-3 bg-surface p-5">
+                <span class="grid size-9 place-items-center rounded-lg bg-accent/10 text-accent">
+                  <Icon name={b.icon} class="size-[18px]" />
+                </span>
+                <span class="text-[14px] font-semibold tracking-tight text-fg">
+                  {b.title}
+                </span>
+                <p class="text-[12.5px] leading-snug text-fg-secondary">
+                  {b.desc}
+                </p>
               </div>
             ))
           }
-        </dl>
+        </div>
 
         <nav class="mt-9 flex flex-wrap gap-2.5" aria-label="Jump to a category">
           {
