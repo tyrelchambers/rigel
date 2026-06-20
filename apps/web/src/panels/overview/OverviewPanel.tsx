@@ -11,6 +11,7 @@ import {
   CalendarClock,
   Activity,
   AlertTriangle,
+  History,
   Trash2,
   Sparkles,
 } from "lucide-react";
@@ -71,6 +72,12 @@ import type {
 const TIMELINE_SPAN_SECONDS = 3600;
 const TIMELINE_BUCKETS = 60;
 const MAX_RECENT_WARNINGS = 10;
+
+// Recent-warnings palette (Pencil redesign).
+const WARN_RED = "#FF6B6B";
+const WARN_TINT = "rgba(255,90,90,0.1)";
+const WARN_MUTED = "#8C8C95";
+const WARN_ROW_BG = "#141417";
 
 interface OverviewPanelProps {
   /** Called when the user clicks "Investigate cluster" — injects the prompt into the chat pane. */
@@ -307,25 +314,57 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
         {/* Event activity — 1h span, 60 stacked warning/normal buckets, display-only */}
         <EventActivityCard buckets={buckets} />
 
-        {/* Recent warnings — up to 10, newest first */}
-        <div className="ov-card">
-          <div className="ov-card-hdr">
-            <AlertTriangle className="ov-card-hdr-icon" style={{ color: "var(--status-failed)" }} />
-            <span className="ov-card-hdr-label">Recent warnings</span>
+        {/* Recent warnings — up to 10, newest first (Pencil redesign) */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 16,
+            background: "#0E0E11",
+            border: "1px solid rgba(255,255,255,0.07)",
+            borderRadius: 12,
+            padding: 18,
+          }}
+        >
+          {/* Header — alert badge + title + count pill, with a window label */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center" style={{ gap: 11 }}>
+              <span
+                className="inline-flex items-center justify-center"
+                style={{ width: 30, height: 30, borderRadius: 9, background: WARN_TINT }}
+              >
+                <AlertTriangle size={16} style={{ color: WARN_RED }} />
+              </span>
+              <span style={{ fontSize: 16, fontWeight: 700, color: "#FFFFFF" }}>Recent warnings</span>
+              {warnings.length > 0 && (
+                <span
+                  className="inline-flex items-center justify-center"
+                  style={{ borderRadius: 999, background: WARN_TINT, padding: "3px 10px", fontSize: 12, fontWeight: 600, color: WARN_RED }}
+                >
+                  {warnings.length}
+                </span>
+              )}
+            </div>
+            <span
+              className="inline-flex items-center"
+              style={{ gap: 6, borderRadius: 8, border: "1px solid rgba(255,255,255,0.07)", padding: "6px 11px", fontSize: 12, fontWeight: 500, color: WARN_MUTED }}
+            >
+              <History size={13} /> Last hour
+            </span>
           </div>
+
           {recentWarnings.length === 0 ? (
-            <p className="ov-warn-empty">No warning events.</p>
+            <p style={{ fontSize: 13, color: WARN_MUTED }}>No warning events.</p>
           ) : (
             <>
-              <div className="ov-warn-list">
+              <div className="flex flex-col" style={{ gap: 8 }}>
                 {recentWarnings.map((e) => (
                   <WarningRow key={e.metadata.uid} event={e} />
                 ))}
               </div>
-              <span className="ov-warn-foot">
-                Showing {recentWarnings.length} of {warnings.length}{" "}
-                {plural(warnings.length, "warning")}
-              </span>
+              <div style={{ fontSize: 13, color: WARN_MUTED, paddingTop: 2 }}>
+                Showing {recentWarnings.length} of {warnings.length} {plural(warnings.length, "warning")}
+              </div>
             </>
           )}
         </div>
@@ -612,21 +651,78 @@ function EventActivityCard({ buckets }: { buckets: EventBucket[] }) {
   );
 }
 
-/** One recent-warning row: red left bar | reason | resource | message | age. */
+/**
+ * One recent-warning row (Pencil redesign, no red left border): a left status
+ * column (severity pill + kind) and a body (resource + namespace chip + time,
+ * then the message).
+ */
 function WarningRow({ event }: { event: K8sEvent }) {
   const ts = when(event);
   const age = relativeAge(ts);
   const tooltip = absoluteWhen(ts) ?? undefined;
+  const io = event.involvedObject;
+  const kind = io?.kind ?? "";
+  const name = io?.name ?? "";
+  const resource = name ? (kind ? `${kind}/${name}` : name) : "—";
+  const ns = io?.namespace;
+  const reason = event.reason ?? "Warning";
+
   return (
-    <div className="ov-warn-row">
-      <span className="ov-warn-reason">{event.reason ?? "—"}</span>
-      <span className="ov-warn-res" title={targetLabel(event)}>
-        {targetLabel(event)}
-      </span>
-      <span className="ov-warn-msg">{event.message ?? "—"}</span>
-      <span className="ov-warn-time" title={tooltip}>
-        {age}
-      </span>
+    <div
+      className="flex"
+      style={{ gap: 20, background: WARN_ROW_BG, borderRadius: 12, border: "1px solid rgba(255,255,255,0.05)", padding: "14px 16px" }}
+    >
+      {/* Status column */}
+      <div className="flex flex-col" style={{ gap: 8, width: 150, flexShrink: 0 }}>
+        <span
+          className="inline-flex items-center self-start"
+          style={{ gap: 6, borderRadius: 999, background: WARN_TINT, padding: "4px 11px" }}
+        >
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: WARN_RED }} />
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: WARN_RED }}>{reason}</span>
+        </span>
+        {kind && (
+          <span className="inline-flex items-center" style={{ gap: 6 }}>
+            <Box size={13} style={{ color: WARN_MUTED }} />
+            <span style={{ fontSize: 12, fontWeight: 500, color: WARN_MUTED }}>{kind}</span>
+          </span>
+        )}
+      </div>
+
+      {/* Body */}
+      <div className="flex min-w-0 flex-1 flex-col" style={{ gap: 7 }}>
+        <div className="flex items-center" style={{ gap: 12 }}>
+          <div className="flex min-w-0 flex-1 items-center" style={{ gap: 9 }}>
+            <span
+              title={resource}
+              style={{
+                minWidth: 0,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                fontFamily: "ui-monospace, monospace",
+                fontSize: 13,
+                fontWeight: 500,
+                color: "#A6A6AE",
+              }}
+            >
+              {resource}
+            </span>
+            {ns && (
+              <span
+                className="shrink-0"
+                style={{ borderRadius: 6, background: "rgba(255,255,255,0.05)", padding: "3px 9px", fontFamily: "ui-monospace, monospace", fontSize: 11, color: WARN_MUTED }}
+              >
+                {ns}
+              </span>
+            )}
+          </div>
+          <span className="shrink-0" style={{ fontSize: 12.5, fontWeight: 500, color: WARN_MUTED }} title={tooltip}>
+            {age}
+          </span>
+        </div>
+        <span style={{ fontSize: 13, lineHeight: 1.5, color: "#B9B9C1" }}>{event.message ?? "—"}</span>
+      </div>
     </div>
   );
 }
@@ -634,17 +730,6 @@ function WarningRow({ event }: { event: K8sEvent }) {
 /** Clamp a fraction to [0, 1]. */
 function clamp01(n: number): number {
   return Math.min(Math.max(n, 0), 1);
-}
-
-/** "kind/name" or "kind/name · namespace"; "—" if no name. */
-function targetLabel(event: K8sEvent): string {
-  const io = event.involvedObject;
-  const name = io?.name ?? "";
-  if (name === "") return "—";
-  const kind = io?.kind ?? "";
-  const base = kind ? `${kind}/${name}` : name;
-  const ns = io?.namespace;
-  return ns ? `${base} · ${ns}` : base;
 }
 
 /** Pluralize a noun by count: 1 → "1 deployment", else "N deployments". */

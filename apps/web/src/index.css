@@ -528,42 +528,7 @@
 .ov-bar-col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; }
 
 /* Recent warnings */
-.ov-warn-list { display: flex; flex-direction: column; gap: 8px; }
-.ov-warn-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  border-radius: 6px;
-  background: var(--surface-primary);
-  border-left: 2px solid var(--status-failed);
-  padding: 12px 14px;
-}
-.ov-warn-reason {
-  width: 140px;
-  flex-shrink: 0;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--status-failed);
-}
-.ov-warn-res {
-  width: 240px;
-  flex-shrink: 0;
-  font-family: var(--font-mono, ui-monospace);
-  font-size: 11px;
-  color: var(--fg-tertiary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ov-warn-msg { flex: 1; min-width: 0; font-size: 12.5px; color: var(--fg-secondary); line-height: 1.45; }
-.ov-warn-time {
-  flex-shrink: 0;
-  font-family: var(--font-mono, ui-monospace);
-  font-size: 11px;
-  color: var(--fg-tertiary);
-}
-.ov-warn-foot { font-family: var(--font-mono, ui-monospace); font-size: 10.5px; color: var(--fg-tertiary); }
-.ov-warn-empty { font-size: 13px; color: var(--fg-tertiary); }
+/* Recent-warnings card is styled inline in OverviewPanel (Pencil redesign). */
 
 /* ─── Catalog Panel ─────────────────────────────────────────────────────────── */
 
