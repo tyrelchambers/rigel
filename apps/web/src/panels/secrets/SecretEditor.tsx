@@ -22,6 +22,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { KeyValueEditor } from "../components/KeyValueEditor";
+import { YamlEditor } from "@/components/YamlEditorLazy";
+import { useClusterYamlSchema } from "@/lib/useClusterYamlSchema";
 
 // ---------------------------------------------------------------------------
 // SecretEditor — create/edit form for a Secret
@@ -93,12 +95,15 @@ export function SecretEditor({ target, open, onClose, onApplied }: SecretEditorP
   const [docker, setDocker] = useState<DockerCredsForm>(emptyDockerCreds());
   const [busy, setBusy] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [mode, setMode] = useState<"form" | "yaml">("form");
+  const { data: schema } = useClusterYamlSchema();
 
   // (Re)seed each time the sheet opens.
   useEffect(() => {
     if (!open) return;
     setBusy(false);
     setServerError(null);
+    setMode("form");
     if (target) {
       const t = secretTypeId(target.type);
       setName(target.metadata.name);
@@ -209,6 +214,13 @@ export function SecretEditor({ target, open, onClose, onApplied }: SecretEditorP
           </DialogDescription>
         </div>
 
+        {/* Form ⇄ YAML preview toggle */}
+        <div className="flex items-center gap-1 px-4 pt-1">
+          <Button size="sm" variant={mode === "form" ? "default" : "outline"} onClick={() => setMode("form")}>Form</Button>
+          <Button size="sm" variant={mode === "yaml" ? "default" : "outline"} onClick={() => setMode("yaml")}>YAML</Button>
+        </div>
+
+        {mode === "form" ? (
         <div className="space-y-4 px-4 py-2">
           {/* Metadata */}
           <div className="grid grid-cols-2 gap-3">
@@ -318,25 +330,23 @@ export function SecretEditor({ target, open, onClose, onApplied }: SecretEditorP
             {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
           </div>
 
-          {/* Preview: exact command + YAML (base64 data) */}
-          <div className="space-y-1">
-            <p className="text-xs font-medium text-muted-foreground">
-              Review the exact command before it runs.
-            </p>
-            <pre className="rounded-md bg-muted px-3 py-2 text-xs font-mono">
-              kubectl apply -f -
-            </pre>
-            <pre className="max-h-64 overflow-auto rounded-md bg-muted px-3 py-2 text-xs font-mono whitespace-pre-wrap break-all">
-              {yaml}
-            </pre>
-          </div>
-
-          {serverError && (
-            <pre className="rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
-              {serverError}
-            </pre>
-          )}
         </div>
+        ) : (
+          <div className="space-y-2 px-4 py-2">
+            <p className="text-xs text-muted-foreground">
+              Live preview of the manifest applied with <code className="font-mono">kubectl apply -f -</code>. Plaintext values are base64-encoded.
+            </p>
+            <div className="h-[52vh] w-full overflow-hidden rounded-md border" style={{ background: "#0B0C0E", borderColor: "#26272B" }}>
+              <YamlEditor value={yaml} readOnly schema={schema ?? null} />
+            </div>
+          </div>
+        )}
+
+        {serverError && (
+          <pre className="mx-4 rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+            {serverError}
+          </pre>
+        )}
 
         <div className="mt-auto flex flex-col gap-2 p-4">
           <Button variant="outline" onClick={onClose} disabled={busy}>

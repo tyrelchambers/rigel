@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { KeyValueEditor } from "../components/KeyValueEditor";
+import { YamlEditor } from "@/components/YamlEditorLazy";
+import { useClusterYamlSchema } from "@/lib/useClusterYamlSchema";
 
 // ---------------------------------------------------------------------------
 // ConfigMapEditor — create/edit form for a ConfigMap
@@ -51,6 +53,8 @@ export function ConfigMapEditor({ target, open, onClose, onApplied }: ConfigMapE
   const [rows, setRows] = useState<KVRow[]>([blankRow()]);
   const [busy, setBusy] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [mode, setMode] = useState<"form" | "yaml">("form");
+  const { data: schema } = useClusterYamlSchema();
 
   // Binary data is carried through unchanged on edit; the editor never touches it.
   const originalBinaryData = target?.binaryData;
@@ -60,6 +64,7 @@ export function ConfigMapEditor({ target, open, onClose, onApplied }: ConfigMapE
     if (!open) return;
     setBusy(false);
     setServerError(null);
+    setMode("form");
     if (target) {
       setName(target.metadata.name);
       setNamespace(target.metadata.namespace ?? "default");
@@ -125,6 +130,13 @@ export function ConfigMapEditor({ target, open, onClose, onApplied }: ConfigMapE
           </DialogDescription>
         </div>
 
+        {/* Form ⇄ YAML preview toggle */}
+        <div className="flex items-center gap-1 px-4 pt-1">
+          <Button size="sm" variant={mode === "form" ? "default" : "outline"} onClick={() => setMode("form")}>Form</Button>
+          <Button size="sm" variant={mode === "yaml" ? "default" : "outline"} onClick={() => setMode("yaml")}>YAML</Button>
+        </div>
+
+        {mode === "form" ? (
         <div className="space-y-4 px-4 py-2">
           {/* Identity */}
           <div className="grid grid-cols-2 gap-3">
@@ -164,25 +176,23 @@ export function ConfigMapEditor({ target, open, onClose, onApplied }: ConfigMapE
             </p>
           )}
 
-          {/* Preview: exact command + YAML */}
-          <div className="space-y-1">
-            <p className="text-xs font-medium text-muted-foreground">
-              Review the exact command before it runs.
-            </p>
-            <pre className="rounded-md bg-muted px-3 py-2 text-xs font-mono">
-              kubectl apply -f -
-            </pre>
-            <pre className="max-h-64 overflow-auto rounded-md bg-muted px-3 py-2 text-xs font-mono whitespace-pre-wrap break-all">
-              {yaml}
-            </pre>
-          </div>
-
-          {serverError && (
-            <pre className="rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
-              {serverError}
-            </pre>
-          )}
         </div>
+        ) : (
+          <div className="space-y-2 px-4 py-2">
+            <p className="text-xs text-muted-foreground">
+              Live preview of the manifest applied with <code className="font-mono">kubectl apply -f -</code>.
+            </p>
+            <div className="h-[52vh] w-full overflow-hidden rounded-md border" style={{ background: "#0B0C0E", borderColor: "#26272B" }}>
+              <YamlEditor value={yaml} readOnly schema={schema ?? null} />
+            </div>
+          </div>
+        )}
+
+        {serverError && (
+          <pre className="mx-4 rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+            {serverError}
+          </pre>
+        )}
 
         <div className="mt-auto flex flex-col gap-2 p-4">
           <Button variant="outline" onClick={onClose} disabled={busy}>

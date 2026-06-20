@@ -312,15 +312,6 @@ export function IngressEditor({ target, open, onClose, onApplied }: IngressEdito
                 {Object.keys(labels).length} label(s) preserved unchanged.
               </p>
             )}
-
-            {/* Preview */}
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground">Review the exact command before it runs.</p>
-              <pre className="rounded-md bg-muted px-3 py-2 text-xs font-mono">kubectl apply -f -</pre>
-              <pre className="max-h-64 overflow-auto rounded-md bg-muted px-3 py-2 text-xs font-mono whitespace-pre-wrap break-all">
-                {builtYaml}
-              </pre>
-            </div>
           </div>
         ) : (
           <div className="space-y-2 px-4 py-2">
