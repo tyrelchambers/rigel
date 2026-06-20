@@ -60,6 +60,28 @@ the files are attached and the notes read the way you want, then click
 **Publish release**. The download links on the Releases page go live at that
 point.
 
+## Versioned container images
+
+Publishing the release also versions the deployable images. The
+`release-images.yml` workflow runs on **release publish** and builds three
+images tagged with the release version:
+
+- `ghcr.io/<owner>/rigel-assistant` (the in-cluster agent)
+- `ghcr.io/<owner>/rigel-marketing`
+- `ghcr.io/<owner>/rigel-signups`
+
+Each gets three tags: `:X.Y.Z` (the exact version, immutable), `:X.Y` (the minor
+track), and `:stable` (a moving tag that always points at the latest published
+release). Self-hosters pin whichever they want.
+
+This is independent of the cluster: publishing does **not** deploy anything. The
+live cluster still continuously deploys from `master` (the `*-build.yml`
+workflows pin the per-commit `:<sha>`). These release images are artifacts to
+pin, not a deploy trigger.
+
+To re-push a version without cutting a new release (say a registry hiccup), use
+**Actions → Release versioned images → Run workflow** and enter the version.
+
 ## Why the builds are unsigned (and what users see)
 
 We haven't set up Apple code signing or notarization yet, so when someone
