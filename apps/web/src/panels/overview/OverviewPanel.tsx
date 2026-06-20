@@ -262,25 +262,26 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
             icon={Layers}
             title="Deployments"
             value={deployments.length}
-            caption={plural(deployments.length, "deployment")}
-          >
-            <HealthLine label="Unhealthy" count={deployUnhealthy} tone="red" neutralWhenZero />
-          </StatCard>
+            chips={[{ count: deployUnhealthy, tone: "red", neutralWhenZero: true }]}
+          />
 
-          <StatCard icon={Box} title="Pods" value={pods.length} caption={plural(pods.length, "pod")}>
-            <HealthLine label="Running" count={phases.running} tone="green" />
-            <HealthLine label="Pending" count={phases.pending} tone="yellow" />
-            <HealthLine label="Failed" count={phases.failed} tone="red" />
-          </StatCard>
+          <StatCard
+            icon={Box}
+            title="Pods"
+            value={pods.length}
+            chips={[
+              { count: phases.running, tone: "green" },
+              { count: phases.pending, tone: "yellow" },
+              { count: phases.failed, tone: "red" },
+            ]}
+          />
 
           <StatCard
             icon={Server}
             title="Nodes"
             value={`${nodeReady.ready}/${nodeReady.total}`}
-            caption="ready"
-          >
-            <HealthLine label="Pressure conditions" count={pressure} tone="yellow" neutralWhenZero />
-          </StatCard>
+            chips={[{ count: pressure, tone: "yellow", neutralWhenZero: true }]}
+          />
         </div>
 
         {/* Row 3 — Databases | Events */}
@@ -289,8 +290,6 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
             icon={Database}
             title="Databases"
             value={databases.length}
-            unit={plural(databases.length, "instance")}
-            statLabel="Unhealthy"
             statCount={dbUnhealthy}
             statTone={dbUnhealthy > 0 ? "red" : "neutral"}
           />
@@ -298,8 +297,6 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
             icon={CalendarClock}
             title="Events"
             value={warnings.length}
-            unit="warnings (last 500)"
-            statLabel="Total cached"
             statCount={events.length}
             statTone="neutral"
           />
@@ -351,12 +348,16 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
 // Presentational sub-components
 // ---------------------------------------------------------------------------
 
-/** Card header: tertiary icon + uppercase mono tracked label. */
-function CardHeader({ icon: Icon, title }: { icon: LucideIcon; title: string }) {
+/** Card header: tertiary icon + uppercase mono tracked label, with an optional
+ *  right-aligned slot (used for status chips on the stat/summary cards). */
+function CardHeader({ icon: Icon, title, right }: { icon: LucideIcon; title: string; right?: React.ReactNode }) {
   return (
     <div className="ov-card-hdr">
-      <Icon className="ov-card-hdr-icon" />
-      <span className="ov-card-hdr-label">{title}</span>
+      <div className="ov-card-hdr-left">
+        <Icon className="ov-card-hdr-icon" />
+        <span className="ov-card-hdr-label">{title}</span>
+      </div>
+      {right && <div className="ov-card-hdr-right">{right}</div>}
     </div>
   );
 }
@@ -492,34 +493,6 @@ function NodeGauge({ name, fraction, color, detail }: { name: string; fraction: 
   );
 }
 
-/** Stat card: large mono number + caption, then a block of status lines. */
-function StatCard({
-  icon,
-  title,
-  value,
-  caption,
-  children,
-}: {
-  icon: LucideIcon;
-  title: string;
-  value: number | string;
-  caption: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="ov-card">
-      <CardHeader icon={icon} title={title} />
-      <div className="ov-stat-content">
-        <div className="ov-stat-number">
-          <span className="ov-stat-big">{value}</span>
-          <span className="ov-stat-word">{caption}</span>
-        </div>
-        <div className="ov-stat-block">{children}</div>
-      </div>
-    </div>
-  );
-}
-
 type Tone = "green" | "yellow" | "red" | "neutral";
 
 const TONE_CLASS: Record<Tone, string> = {
@@ -529,61 +502,71 @@ const TONE_CLASS: Record<Tone, string> = {
   neutral: "ov-chip-neutral",
 };
 
-/** A label + count chip line. `neutralWhenZero` greys the chip when the count is 0. */
-function HealthLine({
-  label,
-  count,
-  tone,
-  neutralWhenZero,
-}: {
-  label: string;
-  count: number;
-  tone: Tone;
-  neutralWhenZero?: boolean;
-}) {
-  const chipTone = neutralWhenZero && count === 0 ? "neutral" : tone;
+/** A bare count chip. `neutralWhenZero` greys it when the count is 0. */
+type ChipSpec = { count: number; tone: Tone; neutralWhenZero?: boolean };
+
+/** A row of bare, label-less count chips (used in card headers). */
+function ChipRow({ chips }: { chips: ChipSpec[] }) {
   return (
-    <div className="ov-statusline">
-      <span className="ov-statusline-lbl">{label}</span>
-      <span className={cn("ov-chip", TONE_CLASS[chipTone])}>{count}</span>
+    <>
+      {chips.map((c, i) => {
+        const tone = c.neutralWhenZero && c.count === 0 ? "neutral" : c.tone;
+        return (
+          <span key={i} className={cn("ov-chip", TONE_CLASS[tone])}>
+            {c.count}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+/** Stat card: status chips on the title line + a large mono number. */
+function StatCard({
+  icon,
+  title,
+  value,
+  chips,
+}: {
+  icon: LucideIcon;
+  title: string;
+  value: number | string;
+  chips: ChipSpec[];
+}) {
+  return (
+    <div className="ov-card">
+      <CardHeader icon={icon} title={title} right={<ChipRow chips={chips} />} />
+      <div className="ov-stat-big">{value}</div>
     </div>
   );
 }
 
-/** Summary card (Databases / Events): big bold number + unit, divider, one stat line. */
+/** Summary card (Databases / Events): a status chip on the title line + a big number. */
 function SummaryCard({
   icon,
   title,
   value,
-  unit,
-  statLabel,
   statCount,
   statTone,
 }: {
   icon: LucideIcon;
   title: string;
   value: number | string;
-  unit: string;
-  statLabel: string;
   statCount: number;
   statTone: Tone;
 }) {
   return (
     <div className="ov-card">
-      <CardHeader icon={icon} title={title} />
-      <div className="ov-sum-big">
-        <span className="ov-sum-n">{value}</span>
-        <span className="ov-sum-u">{unit}</span>
-      </div>
-      <div className="ov-divider" />
-      <div className="ov-statusline">
-        <span className="ov-statusline-lbl">{statLabel}</span>
-        <span
-          className={cn("ov-chip", statTone === "neutral" ? "ov-chip-soft" : TONE_CLASS[statTone])}
-        >
-          {statCount}
-        </span>
-      </div>
+      <CardHeader
+        icon={icon}
+        title={title}
+        right={
+          <span className={cn("ov-chip", statTone === "neutral" ? "ov-chip-soft" : TONE_CLASS[statTone])}>
+            {statCount}
+          </span>
+        }
+      />
+      <div className="ov-sum-n">{value}</div>
     </div>
   );
 }
