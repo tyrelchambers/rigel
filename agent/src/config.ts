@@ -12,7 +12,6 @@ export interface Config {
   workerModel: string;
   supervisorModel: string;
   pollIntervalMs: number;
-  spendCapUsd: number;
   maxPerResourcePerHour: number;
   maxPerNight: number;
   maxAttemptsPerIncident: number;
@@ -54,7 +53,6 @@ export function loadConfig(): Config {
     workerModel: str("WORKER_MODEL", "claude-sonnet-4-6"),
     supervisorModel: str("SUPERVISOR_MODEL", "claude-opus-4-8"),
     pollIntervalMs: num("POLL_INTERVAL_MS", 30_000),
-    spendCapUsd: num("SPEND_CAP_USD", 50),
     maxPerResourcePerHour: num("MAX_PER_RESOURCE_PER_HOUR", 3),
     maxPerNight: num("MAX_PER_NIGHT", 20),
     maxAttemptsPerIncident: num("MAX_ATTEMPTS_PER_INCIDENT", 3),

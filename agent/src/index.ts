@@ -24,7 +24,7 @@ import { runWorker } from "./worker.js";
 import { diagnoseConfirmed } from "./diagnosePool.js";
 import { runSupervisor } from "./supervisor.js";
 import { executeAction } from "./executor.js";
-import { CircuitBreaker, SpendTracker } from "./guardrails.js";
+import { CircuitBreaker } from "./guardrails.js";
 import {
   appendAudit,
   readState,
@@ -95,24 +95,18 @@ interface LoopState {
 async function tick(
   cfg: Config,
   cb: CircuitBreaker,
-  spend: SpendTracker,
   loop: LoopState,
 ): Promise<void> {
   const now = Date.now();
   const ts = new Date(now).toISOString();
   let state = await readState(cfg.stateConfigMap, cfg.stateNamespace);
 
-  // Align the spend cap to the billing month (resets the running total when the
-  // month rolls over, mirroring the non-rolling monthly Agent SDK credit).
-  spend.syncMonth(monthKey(now));
-
   const rc = await readRuntimeConfig(cfg);
   const notifications: string[] = [];
   state = {
     ...state,
     updatedAt: ts,
-    status: { heartbeatAt: ts, spentUsd: spend.total(), spendCapUsd: cfg.spendCapUsd, enabled: rc.enabled, version: VERSION },
-    spend: { month: spend.currentMonth(), spentUsd: spend.total() },
+    status: { heartbeatAt: ts, enabled: rc.enabled, version: VERSION },
   };
 
   if (!rc.enabled) {
@@ -122,13 +116,13 @@ async function tick(
   }
 
   // Drop incidents the operator has silenced (known noise) — no detection,
-  // no spend, no action on those fingerprints.
+  // no action on those fingerprints.
   const detection = await detectAll(cfg);
   const incidents = detection.incidents.filter((i) => !rc.silenced.has(fingerprint(i)));
 
   // Re-validate the approval queue against live detection: auto-clear queued
   // suggestions whose incident has cleared (or whose resource is gone), so the
-  // queue stays trustworthy. Free (no AI spend) — runs even when budget-capped.
+  // queue stays trustworthy.
   {
     const presentNow = new Set(incidents.map(fingerprint));
     const checkedKinds = new Set<string>();
@@ -152,8 +146,6 @@ async function tick(
   }
 
   // Custom alert rules — deterministic, model-less, free-riding the fetch above.
-  // Runs before the spend-cap guard so alerts still fire even when AI budget is
-  // exhausted (alert evaluation costs nothing).
   const alertResult = evaluateAlertRules(
     rc.alertRules,
     detection.pods,
@@ -163,13 +155,6 @@ async function tick(
   );
   state = { ...state, alertState: alertResult.alertState };
   for (const ev of alertResult.events) notifications.push(ev.message);
-
-  if (!spend.canSpend()) {
-    log(`spend cap reached ($${cfg.spendCapUsd}) — remediation idle; alerts still active (fail-closed)`);
-    flushNotifications(rc, notifications);
-    await writeState(cfg.stateConfigMap, cfg.stateNamespace, state);
-    return;
-  }
 
   const present = new Set(incidents.map(fingerprint));
 
@@ -198,31 +183,25 @@ async function tick(
 
   // Stage A: investigate every confirmed incident concurrently (bounded). The
   // Worker model call is the slow, side-effect-free part, so overlapping the
-  // calls cuts wall-clock when several incidents land in one tick. Spend
-  // metering happens here; the deterministic guardrails stay in Stage B below.
+  // calls cuts wall-clock when several incidents land in one tick. The
+  // deterministic guardrails stay in Stage B below.
   const packets = await diagnoseConfirmed(
     {
       diagnose: (incident) => runWorker(cfg, [incident]),
-      canSpend: () => spend.canSpend(),
-      addSpend: (c) => spend.add(c),
       limit: cfg.maxConcurrentDiagnoses,
     },
     confirmed,
   );
 
   // Stage B: decide + execute one incident at a time, in confirmed order, so the
-  // circuit breaker, spend cap and audit log stay deterministic regardless of
-  // which diagnosis finished first.
+  // circuit breaker and audit log stay deterministic regardless of which
+  // diagnosis finished first.
   for (const packet of packets) {
     const incident = packet.incident;
     const fp = fingerprint(incident);
     const resourceKey = `${incident.namespace}/${incident.name}`;
 
-    // Spend cap tripped before this incident was diagnosed — leave it un-handled
-    // so it retries next tick once budget frees.
-    if (packet.noBudget) continue;
-
-    // Diagnosed (and metered) — mark handled so we don't re-dispatch next tick.
+    // Diagnosed — mark handled so we don't re-dispatch next tick.
     loop.handled.add(fp);
 
     if (packet.error) {
@@ -267,19 +246,10 @@ async function tick(
     // actions execute on the deterministic guardrails alone.
     let execVerdict: "auto" | "approved" = "auto";
     if (tier === RiskTier.Medium) {
-      if (!spend.canSpend()) {
-        state = queue(state, cfg, ts, fp, describe(incident), action.label, "medium-risk — spend cap reached before supervision", action);
-        state = record(state, cfg, {
-          at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-          tier: "medium", verdict: "escalated", outcome: "queued", detail: "queued (spend cap before supervision)",
-        });
-        continue;
-      }
       const command = previewCommand(action);
       let sup;
       try {
         sup = await runSupervisor(cfg, incident, action, analysis, command);
-        spend.add(sup.costUsd);
       } catch (e) {
         // Fail closed: supervisor unreachable / malformed verdict → never act.
         state = queue(state, cfg, ts, fp, describe(incident), action.label, "medium-risk — supervisor error (fail-closed)", action);
@@ -358,9 +328,6 @@ async function tick(
     }
   }
 
-  // Refresh the spend snapshot to include anything spent during this tick.
-  if (state.status) state.status.spentUsd = spend.total();
-  state.spend = { month: spend.currentMonth(), spentUsd: spend.total() };
   await writeState(cfg.stateConfigMap, cfg.stateNamespace, state);
 
   // Best-effort outbound notification for what happened this tick.
@@ -371,20 +338,19 @@ async function tick(
   // explicit signalInbound opt-in. Never throws — failures stay out of the loop.
   if (rc.signalInbound && rc.signalApiUrl && rc.signalNumber) {
     try {
-      await handleSignalInbound(cfg, rc, spend, cb, loop);
+      await handleSignalInbound(cfg, rc, cb, loop);
     } catch (e) {
       log(`signal inbound error: ${String(e)}`);
     }
   }
 }
 
-/** Wire the real IO handlers and run one inbound poll. Read-only diagnosis is
- * metered against the spend cap; `approve` runs a previously-queued, supervised
- * fix through the same circuit breaker + backup path as the autonomous loop. */
+/** Wire the real IO handlers and run one inbound poll. `approve` runs a
+ * previously-queued, supervised fix through the same circuit breaker + backup
+ * path as the autonomous loop. */
 async function handleSignalInbound(
   cfg: Config,
   rc: RuntimeConfig,
-  spend: SpendTracker,
   cb: CircuitBreaker,
   loop: LoopState,
 ): Promise<void> {
@@ -394,7 +360,6 @@ async function handleSignalInbound(
     log("signal inbound: no authorized numbers configured — skipping");
     return;
   }
-  const spentBefore = spend.total();
 
   const handlers: InboundHandlers = {
     receive: (apiUrl, number) => receiveSignal(apiUrl, number),
@@ -403,8 +368,7 @@ async function handleSignalInbound(
     status: async () => {
       const s = await readState(cfg.stateConfigMap, cfg.stateNamespace);
       const enabled = s.status?.enabled ? "active" : "disabled";
-      const spent = s.status ? `$${s.status.spentUsd.toFixed(2)}/$${s.status.spendCapUsd}` : "—";
-      return `Rigel assistant is ${enabled}. Spend ${spent} this month. ${s.queue.length} fix(es) queued. Updated ${s.updatedAt || "—"}.`;
+      return `Rigel assistant is ${enabled}. ${s.queue.length} fix(es) queued. Updated ${s.updatedAt || "—"}.`;
     },
     queue: async () => {
       const s = await readState(cfg.stateConfigMap, cfg.stateNamespace);
@@ -420,8 +384,6 @@ async function handleSignalInbound(
         {
           sessions: loop.sessions,
           diagnose: (q, resumeId) => runDiagnosis(cfg, q, resumeId),
-          canSpend: () => spend.canSpend(),
-          addSpend: (c) => spend.add(c),
           log,
         },
         source,
@@ -432,14 +394,6 @@ async function handleSignalInbound(
   };
 
   await handleInbound({ enabled: true, apiUrl: rc.signalApiUrl, number: rc.signalNumber, allow }, handlers, loop.seen);
-
-  // Persist spend if a diagnosis cost anything, so the cap survives restarts.
-  if (spend.total() !== spentBefore) {
-    const s = await readState(cfg.stateConfigMap, cfg.stateNamespace);
-    if (s.status) s.status.spentUsd = spend.total();
-    s.spend = { month: spend.currentMonth(), spentUsd: spend.total() };
-    await writeState(cfg.stateConfigMap, cfg.stateNamespace, s);
-  }
 }
 
 /** Execute a queued suggestion the operator approved over Signal. The human is
@@ -501,11 +455,6 @@ async function approveQueued(cfg: Config, cb: CircuitBreaker, index: number): Pr
   }
 }
 
-function monthKey(now: number): string {
-  const d = new Date(now);
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-}
-
 /** Local minutes-of-day (respects the container TZ env) for the quiet-hours window. */
 function minOfDay(now: number): number {
   const d = new Date(now);
@@ -558,31 +507,19 @@ function flushNotifications(rc: RuntimeConfig, notifications: string[]): void {
 
 async function main(): Promise<void> {
   const cfg = loadConfig();
-  log(`starting v${VERSION} — worker=${cfg.workerModel} poll=${cfg.pollIntervalMs}ms cap=$${cfg.spendCapUsd}`);
+  log(`starting v${VERSION} — worker=${cfg.workerModel} poll=${cfg.pollIntervalMs}ms`);
   const cb = new CircuitBreaker({
     maxPerResourcePerHour: cfg.maxPerResourcePerHour,
     maxPerNight: cfg.maxPerNight,
     maxAttemptsPerIncident: cfg.maxAttemptsPerIncident,
     windowMs: cfg.windowMs,
   });
-  const spend = new SpendTracker(cfg.spendCapUsd);
   const loop: LoopState = { streaks: new Map(), handled: new Set(), seen: new SeenTimestamps(), sessions: new SessionStore() };
-
-  // Restore persisted spend so the monthly cap survives pod restarts.
-  try {
-    const persisted = await readState(cfg.stateConfigMap, cfg.stateNamespace);
-    if (persisted.spend) {
-      spend.restore(persisted.spend.spentUsd, persisted.spend.month);
-      log(`restored spend $${persisted.spend.spentUsd.toFixed(2)} for ${persisted.spend.month}`);
-    }
-  } catch {
-    // no persisted state yet — start fresh
-  }
 
   // eslint-disable-next-line no-constant-condition
   while (true) {
     try {
-      await tick(cfg, cb, spend, loop);
+      await tick(cfg, cb, loop);
     } catch (e) {
       log(`tick error: ${String(e)}`);
     }

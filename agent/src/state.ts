@@ -92,8 +92,6 @@ export function reconcileQueue(
 
 export interface AgentStatus {
   heartbeatAt: string;
-  spentUsd: number;
-  spendCapUsd: number;
   enabled: boolean;
   version: string;
 }
@@ -101,9 +99,6 @@ export interface AgentStatus {
 export interface AssistantState {
   updatedAt: string;
   status?: AgentStatus;
-  /** Persisted monthly spend so the cap survives pod restarts and resets with
-   * the billing month. */
-  spend?: { month: string; spentUsd: number };
   alertState?: AlertState;
   audit: AuditEntry[];
   queue: QueuedSuggestion[];

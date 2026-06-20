@@ -28,7 +28,6 @@ export interface AssistantInstallConfig {
   namespaces: string;
   workerModel: string;
   supervisorModel: string;
-  spendCapUsd: number;
   pollIntervalMs: number;
   maxPerResourcePerHour: number;
   maxPerNight: number;
@@ -43,7 +42,6 @@ export const DEFAULT_INSTALL_CONFIG: AssistantInstallConfig = {
   namespaces: "",
   workerModel: "claude-sonnet-4-6",
   supervisorModel: "claude-opus-4-8",
-  spendCapUsd: 50,
   pollIntervalMs: 30000,
   maxPerResourcePerHour: 3,
   maxPerNight: 20,
@@ -267,8 +265,6 @@ spec:
               value: "${c.supervisorModel}"
             - name: POLL_INTERVAL_MS
               value: "${c.pollIntervalMs}"
-            - name: SPEND_CAP_USD
-              value: "${c.spendCapUsd}"
             - name: MAX_PER_RESOURCE_PER_HOUR
               value: "${c.maxPerResourcePerHour}"
             - name: MAX_PER_NIGHT
@@ -352,8 +348,6 @@ export function parseTokenExpiry(issuedAtISO: string | undefined, now: Date): To
 
 export interface AssistantAgentStatus {
   heartbeatAt: string;
-  spentUsd: number;
-  spendCapUsd: number;
   enabled: boolean;
   version: string;
 }

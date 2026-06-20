@@ -6,7 +6,6 @@ import {
   outcomeColorClass,
   auditCanExpand,
   relativeTime,
-  spendLabel,
   auditCount,
 } from "./display";
 
@@ -60,13 +59,6 @@ describe("relativeTime", () => {
     expect(relativeTime("2026-06-09T09:00:00Z", now)).toBe("3h");
     expect(relativeTime("2026-06-07T12:00:00Z", now)).toBe("2d");
     expect(relativeTime("not-a-date", now)).toBe("");
-  });
-});
-
-describe("spendLabel", () => {
-  it('formats "$X.XX/$Y"', () => {
-    expect(spendLabel(1.5, 50)).toBe("$1.50/$50");
-    expect(spendLabel(0, 50)).toBe("$0.00/$50");
   });
 });
 

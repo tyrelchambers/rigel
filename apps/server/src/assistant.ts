@@ -99,7 +99,6 @@ export interface AssistantRequest {
   namespace?: string;
   token?: string;
   image?: string;
-  spendCapUsd?: number;
   workerModel?: string;
   supervisorModel?: string;
   pollIntervalMs?: number;
@@ -171,7 +170,6 @@ async function installAssistant(
     namespaces: req.monitorNamespaces ?? DEFAULT_INSTALL_CONFIG.namespaces,
     workerModel: req.workerModel ?? DEFAULT_INSTALL_CONFIG.workerModel,
     supervisorModel: req.supervisorModel ?? DEFAULT_INSTALL_CONFIG.supervisorModel,
-    spendCapUsd: req.spendCapUsd ?? DEFAULT_INSTALL_CONFIG.spendCapUsd,
     pollIntervalMs: req.pollIntervalMs ?? DEFAULT_INSTALL_CONFIG.pollIntervalMs,
     maxPerResourcePerHour: req.maxPerResourcePerHour ?? DEFAULT_INSTALL_CONFIG.maxPerResourcePerHour,
     maxPerNight: req.maxPerNight ?? DEFAULT_INSTALL_CONFIG.maxPerNight,

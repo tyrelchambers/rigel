@@ -3,9 +3,9 @@
  * resume the sender's recent `claude` session when one is live, self-heal by
  * starting fresh if that resume fails, and remember the resulting session so a
  * follow-up text within the hour continues the same thread. All IO (the model
- * call, spend metering, logging) is injected so this logic is unit-testable;
- * `index.ts` wires the real implementations. Mirrors the pure-core/IO-injection
- * split used by signalInbound.ts.
+ * call, logging) is injected so this logic is unit-testable; `index.ts` wires
+ * the real implementations. Mirrors the pure-core/IO-injection split used by
+ * signalInbound.ts.
  */
 import type { SessionStore } from "./sessionStore.js";
 import type { DiagnosisOutput } from "./diagnose.js";
@@ -15,10 +15,6 @@ export interface ThreadedDiagnosisDeps {
   sessions: SessionStore;
   /** Run a read-only diagnosis; resumeSessionId continues a prior thread. */
   diagnose(question: string, resumeSessionId?: string): Promise<DiagnosisOutput>;
-  /** Whether there is budget to investigate. */
-  canSpend(): boolean;
-  /** Meter model spend for a completed answer. */
-  addSpend(costUsd: number): void;
   log?(msg: string): void;
 }
 
@@ -36,9 +32,6 @@ export async function runThreadedDiagnosis(
   timestamp: number,
   question: string,
 ): Promise<string> {
-  if (!deps.canSpend()) {
-    return "I've reached my monthly spend cap, so I can't investigate right now.";
-  }
   const resumeId = deps.sessions.resumeIdFor(source, timestamp);
   let out: DiagnosisOutput;
   try {
@@ -51,7 +44,6 @@ export async function runThreadedDiagnosis(
     deps.sessions.clear(source);
     out = await deps.diagnose(question);
   }
-  deps.addSpend(out.costUsd);
   deps.sessions.record(source, out.sessionId, timestamp);
   return out.text || "I couldn't find anything conclusive — try asking more specifically.";
 }

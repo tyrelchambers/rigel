@@ -74,11 +74,6 @@ export function relativeTime(iso: string, now: number = Date.now()): string {
   return `${Math.floor(dt / 86400)}d`;
 }
 
-/** Spend display: "$X.XX/$Y". */
-export function spendLabel(spentUsd: number, spendCapUsd: number): string {
-  return `$${spentUsd.toFixed(2)}/$${Math.round(spendCapUsd)}`;
-}
-
 /** Count audit entries with a given outcome. */
 export function auditCount(audit: Array<{ outcome: string }>, outcome: string): number {
   return audit.filter((e) => e.outcome === outcome).length;

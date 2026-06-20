@@ -93,7 +93,6 @@ export function InstallView() {
         namespace,
         token, // empty when reusing the saved token — the server falls back to it
         image,
-        spendCapUsd: config.spendCapUsd,
         monitorNamespaces: config.namespaces,
       },
       () => setInstallToken(""),
@@ -208,17 +207,6 @@ export function InstallView() {
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-        </Field>
-        <Field label="Spend cap ($/mo)">
-          <input
-            type="number"
-            min={0}
-            value={config.spendCapUsd}
-            onChange={(e) =>
-              setConfig((c) => ({ ...c, spendCapUsd: Math.max(0, Number(e.target.value) || 0) }))
-            }
-            className={`w-28 ${inputClass}`}
-          />
         </Field>
       </Card>
 

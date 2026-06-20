@@ -32,7 +32,7 @@ export type Command =
 export const HELP_TEXT = [
   "Rigel assistant — text commands:",
   "• ask anything (e.g. \"why is payments crashlooping?\") — I'll investigate read-only and reply.",
-  "• status — health, spend, and how many fixes are queued.",
+  "• status — health and how many fixes are queued.",
   "• queue — list fixes awaiting approval.",
   "• approve N — run queued fix #N (defaults to #1).",
   "• help — this message.",

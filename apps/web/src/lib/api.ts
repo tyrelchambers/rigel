@@ -316,7 +316,6 @@ export interface AssistantRequest {
   namespace?: string;
   token?: string;
   image?: string;
-  spendCapUsd?: number;
   workerModel?: string;
   supervisorModel?: string;
   pollIntervalMs?: number;

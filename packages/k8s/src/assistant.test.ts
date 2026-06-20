@@ -28,7 +28,6 @@ function config(overrides: Partial<AssistantInstallConfig> = {}): AssistantInsta
     namespaces: "",
     workerModel: "claude-sonnet-4-6",
     supervisorModel: "claude-opus-4-8",
-    spendCapUsd: 50,
     pollIntervalMs: 30000,
     maxPerResourcePerHour: 3,
     maxPerNight: 20,
@@ -156,13 +155,13 @@ test("decodeClusterState defaults missing collections to empty", () => {
 
 test("decodeClusterState parses audit/queue/report/status", () => {
   const raw = JSON.stringify({
-    status: { heartbeatAt: "t", spentUsd: 1.5, spendCapUsd: 50, enabled: true, version: "1" },
+    status: { heartbeatAt: "t", enabled: true, version: "1" },
     audit: [{ at: "t", fingerprint: "f", incident: "i", tier: "auto", outcome: "success", detail: "" }],
     queue: [{ at: "t", incident: "i", suggestion: "s", reason: "r" }],
     report: "all good",
   });
   const s = decodeClusterState(raw)!;
-  expect(s.status!.spentUsd).toBe(1.5);
+  expect(s.status!.enabled).toBe(true);
   expect(s.audit).toHaveLength(1);
   expect(s.queue).toHaveLength(1);
   expect(s.report).toBe("all good");
