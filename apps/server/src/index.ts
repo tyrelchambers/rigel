@@ -9,7 +9,15 @@ import { WatchManager } from "./watchManager";
 import { makeWsHandlers } from "./ws";
 import { buildCommand, PurgeActionError, type ActionBlock } from "./actions";
 import { applyManifest, installHelm } from "./install";
-import { buildHelmRollbackArgs, buildHelmUninstallArgs, type HelmChartSource } from "@rigel/k8s/src/helm";
+import {
+  buildHelmRollbackArgs,
+  buildHelmUninstallArgs,
+  validateHelmInstall,
+  validateHelmTarget,
+  isSafeHelmArg,
+  isHttpRepoURL,
+  type HelmChartSource,
+} from "@rigel/k8s/src/helm";
 import { searchArtifactHub } from "./artifactHub";
 import { handlePurge, type PurgeRequest } from "./purge";
 import {
@@ -355,14 +363,17 @@ async function handler(req: Request): Promise<Response> {
           { status: 422 },
         );
       }
+      const source: HelmChartSource = {
+        kind: "repo",
+        repoName: body.repoName,
+        repoURL: body.repoURL,
+        chart: body.chart,
+        version: body.version ?? null,
+      };
+      const invalid = validateHelmInstall(source, body.releaseName, body.namespace);
+      if (invalid) return Response.json({ error: invalid }, { status: 422 });
       const result = await installHelm(context, {
-        source: {
-          kind: "repo",
-          repoName: body.repoName,
-          repoURL: body.repoURL,
-          chart: body.chart,
-          version: body.version ?? null,
-        },
+        source,
         releaseName: body.releaseName,
         namespace: body.namespace,
         values: body.values,
@@ -378,6 +389,8 @@ async function handler(req: Request): Promise<Response> {
       if (!body.source || !body.releaseName || !body.namespace || typeof body.values !== "string") {
         return Response.json({ error: "missing required fields (source, releaseName, namespace, values)" }, { status: 422 });
       }
+      const invalid = validateHelmInstall(body.source, body.releaseName, body.namespace);
+      if (invalid) return Response.json({ error: invalid }, { status: 422 });
       const result = await installHelm(context, {
         source: body.source, releaseName: body.releaseName, namespace: body.namespace, values: body.values,
       });
@@ -392,6 +405,8 @@ async function handler(req: Request): Promise<Response> {
       if (!body.release || typeof body.revision !== "number" || !body.namespace) {
         return Response.json({ error: "missing required fields (release, revision, namespace)" }, { status: 422 });
       }
+      const invalid = validateHelmTarget(body.release, body.namespace);
+      if (invalid) return Response.json({ error: invalid }, { status: 422 });
       const result = await runProcess("helm", buildHelmRollbackArgs(body.release, body.revision, body.namespace, context));
       return Response.json(result);
     }
@@ -404,6 +419,8 @@ async function handler(req: Request): Promise<Response> {
       if (!body.release || !body.namespace) {
         return Response.json({ error: "missing required fields (release, namespace)" }, { status: 422 });
       }
+      const invalid = validateHelmTarget(body.release, body.namespace);
+      if (invalid) return Response.json({ error: invalid }, { status: 422 });
       const result = await runProcess("helm", buildHelmUninstallArgs(body.release, body.namespace, context));
       return Response.json(result);
     }
@@ -423,12 +440,16 @@ async function handler(req: Request): Promise<Response> {
       // a prior `helm repo add`. OCI refs and local paths resolve on their own.
       const repo = url.searchParams.get("repo");
       if (!ref) return Response.json({ error: "missing ref" }, { status: 422 });
+      if (!isSafeHelmArg(ref)) return Response.json({ error: "invalid ref" }, { status: 422 });
+      if (repo && !isHttpRepoURL(repo)) return Response.json({ error: "repo must be an http(s) URL" }, { status: 422 });
+      if (version && !isSafeHelmArg(version)) return Response.json({ error: "invalid version" }, { status: 422 });
       const args = [
         "show",
         "values",
-        ref,
         ...(repo ? ["--repo", repo] : []),
         ...(version ? ["--version", version] : []),
+        "--",
+        ref,
       ];
       const result = await runProcess("helm", args);
       return Response.json(result);

@@ -93,14 +93,17 @@ import {
 
 const opts = { releaseName: "web", namespace: "apps", valuesFile: "/tmp/v.yaml", context: "kind-test" };
 
+// The release name and chart ref always come last, after a `--` terminator, so
+// helm/pflag can never parse them as flags (the option-injection fix).
 test("install commands: repo source does add -> update -> upgrade --install", () => {
   const src: HelmChartSource = { kind: "repo", repoName: "jetstack", repoURL: "https://charts.jetstack.io", chart: "cert-manager", version: "v1.14.0" };
   const cmds = buildHelmInstallCommands(src, opts);
-  expect(cmds[0]).toEqual(["repo", "add", "jetstack", "https://charts.jetstack.io"]);
-  expect(cmds[1]).toEqual(["repo", "update", "jetstack"]);
+  expect(cmds[0]).toEqual(["repo", "add", "--", "jetstack", "https://charts.jetstack.io"]);
+  expect(cmds[1]).toEqual(["repo", "update", "--", "jetstack"]);
   expect(cmds[2]).toEqual([
-    "upgrade", "--install", "web", "jetstack/cert-manager", "--version", "v1.14.0",
+    "upgrade", "--install", "--version", "v1.14.0",
     "-n", "apps", "--create-namespace", "-f", "/tmp/v.yaml", "--kube-context", "kind-test",
+    "--", "web", "jetstack/cert-manager",
   ]);
 });
 
@@ -109,8 +112,9 @@ test("install commands: oci source skips repo add and installs the ref directly"
   const cmds = buildHelmInstallCommands(src, opts);
   expect(cmds).toHaveLength(1);
   expect(cmds[0]).toEqual([
-    "upgrade", "--install", "web", "oci://registry-1.docker.io/bitnamicharts/postgresql", "--version", "16.0.0",
+    "upgrade", "--install", "--version", "16.0.0",
     "-n", "apps", "--create-namespace", "-f", "/tmp/v.yaml", "--kube-context", "kind-test",
+    "--", "web", "oci://registry-1.docker.io/bitnamicharts/postgresql",
   ]);
 });
 
@@ -118,8 +122,9 @@ test("install commands: local source installs from a path, no version flag", () 
   const cmds = buildHelmInstallCommands({ kind: "local", path: "/charts/web-1.0.0.tgz" }, opts);
   expect(cmds).toHaveLength(1);
   expect(cmds[0]).toEqual([
-    "upgrade", "--install", "web", "/charts/web-1.0.0.tgz",
+    "upgrade", "--install",
     "-n", "apps", "--create-namespace", "-f", "/tmp/v.yaml", "--kube-context", "kind-test",
+    "--", "web", "/charts/web-1.0.0.tgz",
   ]);
 });
 
@@ -130,13 +135,59 @@ test("install commands: omit context flag when context is null", () => {
 
 test("rollback args include revision, namespace, context", () => {
   expect(buildHelmRollbackArgs("web", 3, "apps", "kind-test")).toEqual([
-    "rollback", "web", "3", "-n", "apps", "--kube-context", "kind-test",
+    "rollback", "-n", "apps", "--kube-context", "kind-test", "--", "web", "3",
   ]);
 });
 
 test("uninstall args include namespace + context", () => {
-  expect(buildHelmUninstallArgs("web", "apps", null)).toEqual(["uninstall", "web", "-n", "apps"]);
+  expect(buildHelmUninstallArgs("web", "apps", null)).toEqual(["uninstall", "-n", "apps", "--", "web"]);
   expect(buildHelmUninstallArgs("web", "apps", "kind-test")).toEqual([
-    "uninstall", "web", "-n", "apps", "--kube-context", "kind-test",
+    "uninstall", "-n", "apps", "--kube-context", "kind-test", "--", "web",
   ]);
+});
+
+import { validateHelmInstall, validateHelmTarget, isSafeHelmArg, isHttpRepoURL } from "./helm";
+
+test("validateHelmInstall accepts well-formed repo/oci/local sources", () => {
+  expect(validateHelmInstall(
+    { kind: "repo", repoName: "jetstack", repoURL: "https://charts.jetstack.io", chart: "cert-manager", version: "v1.14.0" },
+    "web", "apps",
+  )).toBeNull();
+  expect(validateHelmInstall({ kind: "oci", ref: "oci://registry-1.docker.io/bitnamicharts/postgresql", version: "16.0.0" }, "web", "apps")).toBeNull();
+  expect(validateHelmInstall({ kind: "local", path: "/charts/web-1.0.0.tgz" }, "web", "apps")).toBeNull();
+});
+
+test("validateHelmInstall rejects option-injection in every user field", () => {
+  const ns = "apps", name = "web";
+  // release name / namespace must be DNS-1123 (forbids a leading dash)
+  expect(validateHelmInstall({ kind: "local", path: "/c.tgz" }, "--post-renderer=/tmp/x", ns)).not.toBeNull();
+  expect(validateHelmInstall({ kind: "local", path: "/c.tgz" }, name, "--kubeconfig=/tmp/x")).not.toBeNull();
+  // chart path can't start with '-'
+  expect(validateHelmInstall({ kind: "local", path: "--post-renderer=/tmp/pwn.sh" }, name, ns)).not.toBeNull();
+  // oci ref must be a real oci:// ref
+  expect(validateHelmInstall({ kind: "oci", ref: "--kubeconfig=/tmp/evil.yaml" }, name, ns)).not.toBeNull();
+  // version flag value can't start with '-'
+  expect(validateHelmInstall({ kind: "oci", ref: "oci://r/c", version: "--post-renderer=/tmp/x" }, name, ns)).not.toBeNull();
+  // repo URL must be http(s); repo/chart names can't start with '-'
+  expect(validateHelmInstall({ kind: "repo", repoName: "x", repoURL: "file:///etc/passwd", chart: "c" }, name, ns)).not.toBeNull();
+  expect(validateHelmInstall({ kind: "repo", repoName: "x", repoURL: "--repo", chart: "c" }, name, ns)).not.toBeNull();
+  expect(validateHelmInstall({ kind: "repo", repoName: "-x", repoURL: "https://e.io", chart: "c" }, name, ns)).not.toBeNull();
+  expect(validateHelmInstall({ kind: "repo", repoName: "x", repoURL: "https://e.io", chart: "--chart" }, name, ns)).not.toBeNull();
+});
+
+test("validateHelmTarget enforces DNS-1123 names (rollback/uninstall)", () => {
+  expect(validateHelmTarget("web", "apps")).toBeNull();
+  expect(validateHelmTarget("--post-renderer=/tmp/x", "apps")).not.toBeNull();
+  expect(validateHelmTarget("web", "--kubeconfig=/tmp/x")).not.toBeNull();
+});
+
+test("isSafeHelmArg / isHttpRepoURL guards", () => {
+  expect(isSafeHelmArg("cert-manager")).toBe(true);
+  expect(isSafeHelmArg("oci://r/c")).toBe(true);
+  expect(isSafeHelmArg("--post-renderer=/tmp/x")).toBe(false);
+  expect(isSafeHelmArg("")).toBe(false);
+  expect(isHttpRepoURL("https://charts.jetstack.io")).toBe(true);
+  expect(isHttpRepoURL("http://charts.local")).toBe(true);
+  expect(isHttpRepoURL("file:///etc/passwd")).toBe(false);
+  expect(isHttpRepoURL("--repo")).toBe(false);
 });
