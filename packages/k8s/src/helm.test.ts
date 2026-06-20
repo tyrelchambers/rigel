@@ -83,3 +83,60 @@ test("groupReleases falls back to highest revision when none marked deployed", (
   const app = groupReleases(secrets).find((r) => r.name === "app")!;
   expect(app.currentRevision).toBe(2);
 });
+
+import {
+  buildHelmInstallCommands,
+  buildHelmRollbackArgs,
+  buildHelmUninstallArgs,
+  type HelmChartSource,
+} from "./helm";
+
+const opts = { releaseName: "web", namespace: "apps", valuesFile: "/tmp/v.yaml", context: "kind-test" };
+
+test("install commands: repo source does add -> update -> upgrade --install", () => {
+  const src: HelmChartSource = { kind: "repo", repoName: "jetstack", repoURL: "https://charts.jetstack.io", chart: "cert-manager", version: "v1.14.0" };
+  const cmds = buildHelmInstallCommands(src, opts);
+  expect(cmds[0]).toEqual(["repo", "add", "jetstack", "https://charts.jetstack.io"]);
+  expect(cmds[1]).toEqual(["repo", "update", "jetstack"]);
+  expect(cmds[2]).toEqual([
+    "upgrade", "--install", "web", "jetstack/cert-manager", "--version", "v1.14.0",
+    "-n", "apps", "--create-namespace", "-f", "/tmp/v.yaml", "--kube-context", "kind-test",
+  ]);
+});
+
+test("install commands: oci source skips repo add and installs the ref directly", () => {
+  const src: HelmChartSource = { kind: "oci", ref: "oci://registry-1.docker.io/bitnamicharts/postgresql", version: "16.0.0" };
+  const cmds = buildHelmInstallCommands(src, opts);
+  expect(cmds).toHaveLength(1);
+  expect(cmds[0]).toEqual([
+    "upgrade", "--install", "web", "oci://registry-1.docker.io/bitnamicharts/postgresql", "--version", "16.0.0",
+    "-n", "apps", "--create-namespace", "-f", "/tmp/v.yaml", "--kube-context", "kind-test",
+  ]);
+});
+
+test("install commands: local source installs from a path, no version flag", () => {
+  const cmds = buildHelmInstallCommands({ kind: "local", path: "/charts/web-1.0.0.tgz" }, opts);
+  expect(cmds).toHaveLength(1);
+  expect(cmds[0]).toEqual([
+    "upgrade", "--install", "web", "/charts/web-1.0.0.tgz",
+    "-n", "apps", "--create-namespace", "-f", "/tmp/v.yaml", "--kube-context", "kind-test",
+  ]);
+});
+
+test("install commands: omit context flag when context is null", () => {
+  const cmds = buildHelmInstallCommands({ kind: "local", path: "/c.tgz" }, { ...opts, context: null });
+  expect(cmds[0]).not.toContain("--kube-context");
+});
+
+test("rollback args include revision, namespace, context", () => {
+  expect(buildHelmRollbackArgs("web", 3, "apps", "kind-test")).toEqual([
+    "rollback", "web", "3", "-n", "apps", "--kube-context", "kind-test",
+  ]);
+});
+
+test("uninstall args include namespace + context", () => {
+  expect(buildHelmUninstallArgs("web", "apps", null)).toEqual(["uninstall", "web", "-n", "apps"]);
+  expect(buildHelmUninstallArgs("web", "apps", "kind-test")).toEqual([
+    "uninstall", "web", "-n", "apps", "--kube-context", "kind-test",
+  ]);
+});

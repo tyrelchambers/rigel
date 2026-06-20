@@ -120,3 +120,50 @@ export function groupReleases(secrets: ReleaseSecret[]): HelmRelease[] {
   }
   return out;
 }
+
+export type HelmChartSource =
+  | { kind: "repo"; repoName: string; repoURL: string; chart: string; version?: string | null }
+  | { kind: "oci"; ref: string; version?: string | null }
+  | { kind: "local"; path: string };
+
+export interface HelmInstallOpts {
+  releaseName: string;
+  namespace: string;
+  valuesFile: string;
+  context: string | null;
+}
+
+function ctxArgs(context: string | null): string[] {
+  return context ? ["--kube-context", context] : [];
+}
+
+/** The chart reference passed to `helm upgrade --install <name> <ref>`. */
+function chartRef(src: HelmChartSource): string {
+  if (src.kind === "repo") return `${src.repoName}/${src.chart}`;
+  if (src.kind === "oci") return src.ref;
+  return src.path;
+}
+
+/**
+ * Ordered helm command argv arrays (each runs as `helm <argv>`). Repo sources
+ * emit repo add + repo update before the upgrade; oci/local emit only upgrade.
+ */
+export function buildHelmInstallCommands(src: HelmChartSource, o: HelmInstallOpts): string[][] {
+  const version = src.kind !== "local" && src.version ? ["--version", src.version] : [];
+  const upgrade = [
+    "upgrade", "--install", o.releaseName, chartRef(src), ...version,
+    "-n", o.namespace, "--create-namespace", "-f", o.valuesFile, ...ctxArgs(o.context),
+  ];
+  if (src.kind === "repo") {
+    return [["repo", "add", src.repoName, src.repoURL], ["repo", "update", src.repoName], upgrade];
+  }
+  return [upgrade];
+}
+
+export function buildHelmRollbackArgs(release: string, revision: number, namespace: string, context: string | null): string[] {
+  return ["rollback", release, String(revision), "-n", namespace, ...ctxArgs(context)];
+}
+
+export function buildHelmUninstallArgs(release: string, namespace: string, context: string | null): string[] {
+  return ["uninstall", release, "-n", namespace, ...ctxArgs(context)];
+}
