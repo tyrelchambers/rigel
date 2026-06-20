@@ -38,12 +38,13 @@ export function useArtifactHubSearch(query: string) {
   });
 }
 
-export function useHelmShowValues(ref: string | null, version?: string | null) {
+export function useHelmShowValues(ref: string | null, version?: string | null, repo?: string | null) {
   return useQuery<RunResult>({
-    queryKey: ["helm-values", ref, version],
+    queryKey: ["helm-values", ref, version, repo],
     queryFn: async () => {
       const q = new URLSearchParams({ ref: ref! });
       if (version) q.set("version", version);
+      if (repo) q.set("repo", repo);
       const res = await fetch(`/api/helm/show-values?${q.toString()}`);
       if (!res.ok) throw new Error(`show-values ${res.status}`);
       return res.json();

@@ -419,8 +419,17 @@ async function handler(req: Request): Promise<Response> {
     if (url.pathname === "/api/helm/show-values" && req.method === "GET") {
       const ref = url.searchParams.get("ref");
       const version = url.searchParams.get("version");
+      // For a repo chart, --repo lets `helm show values <chart>` resolve without
+      // a prior `helm repo add`. OCI refs and local paths resolve on their own.
+      const repo = url.searchParams.get("repo");
       if (!ref) return Response.json({ error: "missing ref" }, { status: 422 });
-      const args = ["show", "values", ref, ...(version ? ["--version", version] : [])];
+      const args = [
+        "show",
+        "values",
+        ref,
+        ...(repo ? ["--repo", repo] : []),
+        ...(version ? ["--version", version] : []),
+      ];
       const result = await runProcess("helm", args);
       return Response.json(result);
     }

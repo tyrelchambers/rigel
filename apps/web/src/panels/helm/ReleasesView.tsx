@@ -13,7 +13,7 @@ type Pending =
   | null;
 
 export function ReleasesView({ onUpgrade }: { onUpgrade: (r: HelmRelease) => void }) {
-  const resources = useCluster((s) => s.resources);
+  const secrets = useCluster((s) => s.resources["secrets"]);
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
   const [selected, setSelected] = useState<string | null>(null);
   const [pending, setPending] = useState<Pending>(null);
@@ -28,8 +28,8 @@ export function ReleasesView({ onUpgrade }: { onUpgrade: (r: HelmRelease) => voi
   }, [namespaceFilter]);
 
   const releases = useMemo(
-    () => releasesFromSecretsMap(resources["secrets"] ?? {}).sort((a, b) => a.name.localeCompare(b.name)),
-    [resources],
+    () => releasesFromSecretsMap(secrets ?? {}).sort((a, b) => a.name.localeCompare(b.name)),
+    [secrets],
   );
   const current = releases.find((r) => `${r.namespace}/${r.name}` === selected) ?? null;
   const [rev, setRev] = useState<HelmRevision | null>(null);
@@ -87,18 +87,25 @@ export function ReleasesView({ onUpgrade }: { onUpgrade: (r: HelmRelease) => voi
 
           <div className="mb-3 flex flex-wrap gap-1.5">
             {current.revisions.map((rv) => (
-              <button
+              <div
                 key={rv.revision}
-                type="button"
-                onClick={() => setRev(rv)}
-                className="rounded-md border px-2 py-1 text-xs"
+                className="inline-flex items-center rounded-md border text-xs"
                 style={{ borderColor: "var(--border-strong)", background: shownRev?.revision === rv.revision ? "rgba(255,255,255,0.06)" : "transparent" }}
               >
-                rev {rv.revision} · {rv.status}
+                <button type="button" onClick={() => setRev(rv)} className="px-2 py-1">
+                  rev {rv.revision} · {rv.status}
+                </button>
                 {rv.revision !== current.currentRevision && (
-                  <span className="ml-1 cursor-pointer text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); setPending({ op: "rollback", release: current, revision: rv.revision }); setError(null); }}>↺</span>
+                  <button
+                    type="button"
+                    aria-label={`Roll back to revision ${rv.revision}`}
+                    className="px-1.5 py-1 text-muted-foreground hover:text-foreground"
+                    onClick={() => { setPending({ op: "rollback", release: current, revision: rv.revision }); setError(null); }}
+                  >
+                    ↺
+                  </button>
                 )}
-              </button>
+              </div>
             ))}
           </div>
 

@@ -30,7 +30,7 @@ export function decodeReleaseSecret(release: string): HelmReleasePayload | null 
     const binary = atob(helmB64);                // -> gzip(json) as a binary string
     const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
     const gzipped = bytes[0] === 0x1f && bytes[1] === 0x8b;
-    const json = gzipped ? strFromU8(gunzipSync(bytes)) : binary;
+    const json = gzipped ? strFromU8(gunzipSync(bytes)) : strFromU8(bytes);
     return JSON.parse(json) as HelmReleasePayload;
   } catch {
     return null;

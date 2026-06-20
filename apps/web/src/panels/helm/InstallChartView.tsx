@@ -31,8 +31,10 @@ export function InstallChartView({ prefill }: { prefill: HelmRelease | null }) {
     return null; // search prefills repo/oci then switches mode
   }, [mode, repoName, repoURL, chart, version, ociRef, localPath]);
 
-  const showValuesRef = mode === "oci" ? ociRef : mode === "repo" && chart ? chart : null;
-  const seeded = useHelmShowValues(showValuesRef, version || null);
+  // Repo mode needs the repo URL too, so `helm show values <chart> --repo <url>`
+  // can resolve without a prior `repo add`.
+  const showValuesRef = mode === "oci" ? ociRef : mode === "repo" && chart && repoURL ? chart : null;
+  const seeded = useHelmShowValues(showValuesRef, version || null, mode === "repo" ? repoURL || null : null);
 
   const allCommands = source && releaseName && namespace
     ? buildHelmInstallCommands(source, { releaseName, namespace, valuesFile: "values.yaml", context: null })
