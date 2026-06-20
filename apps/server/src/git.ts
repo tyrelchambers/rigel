@@ -9,7 +9,7 @@
 // `kubectl diff` provides the pre-apply preview surfaced in the UI.
 import { rm, mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { kubectl, runProcess, type RunResult } from "@helmsman/k8s/src/run";
+import { kubectl, runProcess, type RunResult } from "@rigel/k8s/src/run";
 import {
   GIT_SOURCES_CONFIGMAP,
   GITHUB_SECRET,
@@ -29,7 +29,7 @@ import {
   type ResolvedTarget,
   type GithubRepo,
   type RepoEntry,
-} from "@helmsman/k8s/src/gitSources";
+} from "@rigel/k8s/src/gitSources";
 import { applyManifest } from "./install";
 
 const STATE_NAMESPACE = process.env.HELMSMAN_NAMESPACE ?? "default";

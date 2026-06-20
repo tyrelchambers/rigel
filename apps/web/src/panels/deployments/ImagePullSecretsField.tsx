@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import type { Secret } from "@helmsman/k8s";
+import type { Secret } from "@rigel/k8s";
 
 // ---------------------------------------------------------------------------
 // ImagePullSecretsField — deployment-level picker for pod imagePullSecrets,

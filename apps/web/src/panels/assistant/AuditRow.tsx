@@ -2,8 +2,8 @@
 
 import { ChevronDown, ChevronRight, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { AssistantAuditEntry } from "@helmsman/k8s";
-import { auditEntryId } from "@helmsman/k8s";
+import type { AssistantAuditEntry } from "@rigel/k8s";
+import { auditEntryId } from "@rigel/k8s";
 import { useAssistantCtx } from "./AssistantContext";
 import {
   outcomeGlyph,

@@ -13,7 +13,7 @@
 // port is published. The native macOS app forwarded directly onto your machine;
 // this does not.
 
-import { buildKubectlArgs } from "@helmsman/k8s/src/run";
+import { buildKubectlArgs } from "@rigel/k8s/src/run";
 import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { connect } from "node:net";

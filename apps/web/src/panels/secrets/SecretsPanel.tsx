@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Eye, EyeOff, Plus, Pencil } from "lucide-react";
-import type { Secret } from "@helmsman/k8s";
+import type { Secret } from "@rigel/k8s";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";

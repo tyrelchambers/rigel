@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ConfigMap } from "./types";
-import type { KVRow } from "@helmsman/k8s";
+import type { KVRow } from "@rigel/k8s";
 import {
   blankRow,
   buildConfigMapYAML,
   canSubmitConfigMap,
   rowsToConfigMapData,
   seedConfigMapRows,
-} from "@helmsman/k8s";
+} from "@rigel/k8s";
 import {
   Dialog,
   DialogContent,

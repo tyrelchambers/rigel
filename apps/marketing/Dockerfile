@@ -17,16 +17,16 @@ COPY apps/web/package.json ./apps/web/
 COPY apps/marketing/package.json ./apps/marketing/
 
 # Install only the marketing app's dependency subset.
-RUN pnpm install --frozen-lockfile --filter @helmsman/marketing...
+RUN pnpm install --frozen-lockfile --filter @rigel/marketing...
 
-# The /catalog page imports @helmsman/catalog at build time (its `main` is
+# The /catalog page imports @rigel/catalog at build time (its `main` is
 # src/index.ts), so the package SOURCE must be present, not just its
 # package.json. Without this, `astro build` fails to resolve the entry.
 COPY packages/catalog ./packages/catalog
 
 # Build the static output to apps/marketing/dist.
 COPY apps/marketing ./apps/marketing
-RUN pnpm --filter @helmsman/marketing build
+RUN pnpm --filter @rigel/marketing build
 
 # ---- Stage 2: serve with nginx ----
 FROM nginx:1.27-alpine

@@ -9,7 +9,7 @@
 // Commands are built from typed argv arrays — no shell, no free-form strings —
 // mirroring the Swift WorkloadCommander / HelmCommander invocations.
 
-import { buildKubectlArgs, runProcess, runProcessWithStdin, type RunResult } from "@helmsman/k8s/src/run";
+import { buildKubectlArgs, runProcess, runProcessWithStdin, type RunResult } from "@rigel/k8s/src/run";
 import { unlink, writeFile } from "node:fs/promises";
 
 /**

@@ -19,7 +19,7 @@ import {
   type StatefulSetLike,
   type DaemonSetLike,
   type PodLike,
-} from "@helmsman/catalog";
+} from "@rigel/catalog";
 
 export type WorkloadKind = "deployment" | "statefulset" | "daemonset";
 

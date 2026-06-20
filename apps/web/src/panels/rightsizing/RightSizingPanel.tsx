@@ -43,7 +43,7 @@ import {
   type BackendChoice,
 } from "./backendChoice";
 import { useRightSizing, type UsageBackend } from "./useRightSizing";
-import type { InstalledBackend } from "@helmsman/k8s";
+import type { InstalledBackend } from "@rigel/k8s";
 
 const KIND_BADGE: Record<WorkloadKind, string> = {
   deployment: "DEP",

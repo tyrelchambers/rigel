@@ -10,7 +10,7 @@
 // single setting change never clobbers concurrent edits (kill-switch vs mode
 // vs silenced…), exactly like the Swift `patchConfig`.
 
-import { buildKubectlArgs, kubectl, runProcessWithStdin, type RunResult } from "@helmsman/k8s/src/run";
+import { buildKubectlArgs, kubectl, runProcessWithStdin, type RunResult } from "@rigel/k8s/src/run";
 import {
   DEFAULT_INSTALL_CONFIG,
   SECRET_NAME,
@@ -22,9 +22,9 @@ import {
   clearedStateConfigMapJSON,
   silencedSet,
   type AssistantInstallConfig,
-} from "@helmsman/k8s/src/assistant";
-import { signalConfigUpdates } from "@helmsman/k8s/src/signal";
-import { normalizeAlertRule, parseAlertRules, serializeAlertRules, nextAlertRules, type SuggestedAlert } from "@helmsman/k8s";
+} from "@rigel/k8s/src/assistant";
+import { signalConfigUpdates } from "@rigel/k8s/src/signal";
+import { normalizeAlertRule, parseAlertRules, serializeAlertRules, nextAlertRules, type SuggestedAlert } from "@rigel/k8s";
 
 // ---------------------------------------------------------------------------
 // kubectl plumbing

@@ -30,7 +30,7 @@ import {
   type PurgeResult,
   type RepoFixResponse,
 } from "@/lib/api";
-import { listResources } from "@helmsman/catalog";
+import { listResources } from "@rigel/catalog";
 import { isDestructiveAction } from "@/lib/actionBlocks";
 import { DiffView } from "@/components/DiffView";
 

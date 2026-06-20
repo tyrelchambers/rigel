@@ -3,8 +3,8 @@
 import { useNavigate } from "react-router";
 import { AlertTriangle, BellOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { queuedSuggestionId } from "@helmsman/k8s";
-import type { AssistantQueuedSuggestion } from "@helmsman/k8s";
+import { queuedSuggestionId } from "@rigel/k8s";
+import type { AssistantQueuedSuggestion } from "@rigel/k8s";
 import type { ActionBlock } from "@/lib/api";
 import { useCluster } from "@/store/cluster";
 import { useAssistantCtx } from "../AssistantContext";

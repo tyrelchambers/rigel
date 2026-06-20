@@ -1,4 +1,4 @@
-import type { Secret } from "@helmsman/k8s";
+import type { Secret } from "@rigel/k8s";
 import {
   DOCKERCONFIGJSON_TYPE,
   MANAGED_BY_LABEL,
@@ -6,7 +6,7 @@ import {
   extractRegistryFromSecret,
   dockerconfigjsonToSecret,
   isValidDNS1123Subdomain,
-} from "@helmsman/k8s";
+} from "@rigel/k8s";
 
 /**
  * Pure, framework-free logic for the Accounts panel (registry credentials).

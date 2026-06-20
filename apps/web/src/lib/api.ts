@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ActiveForward } from "@/panels/services/portForward";
-import type { SuggestedAlert } from "@helmsman/k8s";
+import type { SuggestedAlert } from "@rigel/k8s";
 
 /**
  * ActionBlock mirrors the server-side ActionBlock interface and

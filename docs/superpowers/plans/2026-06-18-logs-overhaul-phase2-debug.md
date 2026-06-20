@@ -19,7 +19,7 @@
 - **Modify** `apps/web/src/panels/logs/logDisplay.test.ts` — tests for container plumb + `distinctContainers` + container filter.
 - **Modify** `apps/web/src/panels/logs/LogsPanel.tsx` — container picker (client filter), tail/since controls, previous toggle + "not live" banner, stream re-issue.
 
-**Verification:** bun + vitest for pure logic; `pnpm --filter web typecheck && build` + `pnpm --filter @helmsman/server test`; then Playwright re-drive + `docker compose up -d --build`; Outline doc updated.
+**Verification:** bun + vitest for pure logic; `pnpm --filter web typecheck && build` + `pnpm --filter @rigel/server test`; then Playwright re-drive + `docker compose up -d --build`; Outline doc updated.
 
 **Convention:** extend `filterLines`/`toLogLine` rather than forking (per the user's global rules). New helper `distinctContainers` mirrors the existing `distinctPods` exactly.
 
@@ -65,7 +65,7 @@ test("buildLogsArgs: default (no container/previous/since) is unchanged", () => 
 
 - [ ] **Step 2: Run to verify fail**
 
-Run: `pnpm --filter @helmsman/server test 2>&1 | tail -20`
+Run: `pnpm --filter @rigel/server test 2>&1 | tail -20`
 Expected: FAIL — `previous`/`since` not on `LogTarget` (type error) and the container/previous/since assertions fail.
 
 - [ ] **Step 3: Implement.** In `apps/server/src/logStream.ts`, extend the `LogTarget` interface to add two fields (after `container?: string;`):
@@ -107,7 +107,7 @@ export function buildLogsArgs(target: LogTarget, tailLines: number): string[] {
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `pnpm --filter @helmsman/server test 2>&1 | tail -6`
+Run: `pnpm --filter @rigel/server test 2>&1 | tail -6`
 Expected: PASS (all server tests, including the unchanged-default case).
 
 - [ ] **Step 5: Commit**
@@ -454,7 +454,7 @@ git commit -m "feat(logs): tail size + since controls and previous (crashed) con
 
 - [ ] **Step 1: Full server + web tests + typecheck**
 
-Run: `pnpm --filter @helmsman/server test && pnpm --filter web typecheck && pnpm --filter web test 2>&1 | grep -E "pass|Test Files|Tests "`
+Run: `pnpm --filter @rigel/server test && pnpm --filter web typecheck && pnpm --filter web test 2>&1 | grep -E "pass|Test Files|Tests "`
 Expected: all PASS.
 
 - [ ] **Step 2: Rebuild the container**

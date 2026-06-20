@@ -1,5 +1,5 @@
 import { CheckCircle2, Circle, CircleSlash } from "lucide-react";
-import type { CatalogApp } from "@helmsman/catalog";
+import type { CatalogApp } from "@rigel/catalog";
 import { InfoTooltip } from "@/components/InfoTooltip";
 import {
   formatBytesValue,

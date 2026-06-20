@@ -14,7 +14,7 @@ import {
   CheckCircle2,
   HelpCircle,
 } from "lucide-react";
-import { categoryDisplayName, type CatalogApp } from "@helmsman/catalog";
+import { categoryDisplayName, type CatalogApp } from "@rigel/catalog";
 import {
   Dialog,
   DialogContent,

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Ingress } from "./types";
-import type { KVRow } from "@helmsman/k8s";
+import type { KVRow } from "@rigel/k8s";
 import {
   blankRow,
   newRowId,
@@ -13,7 +13,7 @@ import {
   blankTLS,
   type IngressRuleInput,
   type IngressTLSInput,
-} from "@helmsman/k8s";
+} from "@rigel/k8s";
 import {
   Dialog,
   DialogContent,

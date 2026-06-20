@@ -1,6 +1,6 @@
 import { Plus, Minus, FileLock2 } from "lucide-react";
-import type { KVRow } from "@helmsman/k8s";
-import { blankRow } from "@helmsman/k8s";
+import type { KVRow } from "@rigel/k8s";
+import { blankRow } from "@rigel/k8s";
 import { Button } from "@/components/ui/button";
 
 // ---------------------------------------------------------------------------

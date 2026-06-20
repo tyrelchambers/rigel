@@ -1,6 +1,6 @@
 import type { WebSocket } from "ws";
 import { WatchManager } from "./watchManager";
-import type { WatchEvent } from "@helmsman/k8s/src/watch";
+import type { WatchEvent } from "@rigel/k8s/src/watch";
 import { runAgent } from "./runAgent";
 import { LogStreamManager, type LogTarget } from "./logStream";
 import { TerminalSession } from "./terminal";

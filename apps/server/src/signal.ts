@@ -13,14 +13,14 @@
 // kubectl argv (no shell). Port-forward stderr is surfaced verbatim so the UI
 // can show "Port-forward failed: <stderr>".
 
-import { buildKubectlArgs } from "@helmsman/k8s/src/run";
+import { buildKubectlArgs } from "@rigel/k8s/src/run";
 import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import {
   SIGNAL_BRIDGE_NAME,
   SIGNAL_BRIDGE_PORT,
   SIGNAL_DEVICE_NAME,
-} from "@helmsman/k8s/src/signal";
+} from "@rigel/k8s/src/signal";
 
 /** Local port the tunnel binds (avoids the 8080 collision the spec calls out). */
 const LOCAL_PORT = 18099;

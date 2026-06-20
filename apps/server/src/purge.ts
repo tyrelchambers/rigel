@@ -7,12 +7,12 @@
 //                  `kubectl delete` per selected resource, re-checking guardrails.
 //
 // All binaries are spawned via node:child_process argv arrays (no shell); the
-// `--context` flag is prepended by `kubectl` / `buildKubectlArgs` in @helmsman/k8s. Pure
-// discovery/guardrail/helm logic lives in @helmsman/k8s/src/purge.
+// `--context` flag is prepended by `kubectl` / `buildKubectlArgs` in @rigel/k8s. Pure
+// discovery/guardrail/helm logic lives in @rigel/k8s/src/purge.
 //
 // See docs/parity/purge.md for the normative spec.
 
-import { kubectl, runProcess, type RunResult } from "@helmsman/k8s/src/run";
+import { kubectl, runProcess, type RunResult } from "@rigel/k8s/src/run";
 import {
   type DiscoveredResource,
   type RawResource,
@@ -27,7 +27,7 @@ import {
   deleteArgs,
   helmUninstallArgs,
   canonicalKind,
-} from "@helmsman/k8s/src/purge";
+} from "@rigel/k8s/src/purge";
 
 // ---------------------------------------------------------------------------
 // Request / response shapes

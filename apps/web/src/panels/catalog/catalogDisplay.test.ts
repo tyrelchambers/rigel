@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import type { CatalogApp } from "@helmsman/catalog";
+import type { CatalogApp } from "@rigel/catalog";
 import {
   matchesSearch,
   filterCatalog,

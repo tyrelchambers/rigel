@@ -16,7 +16,7 @@ import {
   DEFAULT_INSTALL_CONFIG,
   manifestYAML,
   type AssistantInstallConfig,
-} from "@helmsman/k8s";
+} from "@rigel/k8s";
 import { useAssistantCtx } from "../AssistantContext";
 import { Card, Field, inputClass } from "../components/primitives";
 

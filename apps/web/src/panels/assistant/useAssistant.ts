@@ -1,6 +1,6 @@
 // Derived Assistant state, read from the live cluster store (the web analogue
 // of Swift's `AssistantViewModel`). All derivation logic is the shared port in
-// `@helmsman/k8s` so it stays byte-identical with the Swift source of truth.
+// `@rigel/k8s` so it stays byte-identical with the Swift source of truth.
 
 import { useEffect, useMemo } from "react";
 import { useCluster } from "@/store/cluster";
@@ -20,7 +20,7 @@ import {
   type AssistantLiveIssue,
   type TokenExpiryStatus,
   type AlertRule,
-} from "@helmsman/k8s";
+} from "@rigel/k8s";
 
 // Minimal shapes for the watched resources (we only read what we render).
 interface Meta {

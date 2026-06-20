@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import type { Secret } from "@helmsman/k8s";
+import type { Secret } from "@rigel/k8s";
 import {
   relativeAge,
   keyCount,

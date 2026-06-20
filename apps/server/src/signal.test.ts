@@ -1,6 +1,6 @@
 import { test, expect } from "vitest";
 import { handleSignal } from "./signal";
-import { signalConfigUpdates } from "@helmsman/k8s/src/signal";
+import { signalConfigUpdates } from "@rigel/k8s/src/signal";
 
 // sendTest precondition guards are deterministic and run WITHOUT a cluster —
 // they short-circuit before any port-forward. The port-forward + bridge HTTP

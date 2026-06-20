@@ -14,4 +14,4 @@ export {
   parseSuggestedActions,
   isDestructiveAction,
   buildQuestionAnswer,
-} from "@helmsman/k8s";
+} from "@rigel/k8s";

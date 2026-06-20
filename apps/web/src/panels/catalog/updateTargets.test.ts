@@ -5,7 +5,7 @@ import type {
   StatefulSetLike,
   DaemonSetLike,
   PodLike,
-} from "@helmsman/catalog";
+} from "@rigel/catalog";
 import { updateTargets, withTag } from "./updateTargets";
 
 function app(partial: Partial<CatalogApp> & { id: string }): CatalogApp {

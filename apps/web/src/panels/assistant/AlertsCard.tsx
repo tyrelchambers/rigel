@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { useAssistantCtx } from "./AssistantContext";
 import { Card, Field, inputClass } from "./components/primitives";
 import { alertRuleSummary, type SuggestedAlert, type AlertTarget, type AlertCondition } from "@/lib/alerts";
-import type { AlertScope } from "@helmsman/k8s";
+import type { AlertScope } from "@rigel/k8s";
 
 type AlertKind = "Deployment" | "StatefulSet" | "DaemonSet";
 type AlertCondType =

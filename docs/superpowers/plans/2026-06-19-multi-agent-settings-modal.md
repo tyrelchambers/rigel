@@ -49,7 +49,7 @@ type AgentConnection = "connected" | "notConnected" | "comingSoon";
 ```
 
 Test commands:
-- Server: `pnpm --filter @helmsman/server test`
+- Server: `pnpm --filter @rigel/server test`
 - Web: `pnpm --filter web test` · `pnpm --filter web typecheck`
 
 ---
@@ -89,7 +89,7 @@ test("getAgent returns undefined for an unknown id", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm --filter @helmsman/server test agentRegistry`
+Run: `pnpm --filter @rigel/server test agentRegistry`
 Expected: FAIL — `Cannot find module './agentRegistry'`.
 
 - [ ] **Step 3: Write the implementation**
@@ -177,7 +177,7 @@ export function getAgent(id: string): AgentDescriptor | undefined {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm --filter @helmsman/server test agentRegistry`
+Run: `pnpm --filter @rigel/server test agentRegistry`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
@@ -297,7 +297,7 @@ describe("setAgentAuth (coming soon)", () => {
 
 - [ ] **Step 3: Run test to verify it fails**
 
-Run: `pnpm --filter @helmsman/server test agentConfig`
+Run: `pnpm --filter @rigel/server test agentConfig`
 Expected: FAIL — `Cannot find module './agentConfig'`.
 
 - [ ] **Step 4: Write the implementation**
@@ -446,8 +446,8 @@ export async function setAgentAuth(id: AgentId, input: SetAgentAuthInput): Promi
 
 - [ ] **Step 5: Run tests to verify they pass**
 
-Run: `pnpm --filter @helmsman/server test agentConfig`
-Expected: PASS (4 tests). Also run `pnpm --filter @helmsman/server test chatConfig` is not present; run the full suite once to confirm no regressions: `pnpm --filter @helmsman/server test` → all PASS.
+Run: `pnpm --filter @rigel/server test agentConfig`
+Expected: PASS (4 tests). Also run `pnpm --filter @rigel/server test chatConfig` is not present; run the full suite once to confirm no regressions: `pnpm --filter @rigel/server test` → all PASS.
 
 - [ ] **Step 6: Commit**
 
@@ -541,7 +541,7 @@ test("a non-claude active agent yields a single 'not available' error event", as
 
 - [ ] **Step 3: Run test to verify it fails**
 
-Run: `pnpm --filter @helmsman/server test runAgent`
+Run: `pnpm --filter @rigel/server test runAgent`
 Expected: FAIL — `Cannot find module './runAgent'`.
 
 - [ ] **Step 4: Write the implementation**
@@ -577,8 +577,8 @@ export async function* runAgent(
 
 - [ ] **Step 5: Run tests to verify they pass**
 
-Run: `pnpm --filter @helmsman/server test runAgent`
-Expected: PASS (1 test). Then `pnpm --filter @helmsman/server test` → all PASS (the `mapClaudeEvent` and other suites still green).
+Run: `pnpm --filter @rigel/server test runAgent`
+Expected: PASS (1 test). Then `pnpm --filter @rigel/server test` → all PASS (the `mapClaudeEvent` and other suites still green).
 
 - [ ] **Step 6: Commit**
 
@@ -643,7 +643,7 @@ Immediately after the existing `POST /api/chat-config` block (the one that ends 
 
 - [ ] **Step 3: Verify (typecheck + build — no live mutation calls)**
 
-Run: `pnpm --filter @helmsman/server build`
+Run: `pnpm --filter @rigel/server build`
 Expected: builds with no type errors. (Per project rule, do **not** curl mutation endpoints against a live cluster; the logic is covered by Task 2's `setAgentAuth`/`agentsView` unit tests.)
 
 - [ ] **Step 4: Commit**
@@ -682,7 +682,7 @@ to:
 
 - [ ] **Step 2: Verify**
 
-Run: `pnpm --filter @helmsman/server build && pnpm --filter @helmsman/server test`
+Run: `pnpm --filter @rigel/server build && pnpm --filter @rigel/server test`
 Expected: builds clean; all server tests PASS. (Claude remains the active agent by default, so chat behavior is unchanged.)
 
 - [ ] **Step 3: Commit**
@@ -1424,7 +1424,7 @@ git commit -m "feat(web): open SettingsModal from header gear + nav; drop /setti
 
 - [ ] **Step 1: Server — build + test**
 
-Run: `pnpm --filter @helmsman/server build && pnpm --filter @helmsman/server test`
+Run: `pnpm --filter @rigel/server build && pnpm --filter @rigel/server test`
 Expected: build clean; all server tests PASS.
 
 - [ ] **Step 2: Web — typecheck + build + test**

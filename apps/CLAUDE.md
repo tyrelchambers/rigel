@@ -38,5 +38,5 @@ SPA — no separate server process needed for the desktop build.
 ## Build / test
 - `pnpm --filter web build`, `pnpm --filter web test` (vitest),
   `pnpm --filter web typecheck`.
-- `pnpm --filter @helmsman/server test` (vitest), `… build`.
+- `pnpm --filter @rigel/server test` (vitest), `… build`.
   Server dev: `tsx watch src/index.ts`.

@@ -186,7 +186,7 @@ mounted behind the confirm step) is preserved.
   (merge) and `setEnvRef` (strategic), including `-n <ns>` and a `statefulset`
   `resourceKind`.
 - `pnpm --filter web typecheck && pnpm --filter web test` and
-  `pnpm --filter @helmsman/server test`.
+  `pnpm --filter @rigel/server test`.
 
 ## Post-implementation
 

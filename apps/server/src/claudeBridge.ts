@@ -1,6 +1,6 @@
 // Action-block parsing lives once in the shared package so the chat panel
 // (apps/web) and this bridge decode the fenced ```action JSON identically.
-export { extractActionBlocks } from "@helmsman/k8s/src/actionBlocks";
+export { extractActionBlocks } from "@rigel/k8s/src/actionBlocks";
 import { claudeAuthEnv } from "./agentConfig";
 import { systemPrompt } from "./systemPrompt";
 import { spawn } from "node:child_process";

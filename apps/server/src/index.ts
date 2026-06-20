@@ -4,7 +4,7 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "./staticFiles";
 import { WebSocketServer } from "ws";
 import { resolveKubeconfigPath } from "./kubeconfig";
-import { kubectl } from "@helmsman/k8s/src/run";
+import { kubectl } from "@rigel/k8s/src/run";
 import { WatchManager } from "./watchManager";
 import { makeWsHandlers } from "./ws";
 import { buildCommand, PurgeActionError, type ActionBlock } from "./actions";
@@ -22,7 +22,7 @@ import {
   upsertDeployment,
   type GitSource,
   type GitDeployment,
-} from "@helmsman/k8s/src/gitSources";
+} from "@rigel/k8s/src/gitSources";
 import { getPodMetrics, getNodeMetrics, getNodeDisk } from "./metrics";
 import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusMetrics";
 import { handleUpdates, type UpdatesRequest } from "./updates";
@@ -31,7 +31,7 @@ import { agentsView, setAgentAuth, type AgentAuthMethod } from "./agentConfig";
 import { getAgent } from "./agentRegistry";
 import { buildSuggestions } from "./suggestions";
 import { getClusterYamlSchema } from "./clusterSchema";
-import { stripStatusBlock } from "@helmsman/k8s/src/manifestClean";
+import { stripStatusBlock } from "@rigel/k8s/src/manifestClean";
 import { handleAssistant, type AssistantRequest } from "./assistant";
 import { handleSignal, type SignalRequest } from "./signal";
 import { PortForwardManager, type TargetKind } from "./portForward";

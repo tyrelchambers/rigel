@@ -6,4 +6,4 @@ export {
   type SuggestedAlert,
   parseAlertRules,
   alertRuleSummary,
-} from "@helmsman/k8s";
+} from "@rigel/k8s";

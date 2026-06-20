@@ -1,6 +1,6 @@
 // Derived Settings state — Signal bridge status + self-host defaults
 // (docs/parity/settings.md). All bridge/recipient/status logic lives in the
-// shared @helmsman/k8s port so it stays byte-identical with the Swift source.
+// shared @rigel/k8s port so it stays byte-identical with the Swift source.
 
 import { useEffect, useMemo } from "react";
 import { useCluster } from "@/store/cluster";
@@ -12,7 +12,7 @@ import {
   signalRecipients as deriveRecipients,
   signalInbound as deriveInbound,
   type SignalBridgeStatus,
-} from "@helmsman/k8s";
+} from "@rigel/k8s";
 
 interface Meta {
   name: string;

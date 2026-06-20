@@ -19,7 +19,7 @@ import {
   namespaceValid,
   type MetricsInstallBackend,
   type InstalledBackend,
-} from "@helmsman/k8s";
+} from "@rigel/k8s";
 
 interface Props {
   open: boolean;

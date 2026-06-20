@@ -90,7 +90,7 @@ export interface PodTemplate {
 
 - [ ] **Step 4: Verify both packages still typecheck**
 
-Run: `pnpm --filter web typecheck && pnpm --filter @helmsman/server build`
+Run: `pnpm --filter web typecheck && pnpm --filter @rigel/server build`
 Expected: PASS (additions only; no existing reference breaks).
 
 - [ ] **Step 5: Commit**
@@ -144,7 +144,7 @@ test("setImagePullSecrets honors resourceKind", () => {
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `pnpm --filter @helmsman/server test 2>&1 | grep -A2 setImagePullSecrets`
+Run: `pnpm --filter @rigel/server test 2>&1 | grep -A2 setImagePullSecrets`
 Expected: FAIL — `unsupported action kind: setImagePullSecrets`.
 
 - [ ] **Step 3: Implement the case.** In `apps/server/src/actions.ts`, add inside the `switch (a.kind)` in `buildCommand`, right before the `case "command":` block:
@@ -165,7 +165,7 @@ Expected: FAIL — `unsupported action kind: setImagePullSecrets`.
 
 - [ ] **Step 4: Run the test to verify it passes**
 
-Run: `pnpm --filter @helmsman/server test 2>&1 | tail -5`
+Run: `pnpm --filter @rigel/server test 2>&1 | tail -5`
 Expected: PASS (all tests green).
 
 - [ ] **Step 5: Commit**
@@ -219,7 +219,7 @@ test("setEnvRef supports configMapKeyRef and multiple refs", () => {
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `pnpm --filter @helmsman/server test 2>&1 | grep -A2 setEnvRef`
+Run: `pnpm --filter @rigel/server test 2>&1 | grep -A2 setEnvRef`
 Expected: FAIL — `unsupported action kind: setEnvRef`.
 
 - [ ] **Step 3: Implement the case.** In `apps/server/src/actions.ts`, add directly below the `setImagePullSecrets` case:
@@ -246,7 +246,7 @@ Expected: FAIL — `unsupported action kind: setEnvRef`.
 
 - [ ] **Step 4: Run the test to verify it passes**
 
-Run: `pnpm --filter @helmsman/server test 2>&1 | tail -5`
+Run: `pnpm --filter @rigel/server test 2>&1 | tail -5`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -599,7 +599,7 @@ git commit -m "feat(deploy-editor): diff secret/configmap env refs → setEnvRef
 
 ```tsx
 import { Plus, Minus } from "lucide-react";
-import type { Secret, ConfigMap } from "@helmsman/k8s";
+import type { Secret, ConfigMap } from "@rigel/k8s";
 import { Button } from "@/components/ui/button";
 import type { EnvRefEdit } from "./deploymentDisplay";
 
@@ -706,7 +706,7 @@ export function EnvRefEditor({ rows, secrets, configMaps, onChange }: EnvRefEdit
 - [ ] **Step 2: Wire live secrets/configmaps into `DeploymentEditor.tsx`.** Add imports near the top:
 
 ```tsx
-import type { Secret, ConfigMap } from "@helmsman/k8s";
+import type { Secret, ConfigMap } from "@rigel/k8s";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { EnvRefEditor } from "./EnvRefEditor";
@@ -777,7 +777,7 @@ git commit -m "feat(deploy-editor): EnvRefEditor — add env vars from Secret/Co
 
 ```tsx
 import { X } from "lucide-react";
-import type { Secret } from "@helmsman/k8s";
+import type { Secret } from "@rigel/k8s";
 
 // ---------------------------------------------------------------------------
 // ImagePullSecretsField — deployment-level picker for pod imagePullSecrets,
@@ -939,7 +939,7 @@ git commit -m "feat(deploy-editor): present editor as a wide centered Dialog"
 
 Run:
 ```bash
-pnpm --filter web typecheck && pnpm --filter web test && pnpm --filter @helmsman/server test
+pnpm --filter web typecheck && pnpm --filter web test && pnpm --filter @rigel/server test
 ```
 Expected: all PASS.
 

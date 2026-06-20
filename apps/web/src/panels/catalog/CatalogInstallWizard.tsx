@@ -7,7 +7,7 @@ import {
   validateManifestShape,
   type CatalogApp,
   type SecretFieldSpec,
-} from "@helmsman/catalog";
+} from "@rigel/catalog";
 import {
   Dialog,
   DialogContent,

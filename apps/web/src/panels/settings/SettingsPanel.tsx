@@ -20,7 +20,7 @@ import {
   signalStatusLabel,
   signalApiUrl,
   parseRecipients,
-} from "@helmsman/k8s";
+} from "@rigel/k8s";
 import { useAssistantAction } from "@/lib/api";
 import { fetchSignalQR, fetchSignalAccounts, sendSignalTest } from "@/lib/api";
 import {

@@ -173,7 +173,7 @@ of the web app — the panel raises the same action shapes the chat path uses.
   `challenge` mapping to the fully-qualified `delete` argv; confirm the
   force-renew `command` argv shape.
 - Build/typecheck: `pnpm --filter web build`, `pnpm --filter web typecheck`,
-  `pnpm --filter web test`, `pnpm --filter @helmsman/server test`.
+  `pnpm --filter web test`, `pnpm --filter @rigel/server test`.
 - Rebuild the Docker container after the web change (`docker compose up -d
   --build`) so the running app — and the baked cmctl plugin — are updated.
 

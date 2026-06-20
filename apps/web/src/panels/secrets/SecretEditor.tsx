@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Secret, KVRow, SecretTypeId, DockerCredsForm } from "@helmsman/k8s";
+import type { Secret, KVRow, SecretTypeId, DockerCredsForm } from "@rigel/k8s";
 import {
   CREATABLE_SECRET_TYPES,
   canonicalKeysFor,
@@ -13,7 +13,7 @@ import {
   parseDockerCredsForm,
   seedSecretRows,
   decodeSecretValue,
-} from "@helmsman/k8s";
+} from "@rigel/k8s";
 import {
   Dialog,
   DialogContent,
