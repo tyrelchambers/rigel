@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
 import { YamlEditor } from "@/components/YamlEditorLazy";
 import { buildHelmRollbackArgs, buildHelmUninstallArgs, type HelmRelease, type HelmRevision } from "@rigel/k8s/src/helm";
-import { releasesFromSecretsMap } from "./releases";
+import { releasesFromSecretsMap, releaseStatusTone, formatTimestamp, type StatusTone } from "./releases";
 import { useHelmRollback, useHelmUninstall } from "./helmApi";
 import { HelmConfirmModal } from "./HelmConfirmModal";
 
@@ -16,6 +19,7 @@ export function ReleasesView({ onUpgrade }: { onUpgrade: (r: HelmRelease) => voi
   const secrets = useCluster((s) => s.resources["secrets"]);
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
   const [selected, setSelected] = useState<string | null>(null);
+  const [rev, setRev] = useState<HelmRevision | null>(null);
   const [pending, setPending] = useState<Pending>(null);
   const [error, setError] = useState<string | null>(null);
   const rollback = useHelmRollback();
@@ -32,7 +36,6 @@ export function ReleasesView({ onUpgrade }: { onUpgrade: (r: HelmRelease) => voi
     [secrets],
   );
   const current = releases.find((r) => `${r.namespace}/${r.name}` === selected) ?? null;
-  const [rev, setRev] = useState<HelmRevision | null>(null);
   const shownRev = rev ?? current?.revisions[0] ?? null;
 
   const command = !pending
@@ -54,75 +57,40 @@ export function ReleasesView({ onUpgrade }: { onUpgrade: (r: HelmRelease) => voi
   }
 
   return (
-    <div className="flex gap-4">
-      <ul className="w-64 shrink-0 space-y-1">
-        {releases.map((r) => (
-          <li key={`${r.namespace}/${r.name}`}>
-            <button
-              type="button"
-              onClick={() => { setSelected(`${r.namespace}/${r.name}`); setRev(null); }}
-              className="w-full rounded-md px-2.5 py-2 text-left text-sm hover:bg-white/[0.04]"
-              style={{ background: selected === `${r.namespace}/${r.name}` ? "rgba(255,255,255,0.06)" : undefined }}
-            >
-              <div className="font-medium">{r.name}</div>
-              <div className="text-xs text-muted-foreground">{r.namespace} · {r.chartName} {r.chartVersion} · {r.status}</div>
-            </button>
-          </li>
-        ))}
-        {releases.length === 0 && <li className="px-2.5 py-2 text-sm text-muted-foreground">No Helm releases found.</li>}
-      </ul>
-
-      {current && (
-        <div className="min-w-0 flex-1">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-semibold">{current.name}</h2>
-              <p className="text-xs text-muted-foreground">rev {current.currentRevision} · {current.status} · updated {current.updated ?? "?"}</p>
-            </div>
-            <div className="flex gap-2">
-              <button type="button" className="rounded-md px-3 py-1.5 text-sm hover:bg-white/[0.05]" onClick={() => onUpgrade(current)}>Upgrade</button>
-              <button type="button" className="rounded-md px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10" onClick={() => { setPending({ op: "uninstall", release: current }); setError(null); }}>Uninstall</button>
-            </div>
-          </div>
-
-          <div className="mb-3 flex flex-wrap gap-1.5">
-            {current.revisions.map((rv) => (
-              <div
-                key={rv.revision}
-                className="inline-flex items-center rounded-md border text-xs"
-                style={{ borderColor: "var(--border-strong)", background: shownRev?.revision === rv.revision ? "rgba(255,255,255,0.06)" : "transparent" }}
-              >
-                <button type="button" onClick={() => setRev(rv)} className="px-2 py-1">
-                  rev {rv.revision} · {rv.status}
-                </button>
-                {rv.revision !== current.currentRevision && (
-                  <button
-                    type="button"
-                    aria-label={`Roll back to revision ${rv.revision}`}
-                    className="px-1.5 py-1 text-muted-foreground hover:text-foreground"
-                    onClick={() => { setPending({ op: "rollback", release: current, revision: rv.revision }); setError(null); }}
-                  >
-                    ↺
-                  </button>
-                )}
-              </div>
+    <div className="flex h-full flex-col">
+      {releases.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No Helm releases found.</p>
+      ) : (
+        <div className="min-h-0 flex-1 overflow-auto">
+          <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
+            {releases.map((r) => (
+              <ReleaseCard
+                key={`${r.namespace}/${r.name}`}
+                release={r}
+                onClick={() => { setSelected(`${r.namespace}/${r.name}`); setRev(null); }}
+              />
             ))}
           </div>
-
-          {shownRev && (
-            <div className="space-y-3">
-              <div>
-                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Values</div>
-                <YamlEditor value={toYaml(shownRev.config)} readOnly height="200px" schema={null} />
-              </div>
-              <div>
-                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Manifest</div>
-                <YamlEditor value={shownRev.manifest ?? ""} readOnly height="320px" schema={null} />
-              </div>
-            </div>
-          )}
         </div>
       )}
+
+      <Modal
+        open={current != null}
+        onOpenChange={(o) => { if (!o) { setSelected(null); setRev(null); } }}
+        title={current?.name ?? "Release"}
+        maxWidth="!max-w-4xl"
+      >
+        {current && (
+          <ReleaseDetail
+            release={current}
+            shownRev={shownRev}
+            onSelectRev={setRev}
+            onUpgrade={() => { onUpgrade(current); setSelected(null); }}
+            onUninstall={() => { setPending({ op: "uninstall", release: current }); setError(null); }}
+            onRollback={(revision) => { setPending({ op: "rollback", release: current, revision }); setError(null); }}
+          />
+        )}
+      </Modal>
 
       <HelmConfirmModal
         open={pending != null}
@@ -133,6 +101,132 @@ export function ReleasesView({ onUpgrade }: { onUpgrade: (r: HelmRelease) => voi
         error={error}
         onConfirm={runPending}
       />
+    </div>
+  );
+}
+
+const TONE: Record<StatusTone, string> = {
+  green: "#34D399",
+  yellow: "#FBBF24",
+  red: "#F87171",
+  neutral: "#8C8C95",
+};
+
+/** A colored status dot + label pill for a Helm release status. */
+function StatusBadge({ status, className }: { status: string; className?: string }) {
+  const color = TONE[releaseStatusTone(status)];
+  return (
+    <span
+      className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium", className)}
+      style={{ background: "rgba(255,255,255,0.05)", color }}
+    >
+      <span className="size-1.5 rounded-full" style={{ background: color }} />
+      {status}
+    </span>
+  );
+}
+
+/** A labeled metadata field: a small uppercase caption above its value. */
+function Field({ label, mono, children }: { label: string; mono?: boolean; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className={cn("text-sm", mono && "font-mono")}>{children}</span>
+    </div>
+  );
+}
+
+/** A release card: name + status, chart·version, namespace chip + current revision. */
+function ReleaseCard({ release, onClick }: { release: HelmRelease; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex flex-col gap-1.5 rounded-lg border p-3 text-left hover:bg-white/[0.04]"
+      style={{ borderColor: "var(--border-strong)" }}
+    >
+      <div className="flex items-center gap-2">
+        <span className="min-w-0 truncate font-medium">{release.name}</span>
+        <StatusBadge status={release.status} className="ml-auto shrink-0" />
+      </div>
+      <div className="truncate text-xs text-muted-foreground">{release.chartName} · {release.chartVersion}</div>
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="truncate rounded bg-white/[0.05] px-1.5 py-0.5 font-mono">{release.namespace}</span>
+        <span className="ml-auto shrink-0">rev {release.currentRevision}</span>
+      </div>
+    </button>
+  );
+}
+
+/** The release detail body shown inside the dialog: metadata + actions, revision
+ *  picker (with rollback), and read-only values + manifest. */
+function ReleaseDetail({
+  release,
+  shownRev,
+  onSelectRev,
+  onUpgrade,
+  onUninstall,
+  onRollback,
+}: {
+  release: HelmRelease;
+  shownRev: HelmRevision | null;
+  onSelectRev: (rv: HelmRevision) => void;
+  onUpgrade: () => void;
+  onUninstall: () => void;
+  onRollback: (revision: number) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-wrap items-start gap-x-6 gap-y-3">
+          <Field label="Status"><StatusBadge status={release.status} /></Field>
+          <Field label="Namespace" mono>{release.namespace}</Field>
+          <Field label="Chart">{release.chartName} {release.chartVersion}</Field>
+          <Field label="Revision">{release.currentRevision}</Field>
+          <Field label="Updated">{formatTimestamp(release.updated)}</Field>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <Button variant="secondary" onClick={onUpgrade}>Upgrade</Button>
+          <Button className="bg-destructive text-white hover:bg-destructive/90" onClick={onUninstall}>Uninstall</Button>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5">
+        {release.revisions.map((rv) => (
+          <div
+            key={rv.revision}
+            className="inline-flex items-center rounded-md border text-xs"
+            style={{ borderColor: "var(--border-strong)", background: shownRev?.revision === rv.revision ? "rgba(255,255,255,0.06)" : "transparent" }}
+          >
+            <button type="button" onClick={() => onSelectRev(rv)} className="px-2 py-1">
+              rev {rv.revision} · {rv.status}
+            </button>
+            {rv.revision !== release.currentRevision && (
+              <button
+                type="button"
+                aria-label={`Roll back to revision ${rv.revision}`}
+                className="px-1.5 py-1 text-muted-foreground hover:text-foreground"
+                onClick={() => onRollback(rv.revision)}
+              >
+                ↺
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {shownRev && (
+        <div className="space-y-3">
+          <div>
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Values</div>
+            <YamlEditor value={toYaml(shownRev.config)} readOnly height="200px" schema={null} />
+          </div>
+          <div>
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Manifest</div>
+            <YamlEditor value={shownRev.manifest ?? ""} readOnly height="320px" schema={null} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
