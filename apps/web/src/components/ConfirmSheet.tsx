@@ -251,11 +251,13 @@ export function ConfirmSheet({
   const isPurge = action?.kind === "purge";
   const isApply = action?.kind === "applyManifest";
   const isFix = action?.kind === "proposeRepoFix";
-  // Destructive treatment follows the shared rule (delete/drain/purge family or
-  // the model's `destructive` hint), plus applyManifest which is app-specific.
-  // A proposeRepoFix only opens a PR (nothing applied), so it is NOT destructive.
-  const isDestructive =
-    (action ? isDestructiveAction(action) : false) || isApply;
+  // Destructive treatment is reserved for actions that REMOVE or evict a
+  // resource: the delete/drain/purge family, or anything the model explicitly
+  // flags `destructive` (e.g. a scale-down). Additive applies (install/create)
+  // and in-place patches are not destructive — they take the neutral brand
+  // treatment via the isApply / default branches below. A proposeRepoFix only
+  // opens a PR (nothing applied), so it is NOT destructive either.
+  const isDestructive = action ? isDestructiveAction(action) : false;
   const commandString = previewCommand ? previewCommand.join(" ") : null;
 
   function handleCopy() {
