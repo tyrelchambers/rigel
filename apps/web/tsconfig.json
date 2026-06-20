@@ -28,6 +28,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
+      "@rigel/k8s/src/helm": ["../../packages/k8s/src/helm.ts"],
       "@rigel/k8s": ["../../packages/k8s/src/index.ts"],
       "@rigel/catalog": ["../../packages/catalog/src/index.ts"]
     }

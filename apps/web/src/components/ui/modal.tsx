@@ -9,6 +9,7 @@ import { useState, type ReactNode } from "react";
 import { XIcon } from "lucide-react";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "./dialog";
 import { cn } from "@/lib/utils";
+import { SegmentedTabs } from "./SegmentedTabs";
 
 const HEADER_BORDER = "rgba(255,255,255,0.07)";
 const MUTED = "#8C8C95";
@@ -114,29 +115,11 @@ export function TabModal({ open, onOpenChange, title, tabs, defaultTab, maxWidth
       title={title}
       maxWidth={maxWidth}
       header={
-        <div className="flex" style={{ gap: 4 }}>
-          {tabs.map((t) => {
-            const isActive = t.id === current?.id;
-            return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setActive(t.id)}
-                className="transition-colors hover:bg-white/[0.04]"
-                style={{
-                  padding: "7px 12px",
-                  borderRadius: 8,
-                  fontSize: 13,
-                  fontWeight: isActive ? 600 : 500,
-                  color: isActive ? "#FFFFFF" : MUTED,
-                  background: isActive ? "rgba(255,255,255,0.08)" : "transparent",
-                }}
-              >
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
+        <SegmentedTabs
+          tabs={tabs.map((t) => ({ id: t.id, label: t.label }))}
+          active={current?.id ?? ""}
+          onChange={setActive}
+        />
       }
     >
       {current?.content}

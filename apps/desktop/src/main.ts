@@ -9,7 +9,7 @@
 // Trust model: the server has no built-in auth. It's bound to loopback
 // (HOST=127.0.0.1) and is only ever reachable by this desktop app on the same
 // machine.
-import { app, BrowserWindow, ipcMain, nativeImage, shell, utilityProcess, type UtilityProcess } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell, utilityProcess, type UtilityProcess } from "electron";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -292,6 +292,15 @@ async function boot(): Promise<void> {
   ipcMain.handle("rigel:submit-signup", (_e, data: { name: string; email: string }) =>
     submitSignup(installStore, fetch, SIGNUP_ENDPOINT, SIGNUP_APP_KEY, data.name, data.email, app.getVersion(), process.platform),
   );
+  ipcMain.handle("rigel:open-chart-file", async () => {
+    const res = await dialog.showOpenDialog({
+      title: "Select a Helm chart (.tgz) or chart folder",
+      properties: ["openFile", "openDirectory"],
+      filters: [{ name: "Helm chart", extensions: ["tgz", "gz"] }, { name: "All files", extensions: ["*"] }],
+    });
+    if (res.canceled || res.filePaths.length === 0) return { canceled: true };
+    return { canceled: false, path: res.filePaths[0] };
+  });
 
   serverPort = await resolveServerPort();
   savePreferredPort(serverPort); // remember it so the origin stays stable next launch

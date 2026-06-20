@@ -637,60 +637,6 @@
   flex-wrap: wrap;
 }
 
-/* Scope segmented control */
-.catalog-scope-control {
-  display: inline-flex;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--surface-primary);
-}
-
-.catalog-scope-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--fg-tertiary);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: color 120ms, background 120ms;
-  white-space: nowrap;
-}
-.catalog-scope-btn:first-child {
-  border-right: 1px solid var(--border-strong);
-}
-.catalog-scope-btn.active {
-  background: var(--surface-elevated);
-  color: var(--fg-primary);
-}
-.catalog-scope-btn:not(.active):hover {
-  color: var(--fg-secondary);
-  background: rgba(255,255,255,0.03);
-}
-
-.catalog-scope-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: 4px;
-  background: var(--border-strong);
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--fg-secondary);
-  font-variant-numeric: tabular-nums;
-}
-.catalog-scope-btn.active .catalog-scope-count {
-  background: rgba(56, 189, 248, 0.2);
-  color: var(--accent-primary);
-}
-
 /* Search */
 .catalog-search-wrap {
   position: relative;

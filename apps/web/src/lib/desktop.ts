@@ -3,6 +3,7 @@ export interface RigelBridge {
   electronVersion: string;
   needsSignup(): Promise<boolean>;
   submitSignup(data: { name: string; email: string }): Promise<{ ok: true }>;
+  openChartFile?(): Promise<{ canceled: boolean; path?: string }>;
 }
 export const rigel: RigelBridge | undefined = (window as unknown as { rigel?: RigelBridge }).rigel;
 export const isDesktop = !!rigel;

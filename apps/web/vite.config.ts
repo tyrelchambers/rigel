@@ -16,6 +16,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@rigel/k8s/src/helm": path.resolve(__dirname, "../../packages/k8s/src/helm.ts"),
       "@rigel/k8s": path.resolve(__dirname, "../../packages/k8s/src/index.ts"),
       "@rigel/catalog": path.resolve(__dirname, "../../packages/catalog/src/index.ts"),
     },
