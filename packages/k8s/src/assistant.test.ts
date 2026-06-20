@@ -72,6 +72,13 @@ test("install namespace applied to namespaced objects and subjects", () => {
   expect(yaml).not.toContain("namespace: default");
 });
 
+test("agent Deployment writes its state to the install namespace, not default", () => {
+  const yaml = manifestYAML(config({ installNamespace: "agents" }));
+  // Without STATE_NAMESPACE the agent defaults to "default" and, when installed
+  // elsewhere, can never write its state, leaving the panel stuck on setup.
+  expect(yaml).toContain('- name: STATE_NAMESPACE\n              value: "agents"');
+});
+
 test("namespaceYAML builds a Namespace", () => {
   const y = namespaceYAML("agents");
   expect(y).toContain("kind: Namespace");
