@@ -172,12 +172,12 @@ function NavButton({ panelKey, collapsed = false }: NavButtonProps) {
       {({ isActive }) => (
         <>
           <Icon
-            size={14}
+            size={17}
             strokeWidth={isActive ? 2 : 1.75}
             style={{
               color: isActive ? "var(--accent-primary)" : "var(--fg-tertiary)",
               flexShrink: 0,
-              width: 20,
+              width: 22,
             }}
             className={!isActive ? "group-hover:!text-[#A1A1AA]" : ""}
           />

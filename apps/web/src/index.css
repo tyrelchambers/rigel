@@ -226,7 +226,21 @@
 .chat-md a { color: var(--accent-primary); text-decoration: underline; }
 .chat-md strong { font-weight: 600; color: var(--fg-primary); }
 .chat-md em { font-style: italic; }
-.chat-md ul, .chat-md ol { margin: 0 0 8px; padding-left: 20px; }
+/* Lists render as a distinct padded, rounded callout so they read as grouped. */
+.chat-md ul, .chat-md ol {
+  margin: 8px 0;
+  padding: 8px 14px 8px 30px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+}
+/* Nested lists stay plain (no nested box). */
+.chat-md li ul, .chat-md li ol {
+  margin: 4px 0 0;
+  padding: 0 0 0 18px;
+  background: transparent;
+  border: 0;
+}
 .chat-md li { margin: 2px 0; }
 .chat-md li::marker { color: var(--fg-secondary); }
 /* Inline code */
