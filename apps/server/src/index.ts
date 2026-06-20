@@ -8,7 +8,7 @@ import { kubectl, runProcess } from "@rigel/k8s/src/run";
 import { WatchManager } from "./watchManager";
 import { makeWsHandlers } from "./ws";
 import { buildCommand, PurgeActionError, type ActionBlock } from "./actions";
-import { applyManifest, installHelm } from "./install";
+import { applyManifest, deleteManifest, installHelm } from "./install";
 import {
   buildHelmRollbackArgs,
   buildHelmUninstallArgs,
@@ -294,6 +294,23 @@ async function handler(req: Request): Promise<Response> {
         return Response.json({ error: "missing yaml" }, { status: 422 });
       }
       const result = await applyManifest(context, body.yaml, body.dryRun === true);
+      return Response.json(result);
+    }
+
+    // POST /api/delete — MANIFEST delete (the uninstall counterpart of /api/apply).
+    // Feeds the multi-doc YAML to `kubectl delete -f - --ignore-not-found` via
+    // STDIN. Used to remove a backend set Rigel installed. Returns { code, stdout, stderr }.
+    if (url.pathname === "/api/delete" && req.method === "POST") {
+      let body: { yaml?: string };
+      try {
+        body = (await req.json()) as { yaml?: string };
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      if (typeof body.yaml !== "string" || body.yaml.trim() === "") {
+        return Response.json({ error: "missing yaml" }, { status: 422 });
+      }
+      const result = await deleteManifest(context, body.yaml);
       return Response.json(result);
     }
 

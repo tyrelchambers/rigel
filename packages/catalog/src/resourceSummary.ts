@@ -36,6 +36,10 @@ function topLevelKind(doc: string): string | null {
 
 export interface ResourceRef { kind: string; name: string; namespace?: string }
 
+/** A parsed resource paired with its original manifest document, so a SUBSET of
+ * a multi-doc manifest can be re-emitted (e.g. selective uninstall). */
+export interface ResourceDoc extends ResourceRef { doc: string }
+
 /** First column-0 `metadata:` block's 2-space-indented `name:`/`namespace:`. */
 function metaField(doc: string, field: "name" | "namespace"): string | undefined {
   let inMeta = false;
@@ -51,15 +55,25 @@ function metaField(doc: string, field: "name" | "namespace"): string | undefined
   return undefined;
 }
 
-/** Per-document {kind,name,namespace}. Docs without a top-level kind are skipped. */
-export function listResources(yaml: string): ResourceRef[] {
-  const out: ResourceRef[] = [];
+/** Per-document {kind,name,namespace,doc}. Docs without a top-level kind are skipped. */
+export function listResourceDocs(yaml: string): ResourceDoc[] {
+  const out: ResourceDoc[] = [];
   for (const doc of splitDocuments(yaml)) {
     const kind = topLevelKind(doc);
     if (!kind) continue;
-    out.push({ kind, name: metaField(doc, "name") ?? "", namespace: metaField(doc, "namespace") });
+    out.push({ kind, name: metaField(doc, "name") ?? "", namespace: metaField(doc, "namespace"), doc });
   }
   return out;
+}
+
+/** Re-emit a multi-doc manifest from a subset of its documents. */
+export function joinResourceDocs(docs: ResourceDoc[]): string {
+  return docs.map((d) => d.doc).join("\n---\n") + "\n";
+}
+
+/** Per-document {kind,name,namespace}. Docs without a top-level kind are skipped. */
+export function listResources(yaml: string): ResourceRef[] {
+  return listResourceDocs(yaml).map(({ kind, name, namespace }) => ({ kind, name, namespace }));
 }
 
 /**

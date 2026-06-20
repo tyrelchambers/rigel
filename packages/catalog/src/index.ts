@@ -75,5 +75,5 @@ export {
 
 export { generateSecret } from "./randomSecret";
 
-export type { ResourceCount, ResourceRef } from "./resourceSummary";
-export { summarizeResources, listResources } from "./resourceSummary";
+export type { ResourceCount, ResourceRef, ResourceDoc } from "./resourceSummary";
+export { summarizeResources, listResources, listResourceDocs, joinResourceDocs } from "./resourceSummary";

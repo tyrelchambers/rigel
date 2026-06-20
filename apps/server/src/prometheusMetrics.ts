@@ -231,14 +231,26 @@ export function mergeUsage(q: UsageQuerySet, stepSeconds: number): PodUsage[] {
 
 /** All metrics backends in the cluster (for the source picker). [] when none. */
 export async function detectAllBackends(context: string | null): Promise<PromBackend[]> {
-  try {
-    const res = await kubectl(context, ["get", "services", "--all-namespaces", "-o", "json"]);
-    if (res.code !== 0) return [];
-    const json = JSON.parse(res.stdout) as { items?: ServiceJson[] };
-    return detectAllBackendsFromServices(Array.isArray(json.items) ? json.items : []);
-  } catch {
-    return [];
+  // Retry on FAILURE only (non-zero exit or throw) — a cold-start/transient
+  // kubectl hiccup must not read as "no backend" when one actually exists. A
+  // successful-but-empty result (code 0, no matching services) is returned as-is.
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await kubectl(context, ["get", "services", "--all-namespaces", "-o", "json"]);
+      if (res.code === 0) {
+        const json = JSON.parse(res.stdout) as { items?: ServiceJson[] };
+        return detectAllBackendsFromServices(Array.isArray(json.items) ? json.items : []);
+      }
+      console.warn(
+        `[metrics] backend detection: kubectl get services failed (code ${res.code}, attempt ${attempt}/3): ${res.stderr.trim().slice(0, 200)}`,
+      );
+    } catch (err) {
+      console.warn(`[metrics] backend detection error (attempt ${attempt}/3): ${String(err)}`);
+    }
+    if (attempt < 3) await new Promise((r) => setTimeout(r, 250 * attempt));
   }
+  console.warn("[metrics] backend detection gave up after 3 attempts — reporting no backend");
+  return [];
 }
 
 /** Detect the single best metrics backend. Null when none. */

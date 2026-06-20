@@ -37,6 +37,21 @@ export async function applyManifest(
   return runProcessWithStdin("kubectl", args, yaml);
 }
 
+/** Build the kubectl argv for a stdin delete. Exported for tests. */
+export function buildDeleteArgs(context: string | null): string[] {
+  return buildKubectlArgs(context, ["delete", "-f", "-", "--ignore-not-found"]);
+}
+
+/**
+ * Run `kubectl [--context ctx] delete -f - --ignore-not-found`, feeding `yaml`
+ * on STDIN (symmetric with applyManifest, used to uninstall a manifest set we
+ * created). `--ignore-not-found` makes the delete idempotent: docs that no
+ * longer exist (e.g. an ephemeral install's PVC) are skipped, not errors.
+ */
+export async function deleteManifest(context: string | null, yaml: string): Promise<RunResult> {
+  return runProcessWithStdin("kubectl", buildDeleteArgs(context), yaml);
+}
+
 export interface HelmInstallRequest {
   source: HelmChartSource;
   releaseName: string;

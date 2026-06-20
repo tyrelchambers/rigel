@@ -102,6 +102,23 @@ export async function applyManifestYaml(yaml: string, dryRun = false): Promise<A
   return res.json() as Promise<ActionResult>;
 }
 
+/**
+ * Delete a manifest set via the server's stdin `kubectl delete -f -
+ * --ignore-not-found` (the uninstall counterpart of applyManifestYaml).
+ */
+export async function deleteManifestYaml(yaml: string): Promise<ActionResult> {
+  const res = await fetch("/api/delete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ yaml }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? res.statusText);
+  }
+  return res.json() as Promise<ActionResult>;
+}
+
 export interface RepoFixResponse {
   ok: boolean;
   diff?: string; // dryRun preview

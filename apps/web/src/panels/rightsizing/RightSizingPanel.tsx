@@ -37,13 +37,14 @@ import type {
   WorkloadRightSizing,
 } from "./types";
 import { MetricsInstallDialog } from "./MetricsInstallDialog";
+import { MetricsRemoveDialog } from "./MetricsRemoveDialog";
 import {
   choiceSelectValue,
   backendValue,
   type BackendChoice,
 } from "./backendChoice";
 import { useRightSizing, type UsageBackend } from "./useRightSizing";
-import type { InstalledBackend } from "@rigel/k8s";
+import { METRICS_SERVICE_NAME, type InstalledBackend } from "@rigel/k8s";
 
 const KIND_BADGE: Record<WorkloadKind, string> = {
   deployment: "DEP",
@@ -103,6 +104,7 @@ export default function RightSizingPanel() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
   const [installOpen, setInstallOpen] = useState(false);
+  const [removeOpen, setRemoveOpen] = useState(false);
 
   // Shared right-sizing pipeline (also feeds the Overview "Reclaimable" card).
   const { workloads, usage, detecting, usingBackend, noBackend, backends, choice, setChoice, reload } = useRightSizing();
@@ -122,6 +124,18 @@ export default function RightSizingPanel() {
 
   const selectValue = choiceSelectValue(choice, usage?.backend ?? null);
 
+  // The backend the picker points at, and whether Rigel installed it. Only our
+  // own install (Service "rigel-metrics") is removable — we never delete a
+  // user's pre-existing Prometheus/VictoriaMetrics.
+  const selectedBackend = sourceOptions.find((o) => backendValue(o) === selectValue) ?? usage?.backend ?? null;
+  const removable = selectedBackend?.service === METRICS_SERVICE_NAME ? selectedBackend : null;
+
+  function handleRemoved() {
+    // Backend is gone — drop any pinned choice and re-detect (→ no backend).
+    setChoice({ kind: "auto" });
+    reload();
+  }
+
   function pickSource(value: string) {
     const b = sourceOptions.find((o) => backendValue(o) === value);
     if (b) {
@@ -131,9 +145,11 @@ export default function RightSizingPanel() {
   }
 
   function handleInstall(backend: InstalledBackend, yaml: string) {
-    // Persist the choice optimistically, then route the apply through ConfirmSheet.
-    const c: BackendChoice = { kind: "prometheus", namespace: backend.namespace, service: backend.service, port: backend.port, flavor: backend.flavor };
-    setChoice(c); // persists the choice
+    // Route the apply through ConfirmSheet. Do NOT persist a backend choice
+    // here: that would pin the source even if the user cancels the apply. The
+    // ConfirmSheet's onClose runs reload(), so a real apply is picked up by
+    // auto-detect; nothing is persisted unless the user explicitly picks a
+    // source from the picker.
     setInstallOpen(false);
     setPendingAction({
       kind: "applyManifest",
@@ -284,6 +300,16 @@ export default function RightSizingPanel() {
               ))}
             </select>
           </>
+        )}
+        {removable && (
+          <button
+            type="button"
+            onClick={() => setRemoveOpen(true)}
+            title={`Remove ${removable.flavor} in ${removable.namespace}`}
+            className="whitespace-nowrap rounded-md border border-destructive/40 px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
+          >
+            Remove…
+          </button>
         )}
         <button
           type="button"
@@ -469,6 +495,14 @@ export default function RightSizingPanel() {
         }}
       />
       <MetricsInstallDialog open={installOpen} onOpenChange={setInstallOpen} onInstall={handleInstall} />
+      {removable && (
+        <MetricsRemoveDialog
+          open={removeOpen}
+          onOpenChange={setRemoveOpen}
+          backend={removable}
+          onRemoved={handleRemoved}
+        />
+      )}
     </div>
   );
 }
