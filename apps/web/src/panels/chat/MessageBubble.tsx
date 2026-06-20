@@ -77,27 +77,27 @@ export function MessageBubble({ message, onAction, onRunBatch, onAnswer, agentNa
     : { display: message.text, actions: [] as SuggestedAction[], questions: [] as SuggestedQuestion[], alerts: [] as SuggestedAlert[] };
 
   return (
-    <div className="flex items-start gap-2">
-      {/* Role avatar — colored circle. The assistant uses the Rigel mark. */}
-      <div
-        className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full"
-        style={{ background: `${color}26`, color }}
-        aria-hidden
-      >
-        {isAssistant ? <RigelMark size={16} /> : <Icon className="size-3" style={{ color }} />}
-      </div>
-
-      {/* Role-tinted bordered card */}
-      <div
-        className=" chat-bubble min-w-0 flex-1 rounded-md border px-2.5 py-2"
-        style={surface}
-      >
+    // Role-tinted bordered card — full width, with the avatar in its header.
+    <div
+      className="chat-bubble w-full min-w-0 rounded-md border px-2.5 py-2"
+      style={surface}
+    >
+      {/* Header — role avatar (the assistant uses the Rigel mark) + label. */}
+      <div className="mb-1 flex items-center gap-1.5">
         <div
-          className="mb-1 text-[10px] font-semibold uppercase tracking-[0.5px]"
+          className="flex size-7 shrink-0 items-center justify-center rounded-full"
+          style={{ background: `${color}26`, color }}
+          aria-hidden
+        >
+          {isAssistant ? <RigelMark size={20} /> : <Icon className="size-4" style={{ color }} />}
+        </div>
+        <div
+          className="text-[10px] font-semibold uppercase tracking-[0.5px]"
           style={{ color }}
         >
           {label}
         </div>
+      </div>
         {isAssistant && message.thinking ? (
           <ThinkingTrail thinking={message.thinking} seconds={message.thinkingSeconds} />
         ) : null}
@@ -126,7 +126,6 @@ export function MessageBubble({ message, onAction, onRunBatch, onAnswer, agentNa
         {isAssistant && (
           <SuggestedAlertList alerts={alerts} namespace={agentNamespace ?? "default"} />
         )}
-      </div>
     </div>
   );
 }

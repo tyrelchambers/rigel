@@ -10,7 +10,6 @@ import { NavLink, useLocation } from "react-router";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   LayoutGrid,
-  Sparkles,
   Layers,
   Box,
   Boxes,
@@ -37,7 +36,8 @@ import {
 } from "lucide-react";
 // Note: MessageSquare (chat) and Activity (health) are intentionally absent —
 // chat is the always-visible right pane (not a route), and health is nav-hidden.
-import type { LucideIcon } from "lucide-react";
+import type { ComponentType, CSSProperties } from "react";
+import { RigelMark } from "@/components/RigelMark";
 import {
   loadCollapsed,
   saveCollapsed,
@@ -49,16 +49,27 @@ import {
 
 // ─── Panel metadata ───────────────────────────────────────────────────────────
 
+/**
+ * Nav icons are usually lucide icons, but the Assistant uses the Rigel mark.
+ * Both accept this prop shape, so PanelMeta.icon is typed to the common surface.
+ */
+export type NavIcon = ComponentType<{
+  size?: number;
+  strokeWidth?: number;
+  style?: CSSProperties;
+  className?: string;
+}>;
+
 export interface PanelMeta {
   route: string;
   title: string;
   subtitle: string;
-  icon: LucideIcon;
+  icon: NavIcon;
 }
 
 export const PANEL_META: Record<string, PanelMeta> = {
   overview:     { route: "/overview",     title: "Overview",     subtitle: "Health at a glance",    icon: LayoutGrid },
-  assistant:    { route: "/assistant",    title: "Assistant",    subtitle: "AI cluster operator",   icon: Sparkles },
+  assistant:    { route: "/assistant",    title: "Assistant",    subtitle: "AI cluster operator",   icon: RigelMark },
   deployments:  { route: "/deployments",  title: "Deployments",  subtitle: "Rollouts & replicas",   icon: Layers },
   pods:         { route: "/pods",         title: "Pods",         subtitle: "Running containers",    icon: Box },
   workloads:    { route: "/workloads",    title: "Workloads",    subtitle: "All controllers",       icon: Boxes },

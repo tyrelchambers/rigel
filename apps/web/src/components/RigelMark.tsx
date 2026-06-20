@@ -5,14 +5,25 @@
  * dark navy (#0B1F3A), which is invisible on the app's dark surfaces, so this
  * draws stroke/fill with `currentColor` and lets the parent set the color.
  */
-export function RigelMark({ size = 15 }: { size?: number }) {
+import type { CSSProperties } from "react";
+
+export function RigelMark({
+  size = 15,
+  style,
+  className,
+}: {
+  size?: number;
+  style?: CSSProperties;
+  className?: string;
+}) {
   return (
     <svg
       width={size}
       height={size}
       viewBox="0 0 132 132"
       fill="none"
-      style={{ flexShrink: 0 }}
+      className={className}
+      style={{ flexShrink: 0, ...style }}
       aria-hidden
     >
       <path
