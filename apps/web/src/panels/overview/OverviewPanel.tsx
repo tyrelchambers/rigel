@@ -14,6 +14,7 @@ import {
   History,
   Trash2,
   Sparkles,
+  Hourglass,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCluster } from "@/store/cluster";
@@ -24,6 +25,7 @@ import { InfoTooltip } from "@/components/InfoTooltip";
 import { PurgePickerSheet } from "@/panels/purge/PurgePickerSheet";
 import { PurgeSheet } from "@/panels/purge/PurgeSheet";
 import { useRightSizing } from "@/panels/rightsizing/useRightSizing";
+import { MIN_HOURS } from "@/panels/rightsizing/displayHelper";
 import type {
   Deployment,
   EventBucket,
@@ -159,10 +161,20 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
   // Reclaimable memory — same right-sizing pipeline the Right-Sizing panel uses,
   // but forced cluster-wide so it matches the rest of this dashboard (the
   // Right-Sizing panel itself stays namespace-scoped).
-  const { workloads: rsWorkloads, usingBackend: rsBackend } = useRightSizing({ clusterWide: true });
+  const { workloads: rsWorkloads, usingBackend: rsBackend, detecting: rsDetecting } = useRightSizing({ clusterWide: true });
   const reclaimBytes = useMemo(
     () => rsWorkloads.reduce((sum, w) => sum + Math.max(0, w.reclaimableMemBytes), 0),
     [rsWorkloads],
+  );
+  // Backend connected but still scraping its first ~MIN_HOURS — mirror the
+  // Right-Sizing tab's "collecting data" state instead of a misleading 0% gauge.
+  const rsWarmingUp =
+    rsBackend &&
+    rsWorkloads.length > 0 &&
+    rsWorkloads.every((w) => w.containers.every((c) => c.hoursCovered < MIN_HOURS));
+  const rsMaxHours = rsWorkloads.reduce(
+    (m, w) => Math.max(m, ...w.containers.map((c) => c.hoursCovered), 0),
+    0,
   );
 
   const deployUnhealthy = unhealthyDeploymentCount(deployments);
@@ -251,13 +263,25 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
             show={hasMetrics}
             emptyText="metrics-server unavailable — install it to see live memory usage."
           />
-          {/* Reclaimable memory from the right-sizing pipeline (shared hook). */}
+          {/* Reclaimable memory from the right-sizing pipeline (shared hook).
+              Mirrors the Right-Sizing tab states: loader while detecting,
+              "collecting data" while the backend warms up, then the gauge. */}
           <GaugeCard
             icon={Recycle}
             title="Reclaimable"
             color="#10B981"
-            fraction={rsBackend && totals.memAllocatable > 0 ? Math.min(1, reclaimBytes / totals.memAllocatable) : null}
-            detail={rsBackend ? `${formatBytes(String(reclaimBytes))} of ${formatBytes(String(totals.memAllocatable))}` : ""}
+            loading={rsDetecting}
+            fraction={
+              rsBackend && !rsWarmingUp && totals.memAllocatable > 0
+                ? Math.min(1, reclaimBytes / totals.memAllocatable)
+                : null
+            }
+            detail={
+              rsBackend && !rsWarmingUp
+                ? `${formatBytes(String(reclaimBytes))} of ${formatBytes(String(totals.memAllocatable))}`
+                : ""
+            }
+            note={rsBackend && rsWarmingUp ? `Collecting data · ${rsMaxHours}h of ${MIN_HOURS}h` : undefined}
             emptyText="connect a metrics backend in Right-Sizing to see reclaimable memory."
           />
         </div>
@@ -410,6 +434,8 @@ function GaugeCard({
   color,
   detail,
   emptyText,
+  loading = false,
+  note,
 }: {
   icon: LucideIcon;
   title: string;
@@ -417,6 +443,10 @@ function GaugeCard({
   color: string;
   detail: string;
   emptyText: string;
+  /** Show a spinner + "Loading…" while the data source is still resolving. */
+  loading?: boolean;
+  /** Replaces emptyText in the non-gauge slot (e.g. a "collecting data" note). */
+  note?: string;
 }) {
   const RADIUS = 47;
   const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
@@ -424,10 +454,19 @@ function GaugeCard({
   return (
     <div className="ov-card">
       <CardHeader icon={icon} title={title} />
-      {fraction === null ? (
+      {loading ? (
         <div className="ov-gauge-empty">
-          <div className="ov-gauge-dash" />
-          <span className="ov-gauge-empty-text">{emptyText}</span>
+          <LoaderCircle className="size-5 animate-spin" style={{ color: "var(--accent-primary)" }} />
+          <span className="ov-gauge-empty-text">Loading usage history…</span>
+        </div>
+      ) : fraction === null ? (
+        <div className="ov-gauge-empty">
+          {note ? (
+            <Hourglass className="size-5" style={{ color: "var(--accent-primary)" }} />
+          ) : (
+            <div className="ov-gauge-dash" />
+          )}
+          <span className="ov-gauge-empty-text">{note ?? emptyText}</span>
         </div>
       ) : (
         <div className="ov-gauge-body">
