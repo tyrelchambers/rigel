@@ -70,7 +70,18 @@ export interface RightSizingData {
   reload: () => void;
 }
 
-export function useRightSizing(): RightSizingData {
+/**
+ * Resolve the namespace scope for the right-sizing queries. `clusterWide`
+ * forces "*" (every namespace) regardless of the bar selection — the Overview
+ * "Reclaimable" card uses this so it stays cluster-wide like the rest of the
+ * dashboard, while the Right-Sizing panel leaves it off to honor the filter.
+ */
+export function resolveNamespaceScope(namespaceFilter: string | null, clusterWide: boolean): string {
+  return clusterWide ? "*" : namespaceFilter ?? "*";
+}
+
+export function useRightSizing(opts?: { clusterWide?: boolean }): RightSizingData {
+  const clusterWide = opts?.clusterWide ?? false;
   const resources = useCluster((s) => s.resources);
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
 
@@ -81,7 +92,7 @@ export function useRightSizing(): RightSizingData {
 
   // Workload specs come from the live store.
   useEffect(() => {
-    const ns = namespaceFilter ?? "*";
+    const ns = resolveNamespaceScope(namespaceFilter, clusterWide);
     subscribe("deployments", ns);
     subscribe("statefulsets", ns);
     subscribe("daemonsets", ns);
@@ -90,7 +101,7 @@ export function useRightSizing(): RightSizingData {
       unsubscribe("statefulsets", ns);
       unsubscribe("daemonsets", ns);
     };
-  }, [namespaceFilter]);
+  }, [namespaceFilter, clusterWide]);
 
   // Detected backends for the picker.
   useEffect(() => {
@@ -107,7 +118,7 @@ export function useRightSizing(): RightSizingData {
   // source. `usage === null` means "still resolving"; refreshed every 2 min.
   useEffect(() => {
     let cancelled = false;
-    const ns = namespaceFilter ?? "*";
+    const ns = resolveNamespaceScope(namespaceFilter, clusterWide);
     const explicit =
       choice.kind === "prometheus"
         ? { flavor: choice.flavor, namespace: choice.namespace, service: choice.service, port: choice.port }
@@ -127,7 +138,7 @@ export function useRightSizing(): RightSizingData {
       cancelled = true;
       clearInterval(id);
     };
-  }, [namespaceFilter, choice, reloadKey]);
+  }, [namespaceFilter, clusterWide, choice, reloadKey]);
 
   const usingBackend = usage?.available === true;
   const noBackend = usage !== null && usage.available === false;

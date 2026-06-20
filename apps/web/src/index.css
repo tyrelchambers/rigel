@@ -326,16 +326,6 @@
   line-height: 1.1;
   letter-spacing: -0.3px;
 }
-.ov-ns-chip {
-  font-family: var(--font-mono, ui-monospace);
-  font-size: 11px;
-  color: var(--fg-tertiary);
-  background: var(--surface-elevated);
-  padding: 2px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--border-subtle);
-}
-
 .ov-actions { display: flex; align-items: center; gap: 8px; }
 
 .ov-btn-purge,

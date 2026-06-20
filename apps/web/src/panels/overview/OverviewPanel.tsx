@@ -88,7 +88,6 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
   const resources = useCluster((s) => s.resources);
   const isLoading = useCluster((s) => s.isLoading);
   const error = useCluster((s) => s.error);
-  const namespaceFilter = useCluster((s) => s.namespaceFilter);
 
   // Purge flow: picker → typed-name confirm sheet.
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -158,8 +157,9 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
   const hasMetrics = nodeMetricsData?.available === true && Object.keys(nodeMetrics).length > 0;
 
   // Reclaimable memory — same right-sizing pipeline the Right-Sizing panel uses,
-  // summed across the current namespace scope.
-  const { workloads: rsWorkloads, usingBackend: rsBackend } = useRightSizing();
+  // but forced cluster-wide so it matches the rest of this dashboard (the
+  // Right-Sizing panel itself stays namespace-scoped).
+  const { workloads: rsWorkloads, usingBackend: rsBackend } = useRightSizing({ clusterWide: true });
   const reclaimBytes = useMemo(
     () => rsWorkloads.reduce((sum, w) => sum + Math.max(0, w.reclaimableMemBytes), 0),
     [rsWorkloads],
@@ -212,7 +212,6 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
             {isLoading && (
               <LoaderCircle className="size-4 animate-spin text-muted-foreground" aria-label="loading" />
             )}
-            {namespaceFilter && <span className="ov-ns-chip">{namespaceFilter}</span>}
           </div>
         </div>
 
