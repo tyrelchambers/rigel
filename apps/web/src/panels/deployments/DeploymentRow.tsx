@@ -114,14 +114,8 @@ export function DeploymentRow({
         <DeploymentDetail
           deployment={d}
           pods={pods}
-          paused={paused}
           linkTargets={linkTargets}
           onAction={setPendingAction}
-          onRestart={() => restart(d)}
-          onScale={() => openScale(d)}
-          onEdit={() => openEdit(d)}
-          onRollback={() => rollback(d)}
-          onTogglePause={() => togglePause(d)}
         />
       }
     >

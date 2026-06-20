@@ -1,26 +1,6 @@
 import { type ReactNode } from "react";
-import {
-  RefreshCw,
-  MoveVertical,
-  SlidersHorizontal,
-  Undo2,
-  Pause,
-  Play,
-  Box,
-  Cpu,
-  MemoryStick,
-  GitBranch,
-  Settings2,
-  ChevronDown,
-} from "lucide-react";
+import { Box, Cpu, MemoryStick, GitBranch } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
 import type { ActionBlock } from "@/lib/api";
 import type { GitDeployment } from "@/panels/gitops/gitApi";
 import { buildLinkAction, buildUnlinkAction, linkedSourceName, type WorkloadRef } from "@/panels/gitops/linkSource";
@@ -41,27 +21,15 @@ import {
 interface DeploymentDetailProps {
   deployment: Deployment;
   pods: Pod[];
-  paused: boolean;
   linkTargets: { repo: string; dep: GitDeployment }[];
   onAction: (a: ActionBlock) => void;
-  onRestart: () => void;
-  onScale: () => void;
-  onEdit: () => void;
-  onRollback: () => void;
-  onTogglePause: () => void;
 }
 
 export function DeploymentDetail({
   deployment,
   pods,
-  paused,
   linkTargets,
   onAction,
-  onRestart,
-  onScale,
-  onEdit,
-  onRollback,
-  onTogglePause,
 }: DeploymentDetailProps) {
   const containers = containerSummaries(deployment);
   const sortedPods = [...pods].sort((a, b) => a.metadata.name.localeCompare(b.metadata.name));
@@ -189,46 +157,13 @@ export function DeploymentDetail({
         </div>
       </div>
 
-      {/* Manage section — mutations via ConfirmSheet */}
+      {/* Source link — actions live in the row's right-click / kebab menu. */}
       <div
         className="flex items-center gap-2 border-t pt-3"
         style={{ borderColor: "var(--border-subtle)" }}
       >
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={<Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" />}
-          >
-            <Settings2 className="size-3" />
-            Manage
-            <ChevronDown className="size-3 opacity-60" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="text-xs">
-            <DropdownMenuItem onClick={onRestart}>
-              <RefreshCw />
-              Restart
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onScale}>
-              <MoveVertical />
-              Scale
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onEdit}>
-              <SlidersHorizontal />
-              Edit config
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onRollback}>
-              <Undo2 />
-              Rollback
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onTogglePause}>
-              {paused ? <Play /> : <Pause />}
-              {paused ? "Resume" : "Pause"}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
         {/* GitHub source link — gives the AI source context + enables fix-PRs. */}
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5">
           <GitBranch className="size-3" style={{ color: "var(--accent-primary)" }} />
           {linkedSource ? (
             <>
