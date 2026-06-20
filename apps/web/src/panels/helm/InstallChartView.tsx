@@ -1,13 +1,14 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { YamlEditor } from "@/components/YamlEditorLazy";
 import { rigel } from "@/lib/desktop";
 import { buildHelmInstallCommands, type HelmChartSource, type HelmRelease } from "@rigel/k8s/src/helm";
-import { useArtifactHubSearch, useHelmInstall, useHelmShowValues } from "./helmApi";
+import { useHelmInstall, useHelmShowValues } from "./helmApi";
+import { chartPrefillToFields, type ChartPrefill } from "./installPrefill";
 import { HelmConfirmModal } from "./HelmConfirmModal";
 
-type Mode = "repo" | "oci" | "search" | "local";
+type Mode = "repo" | "oci" | "local";
 
-export function InstallChartView({ prefill }: { prefill: HelmRelease | null }) {
+export function InstallChartView({ prefill, chartPrefill }: { prefill: HelmRelease | null; chartPrefill: ChartPrefill | null }) {
   const [mode, setMode] = useState<Mode>("repo");
   const [releaseName, setReleaseName] = useState(prefill?.name ?? "");
   const [namespace, setNamespace] = useState(prefill?.namespace ?? "default");
@@ -17,18 +18,30 @@ export function InstallChartView({ prefill }: { prefill: HelmRelease | null }) {
   const [version, setVersion] = useState("");
   const [ociRef, setOciRef] = useState("");
   const [localPath, setLocalPath] = useState("");
-  const [query, setQuery] = useState("");
   const [values, setValues] = useState("# values\n");
   const [confirm, setConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const search = useArtifactHubSearch(mode === "search" ? query : "");
   const install = useHelmInstall();
+
+  // When a chart is picked in the Browse tab, seed the form fields.
+  useEffect(() => {
+    if (!chartPrefill) return;
+    const f = chartPrefillToFields(chartPrefill);
+    setMode(f.mode);
+    setRepoName(f.repoName);
+    setRepoURL(f.repoURL);
+    setChart(f.chart);
+    setOciRef(f.ociRef);
+    setLocalPath(f.localPath);
+    setVersion(f.version);
+    setReleaseName((prev) => prev || f.releaseName);
+  }, [chartPrefill]);
 
   const source: HelmChartSource | null = useMemo(() => {
     if (mode === "repo") return repoName && repoURL && chart ? { kind: "repo", repoName, repoURL, chart, version: version || null } : null;
     if (mode === "oci") return ociRef ? { kind: "oci", ref: ociRef, version: version || null } : null;
     if (mode === "local") return localPath ? { kind: "local", path: localPath } : null;
-    return null; // search prefills repo/oci then switches mode
+    return null;
   }, [mode, repoName, repoURL, chart, version, ociRef, localPath]);
 
   // Repo mode needs the repo URL too, so `helm show values <chart> --repo <url>`
@@ -62,9 +75,9 @@ export function InstallChartView({ prefill }: { prefill: HelmRelease | null }) {
   return (
     <div className="max-w-2xl space-y-4">
       <div className="flex gap-2 text-sm">
-        {(["repo", "oci", "search", "local"] as Mode[]).map((m) => (
+        {(["repo", "oci", "local"] as Mode[]).map((m) => (
           <button key={m} type="button" onClick={() => setMode(m)} className="rounded-md px-2.5 py-1.5" style={{ background: mode === m ? "rgba(255,255,255,0.08)" : "transparent" }}>
-            {m === "repo" ? "Repo + chart" : m === "oci" ? "OCI ref" : m === "search" ? "Artifact Hub" : "Local file"}
+            {m === "repo" ? "Repo + chart" : m === "oci" ? "OCI ref" : "Local file"}
           </button>
         ))}
       </div>
@@ -87,30 +100,6 @@ export function InstallChartView({ prefill }: { prefill: HelmRelease | null }) {
         <div className="flex items-end gap-2">
           <Field label="Chart path (.tgz or folder)" value={localPath} onChange={setLocalPath} />
           <button type="button" className="rounded-md px-3 py-2 text-sm hover:bg-white/[0.05]" onClick={pickLocal}>Browse…</button>
-        </div>
-      )}
-      {mode === "search" && (
-        <div>
-          <Field label="Search Artifact Hub" value={query} onChange={setQuery} />
-          <ul className="mt-2 space-y-1">
-            {(search.data ?? []).map((c, i) => (
-              <li key={i}>
-                <button
-                  type="button"
-                  className="w-full rounded-md px-2.5 py-2 text-left text-sm hover:bg-white/[0.04]"
-                  onClick={() => {
-                    if (c.source.kind === "oci") { setMode("oci"); setOciRef(c.source.ref); }
-                    else if (c.source.kind === "repo") { setMode("repo"); setRepoName(c.source.repoName); setRepoURL(c.source.repoURL); setChart(c.source.chart); }
-                    setVersion(c.version);
-                    if (!releaseName) setReleaseName(c.name);
-                  }}
-                >
-                  <span className="font-medium">{c.name}</span> <span className="text-xs text-muted-foreground">{c.repoName} · {c.version}</span>
-                  <div className="text-xs text-muted-foreground">{c.description}</div>
-                </button>
-              </li>
-            ))}
-          </ul>
         </div>
       )}
 

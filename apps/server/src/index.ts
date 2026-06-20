@@ -18,7 +18,7 @@ import {
   isHttpRepoURL,
   type HelmChartSource,
 } from "@rigel/k8s/src/helm";
-import { searchArtifactHub } from "./artifactHub";
+import { browseArtifactHub } from "./artifactHub";
 import { handlePurge, type PurgeRequest } from "./purge";
 import {
   loadSources, saveSources, diffSource, applySource, previewRepoFix, proposeRepoFix,
@@ -425,11 +425,20 @@ async function handler(req: Request): Promise<Response> {
       return Response.json(result);
     }
 
-    // GET /api/helm/search?q= — Artifact Hub chart search
-    if (url.pathname === "/api/helm/search" && req.method === "GET") {
-      const q = url.searchParams.get("q") ?? "";
-      if (q.trim() === "") return Response.json([]);
-      return Response.json(await searchArtifactHub(q));
+    // GET /api/helm/browse?q=&sort=&official=&verified=&offset=&limit= — Artifact Hub chart browse/search
+    if (url.pathname === "/api/helm/browse" && req.method === "GET") {
+      const sp = url.searchParams;
+      const sortParam = sp.get("sort");
+      const result = await browseArtifactHub({
+        query: sp.get("q") ?? undefined,
+        sort: sortParam === "stars" || sortParam === "relevance" ? sortParam : undefined,
+        official: sp.get("official") === "true",
+        verified: sp.get("verified") === "true",
+        // Builder owns defaults/clamping; absent → undefined, invalid → NaN, both fall back there.
+        offset: sp.has("offset") ? Number(sp.get("offset")) : undefined,
+        limit: sp.has("limit") ? Number(sp.get("limit")) : undefined,
+      });
+      return Response.json(result);
     }
 
     // GET /api/helm/show-values?ref=&version= — default chart values for the install form
