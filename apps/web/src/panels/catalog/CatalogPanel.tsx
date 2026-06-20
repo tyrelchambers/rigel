@@ -22,14 +22,14 @@ import {
   type StatefulSetLike,
   type DaemonSetLike,
   type PodLike,
-} from "@helmsman/catalog";
+} from "@rigel/catalog";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { useUpdates, type UpdateResult, type ActionBlock } from "@/lib/api";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { InfoTooltip } from "@/components/InfoTooltip";
 import { iconFor } from "./icons";
-import { boundAppID, boundContainer } from "@helmsman/catalog";
+import { boundAppID, boundContainer } from "@rigel/catalog";
 import {
   availableCategories,
   filterCatalog,

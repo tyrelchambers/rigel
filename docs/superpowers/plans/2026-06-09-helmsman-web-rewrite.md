@@ -235,7 +235,7 @@ Expected: FAIL — `applyEvent` not found.
 
 `apps/server/src/watchManager.ts`:
 ```ts
-import { WatchEventParser, type WatchEvent } from "@helmsman/k8s/src/watch";
+import { WatchEventParser, type WatchEvent } from "@rigel/k8s/src/watch";
 
 export function applyEvent(cache: Map<string, any>, e: WatchEvent): void {
   const name = e.object?.metadata?.name;

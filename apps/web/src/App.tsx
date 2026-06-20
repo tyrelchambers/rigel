@@ -253,9 +253,9 @@ export default function App() {
               <Route path="/apply" element={<ApplyYamlPanel />} />
               <Route path="/gitops" element={<GitOpsPanel />} />
               <Route path="/accounts" element={<Padded><AccountsPanel /></Padded>} />
+              <Route path="/settings" element={<Padded><SettingsPanel /></Padded>} />
               <Route path="/events" element={<EventsPanel />} />
               <Route path="/assistant" element={<AssistantPanel />} />
-              <Route path="/settings" element={<Padded><SettingsPanel /></Padded>} />
             </Routes>
           </main>
 

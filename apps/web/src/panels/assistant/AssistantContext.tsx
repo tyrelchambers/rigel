@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { useAssistantAction, type ActionBlock, type AssistantRequest } from "@/lib/api";
 import { useAssistant, type AssistantDerived } from "./useAssistant";
-import type { AssistantAuditEntry } from "@helmsman/k8s";
+import type { AssistantAuditEntry } from "@rigel/k8s";
 import { outcomeGlyph, outcomeColorClass, relativeTime } from "./display";
 
 // ---------------------------------------------------------------------------

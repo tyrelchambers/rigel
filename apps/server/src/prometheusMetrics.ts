@@ -12,7 +12,7 @@
  * getNodeDisk), so the metrics DB needs no direct network exposure.
  */
 
-import { kubectl } from "@helmsman/k8s/src/run";
+import { kubectl } from "@rigel/k8s/src/run";
 
 /** Service name Helmsman's own metrics-install flow creates (MetricsInstallManifests). */
 const INSTALL_SERVICE = "helmsman-metrics";

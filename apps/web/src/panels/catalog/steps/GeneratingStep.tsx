@@ -1,5 +1,5 @@
 import { Sparkles } from "lucide-react";
-import type { CatalogApp } from "@helmsman/catalog";
+import type { CatalogApp } from "@rigel/catalog";
 import { Button } from "@/components/ui/button";
 
 /**

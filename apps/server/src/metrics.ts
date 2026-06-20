@@ -9,7 +9,7 @@
  * Mirrors the Swift `MetricsServerClient` parsing of `kubectl top` output.
  */
 
-import { kubectl } from "@helmsman/k8s/src/run";
+import { kubectl } from "@rigel/k8s/src/run";
 
 export interface PodMetricRow {
   namespace: string;

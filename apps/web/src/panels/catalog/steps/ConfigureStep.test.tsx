@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, test } from "vitest";
 import { render } from "@testing-library/react";
-import type { CatalogApp } from "@helmsman/catalog";
+import type { CatalogApp } from "@rigel/catalog";
 import { ConfigureStep } from "./ConfigureStep";
 import type { ConfigureValues } from "../wizardLogic";
 

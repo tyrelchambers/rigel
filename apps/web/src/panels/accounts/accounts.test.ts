@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import type { Secret } from "@helmsman/k8s";
+import type { Secret } from "@rigel/k8s";
 import {
   buildDockerConfigJson,
   base64Encode,
@@ -7,7 +7,7 @@ import {
   DOCKERCONFIGJSON_TYPE,
   MANAGED_BY_LABEL,
   MANAGED_BY_VALUE,
-} from "@helmsman/k8s";
+} from "@rigel/k8s";
 import {
   accountsFromSecrets,
   accountId,

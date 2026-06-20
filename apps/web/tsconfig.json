@@ -28,8 +28,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@helmsman/k8s": ["../../packages/k8s/src/index.ts"],
-      "@helmsman/catalog": ["../../packages/catalog/src/index.ts"]
+      "@rigel/k8s": ["../../packages/k8s/src/index.ts"],
+      "@rigel/catalog": ["../../packages/catalog/src/index.ts"]
     }
   },
   "include": ["src"]

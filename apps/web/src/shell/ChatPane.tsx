@@ -16,8 +16,8 @@
  * ChatPanel.tsx — only the outer shell chrome and layout differ.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router";
 import { Copy, SquarePen, Clock, ArrowDown } from "lucide-react";
-import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { BatchConfirmSheet, type BatchConfirmItem } from "@/components/BatchConfirmSheet";
@@ -88,6 +88,8 @@ interface ChatPaneProps {
 }
 
 export default function ChatPane({ handleRef }: ChatPaneProps) {
+  const navigate = useNavigate();
+
   // ── Width / resize state ──────────────────────────────────────────────────
   const [paneWidth, setPaneWidth] = useState<number>(() => loadPaneWidth());
   const resizingRef = useRef(false);
@@ -163,7 +165,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   }, []);
   const agentNamespace = useCluster((s) => {
     const deps = (s.resources["deployments"] ?? {}) as Record<string, { metadata?: { name?: string; namespace?: string } }>;
-    const agent = Object.values(deps).find((d) => d.metadata?.name === "helmsman-assistant");
+    const agent = Object.values(deps).find((d) => d.metadata?.name === "rigel-assistant");
     return agent?.metadata?.namespace ?? "default";
   });
 
@@ -733,18 +735,24 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
             }}
           >
             <span style={{ lineHeight: 1.4 }}>Add an API key to start chatting.</span>
-            <Link
-              to="/settings"
+            <button
+              type="button"
+              onClick={() => navigate("/settings")}
               style={{
                 marginLeft: "auto",
                 color: "var(--accent-primary)",
                 fontWeight: 500,
                 textDecoration: "none",
                 whiteSpace: "nowrap",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: 0,
+                fontSize: "inherit",
               }}
             >
               Open Settings
-            </Link>
+            </button>
           </div>
         )}
 

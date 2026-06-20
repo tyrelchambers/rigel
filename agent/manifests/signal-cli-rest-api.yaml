@@ -2,7 +2,7 @@
 #
 # After applying, link your Signal number as a device (one-time):
 #   kubectl -n default port-forward svc/signal-cli-rest 8080:8080
-#   open http://localhost:8080/v1/qrcodelink?device_name=helmsman   # scan in Signal app
+#   open http://localhost:8080/v1/qrcodelink?device_name=rigel   # scan in Signal app
 # Then in the Assistant tab (or assistant-config) set:
 #   signalApiUrl=http://signal-cli-rest:8080
 #   signalNumber=+<your linked number>
@@ -20,7 +20,7 @@ metadata:
   name: signal-cli-data
   namespace: default
   labels:
-    app.kubernetes.io/managed-by: helmsman-assistant
+    app.kubernetes.io/managed-by: rigel-assistant
 spec:
   accessModes: [ReadWriteOnce]
   resources:
@@ -34,7 +34,7 @@ metadata:
   namespace: default
   labels:
     app.kubernetes.io/name: signal-cli-rest
-    app.kubernetes.io/managed-by: helmsman-assistant
+    app.kubernetes.io/managed-by: rigel-assistant
 spec:
   replicas: 1
   strategy:
@@ -76,7 +76,7 @@ metadata:
   name: signal-cli-rest
   namespace: default
   labels:
-    app.kubernetes.io/managed-by: helmsman-assistant
+    app.kubernetes.io/managed-by: rigel-assistant
 spec:
   selector:
     app.kubernetes.io/name: signal-cli-rest

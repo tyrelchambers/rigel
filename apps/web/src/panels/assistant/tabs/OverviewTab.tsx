@@ -2,7 +2,7 @@
 
 import { AlertTriangle, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { auditEntryId } from "@helmsman/k8s";
+import { auditEntryId } from "@rigel/k8s";
 import { useAssistantCtx } from "../AssistantContext";
 import { Card, Section } from "../components/primitives";
 import { AuditRow } from "../AuditRow";

@@ -13,7 +13,7 @@
 import { parseCpuCores, parseBytes, isReady } from "@/panels/nodes/nodeDisplay";
 import type { Node } from "@/panels/nodes/types";
 import type { Pod } from "@/panels/pods/types";
-import type { CatalogApp } from "@helmsman/catalog";
+import type { CatalogApp } from "@rigel/catalog";
 
 // ---------------------------------------------------------------------------
 // Public types

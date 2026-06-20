@@ -10,7 +10,7 @@ import {
   type DeploymentLike,
   type StatefulSetLike,
   type DaemonSetLike,
-} from "@helmsman/catalog";
+} from "@rigel/catalog";
 import type { WorkloadKind } from "./updateTargets";
 
 /** One selectable workload row in the picker. */

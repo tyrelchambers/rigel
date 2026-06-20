@@ -6,7 +6,7 @@
  * component never reads the store.
  */
 import { Sparkles } from "lucide-react";
-import { Link } from "react-router";
+import { useNavigate } from "react-router";
 
 interface ChatPaneEmptyStateProps {
   /** Whether to render the empty state (copilot unconfigured + no messages). */
@@ -14,6 +14,7 @@ interface ChatPaneEmptyStateProps {
 }
 
 export function ChatPaneEmptyState({ show }: ChatPaneEmptyStateProps) {
+  const navigate = useNavigate();
   if (!show) return null;
   return (
     <div
@@ -41,8 +42,9 @@ export function ChatPaneEmptyState({ show }: ChatPaneEmptyStateProps) {
         </code>{" "}
         and add it in Settings — the rest of the app works without it.
       </span>
-      <Link
-        to="/settings"
+      <button
+        type="button"
+        onClick={() => navigate("/settings")}
         style={{
           alignSelf: "flex-start",
           marginTop: 2,
@@ -52,11 +54,13 @@ export function ChatPaneEmptyState({ show }: ChatPaneEmptyStateProps) {
           color: "var(--fg-inverse)",
           fontSize: 12,
           fontWeight: 500,
+          border: "none",
+          cursor: "pointer",
           textDecoration: "none",
         }}
       >
         Open Settings
-      </Link>
+      </button>
     </div>
   );
 }

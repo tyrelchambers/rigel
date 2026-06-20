@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { YamlEditor } from "@/components/YamlEditorLazy";
 import { useClusterYamlSchema } from "@/lib/useClusterYamlSchema";
 import { applyManifestYaml, type ActionBlock, type ActionResult } from "@/lib/api";
-import { listResources } from "@helmsman/catalog";
+import { listResources } from "@rigel/catalog";
 import { isYamlFilename, readYamlFile } from "./readYamlFile";
 import { CheckCircle2, Layers, LoaderCircle, Play, Upload } from "lucide-react";
 

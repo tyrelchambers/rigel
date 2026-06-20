@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE: ghcr.io/${{ github.repository_owner }}/helmsman-assistant
+  IMAGE: ghcr.io/${{ github.repository_owner }}/rigel-assistant
 
 jobs:
   build:
@@ -72,4 +72,4 @@ jobs:
           chmod 600 ~/.kube/config
 
       - name: Restart deployment
-        run: kubectl rollout restart deployment/helmsman-assistant -n default
+        run: kubectl rollout restart deployment/rigel-assistant -n default

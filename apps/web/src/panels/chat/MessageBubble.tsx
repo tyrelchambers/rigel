@@ -8,6 +8,7 @@ import { SuggestedActionList } from "./SuggestedActionList";
 import { SuggestedQuestionList } from "./SuggestedQuestionList";
 import { SuggestedAlertList } from "./SuggestedAlertList";
 import { ToolCard } from "./ToolCard";
+import { RigelMark } from "@/components/RigelMark";
 import type { ChatMessage } from "./types";
 
 interface Props {
@@ -77,13 +78,13 @@ export function MessageBubble({ message, onAction, onRunBatch, onAnswer, agentNa
 
   return (
     <div className="flex items-start gap-2">
-      {/* Role avatar — colored circle (mirrors Swift roleIcon) */}
+      {/* Role avatar — colored circle. The assistant uses the Rigel mark. */}
       <div
         className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full"
-        style={{ background: `${color}26` }}
+        style={{ background: `${color}26`, color }}
         aria-hidden
       >
-        <Icon className="size-3" style={{ color }} />
+        {isAssistant ? <RigelMark size={13} /> : <Icon className="size-3" style={{ color }} />}
       </div>
 
       {/* Role-tinted bordered card */}

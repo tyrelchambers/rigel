@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
   <!-- White rounded-square body (macOS icon-grid proportions: 824 of 1024) -->
   <rect x="100" y="100" width="824" height="824" rx="184" ry="184" fill="#FFFFFF"/>
-  <!-- Rigel constellation, navy #0B1F3A, centered (132-unit art scaled to ~480px) -->
-  <g transform="translate(272,272) scale(3.6364)">
+  <!-- Rigel constellation, navy #0B1F3A, centered (132-unit art scaled to ~552px, ~15% larger) -->
+  <g transform="translate(236,236) scale(4.1818)">
     <path d="M30 46l68-16 4 66-60 6z m68-16l-56 72"
           stroke="#0B1F3A" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
     <circle cx="30" cy="46" r="9" fill="#0B1F3A"/>

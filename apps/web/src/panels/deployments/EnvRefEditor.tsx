@@ -1,5 +1,5 @@
 import { Plus, Minus } from "lucide-react";
-import type { Secret, ConfigMap } from "@helmsman/k8s";
+import type { Secret, ConfigMap } from "@rigel/k8s";
 import { Button } from "@/components/ui/button";
 import type { EnvRefEdit } from "./deploymentDisplay";
 

@@ -1,5 +1,5 @@
 // Pure helpers for the PurgePickerSheet. The protected-namespace list mirrors
-// the server guardrail in @helmsman/k8s/src/purge (kept in sync by the parity
+// the server guardrail in @rigel/k8s/src/purge (kept in sync by the parity
 // spec; the picker filters client-side so protected namespaces never appear,
 // and the server re-checks at discovery + execution).
 

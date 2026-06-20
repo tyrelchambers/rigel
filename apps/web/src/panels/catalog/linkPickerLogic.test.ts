@@ -3,7 +3,7 @@ import type {
   DeploymentLike,
   StatefulSetLike,
   DaemonSetLike,
-} from "@helmsman/catalog";
+} from "@rigel/catalog";
 import { pickableWorkloads, groupWorkloadsByNamespace } from "./linkPickerLogic";
 
 function dep(

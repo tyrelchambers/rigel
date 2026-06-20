@@ -5,7 +5,7 @@ import {
   saveSelfHostDefaults,
   EMPTY_SELF_HOST_DEFAULTS,
 } from "./useSettings";
-import { signalBridgeManifest, deriveSignalBridgeStatus, parseRecipients } from "@helmsman/k8s";
+import { signalBridgeManifest, deriveSignalBridgeStatus, parseRecipients } from "@rigel/k8s";
 
 // Minimal in-memory localStorage stub (vitest runs in node by default).
 beforeEach(() => {

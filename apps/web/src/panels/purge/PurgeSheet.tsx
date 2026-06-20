@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Trash2, Lock, LoaderCircle, CheckCircle2, XCircle } from "lucide-react";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetFooter,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -130,20 +128,19 @@ export function PurgeSheet({ target, open, onClose }: PurgeSheetProps) {
   const namespace = plan?.namespace ?? target?.namespace ?? "";
 
   return (
-    <Sheet open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
-      <SheetContent
-        side="bottom"
-        className="border-t-2 border-destructive/50 max-h-[85vh] overflow-hidden"
+    <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
+      <DialogContent
+        className="p-0 gap-0 border-t-2 border-destructive/50 max-h-[85vh] overflow-hidden max-w-2xl"
       >
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
+        <div className="flex flex-col gap-0.5 p-4">
+          <DialogTitle className="flex items-center gap-2">
             <Trash2 className="size-4 text-destructive" />
             <span>Purge {appName}</span>
-          </SheetTitle>
-          <SheetDescription className="font-mono text-xs">
+          </DialogTitle>
+          <DialogDescription className="font-mono text-xs">
             namespace: {namespace}
-          </SheetDescription>
-        </SheetHeader>
+          </DialogDescription>
+        </div>
 
         {/* Loading discovery */}
         {discovery.isPending && (
@@ -298,7 +295,7 @@ export function PurgeSheet({ target, open, onClose }: PurgeSheetProps) {
           </div>
         )}
 
-        <SheetFooter className="flex-row justify-end">
+        <div className="mt-auto flex flex-col gap-2 p-4 flex-row justify-end">
           <Button variant="outline" onClick={handleClose} disabled={exec.isPending}>
             Cancel
           </Button>
@@ -312,9 +309,9 @@ export function PurgeSheet({ target, open, onClose }: PurgeSheetProps) {
               Purge
             </Button>
           )}
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

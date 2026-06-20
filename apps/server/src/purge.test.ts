@@ -1,6 +1,6 @@
 import { test, expect } from "vitest";
 import { discover, execute, type PurgeRunners } from "./purge";
-import type { RunResult } from "@helmsman/k8s/src/run";
+import type { RunResult } from "@rigel/k8s/src/run";
 
 const ok = (stdout = ""): RunResult => ({ code: 0, stdout, stderr: "" });
 const fail = (stderr = "boom", code = 1): RunResult => ({ code, stdout: "", stderr });

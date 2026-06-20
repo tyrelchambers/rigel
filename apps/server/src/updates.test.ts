@@ -1,6 +1,6 @@
 import { test, expect, describe } from "vitest";
 import { handleUpdates } from "./updates";
-import { UpdateResolver, type TagSource } from "@helmsman/catalog";
+import { UpdateResolver, type TagSource } from "@rigel/catalog";
 
 // A stub tag source so the handler never touches the network. Returns canned
 // tag lists keyed by registry via the injected `tagSourceFor`.

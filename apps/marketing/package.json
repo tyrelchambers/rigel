@@ -1,5 +1,5 @@
 {
-  "name": "@helmsman/marketing",
+  "name": "@rigel/marketing",
   "private": true,
   "type": "module",
   "version": "0.0.0",
@@ -13,7 +13,7 @@
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.9",
     "@fontsource-variable/geist-mono": "^5.2.8",
-    "@helmsman/catalog": "workspace:*",
+    "@rigel/catalog": "workspace:*",
     "@iconify-json/lucide": "^1.2.113",
     "astro": "^6.4.7",
     "astro-icon": "^1.1.5"

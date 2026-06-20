@@ -1,7 +1,7 @@
 // Catalog grid filtering — search, category, scope. Pure helpers so the panel
 // stays declarative and the matching rules are unit-testable
 // (docs/parity/catalog.md §"State & Filtering").
-import type { AppCategory, CatalogApp } from "@helmsman/catalog";
+import type { AppCategory, CatalogApp } from "@rigel/catalog";
 
 export type Scope = "all" | "installed";
 

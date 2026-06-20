@@ -9,7 +9,9 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { readFile, unlink, writeFile } from "node:fs/promises";
 
-const TOKEN_FILE = join(homedir(), ".claude", "helmsman-oauth-token");
+function tokenFile(): string {
+  return join(homedir(), ".claude", "helmsman-oauth-token");
+}
 
 function envToken(): string | null {
   const t = process.env.CLAUDE_CODE_OAUTH_TOKEN?.trim();
@@ -18,7 +20,7 @@ function envToken(): string | null {
 
 async function fileToken(): Promise<string | null> {
   try {
-    const t = (await readFile(TOKEN_FILE, "utf8")).trim();
+    const t = (await readFile(tokenFile(), "utf8")).trim();
     return t || null;
   } catch {
     // ENOENT (file absent) or any read error → treat as no token.
@@ -39,12 +41,12 @@ export async function setClaudeToken(token: string): Promise<void> {
     return;
   }
   // mode 0o600 replaces the prior chmod-spawn: owner read/write only.
-  await writeFile(TOKEN_FILE, t, { mode: 0o600 });
+  await writeFile(tokenFile(), t, { mode: 0o600 });
 }
 
 export async function clearClaudeToken(): Promise<void> {
   try {
-    await unlink(TOKEN_FILE);
+    await unlink(tokenFile());
   } catch {
     /* already absent */
   }

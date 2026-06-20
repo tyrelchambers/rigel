@@ -2,8 +2,8 @@
 // monaco-yaml JSON Schema, cached per kube-context for the process lifetime
 // (CRDs/version change rarely; a server restart re-fetches). Returns null when
 // the fetch or conversion fails — the client edits lint-only (NO static fallback).
-import { kubectl } from "@helmsman/k8s/src/run";
-import { openapiV2ToYamlSchema } from "@helmsman/k8s/src/openapiSchema";
+import { kubectl } from "@rigel/k8s/src/run";
+import { openapiV2ToYamlSchema } from "@rigel/k8s/src/openapiSchema";
 
 const cache = new Map<string, Record<string, unknown> | null>();
 

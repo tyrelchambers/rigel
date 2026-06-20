@@ -262,7 +262,7 @@ git commit -m "feat(web): app shell — Vite/React/Tailwind v4/shadcn/TanStack Q
 `apps/server/package.json`:
 ```json
 {
-  "name": "@helmsman/server",
+  "name": "@rigel/server",
   "private": true,
   "type": "module",
   "scripts": {
@@ -391,7 +391,7 @@ git commit -m "feat(server): Bun skeleton — health, WS echo, kubeconfig resolu
 `packages/k8s/package.json`:
 ```json
 {
-  "name": "@helmsman/k8s",
+  "name": "@rigel/k8s",
   "private": true,
   "type": "module",
   "main": "src/index.ts",
@@ -410,7 +410,7 @@ export {};
 `packages/catalog/package.json`:
 ```json
 {
-  "name": "@helmsman/catalog",
+  "name": "@rigel/catalog",
   "private": true,
   "type": "module",
   "main": "src/index.ts",
@@ -542,7 +542,7 @@ shared `packages/k8s` + `packages/catalog`.
 ## Build / test
 - `pnpm --filter web build`, `pnpm --filter web test` (vitest),
   `pnpm --filter web typecheck`.
-- `pnpm --filter @helmsman/server test` (bun test), `… build`.
+- `pnpm --filter @rigel/server test` (bun test), `… build`.
 ```
 
 - [ ] **Step 2: Commit**
@@ -774,7 +774,7 @@ const verdicts = (await parallel(targets.map((t) => () =>
   agent(
     t === 'web'
       ? `You are the WEB VERIFIER. Run: pnpm --filter web typecheck && pnpm --filter web build && pnpm --filter web test, ` +
-        `and pnpm --filter @helmsman/server test. Then check the implementation against the acceptance criteria in ${SPEC_PATH}. ` +
+        `and pnpm --filter @rigel/server test. Then check the implementation against the acceptance criteria in ${SPEC_PATH}. ` +
         `Return the verdict (parity true only if build+tests pass AND acceptance criteria are met).`
       : `You are the SWIFT VERIFIER. Run: swift build && swift test. Then check against the acceptance criteria in ${SPEC_PATH}. ` +
         `Return the verdict (parity true only if build+tests pass AND acceptance criteria are met).`,

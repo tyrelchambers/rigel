@@ -130,10 +130,12 @@ active/available, so the live behavior is unchanged.
 
 ### Web: tabbed settings modal
 
-**Trigger / routing.** The NavStrip **Settings** entry becomes a button that
-opens the modal (state lifted to `App.tsx`, same pattern as the ⌘K
-CommandPalette `paletteOpen`). The `/settings` route is removed. `App.tsx`
-renders `<SettingsModal open onOpenChange .../>`.
+**Trigger / routing.** A **gear button in the `GlobalHeader`** (right side, near
+the search + connection-status cluster) is the primary trigger. The NavStrip
+**Settings** entry opens the same modal. Open state is lifted to `App.tsx`
+(same pattern as the ⌘K CommandPalette `paletteOpen`) and threaded to both the
+header and NavStrip. The `/settings` route is removed. `App.tsx` renders
+`<SettingsModal open onOpenChange .../>`.
 
 **`apps/web/src/panels/settings/SettingsModal.tsx`** (new) — shadcn `Dialog`
 with a top tab bar (pill-style, echoing the reference), dark-themed via existing

@@ -4,7 +4,7 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "./staticFiles";
 import { WebSocketServer } from "ws";
 import { resolveKubeconfigPath } from "./kubeconfig";
-import { kubectl } from "@helmsman/k8s/src/run";
+import { kubectl } from "@rigel/k8s/src/run";
 import { WatchManager } from "./watchManager";
 import { makeWsHandlers } from "./ws";
 import { buildCommand, PurgeActionError, type ActionBlock } from "./actions";
@@ -22,14 +22,16 @@ import {
   upsertDeployment,
   type GitSource,
   type GitDeployment,
-} from "@helmsman/k8s/src/gitSources";
+} from "@rigel/k8s/src/gitSources";
 import { getPodMetrics, getNodeMetrics, getNodeDisk } from "./metrics";
 import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusMetrics";
 import { handleUpdates, type UpdatesRequest } from "./updates";
 import { chatConfig, setClaudeToken } from "./chatConfig";
+import { agentsView, setAgentAuth, type AgentAuthMethod } from "./agentConfig";
+import { getAgent } from "./agentRegistry";
 import { buildSuggestions } from "./suggestions";
 import { getClusterYamlSchema } from "./clusterSchema";
-import { stripStatusBlock } from "@helmsman/k8s/src/manifestClean";
+import { stripStatusBlock } from "@rigel/k8s/src/manifestClean";
 import { handleAssistant, type AssistantRequest } from "./assistant";
 import { handleSignal, type SignalRequest } from "./signal";
 import { PortForwardManager, type TargetKind } from "./portForward";
@@ -191,6 +193,38 @@ async function handler(req: Request): Promise<Response> {
       const body = (await req.json().catch(() => ({}))) as { token?: unknown };
       await setClaudeToken(typeof body.token === "string" ? body.token : "");
       return Response.json(await chatConfig());
+    }
+
+    if (url.pathname === "/api/agents" && req.method === "GET") {
+      return Response.json(await agentsView());
+    }
+
+    // POST /api/agents/<id>/auth  { authMethod, secret? }
+    if (
+      url.pathname.startsWith("/api/agents/") &&
+      url.pathname.endsWith("/auth") &&
+      req.method === "POST"
+    ) {
+      const id = url.pathname.split("/")[3] ?? "";
+      const agent = getAgent(id);
+      if (!agent) return Response.json({ error: "unknown agent" }, { status: 404 });
+      if (agent.status === "comingSoon") {
+        return Response.json({ error: "agent not available yet" }, { status: 409 });
+      }
+      const body = (await req.json().catch(() => ({}))) as {
+        authMethod?: unknown;
+        secret?: unknown;
+      };
+      const authMethod = body.authMethod === "apiKey" ? "apiKey" : "subscription";
+      if (!agent.authMethods.includes(authMethod as AgentAuthMethod)) {
+        return Response.json({ error: "unsupported auth method" }, { status: 400 });
+      }
+      const secret = typeof body.secret === "string" ? body.secret : "";
+      if (authMethod === "apiKey" && !secret.trim()) {
+        return Response.json({ error: "an API key is required" }, { status: 400 });
+      }
+      const view = await setAgentAuth(agent.id, { authMethod, secret });
+      return Response.json(view);
     }
 
     // POST /api/action — execute or preview a chat action-block mutation.

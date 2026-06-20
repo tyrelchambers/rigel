@@ -1,7 +1,7 @@
 name: Catalog update check
 
 # Weekly scan of every catalog app's pinned PRIMARY image for a newer stable
-# release (reuses @helmsman/catalog's UpdateResolver, releases-first). The
+# release (reuses @rigel/catalog's UpdateResolver, releases-first). The
 # report lands in the run's job summary; results are CANDIDATES to verify
 # before re-pinning, so the job stays green and never blocks anything.
 

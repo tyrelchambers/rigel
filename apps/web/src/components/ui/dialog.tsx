@@ -51,7 +51,10 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-[calc(100%-2rem)] max-w-md max-h-[calc(100dvh-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          // Anchored a fixed distance from the top (not vertically centered) so a
+          // modal doesn't jump as its content height changes. Graphite body with a
+          // hairline ring + soft shadow — the shared default for every modal.
+          "fixed top-[8vh] left-1/2 z-50 grid w-[calc(100%-2rem)] max-w-md max-h-[84vh] -translate-x-1/2 gap-4 overflow-y-auto rounded-2xl bg-[#101012] p-4 text-sm text-popover-foreground ring-1 ring-white/10 shadow-[0_30px_80px_rgba(0,0,0,0.45)] duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className,
         )}
         {...props}

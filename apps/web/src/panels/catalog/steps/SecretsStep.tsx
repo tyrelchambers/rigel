@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Copy, RefreshCw, KeyRound, Check } from "lucide-react";
-import { generateSecret, type SecretFieldSpec } from "@helmsman/catalog";
+import { generateSecret, type SecretFieldSpec } from "@rigel/catalog";
 import { Button } from "@/components/ui/button";
 
 /**

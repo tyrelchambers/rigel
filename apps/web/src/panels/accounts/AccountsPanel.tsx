@@ -1,16 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { LoaderCircle, Package, Star, Trash2 } from "lucide-react";
-import type { Secret } from "@helmsman/k8s";
+import type { Secret } from "@rigel/k8s";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetFooter,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { InfoTooltip } from "@/components/InfoTooltip";
 import {
@@ -319,14 +317,14 @@ function AddAccountSheet({
   }
 
   return (
-    <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <SheetContent side="bottom" className="max-h-[90vh] overflow-auto">
-        <SheetHeader>
-          <SheetTitle>Add account</SheetTitle>
-          <SheetDescription>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="p-0 gap-0 max-h-[90vh] overflow-auto max-w-lg">
+        <div className="flex flex-col gap-0.5 p-4">
+          <DialogTitle>Add account</DialogTitle>
+          <DialogDescription>
             Store registry pull credentials as a cluster Secret so installs pull authenticated.
-          </SheetDescription>
-        </SheetHeader>
+          </DialogDescription>
+        </div>
 
         <div className="space-y-3 px-4 py-2">
           {/* Mode picker */}
@@ -368,16 +366,16 @@ function AddAccountSheet({
           )}
         </div>
 
-        <SheetFooter>
+        <div className="mt-auto flex flex-col gap-2 p-4">
           <Button variant="outline" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={busy}>
             {busy ? "Applying…" : form.mode === "create" ? "Create & apply" : "Add reference"}
           </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -395,32 +393,32 @@ function DeleteConfirmSheet({
   onConfirm: () => void;
 }) {
   return (
-    <Sheet open={!!account} onOpenChange={(o) => { if (!o) onCancel(); }}>
-      <SheetContent side="bottom">
-        <SheetHeader>
-          <SheetTitle>Remove account?</SheetTitle>
-          <SheetDescription>
+    <Dialog open={!!account} onOpenChange={(o) => { if (!o) onCancel(); }}>
+      <DialogContent className="p-0 gap-0 max-w-lg">
+        <div className="flex flex-col gap-0.5 p-4">
+          <DialogTitle>Remove account?</DialogTitle>
+          <DialogDescription>
             {account && (
               <span className="font-mono">
                 {account.registry}
                 {account.username ? ` · ${account.username}` : ""}
               </span>
             )}
-          </SheetDescription>
-        </SheetHeader>
+          </DialogDescription>
+        </div>
         <div className="px-4 py-2 text-sm text-muted-foreground">
           This removes the account from Rigel&apos;s list. The Secret will remain in the cluster
           (use the Secrets panel to delete it if needed).
         </div>
-        <SheetFooter>
+        <div className="mt-auto flex flex-col gap-2 p-4">
           <Button variant="outline" onClick={onCancel}>
             Cancel
           </Button>
           <Button variant="destructive" onClick={onConfirm}>
             Remove
           </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

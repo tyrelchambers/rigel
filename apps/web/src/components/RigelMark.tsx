@@ -18,7 +18,7 @@ export function RigelMark({ size = 15 }: { size?: number }) {
       <path
         d="M30 46l68-16 4 66-60 6z m68-16l-56 72"
         stroke="currentColor"
-        strokeWidth="3"
+        strokeWidth="4.5"
         strokeLinecap="round"
         strokeLinejoin="round"
       />

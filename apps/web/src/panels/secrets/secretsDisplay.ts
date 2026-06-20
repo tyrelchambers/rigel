@@ -1,4 +1,4 @@
-import type { Secret } from "@helmsman/k8s";
+import type { Secret } from "@rigel/k8s";
 
 /**
  * Pure display helpers for the Secrets panel. Mirrors the Swift `Secret`

@@ -3,7 +3,7 @@
 // This module is the byte-for-byte port of the Swift purge core
 // (Sources/Helmsman/Panels/Purge/*). It holds ZERO process spawning — only the
 // pure functions the server route composes around `kubectl`/`helm`. Keeping it
-// in @helmsman/k8s lets both the server route and its tests import the same
+// in @rigel/k8s lets both the server route and its tests import the same
 // guardrails without touching the cluster.
 //
 // See docs/parity/purge.md for the normative spec.

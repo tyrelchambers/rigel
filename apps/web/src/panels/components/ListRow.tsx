@@ -11,7 +11,7 @@
  * All list panels (Deployments, Pods, …) should wrap their per-item markup
  * in this component so chrome stays consistent.
  */
-import { ChevronRight, ChevronDown } from "lucide-react";
+import { ChevronRight, ChevronDown, MoreVertical } from "lucide-react";
 import type { ReactNode } from "react";
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent } from "@/components/ui/context-menu";
 
@@ -56,6 +56,19 @@ export function ListRow({
     border: "1px solid #26272B",
   } as const;
 
+  // Kebab affordance: open the row's own right-click menu from a left click, so
+  // the menu has a single definition (no duplicate dropdown). Dispatches a
+  // synthetic contextmenu event on the ContextMenuTrigger at the button's corner.
+  function openRowMenu(e: React.MouseEvent<HTMLButtonElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    const trigger = e.currentTarget.closest('[data-slot="context-menu-trigger"]');
+    const r = e.currentTarget.getBoundingClientRect();
+    trigger?.dispatchEvent(
+      new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: r.right, clientY: r.bottom }),
+    );
+  }
+
   const cardInner = (
     <>
       {/* Optional left-edge overlay (e.g. redeploying glow) */}
@@ -75,6 +88,19 @@ export function ListRow({
 
         {/* Row body */}
         {children}
+
+        {/* Kebab — opens the same right-click menu (only when there is one) */}
+        {contextMenu && (
+          <button
+            type="button"
+            onClick={openRowMenu}
+            aria-label="Row actions"
+            title="Actions"
+            className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-white/[0.07] hover:text-foreground"
+          >
+            <MoreVertical className="size-3.5" />
+          </button>
+        )}
       </div>
 
       {/* Optional bottom progress bar */}

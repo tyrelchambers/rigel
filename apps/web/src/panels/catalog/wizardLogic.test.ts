@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import type { CatalogApp, SecretFieldSpec } from "@helmsman/catalog";
+import type { CatalogApp, SecretFieldSpec } from "@rigel/catalog";
 import type { Pod } from "../pods/types";
 import {
   canAdvanceFromConfigure,

@@ -1,0 +1,145 @@
+// Reusable modal shell built on the shared graphite Dialog primitive:
+//   • <Modal>     — title on the left, X on the right, content below.
+//   • <TabModal>  — same header, but a tab row sits in the header and the
+//                   active panel renders in the body below.
+// Background, corner radius, hairline ring, shadow and top-anchored position
+// all come from DialogContent (the app-wide default). This component only adds
+// the header bar (hairline-separated) and padded body.
+import { useState, type ReactNode } from "react";
+import { XIcon } from "lucide-react";
+import { Dialog, DialogClose, DialogContent, DialogTitle } from "./dialog";
+import { cn } from "@/lib/utils";
+
+const HEADER_BORDER = "rgba(255,255,255,0.07)";
+const MUTED = "#8C8C95";
+
+interface FrameProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** Accessible title (also the visible title for <Modal>). */
+  title: string;
+  /** Left side of the header bar — a title for Modal, the tab row for TabModal. */
+  header: ReactNode;
+  /** Tailwind max-width override, e.g. "!max-w-4xl". */
+  maxWidth?: string;
+  children: ReactNode;
+}
+
+/** Shared frame: hairline-separated header (left content + X), padded body below. */
+function ModalFrame({ open, onOpenChange, title, header, maxWidth = "!max-w-2xl", children }: FrameProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        showCloseButton={false}
+        className={cn(
+          "flex max-h-[85vh] w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0",
+          maxWidth,
+        )}
+      >
+        {/* Accessible title (the visible one lives in the header) */}
+        <DialogTitle className="sr-only">{title}</DialogTitle>
+
+        {/* Header bar — same graphite as the body, set off by a hairline */}
+        <div
+          className="flex shrink-0 items-center justify-between gap-4"
+          style={{ borderBottom: `1px solid ${HEADER_BORDER}`, padding: "14px 18px" }}
+        >
+          <div className="min-w-0 flex-1">{header}</div>
+          <DialogClose
+            className="flex shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-white/[0.05]"
+            style={{ width: 30, height: 30 }}
+          >
+            <XIcon className="size-4" style={{ color: MUTED }} />
+            <span className="sr-only">Close</span>
+          </DialogClose>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto" style={{ padding: "24px 24px 28px" }}>
+          {children}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+interface ModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  maxWidth?: string;
+  children: ReactNode;
+}
+
+/** General modal: a graphite header with the title on the left + X on the right. */
+export function Modal({ open, onOpenChange, title, maxWidth, children }: ModalProps) {
+  return (
+    <ModalFrame
+      open={open}
+      onOpenChange={onOpenChange}
+      title={title}
+      maxWidth={maxWidth}
+      header={<h2 style={{ fontSize: 15, fontWeight: 600, color: "#FFFFFF" }}>{title}</h2>}
+    >
+      {children}
+    </ModalFrame>
+  );
+}
+
+export interface ModalTab {
+  id: string;
+  label: string;
+  content: ReactNode;
+}
+
+interface TabModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** Accessible title (the visible header shows the tabs). */
+  title: string;
+  tabs: ModalTab[];
+  defaultTab?: string;
+  maxWidth?: string;
+}
+
+/** Tab modal: the same graphite header, but with the tab row in the header. */
+export function TabModal({ open, onOpenChange, title, tabs, defaultTab, maxWidth }: TabModalProps) {
+  const [active, setActive] = useState<string>(defaultTab ?? tabs[0]?.id ?? "");
+  const current = tabs.find((t) => t.id === active) ?? tabs[0];
+
+  return (
+    <ModalFrame
+      open={open}
+      onOpenChange={onOpenChange}
+      title={title}
+      maxWidth={maxWidth}
+      header={
+        <div className="flex" style={{ gap: 4 }}>
+          {tabs.map((t) => {
+            const isActive = t.id === current?.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setActive(t.id)}
+                className="transition-colors hover:bg-white/[0.04]"
+                style={{
+                  padding: "7px 12px",
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: isActive ? 600 : 500,
+                  color: isActive ? "#FFFFFF" : MUTED,
+                  background: isActive ? "rgba(255,255,255,0.08)" : "transparent",
+                }}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+      }
+    >
+      {current?.content}
+    </ModalFrame>
+  );
+}

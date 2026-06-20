@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { KVRow, Secret, ConfigMap } from "@helmsman/k8s";
+import type { KVRow, Secret, ConfigMap } from "@rigel/k8s";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { EnvRefEditor } from "./EnvRefEditor";

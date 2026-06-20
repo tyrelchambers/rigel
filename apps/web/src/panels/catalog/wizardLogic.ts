@@ -8,7 +8,7 @@ import {
   scanPlaceholders,
   type CatalogApp,
   type SecretFieldSpec,
-} from "@helmsman/catalog";
+} from "@rigel/catalog";
 import type { Pod } from "../pods/types";
 
 export type WizardStep =

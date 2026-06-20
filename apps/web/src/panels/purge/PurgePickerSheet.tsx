@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Trash2, Search } from "lucide-react";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import type { Deployment } from "@/panels/deployments/types";
@@ -58,18 +57,18 @@ export function PurgePickerSheet({ open, onClose, onPick }: PurgePickerSheetProp
   const hasMatches = groups.some((g) => g.deployments.length > 0);
 
   return (
-    <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <SheetContent side="bottom" className="max-h-[85vh] overflow-hidden">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="p-0 gap-0 max-h-[85vh] overflow-hidden max-w-2xl">
+        <div className="flex flex-col gap-0.5 p-4">
+          <DialogTitle className="flex items-center gap-2">
             <Trash2 className="size-4 text-destructive" />
             Purge an app
-          </SheetTitle>
-          <SheetDescription>
+          </DialogTitle>
+          <DialogDescription>
             Pick a deployment to remove. The next step previews every resource and
             requires you to type the app name.
-          </SheetDescription>
-        </SheetHeader>
+          </DialogDescription>
+        </div>
 
         {/* Search */}
         <div className="px-4">
@@ -120,7 +119,7 @@ export function PurgePickerSheet({ open, onClose, onPick }: PurgePickerSheetProp
             </div>
           )}
         </div>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }

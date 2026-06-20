@@ -13,7 +13,7 @@
 // container in the outbound message are parsed from kubectl's `--prefix` line
 // when present (multi-pod `-l` streams), else echoed from the target.
 
-import { buildKubectlArgs } from "@helmsman/k8s/src/run";
+import { buildKubectlArgs } from "@rigel/k8s/src/run";
 import { spawn, type ChildProcess } from "node:child_process";
 
 /** Minimal sink for outbound JSON frames (a ServerWebSocket satisfies this). */

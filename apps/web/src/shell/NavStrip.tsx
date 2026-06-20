@@ -7,6 +7,7 @@
  */
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   LayoutGrid,
   Sparkles,
@@ -142,21 +143,21 @@ function NavGroupHeader({ title, collapsed, onToggle }: NavGroupHeaderProps) {
   );
 }
 
-interface NavButtonProps {
+type NavButtonProps = {
   panelKey: string;
   /** Icon-only rail mode: hide the label, center the icon. */
   collapsed?: boolean;
-}
+};
 
 function NavButton({ panelKey, collapsed = false }: NavButtonProps) {
   const meta = PANEL_META[panelKey];
   if (!meta) return null;
   const Icon = meta.icon;
 
-  return (
+  const link = (
     <NavLink
       to={meta.route}
-      title={meta.title}
+      aria-label={meta.title}
       className={({ isActive }) =>
         [
           collapsed
@@ -199,11 +200,28 @@ function NavButton({ panelKey, collapsed = false }: NavButtonProps) {
       )}
     </NavLink>
   );
+
+  // Only the collapsed icon-only rail needs a tooltip; the expanded rail shows
+  // the label inline already.
+  if (!collapsed) return link;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger render={link} />
+      <TooltipContent side="right" sideOffset={8}>
+        {meta.title}
+      </TooltipContent>
+    </Tooltip>
+  );
 }
 
 // ─── NavStrip ─────────────────────────────────────────────────────────────────
 
-export default function NavStrip({ collapsed = false }: { collapsed?: boolean }) {
+export default function NavStrip({
+  collapsed = false,
+}: {
+  collapsed?: boolean;
+}) {
   const location = useLocation();
   const activePanelKey = routeToPanelKey(location.pathname);
 
@@ -238,6 +256,7 @@ export default function NavStrip({ collapsed = false }: { collapsed?: boolean })
           background-color: rgba(56, 189, 248, 0.15);
         }
       `}</style>
+      <TooltipProvider delay={0}>
       <nav
         style={{
           width: collapsed ? 52 : 200,
@@ -321,6 +340,7 @@ export default function NavStrip({ collapsed = false }: { collapsed?: boolean })
           })}
         </div>
       </nav>
+      </TooltipProvider>
     </>
   );
 }

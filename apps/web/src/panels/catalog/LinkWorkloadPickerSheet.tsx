@@ -5,14 +5,13 @@ import {
   type DeploymentLike,
   type StatefulSetLike,
   type DaemonSetLike,
-} from "@helmsman/catalog";
+} from "@rigel/catalog";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import type { WorkloadKind } from "./updateTargets";
@@ -127,19 +126,19 @@ export function LinkWorkloadPickerSheet({
   }
 
   return (
-    <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <SheetContent side="bottom" className="max-h-[85vh] overflow-hidden">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="p-0 gap-0 max-h-[85vh] overflow-hidden max-w-2xl">
+        <div className="flex flex-col gap-0.5 p-4">
+          <DialogTitle className="flex items-center gap-2">
             <Link2 className="size-4" />
             {containerStep ? "Choose a container" : `Link a workload to ${app.name}`}
-          </SheetTitle>
-          <SheetDescription>
+          </DialogTitle>
+          <DialogDescription>
             {containerStep
               ? `Pick which container of ${containerStep.name} backs ${app.name}.`
               : "Pick the Deployment, StatefulSet, or DaemonSet that runs this app. The next step shows the exact kubectl command."}
-          </SheetDescription>
-        </SheetHeader>
+          </DialogDescription>
+        </div>
 
         {containerStep ? (
           // ─── Step 2: container picker (multi-container only) ───
@@ -216,7 +215,7 @@ export function LinkWorkloadPickerSheet({
             </div>
           </>
         )}
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }

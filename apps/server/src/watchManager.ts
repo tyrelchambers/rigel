@@ -1,4 +1,4 @@
-import { WatchEventParser, type WatchEvent } from "@helmsman/k8s/src/watch";
+import { WatchEventParser, type WatchEvent } from "@rigel/k8s/src/watch";
 import { spawn, type ChildProcess } from "node:child_process";
 
 export function applyEvent(cache: Map<string, any>, e: WatchEvent): void {

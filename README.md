@@ -161,7 +161,7 @@ Run the web UI and server in parallel during development:
 pnpm --filter web dev
 
 # Node backend (restarts on file changes)
-pnpm --filter @helmsman/server dev   # uses tsx watch internally
+pnpm --filter @rigel/server dev   # uses tsx watch internally
 ```
 
 Run tests and type-checks across the monorepo:

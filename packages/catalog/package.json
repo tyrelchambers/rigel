@@ -1,5 +1,5 @@
 {
-  "name": "@helmsman/catalog",
+  "name": "@rigel/catalog",
   "private": true,
   "type": "module",
   "main": "src/index.ts",

@@ -102,7 +102,7 @@ schema.
 - **All checks pass →** insert the entry into `catalog.json` with a SURGICAL string insert
   that preserves the file's existing formatting (do NOT `json.load`/`json.dump` the whole
   file — that reformats unrelated entries; insert the new object text before the closing
-  `]`). Then run `pnpm --filter @helmsman/catalog test` to confirm the bundled catalog
+  `]`). Then run `pnpm --filter @rigel/catalog test` to confirm the bundled catalog
   still decodes. Report what each check returned.
 - **Any check fails →** re-dispatch ONLY the relevant research agent with the failure text
   as feedback (e.g. "helm show chart failed: chart not found" → install-method;
@@ -134,7 +134,7 @@ in-app install never re-runs an LLM or scrapes generated YAML. So **persist** th
   `installPromptTemplate` as the legacy fallback.
 - **Verify the baked form** before writing: substitute sample `{{vars}}` + dummy secret
   values, assert no `<FILL_ME_IN>`/`{{` survive, then run the Step-4 harness on the result
-  (`manifest-validate` / `helm-render` + `image`). Then `pnpm --filter @helmsman/catalog test`.
+  (`manifest-validate` / `helm-render` + `image`). Then `pnpm --filter @rigel/catalog test`.
 - An entry with a baked artifact is `isBaked` — the wizard installs it deterministically
   (substitute + apply, no Claude). Migrate apps to baked one at a time; `outline` is the
   reference example.

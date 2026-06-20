@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import type { Node } from "@/panels/nodes/types";
 import type { Pod } from "@/panels/pods/types";
-import type { CatalogApp } from "@helmsman/catalog";
+import type { CatalogApp } from "@rigel/catalog";
 import { nodeFit } from "./nodeFit";
 
 // ---------------------------------------------------------------------------

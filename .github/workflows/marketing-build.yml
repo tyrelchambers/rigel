@@ -1,4 +1,4 @@
-name: Build Helmsman marketing image
+name: Build Rigel marketing image
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE: ghcr.io/${{ github.repository_owner }}/helmsman-marketing
+  IMAGE: ghcr.io/${{ github.repository_owner }}/rigel-marketing
 
 jobs:
   build:
@@ -84,4 +84,4 @@ jobs:
           # it's applied manually from apps/marketing/k8s/ingress.yaml when ready.
           kubectl apply -f apps/marketing/k8s/deployment.yaml -f apps/marketing/k8s/service.yaml
           # Force a re-pull of the freshly-pushed :latest image.
-          kubectl rollout restart deployment/helmsman-marketing -n default
+          kubectl rollout restart deployment/rigel-marketing -n default

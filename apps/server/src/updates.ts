@@ -3,7 +3,7 @@
  *
  * Takes a list of full running image references and, for each, resolves an
  * update status through the deterministic resolver tiers in
- * `@helmsman/catalog` (registry version tags → moving-tag digests → GitHub
+ * `@rigel/catalog` (registry version tags → moving-tag digests → GitHub
  * Releases). Maps each `UpdateStatus | null` to the wire `UpdateResult` shape.
  *
  * Error handling is strictly per-image: a network failure, malformed registry
@@ -20,7 +20,7 @@ import {
   UpdateResolver,
   type InstalledImage,
   type UpdateStatus,
-} from "@helmsman/catalog";
+} from "@rigel/catalog";
 
 /** Request body for `POST /api/updates`. */
 export interface UpdatesRequest {

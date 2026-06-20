@@ -120,7 +120,7 @@ export type WalArchivingStatus = "healthy" | "failing" | "unknown";
 
 // --- Raw Secret (credential discovery + username decode) -------------------
 // Minimal shape needed by the Databases panel; the full Secret type lives in
-// @helmsman/k8s but this keeps the panel free of workspace-package linking for
+// @rigel/k8s but this keeps the panel free of workspace-package linking for
 // a type-only import (same rationale as the other models above).
 
 export interface DatabaseSecret {

@@ -6,7 +6,7 @@
 
 **Architecture:** One shared lazy-loaded editor component (Monaco + `monaco-yaml`) backed by a server endpoint that converts the apiserver's OpenAPI v2 into a JSON Schema. Each consumer reuses existing guarded plumbing: Apply/edit go through the `applyManifest` action + `ConfirmSheet`; GitOps goes through `proposeRepoFix`. No new mutation paths. On schema failure the editor degrades to YAML-lint only (no static fallback).
 
-**Tech Stack:** React 19 + Vite + TypeScript; `monaco-editor@0.55.1`, `@monaco-editor/react@4.7.0`, `monaco-yaml@5.5.1`; Bun server; `@helmsman/k8s` shared package; vitest (web) / `bun test` (server + packages).
+**Tech Stack:** React 19 + Vite + TypeScript; `monaco-editor@0.55.1`, `@monaco-editor/react@4.7.0`, `monaco-yaml@5.5.1`; Bun server; `@rigel/k8s` shared package; vitest (web) / `bun test` (server + packages).
 
 **Spec:** `docs/superpowers/specs/2026-06-18-monaco-yaml-editor-design.md`
 
@@ -15,7 +15,7 @@
 ## Conventions for every task
 
 - Web tests: vitest. Pure-logic suites run in node; component/DOM suites start the file with `// @vitest-environment jsdom`. Run with `pnpm --filter web test`.
-- Server + `packages/*` tests: `bun test` (`import { test, expect } from "bun:test"`). Run with `pnpm --filter @helmsman/k8s test` / `pnpm --filter @helmsman/server test`.
+- Server + `packages/*` tests: `bun test` (`import { test, expect } from "bun:test"`). Run with `pnpm --filter @rigel/k8s test` / `pnpm --filter @rigel/server test`.
 - Monaco UI wiring can't be meaningfully unit-tested (workers/canvas). We extract all testable logic into pure modules (tested) and verify the editor itself **manually in the running Docker container** (`docker compose up -d --build`, per the project rule that the web app runs as a local container).
 - Commit after each task. Keep commits scoped to the task.
 
@@ -119,7 +119,7 @@ test("openapiV2ToYamlSchema returns null on junk input (→ lint-only)", () => {
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `pnpm --filter @helmsman/k8s test openapiSchema`
+Run: `pnpm --filter @rigel/k8s test openapiSchema`
 Expected: FAIL — `openapiV2ToYamlSchema is not a function` (module doesn't exist).
 
 - [ ] **Step 3: Implement the converter**
@@ -177,7 +177,7 @@ export function openapiV2ToYamlSchema(raw: unknown): Record<string, unknown> | n
 
 - [ ] **Step 4: Run the test to verify it passes**
 
-Run: `pnpm --filter @helmsman/k8s test openapiSchema`
+Run: `pnpm --filter @rigel/k8s test openapiSchema`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Export from the package index**
@@ -245,7 +245,7 @@ test("stripStatusBlock leaves an indented status: key (e.g. configmap data) unto
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `pnpm --filter @helmsman/k8s test manifestClean`
+Run: `pnpm --filter @rigel/k8s test manifestClean`
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Implement the stripper**
@@ -281,7 +281,7 @@ export function stripStatusBlock(yaml: string): string {
 
 - [ ] **Step 4: Run the test to verify it passes**
 
-Run: `pnpm --filter @helmsman/k8s test manifestClean`
+Run: `pnpm --filter @rigel/k8s test manifestClean`
 Expected: PASS (3 tests).
 
 - [ ] **Step 5: Export from the package index**
@@ -314,8 +314,8 @@ Create `apps/server/src/clusterSchema.ts`:
 // monaco-yaml JSON Schema, cached per kube-context for the process lifetime
 // (CRDs/version change rarely; a server restart re-fetches). Returns null when
 // the fetch or conversion fails — the client edits lint-only (NO static fallback).
-import { kubectl } from "@helmsman/k8s/src/run";
-import { openapiV2ToYamlSchema } from "@helmsman/k8s/src/openapiSchema";
+import { kubectl } from "@rigel/k8s/src/run";
+import { openapiV2ToYamlSchema } from "@rigel/k8s/src/openapiSchema";
 
 const cache = new Map<string, Record<string, unknown> | null>();
 
@@ -344,9 +344,9 @@ In `apps/server/src/index.ts`:
 ```ts
 import { getClusterYamlSchema } from "./clusterSchema";
 ```
-(b) Add `stripStatusBlock` to the existing `@helmsman/k8s` usage — add this import line near the top:
+(b) Add `stripStatusBlock` to the existing `@rigel/k8s` usage — add this import line near the top:
 ```ts
-import { stripStatusBlock } from "@helmsman/k8s/src/manifestClean";
+import { stripStatusBlock } from "@rigel/k8s/src/manifestClean";
 ```
 (c) Replace the `/api/resource` handler body (currently lines 314–322) with a `clean`-aware version:
 ```ts
@@ -378,7 +378,7 @@ import { stripStatusBlock } from "@helmsman/k8s/src/manifestClean";
 
 - [ ] **Step 3: Verify the server typechecks/builds**
 
-Run: `pnpm --filter @helmsman/server build`
+Run: `pnpm --filter @rigel/server build`
 Expected: build succeeds.
 
 - [ ] **Step 4: Verify the endpoint returns a schema against the live cluster**
@@ -723,7 +723,7 @@ import { Button } from "@/components/ui/button";
 import { YamlEditor } from "@/components/YamlEditorLazy";
 import { useClusterYamlSchema } from "@/lib/useClusterYamlSchema";
 import { applyManifestYaml, type ActionBlock, type ActionResult } from "@/lib/api";
-import { listResources } from "@helmsman/catalog";
+import { listResources } from "@rigel/catalog";
 import { isYamlFilename, readYamlFile } from "./readYamlFile";
 import { CheckCircle2, Layers, LoaderCircle, Play, Upload } from "lucide-react";
 
@@ -1196,7 +1196,7 @@ export async function readRepoFile(
 }
 ```
 
-(Confirm `safeRepoFilePath` and `githubHeaders` are in scope in `git.ts` — both already exist there; if `safeRepoFilePath` is imported from `@helmsman/k8s/src/gitSources`, it already is for `previewRepoFix`.)
+(Confirm `safeRepoFilePath` and `githubHeaders` are in scope in `git.ts` — both already exist there; if `safeRepoFilePath` is imported from `@rigel/k8s/src/gitSources`, it already is for `previewRepoFix`.)
 
 - [ ] **Step 2: Add the route**
 
@@ -1221,7 +1221,7 @@ In `apps/server/src/index.ts`:
 
 - [ ] **Step 3: Verify the server builds**
 
-Run: `pnpm --filter @helmsman/server build`
+Run: `pnpm --filter @rigel/server build`
 Expected: succeeds.
 
 - [ ] **Step 4: Commit**
@@ -1444,8 +1444,8 @@ git commit -m "feat(web): launch GitOps file-edit dialog from the source card"
 - [ ] **Step 1: Run every suite + typecheck + build**
 
 ```bash
-pnpm --filter @helmsman/k8s test
-pnpm --filter @helmsman/server build
+pnpm --filter @rigel/k8s test
+pnpm --filter @rigel/server build
 pnpm --filter web typecheck
 pnpm --filter web test
 pnpm --filter web build

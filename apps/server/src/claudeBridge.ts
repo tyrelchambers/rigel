@@ -1,7 +1,7 @@
 // Action-block parsing lives once in the shared package so the chat panel
 // (apps/web) and this bridge decode the fenced ```action JSON identically.
-export { extractActionBlocks } from "@helmsman/k8s/src/actionBlocks";
-import { effectiveClaudeToken } from "./chatConfig";
+export { extractActionBlocks } from "@rigel/k8s/src/actionBlocks";
+import { claudeAuthEnv } from "./agentConfig";
 import { systemPrompt } from "./systemPrompt";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
@@ -267,14 +267,11 @@ export async function* runClaude(
 ): AsyncGenerator<ChatEvent> {
   const argv = buildClaudeArgs(prompt, context, opts);
 
-  // Token: explicit env wins; otherwise the in-app Settings token (persisted to
-  // the claude home) is injected so chat works without an env restart.
-  const token = await effectiveClaudeToken();
   const env: Record<string, string> = {
     ...(process.env as Record<string, string>),
     ...(context ? { KUBECONFIG_CONTEXT: context } : {}),
+    ...(await claudeAuthEnv()),
   };
-  if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;
 
   const proc = spawn(argv[0], argv.slice(1), {
     stdio: ["ignore", "pipe", "pipe"],

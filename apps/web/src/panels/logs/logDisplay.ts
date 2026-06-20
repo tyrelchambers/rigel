@@ -1,6 +1,6 @@
 // Display + filtering logic for the Logs panel. Pure functions (no React) so
 // they're unit-testable. The color assigner + probe filter + line parser are
-// shared with the server via @helmsman/k8s; this module wraps them with the
+// shared with the server via @rigel/k8s; this module wraps them with the
 // web-side LogLine model (stable `id`), the 5000-line buffer cap, the
 // filter pipeline, timestamp formatting, and sidebar helpers.
 //
@@ -13,7 +13,7 @@ import {
   isErrorLine,
   fnv1aColorIndex,
   deploymentColorIndex,
-} from "@helmsman/k8s";
+} from "@rigel/k8s";
 import type { Deployment } from "../deployments/types";
 
 export { POD_COLORS, isProbeLine, isErrorLine, fnv1aColorIndex, deploymentColorIndex };

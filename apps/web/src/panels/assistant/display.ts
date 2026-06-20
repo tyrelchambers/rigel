@@ -2,7 +2,7 @@
 // helpers in AssistantPanel.swift). Kept separate from the component so they can
 // be unit-tested without a DOM.
 
-import type { TokenExpiryStatus } from "@helmsman/k8s";
+import type { TokenExpiryStatus } from "@rigel/k8s";
 
 /** Summary-strip / credentials token label. */
 export function tokenLabel(t: TokenExpiryStatus): string {

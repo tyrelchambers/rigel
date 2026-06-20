@@ -1,5 +1,5 @@
 {
-  "name": "helmsman-monorepo",
+  "name": "rigel-monorepo",
   "private": true,
   "type": "module",
   "engines": { "node": ">=22" },

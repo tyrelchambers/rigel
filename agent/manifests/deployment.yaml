@@ -1,28 +1,28 @@
-# The agent Deployment. The image tag and env knobs are filled in by Helmsman's
+# The agent Deployment. The image tag and env knobs are filled in by Rigel's
 # guided installer; the values below are sane defaults. The OAuth token is
 # mounted from the `assistant-claude-token` Secret created during setup (see
 # secret.example.yaml) — it is NOT committed.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: helmsman-assistant
+  name: rigel-assistant
   namespace: default
   labels:
-    app.kubernetes.io/name: helmsman-assistant
-    app.kubernetes.io/managed-by: helmsman-assistant
+    app.kubernetes.io/name: rigel-assistant
+    app.kubernetes.io/managed-by: rigel-assistant
 spec:
   replicas: 1
   strategy:
     type: Recreate # single-writer of the state ConfigMaps; never run two
   selector:
     matchLabels:
-      app.kubernetes.io/name: helmsman-assistant
+      app.kubernetes.io/name: rigel-assistant
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: helmsman-assistant
+        app.kubernetes.io/name: rigel-assistant
     spec:
-      serviceAccountName: helmsman-assistant
+      serviceAccountName: rigel-assistant
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000 # the image's `node` user; numeric so runAsNonRoot can verify it
@@ -34,7 +34,7 @@ spec:
           type: Unconfined
       containers:
         - name: agent
-          image: ghcr.io/OWNER/helmsman-assistant:latest # ← set by installer
+          image: ghcr.io/OWNER/rigel-assistant:latest # ← set by installer
           # Always: CI pushes a new image to the :latest tag and rolls the
           # Deployment, so each restarted pod must re-pull to get the new code.
           imagePullPolicy: Always
