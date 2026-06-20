@@ -673,13 +673,26 @@ function WarningRow({ event }: { event: K8sEvent }) {
       style={{ gap: 20, background: WARN_ROW_BG, borderRadius: 12, border: "1px solid rgba(255,255,255,0.05)", padding: "14px 16px" }}
     >
       {/* Status column */}
-      <div className="flex flex-col" style={{ gap: 8, width: 150, flexShrink: 0 }}>
+      <div className="flex flex-col" style={{ gap: 8, width: 170, flexShrink: 0, minWidth: 0 }}>
         <span
           className="inline-flex items-center self-start"
-          style={{ gap: 6, borderRadius: 999, background: WARN_TINT, padding: "4px 11px" }}
+          title={reason}
+          style={{ maxWidth: "100%", gap: 6, borderRadius: 999, background: WARN_TINT, padding: "4px 11px" }}
         >
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: WARN_RED }} />
-          <span style={{ fontSize: 12.5, fontWeight: 600, color: WARN_RED }}>{reason}</span>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: WARN_RED, flexShrink: 0 }} />
+          <span
+            style={{
+              minWidth: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: WARN_RED,
+            }}
+          >
+            {reason}
+          </span>
         </span>
         {kind && (
           <span className="inline-flex items-center" style={{ gap: 6 }}>
