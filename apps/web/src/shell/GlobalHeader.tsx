@@ -45,7 +45,7 @@ export function GlobalHeader({ sidebarCollapsed, onToggleSidebar, onOpenSearch }
       <div
         style={{ display: "flex", alignItems: "center", flexShrink: 0, color: "var(--fg-primary)" }}
       >
-        <RigelMark size={18} />
+        <RigelMark size={22} />
       </div>
 
       {/* Sidebar collapse toggle (icon-only ghost button) */}

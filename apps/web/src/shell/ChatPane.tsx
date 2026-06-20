@@ -593,7 +593,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
           }}
         >
           <span style={{ color: "var(--accent-primary)", display: "flex", flexShrink: 0 }}>
-            <RigelMark size={15} />
+            <RigelMark size={18} />
           </span>
           <span
             style={{

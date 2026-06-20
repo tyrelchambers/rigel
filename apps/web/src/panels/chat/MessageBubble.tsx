@@ -84,7 +84,7 @@ export function MessageBubble({ message, onAction, onRunBatch, onAnswer, agentNa
         style={{ background: `${color}26`, color }}
         aria-hidden
       >
-        {isAssistant ? <RigelMark size={13} /> : <Icon className="size-3" style={{ color }} />}
+        {isAssistant ? <RigelMark size={16} /> : <Icon className="size-3" style={{ color }} />}
       </div>
 
       {/* Role-tinted bordered card */}

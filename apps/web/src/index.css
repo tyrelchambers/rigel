@@ -228,7 +228,7 @@
 .chat-md em { font-style: italic; }
 .chat-md ul, .chat-md ol { margin: 0 0 8px; padding-left: 20px; }
 .chat-md li { margin: 2px 0; }
-.chat-md li::marker { color: var(--fg-tertiary); }
+.chat-md li::marker { color: var(--fg-secondary); }
 /* Inline code */
 .chat-md code {
   font-family: var(--font-mono, ui-monospace);
