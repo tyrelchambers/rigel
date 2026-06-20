@@ -6,6 +6,8 @@ export interface AppDeps {
   appKey: string;
   upsert: (s: Signup) => Promise<void>;
   allow: (key: string) => boolean;
+  /** Best-effort side sync (e.g. Kit). Failures are logged, never surfaced. */
+  notify?: (s: Signup) => Promise<void>;
 }
 
 // Origins allowed to call /signups from a browser. The marketing site (rigel.run)
@@ -13,7 +15,7 @@ export interface AppDeps {
 // (no Origin header, unaffected by CORS).
 const ALLOWED_ORIGINS = ["https://rigel.run", "https://www.rigel.run"];
 
-export function createApp({ appKey, upsert, allow }: AppDeps): Hono {
+export function createApp({ appKey, upsert, allow, notify }: AppDeps): Hono {
   const app = new Hono();
 
   app.get("/health", (c) => c.json({ ok: true }));
@@ -39,6 +41,10 @@ export function createApp({ appKey, upsert, allow }: AppDeps): Hono {
     const parsed = parseSignup(body);
     if (!parsed.ok) return c.json({ error: parsed.error }, 400);
     await upsert(parsed.value);
+    if (notify) {
+      // Best-effort: a Kit failure must not fail the signup (Postgres is source of truth).
+      try { await notify(parsed.value); } catch (e) { console.error("kit sync failed", e); }
+    }
     return c.json({ ok: true });
   });
 
