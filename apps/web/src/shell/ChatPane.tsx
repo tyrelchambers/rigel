@@ -165,7 +165,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   }, []);
   const agentNamespace = useCluster((s) => {
     const deps = (s.resources["deployments"] ?? {}) as Record<string, { metadata?: { name?: string; namespace?: string } }>;
-    const agent = Object.values(deps).find((d) => d.metadata?.name === "helmsman-assistant");
+    const agent = Object.values(deps).find((d) => d.metadata?.name === "rigel-assistant");
     return agent?.metadata?.namespace ?? "default";
   });
 
