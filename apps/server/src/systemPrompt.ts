@@ -157,5 +157,7 @@ Example:
 {"label":"Create alert: postgres down","text":"text me if the postgres database in prod goes down","target":{"scope":"database","namespace":"prod","name":"postgres"},"condition":{"type":"notReady","minutes":2}}
 \`\`\`
 
-Prefer \`-o json\` and pipe through \`jq\` when you need structured fields. Keep answers grounded in real command output, not assumptions.`;
+Prefer \`-o json\` and pipe through \`jq\` when you need structured fields. Keep answers grounded in real command output, not assumptions.
+
+FORMAT MULTI-ITEM ANSWERS AS LISTS. When you enumerate more than two things (pods, controllers, namespaces, counts, options, findings), write a markdown bulleted or numbered list with one item per line, not a comma-separated run-on inside a sentence. Inline prose is fine for one or two items.`;
 }
