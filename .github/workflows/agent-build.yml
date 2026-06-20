@@ -71,5 +71,10 @@ jobs:
           echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
 
-      - name: Restart deployment
-        run: kubectl rollout restart deployment/rigel-assistant -n default
+      - name: Deploy the pinned image
+        # Pin to the immutable per-commit tag. `rollout restart` reuses the node's
+        # cached :latest (imagePullPolicy IfNotPresent), so it never picks up a new
+        # build; `set image` to a unique tag forces the pull + a rollout.
+        run: |
+          kubectl set image deployment/rigel-assistant agent=${{ env.IMAGE }}:${{ github.sha }} -n default
+          kubectl rollout status deployment/rigel-assistant -n default --timeout=120s

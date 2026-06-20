@@ -83,5 +83,8 @@ jobs:
           # left out: it depends on the domain + ingress-nginx/cert-manager, so
           # it's applied manually from apps/marketing/k8s/ingress.yaml when ready.
           kubectl apply -f apps/marketing/k8s/deployment.yaml -f apps/marketing/k8s/service.yaml
-          # Force a re-pull of the freshly-pushed :latest image.
-          kubectl rollout restart deployment/rigel-marketing -n default
+          # Pin to the immutable per-commit tag so the node actually pulls this
+          # build (and the deploy is traceable + rollback-able), instead of relying
+          # on a :latest re-pull.
+          kubectl set image deployment/rigel-marketing web=${{ env.IMAGE }}:${{ github.sha }} -n default
+          kubectl rollout status deployment/rigel-marketing -n default --timeout=120s

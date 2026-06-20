@@ -74,4 +74,7 @@ jobs:
       - name: Apply manifests and roll out
         run: |
           kubectl apply -f apps/signups/k8s/deployment.yaml -f apps/signups/k8s/service.yaml
-          kubectl rollout restart deployment/rigel-signups -n default
+          # Pin to the immutable per-commit tag so the node actually pulls this
+          # build (and the deploy is traceable + rollback-able).
+          kubectl set image deployment/rigel-signups signups=${{ env.IMAGE }}:${{ github.sha }} -n default
+          kubectl rollout status deployment/rigel-signups -n default --timeout=120s
