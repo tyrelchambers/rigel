@@ -1,5 +1,7 @@
 import { test, expect } from "vitest";
-import { buildApplyArgs, buildHelmArgs, type HelmInstallRequest } from "./install";
+import { buildApplyArgs } from "./install";
+import { type HelmInstallRequest } from "./install";
+import { buildHelmInstallCommands } from "@rigel/k8s/src/helm";
 
 // ---------------------------------------------------------------------------
 // kubectl apply -f - (manifest mode)
@@ -34,64 +36,16 @@ test("buildApplyArgs: no dry-run flag unless requested", () => {
 });
 
 // ---------------------------------------------------------------------------
-// helm upgrade --install (helm mode)
+// helm upgrade --install (helm mode via shared builder)
 // ---------------------------------------------------------------------------
-const baseReq: HelmInstallRequest = {
-  repoName: "sentry",
-  repoURL: "https://sentry-kubernetes.github.io/charts",
-  chart: "sentry",
-  version: "31.7.1",
-  releaseName: "my-sentry",
-  namespace: "apps",
-  values: "user:\n  create: true\n",
-};
-
-test("buildHelmArgs: repo add / update sequence", () => {
-  const args = buildHelmArgs(baseReq, "kind-test", "/tmp/values.yaml");
-  expect(args.repoAdd).toEqual([
-    "repo",
-    "add",
-    "sentry",
-    "https://sentry-kubernetes.github.io/charts",
-  ]);
-  expect(args.repoUpdate).toEqual(["repo", "update", "sentry"]);
-});
-
-test("buildHelmArgs: upgrade --install with version, namespace, values, context", () => {
-  const args = buildHelmArgs(baseReq, "kind-test", "/tmp/values.yaml");
-  expect(args.upgrade).toEqual([
-    "upgrade",
-    "--install",
-    "my-sentry",
-    "sentry/sentry",
-    "--version",
-    "31.7.1",
-    "-n",
-    "apps",
-    "--create-namespace",
-    "-f",
-    "/tmp/values.yaml",
-    "--kube-context",
-    "kind-test",
-  ]);
-});
-
-test("buildHelmArgs: omits --version when not pinned", () => {
-  const args = buildHelmArgs({ ...baseReq, version: null }, null, "/tmp/v.yaml");
-  expect(args.upgrade).toEqual([
-    "upgrade",
-    "--install",
-    "my-sentry",
-    "sentry/sentry",
-    "-n",
-    "apps",
-    "--create-namespace",
-    "-f",
-    "/tmp/v.yaml",
-  ]);
-});
-
-test("buildHelmArgs: omits --kube-context when no context", () => {
-  const args = buildHelmArgs(baseReq, null, "/tmp/v.yaml");
-  expect(args.upgrade).not.toContain("--kube-context");
+test("install request maps a repo source to the shared builder", () => {
+  const req: HelmInstallRequest = {
+    source: { kind: "repo", repoName: "sentry", repoURL: "https://sentry-kubernetes.github.io/charts", chart: "sentry", version: "31.7.1" },
+    releaseName: "my-sentry",
+    namespace: "apps",
+    values: "user:\n  create: true\n",
+  };
+  const cmds = buildHelmInstallCommands(req.source, { releaseName: req.releaseName, namespace: req.namespace, valuesFile: "/tmp/v.yaml", context: "kind-test" });
+  expect(cmds[2][0]).toBe("upgrade");
+  expect(cmds[2]).toContain("sentry/sentry");
 });

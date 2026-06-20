@@ -4,11 +4,13 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "./staticFiles";
 import { WebSocketServer } from "ws";
 import { resolveKubeconfigPath } from "./kubeconfig";
-import { kubectl } from "@rigel/k8s/src/run";
+import { kubectl, runProcess } from "@rigel/k8s/src/run";
 import { WatchManager } from "./watchManager";
 import { makeWsHandlers } from "./ws";
 import { buildCommand, PurgeActionError, type ActionBlock } from "./actions";
-import { applyManifest, installHelm, type HelmInstallRequest } from "./install";
+import { applyManifest, installHelm } from "./install";
+import { buildHelmRollbackArgs, buildHelmUninstallArgs, type HelmChartSource } from "@rigel/k8s/src/helm";
+import { searchArtifactHub } from "./artifactHub";
 import { handlePurge, type PurgeRequest } from "./purge";
 import {
   loadSources, saveSources, diffSource, applySource, previewRepoFix, proposeRepoFix,
@@ -334,9 +336,9 @@ async function handler(req: Request): Promise<Response> {
     // POST /api/helm — catalog wizard HELM install. Runs repo add (idempotent)
     // → repo update → upgrade --install in sequence. Returns { code, stdout, stderr }.
     if (url.pathname === "/api/helm" && req.method === "POST") {
-      let body: Partial<HelmInstallRequest>;
+      let body: { repoName?: string; repoURL?: string; chart?: string; version?: string | null; releaseName?: string; namespace?: string; values?: string };
       try {
-        body = (await req.json()) as Partial<HelmInstallRequest>;
+        body = (await req.json()) as typeof body;
       } catch {
         return Response.json({ error: "invalid JSON body" }, { status: 400 });
       }
@@ -354,14 +356,72 @@ async function handler(req: Request): Promise<Response> {
         );
       }
       const result = await installHelm(context, {
-        repoName: body.repoName,
-        repoURL: body.repoURL,
-        chart: body.chart,
-        version: body.version ?? null,
+        source: {
+          kind: "repo",
+          repoName: body.repoName,
+          repoURL: body.repoURL,
+          chart: body.chart,
+          version: body.version ?? null,
+        },
         releaseName: body.releaseName,
         namespace: body.namespace,
         values: body.values,
       });
+      return Response.json(result);
+    }
+
+    // POST /api/helm/install — custom-chart install/upgrade (repo | oci | local).
+    if (url.pathname === "/api/helm/install" && req.method === "POST") {
+      let body: { source?: HelmChartSource; releaseName?: string; namespace?: string; values?: string };
+      try { body = (await req.json()) as typeof body; }
+      catch { return Response.json({ error: "invalid JSON body" }, { status: 400 }); }
+      if (!body.source || !body.releaseName || !body.namespace || typeof body.values !== "string") {
+        return Response.json({ error: "missing required fields (source, releaseName, namespace, values)" }, { status: 422 });
+      }
+      const result = await installHelm(context, {
+        source: body.source, releaseName: body.releaseName, namespace: body.namespace, values: body.values,
+      });
+      return Response.json(result);
+    }
+
+    // POST /api/helm/rollback — { release, revision, namespace }
+    if (url.pathname === "/api/helm/rollback" && req.method === "POST") {
+      let body: { release?: string; revision?: number; namespace?: string };
+      try { body = (await req.json()) as typeof body; }
+      catch { return Response.json({ error: "invalid JSON body" }, { status: 400 }); }
+      if (!body.release || typeof body.revision !== "number" || !body.namespace) {
+        return Response.json({ error: "missing required fields (release, revision, namespace)" }, { status: 422 });
+      }
+      const result = await runProcess("helm", buildHelmRollbackArgs(body.release, body.revision, body.namespace, context));
+      return Response.json(result);
+    }
+
+    // POST /api/helm/uninstall — { release, namespace }
+    if (url.pathname === "/api/helm/uninstall" && req.method === "POST") {
+      let body: { release?: string; namespace?: string };
+      try { body = (await req.json()) as typeof body; }
+      catch { return Response.json({ error: "invalid JSON body" }, { status: 400 }); }
+      if (!body.release || !body.namespace) {
+        return Response.json({ error: "missing required fields (release, namespace)" }, { status: 422 });
+      }
+      const result = await runProcess("helm", buildHelmUninstallArgs(body.release, body.namespace, context));
+      return Response.json(result);
+    }
+
+    // GET /api/helm/search?q= — Artifact Hub chart search
+    if (url.pathname === "/api/helm/search" && req.method === "GET") {
+      const q = url.searchParams.get("q") ?? "";
+      if (q.trim() === "") return Response.json([]);
+      return Response.json(await searchArtifactHub(q));
+    }
+
+    // GET /api/helm/show-values?ref=&version= — default chart values for the install form
+    if (url.pathname === "/api/helm/show-values" && req.method === "GET") {
+      const ref = url.searchParams.get("ref");
+      const version = url.searchParams.get("version");
+      if (!ref) return Response.json({ error: "missing ref" }, { status: 422 });
+      const args = ["show", "values", ref, ...(version ? ["--version", version] : [])];
+      const result = await runProcess("helm", args);
       return Response.json(result);
     }
 

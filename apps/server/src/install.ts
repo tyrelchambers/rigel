@@ -10,6 +10,7 @@
 // mirroring the Swift WorkloadCommander / HelmCommander invocations.
 
 import { buildKubectlArgs, runProcess, runProcessWithStdin, type RunResult } from "@rigel/k8s/src/run";
+import { buildHelmInstallCommands, type HelmChartSource } from "@rigel/k8s/src/helm";
 import { unlink, writeFile } from "node:fs/promises";
 
 /**
@@ -37,100 +38,56 @@ export async function applyManifest(
 }
 
 export interface HelmInstallRequest {
-  repoName: string;
-  repoURL: string;
-  chart: string;
-  version?: string | null;
+  source: HelmChartSource;
   releaseName: string;
   namespace: string;
   values: string;
-}
-
-/** Build the three ordered helm argv arrays for an install. Exported for tests. */
-export function buildHelmArgs(
-  req: HelmInstallRequest,
-  context: string | null,
-  valuesFile: string,
-): { repoAdd: string[]; repoUpdate: string[]; upgrade: string[] } {
-  const ctx = context ? ["--kube-context", context] : [];
-  const version = req.version ? ["--version", req.version] : [];
-  return {
-    repoAdd: ["repo", "add", req.repoName, req.repoURL],
-    repoUpdate: ["repo", "update", req.repoName],
-    upgrade: [
-      "upgrade",
-      "--install",
-      req.releaseName,
-      `${req.repoName}/${req.chart}`,
-      ...version,
-      "-n",
-      req.namespace,
-      "--create-namespace",
-      "-f",
-      valuesFile,
-      ...ctx,
-    ],
-  };
 }
 
 function runHelm(args: string[]): Promise<RunResult> {
   return runProcess("helm", args);
 }
 
-/** True when a `helm repo add` failure is the benign "already exists" case. */
-function isAlreadyExists(result: RunResult): boolean {
-  return /already exists/i.test(result.stderr) || /already exists/i.test(result.stdout);
+function isAlreadyExists(r: RunResult): boolean {
+  return /already exists/i.test(r.stderr) || /already exists/i.test(r.stdout);
 }
 
 /**
- * Run the ordered helm install: repo add (idempotent) → repo update → upgrade
- * --install. Values are written to a temp file passed with `-f`. Returns the
- * combined result; a non-zero exit on update/upgrade aborts with that result.
- * code -1 when the helm binary is missing.
+ * Run the ordered helm install/upgrade commands. Repo `add` tolerates the
+ * benign "already exists"; any other non-zero aborts with that result. Values
+ * are written to a temp file and removed afterwards. code -1 if helm is missing.
  */
-export async function installHelm(
-  context: string | null,
-  req: HelmInstallRequest,
-): Promise<RunResult> {
+export async function installHelm(context: string | null, req: HelmInstallRequest): Promise<RunResult> {
   let valuesFile: string | null = null;
   try {
-    valuesFile = `${process.env.TMPDIR ?? "/tmp"}/rigel-values-${req.releaseName}-${Date.now()}.yaml`;
+    valuesFile = `${process.env.TMPDIR ?? "/tmp"}/rigel-values-${req.releaseName}-${process.pid}-${counter()}.yaml`;
     await writeFile(valuesFile, req.values);
-
-    const args = buildHelmArgs(req, context, valuesFile);
-
-    let combinedOut = "";
-    let combinedErr = "";
-
-    const add = await runHelm(args.repoAdd);
-    combinedOut += add.stdout;
-    combinedErr += add.stderr;
-    // "already exists" is OK; any other non-zero aborts.
-    if (add.code !== 0 && !isAlreadyExists(add)) {
-      return { code: add.code, stdout: combinedOut, stderr: combinedErr };
-    }
-
-    const update = await runHelm(args.repoUpdate);
-    combinedOut += update.stdout;
-    combinedErr += update.stderr;
-    if (update.code !== 0) {
-      return { code: update.code, stdout: combinedOut, stderr: combinedErr };
-    }
-
-    const upgrade = await runHelm(args.upgrade);
-    combinedOut += upgrade.stdout;
-    combinedErr += upgrade.stderr;
-    return { code: upgrade.code, stdout: combinedOut, stderr: combinedErr };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { code: -1, stdout: "", stderr: `helm not found: ${message}` };
-  } finally {
-    if (valuesFile) {
-      try {
-        await unlink(valuesFile);
-      } catch {
-        // best-effort cleanup
+    const cmds = buildHelmInstallCommands(req.source, {
+      releaseName: req.releaseName,
+      namespace: req.namespace,
+      valuesFile,
+      context,
+    });
+    let out = "";
+    let err = "";
+    for (let i = 0; i < cmds.length; i++) {
+      const r = await runHelm(cmds[i]!);
+      out += r.stdout;
+      err += r.stderr;
+      const isRepoAdd = cmds[i]![0] === "repo" && cmds[i]![1] === "add";
+      if (r.code !== 0 && !(isRepoAdd && isAlreadyExists(r))) {
+        return { code: r.code, stdout: out, stderr: err };
       }
     }
+    return { code: 0, stdout: out, stderr: err };
+  } catch (e) {
+    return { code: -1, stdout: "", stderr: `helm not found: ${e instanceof Error ? e.message : String(e)}` };
+  } finally {
+    if (valuesFile) await unlink(valuesFile).catch(() => {});
   }
+}
+
+let _c = 0;
+function counter(): number {
+  return (_c = (_c + 1) % 1_000_000);
 }
