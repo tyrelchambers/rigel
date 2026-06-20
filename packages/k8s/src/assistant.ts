@@ -51,7 +51,9 @@ export const DEFAULT_INSTALL_CONFIG: AssistantInstallConfig = {
   confirmPolls: 2,
 };
 
-export const SECRET_NAME = "assistant-claude-token";
+// Agent-agnostic name — the assistant supports multiple AI backends, so the
+// Secret isn't Claude-specific (it just holds the active agent's credential).
+export const SECRET_NAME = "rigel-assistant-token";
 /** Annotation the installer stamps on the token Secret at mint time. */
 export const ISSUED_AT_ANNOTATION = "rigel.assistant/token-issued-at";
 

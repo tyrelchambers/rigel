@@ -15,8 +15,10 @@ import {
 import {
   DEFAULT_INSTALL_CONFIG,
   manifestYAML,
+  SECRET_NAME,
   type AssistantInstallConfig,
 } from "@rigel/k8s";
+import { useChatConfig } from "@/lib/api";
 import { useAssistantCtx } from "../AssistantContext";
 import { Card, Field, inputClass } from "../components/primitives";
 
@@ -38,6 +40,11 @@ export function InstallView() {
   });
   const [installToken, setInstallToken] = useState("");
   const [showManifest, setShowManifest] = useState(false);
+
+  // If a token is already saved (onboarding / Settings), the server reuses it —
+  // so the user doesn't have to paste it again here.
+  const { data: chatConfig } = useChatConfig();
+  const hasSavedToken = chatConfig?.configured ?? false;
 
   // Keep local config.installNamespace in sync with ctx.installNamespace.
   // The user types in the local input → we update both local config and ctx.
@@ -74,7 +81,7 @@ export function InstallView() {
     const token = installToken.trim();
     const image = config.image.trim();
     const namespace = config.installNamespace.trim();
-    if (token === "") return;
+    if (token === "" && !hasSavedToken) return; // need a token, pasted or saved
     if (image === "") return;
     const repoPath = image.split(":")[0] ?? image;
     if (repoPath !== repoPath.toLowerCase()) return;
@@ -84,7 +91,7 @@ export function InstallView() {
       {
         action: "install",
         namespace,
-        token,
+        token, // empty when reusing the saved token — the server falls back to it
         image,
         spendCapUsd: config.spendCapUsd,
         monitorNamespaces: config.namespaces,
@@ -94,28 +101,10 @@ export function InstallView() {
   }
 
   function handleInstall() {
-    const token = installToken.trim();
-    const image = config.image.trim();
-    const namespace = config.installNamespace.trim();
-
-    // Surface validation errors via run (which sets actionError in ctx).
-    if (token === "") {
-      run({ action: "install", namespace: "default" }); // will fail server-side — but we set actionError below
-      return;
-    }
-    // Validate client-side; errors go through the context actionError channel
-    // by temporarily re-using run with a no-op (the server will reject, but we
-    // prefer to surface errors here before hitting the network).
-    // NOTE: the original code sets actionError directly; since we no longer
-    // have direct access to setActionError, we surface errors by calling run
-    // with invalid params so the server errors bubble back. For UX correctness
-    // we do the check locally and rely on HTML form semantics + button disabled.
-    void token; void image; void namespace;
-    if (namespaceMissing) {
-      openConfirmCreateNs(doInstall);
-    } else {
-      doInstall();
-    }
+    if (installToken.trim() === "" && !hasSavedToken) return; // button is disabled anyway
+    if (config.image.trim() === "" || config.installNamespace.trim() === "") return;
+    if (namespaceMissing) openConfirmCreateNs(doInstall);
+    else doInstall();
   }
 
   return (
@@ -132,21 +121,31 @@ export function InstallView() {
 
       <Card>
         <p className="text-sm font-semibold">1. Subscription token</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          On a machine logged into your Claude plan, run:
-        </p>
-        <p className="select-text font-mono text-sm text-primary">claude setup-token</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Paste the token below — it's stored as a Kubernetes Secret, never shown again.
-        </p>
+        {hasSavedToken ? (
+          <p className="mt-1 text-sm text-muted-foreground">
+            ✓ Using the token you already saved. Paste a new one below only to replace it.
+          </p>
+        ) : (
+          <>
+            <p className="mt-1 text-sm text-muted-foreground">
+              On a machine logged into your Claude plan, run:
+            </p>
+            <p className="select-text font-mono text-sm text-primary">claude setup-token</p>
+            <p className="mt-1 text-sm text-muted-foreground">Paste the token below.</p>
+          </>
+        )}
         <input
           type="password"
           autoComplete="off"
           value={installToken}
           onChange={(e) => setInstallToken(e.target.value)}
-          placeholder="CLAUDE_CODE_OAUTH_TOKEN"
+          placeholder={hasSavedToken ? "Paste a new token to replace (optional)" : "CLAUDE_CODE_OAUTH_TOKEN"}
           className={`mt-2 w-full ${inputClass}`}
         />
+        <p className="mt-2 text-xs text-muted-foreground">
+          Stored as Secret <code className="select-text font-mono">{SECRET_NAME}</code> in namespace{" "}
+          <code className="select-text font-mono">{config.installNamespace.trim() || "default"}</code> — never shown again.
+        </p>
       </Card>
 
       <Card className="space-y-2">
@@ -243,7 +242,7 @@ export function InstallView() {
 
       <Button
         className="w-full"
-        disabled={working || installToken.trim() === ""}
+        disabled={working || (installToken.trim() === "" && !hasSavedToken)}
         onClick={handleInstall}
       >
         {working ? "Installing…" : "Install"}

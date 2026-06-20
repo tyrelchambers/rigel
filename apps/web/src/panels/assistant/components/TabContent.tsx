@@ -1,6 +1,7 @@
 // TabContent — decides which content to render based on ready state.
 // The loading matrix is implemented here exactly.
 
+import { LoaderCircle } from "lucide-react";
 import { useAssistantCtx } from "../AssistantContext";
 import { ContentSkeleton } from "./ContentSkeleton";
 import { InstallView } from "../tabs/InstallView";
@@ -23,10 +24,21 @@ export function TabContent() {
     return <InstallView />;
   }
 
-  // Installed — but state-dependent tabs show ContentSkeleton until ready.state.
+  // Installed but the agent hasn't written its first state yet — i.e. it's
+  // starting up right after an install. Show progress instead of a bare skeleton.
   const needsState = tab === "overview" || tab === "needs" || tab === "rules" || tab === "activity";
   if (needsState && !ready.state) {
-    return <ContentSkeleton />;
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+        <LoaderCircle className="size-6 animate-spin text-muted-foreground" />
+        <div>
+          <p className="text-sm font-medium">Setting up the assistant…</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Manifests applied. Waiting for the agent pod to start and report in — this takes a few seconds.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   switch (tab) {

@@ -106,7 +106,7 @@ test("maskToken redacts the token line", () => {
 
 test("default install config matches the catalog default image", () => {
   expect(DEFAULT_INSTALL_CONFIG.image).toBe("ghcr.io/tyrelchambers/rigel-assistant:latest");
-  expect(SECRET_NAME).toBe("assistant-claude-token");
+  expect(SECRET_NAME).toBe("rigel-assistant-token");
 });
 
 // ---------------------------------------------------------------------------

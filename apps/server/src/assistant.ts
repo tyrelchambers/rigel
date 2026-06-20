@@ -25,6 +25,7 @@ import {
 } from "@rigel/k8s/src/assistant";
 import { signalConfigUpdates } from "@rigel/k8s/src/signal";
 import { normalizeAlertRule, parseAlertRules, serializeAlertRules, nextAlertRules, type SuggestedAlert } from "@rigel/k8s";
+import { effectiveClaudeToken } from "./chatConfig";
 
 // ---------------------------------------------------------------------------
 // kubectl plumbing
@@ -158,7 +159,9 @@ async function installAssistant(
   req: AssistantRequest,
 ): Promise<RunResult> {
   const namespace = (req.namespace ?? DEFAULT_INSTALL_CONFIG.installNamespace).trim();
-  const token = (req.token ?? "").trim();
+  // Use the token from the request if one was pasted, otherwise the token the
+  // user already saved (onboarding / Settings) — so they don't re-enter it.
+  const token = (req.token ?? "").trim() || ((await effectiveClaudeToken()) ?? "");
   const image = (req.image ?? DEFAULT_INSTALL_CONFIG.image).trim();
   validateInstall(namespace, token, image);
 
