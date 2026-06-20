@@ -262,7 +262,7 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
             icon={Layers}
             title="Deployments"
             value={deployments.length}
-            chips={[{ count: deployUnhealthy, tone: "red", neutralWhenZero: true }]}
+            chips={[{ label: "Unhealthy", count: deployUnhealthy, tone: "red", neutralWhenZero: true }]}
           />
 
           <StatCard
@@ -270,9 +270,9 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
             title="Pods"
             value={pods.length}
             chips={[
-              { count: phases.running, tone: "green" },
-              { count: phases.pending, tone: "yellow" },
-              { count: phases.failed, tone: "red" },
+              { label: "Running", count: phases.running, tone: "green" },
+              { label: "Pending", count: phases.pending, tone: "yellow" },
+              { label: "Failed", count: phases.failed, tone: "red" },
             ]}
           />
 
@@ -280,7 +280,7 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
             icon={Server}
             title="Nodes"
             value={`${nodeReady.ready}/${nodeReady.total}`}
-            chips={[{ count: pressure, tone: "yellow", neutralWhenZero: true }]}
+            chips={[{ label: "Pressure conditions", count: pressure, tone: "yellow", neutralWhenZero: true }]}
           />
         </div>
 
@@ -290,6 +290,7 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
             icon={Database}
             title="Databases"
             value={databases.length}
+            statLabel="Unhealthy"
             statCount={dbUnhealthy}
             statTone={dbUnhealthy > 0 ? "red" : "neutral"}
           />
@@ -297,6 +298,7 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
             icon={CalendarClock}
             title="Events"
             value={warnings.length}
+            statLabel="Total cached"
             statCount={events.length}
             statTone="neutral"
           />
@@ -502,17 +504,18 @@ const TONE_CLASS: Record<Tone, string> = {
   neutral: "ov-chip-neutral",
 };
 
-/** A bare count chip. `neutralWhenZero` greys it when the count is 0. */
-type ChipSpec = { count: number; tone: Tone; neutralWhenZero?: boolean };
+/** A bare count chip. `label` is the hover tooltip; `neutralWhenZero` greys it
+ *  when the count is 0. */
+type ChipSpec = { label: string; count: number; tone: Tone; neutralWhenZero?: boolean };
 
-/** A row of bare, label-less count chips (used in card headers). */
+/** A row of label-less count chips (used in card headers); the label shows on hover. */
 function ChipRow({ chips }: { chips: ChipSpec[] }) {
   return (
     <>
       {chips.map((c, i) => {
         const tone = c.neutralWhenZero && c.count === 0 ? "neutral" : c.tone;
         return (
-          <span key={i} className={cn("ov-chip", TONE_CLASS[tone])}>
+          <span key={i} className={cn("ov-chip", TONE_CLASS[tone])} title={c.label} aria-label={`${c.label}: ${c.count}`}>
             {c.count}
           </span>
         );
@@ -546,12 +549,14 @@ function SummaryCard({
   icon,
   title,
   value,
+  statLabel,
   statCount,
   statTone,
 }: {
   icon: LucideIcon;
   title: string;
   value: number | string;
+  statLabel: string;
   statCount: number;
   statTone: Tone;
 }) {
@@ -561,7 +566,11 @@ function SummaryCard({
         icon={icon}
         title={title}
         right={
-          <span className={cn("ov-chip", statTone === "neutral" ? "ov-chip-soft" : TONE_CLASS[statTone])}>
+          <span
+            className={cn("ov-chip", statTone === "neutral" ? "ov-chip-soft" : TONE_CLASS[statTone])}
+            title={statLabel}
+            aria-label={`${statLabel}: ${statCount}`}
+          >
             {statCount}
           </span>
         }
