@@ -20,12 +20,12 @@ self.MonacoEnvironment = {
 // same instance the React wrapper renders.
 loader.config({ monaco });
 
-export const HELMSMAN_THEME = "helmsman-dark";
+export const HELMSMAN_THEME = "rigel-dark";
 
 // Define the theme EAGERLY (at module load), not lazily in onMount — the editor's
 // `theme` prop is applied when Monaco *creates* the editor, which is before
 // onMount runs. Defining it here guarantees the name resolves at creation time;
-// otherwise Monaco doesn't recognise "helmsman-dark" and silently falls back to
+// otherwise Monaco doesn't recognise "rigel-dark" and silently falls back to
 // the light `vs` theme. Palette tracks the app tokens (accent #38BDF8, sunken
 // surfaces) so the editor reads as part of the dark shell.
 monaco.editor.defineTheme(HELMSMAN_THEME, {

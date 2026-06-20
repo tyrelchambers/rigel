@@ -713,7 +713,7 @@ describe("installedImages", () => {
           metadata: {
             name: "mirror-plausible",
             namespace: "analytics",
-            annotations: { "helmsman.dev/catalog-app": "plausible" },
+            annotations: { "rigel.dev/catalog-app": "plausible" },
           },
           spec: {
             template: {

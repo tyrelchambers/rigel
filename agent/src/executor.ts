@@ -12,7 +12,7 @@ export interface ExecutionResult {
   success: boolean;
   output: string;
   /** Pre-mutation `kubectl get -o yaml` snapshot, or null if the target was
-   * absent. Stored so Helmsman can offer one-click revert. */
+   * absent. Stored so Rigel can offer one-click revert. */
   backupYaml: string | null;
   /** Human-readable commands actually run. */
   commands: string[];

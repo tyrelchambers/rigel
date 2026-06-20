@@ -1,6 +1,6 @@
 // K8sEvent type for the web Events panel. Mirrors the shared contract in
 // `packages/k8s/src/index.ts`, the Swift `K8sEvent` in
-// `Sources/Helmsman/Cluster/KubeTypes.swift`, and the normative spec in
+// `Sources/Rigel/Cluster/KubeTypes.swift`, and the normative spec in
 // `docs/parity/events.md`. Kept local to the web app so the panel does not
 // depend on workspace-package linking for a type-only import.
 //

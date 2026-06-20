@@ -1,4 +1,4 @@
-# Helmsman Web — Design
+# Rigel Web — Design
 
 **Date:** 2026-06-09
 **Branch:** `feature/web-rewrite`
@@ -6,14 +6,14 @@
 
 ## Goal
 
-Make Helmsman universal: a self-hostable web application that runs in a Docker
-container, is handed a kubeconfig, and serves the full Helmsman UI in a browser.
+Make Rigel universal: a self-hostable web application that runs in a Docker
+container, is handed a kubeconfig, and serves the full Rigel UI in a browser.
 Each instance is single-user, run against the operator's own cluster; "sharing"
 means other people run their own container. This removes the macOS-only
 constraint (run on Linux/Windows, reach it from any device) and the Apple
 Developer ID dependency.
 
-The existing native macOS SwiftUI app (`Sources/`, `Helmsman.app/`) is **kept
+The existing native macOS SwiftUI app (`Sources/`, `Rigel.app/`) is **kept
 in-tree** as the reference implementation and remains the source of truth during
 the port. Nothing Swift is deleted until the web app reaches parity.
 
@@ -56,7 +56,7 @@ goal), delivered incrementally (path).
 ## Monorepo layout
 
 ```
-helmsman/
+rigel/
 ├── apps/
 │   ├── web/         # React 19 + Vite + Tailwind v4 + shadcn/ui + TanStack Query v5
 │   └── server/      # Bun backend: kubectl/claude orchestration, WS + REST
@@ -64,7 +64,7 @@ helmsman/
 │   ├── k8s/         # shared kubectl wrappers, output parsing, resource types
 │   ├── catalog/     # catalog.json + install/update-resolver logic
 │   └── agent/       # existing in-cluster agent, moved from /agent
-├── Sources/, Helmsman.app/   # Swift app — kept untouched until web parity
+├── Sources/, Rigel.app/   # Swift app — kept untouched until web parity
 └── catalog.json
 ```
 

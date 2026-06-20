@@ -50,7 +50,7 @@ Additional kinds:
   the COMPLETE new file content (attached as `content`). The confirm sheet shows
   a `git diff` and, on confirm, branches/commits/pushes and opens a PR via
   `/api/git/propose-fix` — nothing is applied to the cluster. Used when a broken
-  workload carries the `helmsman.dev/source-repo` annotation (stamped on sync).
+  workload carries the `rigel.dev/source-repo` annotation (stamped on sync).
 
 Examples:
 

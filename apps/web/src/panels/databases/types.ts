@@ -1,5 +1,5 @@
 // Types for the web Databases panel. Mirrors the Swift
-// `Sources/Helmsman/Panels/Databases/` data models for CloudNativePG (CNPG)
+// `Sources/Rigel/Panels/Databases/` data models for CloudNativePG (CNPG)
 // clusters and image-detected databases (Deployment / StatefulSet). Kept local
 // to the web app so the panel does not depend on workspace-package linking for
 // a type-only import (same pattern as workloads/types.ts and pods/types.ts).

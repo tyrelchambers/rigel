@@ -1,4 +1,4 @@
-// Update detection — port of Sources/Helmsman/Updates/ (Swift) to TypeScript.
+// Update detection — port of Sources/Rigel/Updates/ (Swift) to TypeScript.
 //
 // Detects newer stable releases for installed catalog apps via three
 // deterministic tiers:

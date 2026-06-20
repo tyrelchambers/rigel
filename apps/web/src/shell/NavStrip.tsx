@@ -2,7 +2,7 @@
  * NavStrip — the collapsible grouped sidebar.
  * Mirrors NavStrip.swift / NavCollapseState.swift exactly:
  *   - First launch: every titled group collapsed.
- *   - Collapse state persists in localStorage (helmsman.nav.collapsed).
+ *   - Collapse state persists in localStorage (rigel.nav.collapsed).
  *   - If the current route is in a collapsed group, auto-expand that group.
  */
 import { useEffect, useState } from "react";

@@ -306,7 +306,7 @@ async function updateToken(
 function restartAgent(context: string | null, namespace: string): Promise<RunResult> {
   return runKubectlStdin(
     context,
-    ["rollout", "restart", "deployment/helmsman-assistant", "-n", namespace],
+    ["rollout", "restart", "deployment/rigel-assistant", "-n", namespace],
     null,
   );
 }

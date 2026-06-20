@@ -1,6 +1,6 @@
 // Pure analysis + formatting helpers for the Right-Sizing panel.
 //
-// Ports the Swift RightSizing engine verbatim (Sources/Helmsman/RightSizing/
+// Ports the Swift RightSizing engine verbatim (Sources/Rigel/RightSizing/
 // RightSizing.swift + Quantity formatting). No I/O — fully testable.
 
 import type {

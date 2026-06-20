@@ -1,6 +1,6 @@
 // Display helpers for the Databases panel: detection, normalization, health,
 // age, search, sort, pod matching, and connection-string construction.
-// Mirrors the Swift `Sources/Helmsman/Panels/Databases/` helpers.
+// Mirrors the Swift `Sources/Rigel/Panels/Databases/` helpers.
 // See docs/parity/databases.md for the normative spec.
 
 import type {
@@ -514,7 +514,7 @@ export function sourceBadgeLabel(source: DatabaseSource): string {
 // Capabilities (action bar + connection + backup info)
 //
 // Pure helper mirroring the Swift `DatabaseOperatorRegistry` / `CNPGOperator` /
-// `NoOperator` in Sources/Helmsman/Panels/Databases/DatabaseOperator.swift and
+// `NoOperator` in Sources/Rigel/Panels/Databases/DatabaseOperator.swift and
 // `DatabasesViewModel.capabilities(for:)`. See docs/parity/databases-controls.md.
 // ---------------------------------------------------------------------------
 

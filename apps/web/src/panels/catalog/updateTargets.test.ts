@@ -129,7 +129,7 @@ describe("updateTargets", () => {
     const deployments = [
       deployment("image-foo", "a", "foo", "ghcr.io/foo/foo:1.0"),
       {
-        metadata: { name: "mirror-foo", namespace: "apps", annotations: { "helmsman.dev/catalog-app": "foo" } },
+        metadata: { name: "mirror-foo", namespace: "apps", annotations: { "rigel.dev/catalog-app": "foo" } },
         spec: { template: { spec: { containers: [{ name: "app", image: "registry.internal/team/foo:2.0" }] } } },
       } as DeploymentLike,
     ];
@@ -145,7 +145,7 @@ describe("updateTargets", () => {
     const apps = [app({ id: "ne", matchImages: ["quay.io/prometheus/node-exporter"] })];
     const daemonSets = [
       {
-        metadata: { name: "node-exp", namespace: "mon", annotations: { "helmsman.dev/catalog-app": "ne" } },
+        metadata: { name: "node-exp", namespace: "mon", annotations: { "rigel.dev/catalog-app": "ne" } },
         spec: { template: { spec: { containers: [{ name: "node-exporter", image: "quay.io/prometheus/node-exporter:v1.8.0" }] } } },
       } as DaemonSetLike,
     ];
@@ -158,7 +158,7 @@ describe("updateTargets", () => {
     const apps = [app({ id: "multi", matchImages: ["ghcr.io/multi/main"] })];
     const deployments = [
       {
-        metadata: { name: "multi", namespace: "default", annotations: { "helmsman.dev/catalog-app": "multi", "helmsman.dev/catalog-container": "sidecar" } },
+        metadata: { name: "multi", namespace: "default", annotations: { "rigel.dev/catalog-app": "multi", "rigel.dev/catalog-container": "sidecar" } },
         spec: { template: { spec: { containers: [
           { name: "main", image: "ghcr.io/multi/main:1.0" },
           { name: "sidecar", image: "ghcr.io/multi/sidecar:9.9" },
@@ -174,7 +174,7 @@ describe("updateTargets", () => {
     const apps = [app({ id: "multi", matchImages: ["ghcr.io/multi/main"] })];
     const deployments = [
       {
-        metadata: { name: "multi", namespace: "default", annotations: { "helmsman.dev/catalog-app": "multi" } },
+        metadata: { name: "multi", namespace: "default", annotations: { "rigel.dev/catalog-app": "multi" } },
         spec: { template: { spec: { containers: [
           { name: "sidecar", image: "ghcr.io/multi/sidecar:9.9" },
           { name: "main", image: "ghcr.io/multi/main:1.0" },
@@ -189,7 +189,7 @@ describe("updateTargets", () => {
     const apps = [app({ id: "multi", matchImages: ["ghcr.io/multi/main"] })];
     const deployments = [
       {
-        metadata: { name: "multi", namespace: "default", annotations: { "helmsman.dev/catalog-app": "multi", "helmsman.dev/catalog-container": "ghost" } },
+        metadata: { name: "multi", namespace: "default", annotations: { "rigel.dev/catalog-app": "multi", "rigel.dev/catalog-container": "ghost" } },
         spec: { template: { spec: { containers: [
           { name: "sidecar", image: "ghcr.io/multi/sidecar:9.9" },
           { name: "main", image: "ghcr.io/multi/main:1.0" },
@@ -204,10 +204,10 @@ describe("updateTargets", () => {
   test("two workloads with the same annotation → first in scan order wins", () => {
     const apps = [app({ id: "dup", matchImages: [] })];
     const deployments = [
-      { metadata: { name: "dep-dup", namespace: "a", annotations: { "helmsman.dev/catalog-app": "dup" } }, spec: { template: { spec: { containers: [{ name: "c", image: "img:1" }] } } } } as DeploymentLike,
+      { metadata: { name: "dep-dup", namespace: "a", annotations: { "rigel.dev/catalog-app": "dup" } }, spec: { template: { spec: { containers: [{ name: "c", image: "img:1" }] } } } } as DeploymentLike,
     ];
     const statefulSets = [
-      { metadata: { name: "sts-dup", namespace: "b", annotations: { "helmsman.dev/catalog-app": "dup" } }, spec: { template: { spec: { containers: [{ name: "c", image: "img:2" }] } } } } as StatefulSetLike,
+      { metadata: { name: "sts-dup", namespace: "b", annotations: { "rigel.dev/catalog-app": "dup" } }, spec: { template: { spec: { containers: [{ name: "c", image: "img:2" }] } } } } as StatefulSetLike,
     ];
     const targets = updateTargets(apps, deployments, statefulSets, [], []);
     expect(targets).toHaveLength(1);

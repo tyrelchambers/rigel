@@ -1,5 +1,5 @@
 // Cluster-aware chat suggestion chips. Port of the Swift `SuggestedPromptsBuilder`
-// (Sources/Helmsman/Chat/SuggestedPrompts.swift). Computed server-side from
+// (Sources/Rigel/Chat/SuggestedPrompts.swift). Computed server-side from
 // one-shot kubectl reads so it stays isolated from the per-panel watch store
 // (which the namespace filter mutates). Priority: unhealthy pods > degraded
 // deployments > grouped warning events > node pressure > "Investigate" fallback.

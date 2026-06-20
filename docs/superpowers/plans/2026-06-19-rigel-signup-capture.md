@@ -30,7 +30,7 @@
 - `src/installStore.ts` — persistent `installId`/`captured`/`pending` in `userData`
 - `src/signup.ts` — `submitSignup()` + `deliver()` (POST with retry)
 - `src/main.ts` (modify) — instantiate store, IPC handlers, background retry on boot
-- `src/preload.ts` (modify) — rename bridge `helmsman`→`rigel`, add `needsSignup`/`submitSignup`
+- `src/preload.ts` (modify) — rename bridge `rigel`→`rigel`, add `needsSignup`/`submitSignup`
 - `package.json` (modify) — add vitest + `test` script
 - `src/*.test.ts` — vitest unit tests
 
@@ -934,7 +934,7 @@ export async function submitSignup(
 - Modify: `apps/desktop/src/preload.ts`
 - Modify: `apps/desktop/src/main.ts`
 
-- [ ] **Step 1: Rewrite `apps/desktop/src/preload.ts`** (rename bridge `helmsman`→`rigel`, add the two methods; renderer references none of the old name, verified)
+- [ ] **Step 1: Rewrite `apps/desktop/src/preload.ts`** (rename bridge `rigel`→`rigel`, add the two methods; renderer references none of the old name, verified)
 
 ```ts
 import { contextBridge, ipcRenderer } from "electron";
@@ -1173,7 +1173,7 @@ useEffect(() => {
     if (cancelled) return;
     if (needs) { setRequireAboutYou(true); setShowOnboarding(true); return; }
     // existing optional-onboarding condition:
-    if (authed && chatConfig && !chatConfig.configured && !localStorage.getItem("helmsman_onboarded")) {
+    if (authed && chatConfig && !chatConfig.configured && !localStorage.getItem("rigel_onboarded")) {
       setShowOnboarding(true);
     }
   })();
@@ -1183,7 +1183,7 @@ useEffect(() => {
 function closeOnboarding() {
   if (requireAboutYou) return; // guarded; the wizard itself only calls onClose once About-you is done
   setShowOnboarding(false);
-  localStorage.setItem("helmsman_onboarded", "1");
+  localStorage.setItem("rigel_onboarded", "1");
 }
 // render:
 {showOnboarding && <OnboardingWizard onClose={closeOnboarding} requireAboutYou={requireAboutYou} />}

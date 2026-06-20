@@ -1,6 +1,6 @@
 /**
  * First-run setup. Auto-shown after login when no Claude token is configured
- * (dismissible; re-openable from Settings via the "helmsman:open-setup" event).
+ * (dismissible; re-openable from Settings via the "rigel:open-setup" event).
  * A guided front-end over existing endpoints — captures the Claude token and
  * offers one-click installs of the Assistant, metrics-server, and Signal.
  *

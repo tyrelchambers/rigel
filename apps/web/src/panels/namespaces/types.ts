@@ -1,6 +1,6 @@
 // Namespace type for the web Namespaces panel. Mirrors the shared contract in
 // `packages/k8s/src/index.ts` and the Swift `Namespace` in
-// `Sources/Helmsman/Cluster/KubeTypes.swift`. Kept local to the web app so the
+// `Sources/Rigel/Cluster/KubeTypes.swift`. Kept local to the web app so the
 // panel does not depend on workspace-package linking for a type-only import.
 //
 // Namespaces are CLUSTER-SCOPED: no per-namespace qualifier, never filtered by

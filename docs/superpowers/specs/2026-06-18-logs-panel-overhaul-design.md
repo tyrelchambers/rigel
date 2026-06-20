@@ -162,7 +162,7 @@ verified via Playwright (smooth scroll, sticky-bottom) + typecheck/build.
   download payload, `buildLogsArgs`) → vitest (web) / bun (server) unit tests, TDD.
 - UI → `pnpm --filter web typecheck && build`, a Playwright re-drive of the panel,
   and `docker compose up -d --build` so the change is live (per project workflow).
-- Update the Helmsman Outline doc (a "Logs panel" doc) as features land.
+- Update the Rigel Outline doc (a "Logs panel" doc) as features land.
 
 ## Out of scope (YAGNI for now)
 

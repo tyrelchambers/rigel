@@ -203,7 +203,7 @@ export function IngressEditor({ target, open, onClose, onApplied }: IngressEdito
                     <input
                       type="text"
                       value={rule.host}
-                      placeholder="host (e.g. helmsman.sh) — blank = all hosts"
+                      placeholder="host (e.g. rigel.sh) — blank = all hosts"
                       onChange={(e) => updateRule(ri, { host: e.target.value })}
                       className={fieldInput}
                       aria-label="host"

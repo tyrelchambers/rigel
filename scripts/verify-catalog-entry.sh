@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# verify-catalog-entry.sh — deterministic verification harness for Helmsman
+# verify-catalog-entry.sh — deterministic verification harness for Rigel
 # catalog entries. The "absolutely sure" core of the catalog-entry skill: it
 # proves install correctness against LIVE tooling (helm/docker/kubectl) rather
 # than trusting LLM research.

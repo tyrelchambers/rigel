@@ -22,7 +22,7 @@ afterEach(async () => {
 test("a non-claude active agent yields a single 'not available' error event", async () => {
   // Force the active agent to a coming-soon one by writing the config directly.
   await writeFile(
-    join(home, ".claude", "helmsman-agents.json"),
+    join(home, ".claude", "rigel-agents.json"),
     JSON.stringify({ activeAgentId: "codex", agents: {} }),
   );
   const events: ChatEvent[] = [];

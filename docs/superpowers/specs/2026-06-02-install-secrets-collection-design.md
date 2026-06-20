@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-02
 **Status:** Approved (pending spec review)
-**Area:** Catalog install wizard (`Sources/Helmsman/Panels/Catalog`, `Sources/Helmsman/Catalog`)
+**Area:** Catalog install wizard (`Sources/Rigel/Panels/Catalog`, `Sources/Rigel/Catalog`)
 
 ## Problem
 
@@ -128,7 +128,7 @@ enum SecretNameResolver {
 Logic:
 - base `= "\(instance)-secrets"`.
 - if a Secret named base exists **and** carries our labels
-  (`app.kubernetes.io/managed-by == "helmsman"` && `app.kubernetes.io/instance == instance`)
+  (`app.kubernetes.io/managed-by == "rigel"` && `app.kubernetes.io/instance == instance`)
   → ours: keep base, `note = .reusing`, `prefill =` its decoded values.
 - exists but **unrelated** (no/!matching labels) → first free `"\(instance)-secrets-\(n)"`
   (n≥2), `note = .suffixed(requested: base)`.
@@ -173,7 +173,7 @@ preserved).
 
 1. **Secret first** (only when `secretSchema` non-empty): build via existing
    `Secret.draft(name: secretName, namespace: namespace, type: .opaque,
-   decodedData: secretValues, labels: ["app.kubernetes.io/managed-by": "helmsman",
+   decodedData: secretValues, labels: ["app.kubernetes.io/managed-by": "rigel",
    "app.kubernetes.io/instance": instance])` and apply via the existing
    `WorkloadCommander.run(.applySecret(secret))`. On failure → `.failed`
    (the app is **not** installed).
@@ -216,7 +216,7 @@ exposed command vector is unit-tested.
 work; the hand-off prompt gains the resolved `secretName` and install mode for
 context.
 
-## 7. Testing (cluster-free, matches existing `Tests/HelmsmanTests` style)
+## 7. Testing (cluster-free, matches existing `Tests/RigelTests` style)
 
 - `InstallArtifactsTests`: decode `SecretFieldSpec` / `InstallDescriptor`;
   `WizardArtifacts.parse` extracts yaml + secrets + install from a sample
@@ -232,20 +232,20 @@ context.
 ## 8. Files
 
 **New**
-- `Sources/Helmsman/Catalog/InstallArtifacts.swift` — `SecretFieldSpec`,
+- `Sources/Rigel/Catalog/InstallArtifacts.swift` — `SecretFieldSpec`,
   `InstallDescriptor`, `WizardArtifacts.parse`.
-- `Sources/Helmsman/Catalog/SecretNameResolver.swift` — collision resolver +
+- `Sources/Rigel/Catalog/SecretNameResolver.swift` — collision resolver +
   random-secret generator + namespace secret probe.
-- `Sources/Helmsman/Panels/Actions/HelmCommander.swift` — Helm execution.
+- `Sources/Rigel/Panels/Actions/HelmCommander.swift` — Helm execution.
 - Tests: `InstallArtifactsTests`, `SecretNameResolverTests`, `RandomSecretTests`,
   `HelmCommandTests`, `WizardSecretsGatingTests`.
 
 **Modified**
-- `Sources/Helmsman/Panels/Catalog/CatalogInstallWizardModel.swift` — `.secrets`
+- `Sources/Rigel/Panels/Catalog/CatalogInstallWizardModel.swift` — `.secrets`
   step + `pipelineIndex` shift, new fields, async `advanceFromConfigure`,
   `secretName` + `templateVars`, `handle(.result:)` artifact parsing,
   Secret-first `runApply`, helm branch, verify additions, secrets-gating.
-- `Sources/Helmsman/Panels/Catalog/CatalogInstallWizard.swift` — Secrets step
+- `Sources/Rigel/Panels/Catalog/CatalogInstallWizard.swift` — Secrets step
   view, step-nav indicator, routing from Generating.
 - `buildInstallPrompt()` preamble — Secrets & install contract section.
 

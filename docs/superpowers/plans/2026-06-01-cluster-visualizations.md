@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add four visualizations to Helmsman — Overview cluster gauges + reclaimable-waste headline, an event-volume timeline, a node→pod treemap (new Topology tab), and a Right-Sizing 24h usage-band chart — on a shared `Charts/` module of reusable views and pure, tested aggregation/layout functions.
+**Goal:** Add four visualizations to Rigel — Overview cluster gauges + reclaimable-waste headline, an event-volume timeline, a node→pod treemap (new Topology tab), and a Right-Sizing 24h usage-band chart — on a shared `Charts/` module of reusable views and pure, tested aggregation/layout functions.
 
 **Architecture:** Pure functions (`Viz` aggregations, `TreemapLayout`) hold all logic and get unit-tested; SwiftUI/Swift-Charts views stay thin wrappers. Three of the four features read existing `ClusterCache` snapshots reactively (zero new fetching); only the usage-band chart adds a Prometheus range query, gated on a configured backend with an honest empty state otherwise.
 
@@ -13,24 +13,24 @@
 ## File Structure
 
 **New files:**
-- `Sources/Helmsman/Charts/Aggregations.swift` — `enum Viz`: cluster totals, waste summary, event buckets, treemap model (pure).
-- `Sources/Helmsman/Charts/TreemapLayout.swift` — squarified treemap rect packing (pure).
-- `Sources/Helmsman/Charts/ChartTheme.swift` — shared health→color mapping for viz views.
-- `Sources/Helmsman/Charts/RingGauge.swift` — circular usage gauge (native SwiftUI shapes).
-- `Sources/Helmsman/Charts/EventTimeline.swift` — event-volume ribbon (Swift Charts `BarMark`).
-- `Sources/Helmsman/Charts/ClusterTreemap.swift` — node treemap view over `Viz.TreemapNode` (GeometryReader + `TreemapLayout`).
-- `Sources/Helmsman/Charts/UsageBandChart.swift` — usage area + request/limit rule lines (Swift Charts).
-- `Sources/Helmsman/Metrics/UsageSeriesSource.swift` — Prometheus range-query → `[UsagePoint]`, plus `PromRangeResponse`.
-- `Sources/Helmsman/Panels/Topology/TopologyPanel.swift` — the new Topology tab.
-- `Tests/HelmsmanTests/VizAggregationsTests.swift`, `Tests/HelmsmanTests/TreemapLayoutTests.swift`, `Tests/HelmsmanTests/UsageSeriesSourceTests.swift`.
+- `Sources/Rigel/Charts/Aggregations.swift` — `enum Viz`: cluster totals, waste summary, event buckets, treemap model (pure).
+- `Sources/Rigel/Charts/TreemapLayout.swift` — squarified treemap rect packing (pure).
+- `Sources/Rigel/Charts/ChartTheme.swift` — shared health→color mapping for viz views.
+- `Sources/Rigel/Charts/RingGauge.swift` — circular usage gauge (native SwiftUI shapes).
+- `Sources/Rigel/Charts/EventTimeline.swift` — event-volume ribbon (Swift Charts `BarMark`).
+- `Sources/Rigel/Charts/ClusterTreemap.swift` — node treemap view over `Viz.TreemapNode` (GeometryReader + `TreemapLayout`).
+- `Sources/Rigel/Charts/UsageBandChart.swift` — usage area + request/limit rule lines (Swift Charts).
+- `Sources/Rigel/Metrics/UsageSeriesSource.swift` — Prometheus range-query → `[UsagePoint]`, plus `PromRangeResponse`.
+- `Sources/Rigel/Panels/Topology/TopologyPanel.swift` — the new Topology tab.
+- `Tests/RigelTests/VizAggregationsTests.swift`, `Tests/RigelTests/TreemapLayoutTests.swift`, `Tests/RigelTests/UsageSeriesSourceTests.swift`.
 
 **Modified files:**
-- `Sources/Helmsman/Cluster/ClusterCache.swift` — add `promRangeQuery(path:)`.
-- `Sources/Helmsman/Panels/PanelKind.swift` — add `.topology` case + nav entry.
-- `Sources/Helmsman/Shell/MainWindow.swift` — route `.topology`; pass `rightSizingVM` to Overview; wire treemap pod-select.
-- `Sources/Helmsman/Panels/Overview/OverviewPanel.swift` — gauges row + waste card + compact timeline.
-- `Sources/Helmsman/Panels/Events/EventsPanel.swift` — timeline ribbon above the list.
-- `Sources/Helmsman/Panels/RightSizing/RightSizingPanel.swift` — drop in `WorkloadUsageBands` in the workload detail.
+- `Sources/Rigel/Cluster/ClusterCache.swift` — add `promRangeQuery(path:)`.
+- `Sources/Rigel/Panels/PanelKind.swift` — add `.topology` case + nav entry.
+- `Sources/Rigel/Shell/MainWindow.swift` — route `.topology`; pass `rightSizingVM` to Overview; wire treemap pod-select.
+- `Sources/Rigel/Panels/Overview/OverviewPanel.swift` — gauges row + waste card + compact timeline.
+- `Sources/Rigel/Panels/Events/EventsPanel.swift` — timeline ribbon above the list.
+- `Sources/Rigel/Panels/RightSizing/RightSizingPanel.swift` — drop in `WorkloadUsageBands` in the workload detail.
 
 **Note on view testing:** this codebase has no SwiftUI snapshot/view tests — logic is tested, views are verified by `swift build` + a manual run. This plan follows that convention: pure functions are TDD'd; view tasks gate on a clean build and a manual checkpoint.
 
@@ -39,16 +39,16 @@
 ## Task 1: Aggregations — cluster resource totals
 
 **Files:**
-- Create: `Sources/Helmsman/Charts/Aggregations.swift`
-- Test: `Tests/HelmsmanTests/VizAggregationsTests.swift`
+- Create: `Sources/Rigel/Charts/Aggregations.swift`
+- Test: `Tests/RigelTests/VizAggregationsTests.swift`
 
 - [ ] **Step 1: Write the failing test**
 
-Create `Tests/HelmsmanTests/VizAggregationsTests.swift`:
+Create `Tests/RigelTests/VizAggregationsTests.swift`:
 
 ```swift
 import XCTest
-@testable import Helmsman
+@testable import Rigel
 
 final class VizAggregationsTests: XCTestCase {
 
@@ -93,7 +93,7 @@ Expected: FAIL — compile error, `Viz` is not defined.
 
 - [ ] **Step 3: Write minimal implementation**
 
-Create `Sources/Helmsman/Charts/Aggregations.swift`:
+Create `Sources/Rigel/Charts/Aggregations.swift`:
 
 ```swift
 import Foundation
@@ -141,7 +141,7 @@ Expected: PASS (2 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/Helmsman/Charts/Aggregations.swift Tests/HelmsmanTests/VizAggregationsTests.swift
+git add Sources/Rigel/Charts/Aggregations.swift Tests/RigelTests/VizAggregationsTests.swift
 git commit -m "feat(viz): cluster resource totals aggregation"
 ```
 
@@ -150,8 +150,8 @@ git commit -m "feat(viz): cluster resource totals aggregation"
 ## Task 2: Aggregations — reclaimable-waste summary
 
 **Files:**
-- Modify: `Sources/Helmsman/Charts/Aggregations.swift`
-- Test: `Tests/HelmsmanTests/VizAggregationsTests.swift`
+- Modify: `Sources/Rigel/Charts/Aggregations.swift`
+- Test: `Tests/RigelTests/VizAggregationsTests.swift`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -227,7 +227,7 @@ Expected: PASS (4 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/Helmsman/Charts/Aggregations.swift Tests/HelmsmanTests/VizAggregationsTests.swift
+git add Sources/Rigel/Charts/Aggregations.swift Tests/RigelTests/VizAggregationsTests.swift
 git commit -m "feat(viz): reclaimable-waste summary aggregation"
 ```
 
@@ -236,8 +236,8 @@ git commit -m "feat(viz): reclaimable-waste summary aggregation"
 ## Task 3: Aggregations — event timeline buckets
 
 **Files:**
-- Modify: `Sources/Helmsman/Charts/Aggregations.swift`
-- Test: `Tests/HelmsmanTests/VizAggregationsTests.swift`
+- Modify: `Sources/Rigel/Charts/Aggregations.swift`
+- Test: `Tests/RigelTests/VizAggregationsTests.swift`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -326,7 +326,7 @@ Expected: PASS (6 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/Helmsman/Charts/Aggregations.swift Tests/HelmsmanTests/VizAggregationsTests.swift
+git add Sources/Rigel/Charts/Aggregations.swift Tests/RigelTests/VizAggregationsTests.swift
 git commit -m "feat(viz): event timeline bucketing aggregation"
 ```
 
@@ -335,8 +335,8 @@ git commit -m "feat(viz): event timeline bucketing aggregation"
 ## Task 4: Aggregations — treemap model
 
 **Files:**
-- Modify: `Sources/Helmsman/Charts/Aggregations.swift`
-- Test: `Tests/HelmsmanTests/VizAggregationsTests.swift`
+- Modify: `Sources/Rigel/Charts/Aggregations.swift`
+- Test: `Tests/RigelTests/VizAggregationsTests.swift`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -451,7 +451,7 @@ Expected: PASS (8 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/Helmsman/Charts/Aggregations.swift Tests/HelmsmanTests/VizAggregationsTests.swift
+git add Sources/Rigel/Charts/Aggregations.swift Tests/RigelTests/VizAggregationsTests.swift
 git commit -m "feat(viz): node/pod treemap model aggregation"
 ```
 
@@ -460,17 +460,17 @@ git commit -m "feat(viz): node/pod treemap model aggregation"
 ## Task 5: Squarified treemap layout
 
 **Files:**
-- Create: `Sources/Helmsman/Charts/TreemapLayout.swift`
-- Test: `Tests/HelmsmanTests/TreemapLayoutTests.swift`
+- Create: `Sources/Rigel/Charts/TreemapLayout.swift`
+- Test: `Tests/RigelTests/TreemapLayoutTests.swift`
 
 - [ ] **Step 1: Write the failing test**
 
-Create `Tests/HelmsmanTests/TreemapLayoutTests.swift`:
+Create `Tests/RigelTests/TreemapLayoutTests.swift`:
 
 ```swift
 import XCTest
 import CoreGraphics
-@testable import Helmsman
+@testable import Rigel
 
 final class TreemapLayoutTests: XCTestCase {
 
@@ -519,7 +519,7 @@ Expected: FAIL — `TreemapLayout` is not defined.
 
 - [ ] **Step 3: Write minimal implementation**
 
-Create `Sources/Helmsman/Charts/TreemapLayout.swift`:
+Create `Sources/Rigel/Charts/TreemapLayout.swift`:
 
 ```swift
 import CoreGraphics
@@ -602,7 +602,7 @@ Expected: PASS (4 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/Helmsman/Charts/TreemapLayout.swift Tests/HelmsmanTests/TreemapLayoutTests.swift
+git add Sources/Rigel/Charts/TreemapLayout.swift Tests/RigelTests/TreemapLayoutTests.swift
 git commit -m "feat(viz): squarified treemap layout"
 ```
 
@@ -611,13 +611,13 @@ git commit -m "feat(viz): squarified treemap layout"
 ## Task 6: ChartTheme + RingGauge view
 
 **Files:**
-- Create: `Sources/Helmsman/Charts/ChartTheme.swift`, `Sources/Helmsman/Charts/RingGauge.swift`
+- Create: `Sources/Rigel/Charts/ChartTheme.swift`, `Sources/Rigel/Charts/RingGauge.swift`
 
 No unit tests (pure SwiftUI views/constants — verified by build + manual run, per codebase convention).
 
 - [ ] **Step 1: Create ChartTheme**
 
-Create `Sources/Helmsman/Charts/ChartTheme.swift`:
+Create `Sources/Rigel/Charts/ChartTheme.swift`:
 
 ```swift
 import SwiftUI
@@ -646,7 +646,7 @@ enum ChartTheme {
 
 - [ ] **Step 2: Create RingGauge**
 
-Create `Sources/Helmsman/Charts/RingGauge.swift`:
+Create `Sources/Rigel/Charts/RingGauge.swift`:
 
 ```swift
 import SwiftUI
@@ -699,7 +699,7 @@ Expected: Build complete, no errors.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add Sources/Helmsman/Charts/ChartTheme.swift Sources/Helmsman/Charts/RingGauge.swift
+git add Sources/Rigel/Charts/ChartTheme.swift Sources/Rigel/Charts/RingGauge.swift
 git commit -m "feat(viz): ChartTheme + RingGauge view"
 ```
 
@@ -708,8 +708,8 @@ git commit -m "feat(viz): ChartTheme + RingGauge view"
 ## Task 7: Wire gauges + waste headline into Overview (#3)
 
 **Files:**
-- Modify: `Sources/Helmsman/Panels/Overview/OverviewPanel.swift`
-- Modify: `Sources/Helmsman/Shell/MainWindow.swift:420-426` (Overview call site)
+- Modify: `Sources/Rigel/Panels/Overview/OverviewPanel.swift`
+- Modify: `Sources/Rigel/Shell/MainWindow.swift:420-426` (Overview call site)
 
 - [ ] **Step 1: Pass rightSizingVM into OverviewPanel**
 
@@ -813,12 +813,12 @@ Expected: Build complete, no errors.
 
 - [ ] **Step 4: Manual checkpoint**
 
-Run the app (`swift run Helmsman`), open Overview. Expected: two ring gauges (Cluster CPU, Cluster Memory) showing percentages, plus a "Reclaimable" card. Visit Right-Sizing once, return to Overview → the Reclaimable card now shows a byte figure and workload count. (If metrics-server isn't installed, the "Cluster Usage" unavailable card shows instead.)
+Run the app (`swift run Rigel`), open Overview. Expected: two ring gauges (Cluster CPU, Cluster Memory) showing percentages, plus a "Reclaimable" card. Visit Right-Sizing once, return to Overview → the Reclaimable card now shows a byte figure and workload count. (If metrics-server isn't installed, the "Cluster Usage" unavailable card shows instead.)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/Helmsman/Panels/Overview/OverviewPanel.swift Sources/Helmsman/Shell/MainWindow.swift
+git add Sources/Rigel/Panels/Overview/OverviewPanel.swift Sources/Rigel/Shell/MainWindow.swift
 git commit -m "feat(overview): cluster usage gauges + reclaimable-waste headline"
 ```
 
@@ -827,13 +827,13 @@ git commit -m "feat(overview): cluster usage gauges + reclaimable-waste headline
 ## Task 8: EventTimeline view + wire into Events and Overview (#4)
 
 **Files:**
-- Create: `Sources/Helmsman/Charts/EventTimeline.swift`
-- Modify: `Sources/Helmsman/Panels/Events/EventsPanel.swift`
-- Modify: `Sources/Helmsman/Panels/Overview/OverviewPanel.swift`
+- Create: `Sources/Rigel/Charts/EventTimeline.swift`
+- Modify: `Sources/Rigel/Panels/Events/EventsPanel.swift`
+- Modify: `Sources/Rigel/Panels/Overview/OverviewPanel.swift`
 
 - [ ] **Step 1: Create the EventTimeline view**
 
-Create `Sources/Helmsman/Charts/EventTimeline.swift`:
+Create `Sources/Rigel/Charts/EventTimeline.swift`:
 
 ```swift
 import SwiftUI
@@ -948,12 +948,12 @@ Add this member to the `OverviewPanel` struct:
 
 Run: `swift build`
 Expected: Build complete, no errors.
-Then `swift run Helmsman`: the Events tab shows a stacked-bar ribbon above the list; Overview shows an "Event activity" card. With no recent events both show the "No events in the last 24 hours." empty state.
+Then `swift run Rigel`: the Events tab shows a stacked-bar ribbon above the list; Overview shows an "Event activity" card. With no recent events both show the "No events in the last 24 hours." empty state.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add Sources/Helmsman/Charts/EventTimeline.swift Sources/Helmsman/Panels/Events/EventsPanel.swift Sources/Helmsman/Panels/Overview/OverviewPanel.swift
+git add Sources/Rigel/Charts/EventTimeline.swift Sources/Rigel/Panels/Events/EventsPanel.swift Sources/Rigel/Panels/Overview/OverviewPanel.swift
 git commit -m "feat(events): event-volume timeline ribbon on Events + Overview"
 ```
 
@@ -962,11 +962,11 @@ git commit -m "feat(events): event-volume timeline ribbon on Events + Overview"
 ## Task 9: ClusterTreemap view
 
 **Files:**
-- Create: `Sources/Helmsman/Charts/ClusterTreemap.swift`
+- Create: `Sources/Rigel/Charts/ClusterTreemap.swift`
 
 - [ ] **Step 1: Create the treemap views**
 
-Create `Sources/Helmsman/Charts/ClusterTreemap.swift`:
+Create `Sources/Rigel/Charts/ClusterTreemap.swift`:
 
 ```swift
 import SwiftUI
@@ -1057,7 +1057,7 @@ Expected: Build complete, no errors.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add Sources/Helmsman/Charts/ClusterTreemap.swift
+git add Sources/Rigel/Charts/ClusterTreemap.swift
 git commit -m "feat(viz): cluster treemap node + tile views"
 ```
 
@@ -1066,9 +1066,9 @@ git commit -m "feat(viz): cluster treemap node + tile views"
 ## Task 10: TopologyPanel + new tab (#1)
 
 **Files:**
-- Create: `Sources/Helmsman/Panels/Topology/TopologyPanel.swift`
-- Modify: `Sources/Helmsman/Panels/PanelKind.swift`
-- Modify: `Sources/Helmsman/Shell/MainWindow.swift`
+- Create: `Sources/Rigel/Panels/Topology/TopologyPanel.swift`
+- Modify: `Sources/Rigel/Panels/PanelKind.swift`
+- Modify: `Sources/Rigel/Shell/MainWindow.swift`
 
 - [ ] **Step 1: Add the `.topology` PanelKind**
 
@@ -1109,7 +1109,7 @@ Add to `isNamespaceScoped` — it is **not** namespace-scoped, so add it to the 
 
 - [ ] **Step 2: Create TopologyPanel**
 
-Create `Sources/Helmsman/Panels/Topology/TopologyPanel.swift`:
+Create `Sources/Rigel/Panels/Topology/TopologyPanel.swift`:
 
 ```swift
 import SwiftUI
@@ -1210,12 +1210,12 @@ Expected: PASS — the nav-group coverage test still sees every case exactly onc
 
 - [ ] **Step 5: Manual checkpoint**
 
-`swift run Helmsman`: a new "Topology" item appears under Cluster in the sidebar. It renders one card per node, each a treemap of its pods sized by CPU (toggle to Memory). Tapping a tile jumps to the Pods tab filtered to that pod name.
+`swift run Rigel`: a new "Topology" item appears under Cluster in the sidebar. It renders one card per node, each a treemap of its pods sized by CPU (toggle to Memory). Tapping a tile jumps to the Pods tab filtered to that pod name.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add Sources/Helmsman/Panels/Topology/TopologyPanel.swift Sources/Helmsman/Panels/PanelKind.swift Sources/Helmsman/Shell/MainWindow.swift
+git add Sources/Rigel/Panels/Topology/TopologyPanel.swift Sources/Rigel/Panels/PanelKind.swift Sources/Rigel/Shell/MainWindow.swift
 git commit -m "feat(topology): cluster treemap tab"
 ```
 
@@ -1224,17 +1224,17 @@ git commit -m "feat(topology): cluster treemap tab"
 ## Task 11: Prometheus range query plumbing
 
 **Files:**
-- Create: `Sources/Helmsman/Metrics/UsageSeriesSource.swift`
-- Modify: `Sources/Helmsman/Cluster/ClusterCache.swift`
-- Test: `Tests/HelmsmanTests/UsageSeriesSourceTests.swift`
+- Create: `Sources/Rigel/Metrics/UsageSeriesSource.swift`
+- Modify: `Sources/Rigel/Cluster/ClusterCache.swift`
+- Test: `Tests/RigelTests/UsageSeriesSourceTests.swift`
 
 - [ ] **Step 1: Write the failing test**
 
-Create `Tests/HelmsmanTests/UsageSeriesSourceTests.swift`:
+Create `Tests/RigelTests/UsageSeriesSourceTests.swift`:
 
 ```swift
 import XCTest
-@testable import Helmsman
+@testable import Rigel
 
 final class UsageSeriesSourceTests: XCTestCase {
 
@@ -1281,7 +1281,7 @@ In `ClusterCache.swift`, add directly below the existing `promInstantQuery(path:
 
 - [ ] **Step 4: Create UsageSeriesSource**
 
-Create `Sources/Helmsman/Metrics/UsageSeriesSource.swift`:
+Create `Sources/Rigel/Metrics/UsageSeriesSource.swift`:
 
 ```swift
 import Foundation
@@ -1363,7 +1363,7 @@ Expected: PASS (2 tests).
 - [ ] **Step 6: Commit**
 
 ```bash
-git add Sources/Helmsman/Metrics/UsageSeriesSource.swift Sources/Helmsman/Cluster/ClusterCache.swift Tests/HelmsmanTests/UsageSeriesSourceTests.swift
+git add Sources/Rigel/Metrics/UsageSeriesSource.swift Sources/Rigel/Cluster/ClusterCache.swift Tests/RigelTests/UsageSeriesSourceTests.swift
 git commit -m "feat(metrics): Prometheus range query + usage series source"
 ```
 
@@ -1372,11 +1372,11 @@ git commit -m "feat(metrics): Prometheus range query + usage series source"
 ## Task 12: UsageBandChart + WorkloadUsageBands view
 
 **Files:**
-- Create: `Sources/Helmsman/Charts/UsageBandChart.swift`
+- Create: `Sources/Rigel/Charts/UsageBandChart.swift`
 
 - [ ] **Step 1: Create the chart + self-fetching container view**
 
-Create `Sources/Helmsman/Charts/UsageBandChart.swift`:
+Create `Sources/Rigel/Charts/UsageBandChart.swift`:
 
 ```swift
 import SwiftUI
@@ -1539,7 +1539,7 @@ Expected: Build complete, no errors.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add Sources/Helmsman/Charts/UsageBandChart.swift
+git add Sources/Rigel/Charts/UsageBandChart.swift
 git commit -m "feat(viz): usage-band chart + self-fetching workload usage view"
 ```
 
@@ -1548,11 +1548,11 @@ git commit -m "feat(viz): usage-band chart + self-fetching workload usage view"
 ## Task 13: Wire usage bands into Right-Sizing (#2)
 
 **Files:**
-- Modify: `Sources/Helmsman/Panels/RightSizing/RightSizingPanel.swift`
+- Modify: `Sources/Rigel/Panels/RightSizing/RightSizingPanel.swift`
 
 - [ ] **Step 1: Locate the workload detail area**
 
-Open `Sources/Helmsman/Panels/RightSizing/RightSizingPanel.swift` and find where a single workload's per-container detail is rendered (the expanded row / detail section that has access to a `WorkloadRightSizing` value — typically named `w` or `workload`, matching the `viewModel.filtered` / expansion pattern used by the other panels). Identify:
+Open `Sources/Rigel/Panels/RightSizing/RightSizingPanel.swift` and find where a single workload's per-container detail is rendered (the expanded row / detail section that has access to a `WorkloadRightSizing` value — typically named `w` or `workload`, matching the `viewModel.filtered` / expansion pattern used by the other panels). Identify:
   - the `WorkloadRightSizing` value in scope (call it `w`),
   - the view model property name (the panel holds `viewModel: RightSizingViewModel`).
 
@@ -1578,14 +1578,14 @@ Expected: Build complete, no errors.
 
 - [ ] **Step 4: Manual checkpoint**
 
-`swift run Helmsman`, open Right-Sizing, expand a workload:
+`swift run Rigel`, open Right-Sizing, expand a workload:
   - With a Prometheus/VictoriaMetrics source selected: a "Usage — last 24h" area chart with request/limit dashed reference lines, CPU/Memory toggle.
   - With "Local history" selected: the "Connect a metrics backend for usage history" empty state (no fallback to local data).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/Helmsman/Panels/RightSizing/RightSizingPanel.swift
+git add Sources/Rigel/Panels/RightSizing/RightSizingPanel.swift
 git commit -m "feat(right-sizing): 24h usage-band chart per workload"
 ```
 
@@ -1607,7 +1607,7 @@ Expected: All tests pass, including `VizAggregationsTests` (8), `TreemapLayoutTe
 
 - [ ] **Step 3: Manual smoke test of all four features**
 
-`swift run Helmsman` and confirm:
+`swift run Rigel` and confirm:
 1. Overview: ring gauges + reclaimable headline + event-activity card.
 2. Events: timeline ribbon above the list.
 3. Topology: new tab, node treemaps, CPU/Mem toggle, tap-to-Pods.

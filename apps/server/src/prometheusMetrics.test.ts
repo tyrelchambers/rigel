@@ -15,13 +15,13 @@ const svc = (name: string, namespace: string, ports: Array<{ name?: string; port
 });
 
 describe("detectBackendFromServices", () => {
-  test("recognizes the Helmsman-installed helmsman-metrics service (VM port)", () => {
-    const b = detectBackendFromServices([svc("helmsman-metrics", "helmsman-metrics", [{ name: "http", port: 8428 }])]);
-    expect(b).toEqual({ namespace: "helmsman-metrics", service: "helmsman-metrics", port: 8428, flavor: "VictoriaMetrics" });
+  test("recognizes the Rigel-installed rigel-metrics service (VM port)", () => {
+    const b = detectBackendFromServices([svc("rigel-metrics", "rigel-metrics", [{ name: "http", port: 8428 }])]);
+    expect(b).toEqual({ namespace: "rigel-metrics", service: "rigel-metrics", port: 8428, flavor: "VictoriaMetrics" });
   });
 
-  test("recognizes helmsman-metrics on the Prometheus port", () => {
-    const b = detectBackendFromServices([svc("helmsman-metrics", "obs", [{ port: 9090 }])]);
+  test("recognizes rigel-metrics on the Prometheus port", () => {
+    const b = detectBackendFromServices([svc("rigel-metrics", "obs", [{ port: 9090 }])]);
     expect(b?.flavor).toBe("Prometheus");
     expect(b?.port).toBe(9090);
   });
@@ -46,12 +46,12 @@ describe("detectBackendFromServices", () => {
     expect(b).toBeNull();
   });
 
-  test("prefers the Helmsman-installed backend over a pre-existing stack", () => {
+  test("prefers the Rigel-installed backend over a pre-existing stack", () => {
     const b = detectBackendFromServices([
       svc("kube-prometheus-stack-prometheus", "monitoring", [{ port: 9090 }]),
-      svc("helmsman-metrics", "helmsman-metrics", [{ port: 8428 }]),
+      svc("rigel-metrics", "rigel-metrics", [{ port: 8428 }]),
     ]);
-    expect(b?.service).toBe("helmsman-metrics");
+    expect(b?.service).toBe("rigel-metrics");
   });
 
   test("returns null when nothing matches", () => {
@@ -60,8 +60,8 @@ describe("detectBackendFromServices", () => {
 });
 
 test("proxyBase builds the API-server services proxy path", () => {
-  expect(proxyBase({ namespace: "helmsman-metrics", service: "helmsman-metrics", port: 8428, flavor: "VictoriaMetrics" })).toBe(
-    "/api/v1/namespaces/helmsman-metrics/services/helmsman-metrics:8428/proxy",
+  expect(proxyBase({ namespace: "rigel-metrics", service: "rigel-metrics", port: 8428, flavor: "VictoriaMetrics" })).toBe(
+    "/api/v1/namespaces/rigel-metrics/services/rigel-metrics:8428/proxy",
   );
 });
 

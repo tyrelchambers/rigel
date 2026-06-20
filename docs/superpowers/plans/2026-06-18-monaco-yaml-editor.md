@@ -432,7 +432,7 @@ self.MonacoEnvironment = {
 // same instance the React wrapper renders.
 loader.config({ monaco });
 
-export const HELMSMAN_THEME = "helmsman-dark";
+export const HELMSMAN_THEME = "rigel-dark";
 
 let themeDefined = false;
 let yamlHandle: MonacoYaml | null = null;
@@ -1463,13 +1463,13 @@ Walk Apply (upload/type/validate/apply), Edit-live (ConfigMap/Deployment/Secret 
 
 Per the project docs/tickets workflow (Outline = source of truth; derive Plane tickets):
 
-- [ ] **Step 1: Update the Helmsman app docs in Outline (Outline MCP)**
+- [ ] **Step 1: Update the Rigel app docs in Outline (Outline MCP)**
 
-Add/update a doc under the Helmsman collection describing the YAML editor: the three surfaces, the live-cluster schema source + lint-only degradation, the upload/drag-drop, and that edit/apply still route through the guarded ConfirmSheet. Capture follow-up ideas: extend Edit YAML to the remaining resource panels; manual schema-refresh control; schema staleness on CRD changes.
+Add/update a doc under the Rigel collection describing the YAML editor: the three surfaces, the live-cluster schema source + lint-only degradation, the upload/drag-drop, and that edit/apply still route through the guarded ConfirmSheet. Capture follow-up ideas: extend Edit YAML to the remaining resource panels; manual schema-refresh control; schema staleness on CRD changes.
 
 - [ ] **Step 2: Create Plane tickets from those docs (Plane MCP)**
 
-Derive issues for the deferred items (remaining-panel Edit YAML, schema refresh UI). Note from memory: **no Helmsman Plane project exists yet** — create it first (or confirm the right project) before filing.
+Derive issues for the deferred items (remaining-panel Edit YAML, schema refresh UI). Note from memory: **no Rigel Plane project exists yet** — create it first (or confirm the right project) before filing.
 
 ### Task 16: Finish the branch
 

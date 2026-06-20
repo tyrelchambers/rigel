@@ -30,7 +30,7 @@ export type Command =
   | { kind: "diagnose"; text: string };
 
 export const HELP_TEXT = [
-  "Helmsman assistant — text commands:",
+  "Rigel assistant — text commands:",
   "• ask anything (e.g. \"why is payments crashlooping?\") — I'll investigate read-only and reply.",
   "• status — health, spend, and how many fixes are queued.",
   "• queue — list fixes awaiting approval.",

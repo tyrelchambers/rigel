@@ -3,12 +3,12 @@
  * chat-pane width to localStorage, clamped to the allowed range.
  *
  * Width: resizable via drag on the left edge (280–520px), persisted to
- * localStorage under key "helmsman.chatPane.width".
+ * localStorage under key "rigel.chatPane.width".
  */
 
 // ── Resize persistence ────────────────────────────────────────────────────────
 
-export const PANE_WIDTH_KEY = "helmsman.chatPane.width";
+export const PANE_WIDTH_KEY = "rigel.chatPane.width";
 export const MIN_WIDTH = 280;
 export const MAX_WIDTH = 520;
 export const DEFAULT_WIDTH = 360;

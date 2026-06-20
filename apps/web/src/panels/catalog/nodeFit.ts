@@ -1,7 +1,7 @@
 /**
  * NodeFit — capacity-fit logic for catalog apps.
  *
- * Pure TypeScript port of `Sources/Helmsman/Catalog/NodeFit.swift`.
+ * Pure TypeScript port of `Sources/Rigel/Catalog/NodeFit.swift`.
  * No side effects. Inputs: a CatalogApp + snapshots of nodes and pods.
  *
  * Disk: the web has no kubelet Summary API, so `usedDiskBytes` is always

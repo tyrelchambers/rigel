@@ -6,7 +6,7 @@
  * The localStorage key used by NavStrip is exported so both the
  * component and the tests agree on it.
  */
-export const NAV_COLLAPSE_KEY = "helmsman.nav.collapsed";
+export const NAV_COLLAPSE_KEY = "rigel.nav.collapsed";
 
 /** All titled nav-group titles, in sidebar order. */
 export const ALL_GROUP_TITLES = [
@@ -126,7 +126,7 @@ export function saveCollapsed(state: NavCollapseState): void {
 // Separate from the per-group collapse above: this is the whole-sidebar
 // collapsed/expanded toggle driven by the GlobalHeader.
 
-export const SIDEBAR_COLLAPSE_KEY = "helmsman.sidebar.collapsed";
+export const SIDEBAR_COLLAPSE_KEY = "rigel.sidebar.collapsed";
 
 /** Load the whole-sidebar collapsed flag; defaults to expanded (false). */
 export function loadSidebarCollapsed(): boolean {

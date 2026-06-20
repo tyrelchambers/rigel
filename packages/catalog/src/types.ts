@@ -1,4 +1,4 @@
-// Catalog schema types — port of Sources/Helmsman/Catalog/{CatalogApp,InstallArtifacts}.swift.
+// Catalog schema types — port of Sources/Rigel/Catalog/{CatalogApp,InstallArtifacts}.swift.
 // These mirror the catalog.json shape (54 apps) loaded identically by the Swift
 // and web apps. Keep the field names EXACT — they are part of the shared contract
 // (docs/parity/contracts.md §3).
@@ -151,9 +151,9 @@ export function isBaked(app: CatalogApp): boolean {
 // Neither app may rename or re-derive them.
 
 /** Annotation key whose value is the catalog app `id` a workload backs. */
-export const CATALOG_APP_ANNOTATION = "helmsman.dev/catalog-app";
+export const CATALOG_APP_ANNOTATION = "rigel.dev/catalog-app";
 /** Annotation key whose value is the container name `setImage` targets. */
-export const CATALOG_CONTAINER_ANNOTATION = "helmsman.dev/catalog-container";
+export const CATALOG_CONTAINER_ANNOTATION = "rigel.dev/catalog-container";
 
 /**
  * The catalog app id a controller is explicitly bound to, or null.

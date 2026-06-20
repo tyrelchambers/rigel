@@ -80,7 +80,7 @@ test("parseGitSources / gitSourcesConfigMapJSON: round-trips repo→deployments,
   const cmJSON = gitSourcesConfigMapJSON("default", sources);
   const cm = JSON.parse(cmJSON);
   expect(cm.kind).toBe("ConfigMap");
-  expect(cm.metadata.name).toBe("helmsman-git-sources");
+  expect(cm.metadata.name).toBe("rigel-git-sources");
   expect(cmJSON).not.toContain("token");
 
   const back = parseGitSources(cm.data["sources.json"]);
@@ -90,15 +90,15 @@ test("parseGitSources / gitSourcesConfigMapJSON: round-trips repo→deployments,
 test("parseGitSources: migrates the legacy flat shape to one deployment named after the old source", () => {
   // Pre-refactor sources.json: each source has a top-level `path`, no `deployments`.
   const legacy = JSON.stringify([
-    { name: "helmsman-marketing", repoURL: "https://github.com/me/helmsman", branch: "master", path: "apps/marketing/k8s", lastSyncedSha: "deadbee", lastStatus: "ok" },
+    { name: "rigel-marketing", repoURL: "https://github.com/me/rigel", branch: "master", path: "apps/marketing/k8s", lastSyncedSha: "deadbee", lastStatus: "ok" },
     { name: "bare", repoURL: "https://github.com/me/bare", branch: "main" }, // no path → "."
   ]);
   expect(parseGitSources(legacy)).toEqual([
     {
-      name: "helmsman-marketing",
-      repoURL: "https://github.com/me/helmsman",
+      name: "rigel-marketing",
+      repoURL: "https://github.com/me/rigel",
       branch: "master",
-      deployments: [{ name: "helmsman-marketing", path: "apps/marketing/k8s", lastSyncedSha: "deadbee", lastStatus: "ok" }],
+      deployments: [{ name: "rigel-marketing", path: "apps/marketing/k8s", lastSyncedSha: "deadbee", lastStatus: "ok" }],
     },
     {
       name: "bare",
@@ -158,9 +158,9 @@ test("provenanceAnnotations: binds a workload to its synced deployment (name + p
   ]);
 });
 
-test("fixBranchName: helmsman/fix-<slug>-<suffix>, falls back to 'change'", () => {
-  expect(fixBranchName("Bump api memory limit!", "a1b2c3")).toBe("helmsman/fix-bump-api-memory-limit-a1b2c3");
-  expect(fixBranchName("", "x9")).toBe("helmsman/fix-change-x9");
+test("fixBranchName: rigel/fix-<slug>-<suffix>, falls back to 'change'", () => {
+  expect(fixBranchName("Bump api memory limit!", "a1b2c3")).toBe("rigel/fix-bump-api-memory-limit-a1b2c3");
+  expect(fixBranchName("", "x9")).toBe("rigel/fix-change-x9");
 });
 
 test("safeRepoFilePath: normalizes and rejects traversal/absolute/empty", () => {
@@ -185,7 +185,7 @@ test("parseGithubRepos: maps the GitHub API shape and skips junk", () => {
   expect(parseGithubRepos(null)).toEqual([]);
 });
 
-test("githubSecretJSON: account Secret with token + login, named helmsman-github", () => {
+test("githubSecretJSON: account Secret with token + login, named rigel-github", () => {
   const j = JSON.parse(githubSecretJSON("default", "ghp_x", "octocat"));
   expect(j.kind).toBe("Secret");
   expect(j.metadata.name).toBe(GITHUB_SECRET);

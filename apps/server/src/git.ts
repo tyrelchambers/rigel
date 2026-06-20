@@ -1,7 +1,7 @@
 // GitOps server I/O — clone a GitHub repo, diff/apply its manifests, and persist
-// source configs in-cluster. Source list lives in the `helmsman-git-sources`
+// source configs in-cluster. Source list lives in the `rigel-git-sources`
 // ConfigMap; a single account-level GitHub PAT (+ login) lives in the
-// `helmsman-github` Secret and drives repo listing, clone, push, and PRs. Repos
+// `rigel-github` Secret and drives repo listing, clone, push, and PRs. Repos
 // are shallow-cloned fresh into /tmp on each sync (manifests are small).
 //
 // Reuses the existing apply pipeline conventions: kubectl is run via the argv
@@ -33,7 +33,7 @@ import {
 import { applyManifest } from "./install";
 
 const STATE_NAMESPACE = process.env.HELMSMAN_NAMESPACE ?? "default";
-const REPO_ROOT = `${process.env.TMPDIR ?? "/tmp"}/helmsman-repos`;
+const REPO_ROOT = `${process.env.TMPDIR ?? "/tmp"}/rigel-repos`;
 
 const runGit = (args: string[]) => runProcess("git", args);
 
@@ -114,7 +114,7 @@ function githubHeaders(token: string): Record<string, string> {
   return {
     Authorization: `Bearer ${token}`,
     Accept: "application/vnd.github+json",
-    "User-Agent": "helmsman",
+    "User-Agent": "rigel",
     "X-GitHub-Api-Version": "2022-11-28",
   };
 }
@@ -388,7 +388,7 @@ async function createPullRequest(
       Authorization: `Bearer ${token}`,
       Accept: "application/vnd.github+json",
       "Content-Type": "application/json",
-      "User-Agent": "helmsman",
+      "User-Agent": "rigel",
     },
     body: JSON.stringify(pr),
   });

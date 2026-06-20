@@ -69,6 +69,6 @@ describe("ChatPane width persistence", () => {
 
   it("uses the canonical key", () => {
     savePaneWidth(350);
-    expect(storage.getItem("helmsman.chatPane.width")).toBe("350");
+    expect(storage.getItem("rigel.chatPane.width")).toBe("350");
   });
 });

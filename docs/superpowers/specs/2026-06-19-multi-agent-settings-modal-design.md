@@ -36,7 +36,7 @@ separately and is out of scope for this spec.
   (`runClaude()`, `buildClaudeArgs()`); token in `apps/server/src/chatConfig.ts`
   (`effectiveClaudeToken()`, `setClaudeToken()`, `clearClaudeToken()`,
   `chatConfig()`), precedence `CLAUDE_CODE_OAUTH_TOKEN` env > file
-  `~/.claude/helmsman-oauth-token` (0600), optional k8s Secret via
+  `~/.claude/rigel-oauth-token` (0600), optional k8s Secret via
   `HELMSMAN_CLAUDE_SECRET` + `POD_NAMESPACE`.
 - WS chat handler `apps/server/src/ws.ts` calls `runClaude(...)`.
 - Endpoints `GET/POST /api/chat-config` in `apps/server/src/index.ts`.
@@ -81,7 +81,7 @@ behavior change for the live path.
 **`apps/server/src/agentConfig.ts`** (new; generalizes `chatConfig.ts`) — owns
 persisted per-agent auth and the active agent.
 
-- File: `~/.claude/helmsman-agents.json`, mode `0600`:
+- File: `~/.claude/rigel-agents.json`, mode `0600`:
   ```json
   {
     "activeAgentId": "claude",
@@ -92,9 +92,9 @@ persisted per-agent auth and the active agent.
   }
   ```
 - **Claude subscription stays on the existing path:** the OAuth token continues
-  to resolve via `CLAUDE_CODE_OAUTH_TOKEN` env > `~/.claude/helmsman-oauth-token`
+  to resolve via `CLAUDE_CODE_OAUTH_TOKEN` env > `~/.claude/rigel-oauth-token`
   (0600). `effectiveClaudeToken()` is kept and reused by `claudeBridge.ts`.
-- **API keys** live in `helmsman-agents.json` (0600). When an agent's active
+- **API keys** live in `rigel-agents.json` (0600). When an agent's active
   method is `apiKey`, its key is injected as the right env var at spawn
   (Claude → `ANTHROPIC_API_KEY`).
 - API surface (limited, reused — not parallel near-duplicates):

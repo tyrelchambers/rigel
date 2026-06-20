@@ -1,9 +1,9 @@
-# Helmsman Assistant — in-cluster remediation agent
+# Rigel Assistant — in-cluster remediation agent
 
 An autonomous agent that runs **inside** your Kubernetes cluster, detects
 incidents, has Claude diagnose them, and auto-remediates the **safe tier** under
 deterministic guardrails. Destructive actions are blocked by RBAC entirely and
-only surface as suggestions for you to run in Helmsman.
+only surface as suggestions for you to run in Rigel.
 
 It authenticates with your **Claude subscription** (no API key): `claude -p`
 driven by a `CLAUDE_CODE_OAUTH_TOKEN` minted with `claude setup-token`.
@@ -23,7 +23,7 @@ a **spend cap**, a **kill-switch** (`assistant-config` ConfigMap), **backup-befo
 and **fail-closed** on any model/exec error.
 
 State is written to the `assistant-state` ConfigMap (audit timeline, queued
-suggestions, status) and backups to `assistant-backups` — both read by Helmsman.
+suggestions, status) and backups to `assistant-backups` — both read by Rigel.
 
 ## Two-way Signal (texting the assistant)
 
@@ -67,7 +67,7 @@ npm run typecheck
 npm run build
 ```
 
-## Deploy (manual — Helmsman's Assistant tab automates this in Phase C)
+## Deploy (manual — Rigel's Assistant tab automates this in Phase C)
 
 ```bash
 # 1. Mint a subscription token on a machine logged into your Max plan:
@@ -77,7 +77,7 @@ kubectl create secret generic assistant-claude-token -n default --from-literal=t
 # 2. Apply the RBAC cage, ConfigMaps, and Deployment (set the image first):
 kubectl apply -f manifests/rbac.yaml
 kubectl apply -f manifests/configmaps.yaml
-kubectl apply -f manifests/deployment.yaml   # edit image: ghcr.io/<owner>/helmsman-assistant
+kubectl apply -f manifests/deployment.yaml   # edit image: ghcr.io/<owner>/rigel-assistant
 ```
 
 The image is built and pushed to GHCR by `.github/workflows/agent-build.yml`.

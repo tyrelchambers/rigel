@@ -43,7 +43,7 @@ describe("setAgentAuth (claude, apiKey)", () => {
     expect(view.authMethod).toBe("apiKey");
     expect(view.connection).toBe("connected");
 
-    const file = join(home, ".claude", "helmsman-agents.json");
+    const file = join(home, ".claude", "rigel-agents.json");
     const parsed = JSON.parse(await readFile(file, "utf8"));
     expect(parsed.agents.claude).toEqual({ authMethod: "apiKey", apiKey: "sk-test-123" });
     expect((await stat(file)).mode & 0o777).toBe(0o600);

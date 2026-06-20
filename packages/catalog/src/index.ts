@@ -1,4 +1,4 @@
-// catalog.json schema + install logic — ported from Sources/Helmsman/Catalog/.
+// catalog.json schema + install logic — ported from Sources/Rigel/Catalog/.
 // Loaded identically by the Swift and web apps (docs/parity/contracts.md §3).
 
 export type {

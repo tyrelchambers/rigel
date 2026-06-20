@@ -192,7 +192,7 @@ mounted behind the confirm step) is preserved.
 
 - Rebuild the running container: `docker compose up -d --build` (the web app
   runs as a local Docker container; typecheck/build alone won't update it).
-- Update the Helmsman app's Outline doc (deployment editor section) and derive
+- Update the Rigel app's Outline doc (deployment editor section) and derive
   Plane tickets from the change, per the docs/tickets workflow.
 
 ## Out of scope (YAGNI)

@@ -14,8 +14,8 @@ const FULL: IngressInput = {
   ingressClassName: "nginx",
   annotations: { "cert-manager.io/cluster-issuer": "letsencrypt-prod" },
   labels: { app: "web" },
-  rules: [{ host: "helmsman.sh", paths: [{ path: "/", pathType: "Prefix", serviceName: "marketing", servicePort: "80" }] }],
-  tls: [{ hosts: "helmsman.sh", secretName: "web-tls" }],
+  rules: [{ host: "rigel.sh", paths: [{ path: "/", pathType: "Prefix", serviceName: "marketing", servicePort: "80" }] }],
+  tls: [{ hosts: "rigel.sh", secretName: "web-tls" }],
 };
 
 test("buildIngressYAML: full manifest with class, annotations, labels, TLS, rule", () => {
@@ -33,10 +33,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - helmsman.sh
+        - rigel.sh
       secretName: web-tls
   rules:
-    - host: helmsman.sh
+    - host: rigel.sh
       http:
         paths:
           - path: "/"
@@ -101,8 +101,8 @@ test("ingressToInput: extracts fields, strips last-applied-configuration, joins 
     },
     spec: {
       ingressClassName: "nginx",
-      rules: [{ host: "helmsman.sh", http: { paths: [{ path: "/", pathType: "Prefix", backend: { service: { name: "marketing", port: { number: 80 } } } }] } }],
-      tls: [{ hosts: ["helmsman.sh", "www.helmsman.sh"], secretName: "web-tls" }],
+      rules: [{ host: "rigel.sh", http: { paths: [{ path: "/", pathType: "Prefix", backend: { service: { name: "marketing", port: { number: 80 } } } }] } }],
+      tls: [{ hosts: ["rigel.sh", "www.rigel.sh"], secretName: "web-tls" }],
     },
   };
   const input = ingressToInput(live);
@@ -110,7 +110,7 @@ test("ingressToInput: extracts fields, strips last-applied-configuration, joins 
   expect(input.labels).toEqual({ app: "web" });
   expect(input.ingressClassName).toBe("nginx");
   expect(input.rules[0]!.paths[0]).toEqual({ path: "/", pathType: "Prefix", serviceName: "marketing", servicePort: "80" });
-  expect(input.tls[0]!.hosts).toBe("helmsman.sh, www.helmsman.sh");
+  expect(input.tls[0]!.hosts).toBe("rigel.sh, www.rigel.sh");
 });
 
 test("ingressToInput → buildIngressYAML round-trips a named port", () => {

@@ -1,5 +1,5 @@
 // Types for the web Connectivity panel. Mirrors the Swift `Connectivity` enum
-// in `Sources/Helmsman/Cluster/Connectivity.swift` and the normative spec in
+// in `Sources/Rigel/Cluster/Connectivity.swift` and the normative spec in
 // `docs/parity/connectivity.md`.
 //
 // Connectivity reuses the existing resource types from the Ingresses, Services,

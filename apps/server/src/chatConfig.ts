@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { readFile, unlink, writeFile } from "node:fs/promises";
 
 function tokenFile(): string {
-  return join(homedir(), ".claude", "helmsman-oauth-token");
+  return join(homedir(), ".claude", "rigel-oauth-token");
 }
 
 function envToken(): string | null {

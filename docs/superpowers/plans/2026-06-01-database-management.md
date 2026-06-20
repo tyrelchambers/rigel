@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Turn Helmsman's read-only Databases panel into a management surface — CNPG lifecycle ops (backup, switchover, hibernate, scale), connection helpers (port-forward, reveal credentials, copy DSN), and backup/health observability — behind a multi-operator abstraction.
+**Goal:** Turn Rigel's read-only Databases panel into a management surface — CNPG lifecycle ops (backup, switchover, hibernate, scale), connection helpers (port-forward, reveal credentials, copy DSN), and backup/health observability — behind a multi-operator abstraction.
 
 **Architecture:** A `DatabaseOperator` protocol returns, per `DatabaseInstance`, the available actions + backup/health info + connection info. `CNPGOperator` and `NoOperator` (generic Deployment/StatefulSet) ship in v1; future operators add a conformer. Mutations flow through the existing `WorkloadAction` → `WorkloadConfirmSheet` spine; CNPG ops shell out to the `kubectl cnpg` plugin and degrade gracefully when it is absent. Connection/credentials reuse the existing port-forward and secret-manage sheets.
 
@@ -14,33 +14,33 @@
 
 ## File Structure
 
-- **Modify** `Sources/Helmsman/Cluster/KubeTypes.swift` — extend `CNPGClusterStatus`; add `CNPGCondition`, `CNPGScheduledBackup`; extend `Container` with `env`/`envFrom`.
-- **Modify** `Sources/Helmsman/Cluster/ClusterCache.swift` — add `scheduledBackups` watch + `cnpgPluginAvailable`.
-- **Create** `Sources/Helmsman/Panels/Databases/CNPGPluginProbe.swift` — plugin presence probe.
-- **Modify** `Sources/Helmsman/Panels/Actions/WorkloadAction.swift` — add CNPG action cases.
-- **Create** `Sources/Helmsman/Panels/Databases/DatabaseCapabilities.swift` — capability/value types.
-- **Create** `Sources/Helmsman/Panels/Databases/DatabaseOperator.swift` — protocol, registry, `CNPGOperator`, `NoOperator`.
-- **Modify** `Sources/Helmsman/Panels/Databases/DatabasesViewModel.swift` — capabilities, context, DSN builder, credential lookup.
-- **Modify** `Sources/Helmsman/Panels/Databases/DatabasesPanel.swift` — action bar + connection + backups/health subsections.
-- **Modify** `Sources/Helmsman/Shell/MainWindow.swift` — wire DatabasesPanel callbacks.
-- **Create** test files under `Tests/HelmsmanTests/`.
+- **Modify** `Sources/Rigel/Cluster/KubeTypes.swift` — extend `CNPGClusterStatus`; add `CNPGCondition`, `CNPGScheduledBackup`; extend `Container` with `env`/`envFrom`.
+- **Modify** `Sources/Rigel/Cluster/ClusterCache.swift` — add `scheduledBackups` watch + `cnpgPluginAvailable`.
+- **Create** `Sources/Rigel/Panels/Databases/CNPGPluginProbe.swift` — plugin presence probe.
+- **Modify** `Sources/Rigel/Panels/Actions/WorkloadAction.swift` — add CNPG action cases.
+- **Create** `Sources/Rigel/Panels/Databases/DatabaseCapabilities.swift` — capability/value types.
+- **Create** `Sources/Rigel/Panels/Databases/DatabaseOperator.swift` — protocol, registry, `CNPGOperator`, `NoOperator`.
+- **Modify** `Sources/Rigel/Panels/Databases/DatabasesViewModel.swift` — capabilities, context, DSN builder, credential lookup.
+- **Modify** `Sources/Rigel/Panels/Databases/DatabasesPanel.swift` — action bar + connection + backups/health subsections.
+- **Modify** `Sources/Rigel/Shell/MainWindow.swift` — wire DatabasesPanel callbacks.
+- **Create** test files under `Tests/RigelTests/`.
 
 ---
 
 ## Task 1: CNPG status fields, ScheduledBackup type, and watch
 
 **Files:**
-- Modify: `Sources/Helmsman/Cluster/KubeTypes.swift:356-367` (CNPG types)
-- Modify: `Sources/Helmsman/Cluster/ClusterCache.swift` (watch + property + apply helper)
-- Test: `Tests/HelmsmanTests/CNPGTypesTests.swift`
+- Modify: `Sources/Rigel/Cluster/KubeTypes.swift:356-367` (CNPG types)
+- Modify: `Sources/Rigel/Cluster/ClusterCache.swift` (watch + property + apply helper)
+- Test: `Tests/RigelTests/CNPGTypesTests.swift`
 
 - [ ] **Step 1: Write the failing decode test**
 
-Create `Tests/HelmsmanTests/CNPGTypesTests.swift`:
+Create `Tests/RigelTests/CNPGTypesTests.swift`:
 
 ```swift
 import XCTest
-@testable import Helmsman
+@testable import Rigel
 
 final class CNPGTypesTests: XCTestCase {
     func test_clusterStatus_decodesBackupAndConditions() throws {
@@ -75,7 +75,7 @@ Expected: FAIL — `lastSuccessfulBackup`/`conditions` not members of `CNPGClust
 
 - [ ] **Step 3: Extend the CNPG types**
 
-In `Sources/Helmsman/Cluster/KubeTypes.swift`, replace the `CNPGClusterStatus` struct (currently at ~line 361) with:
+In `Sources/Rigel/Cluster/KubeTypes.swift`, replace the `CNPGClusterStatus` struct (currently at ~line 361) with:
 
 ```swift
 struct CNPGClusterStatus: Codable, Hashable {
@@ -118,7 +118,7 @@ Expected: PASS.
 
 - [ ] **Step 5: Add the scheduledBackups watch to ClusterCache**
 
-In `Sources/Helmsman/Cluster/ClusterCache.swift`, near the other `private(set) var` declarations (~line 14):
+In `Sources/Rigel/Cluster/ClusterCache.swift`, near the other `private(set) var` declarations (~line 14):
 
 ```swift
     private(set) var scheduledBackups: [CNPGScheduledBackup] = []
@@ -159,7 +159,7 @@ Expected: builds with no errors.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add Sources/Helmsman/Cluster/KubeTypes.swift Sources/Helmsman/Cluster/ClusterCache.swift Tests/HelmsmanTests/CNPGTypesTests.swift
+git add Sources/Rigel/Cluster/KubeTypes.swift Sources/Rigel/Cluster/ClusterCache.swift Tests/RigelTests/CNPGTypesTests.swift
 git commit -m "feat(databases): CNPG backup status + scheduledbackups watch"
 ```
 
@@ -170,16 +170,16 @@ git commit -m "feat(databases): CNPG backup status + scheduledbackups watch"
 The generic-DB "reveal credentials" path resolves a secret from a pod's `env`/`envFrom`. The `Container` type does not model these yet.
 
 **Files:**
-- Modify: `Sources/Helmsman/Cluster/KubeTypes.swift:29-34` (Container)
-- Test: `Tests/HelmsmanTests/ContainerEnvTests.swift`
+- Modify: `Sources/Rigel/Cluster/KubeTypes.swift:29-34` (Container)
+- Test: `Tests/RigelTests/ContainerEnvTests.swift`
 
 - [ ] **Step 1: Write the failing decode test**
 
-Create `Tests/HelmsmanTests/ContainerEnvTests.swift`:
+Create `Tests/RigelTests/ContainerEnvTests.swift`:
 
 ```swift
 import XCTest
-@testable import Helmsman
+@testable import Rigel
 
 final class ContainerEnvTests: XCTestCase {
     func test_container_decodesEnvSecretRefs() throws {
@@ -202,7 +202,7 @@ Expected: FAIL — `env`/`envFrom` not members of `Container`.
 
 - [ ] **Step 3: Extend Container**
 
-In `Sources/Helmsman/Cluster/KubeTypes.swift`, replace the `Container` struct (lines 29-34) with:
+In `Sources/Rigel/Cluster/KubeTypes.swift`, replace the `Container` struct (lines 29-34) with:
 
 ```swift
 struct Container: Codable, Hashable {
@@ -250,7 +250,7 @@ Expected: builds (added fields are optional; existing decode sites unaffected).
 - [ ] **Step 6: Commit**
 
 ```bash
-git add Sources/Helmsman/Cluster/KubeTypes.swift Tests/HelmsmanTests/ContainerEnvTests.swift
+git add Sources/Rigel/Cluster/KubeTypes.swift Tests/RigelTests/ContainerEnvTests.swift
 git commit -m "feat(databases): model container env/envFrom secret refs"
 ```
 
@@ -259,17 +259,17 @@ git commit -m "feat(databases): model container env/envFrom secret refs"
 ## Task 3: CNPG plugin probe
 
 **Files:**
-- Create: `Sources/Helmsman/Panels/Databases/CNPGPluginProbe.swift`
-- Modify: `Sources/Helmsman/Cluster/ClusterCache.swift` (add `cnpgPluginAvailable` + probe on start)
-- Test: `Tests/HelmsmanTests/CNPGPluginProbeTests.swift`
+- Create: `Sources/Rigel/Panels/Databases/CNPGPluginProbe.swift`
+- Modify: `Sources/Rigel/Cluster/ClusterCache.swift` (add `cnpgPluginAvailable` + probe on start)
+- Test: `Tests/RigelTests/CNPGPluginProbeTests.swift`
 
 - [ ] **Step 1: Write the failing test**
 
-Create `Tests/HelmsmanTests/CNPGPluginProbeTests.swift`:
+Create `Tests/RigelTests/CNPGPluginProbeTests.swift`:
 
 ```swift
 import XCTest
-@testable import Helmsman
+@testable import Rigel
 
 final class CNPGPluginProbeTests: XCTestCase {
     func test_available_whenCommandSucceeds() async {
@@ -305,7 +305,7 @@ Expected: FAIL — `CNPGPluginProbe` undefined.
 
 - [ ] **Step 3: Implement the probe**
 
-Create `Sources/Helmsman/Panels/Databases/CNPGPluginProbe.swift`:
+Create `Sources/Rigel/Panels/Databases/CNPGPluginProbe.swift`:
 
 ```swift
 import Foundation
@@ -338,7 +338,7 @@ Expected: PASS.
 
 - [ ] **Step 5: Wire the probe into ClusterCache**
 
-In `Sources/Helmsman/Cluster/ClusterCache.swift`, add near the other observable vars (~line 38, by `cnpgAvailable`):
+In `Sources/Rigel/Cluster/ClusterCache.swift`, add near the other observable vars (~line 38, by `cnpgAvailable`):
 
 ```swift
     var cnpgPluginAvailable = false
@@ -361,7 +361,7 @@ Expected: builds.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add Sources/Helmsman/Panels/Databases/CNPGPluginProbe.swift Sources/Helmsman/Cluster/ClusterCache.swift Tests/HelmsmanTests/CNPGPluginProbeTests.swift
+git add Sources/Rigel/Panels/Databases/CNPGPluginProbe.swift Sources/Rigel/Cluster/ClusterCache.swift Tests/RigelTests/CNPGPluginProbeTests.swift
 git commit -m "feat(databases): detect kubectl-cnpg plugin availability"
 ```
 
@@ -370,16 +370,16 @@ git commit -m "feat(databases): detect kubectl-cnpg plugin availability"
 ## Task 4: New WorkloadAction cases for CNPG ops
 
 **Files:**
-- Modify: `Sources/Helmsman/Panels/Actions/WorkloadAction.swift` (enum + all switch arms)
-- Test: `Tests/HelmsmanTests/WorkloadActionCNPGTests.swift`
+- Modify: `Sources/Rigel/Panels/Actions/WorkloadAction.swift` (enum + all switch arms)
+- Test: `Tests/RigelTests/WorkloadActionCNPGTests.swift`
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `Tests/HelmsmanTests/WorkloadActionCNPGTests.swift`:
+Create `Tests/RigelTests/WorkloadActionCNPGTests.swift`:
 
 ```swift
 import XCTest
-@testable import Helmsman
+@testable import Rigel
 
 final class WorkloadActionCNPGTests: XCTestCase {
     func test_backupNow_invocationAndRisk() {
@@ -432,7 +432,7 @@ Expected: FAIL — the new cases are undefined.
 
 - [ ] **Step 3: Add the enum cases**
 
-In `Sources/Helmsman/Panels/Actions/WorkloadAction.swift`, add to the `enum WorkloadAction` case list (e.g. after `case setImage(...)`):
+In `Sources/Rigel/Panels/Actions/WorkloadAction.swift`, add to the `enum WorkloadAction` case list (e.g. after `case setImage(...)`):
 
 ```swift
     /// CNPG: create an on-demand backup via the kubectl-cnpg plugin.
@@ -544,7 +544,7 @@ Expected: PASS. Also run `swift build` to confirm all switches are exhaustive.
 - [ ] **Step 11: Commit**
 
 ```bash
-git add Sources/Helmsman/Panels/Actions/WorkloadAction.swift Tests/HelmsmanTests/WorkloadActionCNPGTests.swift
+git add Sources/Rigel/Panels/Actions/WorkloadAction.swift Tests/RigelTests/WorkloadActionCNPGTests.swift
 git commit -m "feat(databases): CNPG backup/switchover/hibernate/scale actions"
 ```
 
@@ -553,16 +553,16 @@ git commit -m "feat(databases): CNPG backup/switchover/hibernate/scale actions"
 ## Task 5: Capability value types
 
 **Files:**
-- Create: `Sources/Helmsman/Panels/Databases/DatabaseCapabilities.swift`
-- Test: `Tests/HelmsmanTests/DatabaseActionTests.swift`
+- Create: `Sources/Rigel/Panels/Databases/DatabaseCapabilities.swift`
+- Test: `Tests/RigelTests/DatabaseActionTests.swift`
 
 - [ ] **Step 1: Write the failing test**
 
-Create `Tests/HelmsmanTests/DatabaseActionTests.swift`:
+Create `Tests/RigelTests/DatabaseActionTests.swift`:
 
 ```swift
 import XCTest
-@testable import Helmsman
+@testable import Rigel
 
 final class DatabaseActionTests: XCTestCase {
     func test_action_idAndLabel() {
@@ -585,7 +585,7 @@ Expected: FAIL — types undefined.
 
 - [ ] **Step 3: Implement the value types**
 
-Create `Sources/Helmsman/Panels/Databases/DatabaseCapabilities.swift`:
+Create `Sources/Rigel/Panels/Databases/DatabaseCapabilities.swift`:
 
 ```swift
 import Foundation
@@ -688,7 +688,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/Helmsman/Panels/Databases/DatabaseCapabilities.swift Tests/HelmsmanTests/DatabaseActionTests.swift
+git add Sources/Rigel/Panels/Databases/DatabaseCapabilities.swift Tests/RigelTests/DatabaseActionTests.swift
 git commit -m "feat(databases): capability value types"
 ```
 
@@ -697,16 +697,16 @@ git commit -m "feat(databases): capability value types"
 ## Task 6: Operator protocol, registry, and conformers
 
 **Files:**
-- Create: `Sources/Helmsman/Panels/Databases/DatabaseOperator.swift`
-- Test: `Tests/HelmsmanTests/DatabaseOperatorTests.swift`
+- Create: `Sources/Rigel/Panels/Databases/DatabaseOperator.swift`
+- Test: `Tests/RigelTests/DatabaseOperatorTests.swift`
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `Tests/HelmsmanTests/DatabaseOperatorTests.swift`:
+Create `Tests/RigelTests/DatabaseOperatorTests.swift`:
 
 ```swift
 import XCTest
-@testable import Helmsman
+@testable import Rigel
 
 final class DatabaseOperatorTests: XCTestCase {
 
@@ -811,14 +811,14 @@ final class DatabaseOperatorTests: XCTestCase {
 
 This test references two test helpers that may not exist yet — `Pod.testInstance(...)` and the `ObjectMeta`/`CNPGCluster` memberwise initializers used above. Check whether `Pod.testInstance` exists:
 
-Run: `grep -rn "func testInstance\|static func testInstance" Tests/HelmsmanTests Sources`
+Run: `grep -rn "func testInstance\|static func testInstance" Tests/RigelTests Sources`
 
 - [ ] **Step 2: Add the `Pod.testInstance` helper if missing**
 
-If the grep above returns nothing, create `Tests/HelmsmanTests/Support/PodTestSupport.swift`:
+If the grep above returns nothing, create `Tests/RigelTests/Support/PodTestSupport.swift`:
 
 ```swift
-@testable import Helmsman
+@testable import Rigel
 
 extension Pod {
     /// Minimal Pod for tests: a name, namespace, and phase. Other fields nil.
@@ -833,7 +833,7 @@ extension Pod {
 }
 ```
 
-> NOTE TO IMPLEMENTER: open `Sources/Helmsman/Cluster/KubeTypes.swift` and match the REAL initializers for `Pod`, `Pod.Spec`, `ObjectMeta`, `CNPGCluster`, `CNPGClusterStatus`, `CNPGScheduledBackup`. Adjust the helper and the `cluster`/`sb` literals in Step 1 to the actual member names/order (e.g. `Pod.Spec` may name the field `containers`/`nodeName` differently). The intent — a Running pod named `pg-2` and a cluster whose status carries the new fields — must hold.
+> NOTE TO IMPLEMENTER: open `Sources/Rigel/Cluster/KubeTypes.swift` and match the REAL initializers for `Pod`, `Pod.Spec`, `ObjectMeta`, `CNPGCluster`, `CNPGClusterStatus`, `CNPGScheduledBackup`. Adjust the helper and the `cluster`/`sb` literals in Step 1 to the actual member names/order (e.g. `Pod.Spec` may name the field `containers`/`nodeName` differently). The intent — a Running pod named `pg-2` and a cluster whose status carries the new fields — must hold.
 
 - [ ] **Step 3: Run test to verify it fails**
 
@@ -842,7 +842,7 @@ Expected: FAIL — `DatabaseOperator`, `DatabaseOperatorRegistry`, `CNPGOperator
 
 - [ ] **Step 4: Implement the operator layer**
 
-Create `Sources/Helmsman/Panels/Databases/DatabaseOperator.swift`:
+Create `Sources/Rigel/Panels/Databases/DatabaseOperator.swift`:
 
 ```swift
 import Foundation
@@ -1037,7 +1037,7 @@ Expected: PASS. Fix any initializer mismatches flagged in the NOTE blocks until 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add Sources/Helmsman/Panels/Databases/DatabaseOperator.swift Tests/HelmsmanTests/DatabaseOperatorTests.swift Tests/HelmsmanTests/Support/PodTestSupport.swift
+git add Sources/Rigel/Panels/Databases/DatabaseOperator.swift Tests/RigelTests/DatabaseOperatorTests.swift Tests/RigelTests/Support/PodTestSupport.swift
 git commit -m "feat(databases): operator abstraction + CNPG/generic conformers"
 ```
 
@@ -1046,16 +1046,16 @@ git commit -m "feat(databases): operator abstraction + CNPG/generic conformers"
 ## Task 7: View model — capabilities, context, DSN, credential lookup
 
 **Files:**
-- Modify: `Sources/Helmsman/Panels/Databases/DatabasesViewModel.swift`
-- Test: `Tests/HelmsmanTests/DatabasesViewModelTests.swift`
+- Modify: `Sources/Rigel/Panels/Databases/DatabasesViewModel.swift`
+- Test: `Tests/RigelTests/DatabasesViewModelTests.swift`
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `Tests/HelmsmanTests/DatabasesViewModelTests.swift`:
+Create `Tests/RigelTests/DatabasesViewModelTests.swift`:
 
 ```swift
 import XCTest
-@testable import Helmsman
+@testable import Rigel
 
 final class DatabasesViewModelTests: XCTestCase {
     func test_dsn_cnpgWithUsername() {
@@ -1082,7 +1082,7 @@ Expected: FAIL — `DatabasesViewModel.dsn(for:)` undefined.
 
 - [ ] **Step 3: Add capabilities, context, and DSN to the view model**
 
-In `Sources/Helmsman/Panels/Databases/DatabasesViewModel.swift`, add a registry stored property and these methods (inside the class):
+In `Sources/Rigel/Panels/Databases/DatabasesViewModel.swift`, add a registry stored property and these methods (inside the class):
 
 ```swift
     private let registry = DatabaseOperatorRegistry()
@@ -1145,7 +1145,7 @@ Expected: builds.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add Sources/Helmsman/Panels/Databases/DatabasesViewModel.swift Tests/HelmsmanTests/DatabasesViewModelTests.swift
+git add Sources/Rigel/Panels/Databases/DatabasesViewModel.swift Tests/RigelTests/DatabasesViewModelTests.swift
 git commit -m "feat(databases): view model capabilities, DSN, credential lookup"
 ```
 
@@ -1156,7 +1156,7 @@ git commit -m "feat(databases): view model capabilities, DSN, credential lookup"
 This task is SwiftUI; verification is build + manual (no unit test, matching how other panels in this codebase are tested).
 
 **Files:**
-- Modify: `Sources/Helmsman/Panels/Databases/DatabasesPanel.swift`
+- Modify: `Sources/Rigel/Panels/Databases/DatabasesPanel.swift`
 
 - [ ] **Step 1: Add callback closures to DatabasesPanel and DatabaseRow**
 
@@ -1330,7 +1330,7 @@ Expected: builds. (MainWindow will not compile yet because `DatabasesPanel(...)`
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/Helmsman/Panels/Databases/DatabasesPanel.swift
+git add Sources/Rigel/Panels/Databases/DatabasesPanel.swift
 git commit -m "feat(databases): action bar, connection + backups/health subsections"
 ```
 
@@ -1339,7 +1339,7 @@ git commit -m "feat(databases): action bar, connection + backups/health subsecti
 ## Task 9: Wire DatabasesPanel into MainWindow
 
 **Files:**
-- Modify: `Sources/Helmsman/Shell/MainWindow.swift:505` (the `.databases` case)
+- Modify: `Sources/Rigel/Shell/MainWindow.swift:505` (the `.databases` case)
 
 - [ ] **Step 1: Pass the new closures**
 
@@ -1399,7 +1399,7 @@ Verify in the Databases panel: expand a CNPG cluster → action bar shows Back u
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/Helmsman/Shell/MainWindow.swift
+git add Sources/Rigel/Shell/MainWindow.swift
 git commit -m "feat(databases): wire management actions into MainWindow"
 ```
 

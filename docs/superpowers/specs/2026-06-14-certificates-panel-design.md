@@ -8,7 +8,7 @@ actions to cancel orders/challenges and re-initialize a TLS certificate.
 
 ## Goal
 
-Give Helmsman a Rancher-equivalent view of cert-manager resources: see
+Give Rigel a Rancher-equivalent view of cert-manager resources: see
 certificates and their issuance state, drill into the
 CertificateRequest → Order → Challenge chain, and take corrective action
 (cancel a stuck order/challenge, force a renew, or delete the cert's secret) to

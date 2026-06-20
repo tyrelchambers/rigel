@@ -49,7 +49,7 @@ function reconcileSlice(
 
 // Persist the shared namespace selection across reloads. Guarded so the store
 // can still be imported in non-browser contexts (tests). `null`/absent = "all".
-const NS_FILTER_KEY = "helmsman_namespace_filter";
+const NS_FILTER_KEY = "rigel_namespace_filter";
 
 function readNamespaceFilter(): string | null {
   try {

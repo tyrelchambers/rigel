@@ -3,7 +3,7 @@ import type { Config } from "./config.js";
 import { parseAlertRules, type AlertRule } from "./alerts.js";
 
 /**
- * Live, human/Helmsman-editable control surface, read from the `assistant-config`
+ * Live, human/Rigel-editable control surface, read from the `assistant-config`
  * ConfigMap every poll. Separate from the deploy-time env config. Lets the
  * operator flip the kill-switch, silence noisy incidents, set the autonomy mode,
  * and point at a notification webhook — all without redeploying.

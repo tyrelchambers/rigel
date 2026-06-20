@@ -740,7 +740,7 @@ Expected: success.
 - [ ] **Step 3: Rebuild the running container** (web runs as a local Docker container; typecheck/build alone won't update it, and the baked cmctl only lands on image rebuild)
 
 Run: `docker compose up -d --build`
-Expected: `helmsman-web` rebuilt and healthy on :8787.
+Expected: `rigel-web` rebuilt and healthy on :8787.
 
 - [ ] **Step 4: Smoke-check the probe** (read-only)
 
@@ -753,5 +753,5 @@ Expected: `{"available":true}` (or `false` if cmctl didn't install — Force-ren
 
 ## Post-implementation (user's global workflow)
 
-- Update the Helmsman app's Outline doc with the new Certificates panel (features + actions).
+- Update the Rigel app's Outline doc with the new Certificates panel (features + actions).
 - Derive Plane tickets from that doc (e.g. follow-ups: Issuer/ClusterIssuer view, ARM asset confirmation for cmctl).

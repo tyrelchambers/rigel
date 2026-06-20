@@ -47,14 +47,14 @@ function dockerSecret(
 describe("accountsFromSecrets", () => {
   test("maps dockerconfigjson secrets to accounts with registry + username", () => {
     const map: Record<string, Secret> = {
-      "helmsman-dockerhub": dockerSecret("helmsman-dockerhub", "default", "docker.io", "alice", "tok"),
+      "rigel-dockerhub": dockerSecret("rigel-dockerhub", "default", "docker.io", "alice", "tok"),
     };
     const accounts = accountsFromSecrets(map, null);
     expect(accounts).toHaveLength(1);
     expect(accounts[0]).toMatchObject({
       registry: "docker.io",
       username: "alice",
-      secretName: "helmsman-dockerhub",
+      secretName: "rigel-dockerhub",
       sourceNamespace: "default",
       managed: true,
       isDefault: false,

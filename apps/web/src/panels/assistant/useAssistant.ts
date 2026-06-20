@@ -133,7 +133,7 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
   );
 
   return useMemo<AssistantDerived>(() => {
-    const agentDeployment = deployments.find((d) => d.metadata.name === "helmsman-assistant") ?? null;
+    const agentDeployment = deployments.find((d) => d.metadata.name === "rigel-assistant") ?? null;
     const isInstalled = agentDeployment != null;
     const installedNamespace = agentDeployment ? agentDeployment.metadata.namespace ?? "default" : null;
     const stateNamespace = installedNamespace ?? installNamespaceHint;
@@ -150,7 +150,7 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
     const agentPod =
       pods.find(
         (p) =>
-          p.metadata.labels?.[POD_LABEL] === "helmsman-assistant" &&
+          p.metadata.labels?.[POD_LABEL] === "rigel-assistant" &&
           (p.metadata.namespace ?? "default") === stateNamespace,
       ) ?? null;
     const agentPodRestarts =
@@ -176,7 +176,7 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
       // watchManager sends an empty snapshot first (cold cache) then streams
       // every object as an ADDED delta, so `!!resources[kind]` flips true while
       // the list is still empty — which is exactly what made the Installer flash
-      // before real deployments (incl. helmsman-assistant) had arrived. Gate on
+      // before real deployments (incl. rigel-assistant) had arrived. Gate on
       // non-empty data instead (and on the decoded assistant-state for stats).
       ready: {
         deployments: deployments.length > 0,

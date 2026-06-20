@@ -1,4 +1,4 @@
-// Installed-app detection — port of Sources/Helmsman/Catalog/InstallMatch.swift.
+// Installed-app detection — port of Sources/Rigel/Catalog/InstallMatch.swift.
 // Pure functions; recompute freely on every render to track the watch stream.
 
 import type {
@@ -78,7 +78,7 @@ export function repoPathsMatch(running: string, candidate: string): boolean {
  * first:
  *
  *   1. Annotation pass (definitive). Any Deployment/StatefulSet/DaemonSet
- *      carrying `helmsman.dev/catalog-app=<id>` IS that app's install,
+ *      carrying `rigel.dev/catalog-app=<id>` IS that app's install,
  *      regardless of image. (A value for an unknown id is added verbatim; it
  *      just doesn't correspond to any card — no crash.)
  *   2. Image pass (fallback). For apps not already matched, match `matchImages`
@@ -187,8 +187,8 @@ function boundWorkloadImage(
  * the update check needs: the running *tag*, not just the repo path.
  *
  * Annotation wins (§3.3): an app bound to a workload via
- * `helmsman.dev/catalog-app` uses that workload's container image (selected per
- * `helmsman.dev/catalog-container` / single / matchImage / first), regardless of
+ * `rigel.dev/catalog-app` uses that workload's container image (selected per
+ * `rigel.dev/catalog-container` / single / matchImage / first), regardless of
  * image match. Otherwise the running image is found by image match across
  * Deployments/StatefulSets/DaemonSets/Pods. Apps with no match are omitted.
  * Mirrors Swift `installedImages`.

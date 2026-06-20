@@ -20,7 +20,7 @@ GitOps uses a **single account-level GitHub Personal Access Token (PAT)** for ev
 
 * Click **Create a personal access token**, which links to GitHub's classic-token page pre-scoped to `**repo**` (which covers clone/push **and** opening PRs).
 * Paste the `ghp_…` token and **Connect**. Rigel validates it against the GitHub API (`/user`) and shows **"Connected as \<you\>"**.
-* The token is stored as a cluster **Secret** (`helmsman-github`) and is never shown again or returned to the browser.
+* The token is stored as a cluster **Secret** (`rigel-github`) and is never shown again or returned to the browser.
 
 > You don't have to visit Accounts first; the **Add repo** flow will prompt you for the token the first time if you're not connected yet.
 
@@ -38,7 +38,7 @@ Open **GitOps → Add repo**. It's a short wizard:
 
 To add more later, each repo card has **Add deployment** (the same folder browser scoped to that repo).
 
-Sources are stored in the `helmsman-git-sources` **ConfigMap** (no tokens, since those stay in the Secret), so they survive restarts. Repos created before this change are migrated automatically to a single deployment named after the old source, so existing links keep working.
+Sources are stored in the `rigel-git-sources` **ConfigMap** (no tokens, since those stay in the Secret), so they survive restarts. Repos created before this change are migrated automatically to a single deployment named after the old source, so existing links keep working.
 
 ---
 
@@ -51,7 +51,7 @@ Each **deployment** row has its own **Sync now** button. Syncing:
 3. On **Apply**, runs `kubectl apply -f <folder> -R` against the cluster.
 4. Records the last-synced commit, time, and status on that deployment row.
 
-On a successful sync, the applied resources are **stamped** with provenance annotations, `helmsman.dev/source-repo` (the **deployment** name) and `helmsman.dev/source-path`, so Rigel (and the AI) can map a running workload back to its repo + folder. See [Linking](#4-link-an-existing-workload-to-a-deployment).
+On a successful sync, the applied resources are **stamped** with provenance annotations, `rigel.dev/source-repo` (the **deployment** name) and `rigel.dev/source-path`, so Rigel (and the AI) can map a running workload back to its repo + folder. See [Linking](#4-link-an-existing-workload-to-a-deployment).
 
 > **Manual only.** There's no auto-sync on push yet, so you click Sync. Removed manifests are **not** pruned from the cluster.
 
@@ -59,7 +59,7 @@ On a successful sync, the applied resources are **stamped** with provenance anno
 
 ## 4. Link an existing workload to a deployment
 
-If you deployed an app some other way (manually, catalog, an existing cluster) and want the AI to understand it (and be able to open fix-PRs), **link the workload to a GitOps deployment**. Linking just stamps the same `helmsman.dev/source-repo` annotation that a sync would; it doesn't move or re-deploy anything.
+If you deployed an app some other way (manually, catalog, an existing cluster) and want the AI to understand it (and be able to open fix-PRs), **link the workload to a GitOps deployment**. Linking just stamps the same `rigel.dev/source-repo` annotation that a sync would; it doesn't move or re-deploy anything.
 
 Linking is **bidirectional**:
 
@@ -76,7 +76,7 @@ Every link is run through the standard confirm sheet (it's a `kubectl annotate` 
 
 Once a workload is linked to a deployment, the chat copilot can fix it **in the repo** instead of patching the live cluster:
 
-1. You ask the AI about a broken app (e.g. an OOMKilled deployment). It reads the `helmsman.dev/source-repo` annotation to find the deployment → its repo + folder.
+1. You ask the AI about a broken app (e.g. an OOMKilled deployment). It reads the `rigel.dev/source-repo` annotation to find the deployment → its repo + folder.
 2. It proposes the change as an **Open PR** button. Clicking it opens the confirm sheet with a **readable diff** of the manifest change, a GitHub-style unified diff with old/new line-number gutters, color-coded additions/removals, hunk separators, a `+/−` change summary, and a copy button. Nothing is applied to the cluster.
 3. On confirm, Rigel creates a branch, commits the change, pushes, and **opens a pull request** via the GitHub API. You get the PR link.
 4. You review and merge on GitHub, then **Sync now** to roll it out.
@@ -89,10 +89,10 @@ This keeps the repo as the source of truth and keeps a human in the loop (PR rev
 
 | Thing | Where |
 |-------|-------|
-| Repo configs (repo, branch, deployments[], per-deployment last-sync) | `helmsman-git-sources` ConfigMap (no secrets) |
-| GitHub PAT + login | `helmsman-github` Secret |
+| Repo configs (repo, branch, deployments[], per-deployment last-sync) | `rigel-git-sources` ConfigMap (no secrets) |
+| GitHub PAT + login | `rigel-github` Secret |
 | Cloned repos | ephemeral, under `/tmp` (re-cloned each sync) |
-| Provenance / link | `helmsman.dev/source-repo` (deployment name) + `helmsman.dev/source-path` annotations on the workload |
+| Provenance / link | `rigel.dev/source-repo` (deployment name) + `rigel.dev/source-path` annotations on the workload |
 
 API endpoints (all behind the same session auth as the rest of the app): `GET/POST/DELETE /api/git/account`, `GET /api/git/repos`, `GET /api/git/repo-tree`, `GET/POST/DELETE /api/git/sources` (repo upsert/remove), `POST/DELETE /api/git/sources/deployment` (add/remove one deployment), `POST /api/git/sync` (`{repo, deployment}`), `POST /api/git/propose-fix`.
 

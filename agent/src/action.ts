@@ -1,6 +1,6 @@
 /**
- * The action contract shared verbatim with Helmsman's Swift
- * `SuggestedAction` (Sources/Helmsman/Chat/SuggestedAction.swift). The worker
+ * The action contract shared verbatim with Rigel's Swift
+ * `SuggestedAction` (Sources/Rigel/Chat/SuggestedAction.swift). The worker
  * proposes a remediation by emitting one or more fenced ```action JSON blocks;
  * we parse them here and map them to kubectl invocations that match
  * `WorkloadAction.kubectlInvocations()` exactly, so the agent and the app run

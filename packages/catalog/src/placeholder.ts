@@ -1,5 +1,5 @@
 // Placeholder scanning, substitution, and manifest-shape validation — port of
-// Sources/Helmsman/Catalog/{PlaceholderScanner,ManifestShape}.swift.
+// Sources/Rigel/Catalog/{PlaceholderScanner,ManifestShape}.swift.
 
 export const MARKER = "<FILL_ME_IN>";
 

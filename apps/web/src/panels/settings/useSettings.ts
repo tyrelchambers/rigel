@@ -47,7 +47,7 @@ export const EMPTY_SELF_HOST_DEFAULTS: SelfHostDefaults = {
 
 /** localStorage key for the active kubectl context (spec §3.1). */
 export function selfHostKey(context: string): string {
-  return `helmsman_selfhost_defaults_${context}`;
+  return `rigel_selfhost_defaults_${context}`;
 }
 
 /** Read self-host defaults for `context`, falling back to all-empty. */
@@ -93,7 +93,7 @@ export interface SettingsDerived {
  * Subscribe to the deployments + configmaps cluster-wide watches and derive the
  * Signal bridge state. `applying` is the local "kubectl apply in flight" flag
  * owned by the panel. The bridge namespace follows the assistant install (or
- * "default"), found by locating the helmsman-assistant Deployment.
+ * "default"), found by locating the rigel-assistant Deployment.
  */
 export function useSettings(applying: boolean): SettingsDerived {
   const resources = useCluster((s) => s.resources);
@@ -117,7 +117,7 @@ export function useSettings(applying: boolean): SettingsDerived {
 
   return useMemo<SettingsDerived>(() => {
     // The bridge shares the assistant's namespace; default when not installed.
-    const agent = deployments.find((d) => d.metadata.name === "helmsman-assistant");
+    const agent = deployments.find((d) => d.metadata.name === "rigel-assistant");
     const namespace = agent?.metadata.namespace ?? "default";
 
     const config =

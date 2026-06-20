@@ -1,5 +1,5 @@
 // Node type for the web Nodes panel. Mirrors the Swift `Node` in
-// `Sources/Helmsman/Cluster/KubeTypes.swift` and the normative spec in
+// `Sources/Rigel/Cluster/KubeTypes.swift` and the normative spec in
 // `docs/parity/nodes.md`. Nodes are cluster-scoped (no namespace).
 
 export interface NodeCondition {

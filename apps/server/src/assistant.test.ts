@@ -6,7 +6,7 @@ import { validateInstall } from "./assistant";
 
 test("validateInstall accepts a lowercase namespace + image + token", () => {
   expect(() =>
-    validateInstall("default", "sk-token", "ghcr.io/acme/helmsman-assistant:latest"),
+    validateInstall("default", "sk-token", "ghcr.io/acme/rigel-assistant:latest"),
   ).not.toThrow();
 });
 

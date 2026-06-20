@@ -15,9 +15,9 @@ import { onTermEvent, sendTermStart, sendTermInput, sendTermResize, sendTermStop
 
 /** Window event that toggles the drawer — fired by the StatusBar chip, the nav
  *  item, and the command palette; App owns the open state and listens for it. */
-export const TOGGLE_TERMINAL_EVENT = "helmsman:toggle-terminal";
+export const TOGGLE_TERMINAL_EVENT = "rigel:toggle-terminal";
 
-const HEIGHT_KEY = "helmsman.terminal.height";
+const HEIGHT_KEY = "rigel.terminal.height";
 const MIN_HEIGHT = 140;
 
 function readHeight(): number {

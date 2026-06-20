@@ -20,7 +20,7 @@ dist/
 
 # Leftover Swift build artifacts (Swift app removed; safe to `rm -rf` locally)
 .build/
-Helmsman.app/
+Rigel.app/
 
 # electron-builder packaged output (.app/.dmg)
 release/
@@ -37,4 +37,4 @@ apps/web/.shots/
 
 # Swift build output + locally built macOS app
 .build/
-Helmsman.app/
+Rigel.app/

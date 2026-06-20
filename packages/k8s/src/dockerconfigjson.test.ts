@@ -101,13 +101,13 @@ describe("dockerconfigjsonToSecret", () => {
       "docker.io",
       "alice",
       "tok",
-      "helmsman-dockerhub",
+      "rigel-dockerhub",
       "default",
     );
     expect(secret.apiVersion).toBe("v1");
     expect(secret.kind).toBe("Secret");
     expect(secret.type).toBe(DOCKERCONFIGJSON_TYPE);
-    expect(secret.metadata.name).toBe("helmsman-dockerhub");
+    expect(secret.metadata.name).toBe("rigel-dockerhub");
     expect(secret.metadata.namespace).toBe("default");
     expect(secret.metadata.labels?.[MANAGED_BY_LABEL]).toBe(MANAGED_BY_VALUE);
     expect(typeof secret.data?.[DOCKERCONFIGJSON_KEY]).toBe("string");
@@ -201,12 +201,12 @@ describe("displayRegistry", () => {
 
 describe("isValidDNS1123Subdomain", () => {
   test("accepts valid names", () => {
-    for (const n of ["helmsman-dockerhub", "a", "a.b.c", "reg-1"]) {
+    for (const n of ["rigel-dockerhub", "a", "a.b.c", "reg-1"]) {
       expect(isValidDNS1123Subdomain(n)).toBe(true);
     }
   });
   test("rejects invalid names", () => {
-    for (const n of ["", "Helmsman", "-bad", "bad-", "under_score", "a".repeat(254)]) {
+    for (const n of ["", "Rigel", "-bad", "bad-", "under_score", "a".repeat(254)]) {
       expect(isValidDNS1123Subdomain(n)).toBe(false);
     }
   });

@@ -337,7 +337,7 @@ function AddAccountSheet({
           {field("username", "Username", { optional: form.mode === "reference" })}
           {form.mode === "create" &&
             field("password", "Access token", { type: "password", placeholder: "••••••••" })}
-          {field("secretName", "Secret name", { placeholder: "helmsman-dockerhub" })}
+          {field("secretName", "Secret name", { placeholder: "rigel-dockerhub" })}
           {field("namespace", "Namespace", { placeholder: "default" })}
 
           <label className="flex items-center gap-2 text-sm">

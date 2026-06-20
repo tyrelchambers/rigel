@@ -20,7 +20,7 @@ export const SIGNAL_BRIDGE_NAME = "signal-cli-rest";
 export const SIGNAL_BRIDGE_PORT = 8080;
 
 /** Device name used when requesting a link QR from the bridge. */
-export const SIGNAL_DEVICE_NAME = "helmsman";
+export const SIGNAL_DEVICE_NAME = "rigel";
 
 /**
  * Multi-doc YAML for the Signal bridge with `<NAMESPACE>` substituted. Applied
@@ -36,7 +36,7 @@ metadata:
   name: signal-cli-data
   namespace: ${ns}
   labels:
-    app.kubernetes.io/managed-by: helmsman-assistant
+    app.kubernetes.io/managed-by: rigel-assistant
 spec:
   accessModes: [ReadWriteOnce]
   resources:
@@ -50,7 +50,7 @@ metadata:
   namespace: ${ns}
   labels:
     app.kubernetes.io/name: signal-cli-rest
-    app.kubernetes.io/managed-by: helmsman-assistant
+    app.kubernetes.io/managed-by: rigel-assistant
 spec:
   replicas: 1
   strategy:
@@ -92,7 +92,7 @@ metadata:
   name: signal-cli-rest
   namespace: ${ns}
   labels:
-    app.kubernetes.io/managed-by: helmsman-assistant
+    app.kubernetes.io/managed-by: rigel-assistant
 spec:
   selector:
     app.kubernetes.io/name: signal-cli-rest

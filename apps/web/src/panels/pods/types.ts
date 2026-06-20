@@ -1,6 +1,6 @@
 // Pod type for the web Pods panel. Mirrors the shared contract in
 // `packages/k8s/src/index.ts` and the Swift `Pod` in
-// `Sources/Helmsman/Cluster/KubeTypes.swift`. Kept local to the web app so the
+// `Sources/Rigel/Cluster/KubeTypes.swift`. Kept local to the web app so the
 // panel does not depend on workspace-package linking for a type-only import.
 
 export interface ContainerStatus {

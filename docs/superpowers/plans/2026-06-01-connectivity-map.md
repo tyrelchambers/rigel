@@ -13,18 +13,18 @@
 ## Task R1: Pure `Connectivity` flow model
 
 **Files:**
-- Create: `Sources/Helmsman/Cluster/Connectivity.swift`
-- Test: `Tests/HelmsmanTests/ConnectivityTests.swift`
+- Create: `Sources/Rigel/Cluster/Connectivity.swift`
+- Test: `Tests/RigelTests/ConnectivityTests.swift`
 
 This task only ADDS new files — it does not touch the treemap yet, so the build stays green throughout.
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `Tests/HelmsmanTests/ConnectivityTests.swift`:
+Create `Tests/RigelTests/ConnectivityTests.swift`:
 
 ```swift
 import XCTest
-@testable import Helmsman
+@testable import Rigel
 
 final class ConnectivityTests: XCTestCase {
 
@@ -141,7 +141,7 @@ Expected: FAIL — `Connectivity` is not defined.
 
 - [ ] **Step 3: Implement the model**
 
-Create `Sources/Helmsman/Cluster/Connectivity.swift`:
+Create `Sources/Rigel/Cluster/Connectivity.swift`:
 
 ```swift
 import Foundation
@@ -278,7 +278,7 @@ Expected: PASS (7 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/Helmsman/Cluster/Connectivity.swift Tests/HelmsmanTests/ConnectivityTests.swift
+git add Sources/Rigel/Cluster/Connectivity.swift Tests/RigelTests/ConnectivityTests.swift
 git commit -m "feat(connectivity): pure ingress→service→pods flow model"
 ```
 
@@ -287,13 +287,13 @@ git commit -m "feat(connectivity): pure ingress→service→pods flow model"
 ## Task R2: ConnectivityPanel + tab swap + delete treemap
 
 **Files:**
-- Create: `Sources/Helmsman/Panels/Connectivity/ConnectivityPanel.swift`
-- Modify: `Sources/Helmsman/Charts/ChartTheme.swift`, `Sources/Helmsman/Charts/Aggregations.swift`, `Sources/Helmsman/Panels/PanelKind.swift`, `Sources/Helmsman/Shell/MainWindow.swift`, `Tests/HelmsmanTests/VizAggregationsTests.swift`
-- Delete: `Sources/Helmsman/Charts/TreemapLayout.swift`, `Sources/Helmsman/Charts/ClusterTreemap.swift`, `Sources/Helmsman/Panels/Topology/TopologyPanel.swift`, `Tests/HelmsmanTests/TreemapLayoutTests.swift`
+- Create: `Sources/Rigel/Panels/Connectivity/ConnectivityPanel.swift`
+- Modify: `Sources/Rigel/Charts/ChartTheme.swift`, `Sources/Rigel/Charts/Aggregations.swift`, `Sources/Rigel/Panels/PanelKind.swift`, `Sources/Rigel/Shell/MainWindow.swift`, `Tests/RigelTests/VizAggregationsTests.swift`
+- Delete: `Sources/Rigel/Charts/TreemapLayout.swift`, `Sources/Rigel/Charts/ClusterTreemap.swift`, `Sources/Rigel/Panels/Topology/TopologyPanel.swift`, `Tests/RigelTests/TreemapLayoutTests.swift`
 
 - [ ] **Step 1: Create ConnectivityPanel**
 
-Create `Sources/Helmsman/Panels/Connectivity/ConnectivityPanel.swift`:
+Create `Sources/Rigel/Panels/Connectivity/ConnectivityPanel.swift`:
 
 ```swift
 import SwiftUI
@@ -448,7 +448,7 @@ private struct FlowRow: View {
 
 - [ ] **Step 2: Repoint `ChartTheme.color(for:)` to `Connectivity.Health`**
 
-In `Sources/Helmsman/Charts/ChartTheme.swift`, replace the `color(for health: Viz.PodHealth)` method with:
+In `Sources/Rigel/Charts/ChartTheme.swift`, replace the `color(for health: Viz.PodHealth)` method with:
 
 ```swift
     static func color(for health: Connectivity.Health) -> Color {
@@ -465,19 +465,19 @@ Leave `loadColor(_:)` unchanged.
 - [ ] **Step 3: Delete the treemap implementation**
 
 ```bash
-git rm Sources/Helmsman/Charts/TreemapLayout.swift \
-       Sources/Helmsman/Charts/ClusterTreemap.swift \
-       Sources/Helmsman/Panels/Topology/TopologyPanel.swift \
-       Tests/HelmsmanTests/TreemapLayoutTests.swift
+git rm Sources/Rigel/Charts/TreemapLayout.swift \
+       Sources/Rigel/Charts/ClusterTreemap.swift \
+       Sources/Rigel/Panels/Topology/TopologyPanel.swift \
+       Tests/RigelTests/TreemapLayoutTests.swift
 ```
 
-Then in `Sources/Helmsman/Charts/Aggregations.swift`, delete the entire `// MARK: - Treemap model (Topology tab)` section — the `TreemapMetric` enum, `PodHealth` enum, `TreemapPod` struct, `TreemapNode` struct, and the `treemapModel(...)` function. Leave the other three sections (cluster totals, waste summary, event buckets) intact.
+Then in `Sources/Rigel/Charts/Aggregations.swift`, delete the entire `// MARK: - Treemap model (Topology tab)` section — the `TreemapMetric` enum, `PodHealth` enum, `TreemapPod` struct, `TreemapNode` struct, and the `treemapModel(...)` function. Leave the other three sections (cluster totals, waste summary, event buckets) intact.
 
-In `Tests/HelmsmanTests/VizAggregationsTests.swift`, delete the three treemap tests (`test_treemapModel_groupsByNodeWithValuesAndHealth`, `test_treemapModel_unscheduledPodsGrouped`, `test_treemapModel_memoryMetricUsesMemBytes`) and the now-unused private `pod(_:node:phase:restarts:)` fixture helper. Leave `node`, `nodeMetric`, `event`, `rsResult`, and `workload` helpers (still used by the remaining tests).
+In `Tests/RigelTests/VizAggregationsTests.swift`, delete the three treemap tests (`test_treemapModel_groupsByNodeWithValuesAndHealth`, `test_treemapModel_unscheduledPodsGrouped`, `test_treemapModel_memoryMetricUsesMemBytes`) and the now-unused private `pod(_:node:phase:restarts:)` fixture helper. Leave `node`, `nodeMetric`, `event`, `rsResult`, and `workload` helpers (still used by the remaining tests).
 
 - [ ] **Step 4: Rename the PanelKind `.topology` → `.connectivity`**
 
-In `Sources/Helmsman/Panels/PanelKind.swift`, replace every `.topology` occurrence:
+In `Sources/Rigel/Panels/PanelKind.swift`, replace every `.topology` occurrence:
 - `case topology` → `case connectivity`
 - Cluster nav group: `[.namespaces, .nodes, .connectivity, .rbac]`
 - `icon`: `case .connectivity: return "arrow.triangle.branch"`
@@ -487,7 +487,7 @@ In `Sources/Helmsman/Panels/PanelKind.swift`, replace every `.topology` occurren
 
 - [ ] **Step 5: Rewire MainWindow**
 
-In `Sources/Helmsman/Shell/MainWindow.swift`, replace the entire `case .topology:` block in `panelView` with:
+In `Sources/Rigel/Shell/MainWindow.swift`, replace the entire `case .topology:` block in `panelView` with:
 
 ```swift
         case .connectivity:

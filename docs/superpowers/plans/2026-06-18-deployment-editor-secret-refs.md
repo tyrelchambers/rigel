@@ -946,7 +946,7 @@ Expected: all PASS.
 - [ ] **Step 2: Rebuild the running container** (the web app runs as a local Docker container; build/test alone won't update it):
 
 Run: `docker compose up -d --build`
-Expected: `helmsman-web` rebuilt and running on :8787.
+Expected: `rigel-web` rebuilt and running on :8787.
 
 - [ ] **Step 3: Manual smoke (browser at http://localhost:8787)**
   - Open a Deployment's "Edit config…" → confirm it's a centered wide modal.
@@ -954,7 +954,7 @@ Expected: `helmsman-web` rebuilt and running on :8787.
   - In "Image pull secrets": add a registry secret; "Review changes" shows `kubectl patch … --type=merge … imagePullSecrets …`.
   - Confirm + apply; verify the watch refreshes the panel.
 
-- [ ] **Step 4: Update docs + tickets** (per the docs/tickets workflow): update the Helmsman app's Outline doc (Deployment editor section: image-pull secrets + env-from-secret/configmap refs), and derive Plane tickets from the change.
+- [ ] **Step 4: Update docs + tickets** (per the docs/tickets workflow): update the Rigel app's Outline doc (Deployment editor section: image-pull secrets + env-from-secret/configmap refs), and derive Plane tickets from the change.
 
 ---
 

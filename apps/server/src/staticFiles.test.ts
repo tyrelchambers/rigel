@@ -28,7 +28,7 @@ test("cacheHeaders: fingerprinted assets immutable, everything else no-store", (
 // Integration: serve from a temp "dist" mimicking a Vite build.
 let dir: string;
 beforeAll(async () => {
-  dir = await mkdtemp(join(tmpdir(), "helmsman-static-"));
+  dir = await mkdtemp(join(tmpdir(), "rigel-static-"));
   await mkdir(join(dir, "assets"), { recursive: true });
   await writeFile(join(dir, "index.html"), "<!doctype html><div id=root></div>");
   await writeFile(join(dir, "assets", "index-abc123.js"), "console.log(1)");

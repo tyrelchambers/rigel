@@ -6,7 +6,7 @@
 
 ## Problem
 
-The Helmsman AI can already ask the user to **choose** between options: it emits a
+The Rigel AI can already ask the user to **choose** between options: it emits a
 fenced ` ```question ` block (`{ question, options: [{ label, value? }] }`) which both
 apps render as instant-send purple option rows. But when the AI needs **free-text**
 from the user (e.g. "send me the real hostname"), it has no structured way to collect
@@ -124,11 +124,11 @@ For a plain (fieldless) option, the message is unchanged from today
 
 **Swift parity**
 
-- `Sources/Helmsman/Chat/ClarifyingQuestion.swift` — add `fields` to `Option`; decode;
+- `Sources/Rigel/Chat/ClarifyingQuestion.swift` — add `fields` to `Option`; decode;
   port the `buildQuestionAnswer` logic (or extend `combinedAnswer`).
-- `Sources/Helmsman/Chat/MessageViews.swift` — `QuestionOptionRow` expand-to-form;
+- `Sources/Rigel/Chat/MessageViews.swift` — `QuestionOptionRow` expand-to-form;
   always-open lone input; submit gating.
-- `Sources/Helmsman/Chat/ClaudeSession.swift` (systemPrompt) — mirror the web prompt
+- `Sources/Rigel/Chat/ClaudeSession.swift` (systemPrompt) — mirror the web prompt
   guidance so both apps emit the same blocks.
 
 ## Edge cases

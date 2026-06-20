@@ -1,5 +1,5 @@
 // Service type for the web Services panel. Mirrors the Swift `Service` in
-// `Sources/Helmsman/Cluster/KubeTypes.swift` and the normative spec in
+// `Sources/Rigel/Cluster/KubeTypes.swift` and the normative spec in
 // `docs/parity/services.md`. Services are namespace-scoped.
 //
 // NOTE: in the raw kubectl `-o json` watch stream, `targetPort` is an

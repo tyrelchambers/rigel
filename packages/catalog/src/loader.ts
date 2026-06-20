@@ -1,6 +1,6 @@
 // Catalog loader — reads the bundled catalog.json (55 apps) and returns the
 // typed array. The JSON is the SAME file the Swift app ships
-// (Sources/Helmsman/Resources/catalog.json), copied into this package so both
+// (Sources/Rigel/Resources/catalog.json), copied into this package so both
 // apps load an identical catalog.
 
 import catalogJson from "../catalog.json" with { type: "json" };

@@ -39,8 +39,8 @@ describe("pickableWorkloads", () => {
   test("reads existing binding annotation as boundTo / boundContainer", () => {
     const deployments = [
       dep("mirror", "apps", [{ name: "c", image: "x:1" }], {
-        "helmsman.dev/catalog-app": "foo",
-        "helmsman.dev/catalog-container": "c",
+        "rigel.dev/catalog-app": "foo",
+        "rigel.dev/catalog-container": "c",
       }),
     ];
     const out = pickableWorkloads(deployments, [], []);

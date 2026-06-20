@@ -3,7 +3,7 @@ import type { Pod } from "./types";
 /**
  * Compact relative age of an ISO timestamp ("5s" / "3m" / "2h" / "1d"), or
  * "—" when missing. Mirrors `K8sEvent.relativeAge()` in
- * `Sources/Helmsman/Cluster/KubeTypes.swift`. Pass `now` for determinism.
+ * `Sources/Rigel/Cluster/KubeTypes.swift`. Pass `now` for determinism.
  */
 export function relativeAge(iso: string | undefined, now: number = Date.now()): string {
   if (!iso) return "—";

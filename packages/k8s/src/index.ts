@@ -1,5 +1,5 @@
 // kubectl wrappers, output parsing, and resource types are ported here
-// from Sources/Helmsman/Cluster/ via the parity orchestrator.
+// from Sources/Rigel/Cluster/ via the parity orchestrator.
 
 export * from "./alerts";
 
@@ -245,7 +245,7 @@ export interface Container {
 
 /**
  * Pod — mirrors the Kubernetes Pod JSON schema and the Swift
- * `Pod` type in `Sources/Helmsman/Cluster/KubeTypes.swift`.
+ * `Pod` type in `Sources/Rigel/Cluster/KubeTypes.swift`.
  */
 export interface Pod {
   metadata: ObjectMeta;
@@ -270,7 +270,7 @@ export interface InvolvedObject {
 
 /**
  * K8sEvent — mirrors the Kubernetes Event JSON schema and the Swift
- * `K8sEvent` type in `Sources/Helmsman/Cluster/KubeTypes.swift`. Events are
+ * `K8sEvent` type in `Sources/Rigel/Cluster/KubeTypes.swift`. Events are
  * read-only and ephemeral (~1h TTL). See `docs/parity/events.md`.
  *
  * NOTE: `metadata` here is loosened (`type` and timestamps may be absent on the
@@ -295,7 +295,7 @@ export interface K8sEvent {
 
 /**
  * Secret — mirrors the Kubernetes Secret JSON schema and the Swift
- * `Secret` type in `Sources/Helmsman/Cluster/Secret.swift`. Secrets are
+ * `Secret` type in `Sources/Rigel/Cluster/Secret.swift`. Secrets are
  * namespace-scoped. All values in `data` are base64-encoded as returned by
  * `kubectl get -o json`. See `docs/parity/secrets.md`.
  */
@@ -309,7 +309,7 @@ export interface Secret {
 
 /**
  * ConfigMap — mirrors the Kubernetes ConfigMap JSON schema and the Swift
- * `ConfigMap` type in `Sources/Helmsman/Cluster/ConfigMap.swift`. Namespace-
+ * `ConfigMap` type in `Sources/Rigel/Cluster/ConfigMap.swift`. Namespace-
  * scoped. `data` holds plaintext UTF-8 values; `binaryData` holds base64-encoded
  * values (read-only in the editor, carried through unchanged on edit).
  * See `docs/parity/configmaps.md`.

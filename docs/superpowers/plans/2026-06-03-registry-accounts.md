@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Let the user add registry (pull) accounts in Helmsman and have a default account automatically authenticate catalog installs, fixing Docker Hub 429 rate-limit failures.
+**Goal:** Let the user add registry (pull) accounts in Rigel and have a default account automatically authenticate catalog installs, fixing Docker Hub 429 rate-limit failures.
 
 **Architecture:** A `RegistryAccount` value (metadata only) persists per kube-context in `SessionStore`; the credential lives only in a cluster `dockerconfigjson` Secret (create path) or a Secret the user already manages (reference path). A pure `RegistryCredentialBuilder` produces the `dockerconfigjson`; `RegistryAccountReconciler` performs the cluster side effects (create Secret, copy it into a target namespace, union it into that namespace's `default` ServiceAccount `imagePullSecrets`). A new Accounts panel manages accounts; the install wizard runs `ensureAccess` before applying.
 
@@ -18,9 +18,9 @@ struct RegistryAccount: Codable, Hashable, Identifiable {
     let id: UUID
     var registry: String         // "docker.io", "ghcr.io", "quay.io", or a custom host
     var username: String
-    var secretName: String       // k8s Secret name, e.g. "helmsman-dockerhub"
+    var secretName: String       // k8s Secret name, e.g. "rigel-dockerhub"
     var sourceNamespace: String  // namespace the Secret lives in (default "default")
-    var managed: Bool            // true = Helmsman created the Secret; false = referenced existing
+    var managed: Bool            // true = Rigel created the Secret; false = referenced existing
     var isDefault: Bool          // the account auto-attached to installs (≤1 true per context)
 }
 
@@ -52,40 +52,40 @@ extension Secret { func copied(toNamespace ns: String) -> Secret }
 ```
 
 **File structure**
-- Create: `Sources/Helmsman/Accounts/RegistryAccount.swift`
-- Create: `Sources/Helmsman/Accounts/RegistryCredentialBuilder.swift`
-- Create: `Sources/Helmsman/Accounts/RegistryAccountReconciler.swift`
-- Create: `Sources/Helmsman/Panels/Accounts/AccountsViewModel.swift`
-- Create: `Sources/Helmsman/Panels/Accounts/AccountsPanel.swift`
-- Modify: `Sources/Helmsman/State/SessionStore.swift` (add per-context account map + accessors)
-- Modify: `Sources/Helmsman/Cluster/Secret.swift` (add `copied(toNamespace:)`)
-- Modify: `Sources/Helmsman/Panels/PanelKind.swift` (add `.accounts`)
-- Modify: `Sources/Helmsman/Shell/MainWindow.swift` (wire the panel)
-- Modify: `Sources/Helmsman/Panels/Catalog/CatalogInstallWizardModel.swift` (account binding + ensureAccess)
-- Modify: `Sources/Helmsman/Panels/Catalog/CatalogInstallWizard.swift` (pull-credentials control)
-- Tests: `Tests/HelmsmanTests/RegistryAccountTests.swift`, `RegistryCredentialBuilderTests.swift`, `RegistryAccountReconcilerTests.swift`, plus additions to `WizardSecretsTests.swift`.
+- Create: `Sources/Rigel/Accounts/RegistryAccount.swift`
+- Create: `Sources/Rigel/Accounts/RegistryCredentialBuilder.swift`
+- Create: `Sources/Rigel/Accounts/RegistryAccountReconciler.swift`
+- Create: `Sources/Rigel/Panels/Accounts/AccountsViewModel.swift`
+- Create: `Sources/Rigel/Panels/Accounts/AccountsPanel.swift`
+- Modify: `Sources/Rigel/State/SessionStore.swift` (add per-context account map + accessors)
+- Modify: `Sources/Rigel/Cluster/Secret.swift` (add `copied(toNamespace:)`)
+- Modify: `Sources/Rigel/Panels/PanelKind.swift` (add `.accounts`)
+- Modify: `Sources/Rigel/Shell/MainWindow.swift` (wire the panel)
+- Modify: `Sources/Rigel/Panels/Catalog/CatalogInstallWizardModel.swift` (account binding + ensureAccess)
+- Modify: `Sources/Rigel/Panels/Catalog/CatalogInstallWizard.swift` (pull-credentials control)
+- Tests: `Tests/RigelTests/RegistryAccountTests.swift`, `RegistryCredentialBuilderTests.swift`, `RegistryAccountReconcilerTests.swift`, plus additions to `WizardSecretsTests.swift`.
 
 ---
 
 ## Task 1: `RegistryAccount` model + SessionStore persistence
 
 **Files:**
-- Create: `Sources/Helmsman/Accounts/RegistryAccount.swift`
-- Modify: `Sources/Helmsman/State/SessionStore.swift` (Storage struct ~line 27-41; add accessors after the self-host block ~line 136)
-- Test: `Tests/HelmsmanTests/RegistryAccountTests.swift`
+- Create: `Sources/Rigel/Accounts/RegistryAccount.swift`
+- Modify: `Sources/Rigel/State/SessionStore.swift` (Storage struct ~line 27-41; add accessors after the self-host block ~line 136)
+- Test: `Tests/RigelTests/RegistryAccountTests.swift`
 
 - [ ] **Step 1: Write the failing test**
 
 ```swift
-// Tests/HelmsmanTests/RegistryAccountTests.swift
+// Tests/RigelTests/RegistryAccountTests.swift
 import XCTest
-@testable import Helmsman
+@testable import Rigel
 
 @MainActor
 final class RegistryAccountTests: XCTestCase {
     func test_registryAccount_codableRoundTrips() throws {
         let a = RegistryAccount(id: UUID(), registry: "docker.io", username: "tyrel",
-                                secretName: "helmsman-dockerhub", sourceNamespace: "default",
+                                secretName: "rigel-dockerhub", sourceNamespace: "default",
                                 managed: true, isDefault: true)
         let data = try JSONEncoder().encode(a)
         let back = try JSONDecoder().decode(RegistryAccount.self, from: data)
@@ -118,28 +118,28 @@ Expected: FAIL — `cannot find 'RegistryAccount' in scope` / `value of type 'Se
 - [ ] **Step 3: Create the model**
 
 ```swift
-// Sources/Helmsman/Accounts/RegistryAccount.swift
+// Sources/Rigel/Accounts/RegistryAccount.swift
 import Foundation
 
-/// A registry/pull-credential account the user manages in Helmsman. Persisted
+/// A registry/pull-credential account the user manages in Rigel. Persisted
 /// per kube-context in `SessionStore` — METADATA ONLY. The credential never lives
 /// on disk: for `managed` accounts it's in the cluster `dockerconfigjson` Secret
-/// Helmsman created; for referenced accounts (`managed == false`) Helmsman never
+/// Rigel created; for referenced accounts (`managed == false`) Rigel never
 /// sees it. The model is shaped to extend to other account types later.
 struct RegistryAccount: Codable, Hashable, Identifiable {
     let id: UUID
     var registry: String         // "docker.io", "ghcr.io", "quay.io", or a custom host
     var username: String
-    var secretName: String       // k8s Secret name, e.g. "helmsman-dockerhub"
+    var secretName: String       // k8s Secret name, e.g. "rigel-dockerhub"
     var sourceNamespace: String  // namespace the Secret lives in (default "default")
-    var managed: Bool            // true = Helmsman created the Secret; false = referenced existing
+    var managed: Bool            // true = Rigel created the Secret; false = referenced existing
     var isDefault: Bool          // the account auto-attached to installs (≤1 true per context)
 }
 ```
 
 - [ ] **Step 4: Add per-context persistence to SessionStore**
 
-In `Sources/Helmsman/State/SessionStore.swift`, add a field to the `private struct Storage` (right after `selfHostDefaultsByContext`, ~line 40):
+In `Sources/Rigel/State/SessionStore.swift`, add a field to the `private struct Storage` (right after `selfHostDefaultsByContext`, ~line 40):
 
 ```swift
         // Per-context registry/pull accounts (metadata only — no credential).
@@ -178,7 +178,7 @@ Expected: PASS — 2 tests, 0 failures.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add Sources/Helmsman/Accounts/RegistryAccount.swift Sources/Helmsman/State/SessionStore.swift Tests/HelmsmanTests/RegistryAccountTests.swift
+git add Sources/Rigel/Accounts/RegistryAccount.swift Sources/Rigel/State/SessionStore.swift Tests/RigelTests/RegistryAccountTests.swift
 git commit -m "feat(accounts): RegistryAccount model + per-context persistence"
 ```
 
@@ -187,15 +187,15 @@ git commit -m "feat(accounts): RegistryAccount model + per-context persistence"
 ## Task 2: `RegistryCredentialBuilder` (pure dockerconfigjson)
 
 **Files:**
-- Create: `Sources/Helmsman/Accounts/RegistryCredentialBuilder.swift`
-- Test: `Tests/HelmsmanTests/RegistryCredentialBuilderTests.swift`
+- Create: `Sources/Rigel/Accounts/RegistryCredentialBuilder.swift`
+- Test: `Tests/RigelTests/RegistryCredentialBuilderTests.swift`
 
 - [ ] **Step 1: Write the failing test**
 
 ```swift
-// Tests/HelmsmanTests/RegistryCredentialBuilderTests.swift
+// Tests/RigelTests/RegistryCredentialBuilderTests.swift
 import XCTest
-@testable import Helmsman
+@testable import Rigel
 
 final class RegistryCredentialBuilderTests: XCTestCase {
     func test_authsKey_dockerHubUsesV1Endpoint() {
@@ -225,7 +225,7 @@ Expected: FAIL — `cannot find 'RegistryCredentialBuilder' in scope`.
 - [ ] **Step 3: Implement the builder**
 
 ```swift
-// Sources/Helmsman/Accounts/RegistryCredentialBuilder.swift
+// Sources/Rigel/Accounts/RegistryCredentialBuilder.swift
 import Foundation
 
 /// Builds the `.dockerconfigjson` payload for a registry pull Secret. Pure — holds
@@ -260,7 +260,7 @@ Expected: PASS — 2 tests, 0 failures.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/Helmsman/Accounts/RegistryCredentialBuilder.swift Tests/HelmsmanTests/RegistryCredentialBuilderTests.swift
+git add Sources/Rigel/Accounts/RegistryCredentialBuilder.swift Tests/RigelTests/RegistryCredentialBuilderTests.swift
 git commit -m "feat(accounts): pure dockerconfigjson credential builder"
 ```
 
@@ -269,25 +269,25 @@ git commit -m "feat(accounts): pure dockerconfigjson credential builder"
 ## Task 3: `Secret.copied(toNamespace:)` + reconciler pure helpers
 
 **Files:**
-- Modify: `Sources/Helmsman/Cluster/Secret.swift` (add extension method near `draft`/`toYAML`, ~line 106)
-- Create: `Sources/Helmsman/Accounts/RegistryAccountReconciler.swift` (pure statics only in this task; async methods added in Task 4's prerequisite below — actually added here too)
-- Test: `Tests/HelmsmanTests/RegistryAccountReconcilerTests.swift`
+- Modify: `Sources/Rigel/Cluster/Secret.swift` (add extension method near `draft`/`toYAML`, ~line 106)
+- Create: `Sources/Rigel/Accounts/RegistryAccountReconciler.swift` (pure statics only in this task; async methods added in Task 4's prerequisite below — actually added here too)
+- Test: `Tests/RigelTests/RegistryAccountReconcilerTests.swift`
 
 - [ ] **Step 1: Write the failing test**
 
 ```swift
-// Tests/HelmsmanTests/RegistryAccountReconcilerTests.swift
+// Tests/RigelTests/RegistryAccountReconcilerTests.swift
 import XCTest
-@testable import Helmsman
+@testable import Rigel
 
 final class RegistryAccountReconcilerTests: XCTestCase {
     func test_unionImagePullSecrets_appendsWithoutDuplicates_preservingExisting() {
         XCTAssertEqual(
-            RegistryAccountReconciler.unionImagePullSecrets(existing: ["other"], adding: "helmsman-dockerhub"),
-            ["other", "helmsman-dockerhub"])
+            RegistryAccountReconciler.unionImagePullSecrets(existing: ["other"], adding: "rigel-dockerhub"),
+            ["other", "rigel-dockerhub"])
         XCTAssertEqual(
-            RegistryAccountReconciler.unionImagePullSecrets(existing: ["helmsman-dockerhub"], adding: "helmsman-dockerhub"),
-            ["helmsman-dockerhub"])   // idempotent
+            RegistryAccountReconciler.unionImagePullSecrets(existing: ["rigel-dockerhub"], adding: "rigel-dockerhub"),
+            ["rigel-dockerhub"])   // idempotent
         XCTAssertEqual(
             RegistryAccountReconciler.unionImagePullSecrets(existing: [], adding: "a"),
             ["a"])
@@ -318,7 +318,7 @@ Expected: FAIL — `cannot find 'RegistryAccountReconciler'` / `value of type 'S
 
 - [ ] **Step 3: Add `Secret.copied(toNamespace:)`**
 
-In `Sources/Helmsman/Cluster/Secret.swift`, inside the existing `extension Secret { … }` (after `draft`, ~line 106):
+In `Sources/Rigel/Cluster/Secret.swift`, inside the existing `extension Secret { … }` (after `draft`, ~line 106):
 
 ```swift
     /// A copy of this Secret retargeted to another namespace, with server-assigned
@@ -341,7 +341,7 @@ In `Sources/Helmsman/Cluster/Secret.swift`, inside the existing `extension Secre
 - [ ] **Step 4: Create the reconciler with pure statics**
 
 ```swift
-// Sources/Helmsman/Accounts/RegistryAccountReconciler.swift
+// Sources/Rigel/Accounts/RegistryAccountReconciler.swift
 import Foundation
 
 /// Outcome of a reconciler operation. Carries a human-readable message on failure
@@ -382,7 +382,7 @@ Expected: PASS — 3 tests, 0 failures.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add Sources/Helmsman/Cluster/Secret.swift Sources/Helmsman/Accounts/RegistryAccountReconciler.swift Tests/HelmsmanTests/RegistryAccountReconcilerTests.swift
+git add Sources/Rigel/Cluster/Secret.swift Sources/Rigel/Accounts/RegistryAccountReconciler.swift Tests/RigelTests/RegistryAccountReconcilerTests.swift
 git commit -m "feat(accounts): secret copy + reconciler pure helpers (SA union, merge patch)"
 ```
 
@@ -391,7 +391,7 @@ git commit -m "feat(accounts): secret copy + reconciler pure helpers (SA union, 
 ## Task 4: Reconciler async operations (create / verify / ensureAccess)
 
 **Files:**
-- Modify: `Sources/Helmsman/Accounts/RegistryAccountReconciler.swift` (add async methods + a private kubectl read helper)
+- Modify: `Sources/Rigel/Accounts/RegistryAccountReconciler.swift` (add async methods + a private kubectl read helper)
 
 These methods perform live kubectl I/O, so they're exercised via the manual verification at the end of the plan rather than unit tests (the pure pieces they call are already tested in Task 3). No new test file.
 
@@ -432,7 +432,7 @@ Append inside `struct RegistryAccountReconciler`:
             namespace: namespace,
             type: .dockerconfigjson,
             decodedData: [".dockerconfigjson": json],
-            labels: ["app.kubernetes.io/managed-by": "helmsman"]
+            labels: ["app.kubernetes.io/managed-by": "rigel"]
         )
         let result = await WorkloadCommander(context: context).run(.applySecret(secret))
         return result.ok ? .ok : .failed(result.stderr.isEmpty ? "kubectl exited \(result.exitCode)" : result.stderr)
@@ -495,7 +495,7 @@ Expected: `Build complete!` (resolves `KubectlClient`, `runProcess`, `ProcessErr
 - [ ] **Step 6: Commit**
 
 ```bash
-git add Sources/Helmsman/Accounts/RegistryAccountReconciler.swift
+git add Sources/Rigel/Accounts/RegistryAccountReconciler.swift
 git commit -m "feat(accounts): reconciler create/verify/ensureAccess via kubectl"
 ```
 
@@ -504,8 +504,8 @@ git commit -m "feat(accounts): reconciler create/verify/ensureAccess via kubectl
 ## Task 5: `AccountsViewModel`
 
 **Files:**
-- Create: `Sources/Helmsman/Panels/Accounts/AccountsViewModel.swift`
-- Test: add to `Tests/HelmsmanTests/RegistryAccountTests.swift`
+- Create: `Sources/Rigel/Panels/Accounts/AccountsViewModel.swift`
+- Test: add to `Tests/RigelTests/RegistryAccountTests.swift`
 
 - [ ] **Step 1: Write the failing test (append to RegistryAccountTests)**
 
@@ -534,7 +534,7 @@ Expected: FAIL — `cannot find 'AccountsViewModel' in scope`.
 - [ ] **Step 3: Implement the view model**
 
 ```swift
-// Sources/Helmsman/Panels/Accounts/AccountsViewModel.swift
+// Sources/Rigel/Panels/Accounts/AccountsViewModel.swift
 import Foundation
 import Observation
 
@@ -627,7 +627,7 @@ Expected: PASS — 3 tests, 0 failures.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/Helmsman/Panels/Accounts/AccountsViewModel.swift Tests/HelmsmanTests/RegistryAccountTests.swift
+git add Sources/Rigel/Panels/Accounts/AccountsViewModel.swift Tests/RigelTests/RegistryAccountTests.swift
 git commit -m "feat(accounts): AccountsViewModel (add/reference/default/delete)"
 ```
 
@@ -636,13 +636,13 @@ git commit -m "feat(accounts): AccountsViewModel (add/reference/default/delete)"
 ## Task 6: Accounts panel UI + nav wiring
 
 **Files:**
-- Create: `Sources/Helmsman/Panels/Accounts/AccountsPanel.swift`
-- Modify: `Sources/Helmsman/Panels/PanelKind.swift` (add case + icon/title/subtitle/flags)
-- Modify: `Sources/Helmsman/Shell/MainWindow.swift` (VM state + nav group + panel switch + load)
+- Create: `Sources/Rigel/Panels/Accounts/AccountsPanel.swift`
+- Modify: `Sources/Rigel/Panels/PanelKind.swift` (add case + icon/title/subtitle/flags)
+- Modify: `Sources/Rigel/Shell/MainWindow.swift` (VM state + nav group + panel switch + load)
 
 - [ ] **Step 1: Add the `.accounts` PanelKind**
 
-In `Sources/Helmsman/Panels/PanelKind.swift`:
+In `Sources/Rigel/Panels/PanelKind.swift`:
 - Add `case accounts` after `case settings` (line 23).
 - In `navGroups` (line 46) change the System group to:
   `NavGroup(title: "System", panels: [.accounts, .settings]),`
@@ -660,7 +660,7 @@ Expected: FAIL — `switch must be exhaustive` in `MainWindow.panelView` (the mi
 - [ ] **Step 3: Create the panel**
 
 ```swift
-// Sources/Helmsman/Panels/Accounts/AccountsPanel.swift
+// Sources/Rigel/Panels/Accounts/AccountsPanel.swift
 import SwiftUI
 
 struct AccountsPanel: View {
@@ -675,7 +675,7 @@ struct AccountsPanel: View {
                         Text("Registry accounts")
                             .font(Theme.Font.body(15, weight: .semibold))
                             .foregroundStyle(Theme.Foreground.primary)
-                        Text("Credentials Helmsman uses to pull images for catalog installs. Stored as a standard Kubernetes Secret (base64 in etcd) — not encrypted at rest.")
+                        Text("Credentials Rigel uses to pull images for catalog installs. Stored as a standard Kubernetes Secret (base64 in etcd) — not encrypted at rest.")
                             .font(Theme.Font.body(11))
                             .foregroundStyle(Theme.Foreground.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -772,7 +772,7 @@ private struct AddAccountSheet: View {
     @State private var registry = "docker.io"
     @State private var username = ""
     @State private var token = ""
-    @State private var secretName = "helmsman-dockerhub"
+    @State private var secretName = "rigel-dockerhub"
     @State private var namespace = "default"
     @State private var makeDefault = true
 
@@ -795,7 +795,7 @@ private struct AddAccountSheet: View {
             if mode == .create {
                 field("Access token") { SecureField("personal access token", text: $token) }
             }
-            field("Secret name") { TextField("helmsman-dockerhub", text: $secretName) }
+            field("Secret name") { TextField("rigel-dockerhub", text: $secretName) }
             field("Namespace") { TextField("default", text: $namespace) }
             Toggle("Use as the default for installs", isOn: $makeDefault)
                 .font(Theme.Font.body(12))
@@ -826,7 +826,7 @@ private struct AddAccountSheet: View {
 
     private func syncDefaults() {
         // Convenience: derive a sensible secret name from a fresh docker.io entry.
-        if registry == "docker.io" && secretName.isEmpty { secretName = "helmsman-dockerhub" }
+        if registry == "docker.io" && secretName.isEmpty { secretName = "rigel-dockerhub" }
     }
 
     private func submit() async {
@@ -859,7 +859,7 @@ private struct AddAccountSheet: View {
 
 - [ ] **Step 4: Wire it into MainWindow**
 
-In `Sources/Helmsman/Shell/MainWindow.swift`:
+In `Sources/Rigel/Shell/MainWindow.swift`:
 - Add a stored VM near the others (after `settingsVM`, line 27): `@State private var accountsVM: AccountsViewModel`
 - In `init()` after `_settingsVM = …` (line 77): `_accountsVM = State(initialValue: AccountsViewModel(context: ""))`
 - In `panelView` add a case (next to `.settings`, ~line 600):
@@ -879,7 +879,7 @@ Expected: `Build complete!` and the account tests still pass.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add Sources/Helmsman/Panels/Accounts/AccountsPanel.swift Sources/Helmsman/Panels/PanelKind.swift Sources/Helmsman/Shell/MainWindow.swift
+git add Sources/Rigel/Panels/Accounts/AccountsPanel.swift Sources/Rigel/Panels/PanelKind.swift Sources/Rigel/Shell/MainWindow.swift
 git commit -m "feat(accounts): Accounts panel + nav wiring"
 ```
 
@@ -888,9 +888,9 @@ git commit -m "feat(accounts): Accounts panel + nav wiring"
 ## Task 7: Bind the default account to installs
 
 **Files:**
-- Modify: `Sources/Helmsman/Panels/Catalog/CatalogInstallWizardModel.swift` (account selection + ensureAccess in runApply)
-- Modify: `Sources/Helmsman/Panels/Catalog/CatalogInstallWizard.swift` (pull-credentials control in ConfigureStep)
-- Test: add to `Tests/HelmsmanTests/WizardSecretsTests.swift`
+- Modify: `Sources/Rigel/Panels/Catalog/CatalogInstallWizardModel.swift` (account selection + ensureAccess in runApply)
+- Modify: `Sources/Rigel/Panels/Catalog/CatalogInstallWizard.swift` (pull-credentials control in ConfigureStep)
+- Test: add to `Tests/RigelTests/WizardSecretsTests.swift`
 
 - [ ] **Step 1: Write the failing test (append to WizardSecretsTests)**
 
@@ -898,7 +898,7 @@ git commit -m "feat(accounts): Accounts panel + nav wiring"
     func test_install_defaultsToContextDefaultAccount() {
         let ctx = "wiz-ctx-\(UUID().uuidString)"
         let acct = RegistryAccount(id: UUID(), registry: "docker.io", username: "u",
-                                   secretName: "helmsman-dockerhub", sourceNamespace: "default",
+                                   secretName: "rigel-dockerhub", sourceNamespace: "default",
                                    managed: true, isDefault: true)
         SessionStore.shared.setRegistryAccounts([acct], for: ctx)
         let fit = FitResult(perNode: [], recommended: nil)
@@ -995,7 +995,7 @@ Expected: `Build complete!` and the full suite passes (0 failures).
 - [ ] **Step 8: Commit**
 
 ```bash
-git add Sources/Helmsman/Panels/Catalog/CatalogInstallWizardModel.swift Sources/Helmsman/Panels/Catalog/CatalogInstallWizard.swift Tests/HelmsmanTests/WizardSecretsTests.swift
+git add Sources/Rigel/Panels/Catalog/CatalogInstallWizardModel.swift Sources/Rigel/Panels/Catalog/CatalogInstallWizard.swift Tests/RigelTests/WizardSecretsTests.swift
 git commit -m "feat(accounts): bind default registry account to catalog installs"
 ```
 
@@ -1003,14 +1003,14 @@ git commit -m "feat(accounts): bind default registry account to catalog installs
 
 ## Manual verification (end-to-end, requires a reachable cluster)
 
-1. Build and run: `swift run Helmsman`.
-2. Open **Accounts** (System group) → **Add account** → Create: registry `docker.io`, your Docker Hub username, a personal access token, secret name `helmsman-dockerhub`, namespace `default`, "Use as default" on → **Add**. Confirm the row appears with the `default` badge and no error.
+1. Build and run: `swift run Rigel`.
+2. Open **Accounts** (System group) → **Add account** → Create: registry `docker.io`, your Docker Hub username, a personal access token, secret name `rigel-dockerhub`, namespace `default`, "Use as default" on → **Add**. Confirm the row appears with the `default` badge and no error.
 3. Verify the cluster Secret exists and the token isn't anywhere local:
-   - `kubectl get secret helmsman-dockerhub -n default -o jsonpath='{.type}'` → `kubernetes.io/dockerconfigjson`.
-   - `grep -r "<your-token>" ~/Library/Application\ Support/com.tyrelchambers.helmsman/` → no matches (only metadata persisted).
+   - `kubectl get secret rigel-dockerhub -n default -o jsonpath='{.type}'` → `kubernetes.io/dockerconfigjson`.
+   - `grep -r "<your-token>" ~/Library/Application\ Support/com.tyrelchambers.rigel/` → no matches (only metadata persisted).
 4. Install **Outline** into a namespace: the Configure step shows "Pull credentials" defaulting to your account. Apply.
 5. Confirm authentication wired up:
-   - `kubectl get serviceaccount default -n <ns> -o jsonpath='{.imagePullSecrets[*].name}'` includes `helmsman-dockerhub`.
+   - `kubectl get serviceaccount default -n <ns> -o jsonpath='{.imagePullSecrets[*].name}'` includes `rigel-dockerhub`.
    - Pods pull without a 429; `kubectl get pods -n <ns>` reaches Running/Ready.
 6. Confirm the secret never leaked into the wizard UI: the Applying/verify logs show kubectl status lines only — no base64 `dockerconfigjson` body.
 

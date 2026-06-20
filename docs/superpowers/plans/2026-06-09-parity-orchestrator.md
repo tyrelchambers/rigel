@@ -8,7 +8,7 @@
 
 **Tech Stack:** pnpm workspaces, Vite + React 19 + TypeScript + Tailwind v4 + shadcn/ui + TanStack Query v5 + React Router v7 + Zustand (web), Bun (server), the `Workflow` tool (orchestrator script in JS).
 
-**Spec:** `docs/superpowers/specs/2026-06-09-parity-orchestrator-design.md` (companion: `2026-06-09-helmsman-web-rewrite-design.md`).
+**Spec:** `docs/superpowers/specs/2026-06-09-parity-orchestrator-design.md` (companion: `2026-06-09-rigel-web-rewrite-design.md`).
 
 **Scope boundary:** This plan establishes the monorepo foundation, the orchestrator, and a validated dogfood run. Actually porting the 22 panels is the separate web-rewrite plan, executed *through* this orchestrator.
 
@@ -22,7 +22,7 @@
 | `apps/web/` | React shell: Vite + Tailwind v4 + shadcn/ui + TanStack Query + router + Zustand store; nav + empty panel routes |
 | `apps/server/` | Bun server skeleton: health route, WS endpoint, kubeconfig + context discovery |
 | `packages/k8s/`, `packages/catalog/` | Empty typed stubs (write targets for ported logic) |
-| `Sources/Helmsman/CLAUDE.md` | Swift-domain conventions for the extractor/implementer agent |
+| `Sources/Rigel/CLAUDE.md` | Swift-domain conventions for the extractor/implementer agent |
 | `apps/CLAUDE.md` | Web-domain conventions for the builder/implementer agent |
 | `docs/parity/contracts.md` | Manager-owned shared contracts (action-block protocol, MCP tools, catalog schema) |
 | `.claude/workflows/parity-feature.js` | The orchestrator Workflow script |
@@ -52,7 +52,7 @@ packages:
 `package.json`:
 ```json
 {
-  "name": "helmsman-monorepo",
+  "name": "rigel-monorepo",
   "private": true,
   "type": "module",
   "engines": { "node": ">=22" },
@@ -215,7 +215,7 @@ export default function App() {
       </nav>
       <main className="flex-1 overflow-auto p-4">
         <Routes>
-          <Route path="/" element={<div>Helmsman Web</div>} />
+          <Route path="/" element={<div>Rigel Web</div>} />
           {PANELS.map((p) => (
             <Route key={p} path={`/${p}`} element={<div className="capitalize">{p} panel (not yet ported)</div>} />
           ))}
@@ -363,7 +363,7 @@ const server = Bun.serve({
   },
 });
 
-console.log(`helmsman server on :${server.port} (kubeconfig=${KUBECONFIG})`);
+console.log(`rigel server on :${server.port} (kubeconfig=${KUBECONFIG})`);
 ```
 
 - [ ] **Step 7: Verify it boots and serves health**
@@ -401,7 +401,7 @@ git commit -m "feat(server): Bun skeleton — health, WS echo, kubeconfig resolu
 `packages/k8s/src/index.ts`:
 ```ts
 // kubectl wrappers, output parsing, and resource types are ported here
-// from Sources/Helmsman/Cluster/ via the parity orchestrator.
+// from Sources/Rigel/Cluster/ via the parity orchestrator.
 export {};
 ```
 
@@ -420,7 +420,7 @@ export {};
 `packages/catalog/src/index.ts`:
 ```ts
 // catalog.json schema + install/update-resolver logic ported here from
-// Sources/Helmsman/Catalog/ and Sources/Helmsman/Updates/.
+// Sources/Rigel/Catalog/ and Sources/Rigel/Updates/.
 export {};
 ```
 
@@ -438,14 +438,14 @@ git commit -m "chore: package stubs for k8s + catalog logic"
 
 ---
 
-## Task 5: Swift-domain context (`Sources/Helmsman/CLAUDE.md`)
+## Task 5: Swift-domain context (`Sources/Rigel/CLAUDE.md`)
 
 **Files:**
-- Create: `Sources/Helmsman/CLAUDE.md`
+- Create: `Sources/Rigel/CLAUDE.md`
 
 - [ ] **Step 1: Write the Swift conventions doc**
 
-`Sources/Helmsman/CLAUDE.md`:
+`Sources/Rigel/CLAUDE.md`:
 ```markdown
 # Swift app — domain notes (for the parity extractor/implementer)
 
@@ -482,14 +482,14 @@ SOURCE OF TRUTH during the web port.
 Do NOT write code in extractor mode.
 
 ## Build / test
-- `swift build` — compile. `swift test` — run `Tests/HelmsmanTests`.
+- `swift build` — compile. `swift test` — run `Tests/RigelTests`.
 - `make app` assembles the `.app` bundle (not needed for parity checks).
 ```
 
 - [ ] **Step 2: Commit**
 
 ```bash
-git add -f Sources/Helmsman/CLAUDE.md
+git add -f Sources/Rigel/CLAUDE.md
 git commit -m "docs(swift): domain context for parity orchestrator"
 ```
 
@@ -562,8 +562,8 @@ git commit -m "docs(web): domain context for parity orchestrator"
 - [ ] **Step 1: Write the contracts doc with the real, current contracts**
 
 `docs/parity/contracts.md` (content below is extracted from
-`Sources/Helmsman/Chat/SuggestedAction.swift`, `ClaudeSession.swift`,
-`Sources/HelmsmanMCP/main.swift`, and `Sources/Helmsman/Resources/catalog.json`):
+`Sources/Rigel/Chat/SuggestedAction.swift`, `ClaudeSession.swift`,
+`Sources/RigelMCP/main.swift`, and `Sources/Rigel/Resources/catalog.json`):
 
 ````markdown
 # Shared contracts (manager-owned — handed identically to both apps)
@@ -619,10 +619,10 @@ Examples:
 {"label":"Drain node worker-3","kind":"drain","node":"worker-3"}
 ```
 
-## 2. MCP tools (`helmsman` server)
+## 2. MCP tools (`rigel` server)
 
 The copilot reads the cluster through purpose-built MCP tools (plus the
-read-only kubectl allowlist). Current tools (`Sources/HelmsmanMCP/main.swift`):
+read-only kubectl allowlist). Current tools (`Sources/RigelMCP/main.swift`):
 - `list_unhealthy_pods` — pods not Running/Ready, with reasons.
 - `list_degraded_deployments` — deployments with unavailable replicas.
 - `recent_warning_events` — recent Warning events.
@@ -633,7 +633,7 @@ schemas across apps.
 
 ## 3. catalog.json schema
 
-`Sources/Helmsman/Resources/catalog.json` — top level `{ "apps": [ … ] }`
+`Sources/Rigel/Resources/catalog.json` — top level `{ "apps": [ … ] }`
 (54 entries). Each app:
 - `id`, `name`, `tagline`, `description`, `category`, `iconSystemName`.
 - `docsURL`, `repoURL`, `homepageURL`, `tags`.
@@ -667,7 +667,7 @@ git commit -m "docs(parity): shared contracts — action blocks, MCP tools, cata
 ```js
 export const meta = {
   name: 'parity-feature',
-  description: 'Keep the Swift and web Helmsman apps in parity for one change',
+  description: 'Keep the Swift and web Rigel apps in parity for one change',
   whenToUse: 'Porting a Swift panel to web (mode=porter) or adding a feature to both apps (mode=feature)',
   phases: [
     { title: 'Spec' },
@@ -682,7 +682,7 @@ const feature = (args && args.feature) || 'unnamed-feature'
 const request = (args && args.request) || ''
 
 const CONTRACTS = 'docs/parity/contracts.md'
-const SWIFT_CTX = 'Sources/Helmsman/CLAUDE.md'
+const SWIFT_CTX = 'Sources/Rigel/CLAUDE.md'
 const WEB_CTX = 'apps/CLAUDE.md'
 const SPEC_PATH = `docs/parity/${feature}.md`
 
@@ -718,7 +718,7 @@ let spec
 if (mode === 'porter') {
   spec = await agent(
     `You are the SWIFT-DOMAIN EXTRACTOR. Read ${SWIFT_CTX} and ${CONTRACTS}. ` +
-    `Then read the Swift implementation of "${feature}" under Sources/Helmsman/ (panels live in Sources/Helmsman/Panels/). ` +
+    `Then read the Swift implementation of "${feature}" under Sources/Rigel/ (panels live in Sources/Rigel/Panels/). ` +
     `Produce a normative behavior spec for porting it to web. Write the FULL spec to ${SPEC_PATH} (use git add -f if committing later), ` +
     `then return the structured summary. Record every column/field and its kubectl source, every user action and the exact ` +
     `kubectl command it runs, edge/empty/error states, and which resource kinds it watches. DO NOT write any application code. ` +
@@ -754,7 +754,7 @@ if (mode === 'porter') {
 } else {
   const [swiftImpl, webImpl] = await parallel([
     () => agent(
-      `You are the SWIFT IMPLEMENTER. Read ${SWIFT_CTX} and ${CONTRACTS}. Implement ${SPEC_PATH} in Sources/Helmsman/ following ` +
+      `You are the SWIFT IMPLEMENTER. Read ${SWIFT_CTX} and ${CONTRACTS}. Implement ${SPEC_PATH} in Sources/Rigel/ following ` +
       `existing panel/view-model patterns. Match the spec exactly. Spec summary: ${specJson}`,
       { label: `build-swift:${feature}`, phase: 'Implement' },
     ),

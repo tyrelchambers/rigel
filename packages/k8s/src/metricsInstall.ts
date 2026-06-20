@@ -1,14 +1,14 @@
 // Renders the install manifest for a metrics backend (VictoriaMetrics or
-// Prometheus). Ports Sources/Helmsman/Metrics/MetricsInstallManifests.swift.
+// Prometheus). Ports Sources/Rigel/Metrics/MetricsInstallManifests.swift.
 //
 // Both backends scrape cAdvisor through the API-server node proxy (works
 // without direct node access) and expose a Prometheus-compatible query API on a
-// Service named `helmsman-metrics`. Applied via `kubectl apply -f -`.
+// Service named `rigel-metrics`. Applied via `kubectl apply -f -`.
 
 export type MetricsInstallBackend = "victoriaMetrics" | "prometheus";
 
 /** Service (and Deployment/SA) name the install creates, in every namespace. */
-export const METRICS_SERVICE_NAME = "helmsman-metrics";
+export const METRICS_SERVICE_NAME = "rigel-metrics";
 
 const VM_IMAGE = "victoriametrics/victoria-metrics:v1.93.0";
 const PROM_IMAGE = "prom/prometheus:v2.53.0";

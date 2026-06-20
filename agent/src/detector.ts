@@ -1,7 +1,7 @@
 /**
  * Deterministic incident detection — the free, model-less first stage. Parses
  * `kubectl get ... -o json` output into a normalized list of incidents,
- * mirroring the queries in Sources/HelmsmanMCP/main.swift (unhealthy pods,
+ * mirroring the queries in Sources/RigelMCP/main.swift (unhealthy pods,
  * degraded deployments) plus OOMKilled detection from a container's last
  * terminated state. Claude is only woken when one of these fires.
  */

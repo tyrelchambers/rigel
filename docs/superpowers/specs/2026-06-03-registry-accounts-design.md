@@ -4,9 +4,9 @@
 
 Installing catalog apps pulls many images from Docker Hub (the app plus bundled
 `postgres`/`redis`/etc.). Anonymous pulls hit Docker Hub's rate limit (HTTP 429,
-100 pulls / 6h per IP), which broke a live Outline install. Today Helmsman has no
+100 pulls / 6h per IP), which broke a live Outline install. Today Rigel has no
 way to manage registry credentials: `SelfHostDefaults.imagePullSecret` is just the
-*name* of a Secret the user created by hand, and Helmsman never creates it. We want
+*name* of a Secret the user created by hand, and Rigel never creates it. We want
 a first-class "accounts" feature — starting with registry/pull credentials — so the
 user can add a Docker Hub (or ghcr/quay/private) account in-app and have it applied
 to installs automatically.
@@ -17,7 +17,7 @@ account types (git, SMTP, OIDC) can be added later, but none are built now.
 ## Decisions (from brainstorming)
 
 - **Scope:** registry/pull credentials first; extensible model, no other types yet.
-- **Storage:** *create-or-reference*. The **cluster** holds the secret; Helmsman
+- **Storage:** *create-or-reference*. The **cluster** holds the secret; Rigel
   persists only non-secret metadata. No macOS Keychain / OS keystore / local crypto —
   keeps the app portable (possible Linux/headless future). The token exists only
   transiently in the add-form, then lives in a cluster `dockerconfigjson` Secret.
@@ -45,9 +45,9 @@ struct RegistryAccount: Codable, Hashable, Identifiable {
     let id: UUID
     var registry: String         // "docker.io", "ghcr.io", "quay.io", or custom host
     var username: String
-    var secretName: String       // k8s Secret name, e.g. "helmsman-dockerhub"
+    var secretName: String       // k8s Secret name, e.g. "rigel-dockerhub"
     var sourceNamespace: String  // where the Secret lives (default "default")
-    var managed: Bool            // true = Helmsman created it; false = referenced existing
+    var managed: Bool            // true = Rigel created it; false = referenced existing
     var isDefault: Bool          // the account auto-attached to installs (≤1 per context)
 }
 ```
@@ -87,7 +87,7 @@ A new panel under the "System" nav group (`PanelKind.accounts`). Lists the curre
 context's registry accounts (registry, username, default badge), with:
 - **Add account** sheet: mode toggle *Create* vs *Reference*. Create = registry picker
   (Docker Hub / ghcr / quay / custom host) + username + token (SecureField) + optional
-  secret name (defaulted, e.g. `helmsman-<registry-slug>`) + source namespace.
+  secret name (defaulted, e.g. `rigel-<registry-slug>`) + source namespace.
   Reference = registry + existing secret name + namespace.
 - Row actions: Set as default, Edit (metadata; re-enter token to rotate a managed
   account), Delete (managed delete offers to also remove the cluster Secret).
@@ -131,7 +131,7 @@ none). The selected account drives `ensureAccess` immediately before `runApply`.
   locally.
 - No Keychain / Secret Service / Credential Manager / DIY crypto → no platform lock-in;
   Linux/headless remains viable.
-- The *reference* path keeps Helmsman entirely out of the credential path.
+- The *reference* path keeps Rigel entirely out of the credential path.
 - `sessions.json` stores only non-secret metadata (registry, username, secret name,
   namespace, flags) — consistent with what it stores today.
 
@@ -141,7 +141,7 @@ none). The selected account drives `ensureAccess` immediately before `runApply`.
   Anyone with `kubectl get secret -o yaml` + RBAC (or etcd access) can read the token.
   This is inherent to k8s pull secrets, not specific to this feature. Real at-rest
   protection is the *cluster's* responsibility (etcd encryption-at-rest, or
-  sealed-secrets / External Secrets) — out of Helmsman's control. **Surface a one-line
+  sealed-secrets / External Secrets) — out of Rigel's control. **Surface a one-line
   note in the Accounts UI**: "Stored as a standard Kubernetes Secret (base64 in etcd)."
 - **Never log the secret payload (code constraint):** `ensureAccess`'s cross-namespace
   copy runs `kubectl get secret -o json`, whose stdout contains the base64 token.

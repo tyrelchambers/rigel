@@ -372,7 +372,7 @@ async function handler(req: Request): Promise<Response> {
     }
 
     // POST /api/git/account — { token }. Validates against the GitHub API and
-    // stores it (with the login) in the helmsman-github Secret.
+    // stores it (with the login) in the rigel-github Secret.
     if (url.pathname === "/api/git/account" && req.method === "POST") {
       let body: { token?: string };
       try {
@@ -586,7 +586,7 @@ async function handler(req: Request): Promise<Response> {
       }
       const sources = await loadSources(context);
       // `source` is the deployment's provenance id (the value of the
-      // helmsman.dev/source-repo annotation stamped on the workload).
+      // rigel.dev/source-repo annotation stamped on the workload).
       const found = findByDeployment(sources, body.source);
       if (!found) return Response.json({ error: "unknown source" }, { status: 404 });
       const token = await loadGithubToken(context);
@@ -785,7 +785,7 @@ async function handler(req: Request): Promise<Response> {
 }
 
 const httpServer = serve({ fetch: handler, port: PORT, hostname: HOST }, (info) => {
-  console.log(`helmsman server on :${info.port} (kubeconfig=${KUBECONFIG})`);
+  console.log(`rigel server on :${info.port} (kubeconfig=${KUBECONFIG})`);
 });
 
 // WebSocket upgrade wiring. node-server hands us the underlying Node http.Server,

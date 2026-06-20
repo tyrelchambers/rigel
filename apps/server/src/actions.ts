@@ -3,7 +3,7 @@
  *
  * Each kind mirrors the EXACT kubectl invocation built by
  * `WorkloadAction.kubectlInvocations()` in the Swift app
- * (Sources/Helmsman/Panels/Actions/WorkloadAction.swift).
+ * (Sources/Rigel/Panels/Actions/WorkloadAction.swift).
  *
  * Per-kind argv table (derived from Swift source):
  *
@@ -68,7 +68,7 @@ export interface ActionBlock {
   resourceKind?: string;
   /**
    * linkCatalogApp only: the catalog app `id` the workload is bound to
-   * (value of the `helmsman.dev/catalog-app` annotation).
+   * (value of the `rigel.dev/catalog-app` annotation).
    */
   appID?: string;
   /**
@@ -295,8 +295,8 @@ export function buildCommand(a: ActionBlock): string[] {
       return resolveDeleteResource(a);
 
     // -----------------------------------------------------------------------
-    // linkCatalogApp — annotate <kind>/<name> helmsman.dev/catalog-app=<appID>
-    //   [helmsman.dev/catalog-container=<container>] -n <ns> --overwrite
+    // linkCatalogApp — annotate <kind>/<name> rigel.dev/catalog-app=<appID>
+    //   [rigel.dev/catalog-container=<container>] -n <ns> --overwrite
     // Binds a running workload to a catalog app (docs/parity/catalog-link-workload.md §6.1).
     // --overwrite is REQUIRED so re-pointing an already-bound workload succeeds.
     // -----------------------------------------------------------------------
@@ -305,18 +305,18 @@ export function buildCommand(a: ActionBlock): string[] {
       const args = [
         "annotate",
         `${wk}/${target(a)}`,
-        `helmsman.dev/catalog-app=${a.appID ?? ""}`,
+        `rigel.dev/catalog-app=${a.appID ?? ""}`,
       ];
       if (a.container && a.container !== "") {
-        args.push(`helmsman.dev/catalog-container=${a.container}`);
+        args.push(`rigel.dev/catalog-container=${a.container}`);
       }
       args.push(...ns, "--overwrite");
       return args;
     }
 
     // -----------------------------------------------------------------------
-    // unlinkCatalogApp — annotate <kind>/<name> helmsman.dev/catalog-app-
-    //   helmsman.dev/catalog-container- -n <ns>
+    // unlinkCatalogApp — annotate <kind>/<name> rigel.dev/catalog-app-
+    //   rigel.dev/catalog-container- -n <ns>
     // Removes both binding keys (trailing-dash removal; no --overwrite needed).
     // -----------------------------------------------------------------------
     case "unlinkCatalogApp": {
@@ -324,15 +324,15 @@ export function buildCommand(a: ActionBlock): string[] {
       return [
         "annotate",
         `${wk}/${target(a)}`,
-        "helmsman.dev/catalog-app-",
-        "helmsman.dev/catalog-container-",
+        "rigel.dev/catalog-app-",
+        "rigel.dev/catalog-container-",
         ...ns,
       ];
     }
 
     // -----------------------------------------------------------------------
-    // linkSourceRepo — annotate <kind>/<name> helmsman.dev/source-repo=<source>
-    //   helmsman.dev/source-path=<filePath> -n <ns> --overwrite
+    // linkSourceRepo — annotate <kind>/<name> rigel.dev/source-repo=<source>
+    //   rigel.dev/source-path=<filePath> -n <ns> --overwrite
     // Binds an existing workload to a GitOps source so the AI has source context
     // (and can open fix-PRs). --overwrite re-points an already-linked workload.
     // -----------------------------------------------------------------------
@@ -341,24 +341,24 @@ export function buildCommand(a: ActionBlock): string[] {
       return [
         "annotate",
         `${wk}/${target(a)}`,
-        `helmsman.dev/source-repo=${a.source ?? ""}`,
-        `helmsman.dev/source-path=${a.filePath ?? "."}`,
+        `rigel.dev/source-repo=${a.source ?? ""}`,
+        `rigel.dev/source-path=${a.filePath ?? "."}`,
         ...ns,
         "--overwrite",
       ];
     }
 
     // -----------------------------------------------------------------------
-    // unlinkSourceRepo — annotate <kind>/<name> helmsman.dev/source-repo-
-    //   helmsman.dev/source-path- -n <ns> (trailing-dash removal)
+    // unlinkSourceRepo — annotate <kind>/<name> rigel.dev/source-repo-
+    //   rigel.dev/source-path- -n <ns> (trailing-dash removal)
     // -----------------------------------------------------------------------
     case "unlinkSourceRepo": {
       const wk = workloadKind(a);
       return [
         "annotate",
         `${wk}/${target(a)}`,
-        "helmsman.dev/source-repo-",
-        "helmsman.dev/source-path-",
+        "rigel.dev/source-repo-",
+        "rigel.dev/source-path-",
         ...ns,
       ];
     }

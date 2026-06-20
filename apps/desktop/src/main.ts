@@ -123,7 +123,7 @@ function applyLoginPath(): void {
     const fixPath = require("fix-path") as (() => void) | { default: () => void };
     (typeof fixPath === "function" ? fixPath : fixPath.default)();
   } catch (err) {
-    console.warn("[helmsman] fix-path failed (binaries may not resolve):", err);
+    console.warn("[rigel] fix-path failed (binaries may not resolve):", err);
   }
 }
 
@@ -203,11 +203,11 @@ function forkServer(port: number): UtilityProcess {
   });
 
   // Surface the server's logs in the main process console so the dev sees the
-  // "helmsman server on :<port>" ready line, kubectl errors, etc.
+  // "rigel server on :<port>" ready line, kubectl errors, etc.
   child.stdout?.on("data", (b: Buffer) => process.stdout.write(`[server] ${b}`));
   child.stderr?.on("data", (b: Buffer) => process.stderr.write(`[server] ${b}`));
   child.on("exit", (code) => {
-    console.log(`[helmsman] server exited (code=${code})`);
+    console.log(`[rigel] server exited (code=${code})`);
     serverProc = null;
   });
 
@@ -295,7 +295,7 @@ async function boot(): Promise<void> {
 
   serverPort = await resolveServerPort();
   savePreferredPort(serverPort); // remember it so the origin stays stable next launch
-  console.log(`[helmsman] starting server on 127.0.0.1:${serverPort}`);
+  console.log(`[rigel] starting server on 127.0.0.1:${serverPort}`);
   serverProc = forkServer(serverPort);
 
   // C1: race the health wait against the child's own exit so we fail fast if
@@ -308,7 +308,7 @@ async function boot(): Promise<void> {
   });
   await Promise.race([waitForHealth(serverPort), exited]);
 
-  console.log(`[helmsman] server healthy on :${serverPort}`);
+  console.log(`[rigel] server healthy on :${serverPort}`);
 
   mainWindow = createWindow(serverPort);
 
@@ -379,7 +379,7 @@ function ptyUnderElectron(port: number): Promise<void> {
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────
 app.whenReady().then(boot).catch((err: unknown) => {
-  console.error("[helmsman] failed to start:", err instanceof Error ? err.message : err);
+  console.error("[rigel] failed to start:", err instanceof Error ? err.message : err);
   app.quit();
 });
 
@@ -402,7 +402,7 @@ app.on("activate", () => {
     mainWindow = createWindow(serverPort);
   } else {
     void boot().catch((err: unknown) =>
-      console.error("[helmsman] re-boot failed:", err instanceof Error ? err.message : err)
+      console.error("[rigel] re-boot failed:", err instanceof Error ? err.message : err)
     );
   }
 });

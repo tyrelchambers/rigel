@@ -1,5 +1,5 @@
 // Right-Sizing types for the web panel. Mirrors the Swift RightSizing data
-// models (Sources/Helmsman/RightSizing/*). Kept local to the web app, same
+// models (Sources/Rigel/RightSizing/*). Kept local to the web app, same
 // pattern as deployments/types.ts.
 
 export type Verdict =

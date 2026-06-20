@@ -35,13 +35,13 @@ const BACKENDS: Array<{ id: MetricsInstallBackend; title: string; note: string }
 
 export function MetricsInstallDialog({ open, onOpenChange, onInstall }: Props) {
   const [backend, setBackend] = useState<MetricsInstallBackend>("victoriaMetrics");
-  const [namespace, setNamespace] = useState("helmsman-metrics");
+  const [namespace, setNamespace] = useState("rigel-metrics");
   const [persistent, setPersistent] = useState(true);
   const [sizeGiB, setSizeGiB] = useState(5);
 
   const ns = namespace.trim();
   const valid = namespaceValid(ns);
-  const yaml = renderMetricsInstallManifest(backend, ns || "helmsman-metrics", persistent, sizeGiB);
+  const yaml = renderMetricsInstallManifest(backend, ns || "rigel-metrics", persistent, sizeGiB);
   const note = BACKENDS.find((b) => b.id === backend)?.note ?? "";
 
   return (

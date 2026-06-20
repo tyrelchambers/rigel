@@ -314,7 +314,7 @@ export function AssistantProvider({ children }: { children: React.ReactNode }) {
   const ns = d.installedNamespace ?? installNamespace ?? "default";
 
   // Debounce the "not installed" verdict. Deployments arrive as a stream of
-  // ADDED deltas (the server's first snapshot is empty), so the helmsman-assistant
+  // ADDED deltas (the server's first snapshot is empty), so the rigel-assistant
   // deployment can show up a moment after the first few deployments. Without this,
   // `!isInstalled` reads true for that gap and the Installer flashes. So we only
   // conclude "not installed" after deployments have been present (with no agent)

@@ -604,11 +604,11 @@ Expected: all PASS.
 - [ ] **Step 2: Rebuild the running container**
 
 Run: `docker compose up -d --build`
-Expected: `helmsman-web` rebuilt, serving on :8787.
+Expected: `rigel-web` rebuilt, serving on :8787.
 
 - [ ] **Step 3: Playwright re-drive** (reuse `/tmp/logs-analyze/probe.mjs` or a short script): open `/logs`, pick a deployment, confirm the new toolbar (regex + errors-only toggles, `K / N` count), type a filter and confirm `<mark>` highlights appear, toggle errors-only and confirm the list narrows, and confirm the pod column is hidden for a single-replica deployment. Screenshot to `/tmp/logs-analyze/p1-*.png`.
 
-- [ ] **Step 4: Update the Outline doc.** Create/extend a "Logs panel" doc in the Helmsman Outline collection (id `f9bbcd7a-173c-4827-a709-f86082933031`) describing the scan controls (errors-only, regex, highlight + count, level color, collapsing pod column).
+- [ ] **Step 4: Update the Outline doc.** Create/extend a "Logs panel" doc in the Rigel Outline collection (id `f9bbcd7a-173c-4827-a709-f86082933031`) describing the scan controls (errors-only, regex, highlight + count, level color, collapsing pod column).
 
 ---
 

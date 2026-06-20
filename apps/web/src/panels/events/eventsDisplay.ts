@@ -4,7 +4,7 @@ import type { EventBucket, EventTypeFilter, K8sEvent } from "./types";
  * Pure display helpers for the Events panel. Mirrors the Swift `K8sEvent`
  * computed properties (`isWarning`, `when`, `relativeAge(now:)`) and
  * `EventsViewModel` derivations, plus `Viz.eventBuckets` from
- * `Sources/Helmsman/Charts/Aggregations.swift`. See `docs/parity/events.md`.
+ * `Sources/Rigel/Charts/Aggregations.swift`. See `docs/parity/events.md`.
  *
  * All time-dependent helpers accept a `now` parameter (epoch ms) for test
  * determinism, mirroring the Swift `func relativeAge(now: Date = Date())`.
@@ -117,7 +117,7 @@ export function sortEvents(events: K8sEvent[]): K8sEvent[] {
  * event exactly at `now` lands in the final bucket. `now` and the returned
  * `start` are epoch milliseconds; `span` is in SECONDS (to match the Swift
  * `TimeInterval` call site `eventBuckets(events, now, span: 3600, count: 60)`).
- * Mirrors `Viz.eventBuckets` in `Sources/Helmsman/Charts/Aggregations.swift`.
+ * Mirrors `Viz.eventBuckets` in `Sources/Rigel/Charts/Aggregations.swift`.
  */
 export function eventBuckets(
   events: K8sEvent[],

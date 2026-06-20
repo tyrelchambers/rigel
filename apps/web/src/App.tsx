@@ -39,10 +39,10 @@ import { GlobalHeader } from "@/shell/GlobalHeader";
 import { loadSidebarCollapsed, saveSidebarCollapsed } from "@/shell/navCollapse";
 
 function readTerminalOpen(): boolean {
-  try { return localStorage.getItem("helmsman.terminal.open") === "1"; } catch { return false; }
+  try { return localStorage.getItem("rigel.terminal.open") === "1"; } catch { return false; }
 }
 function persistTerminalOpen(open: boolean): void {
-  try { localStorage.setItem("helmsman.terminal.open", open ? "1" : "0"); } catch { /* ignore */ }
+  try { localStorage.setItem("rigel.terminal.open", open ? "1" : "0"); } catch { /* ignore */ }
 }
 
 /** Wrapper for panels that need padding + vertical scroll. */
@@ -93,8 +93,8 @@ export default function App() {
   const [requireAboutYou, setRequireAboutYou] = useState(false);
   useEffect(() => {
     const open = () => setShowOnboarding(true);
-    window.addEventListener("helmsman:open-setup", open);
-    return () => window.removeEventListener("helmsman:open-setup", open);
+    window.addEventListener("rigel:open-setup", open);
+    return () => window.removeEventListener("rigel:open-setup", open);
   }, []);
   useEffect(() => {
     let cancelled = false;
@@ -107,7 +107,7 @@ export default function App() {
         return;
       }
       // Existing optional-onboarding condition:
-      if (chatConfig && !chatConfig.configured && !localStorage.getItem("helmsman_onboarded")) {
+      if (chatConfig && !chatConfig.configured && !localStorage.getItem("rigel_onboarded")) {
         setShowOnboarding(true);
       }
     })();
@@ -116,7 +116,7 @@ export default function App() {
   function closeOnboarding() {
     if (requireAboutYou) return; // guarded until About-you is complete
     setShowOnboarding(false);
-    localStorage.setItem("helmsman_onboarded", "1");
+    localStorage.setItem("rigel_onboarded", "1");
   }
 
   // The ChatPane exposes a send() handle so OverviewPanel's
@@ -134,7 +134,7 @@ export default function App() {
   // its live watches survive hiding/showing.
   const [chatHidden, setChatHidden] = useState<boolean>(() => {
     try {
-      return localStorage.getItem("helmsman.chat.hidden") === "1";
+      return localStorage.getItem("rigel.chat.hidden") === "1";
     } catch {
       return false;
     }
@@ -143,7 +143,7 @@ export default function App() {
     setChatHidden((h) => {
       const next = !h;
       try {
-        localStorage.setItem("helmsman.chat.hidden", next ? "1" : "0");
+        localStorage.setItem("rigel.chat.hidden", next ? "1" : "0");
       } catch {
         /* ignore quota / private-browsing errors */
       }

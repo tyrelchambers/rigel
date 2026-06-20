@@ -18,7 +18,7 @@ export interface BackendRef {
 export type BackendChoice = { kind: "auto" } | ({ kind: "prometheus" } & BackendRef);
 
 export function metricsBackendKey(context: string): string {
-  return `helmsman_metrics_backend_${context}`;
+  return `rigel_metrics_backend_${context}`;
 }
 
 export function loadBackendChoice(context: string): BackendChoice {

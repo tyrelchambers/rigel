@@ -3,7 +3,7 @@ import { kubectl } from "./kubectl.js";
 /**
  * Configuration is split in two:
  *  - process env: deploy-time defaults baked into the Deployment manifest.
- *  - the `assistant-config` ConfigMap: human/Helmsman-editable runtime knobs,
+ *  - the `assistant-config` ConfigMap: human/Rigel-editable runtime knobs,
  *    crucially the `enabled` kill-switch. It is read every loop so flipping it
  *    halts the agent within one poll interval. The agent never writes it.
  */

@@ -4,7 +4,7 @@
 **Branch:** `feature/web-rewrite`
 **Status:** Approved (brainstorm), pending implementation plan
 **Built:** first — then used in porter mode to drive the web rewrite (companion
-spec: `2026-06-09-helmsman-web-rewrite-design.md`).
+spec: `2026-06-09-rigel-web-rewrite-design.md`).
 
 ## Goal
 
@@ -67,7 +67,7 @@ you → manager (write normative spec from request, load shared contracts)
 
 Each sub-agent is grounded in codebase-specific context so it implements idiomatically:
 
-- `Sources/Helmsman/CLAUDE.md` — Swift / SwiftUI conventions, panel structure,
+- `Sources/Rigel/CLAUDE.md` — Swift / SwiftUI conventions, panel structure,
   `KubectlClient` / `ProcessAsync` usage, action-block emission.
 - `apps/CLAUDE.md` — web stack conventions (React 19, Tailwind v4, shadcn,
   TanStack Query, Zustand store, WS/REST split, confirm-sheet pattern).
@@ -94,7 +94,7 @@ build step, giving an audit trail and a human review point.
 
 ### Verification commands
 
-- **Swift:** `swift build`, `swift test` (see `Makefile`, `Tests/HelmsmanTests`).
+- **Swift:** `swift build`, `swift test` (see `Makefile`, `Tests/RigelTests`).
 - **Web:** `pnpm --filter <pkg> build`, `pnpm --filter <pkg> test` (vitest),
   typecheck.
 
@@ -110,7 +110,7 @@ the session script path).
 1. Scaffold the monorepo skeleton enough that `apps/` and `packages/` exist as
    valid targets (so the web-agent has somewhere to write). Minimal: workspace
    config + empty `apps/web`, `apps/server`.
-2. Write the domain context files (`Sources/Helmsman/CLAUDE.md`, `apps/CLAUDE.md`)
+2. Write the domain context files (`Sources/Rigel/CLAUDE.md`, `apps/CLAUDE.md`)
    and `docs/parity/contracts.md`.
 3. Author the parity-orchestrator Workflow script (manager + extractor/builder +
    verifier, both modes).

@@ -1,5 +1,5 @@
 // Assistant agent installer manifests + status derivation. Direct port of the
-// Swift source of truth (`Sources/Helmsman/Panels/Assistant/`):
+// Swift source of truth (`Sources/Rigel/Panels/Assistant/`):
 //   - AssistantInstaller.swift  → manifest/secret/namespace YAML builders
 //   - TokenExpiry.swift         → token-expiry countdown
 //   - AssistantState.swift      → decode-only state.json shape
@@ -38,7 +38,7 @@ export interface AssistantInstallConfig {
 
 /** Defaults baked into the install form (mirrors `AssistantInstallConfig.default`). */
 export const DEFAULT_INSTALL_CONFIG: AssistantInstallConfig = {
-  image: "ghcr.io/tyrelchambers/helmsman-assistant:latest",
+  image: "ghcr.io/tyrelchambers/rigel-assistant:latest",
   installNamespace: "default",
   namespaces: "",
   workerModel: "claude-sonnet-4-6",
@@ -53,7 +53,7 @@ export const DEFAULT_INSTALL_CONFIG: AssistantInstallConfig = {
 
 export const SECRET_NAME = "assistant-claude-token";
 /** Annotation the installer stamps on the token Secret at mint time. */
-export const ISSUED_AT_ANNOTATION = "helmsman.assistant/token-issued-at";
+export const ISSUED_AT_ANNOTATION = "rigel.assistant/token-issued-at";
 
 // ---------------------------------------------------------------------------
 // Manifest builders — byte-for-byte port of AssistantInstaller.swift
@@ -74,7 +74,7 @@ kind: Namespace
 metadata:
   name: ${ns}
   labels:
-    app.kubernetes.io/managed-by: helmsman-assistant`;
+    app.kubernetes.io/managed-by: rigel-assistant`;
 }
 
 /**
@@ -88,7 +88,7 @@ metadata:
   name: ${SECRET_NAME}
   namespace: ${namespace}
   labels:
-    app.kubernetes.io/managed-by: helmsman-assistant
+    app.kubernetes.io/managed-by: rigel-assistant
   annotations:
     ${ISSUED_AT_ANNOTATION}: "${issuedAt}"
 type: Opaque
@@ -101,17 +101,17 @@ export function rbac(ns: string): string {
   return `apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: helmsman-assistant
+  name: rigel-assistant
   namespace: ${ns}
   labels:
-    app.kubernetes.io/managed-by: helmsman-assistant
+    app.kubernetes.io/managed-by: rigel-assistant
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: helmsman-assistant
+  name: rigel-assistant
   labels:
-    app.kubernetes.io/managed-by: helmsman-assistant
+    app.kubernetes.io/managed-by: rigel-assistant
 rules:
   - apiGroups: [""]
     resources: [pods, pods/log, nodes, events, namespaces, services, endpoints, persistentvolumeclaims, persistentvolumes, replicationcontrollers, configmaps]
@@ -141,25 +141,25 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: helmsman-assistant
+  name: rigel-assistant
   labels:
-    app.kubernetes.io/managed-by: helmsman-assistant
+    app.kubernetes.io/managed-by: rigel-assistant
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: helmsman-assistant
+  name: rigel-assistant
 subjects:
   - kind: ServiceAccount
-    name: helmsman-assistant
+    name: rigel-assistant
     namespace: ${ns}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: helmsman-assistant-state
+  name: rigel-assistant-state
   namespace: ${ns}
   labels:
-    app.kubernetes.io/managed-by: helmsman-assistant
+    app.kubernetes.io/managed-by: rigel-assistant
 rules:
   - apiGroups: [""]
     resources: [configmaps]
@@ -169,17 +169,17 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: helmsman-assistant-state
+  name: rigel-assistant-state
   namespace: ${ns}
   labels:
-    app.kubernetes.io/managed-by: helmsman-assistant
+    app.kubernetes.io/managed-by: rigel-assistant
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: helmsman-assistant-state
+  name: rigel-assistant-state
 subjects:
   - kind: ServiceAccount
-    name: helmsman-assistant
+    name: rigel-assistant
     namespace: ${ns}`;
 }
 
@@ -191,7 +191,7 @@ metadata:
   name: assistant-config
   namespace: ${ns}
   labels:
-    app.kubernetes.io/managed-by: helmsman-assistant
+    app.kubernetes.io/managed-by: rigel-assistant
 data:
   enabled: "true"
   mode: "auto"
@@ -202,7 +202,7 @@ metadata:
   name: assistant-state
   namespace: ${ns}
   labels:
-    app.kubernetes.io/managed-by: helmsman-assistant
+    app.kubernetes.io/managed-by: rigel-assistant
 data: {}
 ---
 apiVersion: v1
@@ -211,7 +211,7 @@ metadata:
   name: assistant-backups
   namespace: ${ns}
   labels:
-    app.kubernetes.io/managed-by: helmsman-assistant
+    app.kubernetes.io/managed-by: rigel-assistant
 data: {}`;
 }
 
@@ -220,24 +220,24 @@ export function deployment(c: AssistantInstallConfig): string {
   return `apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: helmsman-assistant
+  name: rigel-assistant
   namespace: ${c.installNamespace}
   labels:
-    app.kubernetes.io/name: helmsman-assistant
-    app.kubernetes.io/managed-by: helmsman-assistant
+    app.kubernetes.io/name: rigel-assistant
+    app.kubernetes.io/managed-by: rigel-assistant
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app.kubernetes.io/name: helmsman-assistant
+      app.kubernetes.io/name: rigel-assistant
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: helmsman-assistant
+        app.kubernetes.io/name: rigel-assistant
     spec:
-      serviceAccountName: helmsman-assistant
+      serviceAccountName: rigel-assistant
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -557,7 +557,7 @@ export function mergedConfigMapJSON(
     metadata: {
       name: "assistant-config",
       namespace,
-      labels: { "app.kubernetes.io/managed-by": "helmsman-assistant" },
+      labels: { "app.kubernetes.io/managed-by": "rigel-assistant" },
     },
     data,
   });
@@ -588,7 +588,7 @@ export function clearedStateConfigMapJSON(
     metadata: {
       name: "assistant-state",
       namespace,
-      labels: { "app.kubernetes.io/managed-by": "helmsman-assistant" },
+      labels: { "app.kubernetes.io/managed-by": "rigel-assistant" },
     },
     data: { "state.json": JSON.stringify(next) },
   });

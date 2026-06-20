@@ -10,7 +10,7 @@ import type {
 /**
  * Pure aggregation helpers for the Overview dashboard. Mirrors the Swift
  * `OverviewPanel` derivations and `Viz` aggregations in
- * `Sources/Helmsman/Charts/Aggregations.swift`. See docs/parity/overview.md.
+ * `Sources/Rigel/Charts/Aggregations.swift`. See docs/parity/overview.md.
  *
  * Everything here is pure and unit-tested (overviewDisplay.test.ts). The panel
  * computes all summary cards from these functions over live store snapshots.

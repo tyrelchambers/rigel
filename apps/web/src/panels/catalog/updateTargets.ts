@@ -176,7 +176,7 @@ function podDigests(pods: PodLike[]): Array<{ repo: string; digest: string }> {
 
 /**
  * For each catalog app, derive the update target (image + workload coordinates).
- * Annotation wins (§3.3): an app bound to a workload via `helmsman.dev/catalog-app`
+ * Annotation wins (§3.3): an app bound to a workload via `rigel.dev/catalog-app`
  * targets THAT workload/container regardless of image; if multiple workloads
  * carry the annotation, the first in scan order (deployments → statefulSets →
  * daemonSets) wins. Otherwise the target is found by image match across

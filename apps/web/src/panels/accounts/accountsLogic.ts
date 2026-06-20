@@ -29,7 +29,7 @@ export interface RegistryAccount {
   username: string;
   secretName: string;
   sourceNamespace: string;
-  /** true = Secret carries the helmsman managed-by label; false = referenced. */
+  /** true = Secret carries the rigel managed-by label; false = referenced. */
   managed: boolean;
   /** Auto-attached to installs; at most one per context (local display state). */
   isDefault: boolean;
@@ -38,7 +38,7 @@ export interface RegistryAccount {
 export type AddMode = "create" | "reference";
 
 export const DEFAULT_REGISTRY = "docker.io";
-export const DEFAULT_SECRET_NAME = "helmsman-dockerhub";
+export const DEFAULT_SECRET_NAME = "rigel-dockerhub";
 export const DEFAULT_NAMESPACE = "default";
 
 export const EMPTY_STATE_MESSAGE =

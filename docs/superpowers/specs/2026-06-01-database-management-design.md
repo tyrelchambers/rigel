@@ -1,11 +1,11 @@
-# Database Management in Helmsman — Design
+# Database Management in Rigel — Design
 
 **Date:** 2026-06-01
 **Status:** Approved, ready for planning
 
 ## Goal
 
-Turn Helmsman's read-only **Databases** panel into a management surface. Today the
+Turn Rigel's read-only **Databases** panel into a management surface. Today the
 panel detects CNPG clusters and DB-image workloads (Deployment/StatefulSet) and shows
 replicas, health, primary, and child pods — but offers no actions. This adds three
 capability buckets the user asked for:

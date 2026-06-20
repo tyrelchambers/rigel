@@ -1,6 +1,6 @@
 // Deployment types for the web Deployments panel. Mirrors the shared contract
 // in `packages/k8s` and the Swift `Deployment` / `DeploymentSpec` /
-// `DeploymentStatus` structs in `Sources/Helmsman/Cluster/KubeTypes.swift`.
+// `DeploymentStatus` structs in `Sources/Rigel/Cluster/KubeTypes.swift`.
 // Kept local to the web app so the panel does not depend on workspace-package
 // linking for a type-only import (same pattern as pods/types.ts).
 

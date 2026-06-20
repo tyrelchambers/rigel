@@ -41,13 +41,13 @@ Rigel is distributed as a cross-platform **desktop app** (Electron) plus a self-
 
 **Renderer (`apps/web` SPA) — fold the signup into the existing onboarding as a multi-step wizard:**
 
-Today `OnboardingWizard` (`apps/web/src/shell/OnboardingWizard.tsx`) is a single **dismissible** card of *optional* setup (AI token, Assistant, metrics-server, Signal), auto-shown after login when the AI token isn't configured (`App.tsx`, gated by `localStorage "helmsman_onboarded"`). Refactor it into a **multi-step wizard with a visible step indicator** (e.g. "Step 2 of 5" + progress dots, shown on every step):
+Today `OnboardingWizard` (`apps/web/src/shell/OnboardingWizard.tsx`) is a single **dismissible** card of *optional* setup (AI token, Assistant, metrics-server, Signal), auto-shown after login when the AI token isn't configured (`App.tsx`, gated by `localStorage "rigel_onboarded"`). Refactor it into a **multi-step wizard with a visible step indicator** (e.g. "Step 2 of 5" + progress dots, shown on every step):
 
 - **Step 1 — "About you" (desktop only, REQUIRED): name + email.** Included only when `window.rigel?.needsSignup` is true. On this step the wizard is **non-dismissible** and **cannot be skipped** — "Continue" stays disabled until both fields are valid (client-side validated). On Continue → `window.rigel.submitSignup({ name, email })` (recorded locally immediately; POSTed with background retry) → advance to step 2. Copy: a one-line rationale ("so we know who's using Rigel").
 - **Steps 2…N — the existing optional setup**, one item per step (AI token, Assistant agent, metrics-server, Signal notifications), each **skippable** (Skip / Next), ending in **Done**. Behavior of each card is unchanged from today.
 - **Web self-host, or a desktop user already captured**: `window.rigel?.needsSignup` is false/undefined → the "About you" step is omitted and the wizard is the normal **dismissible** optional flow (exactly as today).
 
-**Trigger (`App.tsx`)**: auto-open the wizard when `window.rigel?.needsSignup` (desktop first run) **OR** the current condition (AI token not configured and not yet onboarded). When it opens because of `needsSignup`, the modal is **locked** (no backdrop-dismiss, no close) until Step 1 is submitted; afterward it behaves as the normal dismissible wizard. The existing `localStorage "helmsman_onboarded"` flag still governs the optional-steps auto-show; the required Step 1 is governed by `needsSignup` (owned by Electron main), independent of it.
+**Trigger (`App.tsx`)**: auto-open the wizard when `window.rigel?.needsSignup` (desktop first run) **OR** the current condition (AI token not configured and not yet onboarded). When it opens because of `needsSignup`, the modal is **locked** (no backdrop-dismiss, no close) until Step 1 is submitted; afterward it behaves as the normal dismissible wizard. The existing `localStorage "rigel_onboarded"` flag still governs the optional-steps auto-show; the required Step 1 is governed by `needsSignup` (owned by Electron main), independent of it.
 
 ### Unit 2 — Signups API (`apps/signups`)
 

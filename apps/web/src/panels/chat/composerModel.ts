@@ -34,7 +34,7 @@ export function modelLabel(c: ModelConfig): string {
   return `${m} · ${e}`;
 }
 
-const STORAGE_KEY = "helmsman.chat.modelConfig";
+const STORAGE_KEY = "rigel.chat.modelConfig";
 
 export function loadModelConfig(): ModelConfig {
   try {

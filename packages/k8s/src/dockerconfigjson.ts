@@ -14,7 +14,7 @@ import type { Secret } from "./index";
  */
 
 export const MANAGED_BY_LABEL = "app.kubernetes.io/managed-by";
-export const MANAGED_BY_VALUE = "helmsman";
+export const MANAGED_BY_VALUE = "rigel";
 export const DOCKERCONFIGJSON_TYPE = "kubernetes.io/dockerconfigjson";
 export const DOCKERCONFIGJSON_KEY = ".dockerconfigjson";
 

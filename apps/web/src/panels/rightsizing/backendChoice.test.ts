@@ -21,7 +21,7 @@ beforeEach(() => {
 });
 
 test("metricsBackendKey is keyed by context", () => {
-  expect(metricsBackendKey("prod")).toBe("helmsman_metrics_backend_prod");
+  expect(metricsBackendKey("prod")).toBe("rigel_metrics_backend_prod");
 });
 
 describe("load/save round-trip", () => {
@@ -48,7 +48,7 @@ describe("load/save round-trip", () => {
 });
 
 describe("choiceSelectValue", () => {
-  const auto = { namespace: "helmsman-metrics", service: "helmsman-metrics", port: 8428, flavor: "VictoriaMetrics" };
+  const auto = { namespace: "rigel-metrics", service: "rigel-metrics", port: 8428, flavor: "VictoriaMetrics" };
   test("prometheus → its encoded value", () => {
     expect(choiceSelectValue({ kind: "prometheus", ...auto }, null)).toBe(backendValue(auto));
   });

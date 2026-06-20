@@ -10,7 +10,7 @@
  *   - Composer footer: model label ("Opus 4.8 · High") + "</> commands" + send button.
  *
  * Width: resizable via drag on the left edge (280–520px), persisted to
- * localStorage under key "helmsman.chatPane.width".
+ * localStorage under key "rigel.chatPane.width".
  *
  * The chat engine (state, WS, event loop) is reused wholesale from
  * ChatPanel.tsx — only the outer shell chrome and layout differ.

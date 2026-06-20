@@ -2,11 +2,11 @@
 
 **Date:** 2026-06-01
 **Status:** Approved (design); pending implementation plan
-**App:** Helmsman (macOS, SwiftUI, Kubernetes UI)
+**App:** Rigel (macOS, SwiftUI, Kubernetes UI)
 
 ## Goal
 
-Helmsman already collects rich metrics (metrics-server snapshots, a 60-sample
+Rigel already collects rich metrics (metrics-server snapshots, a 60-sample
 rolling per-pod history in SQLite, optional Prometheus/VictoriaMetrics, full
 event streams, right-sizing verdicts) but renders almost all of it as tables.
 The only existing graphic is the custom Canvas sparkline in the Pods table; no
@@ -41,7 +41,7 @@ reads from data already collected in `ClusterCache`; only the usage-band chart
 (#2) adds a new query (a Prometheus range query).
 
 ```
-Sources/Helmsman/Charts/
+Sources/Rigel/Charts/
   ChartTheme.swift        — shared colors/scales (health → color, etc.)
   RingGauge.swift         — cluster CPU/mem gauges                 (#3)
   UsageBandChart.swift    — typical→peak area + request/limit lines (#2)
@@ -106,7 +106,7 @@ thin wrappers over those outputs.
 ## Testing
 
 Pure functions get unit tests (TDD, matching the existing test setup in
-`Tests/HelmsmanTests/`):
+`Tests/RigelTests/`):
 - squarified treemap layout (`TreemapLayout`)
 - Σreclaimable math (`Aggregations`)
 - gauge used/allocatable ratios (`Aggregations`)

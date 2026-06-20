@@ -61,7 +61,7 @@ export function readyColorClass(ready: number, desired: number): string {
 // --- Job -------------------------------------------------------------------
 
 /**
- * Job phase. Mirrors `Sources/Helmsman/Cluster/WorkloadTypes.swift` `Job.phase`:
+ * Job phase. Mirrors `Sources/Rigel/Cluster/WorkloadTypes.swift` `Job.phase`:
  * - Suspended if spec.suspend === true
  * - Failed if any condition type=Failed status=True
  * - Complete if any condition type=Complete status=True
@@ -154,7 +154,7 @@ export function isCronJobSuspended(cronJob: CronJob): boolean {
 
 /**
  * Generate a unique name for a manually triggered cronjob run. Mirrors
- * `Sources/Helmsman/Cluster/WorkloadTypes.swift` `CronJob.manualRunName`.
+ * `Sources/Rigel/Cluster/WorkloadTypes.swift` `CronJob.manualRunName`.
  * Takes `now` (ms) as a parameter for test determinism.
  */
 export function generateTriggerJobName(cronName: string, now: number = Date.now()): string {

@@ -1,11 +1,11 @@
 ---
 name: catalog-entry
-description: Use when adding a new app to the Helmsman catalog (catalog.json) or auditing existing entries for install accuracy. Dispatches research subagents (general-info, system-requirements, install-method, render) and verifies install correctness against live tooling (helm/docker/kubectl) via scripts/verify-catalog-entry.sh before writing. Triggers on "add <app> to the catalog", "audit the catalog", "verify <app>'s install instructions".
+description: Use when adding a new app to the Rigel catalog (catalog.json) or auditing existing entries for install accuracy. Dispatches research subagents (general-info, system-requirements, install-method, render) and verifies install correctness against live tooling (helm/docker/kubectl) via scripts/verify-catalog-entry.sh before writing. Triggers on "add <app> to the catalog", "audit the catalog", "verify <app>'s install instructions".
 ---
 
 # Catalog Entry — research, verify, write
 
-Produces and verifies Helmsman catalog entries (`packages/catalog/catalog.json`).
+Produces and verifies Rigel catalog entries (`packages/catalog/catalog.json`).
 Design: `docs/superpowers/specs/2026-06-02-catalog-entry-automation-design.md`.
 
 **Core principle:** generation is fuzzy (subagents, on the user's subscription — never

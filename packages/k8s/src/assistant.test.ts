@@ -23,7 +23,7 @@ import {
 
 function config(overrides: Partial<AssistantInstallConfig> = {}): AssistantInstallConfig {
   return {
-    image: "ghcr.io/acme/helmsman-assistant:latest",
+    image: "ghcr.io/acme/rigel-assistant:latest",
     installNamespace: "default",
     namespaces: "",
     workerModel: "claude-sonnet-4-6",
@@ -53,7 +53,7 @@ test("manifest contains core objects", () => {
 
 test("manifest substitutes image and knobs", () => {
   const yaml = manifestYAML(config());
-  expect(yaml).toContain("ghcr.io/acme/helmsman-assistant:latest");
+  expect(yaml).toContain("ghcr.io/acme/rigel-assistant:latest");
   expect(yaml).toContain("claude-sonnet-4-6");
   expect(yaml).toContain("claude-opus-4-8");
 });
@@ -69,7 +69,7 @@ test("RBAC cage never grants secrets access", () => {
 test("install namespace applied to namespaced objects and subjects", () => {
   const yaml = manifestYAML(config({ installNamespace: "agents" }));
   expect(yaml).toContain("namespace: agents");
-  expect(yaml).toContain("- kind: ServiceAccount\n    name: helmsman-assistant\n    namespace: agents");
+  expect(yaml).toContain("- kind: ServiceAccount\n    name: rigel-assistant\n    namespace: agents");
   expect(yaml).not.toContain("namespace: default");
 });
 
@@ -105,7 +105,7 @@ test("maskToken redacts the token line", () => {
 });
 
 test("default install config matches the catalog default image", () => {
-  expect(DEFAULT_INSTALL_CONFIG.image).toBe("ghcr.io/tyrelchambers/helmsman-assistant:latest");
+  expect(DEFAULT_INSTALL_CONFIG.image).toBe("ghcr.io/tyrelchambers/rigel-assistant:latest");
   expect(SECRET_NAME).toBe("assistant-claude-token");
 });
 

@@ -7,7 +7,7 @@ import type { Flow, Health } from "./types";
 
 /**
  * Pure functions for the Connectivity panel. Direct port of the Swift
- * `Connectivity` enum (`Sources/Helmsman/Cluster/Connectivity.swift`). Selector→
+ * `Connectivity` enum (`Sources/Rigel/Cluster/Connectivity.swift`). Selector→
  * pod matching and health classification live here so they can be unit-tested
  * without the live store. See `docs/parity/connectivity.md`.
  */

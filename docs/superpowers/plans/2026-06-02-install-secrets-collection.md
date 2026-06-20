@@ -13,19 +13,19 @@
 ## File structure
 
 **New source files**
-- `Sources/Helmsman/Catalog/InstallArtifacts.swift` — `SecretFieldSpec`, `InstallDescriptor`, `WizardArtifacts.parse`.
-- `Sources/Helmsman/Catalog/SecretNameResolver.swift` — `SecretNameNote`, `RandomSecret`, `SecretNameResolver`, `NamespaceSecretsProbe`.
-- `Sources/Helmsman/Panels/Actions/HelmCommander.swift` — Helm command builder + executor.
+- `Sources/Rigel/Catalog/InstallArtifacts.swift` — `SecretFieldSpec`, `InstallDescriptor`, `WizardArtifacts.parse`.
+- `Sources/Rigel/Catalog/SecretNameResolver.swift` — `SecretNameNote`, `RandomSecret`, `SecretNameResolver`, `NamespaceSecretsProbe`.
+- `Sources/Rigel/Panels/Actions/HelmCommander.swift` — Helm command builder + executor.
 
 **New test files**
-- `Tests/HelmsmanTests/InstallArtifactsTests.swift`
-- `Tests/HelmsmanTests/SecretNameResolverTests.swift`
-- `Tests/HelmsmanTests/HelmCommandTests.swift`
-- `Tests/HelmsmanTests/WizardSecretsTests.swift`
+- `Tests/RigelTests/InstallArtifactsTests.swift`
+- `Tests/RigelTests/SecretNameResolverTests.swift`
+- `Tests/RigelTests/HelmCommandTests.swift`
+- `Tests/RigelTests/WizardSecretsTests.swift`
 
 **Modified**
-- `Sources/Helmsman/Panels/Catalog/CatalogInstallWizardModel.swift`
-- `Sources/Helmsman/Panels/Catalog/CatalogInstallWizard.swift`
+- `Sources/Rigel/Panels/Catalog/CatalogInstallWizardModel.swift`
+- `Sources/Rigel/Panels/Catalog/CatalogInstallWizard.swift`
 
 Build: `swift build`. Test: `swift test --filter <TestCaseName>`.
 
@@ -34,15 +34,15 @@ Build: `swift build`. Test: `swift test --filter <TestCaseName>`.
 ## Task 1: Install-artifact types + parser
 
 **Files:**
-- Create: `Sources/Helmsman/Catalog/InstallArtifacts.swift`
-- Test: `Tests/HelmsmanTests/InstallArtifactsTests.swift`
+- Create: `Sources/Rigel/Catalog/InstallArtifacts.swift`
+- Test: `Tests/RigelTests/InstallArtifactsTests.swift`
 
 - [ ] **Step 1: Write the failing tests**
 
 ```swift
-// Tests/HelmsmanTests/InstallArtifactsTests.swift
+// Tests/RigelTests/InstallArtifactsTests.swift
 import XCTest
-@testable import Helmsman
+@testable import Rigel
 
 final class InstallArtifactsTests: XCTestCase {
     func test_parse_extractsYamlSecretsAndInstall() {
@@ -117,7 +117,7 @@ Expected: FAIL — `cannot find 'WizardArtifacts'` / `SecretFieldSpec` / `Instal
 - [ ] **Step 3: Implement `InstallArtifacts.swift`**
 
 ```swift
-// Sources/Helmsman/Catalog/InstallArtifacts.swift
+// Sources/Rigel/Catalog/InstallArtifacts.swift
 import Foundation
 
 /// One sensitive value the install needs, declared by Claude in a ```secrets
@@ -212,7 +212,7 @@ Expected: PASS (5 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/Helmsman/Catalog/InstallArtifacts.swift Tests/HelmsmanTests/InstallArtifactsTests.swift
+git add Sources/Rigel/Catalog/InstallArtifacts.swift Tests/RigelTests/InstallArtifactsTests.swift
 git commit -m "feat(catalog): parse secrets schema + install descriptor from wizard output"
 ```
 
@@ -221,17 +221,17 @@ git commit -m "feat(catalog): parse secrets schema + install descriptor from wiz
 ## Task 2: Random-secret generator, collision resolver, namespace probe
 
 **Files:**
-- Create: `Sources/Helmsman/Catalog/SecretNameResolver.swift`
-- Test: `Tests/HelmsmanTests/SecretNameResolverTests.swift`
+- Create: `Sources/Rigel/Catalog/SecretNameResolver.swift`
+- Test: `Tests/RigelTests/SecretNameResolverTests.swift`
 
 The probe (`NamespaceSecretsProbe`) runs `kubectl` and isn't unit-tested; the pure resolver + generator are.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```swift
-// Tests/HelmsmanTests/SecretNameResolverTests.swift
+// Tests/RigelTests/SecretNameResolverTests.swift
 import XCTest
-@testable import Helmsman
+@testable import Rigel
 
 final class SecretNameResolverTests: XCTestCase {
     private func secret(_ name: String, labels: [String: String], data: [String: String] = [:]) -> Secret {
@@ -247,7 +247,7 @@ final class SecretNameResolverTests: XCTestCase {
 
     func test_ourSecret_isReusedAndPrefilled() {
         let mine = secret("plane-secrets",
-                          labels: ["app.kubernetes.io/managed-by": "helmsman",
+                          labels: ["app.kubernetes.io/managed-by": "rigel",
                                    "app.kubernetes.io/instance": "plane"],
                           data: ["SECRET_KEY": "abc"])
         let r = SecretNameResolver.resolve(instance: "plane", existing: [mine])
@@ -292,13 +292,13 @@ Expected: FAIL — `cannot find 'SecretNameResolver'` / `RandomSecret`.
 - [ ] **Step 3: Implement `SecretNameResolver.swift`**
 
 ```swift
-// Sources/Helmsman/Catalog/SecretNameResolver.swift
+// Sources/Rigel/Catalog/SecretNameResolver.swift
 import Foundation
 
 /// How the wizard arrived at the Secret name — drives the Secrets-step banner.
 enum SecretNameNote: Equatable {
     case fresh                          // base name was free
-    case reusing                        // an existing helmsman-managed Secret for this install
+    case reusing                        // an existing rigel-managed Secret for this install
     case suffixed(requested: String)    // base name was taken by an unrelated Secret
 }
 
@@ -323,7 +323,7 @@ enum RandomSecret {
 enum SecretNameResolver {
     static let managedByLabel = "app.kubernetes.io/managed-by"
     static let instanceLabel = "app.kubernetes.io/instance"
-    static let managedByValue = "helmsman"
+    static let managedByValue = "rigel"
 
     struct Resolution: Equatable {
         let name: String
@@ -383,7 +383,7 @@ Expected: PASS (6 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/Helmsman/Catalog/SecretNameResolver.swift Tests/HelmsmanTests/SecretNameResolverTests.swift
+git add Sources/Rigel/Catalog/SecretNameResolver.swift Tests/RigelTests/SecretNameResolverTests.swift
 git commit -m "feat(catalog): collision-safe secret-name resolver + random generator + namespace probe"
 ```
 
@@ -392,15 +392,15 @@ git commit -m "feat(catalog): collision-safe secret-name resolver + random gener
 ## Task 3: HelmCommander (command builder + executor)
 
 **Files:**
-- Create: `Sources/Helmsman/Panels/Actions/HelmCommander.swift`
-- Test: `Tests/HelmsmanTests/HelmCommandTests.swift`
+- Create: `Sources/Rigel/Panels/Actions/HelmCommander.swift`
+- Test: `Tests/RigelTests/HelmCommandTests.swift`
 
 - [ ] **Step 1: Write the failing tests**
 
 ```swift
-// Tests/HelmsmanTests/HelmCommandTests.swift
+// Tests/RigelTests/HelmCommandTests.swift
 import XCTest
-@testable import Helmsman
+@testable import Rigel
 
 final class HelmCommandTests: XCTestCase {
     private func helmDescriptor() -> InstallDescriptor {
@@ -448,7 +448,7 @@ Expected: FAIL — `cannot find 'HelmCommander'`.
 - [ ] **Step 3: Implement `HelmCommander.swift`**
 
 ```swift
-// Sources/Helmsman/Panels/Actions/HelmCommander.swift
+// Sources/Rigel/Panels/Actions/HelmCommander.swift
 import Foundation
 
 /// Runs a Helm install for the catalog wizard. The argument vectors are built
@@ -502,7 +502,7 @@ struct HelmCommander {
         }
         _ = chart
 
-        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("helmsman-values-\(UUID().uuidString).yaml")
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("rigel-values-\(UUID().uuidString).yaml")
         do {
             try valuesYAML.write(to: tmp, atomically: true, encoding: .utf8)
         } catch {
@@ -538,7 +538,7 @@ Expected: PASS (2 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/Helmsman/Panels/Actions/HelmCommander.swift Tests/HelmsmanTests/HelmCommandTests.swift
+git add Sources/Rigel/Panels/Actions/HelmCommander.swift Tests/RigelTests/HelmCommandTests.swift
 git commit -m "feat(catalog): HelmCommander builds + runs helm install from descriptor"
 ```
 
@@ -547,8 +547,8 @@ git commit -m "feat(catalog): HelmCommander builds + runs helm install from desc
 ## Task 4: Wizard model — `.secrets` step, fields, name resolution, gating
 
 **Files:**
-- Modify: `Sources/Helmsman/Panels/Catalog/CatalogInstallWizardModel.swift`
-- Test: `Tests/HelmsmanTests/WizardSecretsTests.swift`
+- Modify: `Sources/Rigel/Panels/Catalog/CatalogInstallWizardModel.swift`
+- Test: `Tests/RigelTests/WizardSecretsTests.swift`
 
 ### 4a. `.secrets` step + pipeline index shift
 
@@ -714,9 +714,9 @@ func regenerateSecret(_ key: String) {
 - [ ] **Step 8: Write the model tests**
 
 ```swift
-// Tests/HelmsmanTests/WizardSecretsTests.swift
+// Tests/RigelTests/WizardSecretsTests.swift
 import XCTest
-@testable import Helmsman
+@testable import Rigel
 
 @MainActor
 final class WizardSecretsTests: XCTestCase {
@@ -759,12 +759,12 @@ final class WizardSecretsTests: XCTestCase {
 ```
 
 > **Note for implementer:** check whether a catalog `CatalogApp` test fixture
-> already exists (search `Tests/HelmsmanTests` for `CatalogApp(` or a
+> already exists (search `Tests/RigelTests` for `CatalogApp(` or a
 > `CatalogTestFixtures`/`CatalogStoreTests` helper, and `FitResult(` for its
 > exact initializer). Reuse it. If none exists, add a minimal
 > `CatalogTestFixtures.app(id:)` building a `CatalogApp` with the fields from
-> `Sources/Helmsman/Catalog/CatalogApp.swift`, and use the real `FitResult`
-> initializer from `Sources/Helmsman/Catalog/NodeFit.swift`. Adjust the
+> `Sources/Rigel/Catalog/CatalogApp.swift`, and use the real `FitResult`
+> initializer from `Sources/Rigel/Catalog/NodeFit.swift`. Adjust the
 > `ClusterCache()` construction to its real initializer.
 
 - [ ] **Step 9: Run tests, verify pass**
@@ -775,7 +775,7 @@ Expected: PASS (3 tests).
 - [ ] **Step 10: Commit**
 
 ```bash
-git add Sources/Helmsman/Panels/Catalog/CatalogInstallWizardModel.swift Tests/HelmsmanTests/WizardSecretsTests.swift
+git add Sources/Rigel/Panels/Catalog/CatalogInstallWizardModel.swift Tests/RigelTests/WizardSecretsTests.swift
 git commit -m "feat(catalog): .secrets wizard step — schema parsing, name resolution, value gating"
 ```
 
@@ -784,7 +784,7 @@ git commit -m "feat(catalog): .secrets wizard step — schema parsing, name reso
 ## Task 5: Apply ordering (Secret-first) + Helm branch + verify
 
 **Files:**
-- Modify: `Sources/Helmsman/Panels/Catalog/CatalogInstallWizardModel.swift`
+- Modify: `Sources/Rigel/Panels/Catalog/CatalogInstallWizardModel.swift`
 
 - [ ] **Step 1: Build the Secret and apply it before the app**
 
@@ -869,7 +869,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/Helmsman/Panels/Catalog/CatalogInstallWizardModel.swift
+git add Sources/Rigel/Panels/Catalog/CatalogInstallWizardModel.swift
 git commit -m "feat(catalog): apply Secret before install; run helm for chart-based apps"
 ```
 
@@ -878,7 +878,7 @@ git commit -m "feat(catalog): apply Secret before install; run helm for chart-ba
 ## Task 6: Prompt contract — Secrets & install section in the preamble
 
 **Files:**
-- Modify: `Sources/Helmsman/Panels/Catalog/CatalogInstallWizardModel.swift` (`buildInstallPrompt`)
+- Modify: `Sources/Rigel/Panels/Catalog/CatalogInstallWizardModel.swift` (`buildInstallPrompt`)
 
 - [ ] **Step 1: Append the contract to the preamble**
 
@@ -915,7 +915,7 @@ Expected: builds clean.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add Sources/Helmsman/Panels/Catalog/CatalogInstallWizardModel.swift
+git add Sources/Rigel/Panels/Catalog/CatalogInstallWizardModel.swift
 git commit -m "feat(catalog): instruct Claude to wire a referenced Secret + emit secrets/install blocks"
 ```
 
@@ -924,7 +924,7 @@ git commit -m "feat(catalog): instruct Claude to wire a referenced Secret + emit
 ## Task 7: Secrets step UI + step-indicator + footer wiring
 
 **Files:**
-- Modify: `Sources/Helmsman/Panels/Catalog/CatalogInstallWizard.swift`
+- Modify: `Sources/Rigel/Panels/Catalog/CatalogInstallWizard.swift`
 
 - [ ] **Step 1: Add `.secrets` to the step indicator order + label**
 
@@ -1100,7 +1100,7 @@ Expected: builds; all tests pass (including the new suites).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/Helmsman/Panels/Catalog/CatalogInstallWizard.swift
+git add Sources/Rigel/Panels/Catalog/CatalogInstallWizard.swift
 git commit -m "feat(catalog): Secrets wizard step UI + step-indicator/footer wiring"
 ```
 

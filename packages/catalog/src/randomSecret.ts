@@ -1,4 +1,4 @@
-// Locally-generated strong secret values — port of Sources/Helmsman/Catalog/RandomSecret.swift.
+// Locally-generated strong secret values — port of Sources/Rigel/Catalog/RandomSecret.swift.
 // Alphanumeric/hex only, to stay safe inside YAML scalars and shell args. Used
 // to pre-fill the install wizard's detected secret placeholders.
 

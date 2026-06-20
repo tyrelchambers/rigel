@@ -5,7 +5,7 @@
 
 ## Problem
 
-The self-hosted app catalog (`Sources/Helmsman/Resources/catalog.json`, 53 entries) is
+The self-hosted app catalog (`Sources/Rigel/Resources/catalog.json`, 53 entries) is
 hand-authored. Each entry carries general info, system requirements, and an install
 descriptor + `installPromptTemplate` that the in-app wizard feeds to Claude to generate
 the install manifest/values at install time.

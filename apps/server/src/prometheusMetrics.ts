@@ -3,7 +3,7 @@
  * (Prometheus or VictoriaMetrics), reached through the API-server proxy.
  *
  * Ports the Swift `PrometheusMetricsSource` + `MetricsBackendDetector`
- * (Sources/Helmsman/Metrics/). The web port previously had only an in-memory,
+ * (Sources/Rigel/Metrics/). The web port previously had only an in-memory,
  * per-browser-session sample accumulator — which reset on every reload and so
  * never reached the 24h needed for verdicts. When a metrics DB is present we
  * read 30 days of real history from it instead.
@@ -14,8 +14,8 @@
 
 import { kubectl } from "@rigel/k8s/src/run";
 
-/** Service name Helmsman's own metrics-install flow creates (MetricsInstallManifests). */
-const INSTALL_SERVICE = "helmsman-metrics";
+/** Service name Rigel's own metrics-install flow creates (MetricsInstallManifests). */
+const INSTALL_SERVICE = "rigel-metrics";
 /** Matches the install scrape_interval (60s); used to estimate hours of history. */
 const SCRAPE_INTERVAL_SECONDS = 60;
 /** History window queried, matching the Swift source. */
@@ -70,7 +70,7 @@ export function flavorForPort(port: number): PromBackend["flavor"] {
 /**
  * All usable Prometheus/VictoriaMetrics backends in the cluster's services
  * (deduped). Ports the Swift `MetricsBackendDetector`, plus first-class
- * recognition of the `helmsman-metrics` service our own install flow creates
+ * recognition of the `rigel-metrics` service our own install flow creates
  * (whose name doesn't contain "victoria"/"prometheus", so the generic rules
  * would miss it). Used to populate the source picker.
  */
@@ -93,7 +93,7 @@ export function detectAllBackendsFromServices(services: ServiceJson[]): PromBack
       continue;
     }
 
-    // 1. The backend Helmsman's install flow creates (Service "helmsman-metrics").
+    // 1. The backend Rigel's install flow creates (Service "rigel-metrics").
     if (name === INSTALL_SERVICE) {
       const p =
         ports.find((x) => x.port === 8428 || x.port === 9090 || x.port === 8481) ?? ports[0];

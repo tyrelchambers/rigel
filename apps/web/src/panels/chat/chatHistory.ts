@@ -5,7 +5,7 @@
  */
 import type { ChatMessage } from "./types";
 
-const KEY = "helmsman.chat.sessions";
+const KEY = "rigel.chat.sessions";
 const MAX_SESSIONS = 50;
 const MAX_MESSAGES = 200;
 

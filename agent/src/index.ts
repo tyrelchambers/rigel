@@ -254,7 +254,7 @@ async function tick(
     const tierStr = tier === RiskTier.Medium ? "medium" : "low";
 
     if (tier === RiskTier.Blocked) {
-      state = queue(state, cfg, ts, fp, describe(incident), action.label, "destructive — RBAC-blocked; run manually in Helmsman");
+      state = queue(state, cfg, ts, fp, describe(incident), action.label, "destructive — RBAC-blocked; run manually in Rigel");
       state = record(state, cfg, {
         at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
         tier: "blocked", outcome: "queued", detail: "queued for human (destructive)", analysis: truncate(analysis),
@@ -404,14 +404,14 @@ async function handleSignalInbound(
       const s = await readState(cfg.stateConfigMap, cfg.stateNamespace);
       const enabled = s.status?.enabled ? "active" : "disabled";
       const spent = s.status ? `$${s.status.spentUsd.toFixed(2)}/$${s.status.spendCapUsd}` : "—";
-      return `Helmsman assistant is ${enabled}. Spend ${spent} this month. ${s.queue.length} fix(es) queued. Updated ${s.updatedAt || "—"}.`;
+      return `Rigel assistant is ${enabled}. Spend ${spent} this month. ${s.queue.length} fix(es) queued. Updated ${s.updatedAt || "—"}.`;
     },
     queue: async () => {
       const s = await readState(cfg.stateConfigMap, cfg.stateNamespace);
       if (s.queue.length === 0) return "No fixes are queued.";
       const lines = s.queue
         .slice(0, 10)
-        .map((q, i) => `${i + 1}. ${q.suggestion} — ${q.incident}${q.action ? "" : " (manual; run in Helmsman)"}`);
+        .map((q, i) => `${i + 1}. ${q.suggestion} — ${q.incident}${q.action ? "" : " (manual; run in Rigel)"}`);
       return `${lines.join("\n")}\n\nReply "approve N" to run one.`;
     },
     approve: (index) => approveQueued(cfg, cb, index),
@@ -452,12 +452,12 @@ async function approveQueued(cfg: Config, cb: CircuitBreaker, index: number): Pr
   const item = state.queue[index];
   if (!item) return `There's no queued fix #${index + 1}. Reply "queue" to see the list.`;
   if (!item.action) {
-    return `"${item.suggestion}" can't be run automatically (destructive / RBAC-blocked). Run it from Helmsman.`;
+    return `"${item.suggestion}" can't be run automatically (destructive / RBAC-blocked). Run it from Rigel.`;
   }
   const action = item.action;
   const tier = classifyRisk(action.kind);
   if (tier === RiskTier.Blocked) {
-    return `"${item.suggestion}" is blocked from automatic execution. Run it from Helmsman.`;
+    return `"${item.suggestion}" is blocked from automatic execution. Run it from Rigel.`;
   }
 
   const now = Date.now();
@@ -549,7 +549,7 @@ function truncate(s: string, max = 2000): string {
 /** Best-effort flush of this tick's notifications to the configured channels. */
 function flushNotifications(rc: RuntimeConfig, notifications: string[]): void {
   if (notifications.length === 0) return;
-  const text = `Helmsman assistant:\n${notifications.join("\n")}`;
+  const text = `Rigel assistant:\n${notifications.join("\n")}`;
   if (rc.webhookUrl) void notifyWebhook(rc.webhookUrl, text);
   if (rc.signalApiUrl && rc.signalNumber) {
     void notifySignal(rc.signalApiUrl, rc.signalNumber, rc.signalRecipients, text);

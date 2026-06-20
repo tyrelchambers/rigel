@@ -4,7 +4,7 @@
 
 **Goal:** Add a Pencil-style tabbed settings modal whose Agents tab lets users set up AI agents (Claude live; Codex/Gemini/OpenCode/OpenRouter "Coming soon") via CLI subscription or API key, backed by a server-side agent registry + per-agent config — without rewriting the working Claude path.
 
-**Architecture:** Server gets a pure `agentRegistry` (descriptors) + `agentConfig` (per-agent auth persisted to `~/.claude/helmsman-agents.json`, 0600) + a `runAgent` dispatcher that wraps the existing `runClaude`. The Claude env injection moves behind `claudeAuthEnv()` so subscription vs API-key is honored. Web gets `useAgents`/`useSetAgentAuth` hooks, a `SettingsModal` (shadcn Dialog + tab bar), an Agents card-grid + per-agent setup view, opened from a GlobalHeader gear and the NavStrip Settings item. The `/settings` route is removed.
+**Architecture:** Server gets a pure `agentRegistry` (descriptors) + `agentConfig` (per-agent auth persisted to `~/.claude/rigel-agents.json`, 0600) + a `runAgent` dispatcher that wraps the existing `runClaude`. The Claude env injection moves behind `claudeAuthEnv()` so subscription vs API-key is honored. Web gets `useAgents`/`useSetAgentAuth` hooks, a `SettingsModal` (shadcn Dialog + tab bar), an Agents card-grid + per-agent setup view, opened from a GlobalHeader gear and the NavStrip Settings item. The `/settings` route is removed.
 
 **Tech Stack:** Server: Node + Hono (`Response.json`), vitest. Web: React 19 + Vite + Tailwind v4 + shadcn (`@base-ui/react` Dialog), TanStack Query v5, React Router v7, vitest + @testing-library/react.
 
@@ -201,14 +201,14 @@ git commit -m "feat(server): agent registry (descriptors + lookups)"
 In `apps/server/src/chatConfig.ts`, replace the module-load constant:
 
 ```ts
-const TOKEN_FILE = join(homedir(), ".claude", "helmsman-oauth-token");
+const TOKEN_FILE = join(homedir(), ".claude", "rigel-oauth-token");
 ```
 
 with a function:
 
 ```ts
 function tokenFile(): string {
-  return join(homedir(), ".claude", "helmsman-oauth-token");
+  return join(homedir(), ".claude", "rigel-oauth-token");
 }
 ```
 
@@ -263,7 +263,7 @@ describe("setAgentAuth (claude, apiKey)", () => {
     expect(view.authMethod).toBe("apiKey");
     expect(view.connection).toBe("connected");
 
-    const file = join(home, ".claude", "helmsman-agents.json");
+    const file = join(home, ".claude", "rigel-agents.json");
     const parsed = JSON.parse(await readFile(file, "utf8"));
     expect(parsed.agents.claude).toEqual({ authMethod: "apiKey", apiKey: "sk-test-123" });
     expect((await stat(file)).mode & 0o777).toBe(0o600);
@@ -304,10 +304,10 @@ Expected: FAIL — `Cannot find module './agentConfig'`.
 
 ```ts
 // apps/server/src/agentConfig.ts
-// Per-agent auth config, persisted to ~/.claude/helmsman-agents.json (0600).
+// Per-agent auth config, persisted to ~/.claude/rigel-agents.json (0600).
 //
 // Claude is special: its SUBSCRIPTION token keeps living in the existing
-// helmsman-oauth-token file (env CLAUDE_CODE_OAUTH_TOKEN still wins), reusing
+// rigel-oauth-token file (env CLAUDE_CODE_OAUTH_TOKEN still wins), reusing
 // chatConfig.ts. This file only stores the chosen auth method + any API keys.
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -330,7 +330,7 @@ interface AgentsConfig {
 }
 
 function configPath(): string {
-  return join(homedir(), ".claude", "helmsman-agents.json");
+  return join(homedir(), ".claude", "rigel-agents.json");
 }
 
 export async function readAgentsConfig(): Promise<AgentsConfig> {
@@ -528,7 +528,7 @@ afterEach(async () => {
 test("a non-claude active agent yields a single 'not available' error event", async () => {
   // Force the active agent to a coming-soon one by writing the config directly.
   await writeFile(
-    join(home, ".claude", "helmsman-agents.json"),
+    join(home, ".claude", "rigel-agents.json"),
     JSON.stringify({ activeAgentId: "codex", agents: {} }),
   );
   const events: ChatEvent[] = [];

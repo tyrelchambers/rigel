@@ -460,11 +460,11 @@ Expected: all PASS.
 - [ ] **Step 2: Rebuild the container**
 
 Run: `docker compose up -d --build`
-Expected: `helmsman-web` rebuilt on :8787.
+Expected: `rigel-web` rebuilt on :8787.
 
 - [ ] **Step 3: Playwright re-drive.** Open `/logs`, pick a deployment, and confirm: the tail-size + since selects and the previous (History) toggle are present; selecting a multi-container deployment shows the container `<select>`; toggling previous shows the amber "not live" banner and disables Pause. Screenshot to `/tmp/logs-analyze/p2-*.png`. (Do not assert on a specific crashed pod existing — just confirm the controls render and the banner appears on toggle.)
 
-- [ ] **Step 4: Update the Outline doc.** Edit the "Logs — live tail, filter & scan" doc (Helmsman collection `f9bbcd7a-173c-4827-a709-f86082933031`, doc id `70a019c7-a6a9-42ed-b101-87ab50ec6df7`): move container picker / previous-logs / since+tail out of "planned" into the live feature list.
+- [ ] **Step 4: Update the Outline doc.** Edit the "Logs — live tail, filter & scan" doc (Rigel collection `f9bbcd7a-173c-4827-a709-f86082933031`, doc id `70a019c7-a6a9-42ed-b101-87ab50ec6df7`): move container picker / previous-logs / since+tail out of "planned" into the live feature list.
 
 ---
 

@@ -340,7 +340,7 @@ test("linkCatalogApp daemonset maps to annotate … catalog-app=… --overwrite"
     appID: "node-exporter",
   })).toEqual([
     "annotate", "daemonset/node-exp",
-    "helmsman.dev/catalog-app=node-exporter",
+    "rigel.dev/catalog-app=node-exporter",
     "-n", "mon", "--overwrite",
   ]);
 });
@@ -355,8 +355,8 @@ test("linkCatalogApp with container also sets catalog-container", () => {
     container: "exporter",
   })).toEqual([
     "annotate", "daemonset/node-exp",
-    "helmsman.dev/catalog-app=node-exporter",
-    "helmsman.dev/catalog-container=exporter",
+    "rigel.dev/catalog-app=node-exporter",
+    "rigel.dev/catalog-container=exporter",
     "-n", "mon", "--overwrite",
   ]);
 });
@@ -369,7 +369,7 @@ test("linkCatalogApp defaults resourceKind to deployment", () => {
     appID: "memos",
   })).toEqual([
     "annotate", "deployment/memos",
-    "helmsman.dev/catalog-app=memos",
+    "rigel.dev/catalog-app=memos",
     "-n", "default", "--overwrite",
   ]);
 });
@@ -382,8 +382,8 @@ test("unlinkCatalogApp statefulset removes both binding keys", () => {
     namespace: "default",
   })).toEqual([
     "annotate", "statefulset/db",
-    "helmsman.dev/catalog-app-",
-    "helmsman.dev/catalog-container-",
+    "rigel.dev/catalog-app-",
+    "rigel.dev/catalog-container-",
     "-n", "default",
   ]);
 });
@@ -395,8 +395,8 @@ test("unlinkCatalogApp defaults resourceKind to deployment", () => {
     namespace: "default",
   })).toEqual([
     "annotate", "deployment/memos",
-    "helmsman.dev/catalog-app-",
-    "helmsman.dev/catalog-container-",
+    "rigel.dev/catalog-app-",
+    "rigel.dev/catalog-container-",
     "-n", "default",
   ]);
 });
@@ -434,17 +434,17 @@ test("applyManifest is not a kubectl argv — buildCommand throws", () => {
 // ---------------------------------------------------------------------------
 test("linkSourceRepo annotates the workload with source-repo + source-path", () => {
   expect(buildCommand({ kind: "linkSourceRepo", name: "api", namespace: "personal", source: "my-api", filePath: "k8s" }))
-    .toEqual(["annotate", "deployment/api", "helmsman.dev/source-repo=my-api", "helmsman.dev/source-path=k8s", "-n", "personal", "--overwrite"]);
+    .toEqual(["annotate", "deployment/api", "rigel.dev/source-repo=my-api", "rigel.dev/source-path=k8s", "-n", "personal", "--overwrite"]);
 });
 
 test("linkSourceRepo respects the workload kind", () => {
   expect(buildCommand({ kind: "linkSourceRepo", name: "pg", namespace: "default", source: "pgrepo", filePath: ".", resourceKind: "statefulset" }))
-    .toEqual(["annotate", "statefulset/pg", "helmsman.dev/source-repo=pgrepo", "helmsman.dev/source-path=.", "-n", "default", "--overwrite"]);
+    .toEqual(["annotate", "statefulset/pg", "rigel.dev/source-repo=pgrepo", "rigel.dev/source-path=.", "-n", "default", "--overwrite"]);
 });
 
 test("unlinkSourceRepo removes both annotations (trailing-dash)", () => {
   expect(buildCommand({ kind: "unlinkSourceRepo", name: "api", namespace: "personal" }))
-    .toEqual(["annotate", "deployment/api", "helmsman.dev/source-repo-", "helmsman.dev/source-path-", "-n", "personal"]);
+    .toEqual(["annotate", "deployment/api", "rigel.dev/source-repo-", "rigel.dev/source-path-", "-n", "personal"]);
 });
 
 // ---------------------------------------------------------------------------

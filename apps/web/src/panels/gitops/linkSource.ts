@@ -1,11 +1,11 @@
 // Helpers for linking a workload to a GitOps source (bidirectional UI). The link
-// is the `helmsman.dev/source-repo` annotation (= source name) the AI reads for
+// is the `rigel.dev/source-repo` annotation (= source name) the AI reads for
 // context + fix-PRs — stamped via the linkSourceRepo/unlinkSourceRepo actions
 // (server buildCommand → kubectl annotate), run through the ConfirmSheet.
 import type { ActionBlock } from "@/lib/api";
 import type { GitDeployment } from "./gitApi";
 
-export const SOURCE_REPO_ANNOTATION = "helmsman.dev/source-repo";
+export const SOURCE_REPO_ANNOTATION = "rigel.dev/source-repo";
 
 export interface WorkloadRef {
   name: string;

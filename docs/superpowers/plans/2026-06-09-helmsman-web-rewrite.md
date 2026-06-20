@@ -1,14 +1,14 @@
-# Helmsman Web Rewrite Implementation Plan
+# Rigel Web Rewrite Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Serve the full Helmsman UI from a Docker container against a mounted kubeconfig — a TypeScript monorepo web app at behavioral parity with the Swift app.
+**Goal:** Serve the full Rigel UI from a Docker container against a mounted kubeconfig — a TypeScript monorepo web app at behavioral parity with the Swift app.
 
 **Architecture:** Two natures of work. (1) Hand-built deterministic server infra — a kubectl watch manager that streams live cluster state over WebSocket, a Claude-CLI bridge that streams chat, REST routes for guarded mutations, and packaging. Much of this adapts the existing TypeScript in `agent/src/kubectl.ts` and `agent/src/claude.ts`. (2) The 22 UI panels, ported one at a time *through* the parity orchestrator (`.claude/workflows/parity-feature.js`, porter mode) with the Swift app as source of truth.
 
 **Tech Stack:** Bun + WebSocket (server), React 19 + Vite + Tailwind v4 + shadcn/ui + TanStack Query v5 + Zustand (web), `kubectl`/`claude`/`helm` CLIs in-container, Docker.
 
-**Specs:** `docs/superpowers/specs/2026-06-09-helmsman-web-rewrite-design.md`.
+**Specs:** `docs/superpowers/specs/2026-06-09-rigel-web-rewrite-design.md`.
 
 **Prerequisite:** The parity-orchestrator plan (`2026-06-09-parity-orchestrator.md`) is fully executed and its dogfood run (Task 9) reached `parity: true`. This plan reuses that monorepo foundation, domain-context files, and contracts doc.
 
@@ -43,7 +43,7 @@ never a shell string — so cluster/user input can never be shell-interpreted.
 **Files:**
 - Create: `packages/k8s/src/run.ts`
 - Test: `packages/k8s/src/run.test.ts`
-- Reference: `agent/src/kubectl.ts` (existing TS to adapt), `Sources/Helmsman/Util/ProcessAsync.swift`
+- Reference: `agent/src/kubectl.ts` (existing TS to adapt), `Sources/Rigel/Util/ProcessAsync.swift`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -403,7 +403,7 @@ git commit -m "feat(web): WebSocket client feeding the live cluster store"
 - Create: `apps/server/src/claudeBridge.ts`
 - Test: `apps/server/src/actionParse.test.ts`
 - Modify: `apps/server/src/ws.ts` (handle `chat` messages)
-- Reference: `agent/src/claude.ts`, `Sources/Helmsman/Chat/{ClaudeSession,StreamJsonParser,SuggestedAction}.swift`, `docs/parity/contracts.md`
+- Reference: `agent/src/claude.ts`, `Sources/Rigel/Chat/{ClaudeSession,StreamJsonParser,SuggestedAction}.swift`, `docs/parity/contracts.md`
 
 - [ ] **Step 1: Write the failing test for action-block extraction**
 
@@ -521,7 +521,7 @@ git commit -m "feat(server): claude bridge — chat streaming + action-block ext
 - Create: `apps/server/src/actions.ts`
 - Test: `apps/server/src/actions.test.ts`
 - Create: `apps/web/src/components/ConfirmSheet.tsx`, `apps/web/src/lib/api.ts`
-- Reference: `Sources/Helmsman/Chat/SuggestedActionResolver.swift`, `Sources/Helmsman/Panels/Actions/`, `docs/parity/contracts.md`
+- Reference: `Sources/Rigel/Chat/SuggestedActionResolver.swift`, `Sources/Rigel/Panels/Actions/`, `docs/parity/contracts.md`
 
 The server is the single place that turns an action-block `kind` into a concrete
 kubectl command. The client shows that exact command in a confirm sheet BEFORE
@@ -767,7 +767,7 @@ adjust the install line if the URL differs.
 `compose.yaml`:
 ```yaml
 services:
-  helmsman:
+  rigel:
     build: .
     ports: ["8787:8787"]
     environment:
@@ -785,15 +785,15 @@ node_modules
 **/node_modules
 **/dist
 .build
-Helmsman.app
+Rigel.app
 .git
 ```
 
 - [ ] **Step 4: Build and smoke-test the image**
 
-Build the image (`docker build -t helmsman-web .`), run it with the kubeconfig
+Build the image (`docker build -t rigel-web .`), run it with the kubeconfig
 mounted (`docker run --rm -p 8787:8787 -v $HOME/.kube/config:/kube/config:ro -e
-KUBECONFIG=/kube/config helmsman-web`), then `curl -s localhost:8787/api/health`.
+KUBECONFIG=/kube/config rigel-web`), then `curl -s localhost:8787/api/health`.
 Expected: image builds; health returns `{"ok":true,...}`. Open `localhost:8787`
 and confirm the served UI lists live pods.
 

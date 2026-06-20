@@ -4,7 +4,7 @@ import { emptyAlertState, type AlertState } from "./alerts.js";
 
 /**
  * The agent's externally-visible state, persisted to the `assistant-state`
- * ConfigMap so Helmsman can render it (audit timeline, morning report, queued
+ * ConfigMap so Rigel can render it (audit timeline, morning report, queued
  * suggestions). The agent owns this object; human-editable knobs and the
  * kill-switch live in a separate `assistant-config` ConfigMap (see config.ts)
  * so the agent never clobbers them.
@@ -26,12 +26,12 @@ export interface AuditEntry {
   detail: string;
   backupRef?: string;
   /** The worker's full prose reasoning + the supervisor verdict reason, for the
-   * Helmsman drill-down (why the agent did what it did). */
+   * Rigel drill-down (why the agent did what it did). */
   analysis?: string;
 }
 
 /** A remediation the agent could not perform (RBAC-blocked / destructive), left
- * for the human to run from Helmsman in the morning. */
+ * for the human to run from Rigel in the morning. */
 export interface QueuedSuggestion {
   at: string;
   incident: string;
@@ -42,7 +42,7 @@ export interface QueuedSuggestion {
    * with items persisted before this field existed. */
   fingerprint?: string;
   /** The structured action, when one exists (escalated MEDIUM items). Lets
-   * Helmsman render a runnable button → confirm sheet. Absent for destructive
+   * Rigel render a runnable button → confirm sheet. Absent for destructive
    * suggestions, which have no expressible action kind. */
   action?: SuggestedAction;
 }

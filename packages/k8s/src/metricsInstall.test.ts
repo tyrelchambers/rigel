@@ -13,8 +13,8 @@ describe("metricsBackendPort / resultingBackend", () => {
     expect(metricsBackendPort("prometheus")).toBe(9090);
   });
   test("resultingBackend points at the install service", () => {
-    expect(resultingBackend("victoriaMetrics", "helmsman-metrics")).toEqual({
-      namespace: "helmsman-metrics",
+    expect(resultingBackend("victoriaMetrics", "rigel-metrics")).toEqual({
+      namespace: "rigel-metrics",
       service: METRICS_SERVICE_NAME,
       port: 8428,
       flavor: "VictoriaMetrics",
@@ -24,7 +24,7 @@ describe("metricsBackendPort / resultingBackend", () => {
 
 describe("namespaceValid", () => {
   test("accepts RFC-1123 labels, rejects junk", () => {
-    expect(namespaceValid("helmsman-metrics")).toBe(true);
+    expect(namespaceValid("rigel-metrics")).toBe(true);
     expect(namespaceValid("monitoring")).toBe(true);
     expect(namespaceValid("-bad")).toBe(false);
     expect(namespaceValid("Bad_NS")).toBe(false);
@@ -33,7 +33,7 @@ describe("namespaceValid", () => {
 });
 
 describe("renderMetricsInstallManifest (VictoriaMetrics)", () => {
-  const yaml = renderMetricsInstallManifest("victoriaMetrics", "helmsman-metrics", true, 5);
+  const yaml = renderMetricsInstallManifest("victoriaMetrics", "rigel-metrics", true, 5);
 
   test("renders the expected resources", () => {
     expect(yaml).toContain("kind: Namespace");
@@ -45,7 +45,7 @@ describe("renderMetricsInstallManifest (VictoriaMetrics)", () => {
     expect(yaml).toContain("kind: PersistentVolumeClaim");
   });
 
-  test("uses the VM image, port 8428 and the helmsman-metrics service", () => {
+  test("uses the VM image, port 8428 and the rigel-metrics service", () => {
     expect(yaml).toContain("victoriametrics/victoria-metrics:");
     expect(yaml).toContain("-httpListenAddr=:8428");
     expect(yaml).toContain("port: 8428");
@@ -58,8 +58,8 @@ describe("renderMetricsInstallManifest (VictoriaMetrics)", () => {
 
   test("persistent → PVC of the requested size; ephemeral → emptyDir", () => {
     expect(yaml).toContain("storage: 5Gi");
-    expect(yaml).toContain("claimName: helmsman-metrics");
-    const ephemeral = renderMetricsInstallManifest("victoriaMetrics", "helmsman-metrics", false, 5);
+    expect(yaml).toContain("claimName: rigel-metrics");
+    const ephemeral = renderMetricsInstallManifest("victoriaMetrics", "rigel-metrics", false, 5);
     expect(ephemeral).toContain("emptyDir: {}");
     expect(ephemeral).not.toContain("kind: PersistentVolumeClaim");
   });

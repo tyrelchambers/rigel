@@ -213,7 +213,7 @@ describe("installedAppIDs", () => {
     ];
     const deployments = [
       {
-        metadata: { name: "mirror-foo", namespace: "apps", annotations: { "helmsman.dev/catalog-app": "foo" } },
+        metadata: { name: "mirror-foo", namespace: "apps", annotations: { "rigel.dev/catalog-app": "foo" } },
         spec: { template: { spec: { containers: [{ image: "registry.internal/team/foo:1.0" }] } } },
       },
     ];
@@ -227,10 +227,10 @@ describe("installedAppIDs", () => {
       { id: "baz", name: "Baz", tagline: "", description: "", category: "other", iconSystemName: "x", docsURL: "https://x", tags: [], matchImages: ["ghcr.io/baz/baz"], requirements: { cpuRequest: "100m", memoryRequest: "128Mi" }, persistence: false, exposesIngress: false, installPromptTemplate: "" },
     ];
     const statefulSets = [
-      { metadata: { name: "bar", namespace: "db", annotations: { "helmsman.dev/catalog-app": "bar" } }, spec: { template: { spec: { containers: [{ image: "private/bar:2" }] } } } },
+      { metadata: { name: "bar", namespace: "db", annotations: { "rigel.dev/catalog-app": "bar" } }, spec: { template: { spec: { containers: [{ image: "private/bar:2" }] } } } },
     ];
     const daemonSets = [
-      { metadata: { name: "baz", namespace: "mon", annotations: { "helmsman.dev/catalog-app": "baz" } }, spec: { template: { spec: { containers: [{ image: "private/baz:3" }] } } } },
+      { metadata: { name: "baz", namespace: "mon", annotations: { "rigel.dev/catalog-app": "baz" } }, spec: { template: { spec: { containers: [{ image: "private/baz:3" }] } } } },
     ];
     const ids = installedAppIDs(apps, [], statefulSets, daemonSets, []);
     expect(ids.has("bar")).toBe(true);
@@ -253,7 +253,7 @@ describe("installedAppIDs", () => {
       { id: "real", name: "Real", tagline: "", description: "", category: "other", iconSystemName: "x", docsURL: "https://x", tags: [], matchImages: ["ghcr.io/real/real"], requirements: { cpuRequest: "100m", memoryRequest: "128Mi" }, persistence: false, exposesIngress: false, installPromptTemplate: "" },
     ];
     const deployments = [
-      { metadata: { name: "mystery", namespace: "apps", annotations: { "helmsman.dev/catalog-app": "not-a-real-app" } }, spec: { template: { spec: { containers: [{ image: "x:1" }] } } } },
+      { metadata: { name: "mystery", namespace: "apps", annotations: { "rigel.dev/catalog-app": "not-a-real-app" } }, spec: { template: { spec: { containers: [{ image: "x:1" }] } } } },
     ];
     expect(() => installedAppIDs(apps, deployments, [], [], [])).not.toThrow();
     const ids = installedAppIDs(apps, deployments, [], [], []);

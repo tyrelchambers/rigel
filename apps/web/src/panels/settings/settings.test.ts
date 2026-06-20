@@ -22,7 +22,7 @@ beforeEach(() => {
 
 describe("self-host defaults (localStorage)", () => {
   it("keys by kubectl context", () => {
-    expect(selfHostKey("prod-cluster")).toBe("helmsman_selfhost_defaults_prod-cluster");
+    expect(selfHostKey("prod-cluster")).toBe("rigel_selfhost_defaults_prod-cluster");
   });
 
   it("round-trips and trims whitespace", () => {

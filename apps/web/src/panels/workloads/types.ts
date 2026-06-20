@@ -1,5 +1,5 @@
 // Workload types for the web Workloads panel. Mirrors the Swift
-// `Sources/Helmsman/Cluster/WorkloadTypes.swift` data models for StatefulSets,
+// `Sources/Rigel/Cluster/WorkloadTypes.swift` data models for StatefulSets,
 // DaemonSets, Jobs, and CronJobs. Kept local to the web app so the panel does
 // not depend on workspace-package linking for a type-only import (same pattern
 // as deployments/types.ts and pods/types.ts).

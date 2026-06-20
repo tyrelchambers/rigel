@@ -3,7 +3,7 @@ import type { Node, NodeCondition } from "./types";
 /**
  * Pure display helpers for the Nodes panel. Mirrors the Swift `Node`
  * computed properties (`isReady`, `role`) and the formatting in
- * `Sources/Helmsman/Panels/Nodes/`. See `docs/parity/nodes.md`.
+ * `Sources/Rigel/Panels/Nodes/`. See `docs/parity/nodes.md`.
  */
 
 /** True when `status.conditions[type=="Ready"].status == "True"`. */

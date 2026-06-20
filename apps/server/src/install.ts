@@ -94,7 +94,7 @@ export async function installHelm(
 ): Promise<RunResult> {
   let valuesFile: string | null = null;
   try {
-    valuesFile = `${process.env.TMPDIR ?? "/tmp"}/helmsman-values-${req.releaseName}-${Date.now()}.yaml`;
+    valuesFile = `${process.env.TMPDIR ?? "/tmp"}/rigel-values-${req.releaseName}-${Date.now()}.yaml`;
     await writeFile(valuesFile, req.values);
 
     const args = buildHelmArgs(req, context, valuesFile);

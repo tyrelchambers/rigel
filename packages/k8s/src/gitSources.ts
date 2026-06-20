@@ -1,14 +1,14 @@
-// GitOps source model + pure helpers. A "git source" points Helmsman at a
+// GitOps source model + pure helpers. A "git source" points Rigel at a
 // GitHub repo whose manifests are deployed on a manual "Sync now". Source
-// configs (non-secret) live in the `helmsman-git-sources` ConfigMap; PATs live
-// separately in the `helmsman-git-tokens` Secret (key = sanitized source name).
+// configs (non-secret) live in the `rigel-git-sources` ConfigMap; PATs live
+// separately in the `rigel-git-tokens` Secret (key = sanitized source name).
 //
 // Everything here is pure (no I/O) so it is unit-tested directly; the server's
 // git.ts does the cloning/applying and reads/writes the ConfigMap + Secret.
 
 /**
  * One independently-syncable manifest directory within a repo. The `name` is the
- * unit of sync, the `/tmp/helmsman-repos/<name>` workdir, and the provenance id
+ * unit of sync, the `/tmp/rigel-repos/<name>` workdir, and the provenance id
  * stamped on synced workloads — so it is globally unique across all repos.
  */
 export interface GitDeployment {
@@ -75,10 +75,10 @@ export function findByDeployment(
   return null;
 }
 
-export const GIT_SOURCES_CONFIGMAP = "helmsman-git-sources";
+export const GIT_SOURCES_CONFIGMAP = "rigel-git-sources";
 /** Account-level GitHub PAT (+ login) used to list repos, clone, push, and open PRs. */
-export const GITHUB_SECRET = "helmsman-github";
-const MANAGED_BY = { "app.kubernetes.io/managed-by": "helmsman" };
+export const GITHUB_SECRET = "rigel-github";
+const MANAGED_BY = { "app.kubernetes.io/managed-by": "rigel" };
 
 /** A repo from the GitHub API, normalized for the add-source picker. */
 export interface GithubRepo {
@@ -97,8 +97,8 @@ export interface RepoEntry {
 
 // Provenance annotations stamped on every synced resource so a running workload
 // can be mapped back to the source repo + manifest dir (used by the AI fix flow).
-export const SOURCE_REPO_ANNOTATION = "helmsman.dev/source-repo";
-export const SOURCE_PATH_ANNOTATION = "helmsman.dev/source-path";
+export const SOURCE_REPO_ANNOTATION = "rigel.dev/source-repo";
+export const SOURCE_PATH_ANNOTATION = "rigel.dev/source-path";
 
 /** `kubectl annotate key=value` pairs binding a workload to its synced deployment. */
 export function provenanceAnnotations(target: ResolvedTarget): string[] {
@@ -131,7 +131,7 @@ export function normalizeManifestPath(path: string): string {
   return segments.join("/");
 }
 
-/** Branch name for an AI-proposed fix PR: helmsman/fix-<slug>-<suffix>. */
+/** Branch name for an AI-proposed fix PR: rigel/fix-<slug>-<suffix>. */
 export function fixBranchName(title: string, suffix: string): string {
   const slug =
     title
@@ -141,7 +141,7 @@ export function fixBranchName(title: string, suffix: string): string {
       .replace(/^-+|-+$/g, "")
       .slice(0, 40)
       .replace(/-+$/, "") || "change";
-  return `helmsman/fix-${slug}-${suffix}`;
+  return `rigel/fix-${slug}-${suffix}`;
 }
 
 /**

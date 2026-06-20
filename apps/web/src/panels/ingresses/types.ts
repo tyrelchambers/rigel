@@ -1,5 +1,5 @@
 // Ingress type for the web Ingresses panel. Mirrors the Swift `Ingress` in
-// `Sources/Helmsman/Cluster/KubeTypes.swift` and the normative spec in
+// `Sources/Rigel/Cluster/KubeTypes.swift` and the normative spec in
 // `docs/parity/ingresses.md`. Ingresses are namespace-scoped.
 
 export interface ServiceBackendPort {

@@ -1,7 +1,7 @@
 // Shared log-stream logic for the Logs panel — used by BOTH the server (Bun,
 // when spawning `kubectl logs`) and the web app (TS, when rendering lines).
 // Mirrors the Swift LogLine / PodColorAssigner / LogLineParser / LogNoiseFilter
-// in Sources/Helmsman/. See docs/parity/logs.md for the normative spec.
+// in Sources/Rigel/. See docs/parity/logs.md for the normative spec.
 
 /** A single parsed log line. `id` is assigned by the consumer (per instance). */
 export interface ParsedLogLine {

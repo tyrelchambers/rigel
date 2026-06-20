@@ -1,7 +1,7 @@
-// Per-agent auth config, persisted to ~/.claude/helmsman-agents.json (0600).
+// Per-agent auth config, persisted to ~/.claude/rigel-agents.json (0600).
 //
 // Claude is special: its SUBSCRIPTION token keeps living in the existing
-// helmsman-oauth-token file (env CLAUDE_CODE_OAUTH_TOKEN still wins), reusing
+// rigel-oauth-token file (env CLAUDE_CODE_OAUTH_TOKEN still wins), reusing
 // chatConfig.ts. This file only stores the chosen auth method + any API keys.
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -24,7 +24,7 @@ interface AgentsConfig {
 }
 
 function configPath(): string {
-  return join(homedir(), ".claude", "helmsman-agents.json");
+  return join(homedir(), ".claude", "rigel-agents.json");
 }
 
 export async function readAgentsConfig(): Promise<AgentsConfig> {
