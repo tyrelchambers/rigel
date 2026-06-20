@@ -1,8 +1,7 @@
-import { ArrowUp, ArrowDown, RotateCcw, GitBranch } from "lucide-react";
+import { ArrowUp, ArrowDown, GitBranch } from "lucide-react";
 import { ListRow } from "@/panels/components/ListRow";
 import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
-import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { viewYaml, editYaml } from "@/store/yamlViewer";
 import type { ActionBlock } from "@/lib/api";
@@ -72,6 +71,7 @@ export function DeploymentRow({
       <ContextMenuItem onClick={() => askClaude(d, "Errors")}>Ask Claude: Errors</ContextMenuItem>
       <ContextMenuItem onClick={() => askClaude(d, "Logs")}>Ask Claude: Logs</ContextMenuItem>
       <ContextMenuItem onClick={() => askClaude(d, "Explain")}>Ask Claude: Explain</ContextMenuItem>
+      <ContextMenuItem onClick={() => askClaude(d, "Rollout")}>Ask Claude: Rollout</ContextMenuItem>
       <ContextMenuSeparator />
       <ContextMenuItem onClick={() => restart(d)}>Restart…</ContextMenuItem>
       <ContextMenuItem onClick={() => openScale(d)}>Scale…</ContextMenuItem>
@@ -225,20 +225,6 @@ export function DeploymentRow({
       <StatusBadge
         label={readyText(d)}
         variant={isReady(d) ? "healthy" : "error"}
-      />
-
-      {/* Action button strip — Errors / Logs / Explain / Rollout */}
-      <ActionButtonStrip
-        onErrors={(e) => { e.stopPropagation(); askClaude(d, "Errors"); }}
-        onLogs={(e) => { e.stopPropagation(); askClaude(d, "Logs"); }}
-        onExplain={(e) => { e.stopPropagation(); askClaude(d, "Explain"); }}
-        extra={[
-          {
-            label: "Rollout",
-            Icon: RotateCcw,
-            onClick: (e) => { e.stopPropagation(); askClaude(d, "Rollout"); },
-          },
-        ]}
       />
     </ListRow>
   );

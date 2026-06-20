@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { Trash2 } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
@@ -10,7 +9,6 @@ import { useMetricsHistory } from "@/lib/useMetricsHistory";
 import { ListRow } from "@/panels/components/ListRow";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { StatusBadge } from "@/panels/components/StatusBadge";
-import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { LoadingState } from "@/panels/components/LoadingState";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
@@ -257,29 +255,6 @@ export default function PodsPanel() {
                 </span>
               )}
 
-              {/* Action button strip — Errors / Logs / Explain + Delete */}
-              <ActionButtonStrip
-                onErrors={(e) => {
-                  e.stopPropagation();
-                  handoffToChat(buildHandoffPrompt("pod", pod.metadata.name, pod.metadata.namespace, "Errors"));
-                }}
-                onLogs={(e) => {
-                  e.stopPropagation();
-                  handoffToChat(buildHandoffPrompt("pod", pod.metadata.name, pod.metadata.namespace, "Logs"));
-                }}
-                onExplain={(e) => {
-                  e.stopPropagation();
-                  handoffToChat(buildHandoffPrompt("pod", pod.metadata.name, pod.metadata.namespace, "Explain"));
-                }}
-                extra={[
-                  {
-                    label: "Delete",
-                    Icon: Trash2,
-                    onClick: (e) => { e.stopPropagation(); handleDelete(pod); },
-                    destructive: true,
-                  },
-                ]}
-              />
             </ListRow>
           );
         })}
