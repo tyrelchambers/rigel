@@ -88,47 +88,6 @@ export function StatusPill({ enabled }: { enabled: boolean }) {
 }
 
 // ---------------------------------------------------------------------------
-// Tab pill
-// ---------------------------------------------------------------------------
-
-export function TabPill({
-  active,
-  onClick,
-  children,
-  badge,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-  badge?: number;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors",
-        active
-          ? "bg-primary text-primary-foreground"
-          : "text-muted-foreground hover:bg-muted hover:text-foreground",
-      )}
-    >
-      {children}
-      {badge != null && badge > 0 && (
-        <span
-          className={cn(
-            "rounded-full px-1.5 text-[10px] font-semibold tabular-nums",
-            active ? "bg-primary-foreground/20" : "bg-muted-foreground/25",
-          )}
-        >
-          {badge}
-        </span>
-      )}
-    </button>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // inputClass — shared form input styling
 // ---------------------------------------------------------------------------
 

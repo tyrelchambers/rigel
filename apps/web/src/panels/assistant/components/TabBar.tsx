@@ -1,8 +1,9 @@
-// TabBar — always-rendered pill navigation.
-// Skeleton pills → "Set up" pill → real 5 pills, per the loading matrix.
+// TabBar — always-rendered tab navigation on the shared segmented rail.
+// Skeleton rail → "Set up" pill → real 5-tab rail, per the loading matrix.
 
-import { useAssistantCtx } from "../AssistantContext";
-import { Bar, TabPill } from "./primitives";
+import { SegmentedTabs, type SegmentedTab } from "@/components/ui/SegmentedTabs";
+import { useAssistantCtx, type TabKey } from "../AssistantContext";
+import { Bar } from "./primitives";
 
 export function TabBar() {
   const { phase, d, tab, setTab } = useAssistantCtx();
@@ -10,12 +11,12 @@ export function TabBar() {
   const audit = d.clusterState?.audit ?? [];
   const queue = d.clusterState?.queue ?? [];
 
-  // Loading — 5 skeleton pills.
+  // Loading — skeleton shaped like the segmented rail.
   if (phase === "loading") {
     return (
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="inline-flex gap-[3px] rounded-[10px] p-[3px]" style={{ background: "rgba(255,255,255,0.04)" }}>
         {[1, 2, 3, 4, 5].map((i) => (
-          <Bar key={i} className="h-7 w-20 rounded-full" />
+          <Bar key={i} className="h-[30px] w-20 rounded-md" />
         ))}
       </div>
     );
@@ -32,35 +33,17 @@ export function TabBar() {
     );
   }
 
-  // Installed — 5 real pills. Badges only when ready.state.
+  // Installed — the segmented rail. Badges only when ready.state.
   const needsBadge = ready.state ? queue.length + d.liveIssues.length : undefined;
   const activityBadge = ready.state ? audit.length : undefined;
 
-  return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <TabPill active={tab === "overview"} onClick={() => setTab("overview")}>
-        Overview
-      </TabPill>
-      <TabPill
-        active={tab === "needs"}
-        onClick={() => setTab("needs")}
-        badge={needsBadge}
-      >
-        Needs you
-      </TabPill>
-      <TabPill active={tab === "rules"} onClick={() => setTab("rules")}>
-        Rules
-      </TabPill>
-      <TabPill
-        active={tab === "activity"}
-        onClick={() => setTab("activity")}
-        badge={activityBadge}
-      >
-        Activity
-      </TabPill>
-      <TabPill active={tab === "settings"} onClick={() => setTab("settings")}>
-        Settings
-      </TabPill>
-    </div>
-  );
+  const tabs: SegmentedTab[] = [
+    { id: "overview", label: "Overview" },
+    { id: "needs", label: "Needs you", badge: needsBadge },
+    { id: "rules", label: "Rules" },
+    { id: "activity", label: "Activity", badge: activityBadge },
+    { id: "settings", label: "Settings" },
+  ];
+
+  return <SegmentedTabs tabs={tabs} active={tab} onChange={(id) => setTab(id as TabKey)} />;
 }
