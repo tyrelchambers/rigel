@@ -264,6 +264,9 @@ function createWindow(port: number): BrowserWindow {
   // hold a stale BrowserWindow handle after it is closed.
   win.on("closed", () => { if (mainWindow === win) mainWindow = null; });
 
+  // Open maximized (fill the screen) on load. Skipped for the headless smoke run.
+  if (!SMOKE) win.maximize();
+
   void win.loadURL(`http://127.0.0.1:${port}`);
   return win;
 }
