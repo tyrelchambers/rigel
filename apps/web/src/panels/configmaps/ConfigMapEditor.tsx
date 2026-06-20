@@ -9,13 +9,11 @@ import {
   seedConfigMapRows,
 } from "@helmsman/k8s";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetFooter,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { KeyValueEditor } from "../components/KeyValueEditor";
 
@@ -116,16 +114,16 @@ export function ConfigMapEditor({ target, open, onClose, onApplied }: ConfigMapE
   }
 
   return (
-    <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <SheetContent side="bottom" className="max-h-[92vh] overflow-auto">
-        <SheetHeader>
-          <SheetTitle>{isEdit ? `Edit ${name}` : "New ConfigMap"}</SheetTitle>
-          <SheetDescription>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="p-0 gap-0 max-w-3xl max-h-[84vh] overflow-auto">
+        <div className="flex flex-col gap-0.5 p-4">
+          <DialogTitle>{isEdit ? `Edit ${name}` : "New ConfigMap"}</DialogTitle>
+          <DialogDescription>
             {isEdit
               ? "Modify plaintext data. Name, namespace, and any binary data are preserved."
               : "Create a ConfigMap with plaintext key/value data. Multi-line values are supported."}
-          </SheetDescription>
-        </SheetHeader>
+          </DialogDescription>
+        </div>
 
         <div className="space-y-4 px-4 py-2">
           {/* Identity */}
@@ -186,15 +184,15 @@ export function ConfigMapEditor({ target, open, onClose, onApplied }: ConfigMapE
           )}
         </div>
 
-        <SheetFooter>
+        <div className="mt-auto flex flex-col gap-2 p-4">
           <Button variant="outline" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
           <Button onClick={handleApply} disabled={busy || !valid}>
             {busy ? "Applying…" : isEdit ? "Apply changes" : "Create"}
           </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

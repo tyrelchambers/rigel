@@ -15,13 +15,11 @@ import {
   decodeSecretValue,
 } from "@helmsman/k8s";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetFooter,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { KeyValueEditor } from "../components/KeyValueEditor";
 
@@ -200,16 +198,16 @@ export function SecretEditor({ target, open, onClose, onApplied }: SecretEditorP
   }
 
   return (
-    <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <SheetContent side="bottom" className="max-h-[92vh] overflow-auto">
-        <SheetHeader>
-          <SheetTitle>{isEdit ? `Edit ${name}` : "New Secret"}</SheetTitle>
-          <SheetDescription>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="p-0 gap-0 max-w-3xl max-h-[84vh] overflow-auto">
+        <div className="flex flex-col gap-0.5 p-4">
+          <DialogTitle>{isEdit ? `Edit ${name}` : "New Secret"}</DialogTitle>
+          <DialogDescription>
             {isEdit
               ? "Modify the secret data. Name, namespace, and type are fixed; binary values are read-only."
               : "Create a Secret. Plaintext values are base64-encoded into the manifest on apply."}
-          </SheetDescription>
-        </SheetHeader>
+          </DialogDescription>
+        </div>
 
         <div className="space-y-4 px-4 py-2">
           {/* Metadata */}
@@ -340,16 +338,16 @@ export function SecretEditor({ target, open, onClose, onApplied }: SecretEditorP
           )}
         </div>
 
-        <SheetFooter>
+        <div className="mt-auto flex flex-col gap-2 p-4">
           <Button variant="outline" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
           <Button onClick={handleApply} disabled={busy || !valid}>
             {busy ? "Applying…" : isEdit ? "Apply changes" : "Create"}
           </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

@@ -15,13 +15,11 @@ import {
   type IngressTLSInput,
 } from "@helmsman/k8s";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetFooter,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { KeyValueEditor } from "../components/KeyValueEditor";
 import { YamlEditor } from "@/components/YamlEditorLazy";
@@ -159,14 +157,14 @@ export function IngressEditor({ target, open, onClose, onApplied }: IngressEdito
   }
 
   return (
-    <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <SheetContent side="bottom" className="max-h-[92vh] overflow-auto">
-        <SheetHeader>
-          <SheetTitle>Edit {name}</SheetTitle>
-          <SheetDescription>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="p-0 gap-0 max-w-3xl max-h-[84vh] overflow-auto">
+        <div className="flex flex-col gap-0.5 p-4">
+          <DialogTitle>Edit {name}</DialogTitle>
+          <DialogDescription>
             Modify the ingress's class, rules, TLS, and annotations. Name and namespace are preserved.
-          </SheetDescription>
-        </SheetHeader>
+          </DialogDescription>
+        </div>
 
         {/* Form ⇄ YAML toggle */}
         <div className="flex items-center gap-1 px-4">
@@ -341,12 +339,12 @@ export function IngressEditor({ target, open, onClose, onApplied }: IngressEdito
           </pre>
         )}
 
-        <SheetFooter>
+        <div className="mt-auto flex flex-col gap-2 p-4">
           <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
           <Button onClick={handleApply} disabled={busy || !valid}>{busy ? "Applying…" : "Apply changes"}</Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
