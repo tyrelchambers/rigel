@@ -12,6 +12,7 @@
 import { app, BrowserWindow, ipcMain, nativeImage, shell, utilityProcess, type UtilityProcess } from "electron";
 import { createServer } from "node:net";
 import { join } from "node:path";
+import { readFileSync, writeFileSync } from "node:fs";
 import { InstallStore } from "./installStore";
 import { submitSignup, deliver } from "./signup";
 
@@ -63,6 +64,47 @@ function findFreePort(): Promise<number> {
       }
     });
   });
+}
+
+// ── Stable window origin ──────────────────────────────────────────────────────
+// The renderer loads http://127.0.0.1:<port>, and the browser partitions
+// localStorage by origin (which includes the port). If we picked a fresh
+// ephemeral port every launch the origin would change each time, wiping all
+// persisted UI state (sidebar collapse, open nav groups, chat/terminal toggles).
+// So we remember the last port and reuse it whenever it's still free; only when
+// it's taken do we fall back to a new free port. Persisted in userData.
+function portFile(): string {
+  return join(app.getPath("userData"), "rigel-window.json");
+}
+function loadPreferredPort(): number | null {
+  try {
+    const { port } = JSON.parse(readFileSync(portFile(), "utf8")) as { port?: number };
+    return typeof port === "number" && port > 0 ? port : null;
+  } catch {
+    return null;
+  }
+}
+function savePreferredPort(port: number): void {
+  try {
+    writeFileSync(portFile(), JSON.stringify({ port }), { mode: 0o600 });
+  } catch {
+    // ignore quota / permission errors — we just lose origin stability
+  }
+}
+/** True if `port` can be bound on loopback right now. */
+function portIsFree(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const srv = createServer();
+    srv.unref();
+    srv.once("error", () => resolve(false));
+    srv.listen(port, "127.0.0.1", () => srv.close(() => resolve(true)));
+  });
+}
+/** Reuse the last port if it's free (stable origin), else acquire a new one. */
+async function resolveServerPort(): Promise<number> {
+  const preferred = loadPreferredPort();
+  if (preferred && (await portIsFree(preferred))) return preferred;
+  return findFreePort();
 }
 
 // ── macOS PATH fix ──────────────────────────────────────────────────────────
@@ -248,7 +290,8 @@ async function boot(): Promise<void> {
     submitSignup(installStore, fetch, SIGNUP_ENDPOINT, SIGNUP_APP_KEY, data.name, data.email, app.getVersion(), process.platform),
   );
 
-  serverPort = await findFreePort();
+  serverPort = await resolveServerPort();
+  savePreferredPort(serverPort); // remember it so the origin stays stable next launch
   console.log(`[helmsman] starting server on 127.0.0.1:${serverPort}`);
   serverProc = forkServer(serverPort);
 
