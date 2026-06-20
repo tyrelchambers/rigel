@@ -8,4 +8,6 @@ contextBridge.exposeInMainWorld("rigel", {
   /** Record + deliver the signup. Resolves once captured locally (delivery retries in the background). */
   submitSignup: (data: { name: string; email: string }): Promise<{ ok: true }> =>
     ipcRenderer.invoke("rigel:submit-signup", data),
+  openChartFile: (): Promise<{ canceled: boolean; path?: string }> =>
+    ipcRenderer.invoke("rigel:open-chart-file"),
 });
