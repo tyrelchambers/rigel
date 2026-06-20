@@ -275,6 +275,13 @@ spec:
               value: "${c.confirmPolls}"
             - name: NAMESPACES
               value: "${c.namespaces}"
+            # State/config/backups live in the install namespace (that's where
+            # the RBAC Role and the pre-created ConfigMaps are, and where the web
+            # panel reads them). Without this the agent defaults to "default" and,
+            # when installed elsewhere, can never write its state — leaving the
+            # panel stuck on "Setting up the assistant…".
+            - name: STATE_NAMESPACE
+              value: "${c.installNamespace}"
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
