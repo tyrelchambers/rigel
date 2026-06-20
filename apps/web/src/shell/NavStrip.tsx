@@ -7,6 +7,7 @@
  */
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   LayoutGrid,
   Sparkles,
@@ -154,50 +155,59 @@ function NavButton({ panelKey, collapsed = false }: NavButtonProps) {
   const Icon = meta.icon;
 
   return (
-    <NavLink
-      to={meta.route}
-      title={meta.title}
-      className={({ isActive }) =>
-        [
-          collapsed
-            ? "flex items-center justify-center h-8 w-full rounded-md transition-colors group"
-            : "flex items-center gap-2.5 px-2.5 h-8 w-full rounded-md transition-colors group",
-          isActive
-            ? "nav-btn-active"
-            : "nav-btn-idle hover:bg-[#1B1C1F]",
-        ].join(" ")
-      }
-    >
-      {({ isActive }) => (
-        <>
-          <Icon
-            size={14}
-            strokeWidth={isActive ? 2 : 1.75}
-            style={{
-              color: isActive ? "var(--accent-primary)" : "var(--fg-tertiary)",
-              flexShrink: 0,
-              width: 20,
-            }}
-            className={!isActive ? "group-hover:!text-[#A1A1AA]" : ""}
-          />
-          {!collapsed && (
-            <span
-              style={{
-                fontSize: "13px",
-                color: isActive ? "var(--fg-primary)" : "var(--fg-secondary)",
-                fontWeight: isActive ? 600 : 500,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-              className={!isActive ? "group-hover:!text-white" : ""}
-            >
-              {meta.title}
-            </span>
-          )}
-        </>
-      )}
-    </NavLink>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <NavLink
+            to={meta.route}
+            aria-label={meta.title}
+            className={({ isActive }) =>
+              [
+                collapsed
+                  ? "flex items-center justify-center h-8 w-full rounded-md transition-colors group"
+                  : "flex items-center gap-2.5 px-2.5 h-8 w-full rounded-md transition-colors group",
+                isActive
+                  ? "nav-btn-active"
+                  : "nav-btn-idle hover:bg-[#1B1C1F]",
+              ].join(" ")
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <Icon
+                  size={14}
+                  strokeWidth={isActive ? 2 : 1.75}
+                  style={{
+                    color: isActive ? "var(--accent-primary)" : "var(--fg-tertiary)",
+                    flexShrink: 0,
+                    width: 20,
+                  }}
+                  className={!isActive ? "group-hover:!text-[#A1A1AA]" : ""}
+                />
+                {!collapsed && (
+                  <span
+                    style={{
+                      fontSize: "13px",
+                      color: isActive ? "var(--fg-primary)" : "var(--fg-secondary)",
+                      fontWeight: isActive ? 600 : 500,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                    className={!isActive ? "group-hover:!text-white" : ""}
+                  >
+                    {meta.title}
+                  </span>
+                )}
+              </>
+            )}
+          </NavLink>
+        }
+      />
+      <TooltipContent side="right" sideOffset={8}>
+        {meta.title}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -242,6 +252,7 @@ export default function NavStrip({
           background-color: rgba(56, 189, 248, 0.15);
         }
       `}</style>
+      <TooltipProvider delay={0}>
       <nav
         style={{
           width: collapsed ? 52 : 200,
@@ -325,6 +336,7 @@ export default function NavStrip({
           })}
         </div>
       </nav>
+      </TooltipProvider>
     </>
   );
 }
