@@ -32,6 +32,8 @@ export interface Config {
   stateNamespace: string;
   auditMaxEntries: number;
   maxBackups: number;
+  /** TTL backstop for queued suggestions we can't actively re-validate. */
+  queueTtlMs: number;
 }
 
 function num(name: string, fallback: number): number {
@@ -69,6 +71,7 @@ export function loadConfig(): Config {
     stateNamespace: str("STATE_NAMESPACE", "default"),
     auditMaxEntries: num("AUDIT_MAX_ENTRIES", 200),
     maxBackups: num("MAX_BACKUPS", 50),
+    queueTtlMs: num("QUEUE_TTL_HOURS", 48) * 3_600_000,
   };
 }
 

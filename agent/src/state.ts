@@ -37,10 +37,57 @@ export interface QueuedSuggestion {
   incident: string;
   suggestion: string;
   reason: string;
+  /** Stable incident identity (detector `fingerprint`) so the queue can be
+   * re-validated each poll and moot items auto-cleared. Optional for back-compat
+   * with items persisted before this field existed. */
+  fingerprint?: string;
   /** The structured action, when one exists (escalated MEDIUM items). Lets
    * Helmsman render a runnable button → confirm sheet. Absent for destructive
    * suggestions, which have no expressible action kind. */
   action?: SuggestedAction;
+}
+
+export interface QueueReconcileResult {
+  kept: QueuedSuggestion[];
+  cleared: { item: QueuedSuggestion; reason: string }[];
+}
+
+/**
+ * Re-validate the approval queue against live detection so stale suggestions
+ * don't linger. An item is moot when its incident fingerprint is no longer
+ * present AND detection for that incident kind actually ran this tick — so an
+ * empty/failed detection never wrongly clears the queue. Items we can't confirm
+ * (no fingerprint, or their kind wasn't checked this tick) are kept until a long
+ * TTL backstop expires them. Pure — returns the partition, mutates nothing.
+ */
+export function reconcileQueue(
+  queue: QueuedSuggestion[],
+  present: ReadonlySet<string>,
+  checkedKinds: ReadonlySet<string>,
+  nowMs: number,
+  ttlMs: number,
+): QueueReconcileResult {
+  const kept: QueuedSuggestion[] = [];
+  const cleared: { item: QueuedSuggestion; reason: string }[] = [];
+  for (const item of queue) {
+    const fp = item.fingerprint;
+    if (fp && present.has(fp)) {
+      kept.push(item); // condition still active — keep awaiting approval
+      continue;
+    }
+    const kind = fp ? fp.split("|")[0] : undefined;
+    if (kind && checkedKinds.has(kind)) {
+      cleared.push({ item, reason: "auto-cleared: the underlying condition is no longer present" });
+      continue;
+    }
+    const ageMs = nowMs - Date.parse(item.at);
+    if (Number.isFinite(ageMs) && ageMs > ttlMs) {
+      cleared.push({ item, reason: `auto-cleared: stale (older than ${Math.round(ttlMs / 3_600_000)}h, unverified)` });
+      continue;
+    }
+    kept.push(item);
+  }
+  return { kept, cleared };
 }
 
 export interface AgentStatus {

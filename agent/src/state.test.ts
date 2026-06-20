@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { appendAudit, capBackups, emptyState, type AuditEntry } from "./state.js";
+import { appendAudit, capBackups, emptyState, reconcileQueue, type AuditEntry, type QueuedSuggestion } from "./state.js";
 
 function entry(at: string, fingerprint: string): AuditEntry {
   return {
@@ -51,5 +51,56 @@ describe("capBackups", () => {
 
   test("a cap of zero drops everything", () => {
     expect(capBackups({ "2026-01-01_a": "1" }, 0)).toEqual({});
+  });
+});
+
+describe("reconcileQueue", () => {
+  const HOUR = 3_600_000;
+  const NOW = Date.parse("2026-06-19T12:00:00Z");
+  const TTL = 48 * HOUR;
+
+  function q(over: Partial<QueuedSuggestion>): QueuedSuggestion {
+    return { at: "2026-06-19T11:00:00Z", incident: "i", suggestion: "s", reason: "r", ...over };
+  }
+
+  const bothKinds = new Set(["unhealthyPod", "degradedDeployment"]);
+
+  test("keeps an item whose incident is still present", () => {
+    const item = q({ fingerprint: "unhealthyPod|default|web|CrashLoopBackOff" });
+    const r = reconcileQueue([item], new Set([item.fingerprint!]), bothKinds, NOW, TTL);
+    expect(r.kept).toEqual([item]);
+    expect(r.cleared).toEqual([]);
+  });
+
+  test("clears an item whose incident cleared and whose kind was checked", () => {
+    const item = q({ fingerprint: "unhealthyPod|default|web|CrashLoopBackOff" });
+    const r = reconcileQueue([item], new Set(), bothKinds, NOW, TTL);
+    expect(r.kept).toEqual([]);
+    expect(r.cleared).toHaveLength(1);
+    expect(r.cleared[0]!.reason).toMatch(/no longer present/);
+  });
+
+  test("does NOT clear when detection for that kind did not run this tick", () => {
+    const item = q({ fingerprint: "degradedDeployment|default|api|Degraded" });
+    // Only pods were checked; the deployment detection didn't run → can't confirm.
+    const r = reconcileQueue([item], new Set(), new Set(["unhealthyPod"]), NOW, TTL);
+    expect(r.kept).toEqual([item]);
+    expect(r.cleared).toEqual([]);
+  });
+
+  test("TTL backstop clears an unverifiable item older than the TTL", () => {
+    const old = q({ fingerprint: "degradedDeployment|default|api|Degraded", at: "2026-06-16T11:00:00Z" });
+    const r = reconcileQueue([old], new Set(), new Set(["unhealthyPod"]), NOW, TTL);
+    expect(r.kept).toEqual([]);
+    expect(r.cleared[0]!.reason).toMatch(/stale/);
+  });
+
+  test("keeps a legacy item without a fingerprint until the TTL", () => {
+    const recent = q({ at: "2026-06-19T11:00:00Z" }); // no fingerprint, recent
+    const old = q({ at: "2026-06-16T11:00:00Z" }); // no fingerprint, stale
+    const r = reconcileQueue([recent, old], new Set(), bothKinds, NOW, TTL);
+    expect(r.kept).toEqual([recent]);
+    expect(r.cleared).toHaveLength(1);
+    expect(r.cleared[0]!.item).toBe(old);
   });
 });

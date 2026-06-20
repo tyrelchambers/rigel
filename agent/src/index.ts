@@ -28,6 +28,7 @@ import { CircuitBreaker, SpendTracker } from "./guardrails.js";
 import {
   appendAudit,
   readState,
+  reconcileQueue,
   storeBackup,
   writeState,
   type AssistantState,
@@ -58,7 +59,7 @@ function itemsOf(raw: unknown): Record<string, unknown>[] {
   return Array.isArray(list?.items) ? (list.items as Record<string, unknown>[]) : [];
 }
 
-async function detectAll(cfg: Config): Promise<{ incidents: Incident[]; pods: Record<string, unknown>[]; deps: Record<string, unknown>[] }> {
+async function detectAll(cfg: Config): Promise<{ incidents: Incident[]; pods: Record<string, unknown>[]; deps: Record<string, unknown>[]; podsOk: boolean; depsOk: boolean }> {
   const [podsRes, depsRes] = await Promise.all([
     kubectl(["get", "pods", ...nsArgs(cfg), "-o", "json"]),
     kubectl(["get", "deployments", ...nsArgs(cfg), "-o", "json"]),
@@ -79,7 +80,7 @@ async function detectAll(cfg: Config): Promise<{ incidents: Incident[]; pods: Re
     const allow = new Set(cfg.namespaces);
     incidents = incidents.filter((i) => i.namespace === "" || allow.has(i.namespace));
   }
-  return { incidents, pods, deps };
+  return { incidents, pods, deps, podsOk: podsRes.code === 0, depsOk: depsRes.code === 0 };
 }
 
 interface LoopState {
@@ -124,6 +125,31 @@ async function tick(
   // no spend, no action on those fingerprints.
   const detection = await detectAll(cfg);
   const incidents = detection.incidents.filter((i) => !rc.silenced.has(fingerprint(i)));
+
+  // Re-validate the approval queue against live detection: auto-clear queued
+  // suggestions whose incident has cleared (or whose resource is gone), so the
+  // queue stays trustworthy. Free (no AI spend) — runs even when budget-capped.
+  {
+    const presentNow = new Set(incidents.map(fingerprint));
+    const checkedKinds = new Set<string>();
+    if (detection.podsOk) checkedKinds.add("unhealthyPod");
+    if (detection.depsOk) checkedKinds.add("degradedDeployment");
+    const recon = reconcileQueue(state.queue, presentNow, checkedKinds, now, cfg.queueTtlMs);
+    if (recon.cleared.length > 0) {
+      state = { ...state, queue: recon.kept };
+      for (const c of recon.cleared) {
+        state = appendAudit(
+          state,
+          {
+            at: ts, fingerprint: c.item.fingerprint ?? "", incident: c.item.incident,
+            proposal: c.item.suggestion, tier: "low", outcome: "skipped", detail: c.reason,
+          },
+          cfg.auditMaxEntries,
+        );
+      }
+      log(`reconcile: auto-cleared ${recon.cleared.length} moot queued item(s)`);
+    }
+  }
 
   // Custom alert rules — deterministic, model-less, free-riding the fetch above.
   // Runs before the spend-cap guard so alerts still fire even when AI budget is
@@ -228,7 +254,7 @@ async function tick(
     const tierStr = tier === RiskTier.Medium ? "medium" : "low";
 
     if (tier === RiskTier.Blocked) {
-      state = queue(state, cfg, ts, describe(incident), action.label, "destructive — RBAC-blocked; run manually in Helmsman");
+      state = queue(state, cfg, ts, fp, describe(incident), action.label, "destructive — RBAC-blocked; run manually in Helmsman");
       state = record(state, cfg, {
         at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
         tier: "blocked", outcome: "queued", detail: "queued for human (destructive)", analysis: truncate(analysis),
@@ -242,7 +268,7 @@ async function tick(
     let execVerdict: "auto" | "approved" = "auto";
     if (tier === RiskTier.Medium) {
       if (!spend.canSpend()) {
-        state = queue(state, cfg, ts, describe(incident), action.label, "medium-risk — spend cap reached before supervision", action);
+        state = queue(state, cfg, ts, fp, describe(incident), action.label, "medium-risk — spend cap reached before supervision", action);
         state = record(state, cfg, {
           at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
           tier: "medium", verdict: "escalated", outcome: "queued", detail: "queued (spend cap before supervision)",
@@ -256,7 +282,7 @@ async function tick(
         spend.add(sup.costUsd);
       } catch (e) {
         // Fail closed: supervisor unreachable / malformed verdict → never act.
-        state = queue(state, cfg, ts, describe(incident), action.label, "medium-risk — supervisor error (fail-closed)", action);
+        state = queue(state, cfg, ts, fp, describe(incident), action.label, "medium-risk — supervisor error (fail-closed)", action);
         state = record(state, cfg, {
           at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
           tier: "medium", verdict: "escalated", outcome: "queued", detail: `supervisor failed (fail-closed): ${String(e)}`,
@@ -272,7 +298,7 @@ async function tick(
         continue;
       }
       if (sup.verdict.decision === "escalate") {
-        state = queue(state, cfg, ts, describe(incident), action.label, `medium-risk — Opus escalated: ${sup.verdict.reason}`, action);
+        state = queue(state, cfg, ts, fp, describe(incident), action.label, `medium-risk — Opus escalated: ${sup.verdict.reason}`, action);
         state = record(state, cfg, {
           at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
           tier: "medium", verdict: "escalated", outcome: "queued",
@@ -290,7 +316,7 @@ async function tick(
     // Opus-approved MEDIUM.
     if (decideAutonomy(rc.mode, rc.window, minOfDay(now)) === "queue") {
       const why = rc.mode === "advisory" ? "advisory mode — suggestion only" : "outside quiet-hours window — queued for approval";
-      state = queue(state, cfg, ts, describe(incident), action.label, why, action);
+      state = queue(state, cfg, ts, fp, describe(incident), action.label, why, action);
       state = record(state, cfg, {
         at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
         command: previewCommand(action), tier: tierStr, outcome: "queued", detail: why, analysis: truncate(analysis),
@@ -494,6 +520,7 @@ function queue(
   state: AssistantState,
   cfg: Config,
   at: string,
+  fingerprint: string,
   incident: string,
   suggestion: string,
   reason: string,
@@ -501,7 +528,7 @@ function queue(
 ): AssistantState {
   const exists = state.queue.some((q) => q.incident === incident && q.suggestion === suggestion);
   if (exists) return state;
-  return { ...state, queue: [{ at, incident, suggestion, reason, action }, ...state.queue].slice(0, cfg.auditMaxEntries) };
+  return { ...state, queue: [{ at, fingerprint, incident, suggestion, reason, action }, ...state.queue].slice(0, cfg.auditMaxEntries) };
 }
 
 function describe(i: Incident): string {
