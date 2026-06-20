@@ -33,6 +33,7 @@ import {
   ChevronDown,
   AppWindow,
   FilePlus2,
+  Package,
 } from "lucide-react";
 // Note: MessageSquare (chat) and Activity (health) are intentionally absent —
 // chat is the always-visible right pane (not a route), and health is nav-hidden.
@@ -88,6 +89,7 @@ export const PANEL_META: Record<string, PanelMeta> = {
   events:       { route: "/events",       title: "Events",       subtitle: "Recent activity",       icon: Bell },
   logs:         { route: "/logs",         title: "Logs",         subtitle: "Container output",      icon: ScrollText },
   catalog:      { route: "/catalog",      title: "Apps",         subtitle: "Install apps",          icon: AppWindow },
+  helm:         { route: "/helm",         title: "Helm",         subtitle: "Releases & charts",     icon: Package },
   apply:        { route: "/apply",        title: "Apply YAML",   subtitle: "Create from manifest",  icon: FilePlus2 },
   gitops:       { route: "/gitops",       title: "GitOps",       subtitle: "Deploy from Git",       icon: GitBranch },
   accounts:     { route: "/accounts",     title: "Accounts",     subtitle: "Registry credentials",  icon: UserRoundKey },
@@ -112,7 +114,7 @@ export const NAV_GROUPS: NavGroup[] = [
   { title: "Cluster", panels: ["namespaces", "nodes", "connectivity", "rbac"] },
   { title: "Security & Certs", panels: ["certificates"] },
   { title: "Observability", panels: ["events", "logs"] },
-  { title: "Self-host", panels: ["catalog"] },
+  { title: "Self-host", panels: ["catalog", "helm"] },
   { title: "Tools", panels: ["apply", "gitops"] },
   { title: "System", panels: ["accounts", "settings"] },
 ];

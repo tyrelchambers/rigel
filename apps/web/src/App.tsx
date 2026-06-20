@@ -25,6 +25,7 @@ import SettingsPanel from "./panels/settings/SettingsPanel";
 import AccountsPanel from "./panels/accounts/AccountsPanel";
 import ApplyYamlPanel from "./panels/apply/ApplyYamlPanel";
 import GitOpsPanel from "./panels/gitops/GitOpsPanel";
+import HelmPanel from "./panels/helm/HelmPanel";
 import { TerminalDrawer, TOGGLE_TERMINAL_EVENT } from "@/shell/TerminalDrawer";
 import { ResourceYamlViewer } from "@/components/ResourceYamlViewer";
 import { connectCluster } from "@/lib/ws";
@@ -250,6 +251,7 @@ export default function App() {
               <Route path="/rbac" element={<RbacPanel />} />
               <Route path="/certificates" element={<CertificatesPanel />} />
               <Route path="/catalog" element={<PaddedX><CatalogPanel /></PaddedX>} />
+              <Route path="/helm" element={<HelmPanel />} />
               <Route path="/apply" element={<ApplyYamlPanel />} />
               <Route path="/gitops" element={<GitOpsPanel />} />
               <Route path="/accounts" element={<Padded><AccountsPanel /></Padded>} />
