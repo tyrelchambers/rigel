@@ -1,6 +1,6 @@
-# Helmsman marketing — static Astro site, built with pnpm and served by nginx.
+# Rigel marketing — static Astro site, built with pnpm and served by nginx.
 # Build context is the repo ROOT (the pnpm workspace), like the web image:
-#   docker build -f apps/marketing/Dockerfile -t helmsman-marketing .
+#   docker build -f apps/marketing/Dockerfile -t rigel-marketing .
 
 # ---- Stage 1: build the static site ----
 FROM node:22-slim AS build

@@ -104,7 +104,7 @@ export async function writeState(name: string, namespace: string, state: Assista
   const manifest = {
     apiVersion: "v1",
     kind: "ConfigMap",
-    metadata: { name, namespace, labels: { "app.kubernetes.io/managed-by": "helmsman-assistant" } },
+    metadata: { name, namespace, labels: { "app.kubernetes.io/managed-by": "rigel-assistant" } },
     data: { [STATE_KEY]: JSON.stringify(state) },
   };
   await kubectlApply(JSON.stringify(manifest));
@@ -132,7 +132,7 @@ export async function storeBackup(
   const manifest = {
     apiVersion: "v1",
     kind: "ConfigMap",
-    metadata: { name, namespace, labels: { "app.kubernetes.io/managed-by": "helmsman-assistant" } },
+    metadata: { name, namespace, labels: { "app.kubernetes.io/managed-by": "rigel-assistant" } },
     data: capBackups(data, maxBackups),
   };
   await kubectlApply(JSON.stringify(manifest));

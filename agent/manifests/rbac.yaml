@@ -13,18 +13,18 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: helmsman-assistant
+  name: rigel-assistant
   namespace: default
   labels:
-    app.kubernetes.io/name: helmsman-assistant
-    app.kubernetes.io/managed-by: helmsman-assistant
+    app.kubernetes.io/name: rigel-assistant
+    app.kubernetes.io/managed-by: rigel-assistant
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: helmsman-assistant
+  name: rigel-assistant
   labels:
-    app.kubernetes.io/managed-by: helmsman-assistant
+    app.kubernetes.io/managed-by: rigel-assistant
 rules:
   # ── broad read for diagnosis — secrets deliberately omitted ──
   - apiGroups: [""]
@@ -61,16 +61,16 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: helmsman-assistant
+  name: rigel-assistant
   labels:
-    app.kubernetes.io/managed-by: helmsman-assistant
+    app.kubernetes.io/managed-by: rigel-assistant
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: helmsman-assistant
+  name: rigel-assistant
 subjects:
   - kind: ServiceAccount
-    name: helmsman-assistant
+    name: rigel-assistant
     namespace: default
 ---
 # Namespaced role for the agent's OWN state ConfigMaps. Scoped by resourceNames
@@ -79,10 +79,10 @@ subjects:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: helmsman-assistant-state
+  name: rigel-assistant-state
   namespace: default
   labels:
-    app.kubernetes.io/managed-by: helmsman-assistant
+    app.kubernetes.io/managed-by: rigel-assistant
 rules:
   - apiGroups: [""]
     resources: [configmaps]
@@ -92,15 +92,15 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: helmsman-assistant-state
+  name: rigel-assistant-state
   namespace: default
   labels:
-    app.kubernetes.io/managed-by: helmsman-assistant
+    app.kubernetes.io/managed-by: rigel-assistant
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: helmsman-assistant-state
+  name: rigel-assistant-state
 subjects:
   - kind: ServiceAccount
-    name: helmsman-assistant
+    name: rigel-assistant
     namespace: default
