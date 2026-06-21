@@ -33,6 +33,7 @@ import { useChatConfig } from "@/lib/api";
 import { rigel } from "@/lib/desktop";
 import { OnboardingWizard } from "@/shell/OnboardingWizard";
 import NavStrip from "@/shell/NavStrip";
+import { ClusterRail } from "@/shell/ClusterRail";
 import StatusBar from "@/shell/StatusBar";
 import ChatPane, { type ChatPaneHandle } from "@/shell/ChatPane";
 import { CommandPalette, useCommandPalette } from "@/shell/CommandPalette";
@@ -206,6 +207,9 @@ export default function App() {
 
       {/* ── Main row: NavStrip + content column + ChatPane ─────────────────── */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
+
+        {/* ── Cluster rail — far left, hidden for single-cluster setups ────── */}
+        <ClusterRail />
 
         {/* ── Sidebar ──────────────────────────────────────────────────────── */}
         <NavStrip collapsed={sidebarCollapsed} />
