@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, X } from "lucide-react";
+import { Boxes, Check, CircleCheck, CircleX, Copy, RefreshCw } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { useClusterTools } from "@/lib/api";
 import { sendClusterCreate, sendClusterStop, onClusterEvent } from "@/lib/ws";
 
@@ -36,11 +37,19 @@ export function CreateClusterModal({ open, onOpenChange }: { open: boolean; onOp
   const [creating, setCreating] = useState(false);
   const [lines, setLines] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const logRef = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
-    if (open) { setName(""); setVersion("default"); setTool("kind"); setCreating(false); setLines([]); setError(null); }
+    if (open) { setName(""); setVersion("default"); setTool("kind"); setCreating(false); setLines([]); setError(null); setCopied(false); }
   }, [open]);
+
+  // Brief "Copied" confirmation on the install command, then revert.
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(t);
+  }, [copied]);
 
   // Default to kind, but if only k3d is installed prefer it. Runs after the reset
   // above (which restores kind) so reopening always starts from a clean default.
@@ -75,11 +84,17 @@ export function CreateClusterModal({ open, onOpenChange }: { open: boolean; onOp
     sendClusterCreate({ tool, name, version });
   }
 
+  function copyInstall() {
+    navigator.clipboard?.writeText("brew install kind");
+    setCopied(true);
+  }
+
   return (
     <Modal
       open={open}
       onOpenChange={(o) => { if (!o && creating) sendClusterStop(); onOpenChange(o); }}
       title="Create cluster"
+      icon={<Boxes className="size-[17px]" />}
       maxWidth="!max-w-md"
     >
       {!tools ? (
@@ -99,23 +114,48 @@ export function CreateClusterModal({ open, onOpenChange }: { open: boolean; onOp
           {!tools.kind && !tools.k3d && (
             <div className="flex flex-col gap-2">
               <div className="text-xs font-medium text-muted-foreground">Install a tool (kind is the simplest)</div>
-              <div className="flex items-center gap-2 rounded-md border bg-muted/30 py-2 pr-2 pl-3">
-                <code className="flex-1 font-mono text-sm text-foreground">brew install kind</code>
-                <Button variant="ghost" size="sm" onClick={() => navigator.clipboard?.writeText("brew install kind")}>
-                  <Copy className="size-3.5" /> Copy
-                </Button>
+              <div className="flex items-center justify-between overflow-hidden rounded-[10px] border border-white/[0.08] bg-[#161619] pl-4">
+                <code className="flex items-center gap-2.5 py-3.5 font-mono text-[13px]">
+                  <span className="text-[#5E6168]">$</span>
+                  <span className="text-[#D6D6DC]">brew install kind</span>
+                </code>
+                <button
+                  type="button"
+                  onClick={copyInstall}
+                  className="flex items-center gap-1.5 self-stretch border-l border-white/[0.08] px-4 text-[13px] font-semibold text-[#4FB0F2] transition-colors hover:bg-white/[0.03]"
+                >
+                  {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                  {copied ? "Copied" : "Copy"}
+                </button>
               </div>
             </div>
           )}
 
-          {/* Status checklist */}
-          <div className="flex flex-col gap-2">
-            <StatusRow ok={tools.kind || tools.k3d} okText="kind or k3d installed" badText="No cluster tool found" />
-            <StatusRow ok={dockerOk} okText="Docker is running" badText="Docker is not running" />
+          {/* Status checks */}
+          <div className="flex flex-col divide-y divide-white/[0.04] overflow-hidden rounded-[10px] border border-white/[0.08] bg-[#141417]">
+            <StatusRow
+              ok={tools.kind || tools.k3d}
+              okText="kind or k3d installed"
+              badText="No cluster tool found"
+              badStatus="Not found"
+            />
+            <StatusRow
+              ok={dockerOk}
+              okText="Docker is running"
+              badText="Docker is not running"
+              badStatus="Not running"
+            />
           </div>
 
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="bg-white/[0.08] text-white hover:bg-white/[0.12]"
+            >
+              <RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} />
               {isFetching ? "Checking…" : "Re-check"}
             </Button>
             <span className="text-xs text-muted-foreground">Run the steps above, then re-check.</span>
@@ -188,11 +228,28 @@ export function CreateClusterModal({ open, onOpenChange }: { open: boolean; onOp
   );
 }
 
-function StatusRow({ ok, okText, badText }: { ok: boolean; okText: string; badText: string }) {
+function StatusRow({
+  ok,
+  okText,
+  badText,
+  badStatus,
+}: {
+  ok: boolean;
+  okText: string;
+  badText: string;
+  badStatus: string;
+}) {
   return (
-    <div className="flex items-center gap-2 text-sm">
-      {ok ? <Check className="size-4 text-emerald-500" /> : <X className="size-4 text-muted-foreground" />}
-      <span className={ok ? "text-foreground" : "text-muted-foreground"}>{ok ? okText : badText}</span>
+    <div className="flex items-center gap-2.5 px-4 py-3">
+      {ok ? (
+        <CircleCheck className="size-[17px] shrink-0 text-[#34D07F]" />
+      ) : (
+        <CircleX className="size-[17px] shrink-0 text-[#FF6B6B]" />
+      )}
+      <span className={cn("text-sm font-medium", ok ? "text-foreground" : "text-zinc-300")}>
+        {ok ? okText : badText}
+      </span>
+      <span className="ml-auto text-xs font-medium text-muted-foreground">{ok ? "OK" : badStatus}</span>
     </div>
   );
 }
