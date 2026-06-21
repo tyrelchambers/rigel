@@ -59,6 +59,28 @@ function rawSend(frame: string): void {
 type ChatEventCallback = (event: ChatEvent) => void;
 let chatListeners: ChatEventCallback[] = [];
 
+/** A streamed cluster-create event from the server. */
+export interface ClusterEvent {
+  type: "cluster.progress" | "cluster.done" | "cluster.error";
+  line?: string;              // progress
+  context?: string;           // done — the new kubeconfig context
+  backupPath?: string | null; // done
+  message?: string;           // error
+}
+type ClusterCallback = (e: ClusterEvent) => void;
+let clusterListeners: ClusterCallback[] = [];
+
+export function sendClusterCreate(opts: { tool: "kind" | "k3d"; name: string; version?: string }): void {
+  rawSend(JSON.stringify({ type: "cluster.create", ...opts }));
+}
+export function sendClusterStop(): void {
+  rawSend(JSON.stringify({ type: "cluster.stop" }));
+}
+export function onClusterEvent(cb: ClusterCallback): () => void {
+  clusterListeners.push(cb);
+  return () => { clusterListeners = clusterListeners.filter((c) => c !== cb); };
+}
+
 /** A line streamed from the server's kubectl-logs process. */
 export interface LogStreamMessage {
   type: "logs" | "logs.error";
@@ -210,6 +232,8 @@ export function connectCluster(): void {
       logListeners.forEach((cb) => cb(m as LogStreamMessage));
     } else if (m.type === "term") {
       termListeners.forEach((cb) => cb(m as TermMessage));
+    } else if (m.type === "cluster.progress" || m.type === "cluster.done" || m.type === "cluster.error") {
+      clusterListeners.forEach((cb) => cb(m as ClusterEvent));
     } else if (m.type === "snapshot") {
       // Authoritative full set for this subscription: REPLACE the kind's items
       // (not merge) so switching namespace swaps the data instead of piling the
