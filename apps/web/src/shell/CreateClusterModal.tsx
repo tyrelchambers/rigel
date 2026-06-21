@@ -31,12 +31,14 @@ export function CreateClusterModal({ open, onOpenChange }: { open: boolean; onOp
   const logRef = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
-    if (open) { setName(""); setVersion("default"); setCreating(false); setLines([]); setError(null); }
+    if (open) { setName(""); setVersion("default"); setTool("kind"); setCreating(false); setLines([]); setError(null); }
   }, [open]);
 
+  // Default to kind, but if only k3d is installed prefer it. Runs after the reset
+  // above (which restores kind) so reopening always starts from a clean default.
   useEffect(() => {
-    if (tools && !tools.kind && tools.k3d) setTool("k3d");
-  }, [tools]);
+    if (open && tools && !tools.kind && tools.k3d) setTool("k3d");
+  }, [open, tools]);
 
   useEffect(() => {
     if (!creating) return;
