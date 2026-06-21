@@ -309,7 +309,7 @@ export function PaneComposer({
       {scopeOpen && contextNames.length > 1 && (
         <>
           <div style={{ position: "fixed", inset: 0, zIndex: 25 }} onClick={() => setScopeOpen(false)} />
-          <div style={{ ...modelMenuStyle, left: "auto" }}>
+          <div style={modelMenuStyle}>
             <div style={modelSectionLabel}>CHAT SCOPE</div>
             <button type="button" onClick={() => { onScopeConfig({ mode: "active", picked: [] }); setScopeOpen(false); }} style={modelRowStyle(scopeConfig.mode === "active")}>
               {scopeConfig.mode === "active" ? <Check style={checkStyle} /> : <span style={{ width: 12 }} />}
