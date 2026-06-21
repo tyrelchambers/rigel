@@ -35,6 +35,7 @@ import {
 } from "@rigel/k8s/src/gitSources";
 import { getPodMetrics, getNodeMetrics, getNodeDisk } from "./metrics";
 import { listContexts } from "./contexts";
+import { detectClusterTools } from "./clusterTools";
 import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusMetrics";
 import { handleUpdates, type UpdatesRequest } from "./updates";
 import { chatConfig, setClaudeToken } from "./chatConfig";
@@ -102,6 +103,12 @@ async function handler(req: Request): Promise<Response> {
     // rail). { contexts: ClusterContext[] }; the active one is current-context.
     if (url.pathname === "/api/contexts" && req.method === "GET") {
       return Response.json({ contexts: await listContexts() });
+    }
+
+    // GET /api/cluster-tools — are kind/k3d installed and is Docker running?
+    // Drives the create-cluster modal's detect-and-guide UI. Always HTTP 200.
+    if (url.pathname === "/api/cluster-tools" && req.method === "GET") {
+      return Response.json(await detectClusterTools());
     }
 
     // Serve the built web UI for everything that isn't an API or WS path.
