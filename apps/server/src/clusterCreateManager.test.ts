@@ -15,6 +15,19 @@ function fakeWs() {
   return { sent, send: (raw: string) => sent.push(JSON.parse(raw)) };
 }
 
+test("a second create while one is in flight is rejected without spawning again", async () => {
+  let spawnCount = 0;
+  const spawnFn = () => { spawnCount++; return fakeProc(); };
+  const ws = fakeWs();
+  const mgr = new ClusterCreateManager(ws as any, "/k/config", spawnFn as any, async () => null);
+
+  await mgr.create({ tool: "kind", name: "one", version: "default" }); // in flight (proc not closed)
+  await mgr.create({ tool: "kind", name: "two", version: "default" }); // should be rejected
+
+  expect(spawnCount).toBe(1);
+  expect(ws.sent.find((m) => m.type === "cluster.error" && /already running/i.test(m.message))).toBeTruthy();
+});
+
 test("create backs up the kubeconfig, spawns the tool with KUBECONFIG, streams progress, then done", async () => {
   const proc = fakeProc();
   const spawns: any[] = [];

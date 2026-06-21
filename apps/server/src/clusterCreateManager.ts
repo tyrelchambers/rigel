@@ -28,6 +28,10 @@ export class ClusterCreateManager {
   ) {}
 
   async create(req: CreateRequest): Promise<void> {
+    // One create at a time — a second request while one is in flight would orphan
+    // the first process (a half-built cluster). The client disables Create during
+    // a run; this enforces the contract server-side too.
+    if (this.proc) return this.error("A cluster creation is already running.");
     const nameErr = validateClusterName(req.name);
     if (nameErr) return this.error(nameErr);
     if (req.tool !== "kind" && req.tool !== "k3d") return this.error("Unknown tool.");
