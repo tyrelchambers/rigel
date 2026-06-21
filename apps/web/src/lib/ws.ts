@@ -4,12 +4,18 @@ import {
   LINGER_MS,
   finishLinger,
   planSubscribe,
+  planSwitch,
   planUnsubscribe,
   subKey,
   type SubRegistry,
 } from "./wsSubscriptions";
 
 let socket: WebSocket | null = null;
+
+// The active kubeconfig context every subscribe/unsubscribe frame is stamped
+// with. null until the rail resolves it (→ frames omit `context`, so the server
+// uses its boot context, which is the active one — no behavior change pre-rail).
+let currentContext: string | null = null;
 
 /**
  * Store key for a watched object: `namespace/name` for namespaced resources,
@@ -32,9 +38,15 @@ const activeSubs: SubRegistry = new Map();
 /** Send a subscribe/unsubscribe control frame if the socket is OPEN. Unlike
  *  rawSend these are not buffered: the onopen re-send loop replays active subs,
  *  and a lingering teardown that misses the window is harmless. */
-function sendSubFrame(type: "subscribe" | "unsubscribe", kind: string, namespace: string): void {
+function sendSubFrame(
+  type: "subscribe" | "unsubscribe",
+  kind: string,
+  namespace: string,
+  context: string | null = currentContext,
+): void {
   if (socket && socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({ type, kind, namespace }));
+    // Omit `context` when null so the server falls back to its boot context.
+    socket.send(JSON.stringify(context ? { type, kind, namespace, context } : { type, kind, namespace }));
   }
 }
 
@@ -170,7 +182,7 @@ export function connectCluster(): void {
     // entries that are lingering with refs 0; those are on their way out.
     for (const sub of activeSubs.values()) {
       if (sub.refs > 0) {
-        socket!.send(JSON.stringify({ type: "subscribe", kind: sub.kind, namespace: sub.namespace }));
+        sendSubFrame("subscribe", sub.kind, sub.namespace);
       }
     }
     // Drain any chat/log frames buffered while connecting.
@@ -245,4 +257,42 @@ export function unsubscribe(kind: string, namespace = "default"): void {
     // cleanup is the source of truth), so a reconnect never strands a watch.
     if (sendUnsubscribe) sendSubFrame("unsubscribe", kind, namespace);
   }, LINGER_MS);
+}
+
+/**
+ * One-time initial set of the active context (on first load, once the rail
+ * resolves which context is active). Sets the stamp + the store's active context
+ * WITHOUT tearing down/resubscribing: nothing needs migrating, and any frames
+ * already sent (context null) went to the server's boot context — the same
+ * cluster. Safe to call repeatedly; only the first (currentContext null) acts.
+ */
+export function initContext(context: string): void {
+  if (currentContext !== null) return;
+  currentContext = context;
+  useCluster.getState().setActiveContextInitial(context);
+}
+
+/**
+ * Switch the active cluster. Releases every active watch under the old context,
+ * clears the stale resource cache + adopts the new context's remembered
+ * namespace (via the store), then resubscribes the live watches under the new
+ * context. No-op if already on `context`.
+ */
+export function switchCluster(context: string): void {
+  const old = currentContext;
+  if (old === context) return;
+  const store = useCluster.getState();
+  if (old !== null) {
+    for (const f of planSwitch(activeSubs, old, context).unsubscribes) {
+      sendSubFrame("unsubscribe", f.kind, f.namespace, f.context);
+    }
+  }
+  currentContext = context;
+  store.applySwitch(context, store.namespaceByContext[context] ?? null);
+  store.setLoading(true);
+  if (old !== null) {
+    for (const f of planSwitch(activeSubs, old, context).subscribes) {
+      sendSubFrame("subscribe", f.kind, f.namespace, f.context);
+    }
+  }
 }
