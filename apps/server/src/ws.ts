@@ -4,6 +4,8 @@ import type { WatchEvent } from "@rigel/k8s/src/watch";
 import { runAgent } from "./runAgent";
 import { LogStreamManager, type LogTarget } from "./logStream";
 import { TerminalSession } from "./terminal";
+import { parseChatScope, resolveReadContexts } from "./chatScope";
+import { listContexts } from "./contexts";
 
 export function makeWsHandlers(mgr: WatchManager, context: string | null = null) {
   const unsubs = new WeakMap<WebSocket, Map<string, () => void>>();
@@ -85,9 +87,22 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null)
         // Resume the prior session so the turn keeps conversation history. The
         // client owns the id (from the `session` event); the server stays stateless.
         const sessionId = typeof m.sessionId === "string" ? m.sessionId : undefined;
+        const scope = parseChatScope(m.scope);
         (async () => {
           try {
-            for await (const event of runAgent(m.prompt, context, ac.signal, { model, effort, sessionId })) {
+            // Only enumerate contexts when the turn fans out beyond the active one.
+            const readContexts =
+              scope === "active"
+                ? context
+                  ? [context]
+                  : []
+                : resolveReadContexts(scope, context, (await listContexts()).map((c) => c.name));
+            for await (const event of runAgent(m.prompt, context, ac.signal, {
+              model,
+              effort,
+              sessionId,
+              readContexts,
+            })) {
               ws.send(JSON.stringify({ type: "chat", event }));
             }
           } catch {
