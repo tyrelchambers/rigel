@@ -282,17 +282,18 @@ export function switchCluster(context: string): void {
   const old = currentContext;
   if (old === context) return;
   const store = useCluster.getState();
-  if (old !== null) {
-    for (const f of planSwitch(activeSubs, old, context).unsubscribes) {
-      sendSubFrame("unsubscribe", f.kind, f.namespace, f.context);
-    }
+  // Plan the watch migration once (pure; reads the registry without mutating it).
+  const plan = old !== null ? planSwitch(activeSubs, old, context) : null;
+  // Release old-context watches (server-side) — otherwise they only reap via idle TTL.
+  if (plan) {
+    for (const f of plan.unsubscribes) sendSubFrame("unsubscribe", f.kind, f.namespace, f.context);
   }
   currentContext = context;
+  // Clear stale data + adopt the per-context namespace; one snapshot per kind repopulates.
   store.applySwitch(context, store.namespaceByContext[context] ?? null);
   store.setLoading(true);
-  if (old !== null) {
-    for (const f of planSwitch(activeSubs, old, context).subscribes) {
-      sendSubFrame("subscribe", f.kind, f.namespace, f.context);
-    }
+  // Re-establish the live watches under the new context.
+  if (plan) {
+    for (const f of plan.subscribes) sendSubFrame("subscribe", f.kind, f.namespace, f.context);
   }
 }
