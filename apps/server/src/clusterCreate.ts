@@ -22,7 +22,13 @@ export const K8S_VERSIONS: K8sVersion[] = [
 ];
 
 function versionById(id: string | undefined): K8sVersion {
-  return K8S_VERSIONS.find((v) => v.id === id) ?? K8S_VERSIONS[0]!;
+  // Fall back to the explicit "default" entry by id (not by array position) so a
+  // future reorder of K8S_VERSIONS can't silently pick the wrong version.
+  return (
+    K8S_VERSIONS.find((v) => v.id === id) ??
+    K8S_VERSIONS.find((v) => v.id === "default") ??
+    K8S_VERSIONS[0]!
+  );
 }
 
 /** kind/k3d cluster-name rules: lowercase RFC1123-ish, <= 50 chars. Returns an
