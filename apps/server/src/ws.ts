@@ -29,14 +29,16 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null)
       const m = JSON.parse(String(raw));
       const map = unsubs.get(ws)!;
       if (m.type === "subscribe") {
-        const key = `${m.kind}/${m.namespace}`;
+        const subCtx = typeof m.context === "string" ? m.context : context;
+        const key = `${subCtx ?? ""}/${m.kind}/${m.namespace}`;
         if (map.has(key)) return;
         const un = mgr.subscribe(
-          { kind: m.kind, namespace: m.namespace },
+          { context: subCtx, kind: m.kind, namespace: m.namespace },
           (items) =>
             ws.send(
               JSON.stringify({
                 type: "snapshot",
+                context: subCtx,
                 kind: m.kind,
                 namespace: m.namespace,
                 items,
@@ -46,6 +48,7 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null)
             ws.send(
               JSON.stringify({
                 type: "delta",
+                context: subCtx,
                 kind: m.kind,
                 namespace: m.namespace,
                 event: e.type,
@@ -55,7 +58,8 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null)
         );
         map.set(key, un);
       } else if (m.type === "unsubscribe") {
-        const key = `${m.kind}/${m.namespace}`;
+        const subCtx = typeof m.context === "string" ? m.context : context;
+        const key = `${subCtx ?? ""}/${m.kind}/${m.namespace}`;
         map.get(key)?.();
         map.delete(key);
       } else if (m.type === "logs.start" && Array.isArray(m.targets)) {
