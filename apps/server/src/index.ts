@@ -34,6 +34,7 @@ import {
   type GitDeployment,
 } from "@rigel/k8s/src/gitSources";
 import { getPodMetrics, getNodeMetrics, getNodeDisk } from "./metrics";
+import { listContexts } from "./contexts";
 import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusMetrics";
 import { handleUpdates, type UpdatesRequest } from "./updates";
 import { chatConfig, setClaudeToken } from "./chatConfig";
@@ -95,6 +96,12 @@ async function handler(req: Request): Promise<Response> {
 
     if (url.pathname === "/api/health") {
       return Response.json({ ok: true, kubeconfig: KUBECONFIG });
+    }
+
+    // GET /api/contexts — all selectable kubeconfig contexts (for the cluster
+    // rail). { contexts: ClusterContext[] }; the active one is current-context.
+    if (url.pathname === "/api/contexts" && req.method === "GET") {
+      return Response.json({ contexts: await listContexts() });
     }
 
     // Serve the built web UI for everything that isn't an API or WS path.
