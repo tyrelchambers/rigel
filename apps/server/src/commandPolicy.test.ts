@@ -128,4 +128,11 @@ describe("classifyCommand — cross-context mutation safety (multi-cluster fan-o
   test("without an activeContext the cross-cluster check is inert (back-compat)", () => {
     expect(classifyCommand("kubectl --context prod delete pod web").reason).not.toMatch(/active cluster/i);
   });
+
+  test("a mutation referencing ANY non-active context (even alongside the active one) is denied cross-cluster", () => {
+    // Conservative: if a mutation names any cluster other than the active one, deny.
+    const v = classifyCommand("kubectl --context dev --context prod delete pod web", "dev");
+    expect(v.decision).toBe("deny");
+    expect(v.reason).toMatch(/active cluster/i);
+  });
 });
