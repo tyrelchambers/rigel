@@ -98,3 +98,34 @@ describe("classifyCommand — port-forward/proxy blocked (would hang the turn)",
     expect(v.reason).toMatch(/action block/i);
   });
 });
+
+describe("classifyCommand — cross-context mutation safety (multi-cluster fan-out)", () => {
+  test("a mutation targeting a NON-active explicit context is denied with the cross-cluster reason", () => {
+    const v = classifyCommand("kubectl --context prod delete pod web", "dev");
+    expect(v.decision).toBe("deny");
+    expect(v.reason).toMatch(/active cluster/i);
+    expect(v.reason).toContain("dev");
+  });
+
+  test("--context=value inline form is detected for cross-context mutations", () => {
+    expect(classifyCommand("kubectl --context=prod scale deploy/web --replicas=0", "dev").reason).toMatch(/active cluster/i);
+  });
+
+  test("a mutation on the ACTIVE context uses the normal approval hint (not cross-cluster)", () => {
+    const v = classifyCommand("kubectl --context dev delete pod web", "dev");
+    expect(v.decision).toBe("deny");
+    expect(v.reason).not.toMatch(/active cluster/i);
+  });
+
+  test("a READ on a non-active context is still allowed (fan-out reads are fine)", () => {
+    expect(classifyCommand("kubectl --context prod get pods", "dev").decision).toBe("allow");
+  });
+
+  test("a mutation with no explicit context is denied normally (no cross-cluster reason)", () => {
+    expect(classifyCommand("kubectl delete pod web", "dev").reason).not.toMatch(/active cluster/i);
+  });
+
+  test("without an activeContext the cross-cluster check is inert (back-compat)", () => {
+    expect(classifyCommand("kubectl --context prod delete pod web").reason).not.toMatch(/active cluster/i);
+  });
+});
