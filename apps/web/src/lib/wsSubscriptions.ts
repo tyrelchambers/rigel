@@ -82,6 +82,37 @@ export function planUnsubscribe(
   return { startLinger: true };
 }
 
+/** One subscribe/unsubscribe frame the ws layer must send during a cluster switch. */
+export interface SwitchFrame {
+  kind: string;
+  namespace: string;
+  context: string;
+}
+
+/**
+ * Plan the frames to migrate every watch from `oldContext` to `newContext` on a
+ * cluster switch. Releases ALL current entries under the old context (so no
+ * watch is stranded — otherwise old watches only reap via the server idle TTL),
+ * and re-establishes only the still-in-use (`refs > 0`) entries under the new
+ * context, matching the onopen replay which skips lingering entries. Does not
+ * mutate the registry.
+ */
+export function planSwitch(
+  registry: SubRegistry,
+  oldContext: string,
+  newContext: string,
+): { unsubscribes: SwitchFrame[]; subscribes: SwitchFrame[] } {
+  const unsubscribes: SwitchFrame[] = [];
+  const subscribes: SwitchFrame[] = [];
+  for (const entry of registry.values()) {
+    unsubscribes.push({ kind: entry.kind, namespace: entry.namespace, context: oldContext });
+    if (entry.refs > 0) {
+      subscribes.push({ kind: entry.kind, namespace: entry.namespace, context: newContext });
+    }
+  }
+  return { unsubscribes, subscribes };
+}
+
 /**
  * Run when a linger timer fires. If the entry is still at refs 0 (no revive
  * happened during the grace period) delete it and report that the unsubscribe
