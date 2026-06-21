@@ -921,7 +921,7 @@ const httpServer = serve({ fetch: handler, port: PORT, hostname: HOST }, (info) 
 // WebSocket upgrade wiring. node-server hands us the underlying Node http.Server,
 // so we intercept the HTTP `upgrade` event ourselves and drive the `ws` server.
 const wss = new WebSocketServer({ noServer: true });
-const wsHandlers = makeWsHandlers(mgr, context);
+const wsHandlers = makeWsHandlers(mgr, context, KUBECONFIG);
 httpServer.on("upgrade", (req: IncomingMessage, socket, head) => {
   try {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);

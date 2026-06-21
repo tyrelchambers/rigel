@@ -4,10 +4,11 @@ import type { WatchEvent } from "@rigel/k8s/src/watch";
 import { runAgent } from "./runAgent";
 import { LogStreamManager, type LogTarget } from "./logStream";
 import { TerminalSession } from "./terminal";
+import { ClusterCreateManager } from "./clusterCreateManager";
 import { parseChatScope, resolveReadContexts } from "./chatScope";
 import { listContexts } from "./contexts";
 
-export function makeWsHandlers(mgr: WatchManager, context: string | null = null) {
+export function makeWsHandlers(mgr: WatchManager, context: string | null = null, kubeconfigPath = "") {
   const unsubs = new WeakMap<WebSocket, Map<string, () => void>>();
   // One kubectl-logs stream manager per connection — killed on logs.stop/close.
   const logStreams = new WeakMap<WebSocket, LogStreamManager>();
@@ -15,6 +16,8 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null)
   const chatAborts = new WeakMap<WebSocket, AbortController>();
   // One interactive PTY shell per connection — killed on term.stop/close.
   const terminals = new WeakMap<WebSocket, TerminalSession>();
+  // One in-flight cluster-create per connection — killed on cluster.stop/close.
+  const creates = new WeakMap<WebSocket, ClusterCreateManager>();
 
   // Resolve a subscribe/unsubscribe message's effective context (explicit
   // non-empty string, else the connection default) and its per-connection key.
@@ -29,12 +32,14 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null)
       unsubs.set(ws, new Map());
       logStreams.set(ws, new LogStreamManager(ws, context));
       terminals.set(ws, new TerminalSession(ws));
+      creates.set(ws, new ClusterCreateManager(ws, kubeconfigPath));
     },
     close(ws: WebSocket) {
       unsubs.get(ws)?.forEach((u) => u());
       logStreams.get(ws)?.stop();
       chatAborts.get(ws)?.abort();
       terminals.get(ws)?.stop();
+      creates.get(ws)?.stop();
     },
     message(ws: WebSocket, raw: string | Buffer) {
       const m = JSON.parse(String(raw));
@@ -120,6 +125,10 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null)
         terminals.get(ws)?.resize(Number(m.cols), Number(m.rows));
       } else if (m.type === "term.stop") {
         terminals.get(ws)?.stop();
+      } else if (m.type === "cluster.create" && typeof m.name === "string") {
+        creates.get(ws)?.create({ tool: m.tool, name: m.name, version: m.version });
+      } else if (m.type === "cluster.stop") {
+        creates.get(ws)?.stop();
       }
     },
   };
