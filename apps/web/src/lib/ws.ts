@@ -100,13 +100,15 @@ export function onLogLine(callback: LogCallback): () => void {
 }
 
 /**
- * Send a chat prompt to the server. {type:"chat", prompt, model?, effort?, sessionId?}.
+ * Send a chat prompt to the server. {type:"chat", prompt, model?, effort?, sessionId?, scope?}.
  * Pass the prior `sessionId` (captured from the `session` event) so the turn
  * resumes the same conversation; omit it on the first turn for a fresh session.
+ * Pass `scope` to tell the server which kubeconfig contexts it may read from;
+ * omit it (or pass "active") for the default single-context behavior.
  */
 export function sendChat(
   prompt: string,
-  opts?: { model?: string; effort?: string; sessionId?: string },
+  opts?: { model?: string; effort?: string; sessionId?: string; scope?: "active" | "all" | { contexts: string[] } },
 ): void {
   rawSend(
     JSON.stringify({
@@ -115,6 +117,7 @@ export function sendChat(
       model: opts?.model,
       effort: opts?.effort,
       sessionId: opts?.sessionId,
+      scope: opts?.scope,
     }),
   );
 }
