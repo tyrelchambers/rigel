@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
+import { Loader } from "@/components/Loader";
 import { cn } from "@/lib/utils";
 import { elapsedSeconds, thinkingVerb } from "./chatLogic";
 
@@ -50,7 +51,7 @@ export function ThinkingPane({ liveThinking, turnStartedAt }: Props) {
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center gap-2 text-left text-xs text-muted-foreground disabled:cursor-default"
       >
-        <Loader2 className="size-3.5 animate-spin" />
+        <Loader size={14} />
         <span className="font-medium text-foreground">{thinkingVerb(verbIndex)}</span>
         <span>{seconds}s</span>
         <span>· esc to interrupt</span>

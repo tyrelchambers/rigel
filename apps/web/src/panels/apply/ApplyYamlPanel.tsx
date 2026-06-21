@@ -12,7 +12,8 @@ import { useClusterYamlSchema } from "@/lib/useClusterYamlSchema";
 import { applyManifestYaml, type ActionBlock, type ActionResult } from "@/lib/api";
 import { listResources } from "@rigel/catalog";
 import { isYamlFilename, readYamlFile } from "./readYamlFile";
-import { CheckCircle2, Layers, LoaderCircle, Play, Upload } from "lucide-react";
+import { CheckCircle2, Layers, Play, Upload } from "lucide-react";
+import { Loader } from "@/components/Loader";
 
 // Seeded into the editor as a starting template — real, editable content the
 // user can overwrite or clear (not a fake overlay). Multi-doc YAML is supported.
@@ -87,7 +88,7 @@ export default function ApplyYamlPanel() {
           <Upload className="size-3.5" /> Upload
         </Button>
         <Button variant="outline" size="sm" onClick={handleValidate} disabled={!hasContent || validate.pending}>
-          {validate.pending ? <><LoaderCircle className="size-3.5 animate-spin" /> Validating…</> : "Validate"}
+          {validate.pending ? <><Loader size={14} /> Validating…</> : "Validate"}
         </Button>
         <Button size="sm" className="gap-1.5" onClick={handleApply} disabled={!hasContent}>
           <Play className="size-3.5 fill-current" /> Apply…

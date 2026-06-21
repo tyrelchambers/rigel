@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { motion, useAnimationControls } from "motion/react";
 import {
-  LoaderCircle,
   ArrowUp,
   Check,
   HelpCircle,
@@ -11,6 +10,7 @@ import {
   MemoryStick,
   HardDrive,
 } from "lucide-react";
+import { Loader } from "@/components/Loader";
 import {
   APP_CATEGORIES,
   categoryDisplayName,
@@ -288,9 +288,10 @@ export default function CatalogPanel() {
                 aria-label="Search apps"
               />
               {isLoading && (
-                <LoaderCircle
-                  className="catalog-search-spinner"
-                  aria-label="loading"
+                <Loader
+                  size={12}
+                  label="loading"
+                  style={{ position: "absolute", right: 10, color: "var(--fg-tertiary)" }}
                 />
               )}
             </div>
@@ -650,7 +651,7 @@ function UpdateStatusRow({
   if (checking && !result) {
     return (
       <div className="catalog-update-row">
-        <LoaderCircle className="catalog-update-spin" aria-hidden />
+        <Loader size={11} label="" className="shrink-0" />
         <span>Checking for updates…</span>
       </div>
     );
