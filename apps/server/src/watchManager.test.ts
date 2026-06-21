@@ -95,6 +95,23 @@ test("cold subscribe LISTs then emits a snapshot with the listed items", async (
   expect(rec.watches().length).toBe(1);
 });
 
+// (a2) The SAME kind/namespace under two different contexts produces two
+//      independent watches, each spawning kubectl with its own --context.
+test("subscriptions are keyed by context: two contexts → two independent watches", async () => {
+  const rec = makeRecorder();
+  const mgr = new WatchManager(null, rec.spawnFn as any);
+
+  mgr.subscribe({ context: "ctx-a", kind: "pods", namespace: "default" }, () => {}, () => {});
+  mgr.subscribe({ context: "ctx-b", kind: "pods", namespace: "default" }, () => {}, () => {});
+
+  // Two separate LISTs, one per context.
+  expect(rec.lists().length).toBe(2);
+  const argsFor = (ctx: string) =>
+    rec.lists().find((p) => p.args.includes("--context") && p.args.includes(ctx));
+  expect(argsFor("ctx-a")).toBeTruthy();
+  expect(argsFor("ctx-b")).toBeTruthy();
+});
+
 // (b) Last listener leaving does NOT stop immediately, but DOES stop after the
 //     idle TTL with no new subscriber.
 test("leaving keeps the warm watch until the idle TTL fires", async () => {

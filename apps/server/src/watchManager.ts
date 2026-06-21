@@ -8,8 +8,8 @@ export function applyEvent(cache: Map<string, any>, e: WatchEvent): void {
   else cache.set(name, e.object);
 }
 
-type Sub = { kind: string; namespace: string };
-const subKey = (s: Sub) => `${s.kind}/${s.namespace}`;
+type Sub = { context?: string | null; kind: string; namespace: string };
+const subKey = (s: Sub) => `${s.context ?? ""}/${s.kind}/${s.namespace}`;
 
 // How long a warm watch with zero listeners lives before teardown. Keeps the
 // cache hot across tab switches so re-subscribing is an instant warm hit.
@@ -61,7 +61,7 @@ export class WatchManager {
   private restartMaxMs: number;
 
   constructor(
-    private context: string | null,
+    private defaultContext: string | null,
     private spawnFn: typeof spawn = spawn,
     opts: WatchManagerOptions = {},
   ) {
@@ -138,17 +138,16 @@ export class WatchManager {
 
   // Build the kubectl argv shared by the LIST and the watch stream.
   private buildArgs(sub: Sub, watchOnly: boolean): string[] {
+    const context = sub.context ?? this.defaultContext;
     const nsArgs =
       sub.namespace === "*" ? ["--all-namespaces"] : ["-n", sub.namespace];
     return [
       "kubectl",
-      ...(this.context ? ["--context", this.context] : []),
+      ...(context ? ["--context", context] : []),
       "get",
       sub.kind,
       ...nsArgs,
-      ...(watchOnly
-        ? ["--watch-only", "--output-watch-events"]
-        : []),
+      ...(watchOnly ? ["--watch-only", "--output-watch-events"] : []),
       "-o",
       "json",
     ];
