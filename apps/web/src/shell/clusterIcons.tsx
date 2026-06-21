@@ -1,7 +1,8 @@
 import type { ComponentType } from "react";
 import { Monitor, Laptop, Server, Database, HardDrive, House, Building2, Boxes, Cloud } from "lucide-react";
 import { SiKubernetes, SiGooglecloud, SiDigitalocean } from "react-icons/si";
-import { FaAws, FaMicrosoft } from "react-icons/fa";
+import { FaAws } from "react-icons/fa";
+import { VscAzure } from "react-icons/vsc";
 import type { ProviderKind } from "./clusterTile";
 
 /** An icon a cluster tile can display. */
@@ -23,10 +24,10 @@ export const CLUSTER_ICONS: Record<IconId, IconEntry> = {
   boxes: { label: "Cluster", Component: Boxes },
   cloud: { label: "Cloud", Component: Cloud },
   // Brand marks — react-icons/si doesn't have AWS or Azure in v5.6.0;
-  // using FaAws (Font Awesome) for AWS and FaMicrosoft for Azure.
+  // using FaAws (Font Awesome) for AWS and VscAzure (VS Code icons) for Azure.
   aws: { label: "Amazon Web Services", Component: FaAws as ComponentType<{ size?: number; className?: string }> },
   gcp: { label: "Google Cloud", Component: SiGooglecloud as ComponentType<{ size?: number; className?: string }> },
-  azure: { label: "Microsoft Azure", Component: FaMicrosoft as ComponentType<{ size?: number; className?: string }> },
+  azure: { label: "Microsoft Azure", Component: VscAzure as ComponentType<{ size?: number; className?: string }> },
   digitalocean: { label: "DigitalOcean", Component: SiDigitalocean as ComponentType<{ size?: number; className?: string }> },
   kubernetes: { label: "Kubernetes", Component: SiKubernetes as ComponentType<{ size?: number; className?: string }> },
 };
