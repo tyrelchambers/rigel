@@ -801,3 +801,31 @@ export function useSetAgentAuth() {
 export function connectionLabel(c: AgentConnection): string {
   return c === "connected" ? "Connected" : c === "notConnected" ? "Not connected" : "Coming soon";
 }
+
+// ---------------------------------------------------------------------------
+// Cluster contexts — GET /api/contexts (multi-cluster rail)
+// ---------------------------------------------------------------------------
+
+/** A selectable cluster from the server's /api/contexts (mirrors the server's ClusterContext). */
+export interface ClusterContext {
+  name: string;
+  cluster: string;
+  server: string;
+  active: boolean;
+}
+
+async function fetchContexts(): Promise<ClusterContext[]> {
+  const res = await fetch("/api/contexts");
+  if (!res.ok) throw new Error(`failed to load contexts: ${res.status}`);
+  const body = (await res.json()) as { contexts?: ClusterContext[] };
+  return body.contexts ?? [];
+}
+
+/** The kubeconfig contexts (clusters) for the cluster rail. */
+export function useContexts() {
+  return useQuery({
+    queryKey: ["contexts"] as const,
+    queryFn: fetchContexts,
+    staleTime: 30_000,
+  });
+}
