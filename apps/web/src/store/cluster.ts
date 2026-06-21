@@ -68,6 +68,28 @@ function writeNamespaceFilter(ns: string | null): void {
   }
 }
 
+// Per-context namespace memory: each kubeconfig context remembers its last
+// selected namespace, so switching clusters doesn't carry one cluster's
+// namespace onto another. JSON-persisted; absent/parse-failure = {}.
+const NS_BY_CONTEXT_KEY = "rigel_namespace_by_context";
+
+function readNamespaceByContext(): Record<string, string | null> {
+  try {
+    const raw = localStorage.getItem(NS_BY_CONTEXT_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, string | null>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeNamespaceByContext(map: Record<string, string | null>): void {
+  try {
+    localStorage.setItem(NS_BY_CONTEXT_KEY, JSON.stringify(map));
+  } catch {
+    // non-browser / storage disabled — keep in-memory only
+  }
+}
+
 interface ClusterState {
   connected: boolean;
   resources: ResourceMap;
@@ -80,6 +102,19 @@ interface ClusterState {
    * namespaces". Set by the namespace selector elsewhere in the app.
    */
   namespaceFilter: string | null;
+  /** The active kubeconfig context (cluster) the whole app is pointed at. null
+   *  until the rail resolves it from /api/contexts. */
+  activeContext: string | null;
+  /** Each context's last-selected namespace (null = all). Drives per-cluster
+   *  namespace memory across switches. */
+  namespaceByContext: Record<string, string | null>;
+  /** Initial (no-teardown) set of the active context, used once on load. Adopts
+   *  the context's remembered namespace if any; does NOT clear resources. */
+  setActiveContextInitial: (context: string) => void;
+  /** Switch the active cluster: set context, adopt `namespace`, and clear the
+   *  resource cache (stale old-cluster data). The ws layer orchestrates the
+   *  actual unsubscribe/resubscribe around this. */
+  applySwitch: (context: string, namespace: string | null) => void;
   setConnected: (c: boolean) => void;
   setLoading: (l: boolean) => void;
   setError: (e: string | null) => void;
@@ -110,12 +145,31 @@ export const useCluster = create<ClusterState>((set) => ({
   isLoading: false,
   error: null,
   namespaceFilter: readNamespaceFilter(), // null = All namespaces; restored from localStorage
+  activeContext: null,
+  namespaceByContext: readNamespaceByContext(),
+  setActiveContextInitial: (context) =>
+    set((s) => {
+      const remembered = s.namespaceByContext[context];
+      return remembered !== undefined
+        ? { activeContext: context, namespaceFilter: remembered }
+        : { activeContext: context };
+    }),
+  applySwitch: (context, namespace) => {
+    writeNamespaceFilter(namespace);
+    set({ activeContext: context, namespaceFilter: namespace, resources: {} });
+  },
   setConnected: (connected) => set({ connected }),
   setLoading: (isLoading) => set({ isLoading }),
   setError: (error) => set({ error }),
   setNamespaceFilter: (namespaceFilter) => {
     writeNamespaceFilter(namespaceFilter);
-    set({ namespaceFilter });
+    set((s) => {
+      const ctx = s.activeContext;
+      if (!ctx) return { namespaceFilter };
+      const namespaceByContext = { ...s.namespaceByContext, [ctx]: namespaceFilter };
+      writeNamespaceByContext(namespaceByContext);
+      return { namespaceFilter, namespaceByContext };
+    });
   },
   upsert: (kind, name, obj) =>
     set((s) => ({ resources: { ...s.resources, [kind]: { ...s.resources[kind], [name]: obj } } })),
