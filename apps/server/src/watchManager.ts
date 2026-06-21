@@ -146,6 +146,8 @@ export class WatchManager {
 
   // Build the kubectl argv shared by the LIST and the watch stream.
   private buildArgs(sub: Sub, watchOnly: boolean): string[] {
+    // Deliberately NO `?? ""` here (unlike subKey): a null context must stay
+    // ABSENT from the argv so kubectl falls back to its own current-context.
     const context = sub.context ?? this.defaultContext;
     const nsArgs =
       sub.namespace === "*" ? ["--all-namespaces"] : ["-n", sub.namespace];

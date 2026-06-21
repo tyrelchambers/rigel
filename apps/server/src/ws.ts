@@ -13,6 +13,15 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null)
   const chatAborts = new WeakMap<WebSocket, AbortController>();
   // One interactive PTY shell per connection — killed on term.stop/close.
   const terminals = new WeakMap<WebSocket, TerminalSession>();
+
+  // Resolve a subscribe/unsubscribe message's effective context (explicit
+  // non-empty string, else the connection default) and its per-connection key.
+  // Shared by both branches so they always pair on the same key.
+  const resolveSub = (m: { context?: unknown; kind: string; namespace: string }) => {
+    const subCtx = typeof m.context === "string" && m.context !== "" ? m.context : context;
+    return { subCtx, key: `${subCtx ?? ""}/${m.kind}/${m.namespace}` };
+  };
+
   return {
     open(ws: WebSocket) {
       unsubs.set(ws, new Map());
@@ -29,8 +38,7 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null)
       const m = JSON.parse(String(raw));
       const map = unsubs.get(ws)!;
       if (m.type === "subscribe") {
-        const subCtx = typeof m.context === "string" && m.context !== "" ? m.context : context;
-        const key = `${subCtx ?? ""}/${m.kind}/${m.namespace}`;
+        const { subCtx, key } = resolveSub(m);
         if (map.has(key)) return;
         const un = mgr.subscribe(
           { context: subCtx, kind: m.kind, namespace: m.namespace },
@@ -58,8 +66,7 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null)
         );
         map.set(key, un);
       } else if (m.type === "unsubscribe") {
-        const subCtx = typeof m.context === "string" && m.context !== "" ? m.context : context;
-        const key = `${subCtx ?? ""}/${m.kind}/${m.namespace}`;
+        const { key } = resolveSub(m);
         map.get(key)?.();
         map.delete(key);
       } else if (m.type === "logs.start" && Array.isArray(m.targets)) {
