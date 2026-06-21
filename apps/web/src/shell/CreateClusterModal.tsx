@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Modal } from "@/components/ui/modal";
+import { Button } from "@/components/ui/button";
+import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
 import { useClusterTools } from "@/lib/api";
 import { sendClusterCreate, sendClusterStop, onClusterEvent } from "@/lib/ws";
 
+// Short labels for the version segmented control ("default" → "Latest").
 const VERSIONS = [
-  { id: "default", label: "Default (latest)" },
+  { id: "default", label: "Latest" },
   { id: "v1.31", label: "v1.31" },
   { id: "v1.30", label: "v1.30" },
   { id: "v1.29", label: "v1.29" },
@@ -18,6 +21,12 @@ function nameError(name: string): string | null {
   if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(name)) return "Lowercase letters, digits, dashes only.";
   return null;
 }
+
+const INPUT_CLASS =
+  "w-full rounded-md border bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground " +
+  "outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 " +
+  "disabled:cursor-not-allowed disabled:opacity-50";
+const LABEL_CLASS = "mb-1.5 block text-xs font-medium text-muted-foreground";
 
 export function CreateClusterModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const { data: tools, refetch, isFetching } = useClusterTools();
@@ -60,14 +69,7 @@ export function CreateClusterModal({ open, onOpenChange }: { open: boolean; onOp
   const toolOk = tool === "kind" ? !!tools?.kind : !!tools?.k3d;
   const nameErr = nameError(name);
   const canCreate = dockerOk && toolOk && !nameErr && !creating;
-
-  const hint = (label: string, cmd: string) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--fg-secondary)" }}>
-      <span>{label}</span>
-      <code style={{ background: "var(--surface-primary)", padding: "2px 6px", borderRadius: 6 }}>{cmd}</code>
-      <button type="button" onClick={() => navigator.clipboard?.writeText(cmd)} style={{ cursor: "pointer", fontSize: 11 }}>copy</button>
-    </div>
-  );
+  const needsSetup = !!tools && (!dockerOk || (!tools.kind && !tools.k3d));
 
   function start() {
     setError(null); setLines([]); setCreating(true);
@@ -75,60 +77,87 @@ export function CreateClusterModal({ open, onOpenChange }: { open: boolean; onOp
   }
 
   return (
-    <Modal open={open} onOpenChange={(o) => { if (!o && creating) sendClusterStop(); onOpenChange(o); }} title="Create cluster">
-      {tools && (!dockerOk || (!tools.kind && !tools.k3d)) && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14, padding: 12, borderRadius: 8, background: "var(--surface-primary)", border: "1px solid var(--border-subtle)" }}>
-          {!tools.kind && !tools.k3d && hint("Install a tool:", "brew install kind")}
-          {!dockerOk && hint("Start Docker:", "open -a Docker")}
-          <button type="button" onClick={() => refetch()} disabled={isFetching} style={{ alignSelf: "flex-start", fontSize: 12, cursor: "pointer" }}>
-            {isFetching ? "Checking…" : "Re-check"}
-          </button>
-        </div>
-      )}
+    <Modal
+      open={open}
+      onOpenChange={(o) => { if (!o && creating) sendClusterStop(); onOpenChange(o); }}
+      title="Create cluster"
+      maxWidth="!max-w-lg"
+    >
+      <div className="flex flex-col gap-5">
+        {/* Detect-and-guide: only when a prerequisite is missing. */}
+        {needsSetup && (
+          <div className="flex flex-col gap-2.5 rounded-lg border bg-muted/30 p-3.5">
+            <div className="text-sm font-medium">Set up to create local clusters</div>
+            {!tools!.kind && !tools!.k3d && (
+              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                <span>Install a tool:</span>
+                <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">brew install kind</code>
+                <Button variant="ghost" size="xs" onClick={() => navigator.clipboard?.writeText("brew install kind")}>
+                  Copy
+                </Button>
+              </div>
+            )}
+            {!dockerOk && (
+              <div className="text-sm text-muted-foreground">Start Docker, then re-check.</div>
+            )}
+            <Button variant="outline" size="sm" className="self-start" onClick={() => refetch()} disabled={isFetching}>
+              {isFetching ? "Checking…" : "Re-check"}
+            </Button>
+          </div>
+        )}
 
-      <label style={{ display: "block", fontSize: 12, color: "var(--fg-secondary)", marginBottom: 4 }}>Name</label>
-      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="dev" disabled={creating}
-        style={{ width: "100%", marginBottom: 4, padding: "8px 10px", borderRadius: 8, background: "var(--surface-primary)", border: "1px solid var(--border-subtle)", color: "var(--fg-primary)" }} />
-      {name && nameErr && <div style={{ color: "var(--accent-soft)", fontSize: 11, marginBottom: 8 }}>{nameErr}</div>}
-
-      <div style={{ display: "flex", gap: 16, margin: "12px 0" }}>
+        {/* Name */}
         <div>
-          <label style={{ display: "block", fontSize: 12, color: "var(--fg-secondary)", marginBottom: 4 }}>Tool</label>
-          <div style={{ display: "flex", gap: 6 }}>
-            {(["kind", "k3d"] as const).map((t) => {
-              const enabled = t === "kind" ? !!tools?.kind : !!tools?.k3d;
-              return (
-                <button key={t} type="button" disabled={!enabled || creating} onClick={() => setTool(t)}
-                  style={{ padding: "6px 12px", borderRadius: 8, cursor: enabled ? "pointer" : "not-allowed",
-                    background: tool === t ? "var(--accent-dim)" : "var(--surface-primary)",
-                    border: `1px solid ${tool === t ? "var(--accent-primary)" : "var(--border-subtle)"}`,
-                    color: enabled ? "var(--fg-primary)" : "var(--fg-tertiary)" }}>{t}</button>
-              );
-            })}
+          <label htmlFor="cc-name" className={LABEL_CLASS}>Name</label>
+          <input
+            id="cc-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="dev"
+            disabled={creating}
+            autoComplete="off"
+            spellCheck={false}
+            className={INPUT_CLASS}
+          />
+          {name && nameErr && <p className="mt-1.5 text-xs text-destructive">{nameErr}</p>}
+        </div>
+
+        {/* Tool + version */}
+        <div className="flex flex-wrap gap-6">
+          <div>
+            <span className={LABEL_CLASS}>Tool</span>
+            <SegmentedTabs
+              tabs={[{ id: "kind", label: "kind" }, { id: "k3d", label: "k3d" }]}
+              active={tool}
+              onChange={(id) => setTool(id as "kind" | "k3d")}
+            />
+            {tools && !toolOk && (
+              <p className="mt-1.5 text-xs text-muted-foreground">{tool} is not installed.</p>
+            )}
+          </div>
+          <div>
+            <span className={LABEL_CLASS}>Kubernetes version</span>
+            <SegmentedTabs tabs={VERSIONS} active={version} onChange={setVersion} />
           </div>
         </div>
-        <div>
-          <label style={{ display: "block", fontSize: 12, color: "var(--fg-secondary)", marginBottom: 4 }}>Kubernetes version</label>
-          <select value={version} onChange={(e) => setVersion(e.target.value)} disabled={creating}
-            style={{ padding: "7px 10px", borderRadius: 8, background: "var(--surface-primary)", border: "1px solid var(--border-subtle)", color: "var(--fg-primary)" }}>
-            {VERSIONS.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-          </select>
+
+        {/* Streamed progress */}
+        {(lines.length > 0 || error) && (
+          <pre
+            ref={logRef}
+            className="max-h-52 overflow-auto rounded-md border bg-muted/30 p-3 font-mono text-xs whitespace-pre-wrap text-muted-foreground"
+          >
+            {lines.join("\n")}
+            {error ? `\n✗ ${error}` : ""}
+          </pre>
+        )}
+
+        {/* Footer */}
+        <div className="flex justify-end">
+          <Button onClick={start} disabled={!canCreate}>
+            {creating ? "Creating…" : "Create cluster"}
+          </Button>
         </div>
-      </div>
-
-      {(lines.length > 0 || error) && (
-        <pre ref={logRef} style={{ maxHeight: 200, overflow: "auto", marginTop: 12, padding: 10, borderRadius: 8, background: "var(--surface-sunken)", border: "1px solid var(--border-subtle)", color: "var(--fg-secondary)", fontSize: 11, whiteSpace: "pre-wrap" }}>
-          {lines.join("\n")}{error ? `\n✗ ${error}` : ""}
-        </pre>
-      )}
-
-      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
-        <button type="button" disabled={!canCreate} onClick={start}
-          style={{ padding: "8px 16px", borderRadius: 8, cursor: canCreate ? "pointer" : "not-allowed",
-            background: canCreate ? "var(--accent-primary)" : "var(--surface-elevated)",
-            color: canCreate ? "var(--fg-inverse)" : "var(--fg-tertiary)", border: "none", fontWeight: 600 }}>
-          {creating ? "Creating…" : "Create"}
-        </button>
       </div>
     </Modal>
   );
