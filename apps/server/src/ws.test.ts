@@ -9,8 +9,8 @@ function fakeMgr() {
   return {
     subs,
     unsub,
-    subscribe(sub: any, onSnapshot: (i: any[]) => void, _onDelta: any) {
-      subs.push({ sub, onSnapshot });
+    subscribe(sub: any, onSnapshot: (i: any[]) => void, onDelta: (e: any) => void) {
+      subs.push({ sub, onSnapshot, onDelta });
       return unsub;
     },
   };
@@ -49,7 +49,27 @@ test("subscribe uses an explicit context when provided, and keys by it (no dedup
   expect(mgr.subs.map((s) => s.sub.context)).toEqual(["ctx-a", "ctx-b"]);
 });
 
-test("unsubscribe with a context tears down that context's subscription", () => {
+test("delta frames echo the context, event, and object", () => {
+  const mgr = fakeMgr();
+  const handlers = makeWsHandlers(mgr as any, "boot-ctx");
+  const ws = fakeWs();
+  handlers.open(ws);
+
+  handlers.message(ws, JSON.stringify({ type: "subscribe", context: "ctx-a", kind: "pods", namespace: "default" }));
+
+  // Drive a delta through the captured callback — the frame must echo the context.
+  mgr.subs[0].onDelta({ type: "ADDED", object: { metadata: { name: "p1" } } });
+  expect(ws.sent[0]).toMatchObject({
+    type: "delta",
+    context: "ctx-a",
+    kind: "pods",
+    namespace: "default",
+    event: "ADDED",
+    object: { metadata: { name: "p1" } },
+  });
+});
+
+test("unsubscribe with a context tears down that subscription and frees the key", () => {
   const mgr = fakeMgr();
   const handlers = makeWsHandlers(mgr as any, "boot-ctx");
   const ws = fakeWs();
@@ -57,6 +77,10 @@ test("unsubscribe with a context tears down that context's subscription", () => 
 
   handlers.message(ws, JSON.stringify({ type: "subscribe", context: "ctx-a", kind: "pods", namespace: "default" }));
   handlers.message(ws, JSON.stringify({ type: "unsubscribe", context: "ctx-a", kind: "pods", namespace: "default" }));
-
   expect(mgr.unsub).toHaveBeenCalledTimes(1);
+
+  // The key was freed: re-subscribing the same key registers a NEW subscription
+  // (not skipped by the `if (map.has(key)) return` dedupe guard).
+  handlers.message(ws, JSON.stringify({ type: "subscribe", context: "ctx-a", kind: "pods", namespace: "default" }));
+  expect(mgr.subs.length).toBe(2);
 });

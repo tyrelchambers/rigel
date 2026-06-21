@@ -29,7 +29,7 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null)
       const m = JSON.parse(String(raw));
       const map = unsubs.get(ws)!;
       if (m.type === "subscribe") {
-        const subCtx = typeof m.context === "string" ? m.context : context;
+        const subCtx = typeof m.context === "string" && m.context !== "" ? m.context : context;
         const key = `${subCtx ?? ""}/${m.kind}/${m.namespace}`;
         if (map.has(key)) return;
         const un = mgr.subscribe(
@@ -58,7 +58,7 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null)
         );
         map.set(key, un);
       } else if (m.type === "unsubscribe") {
-        const subCtx = typeof m.context === "string" ? m.context : context;
+        const subCtx = typeof m.context === "string" && m.context !== "" ? m.context : context;
         const key = `${subCtx ?? ""}/${m.kind}/${m.namespace}`;
         map.get(key)?.();
         map.delete(key);
