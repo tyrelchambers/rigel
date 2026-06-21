@@ -86,10 +86,11 @@ export function permissionHookSettings(): string {
   });
 }
 
-export function readAllowlist(context: string | null): string[] {
-  if (!context) return READ_ONLY_ALLOWLIST;
-  const prefixed = READ_ONLY_ALLOWLIST.filter((p) => p.startsWith("Bash(kubectl ")).map(
-    (p) => p.replace("Bash(kubectl ", `Bash(kubectl --context ${context} `),
+export function readAllowlist(contexts: string[]): string[] {
+  const prefixed = contexts.flatMap((ctx) =>
+    READ_ONLY_ALLOWLIST.filter((p) => p.startsWith("Bash(kubectl ")).map((p) =>
+      p.replace("Bash(kubectl ", `Bash(kubectl --context ${ctx} `),
+    ),
   );
   return [...READ_ONLY_ALLOWLIST, ...prefixed];
 }
@@ -224,6 +225,9 @@ export interface RunClaudeOpts {
   /** Prior CLI session id — passed as `--resume` so the turn continues the same
    * conversation (parity with Swift's ClaudeSession resume). Absent = fresh turn. */
   sessionId?: string;
+  /** Contexts the model may run READ-ONLY kubectl against this turn (fan-out).
+   *  Active-first; defaults to just the active context. */
+  readContexts?: string[];
 }
 
 /**
@@ -236,9 +240,10 @@ export function buildClaudeArgs(
   opts?: RunClaudeOpts,
 ): string[] {
   const argv = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose"];
+  const readContexts = opts?.readContexts ?? (context ? [context] : []);
   // Teach the model the action/question button contract (parity with Swift) and
   // block AskUserQuestion (no UI here — it uses ```question blocks instead).
-  argv.push("--append-system-prompt", systemPrompt(context));
+  argv.push("--append-system-prompt", systemPrompt(context, readContexts));
   argv.push("--disallowedTools", "AskUserQuestion");
   // Denylist permissioning: a PreToolUse hook (commandPolicy) auto-allows every
   // non-mutating Bash command — so reads run regardless of flag order — and DENIES
@@ -253,7 +258,7 @@ export function buildClaudeArgs(
   // Resume the prior session so the model keeps conversation + action-result
   // history across turns. Only when we actually have an id (first turn is fresh).
   if (opts?.sessionId) argv.push("--resume", opts.sessionId);
-  for (const tool of readAllowlist(context)) {
+  for (const tool of readAllowlist(readContexts)) {
     argv.push("--allowedTools", tool);
   }
   return argv;
