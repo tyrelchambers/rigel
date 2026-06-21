@@ -25,7 +25,7 @@ interface KubeConfigView {
  * server is resolved by following its cluster ref into the clusters list.
  */
 export function parseContexts(view: KubeConfigView): ClusterContext[] {
-  const current = view["current-context"] ?? null;
+  const current = view["current-context"];
   const serverByCluster = new Map<string, string>();
   for (const c of view.clusters ?? []) serverByCluster.set(c.name, c.cluster?.server ?? "");
   return (view.contexts ?? []).map((c) => {

@@ -44,3 +44,8 @@ test("listContexts returns [] when kubectl fails (non-zero exit)", async () => {
   const fakeRun = async () => ({ code: 1, stdout: "", stderr: "no kubeconfig" });
   expect(await listContexts(fakeRun)).toEqual([]);
 });
+
+test("listContexts returns [] when kubectl exits 0 but emits bad JSON", async () => {
+  const fakeRun = async () => ({ code: 0, stdout: "not json", stderr: "" });
+  expect(await listContexts(fakeRun)).toEqual([]);
+});
