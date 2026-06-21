@@ -12,11 +12,15 @@ export function ClusterIconPicker({
   currentId,
   onPick,
   onClose,
+  deletable,
+  onDelete,
 }: {
   contextName: string | null;
   currentId: IconId | null;
   onPick: (id: IconId) => void;
   onClose: () => void;
+  deletable?: boolean;
+  onDelete?: () => void;
 }) {
   const [query, setQuery] = useState("");
   const open = contextName !== null;
@@ -86,7 +90,19 @@ export function ClusterIconPicker({
       </div>
       {ids.length === 0 && (
         <div style={{ color: "var(--fg-tertiary)", fontSize: 13, padding: "10px 2px" }}>
-          No icons match “{query}”.
+          No icons match "{query}".
+        </div>
+      )}
+      {deletable && onDelete && (
+        <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--border-subtle)" }}>
+          <button
+            type="button"
+            onClick={onDelete}
+            style={{ fontSize: 13, color: "#f87171", background: "transparent",
+              border: "1px solid var(--border-subtle)", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}
+          >
+            Delete cluster
+          </button>
         </div>
       )}
     </Modal>

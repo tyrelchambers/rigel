@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
+import { Plus } from "lucide-react";
 import { useCluster } from "@/store/cluster";
-import { useContexts } from "@/lib/api";
+import { useContexts, useDeleteCluster } from "@/lib/api";
 import { initContext, switchCluster } from "@/lib/ws";
 import { classifyProvider, providerLabel } from "./clusterTile";
 import { CLUSTER_ICONS, type IconId } from "./clusterIcons";
 import { loadIconOverrides, saveIconOverrides, resolveIconId } from "./clusterIconStore";
 import { ClusterIconPicker } from "./ClusterIconPicker";
+import { CreateClusterModal } from "./CreateClusterModal";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 /**
@@ -22,6 +24,8 @@ export function ClusterRail() {
   const [iconOverrides, setIconOverrides] = useState<Record<string, IconId>>(() => loadIconOverrides());
   // The context whose icon is being edited (null = picker closed).
   const [pickerFor, setPickerFor] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const deleteCluster = useDeleteCluster();
 
   // Once contexts load, adopt the kubeconfig's active one as the initial active
   // context (no teardown). initContext only acts while currentContext is unset.
@@ -129,6 +133,19 @@ export function ClusterRail() {
             );
           })}
         </TooltipProvider>
+        <button
+          type="button"
+          title="Add / create a cluster"
+          onClick={() => setCreateOpen(true)}
+          style={{
+            width: 38, height: 38, borderRadius: 10, marginTop: 2, flexShrink: 0,
+            display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+            color: "var(--fg-secondary)", background: "var(--surface-primary)",
+            border: "1px dashed var(--border-strong)",
+          }}
+        >
+          <Plus size={18} />
+        </button>
       </div>
 
       <ClusterIconPicker
@@ -139,7 +156,16 @@ export function ClusterRail() {
           setPickerFor(null);
         }}
         onClose={() => setPickerFor(null)}
+        deletable={!!pickerFor && (pickerFor.startsWith("kind-") || pickerFor.startsWith("k3d-"))}
+        onDelete={() => {
+          // TODO: upgrade to the app's Dialog confirm
+          if (pickerFor && window.confirm(`Delete cluster "${pickerFor}"? This destroys the local cluster and removes its kubeconfig context.`)) {
+            deleteCluster.mutate(pickerFor);
+            setPickerFor(null); // close the tile modal
+          }
+        }}
       />
+      <CreateClusterModal open={createOpen} onOpenChange={setCreateOpen} />
     </nav>
   );
 }
