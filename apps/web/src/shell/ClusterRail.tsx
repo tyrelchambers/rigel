@@ -1,25 +1,27 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useCluster } from "@/store/cluster";
 import { useContexts } from "@/lib/api";
 import { initContext, switchCluster } from "@/lib/ws";
 import { classifyProvider, providerLabel } from "./clusterTile";
-import { CLUSTER_ICONS, ICON_PALETTE, type IconId } from "./clusterIcons";
+import { CLUSTER_ICONS, type IconId } from "./clusterIcons";
 import { loadIconOverrides, saveIconOverrides, resolveIconId } from "./clusterIconStore";
+import { ClusterIconPicker } from "./ClusterIconPicker";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuLabel } from "@/components/ui/context-menu";
 
 /**
  * Full-height far-left rail of cluster tiles. Clicking a tile re-points the whole
- * app at that kubeconfig context. Single active cluster at a time. Hidden when
- * there's 0 or 1 context (no choice to make).
+ * app at that kubeconfig context. Single active cluster at a time. Shown whenever
+ * there's at least one context; hidden only when the kubeconfig is empty.
  *
  * Each tile shows the provider-default icon (or a user override). Right-clicking
- * opens an icon picker; left-clicking switches the active cluster.
+ * a tile opens the icon-picker modal; left-clicking switches the active cluster.
  */
 export function ClusterRail() {
   const { data: contexts } = useContexts();
   const activeContext = useCluster((s) => s.activeContext);
   const [iconOverrides, setIconOverrides] = useState<Record<string, IconId>>(() => loadIconOverrides());
+  // The context whose icon is being edited (null = picker closed).
+  const [pickerFor, setPickerFor] = useState<string | null>(null);
 
   // Once contexts load, adopt the kubeconfig's active one as the initial active
   // context (no teardown). initContext only acts while currentContext is unset.
@@ -36,7 +38,17 @@ export function ClusterRail() {
     });
   }
 
-  if (!contexts || contexts.length <= 1) return null;
+  // The current icon id of the context being edited, for the picker's highlight.
+  const pickerCurrentId = useMemo(() => {
+    if (!pickerFor || !contexts) return null;
+    const ctx = contexts.find((c) => c.name === pickerFor);
+    return ctx ? resolveIconId(ctx.name, classifyProvider(ctx), iconOverrides) : null;
+  }, [pickerFor, contexts, iconOverrides]);
+
+  // Show the rail whenever there's at least one context (the user wants the
+  // active cluster visible even in a single-cluster setup); only a truly empty
+  // list hides it.
+  if (!contexts || contexts.length === 0) return null;
 
   return (
     <nav
@@ -56,80 +68,78 @@ export function ClusterRail() {
             const iconId = resolveIconId(c.name, provider, iconOverrides);
             const Icon = CLUSTER_ICONS[iconId].Component;
             return (
-              <ContextMenu key={c.name}>
-                {/*
-                 * ContextMenuTrigger wraps the whole Tooltip subtree so that
-                 * right-clicking the button (or the trigger area) opens the icon
-                 * picker. The Tooltip lives inside so hover still works on the
-                 * same button element.
-                 */}
-                <ContextMenuTrigger>
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <button
-                          type="button"
-                          aria-current={isActive ? "true" : undefined}
-                          onClick={() => switchCluster(c.name)}
-                          style={{
-                            width: 38, height: 38, borderRadius: 10,
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            cursor: "pointer",
-                            color: isActive ? "var(--fg-primary)" : "var(--fg-secondary)",
-                            background: isActive ? "var(--accent-primary)" : "var(--surface-primary)",
-                            border: isActive ? "1px solid var(--accent-primary)" : "1px solid var(--border-subtle)",
-                            transition: "background 120ms ease, color 120ms ease",
-                          }}
-                        >
-                          <Icon size={18} />
-                        </button>
-                      }
-                    />
-                    <TooltipContent side="right">
-                      <div style={{ fontWeight: 600 }}>{c.name}</div>
-                      <div style={{ opacity: 0.8, fontSize: 11 }}>{providerLabel(provider)}</div>
-                      {c.server ? <div style={{ opacity: 0.6, fontSize: 11 }}>{c.server}</div> : null}
-                      <div style={{ opacity: 0.5, fontSize: 10, marginTop: 2 }}>Right-click to change icon</div>
-                    </TooltipContent>
-                  </Tooltip>
-                </ContextMenuTrigger>
-                <ContextMenuContent>
-                  <ContextMenuLabel>Set icon</ContextMenuLabel>
-                  {/*
-                   * Each palette entry is a ContextMenuItem so base-ui closes
-                   * the menu automatically on pick. The icon buttons are
-                   * rendered inside ContextMenuItem via the render prop to
-                   * keep them square and gridded.
-                   */}
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 2, padding: 2 }}>
-                    {ICON_PALETTE.map((id) => {
-                      const P = CLUSTER_ICONS[id].Component;
-                      const selected = id === iconId;
-                      return (
-                        <ContextMenuItem
-                          key={id}
-                          onClick={() => setIcon(c.name, id)}
-                          title={CLUSTER_ICONS[id].label}
-                          style={{
-                            width: 30, height: 30, borderRadius: 6,
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            cursor: "pointer", padding: 0,
-                            color: "var(--fg-primary)",
-                            background: selected ? "var(--accent-primary)" : "transparent",
-                            border: selected ? "1px solid var(--accent-primary)" : "1px solid transparent",
-                          }}
-                        >
-                          <P size={16} />
-                        </ContextMenuItem>
-                      );
-                    })}
-                  </div>
-                </ContextMenuContent>
-              </ContextMenu>
+              <div
+                key={c.name}
+                style={{ position: "relative", width: "100%", display: "flex", justifyContent: "center", flexShrink: 0 }}
+              >
+                {/* Discord-style active indicator: a slim blue bar flush against
+                    the rail's left edge, rounded on the right, centered on the
+                    active tile. */}
+                {isActive && (
+                  <span
+                    aria-hidden
+                    style={{
+                      position: "absolute", left: 0, top: "50%",
+                      transform: "translateY(-50%)",
+                      width: 4, height: 20, borderRadius: "0 3px 3px 0",
+                      background: "var(--accent-primary)",
+                    }}
+                  />
+                )}
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <button
+                        type="button"
+                        aria-current={isActive ? "true" : undefined}
+                        onClick={() => switchCluster(c.name)}
+                        // Right-click opens the icon-picker modal for this context.
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          setPickerFor(c.name);
+                        }}
+                        style={{
+                          width: 38, height: 38, borderRadius: 10,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          cursor: "pointer",
+                          color: isActive ? "var(--fg-primary)" : "var(--fg-secondary)",
+                          // Active tile uses the card gray (lighter); the blue
+                          // moved to the left-edge indicator above.
+                          background: isActive ? "var(--surface-elevated)" : "var(--surface-primary)",
+                          border: "1px solid var(--border-subtle)",
+                          transition: "background 120ms ease, color 120ms ease",
+                        }}
+                      >
+                        <Icon size={18} />
+                      </button>
+                    }
+                  />
+                  <TooltipContent side="right">
+                    {/* Stack vertically: the tooltip Popup is an inline-flex row,
+                        so without this column the lines squish side-by-side. */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-start", textAlign: "left", lineHeight: 1.35 }}>
+                      <div style={{ fontWeight: 600, color: "var(--fg-primary)" }}>{c.name}</div>
+                      <div style={{ color: "var(--accent-soft)", fontSize: 11 }}>{providerLabel(provider)}</div>
+                      {c.server ? <div style={{ color: "var(--fg-secondary)", fontSize: 11 }}>{c.server}</div> : null}
+                      <div style={{ color: "var(--fg-tertiary)", fontSize: 10, marginTop: 2 }}>Right-click to change icon</div>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
             );
           })}
         </TooltipProvider>
       </div>
+
+      <ClusterIconPicker
+        contextName={pickerFor}
+        currentId={pickerCurrentId}
+        onPick={(id) => {
+          if (pickerFor) setIcon(pickerFor, id);
+          setPickerFor(null);
+        }}
+        onClose={() => setPickerFor(null)}
+      />
     </nav>
   );
 }
