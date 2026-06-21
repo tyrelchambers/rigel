@@ -1,7 +1,7 @@
 // TabContent — decides which content to render based on ready state.
 // The loading matrix is implemented here exactly.
 
-import { LoaderCircle } from "lucide-react";
+import { Loader } from "@/components/Loader";
 import { useAssistantCtx } from "../AssistantContext";
 import { ContentSkeleton } from "./ContentSkeleton";
 import { InstallView } from "../tabs/InstallView";
@@ -30,7 +30,7 @@ export function TabContent() {
   if (needsState && !ready.state) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-        <LoaderCircle className="size-6 animate-spin text-muted-foreground" />
+        <Loader size={24} className="text-muted-foreground" />
         <div>
           <p className="text-sm font-medium">Setting up the assistant…</p>
           <p className="mt-1 text-xs text-muted-foreground">

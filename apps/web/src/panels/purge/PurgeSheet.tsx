@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Trash2, Lock, LoaderCircle, CheckCircle2, XCircle } from "lucide-react";
+import { Trash2, Lock, CheckCircle2, XCircle } from "lucide-react";
+import { Loader } from "@/components/Loader";
 import {
   Dialog,
   DialogContent,
@@ -145,7 +146,7 @@ export function PurgeSheet({ target, open, onClose }: PurgeSheetProps) {
         {/* Loading discovery */}
         {discovery.isPending && (
           <div className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
-            <LoaderCircle className="size-4 animate-spin" />
+            <Loader size={16} />
             Discovering resources…
           </div>
         )}
@@ -302,7 +303,7 @@ export function PurgeSheet({ target, open, onClose }: PurgeSheetProps) {
           {!blocked && (
             <Button variant="destructive" onClick={handlePurge} disabled={!canPurge}>
               {exec.isPending ? (
-                <LoaderCircle className="size-4 animate-spin" />
+                <Loader size={16} />
               ) : (
                 <Trash2 />
               )}

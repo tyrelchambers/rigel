@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, CircleAlert, LoaderCircle, Hourglass } from "lucide-react";
+import { Check, CircleAlert, Hourglass } from "lucide-react";
 import { useCluster } from "@/store/cluster";
+import { Loader } from "@/components/Loader";
 import { Button } from "@/components/ui/button";
 import type { Pod } from "../../pods/types";
 import { matchInstancePods, podReadiness } from "../wizardLogic";
@@ -87,7 +88,7 @@ export function VerifyingStep({
         {rows.map((r) => (
           <li key={r.label} className="flex items-center gap-2 text-sm">
             {r.icon === "done" && <Check className="size-4 text-green-600 dark:text-green-400" />}
-            {r.icon === "spin" && <LoaderCircle className="size-4 animate-spin text-muted-foreground" />}
+            {r.icon === "spin" && <Loader size={16} className="text-muted-foreground" />}
             {r.icon === "wait" && <Hourglass className="size-4 text-muted-foreground" />}
             {r.icon === "fail" && <CircleAlert className="size-4 text-destructive" />}
             <span>{r.label}</span>

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  LoaderCircle,
   Cpu,
   MemoryStick,
   Recycle,
@@ -22,6 +21,7 @@ import { subscribe, unsubscribe } from "@/lib/ws";
 import { cn } from "@/lib/utils";
 import { useNodeMetrics } from "@/lib/api";
 import { InfoTooltip } from "@/components/InfoTooltip";
+import { Loader } from "@/components/Loader";
 import { PurgePickerSheet } from "@/panels/purge/PurgePickerSheet";
 import { PurgeSheet } from "@/panels/purge/PurgeSheet";
 import { useRightSizing } from "@/panels/rightsizing/useRightSizing";
@@ -222,7 +222,7 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
             <h1 className="ov-title">Overview</h1>
             <InfoTooltip label="Health at a glance" />
             {isLoading && (
-              <LoaderCircle className="size-4 animate-spin text-muted-foreground" aria-label="loading" />
+              <Loader size={16} className="text-muted-foreground" label="loading" />
             )}
           </div>
         </div>
@@ -456,7 +456,7 @@ function GaugeCard({
       <CardHeader icon={icon} title={title} />
       {loading ? (
         <div className="ov-gauge-empty">
-          <LoaderCircle className="size-5 animate-spin" style={{ color: "var(--accent-primary)" }} />
+          <Loader size={20} color="var(--accent-primary)" />
           <span className="ov-gauge-empty-text">Loading usage history…</span>
         </div>
       ) : fraction === null ? (

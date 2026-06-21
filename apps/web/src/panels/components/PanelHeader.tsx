@@ -9,7 +9,7 @@
  * Panels render this as the fixed top of a full-height column, with the list
  * scrolling underneath, so the header stays put.
  */
-import { LoaderCircle } from "lucide-react";
+import { Loader } from "@/components/Loader";
 import { InfoTooltip } from "@/components/InfoTooltip";
 
 interface PanelHeaderProps {
@@ -46,7 +46,7 @@ export function PanelHeader({ title, subtitle, count, loading, children }: Panel
           </span>
         )}
         {loading && (
-          <LoaderCircle className="size-4 animate-spin text-muted-foreground" aria-label="loading" />
+          <Loader size={16} className="text-muted-foreground" label="loading" />
         )}
         {children && <div className="ml-auto flex items-center gap-2">{children}</div>}
       </div>

@@ -12,8 +12,9 @@
 //      catalog install wizard. No kubectl runs here.
 
 import { useEffect, useRef, useState } from "react";
-import { LoaderCircle, Check, ChevronDown, ChevronRight, AlertTriangle } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Loader } from "@/components/Loader";
 import {
   signalBridgeManifest,
   signalStatusColor,
@@ -236,7 +237,7 @@ export function SignalSection({
       <div className="mb-3 flex items-center gap-2">
         <span className={`inline-block h-2.5 w-2.5 rounded-full ${dot}`} />
         <span className="font-mono text-xs">{label}</span>
-        {busy && <LoaderCircle className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+        {busy && <Loader size={14} className="text-muted-foreground" />}
       </div>
 
       {error && (
@@ -298,7 +299,7 @@ export function SignalSection({
                 </>
               ) : (
                 <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                  <Loader size={14} />
                   Opening link channel…
                 </p>
               )}
@@ -330,7 +331,7 @@ export function SignalSection({
                 />
               ) : (
                 <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                  <Loader size={14} />
                   Opening link channel…
                 </p>
               )}

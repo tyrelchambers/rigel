@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { LoaderCircle, Package, Star, Trash2 } from "lucide-react";
+import { Package, Star, Trash2 } from "lucide-react";
 import type { Secret } from "@rigel/k8s";
+import { Loader } from "@/components/Loader";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import {
@@ -108,7 +109,7 @@ export default function AccountsPanel() {
           <InfoTooltip label="Registry pull credentials for catalog installs (Docker Hub, ghcr.io, quay.io)." />
         </div>
         {isLoading && (
-          <LoaderCircle className="mt-1 size-4 animate-spin text-muted-foreground" aria-label="loading" />
+          <Loader size={16} className="mt-1 text-muted-foreground" label="loading" />
         )}
         <Button className="ml-auto" onClick={() => setShowAdd(true)}>
           Add account
