@@ -112,6 +112,33 @@ test("subscriptions are keyed by context: two contexts → two independent watch
   expect(argsFor("ctx-b")).toBeTruthy();
 });
 
+// (a3) An omitted context and an explicit context equal to the default resolve
+//      to the SAME watch (no duplicate spawn) — so prewarm warm-hits survive
+//      once the WS layer passes the default context explicitly.
+test("omitted context and explicit-default context share one watch (no duplicate spawn)", async () => {
+  const rec = makeRecorder();
+  const mgr = new WatchManager("prod", rec.spawnFn as any);
+
+  // First subscriber omits context (like prewarm / today's callers).
+  mgr.subscribe({ kind: "pods", namespace: "default" }, () => {}, () => {});
+  rec.lastList().emitList([pod("a")]);
+  await new Promise((r) => setImmediate(r));
+  const listsAfterFirst = rec.lists().length;
+
+  // Second subscriber passes the default context explicitly — must reuse the
+  // same watch (warm hit), not spawn a second LIST.
+  const snapshots: any[][] = [];
+  mgr.subscribe(
+    { context: "prod", kind: "pods", namespace: "default" },
+    (items) => snapshots.push(items),
+    () => {},
+  );
+
+  expect(rec.lists().length).toBe(listsAfterFirst); // no new spawn
+  expect(snapshots.length).toBe(1); // served warm from cache
+  expect(snapshots[0].map((p: any) => p.metadata.name)).toEqual(["a"]);
+});
+
 // (b) Last listener leaving does NOT stop immediately, but DOES stop after the
 //     idle TTL with no new subscriber.
 test("leaving keeps the warm watch until the idle TTL fires", async () => {
