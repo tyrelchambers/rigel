@@ -24,6 +24,13 @@ export interface AgentModels {
 const CODEX_MODELS = ["gpt-5-codex", "gpt-5", "o4-mini"];
 
 /**
+ * Gemini model list. STATIC + PROVISIONAL: gemini-cli has no cheap "list models"
+ * command, so this is a best-effort set to refine once gemini is live-verified.
+ * Effort is Claude-only, so the efforts list is empty (mirrors codex).
+ */
+const GEMINI_MODELS = ["gemini-2.5-pro", "gemini-2.5-flash"];
+
+/**
  * Parse the stdout of `opencode models` into a deduped, sorted list of model ids.
  * Pure + exported so it's unit-testable without spawning opencode.
  *
@@ -104,6 +111,9 @@ export async function agentModels(id: AgentId): Promise<AgentModels> {
   }
   if (id === "codex") {
     return { models: [...CODEX_MODELS], efforts: [] };
+  }
+  if (id === "gemini") {
+    return { models: [...GEMINI_MODELS], efforts: [] };
   }
   if (id === "opencode") {
     return { models: await listOpencodeModels(), efforts: [] };

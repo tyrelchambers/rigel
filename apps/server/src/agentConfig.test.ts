@@ -10,6 +10,8 @@ import {
   claudeAuthEnv,
   codexAuthEnv,
   codexSubscriptionConnected,
+  geminiAuthEnv,
+  geminiConnected,
   opencodeAuthEnv,
   opencodeConnected,
 } from "./agentConfig";
@@ -47,11 +49,14 @@ afterEach(async () => {
 });
 
 describe("agentsView", () => {
-  it("defaults active=claude and marks others coming soon", async () => {
+  it("defaults active=claude; all listed agents are available (none coming soon)", async () => {
     const v = await agentsView();
     expect(v.activeAgentId).toBe("claude");
     expect(v.agents.find((a) => a.id === "claude")?.connection).toBe("notConnected");
-    expect(v.agents.find((a) => a.id === "gemini")?.connection).toBe("comingSoon");
+    // gemini is now an available runner — no auth on a fresh temp HOME → notConnected.
+    expect(v.agents.find((a) => a.id === "gemini")?.connection).toBe("notConnected");
+    // None of the listed agents are coming soon anymore.
+    expect(v.agents.every((a) => a.connection !== "comingSoon")).toBe(true);
   });
 });
 
@@ -84,11 +89,21 @@ describe("setAgentAuth (claude, subscription)", () => {
   });
 });
 
-describe("setAgentAuth (coming soon)", () => {
-  it("rejects a not-available agent", async () => {
-    await expect(setAgentAuth("gemini", { authMethod: "apiKey", secret: "x" })).rejects.toThrow(
-      /not available/,
+describe("setAgentAuth (unknown agent)", () => {
+  it("rejects an unknown agent id", async () => {
+    // @ts-expect-error intentionally passing an invalid id
+    await expect(setAgentAuth("bogus", { authMethod: "apiKey", secret: "x" })).rejects.toThrow(
+      /unknown agent/,
     );
+  });
+});
+
+describe("setAgentAuth (gemini, apiKey)", () => {
+  it("stores the key and reports connected; geminiAuthEnv injects GEMINI_API_KEY", async () => {
+    const view = await setAgentAuth("gemini", { authMethod: "apiKey", secret: "g-key-123" });
+    expect(view.authMethod).toBe("apiKey");
+    expect(view.connection).toBe("connected");
+    expect(await geminiAuthEnv()).toEqual({ GEMINI_API_KEY: "g-key-123" });
   });
 });
 
@@ -135,6 +150,49 @@ describe("codexSubscriptionConnected", () => {
     } finally {
       await rm(codexHome, { recursive: true, force: true });
     }
+  });
+});
+
+describe("geminiAuthEnv", () => {
+  it("returns GEMINI_API_KEY when gemini is configured with an api key", async () => {
+    await writeRawConfig({
+      activeAgentId: "claude",
+      agents: { gemini: { authMethod: "apiKey", apiKey: "g-key-456" } },
+    });
+    expect(await geminiAuthEnv()).toEqual({ GEMINI_API_KEY: "g-key-456" });
+  });
+
+  it("returns {} on subscription (gemini reads its own oauth_creds.json)", async () => {
+    await writeRawConfig({
+      activeAgentId: "claude",
+      agents: { gemini: { authMethod: "subscription" } },
+    });
+    expect(await geminiAuthEnv()).toEqual({});
+  });
+
+  it("returns {} when there is no gemini entry", async () => {
+    expect(await geminiAuthEnv()).toEqual({});
+  });
+});
+
+describe("geminiConnected", () => {
+  it("is false when oauth_creds.json is absent and true when present", async () => {
+    // geminiConnected reads ~/.gemini/oauth_creds.json under the temp HOME.
+    expect(await geminiConnected()).toBe(false);
+    await mkdir(join(home, ".gemini"), { recursive: true });
+    await writeFile(join(home, ".gemini", "oauth_creds.json"), "{}", "utf8");
+    expect(await geminiConnected()).toBe(true);
+  });
+
+  it("agentConnection('gemini') tracks the subscription login when on subscription auth", async () => {
+    await writeRawConfig({
+      activeAgentId: "claude",
+      agents: { gemini: { authMethod: "subscription" } },
+    });
+    expect(await agentConnection("gemini")).toBe("notConnected");
+    await mkdir(join(home, ".gemini"), { recursive: true });
+    await writeFile(join(home, ".gemini", "oauth_creds.json"), "{}", "utf8");
+    expect(await agentConnection("gemini")).toBe("connected");
   });
 });
 
@@ -209,8 +267,12 @@ describe("setActiveAgent", () => {
     expect((await agentsView()).activeAgentId).toBe("codex");
   });
 
-  it("rejects a coming-soon agent", async () => {
-    await expect(setActiveAgent("gemini")).rejects.toThrow(/not available/);
+  it("persists gemini as the active agent (gemini is available)", async () => {
+    const view = await setActiveAgent("gemini");
+    expect(view.activeAgentId).toBe("gemini");
+    const file = join(home, ".claude", "rigel-agents.json");
+    const parsed = JSON.parse(await readFile(file, "utf8"));
+    expect(parsed.activeAgentId).toBe("gemini");
   });
 
   it("rejects an unknown agent", async () => {

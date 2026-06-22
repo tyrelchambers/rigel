@@ -84,6 +84,29 @@ export async function codexSubscriptionConnected(): Promise<boolean> {
   }
 }
 
+/** Env vars to launch Gemini with, per its active auth method. */
+export async function geminiAuthEnv(): Promise<Record<string, string>> {
+  const cfg = await readAgentsConfig();
+  const entry = cfg.agents.gemini;
+  if (entry?.authMethod === "apiKey" && entry.apiKey) {
+    const key = decryptSecret(entry.apiKey);
+    if (key) return { GEMINI_API_KEY: key };
+  }
+  // Subscription: Gemini reads its own ~/.gemini/oauth_creds.json; nothing to inject.
+  return {};
+}
+
+/** A Google-OAuth login exists iff Gemini's oauth_creds.json is on disk
+ * (mirrors codexSubscriptionConnected). */
+export async function geminiConnected(): Promise<boolean> {
+  try {
+    await access(join(homedir(), ".gemini", "oauth_creds.json"));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Env vars to launch OpenCode with. OpenCode is login-managed: `opencode providers
  * login` stores creds in its own auth.json, so there is no Rigel-managed key to
  * inject — always {}. (Mirrors codexAuthEnv's subscription branch.) */
@@ -131,7 +154,16 @@ export async function agentConnection(id: AgentId): Promise<AgentConnection> {
     // auth.json holds ≥1 credential.
     return (await opencodeConnected()) ? "connected" : "notConnected";
   }
-  return cfg.agents[id]?.apiKey ? "connected" : "notConnected";
+  if (id === "gemini") {
+    if (authMethodFor(cfg, "gemini") === "apiKey") {
+      return cfg.agents.gemini?.apiKey ? "connected" : "notConnected";
+    }
+    // Subscription: connected iff Gemini's own oauth_creds.json is on disk.
+    return (await geminiConnected()) ? "connected" : "notConnected";
+  }
+  // Every AgentId is handled above, so `id` is `never` here; this is the safe
+  // default for any future agent id that lands before its connection branch does.
+  return (cfg.agents[id as AgentId]?.apiKey ? "connected" : "notConnected") as AgentConnection;
 }
 
 export interface AgentView {

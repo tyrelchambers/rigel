@@ -1,15 +1,24 @@
 import { test, expect } from "vitest";
 import { listAgents, getAgent } from "./agentRegistry";
 
-test("claude, codex, and opencode are available; the rest are coming soon", () => {
+test("claude, codex, gemini, and opencode are all available; openrouter is gone", () => {
   const ids = listAgents().map((a) => a.id);
-  expect(ids).toEqual(["claude", "codex", "gemini", "opencode", "openrouter"]);
+  expect(ids).toEqual(["claude", "codex", "gemini", "opencode"]);
   expect(getAgent("claude")?.status).toBe("available");
   expect(getAgent("codex")?.status).toBe("available");
+  expect(getAgent("gemini")?.status).toBe("available");
   expect(getAgent("opencode")?.status).toBe("available");
-  for (const id of ["gemini", "openrouter"] as const) {
-    expect(getAgent(id)?.status).toBe("comingSoon");
-  }
+  // OpenRouter was removed entirely.
+  expect(getAgent("openrouter")).toBeUndefined();
+});
+
+test("gemini is available with both subscription + apiKey auth methods", () => {
+  const g = getAgent("gemini");
+  expect(g?.status).toBe("available");
+  expect(g?.authMethods).toEqual(["subscription", "apiKey"]);
+  expect(g?.label).toBe("Gemini");
+  expect(g?.vendor).toBe("Google");
+  expect(g?.installLabel).toBe("Install Gemini CLI");
 });
 
 test("opencode is login-managed: available with a single subscription auth method", () => {
@@ -23,7 +32,6 @@ test("opencode is login-managed: available with a single subscription auth metho
 test("every agent offers at least one auth method; claude offers both", () => {
   for (const a of listAgents()) expect(a.authMethods.length).toBeGreaterThan(0);
   expect(getAgent("claude")?.authMethods).toEqual(["subscription", "apiKey"]);
-  expect(getAgent("openrouter")?.authMethods).toEqual(["apiKey"]);
 });
 
 test("getAgent returns undefined for an unknown id", () => {

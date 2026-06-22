@@ -2,7 +2,7 @@
 // this free of heavy imports (claudeBridge/agentConfig) so nothing import-cycles
 // through it. Only "claude" is wired to a real runner today (see runAgent.ts).
 
-export type AgentId = "claude" | "codex" | "gemini" | "opencode" | "openrouter";
+export type AgentId = "claude" | "codex" | "gemini" | "opencode";
 export type AgentAuthMethod = "subscription" | "apiKey";
 
 export interface AgentDescriptor {
@@ -43,7 +43,7 @@ const AGENTS: AgentDescriptor[] = [
     id: "gemini",
     label: "Gemini",
     vendor: "Google",
-    status: "comingSoon",
+    status: "available",
     authMethods: ["subscription", "apiKey"],
     installUrl: "https://github.com/google-gemini/gemini-cli",
     installLabel: "Install Gemini CLI",
@@ -58,15 +58,6 @@ const AGENTS: AgentDescriptor[] = [
     authMethods: ["subscription"],
     installUrl: "https://opencode.ai",
     installLabel: "Install OpenCode",
-  },
-  {
-    id: "openrouter",
-    label: "OpenRouter",
-    vendor: "OpenRouter",
-    status: "comingSoon",
-    authMethods: ["apiKey"],
-    installUrl: "https://openrouter.ai/keys",
-    installLabel: "Get an OpenRouter key",
   },
 ];
 

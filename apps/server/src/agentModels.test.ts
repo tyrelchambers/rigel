@@ -13,7 +13,7 @@ describe("parseOpencodeModels", () => {
       "  ", // whitespace-only
       "Available models:", // header with a space → dropped
       "anthropic/claude-sonnet-4", // duplicate
-      "openrouter/some/model", // two slashes → dropped
+      "vendor/some/model", // two slashes → dropped
       "noslash", // no slash → dropped
       "provider/ ", // trailing space → has whitespace → dropped
       "google/gemini-2.5-pro",
@@ -51,6 +51,12 @@ describe("agentModels", () => {
   test("codex → the static codex model set, no efforts", async () => {
     const r = await agentModels("codex");
     expect(r.models).toEqual(["gpt-5-codex", "gpt-5", "o4-mini"]);
+    expect(r.efforts).toEqual([]);
+  });
+
+  test("gemini → the static gemini model set, no efforts", async () => {
+    const r = await agentModels("gemini");
+    expect(r.models).toEqual(["gemini-2.5-pro", "gemini-2.5-flash"]);
     expect(r.efforts).toEqual([]);
   });
 

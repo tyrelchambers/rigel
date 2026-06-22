@@ -3,6 +3,7 @@
 // available" event.
 import { runClaude, type ChatEvent, type RunClaudeOpts } from "./claudeBridge";
 import { runCodex } from "./codexBridge";
+import { runGemini } from "./geminiBridge";
 import { runOpencode } from "./opencodeBridge";
 import { getAgent } from "./agentRegistry";
 import { readAgentsConfig } from "./agentConfig";
@@ -23,6 +24,11 @@ export async function* runAgent(
 
   if (agent?.id === "codex") {
     yield* runCodex(prompt, context, signal, opts);
+    return;
+  }
+
+  if (agent?.id === "gemini") {
+    yield* runGemini(prompt, context, signal, opts);
     return;
   }
 

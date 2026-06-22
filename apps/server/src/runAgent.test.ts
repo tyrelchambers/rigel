@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runAgent } from "./runAgent";
 import { runCodex } from "./codexBridge";
+import { runGemini } from "./geminiBridge";
 import { runOpencode } from "./opencodeBridge";
 import type { ChatEvent } from "./claudeBridge";
 
@@ -28,6 +29,15 @@ vi.mock("./opencodeBridge", () => ({
   }),
 }));
 
+// Same rationale for gemini — mock the runner so the routing test asserts it was
+// reached without spawning a real `gemini`.
+vi.mock("./geminiBridge", () => ({
+  // eslint-disable-next-line require-yield
+  runGemini: vi.fn(async function* () {
+    /* no events: the test only cares that this runner was reached */
+  }),
+}));
+
 let home: string;
 const ORIG_HOME = process.env.HOME;
 
@@ -42,11 +52,12 @@ afterEach(async () => {
   await rm(home, { recursive: true, force: true });
 });
 
-test("a coming-soon active agent yields a single 'not available' error event", async () => {
-  // Force the active agent to a coming-soon one by writing the config directly.
+test("an unknown active agent yields a single 'not available' error event", async () => {
+  // No coming-soon agents remain, so the fallback is only hit when the active id
+  // doesn't match any known runner. Force that by writing an unknown id.
   await writeFile(
     join(home, ".claude", "rigel-agents.json"),
-    JSON.stringify({ activeAgentId: "gemini", agents: {} }),
+    JSON.stringify({ activeAgentId: "openrouter", agents: {} }),
   );
   const events: ChatEvent[] = [];
   for await (const ev of runAgent("hi", null)) events.push(ev);
@@ -68,6 +79,19 @@ test("active agent codex routes to the codex runner, not the 'not available' pat
   expect(runCodex).toHaveBeenCalledTimes(1);
   expect(runCodex).toHaveBeenCalledWith("hi", null, undefined, undefined);
   // And it did NOT short-circuit to the "isn't available yet" fallback.
+  expect(events.some((ev) => /isn't available/i.test(ev.text ?? ""))).toBe(false);
+});
+
+test("active agent gemini routes to the gemini runner, not the 'not available' path", async () => {
+  await writeFile(
+    join(home, ".claude", "rigel-agents.json"),
+    JSON.stringify({ activeAgentId: "gemini", agents: {} }),
+  );
+  const events: ChatEvent[] = [];
+  for await (const ev of runAgent("hi", null)) events.push(ev);
+  // POSITIVE assertion: it genuinely entered the gemini runner (asserted via the spy).
+  expect(runGemini).toHaveBeenCalledTimes(1);
+  expect(runGemini).toHaveBeenCalledWith("hi", null, undefined, undefined);
   expect(events.some((ev) => /isn't available/i.test(ev.text ?? ""))).toBe(false);
 });
 

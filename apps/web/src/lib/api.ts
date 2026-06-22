@@ -742,7 +742,7 @@ export function useSetChatToken() {
 }
 
 // ── Agents (multi-backend settings) ──────────────────────────────────────────
-export type AgentId = "claude" | "codex" | "gemini" | "opencode" | "openrouter";
+export type AgentId = "claude" | "codex" | "gemini" | "opencode";
 export type AgentAuthMethod = "subscription" | "apiKey";
 export type AgentConnection = "connected" | "notConnected" | "comingSoon";
 
