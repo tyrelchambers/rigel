@@ -27,12 +27,15 @@ export function AgentCard({
     <button
       type="button"
       onClick={() => onOpen(agent.id)}
-      className="flex flex-col justify-between rounded-xl bg-[#18181B] text-left transition-colors hover:bg-[#1c1c20]"
+      className={
+        "flex flex-col justify-between rounded-xl bg-[#18181B] text-left transition-colors hover:bg-[#1c1c20]" +
+        (isActive ? "" : " border border-white/[0.08] hover:border-white/20")
+      }
       style={{
         padding: 16,
         minHeight: 112,
         gap: 16,
-        border: isActive ? `1.5px solid ${ACTIVE}` : "1px solid rgba(255,255,255,0.08)",
+        ...(isActive ? { border: `1.5px solid ${ACTIVE}` } : {}),
       }}
     >
       <div className="flex flex-col" style={{ gap: 12 }}>

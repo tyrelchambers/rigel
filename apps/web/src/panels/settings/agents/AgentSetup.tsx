@@ -161,7 +161,7 @@ export function AgentSetup({
             <button
               type="button"
               disabled={setActive.isPending}
-              onClick={() => setActive.mutateAsync(agent.id)}
+              onClick={() => setActive.mutate(agent.id)}
               className="inline-flex items-center rounded-[10px] transition-colors hover:bg-[rgba(95,201,236,0.08)] disabled:opacity-40"
               style={{ gap: 7, padding: "13px 20px", fontSize: 13, fontWeight: 700, color: ACTIVE, border: `1px solid ${ACTIVE}` }}
             >
