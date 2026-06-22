@@ -3,6 +3,7 @@
 // available" event.
 import { runClaude, type ChatEvent, type RunClaudeOpts } from "./claudeBridge";
 import { runCodex } from "./codexBridge";
+import { runOpencode } from "./opencodeBridge";
 import { getAgent } from "./agentRegistry";
 import { readAgentsConfig } from "./agentConfig";
 
@@ -22,6 +23,11 @@ export async function* runAgent(
 
   if (agent?.id === "codex") {
     yield* runCodex(prompt, context, signal, opts);
+    return;
+  }
+
+  if (agent?.id === "opencode") {
+    yield* runOpencode(prompt, context, signal, opts);
     return;
   }
 

@@ -81,6 +81,30 @@ export async function codexSubscriptionConnected(): Promise<boolean> {
   }
 }
 
+/** Env vars to launch OpenCode with. OpenCode is login-managed: `opencode providers
+ * login` stores creds in its own auth.json, so there is no Rigel-managed key to
+ * inject — always {}. (Mirrors codexAuthEnv's subscription branch.) */
+export async function opencodeAuthEnv(): Promise<Record<string, string>> {
+  return {};
+}
+
+/**
+ * An OpenCode login exists iff its auth.json is on disk AND parses to a non-empty
+ * object (≥1 credential). Login lives at `$XDG_DATA_HOME/opencode/auth.json`, or
+ * `~/.local/share/opencode/auth.json` when XDG_DATA_HOME is unset. Mirrors
+ * codexSubscriptionConnected, but also reads the file so an empty `{}` (no providers
+ * logged in) doesn't count as connected.
+ */
+export async function opencodeConnected(): Promise<boolean> {
+  const dataHome = process.env.XDG_DATA_HOME ?? join(homedir(), ".local", "share");
+  try {
+    const parsed = JSON.parse(await readFile(join(dataHome, "opencode", "auth.json"), "utf8"));
+    return !!parsed && typeof parsed === "object" && Object.keys(parsed).length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export type AgentConnection = "connected" | "notConnected" | "comingSoon";
 
 export async function agentConnection(id: AgentId): Promise<AgentConnection> {
@@ -98,6 +122,11 @@ export async function agentConnection(id: AgentId): Promise<AgentConnection> {
       return cfg.agents.codex?.apiKey ? "connected" : "notConnected";
     }
     return (await codexSubscriptionConnected()) ? "connected" : "notConnected";
+  }
+  if (id === "opencode") {
+    // OpenCode is login-managed only (no Rigel-stored key); connected iff its own
+    // auth.json holds ≥1 credential.
+    return (await opencodeConnected()) ? "connected" : "notConnected";
   }
   return cfg.agents[id]?.apiKey ? "connected" : "notConnected";
 }

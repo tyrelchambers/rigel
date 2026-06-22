@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runAgent } from "./runAgent";
 import { runCodex } from "./codexBridge";
+import { runOpencode } from "./opencodeBridge";
 import type { ChatEvent } from "./claudeBridge";
 
 // Spy on the codex runner so the routing test asserts it was actually invoked,
@@ -13,6 +14,16 @@ import type { ChatEvent } from "./claudeBridge";
 vi.mock("./codexBridge", () => ({
   // eslint-disable-next-line require-yield
   runCodex: vi.fn(async function* () {
+    /* no events: the test only cares that this runner was reached */
+  }),
+}));
+
+// Same rationale for opencode — and `opencode` IS installed on this machine, so a
+// real spawn would not error; the spy is the robust signal that the opencode path
+// was reached.
+vi.mock("./opencodeBridge", () => ({
+  // eslint-disable-next-line require-yield
+  runOpencode: vi.fn(async function* () {
     /* no events: the test only cares that this runner was reached */
   }),
 }));
@@ -56,6 +67,22 @@ test("active agent codex routes to the codex runner, not the 'not available' pat
   // not reliably produce a spawn error to match on.
   expect(runCodex).toHaveBeenCalledTimes(1);
   expect(runCodex).toHaveBeenCalledWith("hi", null, undefined, undefined);
+  // And it did NOT short-circuit to the "isn't available yet" fallback.
+  expect(events.some((ev) => /isn't available/i.test(ev.text ?? ""))).toBe(false);
+});
+
+test("active agent opencode routes to the opencode runner, not the 'not available' path", async () => {
+  await writeFile(
+    join(home, ".claude", "rigel-agents.json"),
+    JSON.stringify({ activeAgentId: "opencode", agents: {} }),
+  );
+  const events: ChatEvent[] = [];
+  for await (const ev of runAgent("hi", null)) events.push(ev);
+  // POSITIVE assertion: it genuinely entered the opencode runner. We assert via the
+  // spy because `opencode` IS resolvable on this machine, so a real spawn would not
+  // reliably produce a spawn error to match on.
+  expect(runOpencode).toHaveBeenCalledTimes(1);
+  expect(runOpencode).toHaveBeenCalledWith("hi", null, undefined, undefined);
   // And it did NOT short-circuit to the "isn't available yet" fallback.
   expect(events.some((ev) => /isn't available/i.test(ev.text ?? ""))).toBe(false);
 });

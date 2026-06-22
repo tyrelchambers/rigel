@@ -52,8 +52,10 @@ const AGENTS: AgentDescriptor[] = [
     id: "opencode",
     label: "OpenCode",
     vendor: "OpenCode",
-    status: "comingSoon",
-    authMethods: ["subscription", "apiKey"],
+    status: "available",
+    // OpenCode is login-managed (`opencode providers login` stores its own creds);
+    // there is no Rigel-managed key, so only the subscription/login method is offered.
+    authMethods: ["subscription"],
     installUrl: "https://opencode.ai",
     installLabel: "Install OpenCode",
   },
