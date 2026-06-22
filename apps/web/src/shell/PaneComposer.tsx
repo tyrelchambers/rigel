@@ -332,7 +332,7 @@ export function PaneComposer({
             <div style={{ maxHeight: 220, overflowY: "auto" }}>
               {filteredModels.length === 0 ? (
                 <div style={{ ...modelSectionLabel, color: "var(--fg-tertiary)", fontWeight: 400 }}>
-                  {models.length === 0 ? "No models available" : "No matches"}
+                  No matches
                 </div>
               ) : (
                 filteredModels.map((m) => {
