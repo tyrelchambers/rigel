@@ -23,14 +23,16 @@ import { classifyCommand, type CommandVerdict } from "./commandPolicy";
  * reconstruction is safe here because the shim only ever receives ONE already-split
  * invocation (no pipes/chains across argv), and the policy biases to deny on any
  * kubectl/helm mutation token regardless of exact spacing.
+ *
+ * Note: per-cluster (cross-context) denial is intentionally OUT OF SCOPE here. A
+ * cluster mutation is denied either way, so cross-context awareness would only change
+ * the human-readable reason. Once the multi-cluster cross-context policy lands on
+ * master's classifyCommand, this becomes a one-line change (thread the active context
+ * through to classifyCommand).
  */
-export function guardVerdict(
-  logicalName: string,
-  userArgs: string[],
-  activeContext: string | null,
-): CommandVerdict {
+export function guardVerdict(logicalName: string, userArgs: string[]): CommandVerdict {
   const cmd = [logicalName, ...userArgs].join(" ");
-  return classifyCommand(cmd, activeContext);
+  return classifyCommand(cmd);
 }
 
 /**
@@ -49,7 +51,7 @@ export function runGuard(argv: string[]): Promise<number> {
     return Promise.resolve(2);
   }
 
-  const verdict = guardVerdict(logicalName, userArgs, process.env.KUBECONFIG_CONTEXT ?? null);
+  const verdict = guardVerdict(logicalName, userArgs);
   if (verdict.decision === "deny") {
     process.stderr.write(verdict.reason + "\n");
     return Promise.resolve(1);

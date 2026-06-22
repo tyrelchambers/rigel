@@ -41,7 +41,7 @@ async function main() {
     return;
   }
 
-  const verdict = classifyCommand(command, process.env.KUBECONFIG_CONTEXT ?? null);
+  const verdict = classifyCommand(command);
   emit(verdict.decision, verdict.reason);
 }
 

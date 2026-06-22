@@ -71,11 +71,6 @@ const BLOCKED_HINT =
   "kubectl port-forward / proxy can't run in this chat — they block with no terminal. " +
   "Do NOT retry it. Tell the user to use Rigel's built-in port-forward feature instead.";
 
-const CROSS_CONTEXT_HINT =
-  "This is a cluster mutation targeting a DIFFERENT context than the active one. " +
-  "Do NOT retry it via Bash. Switch the active cluster first if intended, then emit a " +
-  "```action block so the user approves the exact command.";
-
 /** First non-flag token after the binary = the verb. Skips global flags + values. */
 function findVerb(tokens: string[]): { verb: string | null; sub: string | null } {
   let i = 0;
@@ -108,28 +103,8 @@ function unquote(t: string): string {
   return t.replace(/^['"]+/, "").replace(/['"]+$/, "");
 }
 
-/**
- * The `--context`/`--kube-context` value in a token list (after the binary), or
- * null if none is given. Accepts both `--context x` and `--context=x`. Used to
- * tell a cross-context mutation (different cluster than the active one) apart from
- * a same-context one, so it can carry a clearer steering reason.
- */
-function explicitContext(tokens: string[]): string | null {
-  for (let i = 0; i < tokens.length; i++) {
-    const t = tokens[i]!;
-    if (t === "--context" || t === "--kube-context") return tokens[i + 1] ?? null;
-    const eq = t.match(/^--(?:kube-)?context=(.*)$/);
-    if (eq) return eq[1] ?? null;
-  }
-  return null;
-}
-
-/**
- * What a kubectl/helm invocation amounts to. "cross-context" is a mutation whose
- * explicit `--context` differs from the active cluster — still denied, but with a
- * clearer steering reason (switch clusters first) than the generic action-block hint.
- */
-type Category = "cross-context" | "mutation" | "blocked" | null;
+/** What a kubectl invocation (tokens after the binary) amounts to. */
+type Category = "mutation" | "blocked" | null;
 
 function kubectlCategory(rest: string[]): Category {
   const { verb, sub } = findVerb(rest);
@@ -148,31 +123,20 @@ function kubectlCategory(rest: string[]): Category {
  * Categorize one pipeline/chain segment. Scans for `kubectl`/`k`/`helm` at ANY
  * token position (after quote-stripping), so wrappers like `xargs kubectl delete`,
  * `sh -c "kubectl delete …"`, `watch`/`timeout`/`env` are caught — not just
- * commands that START with kubectl/helm. A mutation pinned to a context other than
- * `activeContext` reports "cross-context"; otherwise "mutation" outranks "blocked".
+ * commands that START with kubectl/helm. "mutation" outranks "blocked".
  */
-function segmentCategory(segment: string, activeContext: string | null): Category {
+function segmentCategory(segment: string): Category {
   const tokens = segment.trim().split(/\s+/).filter(Boolean).map(unquote);
   let blocked = false;
-  // a mutation targeting a context other than the active one carries a clearer reason
-  const isCross = (rest: string[]): boolean => {
-    if (!activeContext) return false;
-    const ctx = explicitContext(rest);
-    return ctx != null && ctx !== activeContext;
-  };
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i]!;
     if (t === "kubectl" || t === "k") {
-      const rest = tokens.slice(i + 1);
-      const c = kubectlCategory(rest);
-      if (c === "mutation") return isCross(rest) ? "cross-context" : "mutation";
+      const c = kubectlCategory(tokens.slice(i + 1));
+      if (c === "mutation") return "mutation";
       if (c === "blocked") blocked = true;
     } else if (t === "helm") {
-      const rest = tokens.slice(i + 1);
-      const { verb } = findVerb(rest);
-      if (verb != null && HELM_MUTATING.has(verb)) {
-        return isCross(rest) ? "cross-context" : "mutation";
-      }
+      const { verb } = findVerb(tokens.slice(i + 1));
+      if (verb != null && HELM_MUTATING.has(verb)) return "mutation";
     }
   }
   return blocked ? "blocked" : null;
@@ -182,40 +146,27 @@ function segmentCategory(segment: string, activeContext: string | null): Categor
  * Classify a Bash command. Splits on shell separators (; && || | and newlines)
  * and treats the command as a mutation if ANY segment is one. A `$(...)`/backtick
  * substitution that hides a kubectl/helm mutation is caught by a coarse backstop.
- * `activeContext` (the selected cluster, e.g. KUBECONFIG_CONTEXT) lets a mutation
- * aimed at a different context be denied with a cross-context steering reason.
  */
-export function classifyCommand(
-  command: string,
-  activeContext: string | null = null,
-): CommandVerdict {
+export function classifyCommand(command: string): CommandVerdict {
   let blocked = false;
-  let crossContext = false;
   const scan = (text: string) => {
     for (const seg of text.split(/;|&&|\|\||\||\n/)) {
-      const c = segmentCategory(seg, activeContext);
+      const c = segmentCategory(seg);
       if (c === "mutation") return "mutation" as const;
-      if (c === "cross-context") crossContext = true;
       if (c === "blocked") blocked = true;
     }
     return null;
   };
 
-  const denyForMutation = (): CommandVerdict =>
-    crossContext
-      ? { decision: "deny", reason: CROSS_CONTEXT_HINT }
-      : { decision: "deny", reason: APPROVAL_HINT };
-
-  if (scan(command) === "mutation") return denyForMutation();
+  if (scan(command) === "mutation") return { decision: "deny", reason: APPROVAL_HINT };
   // backstop: command substitution can hide a kubectl/helm call from the split
   if (/[`$]\(?/.test(command)) {
     const inner = command.match(/\$\(([^)]*)\)|`([^`]*)`/g) ?? [];
     for (const m of inner) {
       const body = m.replace(/^\$\(|^`|\)$|`$/g, "");
-      if (scan(body) === "mutation") return denyForMutation();
+      if (scan(body) === "mutation") return { decision: "deny", reason: APPROVAL_HINT };
     }
   }
-  if (crossContext) return denyForMutation();
   if (blocked) return { decision: "deny", reason: BLOCKED_HINT };
   return { decision: "allow", reason: "non-mutating — read/investigation command" };
 }

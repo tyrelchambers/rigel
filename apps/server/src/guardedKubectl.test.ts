@@ -30,24 +30,27 @@ function runEntry(
 
 describe("guardVerdict — pure policy decisions (reuses classifyCommand)", () => {
   test("plain reads are allowed", () => {
-    expect(guardVerdict("kubectl", ["get", "pods"], null).decision).toBe("allow");
-    expect(guardVerdict("kubectl", ["rollout", "status", "deploy/x"], null).decision).toBe("allow");
+    expect(guardVerdict("kubectl", ["get", "pods"]).decision).toBe("allow");
+    expect(guardVerdict("kubectl", ["rollout", "status", "deploy/x"]).decision).toBe("allow");
   });
 
   test("cluster mutations are denied with the action-block hint", () => {
-    const v = guardVerdict("kubectl", ["delete", "pod", "x"], null);
+    const v = guardVerdict("kubectl", ["delete", "pod", "x"]);
     expect(v.decision).toBe("deny");
     expect(v.reason).toMatch(/action block/i);
   });
 
   test("helm mutations are denied", () => {
-    expect(guardVerdict("helm", ["install", "affine", "./chart"], null).decision).toBe("deny");
+    expect(guardVerdict("helm", ["install", "affine", "./chart"]).decision).toBe("deny");
   });
 
-  test("a mutation pinned to a DIFFERENT context is denied with a cross-context reason", () => {
-    const v = guardVerdict("kubectl", ["--context", "other-cluster", "delete", "pod", "x"], "myctx");
+  test("a mutation pinned to another context is still denied (generic action-block hint, no cross-context special-casing)", () => {
+    // Cross-context denial is out of scope for the shim: a mutation is denied either
+    // way, so the reason is the generic action-block steering hint, NOT a
+    // cross-context-specific message.
+    const v = guardVerdict("kubectl", ["--context", "other-cluster", "delete", "pod", "x"]);
     expect(v.decision).toBe("deny");
-    expect(v.reason).toMatch(/different context/i);
+    expect(v.reason).toMatch(/action block|approve/i);
   });
 });
 
@@ -64,16 +67,6 @@ describe("runGuard — dispatch (fake real binary = /bin/echo, never a cluster)"
     expect(r.code).not.toBe(0);
     expect(r.stderr).toMatch(/action block/i);
     expect(r.stdout).not.toContain("delete"); // echo never ran
-  });
-
-  test("cross-context env steers the deny reason", async () => {
-    const r = await runEntry(
-      ["kubectl", "/bin/echo", "--context", "other", "delete", "pod", "x"],
-      { KUBECONFIG_CONTEXT: "myctx" },
-    );
-    expect(r.code).not.toBe(0);
-    expect(r.stderr).toMatch(/different context/i);
-    expect(r.stdout).not.toContain("delete");
   });
 
   test("runGuard rejects malformed argv (no real binary)", async () => {
