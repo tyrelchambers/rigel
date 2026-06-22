@@ -1,8 +1,9 @@
 /**
- * First-run setup. Auto-shown after login when no Claude token is configured
- * (dismissible; re-openable from Settings via the "rigel:open-setup" event).
- * A guided front-end over existing endpoints — captures the Claude token and
- * offers one-click installs of the Assistant, metrics-server, and Signal.
+ * First-run setup. Auto-shown after login when the AI copilot has no agent
+ * connected (dismissible; re-openable from Settings via the "rigel:open-setup"
+ * event). A guided front-end over existing endpoints — captures an AI agent
+ * token and offers one-click installs of the Assistant, metrics-server, and
+ * Signal.
  *
  * When `requireAboutYou` is true (desktop first run), prepends a required
  * "About you" step that cannot be skipped or dismissed until completed.
@@ -198,8 +199,8 @@ function TokenCard() {
   return (
     <ToolCard
       icon={<Sparkles size={15} style={{ color: "var(--accent-primary)" }} />}
-      title="AI copilot (Rigel)"
-      desc="Chat needs a Claude subscription token — run `claude setup-token` and paste the sk-ant-oat-… value."
+      title="AI copilot"
+      desc="Chat needs an AI agent. Paste a token from your AI provider below, or connect an agent any time in Settings, then Agents."
       action={configured ? <Done /> : undefined}
     >
       {!configured && (
@@ -214,7 +215,7 @@ function TokenCard() {
             type="password"
             value={token}
             onChange={(e) => setTokenInput(e.target.value)}
-            placeholder="sk-ant-oat-…"
+            placeholder="Paste your AI provider token"
             style={input}
           />
           <button

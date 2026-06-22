@@ -798,6 +798,26 @@ export function useSetAgentAuth() {
   });
 }
 
+/** Set the active agent (the one chat/the assistant use), then refresh agents. */
+export function useSetActiveAgent() {
+  const qc = useQueryClient();
+  return useMutation<AgentsResponse, Error, AgentId>({
+    mutationFn: async (id) => {
+      const res = await fetch("/api/agents/active", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error ?? "Failed to set active agent");
+      }
+      return (await res.json()) as AgentsResponse;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agents"] }),
+  });
+}
+
 export function connectionLabel(c: AgentConnection): string {
   return c === "connected" ? "Connected" : c === "notConnected" ? "Not connected" : "Coming soon";
 }

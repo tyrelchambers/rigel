@@ -1,6 +1,6 @@
 /**
  * ChatPaneEmptyState — the "copilot isn't set up yet" empty-state block shown in
- * ChatPane's transcript when the AI copilot has no Claude subscription token.
+ * ChatPane's transcript when the AI copilot has no agent connected.
  *
  * Pure presentational: the parent decides when to show it (passing `show`); this
  * component never reads the store.
@@ -36,11 +36,8 @@ export function ChatPaneEmptyState({ show }: ChatPaneEmptyStateProps) {
         </span>
       </div>
       <span style={{ fontSize: 12, color: "var(--fg-secondary)", lineHeight: 1.5 }}>
-        Chat needs a Claude subscription token. Run{" "}
-        <code style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, color: "var(--accent-primary)" }}>
-          claude setup-token
-        </code>{" "}
-        and add it in Settings — the rest of the app works without it.
+        Chat needs an AI agent. Open Settings, then Agents, to connect one. The rest of the app works
+        without it.
       </span>
       <button
         type="button"

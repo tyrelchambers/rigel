@@ -2,6 +2,7 @@ import { ArrowRight } from "lucide-react";
 import { connectionLabel, type AgentId, type AgentView } from "@/lib/api";
 import { AgentGlyph } from "./agentGlyphs";
 
+const ACTIVE = "#5FC9EC";
 const DOT: Record<AgentView["connection"], string> = {
   connected: "#34D07F",
   notConnected: "#F59E0B",
@@ -13,13 +14,26 @@ const LABEL_COLOR: Record<AgentView["connection"], string> = {
   comingSoon: "#8C8C95",
 };
 
-export function AgentCard({ agent, onOpen }: { agent: AgentView; onOpen: (id: AgentId) => void }) {
+export function AgentCard({
+  agent,
+  isActive = false,
+  onOpen,
+}: {
+  agent: AgentView;
+  isActive?: boolean;
+  onOpen: (id: AgentId) => void;
+}) {
   return (
     <button
       type="button"
       onClick={() => onOpen(agent.id)}
-      className="flex flex-col justify-between rounded-xl border border-white/[0.08] bg-[#18181B] text-left transition-colors hover:border-white/20 hover:bg-[#1c1c20]"
-      style={{ padding: 16, minHeight: 112, gap: 16 }}
+      className="flex flex-col justify-between rounded-xl bg-[#18181B] text-left transition-colors hover:bg-[#1c1c20]"
+      style={{
+        padding: 16,
+        minHeight: 112,
+        gap: 16,
+        border: isActive ? `1.5px solid ${ACTIVE}` : "1px solid rgba(255,255,255,0.08)",
+      }}
     >
       <div className="flex flex-col" style={{ gap: 12 }}>
         <div className="flex items-start justify-between">
@@ -33,9 +47,11 @@ export function AgentCard({ agent, onOpen }: { agent: AgentView; onOpen: (id: Ag
 
       <div className="flex items-center justify-between">
         <span className="inline-flex items-center" style={{ gap: 7 }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: DOT[agent.connection] }} />
-          <span style={{ fontSize: 12, fontWeight: 500, color: LABEL_COLOR[agent.connection] }}>
-            {connectionLabel(agent.connection)}
+          <span
+            style={{ width: 7, height: 7, borderRadius: "50%", background: isActive ? ACTIVE : DOT[agent.connection] }}
+          />
+          <span style={{ fontSize: 12, fontWeight: 500, color: isActive ? ACTIVE : LABEL_COLOR[agent.connection] }}>
+            {isActive ? "Active" : connectionLabel(agent.connection)}
           </span>
         </span>
         <ArrowRight size={15} style={{ color: "#8C8C95" }} />

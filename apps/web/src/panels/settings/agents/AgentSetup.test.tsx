@@ -27,4 +27,22 @@ describe("AgentSetup", () => {
     expect(screen.getByText(/coming soon/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /save/i })).toBeDisabled();
   });
+
+  it("shows the 'Use this agent' button for a connected, non-active agent", () => {
+    wrap(<AgentSetup agent={{ ...claude, connection: "connected" }} isActive={false} onBack={() => {}} />);
+    expect(screen.getByRole("button", { name: /use this agent/i })).toBeInTheDocument();
+    expect(screen.queryByText(/^Active$/)).not.toBeInTheDocument();
+  });
+
+  it("shows a non-interactive 'Active' indicator when the agent is already active", () => {
+    wrap(<AgentSetup agent={{ ...claude, connection: "connected" }} isActive onBack={() => {}} />);
+    expect(screen.queryByRole("button", { name: /use this agent/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/^Active$/)).toBeInTheDocument();
+  });
+
+  it("renders neither for a not-connected agent", () => {
+    wrap(<AgentSetup agent={{ ...claude, connection: "notConnected" }} onBack={() => {}} />);
+    expect(screen.queryByRole("button", { name: /use this agent/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Active$/)).not.toBeInTheDocument();
+  });
 });

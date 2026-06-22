@@ -1,10 +1,11 @@
 import { useState, type ReactNode } from "react";
-import { ChevronLeft, ExternalLink } from "lucide-react";
-import { useSetAgentAuth, type AgentAuthMethod, type AgentView } from "@/lib/api";
+import { ChevronLeft, CircleCheck, ExternalLink } from "lucide-react";
+import { useSetActiveAgent, useSetAgentAuth, type AgentAuthMethod, type AgentView } from "@/lib/api";
 import { AgentGlyph } from "./agentGlyphs";
 
 const MUTED = "#8C8C95";
 const ACCENT = "#3B9BE8";
+const ACTIVE = "#5FC9EC";
 
 const METHOD_COPY: Record<AgentAuthMethod, { title: string; sub: (vendor: string) => string }> = {
   subscription: {
@@ -17,14 +18,24 @@ const METHOD_COPY: Record<AgentAuthMethod, { title: string; sub: (vendor: string
   },
 };
 
-export function AgentSetup({ agent, onBack }: { agent: AgentView; onBack: () => void }) {
+export function AgentSetup({
+  agent,
+  isActive = false,
+  onBack,
+}: {
+  agent: AgentView;
+  isActive?: boolean;
+  onBack: () => void;
+}) {
   const comingSoon = agent.status === "comingSoon";
   const save = useSetAgentAuth();
+  const setActive = useSetActiveAgent();
   const [method, setMethod] = useState<AgentAuthMethod>(agent.authMethod);
   const [secret, setSecret] = useState("");
 
   const needsSecret = method === "apiKey";
   const saveDisabled = comingSoon || save.isPending || (needsSecret && !secret.trim());
+  const connected = agent.connection === "connected";
 
   async function onSave() {
     await save.mutateAsync({ id: agent.id, authMethod: method, secret: secret.trim() });
@@ -118,11 +129,12 @@ export function AgentSetup({ agent, onBack }: { agent: AgentView; onBack: () => 
 
       {comingSoon && (
         <p style={{ fontSize: 12, color: MUTED }}>
-          This agent isn't connectable yet. We're building its runner. For now, use Claude.
+          This agent isn't connectable yet. We're building its runner. For now, use a connected agent.
         </p>
       )}
 
       {save.isError && <p style={{ fontSize: 12, color: "var(--destructive)" }}>{save.error.message}</p>}
+      {setActive.isError && <p style={{ fontSize: 12, color: "var(--destructive)" }}>{setActive.error.message}</p>}
 
       {/* Footer */}
       <div className="flex items-center justify-end" style={{ gap: 8 }}>
@@ -134,6 +146,29 @@ export function AgentSetup({ agent, onBack }: { agent: AgentView; onBack: () => 
         >
           Cancel
         </button>
+
+        {/* Active selection — only when the agent is connected. The active one
+            shows a non-interactive indicator; others get the "Use this agent" button. */}
+        {connected &&
+          (isActive ? (
+            <span
+              className="inline-flex items-center"
+              style={{ gap: 7, padding: "13px 20px", fontSize: 13, fontWeight: 700, color: ACTIVE }}
+            >
+              <CircleCheck size={15} /> Active
+            </span>
+          ) : (
+            <button
+              type="button"
+              disabled={setActive.isPending}
+              onClick={() => setActive.mutateAsync(agent.id)}
+              className="inline-flex items-center rounded-[10px] transition-colors hover:bg-[rgba(95,201,236,0.08)] disabled:opacity-40"
+              style={{ gap: 7, padding: "13px 20px", fontSize: 13, fontWeight: 700, color: ACTIVE, border: `1px solid ${ACTIVE}` }}
+            >
+              <CircleCheck size={15} /> {setActive.isPending ? "Switching…" : "Use this agent"}
+            </button>
+          ))}
+
         <button
           type="button"
           disabled={saveDisabled}
