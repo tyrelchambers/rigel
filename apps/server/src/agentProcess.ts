@@ -27,6 +27,8 @@ export interface StreamAgentProcessArgs {
   argv: string[];
   env: Record<string, string>;
   signal?: AbortSignal;
+  /** Working directory for the child process (defaults to the parent's cwd). */
+  cwd?: string;
   /** Map ONE parsed JSONL object from stdout to zero+ ChatEvents. */
   mapEvent: (ev: any) => ChatEvent[];
 }
@@ -43,11 +45,13 @@ export async function* streamAgentProcess({
   argv,
   env,
   signal,
+  cwd,
   mapEvent,
 }: StreamAgentProcessArgs): AsyncGenerator<ChatEvent> {
   const proc = spawn(argv[0], argv.slice(1), {
     stdio: ["ignore", "pipe", "pipe"],
     env,
+    ...(cwd ? { cwd } : {}),
   });
 
   // Accumulate stderr from spawn time so it's available for the error path even

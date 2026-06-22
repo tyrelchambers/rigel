@@ -9,10 +9,8 @@ import { systemPrompt } from "./systemPrompt";
 // buildCodexArgs — pure argv build (no subprocess, no codex)
 // ---------------------------------------------------------------------------
 describe("buildCodexArgs", () => {
-  const WORKSPACE = "/tmp/rigel-codex-fake";
-
   test("emits the headless read-only-via-shim flag set + prompt, no --model", () => {
-    const argv = buildCodexArgs("list pods", "prod", {}, WORKSPACE);
+    const argv = buildCodexArgs("list pods", "prod", {});
 
     // Leading positionals: `codex exec` then the flags.
     expect(argv[0]).toBe("codex");
@@ -23,18 +21,14 @@ describe("buildCodexArgs", () => {
     // codex exec 0.141 has NO -a/--ask-for-approval flag; the policy is config-only.
     expect(argv).not.toContain("-a");
     expect(argv).toContain("approval_policy=never");
-    // -s workspace-write
-    const sIdx = argv.indexOf("-s");
-    expect(sIdx).toBeGreaterThan(-1);
-    expect(argv[sIdx + 1]).toBe("workspace-write");
-    // -c sandbox_workspace_write.network_access=true (config network override)
+    // Sandbox + network + cwd are config (-c), not -s/-C, so the same flags work on
+    // `codex exec resume` (which rejects -s/-C). cwd is set via the child process, not argv.
+    expect(argv).toContain("sandbox_mode=workspace-write");
     expect(argv).toContain("sandbox_workspace_write.network_access=true");
+    expect(argv).not.toContain("-s");
+    expect(argv).not.toContain("-C");
     // --skip-git-repo-check
     expect(argv).toContain("--skip-git-repo-check");
-    // -C <workspaceDir>
-    const cdIdx = argv.indexOf("-C");
-    expect(cdIdx).toBeGreaterThan(-1);
-    expect(argv[cdIdx + 1]).toBe(WORKSPACE);
 
     // NO --model / -m (Claude aliases aren't Codex models).
     expect(argv).not.toContain("--model");
@@ -42,7 +36,7 @@ describe("buildCodexArgs", () => {
   });
 
   test("fullPrompt (last arg) contains both the system prompt and the user prompt", () => {
-    const argv = buildCodexArgs("why is nginx crashing?", "prod", {}, WORKSPACE);
+    const argv = buildCodexArgs("why is nginx crashing?", "prod", {});
     const fullPrompt = argv[argv.length - 1];
     // The system prompt teaches the action-block contract — a stable substring of it.
     expect(fullPrompt).toContain("running inside Rigel");
@@ -56,7 +50,7 @@ describe("buildCodexArgs", () => {
   });
 
   test("passes a real Codex model via -m", () => {
-    const argv = buildCodexArgs("hi", null, { model: "gpt-5-codex" }, WORKSPACE);
+    const argv = buildCodexArgs("hi", null, { model: "gpt-5-codex" });
     const mIdx = argv.indexOf("-m");
     expect(mIdx).toBeGreaterThan(-1);
     expect(argv[mIdx + 1]).toBe("gpt-5-codex");
@@ -64,14 +58,14 @@ describe("buildCodexArgs", () => {
 
   test("skips a bare Claude alias (opus/sonnet/haiku) — no -m", () => {
     for (const alias of ["opus", "sonnet", "haiku"]) {
-      const argv = buildCodexArgs("hi", null, { model: alias }, WORKSPACE);
+      const argv = buildCodexArgs("hi", null, { model: alias });
       expect(argv).not.toContain("-m");
       expect(argv).not.toContain(alias);
     }
   });
 
   test("no -m when opts.model is absent; opts.effort is always ignored", () => {
-    const argv = buildCodexArgs("hi", null, { effort: "high" }, WORKSPACE);
+    const argv = buildCodexArgs("hi", null, { effort: "high" });
     expect(argv).not.toContain("-m");
     expect(argv).not.toContain("--model");
     // Effort is out of scope for Codex.
@@ -80,7 +74,7 @@ describe("buildCodexArgs", () => {
   });
 
   test("resume form inserts `resume <sessionId>` right after exec when sessionId is set", () => {
-    const argv = buildCodexArgs("continue", "prod", { sessionId: "thread_abc" }, WORKSPACE);
+    const argv = buildCodexArgs("continue", "prod", { sessionId: "thread_abc" });
     expect(argv[0]).toBe("codex");
     expect(argv[1]).toBe("exec");
     expect(argv[2]).toBe("resume");
@@ -92,7 +86,7 @@ describe("buildCodexArgs", () => {
   });
 
   test("fresh form (no sessionId) has no resume token", () => {
-    const argv = buildCodexArgs("hi", null, {}, WORKSPACE);
+    const argv = buildCodexArgs("hi", null, {});
     expect(argv).not.toContain("resume");
     expect(argv.slice(0, 2)).toEqual(["codex", "exec"]);
   });

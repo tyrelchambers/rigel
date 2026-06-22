@@ -38,40 +38,42 @@ import { isClaudeModelAlias, type RunClaudeOpts } from "./claudeBridge";
  * reach the cluster API server at all. So instead we run Codex in workspace-write
  * WITH network enabled, and rely on the guarded-kubectl shim (prepended to PATH in
  * runCodex) to deny cluster mutations — reads pass, writes are steered to an action
- * block. The flags here implement exactly that:
- *  - `-s workspace-write`                                  : allow fs writes (confined to -C tempdir)
+ * block. Everything is expressed as `-c` config (NOT the `-s`/`-C` flags), because
+ * the `codex exec resume` subcommand accepts `-c`/`-m`/`--json`/`--skip-git-repo-check`
+ * but NOT `-s` or `-C` — so the same flag set works for both the fresh and resume forms:
+ *  - `-c sandbox_mode=workspace-write`                     : allow fs writes (confined to cwd)
  *  - `-c sandbox_workspace_write.network_access=true`      : let kubectl reach the API server
  *  - `-c approval_policy=never`                            : headless — never block on interactive approval
  *    (codex exec has NO `-a`/`--ask-for-approval` flag in 0.141; the policy is config-only)
- *  - `--skip-git-repo-check` + `-C <workspaceDir>`         : run in a throwaway temp dir, not the user's repo
+ *  - `--skip-git-repo-check`                               : allow running outside a git repo
+ * The working dir is set via the child process's cwd (a throwaway temp dir, see
+ * runCodex) rather than `-C`, since resume rejects `-C`; workspace-write's writable
+ * root IS the cwd, so this confines any writes to the temp dir.
  *
- * Flags verified against codex-cli 0.141 (`codex exec --help`).
+ * Flags verified against codex-cli 0.141 (`codex exec --help`, `codex exec resume
+ * --help`); config keys (`sandbox_mode`) verified against the codex source.
  */
 export function buildCodexArgs(
   prompt: string,
   context: string | null,
   opts: RunClaudeOpts | undefined,
-  workspaceDir: string,
 ): string[] {
   // Codex has no append-system-prompt flag (unlike `claude --append-system-prompt`),
   // so we PREPEND our system prompt to the user prompt as a single positional. It
   // teaches the same read-only kubectl + action/question/alert block contract.
   const fullPrompt = `${systemPrompt(context)}\n\n# User request\n${prompt}`;
 
-  // The flag set shared by both the fresh and resume forms. Order matters only for
-  // the two leading positionals (`exec` / `resume <id>`) and the trailing prompt;
-  // the flags in between are order-independent.
+  // The flag set shared by both the fresh and resume forms — all `-c`/`--json`/
+  // `--skip-git-repo-check`/`-m`, every one of which `codex exec resume` accepts too.
   const flags = [
     "--json",
-    "-s",
-    "workspace-write",
+    "-c",
+    "sandbox_mode=workspace-write",
     "-c",
     "sandbox_workspace_write.network_access=true",
     "-c",
     "approval_policy=never",
     "--skip-git-repo-check",
-    "-C",
-    workspaceDir,
   ];
 
   // Model: Codex takes `-m <model>` (e.g. gpt-5-codex), sent by the agent-aware
@@ -84,9 +86,10 @@ export function buildCodexArgs(
   }
 
   if (opts?.sessionId) {
-    // Resume form: `codex exec resume <SESSION_ID> [prompt] --json …` continues the
-    // same Codex session (parity with Claude's --resume). The resume token goes right
-    // after `exec`. PROVISIONAL placement — verify at e2e (checklist item 2).
+    // Resume form: `codex exec resume <SESSION_ID> [prompt] …` continues the same
+    // Codex session (parity with Claude's --resume); the session id sits right after
+    // `resume`. The flags above are all resume-accepted (verified against
+    // `codex exec resume --help` — resume rejects `-s`/`-C`, which is why we use `-c`).
     return ["codex", "exec", "resume", opts.sessionId, ...flags, fullPrompt];
   }
   return ["codex", "exec", ...flags, fullPrompt];
@@ -246,9 +249,12 @@ export async function* runCodex(
       PATH: `${guardBin}${path.delimiter}${process.env.PATH ?? ""}`,
     };
 
-    const argv = buildCodexArgs(prompt, context, opts, workspaceDir);
+    const argv = buildCodexArgs(prompt, context, opts);
 
-    yield* streamAgentProcess({ argv, env, signal, mapEvent: mapCodexEvent });
+    // cwd = the throwaway workspace dir: Codex uses its cwd as the working root
+    // (we don't pass `-C`, since `codex exec resume` rejects it) and workspace-write's
+    // writable root IS the cwd, so any writes are confined here, not the user's repo.
+    yield* streamAgentProcess({ argv, env, signal, cwd: workspaceDir, mapEvent: mapCodexEvent });
   } finally {
     // Clean up the throwaway workspace + guard shim even on abort/throw. force:true
     // so a missing dir (already gone) isn't an error.
