@@ -2,31 +2,21 @@
 //
 // Mirrors claudeBridge's STRUCTURE: a pure `buildCodexArgs`, a pure
 // `mapCodexEvent`, and a thin `runCodex` that builds argv + env and delegates the
-// subprocess lifecycle to streamAgentProcess. The Codex CLI surface used here
-// (flags + `--json` event schema) is GROUNDED from the OpenAI docs and the codex
-// source, but codex is NOT runnable on this dev machine, so the exact spellings
-// are PROVISIONAL.
+// subprocess lifecycle to streamAgentProcess.
 //
-// E2E VERIFICATION CHECKLIST (codex not runnable on dev machine):
-// Everything below is grounded from docs/source but UNVERIFIED on a live codex.
-// Run a real `codex exec --json` and confirm each item; fix the code where it
-// diverges, then delete the inline "PROVISIONAL/verify at e2e" markers.
-//   1. exec flags (buildCodexArgs): `exec`, `--json`, `-a never`,
-//      `-s workspace-write`, `-c sandbox_workspace_write.network_access=true`,
-//      `--skip-git-repo-check`, `-C <dir>` — confirm spellings + that the
-//      `sandbox_workspace_write.network_access` TOML key is the right path.
-//   2. resume placement: `codex exec resume <SESSION_ID> …` — confirm the resume
-//      token sits right after `exec` (not e.g. a `--resume <id>` flag).
-//   3. API-key auth: the env var from agentConfig.codexAuthEnv (CODEX_API_KEY)
-//      actually authenticates a headless `codex exec` (no interactive login).
-//   4. event TYPE names (mapCodexEvent): `thread.started` (carries thread_id),
-//      `turn.started` / `turn.completed` / `turn.failed`, `item.started` /
-//      `item.completed`, and stream-level `error` (carries message).
-//   5. item TYPES: `agent_message` (text), `reasoning` (text),
-//      `command_execution` (command, aggregated_output, exit_code, status).
-//   6. item type field spelling: code reads `item.type ?? item.item_type`.
-//      Observe the REAL spelling on a live event, then pick one and DELETE the
-//      other read (and its tolerance tests/comments).
+// CLI surface VERIFIED against codex-cli 0.141:
+//   - flags: `codex exec --help` (0.141). Note codex exec has NO `-a`/`--ask-for-approval`
+//     flag; the approval policy is config-only, so we pass `-c approval_policy=never`
+//     (a valid value — see codex-rs/execpolicy/src/decision.rs). The `resume`
+//     subcommand is real (`codex exec resume <id>`).
+//   - `--json` event schema: codex-rs/exec/src/exec_events.rs (ThreadEvent /
+//     ThreadItem). ThreadItem `#[serde(flatten)]`s its `details`, whose tagged enum
+//     uses `#[serde(tag = "type", rename_all = "snake_case")]`, so an item serializes
+//     FLAT as `{ id, type, ...payload }` — hence `item.type` (not a nested/`item_type`
+//     field). Item payloads: agent_message/reasoning carry `text`; command_execution
+//     carries `command`, `aggregated_output`, `exit_code`, `status`.
+// Still unconfirmed by an actual run: that CODEX_API_KEY authenticates a headless
+// `codex exec` end-to-end (needs paid OpenAI auth) — auth only, not the wire format.
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path, { join } from "node:path";
@@ -114,17 +104,16 @@ function truncate(raw: string): string {
  * unrecognized and guards EVERY field access, because the codex event schema is
  * provisional and may carry fields we don't expect.
  *
- * Event shape (codex `--json`, PROVISIONAL — verify at e2e, checklist items 4-6):
+ * Event shape (codex `--json`, per codex-rs/exec/src/exec_events.rs, 0.141):
  *  - {type:"thread.started", thread_id} ........ session id
  *  - {type:"turn.started"} ..................... (ignored)
  *  - {type:"turn.completed", usage} ............ end-of-turn
- *  - {type:"turn.failed", error} ............... turn error
+ *  - {type:"turn.failed", error:{message}} ..... turn error
  *  - {type:"item.started", item} .............. a tool call begins (command_execution)
  *  - {type:"item.completed", item} ............ message / reasoning / tool result
  *  - {type:"error", message} .................. stream-level error
- * An `item` carries an id and a type read from `item.type ?? item.item_type`
- * (both spellings are tolerated; checklist item 6 says pick one once observed).
- * Item types handled: agent_message (text), reasoning (text),
+ * An `item` serializes FLAT (ThreadItem flattens its tagged `details`): `{ id, type,
+ * ...payload }`. Item types handled: agent_message (text), reasoning (text),
  * command_execution (command + aggregated_output/exit_code/status).
  * Other item types (file_change/mcp_tool_call/web_search/todo_list) are ignored.
  */
@@ -139,9 +128,10 @@ export function mapCodexEvent(ev: any): ChatEvent[] {
   // turn.completed → done (end-of-stream signal, parity with claude's "result")
   if (ev.type === "turn.completed") return [{ type: "done" }];
 
-  // turn.failed → error (stringify the structured error object)
+  // turn.failed → error (ev.error is a ThreadErrorEvent { message })
   if (ev.type === "turn.failed") {
-    return [{ type: "error", text: stringifyError(ev.error) }];
+    const msg = ev.error?.message;
+    return [{ type: "error", text: typeof msg === "string" ? msg : stringifyError(ev.error) }];
   }
 
   // stream-level error → error
@@ -153,9 +143,10 @@ export function mapCodexEvent(ev: any): ChatEvent[] {
   if (ev.type === "item.started" || ev.type === "item.completed") {
     const item = ev.item;
     if (!item || typeof item !== "object") return [];
-    // Read the item type from either spelling — tolerate both rather than guess
-    // (checklist item 6: pick the real one once observed, delete the other).
-    const itemType = item.type ?? item.item_type;
+    // ThreadItem flattens its tagged `details`, so the discriminator is `item.type`
+    // (per exec_events.rs). agent_message/reasoning carry `text`; command_execution
+    // carries command/aggregated_output/exit_code/status — all flat on the item.
+    const itemType = item.type;
 
     if (itemType === "agent_message") {
       // Assistant prose. Emit on completion (the item carries the full text then).

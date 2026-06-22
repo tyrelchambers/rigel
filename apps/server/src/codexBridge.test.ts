@@ -115,14 +115,6 @@ describe("mapCodexEvent", () => {
     expect(r).toEqual([{ type: "text", text: "Here are your pods:" }]);
   });
 
-  test("agent_message item.completed → text event (item_type spelling)", () => {
-    const r = mapCodexEvent({
-      type: "item.completed",
-      item: { id: "i1", item_type: "agent_message", text: "Done." },
-    });
-    expect(r).toEqual([{ type: "text", text: "Done." }]);
-  });
-
   test("agent_message only emits on item.completed, not item.started", () => {
     const r = mapCodexEvent({
       type: "item.started",
@@ -173,7 +165,7 @@ describe("mapCodexEvent", () => {
   test("command_execution item.completed non-zero exit → toolResult isError", () => {
     const r = mapCodexEvent({
       type: "item.completed",
-      item: { id: "c2", item_type: "command_execution", exit_code: 1, aggregated_output: "boom" },
+      item: { id: "c2", type: "command_execution", exit_code: 1, aggregated_output: "boom" },
     });
     expect(r).toHaveLength(1);
     expect(r[0].isError).toBe(true);
