@@ -58,10 +58,26 @@ describe("buildCodexArgs", () => {
     expect(fullPrompt.startsWith(systemPrompt("prod"))).toBe(true);
   });
 
-  test("ignores opts.model / opts.effort (Codex uses its configured default)", () => {
-    const argv = buildCodexArgs("hi", null, { model: "opus", effort: "high" }, WORKSPACE);
+  test("passes a real Codex model via -m", () => {
+    const argv = buildCodexArgs("hi", null, { model: "gpt-5-codex" }, WORKSPACE);
+    const mIdx = argv.indexOf("-m");
+    expect(mIdx).toBeGreaterThan(-1);
+    expect(argv[mIdx + 1]).toBe("gpt-5-codex");
+  });
+
+  test("skips a bare Claude alias (opus/sonnet/haiku) — no -m", () => {
+    for (const alias of ["opus", "sonnet", "haiku"]) {
+      const argv = buildCodexArgs("hi", null, { model: alias }, WORKSPACE);
+      expect(argv).not.toContain("-m");
+      expect(argv).not.toContain(alias);
+    }
+  });
+
+  test("no -m when opts.model is absent; opts.effort is always ignored", () => {
+    const argv = buildCodexArgs("hi", null, { effort: "high" }, WORKSPACE);
+    expect(argv).not.toContain("-m");
     expect(argv).not.toContain("--model");
-    expect(argv).not.toContain("opus");
+    // Effort is out of scope for Codex.
     expect(argv).not.toContain("--effort");
     expect(argv).not.toContain("high");
   });

@@ -197,9 +197,24 @@ export function mapClaudeEvent(ev: any): ChatEvent[] {
  *  - { type: "result", ... } -- final summary; signals end-of-stream.
  *  - Other types (system, user, tool_use, tool_result) are silently skipped.
  */
-/** CLI aliases the picker may send; anything else is ignored (no flag added). */
-const ALLOWED_MODELS = new Set(["opus", "sonnet", "haiku"]);
-const ALLOWED_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
+/**
+ * CLI aliases the picker may send; anything else is ignored (no flag added).
+ * Exported (insertion order preserved) so agentModels.ts can surface the same set
+ * to the composer's model picker — single source of truth for Claude's models/efforts.
+ */
+export const ALLOWED_MODELS = new Set(["opus", "sonnet", "haiku"]);
+export const ALLOWED_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
+
+/**
+ * True when `model` is a bare Claude alias (opus/sonnet/haiku). The composer
+ * historically sent these to EVERY runner; codex/opencode use this guard to skip
+ * a stale Claude alias rather than passing it as `-m` (which would error, e.g. on
+ * "opus"), so they fall back to their own configured default. Shared so the rule
+ * stays in one place.
+ */
+export function isClaudeModelAlias(model: string): boolean {
+  return ALLOWED_MODELS.has(model);
+}
 
 export interface RunClaudeOpts {
   model?: string;

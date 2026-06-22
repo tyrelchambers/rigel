@@ -38,6 +38,7 @@ import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusM
 import { handleUpdates, type UpdatesRequest } from "./updates";
 import { chatConfig, setClaudeToken } from "./chatConfig";
 import { agentsView, setAgentAuth, setActiveAgent } from "./agentConfig";
+import { agentModels } from "./agentModels";
 import { getAgent, type AgentAuthMethod } from "./agentRegistry";
 import { buildSuggestions } from "./suggestions";
 import { getClusterYamlSchema } from "./clusterSchema";
@@ -249,6 +250,20 @@ async function handler(req: Request): Promise<Response> {
       }
       const view = await setAgentAuth(agent.id, { authMethod, secret });
       return Response.json(view);
+    }
+
+    // GET /api/agents/<id>/models — the models + efforts this agent can run, for
+    // the composer's agent-aware model picker. claude/codex are static sets;
+    // opencode is discovered live via `opencode models`. 404 for an unknown id.
+    if (
+      url.pathname.startsWith("/api/agents/") &&
+      url.pathname.endsWith("/models") &&
+      req.method === "GET"
+    ) {
+      const id = url.pathname.split("/")[3] ?? "";
+      const agent = getAgent(id);
+      if (!agent) return Response.json({ error: "unknown agent" }, { status: 404 });
+      return Response.json(await agentModels(agent.id));
     }
 
     // POST /api/action — execute or preview a chat action-block mutation.

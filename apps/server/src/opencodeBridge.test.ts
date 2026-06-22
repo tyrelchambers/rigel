@@ -51,11 +51,25 @@ describe("buildOpencodeArgs", () => {
     expect(fullPrompt.startsWith(systemPrompt("prod"))).toBe(true);
   });
 
-  test("ignores opts.model / opts.effort (OpenCode uses its configured default)", () => {
-    const argv = buildOpencodeArgs("hi", null, { model: "opus", effort: "high" }, RUNDIR);
-    expect(argv).not.toContain("--model");
+  test("passes a real OpenCode model via -m", () => {
+    const argv = buildOpencodeArgs("hi", null, { model: "anthropic/claude-sonnet-4" }, RUNDIR);
+    const mIdx = argv.indexOf("-m");
+    expect(mIdx).toBeGreaterThan(-1);
+    expect(argv[mIdx + 1]).toBe("anthropic/claude-sonnet-4");
+  });
+
+  test("skips a bare Claude alias (opus/sonnet/haiku) — no -m", () => {
+    for (const alias of ["opus", "sonnet", "haiku"]) {
+      const argv = buildOpencodeArgs("hi", null, { model: alias }, RUNDIR);
+      expect(argv).not.toContain("-m");
+      expect(argv).not.toContain(alias);
+    }
+  });
+
+  test("no -m when opts.model is absent; opts.effort is always ignored", () => {
+    const argv = buildOpencodeArgs("hi", null, { effort: "high" }, RUNDIR);
     expect(argv).not.toContain("-m");
-    expect(argv).not.toContain("opus");
+    expect(argv).not.toContain("--model");
     expect(argv).not.toContain("high");
   });
 

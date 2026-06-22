@@ -28,8 +28,9 @@ import { systemPrompt } from "./systemPrompt";
 import { provisionGuardBin } from "./guardedKubectl";
 import { streamAgentProcess, type ChatEvent } from "./agentProcess";
 // Reuse Claude's per-turn options shape: the chat composer sends the SAME opts to
-// every runner (model/effort/sessionId). OpenCode ignores model/effort this pass.
-import { type RunClaudeOpts } from "./claudeBridge";
+// every runner (model/effort/sessionId). OpenCode now honors model (via -m), but
+// not effort (Claude-only). isClaudeModelAlias guards against a stale Claude alias.
+import { isClaudeModelAlias, type RunClaudeOpts } from "./claudeBridge";
 
 /**
  * Build the `opencode run` argv for one turn. Pure + exported so it can be unit
@@ -41,12 +42,14 @@ import { type RunClaudeOpts } from "./claudeBridge";
  *  - `--thinking`         : surface reasoning events (mapped to `thinking`)
  *  - `--dir <runDir>`     : run in a throwaway temp dir (also where opencode.json lives)
  *  - `-s <sessionId>`     : resume a prior session (parity with Claude's --resume)
+ *  - `-m <provider/model>`: the model from the agent-aware picker (when present)
  * The user message is the trailing positional.
  *
- * Deliberately NO `-m`/`--model`: the composer sends Claude aliases (opus/sonnet/
- * haiku) which are NOT OpenCode model ids, so passing them would break the CLI.
- * OpenCode uses the user's configured default model; opts.model/opts.effort are
- * ignored this pass. (TODO follow-up: a per-agent model picker.)
+ * Model: OpenCode takes `-m provider/model` (the picker sends an OpenCode id like
+ * "anthropic/claude-…"). We SKIP a bare Claude alias (opus/sonnet/haiku) — the
+ * composer historically sent those to every runner, and they're not OpenCode ids,
+ * so passing one would break the CLI; skipping lets OpenCode use its configured
+ * default. Effort stays Claude-only (opts.effort is ignored here).
  */
 export function buildOpencodeArgs(
   prompt: string,
@@ -62,6 +65,12 @@ export function buildOpencodeArgs(
   // Flags shared by the fresh and resume forms. Order is irrelevant for the flags;
   // the message stays the trailing positional.
   const flags = ["--format", "json", "--thinking", "--dir", runDir];
+
+  // Model: pass `-m <provider/model>` from the picker, but skip a bare Claude alias
+  // (see the doc comment) so OpenCode falls back to its own default rather than erroring.
+  if (opts?.model && !isClaudeModelAlias(opts.model)) {
+    flags.push("-m", opts.model);
+  }
 
   if (opts?.sessionId) {
     // Resume form: continue the same OpenCode session (`-s <sessionId>`).
