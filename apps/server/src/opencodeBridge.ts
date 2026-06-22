@@ -142,7 +142,7 @@ export function mapOpencodeEvent(ev: any): ChatEvent[] {
 
   // step_start → carries the session id for resume (harmless if it repeats).
   if (ev.type === "step_start") {
-    return [{ type: "session", sessionId: ev.sessionID }];
+    return typeof ev.sessionID === "string" ? [{ type: "session", sessionId: ev.sessionID }] : [];
   }
 
   // step_finish → step boundary, nothing to surface.
@@ -150,7 +150,14 @@ export function mapOpencodeEvent(ev: any): ChatEvent[] {
 
   // error → session error (prefer the structured message, fall back to the name).
   if (ev.type === "error") {
-    return [{ type: "error", text: ev.error?.data?.message ?? ev.error?.name ?? "opencode error" }];
+    const msg = ev.error?.data?.message;
+    const text =
+      typeof msg === "string" && msg.length > 0
+        ? msg
+        : typeof ev.error?.name === "string"
+          ? ev.error.name
+          : "opencode error";
+    return [{ type: "error", text }];
   }
 
   // Any other event type → nothing.
