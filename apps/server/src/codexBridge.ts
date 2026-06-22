@@ -137,9 +137,13 @@ export function mapCodexEvent(ev: any): ChatEvent[] {
     return [{ type: "error", text: typeof msg === "string" ? msg : stringifyError(ev.error) }];
   }
 
-  // stream-level error → error
+  // stream-level error → error. Codex retries transient connection failures and
+  // emits a "Reconnecting… N/5 …" error for EACH attempt; suppress those so the chat
+  // isn't flooded — the final, fatal failure still surfaces via the non-zero exit.
   if (ev.type === "error") {
-    return [{ type: "error", text: typeof ev.message === "string" ? ev.message : stringifyError(ev.message) }];
+    const text = typeof ev.message === "string" ? ev.message : stringifyError(ev.message);
+    if (/^Reconnecting/i.test(text)) return [];
+    return [{ type: "error", text }];
   }
 
   // item.started / item.completed → per-item-type mapping

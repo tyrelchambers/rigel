@@ -140,3 +140,19 @@ test("a long non-ENOENT stderr is truncated so it can't flood the chat", async (
   expect(events[0].text!.length).toBeLessThanOrEqual(601);
   expect(events[0].text!.endsWith("…")).toBe(true);
 });
+
+test("a non-zero exit after the mapper already yielded done is NOT double-reported", async () => {
+  // Mimics Gemini: it emits a result-error (mapped to error + done) and then exits
+  // non-zero. The harness must not append a second error after the done.
+  const script =
+    'process.stdout.write(\'{"end":true}\\n\'); process.stderr.write("redundant\\n"); process.exit(7)';
+  const mapDone = (ev: any): ChatEvent[] => (ev?.end ? [{ type: "done" }] : []);
+  const events = await collect(
+    streamAgentProcess({
+      argv: ["node", "-e", script],
+      env: process.env as Record<string, string>,
+      mapEvent: mapDone,
+    }),
+  );
+  expect(events).toEqual([{ type: "done" }]);
+});

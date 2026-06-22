@@ -200,6 +200,16 @@ describe("mapCodexEvent", () => {
     expect(r).toEqual([{ type: "error", text: "stream broke" }]);
   });
 
+  test("transient 'Reconnecting…' retry errors are suppressed (no chat flood)", () => {
+    expect(
+      mapCodexEvent({ type: "error", message: "Reconnecting... 2/5 (401 Unauthorized: Incorrect API key)" }),
+    ).toEqual([]);
+    // A real, non-retry error still surfaces.
+    expect(mapCodexEvent({ type: "error", message: "fatal: boom" })).toEqual([
+      { type: "error", text: "fatal: boom" },
+    ]);
+  });
+
   test("unknown / ignored types → empty array", () => {
     expect(mapCodexEvent({ type: "turn.started" })).toHaveLength(0);
     expect(mapCodexEvent({ type: "unknown.future" })).toHaveLength(0);

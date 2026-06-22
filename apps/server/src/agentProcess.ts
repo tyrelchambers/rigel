@@ -90,6 +90,10 @@ export async function* streamAgentProcess({
   // async iterator pulls lines as the generator's consumer pulls events, and
   // ends when stdout closes (process exit or kill on abort).
   const rl = createInterface({ input: proc.stdout! });
+  // Track whether the agent's own events already terminated the turn (`done`). If so,
+  // a non-zero exit is redundant (e.g. Gemini emits a result-error event AND exits
+  // non-zero) — we suppress the trailing exit error to avoid double-reporting.
+  let yieldedDone = false;
   for await (const line of rl) {
     if (!line.trim()) continue;
     let ev: any;
@@ -98,7 +102,10 @@ export async function* streamAgentProcess({
     } catch {
       continue;
     }
-    for (const e of mapEvent(ev)) yield e;
+    for (const e of mapEvent(ev)) {
+      if (e.type === "done") yieldedDone = true;
+      yield e;
+    }
   }
 
   const exitCode = await exitPromise;
@@ -108,7 +115,7 @@ export async function* streamAgentProcess({
     yield { type: "done" };
     return;
   }
-  if (exitCode !== 0) {
+  if (exitCode !== 0 && !yieldedDone) {
     const errText = Buffer.concat(stderrChunks).toString("utf8");
     yield { type: "error", text: formatProcessError(argv[0], errText, exitCode) };
   }
