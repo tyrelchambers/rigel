@@ -297,4 +297,47 @@ describe("runCodex (fake codex on PATH)", () => {
 
     await rm(fakeDir, { recursive: true, force: true });
   });
+
+  test("does not leak its workspace dir when provisionGuardBin throws (kubectl unresolvable)", async () => {
+    // Fix-1 regression guard: workspaceDir is mkdtemp'd BEFORE provisionGuardBin is
+    // called, so if provisioning throws (kubectl not on PATH) the finally must still
+    // remove the `rigel-codex-` workspace. We trigger the throw by pointing PATH at an
+    // empty dir — `command -v kubectl` then fails, so provisionGuardBin throws. The
+    // `rigel-codex-` prefix is unique to runCodex (see the note in the prior test), so
+    // before/after snapshotting that prefix is race-free.
+    const { readdir } = await import("node:fs/promises");
+    const codexDirs = async () =>
+      new Set((await readdir(tmpdir())).filter((d) => d.startsWith("rigel-codex-")));
+    const before = await codexDirs();
+
+    // An empty dir with no kubectl/helm/sh — but `command -v` still works because the
+    // shell builtin needs no PATH; it just won't find kubectl, so whichBinary → null
+    // → provisionGuardBin throws.
+    const emptyDir = await mkdtemp(join(tmpdir(), "rigel-emptypath-"));
+    const prevPath = process.env.PATH;
+    process.env.PATH = emptyDir;
+
+    let threw = false;
+    try {
+      // Draining the generator surfaces the throw from provisionGuardBin.
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      for await (const _ of runCodex("hi", null)) {
+        /* consume */
+      }
+    } catch {
+      threw = true;
+    } finally {
+      process.env.PATH = prevPath;
+    }
+
+    // provisionGuardBin should have thrown (kubectl unresolvable on the empty PATH).
+    expect(threw).toBe(true);
+
+    // And despite that throw, runCodex's finally removed its workspace dir.
+    const after = await codexDirs();
+    const leaked = [...after].filter((d) => !before.has(d));
+    expect(leaked).toEqual([]);
+
+    await rm(emptyDir, { recursive: true, force: true });
+  });
 });

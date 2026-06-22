@@ -5,8 +5,28 @@
 // subprocess lifecycle to streamAgentProcess. The Codex CLI surface used here
 // (flags + `--json` event schema) is GROUNDED from the OpenAI docs and the codex
 // source, but codex is NOT runnable on this dev machine, so the exact spellings
-// are PROVISIONAL — every flag and event field below MUST be verified against a
-// live `codex exec --json` at e2e (see the per-spot comments flagging this).
+// are PROVISIONAL.
+//
+// E2E VERIFICATION CHECKLIST (codex not runnable on dev machine):
+// Everything below is grounded from docs/source but UNVERIFIED on a live codex.
+// Run a real `codex exec --json` and confirm each item; fix the code where it
+// diverges, then delete the inline "PROVISIONAL/verify at e2e" markers.
+//   1. exec flags (buildCodexArgs): `exec`, `--json`, `-a never`,
+//      `-s workspace-write`, `-c sandbox_workspace_write.network_access=true`,
+//      `--skip-git-repo-check`, `-C <dir>` — confirm spellings + that the
+//      `sandbox_workspace_write.network_access` TOML key is the right path.
+//   2. resume placement: `codex exec resume <SESSION_ID> …` — confirm the resume
+//      token sits right after `exec` (not e.g. a `--resume <id>` flag).
+//   3. API-key auth: the env var from agentConfig.codexAuthEnv (CODEX_API_KEY)
+//      actually authenticates a headless `codex exec` (no interactive login).
+//   4. event TYPE names (mapCodexEvent): `thread.started` (carries thread_id),
+//      `turn.started` / `turn.completed` / `turn.failed`, `item.started` /
+//      `item.completed`, and stream-level `error` (carries message).
+//   5. item TYPES: `agent_message` (text), `reasoning` (text),
+//      `command_execution` (command, aggregated_output, exit_code, status).
+//   6. item type field spelling: code reads `item.type ?? item.item_type`.
+//      Observe the REAL spelling on a live event, then pick one and DELETE the
+//      other read (and its tolerance tests/comments).
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path, { join } from "node:path";
@@ -33,9 +53,7 @@ import { type RunClaudeOpts } from "./claudeBridge";
  *  - `-a never`                                            : headless — never block on interactive approval
  *  - `--skip-git-repo-check` + `-C <workspaceDir>`         : run in a throwaway temp dir, not the user's repo
  *
- * PROVISIONAL: flag names/values above are from the codex docs/source and are
- * unverified on a live codex — confirm `-s/-a/-c/-C/--skip-git-repo-check` and the
- * `sandbox_workspace_write.network_access` TOML key at e2e.
+ * PROVISIONAL — verify these flags at e2e (checklist item 1, top of file).
  */
 export function buildCodexArgs(
   prompt: string,
@@ -72,7 +90,7 @@ export function buildCodexArgs(
   if (opts?.sessionId) {
     // Resume form: `codex exec resume <SESSION_ID> [prompt] --json …` continues the
     // same Codex session (parity with Claude's --resume). The resume token goes right
-    // after `exec`. PROVISIONAL placement — verify `exec resume <id>` ordering at e2e.
+    // after `exec`. PROVISIONAL placement — verify at e2e (checklist item 2).
     return ["codex", "exec", "resume", opts.sessionId, ...flags, fullPrompt];
   }
   return ["codex", "exec", ...flags, fullPrompt];
@@ -90,7 +108,7 @@ function truncate(raw: string): string {
  * unrecognized and guards EVERY field access, because the codex event schema is
  * provisional and may carry fields we don't expect.
  *
- * Event shape (codex `--json`, PROVISIONAL — verify at e2e):
+ * Event shape (codex `--json`, PROVISIONAL — verify at e2e, checklist items 4-6):
  *  - {type:"thread.started", thread_id} ........ session id
  *  - {type:"turn.started"} ..................... (ignored)
  *  - {type:"turn.completed", usage} ............ end-of-turn
@@ -99,8 +117,9 @@ function truncate(raw: string): string {
  *  - {type:"item.completed", item} ............ message / reasoning / tool result
  *  - {type:"error", message} .................. stream-level error
  * An `item` carries an id and a type read from `item.type ?? item.item_type`
- * (both spellings are tolerated). Item types handled: agent_message (text),
- * reasoning (text), command_execution (command + aggregated_output/exit_code/status).
+ * (both spellings are tolerated; checklist item 6 says pick one once observed).
+ * Item types handled: agent_message (text), reasoning (text),
+ * command_execution (command + aggregated_output/exit_code/status).
  * Other item types (file_change/mcp_tool_call/web_search/todo_list) are ignored.
  */
 export function mapCodexEvent(ev: any): ChatEvent[] {
@@ -128,8 +147,8 @@ export function mapCodexEvent(ev: any): ChatEvent[] {
   if (ev.type === "item.started" || ev.type === "item.completed") {
     const item = ev.item;
     if (!item || typeof item !== "object") return [];
-    // Read the item type from either spelling (provisional — codex source uses one,
-    // the docs sometimes the other; tolerate both rather than guess).
+    // Read the item type from either spelling — tolerate both rather than guess
+    // (checklist item 6: pick the real one once observed, delete the other).
     const itemType = item.type ?? item.item_type;
 
     if (itemType === "agent_message") {
@@ -214,25 +233,29 @@ export async function* runCodex(
   opts?: RunClaudeOpts,
 ): AsyncGenerator<ChatEvent> {
   const workspaceDir = await mkdtemp(join(tmpdir(), "rigel-codex-"));
-  const guardBin = await provisionGuardBin();
-
-  const env: Record<string, string> = {
-    ...(process.env as Record<string, string>),
-    ...(context ? { KUBECONFIG_CONTEXT: context } : {}),
-    ...(await codexAuthEnv()),
-    // Guard shim FIRST on PATH so kubectl/helm (and any child like `sh -c …`)
-    // resolve to the read-only-enforcing wrappers, not the real binaries.
-    PATH: `${guardBin}${path.delimiter}${process.env.PATH ?? ""}`,
-  };
-
-  const argv = buildCodexArgs(prompt, context, opts, workspaceDir);
-
+  // guardBin is provisioned INSIDE the try so a throw from provisionGuardBin (e.g.
+  // kubectl not on PATH) still hits the finally that removes workspaceDir — otherwise
+  // the workspace temp dir would leak. guardBin is only removed if it was created.
+  let guardBin: string | undefined;
   try {
+    guardBin = await provisionGuardBin();
+
+    const env: Record<string, string> = {
+      ...(process.env as Record<string, string>),
+      ...(context ? { KUBECONFIG_CONTEXT: context } : {}),
+      ...(await codexAuthEnv()),
+      // Guard shim FIRST on PATH so kubectl/helm (and any child like `sh -c …`)
+      // resolve to the read-only-enforcing wrappers, not the real binaries.
+      PATH: `${guardBin}${path.delimiter}${process.env.PATH ?? ""}`,
+    };
+
+    const argv = buildCodexArgs(prompt, context, opts, workspaceDir);
+
     yield* streamAgentProcess({ argv, env, signal, mapEvent: mapCodexEvent });
   } finally {
     // Clean up the throwaway workspace + guard shim even on abort/throw. force:true
     // so a missing dir (already gone) isn't an error.
     await rm(workspaceDir, { recursive: true, force: true });
-    await rm(guardBin, { recursive: true, force: true });
+    if (guardBin) await rm(guardBin, { recursive: true, force: true });
   }
 }
