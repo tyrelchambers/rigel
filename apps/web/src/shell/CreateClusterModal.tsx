@@ -103,11 +103,11 @@ export function CreateClusterModal({ open, onOpenChange }: { open: boolean; onOp
         // ── Setup state: explain what's needed and how to get it ──────────────
         <div className="flex flex-col gap-5">
           <p className="text-sm leading-relaxed text-muted-foreground">
-            Rigel creates a local cluster by running it inside Docker with{" "}
+            This runs a real Kubernetes cluster on your own machine inside Docker, using{" "}
             <span className="font-medium text-foreground">kind</span> or{" "}
-            <span className="font-medium text-foreground">k3d</span>. These are small command-line
-            tools that spin up a throwaway Kubernetes cluster on your machine. You need one of them
-            installed, plus Docker running.
+            <span className="font-medium text-foreground">k3d</span>. Once it's up, you can deploy to
+            it and manage it from Rigel like any other cluster. You just need one of them installed,
+            plus Docker running.
           </p>
 
           {/* Step 1: install a tool (only when neither is present) */}
@@ -216,7 +216,7 @@ export function CreateClusterModal({ open, onOpenChange }: { open: boolean; onOp
 
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground">
-              Creates a throwaway cluster with {tools.kind && tools.k3d ? tool : tools.kind ? "kind" : "k3d"}.
+              Creates a local cluster with {tools.kind && tools.k3d ? tool : tools.kind ? "kind" : "k3d"}.
             </span>
             <Button onClick={start} disabled={!canCreate}>
               {creating ? "Creating…" : "Create cluster"}

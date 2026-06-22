@@ -38,7 +38,7 @@ export function ClusterIconPicker({
           onClose();
         }
       }}
-      title={contextName ? `Icon for ${contextName}` : "Choose an icon"}
+      title={contextName ? `Icon for "${contextName}"` : "Choose an icon"}
     >
       <input
         autoFocus
