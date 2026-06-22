@@ -23,7 +23,7 @@ import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { BatchConfirmSheet, type BatchConfirmItem } from "@/components/BatchConfirmSheet";
 import { PurgeSheet } from "@/panels/purge/PurgeSheet";
 import type { ActionBlock, ActionResult } from "@/lib/api";
-import { useAgents, useSuggestions, executeAction } from "@/lib/api";
+import { useAgents, useAgentModels, useSuggestions, executeAction } from "@/lib/api";
 import { chatFeedback, visibleSummary, batchFeedback, type BatchRun } from "@/panels/chat/workloadResultReport";
 import { SuggestedPromptsRow } from "@/panels/chat/SuggestedPromptsRow";
 import { stripActionBlocks, type SuggestedAction } from "@/lib/actionBlocks";
@@ -33,9 +33,11 @@ import { useCluster } from "@/store/cluster";
 import { MessageBubble } from "@/panels/chat/MessageBubble";
 import { ThinkingPane } from "@/panels/chat/ThinkingPane";
 import {
-  loadModelConfig,
+  loadModelConfigs,
   saveModelConfig,
+  resolveModelConfig,
   type ModelConfig,
+  type ModelConfigMap,
 } from "@/panels/chat/composerModel";
 import {
   CHAT_COMMANDS,
@@ -169,14 +171,11 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     return agent?.metadata?.namespace ?? "default";
   });
 
-  // Model/effort selection (persisted) + @-mention candidates from the store.
-  const [modelConfig, setModelConfigState] = useState<ModelConfig>(() => loadModelConfig());
-  const setModelConfig = useCallback((c: ModelConfig) => {
-    setModelConfigState(c);
-    saveModelConfig(c);
-  }, []);
-  const modelConfigRef = useRef<ModelConfig>(modelConfig);
-  modelConfigRef.current = modelConfig;
+  // Model/effort selection is PER AGENT (persisted): a map keyed by agentId. The
+  // composer reflects the ACTIVE agent's selection, resolved against that agent's
+  // currently-advertised models/efforts (useAgentModels below). @-mention
+  // candidates come from the store.
+  const [modelConfigs, setModelConfigs] = useState<ModelConfigMap>(() => loadModelConfigs());
   // Mirror sessionId into a ref so the handoff `submit` closure (registered once)
   // sends the CURRENT session id and resumes the conversation across turns.
   const sessionIdRef = useRef<string | null>(sessionId);
@@ -208,8 +207,35 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   // not-configured (disabled) — brief and safe, and avoids enabling a composer
   // for an agent that may turn out to be disconnected.
   const agents = useAgents();
-  const activeAgent = agents.data?.agents.find((a) => a.id === agents.data?.activeAgentId);
+  const activeAgentId = agents.data?.activeAgentId;
+  const activeAgent = agents.data?.agents.find((a) => a.id === activeAgentId);
   const notConfigured = activeAgent?.connection !== "connected";
+
+  // The active agent's selectable models/efforts (drives the agent-aware picker).
+  const { data: agentModels } = useAgentModels(activeAgentId);
+  const models = useMemo(() => agentModels?.models ?? [], [agentModels]);
+  const efforts = useMemo(() => agentModels?.efforts ?? [], [agentModels]);
+
+  // The active agent's resolved selection: stored choice when still valid, else a
+  // sensible default from the agent's list. Null while models are still unknown.
+  const modelConfig = useMemo(
+    () => resolveModelConfig(activeAgentId, activeAgentId ? modelConfigs[activeAgentId] : undefined, models, efforts),
+    [activeAgentId, modelConfigs, models, efforts],
+  );
+  // Persist + apply a new selection for the ACTIVE agent.
+  const setModelConfig = useCallback(
+    (c: ModelConfig) => {
+      if (!activeAgentId) return;
+      saveModelConfig(activeAgentId, c);
+      setModelConfigs((prev) => ({ ...prev, [activeAgentId]: c }));
+    },
+    [activeAgentId],
+  );
+  // Mirror the resolved active config into a ref so the once-registered handoff
+  // closure + action/batch callbacks send the CURRENT agent's selection.
+  const modelConfigRef = useRef<ModelConfig | null>(modelConfig);
+  modelConfigRef.current = modelConfig;
+
   // Cluster-aware suggestion chips above the composer.
   const { data: suggestions } = useSuggestions();
   const liveThinkingRef = useRef("");
@@ -768,6 +794,9 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
           isStreaming={isStreaming}
           disabled={!connected || !!usageLimit || notConfigured}
           notConfigured={notConfigured}
+          agentId={activeAgentId}
+          models={models}
+          efforts={efforts}
           modelConfig={modelConfig}
           onModelConfig={setModelConfig}
           mentionCandidates={mentionCandidates}

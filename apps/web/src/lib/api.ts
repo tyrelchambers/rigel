@@ -776,6 +776,34 @@ export function useAgents() {
   });
 }
 
+/**
+ * Models + reasoning-effort levels a given agent can run, for the composer's
+ * agent-aware model picker. `efforts` is non-empty only for Claude; the others
+ * return `[]` (effort is a Claude-only concept). opencode's models are discovered
+ * live server-side (`opencode models`), so they can be empty when it isn't
+ * installed.
+ */
+export interface AgentModels {
+  models: string[];
+  efforts: string[];
+}
+
+async function fetchAgentModels(id: AgentId): Promise<AgentModels> {
+  const res = await fetch(`/api/agents/${id}/models`);
+  if (!res.ok) throw new Error("failed to load agent models");
+  return (await res.json()) as AgentModels;
+}
+
+/** The active agent's selectable models/efforts. Enabled once an id is known. */
+export function useAgentModels(agentId: AgentId | undefined) {
+  return useQuery({
+    queryKey: ["agentModels", agentId] as const,
+    queryFn: () => fetchAgentModels(agentId as AgentId),
+    enabled: !!agentId,
+    staleTime: 5 * 60_000,
+  });
+}
+
 export interface SetAgentAuthVars {
   id: AgentId;
   authMethod: AgentAuthMethod;

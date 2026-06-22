@@ -5,7 +5,12 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { createElement } from "react";
-import { connectionLabel, useSetActiveAgent, type AgentsResponse } from "./api";
+import {
+  connectionLabel,
+  useAgentModels,
+  useSetActiveAgent,
+  type AgentsResponse,
+} from "./api";
 
 describe("connectionLabel", () => {
   it("maps connection states to display labels", () => {
@@ -62,5 +67,36 @@ describe("useSetActiveAgent", () => {
     const { result } = renderHook(() => useSetActiveAgent(), { wrapper: wrapper() });
     await expect(result.current.mutateAsync("codex")).rejects.toThrow("nope");
     await waitFor(() => expect(result.current.isError).toBe(true));
+  });
+});
+
+describe("useAgentModels", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("fetches GET /api/agents/<id>/models and returns models + efforts", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ models: ["opus", "sonnet", "haiku"], efforts: ["low", "high"] }),
+          { status: 200 },
+        ),
+      );
+
+    const { result } = renderHook(() => useAgentModels("claude"), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data).toEqual({
+      models: ["opus", "sonnet", "haiku"],
+      efforts: ["low", "high"],
+    });
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/agents/claude/models");
+  });
+
+  it("is disabled (no fetch) until an agent id is provided", () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const { result } = renderHook(() => useAgentModels(undefined), { wrapper: wrapper() });
+    expect(result.current.fetchStatus).toBe("idle");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
