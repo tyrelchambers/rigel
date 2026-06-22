@@ -90,7 +90,10 @@ function osSignalNumber(signal: NodeJS.Signals): number | undefined {
  */
 function guardRunnerCommand(): string {
   const entry = fileURLToPath(new URL("./guardedKubectl.ts", import.meta.url));
-  return process.env.RIGEL_GUARD_CMD || `node --import tsx ${entry}`;
+  // Single-quote ONLY the entry path so a spaced install path (e.g. under
+  // "Application Support") survives word-splitting; the rest of the runner stays
+  // multi-word. An explicit RIGEL_GUARD_CMD override is used verbatim (no quoting).
+  return process.env.RIGEL_GUARD_CMD || `node --import tsx '${entry}'`;
 }
 
 /** Resolve the real absolute path of a binary on the CURRENT PATH (no shim yet). */
@@ -106,11 +109,16 @@ async function whichBinary(name: string): Promise<string | null> {
 }
 
 /** One wrapper script: exec the guard entry with (logicalName, realBinaryPath, "$@"). */
-function wrapperScript(runner: string, logicalName: string, realBinaryPath: string): string {
+export function wrapperScript(runner: string, logicalName: string, realBinaryPath: string): string {
+  // logicalName + realBinaryPath are single-quoted so spaces in install paths
+  // (e.g. "/Applications/My App.app/…", "Application Support") don't word-split.
+  // ${runner} stays unquoted — it is intentionally multi-word (e.g.
+  // `node --import tsx <entry>`, with its own entry path already quoted). Binary
+  // install paths won't contain single quotes, so plain single-quoting suffices.
   return `#!/bin/sh
 # Auto-generated guarded shim for \`${logicalName}\` — routes through Rigel's command
 # policy (apps/server/src/guardedKubectl.ts). Reads run; cluster mutations are denied.
-exec ${runner} ${logicalName} ${realBinaryPath} "$@"
+exec ${runner} '${logicalName}' '${realBinaryPath}' "$@"
 `;
 }
 

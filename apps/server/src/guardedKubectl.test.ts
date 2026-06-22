@@ -1,9 +1,10 @@
 import { test, expect, describe } from "vitest";
 import { spawn } from "node:child_process";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, stat, writeFile, chmod } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { guardVerdict, runGuard, provisionGuardBin } from "./guardedKubectl";
+import { guardVerdict, runGuard, provisionGuardBin, wrapperScript } from "./guardedKubectl";
 
 // Absolute path to the guard entry, resolved next to this test so the real
 // subprocess tests work in dev (tsx) regardless of cwd. Nothing here EVER touches
@@ -88,7 +89,8 @@ describe("provisionGuardBin — materializes executable wrappers", () => {
     const text = await readFile(kubectlPath, "utf8");
     expect(text).toContain("kubectl"); // logical name
     expect(text).toContain("guardedKubectl"); // guard entry referenced via the runner
-    expect(text).toMatch(/exec .*kubectl .*\/.*kubectl/); // runner + logical + real abs path
+    // runner + single-quoted logical name + single-quoted real abs path.
+    expect(text).toMatch(/exec .*'kubectl' '\/.*kubectl' "\$@"/);
   });
 
   test("wraps helm too when helm is installed (skipped otherwise)", async () => {
@@ -106,5 +108,47 @@ describe("provisionGuardBin — materializes executable wrappers", () => {
     } else {
       expect(entries).not.toContain("helm");
     }
+  });
+});
+
+describe("wrapperScript — spaced install paths don't word-split (packaged macOS)", () => {
+  // Default runner: `node --import tsx '<entry>'` with the entry single-quoted.
+  const realRunner = `node --import tsx '${GUARD_ENTRY}'`;
+
+  test("single-quotes logicalName + realBinaryPath in the generated string", () => {
+    const spaced = "/Applications/My App.app/Contents/Resources/kubectl";
+    const text = wrapperScript(realRunner, "kubectl", spaced);
+    expect(text).toContain(`'kubectl' '${spaced}'`);
+    expect(text).toMatch(/"\$@"\s*$/m); // "$@" preserved verbatim
+  });
+
+  test("a wrapper targeting a binary under a SPACED dir actually execs it on a read", async () => {
+    // Fake "real binary" in a directory whose name contains a space. It echoes its
+    // argv so we can prove it ran (no real cluster, no kubectl involved).
+    const base = await mkdtemp(join(tmpdir(), "rigel-guard-spaced-"));
+    const spacedDir = join(base, "Application Support");
+    await mkdir(spacedDir, { recursive: true });
+    const fakeBin = join(spacedDir, "fake-kubectl");
+    await writeFile(fakeBin, `#!/bin/sh\necho "FAKE-RAN: $*"\n`);
+    await chmod(fakeBin, 0o755);
+
+    // Generate the wrapper the SAME way the code does, then write + run it.
+    const wrapperPath = join(base, "kubectl");
+    await writeFile(wrapperPath, wrapperScript(realRunner, "kubectl", fakeBin));
+    await chmod(wrapperPath, 0o755);
+
+    const r = await new Promise<{ code: number; stdout: string; stderr: string }>((resolve) => {
+      const child = spawn(wrapperPath, ["get", "pods"], { stdio: ["ignore", "pipe", "pipe"] });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (d) => (stdout += d));
+      child.stderr.on("data", (d) => (stderr += d));
+      child.on("exit", (code) => resolve({ code: code ?? -1, stdout, stderr }));
+    });
+
+    // No word-splitting on the spaced path: the fake binary ran with the read args.
+    expect(r.stderr).not.toMatch(/No such file|not found|cannot/i);
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain("FAKE-RAN: get pods");
   });
 });
