@@ -79,8 +79,23 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null)
             for await (const event of runAgent(m.prompt, context, ac.signal, { model, effort, sessionId })) {
               ws.send(JSON.stringify({ type: "chat", event }));
             }
-          } catch {
-            /* connection/stream torn down */
+          } catch (err) {
+            // The user interrupting is not an error; the runner ends quietly.
+            if (ac.signal.aborted) return;
+            // Otherwise the agent runner itself failed (e.g. the CLI couldn't be
+            // spawned, or guard provisioning threw). Surface it as a chat error so
+            // the user sees WHY instead of silence; if the send throws the
+            // connection is genuinely torn down, so swallow that.
+            try {
+              ws.send(
+                JSON.stringify({
+                  type: "chat",
+                  event: { type: "error", text: `Agent error: ${(err as Error)?.message ?? String(err)}` },
+                }),
+              );
+            } catch {
+              /* connection torn down */
+            }
           }
         })();
       } else if (m.type === "chat-interrupt") {
