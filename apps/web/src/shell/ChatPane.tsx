@@ -23,7 +23,7 @@ import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { BatchConfirmSheet, type BatchConfirmItem } from "@/components/BatchConfirmSheet";
 import { PurgeSheet } from "@/panels/purge/PurgeSheet";
 import type { ActionBlock, ActionResult } from "@/lib/api";
-import { useChatConfig, useSuggestions, executeAction } from "@/lib/api";
+import { useAgents, useSuggestions, executeAction } from "@/lib/api";
 import { chatFeedback, visibleSummary, batchFeedback, type BatchRun } from "@/panels/chat/workloadResultReport";
 import { SuggestedPromptsRow } from "@/panels/chat/SuggestedPromptsRow";
 import { stripActionBlocks, type SuggestedAction } from "@/lib/actionBlocks";
@@ -201,11 +201,15 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // AI copilot config — drives the "not configured" empty-state below and
-  // disables the composer when no AI token/API key is configured. Treat the
-  // loading state (chatConfig == null) as enabled to avoid a disabled flash.
-  const { data: chatConfig } = useChatConfig();
-  const notConfigured = chatConfig != null && !chatConfig.configured;
+  // Chat enablement follows the ACTIVE agent's connection (not a Claude-only
+  // token check): the composer is enabled iff the active agent is connected.
+  // This drives the "not configured" empty-state below and disables the composer
+  // otherwise. While the agents query is still loading (data undefined) treat as
+  // not-configured (disabled) — brief and safe, and avoids enabling a composer
+  // for an agent that may turn out to be disconnected.
+  const agents = useAgents();
+  const activeAgent = agents.data?.agents.find((a) => a.id === agents.data?.activeAgentId);
+  const notConfigured = activeAgent?.connection !== "connected";
   // Cluster-aware suggestion chips above the composer.
   const { data: suggestions } = useSuggestions();
   const liveThinkingRef = useRef("");
@@ -671,9 +675,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
               gap: 10,
             }}
           >
-            <ChatPaneEmptyState
-              show={!!chatConfig && !chatConfig.configured && messages.length === 0}
-            />
+            <ChatPaneEmptyState show={notConfigured && messages.length === 0} />
             {messages.map((m) => (
               <MessageBubble
                 key={m.id}
@@ -721,7 +723,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
           />
         )}
 
-        {/* ── "no API key" hint (above the composer) ───────────────────────── */}
+        {/* ── "connect an agent" hint (above the composer) ─────────────────── */}
         {notConfigured && (
           <div
             style={{
@@ -734,7 +736,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
               flexShrink: 0,
             }}
           >
-            <span style={{ lineHeight: 1.4 }}>Add an API key to start chatting.</span>
+            <span style={{ lineHeight: 1.4 }}>Connect an agent to start chatting.</span>
             <button
               type="button"
               onClick={() => navigate("/settings")}

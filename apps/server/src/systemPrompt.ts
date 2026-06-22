@@ -1,7 +1,9 @@
 // System prompt for the chat copilot — ported from the Swift app's
 // ClaudeSession.systemPrompt() so the web emits the SAME action/question button
-// contract. Adapted for web: no rigel MCP tools (Bash kubectl is the only
-// investigation path here). Passed via `claude --append-system-prompt`.
+// contract. Adapted for web: no rigel MCP tools (read-only kubectl is the only
+// investigation path here). Shared across the agent runners (Claude, Codex, …),
+// so keep the wording provider-neutral; e.g. Claude appends it via
+// `claude --append-system-prompt`.
 
 export function systemPrompt(context: string | null): string {
   const ctxLine = context
@@ -12,7 +14,7 @@ export function systemPrompt(context: string | null): string {
 
 ${ctxLine}
 
-INVESTIGATE BEFORE ANSWERING. When the user asks about cluster state, investigate first with the Bash tool — don't ask permission, just run it. EVERY read-only/investigation command runs automatically, and flag order, pipes, and chains don't matter:
+INVESTIGATE BEFORE ANSWERING. When the user asks about cluster state, investigate first by running read-only kubectl commands — don't ask permission, just run them. EVERY read-only/investigation command runs automatically, and flag order, pipes, and chains don't matter:
 - any read-only kubectl: get / describe / logs / top / events / explain / version / cluster-info / api-resources / api-versions, auth can-i, config get-contexts / current-context / view, and rollout status / history
 - read-only helm: list / status / get / history / show / template
 - shell tools to slice output: jq / grep / awk / sed / cut / sort / uniq / wc / head / tail / cat / echo (pipe \`-o json\` through jq freely)

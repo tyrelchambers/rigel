@@ -34,7 +34,7 @@ import {
 // ── PaneComposer ─────────────────────────────────────────────────────────────
 
 const PLACEHOLDER = "Ask Rigel…  (/ for commands, @ to mention a resource)";
-const PLACEHOLDER_UNCONFIGURED = "Connect an API key in Settings to chat";
+const PLACEHOLDER_UNCONFIGURED = "Connect an agent in Settings to chat";
 const LINE_HEIGHT = 20;
 const MIN_LINES = 3;
 const MAX_LINES = 14;
@@ -47,7 +47,7 @@ interface PaneComposerProps {
   onStop: () => void;
   isStreaming: boolean;
   disabled?: boolean;
-  /** True when there's no AI token/API key — drives the disabled placeholder. */
+  /** True when the active agent isn't connected — drives the disabled placeholder. */
   notConfigured?: boolean;
   modelConfig: ModelConfig;
   onModelConfig: (c: ModelConfig) => void;

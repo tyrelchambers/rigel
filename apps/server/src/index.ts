@@ -192,7 +192,9 @@ async function handler(req: Request): Promise<Response> {
       });
     }
 
-    // GET  /api/chat-config — is the AI copilot's Claude token configured?
+    // GET  /api/chat-config — reports whether a Claude token is present. Chat
+    // ENABLEMENT now follows the ACTIVE agent's connection (see /api/agents);
+    // this route remains for the Claude-specific Settings/token surface.
     // POST /api/chat-config { token } — set it (empty clears); env-set tokens
     // take precedence and are not overwritten. Lets a self-hoster enable chat
     // from the Settings screen without an env restart.
