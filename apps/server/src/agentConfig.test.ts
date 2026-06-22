@@ -131,6 +131,15 @@ describe("setActiveAgent", () => {
     expect((await agentsView()).activeAgentId).toBe("claude");
   });
 
+  it("persists codex as the active agent (codex is available)", async () => {
+    const view = await setActiveAgent("codex");
+    expect(view.activeAgentId).toBe("codex");
+    const file = join(home, ".claude", "rigel-agents.json");
+    const parsed = JSON.parse(await readFile(file, "utf8"));
+    expect(parsed.activeAgentId).toBe("codex");
+    expect((await agentsView()).activeAgentId).toBe("codex");
+  });
+
   it("rejects a coming-soon agent", async () => {
     await expect(setActiveAgent("gemini")).rejects.toThrow(/not available/);
   });

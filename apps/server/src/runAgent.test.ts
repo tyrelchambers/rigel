@@ -1,9 +1,21 @@
-import { test, expect, beforeEach, afterEach } from "vitest";
+import { test, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runAgent } from "./runAgent";
+import { runCodex } from "./codexBridge";
 import type { ChatEvent } from "./claudeBridge";
+
+// Spy on the codex runner so the routing test asserts it was actually invoked,
+// rather than inferring routing from a spawn error. `codex` may be installed on
+// the dev/CI machine, so a real spawn would NOT reliably surface an error — the
+// spy is the robust signal that runAgent entered the codex path.
+vi.mock("./codexBridge", () => ({
+  // eslint-disable-next-line require-yield
+  runCodex: vi.fn(async function* () {
+    /* no events: the test only cares that this runner was reached */
+  }),
+}));
 
 let home: string;
 const ORIG_HOME = process.env.HOME;
@@ -38,9 +50,12 @@ test("active agent codex routes to the codex runner, not the 'not available' pat
     JSON.stringify({ activeAgentId: "codex", agents: {} }),
   );
   const events: ChatEvent[] = [];
-  // `codex` is absent on this machine, so runCodex will surface a spawn/error
-  // event from streamAgentProcess. We only assert it ROUTED to runCodex (i.e.
-  // it did NOT short-circuit to the "isn't available yet" fallback).
   for await (const ev of runAgent("hi", null)) events.push(ev);
+  // POSITIVE assertion: it genuinely entered the codex runner. We assert via the
+  // spy because `codex` can be resolvable on this machine, so a real spawn would
+  // not reliably produce a spawn error to match on.
+  expect(runCodex).toHaveBeenCalledTimes(1);
+  expect(runCodex).toHaveBeenCalledWith("hi", null, undefined, undefined);
+  // And it did NOT short-circuit to the "isn't available yet" fallback.
   expect(events.some((ev) => /isn't available/i.test(ev.text ?? ""))).toBe(false);
 });
