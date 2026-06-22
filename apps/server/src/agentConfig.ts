@@ -7,6 +7,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { access, readFile, writeFile } from "node:fs/promises";
 import { effectiveClaudeToken, setClaudeToken } from "./chatConfig";
+import { decryptSecret, encryptSecret } from "./secretStore";
 import {
   getAgent,
   listAgents,
@@ -49,7 +50,8 @@ export async function claudeAuthEnv(): Promise<Record<string, string>> {
   const cfg = await readAgentsConfig();
   const entry = cfg.agents.claude;
   if (entry?.authMethod === "apiKey" && entry.apiKey) {
-    return { ANTHROPIC_API_KEY: entry.apiKey };
+    const key = decryptSecret(entry.apiKey);
+    if (key) return { ANTHROPIC_API_KEY: key };
   }
   const token = await effectiveClaudeToken();
   return token ? { CLAUDE_CODE_OAUTH_TOKEN: token } : {};
@@ -64,7 +66,8 @@ export async function codexAuthEnv(): Promise<Record<string, string>> {
     // enable_codex_api_key_env=true (codex-rs/exec/src/lib.rs), so it reads the
     // key from CODEX_API_KEY. OPENAI_API_KEY is only consulted by the TUI/realtime
     // paths, never by headless exec. Verified against the codex source.
-    return { CODEX_API_KEY: entry.apiKey };
+    const key = decryptSecret(entry.apiKey);
+    if (key) return { CODEX_API_KEY: key };
   }
   // Subscription: Codex reads its own ~/.codex/auth.json; nothing to inject.
   return {};
@@ -181,7 +184,7 @@ export async function setAgentAuth(id: AgentId, input: SetAgentAuthInput): Promi
 
   if (id === "claude") {
     if (input.authMethod === "apiKey") {
-      cfg.agents.claude = { authMethod: "apiKey", apiKey: secret || undefined };
+      cfg.agents.claude = { authMethod: "apiKey", apiKey: secret ? encryptSecret(secret) : undefined };
     } else {
       cfg.agents.claude = { authMethod: "subscription" };
       await setClaudeToken(secret); // persists/clears the OAuth token file
@@ -189,7 +192,7 @@ export async function setAgentAuth(id: AgentId, input: SetAgentAuthInput): Promi
   } else {
     cfg.agents[id] = {
       authMethod: input.authMethod,
-      apiKey: input.authMethod === "apiKey" ? secret || undefined : undefined,
+      apiKey: input.authMethod === "apiKey" && secret ? encryptSecret(secret) : undefined,
     };
   }
   await writeAgentsConfig(cfg);

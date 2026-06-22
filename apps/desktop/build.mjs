@@ -42,7 +42,10 @@ const serverBundle = build({
   // apps/desktop/node_modules/node-pty (pinned to 1.1.0 — same as apps/server —
   // so both packages share the same ABI-compatible binary), so `import "node-pty"`
   // resolves next to this file.
-  external: ["node-pty"],
+  // `electron` is external so secretStore.ts's `require("electron")` resolves at
+  // runtime from the Electron utility process (where safeStorage lives) instead of
+  // being bundled — matching electronBundles above.
+  external: ["node-pty", "electron"],
   // Give the ESM bundle a real CommonJS `require` so esbuild's interop shim can
   // load Node builtins (events/stream/etc. via `ws`) under Electron's utility
   // ESM loader, which otherwise rejects esbuild's default dynamic-require shim.

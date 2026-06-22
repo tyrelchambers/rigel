@@ -112,6 +112,16 @@ describe("codexAuthEnv", () => {
   it("returns {} when there is no codex entry", async () => {
     expect(await codexAuthEnv()).toEqual({});
   });
+
+  it("round-trips a key set via setAgentAuth (plaintext fallback in tests)", async () => {
+    const view = await setAgentAuth("codex", { authMethod: "apiKey", secret: "sk-codex-rt" });
+    expect(view.connection).toBe("connected");
+    // In the test env (no keychain) encryptSecret is a passthrough, so the stored
+    // key is plaintext and decryptSecret returns it unchanged.
+    const parsed = JSON.parse(await readFile(join(home, ".claude", "rigel-agents.json"), "utf8"));
+    expect(parsed.agents.codex.apiKey).toBe("sk-codex-rt");
+    expect(await codexAuthEnv()).toEqual({ CODEX_API_KEY: "sk-codex-rt" });
+  });
 });
 
 describe("codexSubscriptionConnected", () => {
