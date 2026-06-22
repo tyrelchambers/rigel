@@ -60,6 +60,10 @@ export async function codexAuthEnv(): Promise<Record<string, string>> {
   const cfg = await readAgentsConfig();
   const entry = cfg.agents.codex;
   if (entry?.authMethod === "apiKey" && entry.apiKey) {
+    // CODEX_API_KEY (not OPENAI_API_KEY): `codex exec` builds its session with
+    // enable_codex_api_key_env=true (codex-rs/exec/src/lib.rs), so it reads the
+    // key from CODEX_API_KEY. OPENAI_API_KEY is only consulted by the TUI/realtime
+    // paths, never by headless exec. Verified against the codex source.
     return { CODEX_API_KEY: entry.apiKey };
   }
   // Subscription: Codex reads its own ~/.codex/auth.json; nothing to inject.
