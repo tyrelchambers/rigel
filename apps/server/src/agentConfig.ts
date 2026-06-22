@@ -5,7 +5,7 @@
 // chatConfig.ts. This file only stores the chosen auth method + any API keys.
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { readFile, writeFile } from "node:fs/promises";
+import { access, readFile, writeFile } from "node:fs/promises";
 import { effectiveClaudeToken, setClaudeToken } from "./chatConfig";
 import {
   getAgent,
@@ -55,6 +55,28 @@ export async function claudeAuthEnv(): Promise<Record<string, string>> {
   return token ? { CLAUDE_CODE_OAUTH_TOKEN: token } : {};
 }
 
+/** Env vars to launch Codex with, per its active auth method. */
+export async function codexAuthEnv(): Promise<Record<string, string>> {
+  const cfg = await readAgentsConfig();
+  const entry = cfg.agents.codex;
+  if (entry?.authMethod === "apiKey" && entry.apiKey) {
+    return { CODEX_API_KEY: entry.apiKey };
+  }
+  // Subscription: Codex reads its own ~/.codex/auth.json; nothing to inject.
+  return {};
+}
+
+/** A ChatGPT-subscription login exists iff Codex's auth.json is on disk. */
+export async function codexSubscriptionConnected(): Promise<boolean> {
+  const home = process.env.CODEX_HOME ?? join(homedir(), ".codex");
+  try {
+    await access(join(home, "auth.json"));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export type AgentConnection = "connected" | "notConnected" | "comingSoon";
 
 export async function agentConnection(id: AgentId): Promise<AgentConnection> {
@@ -66,6 +88,12 @@ export async function agentConnection(id: AgentId): Promise<AgentConnection> {
       return cfg.agents.claude?.apiKey ? "connected" : "notConnected";
     }
     return (await effectiveClaudeToken()) ? "connected" : "notConnected";
+  }
+  if (id === "codex") {
+    if (authMethodFor(cfg, "codex") === "apiKey") {
+      return cfg.agents.codex?.apiKey ? "connected" : "notConnected";
+    }
+    return (await codexSubscriptionConnected()) ? "connected" : "notConnected";
   }
   return cfg.agents[id]?.apiKey ? "connected" : "notConnected";
 }
@@ -135,4 +163,16 @@ export async function setAgentAuth(id: AgentId, input: SetAgentAuthInput): Promi
   const view = (await agentsView()).agents.find((a) => a.id === id);
   if (!view) throw new Error(`agent vanished: ${id}`);
   return view;
+}
+
+/** Switch the active agent. Only an available agent can be activated. */
+export async function setActiveAgent(id: AgentId): Promise<AgentsResponse> {
+  const desc = getAgent(id);
+  if (!desc) throw new Error(`unknown agent: ${id}`);
+  if (desc.status === "comingSoon") throw new Error(`agent not available: ${id}`);
+
+  const cfg = await readAgentsConfig();
+  cfg.activeAgentId = id;
+  await writeAgentsConfig(cfg);
+  return await agentsView();
 }
