@@ -51,10 +51,11 @@ import { isClaudeModelAlias, type RunClaudeOpts } from "./claudeBridge";
  * block. The flags here implement exactly that:
  *  - `-s workspace-write`                                  : allow fs writes (confined to -C tempdir)
  *  - `-c sandbox_workspace_write.network_access=true`      : let kubectl reach the API server
- *  - `-a never`                                            : headless — never block on interactive approval
+ *  - `-c approval_policy=never`                            : headless — never block on interactive approval
+ *    (codex exec has NO `-a`/`--ask-for-approval` flag in 0.141; the policy is config-only)
  *  - `--skip-git-repo-check` + `-C <workspaceDir>`         : run in a throwaway temp dir, not the user's repo
  *
- * PROVISIONAL — verify these flags at e2e (checklist item 1, top of file).
+ * Flags verified against codex-cli 0.141 (`codex exec --help`).
  */
 export function buildCodexArgs(
   prompt: string,
@@ -72,12 +73,12 @@ export function buildCodexArgs(
   // the flags in between are order-independent.
   const flags = [
     "--json",
-    "-a",
-    "never",
     "-s",
     "workspace-write",
     "-c",
     "sandbox_workspace_write.network_access=true",
+    "-c",
+    "approval_policy=never",
     "--skip-git-repo-check",
     "-C",
     workspaceDir,

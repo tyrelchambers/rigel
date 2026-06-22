@@ -20,18 +20,15 @@ describe("buildCodexArgs", () => {
 
     // The safety-model flag set.
     expect(argv).toContain("--json");
-    // -a never
-    const aIdx = argv.indexOf("-a");
-    expect(aIdx).toBeGreaterThan(-1);
-    expect(argv[aIdx + 1]).toBe("never");
+    // codex exec 0.141 has NO -a/--ask-for-approval flag; the policy is config-only.
+    expect(argv).not.toContain("-a");
+    expect(argv).toContain("approval_policy=never");
     // -s workspace-write
     const sIdx = argv.indexOf("-s");
     expect(sIdx).toBeGreaterThan(-1);
     expect(argv[sIdx + 1]).toBe("workspace-write");
-    // -c sandbox_workspace_write.network_access=true
-    const cIdx = argv.indexOf("-c");
-    expect(cIdx).toBeGreaterThan(-1);
-    expect(argv[cIdx + 1]).toBe("sandbox_workspace_write.network_access=true");
+    // -c sandbox_workspace_write.network_access=true (config network override)
+    expect(argv).toContain("sandbox_workspace_write.network_access=true");
     // --skip-git-repo-check
     expect(argv).toContain("--skip-git-repo-check");
     // -C <workspaceDir>
