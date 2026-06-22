@@ -106,6 +106,24 @@ export async function* streamAgentProcess({
   }
   if (exitCode !== 0) {
     const errText = Buffer.concat(stderrChunks).toString("utf8");
-    yield { type: "error", text: errText.trim() || `${argv[0]} exited with code ${exitCode}` };
+    yield { type: "error", text: formatProcessError(argv[0], errText, exitCode) };
   }
+}
+
+/**
+ * Turn a failed agent subprocess into a concise, user-facing chat error.
+ *
+ * A missing or antivirus-quarantined CLI surfaces as ENOENT — and when the CLI is
+ * an npm shim that re-spawns a vendored binary, the shim crashes with a multi-KB
+ * stack dump that even echoes back our system prompt (it's in the child's argv).
+ * Detect that and show a short, actionable line instead; otherwise cap the raw
+ * stderr so a noisy crash can't flood the chat.
+ */
+function formatProcessError(binary: string, stderr: string, exitCode: number | null): string {
+  const text = stderr.trim();
+  if (/\bENOENT\b/.test(text)) {
+    return `The "${binary}" CLI failed to start: its executable could not be found (ENOENT). Make sure it's installed and not blocked or quarantined by antivirus.`;
+  }
+  if (!text) return `${binary} exited with code ${exitCode}`;
+  return text.length > 600 ? text.slice(0, 600) + "…" : text;
 }

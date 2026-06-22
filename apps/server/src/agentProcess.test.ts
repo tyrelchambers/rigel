@@ -92,7 +92,7 @@ test("already-aborted signal kills immediately and yields done", async () => {
   expect(events).toEqual([{ type: "done" }]);
 });
 
-test("missing binary surfaces an error event (ENOENT, not a hang)", async () => {
+test("missing binary surfaces a clean ENOENT message naming the binary", async () => {
   const events = await collect(
     streamAgentProcess({
       argv: ["definitely-not-a-real-binary-xyz", "-e", "noop"],
@@ -102,5 +102,41 @@ test("missing binary surfaces an error event (ENOENT, not a hang)", async () => 
   );
   expect(events).toHaveLength(1);
   expect(events[0].type).toBe("error");
-  expect(events[0].text).toBeTruthy();
+  expect(events[0].text).toContain("definitely-not-a-real-binary-xyz");
+  expect(events[0].text).toContain("ENOENT");
+  expect(events[0].text).toMatch(/antivirus/i);
+});
+
+test("an ENOENT crash dump on stderr is collapsed to the clean message, not echoed raw", async () => {
+  // Mimics an npm-shim CLI that crashes re-spawning a vendored binary: it prints
+  // a huge ENOENT stack (here padded to ~3KB) to stderr and exits non-zero. The
+  // harness must surface the short, actionable line — never the multi-KB dump.
+  const script =
+    'process.stderr.write("Error: spawn /opt/x/vendor/bin ENOENT\\n" + "y".repeat(3000)); process.exit(1)';
+  const events = await collect(
+    streamAgentProcess({
+      argv: ["node", "-e", script],
+      env: process.env as Record<string, string>,
+      mapEvent: mapText,
+    }),
+  );
+  expect(events).toHaveLength(1);
+  expect(events[0].type).toBe("error");
+  expect(events[0].text).toContain("ENOENT");
+  expect(events[0].text!.length).toBeLessThan(300);
+  expect(events[0].text).not.toContain("yyy");
+});
+
+test("a long non-ENOENT stderr is truncated so it can't flood the chat", async () => {
+  const script = 'process.stderr.write("z".repeat(2000)); process.exit(1)';
+  const events = await collect(
+    streamAgentProcess({
+      argv: ["node", "-e", script],
+      env: process.env as Record<string, string>,
+      mapEvent: mapText,
+    }),
+  );
+  expect(events[0].type).toBe("error");
+  expect(events[0].text!.length).toBeLessThanOrEqual(601);
+  expect(events[0].text!.endsWith("…")).toBe(true);
 });
