@@ -161,9 +161,11 @@ export async function agentConnection(id: AgentId): Promise<AgentConnection> {
     // Subscription: connected iff Gemini's own oauth_creds.json is on disk.
     return (await geminiConnected()) ? "connected" : "notConnected";
   }
-  // Every AgentId is handled above, so `id` is `never` here; this is the safe
-  // default for any future agent id that lands before its connection branch does.
-  return (cfg.agents[id as AgentId]?.apiKey ? "connected" : "notConnected") as AgentConnection;
+  // Exhaustiveness guard: every AgentId is handled above, so `id` is `never` here.
+  // Adding a new AgentId without a connection branch fails the build on this line.
+  return ((_exhaustive: never): AgentConnection => {
+    throw new Error(`agentConnection: unhandled agent id ${String(_exhaustive)}`);
+  })(id);
 }
 
 export interface AgentView {
