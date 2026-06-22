@@ -150,7 +150,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyEntries, setHistoryEntries] = useState<ChatHistoryEntry[]>([]);
   const [liveThinking, setLiveThinking] = useState("");
-  const [isThinking, setIsThinking] = useState(false);
   const [turnStartedAt, setTurnStartedAt] = useState<Date | null>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [usageLimit, setUsageLimit] = useState<string | null>(null);
@@ -258,7 +257,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
       if (!prompt.trim()) return;
       setMessages((prev) => [...prev, makeMessage("user", prompt)]);
       setIsStreaming(true);
-      setIsThinking(false);
       setLiveThinking("");
       liveThinkingRef.current = "";
       const start = new Date();
@@ -279,7 +277,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
         case "thinking":
           liveThinkingRef.current += event.text ?? "";
           setLiveThinking(liveThinkingRef.current);
-          setIsThinking(true);
           break;
         case "text":
           setMessages((prev) => appendTextDelta(prev, event.text ?? ""));
@@ -290,7 +287,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
           const thinking = liveThinkingRef.current;
           setMessages((prev) => stampThinking(prev, thinking, secs));
           setIsStreaming(false);
-          setIsThinking(false);
           setLiveThinking("");
           liveThinkingRef.current = "";
           setUsageLimit(null);
@@ -302,7 +298,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
             makeMessage("system", `⚠︎ ${event.text ?? "The session ended unexpectedly."}`),
           ]);
           setIsStreaming(false);
-          setIsThinking(false);
           setLiveThinking("");
           liveThinkingRef.current = "";
           setAutoFocusComposer(true);
@@ -413,7 +408,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     setMessages((prev) => [...prev, makeMessage("user", text)]);
     setInputText("");
     setIsStreaming(true);
-    setIsThinking(false);
     setLiveThinking("");
     liveThinkingRef.current = "";
     const start = new Date();
@@ -427,7 +421,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   function handleStop() {
     interruptChat();
     setIsStreaming(false);
-    setIsThinking(false);
     setLiveThinking("");
     liveThinkingRef.current = "";
     setMessages((prev) => [...prev, makeMessage("system", "⏹ Stopped by user.")]);
@@ -442,7 +435,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     setUsageLimit(null);
     setInputText("");
     setIsStreaming(false);
-    setIsThinking(false);
     setLiveThinking("");
     liveThinkingRef.current = "";
   }
@@ -461,7 +453,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     setUsageLimit(null);
     setInputText("");
     setIsStreaming(false);
-    setIsThinking(false);
     setLiveThinking("");
     liveThinkingRef.current = "";
     setHistoryOpen(false);
@@ -506,7 +497,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     const title = info.action.label ?? "Action";
     setMessages((prev) => [...prev, makeMessage("system", visibleSummary(title, info.result))]);
     setIsStreaming(true);
-    setIsThinking(false);
     setLiveThinking("");
     liveThinkingRef.current = "";
     const start = new Date();
@@ -539,7 +529,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   async function executeBatch(items: BatchConfirmItem[]) {
     setPendingBatch(null);
     setIsStreaming(true);
-    setIsThinking(false);
     setLiveThinking("");
     liveThinkingRef.current = "";
     const start = new Date();
@@ -575,7 +564,11 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   }
 
   const shortId = shortSessionId(sessionId);
-  const showThinkingPane = isStreaming && isThinking;
+  // Show the working indicator whenever a turn is in flight — for EVERY agent, and
+  // from the moment we send (before any thinking/text arrives), so there's always a
+  // visible "the AI is working" signal. The reasoning body inside only expands once
+  // thinking text has actually arrived (Claude/Codex/OpenCode reasoning events).
+  const showThinkingPane = isStreaming;
 
   return (
     <>
