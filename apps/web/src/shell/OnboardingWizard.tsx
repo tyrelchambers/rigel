@@ -68,7 +68,7 @@ export function OnboardingWizard({
                   setAboutDone(true);
                   onAboutYouDone?.();
                   // The steps array collapses to optionalSteps (About-you removed),
-                  // so reset to index 0 — the first optional step (AI copilot).
+                  // so reset to index 0 — the first optional step (AI agent).
                   setI(0);
                 }}
               />
@@ -118,7 +118,7 @@ export function OnboardingWizard({
 
         {!locked && (
           <span style={{ fontSize: 12.5, color: "var(--fg-secondary)", lineHeight: 1.5 }}>
-            A minute of optional setup. Everything here can also be changed later in Settings — skip
+            A minute of optional setup. Everything here can also be changed later in Settings. Skip
             anything you don't need.
           </span>
         )}
