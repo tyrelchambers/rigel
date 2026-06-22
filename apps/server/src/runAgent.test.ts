@@ -19,15 +19,28 @@ afterEach(async () => {
   await rm(home, { recursive: true, force: true });
 });
 
-test("a non-claude active agent yields a single 'not available' error event", async () => {
+test("a coming-soon active agent yields a single 'not available' error event", async () => {
   // Force the active agent to a coming-soon one by writing the config directly.
   await writeFile(
     join(home, ".claude", "rigel-agents.json"),
-    JSON.stringify({ activeAgentId: "codex", agents: {} }),
+    JSON.stringify({ activeAgentId: "gemini", agents: {} }),
   );
   const events: ChatEvent[] = [];
   for await (const ev of runAgent("hi", null)) events.push(ev);
   expect(events).toHaveLength(1);
   expect(events[0].type).toBe("error");
   expect(events[0].text).toMatch(/isn't available/i);
+});
+
+test("active agent codex routes to the codex runner, not the 'not available' path", async () => {
+  await writeFile(
+    join(home, ".claude", "rigel-agents.json"),
+    JSON.stringify({ activeAgentId: "codex", agents: {} }),
+  );
+  const events: ChatEvent[] = [];
+  // `codex` is absent on this machine, so runCodex will surface a spawn/error
+  // event from streamAgentProcess. We only assert it ROUTED to runCodex (i.e.
+  // it did NOT short-circuit to the "isn't available yet" fallback).
+  for await (const ev of runAgent("hi", null)) events.push(ev);
+  expect(events.some((ev) => /isn't available/i.test(ev.text ?? ""))).toBe(false);
 });

@@ -37,7 +37,7 @@ import { getPodMetrics, getNodeMetrics, getNodeDisk } from "./metrics";
 import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusMetrics";
 import { handleUpdates, type UpdatesRequest } from "./updates";
 import { chatConfig, setClaudeToken } from "./chatConfig";
-import { agentsView, setAgentAuth } from "./agentConfig";
+import { agentsView, setAgentAuth, setActiveAgent } from "./agentConfig";
 import { getAgent, type AgentAuthMethod } from "./agentRegistry";
 import { buildSuggestions } from "./suggestions";
 import { getClusterYamlSchema } from "./clusterSchema";
@@ -207,6 +207,18 @@ async function handler(req: Request): Promise<Response> {
 
     if (url.pathname === "/api/agents" && req.method === "GET") {
       return Response.json(await agentsView());
+    }
+
+    // POST /api/agents/active  { id } — switch the active agent.
+    if (url.pathname === "/api/agents/active" && req.method === "POST") {
+      const body = (await req.json().catch(() => ({}))) as { id?: unknown };
+      const id = typeof body.id === "string" ? body.id : "";
+      const agent = getAgent(id);
+      if (!agent) return Response.json({ error: "unknown agent" }, { status: 404 });
+      if (agent.status === "comingSoon") {
+        return Response.json({ error: "agent not available yet" }, { status: 409 });
+      }
+      return Response.json(await setActiveAgent(agent.id));
     }
 
     // POST /api/agents/<id>/auth  { authMethod, secret? }

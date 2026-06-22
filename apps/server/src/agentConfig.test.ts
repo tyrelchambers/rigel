@@ -45,7 +45,7 @@ describe("agentsView", () => {
     const v = await agentsView();
     expect(v.activeAgentId).toBe("claude");
     expect(v.agents.find((a) => a.id === "claude")?.connection).toBe("notConnected");
-    expect(v.agents.find((a) => a.id === "codex")?.connection).toBe("comingSoon");
+    expect(v.agents.find((a) => a.id === "gemini")?.connection).toBe("comingSoon");
   });
 });
 
@@ -80,7 +80,7 @@ describe("setAgentAuth (claude, subscription)", () => {
 
 describe("setAgentAuth (coming soon)", () => {
   it("rejects a not-available agent", async () => {
-    await expect(setAgentAuth("codex", { authMethod: "apiKey", secret: "x" })).rejects.toThrow(
+    await expect(setAgentAuth("gemini", { authMethod: "apiKey", secret: "x" })).rejects.toThrow(
       /not available/,
     );
   });
@@ -132,7 +132,7 @@ describe("setActiveAgent", () => {
   });
 
   it("rejects a coming-soon agent", async () => {
-    await expect(setActiveAgent("codex")).rejects.toThrow(/not available/);
+    await expect(setActiveAgent("gemini")).rejects.toThrow(/not available/);
   });
 
   it("rejects an unknown agent", async () => {

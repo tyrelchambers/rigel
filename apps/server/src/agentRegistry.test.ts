@@ -1,11 +1,12 @@
 import { test, expect } from "vitest";
 import { listAgents, getAgent } from "./agentRegistry";
 
-test("claude is the only available agent; the rest are coming soon", () => {
+test("claude and codex are available; the rest are coming soon", () => {
   const ids = listAgents().map((a) => a.id);
   expect(ids).toEqual(["claude", "codex", "gemini", "opencode", "openrouter"]);
   expect(getAgent("claude")?.status).toBe("available");
-  for (const id of ["codex", "gemini", "opencode", "openrouter"] as const) {
+  expect(getAgent("codex")?.status).toBe("available");
+  for (const id of ["gemini", "opencode", "openrouter"] as const) {
     expect(getAgent(id)?.status).toBe("comingSoon");
   }
 });

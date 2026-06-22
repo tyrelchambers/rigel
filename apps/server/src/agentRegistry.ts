@@ -34,7 +34,7 @@ const AGENTS: AgentDescriptor[] = [
     id: "codex",
     label: "Codex",
     vendor: "OpenAI",
-    status: "comingSoon",
+    status: "available",
     authMethods: ["subscription", "apiKey"],
     installUrl: "https://github.com/openai/codex",
     installLabel: "Install Codex",

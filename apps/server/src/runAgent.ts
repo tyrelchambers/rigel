@@ -1,6 +1,7 @@
 // Dispatches a chat turn to the active agent's runner. Today only Claude has a
 // real runner; any other active agent yields a single "not available" event.
 import { runClaude, type ChatEvent, type RunClaudeOpts } from "./claudeBridge";
+import { runCodex } from "./codexBridge";
 import { getAgent } from "./agentRegistry";
 import { readAgentsConfig } from "./agentConfig";
 
@@ -15,6 +16,11 @@ export async function* runAgent(
 
   if (agent?.id === "claude") {
     yield* runClaude(prompt, context, signal, opts);
+    return;
+  }
+
+  if (agent?.id === "codex") {
+    yield* runCodex(prompt, context, signal, opts);
     return;
   }
 
