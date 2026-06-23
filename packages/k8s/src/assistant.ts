@@ -290,6 +290,60 @@ export function clearCredentialSourceCommands(
     .map((name) => ["annotate", "secret", name, `${annKey}-`, "-n", namespace]);
 }
 
+/** Every credential id currently claimed by SOME credential-store Secret's
+ *  `rigel.assistant/credential.<id>` annotation (any claimant, valid id only). */
+function annotationClaimedIds(secrets: SecretLike[]): Set<keyof AssistantCredentials> {
+  const claimed = new Set<keyof AssistantCredentials>();
+  for (const secret of secrets) {
+    if (secret.metadata.labels?.[CREDENTIAL_STORE_LABEL] !== "true") continue;
+    for (const annKey of Object.keys(secret.metadata.annotations ?? {})) {
+      if (!annKey.startsWith(CREDENTIAL_ANNOTATION_PREFIX)) continue;
+      const id = annKey.slice(CREDENTIAL_ANNOTATION_PREFIX.length);
+      if (CREDENTIAL_IDS.has(id)) claimed.add(id as keyof AssistantCredentials);
+    }
+  }
+  return claimed;
+}
+
+/**
+ * Pure kubectl argv builders that make a LEGACY install's fallback resolution
+ * explicit: for each CREDENTIAL_ENV id whose default Secret exists, holds the
+ * default key, AND is NOT already annotation-claimed by ANY credential-store
+ * Secret, emit a label (`rigel.assistant/credential-store=true`) + an annotate
+ * (`rigel.assistant/credential.<id>=<defaultKey>`). One `label` command per
+ * Secret (shared across its ids).
+ *
+ * Conflict-safe by construction: an id any Secret already claims is skipped, so
+ * reconcile can never create a second claimant. Idempotent: already-stamped or
+ * absent ids produce nothing. Changes Secret METADATA ONLY — never an apply,
+ * rollout, restart, or patch — since the Deployment env already points at these
+ * Secrets. Runs nothing and never carries a value (ids + names + key names only).
+ */
+export function reconcileCommands(secrets: SecretLike[], namespace: string): string[][] {
+  const claimed = annotationClaimedIds(secrets);
+  const byName = new Map(secrets.map((s) => [s.metadata.name, s]));
+  const labelled = new Set<string>(); // default Secret names already given a label cmd
+  const cmds: string[][] = [];
+  for (const entry of CREDENTIAL_ENV) {
+    if (claimed.has(entry.id)) continue; // already annotation-driven → leave alone
+    const secret = byName.get(entry.defaultSecret);
+    if (!secret) continue; // no default Secret → nothing to stamp
+    if (!(entry.defaultKey in (secret.data ?? {}))) continue; // missing default key
+    if (!labelled.has(entry.defaultSecret)) {
+      cmds.push(["label", "secret", entry.defaultSecret, `${CREDENTIAL_STORE_LABEL}=true`, "--overwrite", "-n", namespace]);
+      labelled.add(entry.defaultSecret);
+    }
+    cmds.push(["annotate", "secret", entry.defaultSecret, `${CREDENTIAL_ANNOTATION_PREFIX}${entry.id}=${entry.defaultKey}`, "--overwrite", "-n", namespace]);
+  }
+  return cmds;
+}
+
+/** True when `reconcileCommands` would emit anything (a legacy install has
+ *  fallback-resolved credentials not yet made explicit via annotations). */
+export function needsReconcile(secrets: SecretLike[]): boolean {
+  return reconcileCommands(secrets, "x").length > 0;
+}
+
 // ---------------------------------------------------------------------------
 // Manifest builders — byte-for-byte port of AssistantInstaller.swift
 // ---------------------------------------------------------------------------

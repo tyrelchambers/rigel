@@ -895,3 +895,145 @@ describe("managed Secret YAML stamps label + annotations", () => {
     expect(yaml).toContain("kind: Secret");
   });
 });
+
+// ---------------------------------------------------------------------------
+// reconcileCommands / needsReconcile (legacy-install repair, Phase 3 / Task A1)
+// ---------------------------------------------------------------------------
+
+import { reconcileCommands, needsReconcile } from "./assistant";
+
+describe("reconcileCommands", () => {
+  test("stamps label + annotation on a legacy default Secret resolved by fallback", () => {
+    // A legacy install: the default credentials Secret holds codexApiKey by its
+    // default key but carries NO credential-store label/annotations → resolution
+    // falls back. Reconcile makes that fallback explicit.
+    const secrets: SecretLike[] = [
+      { metadata: { name: CREDENTIALS_SECRET_NAME }, data: { codexApiKey: "c" } },
+    ];
+    const cmds = reconcileCommands(secrets, "default");
+    expect(cmds).toEqual([
+      ["label", "secret", CREDENTIALS_SECRET_NAME, `${STORE}=true`, "--overwrite", "-n", "default"],
+      ["annotate", "secret", CREDENTIALS_SECRET_NAME, "rigel.assistant/credential.codexApiKey=codexApiKey", "--overwrite", "-n", "default"],
+    ]);
+  });
+
+  test("stamps the legacy token Secret (claudeToken via token key)", () => {
+    const secrets: SecretLike[] = [{ metadata: { name: SECRET_NAME }, data: { token: "t" } }];
+    const cmds = reconcileCommands(secrets, "agents");
+    expect(cmds).toEqual([
+      ["label", "secret", SECRET_NAME, `${STORE}=true`, "--overwrite", "-n", "agents"],
+      ["annotate", "secret", SECRET_NAME, "rigel.assistant/credential.claudeToken=token", "--overwrite", "-n", "agents"],
+    ]);
+  });
+
+  test("two fallback ids on the SAME default Secret share a single label command", () => {
+    const secrets: SecretLike[] = [
+      { metadata: { name: CREDENTIALS_SECRET_NAME }, data: { codexApiKey: "c", geminiApiKey: "g" } },
+    ];
+    const cmds = reconcileCommands(secrets, "default");
+    const labels = cmds.filter((c) => c[0] === "label");
+    expect(labels).toHaveLength(1);
+    expect(labels[0]).toEqual(["label", "secret", CREDENTIALS_SECRET_NAME, `${STORE}=true`, "--overwrite", "-n", "default"]);
+    // One annotate per fallback id (ordered by CREDENTIAL_ENV).
+    expect(cmds.filter((c) => c[0] === "annotate")).toEqual([
+      ["annotate", "secret", CREDENTIALS_SECRET_NAME, "rigel.assistant/credential.codexApiKey=codexApiKey", "--overwrite", "-n", "default"],
+      ["annotate", "secret", CREDENTIALS_SECRET_NAME, "rigel.assistant/credential.geminiApiKey=geminiApiKey", "--overwrite", "-n", "default"],
+    ]);
+  });
+
+  test("idempotent: an already-annotated (claimed) id produces NO commands", () => {
+    const secrets: SecretLike[] = [
+      {
+        metadata: {
+          name: CREDENTIALS_SECRET_NAME,
+          labels: { [STORE]: "true" },
+          annotations: { "rigel.assistant/credential.codexApiKey": "codexApiKey" },
+        },
+        data: { codexApiKey: "c" },
+      },
+    ];
+    expect(reconcileCommands(secrets, "default")).toEqual([]);
+  });
+
+  test("conflict-safe: never stamps an id already claimed by ANY credential-store Secret", () => {
+    // A BYO Secret already claims anthropicApiKey by annotation. The default
+    // credentials Secret also carries the default anthropicApiKey key, but
+    // reconcile must NOT stamp it (that would create a second claimant = conflict).
+    const secrets: SecretLike[] = [
+      {
+        metadata: {
+          name: "byo-anthropic",
+          labels: { [STORE]: "true" },
+          annotations: { "rigel.assistant/credential.anthropicApiKey": "api-key" },
+        },
+        data: { "api-key": "x" },
+      },
+      { metadata: { name: CREDENTIALS_SECRET_NAME }, data: { anthropicApiKey: "legacy" } },
+    ];
+    const cmds = reconcileCommands(secrets, "default");
+    expect(cmds.some((c) => c.join(" ").includes("anthropicApiKey"))).toBe(false);
+    expect(cmds).toEqual([]);
+  });
+
+  test("absent Secret / missing default key produces NO commands", () => {
+    // No default Secret at all.
+    expect(reconcileCommands([], "default")).toEqual([]);
+    // Default Secret present but missing the default key for the id.
+    const secrets: SecretLike[] = [
+      { metadata: { name: CREDENTIALS_SECRET_NAME }, data: { somethingElse: "x" } },
+    ];
+    expect(reconcileCommands(secrets, "default")).toEqual([]);
+  });
+
+  test("a default Secret with an empty default value is still stamped (presence, not value)", () => {
+    // The key EXISTS (empty string), so the legacy fallback resolves it; reconcile
+    // makes that explicit regardless of the value (readiness is a separate concern).
+    const secrets: SecretLike[] = [
+      { metadata: { name: CREDENTIALS_SECRET_NAME }, data: { geminiApiKey: "" } },
+    ];
+    const cmds = reconcileCommands(secrets, "default");
+    expect(cmds).toEqual([
+      ["label", "secret", CREDENTIALS_SECRET_NAME, `${STORE}=true`, "--overwrite", "-n", "default"],
+      ["annotate", "secret", CREDENTIALS_SECRET_NAME, "rigel.assistant/credential.geminiApiKey=geminiApiKey", "--overwrite", "-n", "default"],
+    ]);
+  });
+
+  test("never emits an apply, rollout, restart, or patch (metadata-only)", () => {
+    const secrets: SecretLike[] = [
+      { metadata: { name: CREDENTIALS_SECRET_NAME }, data: { codexApiKey: "c" } },
+      { metadata: { name: SECRET_NAME }, data: { token: "t" } },
+    ];
+    const verbs = new Set(reconcileCommands(secrets, "default").map((c) => c[0]));
+    for (const forbidden of ["apply", "rollout", "restart", "patch", "delete"]) {
+      expect(verbs.has(forbidden)).toBe(false);
+    }
+    expect([...verbs].sort()).toEqual(["annotate", "label"]);
+  });
+});
+
+describe("needsReconcile", () => {
+  test("true when a legacy default Secret needs stamping", () => {
+    const secrets: SecretLike[] = [
+      { metadata: { name: CREDENTIALS_SECRET_NAME }, data: { codexApiKey: "c" } },
+    ];
+    expect(needsReconcile(secrets)).toBe(true);
+  });
+
+  test("false when everything is already annotated", () => {
+    const secrets: SecretLike[] = [
+      {
+        metadata: {
+          name: CREDENTIALS_SECRET_NAME,
+          labels: { [STORE]: "true" },
+          annotations: { "rigel.assistant/credential.codexApiKey": "codexApiKey" },
+        },
+        data: { codexApiKey: "c" },
+      },
+    ];
+    expect(needsReconcile(secrets)).toBe(false);
+  });
+
+  test("false for no managed Secrets", () => {
+    expect(needsReconcile([])).toBe(false);
+  });
+});

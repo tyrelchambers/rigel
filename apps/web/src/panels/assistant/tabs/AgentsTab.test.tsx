@@ -18,6 +18,8 @@ function derived(overrides: Partial<AssistantDerived> = {}): AssistantDerived {
     limits: { pollIntervalMs: 30000, confirmPolls: 2, namespaces: ["default"] },
     creds: {},
     credentialSources: {},
+    credentialConflicts: [],
+    credentialNeedsReconcile: false,
     ...overrides,
   } as AssistantDerived;
 }
@@ -101,6 +103,31 @@ describe("AgentsTab", () => {
       }),
       expect.any(Function),
     );
+  });
+
+  it("Repair button appears only when needsReconcile and reconciles WITHOUT the restart-confirm", async () => {
+    // No reconcile needed → no Repair button.
+    const { unmount } = wrap(derived());
+    await screen.findByText("Agents & providers");
+    expect(screen.queryByRole("button", { name: /repair credential labels/i })).not.toBeInTheDocument();
+    unmount();
+
+    // Legacy install → Repair button present; clicking it dispatches the reconcile
+    // action directly (no "Save & restart" confirm dialog appears).
+    wrap(derived({ credentialNeedsReconcile: true }));
+    const repair = await screen.findByRole("button", { name: /repair credential labels/i });
+    await userEvent.click(repair);
+    expect(screen.queryByRole("button", { name: /save & restart/i })).not.toBeInTheDocument();
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "reconcileCredentialAnnotations", namespace: "default" }),
+      expect.any(Function),
+    );
+  });
+
+  it("renders an amber conflict marker for a conflicting credential id", async () => {
+    wrap(derived({ credentialConflicts: ["geminiApiKey"] }));
+    const geminiRow = (await screen.findByText("Gemini")).closest("[data-provider]") as HTMLElement;
+    expect(within(geminiRow).getByLabelText(/gemini credential conflict/i)).toBeInTheDocument();
   });
 
   it("pointing at an existing Secret confirms then calls setCredentialSource", async () => {

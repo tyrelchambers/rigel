@@ -111,6 +111,12 @@ export interface AssistantDerived {
    *  credentialStatus. Drives the row readiness chip + the source dialog. Names
    *  only — values never leave the cluster. */
   credentialSources: Partial<Record<keyof AssistantCredentials, CredentialSourceStatus>>;
+  /** Credential ids claimed by more than one credential-store Secret (the
+   *  alphabetically-first wins). Drives the per-row amber conflict marker. */
+  credentialConflicts: (keyof AssistantCredentials)[];
+  /** True when a legacy install has fallback-resolved credentials not yet stamped
+   *  with annotations. Drives the "Repair credential labels" button. */
+  credentialNeedsReconcile: boolean;
 }
 
 /**
@@ -151,8 +157,14 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
       const res = await postAssistant({ action: "credentialStatus", namespace: credentialNamespace });
       const parsed = JSON.parse(res.stdout || "{}") as {
         credentials?: Partial<Record<keyof AssistantCredentials, CredentialSourceStatus>>;
+        conflicts?: (keyof AssistantCredentials)[];
+        needsReconcile?: boolean;
       };
-      return parsed.credentials ?? {};
+      return {
+        credentials: parsed.credentials ?? {},
+        conflicts: parsed.conflicts ?? [],
+        needsReconcile: parsed.needsReconcile ?? false,
+      };
     },
   });
 
@@ -251,8 +263,10 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
       alertRules: parseAlertRules(configData["alertRules"]),
       roles: parseRolesFromConfig(configData),
       limits: parseLimitsFromConfig(configData),
-      creds: credsFromSources(credStatus.data ?? {}),
-      credentialSources: credStatus.data ?? {},
+      creds: credsFromSources(credStatus.data?.credentials ?? {}),
+      credentialSources: credStatus.data?.credentials ?? {},
+      credentialConflicts: credStatus.data?.conflicts ?? [],
+      credentialNeedsReconcile: credStatus.data?.needsReconcile ?? false,
     };
   }, [deployments, pods, configMaps, secrets, namespaces, installNamespaceHint, credStatus.data]);
 }

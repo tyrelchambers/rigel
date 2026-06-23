@@ -28,6 +28,8 @@ import {
   resolveCredentialSources,
   credentialSourceCommands,
   clearCredentialSourceCommands,
+  reconcileCommands,
+  needsReconcile,
   credentialEnvPatch,
   defaultCredentialSource,
   isAssistantManaged,
@@ -114,7 +116,8 @@ export type AssistantAction =
   | "credentialStatus"
   | "setCredentialSource"
   | "clearCredentialSource"
-  | "listCredentialSecrets";
+  | "listCredentialSecrets"
+  | "reconcileCredentialAnnotations";
 
 export interface AssistantRequest {
   action: AssistantAction;
@@ -551,8 +554,11 @@ const MANAGED_SECRETS_ARGS = (namespace: string): string[] => [
 /**
  * Per-credential readiness for the UI's chips. Lists the managed Secrets by
  * label (one call), resolves via the name-agnostic `resolveCredentialSources`,
- * and returns `{ credentials: { <id>: { ready, secretName } } }` — ids + backing
- * Secret NAMES only, never values, never data.
+ * and returns `{ credentials: { <id>: { ready, secretName } }, conflicts,
+ * needsReconcile }` — ids + backing Secret NAMES only, never values, never data.
+ * `conflicts` are ids claimed by >1 credential-store Secret (first-by-name wins);
+ * `needsReconcile` is true when a legacy install has fallback-resolved credentials
+ * not yet stamped with annotations (drives the UI's Repair button).
  *
  * `run` is injectable so the resolution can be asserted without a live cluster
  * (defaults to the real kubectl).
@@ -563,7 +569,7 @@ export async function credentialStatus(
   run: (ctx: string | null, args: string[]) => Promise<RunResult> = kubectl,
 ): Promise<RunResult> {
   const items = await listSecretsBy(context, MANAGED_SECRETS_ARGS(namespace), run);
-  const { sources } = resolveCredentialSources(items);
+  const { sources, conflicts } = resolveCredentialSources(items);
   // ids → { ready, secretName }. The data key + any value are intentionally
   // dropped here (the client only ever sees ids + Secret names).
   const credentials: Record<string, { ready: boolean; secretName: string }> = {};
@@ -571,7 +577,36 @@ export async function credentialStatus(
     if (!src) continue;
     credentials[id] = { ready: src.hasValue, secretName: src.secretName };
   }
-  return { code: 0, stdout: JSON.stringify({ credentials }), stderr: "" };
+  return {
+    code: 0,
+    stdout: JSON.stringify({ credentials, conflicts, needsReconcile: needsReconcile(items) }),
+    stderr: "",
+  };
+}
+
+/**
+ * Make a LEGACY install's fallback credential resolution explicit: list the
+ * managed Secrets (one labelled call), build the metadata-only label/annotate
+ * commands via `reconcileCommands`, run each (ensureOk), and report a
+ * `{ stamped: <ids> }` summary. Conflict-safe (never re-stamps an annotation-
+ * claimed id) and idempotent (no commands → no-op success). Changes Secret
+ * METADATA ONLY — NO Deployment apply, NO rollout — since the agent env already
+ * points at these Secrets. `run` is injectable for cluster-free assertions; a
+ * value is never read, returned, or logged.
+ */
+export async function reconcileCredentialAnnotations(
+  context: string | null,
+  namespace: string,
+  run: (ctx: string | null, args: string[]) => Promise<RunResult> = kubectl,
+): Promise<RunResult> {
+  const items = await listSecretsBy(context, MANAGED_SECRETS_ARGS(namespace), run);
+  const cmds = reconcileCommands(items, namespace);
+  for (const args of cmds) {
+    ensureOk(await run(context, args), "Failed to reconcile credential labels");
+  }
+  // One `annotate` per id stamped; the count of annotate commands is the id count.
+  const stamped = cmds.filter((c) => c[0] === "annotate").length;
+  return { code: 0, stdout: JSON.stringify({ stamped }), stderr: "" };
 }
 
 /**
@@ -757,6 +792,8 @@ export async function handleAssistant(
       return setCredentialSource(context, namespace, req);
     case "clearCredentialSource":
       return clearCredentialSource(context, namespace, req);
+    case "reconcileCredentialAnnotations":
+      return reconcileCredentialAnnotations(context, namespace);
     default:
       throw new Error(`unknown action: ${String(req.action)}`);
   }

@@ -81,6 +81,15 @@ export function AgentsTab() {
     setPending(null);
   }
 
+  // Repair: stamp the credential labels onto a legacy install's managed Secrets.
+  // This only changes Secret METADATA (no Deployment apply, no rollout), so it
+  // runs directly — NOT through the restart-confirm dialog the credential edits use.
+  function reconcileLabels() {
+    run({ action: "reconcileCredentialAnnotations", namespace: ns }, () => {
+      void queryClient.invalidateQueries({ queryKey: ["assistant-credentialStatus", ns] });
+    });
+  }
+
   return (
     <div className="space-y-3.5">
       <div>
@@ -111,12 +120,15 @@ export function AgentsTab() {
       <CredentialsManager
         credentials={d.creds}
         credentialSources={d.credentialSources}
+        credentialConflicts={d.credentialConflicts}
+        credentialNeedsReconcile={d.credentialNeedsReconcile}
         namespace={ns}
         onSave={(_provider, key, value) => setPending({ kind: "paste", key, value })}
         onSaveSource={({ credentialId, secretName, dataKey }) =>
           setPending({ kind: "source", credentialId, secretName, dataKey })
         }
         onUseManaged={(credentialId) => setPending({ kind: "clear", credentialId })}
+        onReconcile={reconcileLabels}
         disabled={working}
       />
 

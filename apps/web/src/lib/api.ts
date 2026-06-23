@@ -333,7 +333,8 @@ export type AssistantAction =
   | "credentialStatus"
   | "listCredentialSecrets"
   | "setCredentialSource"
-  | "clearCredentialSource";
+  | "clearCredentialSource"
+  | "reconcileCredentialAnnotations";
 
 export interface AssistantRoleSelection {
   provider: string;
@@ -360,9 +361,15 @@ export interface CredentialSourceStatus {
 }
 
 /** credentialStatus response: per-credential `{ ready, secretName }` keyed by the
- *  AssistantCredentials credential id (only present ids are included). */
+ *  AssistantCredentials credential id (only present ids are included). `conflicts`
+ *  are ids claimed by more than one credential-store Secret (alphabetically-first
+ *  wins; surfaced so the UI can warn). `needsReconcile` is true when a legacy
+ *  install has fallback-resolved credentials not yet stamped with annotations
+ *  (drives the Repair button). Both names/ids only — never values. */
 export interface CredentialStatusResponse {
   credentials: Partial<Record<keyof AssistantCredentials, CredentialSourceStatus>>;
+  conflicts?: (keyof AssistantCredentials)[];
+  needsReconcile?: boolean;
 }
 
 /** A candidate Secret for the BYO source picker: name, type, and data KEY NAMES

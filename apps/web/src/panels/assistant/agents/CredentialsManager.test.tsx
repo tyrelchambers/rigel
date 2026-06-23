@@ -117,4 +117,42 @@ describe("CredentialsManager", () => {
     expect(within(dialog).getByText(/Use an API key/i)).toBeInTheDocument();
     expect(within(dialog).getByText(/Kubernetes Secret/i)).toBeInTheDocument();
   });
+
+  it("shows an amber conflict marker only on the row whose credential is in conflict", async () => {
+    // gemini's only credential id is geminiApiKey → only the Gemini row warns.
+    wrap(manager({ credentialConflicts: ["geminiApiKey"] }));
+    const geminiRow = (await screen.findByText("Gemini")).closest("[data-provider]") as HTMLElement;
+    const marker = within(geminiRow).getByLabelText(/gemini credential conflict/i);
+    expect(marker).toBeInTheDocument();
+    expect(marker).toHaveAttribute(
+      "title",
+      expect.stringMatching(/more than one secret claims this credential.*repair to fix/i),
+    );
+    // The Claude row carries no conflict marker.
+    const claudeRow = (screen.getByText("Claude")).closest("[data-provider]") as HTMLElement;
+    expect(within(claudeRow).queryByLabelText(/credential conflict/i)).not.toBeInTheDocument();
+  });
+
+  it("conflict on a secondary credential (anthropicApiKey) still warns the Claude row", async () => {
+    wrap(manager({ credentialConflicts: ["anthropicApiKey"] }));
+    const claudeRow = (await screen.findByText("Claude")).closest("[data-provider]") as HTMLElement;
+    expect(within(claudeRow).getByLabelText(/claude credential conflict/i)).toBeInTheDocument();
+  });
+
+  it("shows the Repair button only when needsReconcile, and dispatches onReconcile", async () => {
+    const onReconcile = vi.fn();
+    // Not needed → no button.
+    const { rerender } = wrap(manager({ onReconcile, credentialNeedsReconcile: false }));
+    await screen.findByText("Claude");
+    expect(screen.queryByRole("button", { name: /repair credential labels/i })).not.toBeInTheDocument();
+    // Needed → button appears and fires onReconcile (no confirm dialog).
+    rerender(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        {manager({ onReconcile, credentialNeedsReconcile: true })}
+      </QueryClientProvider>,
+    );
+    const repair = await screen.findByRole("button", { name: /repair credential labels/i });
+    await userEvent.click(repair);
+    expect(onReconcile).toHaveBeenCalledTimes(1);
+  });
 });

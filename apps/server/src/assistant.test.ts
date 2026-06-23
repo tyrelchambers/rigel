@@ -260,6 +260,163 @@ describe("credentialStatus per-credential shape", () => {
 });
 
 // ---------------------------------------------------------------------------
+// credentialStatus conflicts + needsReconcile (Phase 3 / Task A2)
+// ---------------------------------------------------------------------------
+
+describe("credentialStatus conflicts + needsReconcile", () => {
+  test("reports conflicts (>1 claimant) and needsReconcile, ids + names only", async () => {
+    const items = [
+      // two credential-store Secrets claim geminiApiKey → conflict
+      {
+        metadata: {
+          name: "alpha",
+          labels: { "rigel.assistant/credential-store": "true" },
+          annotations: { "rigel.assistant/credential.geminiApiKey": "k" },
+        },
+        data: { k: b64("gemini-conflict-value") },
+      },
+      {
+        metadata: {
+          name: "zebra",
+          labels: { "rigel.assistant/credential-store": "true" },
+          annotations: { "rigel.assistant/credential.geminiApiKey": "k" },
+        },
+        data: { k: b64("other-gemini-value") },
+      },
+      // a legacy un-annotated default Secret → needsReconcile
+      {
+        metadata: { name: "rigel-assistant-credentials" },
+        data: { codexApiKey: b64("codex-value") },
+      },
+    ];
+    const res = await credentialStatus(null, "default", fakeKubectl(items));
+    const parsed = JSON.parse(res.stdout) as {
+      credentials: Record<string, { ready: boolean; secretName: string }>;
+      conflicts: string[];
+      needsReconcile: boolean;
+    };
+    expect(parsed.conflicts).toEqual(["geminiApiKey"]);
+    expect(parsed.needsReconcile).toBe(true);
+    // No secret VALUES (or their base64) anywhere.
+    for (const leak of ["gemini-conflict-value", "other-gemini-value", "codex-value"]) {
+      expect(res.stdout).not.toContain(leak);
+      expect(res.stdout).not.toContain(b64(leak));
+    }
+  });
+
+  test("a fully-annotated install reports no conflicts and needsReconcile: false", async () => {
+    const items = [
+      {
+        metadata: {
+          name: "rigel-assistant-credentials",
+          labels: { "rigel.assistant/credential-store": "true" },
+          annotations: { "rigel.assistant/credential.codexApiKey": "codexApiKey" },
+        },
+        data: { codexApiKey: b64("v") },
+      },
+    ];
+    const res = await credentialStatus(null, "default", fakeKubectl(items));
+    const parsed = JSON.parse(res.stdout) as { conflicts: string[]; needsReconcile: boolean };
+    expect(parsed.conflicts).toEqual([]);
+    expect(parsed.needsReconcile).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// reconcileCredentialAnnotations (Phase 3 / Task A2)
+// ---------------------------------------------------------------------------
+
+import { reconcileCredentialAnnotations } from "./assistant";
+
+describe("reconcileCredentialAnnotations", () => {
+  test("lists managed Secrets, stamps fallback ids (metadata only), returns { stamped }", async () => {
+    // A legacy install: default credentials Secret with two fallback ids, plus the
+    // legacy token Secret — none annotated yet.
+    const managed = [
+      {
+        metadata: { name: "rigel-assistant-credentials" },
+        data: { codexApiKey: b64("codex-DO-NOT-LEAK"), geminiApiKey: b64("gemini-DO-NOT-LEAK") },
+      },
+      { metadata: { name: "rigel-assistant-token" }, data: { token: b64("token-DO-NOT-LEAK") } },
+    ];
+    const { run, calls } = scriptedKubectl([
+      { match: (a) => a[0] === "get" && a[1] === "secrets" && a.includes("-l"), result: okJSON({ items: managed }) },
+      { match: (a) => a[0] === "label", result: ok() },
+      { match: (a) => a[0] === "annotate", result: ok() },
+    ]);
+    const res = await reconcileCredentialAnnotations(null, "default", run);
+    const parsed = JSON.parse(res.stdout) as { stamped: number };
+    // 3 ids stamped (codexApiKey + geminiApiKey + claudeToken).
+    expect(parsed.stamped).toBe(3);
+
+    const verbs = new Set(calls.map((c) => c[0]));
+    // Metadata ONLY: never an apply / rollout / restart / patch / delete.
+    for (const forbidden of ["apply", "rollout", "restart", "patch", "delete"]) {
+      expect(verbs.has(forbidden)).toBe(false);
+    }
+    expect(verbs.has("label")).toBe(true);
+    expect(verbs.has("annotate")).toBe(true);
+
+    // No secret VALUE (or its base64) anywhere in the calls or output.
+    const haystack = JSON.stringify(calls) + res.stdout + res.stderr;
+    for (const leak of ["codex-DO-NOT-LEAK", "gemini-DO-NOT-LEAK", "token-DO-NOT-LEAK"]) {
+      expect(haystack).not.toContain(leak);
+      expect(haystack).not.toContain(b64(leak));
+    }
+  });
+
+  test("idempotent: an already-annotated install runs no mutations and reports { stamped: 0 }", async () => {
+    const managed = [
+      {
+        metadata: {
+          name: "rigel-assistant-credentials",
+          labels: { "rigel.assistant/credential-store": "true" },
+          annotations: { "rigel.assistant/credential.codexApiKey": "codexApiKey" },
+        },
+        data: { codexApiKey: b64("v") },
+      },
+    ];
+    const { run, calls } = scriptedKubectl([
+      { match: (a) => a[0] === "get" && a[1] === "secrets" && a.includes("-l"), result: okJSON({ items: managed }) },
+    ]);
+    const res = await reconcileCredentialAnnotations(null, "default", run);
+    expect((JSON.parse(res.stdout) as { stamped: number }).stamped).toBe(0);
+    // Only the list call ran; no label/annotate.
+    expect(calls.every((c) => c[0] === "get")).toBe(true);
+  });
+
+  test("conflict-safe: an annotation-claimed id is never re-stamped from the legacy default", async () => {
+    const managed = [
+      {
+        metadata: {
+          name: "byo-anthropic",
+          labels: { "rigel.assistant/credential-store": "true" },
+          annotations: { "rigel.assistant/credential.anthropicApiKey": "api-key" },
+        },
+        data: { "api-key": b64("v") },
+      },
+      // legacy default also carries anthropicApiKey by default key — must NOT be stamped.
+      { metadata: { name: "rigel-assistant-credentials" }, data: { anthropicApiKey: b64("legacy") } },
+    ];
+    const { run, calls } = scriptedKubectl([
+      { match: (a) => a[0] === "get" && a[1] === "secrets" && a.includes("-l"), result: okJSON({ items: managed }) },
+    ]);
+    const res = await reconcileCredentialAnnotations(null, "default", run);
+    expect((JSON.parse(res.stdout) as { stamped: number }).stamped).toBe(0);
+    expect(calls.some((c) => c[0] === "label" || c[0] === "annotate")).toBe(false);
+  });
+
+  test("propagates a kubectl failure (ensureOk) instead of silently succeeding", async () => {
+    const managed = [{ metadata: { name: "rigel-assistant-credentials" }, data: { codexApiKey: b64("v") } }];
+    const { run } = scriptedKubectl([
+      { match: (a) => a[0] === "get" && a[1] === "secrets" && a.includes("-l"), result: okJSON({ items: managed }) },
+      { match: (a) => a[0] === "label", result: { code: 1, stdout: "", stderr: "forbidden" } },
+    ]);
+    await expect(reconcileCredentialAnnotations(null, "default", run)).rejects.toThrow(/forbidden|reconcile/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // listCredentialSecrets — names + key NAMES only, noise Secrets filtered (A4)
 // ---------------------------------------------------------------------------
 

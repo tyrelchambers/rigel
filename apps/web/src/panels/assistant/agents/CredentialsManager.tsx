@@ -7,7 +7,7 @@
 // from the server's credentialStatus (d.credentialSources) — values never leave the
 // cluster.
 import { useState } from "react";
-import { Info, ExternalLink } from "lucide-react";
+import { Info, ExternalLink, AlertTriangle, Wrench } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -32,22 +32,32 @@ import {
   PROVIDER_AUTH,
   authMethodSummary,
   credentialReady,
+  credentialKeysFor,
   type AuthMethodHelp,
 } from "./providerMeta";
 
 export function CredentialsManager({
   credentials,
   credentialSources = {},
+  credentialConflicts = [],
+  credentialNeedsReconcile = false,
   namespace,
   onSave,
   onSaveSource,
   onUseManaged,
+  onReconcile,
   disabled = false,
 }: {
   credentials: AssistantCredentials;
   /** Per-credential `{ ready, secretName }` from credentialStatus — drives the
    *  chip and the dialog's "currently backed by" readout. Names only. */
   credentialSources?: Partial<Record<keyof AssistantCredentials, CredentialSourceStatus>>;
+  /** Credential ids claimed by more than one Secret — rows for these show an
+   *  amber conflict marker. Ids only. */
+  credentialConflicts?: (keyof AssistantCredentials)[];
+  /** When true, a legacy install needs its credential labels stamped — shows the
+   *  Repair button (which does NOT roll the agent). */
+  credentialNeedsReconcile?: boolean;
   /** Agent namespace — for listing candidate Secrets in the source dialog. */
   namespace: string;
   /** Managed (paste) save: stores `value` under `key` (the chosen method's key). */
@@ -61,17 +71,36 @@ export function CredentialsManager({
   }) => void;
   /** Revert a credential to the Rigel-managed default. Omitted with onSaveSource. */
   onUseManaged?: (credentialId: keyof AssistantCredentials) => void;
+  /** Stamp the new label/annotations onto a legacy install's managed Secrets.
+   *  Metadata-only (no rollout), so it skips the restart-confirm dialog. */
+  onReconcile?: () => void;
   disabled?: boolean;
 }) {
   const { data: agents } = useAgents();
+  const conflictSet = new Set<keyof AssistantCredentials>(credentialConflicts);
 
   return (
     <Card className="space-y-2">
-      <div>
-        <p className="text-sm font-semibold">Credentials</p>
-        <p className="text-xs text-muted-foreground">
-          Stored as a Kubernetes Secret in the cluster. Only providers a role uses need a key.
-        </p>
+      <div className="flex items-start gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold">Credentials</p>
+          <p className="text-xs text-muted-foreground">
+            Stored as a Kubernetes Secret in the cluster. Only providers a role uses need a key.
+          </p>
+        </div>
+        {credentialNeedsReconcile && onReconcile && (
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={disabled}
+            onClick={onReconcile}
+            title="Stamp the credential labels onto this install's managed Secrets. This only updates Secret metadata and does not restart the agent."
+            className="ml-auto shrink-0 text-muted-foreground"
+          >
+            <Wrench className="mr-1 size-3.5" />
+            Repair credential labels
+          </Button>
+        )}
       </div>
       {PROVIDER_IDS.map((id) => (
         <CredentialRow
@@ -79,6 +108,7 @@ export function CredentialsManager({
           id={id}
           label={agents?.agents.find((a) => a.id === id)?.label ?? id}
           ready={credentialReady(id, credentials)}
+          conflict={credentialKeysFor(id).some((k) => conflictSet.has(k))}
           credentialSources={credentialSources}
           namespace={namespace}
           onSave={(key, v) => onSave(id, key, v)}
@@ -95,6 +125,7 @@ function CredentialRow({
   id,
   label,
   ready,
+  conflict,
   credentialSources,
   namespace,
   onSave,
@@ -105,6 +136,8 @@ function CredentialRow({
   id: AgentId;
   label: string;
   ready: boolean;
+  /** A credential this provider uses is claimed by more than one Secret. */
+  conflict: boolean;
   credentialSources: Partial<Record<keyof AssistantCredentials, CredentialSourceStatus>>;
   namespace: string;
   onSave: (key: keyof AssistantCredentials, value: string) => void;
@@ -141,6 +174,17 @@ function CredentialRow({
         >
           <Info className="size-4" />
         </button>
+        {conflict && (
+          <span
+            role="img"
+            data-conflict={id}
+            aria-label={`${label} credential conflict`}
+            title="More than one Secret claims this credential; the alphabetically-first is used. Repair to fix."
+            className="text-amber-500 dark:text-amber-400"
+          >
+            <AlertTriangle className="size-4" />
+          </span>
+        )}
         <span
           className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-medium ${
             ready

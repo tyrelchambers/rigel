@@ -45,6 +45,12 @@ export function credentialKeyFor(id: AgentId): keyof AssistantCredentials {
   return KEYS_FOR[id][0]!;
 }
 
+/** Every credential id this provider can authenticate with (so a row can check
+ *  whether ANY of its credentials is in conflict). */
+export function credentialKeysFor(id: AgentId): (keyof AssistantCredentials)[] {
+  return KEYS_FOR[id];
+}
+
 /** Credential id → the agent env var it feeds, derived from the single source of
  *  truth in @rigel/k8s (CREDENTIAL_ENV) so the two never drift. Display-only (the
  *  BYO source dialog's "reads <ENV> from …" readout). */

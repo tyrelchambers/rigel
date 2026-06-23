@@ -129,6 +129,8 @@ export {
   computeLiveIssues,
   mergedConfigMapJSON,
   clearedReportConfigMapJSON,
+  reconcileCommands,
+  needsReconcile,
 } from "./assistant";
 
 export {
