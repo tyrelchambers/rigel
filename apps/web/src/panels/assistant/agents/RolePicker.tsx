@@ -15,14 +15,6 @@ import { useAgentModels, useAgents, type AgentId, type AssistantRoleSelection } 
 import { Card, Field } from "../components/primitives";
 import { PROVIDER_IDS, isClaudeFamily } from "./providerMeta";
 
-/** Display labels for each provider id — used when useAgents data isn't loaded yet. */
-const PROVIDER_LABELS: Record<AgentId, string> = {
-  claude: "Claude",
-  codex: "Codex",
-  gemini: "Gemini",
-  opencode: "OpenCode",
-};
-
 /** Low/Medium/High only — the three the design exposes. */
 const EFFORTS = [
   { id: "low", label: "Low" },
@@ -59,7 +51,7 @@ export function RolePicker({
     setPendingProvider(null);
   }, [pendingProvider, pendingModels, onChange]);
 
-  const providerLabel = agents?.agents?.find((a) => a.id === provider)?.label ?? PROVIDER_LABELS[provider] ?? provider;
+  const providerLabel = agents?.agents?.find((a) => a.id === provider)?.label ?? provider;
 
   function pickProvider(next: AgentId) {
     if (next === provider) return;
@@ -94,7 +86,7 @@ export function RolePicker({
               <DropdownMenuItem key={id} onClick={() => pickProvider(id)}>
                 <span className="flex items-center gap-2">
                   <AgentGlyph id={id} size={16} />
-                  {agents?.agents?.find((a) => a.id === id)?.label ?? PROVIDER_LABELS[id] ?? id}
+                  {agents?.agents?.find((a) => a.id === id)?.label ?? id}
                 </span>
               </DropdownMenuItem>
             ))}
