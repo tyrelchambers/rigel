@@ -275,13 +275,15 @@ async function installAssistant(
   return result;
 }
 
-/** Delete the manifests, then the Secret. Leaves the namespace + audit history. */
+/** Delete the manifests, then both Secrets (legacy token + provider credentials —
+ *  the latter carries API keys, so don't leave it orphaned). Leaves the namespace
+ *  + audit history. */
 async function uninstallAssistant(context: string | null, namespace: string): Promise<RunResult> {
   const config: AssistantInstallConfig = { ...DEFAULT_INSTALL_CONFIG, installNamespace: namespace };
   ensureOk(await deleteStdin(context, manifestYAML(config)), "Uninstall failed");
   return runKubectlStdin(
     context,
-    ["delete", "secret", SECRET_NAME, "-n", namespace, "--ignore-not-found=true"],
+    ["delete", "secret", SECRET_NAME, CREDENTIALS_SECRET_NAME, "-n", namespace, "--ignore-not-found=true"],
     null,
   );
 }
