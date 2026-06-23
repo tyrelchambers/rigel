@@ -2,7 +2,7 @@
 // role defaults, and the provider→credential-key mapping. Vendor names, labels,
 // and auth-method copy come from useAgents() at render time — this module only
 // holds what the server does not surface.
-import type { AgentId, AssistantCredentials, AssistantRoleSelection } from "@/lib/api";
+import type { AgentId, AssistantCredentials, AssistantLimits, AssistantRoleSelection } from "@/lib/api";
 
 /** The four providers, in display order. Mirrors the chat's AgentId set. */
 export const PROVIDER_IDS: AgentId[] = ["claude", "codex", "gemini", "opencode"];
@@ -17,6 +17,18 @@ export const DEFAULT_SUPERVISOR: AssistantRoleSelection = {
   provider: "claude",
   model: "claude-opus-4-8",
   effort: "high",
+};
+
+/** Out-of-box operational limits — mirrors the server's DEFAULT_INSTALL_CONFIG (and
+ *  the agent's Config defaults), so the Operational limits form shows the real values
+ *  the agent uses rather than blanks when assistant-config hasn't overridden them. */
+export const DEFAULT_LIMITS: AssistantLimits = {
+  pollIntervalMs: 30000,
+  maxPerResourcePerHour: 3,
+  maxPerNight: 20,
+  maxAttemptsPerIncident: 3,
+  confirmPolls: 2,
+  namespaces: [],
 };
 
 /** Every credential Secret key a provider can authenticate with. */

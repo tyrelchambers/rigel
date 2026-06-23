@@ -19,7 +19,7 @@ import { Card, Section } from "../components/primitives";
 import { RolePicker } from "../agents/RolePicker";
 import { CredentialsManager } from "../agents/CredentialsManager";
 import { LimitsForm } from "../agents/LimitsForm";
-import { credentialKeyFor } from "../agents/providerMeta";
+import { credentialKeyFor, DEFAULT_LIMITS } from "../agents/providerMeta";
 
 export function AgentsTab() {
   const { d, ns, working, run } = useAssistantCtx();
@@ -27,7 +27,8 @@ export function AgentsTab() {
 
   const [worker, setWorker] = useState<AssistantRoleSelection>(d.roles.worker);
   const [supervisor, setSupervisor] = useState<AssistantRoleSelection>(d.roles.supervisor);
-  const [limits, setLimits] = useState<AssistantLimits>(d.limits);
+  // Seed with sensible defaults so unset limits show real values, not blanks.
+  const [limits, setLimits] = useState<AssistantLimits>({ ...DEFAULT_LIMITS, ...d.limits });
   // The credential being staged behind the confirm dialog (it rolls the agent).
   const [pendingCred, setPendingCred] = useState<{ provider: AgentId; value: string } | null>(null);
 
@@ -36,7 +37,7 @@ export function AgentsTab() {
     setWorker(d.roles.worker);
     setSupervisor(d.roles.supervisor);
   }, [d.roles.worker, d.roles.supervisor]);
-  useEffect(() => setLimits(d.limits), [d.limits]);
+  useEffect(() => setLimits({ ...DEFAULT_LIMITS, ...d.limits }), [d.limits]);
 
   function saveRolesAndLimits() {
     run({ action: "setModels", namespace: ns, worker, supervisor });
