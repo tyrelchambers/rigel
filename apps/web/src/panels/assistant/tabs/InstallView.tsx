@@ -18,9 +18,12 @@ import {
   SECRET_NAME,
   type AssistantInstallConfig,
 } from "@rigel/k8s";
-import { useChatConfig } from "@/lib/api";
+import { useChatConfig, type AgentId, type AssistantCredentials, type AssistantRoleSelection } from "@/lib/api";
 import { useAssistantCtx } from "../AssistantContext";
 import { Card, Field, inputClass } from "../components/primitives";
+import { RolePicker } from "../agents/RolePicker";
+import { CredentialsManager } from "../agents/CredentialsManager";
+import { DEFAULT_WORKER, DEFAULT_SUPERVISOR, credentialKeyFor } from "../agents/providerMeta";
 
 export function InstallView() {
   const {
@@ -40,6 +43,14 @@ export function InstallView() {
   });
   const [installToken, setInstallToken] = useState("");
   const [showManifest, setShowManifest] = useState(false);
+  const [worker, setWorker] = useState<AssistantRoleSelection>(DEFAULT_WORKER);
+  const [supervisor, setSupervisor] = useState<AssistantRoleSelection>(DEFAULT_SUPERVISOR);
+  // Staged credentials gathered for the providers the user chooses (besides the
+  // Claude token, which uses the existing token field and folds into claudeToken).
+  const [stagedCreds, setStagedCreds] = useState<AssistantCredentials>({});
+  function stageCred(provider: AgentId, value: string) {
+    setStagedCreds((c) => ({ ...c, [credentialKeyFor(provider)]: value }));
+  }
 
   // If a token is already saved (onboarding / Settings), the server reuses it —
   // so the user doesn't have to paste it again here.
@@ -87,15 +98,23 @@ export function InstallView() {
     if (repoPath !== repoPath.toLowerCase()) return;
     if (namespace === "") return;
     if (namespace !== namespace.toLowerCase()) return;
+    const credentials: AssistantCredentials = { ...stagedCreds };
+    if (token !== "") credentials.claudeToken = token;
     run(
       {
         action: "install",
         namespace,
-        token, // empty when reusing the saved token — the server falls back to it
+        token, // legacy field kept; server also folds it into credentials.claudeToken
         image,
         monitorNamespaces: config.namespaces,
+        worker,
+        supervisor,
+        credentials,
       },
-      () => setInstallToken(""),
+      () => {
+        setInstallToken("");
+        setStagedCreds({});
+      },
     );
   }
 
@@ -208,6 +227,19 @@ export function InstallView() {
             </DropdownMenuContent>
           </DropdownMenu>
         </Field>
+      </Card>
+
+      <Card className="space-y-3">
+        <p className="text-sm font-semibold">2b. Agents &amp; providers</p>
+        <p className="text-xs text-muted-foreground">
+          Pick which AI runs each role. Defaults to Claude. Add a key for any non-Claude provider you
+          choose.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <RolePicker label="Worker" description="Investigates incidents, proposes fixes" value={worker} onChange={setWorker} disabled={working} />
+          <RolePicker label="Supervisor" description="Adversarially reviews risky actions" value={supervisor} onChange={setSupervisor} disabled={working} />
+        </div>
+        <CredentialsManager credentials={stagedCreds} onSave={stageCred} disabled={working} />
       </Card>
 
       <Card>
