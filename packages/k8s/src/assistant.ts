@@ -95,6 +95,124 @@ const CREDENTIAL_KEYS: (keyof AssistantCredentials)[] = [
   "opencodeAuthContent",
 ];
 
+/** Discovery label a Secret carries to participate as a credential source, so
+ *  resolution can `kubectl get secrets -l <this>=true` instead of fixed names. */
+export const CREDENTIAL_STORE_LABEL = "rigel.assistant/credential-store";
+/** Per-credential correlation annotation prefix: `<prefix><id>: "<dataKey>"`
+ *  declares "my data key <dataKey> provides credential <id>". */
+export const CREDENTIAL_ANNOTATION_PREFIX = "rigel.assistant/credential.";
+
+/** Canonical provider credential → the agent env var it feeds + its default
+ *  managed source. The single source of truth for resolution + env render. */
+export interface CredentialEnvEntry {
+  id: keyof AssistantCredentials;
+  env: string;
+  defaultSecret: string; // SECRET_NAME for claudeToken, else CREDENTIALS_SECRET_NAME
+  defaultKey: string;    // data key in the default Secret
+}
+
+/** Ordered to mirror today's Deployment env exactly (and CREDENTIAL_KEYS). */
+export const CREDENTIAL_ENV: CredentialEnvEntry[] = [
+  { id: "claudeToken",         env: "CLAUDE_CODE_OAUTH_TOKEN", defaultSecret: SECRET_NAME,             defaultKey: "token" },
+  { id: "anthropicApiKey",     env: "ANTHROPIC_API_KEY",       defaultSecret: CREDENTIALS_SECRET_NAME, defaultKey: "anthropicApiKey" },
+  { id: "codexApiKey",         env: "CODEX_API_KEY",           defaultSecret: CREDENTIALS_SECRET_NAME, defaultKey: "codexApiKey" },
+  { id: "codexAuthContent",    env: "CODEX_AUTH_CONTENT",      defaultSecret: CREDENTIALS_SECRET_NAME, defaultKey: "codexAuthContent" },
+  { id: "geminiApiKey",        env: "GEMINI_API_KEY",          defaultSecret: CREDENTIALS_SECRET_NAME, defaultKey: "geminiApiKey" },
+  { id: "opencodeApiKey",      env: "OPENCODE_API_KEY",        defaultSecret: CREDENTIALS_SECRET_NAME, defaultKey: "opencodeApiKey" },
+  { id: "opencodeAuthContent", env: "OPENCODE_AUTH_CONTENT",   defaultSecret: CREDENTIALS_SECRET_NAME, defaultKey: "opencodeAuthContent" },
+];
+
+/** The set of valid credential ids, for fast membership checks. */
+const CREDENTIAL_IDS = new Set<string>(CREDENTIAL_ENV.map((e) => e.id));
+
+/** Minimal shape of a Secret as resolution needs it (a `kubectl get -o json`
+ *  item, with `data` base64-encoded — we only ever check key presence + that the
+ *  encoded value is a non-empty string, never decode/log a value). */
+export interface SecretLike {
+  metadata: { name: string; labels?: Record<string, string>; annotations?: Record<string, string> };
+  data?: Record<string, string>;
+}
+
+/** Where a resolved credential is backed: a Secret name + data key, plus whether
+ *  that key currently holds a non-empty value. Never carries the value itself. */
+export interface ResolvedSource {
+  secretName: string;
+  dataKey: string;
+  hasValue: boolean;
+}
+
+export interface CredentialResolution {
+  sources: Partial<Record<keyof AssistantCredentials, ResolvedSource>>;
+  /** Credential ids claimed by more than one credential-store Secret (the
+   *  alphabetically-first Secret won; surfaced so the UI can warn, never silent). */
+  conflicts: (keyof AssistantCredentials)[];
+}
+
+/** True when the Secret's `data` holds a non-empty (base64) value for `key`. */
+function hasNonEmptyData(secret: SecretLike, key: string): boolean {
+  const v = secret.data?.[key];
+  return typeof v === "string" && v !== "";
+}
+
+/**
+ * Resolve, per credential id, the backing `{ secretName, dataKey, hasValue }`:
+ *
+ *  1. Annotations first: every Secret carrying `rigel.assistant/credential-store=true`
+ *     contributes each `rigel.assistant/credential.<id>` annotation as a candidate.
+ *     Single owner per id — if >1 Secret claims one id, the alphabetically-first
+ *     (by Secret name) wins and the id is reported in `conflicts`. Unknown ids are
+ *     ignored.
+ *  2. Legacy fallback: for any id with no annotated source, fall back to
+ *     CREDENTIAL_ENV's default Secret name + key (so un-migrated installs keep
+ *     working until re-stamped). Annotations always win over the fallback.
+ *
+ * Pure — never touches the cluster, never returns/logs a secret value.
+ */
+export function resolveCredentialSources(secrets: SecretLike[]): CredentialResolution {
+  const sources: Partial<Record<keyof AssistantCredentials, ResolvedSource>> = {};
+  const conflicts: (keyof AssistantCredentials)[] = [];
+
+  // 1. Annotation-driven candidates from credential-store Secrets, processed in
+  //    alphabetical Secret-name order so the first claimant wins deterministically.
+  const stores = secrets
+    .filter((s) => s.metadata.labels?.[CREDENTIAL_STORE_LABEL] === "true")
+    .sort((a, b) => a.metadata.name.localeCompare(b.metadata.name));
+  for (const secret of stores) {
+    for (const [annKey, dataKey] of Object.entries(secret.metadata.annotations ?? {})) {
+      if (!annKey.startsWith(CREDENTIAL_ANNOTATION_PREFIX)) continue;
+      const id = annKey.slice(CREDENTIAL_ANNOTATION_PREFIX.length);
+      if (!CREDENTIAL_IDS.has(id)) continue; // unknown credential id — ignore
+      const cid = id as keyof AssistantCredentials;
+      if (sources[cid]) {
+        // Already claimed by an earlier (alphabetically-first) Secret.
+        if (!conflicts.includes(cid)) conflicts.push(cid);
+        continue;
+      }
+      sources[cid] = {
+        secretName: secret.metadata.name,
+        dataKey,
+        hasValue: hasNonEmptyData(secret, dataKey),
+      };
+    }
+  }
+
+  // 2. Legacy fallback for any id with no annotated source.
+  const byName = new Map(secrets.map((s) => [s.metadata.name, s]));
+  for (const entry of CREDENTIAL_ENV) {
+    if (sources[entry.id]) continue;
+    const secret = byName.get(entry.defaultSecret);
+    if (!secret) continue;
+    if (!(entry.defaultKey in (secret.data ?? {}))) continue;
+    sources[entry.id] = {
+      secretName: entry.defaultSecret,
+      dataKey: entry.defaultKey,
+      hasValue: hasNonEmptyData(secret, entry.defaultKey),
+    };
+  }
+
+  return { sources, conflicts };
+}
+
 // ---------------------------------------------------------------------------
 // Manifest builders — byte-for-byte port of AssistantInstaller.swift
 // ---------------------------------------------------------------------------
@@ -122,6 +240,7 @@ metadata:
  * token can be rolled back without reapplying RBAC. Never shown in the preview.
  */
 export function secretYAML(token: string, issuedAt = "", namespace = "default"): string {
+  const claudeKey = CREDENTIAL_ENV.find((e) => e.id === "claudeToken")!.defaultKey;
   return `apiVersion: v1
 kind: Secret
 metadata:
@@ -129,11 +248,13 @@ metadata:
   namespace: ${namespace}
   labels:
     app.kubernetes.io/managed-by: rigel-assistant
+    ${CREDENTIAL_STORE_LABEL}: "true"
   annotations:
     ${ISSUED_AT_ANNOTATION}: "${issuedAt}"
+    ${CREDENTIAL_ANNOTATION_PREFIX}claudeToken: "${claudeKey}"
 type: Opaque
 stringData:
-  token: "${escape(token)}"`;
+  ${claudeKey}: "${escape(token)}"`;
 }
 
 /**
@@ -148,13 +269,18 @@ export function credentialsSecretYAML(
   namespace = "default",
 ): string {
   const lines: string[] = [];
+  const annotations: string[] = [];
   for (const key of CREDENTIAL_KEYS) {
     const value = creds[key];
     if (typeof value === "string" && value.trim() !== "") {
       lines.push(`  ${key}: "${escape(value)}"`);
+      // Correlate this data key to its credential id. For the credentials Secret
+      // the data key IS the id, so the annotation value mirrors the key name.
+      annotations.push(`    ${CREDENTIAL_ANNOTATION_PREFIX}${key}: "${key}"`);
     }
   }
   const stringData = lines.length > 0 ? `stringData:\n${lines.join("\n")}` : "stringData: {}";
+  const annotationsBlock = annotations.length > 0 ? `\n  annotations:\n${annotations.join("\n")}` : "";
   return `apiVersion: v1
 kind: Secret
 metadata:
@@ -162,6 +288,7 @@ metadata:
   namespace: ${namespace}
   labels:
     app.kubernetes.io/managed-by: rigel-assistant
+    ${CREDENTIAL_STORE_LABEL}: "true"${annotationsBlock}
 type: Opaque
 ${stringData}`;
 }
@@ -445,7 +572,9 @@ export function manifestYAML(c: AssistantInstallConfig): string {
  * this guards any path that might render a token-bearing string.
  */
 export function maskToken(yaml: string): string {
-  return yaml.replace(/(token:\s*)"(?:[^"\\]|\\.)*"/g, '$1"***SECRET***"');
+  // Line-anchored so it redacts the stringData `token:` value only, never an
+  // annotation line like `rigel.assistant/credential.claudeToken: "token"`.
+  return yaml.replace(/^(\s*token:\s*)"(?:[^"\\]|\\.)*"/gm, '$1"***SECRET***"');
 }
 
 // ---------------------------------------------------------------------------

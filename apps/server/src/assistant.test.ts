@@ -150,21 +150,82 @@ test("setLimitsUpdates throws-worthy empty input is detectable (no keys)", () =>
   expect(setLimitsUpdates({ action: "setLimits" })).toEqual({});
 });
 
-import { normalizeCredentialKeys } from "./assistant";
+import { credentialStatus } from "./assistant";
+import type { RunResult } from "@rigel/k8s/src/run";
 
-describe("normalizeCredentialKeys", () => {
-  test("keeps known credential keys, drops unknown ones", () => {
-    expect(normalizeCredentialKeys(["geminiApiKey", "codexApiKey", "codexAuthContent", "junk"], []).sort()).toEqual([
-      "codexApiKey", "codexAuthContent", "geminiApiKey",
-    ]);
+// Drive credentialStatus with a fake kubectl that returns a label-selected Secret
+// list. Asserts the existing `{ credentialKeys: string[] }` shape is preserved
+// (web unchanged) and that NO secret values appear in the output. b64 helper so
+// `data` values mirror a real `kubectl get -o json` (base64-encoded).
+const b64 = (s: string) => Buffer.from(s, "utf8").toString("base64");
+function fakeKubectl(items: unknown[]): (ctx: string | null, args: string[]) => Promise<RunResult> {
+  return async () => ({ code: 0, stdout: JSON.stringify({ items }), stderr: "" });
+}
+
+describe("credentialStatus", () => {
+  test("returns the ids whose hasValue is true via annotated + legacy + token paths", async () => {
+    const items = [
+      // annotated BYO source
+      {
+        metadata: {
+          name: "byo-anthropic",
+          labels: { "rigel.assistant/credential-store": "true" },
+          annotations: { "rigel.assistant/credential.anthropicApiKey": "api-key" },
+        },
+        data: { "api-key": b64("secret-value-should-never-leak") },
+      },
+      // legacy un-annotated credentials Secret (fallback resolves codexApiKey)
+      {
+        metadata: { name: "rigel-assistant-credentials" },
+        data: { codexApiKey: b64("codex-secret") },
+      },
+      // legacy token Secret (token → claudeToken)
+      {
+        metadata: { name: "rigel-assistant-token" },
+        data: { token: b64("oauth-token") },
+      },
+    ];
+    const res = await credentialStatus(null, "default", fakeKubectl(items));
+    const parsed = JSON.parse(res.stdout) as { credentialKeys: string[] };
+    expect(parsed.credentialKeys.sort()).toEqual(["anthropicApiKey", "claudeToken", "codexApiKey"]);
+    // No secret VALUES (or their base64) may appear anywhere in the output.
+    expect(res.stdout).not.toContain("secret-value-should-never-leak");
+    expect(res.stdout).not.toContain(b64("secret-value-should-never-leak"));
+    expect(res.stdout).not.toContain(b64("oauth-token"));
   });
-  test("the legacy token Secret's `token` key maps to claudeToken", () => {
-    expect(normalizeCredentialKeys([], ["token"])).toEqual(["claudeToken"]);
+
+  test("an empty data value is excluded from credentialKeys", async () => {
+    const items = [
+      {
+        metadata: {
+          name: "byo",
+          labels: { "rigel.assistant/credential-store": "true" },
+          annotations: { "rigel.assistant/credential.geminiApiKey": "k" },
+        },
+        data: { k: "" },
+      },
+    ];
+    const res = await credentialStatus(null, "default", fakeKubectl(items));
+    expect((JSON.parse(res.stdout) as { credentialKeys: string[] }).credentialKeys).toEqual([]);
   });
-  test("dedupes when both the legacy token and an explicit claudeToken are present", () => {
-    expect(normalizeCredentialKeys(["claudeToken"], ["token"])).toEqual(["claudeToken"]);
+
+  test("no managed Secrets → empty credentialKeys", async () => {
+    const res = await credentialStatus(null, "default", fakeKubectl([]));
+    expect((JSON.parse(res.stdout) as { credentialKeys: string[] }).credentialKeys).toEqual([]);
   });
-  test("no keys → empty", () => {
-    expect(normalizeCredentialKeys([], [])).toEqual([]);
+
+  test("issues a single label-selected list, never per-name gets", async () => {
+    const calls: string[][] = [];
+    const spy: (ctx: string | null, args: string[]) => Promise<RunResult> = async (_ctx, args) => {
+      calls.push(args);
+      return { code: 0, stdout: JSON.stringify({ items: [] }), stderr: "" };
+    };
+    await credentialStatus(null, "agents", spy);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain("secrets");
+    expect(calls[0]).toContain("-l");
+    expect(calls[0]).toContain("app.kubernetes.io/managed-by=rigel-assistant");
+    expect(calls[0]).toContain("-n");
+    expect(calls[0]).toContain("agents");
   });
 });

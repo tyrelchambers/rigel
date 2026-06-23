@@ -25,10 +25,12 @@ import {
   silencedSet,
   roleConfigUpdates,
   limitsConfigUpdates,
+  resolveCredentialSources,
   type AssistantInstallConfig,
   type AssistantCredentials,
   type RoleSelectionInput,
   type LimitsInput,
+  type SecretLike,
 } from "@rigel/k8s/src/assistant";
 import { signalConfigUpdates } from "@rigel/k8s/src/signal";
 import { normalizeAlertRule, parseAlertRules, serializeAlertRules, nextAlertRules, type SuggestedAlert } from "@rigel/k8s";
@@ -157,23 +159,6 @@ export function validateInstall(namespace: string, token: string, image: string)
   const ns = namespace.trim();
   if (ns === "") throw new Error("Set an install namespace (e.g. default).");
   if (ns !== ns.toLowerCase()) throw new Error("Namespace must be lowercase.");
-}
-
-/** Credential key names the agent understands (match the bridges' authEnv()). */
-const KNOWN_CREDENTIAL_KEYS: readonly string[] = [
-  "claudeToken", "anthropicApiKey", "codexApiKey", "codexAuthContent", "geminiApiKey",
-  "opencodeApiKey", "opencodeAuthContent",
-];
-
-/** Map the present Secret key NAMES (from the credentials Secret + the legacy token
- *  Secret) to the normalized credential vocabulary the UI consumes. The legacy `token`
- *  key counts as `claudeToken`; unknown keys are dropped. Handles NAMES only — never
- *  secret values. */
-export function normalizeCredentialKeys(credsKeys: string[], legacyKeys: string[]): string[] {
-  const present = new Set<string>();
-  for (const k of credsKeys) if (KNOWN_CREDENTIAL_KEYS.includes(k)) present.add(k);
-  if (legacyKeys.includes("token")) present.add("claudeToken");
-  return [...present];
 }
 
 /**
@@ -491,26 +476,43 @@ async function clearActivity(context: string | null, namespace: string): Promise
   return result;
 }
 
-/** Report which credential key NAMES exist (never the values) across the credentials
- *  Secret + the legacy token Secret, for the UI's readiness chips. */
-async function credentialStatus(context: string | null, namespace: string): Promise<RunResult> {
-  const keysOf = async (secret: string): Promise<string[]> => {
-    const res = await kubectl(context, ["get", "secret", secret, "-n", namespace, "-o", "json"]);
-    if (res.code !== 0) return []; // not found / no access → no keys
-    try {
-      const obj = JSON.parse(res.stdout) as { data?: Record<string, unknown> };
-      return Object.keys(obj.data ?? {}); // key NAMES only — values discarded here
-    } catch {
-      return [];
-    }
-  };
-  const [credsKeys, legacyKeys] = await Promise.all([
-    keysOf(CREDENTIALS_SECRET_NAME),
-    keysOf(SECRET_NAME),
+/**
+ * Report which provider credentials are READY (have a non-empty value) for the
+ * UI's readiness chips. Lists the managed Secrets by label (one call, covering
+ * both the legacy fixed-name Secrets for fallback AND any credential-store
+ * Secret), resolves readiness via the name-agnostic `resolveCredentialSources`,
+ * and returns ONLY credential ids — never values, never Secret names. The web
+ * still reads the existing `{ credentialKeys: string[] }` shape unchanged.
+ *
+ * `run` is injectable so the resolution can be asserted without a live cluster
+ * (defaults to the real kubectl).
+ */
+export async function credentialStatus(
+  context: string | null,
+  namespace: string,
+  run: (ctx: string | null, args: string[]) => Promise<RunResult> = kubectl,
+): Promise<RunResult> {
+  const res = await run(context, [
+    "get", "secrets", "-l", "app.kubernetes.io/managed-by=rigel-assistant",
+    "-n", namespace, "-o", "json",
   ]);
+  let items: SecretLike[] = [];
+  if (res.code === 0) {
+    try {
+      items = (JSON.parse(res.stdout) as { items?: SecretLike[] }).items ?? [];
+    } catch {
+      items = [];
+    }
+  }
+  const { sources } = resolveCredentialSources(items);
+  // ids whose backing data key currently holds a non-empty value — names/values
+  // are intentionally dropped here (the client only ever sees credential ids).
+  const credentialKeys = Object.entries(sources)
+    .filter(([, src]) => src?.hasValue)
+    .map(([id]) => id);
   return {
     code: 0,
-    stdout: JSON.stringify({ credentialKeys: normalizeCredentialKeys(credsKeys, legacyKeys) }),
+    stdout: JSON.stringify({ credentialKeys }),
     stderr: "",
   };
 }
