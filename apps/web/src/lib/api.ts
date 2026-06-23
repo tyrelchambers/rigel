@@ -318,6 +318,9 @@ export type AssistantAction =
   | "setMode"
   | "kill"
   | "updateToken"
+  | "setModels"
+  | "setCredentials"
+  | "setLimits"
   | "restart"
   | "silence"
   | "unsilence"
@@ -327,6 +330,31 @@ export type AssistantAction =
   | "saveAlert"
   | "deleteAlert"
   | "toggleAlert";
+
+export interface AssistantRoleSelection {
+  provider: string;
+  model: string;
+  effort?: string;
+}
+
+/** Provider credentials → the rigel-assistant-credentials Secret keys. */
+export interface AssistantCredentials {
+  claudeToken?: string;
+  anthropicApiKey?: string;
+  codexApiKey?: string;
+  geminiApiKey?: string;
+  opencodeApiKey?: string;
+  opencodeAuthContent?: string;
+}
+
+export interface AssistantLimits {
+  pollIntervalMs?: number;
+  maxPerResourcePerHour?: number;
+  maxPerNight?: number;
+  maxAttemptsPerIncident?: number;
+  confirmPolls?: number;
+  namespaces?: string[];
+}
 
 export interface AssistantRequest {
   action: AssistantAction;
@@ -355,6 +383,12 @@ export interface AssistantRequest {
   // toggleAlert / deleteAlert fields
   alertId?: string;
   alertEnabled?: boolean;
+  // Multi-provider control plane (Plan 2). provider is a plain string (the four
+  // agent ids: claude | codex | gemini | opencode); effort is Claude-family only.
+  worker?: AssistantRoleSelection;
+  supervisor?: AssistantRoleSelection;
+  credentials?: AssistantCredentials;
+  limits?: AssistantLimits;
 }
 
 /**
