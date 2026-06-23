@@ -187,7 +187,7 @@ async function tick(
   // deterministic guardrails stay in Stage B below.
   const packets = await diagnoseConfirmed(
     {
-      diagnose: (incident) => runWorker(cfg, [incident]),
+      diagnose: (incident) => runWorker(rc, [incident]),
       limit: cfg.maxConcurrentDiagnoses,
     },
     confirmed,
