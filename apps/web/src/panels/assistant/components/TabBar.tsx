@@ -15,7 +15,7 @@ export function TabBar() {
   if (phase === "loading") {
     return (
       <div className="inline-flex gap-[3px] rounded-[10px] p-[3px]" style={{ background: "rgba(255,255,255,0.04)" }}>
-        {[1, 2, 3, 4, 5].map((i) => (
+        {[1, 2, 3, 4, 5, 6].map((i) => (
           <Bar key={i} className="h-[30px] w-20 rounded-md" />
         ))}
       </div>
@@ -41,6 +41,7 @@ export function TabBar() {
     { id: "overview", label: "Overview" },
     { id: "needs", label: "Needs you", badge: needsBadge },
     { id: "rules", label: "Rules" },
+    { id: "agents", label: "Agents" },
     { id: "activity", label: "Activity", badge: activityBadge },
     { id: "settings", label: "Settings" },
   ];

@@ -30,7 +30,7 @@ import { outcomeGlyph, outcomeColorClass, relativeTime } from "./display";
 // Types
 // ---------------------------------------------------------------------------
 
-export type TabKey = "overview" | "needs" | "rules" | "activity" | "settings";
+export type TabKey = "overview" | "needs" | "rules" | "agents" | "activity" | "settings";
 
 /**
  * Coarse render phase, debounced so the Installer never flashes during load.

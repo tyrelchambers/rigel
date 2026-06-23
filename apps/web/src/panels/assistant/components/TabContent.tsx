@@ -10,6 +10,7 @@ import { NeedsYouTab } from "../tabs/NeedsYouTab";
 import { RulesTab } from "../tabs/RulesTab";
 import { ActivityTab } from "../tabs/ActivityTab";
 import { SettingsTab } from "../tabs/SettingsTab";
+import { AgentsTab } from "../tabs/AgentsTab";
 
 export function TabContent() {
   const { phase, d, tab } = useAssistantCtx();
@@ -48,6 +49,8 @@ export function TabContent() {
       return <NeedsYouTab />;
     case "rules":
       return <RulesTab />;
+    case "agents":
+      return <AgentsTab />;
     case "activity":
       return <ActivityTab />;
     case "settings":
