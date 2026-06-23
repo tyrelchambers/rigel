@@ -102,7 +102,8 @@ export type AssistantAction =
   | "clearReport"
   | "clearActivity"
   | "setSignal"
-  | "saveAlert" | "deleteAlert" | "toggleAlert";
+  | "saveAlert" | "deleteAlert" | "toggleAlert"
+  | "credentialStatus";
 
 export interface AssistantRequest {
   action: AssistantAction;
@@ -156,6 +157,23 @@ export function validateInstall(namespace: string, token: string, image: string)
   const ns = namespace.trim();
   if (ns === "") throw new Error("Set an install namespace (e.g. default).");
   if (ns !== ns.toLowerCase()) throw new Error("Namespace must be lowercase.");
+}
+
+/** Credential key names the agent understands (match the bridges' authEnv()). */
+const KNOWN_CREDENTIAL_KEYS: readonly string[] = [
+  "claudeToken", "anthropicApiKey", "codexApiKey", "geminiApiKey",
+  "opencodeApiKey", "opencodeAuthContent",
+];
+
+/** Map the present Secret key NAMES (from the credentials Secret + the legacy token
+ *  Secret) to the normalized credential vocabulary the UI consumes. The legacy `token`
+ *  key counts as `claudeToken`; unknown keys are dropped. Handles NAMES only — never
+ *  secret values. */
+export function normalizeCredentialKeys(credsKeys: string[], legacyKeys: string[]): string[] {
+  const present = new Set<string>();
+  for (const k of credsKeys) if (KNOWN_CREDENTIAL_KEYS.includes(k)) present.add(k);
+  if (legacyKeys.includes("token")) present.add("claudeToken");
+  return [...present];
 }
 
 /**
@@ -473,6 +491,30 @@ async function clearActivity(context: string | null, namespace: string): Promise
   return result;
 }
 
+/** Report which credential key NAMES exist (never the values) across the credentials
+ *  Secret + the legacy token Secret, for the UI's readiness chips. */
+async function credentialStatus(context: string | null, namespace: string): Promise<RunResult> {
+  const keysOf = async (secret: string): Promise<string[]> => {
+    const res = await kubectl(context, ["get", "secret", secret, "-n", namespace, "-o", "json"]);
+    if (res.code !== 0) return []; // not found / no access → no keys
+    try {
+      const obj = JSON.parse(res.stdout) as { data?: Record<string, unknown> };
+      return Object.keys(obj.data ?? {}); // key NAMES only — values discarded here
+    } catch {
+      return [];
+    }
+  };
+  const [credsKeys, legacyKeys] = await Promise.all([
+    keysOf(CREDENTIALS_SECRET_NAME),
+    keysOf(SECRET_NAME),
+  ]);
+  return {
+    code: 0,
+    stdout: JSON.stringify({ credentialKeys: normalizeCredentialKeys(credsKeys, legacyKeys) }),
+    stderr: "",
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
@@ -520,6 +562,8 @@ export async function handleAssistant(
     case "deleteAlert":
     case "toggleAlert":
       return mutateAlerts(context, namespace, req);
+    case "credentialStatus":
+      return credentialStatus(context, namespace);
     default:
       throw new Error(`unknown action: ${String(req.action)}`);
   }

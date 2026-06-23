@@ -1,4 +1,4 @@
-import { test, expect } from "vitest";
+import { test, expect, describe } from "vitest";
 import { validateInstall } from "./assistant";
 
 // Install validation (mirrors Swift AssistantViewModel.install() guards). The
@@ -148,4 +148,23 @@ test("setLimitsUpdates produces only the provided limit keys, stringified", () =
 
 test("setLimitsUpdates throws-worthy empty input is detectable (no keys)", () => {
   expect(setLimitsUpdates({ action: "setLimits" })).toEqual({});
+});
+
+import { normalizeCredentialKeys } from "./assistant";
+
+describe("normalizeCredentialKeys", () => {
+  test("keeps known credential keys, drops unknown ones", () => {
+    expect(normalizeCredentialKeys(["geminiApiKey", "codexApiKey", "junk"], []).sort()).toEqual([
+      "codexApiKey", "geminiApiKey",
+    ]);
+  });
+  test("the legacy token Secret's `token` key maps to claudeToken", () => {
+    expect(normalizeCredentialKeys([], ["token"])).toEqual(["claudeToken"]);
+  });
+  test("dedupes when both the legacy token and an explicit claudeToken are present", () => {
+    expect(normalizeCredentialKeys(["claudeToken"], ["token"])).toEqual(["claudeToken"]);
+  });
+  test("no keys → empty", () => {
+    expect(normalizeCredentialKeys([], [])).toEqual([]);
+  });
 });
