@@ -383,7 +383,7 @@ async function handleSignalInbound(
       runThreadedDiagnosis(
         {
           sessions: loop.sessions,
-          diagnose: (q, resumeId) => runDiagnosis(cfg, q, resumeId),
+          diagnose: (q, resumeId) => runDiagnosis(rc, q, resumeId),
           log,
         },
         source,

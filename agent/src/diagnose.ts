@@ -1,5 +1,5 @@
-import { runClaude } from "./claude.js";
-import type { Config } from "./config.js";
+import { runModel } from "./runModel.js";
+import type { RuntimeConfig } from "./runtimeConfig.js";
 
 /**
  * Read-only, conversational diagnosis for an operator's inbound Signal message.
@@ -37,17 +37,22 @@ export interface DiagnosisOutput {
 /** Investigate and answer a single operator question. Rejects on model/exec
  * failure so the caller can reply with an error rather than silence. */
 export async function runDiagnosis(
-  cfg: Config,
+  rc: RuntimeConfig,
   question: string,
   resumeSessionId?: string,
 ): Promise<DiagnosisOutput> {
-  const result = await runClaude({
-    model: cfg.workerModel,
+  const result = await runModel({
+    role: "worker",
+    config: rc,
     prompt: question,
-    appendSystemPrompt: SYSTEM_PROMPT,
-    allowedTools: READ_ONLY_TOOLS,
-    timeoutMs: 150_000,
+    systemPrompt: SYSTEM_PROMPT,
+    allowedReads: READ_ONLY_TOOLS,
     resumeSessionId,
+    timeoutMs: 150_000,
   });
+  if (result.isError) {
+    // Reject on failure so the caller can reply with an error rather than silence.
+    throw new Error(result.errorMessage ?? "diagnosis failed");
+  }
   return { text: result.text, costUsd: result.costUsd, sessionId: result.sessionId ?? "" };
 }
