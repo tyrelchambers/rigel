@@ -1,6 +1,6 @@
 import { parseActions, type SuggestedAction } from "./action.js";
-import { runClaude } from "./claude.js";
-import type { Config } from "./config.js";
+import { runModel } from "./runModel.js";
+import type { RuntimeConfig } from "./runtimeConfig.js";
 import type { Incident } from "./detector.js";
 
 /**
@@ -43,14 +43,20 @@ export interface WorkerOutput {
   costUsd: number;
 }
 
-export async function runWorker(cfg: Config, incidents: Incident[]): Promise<WorkerOutput> {
-  const result = await runClaude({
-    model: cfg.workerModel,
+export async function runWorker(rc: RuntimeConfig, incidents: Incident[]): Promise<WorkerOutput> {
+  const result = await runModel({
+    role: "worker",
+    config: rc,
     prompt: buildPrompt(incidents),
-    appendSystemPrompt: SYSTEM_PROMPT,
-    allowedTools: READ_ONLY_TOOLS,
+    systemPrompt: SYSTEM_PROMPT,
+    allowedReads: READ_ONLY_TOOLS,
     timeoutMs: 120_000,
   });
+  if (result.isError) {
+    // Fail closed: surface the error as analysis with no actions, so the loop's
+    // existing fail-closed handling records a failure and never acts.
+    return { actions: [], analysis: result.errorMessage ?? "worker failed", costUsd: 0 };
+  }
   return {
     actions: parseActions(result.text),
     analysis: result.text,
