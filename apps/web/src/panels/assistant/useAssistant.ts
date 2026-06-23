@@ -21,6 +21,8 @@ import {
   type TokenExpiryStatus,
   type AlertRule,
 } from "@rigel/k8s";
+import type { AssistantRoleSelection, AssistantLimits } from "@/lib/api";
+import { DEFAULT_WORKER, DEFAULT_SUPERVISOR } from "./agents/providerMeta";
 
 // Minimal shapes for the watched resources (we only read what we render).
 interface Meta {
@@ -89,6 +91,10 @@ export interface AssistantDerived {
   backupYAML: (ref: string) => string | undefined;
   /** Parsed alert rules from the assistant-config ConfigMap. */
   alertRules: AlertRule[];
+  /** Per-role provider/model/effort, parsed from assistant-config (defaults applied). */
+  roles: { worker: AssistantRoleSelection; supervisor: AssistantRoleSelection };
+  /** Operational limits parsed from assistant-config (absent keys omitted). */
+  limits: AssistantLimits;
 }
 
 /**
@@ -201,6 +207,54 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
       allNamespaceNames: namespaces.map((n) => n.metadata.name).sort(),
       backupYAML: (ref) => configMap("assistant-backups")?.data?.[ref],
       alertRules: parseAlertRules(configData["alertRules"]),
+      roles: parseRolesFromConfig(configData),
+      limits: parseLimitsFromConfig(configData),
     };
   }, [deployments, pods, configMaps, secrets, namespaces, installNamespaceHint]);
+}
+
+/** Parse the per-role selections from the assistant-config data map, defaulting
+ *  to the out-of-box Claude worker/supervisor when no role keys are present. */
+export function parseRolesFromConfig(
+  data: Record<string, string>,
+): { worker: AssistantRoleSelection; supervisor: AssistantRoleSelection } {
+  const role = (
+    p: string | undefined,
+    m: string | undefined,
+    e: string | undefined,
+    fallback: AssistantRoleSelection,
+  ): AssistantRoleSelection => {
+    if (!p && !m) return fallback;
+    return {
+      provider: p ?? fallback.provider,
+      model: m ?? fallback.model,
+      ...(e ? { effort: e } : {}),
+    };
+  };
+  return {
+    worker: role(data.workerProvider, data.workerModel, data.workerEffort, DEFAULT_WORKER),
+    supervisor: role(
+      data.supervisorProvider,
+      data.supervisorModel,
+      data.supervisorEffort,
+      DEFAULT_SUPERVISOR,
+    ),
+  };
+}
+
+/** Parse the operational limits from the assistant-config data map (numbers
+ *  coerced; namespaces split on commas/newlines; absent keys omitted). */
+export function parseLimitsFromConfig(data: Record<string, string>): AssistantLimits {
+  const num = (v: string | undefined): number | undefined =>
+    v === undefined || v.trim() === "" ? undefined : Number(v);
+  const limits: AssistantLimits = {};
+  if (data.pollIntervalMs !== undefined) limits.pollIntervalMs = num(data.pollIntervalMs);
+  if (data.maxPerResourcePerHour !== undefined) limits.maxPerResourcePerHour = num(data.maxPerResourcePerHour);
+  if (data.maxPerNight !== undefined) limits.maxPerNight = num(data.maxPerNight);
+  if (data.maxAttemptsPerIncident !== undefined) limits.maxAttemptsPerIncident = num(data.maxAttemptsPerIncident);
+  if (data.confirmPolls !== undefined) limits.confirmPolls = num(data.confirmPolls);
+  if (data.namespaces !== undefined) {
+    limits.namespaces = data.namespaces.split(/[,\n]/).map((s) => s.trim()).filter(Boolean);
+  }
+  return limits;
 }
