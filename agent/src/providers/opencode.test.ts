@@ -1,4 +1,7 @@
 import { describe, expect, test, beforeEach, afterEach } from "vitest";
+import { mkdtemp, rm, writeFile, chmod, readdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, delimiter } from "node:path";
 import { buildOpencodeArgs, mapOpencodeEvent, opencodeBridge } from "./opencode.js";
 
 describe("buildOpencodeArgs", () => {
@@ -52,5 +55,117 @@ describe("opencodeBridge.authEnv", () => {
   test("OPENCODE_API_KEY when present", () => {
     process.env.OPENCODE_API_KEY = "oc-key";
     expect(opencodeBridge.authEnv()).toEqual({ OPENCODE_API_KEY: "oc-key" });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// opencodeBridge.run — integration with a FAKE `opencode` executable (no real opencode/cluster)
+// ---------------------------------------------------------------------------
+describe("opencodeBridge.run (fake opencode on PATH)", () => {
+  const savedEnv = { ...process.env };
+  afterEach(() => {
+    process.env = { ...savedEnv };
+  });
+
+  test("happy path: collects text + sessionId from JSONL, isError false", async () => {
+    // A fake `opencode` shell script that emits JSONL events and exits 0.
+    const fakeDir = await mkdtemp(join(tmpdir(), "rigel-fake-opencode-"));
+    const fakeOpencode = join(fakeDir, "opencode");
+    await writeFile(
+      fakeOpencode,
+      [
+        "#!/bin/sh",
+        `echo '{"type":"step_start","sessionID":"oc_sess_1"}'`,
+        `echo '{"type":"text","part":{"text":"hello from opencode"}}'`,
+        "exit 0",
+      ].join("\n") + "\n",
+    );
+    await chmod(fakeOpencode, 0o755);
+
+    const prevPath = process.env.PATH;
+    process.env.PATH = `${fakeDir}${delimiter}${prevPath ?? ""}`;
+    process.env.OPENCODE_API_KEY = "oc-fake";
+
+    let result: Awaited<ReturnType<typeof opencodeBridge.run>>;
+    try {
+      result = await opencodeBridge.run({ prompt: "hi", systemPrompt: "" } as any);
+    } finally {
+      process.env.PATH = prevPath;
+    }
+
+    expect(result.isError).toBe(false);
+    expect(result.text).toBe("hello from opencode");
+    expect(result.sessionId).toBe("oc_sess_1");
+
+    await rm(fakeDir, { recursive: true, force: true });
+  });
+
+  test("workspace dir is cleaned up after successful run (no rigel-opencode- leak)", async () => {
+    // The rigel-opencode- prefix is unique to opencodeBridge.run so snapshotting is race-free.
+    const opencodeDirs = async () =>
+      new Set((await readdir(tmpdir())).filter((d) => d.startsWith("rigel-opencode-")));
+    const before = await opencodeDirs();
+
+    const fakeDir = await mkdtemp(join(tmpdir(), "rigel-fake-opencode2-"));
+    const fakeOpencode = join(fakeDir, "opencode");
+    await writeFile(
+      fakeOpencode,
+      ["#!/bin/sh", "exit 0"].join("\n") + "\n",
+    );
+    await chmod(fakeOpencode, 0o755);
+
+    const prevPath = process.env.PATH;
+    process.env.PATH = `${fakeDir}${delimiter}${prevPath ?? ""}`;
+    process.env.OPENCODE_API_KEY = "oc-fake";
+
+    try {
+      await opencodeBridge.run({ prompt: "hi", systemPrompt: "" } as any);
+    } finally {
+      process.env.PATH = prevPath;
+    }
+
+    const after = await opencodeDirs();
+    const leaked = [...after].filter((d) => !before.has(d));
+    expect(leaked).toEqual([]);
+
+    await rm(fakeDir, { recursive: true, force: true });
+  });
+
+  test("does not leak workspace dir when provisionGuardBin throws (empty PATH)", async () => {
+    // Empty PATH → kubectl unresolvable → provisionGuardBin throws inside try block.
+    // Workspace dir (rigel-opencode-) is created BEFORE that call; finally must still remove it.
+    const opencodeDirs = async () =>
+      new Set((await readdir(tmpdir())).filter((d) => d.startsWith("rigel-opencode-")));
+    const before = await opencodeDirs();
+
+    const emptyDir = await mkdtemp(join(tmpdir(), "rigel-emptypath-"));
+    const prevPath = process.env.PATH;
+    process.env.PATH = emptyDir;
+    process.env.OPENCODE_API_KEY = "oc-fake";
+
+    let result: Awaited<ReturnType<typeof opencodeBridge.run>>;
+    try {
+      result = await opencodeBridge.run({ prompt: "hi", systemPrompt: "" } as any);
+    } finally {
+      process.env.PATH = prevPath;
+    }
+
+    // run() swallows the throw → returns isError (not a thrown exception).
+    expect(result!.isError).toBe(true);
+
+    const after = await opencodeDirs();
+    const leaked = [...after].filter((d) => !before.has(d));
+    expect(leaked).toEqual([]);
+
+    await rm(emptyDir, { recursive: true, force: true });
+  });
+
+  test("missing credential returns isError:true with descriptive errorMessage", async () => {
+    delete process.env.OPENCODE_API_KEY;
+    delete process.env.OPENCODE_AUTH_CONTENT;
+    // No fake CLI on PATH — if it were spawned it would ENOENT, giving a different error.
+    const result = await opencodeBridge.run({ prompt: "hi", systemPrompt: "" } as any);
+    expect(result.isError).toBe(true);
+    expect(result.errorMessage).toMatch(/OPENCODE/);
   });
 });

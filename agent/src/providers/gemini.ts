@@ -1,7 +1,6 @@
-import path from "node:path";
+import path, { join } from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { provisionGuardBin } from "../guardedKubectl.js";
 import { collectJsonlRun, type CollectedEvent } from "./process.js";
 import { structuredInstruction, extractJsonObjectLoose } from "./structured.js";
