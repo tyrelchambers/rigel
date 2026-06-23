@@ -12,13 +12,22 @@ function wrap(ui: React.ReactNode) {
 }
 
 beforeEach(() => {
-  // useAgentModels(provider) → GET /api/agents/<id>/models
+  // useAgentModels(provider) → GET /api/agents/<id>/models ; useAgents() → GET /api/agents
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     if (url.includes("/api/agents/claude/models")) {
       return new Response(JSON.stringify({ models: ["claude-sonnet-4-6", "claude-opus-4-8"], efforts: ["low", "medium", "high"] }));
     }
     if (url.includes("/api/agents/gemini/models")) {
       return new Response(JSON.stringify({ models: ["gemini-2.5-pro", "gemini-2.5-flash"], efforts: [] }));
+    }
+    if (url.includes("/api/agents/") && url.includes("/models")) {
+      return new Response(JSON.stringify({ models: [], efforts: [] }));
+    }
+    if (url.includes("/api/agents")) {
+      return new Response(JSON.stringify({ agents: [
+        { id: "claude", label: "Claude" }, { id: "codex", label: "Codex" },
+        { id: "gemini", label: "Gemini" }, { id: "opencode", label: "OpenCode" },
+      ], activeAgentId: "claude" }));
     }
     return new Response(JSON.stringify({ models: [], efforts: [] }));
   }));
