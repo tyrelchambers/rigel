@@ -5,7 +5,18 @@ import type { Config } from "./config.js";
 
 vi.mock("./kubectl.js", () => ({ kubectl: vi.fn() }));
 
-const CFG = { configConfigMap: "assistant-config", stateNamespace: "default" } as Config;
+const CFG = {
+  configConfigMap: "assistant-config",
+  stateNamespace: "default",
+  workerModel: "claude-sonnet-4-6",
+  supervisorModel: "claude-opus-4-8",
+  pollIntervalMs: 30_000,
+  maxPerResourcePerHour: 3,
+  maxPerNight: 20,
+  maxAttemptsPerIncident: 3,
+  confirmPolls: 2,
+  namespaces: [],
+} as unknown as Config;
 
 function mockConfigMap(data: Record<string, string>): void {
   vi.mocked(kubectl).mockResolvedValueOnce({
@@ -82,5 +93,68 @@ describe("readRuntimeConfig — signalInbound", () => {
   test("fail-closed (inbound off) when the config map is unreadable", async () => {
     vi.mocked(kubectl).mockResolvedValueOnce({ stdout: "", stderr: "not found", code: 1 });
     expect((await readRuntimeConfig(CFG)).signalInbound).toBe(false);
+  });
+});
+
+describe("readRuntimeConfig — role selections", () => {
+  test("defaults to claude worker=sonnet supervisor=opus when no role keys are set", async () => {
+    mockConfigMap({ enabled: "true" });
+    const rc = await readRuntimeConfig(CFG);
+    expect(rc.worker).toEqual({ provider: "claude", model: "claude-sonnet-4-6", effort: undefined });
+    expect(rc.supervisor).toEqual({ provider: "claude", model: "claude-opus-4-8", effort: undefined });
+  });
+
+  test("parses an explicit per-role provider/model/effort", async () => {
+    mockConfigMap({
+      enabled: "true",
+      workerProvider: "gemini", workerModel: "gemini-2.5-pro",
+      supervisorProvider: "claude", supervisorModel: "claude-opus-4-8", supervisorEffort: "high",
+    });
+    const rc = await readRuntimeConfig(CFG);
+    expect(rc.worker).toEqual({ provider: "gemini", model: "gemini-2.5-pro", effort: undefined });
+    expect(rc.supervisor).toEqual({ provider: "claude", model: "claude-opus-4-8", effort: "high" });
+  });
+
+  test("an unknown provider value falls back to claude (safe default)", async () => {
+    mockConfigMap({ enabled: "true", workerProvider: "bogus", workerModel: "x" });
+    const rc = await readRuntimeConfig(CFG);
+    expect(rc.worker.provider).toBe("claude");
+  });
+
+  test("an empty model string falls back to the Config legacy model", async () => {
+    mockConfigMap({ enabled: "true", workerProvider: "claude", workerModel: "  " });
+    const rc = await readRuntimeConfig(CFG);
+    expect(rc.worker.model).toBe("claude-sonnet-4-6");
+  });
+});
+
+describe("readRuntimeConfig — operational limits", () => {
+  test("falls back to Config values when limit keys are absent", async () => {
+    mockConfigMap({ enabled: "true" });
+    const rc = await readRuntimeConfig(CFG);
+    expect(rc.limits).toEqual({
+      pollIntervalMs: 30_000, maxPerResourcePerHour: 3, maxPerNight: 20,
+      maxAttemptsPerIncident: 3, confirmPolls: 2, namespaces: [],
+    });
+  });
+
+  test("parses overrides and ignores non-numeric junk (keeps the Config fallback)", async () => {
+    mockConfigMap({
+      enabled: "true",
+      pollIntervalMs: "15000", maxPerNight: "5", confirmPolls: "nope", namespaces: "default, kube-system",
+    });
+    const rc = await readRuntimeConfig(CFG);
+    expect(rc.limits.pollIntervalMs).toBe(15000);
+    expect(rc.limits.maxPerNight).toBe(5);
+    expect(rc.limits.confirmPolls).toBe(2); // junk → Config fallback
+    expect(rc.limits.namespaces).toEqual(["default", "kube-system"]);
+  });
+
+  test("role selections are claude defaults even on an unreadable config map (fail-closed)", async () => {
+    vi.mocked(kubectl).mockResolvedValueOnce({ stdout: "", stderr: "nf", code: 1 });
+    const rc = await readRuntimeConfig(CFG);
+    expect(rc.enabled).toBe(false);
+    expect(rc.worker.provider).toBe("claude");
+    expect(rc.limits.pollIntervalMs).toBe(30_000);
   });
 });
