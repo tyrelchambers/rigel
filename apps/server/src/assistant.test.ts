@@ -34,3 +34,27 @@ test("validateInstall rejects an empty namespace", () => {
 test("validateInstall rejects an uppercase namespace", () => {
   expect(() => validateInstall("Default", "sk", "ghcr.io/acme/x:latest")).toThrow(/lowercase/);
 });
+
+import { parseCredentials, type AssistantRequest } from "./assistant";
+
+test("parseCredentials picks up every provided credential, trimming empties", () => {
+  const req: AssistantRequest = {
+    action: "setCredentials",
+    credentials: {
+      geminiApiKey: "g-1",
+      codexApiKey: "   ",
+      opencodeAuthContent: "blob",
+      anthropicApiKey: "",
+    },
+  };
+  expect(parseCredentials(req)).toEqual({ geminiApiKey: "g-1", opencodeAuthContent: "blob" });
+});
+
+test("parseCredentials maps a legacy top-level token onto claudeToken", () => {
+  const req: AssistantRequest = { action: "setCredentials", token: "tok-legacy" };
+  expect(parseCredentials(req)).toEqual({ claudeToken: "tok-legacy" });
+});
+
+test("parseCredentials returns an empty object when nothing is provided", () => {
+  expect(parseCredentials({ action: "setCredentials" })).toEqual({});
+});

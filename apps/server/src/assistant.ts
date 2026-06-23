@@ -14,14 +14,21 @@ import { buildKubectlArgs, kubectl, runProcessWithStdin, type RunResult } from "
 import {
   DEFAULT_INSTALL_CONFIG,
   SECRET_NAME,
+  CREDENTIALS_SECRET_NAME,
   namespaceYAML,
   secretYAML,
+  credentialsSecretYAML,
   manifestYAML,
   mergedConfigMapJSON,
   clearedReportConfigMapJSON,
   clearedStateConfigMapJSON,
   silencedSet,
+  roleConfigUpdates,
+  limitsConfigUpdates,
   type AssistantInstallConfig,
+  type AssistantCredentials,
+  type RoleSelectionInput,
+  type LimitsInput,
 } from "@rigel/k8s/src/assistant";
 import { signalConfigUpdates } from "@rigel/k8s/src/signal";
 import { normalizeAlertRule, parseAlertRules, serializeAlertRules, nextAlertRules, type SuggestedAlert } from "@rigel/k8s";
@@ -86,6 +93,9 @@ export type AssistantAction =
   | "setMode"
   | "kill"
   | "updateToken"
+  | "setModels"
+  | "setCredentials"
+  | "setLimits"
   | "restart"
   | "silence"
   | "unsilence"
@@ -106,6 +116,11 @@ export interface AssistantRequest {
   maxPerNight?: number;
   maxAttemptsPerIncident?: number;
   confirmPolls?: number;
+  // Multi-provider control plane (Plan 2).
+  worker?: RoleSelectionInput;
+  supervisor?: RoleSelectionInput;
+  credentials?: AssistantCredentials;
+  limits?: LimitsInput;
   monitorNamespaces?: string;
   mode?: string;
   window?: string;
@@ -141,6 +156,23 @@ export function validateInstall(namespace: string, token: string, image: string)
   const ns = namespace.trim();
   if (ns === "") throw new Error("Set an install namespace (e.g. default).");
   if (ns !== ns.toLowerCase()) throw new Error("Namespace must be lowercase.");
+}
+
+/**
+ * Extract the credentials map from a request: take req.credentials, drop any
+ * empty/whitespace value, and fold a legacy top-level `token` into `claudeToken`
+ * (so old callers still work). Pure — testable without a cluster.
+ */
+export function parseCredentials(req: AssistantRequest): AssistantCredentials {
+  const out: AssistantCredentials = {};
+  const src = req.credentials ?? {};
+  for (const [k, v] of Object.entries(src) as [keyof AssistantCredentials, string | undefined][]) {
+    if (typeof v === "string" && v.trim() !== "") out[k] = v.trim();
+  }
+  if (!out.claudeToken && req.token && req.token.trim() !== "") {
+    out.claudeToken = req.token.trim();
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
