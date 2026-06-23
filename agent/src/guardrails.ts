@@ -34,7 +34,23 @@ const HOUR_MS = 3_600_000;
 export class CircuitBreaker {
   private readonly history: ActionRecord[] = [];
 
-  constructor(private readonly cfg: CircuitBreakerConfig) {}
+  constructor(private cfg: CircuitBreakerConfig) {}
+
+  /**
+   * Update the live caps in place, preserving the action history. Only defined
+   * fields are applied (a partial update keeps the rest). windowMs is deploy-time
+   * and not part of the user-exposed OperationalLimits, so it is not changed here.
+   * Called each tick from the runtime config so a limit edit goes live next poll.
+   */
+  updateLimits(limits: {
+    maxPerResourcePerHour?: number;
+    maxPerNight?: number;
+    maxAttemptsPerIncident?: number;
+  }): void {
+    if (limits.maxPerResourcePerHour !== undefined) this.cfg.maxPerResourcePerHour = limits.maxPerResourcePerHour;
+    if (limits.maxPerNight !== undefined) this.cfg.maxPerNight = limits.maxPerNight;
+    if (limits.maxAttemptsPerIncident !== undefined) this.cfg.maxAttemptsPerIncident = limits.maxAttemptsPerIncident;
+  }
 
   /** Decide whether an action may run now, without recording it. */
   canAct(fingerprint: string, resourceKey: string, now: number): Verdict {
