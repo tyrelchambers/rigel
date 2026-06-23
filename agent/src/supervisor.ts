@@ -126,8 +126,7 @@ Independently verify against the live cluster (read-only), then return your verd
     );
   }
   // runModel already ran validateStructured (which wraps parseVerdict) before returning
-  // isError:false, so structuredOutput is guaranteed to be a well-formed Verdict here.
-  // Cast is safe: validateStructured is parseVerdict in a boolean wrapper, so any output
-  // that passed it has the correct shape + decision enum value.
-  return { verdict: result.structuredOutput as Verdict, costUsd: result.costUsd };
+  // isError:false, so parseVerdict here is guaranteed to succeed — and it NORMALIZES the
+  // verdict (clamps confidence to [0,1], defaults reason) rather than trusting raw output.
+  return { verdict: parseVerdict(result.structuredOutput), costUsd: result.costUsd };
 }

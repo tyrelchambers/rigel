@@ -64,8 +64,20 @@ describe("runSupervisor", () => {
     expect(out.verdict.decision).toBe("approve");
   });
 
+  test("normalizes the success-path verdict (clamps out-of-range confidence)", async () => {
+    vi.spyOn(runModelMod, "runModel").mockResolvedValue({
+      text: "{}", costUsd: 0, isError: false, structuredOutput: { decision: "reject", confidence: 1.5, reason: "too risky" },
+    });
+    const out = await runSupervisor(rc(), INC, ACT, "a", "cmd");
+    expect(out.verdict.confidence).toBe(1);
+    expect(out.verdict.decision).toBe("reject");
+  });
+
   test("the validator rejects a malformed verdict (so runModel would reprompt/escalate)", async () => {
-    const spy = vi.spyOn(runModelMod, "runModel").mockResolvedValue({ text: "x", costUsd: 0, isError: false, structuredOutput: { decision: "yolo" } });
+    // The mock returns a VALID verdict so runSupervisor completes — the test only needs to
+    // capture the validator and exercise it directly (an invalid verdict can't reach the
+    // success path in production: validateStructured would fail → reprompt → fail-closed).
+    const spy = vi.spyOn(runModelMod, "runModel").mockResolvedValue({ text: "x", costUsd: 0, isError: false, structuredOutput: { decision: "approve", confidence: 0.5, reason: "ok" } });
     await runSupervisor(rc(), INC, ACT, "a", "cmd");
     const validate = spy.mock.calls[0][0].validateStructured!;
     expect(validate({ decision: "approve", confidence: 0.9, reason: "ok" })).toBe(true);
