@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { parseRolesFromConfig, parseLimitsFromConfig } from "./useAssistant";
+import { parseRolesFromConfig, parseLimitsFromConfig, credsFromSecretKeys } from "./useAssistant";
 
 describe("parseRolesFromConfig", () => {
   test("reads both roles from the assistant-config keys", () => {
@@ -30,5 +30,17 @@ describe("parseLimitsFromConfig", () => {
 
   test("empty namespaces string → empty array (all namespaces)", () => {
     expect(parseLimitsFromConfig({ namespaces: "" }).namespaces).toEqual([]);
+  });
+});
+
+describe("credsFromSecretKeys", () => {
+  test("maps present Secret key NAMES to an AssistantCredentials presence view", () => {
+    expect(credsFromSecretKeys(["geminiApiKey", "claudeToken"])).toEqual({
+      geminiApiKey: "set",
+      claudeToken: "set",
+    });
+  });
+  test("no keys → empty (all chips read Not set)", () => {
+    expect(credsFromSecretKeys([])).toEqual({});
   });
 });

@@ -3,6 +3,7 @@
 // `@rigel/k8s` so it stays byte-identical with the Swift source of truth.
 
 import { useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import {
@@ -21,7 +22,8 @@ import {
   type TokenExpiryStatus,
   type AlertRule,
 } from "@rigel/k8s";
-import type { AssistantRoleSelection, AssistantLimits } from "@/lib/api";
+import type { AssistantCredentials, AssistantRoleSelection, AssistantLimits } from "@/lib/api";
+import { postAssistant } from "@/lib/api";
 import { DEFAULT_WORKER, DEFAULT_SUPERVISOR } from "./agents/providerMeta";
 
 // Minimal shapes for the watched resources (we only read what we render).
@@ -95,6 +97,9 @@ export interface AssistantDerived {
   roles: { worker: AssistantRoleSelection; supervisor: AssistantRoleSelection };
   /** Operational limits parsed from assistant-config (absent keys omitted). */
   limits: AssistantLimits;
+  /** Per-provider credential readiness, from the server's credentialStatus read
+   *  (key names only — values never leave the cluster). */
+  creds: AssistantCredentials;
 }
 
 /**
@@ -116,6 +121,15 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
       for (const k of kinds) unsubscribe(k, "*");
     };
   }, []);
+
+  const credStatus = useQuery({
+    queryKey: ["assistant-credentialStatus", installNamespaceHint],
+    queryFn: async () => {
+      const res = await postAssistant({ action: "credentialStatus", namespace: installNamespaceHint });
+      const parsed = JSON.parse(res.stdout || "{}") as { credentialKeys?: string[] };
+      return parsed.credentialKeys ?? [];
+    },
+  });
 
   const deployments = useMemo(
     () => Object.values((resources["deployments"] ?? {}) as Record<string, DeploymentLike>),
@@ -209,8 +223,18 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
       alertRules: parseAlertRules(configData["alertRules"]),
       roles: parseRolesFromConfig(configData),
       limits: parseLimitsFromConfig(configData),
+      creds: credsFromSecretKeys(credStatus.data ?? []),
     };
-  }, [deployments, pods, configMaps, secrets, namespaces, installNamespaceHint]);
+  }, [deployments, pods, configMaps, secrets, namespaces, installNamespaceHint, credStatus.data]);
+}
+
+/** Build the presence view from the credential key NAMES the server reported (values
+ *  never reach the client). Each present key gets a non-empty sentinel so the shared
+ *  credentialReady(creds, provider) helper reports that provider ready. */
+export function credsFromSecretKeys(keys: string[]): AssistantCredentials {
+  const out: AssistantCredentials = {};
+  for (const k of keys) (out as Record<string, string>)[k] = "set";
+  return out;
 }
 
 /** Parse the per-role selections from the assistant-config data map, defaulting

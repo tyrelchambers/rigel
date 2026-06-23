@@ -79,10 +79,13 @@ describe("AgentsTab", () => {
     await userEvent.click(within(geminiRow).getByRole("button", { name: /^save$/i }));
     // A confirm dialog explains the restart; confirm it.
     await userEvent.click(await screen.findByRole("button", { name: /save & restart/i }));
-    expect(run).toHaveBeenCalledWith(expect.objectContaining({
-      action: "setCredentials",
-      namespace: "default",
-      credentials: { geminiApiKey: "g-secret" },
-    }));
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "setCredentials",
+        namespace: "default",
+        credentials: { geminiApiKey: "g-secret" },
+      }),
+      expect.any(Function),
+    );
   });
 });

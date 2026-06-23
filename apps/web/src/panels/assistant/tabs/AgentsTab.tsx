@@ -3,6 +3,7 @@
 // and patches LIVE: setModels (roles), setLimits (limits), setCredentials (keys,
 // confirmed because it rollout-restarts the agent). Never re-installs.
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -12,13 +13,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import type { AgentId, AssistantCredentials, AssistantLimits, AssistantRoleSelection } from "@/lib/api";
+import type { AgentId, AssistantLimits, AssistantRoleSelection } from "@/lib/api";
 import { useAssistantCtx } from "../AssistantContext";
-import type { AssistantDerived } from "../useAssistant";
-
-// d.creds is added to AssistantDerived in Task 6c. Until that lands, extend
-// locally so this file typechecks independently.
-type AssistantDerivedWithCreds = AssistantDerived & { creds?: AssistantCredentials };
 import { Card, Section } from "../components/primitives";
 import { RolePicker } from "../agents/RolePicker";
 import { CredentialsManager } from "../agents/CredentialsManager";
@@ -27,6 +23,7 @@ import { credentialKeyFor } from "../agents/providerMeta";
 
 export function AgentsTab() {
   const { d, ns, working, run } = useAssistantCtx();
+  const queryClient = useQueryClient();
 
   const [worker, setWorker] = useState<AssistantRoleSelection>(d.roles.worker);
   const [supervisor, setSupervisor] = useState<AssistantRoleSelection>(d.roles.supervisor);
@@ -49,7 +46,9 @@ export function AgentsTab() {
   function confirmCredential() {
     if (!pendingCred) return;
     const key = credentialKeyFor(pendingCred.provider);
-    run({ action: "setCredentials", namespace: ns, credentials: { [key]: pendingCred.value } });
+    run({ action: "setCredentials", namespace: ns, credentials: { [key]: pendingCred.value } }, () => {
+      void queryClient.invalidateQueries({ queryKey: ["assistant-credentialStatus", ns] });
+    });
     setPendingCred(null);
   }
 
@@ -81,7 +80,7 @@ export function AgentsTab() {
       </div>
 
       <CredentialsManager
-        credentials={(d as AssistantDerivedWithCreds).creds ?? {}}
+        credentials={d.creds}
         onSave={(provider, value) => setPendingCred({ provider, value })}
         disabled={working}
       />

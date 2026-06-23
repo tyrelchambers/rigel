@@ -809,7 +809,7 @@ async function handler(req: Request): Promise<Response> {
             { status: 500 },
           );
         }
-        return Response.json({ success: true });
+        return Response.json({ success: true, stdout: result.stdout, stderr: result.stderr });
       } catch (err) {
         // Log WITHOUT the token (err.message carries kubectl stderr, never the
         // Secret payload — that only ever lives on the process stdin pipe).

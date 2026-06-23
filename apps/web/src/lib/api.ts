@@ -329,7 +329,8 @@ export type AssistantAction =
   | "setSignal"
   | "saveAlert"
   | "deleteAlert"
-  | "toggleAlert";
+  | "toggleAlert"
+  | "credentialStatus";
 
 export interface AssistantRoleSelection {
   provider: string;
@@ -391,12 +392,20 @@ export interface AssistantRequest {
   limits?: AssistantLimits;
 }
 
+/** Shape returned by the assistant route on success (stdout is present for read
+ *  actions like credentialStatus; mutations return an empty stdout). */
+export interface AssistantRunResult {
+  success: true;
+  stdout: string;
+  stderr: string;
+}
+
 /**
  * POST an assistant control action. Returns on success; throws with the server
  * error message on failure. The token (when present) is sent in the JSON body
  * over the same authenticated channel and is never logged client-side.
  */
-async function postAssistant(req: AssistantRequest): Promise<{ success: true }> {
+export async function postAssistant(req: AssistantRequest): Promise<AssistantRunResult> {
   const res = await fetch("/api/assistant", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -406,12 +415,12 @@ async function postAssistant(req: AssistantRequest): Promise<{ success: true }> 
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((err as { error?: string }).error ?? res.statusText);
   }
-  return res.json() as Promise<{ success: true }>;
+  return res.json() as Promise<AssistantRunResult>;
 }
 
 /** Mutation hook for every assistant control action. */
 export function useAssistantAction() {
-  return useMutation<{ success: true }, Error, AssistantRequest>({
+  return useMutation<AssistantRunResult, Error, AssistantRequest>({
     mutationFn: postAssistant,
   });
 }
