@@ -268,3 +268,55 @@ test("clearedReportConfigMapJSON returns null when there is no state", () => {
   expect(clearedReportConfigMapJSON("default", undefined)).toBeNull();
   expect(clearedReportConfigMapJSON("default", "garbage")).toBeNull();
 });
+
+import { describe } from "vitest";
+import {
+  CREDENTIALS_SECRET_NAME,
+  credentialsSecretYAML,
+  type AssistantCredentials,
+} from "./assistant";
+
+describe("credentialsSecretYAML", () => {
+  test("emits only the keys whose value is non-empty", () => {
+    const yaml = credentialsSecretYAML(
+      { geminiApiKey: "g-123", codexApiKey: "" },
+      "default",
+    );
+    expect(yaml).toContain(`name: ${CREDENTIALS_SECRET_NAME}`);
+    expect(yaml).toContain("namespace: default");
+    expect(yaml).toContain("kind: Secret");
+    expect(yaml).toContain("type: Opaque");
+    expect(yaml).toContain('geminiApiKey: "g-123"');
+    expect(yaml).not.toContain("codexApiKey");
+    expect(yaml).not.toContain("claudeToken");
+  });
+
+  test("escapes quotes/backslashes in a credential value", () => {
+    const yaml = credentialsSecretYAML({ opencodeAuthContent: 'a"b\\c' }, "agents");
+    expect(yaml).toContain('opencodeAuthContent: "a\\"b\\\\c"');
+    expect(yaml).toContain("namespace: agents");
+  });
+
+  test("writes all six possible keys when all are provided", () => {
+    const yaml = credentialsSecretYAML(
+      {
+        claudeToken: "t",
+        anthropicApiKey: "a",
+        codexApiKey: "c",
+        geminiApiKey: "g",
+        opencodeApiKey: "o",
+        opencodeAuthContent: "blob",
+      },
+      "default",
+    );
+    for (const k of ["claudeToken", "anthropicApiKey", "codexApiKey", "geminiApiKey", "opencodeApiKey", "opencodeAuthContent"]) {
+      expect(yaml).toContain(`${k}: "`);
+    }
+  });
+
+  test("an all-empty credentials map still produces a valid (empty-data) Secret", () => {
+    const yaml = credentialsSecretYAML({}, "default");
+    expect(yaml).toContain(`name: ${CREDENTIALS_SECRET_NAME}`);
+    expect(yaml).toContain("stringData:");
+  });
+});

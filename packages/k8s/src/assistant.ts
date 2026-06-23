@@ -55,6 +55,38 @@ export const SECRET_NAME = "rigel-assistant-token";
 /** Annotation the installer stamps on the token Secret at mint time. */
 export const ISSUED_AT_ANNOTATION = "rigel.assistant/token-issued-at";
 
+/** Multi-key Secret holding one entry per provider credential the user supplied.
+ * Distinct from the legacy single-key SECRET_NAME so existing installs are
+ * untouched (the Deployment injects from BOTH, each optional). */
+export const CREDENTIALS_SECRET_NAME = "rigel-assistant-credentials";
+
+/** The provider credentials a user can supply. Each maps to one Secret key and,
+ * via the Deployment env, to the exact var the matching bridge's authEnv() reads:
+ *   claudeToken          → CLAUDE_CODE_OAUTH_TOKEN  (claude)
+ *   anthropicApiKey      → ANTHROPIC_API_KEY        (claude fallback)
+ *   codexApiKey          → CODEX_API_KEY            (codex)
+ *   geminiApiKey         → GEMINI_API_KEY           (gemini)
+ *   opencodeApiKey       → OPENCODE_API_KEY         (opencode fallback)
+ *   opencodeAuthContent  → OPENCODE_AUTH_CONTENT    (opencode preferred) */
+export interface AssistantCredentials {
+  claudeToken?: string;
+  anthropicApiKey?: string;
+  codexApiKey?: string;
+  geminiApiKey?: string;
+  opencodeApiKey?: string;
+  opencodeAuthContent?: string;
+}
+
+/** Stable ordered list of (key) so YAML output is deterministic. */
+const CREDENTIAL_KEYS: (keyof AssistantCredentials)[] = [
+  "claudeToken",
+  "anthropicApiKey",
+  "codexApiKey",
+  "geminiApiKey",
+  "opencodeApiKey",
+  "opencodeAuthContent",
+];
+
 // ---------------------------------------------------------------------------
 // Manifest builders — byte-for-byte port of AssistantInstaller.swift
 // ---------------------------------------------------------------------------
@@ -94,6 +126,36 @@ metadata:
 type: Opaque
 stringData:
   token: "${escape(token)}"`;
+}
+
+/**
+ * The multi-key credentials Secret. Writes ONLY the keys whose value is a
+ * non-empty string, so a user who supplies one provider's key gets a Secret with
+ * just that key. The Deployment references every possible key with
+ * `optional: true`, so absent keys are simply not injected (no startup failure).
+ * Never previewed (carries secrets), same as secretYAML.
+ */
+export function credentialsSecretYAML(
+  creds: AssistantCredentials,
+  namespace = "default",
+): string {
+  const lines: string[] = [];
+  for (const key of CREDENTIAL_KEYS) {
+    const value = creds[key];
+    if (typeof value === "string" && value.trim() !== "") {
+      lines.push(`  ${key}: "${escape(value)}"`);
+    }
+  }
+  const stringData = lines.length > 0 ? `stringData:\n${lines.join("\n")}` : "stringData: {}";
+  return `apiVersion: v1
+kind: Secret
+metadata:
+  name: ${CREDENTIALS_SECRET_NAME}
+  namespace: ${namespace}
+  labels:
+    app.kubernetes.io/managed-by: rigel-assistant
+type: Opaque
+${stringData}`;
 }
 
 /** ServiceAccount + ClusterRole + ClusterRoleBinding + namespaced Role/RoleBinding. */
