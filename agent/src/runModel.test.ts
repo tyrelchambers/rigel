@@ -50,7 +50,7 @@ describe("runModel dispatch", () => {
     });
     expect(r.structuredOutput).toEqual({ decision: "approve" });
     expect(runSpy).toHaveBeenCalledTimes(1);
-    expect(runSpy.mock.calls[0][0].structuredSchema).toBe("SCHEMA");
+    expect(runSpy.mock.calls[0]![0].structuredSchema).toBe("SCHEMA");
   });
 
   test("non-Claude structured: reprompts ONCE on a bad verdict, then succeeds", async () => {

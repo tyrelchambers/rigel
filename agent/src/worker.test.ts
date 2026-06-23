@@ -24,11 +24,11 @@ describe("runWorker", () => {
     });
     const out = await runWorker(rc(), [INC]);
     expect(spy).toHaveBeenCalledWith(expect.objectContaining({ role: "worker" }));
-    const call = spy.mock.calls[0][0];
+    const call = spy.mock.calls[0]![0];
     expect(call.allowedReads).toContain("Bash(kubectl get *)");
     expect(call.systemPrompt).toMatch(/autonomous/i);
     expect(out.actions.length).toBe(1);
-    expect(out.actions[0].kind).toBe("restart");
+    expect(out.actions[0]!.kind).toBe("restart");
   });
 
   test("a fail-closed runModel result surfaces as an error analysis (no actions)", async () => {

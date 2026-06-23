@@ -57,7 +57,7 @@ describe("runSupervisor", () => {
       text: "{}", costUsd: 0, isError: false, structuredOutput: { decision: "approve", confidence: 0.9, reason: "ok" },
     });
     const out = await runSupervisor(rc(), INC, ACT, "analysis", "kubectl rollout undo deploy/api");
-    const call = spy.mock.calls[0][0];
+    const call = spy.mock.calls[0]![0];
     expect(call.role).toBe("supervisor");
     expect(typeof call.structuredSchema).toBe("string");
     expect(typeof call.validateStructured).toBe("function");
@@ -79,7 +79,7 @@ describe("runSupervisor", () => {
     // success path in production: validateStructured would fail → reprompt → fail-closed).
     const spy = vi.spyOn(runModelMod, "runModel").mockResolvedValue({ text: "x", costUsd: 0, isError: false, structuredOutput: { decision: "approve", confidence: 0.5, reason: "ok" } });
     await runSupervisor(rc(), INC, ACT, "a", "cmd");
-    const validate = spy.mock.calls[0][0].validateStructured!;
+    const validate = spy.mock.calls[0]![0].validateStructured!;
     expect(validate({ decision: "approve", confidence: 0.9, reason: "ok" })).toBe(true);
     expect(validate({ decision: "yolo" })).toBe(false);
     expect(validate("not even an object")).toBe(false);

@@ -18,7 +18,7 @@ describe("runDiagnosis", () => {
   test("runs the worker role, threads the resume session id, returns text + sessionId", async () => {
     const spy = vi.spyOn(runModelMod, "runModel").mockResolvedValue({ text: "nginx is healthy", costUsd: 0.005, isError: false, sessionId: "sess-9" });
     const out = await runDiagnosis(rc(), "is nginx ok?", "prev-sess");
-    const call = spy.mock.calls[0][0];
+    const call = spy.mock.calls[0]![0];
     expect(call.role).toBe("worker");
     expect(call.resumeSessionId).toBe("prev-sess");
     expect(call.allowedReads).toContain("Bash(kubectl get *)");
