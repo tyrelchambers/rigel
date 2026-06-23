@@ -321,6 +321,40 @@ spec:
                 secretKeyRef:
                   name: ${SECRET_NAME}
                   key: token
+                  optional: true
+            # Provider API keys from the multi-key credentials Secret. Each is
+            # optional so a missing credential never blocks startup; the matching
+            # bridge fails closed at run time if its role's provider has no key.
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ${CREDENTIALS_SECRET_NAME}
+                  key: anthropicApiKey
+                  optional: true
+            - name: CODEX_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ${CREDENTIALS_SECRET_NAME}
+                  key: codexApiKey
+                  optional: true
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ${CREDENTIALS_SECRET_NAME}
+                  key: geminiApiKey
+                  optional: true
+            - name: OPENCODE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ${CREDENTIALS_SECRET_NAME}
+                  key: opencodeApiKey
+                  optional: true
+            - name: OPENCODE_AUTH_CONTENT
+              valueFrom:
+                secretKeyRef:
+                  name: ${CREDENTIALS_SECRET_NAME}
+                  key: opencodeAuthContent
+                  optional: true
             - name: WORKER_MODEL
               value: "${c.workerModel}"
             - name: SUPERVISOR_MODEL

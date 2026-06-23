@@ -320,3 +320,42 @@ describe("credentialsSecretYAML", () => {
     expect(yaml).toContain("stringData:");
   });
 });
+
+import { deployment, CREDENTIALS_SECRET_NAME as CREDS } from "./assistant";
+
+describe("deployment provider credential env", () => {
+  const yaml = deployment(config());
+
+  test("legacy CLAUDE_CODE_OAUTH_TOKEN ref is kept but now optional", () => {
+    expect(yaml).toContain("name: CLAUDE_CODE_OAUTH_TOKEN");
+    expect(yaml).toContain(`name: ${SECRET_NAME}`);
+    expect(yaml).toContain("key: token");
+    // The legacy ref must be optional so a fresh install with no legacy Secret starts.
+    expect(yaml).toMatch(/key: token\s+optional: true/);
+  });
+
+  test("injects ANTHROPIC_API_KEY / CODEX_API_KEY / GEMINI_API_KEY from the credentials Secret, optional", () => {
+    for (const [env, key] of [
+      ["ANTHROPIC_API_KEY", "anthropicApiKey"],
+      ["CODEX_API_KEY", "codexApiKey"],
+      ["GEMINI_API_KEY", "geminiApiKey"],
+    ] as const) {
+      expect(yaml).toContain(`name: ${env}`);
+      expect(yaml).toContain(`key: ${key}`);
+    }
+    // Every credentials ref points at the credentials Secret and is optional.
+    expect(yaml).toContain(`name: ${CREDS}`);
+    expect(yaml.match(/optional: true/g)?.length ?? 0).toBeGreaterThanOrEqual(6);
+  });
+
+  test("injects both OpenCode env vars from the credentials Secret", () => {
+    expect(yaml).toContain("name: OPENCODE_API_KEY");
+    expect(yaml).toContain("key: opencodeApiKey");
+    expect(yaml).toContain("name: OPENCODE_AUTH_CONTENT");
+    expect(yaml).toContain("key: opencodeAuthContent");
+  });
+
+  test("RBAC cage still never grants secrets access", () => {
+    expect(manifestYAML(config()).toLowerCase()).not.toContain("resources: [secrets]");
+  });
+});
