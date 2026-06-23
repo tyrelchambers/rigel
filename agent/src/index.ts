@@ -249,7 +249,7 @@ async function tick(
       const command = previewCommand(action);
       let sup;
       try {
-        sup = await runSupervisor(cfg, incident, action, analysis, command);
+        sup = await runSupervisor(rc, incident, action, analysis, command);
       } catch (e) {
         // Fail closed: supervisor unreachable / malformed verdict → never act.
         state = queue(state, cfg, ts, fp, describe(incident), action.label, "medium-risk — supervisor error (fail-closed)", action);
