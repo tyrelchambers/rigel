@@ -13,13 +13,13 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import type { AgentId, AssistantLimits, AssistantRoleSelection } from "@/lib/api";
+import type { AgentId, AssistantCredentials, AssistantLimits, AssistantRoleSelection } from "@/lib/api";
 import { useAssistantCtx } from "../AssistantContext";
 import { Card, Section } from "../components/primitives";
 import { RolePicker } from "../agents/RolePicker";
 import { CredentialsManager } from "../agents/CredentialsManager";
 import { LimitsForm } from "../agents/LimitsForm";
-import { credentialKeyFor, DEFAULT_LIMITS } from "../agents/providerMeta";
+import { DEFAULT_LIMITS } from "../agents/providerMeta";
 
 export function AgentsTab() {
   const { d, ns, working, run } = useAssistantCtx();
@@ -30,7 +30,11 @@ export function AgentsTab() {
   // Seed with sensible defaults so unset limits show real values, not blanks.
   const [limits, setLimits] = useState<AssistantLimits>({ ...DEFAULT_LIMITS, ...d.limits });
   // The credential being staged behind the confirm dialog (it rolls the agent).
-  const [pendingCred, setPendingCred] = useState<{ provider: AgentId; value: string } | null>(null);
+  const [pendingCred, setPendingCred] = useState<{
+    provider: AgentId;
+    key: keyof AssistantCredentials;
+    value: string;
+  } | null>(null);
 
   // Re-seed from live config when it changes (parity with RulesTab's effect).
   useEffect(() => {
@@ -46,10 +50,12 @@ export function AgentsTab() {
 
   function confirmCredential() {
     if (!pendingCred) return;
-    const key = credentialKeyFor(pendingCred.provider);
-    run({ action: "setCredentials", namespace: ns, credentials: { [key]: pendingCred.value } }, () => {
-      void queryClient.invalidateQueries({ queryKey: ["assistant-credentialStatus", ns] });
-    });
+    run(
+      { action: "setCredentials", namespace: ns, credentials: { [pendingCred.key]: pendingCred.value } },
+      () => {
+        void queryClient.invalidateQueries({ queryKey: ["assistant-credentialStatus", ns] });
+      },
+    );
     setPendingCred(null);
   }
 
@@ -82,7 +88,7 @@ export function AgentsTab() {
 
       <CredentialsManager
         credentials={d.creds}
-        onSave={(provider, value) => setPendingCred({ provider, value })}
+        onSave={(provider, key, value) => setPendingCred({ provider, key, value })}
         disabled={working}
       />
 

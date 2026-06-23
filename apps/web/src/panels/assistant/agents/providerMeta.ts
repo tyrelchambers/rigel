@@ -57,3 +57,134 @@ export function credentialReady(id: AgentId, creds: AssistantCredentials | undef
     return typeof v === "string" && v.trim() !== "";
   });
 }
+
+// ---------------------------------------------------------------------------
+// Auth guidance — how each provider authenticates IN-CLUSTER, and the step-by-step
+// help shown in the per-row help modal. Mirrors the real Secret keys a provider
+// accepts (KEYS_FOR): Claude and OpenCode take a subscription OR an API key; Codex
+// and Gemini take an API key. This is the single source for the row's auth-method
+// summary and the credential editor's method toggle, so the UI never assumes
+// "API key only".
+// ---------------------------------------------------------------------------
+
+/** The kind of credential a method stores. */
+export type AuthMethodKind = "subscription" | "apiKey";
+
+/** One way to authenticate a provider, plus the guidance to obtain it. */
+export interface AuthMethodHelp {
+  kind: AuthMethodKind;
+  /** Short heading, e.g. "Use your subscription". */
+  title: string;
+  /** The Secret key a value entered under this method is stored in. */
+  key: keyof AssistantCredentials;
+  /** Placeholder for the credential input under this method. */
+  placeholder: string;
+  /** Ordered, plain-language steps. */
+  steps: string[];
+  /** Optional terminal command to run, shown as a copyable mono line. */
+  command?: string;
+  /** Optional external link (where to get a key / sign in). */
+  link?: { label: string; url: string };
+  /** Optional caveat shown under the steps. */
+  note?: string;
+  /** Marks the preferred method (selected first in the toggle). */
+  recommended?: boolean;
+}
+
+const ASSISTANT_KEY_NOTE =
+  "The in-cluster assistant authenticates with an API key. A subscription login on your machine does not carry into the cluster.";
+
+/** Per-provider auth methods, in display order (recommended first). */
+export const PROVIDER_AUTH: Record<AgentId, AuthMethodHelp[]> = {
+  claude: [
+    {
+      kind: "subscription",
+      title: "Use your subscription",
+      key: "claudeToken",
+      placeholder: "Paste your setup token…",
+      recommended: true,
+      command: "claude setup-token",
+      steps: [
+        "On your computer, run this in a terminal:",
+        "Copy the token it prints, paste it into the field here, then Save.",
+      ],
+      note: "The token lasts about a year. Re-run the command when it expires.",
+    },
+    {
+      kind: "apiKey",
+      title: "Use an API key",
+      key: "anthropicApiKey",
+      placeholder: "sk-ant-…",
+      steps: [
+        "Open the Anthropic Console and create an API key.",
+        "Paste it into the field here, then Save.",
+      ],
+      link: { label: "console.anthropic.com", url: "https://console.anthropic.com/settings/keys" },
+    },
+  ],
+  codex: [
+    {
+      kind: "apiKey",
+      title: "Use an API key",
+      key: "codexApiKey",
+      placeholder: "sk-…",
+      steps: [
+        "Open the OpenAI Platform and create an API key.",
+        "Paste it into the field here, then Save.",
+      ],
+      link: { label: "platform.openai.com", url: "https://platform.openai.com/api-keys" },
+      note: ASSISTANT_KEY_NOTE,
+    },
+  ],
+  gemini: [
+    {
+      kind: "apiKey",
+      title: "Use an API key",
+      key: "geminiApiKey",
+      placeholder: "AIza…",
+      steps: [
+        "Open Google AI Studio and create an API key.",
+        "Paste it into the field here, then Save.",
+      ],
+      link: { label: "aistudio.google.com", url: "https://aistudio.google.com/apikey" },
+      note: ASSISTANT_KEY_NOTE,
+    },
+  ],
+  opencode: [
+    {
+      kind: "subscription",
+      title: "Use your subscription",
+      key: "opencodeAuthContent",
+      placeholder: "Paste your auth file contents…",
+      recommended: true,
+      command: "opencode auth login",
+      steps: [
+        "On your computer, run this and sign in to your provider:",
+        "Paste the contents of your OpenCode auth file into the field here, then Save.",
+      ],
+      note: "Reuses the subscription you already pay for.",
+    },
+    {
+      kind: "apiKey",
+      title: "Use an API key",
+      key: "opencodeApiKey",
+      placeholder: "API key",
+      steps: [
+        "Create an API key with your OpenCode provider.",
+        "Paste it into the field here, then Save.",
+      ],
+      link: { label: "opencode.ai/docs", url: "https://opencode.ai/docs/" },
+    },
+  ],
+};
+
+/** One-line summary of how a provider authenticates, derived from PROVIDER_AUTH
+ *  so the row label never hardcodes "API key". */
+export function authMethodSummary(id: AgentId): string {
+  const kinds = PROVIDER_AUTH[id].map((m) => m.kind);
+  const hasSub = kinds.includes("subscription");
+  const hasKey = kinds.includes("apiKey");
+  if (hasSub && hasKey) return "Subscription or API key";
+  if (hasSub) return "Subscription";
+  return "API key";
+}

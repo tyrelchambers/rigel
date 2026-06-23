@@ -1,10 +1,12 @@
 import { describe, expect, test } from "vitest";
 import {
   PROVIDER_IDS,
+  PROVIDER_AUTH,
   DEFAULT_WORKER,
   DEFAULT_SUPERVISOR,
   DEFAULT_LIMITS,
   credentialKeyFor,
+  authMethodSummary,
   isClaudeFamily,
   credentialReady,
 } from "./providerMeta";
@@ -49,5 +51,34 @@ describe("providerMeta", () => {
     expect(credentialReady("codex", creds)).toBe(false);
     expect(credentialReady("gemini", { geminiApiKey: "g" })).toBe(true);
     expect(credentialReady("opencode", { opencodeAuthContent: "blob" })).toBe(true);
+  });
+
+  test("authMethodSummary reflects each provider's real auth options", () => {
+    expect(authMethodSummary("claude")).toBe("Subscription or API key");
+    expect(authMethodSummary("opencode")).toBe("Subscription or API key");
+    expect(authMethodSummary("codex")).toBe("API key");
+    expect(authMethodSummary("gemini")).toBe("API key");
+  });
+
+  test("PROVIDER_AUTH methods route to the Secret key matching their kind", () => {
+    // Claude + OpenCode expose both a subscription and an API-key method.
+    const claudeSub = PROVIDER_AUTH.claude.find((m) => m.kind === "subscription");
+    const claudeKey = PROVIDER_AUTH.claude.find((m) => m.kind === "apiKey");
+    expect(claudeSub?.key).toBe("claudeToken");
+    expect(claudeKey?.key).toBe("anthropicApiKey");
+    expect(PROVIDER_AUTH.opencode.find((m) => m.kind === "subscription")?.key).toBe("opencodeAuthContent");
+    expect(PROVIDER_AUTH.opencode.find((m) => m.kind === "apiKey")?.key).toBe("opencodeApiKey");
+    // Codex + Gemini are API-key only.
+    expect(PROVIDER_AUTH.codex).toHaveLength(1);
+    expect(PROVIDER_AUTH.codex[0]!.key).toBe("codexApiKey");
+    expect(PROVIDER_AUTH.gemini[0]!.key).toBe("geminiApiKey");
+  });
+
+  test("the first method of every provider is the one to offer first (recommended when there's a choice)", () => {
+    for (const id of PROVIDER_IDS) {
+      const methods = PROVIDER_AUTH[id];
+      expect(methods.length).toBeGreaterThan(0);
+      if (methods.length > 1) expect(methods[0]!.recommended).toBe(true);
+    }
   });
 });

@@ -75,7 +75,7 @@ describe("AgentsTab", () => {
     wrap();
     const geminiRow = (await screen.findByText("Gemini")).closest("[data-provider]") as HTMLElement;
     await userEvent.click(within(geminiRow).getByRole("button", { name: /add key/i }));
-    await userEvent.type(within(geminiRow).getByPlaceholderText(/key/i), "g-secret");
+    await userEvent.type(within(geminiRow).getByLabelText(/credential value/i), "g-secret");
     await userEvent.click(within(geminiRow).getByRole("button", { name: /^save$/i }));
     // A confirm dialog explains the restart; confirm it.
     await userEvent.click(await screen.findByRole("button", { name: /save & restart/i }));

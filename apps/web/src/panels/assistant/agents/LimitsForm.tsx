@@ -1,8 +1,10 @@
 // LimitsForm — the operational-limits grid. Controlled (value + onChange). Numbers
-// emit numbers; monitor-namespaces is a comma/newline list emitted as string[].
+// emit numbers; monitor-namespaces is picked from the cluster's real namespace
+// list via a multi-select dropdown (blank = all).
 import { useState, useEffect } from "react";
 import type { AssistantLimits } from "@/lib/api";
 import { inputClass } from "../components/primitives";
+import { NamespaceMultiSelect } from "./NamespaceMultiSelect";
 
 const NUM_FIELDS: { key: keyof AssistantLimits; label: string }[] = [
   { key: "pollIntervalMs", label: "Poll interval (ms)" },
@@ -11,19 +13,6 @@ const NUM_FIELDS: { key: keyof AssistantLimits; label: string }[] = [
   { key: "maxAttemptsPerIncident", label: "Attempts per incident" },
   { key: "confirmPolls", label: "Confirm polls" },
 ];
-
-/** Parse a comma/newline list into a trimmed, non-empty string[]. */
-function parseNamespaces(text: string): string[] {
-  return text
-    .split(/[,\n]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-/** Serialize namespaces array for display (comma-space separated). */
-function serializeNamespaces(ns: string[] | undefined): string {
-  return (ns ?? []).join(", ");
-}
 
 export function LimitsForm({
   value,
@@ -37,26 +26,17 @@ export function LimitsForm({
   // Local state lets userEvent.clear + type work correctly in tests and
   // provides a snappy editing experience without waiting for parent re-renders.
   const [local, setLocal] = useState<AssistantLimits>(value);
-  const [namespacesText, setNamespacesText] = useState<string>(serializeNamespaces(value.namespaces));
 
   // Keep local in sync when the parent pushes a new value from outside.
-  useEffect(() => {
-    setLocal(value);
-    setNamespacesText(serializeNamespaces(value.namespaces));
-  }, [value]);
+  useEffect(() => setLocal(value), [value]);
 
-  function handleNumChange(key: keyof AssistantLimits, raw: string) {
-    const parsed = raw === "" ? undefined : Number(raw);
-    const next = { ...local, [key]: parsed };
+  function patch(next: AssistantLimits) {
     setLocal(next);
     onChange(next);
   }
 
-  function handleNamespacesChange(text: string) {
-    setNamespacesText(text);
-    const next = { ...local, namespaces: parseNamespaces(text) };
-    setLocal(next);
-    onChange(next);
+  function handleNumChange(key: keyof AssistantLimits, raw: string) {
+    patch({ ...local, [key]: raw === "" ? undefined : Number(raw) });
   }
 
   return (
@@ -74,17 +54,14 @@ export function LimitsForm({
           />
         </label>
       ))}
-      <label className="col-span-2 flex flex-col gap-1">
+      <div className="col-span-2 flex flex-col gap-1">
         <span className="text-xs text-muted-foreground">Monitor namespaces (blank = all)</span>
-        <input
-          type="text"
-          aria-label="Monitor namespaces"
+        <NamespaceMultiSelect
+          value={local.namespaces ?? []}
+          onChange={(namespaces) => patch({ ...local, namespaces })}
           disabled={disabled}
-          value={namespacesText}
-          onChange={(e) => handleNamespacesChange(e.target.value)}
-          className={`w-full ${inputClass}`}
         />
-      </label>
+      </div>
     </div>
   );
 }
