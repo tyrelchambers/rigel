@@ -65,6 +65,17 @@ export const ISSUED_AT_ANNOTATION = "rigel.assistant/token-issued-at";
  * untouched (the Deployment injects from BOTH, each optional). */
 export const CREDENTIALS_SECRET_NAME = "rigel-assistant-credentials";
 
+/** The agent Deployment's name. Its owned objects all carry the managed-by label
+ *  below, so we can tell OUR install apart from a same-named foreign Deployment. */
+export const DEPLOYMENT_NAME = "rigel-assistant";
+
+/** True when an object's labels mark it as managed by the Rigel assistant. Lets
+ *  discovery + install avoid adopting or operating on a same-named object we
+ *  don't own (`kubectl apply` would otherwise silently merge into it). */
+export function isAssistantManaged(labels?: Record<string, string>): boolean {
+  return labels?.["app.kubernetes.io/managed-by"] === "rigel-assistant";
+}
+
 /** The provider credentials a user can supply. Each maps to one Secret key and,
  * via the Deployment env, to the exact var the matching bridge's authEnv() reads:
  *   claudeToken          → CLAUDE_CODE_OAUTH_TOKEN  (claude)

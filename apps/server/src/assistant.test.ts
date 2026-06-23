@@ -307,7 +307,7 @@ describe("listCredentialSecrets", () => {
 // setCredentialSource / clearCredentialSource (BYO, Phase 2 / Task A3)
 // ---------------------------------------------------------------------------
 
-import { setCredentialSource, clearCredentialSource, type AssistantRequest as Req } from "./assistant";
+import { setCredentialSource, clearCredentialSource, assertNoForeignDeployment, type AssistantRequest as Req } from "./assistant";
 
 /** A scripted fake kubectl: matches each call by a substring of the joined argv
  *  and returns the queued response, recording every call for sequence asserts. */
@@ -511,5 +511,29 @@ describe("clearCredentialSource", () => {
     await expect(
       clearCredentialSource(null, "default", { action: "clearCredentialSource" }, noop),
     ).rejects.toThrow(/credentialId/);
+  });
+});
+
+describe("assertNoForeignDeployment (install ownership guard)", () => {
+  test("no Deployment (not found) → allowed", async () => {
+    const run = async (): Promise<RunResult> => ({ code: 1, stdout: "", stderr: "NotFound" });
+    await expect(assertNoForeignDeployment(null, "default", run)).resolves.toBeUndefined();
+  });
+
+  test("OUR Deployment (managed-by label) → allowed (re-install)", async () => {
+    const run = async (): Promise<RunResult> =>
+      okJSON({ metadata: { name: "rigel-assistant", labels: { "app.kubernetes.io/managed-by": "rigel-assistant" } } });
+    await expect(assertNoForeignDeployment(null, "default", run)).resolves.toBeUndefined();
+  });
+
+  test("a FOREIGN same-named Deployment → refused (no silent adopt)", async () => {
+    const run = async (): Promise<RunResult> =>
+      okJSON({ metadata: { name: "rigel-assistant", labels: { app: "something-else" } } });
+    await expect(assertNoForeignDeployment(null, "default", run)).rejects.toThrow(/isn't managed by Rigel/);
+  });
+
+  test("unparseable response → inconclusive, not blocked", async () => {
+    const run = async (): Promise<RunResult> => ({ code: 0, stdout: "not json", stderr: "" });
+    await expect(assertNoForeignDeployment(null, "default", run)).resolves.toBeUndefined();
   });
 });

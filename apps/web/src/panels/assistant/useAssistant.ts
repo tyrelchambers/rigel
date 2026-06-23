@@ -17,6 +17,7 @@ import {
   parseAlertRules,
   ISSUED_AT_ANNOTATION,
   SECRET_NAME,
+  isAssistantManaged,
   type AssistantClusterState,
   type AssistantLiveIssue,
   type TokenExpiryStatus,
@@ -128,7 +129,9 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
   // once the watch has it, falling back to the hint before the agent exists.
   const credentialNamespace = useMemo(() => {
     const deps = (resources["deployments"] ?? {}) as Record<string, DeploymentLike>;
-    const agent = Object.values(deps).find((d) => d.metadata.name === "rigel-assistant");
+    const agent = Object.values(deps).find(
+      (d) => d.metadata.name === "rigel-assistant" && isAssistantManaged(d.metadata.labels),
+    );
     return agent?.metadata.namespace ?? installNamespaceHint;
   }, [resources, installNamespaceHint]);
 
@@ -163,7 +166,10 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
   );
 
   return useMemo<AssistantDerived>(() => {
-    const agentDeployment = deployments.find((d) => d.metadata.name === "rigel-assistant") ?? null;
+    // Match by name AND our managed-by label, so a same-named Deployment we don't
+    // own is never mistaken for an installed assistant (and never operated on).
+    const agentDeployment =
+      deployments.find((d) => d.metadata.name === "rigel-assistant" && isAssistantManaged(d.metadata.labels)) ?? null;
     const isInstalled = agentDeployment != null;
     const installedNamespace = agentDeployment ? agentDeployment.metadata.namespace ?? "default" : null;
     const stateNamespace = installedNamespace ?? installNamespaceHint;

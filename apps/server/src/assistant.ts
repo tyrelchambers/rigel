@@ -30,6 +30,8 @@ import {
   clearCredentialSourceCommands,
   credentialEnvPatch,
   defaultCredentialSource,
+  isAssistantManaged,
+  DEPLOYMENT_NAME,
   type AssistantInstallConfig,
   type AssistantCredentials,
   type RoleSelectionInput,
@@ -255,6 +257,11 @@ async function installAssistant(
 ): Promise<RunResult> {
   const config = buildInstallConfig(req);
   const namespace = config.installNamespace;
+
+  // Refuse to adopt a same-named Deployment we don't own — `kubectl apply` would
+  // otherwise silently merge into a foreign rigel-assistant. (Re-installing OURS
+  // is fine; it carries the managed-by label.)
+  await assertNoForeignDeployment(context, namespace);
 
   // Credentials: req.credentials (+ legacy top-level token folded into claudeToken).
   // For Claude we still also accept the user's already-saved token (onboarding /
@@ -486,6 +493,34 @@ async function clearActivity(context: string | null, namespace: string): Promise
   const result = await applyStdin(context, cmJSON);
   ensureOk(result, "Failed to clear activity");
   return result;
+}
+
+/**
+ * Refuse to install over a same-named Deployment we don't own. `kubectl apply`
+ * 3-way-merges, so it would silently adopt/overwrite a foreign `rigel-assistant`
+ * rather than error. Re-installing OUR own Deployment (carries the managed-by
+ * label) is allowed; a missing/inaccessible Deployment is nothing to clobber; an
+ * unparseable response is inconclusive and not blocked. `run` is injectable for
+ * cluster-free assertions.
+ */
+export async function assertNoForeignDeployment(
+  context: string | null,
+  namespace: string,
+  run: (ctx: string | null, args: string[]) => Promise<RunResult> = kubectl,
+): Promise<void> {
+  const existing = await run(context, ["get", "deployment", DEPLOYMENT_NAME, "-n", namespace, "-o", "json"]);
+  if (existing.code !== 0) return; // not found / no access → nothing to adopt
+  let labels: Record<string, string> | undefined;
+  try {
+    labels = (JSON.parse(existing.stdout) as { metadata?: { labels?: Record<string, string> } }).metadata?.labels;
+  } catch {
+    return; // unparseable → inconclusive, don't block the install
+  }
+  if (!isAssistantManaged(labels)) {
+    throw new Error(
+      `A Deployment named "${DEPLOYMENT_NAME}" already exists in ${namespace} and isn't managed by Rigel. Remove it or install into a different namespace.`,
+    );
+  }
 }
 
 /** A `kubectl get secrets ... -o json` reader used by the credential actions.

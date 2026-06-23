@@ -2,6 +2,7 @@ import { test, expect } from "vitest";
 import {
   DEFAULT_INSTALL_CONFIG,
   SECRET_NAME,
+  isAssistantManaged,
   ISSUED_AT_ANNOTATION,
   namespaceYAML,
   secretYAML,
@@ -119,6 +120,17 @@ test("maskToken redacts the token line but leaves the credential annotation inta
 test("default install config matches the catalog default image", () => {
   expect(DEFAULT_INSTALL_CONFIG.image).toBe("ghcr.io/tyrelchambers/rigel-assistant:latest");
   expect(SECRET_NAME).toBe("rigel-assistant-token");
+});
+
+test("isAssistantManaged recognizes our managed-by label, rejects foreign/absent", () => {
+  expect(isAssistantManaged({ "app.kubernetes.io/managed-by": "rigel-assistant" })).toBe(true);
+  expect(isAssistantManaged({ "app.kubernetes.io/managed-by": "someone-else" })).toBe(false);
+  expect(isAssistantManaged({})).toBe(false);
+  expect(isAssistantManaged(undefined)).toBe(false);
+});
+
+test("our Deployment carries the managed-by label (so discovery can tell it apart)", () => {
+  expect(deployment(config())).toContain("app.kubernetes.io/managed-by: rigel-assistant");
 });
 
 // ---------------------------------------------------------------------------
