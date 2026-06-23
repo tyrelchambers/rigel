@@ -58,3 +58,33 @@ test("parseCredentials maps a legacy top-level token onto claudeToken", () => {
 test("parseCredentials returns an empty object when nothing is provided", () => {
   expect(parseCredentials({ action: "setCredentials" })).toEqual({});
 });
+
+import { buildInstallConfig } from "./assistant";
+
+test("buildInstallConfig carries the role selections + limits onto the install config", () => {
+  const cfg = buildInstallConfig({
+    action: "install",
+    namespace: "agents",
+    image: "ghcr.io/acme/rigel-assistant:v1",
+    worker: { provider: "gemini", model: "gemini-2.5-pro" },
+    supervisor: { provider: "claude", model: "claude-opus-4-8", effort: "high" },
+    limits: { pollIntervalMs: 45000, confirmPolls: 4, namespaces: ["default", "kube-system"] },
+  });
+  expect(cfg.installNamespace).toBe("agents");
+  expect(cfg.image).toBe("ghcr.io/acme/rigel-assistant:v1");
+  expect(cfg.worker).toEqual({ provider: "gemini", model: "gemini-2.5-pro" });
+  expect(cfg.supervisor).toEqual({ provider: "claude", model: "claude-opus-4-8", effort: "high" });
+  expect(cfg.pollIntervalMs).toBe(45000);
+  expect(cfg.confirmPolls).toBe(4);
+  expect(cfg.namespaces).toBe("default,kube-system");
+});
+
+test("buildInstallConfig falls back to legacy model knobs + defaults when no selection/limits given", () => {
+  const cfg = buildInstallConfig({ action: "install" });
+  expect(cfg.installNamespace).toBe("default");
+  expect(cfg.workerModel).toBe("claude-sonnet-4-6");
+  expect(cfg.supervisorModel).toBe("claude-opus-4-8");
+  expect(cfg.pollIntervalMs).toBe(30000);
+  expect(cfg.worker).toBeUndefined();
+  expect(cfg.supervisor).toBeUndefined();
+});

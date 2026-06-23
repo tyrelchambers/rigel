@@ -180,6 +180,34 @@ export function parseCredentials(req: AssistantRequest): AssistantCredentials {
 // ---------------------------------------------------------------------------
 
 /**
+ * Build the AssistantInstallConfig from a request. The per-role selections seed
+ * the assistant-config ConfigMap (via packages/k8s configMaps); the legacy
+ * workerModel/supervisorModel knobs remain the env fallback. Limits map onto the
+ * install knobs (namespaces is comma-joined for the env/ConfigMap). Pure.
+ */
+export function buildInstallConfig(req: AssistantRequest): AssistantInstallConfig {
+  const namespace = (req.namespace ?? DEFAULT_INSTALL_CONFIG.installNamespace).trim() || DEFAULT_INSTALL_CONFIG.installNamespace;
+  const image = (req.image ?? DEFAULT_INSTALL_CONFIG.image).trim() || DEFAULT_INSTALL_CONFIG.image;
+  const limits = req.limits ?? {};
+  const monitorNamespaces =
+    limits.namespaces !== undefined ? limits.namespaces.join(",") : req.monitorNamespaces ?? DEFAULT_INSTALL_CONFIG.namespaces;
+  return {
+    image,
+    installNamespace: namespace,
+    namespaces: monitorNamespaces,
+    workerModel: req.worker?.model ?? req.workerModel ?? DEFAULT_INSTALL_CONFIG.workerModel,
+    supervisorModel: req.supervisor?.model ?? req.supervisorModel ?? DEFAULT_INSTALL_CONFIG.supervisorModel,
+    pollIntervalMs: limits.pollIntervalMs ?? req.pollIntervalMs ?? DEFAULT_INSTALL_CONFIG.pollIntervalMs,
+    maxPerResourcePerHour: limits.maxPerResourcePerHour ?? req.maxPerResourcePerHour ?? DEFAULT_INSTALL_CONFIG.maxPerResourcePerHour,
+    maxPerNight: limits.maxPerNight ?? req.maxPerNight ?? DEFAULT_INSTALL_CONFIG.maxPerNight,
+    maxAttemptsPerIncident: limits.maxAttemptsPerIncident ?? req.maxAttemptsPerIncident ?? DEFAULT_INSTALL_CONFIG.maxAttemptsPerIncident,
+    confirmPolls: limits.confirmPolls ?? req.confirmPolls ?? DEFAULT_INSTALL_CONFIG.confirmPolls,
+    worker: req.worker,
+    supervisor: req.supervisor,
+  };
+}
+
+/**
  * Apply, in order: the namespace (best-effort — kubectl apply is idempotent and
  * creates it when missing), the token Secret (with a fresh issued-at stamp), and
  * the RBAC + ConfigMaps + Deployment manifests. The Secret goes first so a bad
@@ -189,34 +217,38 @@ async function installAssistant(
   context: string | null,
   req: AssistantRequest,
 ): Promise<RunResult> {
-  const namespace = (req.namespace ?? DEFAULT_INSTALL_CONFIG.installNamespace).trim();
-  // Use the token from the request if one was pasted, otherwise the token the
-  // user already saved (onboarding / Settings) — so they don't re-enter it.
-  const token = (req.token ?? "").trim() || ((await effectiveClaudeToken()) ?? "");
-  const image = (req.image ?? DEFAULT_INSTALL_CONFIG.image).trim();
-  validateInstall(namespace, token, image);
+  const config = buildInstallConfig(req);
+  const namespace = config.installNamespace;
 
-  const config: AssistantInstallConfig = {
-    image,
-    installNamespace: namespace,
-    namespaces: req.monitorNamespaces ?? DEFAULT_INSTALL_CONFIG.namespaces,
-    workerModel: req.workerModel ?? DEFAULT_INSTALL_CONFIG.workerModel,
-    supervisorModel: req.supervisorModel ?? DEFAULT_INSTALL_CONFIG.supervisorModel,
-    pollIntervalMs: req.pollIntervalMs ?? DEFAULT_INSTALL_CONFIG.pollIntervalMs,
-    maxPerResourcePerHour: req.maxPerResourcePerHour ?? DEFAULT_INSTALL_CONFIG.maxPerResourcePerHour,
-    maxPerNight: req.maxPerNight ?? DEFAULT_INSTALL_CONFIG.maxPerNight,
-    maxAttemptsPerIncident: req.maxAttemptsPerIncident ?? DEFAULT_INSTALL_CONFIG.maxAttemptsPerIncident,
-    confirmPolls: req.confirmPolls ?? DEFAULT_INSTALL_CONFIG.confirmPolls,
-  };
+  // Credentials: req.credentials (+ legacy top-level token folded into claudeToken).
+  // For Claude we still also accept the user's already-saved token (onboarding /
+  // Settings) so they don't re-enter it.
+  const creds = parseCredentials(req);
+  if (!creds.claudeToken) {
+    const saved = (await effectiveClaudeToken()) ?? "";
+    if (saved.trim() !== "") creds.claudeToken = saved.trim();
+  }
+
+  // Validate: at least one credential must be present (the worker can't run with
+  // none). Keep the legacy Claude validation when a Claude token is the only cred.
+  const hasAnyCred = Object.values(creds).some((v) => typeof v === "string" && v.trim() !== "");
+  validateInstall(namespace, hasAnyCred ? "ok" : "", config.image);
 
   // 1. Namespace (idempotent; creates it when missing).
   ensureOk(await applyStdin(context, namespaceYAML(namespace)), `Failed to create namespace ${namespace}`);
 
-  // 2. Secret first (carries the OAuth token), stamped at mint time.
-  const issuedAt = new Date().toISOString();
-  ensureOk(await applyStdin(context, secretYAML(token, issuedAt, namespace)), "Failed to create token Secret");
+  // 2. Legacy token Secret first (only when a Claude OAuth token is present) so a
+  //    bad token can be rolled back without reapplying RBAC, and existing installs
+  //    that read CLAUDE_CODE_OAUTH_TOKEN from this Secret keep working.
+  if (creds.claudeToken) {
+    const issuedAt = new Date().toISOString();
+    ensureOk(await applyStdin(context, secretYAML(creds.claudeToken, issuedAt, namespace)), "Failed to create token Secret");
+  }
 
-  // 3. RBAC + ConfigMaps + Deployment.
+  // 3. Multi-key credentials Secret (the other providers + an Anthropic API key).
+  ensureOk(await applyStdin(context, credentialsSecretYAML(creds, namespace)), "Failed to create credentials Secret");
+
+  // 4. RBAC + ConfigMaps (seeded with role + limit keys) + Deployment.
   const result = await applyStdin(context, manifestYAML(config));
   ensureOk(result, "Failed to apply manifests");
   return result;
