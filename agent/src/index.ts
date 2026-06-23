@@ -209,8 +209,10 @@ async function tick(
       // Fail closed: a worker failure never results in an action.
       const msg = packet.error;
       if (/auth|oauth|401|token|unauthor/i.test(msg)) {
-        // Loud signal in the report — almost certainly the 1-year token lapsed.
-        state = { ...state, report: `⚠️ Claude auth is failing — the subscription token may have expired. Re-run \`claude setup-token\` and update the assistant-claude-token Secret. (${msg})` };
+        // Loud signal in the report — the worker provider's credential is failing (an
+        // expired Claude token, a bad API key, etc.). Provider-agnostic: the Assistant
+        // tab shows which provider each role uses and where to update its credential.
+        state = { ...state, report: `⚠️ The worker AI's credentials are failing (auth error). Update the worker provider's key/token in the Assistant tab. (${msg})` };
       }
       state = record(state, cfg, {
         at: ts, fingerprint: fp, incident: describe(incident), tier: "low",

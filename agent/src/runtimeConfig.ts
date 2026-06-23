@@ -75,7 +75,12 @@ function numKey(data: Record<string, string>, key: string, fallback: number): nu
   return Number.isFinite(n) ? n : fallback;
 }
 
-/** Parse the operational limits, each falling back to the deploy-time Config value. */
+/** Parse the operational limits, each falling back to the deploy-time Config value.
+ *  NOTE (Plan 1): rc.limits is parsed here, but the poll loop still reads the static
+ *  Config values. Wiring rc.limits into tick()/main() + the circuit breaker is deferred
+ *  to Plan 2 (control plane), alongside the /api/assistant `setLimits` action and the UI
+ *  that lets users change them. Until something writes these ConfigMap keys, rc.limits
+ *  equals the Config defaults, so consuming it now would be a behavioral no-op. */
 export function parseLimits(data: Record<string, string>, cfg: Config): OperationalLimits {
   const rawNs = (data["namespaces"] ?? "").trim();
   const namespaces = rawNs
