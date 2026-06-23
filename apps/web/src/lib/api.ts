@@ -343,6 +343,7 @@ export interface AssistantCredentials {
   claudeToken?: string;
   anthropicApiKey?: string;
   codexApiKey?: string;
+  codexAuthContent?: string;
   geminiApiKey?: string;
   opencodeApiKey?: string;
   opencodeAuthContent?: string;

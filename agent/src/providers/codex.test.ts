@@ -47,12 +47,17 @@ describe("mapCodexEvent", () => {
 
 describe("codexBridge.authEnv", () => {
   const saved = { ...process.env };
-  beforeEach(() => { delete process.env.CODEX_API_KEY; });
+  beforeEach(() => { delete process.env.CODEX_API_KEY; delete process.env.CODEX_AUTH_CONTENT; });
   afterEach(() => { process.env = { ...saved }; });
-  test("null without CODEX_API_KEY", () => { expect(codexBridge.authEnv()).toBeNull(); });
+  test("null without any codex credential", () => { expect(codexBridge.authEnv()).toBeNull(); });
   test("CODEX_API_KEY env when present", () => {
     process.env.CODEX_API_KEY = "sk-codex";
     expect(codexBridge.authEnv()).toEqual({ CODEX_API_KEY: "sk-codex" });
+  });
+  test("subscription auth content takes precedence over the API key", () => {
+    process.env.CODEX_API_KEY = "sk-codex";
+    process.env.CODEX_AUTH_CONTENT = '{"tokens":{"access_token":"x"}}';
+    expect(codexBridge.authEnv()).toEqual({ CODEX_AUTH_CONTENT: '{"tokens":{"access_token":"x"}}' });
   });
 });
 
@@ -161,11 +166,50 @@ describe("codexBridge.run (fake codex on PATH)", () => {
     await rm(emptyDir, { recursive: true, force: true });
   });
 
-  test("missing CODEX_API_KEY returns isError:true with descriptive errorMessage", async () => {
+  test("no codex credential returns isError:true with descriptive errorMessage", async () => {
     delete process.env.CODEX_API_KEY;
+    delete process.env.CODEX_AUTH_CONTENT;
     // No fake CLI on PATH — if it were spawned it would ENOENT, giving a different error.
     const result = await codexBridge.run({ prompt: "hi", systemPrompt: "" } as any);
     expect(result.isError).toBe(true);
-    expect(result.errorMessage).toMatch(/CODEX_API_KEY/);
+    expect(result.errorMessage).toMatch(/CODEX_AUTH_CONTENT|CODEX_API_KEY/);
+  });
+
+  test("subscription auth: materializes auth.json under CODEX_HOME and drops the API key", async () => {
+    // The fake codex passes only if auth.json exists under CODEX_HOME AND no
+    // CODEX_API_KEY leaked into its env (so the ChatGPT session is used).
+    const fakeDir = await mkdtemp(join(tmpdir(), "rigel-fake-codex3-"));
+    const fakeCodex = join(fakeDir, "codex");
+    await writeFile(
+      fakeCodex,
+      [
+        "#!/bin/sh",
+        'if [ -f "$CODEX_HOME/auth.json" ] && [ -z "$CODEX_API_KEY" ]; then',
+        `  echo '{"type":"item.completed","item":{"type":"agent_message","text":"USED_SUBSCRIPTION"}}'`,
+        "else",
+        `  echo '{"type":"item.completed","item":{"type":"agent_message","text":"NO"}}'`,
+        "fi",
+        "exit 0",
+      ].join("\n") + "\n",
+    );
+    await chmod(fakeCodex, 0o755);
+
+    const prevPath = process.env.PATH;
+    process.env.PATH = `${fakeDir}${delimiter}${prevPath ?? ""}`;
+    delete process.env.CODEX_API_KEY;
+    process.env.CODEX_AUTH_CONTENT = '{"tokens":{"access_token":"x"}}';
+
+    let result: Awaited<ReturnType<typeof codexBridge.run>>;
+    try {
+      result = await codexBridge.run({ prompt: "hi", systemPrompt: "" } as any);
+    } finally {
+      process.env.PATH = prevPath;
+      delete process.env.CODEX_AUTH_CONTENT;
+    }
+
+    expect(result.isError).toBe(false);
+    expect(result.text).toBe("USED_SUBSCRIPTION");
+
+    await rm(fakeDir, { recursive: true, force: true });
   });
 });

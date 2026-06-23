@@ -301,19 +301,20 @@ describe("credentialsSecretYAML", () => {
     expect(yaml).toContain("namespace: agents");
   });
 
-  test("writes all six possible keys when all are provided", () => {
+  test("writes all possible keys when all are provided", () => {
     const yaml = credentialsSecretYAML(
       {
         claudeToken: "t",
         anthropicApiKey: "a",
         codexApiKey: "c",
+        codexAuthContent: "cblob",
         geminiApiKey: "g",
         opencodeApiKey: "o",
         opencodeAuthContent: "blob",
       },
       "default",
     );
-    for (const k of ["claudeToken", "anthropicApiKey", "codexApiKey", "geminiApiKey", "opencodeApiKey", "opencodeAuthContent"]) {
+    for (const k of ["claudeToken", "anthropicApiKey", "codexApiKey", "codexAuthContent", "geminiApiKey", "opencodeApiKey", "opencodeAuthContent"]) {
       expect(yaml).toContain(`${k}: "`);
     }
   });
@@ -349,7 +350,14 @@ describe("deployment provider credential env", () => {
     }
     // Every credentials ref points at the credentials Secret and is optional.
     expect(yaml).toContain(`name: ${CREDS}`);
-    expect(yaml.match(/optional: true/g)?.length ?? 0).toBeGreaterThanOrEqual(6);
+    expect(yaml.match(/optional: true/g)?.length ?? 0).toBeGreaterThanOrEqual(7);
+  });
+
+  test("injects both Codex env vars from the credentials Secret", () => {
+    expect(yaml).toContain("name: CODEX_API_KEY");
+    expect(yaml).toContain("key: codexApiKey");
+    expect(yaml).toContain("name: CODEX_AUTH_CONTENT");
+    expect(yaml).toContain("key: codexAuthContent");
   });
 
   test("injects both OpenCode env vars from the credentials Secret", () => {

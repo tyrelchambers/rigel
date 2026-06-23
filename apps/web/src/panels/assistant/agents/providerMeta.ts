@@ -34,7 +34,7 @@ export const DEFAULT_LIMITS: AssistantLimits = {
 /** Every credential Secret key a provider can authenticate with. */
 const KEYS_FOR: Record<AgentId, (keyof AssistantCredentials)[]> = {
   claude: ["claudeToken", "anthropicApiKey"],
-  codex: ["codexApiKey"],
+  codex: ["codexApiKey", "codexAuthContent"],
   gemini: ["geminiApiKey"],
   opencode: ["opencodeApiKey", "opencodeAuthContent"],
 };
@@ -91,8 +91,10 @@ export interface AuthMethodHelp {
   recommended?: boolean;
 }
 
-const ASSISTANT_KEY_NOTE =
-  "The in-cluster assistant authenticates with an API key. A subscription login on your machine does not carry into the cluster.";
+// Gemini's consumer "Login with Google" needs an interactive browser and has no
+// portable/headless token, so the in-cluster assistant can only use an API key.
+const GEMINI_KEY_NOTE =
+  "Gemini's consumer subscription can't run headless, so the in-cluster assistant uses an API key.";
 
 /** Per-provider auth methods, in display order (recommended first). */
 export const PROVIDER_AUTH: Record<AgentId, AuthMethodHelp[]> = {
@@ -124,6 +126,19 @@ export const PROVIDER_AUTH: Record<AgentId, AuthMethodHelp[]> = {
   ],
   codex: [
     {
+      kind: "subscription",
+      title: "Use your subscription",
+      key: "codexAuthContent",
+      placeholder: "Paste your ~/.codex/auth.json contents…",
+      recommended: true,
+      command: "codex login --device-auth",
+      steps: [
+        "On your computer, sign in (use `codex login` if you have a browser, or the command above on a headless box):",
+        "Copy the contents of ~/.codex/auth.json, paste them into the field here, then Save.",
+      ],
+      note: "Reuses your ChatGPT plan instead of per-token API billing. Re-paste if the token ever goes stale.",
+    },
+    {
       kind: "apiKey",
       title: "Use an API key",
       key: "codexApiKey",
@@ -133,7 +148,7 @@ export const PROVIDER_AUTH: Record<AgentId, AuthMethodHelp[]> = {
         "Paste it into the field here, then Save.",
       ],
       link: { label: "platform.openai.com", url: "https://platform.openai.com/api-keys" },
-      note: ASSISTANT_KEY_NOTE,
+      note: "Billed per token at API rates, separate from your ChatGPT plan.",
     },
   ],
   gemini: [
@@ -147,7 +162,7 @@ export const PROVIDER_AUTH: Record<AgentId, AuthMethodHelp[]> = {
         "Paste it into the field here, then Save.",
       ],
       link: { label: "aistudio.google.com", url: "https://aistudio.google.com/apikey" },
-      note: ASSISTANT_KEY_NOTE,
+      note: GEMINI_KEY_NOTE,
     },
   ],
   opencode: [

@@ -161,7 +161,7 @@ export function validateInstall(namespace: string, token: string, image: string)
 
 /** Credential key names the agent understands (match the bridges' authEnv()). */
 const KNOWN_CREDENTIAL_KEYS: readonly string[] = [
-  "claudeToken", "anthropicApiKey", "codexApiKey", "geminiApiKey",
+  "claudeToken", "anthropicApiKey", "codexApiKey", "codexAuthContent", "geminiApiKey",
   "opencodeApiKey", "opencodeAuthContent",
 ];
 

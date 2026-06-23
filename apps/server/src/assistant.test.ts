@@ -154,8 +154,8 @@ import { normalizeCredentialKeys } from "./assistant";
 
 describe("normalizeCredentialKeys", () => {
   test("keeps known credential keys, drops unknown ones", () => {
-    expect(normalizeCredentialKeys(["geminiApiKey", "codexApiKey", "junk"], []).sort()).toEqual([
-      "codexApiKey", "geminiApiKey",
+    expect(normalizeCredentialKeys(["geminiApiKey", "codexApiKey", "codexAuthContent", "junk"], []).sort()).toEqual([
+      "codexApiKey", "codexAuthContent", "geminiApiKey",
     ]);
   });
   test("the legacy token Secret's `token` key maps to claudeToken", () => {

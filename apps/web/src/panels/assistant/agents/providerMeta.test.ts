@@ -54,23 +54,24 @@ describe("providerMeta", () => {
   });
 
   test("authMethodSummary reflects each provider's real auth options", () => {
+    // Claude, OpenCode and Codex all support a subscription OR an API key headless.
     expect(authMethodSummary("claude")).toBe("Subscription or API key");
     expect(authMethodSummary("opencode")).toBe("Subscription or API key");
-    expect(authMethodSummary("codex")).toBe("API key");
+    expect(authMethodSummary("codex")).toBe("Subscription or API key");
+    // Gemini's consumer login can't run headless, so it is API-key only.
     expect(authMethodSummary("gemini")).toBe("API key");
   });
 
   test("PROVIDER_AUTH methods route to the Secret key matching their kind", () => {
-    // Claude + OpenCode expose both a subscription and an API-key method.
-    const claudeSub = PROVIDER_AUTH.claude.find((m) => m.kind === "subscription");
-    const claudeKey = PROVIDER_AUTH.claude.find((m) => m.kind === "apiKey");
-    expect(claudeSub?.key).toBe("claudeToken");
-    expect(claudeKey?.key).toBe("anthropicApiKey");
+    // Claude, Codex and OpenCode expose both a subscription and an API-key method.
+    expect(PROVIDER_AUTH.claude.find((m) => m.kind === "subscription")?.key).toBe("claudeToken");
+    expect(PROVIDER_AUTH.claude.find((m) => m.kind === "apiKey")?.key).toBe("anthropicApiKey");
+    expect(PROVIDER_AUTH.codex.find((m) => m.kind === "subscription")?.key).toBe("codexAuthContent");
+    expect(PROVIDER_AUTH.codex.find((m) => m.kind === "apiKey")?.key).toBe("codexApiKey");
     expect(PROVIDER_AUTH.opencode.find((m) => m.kind === "subscription")?.key).toBe("opencodeAuthContent");
     expect(PROVIDER_AUTH.opencode.find((m) => m.kind === "apiKey")?.key).toBe("opencodeApiKey");
-    // Codex + Gemini are API-key only.
-    expect(PROVIDER_AUTH.codex).toHaveLength(1);
-    expect(PROVIDER_AUTH.codex[0]!.key).toBe("codexApiKey");
+    // Gemini is API-key only.
+    expect(PROVIDER_AUTH.gemini).toHaveLength(1);
     expect(PROVIDER_AUTH.gemini[0]!.key).toBe("geminiApiKey");
   });
 

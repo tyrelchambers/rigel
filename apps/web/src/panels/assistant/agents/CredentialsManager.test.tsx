@@ -36,9 +36,9 @@ describe("CredentialsManager", () => {
     expect(screen.getByText("Codex")).toBeInTheDocument();
     expect(screen.getByText("Gemini")).toBeInTheDocument();
     expect(screen.getByText("OpenCode")).toBeInTheDocument();
-    // Claude + OpenCode accept a subscription OR an API key; Codex + Gemini are key-only.
-    expect(screen.getAllByText("Subscription or API key")).toHaveLength(2);
-    expect(screen.getAllByText("API key")).toHaveLength(2);
+    // Claude, Codex and OpenCode accept a subscription OR an API key; only Gemini is key-only.
+    expect(screen.getAllByText("Subscription or API key")).toHaveLength(3);
+    expect(screen.getAllByText("API key")).toHaveLength(1);
   });
 
   it("shows 'Key ready' for a provider with a credential and 'Not set' otherwise", async () => {

@@ -1,5 +1,5 @@
 import path, { join } from "node:path";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { provisionGuardBin } from "../guardedKubectl.js";
 import { collectJsonlRun, type CollectedEvent } from "./process.js";
@@ -63,6 +63,10 @@ export const codexBridge: ProviderBridge = {
   id: "codex",
 
   authEnv(): Record<string, string> | null {
+    // Subscription (ChatGPT plan) auth.json content is preferred; CODEX_API_KEY
+    // is the fallback. Materializing the file happens in run().
+    const blob = process.env.CODEX_AUTH_CONTENT;
+    if (blob && blob.trim()) return { CODEX_AUTH_CONTENT: blob };
     const key = process.env.CODEX_API_KEY;
     return key && key.trim() ? { CODEX_API_KEY: key } : null;
   },
@@ -73,7 +77,10 @@ export const codexBridge: ProviderBridge = {
     try {
       guardBin = await provisionGuardBin();
       const auth = this.authEnv();
-      if (!auth) return errorResult("Codex has no CODEX_API_KEY — add a key for this provider.");
+      if (!auth)
+        return errorResult(
+          "Codex has no credential — add a ChatGPT auth file (CODEX_AUTH_CONTENT) or an API key (CODEX_API_KEY).",
+        );
 
       const fullPrompt = composeCodexPrompt(input);
       const env: Record<string, string> = {
@@ -81,6 +88,19 @@ export const codexBridge: ProviderBridge = {
         ...auth,
         PATH: `${guardBin}${path.delimiter}${process.env.PATH ?? ""}`,
       };
+      // Subscription auth: codex reads auth.json under CODEX_HOME (defaults to
+      // ~/.codex). Write the supplied blob into a private CODEX_HOME and strip any
+      // API-key env so codex uses the ChatGPT session rather than per-token billing.
+      const blob = process.env.CODEX_AUTH_CONTENT;
+      if (blob && blob.trim()) {
+        const codexHome = join(workspaceDir, ".codex");
+        await mkdir(codexHome, { recursive: true });
+        await writeFile(join(codexHome, "auth.json"), blob);
+        env.CODEX_HOME = codexHome;
+        delete env.CODEX_AUTH_CONTENT;
+        delete env.CODEX_API_KEY;
+        delete env.OPENAI_API_KEY;
+      }
       const run = await collectJsonlRun({
         argv: buildCodexArgs(fullPrompt, input),
         env,

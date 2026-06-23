@@ -69,7 +69,8 @@ export const CREDENTIALS_SECRET_NAME = "rigel-assistant-credentials";
  * via the Deployment env, to the exact var the matching bridge's authEnv() reads:
  *   claudeToken          → CLAUDE_CODE_OAUTH_TOKEN  (claude)
  *   anthropicApiKey      → ANTHROPIC_API_KEY        (claude fallback)
- *   codexApiKey          → CODEX_API_KEY            (codex)
+ *   codexApiKey          → CODEX_API_KEY            (codex fallback)
+ *   codexAuthContent     → CODEX_AUTH_CONTENT       (codex preferred; ~/.codex/auth.json)
  *   geminiApiKey         → GEMINI_API_KEY           (gemini)
  *   opencodeApiKey       → OPENCODE_API_KEY         (opencode fallback)
  *   opencodeAuthContent  → OPENCODE_AUTH_CONTENT    (opencode preferred) */
@@ -77,6 +78,7 @@ export interface AssistantCredentials {
   claudeToken?: string;
   anthropicApiKey?: string;
   codexApiKey?: string;
+  codexAuthContent?: string;
   geminiApiKey?: string;
   opencodeApiKey?: string;
   opencodeAuthContent?: string;
@@ -87,6 +89,7 @@ const CREDENTIAL_KEYS: (keyof AssistantCredentials)[] = [
   "claudeToken",
   "anthropicApiKey",
   "codexApiKey",
+  "codexAuthContent",
   "geminiApiKey",
   "opencodeApiKey",
   "opencodeAuthContent",
@@ -370,6 +373,12 @@ spec:
                 secretKeyRef:
                   name: ${CREDENTIALS_SECRET_NAME}
                   key: codexApiKey
+                  optional: true
+            - name: CODEX_AUTH_CONTENT
+              valueFrom:
+                secretKeyRef:
+                  name: ${CREDENTIALS_SECRET_NAME}
+                  key: codexAuthContent
                   optional: true
             - name: GEMINI_API_KEY
               valueFrom:
