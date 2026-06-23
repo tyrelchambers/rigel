@@ -79,6 +79,9 @@ export interface AuthMethodHelp {
   key: keyof AssistantCredentials;
   /** Placeholder for the credential input under this method. */
   placeholder: string;
+  /** Render the input as a multi-line textarea (a pasted auth.json blob) rather
+   *  than a single-line password field. */
+  multiline?: boolean;
   /** Ordered, plain-language steps. */
   steps: string[];
   /** Optional terminal command to run, shown as a copyable mono line. */
@@ -130,6 +133,7 @@ export const PROVIDER_AUTH: Record<AgentId, AuthMethodHelp[]> = {
       title: "Use your subscription",
       key: "codexAuthContent",
       placeholder: "Paste your ~/.codex/auth.json contents…",
+      multiline: true,
       recommended: true,
       command: "codex login --device-auth",
       steps: [
@@ -171,6 +175,7 @@ export const PROVIDER_AUTH: Record<AgentId, AuthMethodHelp[]> = {
       title: "Use your subscription",
       key: "opencodeAuthContent",
       placeholder: "Paste your auth file contents…",
+      multiline: true,
       recommended: true,
       command: "opencode auth login",
       steps: [

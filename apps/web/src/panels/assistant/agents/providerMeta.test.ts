@@ -75,6 +75,15 @@ describe("providerMeta", () => {
     expect(PROVIDER_AUTH.gemini[0]!.key).toBe("geminiApiKey");
   });
 
+  test("auth-file (subscription) methods are multiline; key strings are not", () => {
+    expect(PROVIDER_AUTH.codex.find((m) => m.kind === "subscription")?.multiline).toBe(true);
+    expect(PROVIDER_AUTH.opencode.find((m) => m.kind === "subscription")?.multiline).toBe(true);
+    // Claude's setup token and every API key are single-line.
+    expect(PROVIDER_AUTH.claude.find((m) => m.kind === "subscription")?.multiline).toBeFalsy();
+    expect(PROVIDER_AUTH.codex.find((m) => m.kind === "apiKey")?.multiline).toBeFalsy();
+    expect(PROVIDER_AUTH.gemini[0]!.multiline).toBeFalsy();
+  });
+
   test("the first method of every provider is the one to offer first (recommended when there's a choice)", () => {
     for (const id of PROVIDER_IDS) {
       const methods = PROVIDER_AUTH[id];

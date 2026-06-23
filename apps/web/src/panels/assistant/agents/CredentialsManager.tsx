@@ -128,20 +128,41 @@ function CredentialRow({
               onChange={(k) => setMethodKind(k as AuthMethodHelp["kind"])}
             />
           )}
-          <div className="flex gap-2">
-            <input
-              type="password"
-              autoComplete="off"
-              aria-label="Credential value"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              placeholder={method.placeholder}
-              className={`w-full ${inputClass}`}
-            />
-            <Button size="sm" disabled={disabled || value.trim() === ""} onClick={save}>
-              Save
-            </Button>
-          </div>
+          {method.multiline ? (
+            // Auth-file blobs (e.g. ~/.codex/auth.json) are multi-line; a single-line
+            // password input would mangle newlines, so use a textarea.
+            <div className="space-y-2">
+              <textarea
+                autoComplete="off"
+                aria-label="Credential value"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                placeholder={method.placeholder}
+                rows={5}
+                className="w-full resize-y rounded-md border bg-background px-2 py-1.5 font-mono text-xs outline-none focus:ring-2 focus:ring-ring"
+              />
+              <div className="flex justify-end">
+                <Button size="sm" disabled={disabled || value.trim() === ""} onClick={save}>
+                  Save
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <input
+                type="password"
+                autoComplete="off"
+                aria-label="Credential value"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                placeholder={method.placeholder}
+                className={`w-full ${inputClass}`}
+              />
+              <Button size="sm" disabled={disabled || value.trim() === ""} onClick={save}>
+                Save
+              </Button>
+            </div>
+          )}
           <button
             type="button"
             onClick={() => setHelpOpen(true)}

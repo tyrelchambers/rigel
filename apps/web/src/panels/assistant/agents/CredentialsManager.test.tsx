@@ -82,6 +82,32 @@ describe("CredentialsManager", () => {
     expect(onSave).toHaveBeenLastCalledWith("claude", "anthropicApiKey", "sk-ant-2");
   });
 
+  it("uses a textarea for a multiline auth-file method and routes to the auth-content key", async () => {
+    const onSave = vi.fn();
+    wrap(<CredentialsManager credentials={{}} onSave={onSave} />);
+    const codexRow = (await screen.findByText("Codex")).closest("[data-provider]") as HTMLElement;
+    await userEvent.click(within(codexRow).getByRole("button", { name: /add key/i }));
+    // Codex defaults to the subscription method → a multi-line textarea.
+    const field = within(codexRow).getByLabelText(/credential value/i);
+    expect(field.tagName).toBe("TEXTAREA");
+    await userEvent.type(field, "authblob");
+    await userEvent.click(within(codexRow).getByRole("button", { name: /^save$/i }));
+    expect(onSave).toHaveBeenLastCalledWith("codex", "codexAuthContent", "authblob");
+  });
+
+  it("switches Codex to a single-line API key field via the toggle", async () => {
+    const onSave = vi.fn();
+    wrap(<CredentialsManager credentials={{}} onSave={onSave} />);
+    const codexRow = (await screen.findByText("Codex")).closest("[data-provider]") as HTMLElement;
+    await userEvent.click(within(codexRow).getByRole("button", { name: /add key/i }));
+    await userEvent.click(within(codexRow).getByRole("tab", { name: /api key/i }));
+    const field = within(codexRow).getByLabelText(/credential value/i);
+    expect(field.tagName).toBe("INPUT");
+    await userEvent.type(field, "sk-codex");
+    await userEvent.click(within(codexRow).getByRole("button", { name: /^save$/i }));
+    expect(onSave).toHaveBeenLastCalledWith("codex", "codexApiKey", "sk-codex");
+  });
+
   it("opens a help modal explaining how to authenticate the provider", async () => {
     wrap(<CredentialsManager credentials={{}} onSave={() => {}} />);
     const claudeRow = (await screen.findByText("Claude")).closest("[data-provider]") as HTMLElement;
