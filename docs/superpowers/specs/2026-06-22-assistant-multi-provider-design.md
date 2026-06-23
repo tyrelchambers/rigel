@@ -125,9 +125,10 @@ handling the three things that differ between CLIs:
 - **Session resume** (diagnose/Signal): Claude `--resume`; the others run fresh per turn (documented
   limitation, same as Gemini in the chat).
 
-**Output collection:** Claude (`--output-format json`) and Gemini (`-o json`) return a single JSON
-envelope; Codex and OpenCode stream JSONL — the bridge collects events and extracts the final
-message (reusing the event-mapping learnings from the chat's `codexBridge`/`opencodeBridge`).
+**Output collection:** Claude (`--output-format json`) returns a single JSON envelope; Codex,
+Gemini (`-o stream-json`), and OpenCode stream JSONL — the bridge collects events and extracts the
+final message (reusing the event-mapping learnings from the chat's `codexBridge`/`geminiBridge`/
+`opencodeBridge`, which are the verified source of truth for each CLI's flags).
 
 **Image:** the Assistant image gains `codex` (musl binary), `gemini` (npm — Node is already in the
 image), `opencode` (Bun binary), and the guarded-kubectl shim. A startup self-check logs which CLIs
