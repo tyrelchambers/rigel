@@ -33,6 +33,11 @@ export interface AssistantInstallConfig {
   maxPerNight: number;
   maxAttemptsPerIncident: number;
   confirmPolls: number;
+  /** Per-role provider+model+effort selections seeded into assistant-config on
+   * install. Optional: when absent the ConfigMap seeds claude worker/supervisor
+   * (matching the WORKER_MODEL/SUPERVISOR_MODEL env fallbacks). */
+  worker?: RoleSelectionInput;
+  supervisor?: RoleSelectionInput;
 }
 
 /** Defaults baked into the install form (mirrors `AssistantInstallConfig.default`). */
@@ -245,8 +250,35 @@ subjects:
     namespace: ${ns}`;
 }
 
-/** The three pre-created ConfigMaps: config (control surface), state, backups. */
-export function configMaps(ns: string): string {
+/** The three pre-created ConfigMaps: config (control surface, seeded with the
+ *  role selections + operational limits), state, backups. */
+export function configMaps(c: AssistantInstallConfig): string {
+  const ns = c.installNamespace;
+  // Seed role keys (default to claude worker=sonnet / supervisor=opus to match
+  // the WORKER_MODEL/SUPERVISOR_MODEL env fallbacks + parseRoleSelection defaults).
+  const worker = c.worker ?? { provider: "claude", model: c.workerModel };
+  const supervisor = c.supervisor ?? { provider: "claude", model: c.supervisorModel };
+  const roleLines = [
+    `  workerProvider: ${worker.provider}`,
+    `  workerModel: ${worker.model}`,
+    ...(worker.effort ? [`  workerEffort: ${worker.effort}`] : []),
+    `  supervisorProvider: ${supervisor.provider}`,
+    `  supervisorModel: ${supervisor.model}`,
+    ...(supervisor.effort ? [`  supervisorEffort: ${supervisor.effort}`] : []),
+  ].join("\n");
+  const nsList = c.namespaces
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join("\n");
+  const limitLines = [
+    `  pollIntervalMs: "${c.pollIntervalMs}"`,
+    `  maxPerResourcePerHour: "${c.maxPerResourcePerHour}"`,
+    `  maxPerNight: "${c.maxPerNight}"`,
+    `  maxAttemptsPerIncident: "${c.maxAttemptsPerIncident}"`,
+    `  confirmPolls: "${c.confirmPolls}"`,
+    `  namespaces: "${nsList}"`,
+  ].join("\n");
   return `apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -257,6 +289,8 @@ metadata:
 data:
   enabled: "true"
   mode: "auto"
+${roleLines}
+${limitLines}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -393,7 +427,7 @@ spec:
 
 /** The previewable manifest: RBAC + ConfigMaps + Deployment (NO Secret). */
 export function manifestYAML(c: AssistantInstallConfig): string {
-  return [rbac(c.installNamespace), configMaps(c.installNamespace), deployment(c)].join("\n---\n");
+  return [rbac(c.installNamespace), configMaps(c), deployment(c)].join("\n---\n");
 }
 
 /**

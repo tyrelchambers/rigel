@@ -416,3 +416,38 @@ describe("limitsConfigUpdates", () => {
     expect(limitsConfigUpdates({})).toEqual({});
   });
 });
+
+// ---------------------------------------------------------------------------
+// install-time ConfigMap seeding (Task 4)
+// ---------------------------------------------------------------------------
+
+test("install ConfigMap seeds the role keys from the selections", () => {
+  const yaml = manifestYAML(config({
+    worker: { provider: "gemini", model: "gemini-2.5-pro" },
+    supervisor: { provider: "claude", model: "claude-opus-4-8", effort: "high" },
+  }));
+  expect(yaml).toContain("workerProvider: gemini");
+  expect(yaml).toContain("workerModel: gemini-2.5-pro");
+  expect(yaml).toContain("supervisorProvider: claude");
+  expect(yaml).toContain("supervisorModel: claude-opus-4-8");
+  expect(yaml).toContain("supervisorEffort: high");
+});
+
+test("install ConfigMap seeds the operational limit keys", () => {
+  const yaml = manifestYAML(config({ pollIntervalMs: 45000, confirmPolls: 4, namespaces: "default,kube-system" }));
+  expect(yaml).toContain('pollIntervalMs: "45000"');
+  expect(yaml).toContain('confirmPolls: "4"');
+  expect(yaml).toContain("namespaces:");
+});
+
+test("install ConfigMap defaults role keys to claude worker/supervisor when no selection given", () => {
+  const yaml = manifestYAML(config());
+  expect(yaml).toContain("workerProvider: claude");
+  expect(yaml).toContain("workerModel: claude-sonnet-4-6");
+  expect(yaml).toContain("supervisorProvider: claude");
+  expect(yaml).toContain("supervisorModel: claude-opus-4-8");
+});
+
+test("kill switch still starts enabled", () => {
+  expect(manifestYAML(config())).toContain('enabled: "true"');
+});
