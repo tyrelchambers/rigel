@@ -77,10 +77,7 @@ async function detectAll(cfg: Config): Promise<{ incidents: Incident[]; pods: Re
       (incidents.length ? `: ${incidents.map((i) => `${i.namespace}/${i.name}:${i.reason}`).join(", ")}` : "") +
       (podsRes.code !== 0 ? ` | pods stderr: ${podsRes.stderr.slice(0, 200)}` : ""),
   );
-  if (cfg.namespaces.length > 0) {
-    const allow = new Set(cfg.namespaces);
-    incidents = incidents.filter((i) => i.namespace === "" || allow.has(i.namespace));
-  }
+  // (namespace filtering moved to tick() so it uses the LIVE rc.limits.namespaces)
   return { incidents, pods, deps, podsOk: podsRes.code === 0, depsOk: depsRes.code === 0 };
 }
 
@@ -103,6 +100,10 @@ async function tick(
   let state = await readState(cfg.stateConfigMap, cfg.stateNamespace);
 
   const rc = await readRuntimeConfig(cfg);
+  // Live operational limits: push the breaker caps from the ConfigMap (defaults
+  // to the deploy-time Config when unset — see parseLimits), so a setLimits edit
+  // goes live next tick without a restart.
+  cb.updateLimits(rc.limits);
   const notifications: string[] = [];
   state = {
     ...state,
@@ -119,7 +120,12 @@ async function tick(
   // Drop incidents the operator has silenced (known noise) — no detection,
   // no action on those fingerprints.
   const detection = await detectAll(cfg);
-  const incidents = detection.incidents.filter((i) => !rc.silenced.has(fingerprint(i)));
+  // Live namespace scope from rc.limits (was deploy-time cfg.namespaces in detectAll).
+  const nsAllow = rc.limits.namespaces;
+  const scoped = nsAllow.length > 0
+    ? detection.incidents.filter((i) => i.namespace === "" || nsAllow.includes(i.namespace))
+    : detection.incidents;
+  const incidents = scoped.filter((i) => !rc.silenced.has(fingerprint(i)));
 
   // Re-validate the approval queue against live detection: auto-clear queued
   // suggestions whose incident has cleared (or whose resource is gone), so the
@@ -174,11 +180,11 @@ async function tick(
 
   const confirmed = incidents.filter((i) => {
     const fp = fingerprint(i);
-    return (loop.streaks.get(fp) ?? 0) >= cfg.confirmPolls && !loop.handled.has(fp);
+    return (loop.streaks.get(fp) ?? 0) >= rc.limits.confirmPolls && !loop.handled.has(fp);
   });
 
   if (incidents.length > 0) {
-    log(`tick: ${incidents.length} present, confirmPolls=${cfg.confirmPolls}, streaks=[${[...loop.streaks.entries()].map(([k, v]) => `${k}=${v}`).join("; ")}], ${confirmed.length} confirmed, ${loop.handled.size} handled`);
+    log(`tick: ${incidents.length} present, confirmPolls=${rc.limits.confirmPolls}, streaks=[${[...loop.streaks.entries()].map(([k, v]) => `${k}=${v}`).join("; ")}], ${confirmed.length} confirmed, ${loop.handled.size} handled`);
   }
   if (confirmed.length > 0) log(`handling ${confirmed.length} confirmed incident(s)`);
 
