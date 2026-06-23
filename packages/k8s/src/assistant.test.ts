@@ -18,7 +18,11 @@ import {
   computeLiveIssues,
   mergedConfigMapJSON,
   clearedReportConfigMapJSON,
+  roleConfigUpdates,
+  limitsConfigUpdates,
   type AssistantInstallConfig,
+  type RoleSelectionInput,
+  type LimitsInput,
 } from "./assistant";
 
 function config(overrides: Partial<AssistantInstallConfig> = {}): AssistantInstallConfig {
@@ -357,5 +361,58 @@ describe("deployment provider credential env", () => {
 
   test("RBAC cage still never grants secrets access", () => {
     expect(manifestYAML(config()).toLowerCase()).not.toContain("resources: [secrets]");
+  });
+});
+
+describe("roleConfigUpdates", () => {
+  test("emits the exact runtimeConfig keys for both roles", () => {
+    const updates = roleConfigUpdates(
+      { provider: "gemini", model: "gemini-2.5-pro" },
+      { provider: "claude", model: "claude-opus-4-8", effort: "high" },
+    );
+    expect(updates).toEqual({
+      workerProvider: "gemini",
+      workerModel: "gemini-2.5-pro",
+      supervisorProvider: "claude",
+      supervisorModel: "claude-opus-4-8",
+      supervisorEffort: "high",
+    });
+  });
+
+  test("omits effort keys when effort is absent (so a switch-away clears nothing it shouldn't)", () => {
+    const updates = roleConfigUpdates(
+      { provider: "claude", model: "claude-sonnet-4-6" },
+      { provider: "claude", model: "claude-opus-4-8" },
+    );
+    expect(updates.workerEffort).toBeUndefined();
+    expect(updates.supervisorEffort).toBeUndefined();
+    expect(Object.keys(updates).sort()).toEqual([
+      "supervisorModel", "supervisorProvider", "workerModel", "workerProvider",
+    ]);
+  });
+
+  test("only the worker role when supervisor is omitted", () => {
+    const updates = roleConfigUpdates({ provider: "codex", model: "gpt-5-codex" }, undefined);
+    expect(updates).toEqual({ workerProvider: "codex", workerModel: "gpt-5-codex" });
+  });
+});
+
+describe("limitsConfigUpdates", () => {
+  test("emits only the provided limit keys, all stringified", () => {
+    const updates = limitsConfigUpdates({ pollIntervalMs: 15000, confirmPolls: 3 });
+    expect(updates).toEqual({ pollIntervalMs: "15000", confirmPolls: "3" });
+  });
+
+  test("namespaces array is joined newline-separated", () => {
+    const updates = limitsConfigUpdates({ namespaces: ["default", "kube-system"] });
+    expect(updates).toEqual({ namespaces: "default\nkube-system" });
+  });
+
+  test("empty namespaces array clears the key to empty string (all namespaces)", () => {
+    expect(limitsConfigUpdates({ namespaces: [] })).toEqual({ namespaces: "" });
+  });
+
+  test("an empty input produces no updates", () => {
+    expect(limitsConfigUpdates({})).toEqual({});
   });
 });

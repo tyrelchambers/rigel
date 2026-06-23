@@ -636,6 +636,71 @@ export function computeLiveIssues(
 }
 
 // ---------------------------------------------------------------------------
+// assistant-config key builders (used by install seed + setModels + setLimits)
+// ---------------------------------------------------------------------------
+
+/** One role's selection as the server receives it (provider id is a plain string;
+ * the agent re-validates it against its provider set, so no enum needed here). */
+export interface RoleSelectionInput {
+  provider: string;
+  model: string;
+  /** Claude-family reasoning effort; omitted for other providers. */
+  effort?: string;
+}
+
+/** The operational limits a user can change live (subset can be provided). */
+export interface LimitsInput {
+  pollIntervalMs?: number;
+  maxPerResourcePerHour?: number;
+  maxPerNight?: number;
+  maxAttemptsPerIncident?: number;
+  confirmPolls?: number;
+  /** Monitored namespaces; empty array = all. */
+  namespaces?: string[];
+}
+
+/**
+ * Build the assistant-config updates for the per-role selections, using the EXACT
+ * keys `agent/src/runtimeConfig.ts parseRoleSelection` reads. `effort` keys are
+ * only emitted when set. A role omitted (undefined) contributes no keys, so a
+ * worker-only change never touches the supervisor keys.
+ */
+export function roleConfigUpdates(
+  worker?: RoleSelectionInput,
+  supervisor?: RoleSelectionInput,
+): Record<string, string> {
+  const updates: Record<string, string> = {};
+  if (worker) {
+    updates.workerProvider = worker.provider;
+    updates.workerModel = worker.model;
+    if (worker.effort && worker.effort.trim() !== "") updates.workerEffort = worker.effort;
+  }
+  if (supervisor) {
+    updates.supervisorProvider = supervisor.provider;
+    updates.supervisorModel = supervisor.model;
+    if (supervisor.effort && supervisor.effort.trim() !== "") updates.supervisorEffort = supervisor.effort;
+  }
+  return updates;
+}
+
+/**
+ * Build the assistant-config updates for the operational limits, using the EXACT
+ * keys `agent/src/runtimeConfig.ts parseLimits` reads. Numbers are stringified;
+ * namespaces is newline-joined ("" = all namespaces). Only provided fields are
+ * emitted, so a partial update never clobbers other limit keys.
+ */
+export function limitsConfigUpdates(limits: LimitsInput): Record<string, string> {
+  const updates: Record<string, string> = {};
+  if (limits.pollIntervalMs !== undefined) updates.pollIntervalMs = String(limits.pollIntervalMs);
+  if (limits.maxPerResourcePerHour !== undefined) updates.maxPerResourcePerHour = String(limits.maxPerResourcePerHour);
+  if (limits.maxPerNight !== undefined) updates.maxPerNight = String(limits.maxPerNight);
+  if (limits.maxAttemptsPerIncident !== undefined) updates.maxAttemptsPerIncident = String(limits.maxAttemptsPerIncident);
+  if (limits.confirmPolls !== undefined) updates.confirmPolls = String(limits.confirmPolls);
+  if (limits.namespaces !== undefined) updates.namespaces = limits.namespaces.join("\n");
+  return updates;
+}
+
+// ---------------------------------------------------------------------------
 // ConfigMap read-modify-write helpers
 // ---------------------------------------------------------------------------
 
