@@ -135,3 +135,17 @@ test("setCredentialsSecrets emits no legacy token YAML when no claudeToken", () 
   expect(out.legacyTokenYaml).toBeNull();
   expect(out.credentialsYaml).toContain('codexApiKey: "c-1"');
 });
+
+import { setLimitsUpdates } from "./assistant";
+
+test("setLimitsUpdates produces only the provided limit keys, stringified", () => {
+  const updates = setLimitsUpdates({
+    action: "setLimits",
+    limits: { pollIntervalMs: 60000, maxPerNight: 10, namespaces: ["default"] },
+  });
+  expect(updates).toEqual({ pollIntervalMs: "60000", maxPerNight: "10", namespaces: "default" });
+});
+
+test("setLimitsUpdates throws-worthy empty input is detectable (no keys)", () => {
+  expect(setLimitsUpdates({ action: "setLimits" })).toEqual({});
+});

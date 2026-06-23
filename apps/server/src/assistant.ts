@@ -341,6 +341,25 @@ async function mutateAlerts(
   return patchConfig(context, namespace, { alertRules: serializeAlertRules(next) });
 }
 
+/** Pure: the assistant-config limit-key updates for a setLimits request. */
+export function setLimitsUpdates(req: AssistantRequest): Record<string, string> {
+  return limitsConfigUpdates(req.limits ?? {});
+}
+
+/** Live limit change: read-modify-write the limit keys in assistant-config. No
+ *  restart — the agent reads rc.limits each tick. */
+async function setLimits(
+  context: string | null,
+  namespace: string,
+  req: AssistantRequest,
+): Promise<RunResult> {
+  const updates = setLimitsUpdates(req);
+  if (Object.keys(updates).length === 0) {
+    throw new Error("setLimits requires at least one limit field.");
+  }
+  return patchConfig(context, namespace, updates);
+}
+
 /** Live role switch: read-modify-write the role keys in assistant-config. No
  *  restart — the agent re-reads the ConfigMap every poll. */
 async function setModels(
@@ -481,6 +500,8 @@ export async function handleAssistant(
       return setModels(context, namespace, req);
     case "setCredentials":
       return setCredentials(context, namespace, req);
+    case "setLimits":
+      return setLimits(context, namespace, req);
     case "restart":
       return restartAgent(context, namespace);
     case "silence":
