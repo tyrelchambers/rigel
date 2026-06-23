@@ -4,15 +4,36 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CredentialsManager } from "./CredentialsManager";
-import type { AssistantCredentials } from "@/lib/api";
+import type { AssistantCredentials, CredentialSourceStatus } from "@/lib/api";
 
 function wrap(ui: React.ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
 }
 
+function manager(over: Partial<React.ComponentProps<typeof CredentialsManager>> = {}) {
+  return (
+    <CredentialsManager
+      credentials={{}}
+      credentialSources={{}}
+      namespace="default"
+      onSave={() => {}}
+      onSaveSource={() => {}}
+      onUseManaged={() => {}}
+      {...over}
+    />
+  );
+}
+
 beforeEach(() => {
-  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.includes("/api/assistant")) {
+      const body = JSON.parse((init?.body as string) ?? "{}") as { action?: string };
+      if (body.action === "listCredentialSecrets") {
+        return new Response(JSON.stringify({ success: true, stdout: JSON.stringify({ secrets: [] }), stderr: "" }));
+      }
+      return new Response(JSON.stringify({ success: true, stdout: "", stderr: "" }));
+    }
     if (url.includes("/api/agents")) {
       return new Response(JSON.stringify({
         activeAgentId: "claude",
@@ -31,7 +52,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("CredentialsManager", () => {
   it("renders a row per provider with vendor + data-driven auth summary", async () => {
-    wrap(<CredentialsManager credentials={{}} onSave={() => {}} />);
+    wrap(manager());
     expect(await screen.findByText("Claude")).toBeInTheDocument();
     expect(screen.getByText("Codex")).toBeInTheDocument();
     expect(screen.getByText("Gemini")).toBeInTheDocument();
@@ -41,75 +62,53 @@ describe("CredentialsManager", () => {
     expect(screen.getAllByText("API key")).toHaveLength(1);
   });
 
-  it("shows 'Key ready' for a provider with a credential and 'Not set' otherwise", async () => {
-    const creds: AssistantCredentials = { geminiApiKey: "g-1" };
-    wrap(<CredentialsManager credentials={creds} onSave={() => {}} />);
+  it("shows 'Key ready' from credentialSources readiness and 'Not set' otherwise", async () => {
+    const sources: Partial<Record<keyof AssistantCredentials, CredentialSourceStatus>> = {
+      geminiApiKey: { ready: true, secretName: "rigel-assistant-credentials" },
+    };
+    const creds: AssistantCredentials = { geminiApiKey: "set" };
+    wrap(manager({ credentials: creds, credentialSources: sources }));
     expect(await screen.findByText("Key ready")).toBeInTheDocument();
     expect(screen.getAllByText("Not set").length).toBeGreaterThanOrEqual(3);
   });
 
+  it("does NOT show the raw backing Secret name in the row's resting state", async () => {
+    const sources: Partial<Record<keyof AssistantCredentials, CredentialSourceStatus>> = {
+      claudeToken: { ready: true, secretName: "my-byo-secret" },
+    };
+    wrap(manager({ credentials: { claudeToken: "set" }, credentialSources: sources }));
+    await screen.findByText("Claude");
+    // The backing Secret name only appears inside the (closed) dialog, never the row.
+    expect(screen.queryByText(/my-byo-secret/)).not.toBeInTheDocument();
+  });
+
   it("notes the keys are stored as a Kubernetes Secret", async () => {
-    wrap(<CredentialsManager credentials={{}} onSave={() => {}} />);
+    wrap(manager());
     expect(await screen.findByText(/Stored as a Kubernetes Secret/i)).toBeInTheDocument();
   });
 
-  it("calls onSave(provider, key, value) routing a key-only provider to its Secret key", async () => {
-    const onSave = vi.fn();
-    wrap(<CredentialsManager credentials={{}} onSave={onSave} />);
+  it("the Source control opens the credential-source dialog (managed paste editor)", async () => {
+    wrap(manager());
     const geminiRow = (await screen.findByText("Gemini")).closest("[data-provider]") as HTMLElement;
-    await userEvent.click(within(geminiRow).getByRole("button", { name: /add key/i }));
-    await userEvent.type(within(geminiRow).getByLabelText(/credential value/i), "g-secret");
-    await userEvent.click(within(geminiRow).getByRole("button", { name: /^save$/i }));
+    await userEvent.click(within(geminiRow).getByRole("button", { name: /^source$/i }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(/Gemini credential source/i)).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/credential value/i)).toBeInTheDocument();
+  });
+
+  it("a managed-mode save routes the pasted value through onSave(provider, key, value)", async () => {
+    const onSave = vi.fn();
+    wrap(manager({ onSave }));
+    const geminiRow = (await screen.findByText("Gemini")).closest("[data-provider]") as HTMLElement;
+    await userEvent.click(within(geminiRow).getByRole("button", { name: /^source$/i }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText(/credential value/i), "g-secret");
+    await userEvent.click(within(dialog).getByRole("button", { name: /save & restart/i }));
     expect(onSave).toHaveBeenCalledWith("gemini", "geminiApiKey", "g-secret");
   });
 
-  it("routes Claude to the subscription token by default and to the API key when the toggle is switched", async () => {
-    const onSave = vi.fn();
-    wrap(<CredentialsManager credentials={{}} onSave={onSave} />);
-    const claudeRow = (await screen.findByText("Claude")).closest("[data-provider]") as HTMLElement;
-    await userEvent.click(within(claudeRow).getByRole("button", { name: /add key/i }));
-
-    // Default (Subscription) → claudeToken.
-    await userEvent.type(within(claudeRow).getByLabelText(/credential value/i), "tok-1");
-    await userEvent.click(within(claudeRow).getByRole("button", { name: /^save$/i }));
-    expect(onSave).toHaveBeenLastCalledWith("claude", "claudeToken", "tok-1");
-
-    // Switch to API key → anthropicApiKey.
-    await userEvent.click(within(claudeRow).getByRole("button", { name: /add key/i }));
-    await userEvent.click(within(claudeRow).getByRole("tab", { name: /api key/i }));
-    await userEvent.type(within(claudeRow).getByLabelText(/credential value/i), "sk-ant-2");
-    await userEvent.click(within(claudeRow).getByRole("button", { name: /^save$/i }));
-    expect(onSave).toHaveBeenLastCalledWith("claude", "anthropicApiKey", "sk-ant-2");
-  });
-
-  it("uses a textarea for a multiline auth-file method and routes to the auth-content key", async () => {
-    const onSave = vi.fn();
-    wrap(<CredentialsManager credentials={{}} onSave={onSave} />);
-    const codexRow = (await screen.findByText("Codex")).closest("[data-provider]") as HTMLElement;
-    await userEvent.click(within(codexRow).getByRole("button", { name: /add key/i }));
-    // Codex defaults to the subscription method → a multi-line textarea.
-    const field = within(codexRow).getByLabelText(/credential value/i);
-    expect(field.tagName).toBe("TEXTAREA");
-    await userEvent.type(field, "authblob");
-    await userEvent.click(within(codexRow).getByRole("button", { name: /^save$/i }));
-    expect(onSave).toHaveBeenLastCalledWith("codex", "codexAuthContent", "authblob");
-  });
-
-  it("switches Codex to a single-line API key field via the toggle", async () => {
-    const onSave = vi.fn();
-    wrap(<CredentialsManager credentials={{}} onSave={onSave} />);
-    const codexRow = (await screen.findByText("Codex")).closest("[data-provider]") as HTMLElement;
-    await userEvent.click(within(codexRow).getByRole("button", { name: /add key/i }));
-    await userEvent.click(within(codexRow).getByRole("tab", { name: /api key/i }));
-    const field = within(codexRow).getByLabelText(/credential value/i);
-    expect(field.tagName).toBe("INPUT");
-    await userEvent.type(field, "sk-codex");
-    await userEvent.click(within(codexRow).getByRole("button", { name: /^save$/i }));
-    expect(onSave).toHaveBeenLastCalledWith("codex", "codexApiKey", "sk-codex");
-  });
-
   it("opens a help modal explaining how to authenticate the provider", async () => {
-    wrap(<CredentialsManager credentials={{}} onSave={() => {}} />);
+    wrap(manager());
     const claudeRow = (await screen.findByText("Claude")).closest("[data-provider]") as HTMLElement;
     await userEvent.click(within(claudeRow).getByRole("button", { name: /how to connect claude/i }));
     const dialog = await screen.findByRole("dialog");

@@ -1,8 +1,11 @@
-// CredentialsManager — one row per provider with a status chip, a help modal
-// explaining how to authenticate (subscription or API key), and an inline editor.
-// Providers that accept more than one credential type (Claude, OpenCode) get a
-// method toggle that routes the pasted value to the right Secret key. Vendor
-// names come from useAgents(); auth methods + guidance come from PROVIDER_AUTH.
+// CredentialsManager — one row per provider with a readiness chip, a help modal
+// explaining how to authenticate (subscription or API key), and a "Source" control
+// that opens the CredentialSourceDialog. The dialog hosts both the paste-a-key
+// editor (managed mode) and the bring-your-own existing-Secret picker. The row's
+// resting state shows ONLY the readiness chip — never the raw backing Secret name
+// (that lives inside the dialog). Vendor names come from useAgents(); readiness comes
+// from the server's credentialStatus (d.credentialSources) — values never leave the
+// cluster.
 import { useState } from "react";
 import { Info, ExternalLink } from "lucide-react";
 import {
@@ -15,10 +18,15 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
 import { AgentGlyph } from "@/panels/settings/agents/agentGlyphs";
-import { useAgents, type AgentId, type AssistantCredentials } from "@/lib/api";
-import { Card, inputClass } from "../components/primitives";
+import {
+  useAgents,
+  type AgentId,
+  type AssistantCredentials,
+  type CredentialSourceStatus,
+} from "@/lib/api";
+import { Card } from "../components/primitives";
+import { CredentialSourceDialog } from "./CredentialSourceDialog";
 import {
   PROVIDER_IDS,
   PROVIDER_AUTH,
@@ -29,12 +37,30 @@ import {
 
 export function CredentialsManager({
   credentials,
+  credentialSources = {},
+  namespace,
   onSave,
+  onSaveSource,
+  onUseManaged,
   disabled = false,
 }: {
   credentials: AssistantCredentials;
-  /** Stores `value` under `key` (the Secret key for the chosen auth method). */
+  /** Per-credential `{ ready, secretName }` from credentialStatus — drives the
+   *  chip and the dialog's "currently backed by" readout. Names only. */
+  credentialSources?: Partial<Record<keyof AssistantCredentials, CredentialSourceStatus>>;
+  /** Agent namespace — for listing candidate Secrets in the source dialog. */
+  namespace: string;
+  /** Managed (paste) save: stores `value` under `key` (the chosen method's key). */
   onSave: (provider: AgentId, key: keyof AssistantCredentials, value: string) => void;
+  /** BYO save: point `credentialId` at an existing Secret's data key. Omitted in
+   *  the install flow, where the dialog offers managed (paste) mode only. */
+  onSaveSource?: (sel: {
+    credentialId: keyof AssistantCredentials;
+    secretName: string;
+    dataKey: string;
+  }) => void;
+  /** Revert a credential to the Rigel-managed default. Omitted with onSaveSource. */
+  onUseManaged?: (credentialId: keyof AssistantCredentials) => void;
   disabled?: boolean;
 }) {
   const { data: agents } = useAgents();
@@ -53,7 +79,11 @@ export function CredentialsManager({
           id={id}
           label={agents?.agents.find((a) => a.id === id)?.label ?? id}
           ready={credentialReady(id, credentials)}
+          credentialSources={credentialSources}
+          namespace={namespace}
           onSave={(key, v) => onSave(id, key, v)}
+          onSaveSource={onSaveSource}
+          onUseManaged={onUseManaged}
           disabled={disabled}
         />
       ))}
@@ -65,28 +95,34 @@ function CredentialRow({
   id,
   label,
   ready,
+  credentialSources,
+  namespace,
   onSave,
+  onSaveSource,
+  onUseManaged,
   disabled,
 }: {
   id: AgentId;
   label: string;
   ready: boolean;
+  credentialSources: Partial<Record<keyof AssistantCredentials, CredentialSourceStatus>>;
+  namespace: string;
   onSave: (key: keyof AssistantCredentials, value: string) => void;
+  onSaveSource?: (sel: {
+    credentialId: keyof AssistantCredentials;
+    secretName: string;
+    dataKey: string;
+  }) => void;
+  onUseManaged?: (credentialId: keyof AssistantCredentials) => void;
   disabled: boolean;
 }) {
-  const methods = PROVIDER_AUTH[id];
-  const [editing, setEditing] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  const [value, setValue] = useState("");
-  // Selected auth method (recommended first). Drives the target key + placeholder.
-  const [methodKind, setMethodKind] = useState(methods[0]!.kind);
-  const method = methods.find((m) => m.kind === methodKind) ?? methods[0]!;
+  const [sourceOpen, setSourceOpen] = useState(false);
 
-  function save() {
-    onSave(method.key, value.trim());
-    setValue("");
-    setEditing(false);
-  }
+  // The backing Secret of this provider's primary credential, shown ONLY inside
+  // the dialog (never the row's resting state).
+  const primaryKey = PROVIDER_AUTH[id][0]!.key;
+  const currentSecretName = credentialSources[primaryKey]?.secretName;
 
   return (
     <div data-provider={id} className="rounded-md border p-2">
@@ -114,65 +150,39 @@ function CredentialRow({
         >
           {ready ? "Key ready" : "Not set"}
         </span>
-        <Button size="sm" variant="secondary" disabled={disabled} onClick={() => setEditing((e) => !e)}>
-          {ready ? "Update" : "Add key"}
+        <Button size="sm" variant="secondary" disabled={disabled} onClick={() => setSourceOpen(true)}>
+          Source
         </Button>
       </div>
 
-      {editing && (
-        <div className="mt-2 space-y-2">
-          {methods.length > 1 && (
-            <SegmentedTabs
-              tabs={methods.map((m) => ({ id: m.kind, label: m.kind === "subscription" ? "Subscription" : "API key" }))}
-              active={methodKind}
-              onChange={(k) => setMethodKind(k as AuthMethodHelp["kind"])}
-            />
-          )}
-          {method.multiline ? (
-            // Auth-file blobs (e.g. ~/.codex/auth.json) are multi-line; a single-line
-            // password input would mangle newlines, so use a textarea.
-            <div className="space-y-2">
-              <textarea
-                autoComplete="off"
-                aria-label="Credential value"
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                placeholder={method.placeholder}
-                rows={5}
-                className="w-full resize-y rounded-md border bg-background px-2 py-1.5 font-mono text-xs outline-none focus:ring-2 focus:ring-ring"
-              />
-              <div className="flex justify-end">
-                <Button size="sm" disabled={disabled || value.trim() === ""} onClick={save}>
-                  Save
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex gap-2">
-              <input
-                type="password"
-                autoComplete="off"
-                aria-label="Credential value"
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                placeholder={method.placeholder}
-                className={`w-full ${inputClass}`}
-              />
-              <Button size="sm" disabled={disabled || value.trim() === ""} onClick={save}>
-                Save
-              </Button>
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={() => setHelpOpen(true)}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <Info className="size-3" />
-            Not sure where to get this? Open the help.
-          </button>
-        </div>
-      )}
+      <CredentialSourceDialog
+        id={id}
+        label={label}
+        namespace={namespace}
+        open={sourceOpen}
+        onOpenChange={setSourceOpen}
+        currentSecretName={currentSecretName}
+        onSaveKey={(key, value) => {
+          setSourceOpen(false);
+          onSave(key, value);
+        }}
+        onSaveSource={
+          onSaveSource
+            ? (sel) => {
+                setSourceOpen(false);
+                onSaveSource(sel);
+              }
+            : undefined
+        }
+        onUseManaged={
+          onUseManaged
+            ? (credentialId) => {
+                setSourceOpen(false);
+                onUseManaged(credentialId);
+              }
+            : undefined
+        }
+      />
 
       <CredentialHelpDialog id={id} label={label} open={helpOpen} onOpenChange={setHelpOpen} />
     </div>

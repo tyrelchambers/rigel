@@ -330,7 +330,10 @@ export type AssistantAction =
   | "saveAlert"
   | "deleteAlert"
   | "toggleAlert"
-  | "credentialStatus";
+  | "credentialStatus"
+  | "listCredentialSecrets"
+  | "setCredentialSource"
+  | "clearCredentialSource";
 
 export interface AssistantRoleSelection {
   provider: string;
@@ -347,6 +350,27 @@ export interface AssistantCredentials {
   geminiApiKey?: string;
   opencodeApiKey?: string;
   opencodeAuthContent?: string;
+}
+
+/** Per-credential readiness + backing Secret name from the server's
+ *  credentialStatus read. Names only — the value never leaves the cluster. */
+export interface CredentialSourceStatus {
+  ready: boolean;
+  secretName: string;
+}
+
+/** credentialStatus response: per-credential `{ ready, secretName }` keyed by the
+ *  AssistantCredentials credential id (only present ids are included). */
+export interface CredentialStatusResponse {
+  credentials: Partial<Record<keyof AssistantCredentials, CredentialSourceStatus>>;
+}
+
+/** A candidate Secret for the BYO source picker: name, type, and data KEY NAMES
+ *  only (never values). */
+export interface CredentialSecret {
+  name: string;
+  type: string;
+  keys: string[];
 }
 
 export interface AssistantLimits {
@@ -391,6 +415,11 @@ export interface AssistantRequest {
   supervisor?: AssistantRoleSelection;
   credentials?: AssistantCredentials;
   limits?: AssistantLimits;
+  // BYO credential source (setCredentialSource / clearCredentialSource). Only
+  // ids + Secret/data-key NAMES — never a secret value.
+  credentialId?: keyof AssistantCredentials;
+  secretName?: string;
+  dataKey?: string;
 }
 
 /** Shape returned by the assistant route on success (stdout is present for read
@@ -423,6 +452,24 @@ export async function postAssistant(req: AssistantRequest): Promise<AssistantRun
 export function useAssistantAction() {
   return useMutation<AssistantRunResult, Error, AssistantRequest>({
     mutationFn: postAssistant,
+  });
+}
+
+/**
+ * Candidate Secrets in the agent's namespace for the BYO credential-source
+ * picker — names + data key NAMES only (values never reach the client). Enabled
+ * once a namespace is known; refetched lazily (Secrets don't churn fast).
+ */
+export function useCredentialSecrets(namespace: string | undefined) {
+  return useQuery<CredentialSecret[], Error>({
+    queryKey: ["assistant-credentialSecrets", namespace] as const,
+    queryFn: async () => {
+      const res = await postAssistant({ action: "listCredentialSecrets", namespace });
+      const parsed = JSON.parse(res.stdout || "{}") as { secrets?: CredentialSecret[] };
+      return parsed.secrets ?? [];
+    },
+    enabled: !!namespace,
+    staleTime: 30_000,
   });
 }
 
