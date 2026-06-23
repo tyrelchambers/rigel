@@ -26,6 +26,10 @@ import {
   roleConfigUpdates,
   limitsConfigUpdates,
   resolveCredentialSources,
+  credentialSourceCommands,
+  clearCredentialSourceCommands,
+  credentialEnvPatch,
+  defaultCredentialSource,
   type AssistantInstallConfig,
   type AssistantCredentials,
   type RoleSelectionInput,
@@ -105,7 +109,10 @@ export type AssistantAction =
   | "clearActivity"
   | "setSignal"
   | "saveAlert" | "deleteAlert" | "toggleAlert"
-  | "credentialStatus";
+  | "credentialStatus"
+  | "setCredentialSource"
+  | "clearCredentialSource"
+  | "listCredentialSecrets";
 
 export interface AssistantRequest {
   action: AssistantAction;
@@ -138,6 +145,11 @@ export interface AssistantRequest {
   alert?: SuggestedAlert;   // saveAlert payload (model block, validated server-side)
   alertId?: string;          // delete/toggle
   alertEnabled?: boolean;    // toggle
+  // BYO credential source (setCredentialSource/clearCredentialSource). The
+  // server reads the chosen Secret's KEYS only — a value never crosses the wire.
+  credentialId?: keyof AssistantCredentials;
+  secretName?: string;
+  dataKey?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -476,13 +488,36 @@ async function clearActivity(context: string | null, namespace: string): Promise
   return result;
 }
 
+/** A `kubectl get secrets ... -o json` reader used by the credential actions.
+ *  Returns the parsed `items` (empty on any failure/parse error). Reads KEYS
+ *  ONLY downstream — a value is never decoded, returned, or logged. */
+async function listSecretsBy(
+  context: string | null,
+  args: string[],
+  run: (ctx: string | null, args: string[]) => Promise<RunResult>,
+): Promise<SecretLike[]> {
+  const res = await run(context, args);
+  if (res.code !== 0) return [];
+  try {
+    return (JSON.parse(res.stdout) as { items?: SecretLike[] }).items ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** The managed Secrets the credential actions resolve over: every Secret carrying
+ *  the credential-store label OR managed-by rigel-assistant (covers BYO sources +
+ *  the legacy fixed-name Secrets for fallback). */
+const MANAGED_SECRETS_ARGS = (namespace: string): string[] => [
+  "get", "secrets", "-l", "app.kubernetes.io/managed-by=rigel-assistant",
+  "-n", namespace, "-o", "json",
+];
+
 /**
- * Report which provider credentials are READY (have a non-empty value) for the
- * UI's readiness chips. Lists the managed Secrets by label (one call, covering
- * both the legacy fixed-name Secrets for fallback AND any credential-store
- * Secret), resolves readiness via the name-agnostic `resolveCredentialSources`,
- * and returns ONLY credential ids — never values, never Secret names. The web
- * still reads the existing `{ credentialKeys: string[] }` shape unchanged.
+ * Per-credential readiness for the UI's chips. Lists the managed Secrets by
+ * label (one call), resolves via the name-agnostic `resolveCredentialSources`,
+ * and returns `{ credentials: { <id>: { ready, secretName } } }` — ids + backing
+ * Secret NAMES only, never values, never data.
  *
  * `run` is injectable so the resolution can be asserted without a live cluster
  * (defaults to the real kubectl).
@@ -492,29 +527,144 @@ export async function credentialStatus(
   namespace: string,
   run: (ctx: string | null, args: string[]) => Promise<RunResult> = kubectl,
 ): Promise<RunResult> {
-  const res = await run(context, [
-    "get", "secrets", "-l", "app.kubernetes.io/managed-by=rigel-assistant",
-    "-n", namespace, "-o", "json",
-  ]);
-  let items: SecretLike[] = [];
-  if (res.code === 0) {
-    try {
-      items = (JSON.parse(res.stdout) as { items?: SecretLike[] }).items ?? [];
-    } catch {
-      items = [];
-    }
-  }
+  const items = await listSecretsBy(context, MANAGED_SECRETS_ARGS(namespace), run);
   const { sources } = resolveCredentialSources(items);
-  // ids whose backing data key currently holds a non-empty value — names/values
-  // are intentionally dropped here (the client only ever sees credential ids).
-  const credentialKeys = Object.entries(sources)
-    .filter(([, src]) => src?.hasValue)
-    .map(([id]) => id);
-  return {
-    code: 0,
-    stdout: JSON.stringify({ credentialKeys }),
-    stderr: "",
-  };
+  // ids → { ready, secretName }. The data key + any value are intentionally
+  // dropped here (the client only ever sees ids + Secret names).
+  const credentials: Record<string, { ready: boolean; secretName: string }> = {};
+  for (const [id, src] of Object.entries(sources)) {
+    if (!src) continue;
+    credentials[id] = { ready: src.hasValue, secretName: src.secretName };
+  }
+  return { code: 0, stdout: JSON.stringify({ credentials }), stderr: "" };
+}
+
+/**
+ * Candidate Secrets for the BYO source picker: name, type, and data KEY NAMES
+ * only (never values). Filters out service-account tokens and Helm release
+ * Secrets to reduce noise. `run` is injectable for cluster-free assertions.
+ */
+export async function listCredentialSecrets(
+  context: string | null,
+  namespace: string,
+  run: (ctx: string | null, args: string[]) => Promise<RunResult> = kubectl,
+): Promise<RunResult> {
+  const items = await listSecretsBy(
+    context,
+    ["get", "secrets", "-n", namespace, "-o", "json"],
+    run,
+  );
+  const secrets = items
+    .filter((s) => {
+      const type = (s as SecretLike & { type?: string }).type ?? "";
+      if (type === "kubernetes.io/service-account-token") return false;
+      if (type.startsWith("helm.sh/release.")) return false;
+      return true;
+    })
+    .map((s) => ({
+      name: s.metadata.name,
+      type: (s as SecretLike & { type?: string }).type ?? "",
+      keys: Object.keys(s.data ?? {}), // KEY NAMES only — never the values
+    }));
+  return { code: 0, stdout: JSON.stringify({ secrets }), stderr: "" };
+}
+
+/**
+ * Verify the chosen Secret exists and holds `dataKey` (reads KEYS ONLY), run the
+ * single-owner label/annotate commands, then strategic-merge patch ONLY this
+ * credential's env var onto the agent Deployment so it repoints (the patch rolls
+ * the pod). Image, models, and every other env are left untouched, so a repoint
+ * never resets unrelated config. A value never leaves the cluster. `run` is
+ * injectable so the call sequence is asserted without a live cluster.
+ */
+export async function setCredentialSource(
+  context: string | null,
+  namespace: string,
+  req: AssistantRequest,
+  run: (ctx: string | null, args: string[]) => Promise<RunResult> = kubectl,
+): Promise<RunResult> {
+  const credentialId = req.credentialId;
+  const secretName = (req.secretName ?? "").trim();
+  const dataKey = (req.dataKey ?? "").trim();
+  if (!credentialId) throw new Error("setCredentialSource requires a credentialId.");
+  if (secretName === "") throw new Error("setCredentialSource requires a secretName.");
+  if (dataKey === "") throw new Error("setCredentialSource requires a dataKey.");
+
+  // 1. Validate the Secret + key exist — KEYS ONLY (no value is read/returned).
+  const chosen = await listSecretsBy(
+    context,
+    ["get", "secret", secretName, "-n", namespace, "-o", "json"],
+    // `get secret <name>` returns a single object, not a list; wrap it so the
+    // shared list reader can parse a one-element `items` array uniformly.
+    async (ctx, args) => {
+      const res = await run(ctx, args);
+      if (res.code !== 0) return res;
+      try {
+        const obj = JSON.parse(res.stdout) as SecretLike;
+        return { code: 0, stdout: JSON.stringify({ items: [obj] }), stderr: "" };
+      } catch {
+        return { code: 1, stdout: "", stderr: "unparseable secret" };
+      }
+    },
+  );
+  const secret = chosen[0];
+  if (!secret || secret.metadata?.name !== secretName) {
+    throw new Error(`Secret ${secretName} not found in ${namespace}.`);
+  }
+  if (!(dataKey in (secret.data ?? {}))) {
+    throw new Error(`Secret ${secretName} has no key "${dataKey}".`);
+  }
+
+  // 2. Single-owner label/annotate (+ sibling removals) over the current sources.
+  const current = await listSecretsBy(context, MANAGED_SECRETS_ARGS(namespace), run);
+  for (const args of credentialSourceCommands({ credentialId, secretName, dataKey }, current, namespace)) {
+    ensureOk(await run(context, args), `Failed to point ${credentialId} at ${secretName}`);
+  }
+
+  // 3. Repoint ONLY this credential's env var (the patch rolls the agent).
+  return patchCredentialEnv(context, namespace, credentialId, { secretName, dataKey }, run, "Source saved, but updating the agent failed");
+}
+
+/**
+ * Clear a credential's BYO source so it falls back to the managed default: run
+ * the clear commands (drop the annotation), then patch the env var back to the
+ * default Secret/key. `run` injectable for cluster-free assertions.
+ */
+export async function clearCredentialSource(
+  context: string | null,
+  namespace: string,
+  req: AssistantRequest,
+  run: (ctx: string | null, args: string[]) => Promise<RunResult> = kubectl,
+): Promise<RunResult> {
+  const credentialId = req.credentialId;
+  if (!credentialId) throw new Error("clearCredentialSource requires a credentialId.");
+  const current = await listSecretsBy(context, MANAGED_SECRETS_ARGS(namespace), run);
+  for (const args of clearCredentialSourceCommands(credentialId, current, namespace)) {
+    ensureOk(await run(context, args), `Failed to clear the source for ${credentialId}`);
+  }
+  return patchCredentialEnv(context, namespace, credentialId, defaultCredentialSource(credentialId), run, "Source cleared, but updating the agent failed");
+}
+
+/**
+ * Strategic-merge patch ONE credential's env var on the agent Deployment so it
+ * repoints at `source`. Env merges by `name`, so image/models/other env are
+ * untouched; mutating the pod template triggers a rollout on its own. Only Secret
+ * names + key names are sent — never a value.
+ */
+async function patchCredentialEnv(
+  context: string | null,
+  namespace: string,
+  credentialId: keyof AssistantCredentials,
+  source: { secretName: string; dataKey: string },
+  run: (ctx: string | null, args: string[]) => Promise<RunResult>,
+  errorLabel: string,
+): Promise<RunResult> {
+  const patch = credentialEnvPatch(credentialId, source);
+  const result = await run(context, [
+    "patch", "deployment", "rigel-assistant", "-n", namespace, "--type=strategic", "-p", patch,
+  ]);
+  ensureOk(result, errorLabel);
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -566,6 +716,12 @@ export async function handleAssistant(
       return mutateAlerts(context, namespace, req);
     case "credentialStatus":
       return credentialStatus(context, namespace);
+    case "listCredentialSecrets":
+      return listCredentialSecrets(context, namespace);
+    case "setCredentialSource":
+      return setCredentialSource(context, namespace, req);
+    case "clearCredentialSource":
+      return clearCredentialSource(context, namespace, req);
     default:
       throw new Error(`unknown action: ${String(req.action)}`);
   }

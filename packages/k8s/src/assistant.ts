@@ -213,6 +213,72 @@ export function resolveCredentialSources(secrets: SecretLike[]): CredentialResol
   return { sources, conflicts };
 }
 
+/** All credential-store Secret names that currently annotate `credentialId`
+ *  (i.e. carry `rigel.assistant/credential.<id>`), in alphabetical name order. */
+function secretsClaimingCredential(
+  secrets: SecretLike[],
+  credentialId: keyof AssistantCredentials,
+): string[] {
+  const annKey = `${CREDENTIAL_ANNOTATION_PREFIX}${credentialId}`;
+  return secrets
+    .filter(
+      (s) =>
+        s.metadata.labels?.[CREDENTIAL_STORE_LABEL] === "true" &&
+        annKey in (s.metadata.annotations ?? {}),
+    )
+    .map((s) => s.metadata.name)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * Pure kubectl argv builders for repointing a credential at a chosen Secret.
+ * Returns `string[][]` (one argv per command); runs NOTHING and never carries a
+ * secret value — only the credential id, Secret names, and data key name.
+ *
+ * For `setCredentialSource({ credentialId, secretName, dataKey }, currentSecrets, namespace)`:
+ *  1. label the chosen Secret as a credential-store,
+ *  2. annotate it `rigel.assistant/credential.<id>=<dataKey>`,
+ *  3. remove that annotation from every OTHER credential-store Secret claiming
+ *     the id (single-owner per credential).
+ */
+export function credentialSourceCommands(
+  choice: { credentialId: keyof AssistantCredentials; secretName: string; dataKey: string },
+  currentSecrets: SecretLike[],
+  namespace: string,
+): string[][] {
+  const { credentialId, secretName, dataKey } = choice;
+  const annKey = `${CREDENTIAL_ANNOTATION_PREFIX}${credentialId}`;
+  const cmds: string[][] = [
+    ["label", "secret", secretName, `${CREDENTIAL_STORE_LABEL}=true`, "--overwrite", "-n", namespace],
+    ["annotate", "secret", secretName, `${annKey}=${dataKey}`, "--overwrite", "-n", namespace],
+  ];
+  // Single-owner: strip the id annotation from every other claimant.
+  for (const sibling of secretsClaimingCredential(currentSecrets, credentialId)) {
+    if (sibling === secretName) continue;
+    cmds.push(["annotate", "secret", sibling, `${annKey}-`, "-n", namespace]);
+  }
+  return cmds;
+}
+
+/**
+ * Pure kubectl argv builders to clear a credential's BYO source so resolution
+ * falls back to the managed default: remove the `rigel.assistant/credential.<id>`
+ * annotation from EVERY credential-store Secret EXCEPT the managed default
+ * (CREDENTIAL_ENV's defaultSecret for the id), which keeps the legacy mapping
+ * intact. Returns `string[][]`; runs nothing.
+ */
+export function clearCredentialSourceCommands(
+  credentialId: keyof AssistantCredentials,
+  currentSecrets: SecretLike[],
+  namespace: string,
+): string[][] {
+  const annKey = `${CREDENTIAL_ANNOTATION_PREFIX}${credentialId}`;
+  const managedDefault = CREDENTIAL_ENV.find((e) => e.id === credentialId)?.defaultSecret;
+  return secretsClaimingCredential(currentSecrets, credentialId)
+    .filter((name) => name !== managedDefault)
+    .map((name) => ["annotate", "secret", name, `${annKey}-`, "-n", namespace]);
+}
+
 // ---------------------------------------------------------------------------
 // Manifest builders — byte-for-byte port of AssistantInstaller.swift
 // ---------------------------------------------------------------------------
@@ -441,8 +507,90 @@ metadata:
 data: {}`;
 }
 
-/** The agent Deployment (replicas:1, Recreate, RBAC cage, env from config). */
-export function deployment(c: AssistantInstallConfig): string {
+/**
+ * Render the 7 credential env blocks (12-space indented, matching the Deployment
+ * template), each as a `secretKeyRef` resolved from `sources[id]` when present,
+ * else CREDENTIAL_ENV's default managed Secret + key. Every ref is `optional:
+ * true` so a missing credential never blocks startup. Pure — never reads a value.
+ */
+export function credentialEnvYAML(
+  sources: Partial<Record<keyof AssistantCredentials, ResolvedSource>> = {},
+): string {
+  // Explanatory comment kept between the legacy Claude token env and the
+  // provider-key block, exactly where it sat before this was extracted.
+  const PROVIDER_KEYS_COMMENT =
+    "            # Provider API keys from the multi-key credentials Secret. Each is\n" +
+    "            # optional so a missing credential never blocks startup; the matching\n" +
+    "            # bridge fails closed at run time if its role's provider has no key.";
+  return CREDENTIAL_ENV.map((entry, i) => {
+    const src = sources[entry.id];
+    const name = src?.secretName ?? entry.defaultSecret;
+    const key = src?.dataKey ?? entry.defaultKey;
+    const block = `            - name: ${entry.env}
+              valueFrom:
+                secretKeyRef:
+                  name: ${name}
+                  key: ${key}
+                  optional: true`;
+    // claudeToken is first; the comment precedes the remaining provider keys.
+    return i === 1 ? `${PROVIDER_KEYS_COMMENT}\n${block}` : block;
+  }).join("\n");
+}
+
+/**
+ * Strategic-merge patch that repoints ONE credential's env var at `source`,
+ * leaving the image, models, and every other env untouched (env merges by
+ * `name`). Used to apply a BYO source change without re-rendering — and so
+ * reverting a credential never resets unrelated Deployment config. The patch
+ * mutates the pod template, which triggers a rollout on its own.
+ *
+ * Pass the resolved managed default (CREDENTIAL_ENV) to revert a credential.
+ * `"agent"` is the container name in `deployment()` above.
+ */
+export function credentialEnvPatch(
+  credentialId: keyof AssistantCredentials,
+  source: { secretName: string; dataKey: string },
+): string {
+  const entry = CREDENTIAL_ENV.find((e) => e.id === credentialId);
+  if (!entry) throw new Error(`unknown credential id: ${credentialId}`);
+  return JSON.stringify({
+    spec: {
+      template: {
+        spec: {
+          containers: [
+            {
+              name: "agent",
+              env: [
+                {
+                  name: entry.env,
+                  valueFrom: { secretKeyRef: { name: source.secretName, key: source.dataKey, optional: true } },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    },
+  });
+}
+
+/** The managed default source (Secret + key) for a credential id, used to revert
+ *  a BYO repoint. */
+export function defaultCredentialSource(
+  credentialId: keyof AssistantCredentials,
+): { secretName: string; dataKey: string } {
+  const entry = CREDENTIAL_ENV.find((e) => e.id === credentialId);
+  if (!entry) throw new Error(`unknown credential id: ${credentialId}`);
+  return { secretName: entry.defaultSecret, dataKey: entry.defaultKey };
+}
+
+/** The agent Deployment (replicas:1, Recreate, RBAC cage, env from config).
+ *  `sources` repoints credential env at operator-supplied Secrets; the default
+ *  ({}) renders today's managed-Secret refs byte-for-byte. */
+export function deployment(
+  c: AssistantInstallConfig,
+  sources: Partial<Record<keyof AssistantCredentials, ResolvedSource>> = {},
+): string {
   return `apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -480,51 +628,7 @@ spec:
           image: "${c.image}"
           imagePullPolicy: IfNotPresent
           env:
-            - name: CLAUDE_CODE_OAUTH_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: ${SECRET_NAME}
-                  key: token
-                  optional: true
-            # Provider API keys from the multi-key credentials Secret. Each is
-            # optional so a missing credential never blocks startup; the matching
-            # bridge fails closed at run time if its role's provider has no key.
-            - name: ANTHROPIC_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: ${CREDENTIALS_SECRET_NAME}
-                  key: anthropicApiKey
-                  optional: true
-            - name: CODEX_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: ${CREDENTIALS_SECRET_NAME}
-                  key: codexApiKey
-                  optional: true
-            - name: CODEX_AUTH_CONTENT
-              valueFrom:
-                secretKeyRef:
-                  name: ${CREDENTIALS_SECRET_NAME}
-                  key: codexAuthContent
-                  optional: true
-            - name: GEMINI_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: ${CREDENTIALS_SECRET_NAME}
-                  key: geminiApiKey
-                  optional: true
-            - name: OPENCODE_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: ${CREDENTIALS_SECRET_NAME}
-                  key: opencodeApiKey
-                  optional: true
-            - name: OPENCODE_AUTH_CONTENT
-              valueFrom:
-                secretKeyRef:
-                  name: ${CREDENTIALS_SECRET_NAME}
-                  key: opencodeAuthContent
-                  optional: true
+${credentialEnvYAML(sources)}
             - name: WORKER_MODEL
               value: "${c.workerModel}"
             - name: SUPERVISOR_MODEL
