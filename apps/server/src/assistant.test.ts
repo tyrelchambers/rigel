@@ -88,3 +88,50 @@ test("buildInstallConfig falls back to legacy model knobs + defaults when no sel
   expect(cfg.worker).toBeUndefined();
   expect(cfg.supervisor).toBeUndefined();
 });
+
+import { setModelsUpdates, setCredentialsSecrets } from "./assistant";
+
+test("setModelsUpdates produces the assistant-config role keys for a worker-only switch", () => {
+  const updates = setModelsUpdates({
+    action: "setModels",
+    worker: { provider: "codex", model: "gpt-5-codex" },
+  });
+  expect(updates).toEqual({ workerProvider: "codex", workerModel: "gpt-5-codex" });
+});
+
+test("setModelsUpdates includes both roles + effort when supplied", () => {
+  const updates = setModelsUpdates({
+    action: "setModels",
+    worker: { provider: "claude", model: "claude-sonnet-4-6", effort: "medium" },
+    supervisor: { provider: "gemini", model: "gemini-2.5-pro" },
+  });
+  expect(updates).toEqual({
+    workerProvider: "claude", workerModel: "claude-sonnet-4-6", workerEffort: "medium",
+    supervisorProvider: "gemini", supervisorModel: "gemini-2.5-pro",
+  });
+});
+
+test("setCredentialsSecrets builds the credentials Secret YAML (+ legacy token YAML when claudeToken present)", () => {
+  const out = setCredentialsSecrets(
+    { action: "setCredentials", credentials: { geminiApiKey: "g-1", claudeToken: "tok" } },
+    "agents",
+    new Date("2026-06-23T00:00:00Z"),
+  );
+  expect(out.credentialsYaml).toContain("name: rigel-assistant-credentials");
+  expect(out.credentialsYaml).toContain('geminiApiKey: "g-1"');
+  expect(out.credentialsYaml).toContain('claudeToken: "tok"');
+  // Legacy token Secret is also re-stamped (so existing CLAUDE_CODE_OAUTH_TOKEN refs refresh).
+  expect(out.legacyTokenYaml).not.toBeNull();
+  expect(out.legacyTokenYaml).toContain("name: rigel-assistant-token");
+  expect(out.legacyTokenYaml).toContain('token: "tok"');
+});
+
+test("setCredentialsSecrets emits no legacy token YAML when no claudeToken", () => {
+  const out = setCredentialsSecrets(
+    { action: "setCredentials", credentials: { codexApiKey: "c-1" } },
+    "default",
+    new Date(),
+  );
+  expect(out.legacyTokenYaml).toBeNull();
+  expect(out.credentialsYaml).toContain('codexApiKey: "c-1"');
+});

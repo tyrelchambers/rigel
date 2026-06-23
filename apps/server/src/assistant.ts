@@ -207,6 +207,27 @@ export function buildInstallConfig(req: AssistantRequest): AssistantInstallConfi
   };
 }
 
+/** Pure: the assistant-config role-key updates for a setModels request. */
+export function setModelsUpdates(req: AssistantRequest): Record<string, string> {
+  return roleConfigUpdates(req.worker, req.supervisor);
+}
+
+/** Pure: the Secret YAML(s) a setCredentials request applies. Always the
+ *  credentials Secret; additionally the legacy token Secret (re-stamped) when a
+ *  Claude OAuth token is supplied, so existing CLAUDE_CODE_OAUTH_TOKEN refs refresh. */
+export function setCredentialsSecrets(
+  req: AssistantRequest,
+  namespace: string,
+  now: Date,
+): { credentialsYaml: string; legacyTokenYaml: string | null } {
+  const creds = parseCredentials(req);
+  const credentialsYaml = credentialsSecretYAML(creds, namespace);
+  const legacyTokenYaml = creds.claudeToken
+    ? secretYAML(creds.claudeToken, now.toISOString(), namespace)
+    : null;
+  return { credentialsYaml, legacyTokenYaml };
+}
+
 /**
  * Apply, in order: the namespace (best-effort — kubectl apply is idempotent and
  * creates it when missing), the token Secret (with a fresh issued-at stamp), and
@@ -320,6 +341,42 @@ async function mutateAlerts(
   return patchConfig(context, namespace, { alertRules: serializeAlertRules(next) });
 }
 
+/** Live role switch: read-modify-write the role keys in assistant-config. No
+ *  restart — the agent re-reads the ConfigMap every poll. */
+async function setModels(
+  context: string | null,
+  namespace: string,
+  req: AssistantRequest,
+): Promise<RunResult> {
+  const updates = setModelsUpdates(req);
+  if (Object.keys(updates).length === 0) {
+    throw new Error("setModels requires a worker and/or supervisor selection.");
+  }
+  return patchConfig(context, namespace, updates);
+}
+
+/** Re-apply the credentials Secret (+ legacy token Secret when a Claude token is
+ *  supplied), then rollout-restart so the new env vars are injected. Generalizes
+ *  the old token-only updateToken. */
+async function setCredentials(
+  context: string | null,
+  namespace: string,
+  req: AssistantRequest,
+): Promise<RunResult> {
+  const creds = parseCredentials(req);
+  if (Object.values(creds).every((v) => !v || v.trim() === "")) {
+    throw new Error("setCredentials requires at least one credential.");
+  }
+  const { credentialsYaml, legacyTokenYaml } = setCredentialsSecrets(req, namespace, new Date());
+  if (legacyTokenYaml) {
+    ensureOk(await applyStdin(context, legacyTokenYaml), "Failed to update token Secret");
+  }
+  ensureOk(await applyStdin(context, credentialsYaml), "Failed to update credentials Secret");
+  const result = await restartAgent(context, namespace);
+  ensureOk(result, "Credentials saved, but rollout failed");
+  return result;
+}
+
 async function setMode(
   context: string | null,
   namespace: string,
@@ -352,7 +409,8 @@ async function silenceIncident(
   });
 }
 
-/** Re-stamp + apply the token Secret, then roll the Deployment. */
+/** Backward-compat alias: an old token-only update routes through setCredentials
+ *  (which re-stamps the legacy token Secret + the credentials Secret, then rolls). */
 async function updateToken(
   context: string | null,
   namespace: string,
@@ -361,11 +419,7 @@ async function updateToken(
   if (token.trim() === "") {
     throw new Error("Paste a fresh token from `claude setup-token` first.");
   }
-  const issuedAt = new Date().toISOString();
-  ensureOk(await applyStdin(context, secretYAML(token.trim(), issuedAt, namespace)), "Failed to update token");
-  const result = await restartAgent(context, namespace);
-  ensureOk(result, "Token saved, but rollout failed");
-  return result;
+  return setCredentials(context, namespace, { action: "setCredentials", token: token.trim() });
 }
 
 function restartAgent(context: string | null, namespace: string): Promise<RunResult> {
@@ -423,6 +477,10 @@ export async function handleAssistant(
       return setKillSwitch(context, namespace, req.enabled === true);
     case "updateToken":
       return updateToken(context, namespace, req.token ?? "");
+    case "setModels":
+      return setModels(context, namespace, req);
+    case "setCredentials":
+      return setCredentials(context, namespace, req);
     case "restart":
       return restartAgent(context, namespace);
     case "silence":
