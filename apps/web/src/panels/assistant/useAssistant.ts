@@ -122,10 +122,20 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
     };
   }, []);
 
+  // The credential read must target where the agent ACTUALLY lives, not just the
+  // form's install hint — otherwise a token saved in the agent's real namespace
+  // reads back as "Not set". Resolve it from the (uniquely named) agent Deployment
+  // once the watch has it, falling back to the hint before the agent exists.
+  const credentialNamespace = useMemo(() => {
+    const deps = (resources["deployments"] ?? {}) as Record<string, DeploymentLike>;
+    const agent = Object.values(deps).find((d) => d.metadata.name === "rigel-assistant");
+    return agent?.metadata.namespace ?? installNamespaceHint;
+  }, [resources, installNamespaceHint]);
+
   const credStatus = useQuery({
-    queryKey: ["assistant-credentialStatus", installNamespaceHint],
+    queryKey: ["assistant-credentialStatus", credentialNamespace],
     queryFn: async () => {
-      const res = await postAssistant({ action: "credentialStatus", namespace: installNamespaceHint });
+      const res = await postAssistant({ action: "credentialStatus", namespace: credentialNamespace });
       const parsed = JSON.parse(res.stdout || "{}") as { credentialKeys?: string[] };
       return parsed.credentialKeys ?? [];
     },
