@@ -25,6 +25,7 @@ import { diagnoseConfirmed } from "./diagnosePool.js";
 import { runSupervisor } from "./supervisor.js";
 import { executeAction } from "./executor.js";
 import { CircuitBreaker } from "./guardrails.js";
+import { runSelfCheck, formatSelfCheck } from "./selfCheck.js";
 import {
   appendAudit,
   readState,
@@ -508,6 +509,7 @@ function flushNotifications(rc: RuntimeConfig, notifications: string[]): void {
 async function main(): Promise<void> {
   const cfg = loadConfig();
   log(`starting v${VERSION} — worker=${cfg.workerModel} poll=${cfg.pollIntervalMs}ms`);
+  log(`provider CLI self-check — ${formatSelfCheck(await runSelfCheck())}`);
   const cb = new CircuitBreaker({
     maxPerResourcePerHour: cfg.maxPerResourcePerHour,
     maxPerNight: cfg.maxPerNight,
