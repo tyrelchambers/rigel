@@ -41,7 +41,8 @@ describe("RolePicker", () => {
     wrap(<RolePicker label="Worker" description="Investigates incidents, proposes fixes" value={claudeValue} onChange={() => {}} />);
     expect(screen.getByText("Worker")).toBeInTheDocument();
     expect(screen.getByText(/Investigates incidents/)).toBeInTheDocument();
-    expect(screen.getByText("Claude")).toBeInTheDocument();
+    // Label comes from the async useAgents registry query → wait for it.
+    expect(await screen.findByText("Claude")).toBeInTheDocument();
     expect(await screen.findByText("claude-sonnet-4-6")).toBeInTheDocument();
   });
 
