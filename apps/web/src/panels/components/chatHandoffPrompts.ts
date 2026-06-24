@@ -6,6 +6,7 @@
  * extracted here so every list panel can produce consistent prompts without
  * duplicating the strings.
  */
+import type { K8sEvent } from "@/panels/events/types";
 
 export type ChatTopic = "Errors" | "Logs" | "Explain" | "Rollout";
 
@@ -66,4 +67,29 @@ export function moveToNamespacePrompt(name: string, srcNamespace: string | undef
     `- Anything still referencing \`${src}/${name}\` (or its Services) by namespace will break until updated — call out anything you can't see.`,
     `- Surface the discovery first, then propose the apply/delete actions; don't bulk-delete before the new namespace is confirmed working.`,
   ].join("\n");
+}
+
+/**
+ * Build the investigation prompt for a single Recent-warning event. Unlike
+ * buildHandoffPrompt (keyed by kind/name/topic), this consumes a K8sEvent so it
+ * can fold in the warning's reason and message — a distinct purpose, not a
+ * variation of the topic prompts.
+ */
+export function buildWarningInvestigationPrompt(event: K8sEvent): string {
+  const io = event.involvedObject;
+  const ns = io?.namespace ?? "default";
+  const target =
+    io?.kind && io?.name
+      ? `${io.kind} ${io.name} in namespace ${ns}`
+      : io?.name
+        ? `${io.name} in namespace ${ns}`
+        : `a resource in namespace ${ns}`;
+  const reason = event.reason ?? "Warning";
+  const parts = [
+    `Investigate this Kubernetes warning.`,
+    `Reason: ${reason}. Resource: ${target}.`,
+  ];
+  if (event.message) parts.push(`Message: "${event.message}".`);
+  parts.push(`Find the root cause and suggest a fix. Use read-only kubectl. Be concise.`);
+  return parts.join(" ");
 }
