@@ -1,20 +1,29 @@
-// SettingsTab — agent pod status, credentials, and uninstall.
+// SettingsTab — agent pod status (with a manual restart) and uninstall.
+// Credential and token management now lives in the Agents tab.
 
-import { useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAssistantCtx } from "../AssistantContext";
-import { Card, inputClass } from "../components/primitives";
+import { Card } from "../components/primitives";
 
 export function SettingsTab() {
   const { d, ns, working, run, openUninstall } = useAssistantCtx();
-  const [newToken, setNewToken] = useState("");
 
   return (
     <div className="space-y-3.5">
       {/* Agent pod */}
       <Card>
-        <p className="text-sm font-semibold">Agent pod</p>
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold">Agent pod</p>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={working}
+            onClick={() => run({ action: "restart", namespace: ns })}
+          >
+            <RotateCcw className="size-4" /> Restart
+          </Button>
+        </div>
         {d.agentPod ? (
           <div className="mt-1 flex items-center justify-between">
             <div>
@@ -44,44 +53,6 @@ export function SettingsTab() {
             No agent pod found yet — it may still be scheduling or failing to pull the image.
           </p>
         )}
-      </Card>
-
-      {/* Credentials & maintenance */}
-      <Card className="space-y-2">
-        <p className="text-sm font-semibold">Credentials &amp; maintenance</p>
-        <p className="text-sm text-muted-foreground">
-          Update the subscription token (run{" "}
-          <span className="font-mono">claude setup-token</span> and paste it). Saving replaces the
-          Secret and rolls the agent so it picks up the new token. Use after a 401 / token expiry.
-        </p>
-        <input
-          type="password"
-          autoComplete="off"
-          value={newToken}
-          onChange={(e) => setNewToken(e.target.value)}
-          placeholder="New CLAUDE_CODE_OAUTH_TOKEN"
-          className={`w-full ${inputClass}`}
-        />
-        <div className="flex gap-2">
-          <Button
-            disabled={working || newToken.trim() === ""}
-            onClick={() =>
-              run(
-                { action: "updateToken", namespace: ns, token: newToken.trim() },
-                () => setNewToken(""),
-              )
-            }
-          >
-            Update token &amp; restart
-          </Button>
-          <Button
-            variant="secondary"
-            disabled={working}
-            onClick={() => run({ action: "restart", namespace: ns })}
-          >
-            <RotateCcw className="size-4" /> Restart agent
-          </Button>
-        </div>
       </Card>
 
       {/* Uninstall */}
