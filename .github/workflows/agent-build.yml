@@ -79,7 +79,12 @@ jobs:
         # rigel-assistant lives; if it isn't installed yet the image is still built
         # and pushed and we skip the rollout.
         run: |
-          NS=$(kubectl get deployment rigel-assistant -A -o jsonpath='{.items[0].metadata.namespace}' 2>/dev/null || true)
+          # Find OUR agent Deployment by its name + managed-by labels (not
+          # `get <name> -A`, which is invalid; not managed-by alone, which catalog
+          # apps like signal-cli-rest also carry). Resolves to the install namespace.
+          NS=$(kubectl get deployments -A \
+                 -l app.kubernetes.io/name=rigel-assistant,app.kubernetes.io/managed-by=rigel-assistant \
+                 -o jsonpath='{.items[0].metadata.namespace}' 2>/dev/null || true)
           if [ -z "$NS" ]; then
             echo "::notice::rigel-assistant not found in any namespace; image pushed, skipping rollout."
             exit 0
