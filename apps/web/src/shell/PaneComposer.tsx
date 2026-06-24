@@ -8,7 +8,23 @@
  *   (↑/↓ to move, Enter/Tab to pick, Esc to dismiss).
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Box, Layers, Server, Check, ChevronDown, Search } from "lucide-react";
+import {
+  Box,
+  Layers,
+  Server,
+  Check,
+  ChevronDown,
+  Search,
+  Network,
+  Globe,
+  Lock,
+  FileText,
+  Database,
+  ClipboardList,
+  Clock,
+  HardDrive,
+  Boxes,
+} from "lucide-react";
 import {
   effortName,
   modelLabel,
@@ -27,9 +43,15 @@ import {
   type MentionCandidate,
   type MentionKind,
 } from "@/panels/chat/mentions";
+import type {
+  DescribeIconKey,
+  DescribeOption,
+} from "@/panels/chat/describeResources";
+import { subscribe, unsubscribe } from "@/lib/ws";
 import {
   computeTrigger,
   commandRest,
+  describeInsertion,
   type ComposerTrigger,
 } from "./composerTriggerLogic";
 
@@ -61,6 +83,10 @@ interface PaneComposerProps {
   modelConfig: ModelConfig | null;
   onModelConfig: (c: ModelConfig) => void;
   mentionCandidates: MentionCandidate[];
+  /** Live resource map (for the /describe namespace + instance stages). */
+  resources: Record<string, unknown>;
+  /** Active namespace filter; null = All namespaces. */
+  namespaceFilter: string | null;
 }
 
 /** Show a search box for long model lists (always for opencode's provider/model). */
@@ -70,6 +96,22 @@ const MENTION_ICON: Record<MentionKind, typeof Box> = {
   pod: Box,
   deployment: Layers,
   node: Server,
+};
+
+const DESCRIBE_ICON: Record<DescribeIconKey, typeof Box> = {
+  pod: Box,
+  deployment: Layers,
+  service: Network,
+  ingress: Globe,
+  secret: Lock,
+  configmap: FileText,
+  statefulset: Database,
+  daemonset: Layers,
+  job: ClipboardList,
+  cronjob: Clock,
+  pvc: HardDrive,
+  node: Server,
+  namespace: Boxes,
 };
 
 /**
@@ -94,6 +136,8 @@ export function PaneComposer({
   modelConfig,
   onModelConfig,
   mentionCandidates,
+  resources,
+  namespaceFilter,
 }: PaneComposerProps) {
   const internalRef = useRef<HTMLTextAreaElement>(null);
   const textareaRef = (ref ?? internalRef) as React.RefObject<HTMLTextAreaElement>;
@@ -129,19 +173,39 @@ export function PaneComposer({
     el.style.height = `${Math.min(Math.max(el.scrollHeight, min), max)}px`;
   }, [value, textareaRef]);
 
-  // Active "/" (leading) or "@<token>" trigger from the text up to the caret.
+  // Active command / mention / describe trigger from the text up to the caret.
   const trigger = useMemo<ComposerTrigger | null>(
-    () => computeTrigger(value, caret, mentionCandidates),
-    [value, caret, mentionCandidates],
+    () => computeTrigger(value, caret, { mentionCandidates, resources, namespaceFilter }),
+    [value, caret, mentionCandidates, resources, namespaceFilter],
   );
 
-  const triggerKey = trigger ? `${trigger.kind}:${trigger.query}` : "";
+  const triggerKey = trigger
+    ? `${trigger.kind}:${trigger.kind === "describe" ? trigger.stage : ""}:${trigger.query}`
+    : "";
   useEffect(() => {
     setSel(0);
     setDismissed(false);
   }, [triggerKey]);
 
   const popoverOpen = trigger !== null && !dismissed;
+
+  // On-demand watch for the /describe instance stage so its list is populated.
+  // Subscriptions are ref-counted + linger on the ws layer, so this is safe
+  // alongside other consumers. Cluster-scoped kinds watch all namespaces.
+  const describeWatchKind =
+    trigger?.kind === "describe" && trigger.stage === "instance" ? trigger.resourceKind?.kind : undefined;
+  const describeWatchNs =
+    trigger?.kind === "describe" && trigger.stage === "instance"
+      ? trigger.resourceKind?.scope === "cluster"
+        ? "*"
+        : (trigger.namespace ?? "*")
+      : undefined;
+  useEffect(() => {
+    if (!describeWatchKind) return;
+    const ns = describeWatchNs ?? "*";
+    subscribe(describeWatchKind, ns);
+    return () => unsubscribe(describeWatchKind, ns);
+  }, [describeWatchKind, describeWatchNs]);
 
   function syncCaret() {
     const el = textareaRef.current;
@@ -170,26 +234,41 @@ export function PaneComposer({
     onChange(value.slice(0, trigger.start) + ins + value.slice(caret));
     setCaretAt(trigger.start + ins.length);
   }
+  /**
+   * Advance the /describe picker. Each stage rebuilds the command canonically
+   * from the parsed state so the final text is identical regardless of path:
+   * type -> "/describe <type> ", namespace -> "/describe <type> -n <ns> ",
+   * instance -> "/describe <type> <name>[ -n <ns>]".
+   */
+  function pickDescribe(opt: DescribeOption) {
+    if (trigger?.kind !== "describe") return;
+    const head = describeInsertion(trigger, opt);
+    onChange(head + value.slice(caret));
+    setCaretAt(head.length);
+  }
   function selectCurrent() {
-    if (!trigger) return;
+    if (!trigger || trigger.items.length === 0) return;
     if (trigger.kind === "command") pickCommand(trigger.items[sel]);
-    else pickMention(trigger.items[sel]);
+    else if (trigger.kind === "mention") pickMention(trigger.items[sel]);
+    else pickDescribe(trigger.items[sel]);
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (popoverOpen && trigger) {
       const n = trigger.items.length;
-      if (e.key === "ArrowDown") {
+      // With no items (a /describe "no results" popover) let Enter/Tab/arrows
+      // fall through to normal editing/send; only Escape dismisses.
+      if (n > 0 && e.key === "ArrowDown") {
         e.preventDefault();
         setSel((s) => (s + 1) % n);
         return;
       }
-      if (e.key === "ArrowUp") {
+      if (n > 0 && e.key === "ArrowUp") {
         e.preventDefault();
         setSel((s) => (s - 1 + n) % n);
         return;
       }
-      if (e.key === "Enter" || e.key === "Tab") {
+      if (n > 0 && (e.key === "Enter" || e.key === "Tab")) {
         e.preventDefault();
         selectCurrent();
         return;
@@ -231,47 +310,90 @@ export function PaneComposer({
         position: "relative",
       }}
     >
-      {/* `/` command or `@` mention popover (above the input) */}
+      {/* `/` command, `@` mention, or `/describe` resource picker (above input) */}
       {popoverOpen && trigger && (
         <div style={popoverStyle}>
-          {trigger.kind === "command"
-            ? trigger.items.map((c, i) => (
+          {trigger.kind === "command" &&
+            trigger.items.map((c, i) => (
+              <button
+                key={c.name}
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  pickCommand(c);
+                }}
+                onMouseEnter={() => setSel(i)}
+                style={popRowStyle(i === sel)}
+              >
+                <span style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 12, fontWeight: 600, color: i === sel ? "var(--fg-inverse)" : "var(--fg-primary)" }}>
+                  {commandDisplay(c)}
+                </span>
+                <span
+                  style={{
+                    marginLeft: "auto",
+                    fontSize: 11,
+                    color: i === sel ? "rgba(10,10,10,0.8)" : "var(--fg-tertiary)",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {c.description}
+                </span>
+              </button>
+            ))}
+
+          {trigger.kind === "mention" &&
+            trigger.items.map((c, i) => {
+              const Icon = MENTION_ICON[c.kind];
+              return (
                 <button
-                  key={c.name}
+                  key={c.id}
                   type="button"
                   onMouseDown={(e) => {
                     e.preventDefault();
-                    pickCommand(c);
+                    pickMention(c);
                   }}
                   onMouseEnter={() => setSel(i)}
                   style={popRowStyle(i === sel)}
                 >
-                  <span style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 12, fontWeight: 600, color: i === sel ? "var(--fg-inverse)" : "var(--fg-primary)" }}>
-                    {commandDisplay(c)}
-                  </span>
+                  <Icon style={{ width: 12, height: 12, color: i === sel ? "var(--fg-inverse)" : "var(--fg-secondary)", flexShrink: 0 }} />
                   <span
                     style={{
-                      marginLeft: "auto",
-                      fontSize: 11,
-                      color: i === sel ? "rgba(10,10,10,0.8)" : "var(--fg-tertiary)",
-                      whiteSpace: "nowrap",
+                      fontFamily: "var(--font-mono, monospace)",
+                      fontSize: 12,
+                      fontWeight: 500,
+                      color: i === sel ? "var(--fg-inverse)" : "var(--fg-primary)",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
                     }}
                   >
-                    {c.description}
+                    {c.name}
+                  </span>
+                  {c.namespace && (
+                    <span style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 10, color: i === sel ? "rgba(10,10,10,0.7)" : "var(--fg-tertiary)", whiteSpace: "nowrap" }}>
+                      {c.namespace}
+                    </span>
+                  )}
+                  <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono, monospace)", fontSize: 9, fontWeight: 600, letterSpacing: 0.5, color: i === sel ? "rgba(10,10,10,0.7)" : "var(--fg-tertiary)" }}>
+                    {MENTION_KIND_LABEL[c.kind]}
                   </span>
                 </button>
-              ))
-            : trigger.items.map((c, i) => {
-                const Icon = MENTION_ICON[c.kind];
+              );
+            })}
+
+          {trigger.kind === "describe" &&
+            (trigger.items.length > 0 ? (
+              trigger.items.map((opt, i) => {
+                const Icon = DESCRIBE_ICON[opt.iconKey];
                 return (
                   <button
-                    key={c.id}
+                    key={`${opt.value}-${opt.namespace ?? ""}`}
                     type="button"
                     onMouseDown={(e) => {
                       e.preventDefault();
-                      pickMention(c);
+                      pickDescribe(opt);
                     }}
                     onMouseEnter={() => setSel(i)}
                     style={popRowStyle(i === sel)}
@@ -288,19 +410,19 @@ export function PaneComposer({
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {c.name}
+                      {opt.label}
                     </span>
-                    {c.namespace && (
-                      <span style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 10, color: i === sel ? "rgba(10,10,10,0.7)" : "var(--fg-tertiary)", whiteSpace: "nowrap" }}>
-                        {c.namespace}
-                      </span>
-                    )}
                     <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono, monospace)", fontSize: 9, fontWeight: 600, letterSpacing: 0.5, color: i === sel ? "rgba(10,10,10,0.7)" : "var(--fg-tertiary)" }}>
-                      {MENTION_KIND_LABEL[c.kind]}
+                      {opt.badge}
                     </span>
                   </button>
                 );
-              })}
+              })
+            ) : (
+              <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--fg-tertiary)" }}>
+                {describeEmptyLabel(trigger)}
+              </div>
+            ))}
         </div>
       )}
 
@@ -611,6 +733,13 @@ function effortPillStyle(active: boolean): React.CSSProperties {
     fontWeight: 500,
     whiteSpace: "nowrap",
   };
+}
+
+/** Empty-state line for the /describe namespace + instance stages. */
+function describeEmptyLabel(trigger: Extract<ComposerTrigger, { kind: "describe" }>): string {
+  if (trigger.stage === "namespace") return "No namespaces found";
+  const kind = trigger.resourceKind?.label.toLowerCase() ?? "resources";
+  return trigger.namespace ? `No ${kind} in ${trigger.namespace}` : `No ${kind} found`;
 }
 
 /** "CLAUDE · MODEL" / "CODEX · MODEL" / "OPENCODE · PROVIDER / MODEL". */

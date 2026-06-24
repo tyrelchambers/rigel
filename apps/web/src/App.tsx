@@ -28,6 +28,7 @@ import GitOpsPanel from "./panels/gitops/GitOpsPanel";
 import HelmPanel from "./panels/helm/HelmPanel";
 import { TerminalDrawer, TOGGLE_TERMINAL_EVENT } from "@/shell/TerminalDrawer";
 import { ResourceYamlViewer } from "@/components/ResourceYamlViewer";
+import { Toaster } from "@/components/ui/sonner";
 import { connectCluster } from "@/lib/ws";
 import { useChatConfig } from "@/lib/api";
 import { rigel } from "@/lib/desktop";
@@ -279,6 +280,9 @@ export default function App() {
 
       {/* Global read-only YAML viewer (opened from any context menu). */}
       <ResourceYamlViewer />
+
+      {/* Toast host — background action progress (see lib/actionRunner). */}
+      <Toaster />
     </div>
   );
 }

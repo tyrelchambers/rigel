@@ -86,7 +86,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: latest
-        version: 2.0.6(hono@4.12.26)
+        version: 2.0.6(hono@4.12.27)
       '@rigel/catalog':
         specifier: workspace:*
         version: link:../../packages/catalog
@@ -95,7 +95,7 @@ importers:
         version: link:../../packages/k8s
       hono:
         specifier: latest
-        version: 4.12.26
+        version: 4.12.27
       node-pty:
         specifier: 1.1.0
         version: 1.1.0
@@ -126,10 +126,10 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: latest
-        version: 2.0.6(hono@4.12.26)
+        version: 2.0.6(hono@4.12.27)
       hono:
         specifier: latest
-        version: 4.12.26
+        version: 4.12.27
       pg:
         specifier: latest
         version: 8.22.0
@@ -227,6 +227,9 @@ importers:
       shadcn:
         specifier: ^4.11.0
         version: 4.11.0(typescript@6.0.3)
+      sonner:
+        specifier: ^2.0.7
+        version: 2.0.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       tailwind-merge:
         specifier: ^3.6.0
         version: 3.6.0
@@ -3126,12 +3129,12 @@ packages:
   hastscript@9.0.1:
     resolution: {integrity: sha512-g7df9rMFX/SPi34tyGCyUBREQoKkapwdY/T04Qn9TDWfHhAYt4/I0gMVirzK5wEzeUqIjEB+LXC/ypb7Aqno5w==}
 
-  hono@4.12.25:
-    resolution: {integrity: sha512-2NFaIyNVgJmBs/ecmtGzlmluTFs5cHEWGTdu0t1HBwYzoGXOL5nUQBRMXsXWla5i4KkG//QMzVP88m1+I3fdAQ==}
-    engines: {node: '>=16.9.0'}
-
   hono@4.12.26:
     resolution: {integrity: sha512-uyZtpnYxM9CmQ7QsQknM4zN8EftNqhON1qYeIKM0Se67CCEe2c44xyGURwB0axX2fBDu1dqHrHAc1hmNT8ITkw==}
+    engines: {node: '>=16.9.0'}
+
+  hono@4.12.27:
+    resolution: {integrity: sha512-1yrb/+w6HWQJrUCLkJ2IF5jNIPvvFkblV5RNOYl6bV+OA6p9GLcMpHFFGTosSvHvcAUibuUukRqhlYI4z32C7Q==}
     engines: {node: '>=16.9.0'}
 
   hosted-git-info@4.1.0:
@@ -4644,6 +4647,12 @@ packages:
   smol-toml@1.6.1:
     resolution: {integrity: sha512-dWUG8F5sIIARXih1DTaQAX4SsiTXhInKf1buxdY9DIg4ZYPZK5nGM1VRIYmEbDbsHt7USo99xSLFu5Q1IqTmsg==}
     engines: {node: '>= 18'}
+
+  sonner@2.0.7:
+    resolution: {integrity: sha512-W6ZN4p58k8aDKA4XPcx2hpIQXBRAgyiWVkYhT7CvK6D3iAu7xjvVyhQHg2/iaKJZ1XVJ4r7XuwGL+WGEK37i9w==}
+    peerDependencies:
+      react: ^18.0.0 || ^19.0.0 || ^19.0.0-rc
+      react-dom: ^18.0.0 || ^19.0.0 || ^19.0.0-rc
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
@@ -6240,13 +6249,13 @@ snapshots:
 
   '@fontsource-variable/manrope@5.2.8': {}
 
-  '@hono/node-server@1.19.14(hono@4.12.25)':
-    dependencies:
-      hono: 4.12.25
-
-  '@hono/node-server@2.0.6(hono@4.12.26)':
+  '@hono/node-server@1.19.14(hono@4.12.26)':
     dependencies:
       hono: 4.12.26
+
+  '@hono/node-server@2.0.6(hono@4.12.27)':
+    dependencies:
+      hono: 4.12.27
 
   '@iconify-json/lucide@1.2.113':
     dependencies:
@@ -6420,7 +6429,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.29.0(zod@3.25.76)':
     dependencies:
-      '@hono/node-server': 1.19.14(hono@4.12.25)
+      '@hono/node-server': 1.19.14(hono@4.12.26)
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
@@ -6430,7 +6439,7 @@ snapshots:
       eventsource-parser: 3.1.0
       express: 5.2.1
       express-rate-limit: 8.5.2(express@5.2.1)
-      hono: 4.12.25
+      hono: 4.12.26
       jose: 6.2.3
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
@@ -8525,9 +8534,9 @@ snapshots:
       property-information: 7.2.0
       space-separated-tokens: 2.0.2
 
-  hono@4.12.25: {}
-
   hono@4.12.26: {}
+
+  hono@4.12.27: {}
 
   hosted-git-info@4.1.0:
     dependencies:
@@ -10323,6 +10332,11 @@ snapshots:
   sisteransi@1.0.5: {}
 
   smol-toml@1.6.1: {}
+
+  sonner@2.0.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
+    dependencies:
+      react: 19.2.7
+      react-dom: 19.2.7(react@19.2.7)
 
   source-map-js@1.2.1: {}
 

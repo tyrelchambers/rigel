@@ -157,6 +157,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
 
   const connected = useCluster((s) => s.connected);
   const resources = useCluster((s) => s.resources);
+  const namespaceFilter = useCluster((s) => s.namespaceFilter);
 
   // Subscribe to deployments (all namespaces) so we can read the agent's
   // install namespace without pulling in the full useAssistant hook.
@@ -793,6 +794,8 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
           modelConfig={modelConfig}
           onModelConfig={setModelConfig}
           mentionCandidates={mentionCandidates}
+          resources={resources}
+          namespaceFilter={namespaceFilter}
         />
 
         <ConfirmSheet

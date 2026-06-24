@@ -32,6 +32,7 @@ import {
 } from "@/lib/api";
 import { listResources } from "@rigel/catalog";
 import { isDestructiveAction } from "@/lib/actionBlocks";
+import { runActionInBackground } from "@/lib/actionRunner";
 import { DiffView } from "@/components/DiffView";
 
 interface ConfirmSheetProps {
@@ -209,35 +210,33 @@ export function ConfirmSheet({
     const cmd = previewCommand
       ? previewCommand.join(" ")
       : (act.label ?? "kubectl");
-    mutate(act, {
-      onSuccess: (result) => {
-        // If the server signals this is a purge, defer to the purge flow
-        if ("purge" in result && result.purge) {
-          const p = result as PurgeResult;
-          onPurge?.(p.name, p.namespace);
-          onClose();
-          return;
-        }
-        // Close the loop: hand the result back to the chat session (parity with
-        // Swift executeWorkload) so the model knows it ran and can continue.
-        if (fromChat)
-          onResult?.({
-            action: act,
-            result: result as ActionResult,
-            commandString: cmd,
-          });
-      },
-      onError: (err) => {
-        // A failed run still closes the loop so the model can diagnose it.
-        if (fromChat) {
-          const message = err instanceof Error ? err.message : String(err);
-          onResult?.({
-            action: act,
-            result: { code: 1, stdout: "", stderr: message },
-            commandString: cmd,
-          });
-        }
-      },
+
+    // Purge is a quick discovery step that opens the typed-name removal sheet,
+    // so it stays in-modal: run it through the mutation and defer to onPurge.
+    if (act.kind === "purge") {
+      mutate(act, {
+        onSuccess: (result) => {
+          if ("purge" in result && result.purge) {
+            const p = result as PurgeResult;
+            onPurge?.(p.name, p.namespace);
+            onClose();
+          }
+        },
+      });
+      return;
+    }
+
+    // Real cluster mutations run in the background: close the confirm modal
+    // immediately so the UI isn't locked behind a blocking dialog, and surface
+    // progress in a toast. The chat result loop (parity with Swift
+    // executeWorkload) is preserved via onResult inside the runner.
+    handleClose();
+    runActionInBackground({
+      action: act,
+      label: act.label ?? "Confirm action",
+      commandString: cmd,
+      fromChat,
+      onResult,
     });
   }
 
