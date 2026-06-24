@@ -46,6 +46,26 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content="/og.svg" />
+
+    <!-- Privacy-friendly analytics by Plausible. is:inline so Astro leaves the
+         third-party script untouched (exact src + async preserved). -->
+    <script
+      is:inline
+      async
+      src="https://plausible.tybit.luxe/js/pa-amzJ-xZreTn2y6Xc2mkeE.js"></script>
+    <script is:inline>
+      window.plausible =
+        window.plausible ||
+        function () {
+          (plausible.q = plausible.q || []).push(arguments);
+        };
+      plausible.init =
+        plausible.init ||
+        function (i) {
+          plausible.o = i || {};
+        };
+      plausible.init();
+    </script>
   </head>
   <body>
     <a
