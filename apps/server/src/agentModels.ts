@@ -17,18 +17,21 @@ export interface AgentModels {
 }
 
 /**
- * Codex model list. STATIC + PROVISIONAL: codex isn't runnable on the dev machine,
- * so this is a best-effort set to refine once codex is live-verified. Unlike
- * opencode there's no cheap "list models" command to discover these.
+ * Codex model list. CURATED: the `codex` CLI has no "list models" command (verified
+ * against codex-cli 0.141 — `codex models` is treated as a prompt, not a subcommand;
+ * it only takes `-m`/`--model`), so this is a hand-maintained set of the current
+ * Codex-runnable models. Update when OpenAI ships new ones. No efforts (Codex doesn't
+ * take a reasoning-effort flag).
  */
-const CODEX_MODELS = ["gpt-5-codex", "gpt-5", "o4-mini"];
+const CODEX_MODELS = ["gpt-5-codex", "gpt-5.4", "gpt-5"];
 
 /**
- * Gemini model list. STATIC + PROVISIONAL: gemini-cli has no cheap "list models"
- * command, so this is a best-effort set to refine once gemini is live-verified.
- * Effort is Claude-only, so the efforts list is empty (mirrors codex).
+ * Gemini model list. CURATED: gemini-cli has no "list models" command (verified
+ * against gemini 0.27 — only `-m`/`--model`), so this is a hand-maintained set of
+ * the current Gemini models (the 3.x line, then the prior 2.5 line). Update when
+ * Google ships new ones. Effort is Claude-only, so the efforts list is empty.
  */
-const GEMINI_MODELS = ["gemini-2.5-pro", "gemini-2.5-flash"];
+const GEMINI_MODELS = ["gemini-3-pro", "gemini-3-flash", "gemini-2.5-pro", "gemini-2.5-flash"];
 
 /**
  * Parse the stdout of `opencode models` into a deduped, sorted list of model ids.

@@ -1,7 +1,6 @@
 ---
 import { Icon } from "astro-icon/components";
 
-// Hard, honest numbers. The catalog ships 58 apps; the rest are qualities.
 const stats = [
   { value: "58", label: "one-click apps" },
   { value: "24/7", label: "autonomous watch" },
@@ -9,7 +8,6 @@ const stats = [
   { value: "100%", label: "your hardware" },
 ];
 
-// Quick-jump to each feature section. Anchors match the sections below.
 const stations = [
   { icon: "lucide:message-square-text", label: "AI chat", href: "#rigel" },
   { icon: "lucide:moon-star", label: "Autonomous agent", href: "#watch" },
@@ -23,19 +21,10 @@ const stations = [
 ---
 
 <section id="top" class="chart-grid relative overflow-hidden bg-surface-sunken">
-  <!-- ambient glows -->
-  <div class="glow anim-glow absolute -left-40 -top-24 h-[420px] w-[960px]"></div>
-  <div
-    class="glow anim-glow absolute -right-24 top-40 size-[420px] opacity-[0.08]"
-    style="animation-delay:-4s"
-  >
-  </div>
-
   <div
     class="relative mx-auto max-w-[1200px] px-6 pb-16 pt-20 sm:px-8 lg:px-12 lg:pb-20 lg:pt-28"
   >
     <div class="flex items-center gap-2.5">
-      <Icon name="lucide:scroll-text" class="size-[15px] text-accent" />
       <span class="font-mono text-xs tracking-[0.16em] text-fg-tertiary"
         >EVERYTHING IT DOES</span
       >
@@ -58,7 +47,6 @@ const stations = [
       Kubernetes without an ops team.
     </p>
 
-    <!-- stat band -->
     <dl
       class="rise mt-12 grid max-w-[760px] grid-cols-2 gap-px overflow-hidden rounded-xl border border-line-subtle bg-line-subtle sm:grid-cols-4"
       style="animation-delay:0.25s"
@@ -75,7 +63,6 @@ const stations = [
       }
     </dl>
 
-    <!-- feature quick-nav -->
     <nav
       class="rise mt-9 flex flex-wrap gap-2.5"
       aria-label="Jump to a feature"

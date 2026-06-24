@@ -9,7 +9,6 @@ import FinalCta from "../components/FinalCta.astro";
 import Footer from "../components/Footer.astro";
 import { CATEGORY_META, iconForApp } from "../lib/catalog-icons";
 
-// Render the real catalog at build time, grouped into its categories.
 const apps = CATALOG;
 const total = apps.length;
 
@@ -64,7 +63,6 @@ const benefits = [
       subtitle="Pick an app, answer a few guided questions, and Rigel installs it on your cluster with sensible defaults. Your hardware, your data, none of the cloud bill."
     />
 
-    <!-- stat band + category quick-nav -->
     <section class="border-t border-line-subtle bg-surface">
       <div class="mx-auto max-w-[1200px] px-6 py-12 sm:px-8 lg:px-12">
         <div
@@ -109,7 +107,6 @@ const benefits = [
       </div>
     </section>
 
-    <!-- category sections -->
     {
       categories.map((c, ci) => (
         <section

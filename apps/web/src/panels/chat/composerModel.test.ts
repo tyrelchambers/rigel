@@ -20,10 +20,11 @@ beforeEach(() => {
 });
 
 describe("modelLabel / modelName", () => {
-  it("pretty-prints Claude aliases and shows the raw id for other agents", () => {
-    expect(modelLabel("claude", "opus")).toBe("Opus 4.8");
-    expect(modelLabel("claude", "sonnet")).toBe("Sonnet 4.6");
-    expect(modelLabel("claude", "haiku")).toBe("Haiku 4.5");
+  it("pretty-prints Claude model ids and shows the raw id for other agents", () => {
+    expect(modelLabel("claude", "claude-opus-4-8")).toBe("Opus 4.8");
+    expect(modelLabel("claude", "claude-sonnet-4-6")).toBe("Sonnet 4.6");
+    expect(modelLabel("claude", "claude-haiku-4-5-20251001")).toBe("Haiku 4.5");
+    expect(modelLabel("claude", "claude-fable-5")).toBe("Fable 5");
     // Unknown Claude id falls back to the raw id.
     expect(modelLabel("claude", "weird")).toBe("weird");
     // Other agents always show the raw id.
@@ -36,21 +37,21 @@ describe("modelLabel / modelName", () => {
 
 describe("per-agent persistence", () => {
   it("saves + loads a selection keyed by agentId", () => {
-    saveModelConfig("claude", { model: "sonnet", effort: "low" });
+    saveModelConfig("claude", { model: "claude-sonnet-4-6", effort: "low" });
     saveModelConfig("codex", { model: "gpt-5" });
 
     const map = loadModelConfigs();
-    expect(map.claude).toEqual({ model: "sonnet", effort: "low" });
+    expect(map.claude).toEqual({ model: "claude-sonnet-4-6", effort: "low" });
     expect(map.codex).toEqual({ model: "gpt-5" });
   });
 
   it("merges new saves into the existing map without clobbering other agents", () => {
-    saveModelConfig("claude", { model: "opus", effort: "high" });
+    saveModelConfig("claude", { model: "claude-opus-4-8", effort: "high" });
     saveModelConfig("opencode", { model: "openai/gpt-5" });
-    saveModelConfig("claude", { model: "haiku", effort: "max" });
+    saveModelConfig("claude", { model: "claude-haiku-4-5-20251001", effort: "max" });
 
     const map = loadModelConfigs();
-    expect(map.claude).toEqual({ model: "haiku", effort: "max" });
+    expect(map.claude).toEqual({ model: "claude-haiku-4-5-20251001", effort: "max" });
     expect(map.opencode).toEqual({ model: "openai/gpt-5" });
   });
 
@@ -73,7 +74,12 @@ describe("per-agent persistence", () => {
 });
 
 describe("resolveModelConfig", () => {
-  const claudeModels = ["opus", "sonnet", "haiku"];
+  const claudeModels = [
+    "claude-opus-4-8",
+    "claude-sonnet-4-6",
+    "claude-haiku-4-5-20251001",
+    "claude-fable-5",
+  ];
   const claudeEfforts = ["low", "medium", "high", "xhigh", "max"];
 
   it("returns null while the model list is unknown/empty", () => {
@@ -81,16 +87,16 @@ describe("resolveModelConfig", () => {
   });
 
   it("keeps the stored model + effort when both are still valid (Claude)", () => {
-    const stored = { model: "sonnet", effort: "low" };
+    const stored = { model: "claude-sonnet-4-6", effort: "low" };
     expect(resolveModelConfig("claude", stored, claudeModels, claudeEfforts)).toEqual({
-      model: "sonnet",
+      model: "claude-sonnet-4-6",
       effort: "low",
     });
   });
 
-  it("defaults Claude to opus/high when nothing is stored", () => {
+  it("defaults Claude to claude-opus-4-8/high when nothing is stored", () => {
     expect(resolveModelConfig("claude", undefined, claudeModels, claudeEfforts)).toEqual({
-      model: "opus",
+      model: "claude-opus-4-8",
       effort: "high",
     });
   });

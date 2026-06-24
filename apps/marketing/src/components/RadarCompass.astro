@@ -1,7 +1,8 @@
 ---
 import { Icon } from "astro-icon/components";
 
-// 24 ticks every 15°. Cardinal ticks (every 6th) are the accent N/E/S/W marks.
+// The 4 cardinal positions (every 6th) are skipped so no tick overlaps the
+// N/E/S/W letters — the letters mark those directions instead.
 const ticks = Array.from({ length: 24 }, (_, i) => ({
   angle: i * 15,
   cardinal: i % 6 === 0,
@@ -16,14 +17,12 @@ const cardinals = [
 
 <div class="radar-host">
   <div class="radar absolute">
-    <!-- soft base glow -->
     <div
       class="absolute left-1/2 top-1/2 size-[360px] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-25"
       style="background: radial-gradient(circle, rgba(56,189,248,0.55), rgba(56,189,248,0) 65%)"
     >
     </div>
 
-    <!-- concentric rings -->
     {
       [
         { s: 420, o: 0.5 },
@@ -38,7 +37,6 @@ const cardinals = [
       ))
     }
 
-    <!-- crosshair -->
     <div
       class="absolute left-[14px] top-1/2 h-px w-[392px] -translate-y-1/2 bg-fg-tertiary opacity-20"
     >
@@ -48,22 +46,20 @@ const cardinals = [
     >
     </div>
 
-    <!-- tick ring -->
     {
-      ticks.map((t) => (
-        <div
-          class="absolute inset-0"
-          style={`transform:rotate(${t.angle}deg)`}
-          aria-hidden="true"
-        >
-          <span
-            class={`absolute left-1/2 top-[9px] -translate-x-1/2 rounded-full ${t.cardinal ? "h-[9px] w-[2.5px] bg-accent opacity-90" : "h-[4px] w-[1.5px] bg-fg-tertiary opacity-40"}`}
-          />
-        </div>
-      ))
+      ticks
+        .filter((t) => !t.cardinal)
+        .map((t) => (
+          <div
+            class="absolute inset-0"
+            style={`transform:rotate(${t.angle}deg)`}
+            aria-hidden="true"
+          >
+            <span class="absolute left-1/2 top-[9px] h-[4px] w-[1.5px] -translate-x-1/2 rounded-full bg-fg-tertiary opacity-40" />
+          </div>
+        ))
     }
 
-    <!-- compass letters -->
     {
       cardinals.map((c) => (
         <span
@@ -74,7 +70,6 @@ const cardinals = [
       ))
     }
 
-    <!-- expanding pings -->
     {
       [120, 210, 310].map((s, i) => (
         <div
@@ -84,12 +79,10 @@ const cardinals = [
       ))
     }
 
-    <!-- rotating sweep -->
     <div
       class="anim-sweep absolute inset-0"
       style="border-radius:9999px; -webkit-mask:radial-gradient(circle, transparent 8px, #000 9px); mask:radial-gradient(circle, transparent 8px, #000 9px); background:conic-gradient(from 0deg, rgba(56,189,248,0) 0deg, rgba(56,189,248,0) 300deg, rgba(56,189,248,0.05) 330deg, rgba(56,189,248,0.45) 358deg, rgba(56,189,248,0.9) 360deg)"
     >
-      <!-- leading beam -->
       <div
         class="absolute left-1/2 top-0 h-1/2 w-px origin-bottom -translate-x-1/2 bg-accent"
         style="box-shadow:0 0 14px 1px rgba(56,189,248,0.8)"
@@ -97,7 +90,6 @@ const cardinals = [
       </div>
     </div>
 
-    <!-- signal blip: db-01 -->
     <div
       class="absolute"
       style="left:268px;top:140px"
@@ -112,7 +104,6 @@ const cardinals = [
       >
     </div>
 
-    <!-- hub -->
     <div
       class="anim-hub absolute left-1/2 top-1/2 grid size-[44px] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full"
       style="background:radial-gradient(circle, rgba(56,189,248,0.3), rgba(56,189,248,0) 70%)"
@@ -128,7 +119,6 @@ const cardinals = [
       >HDG 000°</span
     >
 
-    <!-- scan badge -->
     <div
       class="absolute left-[38px] top-[44px] flex items-center gap-1.5 rounded-full border border-line-strong bg-surface-elevated/90 px-2.5 py-1"
     >

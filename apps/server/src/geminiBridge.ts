@@ -31,8 +31,8 @@ import { provisionGuardBin } from "./guardedKubectl";
 import { streamAgentProcess, type ChatEvent } from "./agentProcess";
 // Reuse Claude's per-turn options shape: the chat composer sends the SAME opts to
 // every runner (model/effort/sessionId). Gemini honors model (via -m) but not
-// effort. isClaudeModelAlias guards against a stale Claude alias.
-import { isClaudeModelAlias, type RunClaudeOpts } from "./claudeBridge";
+// effort. isClaudeModel guards against a stale Claude selection.
+import { isClaudeModel, type RunClaudeOpts } from "./claudeBridge";
 
 /**
  * Build the `gemini` argv for one turn. Pure + exported so it can be unit tested
@@ -61,11 +61,11 @@ export function buildGeminiArgs(
 
   const argv = ["gemini", "-p", fullPrompt, "-o", "stream-json", "--approval-mode", "yolo"];
 
-  // Model: Gemini takes `-m <model>` (e.g. gemini-2.5-pro), sent by the agent-aware
-  // picker. Skip a BARE Claude alias (opus/sonnet/haiku) — the composer historically
-  // sent those to every runner, and they're not Gemini models, so passing one would
-  // break the CLI. Skipping lets Gemini fall back to its configured default instead.
-  if (opts?.model && !isClaudeModelAlias(opts.model)) {
+  // Model: Gemini takes `-m <model>` (e.g. gemini-3-pro), sent by the agent-aware
+  // picker. Skip a stale Claude selection (alias like "opus" or a full id like
+  // "claude-opus-4-8") — those aren't Gemini models, so passing one would break the
+  // CLI. Skipping lets Gemini fall back to its configured default instead.
+  if (opts?.model && !isClaudeModel(opts.model)) {
     argv.push("-m", opts.model);
   }
 

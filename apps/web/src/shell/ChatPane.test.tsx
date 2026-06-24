@@ -44,7 +44,7 @@ const opencode: AgentView = {
   installUrl: "https://x", installLabel: "Install OpenCode",
 };
 
-const CLAUDE_MODELS: AgentModels = { models: ["opus", "sonnet", "haiku"], efforts: ["low", "medium", "high", "xhigh", "max"] };
+const CLAUDE_MODELS: AgentModels = { models: ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-fable-5"], efforts: ["low", "medium", "high", "xhigh", "max"] };
 const OPENCODE_MODELS: AgentModels = { models: ["anthropic/claude-sonnet-4-6", "openai/gpt-5", "google/gemini-2.5-pro"], efforts: [] };
 
 /**
@@ -169,12 +169,12 @@ describe("ChatPane agent-aware model picker", () => {
     // Send a message and assert the chosen model/effort flow through to sendChat.
     fireEvent.change(composer(), { target: { value: "hi" } });
     fireEvent.keyDown(composer(), { key: "Enter" });
-    expect(sendChat).toHaveBeenCalledWith("hi", expect.objectContaining({ model: "sonnet", effort: "high" }));
+    expect(sendChat).toHaveBeenCalledWith("hi", expect.objectContaining({ model: "claude-sonnet-4-6", effort: "high" }));
   });
 
   it("keeps a per-agent selection (the stored choice is restored on next render)", () => {
     // First mount: active Codex, pick gpt-5.
-    const codexModels: AgentModels = { models: ["gpt-5-codex", "gpt-5", "o4-mini"], efforts: [] };
+    const codexModels: AgentModels = { models: ["gpt-5-codex", "gpt-5.4", "gpt-5"], efforts: [] };
     const { unmount } = renderPane({ activeAgentId: "codex", agents: [codex] }, { codex: codexModels });
     fireEvent.click(within(openModelPicker()).getByRole("option", { name: "gpt-5" }));
     expect(screen.getByRole("button", { name: /choose model/i })).toHaveTextContent("gpt-5");
@@ -189,7 +189,7 @@ describe("ChatPane agent-aware model picker", () => {
     // Codex selection persisted from a prior session.
     localStorage.setItem(
       "rigel.modelConfig.v2",
-      JSON.stringify({ claude: { model: "haiku", effort: "low" }, codex: { model: "o4-mini" } }),
+      JSON.stringify({ claude: { model: "claude-haiku-4-5-20251001", effort: "low" }, codex: { model: "gpt-5.4" } }),
     );
 
     // Active = Claude → shows the Claude selection.
@@ -201,8 +201,8 @@ describe("ChatPane agent-aware model picker", () => {
     claudeRender.unmount();
 
     // Active = Codex → shows the Codex selection (raw id).
-    const codexModels: AgentModels = { models: ["gpt-5-codex", "gpt-5", "o4-mini"], efforts: [] };
+    const codexModels: AgentModels = { models: ["gpt-5-codex", "gpt-5.4", "gpt-5"], efforts: [] };
     renderPane({ activeAgentId: "codex", agents: [codex] }, { codex: codexModels });
-    expect(screen.getByRole("button", { name: /choose model/i })).toHaveTextContent("o4-mini");
+    expect(screen.getByRole("button", { name: /choose model/i })).toHaveTextContent("gpt-5.4");
   });
 });

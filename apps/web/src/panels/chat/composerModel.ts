@@ -13,11 +13,16 @@
  */
 import type { AgentId } from "@/lib/api";
 
-/** Claude pretty-name table (the others show their raw model id). */
+/**
+ * Claude pretty-name table: maps the full model ids the server advertises (see
+ * claudeBridge.ALLOWED_MODELS) to friendly display names. The others show their raw
+ * model id. Keep these ids in sync with ALLOWED_MODELS.
+ */
 export const CLAUDE_MODELS = [
-  { id: "opus", name: "Opus 4.8" },
-  { id: "sonnet", name: "Sonnet 4.6" },
-  { id: "haiku", name: "Haiku 4.5" },
+  { id: "claude-opus-4-8", name: "Opus 4.8" },
+  { id: "claude-sonnet-4-6", name: "Sonnet 4.6" },
+  { id: "claude-haiku-4-5-20251001", name: "Haiku 4.5" },
+  { id: "claude-fable-5", name: "Fable 5" },
 ] as const;
 export type ClaudeModelId = (typeof CLAUDE_MODELS)[number]["id"];
 
@@ -32,8 +37,8 @@ export type ClaudeEffortId = (typeof CLAUDE_EFFORTS)[number]["id"];
 
 /**
  * A single agent's composer selection. `model` is the raw model id the agent
- * advertises (a Claude alias like "opus", a Codex id like "gpt-5-codex", or an
- * OpenCode `provider/model`). `effort` is Claude-only and omitted otherwise.
+ * advertises (a full Claude id like "claude-opus-4-8", a Codex id like "gpt-5-codex",
+ * or an OpenCode `provider/model`). `effort` is Claude-only and omitted otherwise.
  */
 export interface ModelConfig {
   model: string;
@@ -41,9 +46,9 @@ export interface ModelConfig {
 }
 
 /** Claude's defaults — used when an agent has no stored choice and is Claude. */
-export const DEFAULT_MODEL_CONFIG: ModelConfig = { model: "opus", effort: "high" };
+export const DEFAULT_MODEL_CONFIG: ModelConfig = { model: "claude-opus-4-8", effort: "high" };
 
-/** "Opus 4.8" for a Claude alias; the raw id for any other agent. */
+/** "Opus 4.8" for a known Claude model id; the raw id for any other agent. */
 export function modelName(agentId: AgentId | undefined, model: string): string {
   if (agentId === "claude") {
     return CLAUDE_MODELS.find((m) => m.id === model)?.name ?? model;
@@ -131,8 +136,8 @@ export function saveModelConfig(agentId: AgentId, config: ModelConfig): void {
  * Resolve the active selection for an agent from a stored map + the agent's
  * currently-advertised models/efforts:
  *  - use the stored model when it's still in the agent's list;
- *  - otherwise default to the first model in the list (Claude keeps the existing
- *    "opus" default when present);
+ *  - otherwise default to the first model in the list (Claude keeps its
+ *    claude-opus-4-8 default when present);
  *  - effort applies only when the agent has efforts (Claude): keep the stored or
  *    default effort, else omit it.
  * Returns `null` while the model list is still empty/unknown (nothing to pick).

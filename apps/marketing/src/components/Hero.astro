@@ -7,7 +7,6 @@ import RadarCompass from "./RadarCompass.astro";
   id="top"
   class="chart-grid relative overflow-hidden bg-surface-sunken"
 >
-  <!-- ambient glows -->
   <div class="glow anim-glow absolute -left-40 bottom-0 h-[420px] w-[1040px]"></div>
   <div
     class="glow anim-glow absolute -right-24 top-24 size-[460px] opacity-[0.08]"
@@ -18,7 +17,6 @@ import RadarCompass from "./RadarCompass.astro";
   <div
     class="relative mx-auto grid max-w-[1200px] items-center gap-16 px-6 py-20 sm:px-8 lg:grid-cols-[minmax(0,1fr)_440px] lg:gap-10 lg:py-28 lg:px-12"
   >
-    <!-- left: copy -->
     <div class="max-w-xl">
       <h1
         class="rise text-[clamp(2.6rem,7vw,3.875rem)] font-bold leading-[1.02] tracking-[-0.03em]"
@@ -61,7 +59,6 @@ import RadarCompass from "./RadarCompass.astro";
       </div>
     </div>
 
-    <!-- right: radar -->
     <div class="rise mx-auto w-full max-w-[440px]" style="animation-delay:0.2s">
       <RadarCompass />
     </div>

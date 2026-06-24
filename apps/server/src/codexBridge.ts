@@ -26,8 +26,8 @@ import { provisionGuardBin } from "./guardedKubectl";
 import { streamAgentProcess, type ChatEvent } from "./agentProcess";
 // Reuse Claude's per-turn options shape: the chat composer sends the SAME opts to
 // every runner (model/effort/sessionId). Codex now honors model (via -m), but not
-// effort (out of scope). isClaudeModelAlias guards against a stale Claude alias.
-import { isClaudeModelAlias, type RunClaudeOpts } from "./claudeBridge";
+// effort (out of scope). isClaudeModel guards against a stale Claude selection.
+import { isClaudeModel, type RunClaudeOpts } from "./claudeBridge";
 
 /**
  * Build the `codex exec` argv for one turn. Pure + exported so it can be unit
@@ -77,11 +77,11 @@ export function buildCodexArgs(
   ];
 
   // Model: Codex takes `-m <model>` (e.g. gpt-5-codex), sent by the agent-aware
-  // picker. Skip a BARE Claude alias (opus/sonnet/haiku) — the composer historically
-  // sent those to every runner, and they're not Codex models, so passing one would
-  // break the CLI. Skipping lets Codex fall back to its configured default instead.
+  // picker. Skip a stale Claude selection (alias like "opus" or a full id like
+  // "claude-opus-4-8") — those aren't Codex models, so passing one would break the
+  // CLI. Skipping lets Codex fall back to its configured default instead.
   // Effort stays Codex-out-of-scope (opts.effort is ignored).
-  if (opts?.model && !isClaudeModelAlias(opts.model)) {
+  if (opts?.model && !isClaudeModel(opts.model)) {
     flags.push("-m", opts.model);
   }
 

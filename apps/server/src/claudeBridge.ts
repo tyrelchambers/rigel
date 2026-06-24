@@ -198,22 +198,40 @@ export function mapClaudeEvent(ev: any): ChatEvent[] {
  *  - Other types (system, user, tool_use, tool_result) are silently skipped.
  */
 /**
- * CLI aliases the picker may send; anything else is ignored (no flag added).
- * Exported (insertion order preserved) so agentModels.ts can surface the same set
- * to the composer's model picker — single source of truth for Claude's models/efforts.
+ * The full Claude model ids the picker advertises — single source of truth for the
+ * Claude model list shown in BOTH the chat composer and the Assistant Agents picker
+ * (agentModels.ts surfaces this set). Full ids (not the bare opus/sonnet/haiku
+ * aliases) so a selection matches the full-id defaults the UI ships and the in-cluster
+ * agent runs (see providerMeta DEFAULT_WORKER/SUPERVISOR + agent/src/providers/claude).
+ * `claude --model` accepts these full ids directly. Insertion order is preserved.
+ * Update when a new Claude model ships — there is no `claude` CLI command to list models.
  */
-export const ALLOWED_MODELS = new Set(["opus", "sonnet", "haiku"]);
+export const ALLOWED_MODELS = new Set([
+  "claude-opus-4-8",
+  "claude-sonnet-4-6",
+  "claude-haiku-4-5-20251001",
+  "claude-fable-5",
+]);
+
+/**
+ * Bare "latest" aliases the `claude` CLI also accepts for --model. The picker uses
+ * full ids, but a stored/legacy selection may still carry one of these, so we keep
+ * honoring them rather than silently dropping a valid model.
+ */
+const CLAUDE_ALIASES = new Set(["opus", "sonnet", "haiku", "fable"]);
+
 export const ALLOWED_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
 
 /**
- * True when `model` is a bare Claude alias (opus/sonnet/haiku). The composer
- * historically sent these to EVERY runner; codex/opencode use this guard to skip
- * a stale Claude alias rather than passing it as `-m` (which would error, e.g. on
- * "opus"), so they fall back to their own configured default. Shared so the rule
- * stays in one place.
+ * True when `model` is a Claude model string the `claude` CLI accepts for --model:
+ * one of our advertised full ids or a bare latest-alias. Used (a) to gate the
+ * --model flag in buildClaudeArgs, and (b) by the codex/gemini/opencode bridges to
+ * SKIP a stale Claude selection rather than passing it as their own `-m` (which would
+ * error, e.g. on "opus" / "claude-opus-4-8"), falling back to their configured default.
+ * Shared so the rule stays in one place.
  */
-export function isClaudeModelAlias(model: string): boolean {
-  return ALLOWED_MODELS.has(model);
+export function isClaudeModel(model: string): boolean {
+  return ALLOWED_MODELS.has(model) || CLAUDE_ALIASES.has(model);
 }
 
 export interface RunClaudeOpts {
@@ -246,7 +264,7 @@ export function buildClaudeArgs(
   argv.push("--settings", permissionHookSettings());
   // Apply the composer's model/effort selection as launch flags (validated so a
   // bad value can't inject arbitrary args or break the CLI).
-  if (opts?.model && ALLOWED_MODELS.has(opts.model)) argv.push("--model", opts.model);
+  if (opts?.model && isClaudeModel(opts.model)) argv.push("--model", opts.model);
   if (opts?.effort && ALLOWED_EFFORTS.has(opts.effort)) argv.push("--effort", opts.effort);
   // Resume the prior session so the model keeps conversation + action-result
   // history across turns. Only when we actually have an id (first turn is fresh).

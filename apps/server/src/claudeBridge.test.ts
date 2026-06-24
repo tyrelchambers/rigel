@@ -282,6 +282,11 @@ test("buildClaudeArgs appends --resume only when a sessionId is given", () => {
 });
 
 test("buildClaudeArgs still validates model/effort", () => {
+  // A full model id (what the picker now sends) passes through to --model.
+  const full = buildClaudeArgs("hi", null, { model: "claude-opus-4-8", effort: "high" });
+  expect(full).toContain("--model");
+  expect(full[full.indexOf("--model") + 1]).toBe("claude-opus-4-8");
+  // A bare latest-alias is still honored (legacy/stored selection).
   const ok = buildClaudeArgs("hi", null, { model: "opus", effort: "high" });
   expect(ok).toContain("--model");
   expect(ok[ok.indexOf("--model") + 1]).toBe("opus");

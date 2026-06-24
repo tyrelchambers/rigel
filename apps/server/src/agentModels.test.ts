@@ -42,21 +42,26 @@ describe("parseOpencodeModels", () => {
 // (opencode goes through a live spawn, so we don't exercise it here)
 // ---------------------------------------------------------------------------
 describe("agentModels", () => {
-  test("claude → opus/sonnet/haiku + the five effort levels", async () => {
+  test("claude → the full Claude model ids + the five effort levels", async () => {
     const r = await agentModels("claude");
-    expect(r.models).toEqual(["opus", "sonnet", "haiku"]);
+    expect(r.models).toEqual([
+      "claude-opus-4-8",
+      "claude-sonnet-4-6",
+      "claude-haiku-4-5-20251001",
+      "claude-fable-5",
+    ]);
     expect(r.efforts).toEqual(["low", "medium", "high", "xhigh", "max"]);
   });
 
-  test("codex → the static codex model set, no efforts", async () => {
+  test("codex → the curated codex model set, no efforts", async () => {
     const r = await agentModels("codex");
-    expect(r.models).toEqual(["gpt-5-codex", "gpt-5", "o4-mini"]);
+    expect(r.models).toEqual(["gpt-5-codex", "gpt-5.4", "gpt-5"]);
     expect(r.efforts).toEqual([]);
   });
 
-  test("gemini → the static gemini model set, no efforts", async () => {
+  test("gemini → the curated gemini model set, no efforts", async () => {
     const r = await agentModels("gemini");
-    expect(r.models).toEqual(["gemini-2.5-pro", "gemini-2.5-flash"]);
+    expect(r.models).toEqual(["gemini-3-pro", "gemini-3-flash", "gemini-2.5-pro", "gemini-2.5-flash"]);
     expect(r.efforts).toEqual([]);
   });
 

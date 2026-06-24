@@ -1,11 +1,9 @@
 ---
 import { Icon } from "astro-icon/components";
 
-// Shared hero band for standalone pages (about, changelog, …). Mirrors the
-// look of FeaturesHero so secondary pages feel of-a-piece with the site.
 interface Props {
   eyebrow: string;
-  eyebrowIcon?: string;
+  eyebrowIcon?: string | null;
   title: string;
   subtitle?: string;
 }
@@ -19,13 +17,11 @@ const {
 ---
 
 <section class="chart-grid relative overflow-hidden bg-surface-sunken">
-  <div class="glow anim-glow absolute -left-40 -top-24 h-[420px] w-[960px]"></div>
-
   <div
     class="relative mx-auto max-w-[1200px] px-6 pb-16 pt-20 sm:px-8 lg:px-12 lg:pb-20 lg:pt-28"
   >
     <div class="flex items-center gap-2.5">
-      <Icon name={eyebrowIcon} class="size-[15px] text-accent" />
+      {eyebrowIcon && <Icon name={eyebrowIcon} class="size-[15px] text-accent" />}
       <span class="font-mono text-xs tracking-[0.16em] text-fg-tertiary"
         >{eyebrow}</span
       >

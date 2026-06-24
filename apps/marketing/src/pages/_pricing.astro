@@ -75,7 +75,6 @@ const tiers = [
   },
 ];
 
-// The product-specific part of the model: two ways to power the AI.
 const aiBilling = [
   {
     icon: "lucide:key-round",
@@ -98,7 +97,6 @@ const aiBilling = [
   <main id="main">
     <PricingHero />
 
-    <!-- tiers -->
     <section class="relative overflow-hidden bg-surface-sunken">
       <div
         class="relative mx-auto grid max-w-[1100px] items-start gap-6 px-6 pb-16 sm:px-8 lg:grid-cols-3 lg:px-12"
@@ -106,7 +104,6 @@ const aiBilling = [
         {tiers.map((t) => <PricingCard {...t} />)}
       </div>
 
-      <!-- how the AI is billed -->
       <div class="relative mx-auto max-w-[1100px] px-6 pb-20 sm:px-8 lg:px-12">
         <div
           data-reveal
