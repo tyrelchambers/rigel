@@ -1,6 +1,8 @@
 appId: com.tyrelchambers.rigel
 productName: Rigel
 copyright: Copyright © 2026 Tyrel Chambers
+# Required by the Linux .deb target (electron-builder errors without them).
+homepage: https://rigel.run
 
 # Where `--publish` uploads the installers. electron-builder creates a DRAFT
 # GitHub Release named for the version (tag v<version>) and uploads the .dmg
@@ -109,6 +111,8 @@ win:
 linux:
   icon: build/icon.png
   category: Development
+  # The .deb target requires a Debian maintainer ("Name <email>").
+  maintainer: Tyrel Chambers <noreply@rigel.run>
   target:
     - target: AppImage
       arch:
