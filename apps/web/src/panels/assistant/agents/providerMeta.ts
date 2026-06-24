@@ -2,6 +2,7 @@
 // role defaults, and the provider→credential-key mapping. Vendor names, labels,
 // and auth-method copy come from useAgents() at render time — this module only
 // holds what the server does not surface.
+import { CREDENTIAL_ENV } from "@rigel/k8s";
 import type { AgentId, AssistantCredentials, AssistantLimits, AssistantRoleSelection } from "@/lib/api";
 
 /** The four providers, in display order. Mirrors the chat's AgentId set. */
@@ -43,6 +44,19 @@ const KEYS_FOR: Record<AgentId, (keyof AssistantCredentials)[]> = {
 export function credentialKeyFor(id: AgentId): keyof AssistantCredentials {
   return KEYS_FOR[id][0]!;
 }
+
+/** Every credential id this provider can authenticate with (so a row can check
+ *  whether ANY of its credentials is in conflict). */
+export function credentialKeysFor(id: AgentId): (keyof AssistantCredentials)[] {
+  return KEYS_FOR[id];
+}
+
+/** Credential id → the agent env var it feeds, derived from the single source of
+ *  truth in @rigel/k8s (CREDENTIAL_ENV) so the two never drift. Display-only (the
+ *  BYO source dialog's "reads <ENV> from …" readout). */
+export const ENV_FOR = Object.fromEntries(
+  CREDENTIAL_ENV.map((e) => [e.id, e.env]),
+) as Record<keyof AssistantCredentials, string>;
 
 /** Reasoning effort applies only to Claude-family providers. */
 export function isClaudeFamily(id: AgentId | string): boolean {

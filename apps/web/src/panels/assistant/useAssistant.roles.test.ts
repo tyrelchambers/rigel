@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { parseRolesFromConfig, parseLimitsFromConfig, credsFromSecretKeys } from "./useAssistant";
+import { parseRolesFromConfig, parseLimitsFromConfig, credsFromSources } from "./useAssistant";
 
 describe("parseRolesFromConfig", () => {
   test("reads both roles from the assistant-config keys", () => {
@@ -33,14 +33,23 @@ describe("parseLimitsFromConfig", () => {
   });
 });
 
-describe("credsFromSecretKeys", () => {
-  test("maps present Secret key NAMES to an AssistantCredentials presence view", () => {
-    expect(credsFromSecretKeys(["geminiApiKey", "claudeToken"])).toEqual({
-      geminiApiKey: "set",
-      claudeToken: "set",
-    });
+describe("credsFromSources", () => {
+  test("maps ready credential ids to an AssistantCredentials presence view", () => {
+    expect(
+      credsFromSources({
+        geminiApiKey: { ready: true, secretName: "rigel-assistant-credentials" },
+        claudeToken: { ready: true, secretName: "rigel-assistant-token" },
+      }),
+    ).toEqual({ geminiApiKey: "set", claudeToken: "set" });
   });
-  test("no keys → empty (all chips read Not set)", () => {
-    expect(credsFromSecretKeys([])).toEqual({});
+  test("a resolved-but-empty source (ready: false) is omitted, so its chip reads Not set", () => {
+    expect(
+      credsFromSources({
+        anthropicApiKey: { ready: false, secretName: "rigel-assistant-credentials" },
+      }),
+    ).toEqual({});
+  });
+  test("no sources → empty (all chips read Not set)", () => {
+    expect(credsFromSources({})).toEqual({});
   });
 });

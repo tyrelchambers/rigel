@@ -239,7 +239,14 @@ export function InstallView() {
           <RolePicker label="Worker" description="Investigates incidents, proposes fixes" value={worker} onChange={setWorker} disabled={working} />
           <RolePicker label="Supervisor" description="Adversarially reviews risky actions" value={supervisor} onChange={setSupervisor} disabled={working} />
         </div>
-        <CredentialsManager credentials={stagedCreds} onSave={stageCred} disabled={working} />
+        {/* BYO (existing-Secret) is a post-install action — the agent doesn't
+            exist yet, so install stages credentials into the managed Secret only. */}
+        <CredentialsManager
+          credentials={stagedCreds}
+          namespace={config.installNamespace}
+          onSave={stageCred}
+          disabled={working}
+        />
       </Card>
 
       <Card>

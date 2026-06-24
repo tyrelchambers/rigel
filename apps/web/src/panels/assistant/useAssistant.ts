@@ -17,12 +17,18 @@ import {
   parseAlertRules,
   ISSUED_AT_ANNOTATION,
   SECRET_NAME,
+  isAssistantManaged,
   type AssistantClusterState,
   type AssistantLiveIssue,
   type TokenExpiryStatus,
   type AlertRule,
 } from "@rigel/k8s";
-import type { AssistantCredentials, AssistantRoleSelection, AssistantLimits } from "@/lib/api";
+import type {
+  AssistantCredentials,
+  AssistantRoleSelection,
+  AssistantLimits,
+  CredentialSourceStatus,
+} from "@/lib/api";
 import { postAssistant } from "@/lib/api";
 import { DEFAULT_WORKER, DEFAULT_SUPERVISOR } from "./agents/providerMeta";
 
@@ -98,8 +104,19 @@ export interface AssistantDerived {
   /** Operational limits parsed from assistant-config (absent keys omitted). */
   limits: AssistantLimits;
   /** Per-provider credential readiness, from the server's credentialStatus read
-   *  (key names only — values never leave the cluster). */
+   *  (key names only — values never leave the cluster). A "set" sentinel per ready
+   *  credential id so the shared `credentialReady` helper keeps working. */
   creds: AssistantCredentials;
+  /** Per-credential `{ ready, secretName }` (the backing Secret), from
+   *  credentialStatus. Drives the row readiness chip + the source dialog. Names
+   *  only — values never leave the cluster. */
+  credentialSources: Partial<Record<keyof AssistantCredentials, CredentialSourceStatus>>;
+  /** Credential ids claimed by more than one credential-store Secret (the
+   *  alphabetically-first wins). Drives the per-row amber conflict marker. */
+  credentialConflicts: (keyof AssistantCredentials)[];
+  /** True when a legacy install has fallback-resolved credentials not yet stamped
+   *  with annotations. Drives the "Repair credential labels" button. */
+  credentialNeedsReconcile: boolean;
 }
 
 /**
@@ -128,7 +145,9 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
   // once the watch has it, falling back to the hint before the agent exists.
   const credentialNamespace = useMemo(() => {
     const deps = (resources["deployments"] ?? {}) as Record<string, DeploymentLike>;
-    const agent = Object.values(deps).find((d) => d.metadata.name === "rigel-assistant");
+    const agent = Object.values(deps).find(
+      (d) => d.metadata.name === "rigel-assistant" && isAssistantManaged(d.metadata.labels),
+    );
     return agent?.metadata.namespace ?? installNamespaceHint;
   }, [resources, installNamespaceHint]);
 
@@ -136,8 +155,16 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
     queryKey: ["assistant-credentialStatus", credentialNamespace],
     queryFn: async () => {
       const res = await postAssistant({ action: "credentialStatus", namespace: credentialNamespace });
-      const parsed = JSON.parse(res.stdout || "{}") as { credentialKeys?: string[] };
-      return parsed.credentialKeys ?? [];
+      const parsed = JSON.parse(res.stdout || "{}") as {
+        credentials?: Partial<Record<keyof AssistantCredentials, CredentialSourceStatus>>;
+        conflicts?: (keyof AssistantCredentials)[];
+        needsReconcile?: boolean;
+      };
+      return {
+        credentials: parsed.credentials ?? {},
+        conflicts: parsed.conflicts ?? [],
+        needsReconcile: parsed.needsReconcile ?? false,
+      };
     },
   });
 
@@ -163,7 +190,10 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
   );
 
   return useMemo<AssistantDerived>(() => {
-    const agentDeployment = deployments.find((d) => d.metadata.name === "rigel-assistant") ?? null;
+    // Match by name AND our managed-by label, so a same-named Deployment we don't
+    // own is never mistaken for an installed assistant (and never operated on).
+    const agentDeployment =
+      deployments.find((d) => d.metadata.name === "rigel-assistant" && isAssistantManaged(d.metadata.labels)) ?? null;
     const isInstalled = agentDeployment != null;
     const installedNamespace = agentDeployment ? agentDeployment.metadata.namespace ?? "default" : null;
     const stateNamespace = installedNamespace ?? installNamespaceHint;
@@ -233,17 +263,25 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
       alertRules: parseAlertRules(configData["alertRules"]),
       roles: parseRolesFromConfig(configData),
       limits: parseLimitsFromConfig(configData),
-      creds: credsFromSecretKeys(credStatus.data ?? []),
+      creds: credsFromSources(credStatus.data?.credentials ?? {}),
+      credentialSources: credStatus.data?.credentials ?? {},
+      credentialConflicts: credStatus.data?.conflicts ?? [],
+      credentialNeedsReconcile: credStatus.data?.needsReconcile ?? false,
     };
   }, [deployments, pods, configMaps, secrets, namespaces, installNamespaceHint, credStatus.data]);
 }
 
-/** Build the presence view from the credential key NAMES the server reported (values
- *  never reach the client). Each present key gets a non-empty sentinel so the shared
+/** Build the presence view from the per-credential `{ ready, secretName }` map the
+ *  server reported (values never reach the client). Each credential id that resolves
+ *  to a ready source gets a non-empty sentinel so the shared
  *  credentialReady(creds, provider) helper reports that provider ready. */
-export function credsFromSecretKeys(keys: string[]): AssistantCredentials {
+export function credsFromSources(
+  sources: Partial<Record<keyof AssistantCredentials, CredentialSourceStatus>>,
+): AssistantCredentials {
   const out: AssistantCredentials = {};
-  for (const k of keys) (out as Record<string, string>)[k] = "set";
+  for (const [id, src] of Object.entries(sources)) {
+    if (src?.ready) (out as Record<string, string>)[id] = "set";
+  }
   return out;
 }
 
