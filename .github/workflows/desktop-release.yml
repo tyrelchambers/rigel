@@ -70,3 +70,27 @@ jobs:
           # We don't sign yet (identity: null). Tell electron-builder not to go
           # hunting for a signing identity on the runner, which would error out.
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+  # After all three platforms publish, prune the electron-updater .blockmap files
+  # from the draft release (delta-update artifacts we don't use yet — auto-update
+  # isn't wired). The latest-*.yml manifests are kept (they're what a future
+  # electron-updater needs). Runs only on a successful tag release.
+  strip-blockmaps:
+    needs: release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Delete .blockmap assets from the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets[].name | select(endswith(".blockmap"))' \
+          | while read -r asset; do
+              [ -z "$asset" ] && continue
+              echo "Deleting $asset"
+              gh release delete-asset "$TAG" "$asset" --repo "$GITHUB_REPOSITORY" --yes
+            done
