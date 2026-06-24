@@ -230,7 +230,7 @@ describe("new-thread handoff", () => {
     expect(screen.queryByText("old message")).not.toBeInTheDocument();
 
     // The send for a new thread carries sessionId: undefined.
-    const lastCall = sendChat.mock.calls.at(-1)!;
+    const lastCall = sendChat.mock.calls[sendChat.mock.calls.length - 1]!;
     expect(lastCall[0]).toBe("investigate this warning");
     expect((lastCall[1] as { sessionId?: string }).sessionId).toBeUndefined();
   });

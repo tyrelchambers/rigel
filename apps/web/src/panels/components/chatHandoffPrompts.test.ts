@@ -33,7 +33,7 @@ describe("buildWarningInvestigationPrompt", () => {
 
   it("defaults a missing namespace to default", () => {
     const p = buildWarningInvestigationPrompt(
-      evt({ reason: "BackOff", involvedObject: { kind: "Pod", name: "api-1", uid: "x" } }),
+      evt({ reason: "BackOff", involvedObject: { kind: "Pod", name: "api-1", namespace: null, uid: "x" } }),
     );
     expect(p).toContain("in namespace default");
   });
