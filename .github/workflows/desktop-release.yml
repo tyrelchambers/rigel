@@ -37,6 +37,11 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          # setup-node@v5 defaults package-manager-cache:true, which detects the
+          # `packageManager: pnpm` field and tries to cache pnpm BEFORE corepack
+          # enables it ("Unable to locate executable file: pnpm"). corepack runs
+          # in the next step, so disable the premature cache here.
+          package-manager-cache: false
 
       # Activates pnpm from the root package.json "packageManager" field.
       - name: Enable corepack (pnpm)
