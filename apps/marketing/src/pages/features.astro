@@ -10,255 +10,255 @@ import FinalCta from "../components/FinalCta.astro";
 import Footer from "../components/Footer.astro";
 
 const rigel = [
-  {
-    icon: "lucide:search",
-    title: "Plain-English investigation",
-    desc: "“Why is checkout crashing?” It reads your logs, events and dependencies like a senior SRE to find the cause.",
-  },
-  {
-    icon: "lucide:mouse-pointer-click",
-    title: "One-click fixes",
-    desc: "Every fix arrives as a button that shows the exact kubectl command before anything runs.",
-  },
-  {
-    icon: "lucide:at-sign",
-    title: "@-mention any resource",
-    desc: "Pull a pod, deployment or service straight into the conversation with autocomplete.",
-  },
-  {
-    icon: "lucide:brain",
-    title: "Watch it think",
-    desc: "A reasoning pane shows how the AI got there, not just the answer.",
-  },
-  {
-    icon: "lucide:cpu",
-    title: "Choose your model",
-    desc: "Match the model and effort level to the job, from a quick look to a deep dig.",
-  },
-  {
-    icon: "lucide:history",
-    title: "Picks up where you left off",
-    desc: "Saved chat history, and any panel can hand off to the chat with full context.",
-  },
+    {
+        icon: "lucide:search",
+        title: "Plain-English investigation",
+        desc: "“Why is checkout crashing?” It reads your logs, events and dependencies like a senior SRE to find the cause.",
+    },
+    {
+        icon: "lucide:mouse-pointer-click",
+        title: "One-click fixes",
+        desc: "Every fix arrives as a button that shows the exact kubectl command before anything runs.",
+    },
+    {
+        icon: "lucide:at-sign",
+        title: "@-mention any resource",
+        desc: "Pull a pod, deployment or service straight into the conversation with autocomplete.",
+    },
+    {
+        icon: "lucide:brain",
+        title: "Watch it think",
+        desc: "A reasoning pane shows how the AI got there, not just the answer.",
+    },
+    {
+        icon: "lucide:cpu",
+        title: "Choose your model",
+        desc: "Match the model and effort level to the job, from a quick look to a deep dig.",
+    },
+    {
+        icon: "lucide:history",
+        title: "Picks up where you left off",
+        desc: "Saved chat history, and any panel can hand off to the chat with full context.",
+    },
 ];
 
 const nightWatch = [
-  {
-    icon: "lucide:shield-check",
-    title: "Guardrails you define",
-    desc: "Spend caps, a kill-switch and scoped permissions. The agent only ever acts inside the lines.",
-  },
-  {
-    icon: "lucide:siren",
-    title: "Catches the usual suspects",
-    desc: "Crash-loops, OOM kills, pending pods and degraded rollouts, all caught automatically.",
-  },
-  {
-    icon: "lucide:hand",
-    title: "Asks when it's unsure",
-    desc: "A “Needs you” queue surfaces every decision the agent won't make on its own.",
-  },
-  {
-    icon: "lucide:save",
-    title: "Backs up before it touches",
-    desc: "Resource YAML is snapshotted before any change, so nothing is ever lost.",
-  },
-  {
-    icon: "lucide:rotate-ccw",
-    title: "One-click revert",
-    desc: "Every action is logged with before / after YAML and an undo button right beside it.",
-  },
-  {
-    icon: "lucide:scroll-text",
-    title: "Full audit trail",
-    desc: "An activity log of everything the watch has done, ready to review.",
-  },
+    {
+        icon: "lucide:shield-check",
+        title: "Guardrails you define",
+        desc: "Spend caps, a kill-switch and scoped permissions. The agent only ever acts inside the lines.",
+    },
+    {
+        icon: "lucide:siren",
+        title: "Catches the usual suspects",
+        desc: "Crash-loops, OOM kills, pending pods and degraded rollouts, all caught automatically.",
+    },
+    {
+        icon: "lucide:hand",
+        title: "Asks when it's unsure",
+        desc: "A “Needs you” queue surfaces every decision the agent won't make on its own.",
+    },
+    {
+        icon: "lucide:save",
+        title: "Backs up before it touches",
+        desc: "Resource YAML is snapshotted before any change, so nothing is ever lost.",
+    },
+    {
+        icon: "lucide:rotate-ccw",
+        title: "One-click revert",
+        desc: "Every action is logged with before / after YAML and an undo button right beside it.",
+    },
+    {
+        icon: "lucide:scroll-text",
+        title: "Full audit trail",
+        desc: "An activity log of everything the watch has done, ready to review.",
+    },
 ];
 
 const lookout = [
-  {
-    icon: "lucide:message-circle",
-    title: "Alerts in plain English",
-    desc: "“Text me if postgres goes down.” No PromQL, no expressions, nothing to learn.",
-  },
-  {
-    icon: "lucide:smartphone",
-    title: "Straight to your phone",
-    desc: "Signal notifications the second something on your watchlist breaks.",
-  },
-  {
-    icon: "lucide:radar",
-    title: "Always on",
-    desc: "Your words compile to a live watch that runs continuously in the background.",
-  },
-  {
-    icon: "lucide:ban",
-    title: "Nothing extra to run",
-    desc: "No Prometheus, no Alertmanager, no dashboards to babysit. Rigel keeps watch for you.",
-  },
+    {
+        icon: "lucide:message-circle",
+        title: "Alerts in plain English",
+        desc: "“Text me if postgres goes down.” No PromQL, no expressions, nothing to learn.",
+    },
+    {
+        icon: "lucide:smartphone",
+        title: "Straight to your phone",
+        desc: "Signal notifications the second something on your watchlist breaks.",
+    },
+    {
+        icon: "lucide:radar",
+        title: "Always on",
+        desc: "Your words compile to a live watch that runs continuously in the background.",
+    },
+    {
+        icon: "lucide:ban",
+        title: "Nothing extra to run",
+        desc: "No Prometheus, no Alertmanager, no dashboards to babysit. Rigel keeps watch for you.",
+    },
 ];
 
 const harbor = [
-  {
-    icon: "lucide:package",
-    title: "58 apps, six categories",
-    desc: "Dev tools, databases, productivity, media, networking and observability, all ready to deploy.",
-  },
-  {
-    icon: "lucide:wand-sparkles",
-    title: "Guided install",
-    desc: "Pick namespace, hostname, storage and node fit, with sensible defaults filled in.",
-  },
-  {
-    icon: "lucide:sliders-horizontal",
-    title: "Sensible defaults",
-    desc: "Every app ships with sane CPU, memory and storage settings, so you're not guessing at limits.",
-  },
-  {
-    icon: "lucide:refresh-cw",
-    title: "Stay current",
-    desc: "Update checks spot new versions and flag upgrades the moment they land upstream.",
-  },
-  {
-    icon: "lucide:trash-2",
-    title: "Clean uninstall",
-    desc: "The Grand Cleanse finds every resource, confirms by typed name and purges without a trace.",
-  },
-  {
-    icon: "lucide:server",
-    title: "On your hardware",
-    desc: "Heroku ergonomics, on your own cluster. You keep control of your data and your bill.",
-  },
+    {
+        icon: "lucide:package",
+        title: "58 apps, six categories",
+        desc: "Dev tools, databases, productivity, media, networking and observability, all ready to deploy.",
+    },
+    {
+        icon: "lucide:wand-sparkles",
+        title: "Guided install",
+        desc: "Pick namespace, hostname, storage and node fit, with defaults filled in.",
+    },
+    {
+        icon: "lucide:sliders-horizontal",
+        title: "Sensible defaults",
+        desc: "Every app ships with sane CPU, memory and storage settings, so you're not guessing at limits.",
+    },
+    {
+        icon: "lucide:refresh-cw",
+        title: "Stay current",
+        desc: "Update checks spot new versions and flag upgrades the moment they land upstream.",
+    },
+    {
+        icon: "lucide:trash-2",
+        title: "Clean uninstall",
+        desc: "The Grand Cleanse finds every resource, confirms by typed name and purges without a trace.",
+    },
+    {
+        icon: "lucide:server",
+        title: "On your hardware",
+        desc: "Run apps on your own cluster. You keep control of your data and your bill.",
+    },
 ];
 
 const engineRoom = [
-  {
-    icon: "lucide:cable",
-    title: "Port-forward",
-    desc: "Tunnel any service or pod to localhost, with local-port conflict detection.",
-  },
-  {
-    icon: "lucide:scroll-text",
-    title: "Live logs",
-    desc: "Stream pod logs in real time over a WebSocket, with configurable tail.",
-  },
-  {
-    icon: "lucide:move-vertical",
-    title: "Scale & restart",
-    desc: "Scale, restart, pause and resume rollouts, each from a single button.",
-  },
-  {
-    icon: "lucide:pencil",
-    title: "Edit env & images",
-    desc: "Set variables, swap container images and adjust requests & limits in place.",
-  },
-  {
-    icon: "lucide:server-cog",
-    title: "Node operations",
-    desc: "Cordon, uncordon and drain nodes safely, with sensible defaults baked in.",
-  },
-  {
-    icon: "lucide:clock",
-    title: "CronJob control",
-    desc: "Suspend, resume or trigger an on-demand run straight from the schedule.",
-  },
+    {
+        icon: "lucide:cable",
+        title: "Port-forward",
+        desc: "Tunnel any service or pod to localhost, with local-port conflict detection.",
+    },
+    {
+        icon: "lucide:scroll-text",
+        title: "Live logs",
+        desc: "Stream pod logs in real time over a WebSocket, with configurable tail.",
+    },
+    {
+        icon: "lucide:move-vertical",
+        title: "Scale & restart",
+        desc: "Scale, restart, pause and resume rollouts, each from a single button.",
+    },
+    {
+        icon: "lucide:pencil",
+        title: "Edit env & images",
+        desc: "Set variables, swap container images and adjust requests & limits in place.",
+    },
+    {
+        icon: "lucide:server-cog",
+        title: "Node operations",
+        desc: "Cordon, uncordon and drain nodes safely, with sensible defaults baked in.",
+    },
+    {
+        icon: "lucide:clock",
+        title: "CronJob control",
+        desc: "Suspend, resume or trigger an on-demand run straight from the schedule.",
+    },
 ];
 
 const charts = [
-  {
-    icon: "lucide:gauge",
-    title: "Overview dashboard",
-    desc: "Node, pod and deployment health at a glance, with a one-click “investigate this”.",
-  },
-  {
-    icon: "lucide:waypoints",
-    title: "Connectivity map",
-    desc: "See pod-to-pod and pod-to-service flows and spot where traffic is unhealthy.",
-  },
-  {
-    icon: "lucide:database",
-    title: "Database radar",
-    desc: "Auto-detects Postgres, MySQL and Supabase. Copy a DSN, reveal creds or port-forward.",
-  },
-  {
-    icon: "lucide:ruler",
-    title: "Right-sizing",
-    desc: "Flags over- and under-provisioned workloads and suggests the CPU / memory fix.",
-  },
+    {
+        icon: "lucide:gauge",
+        title: "Overview dashboard",
+        desc: "Node, pod and deployment health at a glance, with a one-click “investigate this”.",
+    },
+    {
+        icon: "lucide:waypoints",
+        title: "Connectivity map",
+        desc: "See pod-to-pod and pod-to-service flows and spot where traffic is unhealthy.",
+    },
+    {
+        icon: "lucide:database",
+        title: "Database radar",
+        desc: "Auto-detects Postgres, MySQL and Supabase. Copy a DSN, reveal creds or port-forward.",
+    },
+    {
+        icon: "lucide:ruler",
+        title: "Right-sizing",
+        desc: "Flags over- and under-provisioned workloads and suggests the CPU / memory fix.",
+    },
 ];
 ---
 
 <Base
-  title="Features for Rigel"
-  description="Everything Rigel does: a plain-English AI ops assistant, autonomous remediation, natural-language alerts, a 58-app catalog, and a console for every Kubernetes resource."
+    title="Features for Rigel"
+    description="Everything Rigel does: a plain-English AI ops assistant, autonomous remediation, natural-language alerts, a 58-app catalog, and a console for every Kubernetes resource."
 >
-  <Nav />
-  <main id="main">
-    <FeaturesHero />
+    <Nav />
+    <main id="main">
+        <FeaturesHero />
 
-    <CapabilitySection
-      id="rigel"
-      variant="primary"
-      eyebrow="AI CHAT"
-      heading="An ops engineer you can talk to."
-      copy="Ask in plain English. The AI investigates your cluster like a senior SRE, then hands you the fix as a button. You stay in control."
-      items={rigel}
-    />
+        <CapabilitySection
+            id="rigel"
+            variant="primary"
+            eyebrow="AI CHAT"
+            heading="An ops engineer you can talk to."
+            copy="Ask in plain English. The AI investigates your cluster like a senior SRE, then hands you the fix as a button. You stay in control."
+            items={rigel}
+        />
 
-    <CapabilitySection
-      id="watch"
-      variant="sunken"
-      reverse
-      eyebrow="AUTONOMOUS AGENT"
-      heading="It fixes things while you sleep."
-      copy="An agent runs inside your cluster, catching drift and failures around the clock and fixing what it safely can, always within the guardrails you set."
-      items={nightWatch}
-    />
+        <CapabilitySection
+            id="watch"
+            variant="sunken"
+            reverse
+            eyebrow="AUTONOMOUS AGENT"
+            heading="It fixes things while you sleep."
+            copy="An agent runs inside your cluster, catching drift and failures around the clock and fixing what it safely can, always within the guardrails you set."
+            items={nightWatch}
+        />
 
-    <CapabilitySection
-      id="lookout"
-      variant="primary"
-      eyebrow="SMART ALERTS"
-      heading="Tell it what to worry about."
-      copy="Describe what matters in plain English. Rigel compiles it to a live watch and pings your phone the moment it trips. No query language required."
-      items={lookout}
-    />
+        <CapabilitySection
+            id="lookout"
+            variant="primary"
+            eyebrow="SMART ALERTS"
+            heading="Tell it what to worry about."
+            copy="Describe what matters in plain English. Rigel compiles it to a live watch and pings your phone the moment it trips. No query language required."
+            items={lookout}
+        />
 
-    <CapabilitySection
-      id="harbor"
-      variant="sunken"
-      reverse
-      eyebrow="APP CATALOG"
-      heading="Self-host anything in one click."
-      copy="The catalog turns “I want to run X” into a running app on your own hardware, with Heroku ergonomics and none of the cloud bill."
-      items={harbor}
-    />
+        <CapabilitySection
+            id="harbor"
+            variant="sunken"
+            reverse
+            eyebrow="APP CATALOG"
+            heading="Self-host anything in one click."
+            copy="The catalog turns “I want to run X” into a running app on your own hardware, with Heroku ergonomics and none of the cloud bill."
+            items={harbor}
+        />
 
-    <ResourceMatrix />
+        <ResourceMatrix />
 
-    <CapabilitySection
-      id="engine"
-      variant="sunken"
-      reverse
-      eyebrow="HANDS-ON CONTROLS"
-      heading="Drop into the machinery."
-      copy="When you want to get hands-on, every common operation is a click away. No kubectl incantations to memorize, no YAML to edit by hand."
-      items={engineRoom}
-    />
+        <CapabilitySection
+            id="engine"
+            variant="sunken"
+            reverse
+            eyebrow="HANDS-ON CONTROLS"
+            heading="Drop into the machinery."
+            copy="When you want to get hands-on, every common operation is a click away. No kubectl incantations to memorize, no YAML to edit by hand."
+            items={engineRoom}
+        />
 
-    <CapabilitySection
-      id="charts"
-      variant="primary"
-      eyebrow="CLUSTER OVERVIEW"
-      heading="The whole cluster at a glance."
-      copy="Read the state of everything in one place, then send the AI to investigate anything that looks off."
-      items={charts}
-    />
+        <CapabilitySection
+            id="charts"
+            variant="primary"
+            eyebrow="CLUSTER OVERVIEW"
+            heading="The whole cluster at a glance."
+            copy="Read the state of everything in one place, then send the AI to investigate anything that looks off."
+            items={charts}
+        />
 
-    <SecureBand />
-    <DockBand />
+        <SecureBand />
+        <DockBand />
 
-    <FinalCta />
-  </main>
-  <Footer />
+        <FinalCta />
+    </main>
+    <Footer />
 </Base>
