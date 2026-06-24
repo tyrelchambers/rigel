@@ -1,0 +1,31 @@
+{
+  "tag_name": "v0.2.0",
+  "name": "Rigel 0.2.0",
+  "html_url": "https://github.com/tyrelchambers/rigel/releases/tag/v0.2.0",
+  "assets": [
+    {
+      "name": "Rigel-0.2.0-arm64.dmg",
+      "browser_download_url": "https://github.com/tyrelchambers/rigel/releases/download/v0.2.0/Rigel-0.2.0-arm64.dmg"
+    },
+    {
+      "name": "Rigel-0.2.0-x64.dmg",
+      "browser_download_url": "https://github.com/tyrelchambers/rigel/releases/download/v0.2.0/Rigel-0.2.0-x64.dmg"
+    },
+    {
+      "name": "Rigel-Setup-0.2.0.exe",
+      "browser_download_url": "https://github.com/tyrelchambers/rigel/releases/download/v0.2.0/Rigel-Setup-0.2.0.exe"
+    },
+    {
+      "name": "Rigel-0.2.0-x86_64.AppImage",
+      "browser_download_url": "https://github.com/tyrelchambers/rigel/releases/download/v0.2.0/Rigel-0.2.0-x86_64.AppImage"
+    },
+    {
+      "name": "Rigel-0.2.0-amd64.deb",
+      "browser_download_url": "https://github.com/tyrelchambers/rigel/releases/download/v0.2.0/Rigel-0.2.0-amd64.deb"
+    },
+    {
+      "name": "latest-mac.yml",
+      "browser_download_url": "https://github.com/tyrelchambers/rigel/releases/download/v0.2.0/latest-mac.yml"
+    }
+  ]
+}

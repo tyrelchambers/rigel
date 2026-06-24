@@ -8,6 +8,10 @@ on:
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - ".github/workflows/marketing-build.yml"
+  # A published desktop release rebakes the download page's static asset links.
+  # `released` fires on publish (not on the draft electron-builder uploads).
+  release:
+    types: [released]
   workflow_dispatch:
 
 env:
@@ -38,6 +42,10 @@ jobs:
           context: .
           file: ./apps/marketing/Dockerfile
           push: true
+          # The download page resolves the latest release at build time; pass the
+          # Actions token so that API call is authenticated (60→5000/hr).
+          build-args: |
+            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
           tags: |
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ github.sha }}
