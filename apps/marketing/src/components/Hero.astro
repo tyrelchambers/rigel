@@ -3,64 +3,67 @@ import { Icon } from "astro-icon/components";
 import RadarCompass from "./RadarCompass.astro";
 ---
 
-<section
-  id="top"
-  class="chart-grid relative overflow-hidden bg-surface-sunken"
->
-  <div class="glow anim-glow absolute -left-40 bottom-0 h-[420px] w-[1040px]"></div>
-  <div
-    class="glow anim-glow absolute -right-24 top-24 size-[460px] opacity-[0.08]"
-    style="animation-delay:-4s"
-  >
-  </div>
-
-  <div
-    class="relative mx-auto grid max-w-[1200px] items-center gap-16 px-6 py-20 sm:px-8 lg:grid-cols-[minmax(0,1fr)_440px] lg:gap-10 lg:py-28 lg:px-12"
-  >
-    <div class="max-w-xl">
-      <h1
-        class="rise text-[clamp(2.6rem,7vw,3.875rem)] font-bold leading-[1.02] tracking-[-0.03em]"
-        style="animation-delay:0.05s"
-      >
-        <span class="block text-fg">Run production Kubernetes</span>
-        <span class="block text-fg-secondary">without an ops team.</span>
-      </h1>
-
-      <p
-        class="rise mt-7 max-w-[560px] text-[17px] leading-relaxed text-fg-secondary"
-        style="animation-delay:0.15s"
-      >
-        Rigel is an AI-native admin app for your Mac. It connects to your
-        clusters, diagnoses issues, monitors them around the clock, and applies
-        the fixes you approve.
-      </p>
-
-      <div
-        class="rise mt-8 flex flex-wrap items-center gap-3.5"
-        style="animation-delay:0.25s"
-      >
-        <a
-          href="/#cta"
-          class="group inline-flex items-center gap-2.5 rounded-[9px] bg-accent px-6 py-3.5 text-[15px] font-bold text-fg-inverse shadow-[0_0_28px_-4px_rgba(56,189,248,0.45)] transition-[background-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:bg-accent-hover hover:shadow-[0_0_34px_-2px_rgba(56,189,248,0.55)] active:translate-y-0"
-        >
-          Get early access
-          <Icon
-            name="lucide:arrow-right"
-            class="size-4 transition-transform duration-200 group-hover:translate-x-0.5"
-          />
-        </a>
-        <a
-          href="#crew"
-          class="inline-flex items-center gap-2.5 rounded-[9px] border border-line-strong bg-white/[0.03] px-5 py-3.5 text-[15px] font-semibold text-fg transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-white/[0.07] active:translate-y-0"
-        >
-          <Icon name="lucide:users" class="size-[15px]" />
-          See how it works
-        </a>
-      </div>
+<section id="top" class="chart-grid relative overflow-hidden bg-surface-sunken">
+    <div class="glow anim-glow absolute -left-40 bottom-0 h-[420px] w-[1040px]">
+    </div>
+    <div
+        class="glow anim-glow absolute -right-24 top-24 size-[460px] opacity-[0.08]"
+        style="animation-delay:-4s"
+    >
     </div>
 
-    <div class="rise mx-auto w-full max-w-[440px]" style="animation-delay:0.2s">
-      <RadarCompass />
+    <div
+        class="relative mx-auto grid max-w-[1200px] items-center gap-16 px-6 py-20 sm:px-8 lg:grid-cols-[minmax(0,1fr)_440px] lg:gap-10 lg:py-28 lg:px-12"
+    >
+        <div class="max-w-xl">
+            <h1
+                class="rise text-[clamp(2.6rem,7vw,3.875rem)] font-bold leading-[1.02] tracking-[-0.03em]"
+                style="animation-delay:0.05s"
+            >
+                <span class="block text-fg">Run your own Kubernetes</span>
+                <span class="block text-fg-secondary">without an ops team.</span
+                >
+            </h1>
+
+            <p
+                class="rise mt-7 max-w-[560px] text-[17px] leading-relaxed text-fg-secondary"
+                style="animation-delay:0.15s"
+            >
+                Rigel is an AI-assisted Kubernetes management tool. It connects
+                to your clusters, diagnoses issues, monitors them around the
+                clock, and applies the fixes while you sleep - delegating
+                critical issues for your review.
+            </p>
+
+            <div
+                class="rise mt-8 flex flex-wrap items-center gap-3.5"
+                style="animation-delay:0.25s"
+            >
+                <a
+                    href="/#cta"
+                    class="group inline-flex items-center gap-2.5 rounded-[9px] bg-accent px-6 py-3.5 text-[15px] font-bold text-fg-inverse shadow-[0_0_28px_-4px_rgba(56,189,248,0.45)] transition-[background-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:bg-accent-hover hover:shadow-[0_0_34px_-2px_rgba(56,189,248,0.55)] active:translate-y-0"
+                >
+                    Get early access
+                    <Icon
+                        name="lucide:arrow-right"
+                        class="size-4 transition-transform duration-200 group-hover:translate-x-0.5"
+                    />
+                </a>
+                <a
+                    href="#crew"
+                    class="inline-flex items-center gap-2.5 rounded-[9px] border border-line-strong bg-white/[0.03] px-5 py-3.5 text-[15px] font-semibold text-fg transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-white/[0.07] active:translate-y-0"
+                >
+                    <Icon name="lucide:users" class="size-[15px]" />
+                    See how it works
+                </a>
+            </div>
+        </div>
+
+        <div
+            class="rise mx-auto w-full max-w-[440px]"
+            style="animation-delay:0.2s"
+        >
+            <RadarCompass />
+        </div>
     </div>
-  </div>
 </section>

@@ -14,112 +14,114 @@ import LookoutMock from "../components/mocks/LookoutMock.astro";
 import HarborMock from "../components/mocks/HarborMock.astro";
 
 const navigatorPoints = [
-  {
-    icon: "lucide:search",
-    text: "Plain-English investigation across logs, events & dependencies",
-  },
-  {
-    icon: "lucide:mouse-pointer-click",
-    text: "Every fix is a one-click button. Nothing runs without your say-so",
-  },
+    {
+        icon: "lucide:search",
+        text: "Automatic investigation across logs, events & dependencies",
+    },
+    {
+        icon: "lucide:mouse-pointer-click",
+        text: "Custom action buttons to increase your efficiency",
+    },
 ];
 
 const nightWatchPoints = [
-  {
-    icon: "lucide:shield-check",
-    text: "Stays inside the guardrails you set: spend caps, a kill-switch, and more",
-  },
-  {
-    icon: "lucide:moon",
-    text: "Wake to a clean changelog, not a 3am page",
-  },
+    {
+        icon: "lucide:shield-check",
+        text: "Your supervisor and worker team up to keep your apps running",
+    },
+    {
+        icon: "lucide:moon",
+        text: "Non-critical issus are handled by the assistant. Critical issues are escalated to you.",
+    },
 ];
 
-const lookoutNegatives = ["no PromQL", "no Prometheus", "no YAML"];
+const lookoutNegatives = ["no config", "no Prometheus", "no YAML"];
 
 const harborFeatures = [
-  "One-click deploy from a 58-app catalog",
-  "No manifests to hand-write",
-  "Runs on your hardware, so your data stays yours",
+    "Quick deploy from a 58-app catalog",
+    "No manifests to hand-write",
+    "Runs on your hardware, so your data stays yours",
 ];
 ---
 
 <Base>
-  <Nav />
-  <main id="main">
-    <Hero />
-    <CrewManifest />
+    <Nav />
+    <main id="main">
+        <Hero />
+        <CrewManifest />
 
-    <FeaturePillar
-      id="features"
-      variant="primary"
-      eyebrowIcon="lucide:compass"
-      eyebrow="AI CHAT"
-      heading="A teammate, not a console."
-      copy="Ask in plain English. The AI reads your logs, events and dependencies like a senior SRE, finds the cause, and proposes the fix as a one-click button. You stay in control."
-      points={navigatorPoints}
-    >
-      <ChatWindow />
-    </FeaturePillar>
+        <FeaturePillar
+            id="features"
+            variant="primary"
+            eyebrow="AI CHAT"
+            heading="Your next Kubernetes assistant."
+            copy="Connect an AI agent to track cluster health, diagnose issues, set up your self-hosted apps, and ensure smooth operation of your Kubernetes cluster."
+            points={navigatorPoints}
+        >
+            <ChatWindow />
+        </FeaturePillar>
 
-    <FeaturePillar
-      variant="sunken"
-      reverse
-      eyebrowIcon="lucide:moon-star"
-      eyebrow="AUTONOMOUS AGENT"
-      heading="It watches while you're away."
-      copy="An in-cluster agent runs around the clock, catching drift and remediating within the guardrails you set. You wake up to a quiet morning instead of an incident."
-      points={nightWatchPoints}
-    >
-      <WatchPanel />
-    </FeaturePillar>
+        <FeaturePillar
+            variant="sunken"
+            reverse
+            eyebrow="AUTONOMOUS AGENT"
+            heading="It watches while you're away."
+            copy="An in-cluster agent runs around the clock, catching drift and remediating within the guardrails you set. It helps address issues during the night to keep your apps running."
+            points={nightWatchPoints}
+        >
+            <WatchPanel />
+        </FeaturePillar>
 
-    <ShowcasePillar
-      id="lookout"
-      variant="primary"
-      eyebrowIcon="lucide:radar"
-      eyebrow="SMART ALERTS"
-      heading="Tell it what to worry about."
-      copy={"Describe what matters in plain English: “text me if the postgres database goes down.” Rigel keeps watch and pings you the moment it happens."}
-    >
-      <div slot="extras" class="flex flex-wrap gap-2.5">
-        {
-          lookoutNegatives.map((c) => (
-            <span class="flex items-center gap-1.5 rounded-full border border-line-strong bg-surface-elevated px-3 py-1.5 font-mono text-[11.5px] text-fg-secondary">
-              <Icon name="lucide:ban" class="size-3 text-fg-tertiary" />
-              {c}
-            </span>
-          ))
-        }
-      </div>
-      <LookoutMock />
-    </ShowcasePillar>
-
-    <ShowcasePillar
-      id="harbor"
-      variant="sunken"
-      reverse
-      eyebrowIcon="lucide:anchor"
-      eyebrow="APP CATALOG"
-      heading="Your own private cloud."
-      copy={"The catalog turns “I want to self-host X” into a running app in one click, with sensible defaults and no manifests to hand-write. Heroku ergonomics, on your hardware instead of someone else’s cloud."}
-    >
-      <div slot="extras" class="flex flex-col gap-3.5">
-        {
-          harborFeatures.map((t) => (
-            <div class="flex items-center gap-2.5">
-              <span class="grid size-5 shrink-0 place-items-center rounded bg-running/15 text-running">
-                <Icon name="lucide:check" class="size-3" />
-              </span>
-              <span class="text-[14.5px] text-fg-secondary">{t}</span>
+        <ShowcasePillar
+            id="lookout"
+            variant="primary"
+            eyebrow="SMART ALERTS"
+            heading="Tell it what to worry about."
+            copy={"Describe what matters: “text me if the postgres database goes down.” Rigel keeps watch and pings you the moment it happens."}
+        >
+            <div slot="extras" class="flex flex-wrap gap-2.5">
+                {
+                    lookoutNegatives.map((c) => (
+                        <span class="flex items-center gap-1.5 rounded-full border border-line-strong bg-surface-elevated px-3 py-1.5 font-mono text-[11.5px] text-fg-secondary">
+                            <Icon
+                                name="lucide:ban"
+                                class="size-3 text-fg-tertiary"
+                            />
+                            {c}
+                        </span>
+                    ))
+                }
             </div>
-          ))
-        }
-      </div>
-      <HarborMock />
-    </ShowcasePillar>
+            <LookoutMock />
+        </ShowcasePillar>
 
-    <FinalCta />
-  </main>
-  <Footer />
+        <ShowcasePillar
+            id="harbor"
+            variant="sunken"
+            reverse
+            eyebrowIcon="lucide:anchor"
+            eyebrow="APP CATALOG"
+            heading="Your own private cloud."
+            copy={"The catalog turns “I want to self-host X” into a running app in one click, with sensible defaults and no manifests to hand-write. Host on your hardware."}
+        >
+            <div slot="extras" class="flex flex-col gap-3.5">
+                {
+                    harborFeatures.map((t) => (
+                        <div class="flex items-center gap-2.5">
+                            <span class="grid size-5 shrink-0 place-items-center rounded bg-running/15 text-running">
+                                <Icon name="lucide:check" class="size-3" />
+                            </span>
+                            <span class="text-[14.5px] text-fg-secondary">
+                                {t}
+                            </span>
+                        </div>
+                    ))
+                }
+            </div>
+            <HarborMock />
+        </ShowcasePillar>
+
+        <FinalCta />
+    </main>
+    <Footer />
 </Base>

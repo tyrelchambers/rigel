@@ -2,47 +2,49 @@
 import CrewCard from "./CrewCard.astro";
 
 const crew = [
-  {
-    icon: "lucide:message-square-text",
-    role: "THE OPS ENGINEER",
-    desc: "Plain-English investigations and one-click fixes you approve.",
-    meta: "→ Rigel chat",
-  },
-  {
-    icon: "lucide:shield-check",
-    role: "THE ON-CALL SRE",
-    desc: "Auto-remediation within your guardrails, while you sleep.",
-    meta: "→ In-cluster agent",
-  },
-  {
-    icon: "lucide:bell-ring",
-    role: "THE MONITORING TEAM",
-    desc: "Natural-language alerts. No PromQL, no Prometheus.",
-    meta: "→ Smart alerts",
-  },
-  {
-    icon: "lucide:package",
-    role: "THE PLATFORM TEAM",
-    desc: "One-click catalog. Self-hosted apps on your own hardware.",
-    meta: "→ App catalog",
-  },
+    {
+        icon: "lucide:message-square-text",
+        role: "K8S COMPANION",
+        desc: "Plain-English investigations and one-click fixes you approve.",
+        meta: "→ Rigel chat",
+    },
+    {
+        icon: "lucide:shield-check",
+        role: "PEACE OF MIND",
+        desc: "Auto-remediation within your guardrails, while you sleep.",
+        meta: "→ In-cluster agent",
+    },
+    {
+        icon: "lucide:bell-ring",
+        role: "ALERT MONITORING",
+        desc: "Natural-language alerts.",
+        meta: "→ Smart alerts",
+    },
+    {
+        icon: "lucide:package",
+        role: "SELF-HOST ENABLEMENT",
+        desc: "One-click catalog. Self-hosted apps on your own hardware.",
+        meta: "→ App catalog",
+    },
 ];
 ---
 
 <section id="crew" class="border-t border-line-subtle bg-surface-sunken">
-  <div class="mx-auto max-w-[1200px] px-6 py-20 sm:px-8 lg:px-12">
-    <div data-reveal class="flex items-center gap-4">
-      <span class="font-mono text-[11px] tracking-[0.18em] text-fg-secondary"
-        >YOUR OPS TEAM, BUILT IN</span
-      >
-      <span class="h-px flex-1 bg-line-subtle"></span>
-      <span class="font-mono text-[11px] tracking-[0.09em] text-fg-tertiary"
-        >FOUR ROLES, ONE TOOL</span
-      >
-    </div>
+    <div class="mx-auto max-w-[1200px] px-6 py-20 sm:px-8 lg:px-12">
+        <div data-reveal class="flex items-center gap-4">
+            <span
+                class="font-mono text-[11px] tracking-[0.18em] text-fg-secondary"
+                >YOUR OPS TEAM, BUILT IN</span
+            >
+            <span class="h-px flex-1 bg-line-subtle"></span>
+            <span
+                class="font-mono text-[11px] tracking-[0.09em] text-fg-tertiary"
+                >KUBERNETES AND SELF-HOSTING</span
+            >
+        </div>
 
-    <div class="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-      {crew.map((c, i) => <CrewCard {...c} delay={i * 90} />)}
+        <div class="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {crew.map((c, i) => <CrewCard {...c} delay={i * 90} />)}
+        </div>
     </div>
-  </div>
 </section>

@@ -1,5 +1,6 @@
 ---
 import { Icon } from "astro-icon/components";
+import Logo from "../Logo.astro";
 
 const parsed = [
   { icon: "lucide:message-square", label: "Signal" },
@@ -70,7 +71,7 @@ const parsed = [
       <span
         class="grid size-7 place-items-center rounded-md bg-accent text-fg-inverse shadow-[0_0_14px_-2px_rgba(56,189,248,0.7)]"
       >
-        <Icon name="lucide:anchor" class="size-[15px]" />
+        <Logo class="size-[15px]" />
       </span>
       <span class="flex-1 text-[13.5px] font-semibold text-fg">Rigel</span>
       <span class="font-mono text-[11px] text-fg-tertiary">now</span>
