@@ -39,6 +39,7 @@ import ChatPane, { type ChatPaneHandle } from "@/shell/ChatPane";
 import { CommandPalette, useCommandPalette } from "@/shell/CommandPalette";
 import { GlobalHeader } from "@/shell/GlobalHeader";
 import { loadSidebarCollapsed, saveSidebarCollapsed } from "@/shell/navCollapse";
+import { registerChatReveal } from "@/lib/chatHandoff";
 
 function readTerminalOpen(): boolean {
   try { return localStorage.getItem("rigel.terminal.open") === "1"; } catch { return false; }
@@ -150,6 +151,17 @@ export default function App() {
         /* ignore quota / private-browsing errors */
       }
       return next;
+    });
+  }, []);
+  // Let a new-thread chat handoff un-hide a collapsed chat pane.
+  useEffect(() => {
+    registerChatReveal(() => {
+      setChatHidden(false);
+      try {
+        localStorage.setItem("rigel.chat.hidden", "0");
+      } catch {
+        /* ignore quota / private-browsing errors */
+      }
     });
   }, []);
   useEffect(() => {
