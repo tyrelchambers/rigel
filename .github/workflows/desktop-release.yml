@@ -2,11 +2,15 @@ name: Release Rigel desktop
 
 # Cut a release by bumping apps/desktop/package.json "version", then pushing a
 # matching tag:  git tag v0.2.0 && git push origin v0.2.0
-# electron-builder builds the macOS .dmg files (Apple Silicon + Intel) and
-# uploads them to a DRAFT GitHub Release named for that version. Review the
-# draft on the Releases page, then hit Publish. Builds are UNSIGNED for now
-# (see electron-builder.yml `identity: null`); macOS users right-click -> Open
-# on first launch. Signing + notarization is a later phase.
+# A 3-OS matrix builds the installers on their native runners and uploads them to
+# the SAME DRAFT GitHub Release named for that version:
+#   macOS   -> .dmg (Apple Silicon + Intel)
+#   Windows -> .exe (NSIS, x64)
+#   Linux   -> .AppImage + .deb (x64)
+# Review the draft on the Releases page, then hit Publish. Builds are UNSIGNED
+# for now (see electron-builder.yml `identity: null` / no Win or Linux signing):
+# macOS users right-click -> Open and Windows users More info -> Run anyway on
+# first launch. Signing + notarization is a later phase.
 on:
   push:
     tags:
@@ -15,9 +19,16 @@ on:
 
 jobs:
   release:
-    # macOS .dmg must be built on a macOS runner; node-pty's native addon is
-    # packed from the prebuild installed on this runner (no cross-compile).
-    runs-on: macos-latest
+    # Each OS builds only its own platform; node-pty's native addon is packed
+    # from the prebuild installed on that runner (no cross-compile).
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, script: release:mac }
+          - { os: windows-latest, script: release:win }
+          - { os: ubuntu-latest, script: release:linux }
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: write # create the GitHub Release and upload the installers
     steps:
@@ -36,9 +47,10 @@ jobs:
 
       # On a tag push, make sure the tag matches the packaged version, so the
       # draft release electron-builder names from package.json lines up with the
-      # tag you pushed. Skipped for manual (workflow_dispatch) runs.
+      # tag you pushed. Run once (macOS) since it's platform-independent. Skipped
+      # for manual (workflow_dispatch) runs.
       - name: Verify tag matches package version
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: matrix.os == 'macos-latest' && startsWith(github.ref, 'refs/tags/v')
         run: |
           PKG_VERSION="v$(node -p "require('./apps/desktop/package.json').version")"
           if [ "${{ github.ref_name }}" != "$PKG_VERSION" ]; then
@@ -47,7 +59,7 @@ jobs:
           fi
 
       - name: Build + publish installers (unsigned)
-        run: pnpm --filter desktop release
+        run: pnpm --filter desktop run ${{ matrix.script }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # We don't sign yet (identity: null). Tell electron-builder not to go
