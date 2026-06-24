@@ -64,15 +64,8 @@ const versionLabel = version ? `v${version}` : null;
       <div
         class="relative mx-auto flex max-w-[820px] flex-col items-center px-6 pb-12 pt-20 text-center sm:px-8 lg:pt-28"
       >
-        <div class="flex items-center gap-2.5">
-          <Icon name="lucide:monitor-down" class="size-[15px] text-accent" />
-          <span class="font-mono text-xs tracking-[0.16em] text-fg-tertiary"
-            >DESKTOP APP</span
-          >
-        </div>
-
         <h1
-          class="rise ink-gradient mt-5 max-w-[16ch] text-[clamp(2.6rem,8vw,3.875rem)] font-bold leading-[1.03] tracking-[-0.03em]"
+          class="rise ink-gradient max-w-[16ch] text-[clamp(2.6rem,8vw,3.875rem)] font-bold leading-[1.03] tracking-[-0.03em]"
           style="animation-delay:0.05s"
         >
           Download Rigel Desktop
@@ -83,7 +76,7 @@ const versionLabel = version ? `v${version}` : null;
           style="animation-delay:0.15s"
         >
           Connect to your clusters, diagnose issues, and apply the fixes you
-          approve. Free and open source.
+          approve.
         </p>
 
         <!-- Primary button (auto-detected platform, JS-enhanced) -->
@@ -102,26 +95,20 @@ const versionLabel = version ? `v${version}` : null;
             <span id="primary-download-label">Download for macOS</span>
           </a>
 
-          <p class="flex items-center gap-2 font-mono text-[12.5px] text-fg-tertiary">
-            <span id="primary-download-meta">
-              {versionLabel ? `Apple Silicon · ${versionLabel}` : "Coming soon"}
-            </span>
-            {
-              versionLabel && (
-                <>
-                  <span aria-hidden="true">·</span>
-                  <a
-                    href={releaseUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="text-accent transition-colors hover:text-accent-hover"
-                  >
-                    What's new ↗
-                  </a>
-                </>
-              )
-            }
-          </p>
+          {versionLabel && (
+            <p class="flex items-center gap-2 font-mono text-[12.5px] text-fg-tertiary">
+              <span id="primary-download-meta">Apple Silicon · {versionLabel}</span>
+              <span aria-hidden="true">·</span>
+              <a
+                href={releaseUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-accent transition-colors hover:text-accent-hover"
+              >
+                What's new ↗
+              </a>
+            </p>
+          )}
         </div>
       </div>
     </section>
@@ -179,12 +166,6 @@ const versionLabel = version ? `v${version}` : null;
             class="whitespace-nowrap text-[13px] font-medium text-accent transition-colors hover:text-accent-hover"
           >
             All releases ↗
-          </a>
-          <a
-            href="/docs/getting-started"
-            class="whitespace-nowrap text-[13px] font-medium text-accent transition-colors hover:text-accent-hover"
-          >
-            System requirements
           </a>
         </div>
       </div>
