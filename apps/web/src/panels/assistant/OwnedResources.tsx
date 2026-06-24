@@ -94,7 +94,6 @@ export function OwnedResources() {
   }, [installed, ns]);
 
   if (!installed) return null;
-  const groups = inventory(d.agentPod?.metadata.name);
 
   function presenceOf(r: OwnedResource): Presence {
     const slice = resources[r.storeKind];
@@ -110,6 +109,17 @@ export function OwnedResources() {
     setNamespaceFilter(r.namespaced ? ns : null);
     navigate(r.route);
   }
+
+  // For Credentials, only surface Secrets that actually exist: a "missing"
+  // credential is ambiguous (a provider you simply aren't using has no Secret),
+  // so hide it rather than flag it red. Other groups still show genuine gaps.
+  const groups = inventory(d.agentPod?.metadata.name)
+    .map((g) =>
+      g.title === "Credentials"
+        ? { ...g, items: g.items.filter((r) => presenceOf(r) === "present") }
+        : g,
+    )
+    .filter((g) => g.items.length > 0);
 
   return (
     <Section title="Resources">

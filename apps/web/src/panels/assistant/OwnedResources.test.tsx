@@ -91,6 +91,32 @@ describe("OwnedResources", () => {
     expect(dotIn("ConfigMap", "assistant-config")).toHaveAccessibleName("Present");
   });
 
+  it("hides a credential Secret that doesn't exist (no ambiguous 'missing' credential)", () => {
+    seedAllPresent();
+    // API-key-only install: no token Secret, but the secrets slice is loaded.
+    useCluster.setState({
+      resources: {
+        ...useCluster.getState().resources,
+        secrets: { "agents/rigel-assistant-credentials": { metadata: { name: "rigel-assistant-credentials" } } },
+      },
+    });
+    wrap(derived());
+    expect(screen.getByText("rigel-assistant-credentials")).toBeInTheDocument();
+    expect(screen.queryByText("rigel-assistant-token")).not.toBeInTheDocument();
+  });
+
+  it("still flags a missing non-credential object as Missing (filter is credentials-only)", () => {
+    seedAllPresent();
+    useCluster.setState({
+      resources: {
+        ...useCluster.getState().resources,
+        configmaps: { "agents/assistant-config": { metadata: { name: "assistant-config" } } },
+      },
+    });
+    wrap(derived());
+    expect(dotIn("ConfigMap", "assistant-backups")).toHaveAccessibleName("Missing");
+  });
+
   it("shows Checking before a kind's watch has delivered", () => {
     // No resources seeded → every slice undefined → checking.
     wrap(derived());
