@@ -28,7 +28,7 @@ import { chatFeedback, visibleSummary, batchFeedback, type BatchRun } from "@/pa
 import { SuggestedPromptsRow } from "@/panels/chat/SuggestedPromptsRow";
 import { stripActionBlocks, type SuggestedAction } from "@/lib/actionBlocks";
 import { onChatEvent, sendChat, interruptChat, subscribe, unsubscribe } from "@/lib/ws";
-import { registerChatHandoff, handoffToChat } from "@/lib/chatHandoff";
+import { registerChatHandoff, handoffToChat, type ChatHandoffOpts } from "@/lib/chatHandoff";
 import { useCluster } from "@/store/cluster";
 import { MessageBubble } from "@/panels/chat/MessageBubble";
 import { ThinkingPane } from "@/panels/chat/ThinkingPane";
@@ -81,7 +81,7 @@ import { RigelMark } from "@/components/RigelMark";
  * call this to inject a message into the pane.
  */
 export interface ChatPaneHandle {
-  send: (prompt: string) => void;
+  send: (prompt: string, opts?: ChatHandoffOpts) => void;
 }
 
 interface ChatPaneProps {
@@ -249,14 +249,33 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     bottomRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
   }, []);
 
+  // Begin a fresh conversation. The previous one stays saved (autosave keyed by
+  // conversationId). Shared by the New-chat button and the new-thread handoff.
+  const resetConversation = useCallback(() => {
+    setConversationId(newId());
+    createdAtRef.current = Date.now();
+    setMessages([]);
+    setSessionId(null);
+    setUsageLimit(null);
+    setInputText("");
+    setIsStreaming(false);
+    setLiveThinking("");
+    liveThinkingRef.current = "";
+  }, []);
+
   // ── Expose send handle + global handoff ───────────────────────────────────
   // The handle (for App-level callers) and the global registry (for any panel)
   // share one submit: it appends the user message to the transcript and streams
   // the reply in this always-visible pane — so handoffs never navigate.
   useEffect(() => {
-    const submit = (prompt: string) => {
+    const submit = (prompt: string, opts?: ChatHandoffOpts) => {
       if (!prompt.trim()) return;
-      setMessages((prev) => [...prev, makeMessage("user", prompt)]);
+      if (opts?.newThread) {
+        resetConversation();
+        setMessages([makeMessage("user", prompt)]);
+      } else {
+        setMessages((prev) => [...prev, makeMessage("user", prompt)]);
+      }
       setIsStreaming(true);
       setLiveThinking("");
       liveThinkingRef.current = "";
@@ -265,11 +284,14 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
       turnStartedAtRef.current = start;
       setIsAtBottom(true);
       isAtBottomRef.current = true;
-      sendChat(prompt, { ...modelConfigRef.current, sessionId: sessionIdRef.current ?? undefined });
+      sendChat(prompt, {
+        ...modelConfigRef.current,
+        sessionId: opts?.newThread ? undefined : sessionIdRef.current ?? undefined,
+      });
     };
     if (handleRef) handleRef.current = { send: submit };
     registerChatHandoff(submit);
-  }, [handleRef]);
+  }, [handleRef, resetConversation]);
 
   // ── WebSocket chat event handling ─────────────────────────────────────────
   useEffect(() => {
@@ -429,15 +451,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
 
   function startNewChat() {
     // The previous conversation stays saved; this just begins a fresh one.
-    setConversationId(newId());
-    createdAtRef.current = Date.now();
-    setMessages([]);
-    setSessionId(null);
-    setUsageLimit(null);
-    setInputText("");
-    setIsStreaming(false);
-    setLiveThinking("");
-    liveThinkingRef.current = "";
+    resetConversation();
   }
 
   // ── Chat history modal ─────────────────────────────────────────────────────

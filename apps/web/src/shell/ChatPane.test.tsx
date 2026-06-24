@@ -11,6 +11,7 @@ import { render, screen, within, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { AgentsResponse, AgentView, AgentModels } from "@/lib/api";
+import { handoffToChat } from "@/lib/chatHandoff";
 
 // The WS module is import-time side-effectful (opens a socket); stub the bits
 // ChatPane touches so the render stays inert. sendChat is captured so the
@@ -204,5 +205,33 @@ describe("ChatPane agent-aware model picker", () => {
     const codexModels: AgentModels = { models: ["gpt-5-codex", "gpt-5.4", "gpt-5"], efforts: [] };
     renderPane({ activeAgentId: "codex", agents: [codex] }, { codex: codexModels });
     expect(screen.getByRole("button", { name: /choose model/i })).toHaveTextContent("gpt-5.4");
+  });
+});
+
+describe("new-thread handoff", () => {
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+    useCluster.setState({ connected: true, resources: {} });
+    localStorage.clear();
+    sendChat.mockClear();
+  });
+
+  it("resets the conversation and sends without a sessionId", async () => {
+    sendChat.mockClear();
+    renderPane({ activeAgentId: "claude", agents: [claudeConnected, codex] }, { claude: CLAUDE_MODELS });
+
+    // Seed the current thread with an appended message.
+    handoffToChat("old message");
+    expect(await screen.findByText("old message")).toBeInTheDocument();
+
+    // New-thread handoff clears the old message and seeds the new one.
+    handoffToChat("investigate this warning", { newThread: true });
+    expect(await screen.findByText("investigate this warning")).toBeInTheDocument();
+    expect(screen.queryByText("old message")).not.toBeInTheDocument();
+
+    // The send for a new thread carries sessionId: undefined.
+    const lastCall = sendChat.mock.calls.at(-1)!;
+    expect(lastCall[0]).toBe("investigate this warning");
+    expect((lastCall[1] as { sessionId?: string }).sessionId).toBeUndefined();
   });
 });
