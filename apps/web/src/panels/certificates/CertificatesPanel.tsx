@@ -353,7 +353,7 @@ function CertBody({
     {
       key: "AGE",
       icon: <History size={15} color="#8C8C95" />,
-      value: agePhrase(view.cert.metadata.creationTimestamp),
+      value: agePhrase(view.cert.metadata.creationTimestamp) || "—",
       copy: false,
       isLast: true,
     },
@@ -833,6 +833,7 @@ function CopyButton({ value }: { value: string }) {
         flexShrink: 0,
       }}
       title="Copy to clipboard"
+      aria-label="Copy to clipboard"
     >
       <Copy size={15} color="#8C8C95" />
     </button>
