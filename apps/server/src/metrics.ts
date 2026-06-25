@@ -173,9 +173,76 @@ export function parseKubectlTopNodes(stdout: string): NodeMetricRow[] {
     .filter((r): r is NodeMetricRow => r !== null);
 }
 
+// ---------------------------------------------------------------------------
+// `kubectl top` availability cache
+// ---------------------------------------------------------------------------
+//
+// The client polls /api/metrics/{pods,nodes} every 5s. On a cluster with no
+// metrics-server (every fresh kind/k3d cluster) each poll would spawn a doomed
+// `kubectl top` and log a warning, flooding the log. We remember, per cluster +
+// kind, that `top` came back unavailable and short-circuit further calls for a
+// TTL: no spawn, no log. After the TTL we probe once more so it self-heals if
+// metrics-server gets installed. The warning is logged only on the transition
+// to unavailable (plus a recovery line when it comes back).
+
+const UNAVAILABLE_TTL_MS = 60_000;
+
+interface ProbeState {
+  unavailable: boolean;
+  lastProbeAt: number;
+}
+
+const probeState = new Map<string, ProbeState>();
+
+/** Reset the `kubectl top` availability cache (for test isolation). */
+export function resetMetricsCache(): void {
+  probeState.clear();
+}
+
+/**
+ * Run `kubectl top <args>` behind the negative-availability cache + transition
+ * logging. `parse` turns stdout into rows on success. Never throws, never 500.
+ */
+async function topWithCache<T>(
+  context: string | null,
+  kind: "pods" | "nodes",
+  args: string[],
+  parse: (stdout: string) => T[],
+): Promise<MetricsResult<T>> {
+  const cacheKey = `${context ?? ""}:${kind}`;
+  const prev = probeState.get(cacheKey);
+
+  // Negative-cache hit: known unavailable and probed within the TTL → skip the
+  // doomed spawn and the log entirely.
+  if (prev?.unavailable && Date.now() - prev.lastProbeAt < UNAVAILABLE_TTL_MS) {
+    return { available: false, items: [] };
+  }
+
+  try {
+    const res = await kubectl(context, ["top", ...args, "--no-headers"]);
+    if (res.code !== 0) {
+      if (!prev?.unavailable) {
+        console.warn(`[metrics] kubectl top ${kind} unavailable: ${res.stderr.trim()} (suppressing repeats for ${UNAVAILABLE_TTL_MS / 1000}s)`);
+      }
+      probeState.set(cacheKey, { unavailable: true, lastProbeAt: Date.now() });
+      return { available: false, items: [] };
+    }
+    if (prev?.unavailable) console.info(`[metrics] kubectl top ${kind} recovered`);
+    probeState.set(cacheKey, { unavailable: false, lastProbeAt: Date.now() });
+    return { available: true, items: parse(res.stdout) };
+  } catch (err) {
+    if (!prev?.unavailable) {
+      console.warn(`[metrics] kubectl top ${kind} failed: ${String(err)} (suppressing repeats for ${UNAVAILABLE_TTL_MS / 1000}s)`);
+    }
+    probeState.set(cacheKey, { unavailable: true, lastProbeAt: Date.now() });
+    return { available: false, items: [] };
+  }
+}
+
 /**
  * Run `kubectl top pods` for a namespace (or all). Returns gracefully when
- * metrics-server is unavailable — never throws, never 500.
+ * metrics-server is unavailable (never throws, never 500), and skips the probe
+ * for a short TTL once it's known unavailable.
  *
  * @param namespace  `"*"` (or undefined) → all namespaces; otherwise a single ns.
  */
@@ -185,40 +252,20 @@ export async function getPodMetrics(
 ): Promise<MetricsResult<PodMetricRow>> {
   const all = !namespace || namespace === "*";
   const nsArgs = all ? ["--all-namespaces"] : ["-n", namespace];
-  try {
-    const res = await kubectl(context, ["top", "pods", ...nsArgs, "--no-headers"]);
-    if (res.code !== 0) {
-      console.warn(`[metrics] kubectl top pods unavailable: ${res.stderr.trim()}`);
-      return { available: false, items: [] };
-    }
-    return {
-      available: true,
-      items: parseKubectlTopPods(res.stdout, all ? undefined : namespace),
-    };
-  } catch (err) {
-    console.warn(`[metrics] kubectl top pods failed: ${String(err)}`);
-    return { available: false, items: [] };
-  }
+  return topWithCache(context, "pods", ["pods", ...nsArgs], (stdout) =>
+    parseKubectlTopPods(stdout, all ? undefined : namespace),
+  );
 }
 
 /**
- * Run `kubectl top nodes`. Returns gracefully when metrics-server is
- * unavailable — never throws, never 500.
+ * Run `kubectl top nodes`. Returns gracefully when metrics-server is unavailable
+ * (never throws, never 500), and skips the probe for a short TTL once it's known
+ * unavailable.
  */
 export async function getNodeMetrics(
   context: string | null,
 ): Promise<MetricsResult<NodeMetricRow>> {
-  try {
-    const res = await kubectl(context, ["top", "nodes", "--no-headers"]);
-    if (res.code !== 0) {
-      console.warn(`[metrics] kubectl top nodes unavailable: ${res.stderr.trim()}`);
-      return { available: false, items: [] };
-    }
-    return { available: true, items: parseKubectlTopNodes(res.stdout) };
-  } catch (err) {
-    console.warn(`[metrics] kubectl top nodes failed: ${String(err)}`);
-    return { available: false, items: [] };
-  }
+  return topWithCache(context, "nodes", ["nodes"], parseKubectlTopNodes);
 }
 
 /**

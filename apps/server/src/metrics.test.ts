@@ -1,11 +1,23 @@
-import { test, expect } from "vitest";
+import { test, expect, vi, beforeEach } from "vitest";
 import {
   normalizeQuantity,
   parseKubectlTopLine,
   parseKubectlTopNodeLine,
   parseKubectlTopPods,
   parseKubectlTopNodes,
+  getNodeMetrics,
+  getPodMetrics,
+  resetMetricsCache,
 } from "./metrics";
+import { kubectl } from "@rigel/k8s/src/run";
+
+vi.mock("@rigel/k8s/src/run", () => ({ kubectl: vi.fn() }));
+const mockKubectl = vi.mocked(kubectl);
+
+beforeEach(() => {
+  resetMetricsCache();
+  mockKubectl.mockReset();
+});
 
 // --- normalizeQuantity: CPU -------------------------------------------------
 
@@ -102,4 +114,67 @@ test("parseKubectlTopNodes: parses multi-line node output", () => {
   expect(rows).toHaveLength(2);
   expect(rows[1].name).toBe("node-2");
   expect(rows[1].memory).toBe("2048Mi");
+});
+
+// --- `kubectl top` availability cache --------------------------------------
+
+test("getNodeMetrics: negative cache skips the doomed kubectl and logs once", async () => {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  mockKubectl.mockResolvedValue({ code: 1, stdout: "", stderr: "error: Metrics API not available" });
+
+  const a = await getNodeMetrics("ctx");
+  const b = await getNodeMetrics("ctx");
+  const c = await getNodeMetrics("ctx");
+
+  expect(a).toEqual({ available: false, items: [] });
+  expect(b).toEqual({ available: false, items: [] });
+  expect(c).toEqual({ available: false, items: [] });
+  expect(mockKubectl).toHaveBeenCalledTimes(1); // 2nd/3rd short-circuited by the cache
+  expect(warn).toHaveBeenCalledTimes(1); // logged only on the transition
+  warn.mockRestore();
+});
+
+test("getNodeMetrics: available results are re-probed each call and parsed", async () => {
+  mockKubectl.mockResolvedValue({ code: 0, stdout: "node-1   1200m   30%   4096Mi   50%", stderr: "" });
+  const r1 = await getNodeMetrics("ctx");
+  const r2 = await getNodeMetrics("ctx");
+  expect(r1.available).toBe(true);
+  expect(r1.items[0]).toEqual({ name: "node-1", cpu: "1200", memory: "4096Mi" });
+  expect(r2.available).toBe(true);
+  expect(mockKubectl).toHaveBeenCalledTimes(2); // available → fresh metrics every call
+});
+
+test("getNodeMetrics: re-probes after the TTL and logs recovery", async () => {
+  vi.useFakeTimers();
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const info = vi.spyOn(console, "info").mockImplementation(() => {});
+  try {
+    mockKubectl.mockResolvedValue({ code: 1, stdout: "", stderr: "no metrics" });
+    await getNodeMetrics("ctx"); // transition → unavailable (warns)
+    await getNodeMetrics("ctx"); // cache hit, no spawn
+    expect(mockKubectl).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(61_000); // TTL lapses
+    mockKubectl.mockResolvedValue({ code: 0, stdout: "node-1   1200m   30%   4096Mi   50%", stderr: "" });
+    const r = await getNodeMetrics("ctx"); // re-probe → available (recovery)
+
+    expect(r.available).toBe(true);
+    expect(mockKubectl).toHaveBeenCalledTimes(2);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(info).toHaveBeenCalledTimes(1);
+  } finally {
+    vi.useRealTimers();
+    warn.mockRestore();
+    info.mockRestore();
+  }
+});
+
+test("pods and nodes caches are independent", async () => {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  mockKubectl.mockResolvedValue({ code: 1, stdout: "", stderr: "no metrics" });
+  await getNodeMetrics("ctx"); // nodes → unavailable
+  await getPodMetrics("ctx", "*"); // pods → unavailable (separate key)
+  expect(mockKubectl).toHaveBeenCalledTimes(2);
+  expect(warn).toHaveBeenCalledTimes(2);
+  warn.mockRestore();
 });
