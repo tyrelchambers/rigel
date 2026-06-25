@@ -11,6 +11,7 @@ import { StatusBadge } from "@/panels/components/StatusBadge";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { PanelHeader } from "@/panels/components/PanelHeader";
+import { useFocusRow } from "@/panels/components/useFocusRow";
 import type { ConfigMap } from "./types";
 import { ConfigMapEditor } from "./ConfigMapEditor";
 import {
@@ -78,6 +79,8 @@ export default function ConfigMapsPanel() {
   );
 
   const shown = filtered.length;
+
+  useFocusRow("configmap", allConfigMaps, (cm) => cm.metadata.uid, (k) => setExpanded((prev) => new Set(prev).add(k)));
 
   function toggleExpand(uid: string) {
     setExpanded((prev) => {

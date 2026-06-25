@@ -12,6 +12,7 @@ import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { PanelHeader } from "@/panels/components/PanelHeader";
+import { useFocusRow } from "@/panels/components/useFocusRow";
 import { viewYaml, editYaml } from "@/store/yamlViewer";
 import { SecretEditor } from "./SecretEditor";
 import {
@@ -44,8 +45,6 @@ export default function SecretsPanel() {
   const error = useCluster((s) => s.error);
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
   const setNamespaceFilter = useCluster((s) => s.setNamespaceFilter);
-  const focusRequest = useCluster((s) => s.focusRequest);
-  const setFocusRequest = useCluster((s) => s.setFocusRequest);
 
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -93,25 +92,8 @@ export default function SecretsPanel() {
     [allSecrets, search],
   );
 
-  // Cmd-K focus: open the editor for a secret picked in the command palette.
-  useEffect(() => {
-    if (focusRequest?.kind !== "secret") return;
-    const match = allSecrets.find(
-      (s) => s.metadata.uid === focusRequest.key || s.metadata.name === focusRequest.key,
-    );
-    if (!match) return; // not streamed yet; effect re-runs when allSecrets updates
-    openEdit(match);
-    setFocusRequest(null);
-  }, [focusRequest, allSecrets]);
-
-  // Drop a stale secret focus request if we leave before it resolves.
-  useEffect(() => {
-    return () => {
-      if (useCluster.getState().focusRequest?.kind === "secret") {
-        useCluster.getState().setFocusRequest(null);
-      }
-    };
-  }, []);
+  // Focus navigation: expand and scroll to the targeted secret row.
+  useFocusRow("secret", allSecrets, (s) => s.metadata.uid, (k) => setExpanded((prev) => new Set(prev).add(k)));
 
   const shown = filtered.length;
 

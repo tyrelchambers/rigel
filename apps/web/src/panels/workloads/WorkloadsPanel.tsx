@@ -5,6 +5,7 @@ import { handoffToChat } from "@/lib/chatHandoff";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
+import { useFocusRow } from "@/panels/components/useFocusRow";
 import type { ActionBlock } from "@/lib/api";
 import type { StatefulSet, DaemonSet, Job, CronJob, WorkloadKind, WorkloadTopic } from "./types";
 import {
@@ -80,6 +81,9 @@ export default function WorkloadsPanel() {
     jobs: jobs.length,
     cronjobs: cronJobs.length,
   };
+
+  useFocusRow("statefulset", statefulSets, (s) => rowKey(s.metadata.name, s.metadata.namespace, s.metadata.uid), (k) => setExpanded((prev) => new Set(prev).add(k)));
+  useFocusRow("daemonset", daemonSets, (d) => rowKey(d.metadata.name, d.metadata.namespace, d.metadata.uid), (k) => setExpanded((prev) => new Set(prev).add(k)));
 
   const filteredStatefulSets = useMemo(
     () => statefulSets.filter((s) => matchesSearch(s.metadata.name, s.metadata.namespace, [], search)),
