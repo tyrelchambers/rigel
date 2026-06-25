@@ -1,8 +1,6 @@
-import { RefreshCw, MoveVertical, Trash2 } from "lucide-react";
 import { ListRow } from "@/panels/components/ListRow";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { StatusBadge } from "@/panels/components/StatusBadge";
-import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { viewYaml } from "@/store/yamlViewer";
 import { relativeAge, readyFraction, statefulSetReady, statefulSetDesired } from "./workloadsDisplay";
 import type { StatefulSet, AskClaudeFn } from "./types";
@@ -87,31 +85,6 @@ export function StatefulSetRow({ s, k, isOpen, toggleExpand, askClaude, restartS
         label={readyFraction(ready, desired)}
         variant={allReady ? "healthy" : "error"}
         title={`Ready: ${ready}/${desired}`}
-      />
-
-      {/* Actions */}
-      <ActionButtonStrip
-        onErrors={(e) => { e.stopPropagation(); askClaude("statefulset", s.metadata.name, s.metadata.namespace, "Errors"); }}
-        onLogs={(e) => { e.stopPropagation(); askClaude("statefulset", s.metadata.name, s.metadata.namespace, "Logs"); }}
-        onExplain={(e) => { e.stopPropagation(); askClaude("statefulset", s.metadata.name, s.metadata.namespace, "Explain"); }}
-        extra={[
-          {
-            label: "Restart",
-            Icon: RefreshCw,
-            onClick: (e) => { e.stopPropagation(); restartStatefulSet(s); },
-          },
-          {
-            label: "Scale",
-            Icon: MoveVertical,
-            onClick: (e) => { e.stopPropagation(); openScale(s); },
-          },
-          {
-            label: "Delete",
-            Icon: Trash2,
-            onClick: (e) => { e.stopPropagation(); deleteStatefulSet(s); },
-            destructive: true,
-          },
-        ]}
       />
     </ListRow>
   );

@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { ListRow } from "@/panels/components/ListRow";
 import { StatusBadge } from "@/panels/components/StatusBadge";
-import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { useFocusRow } from "@/panels/components/useFocusRow";
@@ -197,20 +196,6 @@ export default function ConfigMapsPanel() {
               >
                 {relativeAge(cm.metadata.creationTimestamp)}
               </span>
-
-              {/* Action button strip — Errors / Logs / Explain + Edit */}
-              <ActionButtonStrip
-                onErrors={(e) => { e.stopPropagation(); askClaude(cm, "Errors"); }}
-                onLogs={(e) => { e.stopPropagation(); askClaude(cm, "Logs"); }}
-                onExplain={(e) => { e.stopPropagation(); askClaude(cm, "Explain"); }}
-                extra={[
-                  {
-                    label: "Edit",
-                    Icon: Pencil,
-                    onClick: (e) => { e.stopPropagation(); openEdit(cm); },
-                  },
-                ]}
-              />
             </ListRow>
           );
         })}

@@ -8,7 +8,6 @@ import { ListRow } from "@/panels/components/ListRow";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
-import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { RelatedResources } from "@/panels/components/RelatedResources";
 import { useFocusRow } from "@/panels/components/useFocusRow";
@@ -288,24 +287,6 @@ export default function ServicesPanel() {
                   {external}
                 </span>
               )}
-
-              {/* Action strip — Errors / Logs / Explain + Port Forward */}
-              <ActionButtonStrip
-                onErrors={(e) => { e.stopPropagation(); askClaude(svc, "Errors"); }}
-                onLogs={(e) => { e.stopPropagation(); askClaude(svc, "Logs"); }}
-                onExplain={(e) => { e.stopPropagation(); askClaude(svc, "Explain"); }}
-                extra={
-                  notExternalName && (svc.spec?.ports ?? []).length > 0
-                    ? [
-                        {
-                          label: "Forward",
-                          Icon: ArrowRightLeft,
-                          onClick: (e) => { e.stopPropagation(); openForwardDialog(svc); },
-                        },
-                      ]
-                    : []
-                }
-              />
             </ListRow>
           );
         })}

@@ -10,7 +10,6 @@ import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-m
 import { Button } from "@/components/ui/button";
 import type { ActionBlock } from "@/lib/api";
 import { TagPill } from "@/panels/components/TagPill";
-import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { RelatedResources } from "@/panels/components/RelatedResources";
@@ -220,13 +219,6 @@ export default function IngressesPanel() {
                   </div>
                 )}
               </div>
-
-              {/* Action strip — Errors / Logs / Explain */}
-              <ActionButtonStrip
-                onErrors={(e) => { e.stopPropagation(); askClaude(ing, "Errors"); }}
-                onLogs={(e) => { e.stopPropagation(); askClaude(ing, "Logs"); }}
-                onExplain={(e) => { e.stopPropagation(); askClaude(ing, "Explain"); }}
-              />
             </ListRow>
           );
         })}

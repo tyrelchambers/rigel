@@ -7,7 +7,6 @@ import { viewYaml } from "@/store/yamlViewer";
 import { ListRow } from "@/panels/components/ListRow";
 import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
-import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
@@ -363,13 +362,6 @@ export default function DatabasesPanel() {
 
               {/* Spacer */}
               <span className="flex-1" />
-
-              {/* Action strip — Errors / Logs / Explain */}
-              <ActionButtonStrip
-                onErrors={(e) => { e.stopPropagation(); askClaude(inst, "Errors"); }}
-                onLogs={(e) => { e.stopPropagation(); askClaude(inst, "Logs"); }}
-                onExplain={(e) => { e.stopPropagation(); askClaude(inst, "Explain"); }}
-              />
             </ListRow>
           );
         })}

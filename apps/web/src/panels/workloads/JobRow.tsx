@@ -1,8 +1,6 @@
-import { Trash2 } from "lucide-react";
 import { ListRow } from "@/panels/components/ListRow";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { StatusBadge } from "@/panels/components/StatusBadge";
-import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { viewYaml } from "@/store/yamlViewer";
 import { relativeAge, jobPhase, jobCompletionsLabel, jobPhaseVariant } from "./workloadsDisplay";
 import type { Job, AskClaudeFn } from "./types";
@@ -86,21 +84,6 @@ export function JobRow({ j, k, isOpen, toggleExpand, askClaude, deleteJob }: Job
       <StatusBadge
         label={phase}
         variant={jobPhaseVariant(phase)}
-      />
-
-      {/* Actions */}
-      <ActionButtonStrip
-        onErrors={(e) => { e.stopPropagation(); askClaude("job", j.metadata.name, j.metadata.namespace, "Errors"); }}
-        onLogs={(e) => { e.stopPropagation(); askClaude("job", j.metadata.name, j.metadata.namespace, "Logs"); }}
-        onExplain={(e) => { e.stopPropagation(); askClaude("job", j.metadata.name, j.metadata.namespace, "Explain"); }}
-        extra={[
-          {
-            label: "Delete",
-            Icon: Trash2,
-            onClick: (e) => { e.stopPropagation(); deleteJob(j); },
-            destructive: true,
-          },
-        ]}
       />
     </ListRow>
   );

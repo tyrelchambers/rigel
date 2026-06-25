@@ -4,7 +4,6 @@ import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { ListRow } from "@/panels/components/ListRow";
 import { StatusBadge } from "@/panels/components/StatusBadge";
-import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
@@ -342,12 +341,6 @@ export default function RbacPanel() {
                 <StatusBadge label={secretsLabel(count)} variant="neutral" />
 
                 <span className="flex-1" />
-
-                <ActionButtonStrip
-                  onErrors={(e) => { e.stopPropagation(); askClaude("serviceaccount", sa.metadata.name, sa.metadata.namespace, "Errors"); }}
-                  onLogs={(e) => { e.stopPropagation(); askClaude("serviceaccount", sa.metadata.name, sa.metadata.namespace, "Logs"); }}
-                  onExplain={(e) => { e.stopPropagation(); askClaude("serviceaccount", sa.metadata.name, sa.metadata.namespace, "Explain"); }}
-                />
               </ListRow>
             );
           })}
@@ -392,12 +385,6 @@ export default function RbacPanel() {
                 <StatusBadge label={rulesLabel(count)} variant="neutral" />
 
                 <span className="flex-1" />
-
-                <ActionButtonStrip
-                  onErrors={(e) => { e.stopPropagation(); askClaude("role", r.metadata.name, r.metadata.namespace, "Errors"); }}
-                  onLogs={(e) => { e.stopPropagation(); askClaude("role", r.metadata.name, r.metadata.namespace, "Logs"); }}
-                  onExplain={(e) => { e.stopPropagation(); askClaude("role", r.metadata.name, r.metadata.namespace, "Explain"); }}
-                />
               </ListRow>
             );
           })}
@@ -446,12 +433,6 @@ export default function RbacPanel() {
                 <StatusBadge label={roleRefLabel(rb.roleRef, "Role")} variant="neutral" />
 
                 <span className="flex-1" />
-
-                <ActionButtonStrip
-                  onErrors={(e) => { e.stopPropagation(); askClaude("rolebinding", rb.metadata.name, rb.metadata.namespace, "Errors"); }}
-                  onLogs={(e) => { e.stopPropagation(); askClaude("rolebinding", rb.metadata.name, rb.metadata.namespace, "Logs"); }}
-                  onExplain={(e) => { e.stopPropagation(); askClaude("rolebinding", rb.metadata.name, rb.metadata.namespace, "Explain"); }}
-                />
               </ListRow>
             );
           })}
@@ -494,12 +475,6 @@ export default function RbacPanel() {
                 <StatusBadge label={rulesLabel(count)} variant="neutral" />
 
                 <span className="flex-1" />
-
-                <ActionButtonStrip
-                  onErrors={(e) => { e.stopPropagation(); askClaude("clusterrole", cr.metadata.name, undefined, "Errors"); }}
-                  onLogs={(e) => { e.stopPropagation(); askClaude("clusterrole", cr.metadata.name, undefined, "Logs"); }}
-                  onExplain={(e) => { e.stopPropagation(); askClaude("clusterrole", cr.metadata.name, undefined, "Explain"); }}
-                />
               </ListRow>
             );
           })}
@@ -546,12 +521,6 @@ export default function RbacPanel() {
                 <StatusBadge label={roleRefLabel(crb.roleRef, "ClusterRole")} variant="neutral" />
 
                 <span className="flex-1" />
-
-                <ActionButtonStrip
-                  onErrors={(e) => { e.stopPropagation(); askClaude("clusterrolebinding", crb.metadata.name, undefined, "Errors"); }}
-                  onLogs={(e) => { e.stopPropagation(); askClaude("clusterrolebinding", crb.metadata.name, undefined, "Logs"); }}
-                  onExplain={(e) => { e.stopPropagation(); askClaude("clusterrolebinding", crb.metadata.name, undefined, "Explain"); }}
-                />
               </ListRow>
             );
           })}

@@ -7,7 +7,6 @@ import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-m
 import { ListRow } from "@/panels/components/ListRow";
 import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
-import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { useFocusRow } from "@/panels/components/useFocusRow";
@@ -272,13 +271,6 @@ export default function StoragePanel() {
 
                 {/* Spacer */}
                 <span className="flex-1" />
-
-                {/* Action strip */}
-                <ActionButtonStrip
-                  onErrors={(e) => { e.stopPropagation(); askClaude("persistentvolumeclaim", pvc.metadata.name, pvc.metadata.namespace, "Errors"); }}
-                  onLogs={(e) => { e.stopPropagation(); askClaude("persistentvolumeclaim", pvc.metadata.name, pvc.metadata.namespace, "Logs"); }}
-                  onExplain={(e) => { e.stopPropagation(); askClaude("persistentvolumeclaim", pvc.metadata.name, pvc.metadata.namespace, "Explain"); }}
-                />
               </ListRow>
             );
           })}
@@ -373,13 +365,6 @@ export default function StoragePanel() {
 
                 {/* Spacer */}
                 <span className="flex-1" />
-
-                {/* Action strip */}
-                <ActionButtonStrip
-                  onErrors={(e) => { e.stopPropagation(); askClaude("persistentvolume", pv.metadata.name, undefined, "Errors"); }}
-                  onLogs={(e) => { e.stopPropagation(); askClaude("persistentvolume", pv.metadata.name, undefined, "Logs"); }}
-                  onExplain={(e) => { e.stopPropagation(); askClaude("persistentvolume", pv.metadata.name, undefined, "Explain"); }}
-                />
               </ListRow>
             );
           })}
@@ -472,13 +457,6 @@ export default function StoragePanel() {
 
                 {/* Spacer */}
                 <span className="flex-1" />
-
-                {/* Action strip */}
-                <ActionButtonStrip
-                  onErrors={(e) => { e.stopPropagation(); askClaude("storageclass", sc.metadata.name, undefined, "Errors"); }}
-                  onLogs={(e) => { e.stopPropagation(); askClaude("storageclass", sc.metadata.name, undefined, "Logs"); }}
-                  onExplain={(e) => { e.stopPropagation(); askClaude("storageclass", sc.metadata.name, undefined, "Explain"); }}
-                />
               </ListRow>
             );
           })}
