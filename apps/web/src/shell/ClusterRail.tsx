@@ -9,6 +9,7 @@ import { loadIconOverrides, saveIconOverrides, resolveIconId } from "./clusterIc
 import { ClusterIconPicker } from "./ClusterIconPicker";
 import { CreateClusterModal } from "./CreateClusterModal";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { toast } from "sonner";
 
 /**
  * Full-height far-left rail of cluster tiles. Clicking a tile re-points the whole
@@ -160,7 +161,21 @@ export function ClusterRail() {
         onDelete={() => {
           // TODO: upgrade to the app's Dialog confirm
           if (pickerFor && window.confirm(`Delete cluster "${pickerFor}"? This destroys the local cluster and removes its kubeconfig context.`)) {
-            deleteCluster.mutate(pickerFor);
+            const ctx = pickerFor;
+            deleteCluster.mutate(ctx, {
+              onSuccess: (data) => {
+                toast.success(`Cluster "${ctx}" deleted`, {
+                  description: data.backupPath
+                    ? `Kubeconfig backed up to ${data.backupPath}`
+                    : "Your kubeconfig couldn't be backed up.",
+                });
+              },
+              onError: (err) => {
+                toast.error(`Couldn't delete "${ctx}"`, {
+                  description: err instanceof Error ? err.message : String(err),
+                });
+              },
+            });
             setPickerFor(null); // close the tile modal
           }
         }}
