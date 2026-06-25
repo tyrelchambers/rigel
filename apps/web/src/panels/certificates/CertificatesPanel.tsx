@@ -2,13 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
+import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
+import { ListRow } from "@/panels/components/ListRow";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { viewYaml } from "@/store/yamlViewer";
 import type { ActionBlock } from "@/lib/api";
 import { fetchCertManagerPlugin } from "@/lib/api";
 import {
-  ChevronDown,
-  ChevronRight,
   History,
   CircleCheck,
   Loader,
@@ -21,7 +21,6 @@ import {
   Trash2,
   Copy,
   X,
-  FileCode,
 } from "lucide-react";
 import type {
   Certificate,
@@ -33,10 +32,10 @@ import type {
   ChallengeNode,
 } from "./types";
 import {
+  expiryLabel,
   buildCertViews,
   sortCertViews,
   matchesSearch,
-  expiresPhrase,
   agePhrase,
   notAfterRelative,
   absoluteDate,
@@ -44,9 +43,9 @@ import {
 
 // ---------------------------------------------------------------------------
 // Certificates panel — cert-manager TLS. Joins certs ← requests ← orders ←
-// challenges into per-cert view models. Card-based UI matching the Pencil design.
+// challenges into per-cert view models, mirrors IngressesPanel's structure.
 // Mutations (cancel order/challenge, delete secret, force renew) flow through
-// the shared ConfirmSheet.
+// the shared ConfirmSheet like NamespacesPanel.
 // ---------------------------------------------------------------------------
 
 const KINDS = [
@@ -132,22 +131,75 @@ export default function CertificatesPanel() {
           </pre>
         )}
 
-        {/* Card list */}
-        <div
-          className="flex flex-col px-4 py-4"
-          style={{ gap: 12 }}
-        >
+        {/* Row list */}
+        <div className="flex flex-col gap-0.5 px-3 py-2">
           {filtered.map((v) => {
             const isOpen = expanded.has(v.uid);
+            const rowMenu = (
+              <>
+                <ContextMenuItem onClick={() => viewYaml("certificate", v.name, v.namespace)}>View YAML…</ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem onClick={() => toggleExpand(v.uid)}>{isOpen ? "Collapse" : "Details…"}</ContextMenuItem>
+              </>
+            );
+
             return (
-              <CertCard
+              <ListRow
                 key={v.uid}
-                view={v}
+                rowKey={v.uid}
                 isOpen={isOpen}
                 onToggle={() => toggleExpand(v.uid)}
-                onAction={setPendingAction}
-                cmctlAvailable={cmctlAvailable}
-              />
+                contextMenu={rowMenu}
+                expandedContent={
+                  <CertBody view={v} onAction={setPendingAction} cmctlAvailable={cmctlAvailable} />
+                }
+              >
+                {/* Name */}
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(v.uid)}
+                  className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
+                >
+                  {v.name}
+                </button>
+
+                {/* Namespace pill */}
+                <span
+                  style={{
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: 10,
+                    color: "var(--fg-tertiary)",
+                    background: "var(--surface-sunken)",
+                    padding: "1px 5px",
+                    borderRadius: 4,
+                    border: "1px solid #26272B",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {v.namespace ?? "—"}
+                </span>
+
+                {/* Status pill */}
+                <StatusPill view={v} />
+
+                {/* Spacer */}
+                <span className="flex-1" />
+
+                {/* Expiry — dim, only when notAfter is set */}
+                {v.notAfter && (
+                  <span
+                    style={{
+                      fontFamily: "ui-monospace, monospace",
+                      fontSize: 10,
+                      color: "var(--fg-tertiary)",
+                      whiteSpace: "nowrap",
+                    }}
+                    title={`Expires ${v.notAfter}`}
+                  >
+                    exp {expiryLabel(v.notAfter)}
+                  </span>
+                )}
+              </ListRow>
             );
           })}
         </div>
@@ -173,203 +225,47 @@ export default function CertificatesPanel() {
 }
 
 // ---------------------------------------------------------------------------
-// CertCard — single certificate rendered as a card with collapsible body.
-// ---------------------------------------------------------------------------
-
-function CertCard({
-  view,
-  isOpen,
-  onToggle,
-  onAction,
-  cmctlAvailable,
-}: {
-  view: CertView;
-  isOpen: boolean;
-  onToggle: () => void;
-  onAction: (a: ActionBlock) => void;
-  cmctlAvailable: boolean;
-}) {
-  return (
-    <div
-      style={{
-        background: "#0E0E11",
-        borderRadius: 16,
-        border: "1px solid #FFFFFF12",
-        boxShadow: "0 24px 60px 0 #00000059",
-        overflow: "hidden",
-        width: "100%",
-      }}
-    >
-      {/* Card header */}
-      <button
-        type="button"
-        onClick={onToggle}
-        style={{
-          width: "100%",
-          display: "flex",
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "18px 24px",
-          borderBottom: "1px solid #FFFFFF0A",
-          background: "transparent",
-          cursor: "pointer",
-          textAlign: "left",
-        }}
-      >
-        {/* Left: chevron + name + namespace + status */}
-        <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 12 }}>
-          {isOpen ? (
-            <ChevronDown size={18} color="#8C8C95" style={{ flexShrink: 0 }} />
-          ) : (
-            <ChevronRight size={18} color="#8C8C95" style={{ flexShrink: 0 }} />
-          )}
-
-          {/* Name */}
-          <span
-            style={{
-              fontFamily: "Geist, sans-serif",
-              fontSize: 17,
-              fontWeight: 700,
-              color: "#FFFFFF",
-            }}
-          >
-            {view.name}
-          </span>
-
-          {/* Namespace chip */}
-          {view.namespace && (
-            <span
-              style={{
-                fontFamily: "Geist Mono, monospace",
-                fontSize: 12,
-                fontWeight: 500,
-                color: "#8C8C95",
-                background: "#FFFFFF0D",
-                borderRadius: 6,
-                padding: "3px 10px",
-              }}
-            >
-              {view.namespace}
-            </span>
-          )}
-
-          {/* Status pill */}
-          <StatusPill view={view} />
-        </div>
-
-        {/* Right: expiry */}
-        {view.notAfter && (
-          <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 7 }}>
-            <History size={15} color="#8C8C95" />
-            <span
-              style={{
-                fontFamily: "Geist, sans-serif",
-                fontSize: 13,
-                fontWeight: 500,
-                color: "#8C8C95",
-              }}
-            >
-              {expiresPhrase(view.notAfter)}
-            </span>
-          </div>
-        )}
-
-        {/* View YAML kebab affordance — only visible on hover via opacity trick */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            viewYaml("certificate", view.name, view.namespace);
-          }}
-          title="View YAML…"
-          style={{
-            marginLeft: 12,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 28,
-            height: 28,
-            borderRadius: 7,
-            border: "1px solid #FFFFFF0D",
-            background: "transparent",
-            cursor: "pointer",
-            color: "#8C8C95",
-            flexShrink: 0,
-          }}
-        >
-          <FileCode size={14} />
-        </button>
-      </button>
-
-      {/* Card body (only when expanded) */}
-      {isOpen && (
-        <CertBody view={view} onAction={onAction} cmctlAvailable={cmctlAvailable} />
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Status pill — Ready / Issuing / Not ready
+// Status pill — Ready (green) / Issuing (amber) / — (gray)
 // ---------------------------------------------------------------------------
 
 function StatusPill({ view }: { view: CertView }) {
   let label: string;
   let color: string;
-  let bg: string;
+  let background: string;
 
   if (view.ready) {
     label = "Ready";
-    color = "#34D07F";
-    bg = "#34D07F1F";
+    color = "#10B981";
+    background = "rgba(16, 185, 129, 0.13)";
   } else if (view.issuing) {
     label = "Issuing";
-    color = "#F5A623";
-    bg = "#F5A6231F";
+    color = "#F59E0B";
+    background = "rgba(245, 158, 11, 0.15)";
   } else {
-    label = "Not ready";
-    color = "#8C8C95";
-    bg = "#FFFFFF0D";
+    label = "—";
+    color = "#6B6B73";
+    background = "#1B1C1F";
   }
 
   return (
     <span
       style={{
-        display: "inline-flex",
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 6,
-        borderRadius: 999,
-        padding: "5px 12px",
-        background: bg,
+        fontSize: 10,
+        fontWeight: 600,
+        color,
+        background,
+        padding: "1px 6px",
+        borderRadius: 4,
+        whiteSpace: "nowrap",
       }}
     >
-      <span
-        style={{
-          width: 6,
-          height: 6,
-          borderRadius: "50%",
-          background: color,
-          flexShrink: 0,
-        }}
-      />
-      <span
-        style={{
-          fontFamily: "Geist, sans-serif",
-          fontSize: 13,
-          fontWeight: 600,
-          color,
-        }}
-      >
-        {label}
-      </span>
+      {label}
     </span>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Card body: Issuance chain + Details + Actions
+// Expanded body: ISSUANCE CHAIN, DETAILS, cert-level actions
 // ---------------------------------------------------------------------------
 
 function CertBody({
@@ -942,3 +838,4 @@ function CopyButton({ value }: { value: string }) {
     </button>
   );
 }
+
