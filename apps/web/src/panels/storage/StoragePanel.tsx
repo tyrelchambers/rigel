@@ -10,6 +10,7 @@ import { StatusBadge } from "@/panels/components/StatusBadge";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
+import { useFocusRow } from "@/panels/components/useFocusRow";
 import type {
   PersistentVolumeClaim,
   PersistentVolume,
@@ -124,6 +125,8 @@ export default function StoragePanel() {
     () => allSCs.filter((s) => matchesStorageClass(s, search)),
     [allSCs, search],
   );
+
+  useFocusRow("persistentvolumeclaim", allPVCs, (pvc) => pvc.metadata.uid ?? pvc.metadata.name, (k) => setExpanded((prev) => new Set(prev).add(k)));
 
   function toggleExpand(key: string) {
     setExpanded((prev) => {

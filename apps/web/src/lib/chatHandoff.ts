@@ -1,14 +1,26 @@
-// A tiny registry so any panel can hand a prompt to the pinned chat pane
-// without prop-drilling. ChatPane registers its send() on mount; panels call
-// handoffToChat(prompt) — which appends the user message to the transcript AND
-// streams the reply in the always-visible pane (no navigation, since chat is
-// not a route).
-let handler: ((prompt: string) => void) | null = null;
+/**
+ * Global chat handoff — lets any panel inject a prompt into the always-mounted
+ * ChatPane without prop-drilling. `newThread` starts a fresh conversation and
+ * reveals the pane (via the App-registered reveal hook) before sending.
+ */
+export interface ChatHandoffOpts {
+  /** Start a brand-new chat thread (prior conversation stays saved) + reveal the pane. */
+  newThread?: boolean;
+}
 
-export function registerChatHandoff(fn: (prompt: string) => void): void {
+let handler: ((prompt: string, opts?: ChatHandoffOpts) => void) | null = null;
+let reveal: (() => void) | null = null;
+
+export function registerChatHandoff(fn: (prompt: string, opts?: ChatHandoffOpts) => void): void {
   handler = fn;
 }
 
-export function handoffToChat(prompt: string): void {
-  handler?.(prompt);
+/** App registers this so a new-thread handoff can un-hide a collapsed chat pane. */
+export function registerChatReveal(fn: () => void): void {
+  reveal = fn;
+}
+
+export function handoffToChat(prompt: string, opts?: ChatHandoffOpts): void {
+  if (opts?.newThread) reveal?.();
+  handler?.(prompt, opts);
 }

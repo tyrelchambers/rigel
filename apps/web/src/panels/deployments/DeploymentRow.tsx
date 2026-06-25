@@ -18,7 +18,6 @@ import {
   firstImage,
   isRedeploying,
   rolloutProgress,
-  childPods,
   totalReplicas,
 } from "./deploymentDisplay";
 import { DeploymentDetail } from "./DeploymentDetail";
@@ -58,7 +57,6 @@ export function DeploymentRow({
   setMoveTarget,
 }: DeploymentRowProps) {
   const image = firstImage(d);
-  const pods = childPods(d, allPods);
   const redeploying = isRedeploying(d, allPods);
   const total = totalReplicas(d);
   const updated = d.status?.updatedReplicas ?? 0;
@@ -113,7 +111,6 @@ export function DeploymentRow({
       expandedContent={
         <DeploymentDetail
           deployment={d}
-          pods={pods}
           linkTargets={linkTargets}
           onAction={setPendingAction}
         />

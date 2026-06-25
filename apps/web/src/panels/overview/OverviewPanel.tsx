@@ -26,6 +26,8 @@ import { PurgePickerSheet } from "@/panels/purge/PurgePickerSheet";
 import { PurgeSheet } from "@/panels/purge/PurgeSheet";
 import { useRightSizing } from "@/panels/rightsizing/useRightSizing";
 import { MIN_HOURS } from "@/panels/rightsizing/displayHelper";
+import { handoffToChat } from "@/lib/chatHandoff";
+import { buildWarningInvestigationPrompt } from "@/panels/components/chatHandoffPrompts";
 import type {
   Deployment,
   EventBucket,
@@ -382,7 +384,11 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
             <>
               <div className="flex flex-col" style={{ gap: 8 }}>
                 {recentWarnings.map((e) => (
-                  <WarningRow key={e.metadata.uid} event={e} />
+                  <WarningRow
+                    key={e.metadata.uid}
+                    event={e}
+                    onInvestigate={() => handoffToChat(buildWarningInvestigationPrompt(e), { newThread: true })}
+                  />
                 ))}
               </div>
               <div style={{ fontSize: 13, color: WARN_MUTED, paddingTop: 2 }}>
@@ -694,7 +700,13 @@ function EventActivityCard({ buckets }: { buckets: EventBucket[] }) {
  * column (severity pill + kind) and a body (resource + namespace chip + time,
  * then the message).
  */
-function WarningRow({ event }: { event: K8sEvent }) {
+export function WarningRow({
+  event,
+  onInvestigate,
+}: {
+  event: K8sEvent;
+  onInvestigate?: () => void;
+}) {
   const ts = when(event);
   const age = relativeAge(ts);
   const tooltip = absoluteWhen(ts) ?? undefined;
@@ -742,37 +754,61 @@ function WarningRow({ event }: { event: K8sEvent }) {
 
       {/* Body */}
       <div className="flex min-w-0 flex-1 flex-col" style={{ gap: 7 }}>
-        <div className="flex items-center" style={{ gap: 12 }}>
-          <div className="flex min-w-0 flex-1 items-center" style={{ gap: 9 }}>
+        {/* Resource title, namespace tag, and age — all inline */}
+        <div className="flex min-w-0 items-center" style={{ gap: 9 }}>
+          <span
+            title={resource}
+            style={{
+              minWidth: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              fontFamily: "ui-monospace, monospace",
+              fontSize: 13,
+              fontWeight: 500,
+              color: "#A6A6AE",
+            }}
+          >
+            {resource}
+          </span>
+          {ns && (
             <span
-              title={resource}
-              style={{
-                minWidth: 0,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                fontFamily: "ui-monospace, monospace",
-                fontSize: 13,
-                fontWeight: 500,
-                color: "#A6A6AE",
-              }}
+              className="shrink-0"
+              style={{ borderRadius: 6, background: "rgba(255,255,255,0.05)", padding: "3px 9px", fontFamily: "ui-monospace, monospace", fontSize: 11, color: WARN_MUTED }}
             >
-              {resource}
+              {ns}
             </span>
-            {ns && (
-              <span
-                className="shrink-0"
-                style={{ borderRadius: 6, background: "rgba(255,255,255,0.05)", padding: "3px 9px", fontFamily: "ui-monospace, monospace", fontSize: 11, color: WARN_MUTED }}
-              >
-                {ns}
-              </span>
-            )}
-          </div>
+          )}
           <span className="shrink-0" style={{ fontSize: 12.5, fontWeight: 500, color: WARN_MUTED }} title={tooltip}>
             {age}
           </span>
         </div>
         <span style={{ fontSize: 13, lineHeight: 1.5, color: "#B9B9C1" }}>{event.message ?? "—"}</span>
+      </div>
+
+      {/* Investigate (AI) — trailing, vertically centered */}
+      <div className="flex shrink-0 items-center">
+        <button
+          type="button"
+          onClick={onInvestigate}
+          title="Investigate this warning with AI"
+          className="shrink-0"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: 7,
+            padding: "5px 11px",
+            fontSize: 12,
+            fontWeight: 600,
+            color: "#D8D8DE",
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          Investigate
+        </button>
       </div>
     </div>
   );

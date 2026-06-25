@@ -13,6 +13,8 @@ import { TagPill } from "@/panels/components/TagPill";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { PanelHeader } from "@/panels/components/PanelHeader";
+import { RelatedResources } from "@/panels/components/RelatedResources";
+import { useFocusRow } from "@/panels/components/useFocusRow";
 import type { Ingress } from "./types";
 import { IngressEditor } from "./IngressEditor";
 import {
@@ -71,6 +73,8 @@ export default function IngressesPanel() {
   );
 
   const shown = filtered.length;
+
+  useFocusRow("ingress", allIngresses, (ing) => ing.metadata.uid, (k) => setExpanded((prev) => new Set(prev).add(k)));
 
   function toggleExpand(uid: string) {
     setExpanded((prev) => {
@@ -335,6 +339,9 @@ function IngressDetail({ ingress, onEdit }: { ingress: Ingress; onEdit: () => vo
           <dd style={{ color: "var(--fg-secondary)" }}>{relativeAge(ingress.metadata.creationTimestamp)} ago</dd>
         </dl>
       </div>
+
+      {/* Related resources */}
+      <RelatedResources sourceKind="ingress" source={ingress} />
     </div>
   );
 }
