@@ -12,6 +12,7 @@ export interface RelatedRef {
   key: string; // store key: `${namespace}/${name}` (bare name if cluster-scoped)
   uid?: string;
   status: RelatedStatus;
+  node?: string; // pods only: the node the pod is scheduled on (spec.nodeName)
 }
 export interface RelatedGroup { kind: string; label: string; icon: string; items: RelatedRef[]; }
 
@@ -129,7 +130,7 @@ function group(kind: string, items: RelatedRef[]): RelatedGroup | null {
 function podsForSelector(selector: Obj | undefined, namespace: string, store: Store): RelatedRef[] {
   return values(store.pods)
     .filter((p) => sameNs(p, namespace) && selectorMatches(selector, p?.metadata?.labels))
-    .map((p) => refFromObj("pods", p, podStatus(p)));
+    .map((p) => ({ ...refFromObj("pods", p, podStatus(p)), node: p?.spec?.nodeName }));
 }
 
 export function computeRelated(sourceKind: string, source: Obj, store: Store): RelatedGroup[] {

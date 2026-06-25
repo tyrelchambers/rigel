@@ -16,7 +16,7 @@ beforeEach(() => {
   subscribe.mockClear(); unsubscribe.mockClear(); goToResource.mockClear();
   useCluster.setState({ resources: {
     services: { "prod/backend": { metadata: { name: "backend", namespace: "prod", uid: "s1" }, spec: { selector: { app: "backend" } } } },
-    pods: { "prod/backend-1": { metadata: { name: "backend-1", namespace: "prod", uid: "p1", labels: { app: "backend" } }, spec: { containers: [] }, status: { phase: "Running", containerStatuses: [{ ready: true }] } } },
+    pods: { "prod/backend-1": { metadata: { name: "backend-1", namespace: "prod", uid: "p1", labels: { app: "backend" } }, spec: { containers: [], nodeName: "node-1" }, status: { phase: "Running", containerStatuses: [{ ready: true }] } } },
   } });
 });
 
@@ -36,10 +36,30 @@ describe("RelatedResources", () => {
     expect(subscribe).toHaveBeenCalledWith("pods", "prod");
   });
 
-  it("renders grouped related resources and navigates on click", () => {
+  it("renders a tab per related kind with counts, defaulting to the first", () => {
     renderWith();
-    const row = screen.getByText("backend-1");
-    fireEvent.click(row);
+    expect(screen.getByRole("tab", { name: /Pods/ })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /Services/ })).toBeTruthy();
+    // Pods is the first group → its row shows, the service row is hidden.
+    expect(screen.getByText("backend-1")).toBeTruthy();
+    expect(screen.queryByText("backend")).toBeNull();
+  });
+
+  it("swaps content when another tab is selected", () => {
+    renderWith();
+    fireEvent.click(screen.getByRole("tab", { name: /Services/ }));
+    expect(screen.getByText("backend")).toBeTruthy();
+    expect(screen.queryByText("backend-1")).toBeNull();
+  });
+
+  it("shows the node a pod is scheduled on", () => {
+    renderWith();
+    expect(screen.getByText("node-1")).toBeTruthy();
+  });
+
+  it("navigates on row click", () => {
+    renderWith();
+    fireEvent.click(screen.getByText("backend-1"));
     expect(goToResource).toHaveBeenCalled();
     expect(goToResource.mock.calls[0][1].kind).toBe("pods");
   });

@@ -75,6 +75,7 @@ describe("computeRelated", () => {
     const pods = groups.find((g) => g.kind === "pods")!;
     expect(pods.items.map((i) => i.name)).toEqual(["backend-1"]);
     expect(pods.items[0].status).toBe("ok");
+    expect(pods.items[0].node).toBe("node-1");
   });
 
   it("workload → services whose selector matches the pod template labels", () => {
