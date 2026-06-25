@@ -9,6 +9,6 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
-  "dependencies": { "@rigel/k8s": "workspace:*", "@rigel/catalog": "workspace:*", "@hono/node-server": "latest", "hono": "latest", "node-pty": "1.1.0", "ws": "latest" },
+  "dependencies": { "@rigel/k8s": "workspace:*", "@rigel/catalog": "workspace:*", "@rigel/cloud-connect": "workspace:*", "@hono/node-server": "latest", "hono": "latest", "node-pty": "1.1.0", "ws": "latest" },
   "devDependencies": { "@types/node": "latest", "@types/ws": "latest", "esbuild": "latest", "tsx": "latest", "typescript": "latest", "vitest": "^4.1.8" }
 }

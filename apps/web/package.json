@@ -31,6 +31,7 @@
     "@fontsource-variable/manrope": "^5.2.8",
     "@monaco-editor/react": "^4.7.0",
     "@rigel/catalog": "workspace:*",
+    "@rigel/cloud-connect": "workspace:*",
     "@rigel/k8s": "workspace:*",
     "@tanstack/react-query": "^5.101.0",
     "@tanstack/react-virtual": "^3.14.3",

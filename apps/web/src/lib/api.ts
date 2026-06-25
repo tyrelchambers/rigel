@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ActiveForward } from "@/panels/services/portForward";
 import type { SuggestedAlert } from "@rigel/k8s";
+import type { CheckResult, CloudProvider, CloudCluster } from "@rigel/cloud-connect/src/index";
 
 /**
  * ActionBlock mirrors the server-side ActionBlock interface and
@@ -1005,5 +1006,76 @@ export function useDeleteCluster() {
       return body as { ok: boolean; backupPath: string | null };
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["contexts"] }),
+  });
+}
+
+export function useDisconnectCluster() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (context: string) => {
+      const res = await fetch("/api/cluster/disconnect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ context }),
+      });
+      const body = await res.json();
+      if (!res.ok || body?.ok === false) throw new Error(body?.error || body?.stderr || "disconnect failed");
+      return body as { ok: boolean; backupPath: string | null; removed?: string };
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["contexts"] }),
+  });
+}
+
+// ---- Cloud connect ----
+
+export type { CloudProvider, CloudCluster };
+/** The provider check shape, shared with @rigel/cloud-connect (one source of truth). */
+export type CloudCheckResult = CheckResult;
+
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string }).error ?? `request failed: ${res.status}`);
+  return data as T;
+}
+
+export const cloudCheck = (provider: CloudProvider) =>
+  postJson<CloudCheckResult>("/api/cloud/check", { provider });
+
+export const cloudListClusters = (provider: CloudProvider) =>
+  postJson<{ clusters?: CloudCluster[]; error?: string; stderr?: string }>(
+    "/api/cloud/clusters", { provider, params: {} },
+  );
+
+export async function cloudConnect(provider: CloudProvider, cluster: CloudCluster) {
+  const r = await postJson<{ context?: string; backupPath?: string | null; error?: string; stderr?: string }>(
+    "/api/cloud/connect", { provider, cluster, params: {} },
+  );
+  if (r.error) throw new Error(r.stderr || r.error);
+  return r;
+}
+
+export async function importKubeconfig(kubeconfig: string) {
+  const r = await postJson<{ ok: boolean; backupPath?: string | null; added?: string[]; error?: string }>(
+    "/api/cloud/import", { kubeconfig },
+  );
+  if (!r.ok) throw new Error(r.error ?? "import failed");
+  return r;
+}
+
+export interface ClusterHealth { ok: boolean; authExpired: boolean }
+
+/** Poll a connected cloud context's health to drive the "Needs re-login" badge. */
+export function useClusterHealth(context: string | null, provider: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["cluster-health", context] as const,
+    queryFn: () => postJson<ClusterHealth>("/api/cloud/health", { provider, context }),
+    enabled: enabled && !!context,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
   });
 }

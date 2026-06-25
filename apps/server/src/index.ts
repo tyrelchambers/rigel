@@ -38,6 +38,12 @@ import { listContexts } from "./contexts";
 import { detectClusterTools } from "./clusterTools";
 import { toolForContext, buildKindDeleteArgs, buildK3dDeleteArgs } from "./clusterCreate";
 import { backupKubeconfig } from "./kubeconfigBackup";
+import {
+  cloudCheck, cloudListClusters, cloudConnect, cloudHealth, importKubeconfig,
+} from "./cloudConnect";
+import { disconnectContext } from "./disconnectContext";
+import { canConnect, type ConnectTarget } from "./entitlements";
+import type { CloudCluster } from "@rigel/cloud-connect/src/index";
 import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusMetrics";
 import { handleUpdates, type UpdatesRequest } from "./updates";
 import { chatConfig, setClaudeToken } from "./chatConfig";
@@ -128,6 +134,85 @@ async function handler(req: Request): Promise<Response> {
       const argv = target.tool === "kind" ? buildKindDeleteArgs(target.name) : buildK3dDeleteArgs(target.name);
       const result = await runProcess(target.tool, argv);
       return Response.json({ ok: result.code === 0, backupPath, stdout: result.stdout, stderr: result.stderr });
+    }
+
+    // POST /api/cluster/disconnect { context } — remove a connected cluster's kubeconfig
+    // context (disconnect). Does NOT touch the remote cluster. Backs up the kubeconfig first.
+    if (url.pathname === "/api/cluster/disconnect" && req.method === "POST") {
+      let body: { context?: string };
+      try { body = (await req.json()) as typeof body; }
+      catch { return Response.json({ error: "invalid JSON body" }, { status: 400 }); }
+      if (typeof body.context !== "string") {
+        return Response.json({ error: "context required" }, { status: 422 });
+      }
+      return Response.json(await disconnectContext(body.context, { kubeconfigPath: KUBECONFIG }));
+    }
+
+    // POST /api/cloud/check { provider } — is the provider CLI installed + logged in?
+    // Read-only; always HTTP 200 with a status payload.
+    if (url.pathname === "/api/cloud/check" && req.method === "POST") {
+      let body: { provider?: string };
+      try { body = (await req.json()) as typeof body; }
+      catch { return Response.json({ error: "invalid JSON body" }, { status: 400 }); }
+      if (typeof body.provider !== "string") {
+        return Response.json({ error: "provider required" }, { status: 422 });
+      }
+      return Response.json(await cloudCheck(body.provider));
+    }
+
+    // POST /api/cloud/clusters { provider, params } — list the user's clusters. 200.
+    if (url.pathname === "/api/cloud/clusters" && req.method === "POST") {
+      let body: { provider?: string; params?: Record<string, string> };
+      try { body = (await req.json()) as typeof body; }
+      catch { return Response.json({ error: "invalid JSON body" }, { status: 400 }); }
+      if (typeof body.provider !== "string") {
+        return Response.json({ error: "provider required" }, { status: 422 });
+      }
+      return Response.json(await cloudListClusters(body.provider, body.params ?? {}));
+    }
+
+    // POST /api/cloud/connect { provider, cluster, params } — write the kubeconfig
+    // context (backs up first). The canConnect seam gates this (allow-all today).
+    if (url.pathname === "/api/cloud/connect" && req.method === "POST") {
+      let body: { provider?: string; cluster?: CloudCluster; params?: Record<string, string> };
+      try { body = (await req.json()) as typeof body; }
+      catch { return Response.json({ error: "invalid JSON body" }, { status: 400 }); }
+      if (typeof body.provider !== "string" || !body.cluster?.id) {
+        return Response.json({ error: "provider and cluster required" }, { status: 422 });
+      }
+      const gate = canConnect(body.provider as ConnectTarget);
+      if (!gate.allowed) {
+        return Response.json({ error: gate.reason ?? "upgrade required", gated: true }, { status: 402 });
+      }
+      return Response.json(
+        await cloudConnect(body.provider, body.cluster, body.params ?? {}, { kubeconfigPath: KUBECONFIG }),
+      );
+    }
+
+    // POST /api/cloud/health { provider, context } — probe a connected context. 200.
+    if (url.pathname === "/api/cloud/health" && req.method === "POST") {
+      let body: { provider?: string; context?: string };
+      try { body = (await req.json()) as typeof body; }
+      catch { return Response.json({ error: "invalid JSON body" }, { status: 400 }); }
+      if (typeof body.provider !== "string" || typeof body.context !== "string") {
+        return Response.json({ error: "provider and context required" }, { status: 422 });
+      }
+      return Response.json(await cloudHealth(body.provider, body.context));
+    }
+
+    // POST /api/cloud/import { kubeconfig } — merge a pasted kubeconfig (backs up first).
+    if (url.pathname === "/api/cloud/import" && req.method === "POST") {
+      let body: { kubeconfig?: string };
+      try { body = (await req.json()) as typeof body; }
+      catch { return Response.json({ error: "invalid JSON body" }, { status: 400 }); }
+      if (typeof body.kubeconfig !== "string" || body.kubeconfig.trim() === "") {
+        return Response.json({ error: "kubeconfig required" }, { status: 422 });
+      }
+      const gate = canConnect("import");
+      if (!gate.allowed) {
+        return Response.json({ error: gate.reason ?? "upgrade required", gated: true }, { status: 402 });
+      }
+      return Response.json(await importKubeconfig(body.kubeconfig, { kubeconfigPath: KUBECONFIG }));
     }
 
     // Serve the built web UI for everything that isn't an API or WS path.

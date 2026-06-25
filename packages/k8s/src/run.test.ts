@@ -52,3 +52,23 @@ test("runProcessWithStdin resolves (EPIPE guard) when child exits before drainin
   const result = await runProcessWithStdin("sh", ["-c", "exit 0"], "x".repeat(1024 * 1024));
   expect(typeof result.code).toBe("number");
 });
+
+// runProcess env override
+
+test("runProcess inherits process.env when no opts given", async () => {
+  process.env.RIGEL_RUN_TEST = "inherited";
+  const r = await runProcess(process.execPath, ["-e", "process.stdout.write(process.env.RIGEL_RUN_TEST ?? '')"]);
+  expect(r.code).toBe(0);
+  expect(r.stdout).toBe("inherited");
+  delete process.env.RIGEL_RUN_TEST;
+});
+
+test("runProcess uses a provided env", async () => {
+  const r = await runProcess(
+    process.execPath,
+    ["-e", "process.stdout.write(process.env.RIGEL_RUN_TEST ?? 'MISSING')"],
+    { env: { ...process.env, RIGEL_RUN_TEST: "provided" } },
+  );
+  expect(r.code).toBe(0);
+  expect(r.stdout).toBe("provided");
+});

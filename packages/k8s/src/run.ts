@@ -37,9 +37,17 @@ function collectProcess(proc: ChildProcess): Promise<RunResult> {
   });
 }
 
-/** Run a binary to completion via node:child_process spawn (argv array — no shell). */
-export function runProcess(bin: string, args: string[]): Promise<RunResult> {
-  return collectProcess(spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"] }));
+/**
+ * Run a binary to completion via node:child_process spawn (argv array — no shell).
+ * `opts.env` overrides the child's environment (e.g. to set KUBECONFIG); when
+ * omitted the child inherits the parent process env.
+ */
+export function runProcess(
+  bin: string,
+  args: string[],
+  opts?: { env?: NodeJS.ProcessEnv },
+): Promise<RunResult> {
+  return collectProcess(spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"], env: opts?.env }));
 }
 
 /**

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Unplug } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { CLUSTER_ICONS, ICON_PALETTE, type IconId } from "./clusterIcons";
 
@@ -14,6 +15,8 @@ export function ClusterIconPicker({
   onClose,
   deletable,
   onDelete,
+  removable,
+  onRemove,
 }: {
   contextName: string | null;
   currentId: IconId | null;
@@ -21,6 +24,8 @@ export function ClusterIconPicker({
   onClose: () => void;
   deletable?: boolean;
   onDelete?: () => void;
+  removable?: boolean;
+  onRemove?: () => void;
 }) {
   const [query, setQuery] = useState("");
   const open = contextName !== null;
@@ -93,18 +98,32 @@ export function ClusterIconPicker({
           No icons match "{query}".
         </div>
       )}
-      {deletable && onDelete && (
-        <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--border-subtle)" }}>
-          <button
-            type="button"
-            onClick={onDelete}
-            style={{ fontSize: 13, color: "#f87171", background: "transparent",
-              border: "1px solid var(--border-subtle)", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}
-          >
-            Delete cluster
-          </button>
+      {(deletable && onDelete) || (removable && onRemove) ? (
+        <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--border-subtle)", display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {deletable && onDelete && (
+            <button
+              type="button"
+              onClick={onDelete}
+              style={{ fontSize: 13, color: "var(--status-failed)", background: "transparent",
+                border: "1px solid var(--border-subtle)", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}
+            >
+              Delete cluster
+            </button>
+          )}
+          {removable && onRemove && (
+            <button
+              type="button"
+              onClick={onRemove}
+              style={{ fontSize: 13, color: "var(--fg-secondary)", background: "transparent",
+                border: "1px solid var(--border-subtle)", borderRadius: 8, padding: "6px 12px", cursor: "pointer",
+                display: "flex", alignItems: "center", gap: 6 }}
+            >
+              <Unplug size={13} />
+              Remove from Rigel
+            </button>
+          )}
         </div>
-      )}
+      ) : null}
     </Modal>
   );
 }

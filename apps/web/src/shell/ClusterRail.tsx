@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import { useCluster } from "@/store/cluster";
-import { useContexts, useDeleteCluster } from "@/lib/api";
+import { useContexts, useDeleteCluster, useDisconnectCluster, useClusterHealth } from "@/lib/api";
 import { initContext, switchCluster } from "@/lib/ws";
 import { classifyProvider, providerLabel } from "./clusterTile";
 import { CLUSTER_ICONS, type IconId } from "./clusterIcons";
 import { loadIconOverrides, saveIconOverrides, resolveIconId } from "./clusterIconStore";
 import { ClusterIconPicker } from "./ClusterIconPicker";
+import { RemoveClusterDialog } from "./RemoveClusterDialog";
 import { CreateClusterModal } from "./CreateClusterModal";
+import { AddClusterChooser } from "./AddClusterChooser";
+import { ConnectClusterModal } from "./ConnectClusterModal";
+import { ClusterHealthBadge } from "./ClusterHealthBadge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 
@@ -25,8 +29,18 @@ export function ClusterRail() {
   const [iconOverrides, setIconOverrides] = useState<Record<string, IconId>>(() => loadIconOverrides());
   // The context whose icon is being edited (null = picker closed).
   const [pickerFor, setPickerFor] = useState<string | null>(null);
+  const [chooserOpen, setChooserOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [connectOpen, setConnectOpen] = useState(false);
+  const [removeFor, setRemoveFor] = useState<string | null>(null);
   const deleteCluster = useDeleteCluster();
+  const disconnect = useDisconnectCluster();
+
+  // Probe only the ACTIVE cloud context; the badge surfaces an expired login.
+  const active = contexts?.find((c) => c.name === activeContext) ?? null;
+  const activeProvider = active ? classifyProvider(active) : "generic";
+  const isCloud = ["digitalocean", "aws", "gcp", "azure"].includes(activeProvider);
+  const health = useClusterHealth(active?.name ?? null, activeProvider, isCloud);
 
   // Once contexts load, adopt the kubeconfig's active one as the initial active
   // context (no teardown). initContext only acts while currentContext is unset.
@@ -91,6 +105,9 @@ export function ClusterRail() {
                     }}
                   />
                 )}
+                {isActive && isCloud && health.data?.authExpired ? (
+                  <ClusterHealthBadge onReconnect={() => setConnectOpen(true)} />
+                ) : null}
                 <Tooltip>
                   <TooltipTrigger
                     render={
@@ -137,7 +154,7 @@ export function ClusterRail() {
         <button
           type="button"
           title="Add / create a cluster"
-          onClick={() => setCreateOpen(true)}
+          onClick={() => setChooserOpen(true)}
           style={{
             width: 38, height: 38, borderRadius: 10, marginTop: 2, flexShrink: 0,
             display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
@@ -179,8 +196,48 @@ export function ClusterRail() {
             setPickerFor(null); // close the tile modal
           }
         }}
+        removable={(() => {
+          const pickerCtx = contexts?.find((c) => c.name === pickerFor);
+          return !!pickerCtx && classifyProvider(pickerCtx) !== "local";
+        })()}
+        onRemove={() => { setRemoveFor(pickerFor); setPickerFor(null); }}
+      />
+      <RemoveClusterDialog
+        cluster={contexts?.find((c) => c.name === removeFor) ?? null}
+        open={removeFor !== null}
+        onOpenChange={(o) => { if (!o) setRemoveFor(null); }}
+        busy={disconnect.isPending}
+        onConfirm={() => {
+          const removed = removeFor;
+          if (!removed) return;
+          const wasActive = activeContext === removed;
+          disconnect.mutate(removed, {
+            onSuccess: (data) => {
+              toast.success(`Removed "${removed}" from Rigel`, {
+                description: data.backupPath ? `Kubeconfig backed up to ${data.backupPath}` : undefined,
+              });
+              if (wasActive) {
+                const next = contexts?.find((c) => c.name !== removed);
+                if (next) switchCluster(next.name);
+              }
+              setRemoveFor(null);
+            },
+            onError: (err) => {
+              toast.error(`Couldn't remove "${removed}"`, {
+                description: err instanceof Error ? err.message : String(err),
+              });
+            },
+          });
+        }}
+      />
+      <AddClusterChooser
+        open={chooserOpen}
+        onOpenChange={setChooserOpen}
+        onCreateLocal={() => { setChooserOpen(false); setCreateOpen(true); }}
+        onConnectExisting={() => { setChooserOpen(false); setConnectOpen(true); }}
       />
       <CreateClusterModal open={createOpen} onOpenChange={setCreateOpen} />
+      <ConnectClusterModal open={connectOpen} onOpenChange={setConnectOpen} />
     </nav>
   );
 }
