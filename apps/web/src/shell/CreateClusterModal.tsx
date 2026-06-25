@@ -164,6 +164,10 @@ export function CreateClusterModal({ open, onOpenChange }: { open: boolean; onOp
       ) : (
         // ── Form state: ready to create ───────────────────────────────────────
         <div className="flex flex-col gap-5">
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            kind and k3d run the cluster as Docker containers on this machine. It shows up in Rigel once it's ready.
+          </p>
+
           <div>
             <label htmlFor="cc-name" className={LABEL_CLASS}>Name</label>
             <input
@@ -204,14 +208,23 @@ export function CreateClusterModal({ open, onOpenChange }: { open: boolean; onOp
             </div>
           </div>
 
-          {(lines.length > 0 || error) && (
-            <pre
-              ref={logRef}
-              className="max-h-52 overflow-auto rounded-md border bg-muted/30 p-3 font-mono text-xs whitespace-pre-wrap text-muted-foreground"
-            >
-              {lines.join("\n")}
-              {error ? `\n✗ ${error}` : ""}
-            </pre>
+          {(creating || lines.length > 0 || error) && (
+            <div className="flex flex-col gap-2">
+              {creating && (
+                <p className="text-xs text-muted-foreground">
+                  Creating the cluster inside Docker. This usually takes under a minute.
+                </p>
+              )}
+              {(lines.length > 0 || error) && (
+                <pre
+                  ref={logRef}
+                  className="max-h-52 overflow-auto rounded-md border bg-muted/30 p-3 font-mono text-xs whitespace-pre-wrap text-muted-foreground"
+                >
+                  {lines.join("\n")}
+                  {error ? `\n✗ ${error}` : ""}
+                </pre>
+              )}
+            </div>
           )}
 
           <div className="flex items-center justify-between">
