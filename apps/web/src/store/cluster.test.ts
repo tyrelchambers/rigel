@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, test } from "vitest";
 import { useCluster } from "./cluster";
 
 // Build a minimal k8s-ish object with a resourceVersion. Each call returns a
@@ -8,6 +8,46 @@ function obj(name: string, resourceVersion?: string): Record<string, unknown> {
 }
 
 const KIND = "Pod";
+
+// Reset the store between multi-cluster tests (zustand stores are module singletons).
+beforeEach(() => {
+  useCluster.setState({
+    resources: {},
+    activeContext: null,
+    namespaceByContext: {},
+    namespaceFilter: null,
+  });
+});
+
+test("applySwitch sets activeContext, adopts the namespace, and clears resources", () => {
+  useCluster.setState({ resources: { pods: { "default/a": {} } } });
+  useCluster.getState().applySwitch("prod", "kube-system");
+  const s = useCluster.getState();
+  expect(s.activeContext).toBe("prod");
+  expect(s.namespaceFilter).toBe("kube-system");
+  expect(s.resources).toEqual({}); // stale cluster data dropped
+});
+
+test("setNamespaceFilter records the namespace under the active context", () => {
+  useCluster.getState().setActiveContextInitial("prod");
+  useCluster.getState().setNamespaceFilter("team-a");
+  expect(useCluster.getState().namespaceByContext["prod"]).toBe("team-a");
+});
+
+test("switching back to a context restores its remembered namespace; an unseen context defaults to all (null)", () => {
+  useCluster.getState().setActiveContextInitial("prod");
+  useCluster.getState().setNamespaceFilter("team-a");
+  useCluster.getState().applySwitch("dev", useCluster.getState().namespaceByContext["dev"] ?? null);
+  expect(useCluster.getState().namespaceFilter).toBe(null);
+  useCluster.getState().applySwitch("prod", useCluster.getState().namespaceByContext["prod"] ?? null);
+  expect(useCluster.getState().namespaceFilter).toBe("team-a");
+});
+
+test("setActiveContextInitial does NOT clear resources", () => {
+  useCluster.setState({ resources: { pods: { "default/a": {} } } });
+  useCluster.getState().setActiveContextInitial("prod");
+  expect(useCluster.getState().resources).toEqual({ pods: { "default/a": {} } });
+});
 
 describe("replaceKind — identity reconciliation", () => {
   beforeEach(() => {

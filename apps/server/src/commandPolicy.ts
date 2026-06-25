@@ -71,6 +71,15 @@ const BLOCKED_HINT =
   "kubectl port-forward / proxy can't run in this chat — they block with no terminal. " +
   "Do NOT retry it. Tell the user to use Rigel's built-in port-forward feature instead.";
 
+function crossContextHint(active: string): string {
+  return (
+    `This command targets a DIFFERENT cluster than the active one (\`${active}\`). ` +
+    `You can only modify the active cluster. Do NOT retry it via Bash and do NOT raise an ` +
+    `action block for it — action buttons run against the active cluster, so they'd change ` +
+    `the wrong one. Tell the user to switch to that cluster first if they want to modify it.`
+  );
+}
+
 /** First non-flag token after the binary = the verb. Skips global flags + values. */
 function findVerb(tokens: string[]): { verb: string | null; sub: string | null } {
   let i = 0;
@@ -101,6 +110,22 @@ function findVerb(tokens: string[]): { verb: string | null; sub: string | null }
 /** Drop surrounding quotes so `sh -c "kubectl delete …"` tokens compare cleanly. */
 function unquote(t: string): string {
   return t.replace(/^['"]+/, "").replace(/['"]+$/, "");
+}
+
+/** Explicit `--context`/`--kube-context` values in a segment (space or = form). */
+function segmentContexts(segment: string): string[] {
+  const tokens = segment.trim().split(/\s+/).filter(Boolean).map(unquote);
+  const out: string[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i]!;
+    if ((t === "--context" || t === "--kube-context") && i + 1 < tokens.length) {
+      out.push(unquote(tokens[i + 1]!));
+    } else {
+      const m = t.match(/^--(?:kube-)?context=(.+)$/);
+      if (m) out.push(unquote(m[1]!));
+    }
+  }
+  return out;
 }
 
 /** What a kubectl invocation (tokens after the binary) amounts to. */
@@ -146,26 +171,42 @@ function segmentCategory(segment: string): Category {
  * Classify a Bash command. Splits on shell separators (; && || | and newlines)
  * and treats the command as a mutation if ANY segment is one. A `$(...)`/backtick
  * substitution that hides a kubectl/helm mutation is caught by a coarse backstop.
+ *
+ * When `activeContext` is provided, a mutation that carries an explicit
+ * `--context`/`--kube-context` targeting a DIFFERENT cluster is denied with a
+ * distinct cross-cluster reason that steers the model to ask the user to switch
+ * clusters rather than raising an action block (which would run on the active one).
  */
-export function classifyCommand(command: string): CommandVerdict {
+export function classifyCommand(command: string, activeContext?: string | null): CommandVerdict {
   let blocked = false;
-  const scan = (text: string) => {
+  // Find the first mutating segment (so we can inspect its --context), scanning
+  // top-level segments and then command-substitution bodies as a backstop.
+  const firstMutating = (text: string): string | null => {
     for (const seg of text.split(/;|&&|\|\||\||\n/)) {
       const c = segmentCategory(seg);
-      if (c === "mutation") return "mutation" as const;
+      if (c === "mutation") return seg;
       if (c === "blocked") blocked = true;
     }
     return null;
   };
 
-  if (scan(command) === "mutation") return { decision: "deny", reason: APPROVAL_HINT };
-  // backstop: command substitution can hide a kubectl/helm call from the split
-  if (/[`$]\(?/.test(command)) {
+  let mutSeg = firstMutating(command);
+  if (!mutSeg && /[`$]\(?/.test(command)) {
     const inner = command.match(/\$\(([^)]*)\)|`([^`]*)`/g) ?? [];
     for (const m of inner) {
-      const body = m.replace(/^\$\(|^`|\)$|`$/g, "");
-      if (scan(body) === "mutation") return { decision: "deny", reason: APPROVAL_HINT };
+      const seg = firstMutating(m.replace(/^\$\(|^`|\)$|`$/g, ""));
+      if (seg) {
+        mutSeg = seg;
+        break;
+      }
     }
+  }
+
+  if (mutSeg) {
+    if (activeContext && segmentContexts(mutSeg).some((c) => c !== activeContext)) {
+      return { decision: "deny", reason: crossContextHint(activeContext) };
+    }
+    return { decision: "deny", reason: APPROVAL_HINT };
   }
   if (blocked) return { decision: "deny", reason: BLOCKED_HINT };
   return { decision: "allow", reason: "non-mutating — read/investigation command" };

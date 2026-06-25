@@ -19,8 +19,7 @@ export function applyEvent(cache: Map<string, any>, e: WatchEvent): void {
   else cache.set(key, e.object);
 }
 
-type Sub = { kind: string; namespace: string };
-const subKey = (s: Sub) => `${s.kind}/${s.namespace}`;
+type Sub = { context?: string | null; kind: string; namespace: string };
 
 // How long a warm watch with zero listeners lives before teardown. Keeps the
 // cache hot across tab switches so re-subscribing is an instant warm hit.
@@ -72,7 +71,7 @@ export class WatchManager {
   private restartMaxMs: number;
 
   constructor(
-    private context: string | null,
+    private defaultContext: string | null,
     private spawnFn: typeof spawn = spawn,
     opts: WatchManagerOptions = {},
   ) {
@@ -81,12 +80,21 @@ export class WatchManager {
     this.restartMaxMs = opts.restartMaxMs ?? RESTART_MAX_MS;
   }
 
+  // The watch key identifies the ACTUAL cluster watched: an omitted context and
+  // an explicit context equal to defaultContext resolve to the same key, so they
+  // share one watch (and prewarm warm-hits survive once the WS layer passes the
+  // default context explicitly). Mirrors the resolution in buildArgs.
+  private subKey(s: Sub): string {
+    const ctx = s.context ?? this.defaultContext ?? "";
+    return `${ctx}/${s.kind}/${s.namespace}`;
+  }
+
   subscribe(
     sub: Sub,
     onSnapshot: (items: any[]) => void,
     onDelta: (e: WatchEvent) => void,
   ): () => void {
-    const key = subKey(sub);
+    const key = this.subKey(sub);
     let w = this.watches.get(key);
     if (!w) w = this.create(sub, key, false);
 
@@ -117,7 +125,7 @@ export class WatchManager {
   prewarm(kinds: string[], namespace = "*"): void {
     for (const kind of kinds) {
       const sub = { kind, namespace };
-      const key = subKey(sub);
+      const key = this.subKey(sub);
       const existing = this.watches.get(key);
       if (existing) {
         existing.pinned = true;
@@ -149,17 +157,18 @@ export class WatchManager {
 
   // Build the kubectl argv shared by the LIST and the watch stream.
   private buildArgs(sub: Sub, watchOnly: boolean): string[] {
+    // Deliberately NO `?? ""` here (unlike subKey): a null context must stay
+    // ABSENT from the argv so kubectl falls back to its own current-context.
+    const context = sub.context ?? this.defaultContext;
     const nsArgs =
       sub.namespace === "*" ? ["--all-namespaces"] : ["-n", sub.namespace];
     return [
       "kubectl",
-      ...(this.context ? ["--context", this.context] : []),
+      ...(context ? ["--context", context] : []),
       "get",
       sub.kind,
       ...nsArgs,
-      ...(watchOnly
-        ? ["--watch-only", "--output-watch-events"]
-        : []),
+      ...(watchOnly ? ["--watch-only", "--output-watch-events"] : []),
       "-o",
       "json",
     ];

@@ -110,7 +110,51 @@ test("cold subscribe LISTs then emits a snapshot with the listed items", async (
   expect(rec.watches().length).toBe(1);
 });
 
-// (a2) An --all-namespaces (namespace "*") LIST snapshot must retain every item
+// (a2) The SAME kind/namespace under two different contexts produces two
+//      independent watches, each spawning kubectl with its own --context.
+test("subscriptions are keyed by context: two contexts → two independent watches", async () => {
+  const rec = makeRecorder();
+  const mgr = new WatchManager(null, rec.spawnFn as any);
+
+  mgr.subscribe({ context: "ctx-a", kind: "pods", namespace: "default" }, () => {}, () => {});
+  mgr.subscribe({ context: "ctx-b", kind: "pods", namespace: "default" }, () => {}, () => {});
+
+  // Two separate LISTs, one per context.
+  expect(rec.lists().length).toBe(2);
+  const argsFor = (ctx: string) =>
+    rec.lists().find((p) => p.args.includes("--context") && p.args.includes(ctx));
+  expect(argsFor("ctx-a")).toBeTruthy();
+  expect(argsFor("ctx-b")).toBeTruthy();
+});
+
+// (a3) An omitted context and an explicit context equal to the default resolve
+//      to the SAME watch (no duplicate spawn) — so prewarm warm-hits survive
+//      once the WS layer passes the default context explicitly.
+test("omitted context and explicit-default context share one watch (no duplicate spawn)", async () => {
+  const rec = makeRecorder();
+  const mgr = new WatchManager("prod", rec.spawnFn as any);
+
+  // First subscriber omits context (like prewarm / today's callers).
+  mgr.subscribe({ kind: "pods", namespace: "default" }, () => {}, () => {});
+  rec.lastList().emitList([pod("a")]);
+  await new Promise((r) => setImmediate(r));
+  const listsAfterFirst = rec.lists().length;
+
+  // Second subscriber passes the default context explicitly — must reuse the
+  // same watch (warm hit), not spawn a second LIST.
+  const snapshots: any[][] = [];
+  mgr.subscribe(
+    { context: "prod", kind: "pods", namespace: "default" },
+    (items) => snapshots.push(items),
+    () => {},
+  );
+
+  expect(rec.lists().length).toBe(listsAfterFirst); // no new spawn
+  expect(snapshots.length).toBe(1); // served warm from cache
+  expect(snapshots[0].map((p: any) => p.metadata.name)).toEqual(["a"]);
+});
+
+// (a4) An --all-namespaces (namespace "*") LIST snapshot must retain every item
 //      even when names repeat across namespaces.
 test("all-namespaces snapshot retains same-named resources from different namespaces", async () => {
   const rec = makeRecorder();

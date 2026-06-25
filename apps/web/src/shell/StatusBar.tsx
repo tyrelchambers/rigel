@@ -24,6 +24,7 @@ export default function StatusBar({ chatHidden, onToggleChat }: StatusBarProps =
   const resources = useCluster((s) => s.resources);
   const error = useCluster((s) => s.error);
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
+  const activeContext = useCluster((s) => s.activeContext);
 
   const [health, setHealth] = useState<HealthData>({});
 
@@ -42,7 +43,7 @@ export default function StatusBar({ chatHidden, onToggleChat }: StatusBarProps =
   const statusLabel = kubectlOk ? "kubectl: ok" : "kubectl: error";
 
   // Namespace label for left side — use context name or namespace filter
-  const namespaceLabel = namespaceFilter ?? health.context ?? null;
+  const namespaceLabel = namespaceFilter ?? activeContext ?? health.context ?? null;
 
   return (
     <div

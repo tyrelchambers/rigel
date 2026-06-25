@@ -19,6 +19,11 @@ export function SplashScreen({ onFinish }: { onFinish?: () => void }) {
   const done = useRef(false);
 
   useEffect(() => {
+    // Re-arm on (re)mount. React StrictMode double-invokes effects in dev: the
+    // first cleanup sets mounted.current = false, so without resetting it here the
+    // second run stays "unmounted" and handleDrawn/onComplete no-ops forever —
+    // the splash never fades and the app hangs on the logo (dev only).
+    mounted.current = true;
     // Reveal the wordmark as the comet reaches the apex (~CHARGE + TRAVEL into the draw).
     const t = setTimeout(() => mounted.current && setWordIn(true), 940);
     return () => {

@@ -31,6 +31,7 @@ import {
   modelName,
   type ModelConfig,
 } from "@/panels/chat/composerModel";
+import { scopeLabel, type ScopeSelection } from "@/panels/chat/composerScope";
 import type { AgentId } from "@/lib/api";
 import { AgentGlyph } from "@/panels/settings/agents/agentGlyphs";
 import {
@@ -83,6 +84,9 @@ interface PaneComposerProps {
   modelConfig: ModelConfig | null;
   onModelConfig: (c: ModelConfig) => void;
   mentionCandidates: MentionCandidate[];
+  scopeConfig: ScopeSelection;
+  onScopeConfig: (s: ScopeSelection) => void;
+  contextNames: string[];
   /** Live resource map (for the /describe namespace + instance stages). */
   resources: Record<string, unknown>;
   /** Active namespace filter; null = All namespaces. */
@@ -136,6 +140,9 @@ export function PaneComposer({
   modelConfig,
   onModelConfig,
   mentionCandidates,
+  scopeConfig,
+  onScopeConfig,
+  contextNames,
   resources,
   namespaceFilter,
 }: PaneComposerProps) {
@@ -145,6 +152,7 @@ export function PaneComposer({
   const [sel, setSel] = useState(0);
   const [dismissed, setDismissed] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
+  const [scopeOpen, setScopeOpen] = useState(false);
   const [modelQuery, setModelQuery] = useState("");
 
   // Reset the model search whenever the picker closes or the agent changes.
@@ -505,6 +513,44 @@ export function PaneComposer({
         </>
       )}
 
+      {/* Scope picker menu — same pattern as the model picker menu. Hidden for
+          single-cluster users (contextNames.length <= 1). */}
+      {scopeOpen && contextNames.length > 1 && (
+        <>
+          <div style={{ position: "fixed", inset: 0, zIndex: 25 }} onClick={() => setScopeOpen(false)} />
+          <div style={modelMenuStyle}>
+            <div style={modelSectionLabel}>CHAT SCOPE</div>
+            <button type="button" onClick={() => { onScopeConfig({ mode: "active", picked: [] }); setScopeOpen(false); }} style={modelRowStyle(scopeConfig.mode === "active")}>
+              {scopeConfig.mode === "active" ? <Check style={checkStyle} /> : <span style={{ width: 12 }} />}
+              Active cluster
+            </button>
+            <button type="button" onClick={() => { onScopeConfig({ mode: "all", picked: [] }); setScopeOpen(false); }} style={modelRowStyle(scopeConfig.mode === "all")}>
+              {scopeConfig.mode === "all" ? <Check style={checkStyle} /> : <span style={{ width: 12 }} />}
+              All clusters
+            </button>
+            <div style={{ ...modelSectionLabel, marginTop: 6 }}>PICK CLUSTERS</div>
+            {contextNames.map((name) => {
+              const picked = scopeConfig.mode === "pick" && scopeConfig.picked.includes(name);
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => {
+                    const cur = scopeConfig.mode === "pick" ? scopeConfig.picked : [];
+                    const next = cur.includes(name) ? cur.filter((n) => n !== name) : [...cur, name];
+                    onScopeConfig({ mode: "pick", picked: next });
+                  }}
+                  style={modelRowStyle(picked)}
+                >
+                  {picked ? <Check style={checkStyle} /> : <span style={{ width: 12 }} />}
+                  {name}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+
       {/* Rounded container */}
       <div style={{ background: "var(--surface-sunken)", borderRadius: 10, border: "1px solid #34353A", overflow: "hidden" }}>
         <textarea
@@ -547,6 +593,18 @@ export function PaneComposer({
             </span>
             <ChevronDown size={11} style={{ color: "var(--fg-tertiary)", flexShrink: 0 }} />
           </button>
+
+          {/* Scope picker — hidden when only one cluster is available */}
+          {contextNames.length > 1 && (
+            <button
+              type="button"
+              onClick={() => setScopeOpen((o) => !o)}
+              title="Choose which clusters the Helmsman may read from"
+              style={{ ...pillStyle, cursor: "pointer" }}
+            >
+              {scopeLabel(scopeConfig)}
+            </button>
+          )}
 
           {/* Commands pill — opens the / popover */}
           <button

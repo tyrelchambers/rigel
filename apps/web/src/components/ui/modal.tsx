@@ -64,23 +64,54 @@ function ModalFrame({ open, onOpenChange, title, header, maxWidth = "!max-w-2xl"
   );
 }
 
+/**
+ * Small leading-icon tile for a modal header. By default the icon sits on a
+ * subtle rounded background; pass `background={false}` for a bare icon. The
+ * icon inherits white via `currentColor` unless the passed node overrides it.
+ */
+export function ModalIcon({ children, background = true }: { children: ReactNode; background?: boolean }) {
+  return (
+    <div
+      className="flex shrink-0 items-center justify-center"
+      style={{
+        width: 30,
+        height: 30,
+        color: "#FFFFFF",
+        borderRadius: background ? 8 : undefined,
+        background: background ? "rgba(255,255,255,0.07)" : undefined,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 interface ModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
   maxWidth?: string;
+  /** Optional leading icon, shown in a tile to the left of the title. */
+  icon?: ReactNode;
+  /** Whether the icon sits on a rounded background tile. Default true. */
+  iconBackground?: boolean;
   children: ReactNode;
 }
 
-/** General modal: a graphite header with the title on the left + X on the right. */
-export function Modal({ open, onOpenChange, title, maxWidth, children }: ModalProps) {
+/** General modal: a graphite header with the title (and optional icon) on the left + X on the right. */
+export function Modal({ open, onOpenChange, title, maxWidth, icon, iconBackground = true, children }: ModalProps) {
   return (
     <ModalFrame
       open={open}
       onOpenChange={onOpenChange}
       title={title}
       maxWidth={maxWidth}
-      header={<h2 style={{ fontSize: 15, fontWeight: 600, color: "#FFFFFF" }}>{title}</h2>}
+      header={
+        <div className="flex items-center gap-2.5">
+          {icon && <ModalIcon background={iconBackground}>{icon}</ModalIcon>}
+          <h2 style={{ fontSize: 15, fontWeight: 600, color: "#FFFFFF" }}>{title}</h2>
+        </div>
+      }
     >
       {children}
     </ModalFrame>

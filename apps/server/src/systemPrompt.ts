@@ -5,14 +5,22 @@
 // so keep the wording provider-neutral; e.g. Claude appends it via
 // `claude --append-system-prompt`.
 
-export function systemPrompt(context: string | null): string {
+export function systemPrompt(context: string | null, readContexts?: string[]): string {
   const ctxLine = context
     ? `Active kubectl context: \`${context}\`. Always pass \`--context ${context}\` to kubectl so commands hit the right cluster.`
     : "No specific kubectl context is selected — use the user's current-context.";
 
+  const others = (readContexts ?? []).filter((c) => c !== context);
+  const fanoutLine =
+    others.length > 0
+      ? `\n\nREAD-ONLY FAN-OUT: the user scoped this turn across multiple clusters. Besides the active context, you MAY run READ-ONLY kubectl against these other clusters by passing their \`--context\`: ${others
+          .map((c) => `\`${c}\``)
+          .join(", ")}. Run the same read against each relevant cluster and compare in your answer. You can only CHANGE the active cluster \`${context}\` — action buttons ALWAYS run against the active cluster, so NEVER raise an action block intending to modify another cluster (it would hit the wrong one). To modify a different cluster, tell the user to switch to it first.`
+      : "";
+
   return `You are running inside Rigel — a self-hostable Kubernetes admin web app the user uses to investigate and manage their cluster.
 
-${ctxLine}
+${ctxLine}${fanoutLine}
 
 INVESTIGATE BEFORE ANSWERING. When the user asks about cluster state, investigate first by running read-only kubectl commands — don't ask permission, just run them. EVERY read-only/investigation command runs automatically, and flag order, pipes, and chains don't matter:
 - any read-only kubectl: get / describe / logs / top / events / explain / version / cluster-info / api-resources / api-versions, auth can-i, config get-contexts / current-context / view, and rollout status / history

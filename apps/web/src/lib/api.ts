@@ -947,3 +947,63 @@ export function useSetActiveAgent() {
 export function connectionLabel(c: AgentConnection): string {
   return c === "connected" ? "Connected" : c === "notConnected" ? "Not connected" : "Coming soon";
 }
+
+// ---------------------------------------------------------------------------
+// Cluster contexts — GET /api/contexts (multi-cluster rail)
+// ---------------------------------------------------------------------------
+
+/** A selectable cluster from the server's /api/contexts (mirrors the server's ClusterContext). */
+export interface ClusterContext {
+  name: string;
+  cluster: string;
+  server: string;
+  active: boolean;
+}
+
+async function fetchContexts(): Promise<ClusterContext[]> {
+  const res = await fetch("/api/contexts");
+  if (!res.ok) throw new Error(`failed to load contexts: ${res.status}`);
+  const body = (await res.json()) as { contexts?: ClusterContext[] };
+  return body.contexts ?? [];
+}
+
+/** The kubeconfig contexts (clusters) for the cluster rail. */
+export function useContexts() {
+  return useQuery({
+    queryKey: ["contexts"] as const,
+    queryFn: fetchContexts,
+    staleTime: 30_000,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Cluster tools + local cluster management
+// ---------------------------------------------------------------------------
+
+export interface ClusterToolStatus { kind: boolean; k3d: boolean; dockerRunning: boolean }
+
+async function fetchClusterTools(): Promise<ClusterToolStatus> {
+  const res = await fetch("/api/cluster-tools");
+  if (!res.ok) return { kind: false, k3d: false, dockerRunning: false };
+  return (await res.json()) as ClusterToolStatus;
+}
+export function useClusterTools() {
+  return useQuery({ queryKey: ["cluster-tools"] as const, queryFn: fetchClusterTools, staleTime: 5_000 });
+}
+
+export function useDeleteCluster() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (context: string) => {
+      const res = await fetch("/api/cluster/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ context }),
+      });
+      const body = await res.json();
+      if (!res.ok || body?.ok === false) throw new Error(body?.error || body?.stderr || "delete failed");
+      return body as { ok: boolean; backupPath: string | null };
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["contexts"] }),
+  });
+}

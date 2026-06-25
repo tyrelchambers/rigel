@@ -34,6 +34,10 @@ import {
   type GitDeployment,
 } from "@rigel/k8s/src/gitSources";
 import { getPodMetrics, getNodeMetrics, getNodeDisk } from "./metrics";
+import { listContexts } from "./contexts";
+import { detectClusterTools } from "./clusterTools";
+import { toolForContext, buildKindDeleteArgs, buildK3dDeleteArgs } from "./clusterCreate";
+import { backupKubeconfig } from "./kubeconfigBackup";
 import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusMetrics";
 import { handleUpdates, type UpdatesRequest } from "./updates";
 import { chatConfig, setClaudeToken } from "./chatConfig";
@@ -96,6 +100,34 @@ async function handler(req: Request): Promise<Response> {
 
     if (url.pathname === "/api/health") {
       return Response.json({ ok: true, kubeconfig: KUBECONFIG });
+    }
+
+    // GET /api/contexts — all selectable kubeconfig contexts (for the cluster
+    // rail). { contexts: ClusterContext[] }; the active one is current-context.
+    if (url.pathname === "/api/contexts" && req.method === "GET") {
+      return Response.json({ contexts: await listContexts() });
+    }
+
+    // GET /api/cluster-tools — are kind/k3d installed and is Docker running?
+    // Drives the create-cluster modal's detect-and-guide UI. Always HTTP 200.
+    if (url.pathname === "/api/cluster-tools" && req.method === "GET") {
+      return Response.json(await detectClusterTools());
+    }
+
+    // POST /api/cluster/delete { context } — delete a LOCAL kind/k3d cluster Rigel
+    // can identify (refused for any other context). Backs up the kubeconfig first.
+    if (url.pathname === "/api/cluster/delete" && req.method === "POST") {
+      let body: { context?: string };
+      try { body = (await req.json()) as typeof body; }
+      catch { return Response.json({ error: "invalid JSON body" }, { status: 400 }); }
+      const target = typeof body.context === "string" ? toolForContext(body.context) : null;
+      if (!target) {
+        return Response.json({ error: "not a local kind/k3d cluster" }, { status: 422 });
+      }
+      const backupPath = await backupKubeconfig(KUBECONFIG);
+      const argv = target.tool === "kind" ? buildKindDeleteArgs(target.name) : buildK3dDeleteArgs(target.name);
+      const result = await runProcess(target.tool, argv);
+      return Response.json({ ok: result.code === 0, backupPath, stdout: result.stdout, stderr: result.stderr });
     }
 
     // Serve the built web UI for everything that isn't an API or WS path.
@@ -936,7 +968,7 @@ const httpServer = serve({ fetch: handler, port: PORT, hostname: HOST }, (info) 
 // WebSocket upgrade wiring. node-server hands us the underlying Node http.Server,
 // so we intercept the HTTP `upgrade` event ourselves and drive the `ws` server.
 const wss = new WebSocketServer({ noServer: true });
-const wsHandlers = makeWsHandlers(mgr, context);
+const wsHandlers = makeWsHandlers(mgr, context, KUBECONFIG);
 httpServer.on("upgrade", (req: IncomingMessage, socket, head) => {
   try {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);

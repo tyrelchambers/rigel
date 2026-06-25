@@ -307,7 +307,7 @@ test("permissionHookSettings registers a PreToolUse Bash hook run under Node (ts
 });
 
 test("readAllowlist adds context-prefixed kubectl patterns when a context is set", () => {
-  const list = readAllowlist("default");
+  const list = readAllowlist(["default"]);
   expect(list).toContain("Bash(kubectl get *)"); // base preserved
   expect(list).toContain("Bash(kubectl --context default get *)"); // context-prefixed variant
   expect(list).toContain("Bash(kubectl --context default config view*)");
@@ -320,6 +320,28 @@ test("readAllowlist adds context-prefixed kubectl patterns when a context is set
 });
 
 test("readAllowlist returns the base list unchanged when context is null", () => {
-  expect(readAllowlist(null)).toContain("Bash(kubectl get *)");
-  expect(readAllowlist(null).some((p) => p.includes("--context"))).toBe(false);
+  expect(readAllowlist([])).toContain("Bash(kubectl get *)");
+  expect(readAllowlist([]).some((p) => p.includes("--context"))).toBe(false);
+});
+
+test("readAllowlist prefixes kubectl patterns for EACH read context", () => {
+  const all = readAllowlist(["dev", "prod"]);
+  expect(all).toContain("Bash(kubectl --context dev get *)");
+  expect(all).toContain("Bash(kubectl --context prod get *)");
+  expect(all).toContain("Bash(kubectl get *)");
+  expect(all.filter((p) => p.includes("awk")).length).toBe(1);
+});
+
+test("readAllowlist with no contexts returns just the base patterns", () => {
+  const base = readAllowlist([]);
+  expect(base).toContain("Bash(kubectl get *)");
+  expect(base.some((p) => p.includes("--context"))).toBe(false);
+});
+
+test("buildClaudeArgs passes per-context read allowlist for a fan-out turn", () => {
+  const argv = buildClaudeArgs("hi", "dev", { readContexts: ["dev", "prod"] });
+  expect(argv).toContain("Bash(kubectl --context prod get *)");
+  const sys = argv[argv.indexOf("--append-system-prompt") + 1];
+  expect(sys).toContain("prod");
+  expect(sys.toLowerCase()).toContain("read-only");
 });

@@ -23,7 +23,7 @@ import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { BatchConfirmSheet, type BatchConfirmItem } from "@/components/BatchConfirmSheet";
 import { PurgeSheet } from "@/panels/purge/PurgeSheet";
 import type { ActionBlock, ActionResult } from "@/lib/api";
-import { useAgents, useAgentModels, useSuggestions, executeAction } from "@/lib/api";
+import { useAgents, useAgentModels, useSuggestions, executeAction, useContexts } from "@/lib/api";
 import { chatFeedback, visibleSummary, batchFeedback, type BatchRun } from "@/panels/chat/workloadResultReport";
 import { SuggestedPromptsRow } from "@/panels/chat/SuggestedPromptsRow";
 import { stripActionBlocks, type SuggestedAction } from "@/lib/actionBlocks";
@@ -39,6 +39,12 @@ import {
   type ModelConfig,
   type ModelConfigMap,
 } from "@/panels/chat/composerModel";
+import {
+  loadScope,
+  saveScope,
+  scopeToWire,
+  type ScopeSelection,
+} from "@/panels/chat/composerScope";
 import {
   CHAT_COMMANDS,
   commandDisplay,
@@ -176,6 +182,16 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   // currently-advertised models/efforts (useAgentModels below). @-mention
   // candidates come from the store.
   const [modelConfigs, setModelConfigs] = useState<ModelConfigMap>(() => loadModelConfigs());
+
+  // Cluster-scope selection (persisted) — which contexts the agent may read from.
+  const [scopeConfig, setScopeConfig] = useState<ScopeSelection>(() => loadScope());
+  const scopeConfigRef = useRef(scopeConfig);
+  useEffect(() => {
+    scopeConfigRef.current = scopeConfig;
+    saveScope(scopeConfig);
+  }, [scopeConfig]);
+  const { data: contexts } = useContexts();
+  const contextNames = useMemo(() => (contexts ?? []).map((c) => c.name), [contexts]);
   // Mirror sessionId into a ref so the handoff `submit` closure (registered once)
   // sends the CURRENT session id and resumes the conversation across turns.
   const sessionIdRef = useRef<string | null>(sessionId);
@@ -287,6 +303,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
       sendChat(prompt, {
         ...modelConfigRef.current,
         sessionId: opts?.newThread ? undefined : sessionIdRef.current ?? undefined,
+        scope: scopeToWire(scopeConfigRef.current),
       });
     };
     if (handleRef) handleRef.current = { send: submit };
@@ -438,7 +455,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     turnStartedAtRef.current = start;
     setIsAtBottom(true);
     isAtBottomRef.current = true;
-    sendChat(text, { ...modelConfig, sessionId: sessionId ?? undefined });
+    sendChat(text, { ...modelConfig, sessionId: sessionId ?? undefined, scope: scopeToWire(scopeConfig) });
   }
 
   function handleStop() {
@@ -522,6 +539,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     sendChat(chatFeedback(info.commandString, info.result), {
       ...modelConfigRef.current,
       sessionId: sessionIdRef.current ?? undefined,
+      scope: scopeToWire(scopeConfigRef.current),
     });
   }
 
@@ -575,6 +593,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     sendChat(batchFeedback(ran, skipped), {
       ...modelConfigRef.current,
       sessionId: sessionIdRef.current ?? undefined,
+      scope: scopeToWire(scopeConfigRef.current),
     });
   }
 
@@ -808,6 +827,9 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
           modelConfig={modelConfig}
           onModelConfig={setModelConfig}
           mentionCandidates={mentionCandidates}
+          scopeConfig={scopeConfig}
+          onScopeConfig={setScopeConfig}
+          contextNames={contextNames}
           resources={resources}
           namespaceFilter={namespaceFilter}
         />

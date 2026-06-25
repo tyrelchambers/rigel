@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   finishLinger,
   planSubscribe,
+  planSwitch,
   planUnsubscribe,
   subKey,
   type SubRegistry,
@@ -102,6 +103,27 @@ describe("finishLinger", () => {
   test("unknown entry is a no-op", () => {
     const reg = registry();
     expect(finishLinger(reg, "pods", "default")).toEqual({ sendUnsubscribe: false });
+  });
+});
+
+describe("planSwitch", () => {
+  test("planSwitch unsubscribes all entries under the old context and resubscribes only live ones under the new", () => {
+    const registry: SubRegistry = new Map();
+    registry.set("pods/default", { kind: "pods", namespace: "default", refs: 2 });
+    registry.set("nodes/*", { kind: "nodes", namespace: "*", refs: 1 });
+    registry.set("events/default", { kind: "events", namespace: "default", refs: 0 }); // lingering
+
+    const { unsubscribes, subscribes } = planSwitch(registry, "ctx-a", "ctx-b");
+
+    expect(unsubscribes).toEqual([
+      { kind: "pods", namespace: "default", context: "ctx-a" },
+      { kind: "nodes", namespace: "*", context: "ctx-a" },
+      { kind: "events", namespace: "default", context: "ctx-a" },
+    ]);
+    expect(subscribes).toEqual([
+      { kind: "pods", namespace: "default", context: "ctx-b" },
+      { kind: "nodes", namespace: "*", context: "ctx-b" },
+    ]);
   });
 });
 

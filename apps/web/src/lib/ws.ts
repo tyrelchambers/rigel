@@ -4,12 +4,18 @@ import {
   LINGER_MS,
   finishLinger,
   planSubscribe,
+  planSwitch,
   planUnsubscribe,
   subKey,
   type SubRegistry,
 } from "./wsSubscriptions";
 
 let socket: WebSocket | null = null;
+
+// The active kubeconfig context every subscribe/unsubscribe frame is stamped
+// with. null until the rail resolves it (→ frames omit `context`, so the server
+// uses its boot context, which is the active one — no behavior change pre-rail).
+let currentContext: string | null = null;
 
 /**
  * Store key for a watched object: `namespace/name` for namespaced resources,
@@ -32,9 +38,15 @@ const activeSubs: SubRegistry = new Map();
 /** Send a subscribe/unsubscribe control frame if the socket is OPEN. Unlike
  *  rawSend these are not buffered: the onopen re-send loop replays active subs,
  *  and a lingering teardown that misses the window is harmless. */
-function sendSubFrame(type: "subscribe" | "unsubscribe", kind: string, namespace: string): void {
+function sendSubFrame(
+  type: "subscribe" | "unsubscribe",
+  kind: string,
+  namespace: string,
+  context: string | null = currentContext,
+): void {
   if (socket && socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({ type, kind, namespace }));
+    // Omit `context` when null so the server falls back to its boot context.
+    socket.send(JSON.stringify(context ? { type, kind, namespace, context } : { type, kind, namespace }));
   }
 }
 
@@ -46,6 +58,28 @@ function rawSend(frame: string): void {
 
 type ChatEventCallback = (event: ChatEvent) => void;
 let chatListeners: ChatEventCallback[] = [];
+
+/** A streamed cluster-create event from the server. */
+export interface ClusterEvent {
+  type: "cluster.progress" | "cluster.done" | "cluster.error";
+  line?: string;              // progress
+  context?: string;           // done — the new kubeconfig context
+  backupPath?: string | null; // done
+  message?: string;           // error
+}
+type ClusterCallback = (e: ClusterEvent) => void;
+let clusterListeners: ClusterCallback[] = [];
+
+export function sendClusterCreate(opts: { tool: "kind" | "k3d"; name: string; version?: string }): void {
+  rawSend(JSON.stringify({ type: "cluster.create", ...opts }));
+}
+export function sendClusterStop(): void {
+  rawSend(JSON.stringify({ type: "cluster.stop" }));
+}
+export function onClusterEvent(cb: ClusterCallback): () => void {
+  clusterListeners.push(cb);
+  return () => { clusterListeners = clusterListeners.filter((c) => c !== cb); };
+}
 
 /** A line streamed from the server's kubectl-logs process. */
 export interface LogStreamMessage {
@@ -88,13 +122,15 @@ export function onLogLine(callback: LogCallback): () => void {
 }
 
 /**
- * Send a chat prompt to the server. {type:"chat", prompt, model?, effort?, sessionId?}.
+ * Send a chat prompt to the server. {type:"chat", prompt, model?, effort?, sessionId?, scope?}.
  * Pass the prior `sessionId` (captured from the `session` event) so the turn
  * resumes the same conversation; omit it on the first turn for a fresh session.
+ * Pass `scope` to tell the server which kubeconfig contexts it may read from;
+ * omit it (or pass "active") for the default single-context behavior.
  */
 export function sendChat(
   prompt: string,
-  opts?: { model?: string; effort?: string; sessionId?: string },
+  opts?: { model?: string; effort?: string; sessionId?: string; scope?: "active" | "all" | { contexts: string[] } },
 ): void {
   rawSend(
     JSON.stringify({
@@ -103,6 +139,7 @@ export function sendChat(
       model: opts?.model,
       effort: opts?.effort,
       sessionId: opts?.sessionId,
+      scope: opts?.scope,
     }),
   );
 }
@@ -170,7 +207,7 @@ export function connectCluster(): void {
     // entries that are lingering with refs 0; those are on their way out.
     for (const sub of activeSubs.values()) {
       if (sub.refs > 0) {
-        socket!.send(JSON.stringify({ type: "subscribe", kind: sub.kind, namespace: sub.namespace }));
+        sendSubFrame("subscribe", sub.kind, sub.namespace);
       }
     }
     // Drain any chat/log frames buffered while connecting.
@@ -195,6 +232,8 @@ export function connectCluster(): void {
       logListeners.forEach((cb) => cb(m as LogStreamMessage));
     } else if (m.type === "term") {
       termListeners.forEach((cb) => cb(m as TermMessage));
+    } else if (m.type === "cluster.progress" || m.type === "cluster.done" || m.type === "cluster.error") {
+      clusterListeners.forEach((cb) => cb(m as ClusterEvent));
     } else if (m.type === "snapshot") {
       // Authoritative full set for this subscription: REPLACE the kind's items
       // (not merge) so switching namespace swaps the data instead of piling the
@@ -245,4 +284,43 @@ export function unsubscribe(kind: string, namespace = "default"): void {
     // cleanup is the source of truth), so a reconnect never strands a watch.
     if (sendUnsubscribe) sendSubFrame("unsubscribe", kind, namespace);
   }, LINGER_MS);
+}
+
+/**
+ * One-time initial set of the active context (on first load, once the rail
+ * resolves which context is active). Sets the stamp + the store's active context
+ * WITHOUT tearing down/resubscribing: nothing needs migrating, and any frames
+ * already sent (context null) went to the server's boot context — the same
+ * cluster. Safe to call repeatedly; only the first (currentContext null) acts.
+ */
+export function initContext(context: string): void {
+  if (currentContext !== null) return;
+  currentContext = context;
+  useCluster.getState().setActiveContextInitial(context);
+}
+
+/**
+ * Switch the active cluster. Releases every active watch under the old context,
+ * clears the stale resource cache + adopts the new context's remembered
+ * namespace (via the store), then resubscribes the live watches under the new
+ * context. No-op if already on `context`.
+ */
+export function switchCluster(context: string): void {
+  const old = currentContext;
+  if (old === context) return;
+  const store = useCluster.getState();
+  // Plan the watch migration once (pure; reads the registry without mutating it).
+  const plan = old !== null ? planSwitch(activeSubs, old, context) : null;
+  // Release old-context watches (server-side) — otherwise they only reap via idle TTL.
+  if (plan) {
+    for (const f of plan.unsubscribes) sendSubFrame("unsubscribe", f.kind, f.namespace, f.context);
+  }
+  currentContext = context;
+  // Clear stale data + adopt the per-context namespace; one snapshot per kind repopulates.
+  store.applySwitch(context, store.namespaceByContext[context] ?? null);
+  store.setLoading(true);
+  // Re-establish the live watches under the new context.
+  if (plan) {
+    for (const f of plan.subscribes) sendSubFrame("subscribe", f.kind, f.namespace, f.context);
+  }
 }
