@@ -325,34 +325,34 @@ function CertBody({
   const detailRows = [
     {
       key: "DNS NAMES",
-      icon: <Globe size={15} color="#8C8C95" />,
+      icon: <Globe className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />,
       value: view.dnsNames.length > 0 ? view.dnsNames.join(", ") : "—",
       copy: true,
       copyValue: view.dnsNames.join(", "),
     },
     {
       key: "ISSUER",
-      icon: <Shield size={15} color="#8C8C95" />,
+      icon: <Shield className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />,
       value: view.issuer,
       copy: false,
     },
     {
       key: "SECRET",
-      icon: <Lock size={15} color="#8C8C95" />,
+      icon: <Lock className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />,
       value: view.secretName || "—",
       copy: !!view.secretName,
       copyValue: view.secretName,
     },
     {
       key: "NOT AFTER",
-      icon: <Calendar size={15} color="#8C8C95" />,
+      icon: <Calendar className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />,
       value: notAfterRel,
       secondary: notAfterAbs ? `· ${notAfterAbs}` : undefined,
       copy: false,
     },
     {
       key: "AGE",
-      icon: <History size={15} color="#8C8C95" />,
+      icon: <History className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />,
       value: agePhrase(view.cert.metadata.creationTimestamp) || "—",
       copy: false,
       isLast: true,
@@ -360,50 +360,20 @@ function CertBody({
   ] as const;
 
   return (
-    <div
-      style={{
-        padding: 24,
-        display: "flex",
-        flexDirection: "column",
-        gap: 22,
-      }}
-    >
+    <div className="flex flex-col gap-4 px-4 py-3">
       {/* 1. ISSUANCE CHAIN */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div className="flex flex-col gap-2">
         <SectionLabel>ISSUANCE CHAIN</SectionLabel>
-        <div
-          style={{
-            background: "#141417",
-            borderRadius: 12,
-            border: "1px solid #FFFFFF0D",
-            padding: "18px 20px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 6,
-          }}
-        >
+        <div className="flex flex-col gap-1.5 rounded-lg border border-[#26272B] bg-[var(--surface-sunken)] p-3">
           {view.requests.length === 0 ? (
-            <span style={{ fontFamily: "Geist, sans-serif", fontSize: 13, color: "#8C8C95" }}>
-              No active issuance.
-            </span>
+            <span className="text-xs text-muted-foreground">No active issuance.</span>
           ) : (
             view.requests.map((req) => (
-              <div key={req.name} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <div key={req.name} className="flex flex-col gap-1.5">
                 {/* Request node */}
-                <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <div className="flex items-center gap-2">
                   <RequestStatusIcon ready={req.ready} reason={req.reason} />
-                  <span
-                    style={{
-                      fontFamily: "Geist Mono, monospace",
-                      fontSize: 14,
-                      fontWeight: 500,
-                      color: "#FFFFFF",
-                      minWidth: 0,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
+                  <span className="min-w-0 truncate font-mono text-xs font-medium text-foreground">
                     {req.name}
                   </span>
                   <StateChip
@@ -414,26 +384,15 @@ function CertBody({
 
                 {/* Order node */}
                 {req.order && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 10 }}>
-                      <ChainConnector />
-                      <span
-                        style={{
-                          fontFamily: "Geist Mono, monospace",
-                          fontSize: 14,
-                          fontWeight: 500,
-                          color: "#D2D2D8",
-                          minWidth: 0,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                          flex: 1,
-                        }}
-                      >
-                        {req.order.name}
-                      </span>
-                      <StateChip state={req.order.state} label={req.order.state} />
-                      <div style={{ flex: 1 }} />
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center gap-2">
+                      <div className="flex min-w-0 flex-1 items-center gap-2">
+                        <ChainConnector />
+                        <span className="min-w-0 truncate font-mono text-xs font-medium text-[var(--fg-secondary)]">
+                          {req.order.name}
+                        </span>
+                        <StateChip state={req.order.state} label={req.order.state} />
+                      </div>
                       <ChainActionButton
                         label="Cancel order"
                         onClick={(e) => {
@@ -445,25 +404,14 @@ function CertBody({
 
                     {/* Challenge nodes */}
                     {req.order.challenges.map((ch) => (
-                      <div key={ch.name} style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 10 }}>
-                        <ChainConnector />
-                        <span
-                          style={{
-                            fontFamily: "Geist Mono, monospace",
-                            fontSize: 14,
-                            fontWeight: 500,
-                            color: "#D2D2D8",
-                            minWidth: 0,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                            flex: 1,
-                          }}
-                        >
-                          {ch.name}
-                        </span>
-                        <StateChip state={ch.state} label={ch.state} />
-                        <div style={{ flex: 1 }} />
+                      <div key={ch.name} className="flex items-center gap-2">
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                          <ChainConnector />
+                          <span className="min-w-0 truncate font-mono text-xs font-medium text-[var(--fg-secondary)]">
+                            {ch.name}
+                          </span>
+                          <StateChip state={ch.state} label={ch.state} />
+                        </div>
                         <ChainActionButton
                           label="Cancel challenge"
                           onClick={(e) => {
@@ -482,81 +430,27 @@ function CertBody({
       </div>
 
       {/* 2. DETAILS */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div className="flex flex-col gap-2">
         <SectionLabel>DETAILS</SectionLabel>
-        <div
-          style={{
-            background: "#141417",
-            borderRadius: 12,
-            border: "1px solid #FFFFFF0D",
-            overflow: "hidden",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
+        <div className="flex flex-col overflow-hidden rounded-lg border border-[#26272B] bg-[var(--surface-sunken)]">
           {detailRows.map((row, i) => (
             <div
               key={row.key}
-              style={{
-                display: "flex",
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 18,
-                padding: "14px 18px",
-                borderBottom: i < detailRows.length - 1 ? "1px solid #FFFFFF0A" : undefined,
-              }}
+              className={`flex items-center gap-3 px-3 py-2 ${i < detailRows.length - 1 ? "border-b border-white/5" : ""}`}
             >
               {/* Key */}
-              <span
-                style={{
-                  width: 150,
-                  flexShrink: 0,
-                  fontFamily: "Geist, sans-serif",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: "#7E7E87",
-                  letterSpacing: "0.8px",
-                  textTransform: "uppercase",
-                }}
-              >
+              <span className="w-28 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-[var(--fg-tertiary)]">
                 {row.key}
               </span>
 
               {/* Value */}
-              <div
-                style={{
-                  flex: 1,
-                  display: "flex",
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 9,
-                  minWidth: 0,
-                }}
-              >
+              <div className="flex min-w-0 flex-1 items-center gap-2">
                 {row.icon}
-                <span
-                  style={{
-                    fontFamily: "Geist Mono, monospace",
-                    fontSize: 13.5,
-                    fontWeight: 500,
-                    color: "#D2D2D8",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
+                <span className="truncate font-mono text-xs text-[var(--fg-secondary)]">
                   {row.value}
                 </span>
                 {"secondary" in row && row.secondary && (
-                  <span
-                    style={{
-                      fontFamily: "Geist, sans-serif",
-                      fontSize: 13,
-                      fontWeight: 400,
-                      color: "#8C8C95",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
+                  <span className="shrink-0 text-[11px] text-[var(--fg-tertiary)]">
                     {row.secondary}
                   </span>
                 )}
@@ -572,47 +466,24 @@ function CertBody({
       </div>
 
       {/* 3. ACTIONS */}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          paddingTop: 6,
-        }}
-      >
+      <div className="flex items-center gap-2 pt-1">
         {/* Force renew */}
         <button
           type="button"
           disabled={!cmctlAvailable}
-          title={!cmctlAvailable ? "cmctl is required for force renew — not available on server" : undefined}
+          title={!cmctlAvailable ? "cmctl is required for force renew (not available on server)" : undefined}
           onClick={(e) => {
             e.stopPropagation();
             if (cmctlAvailable) forceRenew();
           }}
-          style={{
-            display: "inline-flex",
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 8,
-            background: "#FFFFFF08",
-            borderRadius: 9,
-            border: "none",
-            padding: "11px 18px",
-            cursor: cmctlAvailable ? "pointer" : "not-allowed",
-          }}
+          className={`inline-flex items-center gap-1.5 rounded-md bg-white/5 px-3 py-1.5 text-xs font-semibold ${
+            cmctlAvailable
+              ? "text-[var(--fg-secondary)] hover:bg-white/10"
+              : "cursor-not-allowed text-[var(--fg-tertiary)]"
+          }`}
         >
-          <RefreshCw size={15} color={cmctlAvailable ? "#D2D2D8" : "#5A5A62"} />
-          <span
-            style={{
-              fontFamily: "Geist, sans-serif",
-              fontSize: 14,
-              fontWeight: 600,
-              color: cmctlAvailable ? "#D2D2D8" : "#5A5A62",
-            }}
-          >
-            Force renew
-          </span>
+          <RefreshCw className="size-3.5" />
+          Force renew
         </button>
 
         {/* Delete secret */}
@@ -623,29 +494,10 @@ function CertBody({
               e.stopPropagation();
               deleteSecret();
             }}
-            style={{
-              display: "inline-flex",
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-              background: "transparent",
-              borderRadius: 9,
-              border: "1px solid #FF6B6B33",
-              padding: "11px 18px",
-              cursor: "pointer",
-            }}
+            className="inline-flex items-center gap-1.5 rounded-md border border-destructive/30 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10"
           >
-            <Trash2 size={15} color="#FF6B6B" />
-            <span
-              style={{
-                fontFamily: "Geist, sans-serif",
-                fontSize: 14,
-                fontWeight: 600,
-                color: "#FF6B6B",
-              }}
-            >
-              Delete secret
-            </span>
+            <Trash2 className="size-3.5" />
+            Delete secret
           </button>
         )}
       </div>
@@ -659,16 +511,7 @@ function CertBody({
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span
-      style={{
-        fontFamily: "Geist, sans-serif",
-        fontSize: 12,
-        fontWeight: 600,
-        color: "#7E7E87",
-        letterSpacing: "1.2px",
-        textTransform: "uppercase",
-      }}
-    >
+    <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--fg-tertiary)]">
       {children}
     </span>
   );
@@ -679,64 +522,31 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 // ---------------------------------------------------------------------------
 
 function RequestStatusIcon({ ready, reason }: { ready: boolean; reason: string }) {
-  if (ready) return <CircleCheck size={17} color="#34D07F" style={{ flexShrink: 0 }} />;
+  if (ready) return <CircleCheck className="size-3.5 shrink-0 text-[#10B981]" />;
   const isPending = !reason || reason.toLowerCase().includes("pending") || reason.toLowerCase().includes("process");
-  if (isPending) return <Loader size={17} color="#F5A623" style={{ flexShrink: 0 }} />;
-  return <CircleX size={17} color="#FF6B6B" style={{ flexShrink: 0 }} />;
+  if (isPending) return <Loader className="size-3.5 shrink-0 text-[#F59E0B]" />;
+  return <CircleX className="size-3.5 shrink-0 text-destructive" />;
 }
 
 // ---------------------------------------------------------------------------
 // State chip — colored by state string
 // ---------------------------------------------------------------------------
 
-function stateColors(state: string): { color: string; bg: string } {
+function stateChipClass(state: string): string {
   const s = state.toLowerCase();
-  if (s === "valid" || s === "ready" || s === "true") {
-    return { color: "#34D07F", bg: "#34D07F1F" };
-  }
-  if (s === "pending" || s === "processing" || s === "issuing") {
-    return { color: "#F5A623", bg: "#F5A6231F" };
-  }
-  if (s === "invalid" || s === "failed" || s === "errored") {
-    return { color: "#FF6B6B", bg: "#FF6B6B1F" };
-  }
-  return { color: "#8C8C95", bg: "#FFFFFF0D" };
+  if (s === "valid" || s === "ready" || s === "true") return "text-[#10B981] bg-[#10B981]/15";
+  if (s === "pending" || s === "processing" || s === "issuing") return "text-[#F59E0B] bg-[#F59E0B]/15";
+  if (s === "invalid" || s === "failed" || s === "errored") return "text-destructive bg-destructive/15";
+  return "text-[var(--fg-tertiary)] bg-white/5";
 }
 
 function StateChip({ state, label }: { state: string; label: string }) {
-  const { color, bg } = stateColors(state);
   return (
     <span
-      style={{
-        display: "inline-flex",
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 5,
-        borderRadius: 999,
-        padding: "2px 8px",
-        background: bg,
-        flexShrink: 0,
-      }}
+      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-px text-[10px] font-semibold ${stateChipClass(state)}`}
     >
-      <span
-        style={{
-          width: 5,
-          height: 5,
-          borderRadius: "50%",
-          background: color,
-          flexShrink: 0,
-        }}
-      />
-      <span
-        style={{
-          fontFamily: "Geist, sans-serif",
-          fontSize: 12,
-          fontWeight: 600,
-          color,
-        }}
-      >
-        {label}
-      </span>
+      <span className="size-1 rounded-full bg-current" />
+      {label}
     </span>
   );
 }
@@ -747,16 +557,10 @@ function StateChip({ state, label }: { state: string; label: string }) {
 
 function ChainConnector() {
   return (
-    <svg
-      width={20}
-      height={22}
-      viewBox="0 0 20 22"
-      fill="none"
-      style={{ flexShrink: 0 }}
-    >
+    <svg viewBox="0 0 20 22" fill="none" className="size-4 shrink-0 text-[#55555E]">
       <path
         d="M2 0 L2 14 Q2 20 8 20 L20 20"
-        stroke="#55555E"
+        stroke="currentColor"
         strokeWidth={1.5}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -780,30 +584,10 @@ function ChainActionButton({
     <button
       type="button"
       onClick={onClick}
-      style={{
-        display: "inline-flex",
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 6,
-        borderRadius: 8,
-        border: "1px solid #FFFFFF0D",
-        padding: "7px 14px",
-        background: "transparent",
-        cursor: "pointer",
-        flexShrink: 0,
-      }}
+      className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[#26272B] px-2 py-1 text-[11px] font-medium text-[var(--fg-secondary)] hover:bg-white/5"
     >
-      <X size={14} color="#8C8C95" />
-      <span
-        style={{
-          fontFamily: "Geist, sans-serif",
-          fontSize: 13,
-          fontWeight: 500,
-          color: "#D2D2D8",
-        }}
-      >
-        {label}
-      </span>
+      <X className="size-3" />
+      {label}
     </button>
   );
 }
@@ -820,22 +604,11 @@ function CopyButton({ value }: { value: string }) {
         e.stopPropagation();
         void navigator.clipboard.writeText(value);
       }}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: 28,
-        height: 28,
-        borderRadius: 7,
-        border: "none",
-        background: "transparent",
-        cursor: "pointer",
-        flexShrink: 0,
-      }}
+      className="flex size-6 shrink-0 items-center justify-center rounded text-[var(--fg-tertiary)] hover:bg-white/5"
       title="Copy to clipboard"
       aria-label="Copy to clipboard"
     >
-      <Copy size={15} color="#8C8C95" />
+      <Copy className="size-3.5" />
     </button>
   );
 }
