@@ -8,7 +8,7 @@ interface Item {
 }
 interface Props {
   id?: string;
-  eyebrowIcon: string;
+  eyebrowIcon?: string;
   eyebrow: string;
   heading: string;
   copy: string;
@@ -59,10 +59,9 @@ const gridCols = reverse
       gridCols,
     ]}
   >
-    <!-- intro column -->
     <div data-reveal class:list={["lg:pt-2", reverse ? "lg:order-2" : ""]}>
       <div class="flex items-center gap-2.5">
-        <Icon name={eyebrowIcon} class="size-[15px] text-accent" />
+        {eyebrowIcon && <Icon name={eyebrowIcon} class="size-[15px] text-accent" />}
         <span class="font-mono text-xs tracking-[0.15em] text-fg-tertiary"
           >{eyebrow}</span
         >
@@ -77,7 +76,6 @@ const gridCols = reverse
       </p>
     </div>
 
-    <!-- capability grid -->
     <div
       class:list={[
         "grid gap-3.5 sm:grid-cols-2",

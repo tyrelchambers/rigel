@@ -8,6 +8,20 @@ import { PanelHeader } from "@/panels/components/PanelHeader";
 import { viewYaml } from "@/store/yamlViewer";
 import type { ActionBlock } from "@/lib/api";
 import { fetchCertManagerPlugin } from "@/lib/api";
+import {
+  History,
+  CircleCheck,
+  Loader,
+  CircleX,
+  Globe,
+  Shield,
+  Lock,
+  Calendar,
+  RefreshCw,
+  Trash2,
+  Copy,
+  X,
+} from "lucide-react";
 import type {
   Certificate,
   CertificateRequest,
@@ -18,11 +32,13 @@ import type {
   ChallengeNode,
 } from "./types";
 import {
-  relativeAge,
   expiryLabel,
   buildCertViews,
   sortCertViews,
   matchesSearch,
+  agePhrase,
+  notAfterRelative,
+  absoluteDate,
 } from "./certificatesDisplay";
 
 // ---------------------------------------------------------------------------
@@ -135,7 +151,7 @@ export default function CertificatesPanel() {
                 onToggle={() => toggleExpand(v.uid)}
                 contextMenu={rowMenu}
                 expandedContent={
-                  <CertDetail view={v} onAction={setPendingAction} cmctlAvailable={cmctlAvailable} />
+                  <CertBody view={v} onAction={setPendingAction} cmctlAvailable={cmctlAvailable} />
                 }
               >
                 {/* Name */}
@@ -249,54 +265,10 @@ function StatusPill({ view }: { view: CertView }) {
 }
 
 // ---------------------------------------------------------------------------
-// Small subtle action button used in the issuance chain + cert-level actions.
+// Expanded body: ISSUANCE CHAIN, DETAILS, cert-level actions
 // ---------------------------------------------------------------------------
 
-function SmallButton({
-  label,
-  onClick,
-  disabled,
-  title,
-}: {
-  label: string;
-  onClick: (e: React.MouseEvent) => void;
-  disabled?: boolean;
-  title?: string;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      title={title}
-      onClick={(e) => {
-        e.stopPropagation();
-        if (!disabled) onClick(e);
-      }}
-      className="shrink-0 rounded font-mono transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-      style={{
-        fontSize: 10,
-        padding: "2px 7px",
-        color: "var(--fg-secondary)",
-        background: "var(--surface-elevated)",
-        border: "1px solid #26272B",
-      }}
-      onMouseEnter={(e) => {
-        if (!disabled) e.currentTarget.style.borderColor = "#34353A";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = "#26272B";
-      }}
-    >
-      {label}
-    </button>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Expanded detail: ISSUANCE CHAIN, DETAILS, cert-level actions
-// ---------------------------------------------------------------------------
-
-function CertDetail({
+function CertBody({
   view,
   onAction,
   cmctlAvailable,
@@ -347,108 +319,297 @@ function CertDetail({
     });
   }
 
+  const notAfterAbs = view.notAfter ? absoluteDate(view.notAfter) : null;
+  const notAfterRel = notAfterRelative(view.notAfter);
+
+  const detailRows = [
+    {
+      key: "DNS NAMES",
+      icon: <Globe className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />,
+      value: view.dnsNames.length > 0 ? view.dnsNames.join(", ") : "—",
+      copy: true,
+      copyValue: view.dnsNames.join(", "),
+    },
+    {
+      key: "ISSUER",
+      icon: <Shield className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />,
+      value: view.issuer,
+      copy: false,
+    },
+    {
+      key: "SECRET",
+      icon: <Lock className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />,
+      value: view.secretName || "—",
+      copy: !!view.secretName,
+      copyValue: view.secretName,
+    },
+    {
+      key: "NOT AFTER",
+      icon: <Calendar className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />,
+      value: notAfterRel,
+      secondary: notAfterAbs ? `· ${notAfterAbs}` : undefined,
+      copy: false,
+    },
+    {
+      key: "AGE",
+      icon: <History className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />,
+      value: agePhrase(view.cert.metadata.creationTimestamp) || "—",
+      copy: false,
+      isLast: true,
+    },
+  ] as const;
+
   return (
-    <div className="space-y-3">
-      {/* ISSUANCE CHAIN */}
-      <div className="space-y-1">
-        <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-          Issuance chain
-        </h3>
-        {view.requests.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No active issuance requests</p>
-        ) : (
-          <div className="space-y-1.5 text-xs font-mono">
-            {view.requests.map((req) => (
-              <div key={req.name} className="space-y-1">
-                {/* CertificateRequest */}
+    <div className="flex flex-col gap-4 px-4 py-3">
+      {/* 1. ISSUANCE CHAIN */}
+      <div className="flex flex-col gap-2">
+        <SectionLabel>ISSUANCE CHAIN</SectionLabel>
+        <div className="flex flex-col gap-1.5 rounded-lg border border-[#26272B] bg-[var(--surface-sunken)] p-3">
+          {view.requests.length === 0 ? (
+            <span className="text-xs text-muted-foreground">No active issuance.</span>
+          ) : (
+            view.requests.map((req) => (
+              <div key={req.name} className="flex flex-col gap-1.5">
+                {/* Request node */}
                 <div className="flex items-center gap-2">
-                  <span style={{ color: "var(--fg-secondary)" }}>{req.name}</span>
-                  <span style={{ color: req.ready ? "var(--status-running)" : "var(--fg-tertiary)" }}>
-                    {req.ready ? "ready" : req.reason || "pending"}
+                  <RequestStatusIcon ready={req.ready} reason={req.reason} />
+                  <span className="min-w-0 truncate font-mono text-xs font-medium text-foreground">
+                    {req.name}
                   </span>
+                  <StateChip
+                    state={req.ready ? "valid" : (req.reason || "pending")}
+                    label={req.ready ? "ready" : (req.reason || "pending")}
+                  />
                 </div>
 
-                {/* Order */}
+                {/* Order node */}
                 {req.order && (
-                  <div className="ml-3 space-y-1">
+                  <div className="flex flex-col gap-1.5">
                     <div className="flex items-center gap-2">
-                      <span style={{ color: "var(--fg-tertiary)" }}>↳</span>
-                      <span style={{ color: "var(--fg-secondary)" }}>{req.order.name}</span>
-                      <span style={{ color: "var(--fg-tertiary)" }}>·</span>
-                      <span style={{ color: "var(--fg-secondary)" }}>{req.order.state}</span>
-                      {req.order.reason && (
-                        <>
-                          <span style={{ color: "var(--fg-tertiary)" }}>·</span>
-                          <span style={{ color: "var(--fg-tertiary)" }}>{req.order.reason}</span>
-                        </>
-                      )}
-                      <SmallButton label="Cancel order" onClick={() => cancelOrder(req.order!)} />
+                      <div className="flex min-w-0 flex-1 items-center gap-2">
+                        <ChainConnector />
+                        <span className="min-w-0 truncate font-mono text-xs font-medium text-[var(--fg-secondary)]">
+                          {req.order.name}
+                        </span>
+                        <StateChip state={req.order.state} label={req.order.state} />
+                      </div>
+                      <ChainActionButton
+                        label="Cancel order"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          cancelOrder(req.order!);
+                        }}
+                      />
                     </div>
 
-                    {/* Challenges */}
+                    {/* Challenge nodes */}
                     {req.order.challenges.map((ch) => (
-                      <div key={ch.name} className="ml-4 flex items-center gap-2">
-                        <span style={{ color: "var(--fg-tertiary)" }}>↳</span>
-                        <span style={{ color: "var(--fg-secondary)" }}>{ch.type}</span>
-                        <span style={{ color: "var(--fg-tertiary)" }}>·</span>
-                        <span style={{ color: "var(--fg-secondary)" }}>{ch.dnsName}</span>
-                        <span style={{ color: "var(--fg-tertiary)" }}>·</span>
-                        <span style={{ color: "var(--fg-secondary)" }}>{ch.state}</span>
-                        {ch.reason && (
-                          <>
-                            <span style={{ color: "var(--fg-tertiary)" }}>·</span>
-                            <span style={{ color: "var(--fg-tertiary)" }}>{ch.reason}</span>
-                          </>
-                        )}
-                        <SmallButton label="Cancel challenge" onClick={() => cancelChallenge(ch)} />
+                      <div key={ch.name} className="flex items-center gap-2">
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                          <ChainConnector />
+                          <span className="min-w-0 truncate font-mono text-xs font-medium text-[var(--fg-secondary)]">
+                            {ch.name}
+                          </span>
+                          <StateChip state={ch.state} label={ch.state} />
+                        </div>
+                        <ChainActionButton
+                          label="Cancel challenge"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            cancelChallenge(ch);
+                          }}
+                        />
                       </div>
                     ))}
                   </div>
                 )}
               </div>
-            ))}
-          </div>
-        )}
+            ))
+          )}
+        </div>
       </div>
 
-      {/* DETAILS */}
-      <div className="space-y-1">
-        <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-          Details
-        </h3>
-        <dl
-          className="grid gap-x-4 gap-y-0.5 text-xs font-mono"
-          style={{ gridTemplateColumns: "6rem 1fr" }}
-        >
-          <dt style={{ color: "var(--fg-tertiary)" }}>DNS NAMES</dt>
-          <dd className="break-all" style={{ color: "var(--fg-secondary)" }}>
-            {view.dnsNames.join(", ") || "—"}
-          </dd>
-          <dt style={{ color: "var(--fg-tertiary)" }}>ISSUER</dt>
-          <dd style={{ color: "var(--fg-secondary)" }}>{view.issuer}</dd>
-          <dt style={{ color: "var(--fg-tertiary)" }}>SECRET</dt>
-          <dd className="break-all" style={{ color: "var(--fg-secondary)" }}>{view.secretName || "—"}</dd>
-          <dt style={{ color: "var(--fg-tertiary)" }}>NOT AFTER</dt>
-          <dd style={{ color: "var(--fg-secondary)" }}>
-            {expiryLabel(view.notAfter)}
-          </dd>
-          <dt style={{ color: "var(--fg-tertiary)" }}>AGE</dt>
-          <dd style={{ color: "var(--fg-secondary)" }}>
-            {relativeAge(view.cert.metadata.creationTimestamp)} ago
-          </dd>
-        </dl>
+      {/* 2. DETAILS */}
+      <div className="flex flex-col gap-2">
+        <SectionLabel>DETAILS</SectionLabel>
+        <div className="flex flex-col overflow-hidden rounded-lg border border-[#26272B] bg-[var(--surface-sunken)]">
+          {detailRows.map((row, i) => (
+            <div
+              key={row.key}
+              className={`flex items-center gap-3 px-3 py-2 ${i < detailRows.length - 1 ? "border-b border-white/5" : ""}`}
+            >
+              {/* Key */}
+              <span className="w-28 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-[var(--fg-tertiary)]">
+                {row.key}
+              </span>
+
+              {/* Value */}
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                {row.icon}
+                <span className="truncate font-mono text-xs text-[var(--fg-secondary)]">
+                  {row.value}
+                </span>
+                {"secondary" in row && row.secondary && (
+                  <span className="shrink-0 text-[11px] text-[var(--fg-tertiary)]">
+                    {row.secondary}
+                  </span>
+                )}
+              </div>
+
+              {/* Copy button */}
+              {"copy" in row && row.copy && (
+                <CopyButton value={"copyValue" in row && row.copyValue ? row.copyValue : row.value} />
+              )}
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Cert-level actions */}
+      {/* 3. ACTIONS */}
       <div className="flex items-center gap-2 pt-1">
-        <SmallButton
-          label="Force renew"
-          onClick={forceRenew}
+        {/* Force renew */}
+        <button
+          type="button"
           disabled={!cmctlAvailable}
-          title={!cmctlAvailable ? "cmctl not available on server" : undefined}
-        />
-        {view.secretName && <SmallButton label="Delete secret" onClick={deleteSecret} />}
+          title={!cmctlAvailable ? "cmctl is required for force renew (not available on server)" : undefined}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (cmctlAvailable) forceRenew();
+          }}
+          className={`inline-flex items-center gap-1.5 rounded-md bg-white/5 px-3 py-1.5 text-xs font-semibold ${
+            cmctlAvailable
+              ? "text-[var(--fg-secondary)] hover:bg-white/10"
+              : "cursor-not-allowed text-[var(--fg-tertiary)]"
+          }`}
+        >
+          <RefreshCw className="size-3.5" />
+          Force renew
+        </button>
+
+        {/* Delete secret */}
+        {view.secretName && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              deleteSecret();
+            }}
+            className="inline-flex items-center gap-1.5 rounded-md border border-destructive/30 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10"
+          >
+            <Trash2 className="size-3.5" />
+            Delete secret
+          </button>
+        )}
       </div>
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Section label
+// ---------------------------------------------------------------------------
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--fg-tertiary)]">
+      {children}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Request status icon in the issuance chain
+// ---------------------------------------------------------------------------
+
+function RequestStatusIcon({ ready, reason }: { ready: boolean; reason: string }) {
+  if (ready) return <CircleCheck className="size-3.5 shrink-0 text-[#10B981]" />;
+  const isPending = !reason || reason.toLowerCase().includes("pending") || reason.toLowerCase().includes("process");
+  if (isPending) return <Loader className="size-3.5 shrink-0 text-[#F59E0B]" />;
+  return <CircleX className="size-3.5 shrink-0 text-destructive" />;
+}
+
+// ---------------------------------------------------------------------------
+// State chip — colored by state string
+// ---------------------------------------------------------------------------
+
+function stateChipClass(state: string): string {
+  const s = state.toLowerCase();
+  if (s === "valid" || s === "ready" || s === "true") return "text-[#10B981] bg-[#10B981]/15";
+  if (s === "pending" || s === "processing" || s === "issuing") return "text-[#F59E0B] bg-[#F59E0B]/15";
+  if (s === "invalid" || s === "failed" || s === "errored") return "text-destructive bg-destructive/15";
+  return "text-[var(--fg-tertiary)] bg-white/5";
+}
+
+function StateChip({ state, label }: { state: string; label: string }) {
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-px text-[10px] font-semibold ${stateChipClass(state)}`}
+    >
+      <span className="size-1 rounded-full bg-current" />
+      {label}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// L-shaped chain connector SVG
+// ---------------------------------------------------------------------------
+
+function ChainConnector() {
+  return (
+    <svg viewBox="0 0 20 22" fill="none" className="size-4 shrink-0 text-[#55555E]">
+      <path
+        d="M2 0 L2 14 Q2 20 8 20 L20 20"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Chain action button (Cancel order / Cancel challenge)
+// ---------------------------------------------------------------------------
+
+function ChainActionButton({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick: (e: React.MouseEvent) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[#26272B] px-2 py-1 text-[11px] font-medium text-[var(--fg-secondary)] hover:bg-white/5"
+    >
+      <X className="size-3" />
+      {label}
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Copy button — silent clipboard copy, no state feedback per design spec.
+// ---------------------------------------------------------------------------
+
+function CopyButton({ value }: { value: string }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        void navigator.clipboard.writeText(value);
+      }}
+      className="flex size-6 shrink-0 items-center justify-center rounded text-[var(--fg-tertiary)] hover:bg-white/5"
+      title="Copy to clipboard"
+      aria-label="Copy to clipboard"
+    >
+      <Copy className="size-3.5" />
+    </button>
+  );
+}
+

@@ -1,5 +1,4 @@
 ---
-import { Icon } from "astro-icon/components";
 import Base from "../layouts/Base.astro";
 import Nav from "../components/Nav.astro";
 import PageHeader from "../components/PageHeader.astro";
@@ -126,7 +125,7 @@ const faqs = [
   <Nav />
   <main id="main">
     <PageHeader
-      eyebrowIcon="lucide:shield-check"
+      eyebrowIcon={null}
       eyebrow="SECURITY"
       title="You stay in control."
       subtitle="Giving any tool access to your cluster is a real decision, so here's exactly how Rigel works. It runs on your own Mac, it asks before it changes anything, and it never reports back to us."
@@ -135,7 +134,6 @@ const faqs = [
     <CapabilitySection
       id="approval"
       variant="primary"
-      eyebrowIcon="lucide:hand"
       eyebrow="APPROVAL"
       heading="Nothing changes without your say-so."
       copy="Rigel can dig through your cluster and suggest fixes, but it doesn't make the change itself. It hands you the exact command and waits for you to click."
@@ -146,7 +144,6 @@ const faqs = [
       id="access"
       variant="sunken"
       reverse
-      eyebrowIcon="lucide:lock"
       eyebrow="RUNS LOCALLY"
       heading="It runs on your Mac, nowhere else."
       copy="Rigel isn't a server you have to stand up and protect. It's an app on your machine that talks to your clusters directly, so there's nothing exposed to the internet."
@@ -156,7 +153,6 @@ const faqs = [
     <CapabilitySection
       id="data"
       variant="primary"
-      eyebrowIcon="lucide:server"
       eyebrow="YOUR DATA"
       heading="Your data doesn't go anywhere."
       copy="Rigel runs on your Mac. The only thing that ever leaves is what you choose to send to the AI, using your own key."
@@ -167,18 +163,15 @@ const faqs = [
       id="agent"
       variant="sunken"
       reverse
-      eyebrowIcon="lucide:shield"
       eyebrow="AGENT GUARDRAILS"
       heading="The agent has hard limits."
       copy="The optional agent that fixes things while you're away only works inside the limits you set, and it keeps a record of everything it does."
       items={agent}
     />
 
-    <!-- FAQ -->
     <section class="border-t border-line-subtle bg-surface">
       <div class="mx-auto max-w-[760px] px-6 py-20 sm:px-8 lg:py-24">
         <div data-reveal class="flex items-center gap-2.5">
-          <Icon name="lucide:message-circle-question" class="size-[15px] text-accent" />
           <span class="font-mono text-xs tracking-[0.15em] text-fg-tertiary"
             >COMMON QUESTIONS</span
           >

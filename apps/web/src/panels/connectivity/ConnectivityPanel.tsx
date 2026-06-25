@@ -9,8 +9,10 @@ import {
   ArrowRight,
   Split,
 } from "lucide-react";
+import { useNavigate } from "react-router";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
+import { goToResource } from "@/lib/resourceNav";
 import { ListRow } from "@/panels/components/ListRow";
 import { ContextMenuItem } from "@/components/ui/context-menu";
 import { StatusBadge } from "@/panels/components/StatusBadge";
@@ -24,24 +26,10 @@ import type { Flow, Health } from "./types";
 import { computeFlows } from "./connectivityDisplay";
 
 // ---------------------------------------------------------------------------
-// DEFERRED ACTIONS (docs/parity/connectivity.md §"Deferred Actions"). This is a
-// strictly read-only diagnostic map. The following are intentionally NOT
-// implemented and must NOT be added without a new feature spec + infra:
-//   - onSelectService / onSelectPods are stubs (jump-to-panel navigation is TBD;
-//     wiring them requires cross-panel selection state). They no-op safely.
-//   - Port-forward UI, View YAML, Ask Claude handoff, forwarding badge.
-//   - NO mutations, NO ConfirmSheet, NO kubectl writes, NO new server routes.
+// Navigation uses goToResource to jump to the Services or Pods panel and focus
+// the selected row. Port-forward UI, View YAML, Ask Claude handoff, and
+// forwarding badge remain deferred. NO mutations, NO kubectl writes.
 // ---------------------------------------------------------------------------
-
-/** Deferred — jump to the Services panel filtered to this service (TBD). */
-function onSelectService(_serviceName: string, _namespace: string): void {
-  // Intentionally a no-op until cross-panel navigation exists. See spec.
-}
-
-/** Deferred — jump to the Pods panel filtered to this flow's pods (TBD). */
-function onSelectPods(_flow: Flow): void {
-  // Intentionally a no-op until cross-panel navigation exists. See spec.
-}
 
 // Health → StatusBadge variant mapping.
 const HEALTH_VARIANT: Record<Health, StatusBadgeVariant> = {
@@ -212,15 +200,40 @@ function Arrow() {
 }
 
 function FlowRow({ flow }: { flow: Flow }) {
+  const navigate = useNavigate();
   const podsDisabled = flow.totalPods === 0;
   const tintClass = HEALTH_TEXT[flow.health];
   const healthColor =
     flow.health === "ok" ? "var(--status-running)" : flow.health === "warn" ? "var(--status-pending)" : "var(--status-failed)";
 
+  function handleSelectService() {
+    goToResource(navigate, {
+      kind: "services",
+      name: flow.serviceName,
+      namespace: flow.namespace,
+      key: `${flow.namespace}/${flow.serviceName}`,
+      status: "ok",
+    });
+  }
+
+  function handleSelectPods() {
+    if (podsDisabled) return;
+    // Navigate to pods panel; focus the first pod if there is one.
+    const firstName = flow.podNames[0];
+    if (!firstName) return;
+    goToResource(navigate, {
+      kind: "pods",
+      name: firstName,
+      namespace: flow.namespace,
+      key: `${flow.namespace}/${firstName}`,
+      status: "ok",
+    });
+  }
+
   const rowMenu = (
     <>
-      <ContextMenuItem onClick={() => onSelectService(flow.serviceName, flow.namespace)}>View service</ContextMenuItem>
-      <ContextMenuItem disabled={podsDisabled} onClick={() => onSelectPods(flow)}>View pods</ContextMenuItem>
+      <ContextMenuItem onClick={handleSelectService}>View service</ContextMenuItem>
+      <ContextMenuItem disabled={podsDisabled} onClick={handleSelectPods}>View pods</ContextMenuItem>
     </>
   );
 
@@ -267,7 +280,7 @@ function FlowRow({ flow }: { flow: Flow }) {
           {/* Service identity — TagPill when exists, error-colored when missing */}
           <button
             type="button"
-            onClick={() => onSelectService(flow.serviceName, flow.namespace)}
+            onClick={handleSelectService}
             className="rounded hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {flow.serviceExists ? (
@@ -288,7 +301,7 @@ function FlowRow({ flow }: { flow: Flow }) {
           <button
             type="button"
             disabled={podsDisabled}
-            onClick={() => onSelectPods(flow)}
+            onClick={handleSelectPods}
             className="rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
           >
             <Chip

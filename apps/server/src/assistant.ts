@@ -14,14 +14,31 @@ import { buildKubectlArgs, kubectl, runProcessWithStdin, type RunResult } from "
 import {
   DEFAULT_INSTALL_CONFIG,
   SECRET_NAME,
+  CREDENTIALS_SECRET_NAME,
   namespaceYAML,
   secretYAML,
+  credentialsSecretYAML,
   manifestYAML,
   mergedConfigMapJSON,
   clearedReportConfigMapJSON,
   clearedStateConfigMapJSON,
   silencedSet,
+  roleConfigUpdates,
+  limitsConfigUpdates,
+  resolveCredentialSources,
+  credentialSourceCommands,
+  clearCredentialSourceCommands,
+  reconcileCommands,
+  needsReconcile,
+  credentialEnvPatch,
+  defaultCredentialSource,
+  isAssistantManaged,
+  DEPLOYMENT_NAME,
   type AssistantInstallConfig,
+  type AssistantCredentials,
+  type RoleSelectionInput,
+  type LimitsInput,
+  type SecretLike,
 } from "@rigel/k8s/src/assistant";
 import { signalConfigUpdates } from "@rigel/k8s/src/signal";
 import { normalizeAlertRule, parseAlertRules, serializeAlertRules, nextAlertRules, type SuggestedAlert } from "@rigel/k8s";
@@ -86,13 +103,21 @@ export type AssistantAction =
   | "setMode"
   | "kill"
   | "updateToken"
+  | "setModels"
+  | "setCredentials"
+  | "setLimits"
   | "restart"
   | "silence"
   | "unsilence"
   | "clearReport"
   | "clearActivity"
   | "setSignal"
-  | "saveAlert" | "deleteAlert" | "toggleAlert";
+  | "saveAlert" | "deleteAlert" | "toggleAlert"
+  | "credentialStatus"
+  | "setCredentialSource"
+  | "clearCredentialSource"
+  | "listCredentialSecrets"
+  | "reconcileCredentialAnnotations";
 
 export interface AssistantRequest {
   action: AssistantAction;
@@ -106,6 +131,11 @@ export interface AssistantRequest {
   maxPerNight?: number;
   maxAttemptsPerIncident?: number;
   confirmPolls?: number;
+  // Multi-provider control plane (Plan 2).
+  worker?: RoleSelectionInput;
+  supervisor?: RoleSelectionInput;
+  credentials?: AssistantCredentials;
+  limits?: LimitsInput;
   monitorNamespaces?: string;
   mode?: string;
   window?: string;
@@ -120,6 +150,11 @@ export interface AssistantRequest {
   alert?: SuggestedAlert;   // saveAlert payload (model block, validated server-side)
   alertId?: string;          // delete/toggle
   alertEnabled?: boolean;    // toggle
+  // BYO credential source (setCredentialSource/clearCredentialSource). The
+  // server reads the chosen Secret's KEYS only — a value never crosses the wire.
+  credentialId?: keyof AssistantCredentials;
+  secretName?: string;
+  dataKey?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -143,9 +178,75 @@ export function validateInstall(namespace: string, token: string, image: string)
   if (ns !== ns.toLowerCase()) throw new Error("Namespace must be lowercase.");
 }
 
+/**
+ * Extract the credentials map from a request: take req.credentials, drop any
+ * empty/whitespace value, and fold a legacy top-level `token` into `claudeToken`
+ * (so old callers still work). Pure — testable without a cluster.
+ */
+export function parseCredentials(req: AssistantRequest): AssistantCredentials {
+  const out: AssistantCredentials = {};
+  const src = req.credentials ?? {};
+  for (const [k, v] of Object.entries(src) as [keyof AssistantCredentials, string | undefined][]) {
+    if (typeof v === "string" && v.trim() !== "") out[k] = v.trim();
+  }
+  if (!out.claudeToken && req.token && req.token.trim() !== "") {
+    out.claudeToken = req.token.trim();
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Action handlers
 // ---------------------------------------------------------------------------
+
+/**
+ * Build the AssistantInstallConfig from a request. The per-role selections seed
+ * the assistant-config ConfigMap (via packages/k8s configMaps); the legacy
+ * workerModel/supervisorModel knobs remain the env fallback. Limits map onto the
+ * install knobs (namespaces is comma-joined for the env/ConfigMap). Pure.
+ */
+export function buildInstallConfig(req: AssistantRequest): AssistantInstallConfig {
+  const namespace = (req.namespace ?? DEFAULT_INSTALL_CONFIG.installNamespace).trim() || DEFAULT_INSTALL_CONFIG.installNamespace;
+  const image = (req.image ?? DEFAULT_INSTALL_CONFIG.image).trim() || DEFAULT_INSTALL_CONFIG.image;
+  const limits = req.limits ?? {};
+  const monitorNamespaces =
+    limits.namespaces !== undefined ? limits.namespaces.join(",") : req.monitorNamespaces ?? DEFAULT_INSTALL_CONFIG.namespaces;
+  return {
+    image,
+    installNamespace: namespace,
+    namespaces: monitorNamespaces,
+    workerModel: req.worker?.model ?? req.workerModel ?? DEFAULT_INSTALL_CONFIG.workerModel,
+    supervisorModel: req.supervisor?.model ?? req.supervisorModel ?? DEFAULT_INSTALL_CONFIG.supervisorModel,
+    pollIntervalMs: limits.pollIntervalMs ?? req.pollIntervalMs ?? DEFAULT_INSTALL_CONFIG.pollIntervalMs,
+    maxPerResourcePerHour: limits.maxPerResourcePerHour ?? req.maxPerResourcePerHour ?? DEFAULT_INSTALL_CONFIG.maxPerResourcePerHour,
+    maxPerNight: limits.maxPerNight ?? req.maxPerNight ?? DEFAULT_INSTALL_CONFIG.maxPerNight,
+    maxAttemptsPerIncident: limits.maxAttemptsPerIncident ?? req.maxAttemptsPerIncident ?? DEFAULT_INSTALL_CONFIG.maxAttemptsPerIncident,
+    confirmPolls: limits.confirmPolls ?? req.confirmPolls ?? DEFAULT_INSTALL_CONFIG.confirmPolls,
+    worker: req.worker,
+    supervisor: req.supervisor,
+  };
+}
+
+/** Pure: the assistant-config role-key updates for a setModels request. */
+export function setModelsUpdates(req: AssistantRequest): Record<string, string> {
+  return roleConfigUpdates(req.worker, req.supervisor);
+}
+
+/** Pure: the Secret YAML(s) a setCredentials request applies. Always the
+ *  credentials Secret; additionally the legacy token Secret (re-stamped) when a
+ *  Claude OAuth token is supplied, so existing CLAUDE_CODE_OAUTH_TOKEN refs refresh. */
+export function setCredentialsSecrets(
+  req: AssistantRequest,
+  namespace: string,
+  now: Date,
+): { credentialsYaml: string; legacyTokenYaml: string | null } {
+  const creds = parseCredentials(req);
+  const credentialsYaml = credentialsSecretYAML(creds, namespace);
+  const legacyTokenYaml = creds.claudeToken
+    ? secretYAML(creds.claudeToken, now.toISOString(), namespace)
+    : null;
+  return { credentialsYaml, legacyTokenYaml };
+}
 
 /**
  * Apply, in order: the namespace (best-effort — kubectl apply is idempotent and
@@ -157,46 +258,57 @@ async function installAssistant(
   context: string | null,
   req: AssistantRequest,
 ): Promise<RunResult> {
-  const namespace = (req.namespace ?? DEFAULT_INSTALL_CONFIG.installNamespace).trim();
-  // Use the token from the request if one was pasted, otherwise the token the
-  // user already saved (onboarding / Settings) — so they don't re-enter it.
-  const token = (req.token ?? "").trim() || ((await effectiveClaudeToken()) ?? "");
-  const image = (req.image ?? DEFAULT_INSTALL_CONFIG.image).trim();
-  validateInstall(namespace, token, image);
+  const config = buildInstallConfig(req);
+  const namespace = config.installNamespace;
 
-  const config: AssistantInstallConfig = {
-    image,
-    installNamespace: namespace,
-    namespaces: req.monitorNamespaces ?? DEFAULT_INSTALL_CONFIG.namespaces,
-    workerModel: req.workerModel ?? DEFAULT_INSTALL_CONFIG.workerModel,
-    supervisorModel: req.supervisorModel ?? DEFAULT_INSTALL_CONFIG.supervisorModel,
-    pollIntervalMs: req.pollIntervalMs ?? DEFAULT_INSTALL_CONFIG.pollIntervalMs,
-    maxPerResourcePerHour: req.maxPerResourcePerHour ?? DEFAULT_INSTALL_CONFIG.maxPerResourcePerHour,
-    maxPerNight: req.maxPerNight ?? DEFAULT_INSTALL_CONFIG.maxPerNight,
-    maxAttemptsPerIncident: req.maxAttemptsPerIncident ?? DEFAULT_INSTALL_CONFIG.maxAttemptsPerIncident,
-    confirmPolls: req.confirmPolls ?? DEFAULT_INSTALL_CONFIG.confirmPolls,
-  };
+  // Refuse to adopt a same-named Deployment we don't own — `kubectl apply` would
+  // otherwise silently merge into a foreign rigel-assistant. (Re-installing OURS
+  // is fine; it carries the managed-by label.)
+  await assertNoForeignDeployment(context, namespace);
+
+  // Credentials: req.credentials (+ legacy top-level token folded into claudeToken).
+  // For Claude we still also accept the user's already-saved token (onboarding /
+  // Settings) so they don't re-enter it.
+  const creds = parseCredentials(req);
+  if (!creds.claudeToken) {
+    const saved = (await effectiveClaudeToken()) ?? "";
+    if (saved.trim() !== "") creds.claudeToken = saved.trim();
+  }
+
+  // Validate: at least one credential must be present (the worker can't run with
+  // none). Keep the legacy Claude validation when a Claude token is the only cred.
+  const hasAnyCred = Object.values(creds).some((v) => typeof v === "string" && v.trim() !== "");
+  validateInstall(namespace, hasAnyCred ? "ok" : "", config.image);
 
   // 1. Namespace (idempotent; creates it when missing).
   ensureOk(await applyStdin(context, namespaceYAML(namespace)), `Failed to create namespace ${namespace}`);
 
-  // 2. Secret first (carries the OAuth token), stamped at mint time.
-  const issuedAt = new Date().toISOString();
-  ensureOk(await applyStdin(context, secretYAML(token, issuedAt, namespace)), "Failed to create token Secret");
+  // 2. Legacy token Secret first (only when a Claude OAuth token is present) so a
+  //    bad token can be rolled back without reapplying RBAC, and existing installs
+  //    that read CLAUDE_CODE_OAUTH_TOKEN from this Secret keep working.
+  if (creds.claudeToken) {
+    const issuedAt = new Date().toISOString();
+    ensureOk(await applyStdin(context, secretYAML(creds.claudeToken, issuedAt, namespace)), "Failed to create token Secret");
+  }
 
-  // 3. RBAC + ConfigMaps + Deployment.
+  // 3. Multi-key credentials Secret (the other providers + an Anthropic API key).
+  ensureOk(await applyStdin(context, credentialsSecretYAML(creds, namespace)), "Failed to create credentials Secret");
+
+  // 4. RBAC + ConfigMaps (seeded with role + limit keys) + Deployment.
   const result = await applyStdin(context, manifestYAML(config));
   ensureOk(result, "Failed to apply manifests");
   return result;
 }
 
-/** Delete the manifests, then the Secret. Leaves the namespace + audit history. */
+/** Delete the manifests, then both Secrets (legacy token + provider credentials —
+ *  the latter carries API keys, so don't leave it orphaned). Leaves the namespace
+ *  + audit history. */
 async function uninstallAssistant(context: string | null, namespace: string): Promise<RunResult> {
   const config: AssistantInstallConfig = { ...DEFAULT_INSTALL_CONFIG, installNamespace: namespace };
   ensureOk(await deleteStdin(context, manifestYAML(config)), "Uninstall failed");
   return runKubectlStdin(
     context,
-    ["delete", "secret", SECRET_NAME, "-n", namespace, "--ignore-not-found=true"],
+    ["delete", "secret", SECRET_NAME, CREDENTIALS_SECRET_NAME, "-n", namespace, "--ignore-not-found=true"],
     null,
   );
 }
@@ -256,6 +368,61 @@ async function mutateAlerts(
   return patchConfig(context, namespace, { alertRules: serializeAlertRules(next) });
 }
 
+/** Pure: the assistant-config limit-key updates for a setLimits request. */
+export function setLimitsUpdates(req: AssistantRequest): Record<string, string> {
+  return limitsConfigUpdates(req.limits ?? {});
+}
+
+/** Live limit change: read-modify-write the limit keys in assistant-config. No
+ *  restart — the agent reads rc.limits each tick. */
+async function setLimits(
+  context: string | null,
+  namespace: string,
+  req: AssistantRequest,
+): Promise<RunResult> {
+  const updates = setLimitsUpdates(req);
+  if (Object.keys(updates).length === 0) {
+    throw new Error("setLimits requires at least one limit field.");
+  }
+  return patchConfig(context, namespace, updates);
+}
+
+/** Live role switch: read-modify-write the role keys in assistant-config. No
+ *  restart — the agent re-reads the ConfigMap every poll. */
+async function setModels(
+  context: string | null,
+  namespace: string,
+  req: AssistantRequest,
+): Promise<RunResult> {
+  const updates = setModelsUpdates(req);
+  if (Object.keys(updates).length === 0) {
+    throw new Error("setModels requires a worker and/or supervisor selection.");
+  }
+  return patchConfig(context, namespace, updates);
+}
+
+/** Re-apply the credentials Secret (+ legacy token Secret when a Claude token is
+ *  supplied), then rollout-restart so the new env vars are injected. Generalizes
+ *  the old token-only updateToken. */
+async function setCredentials(
+  context: string | null,
+  namespace: string,
+  req: AssistantRequest,
+): Promise<RunResult> {
+  const creds = parseCredentials(req);
+  if (Object.values(creds).every((v) => !v || v.trim() === "")) {
+    throw new Error("setCredentials requires at least one credential.");
+  }
+  const { credentialsYaml, legacyTokenYaml } = setCredentialsSecrets(req, namespace, new Date());
+  if (legacyTokenYaml) {
+    ensureOk(await applyStdin(context, legacyTokenYaml), "Failed to update token Secret");
+  }
+  ensureOk(await applyStdin(context, credentialsYaml), "Failed to update credentials Secret");
+  const result = await restartAgent(context, namespace);
+  ensureOk(result, "Credentials saved, but rollout failed");
+  return result;
+}
+
 async function setMode(
   context: string | null,
   namespace: string,
@@ -288,7 +455,8 @@ async function silenceIncident(
   });
 }
 
-/** Re-stamp + apply the token Secret, then roll the Deployment. */
+/** Backward-compat alias: an old token-only update routes through setCredentials
+ *  (which re-stamps the legacy token Secret + the credentials Secret, then rolls). */
 async function updateToken(
   context: string | null,
   namespace: string,
@@ -297,11 +465,7 @@ async function updateToken(
   if (token.trim() === "") {
     throw new Error("Paste a fresh token from `claude setup-token` first.");
   }
-  const issuedAt = new Date().toISOString();
-  ensureOk(await applyStdin(context, secretYAML(token.trim(), issuedAt, namespace)), "Failed to update token");
-  const result = await restartAgent(context, namespace);
-  ensureOk(result, "Token saved, but rollout failed");
-  return result;
+  return setCredentials(context, namespace, { action: "setCredentials", token: token.trim() });
 }
 
 function restartAgent(context: string | null, namespace: string): Promise<RunResult> {
@@ -334,6 +498,245 @@ async function clearActivity(context: string | null, namespace: string): Promise
   return result;
 }
 
+/**
+ * Refuse to install over a same-named Deployment we don't own. `kubectl apply`
+ * 3-way-merges, so it would silently adopt/overwrite a foreign `rigel-assistant`
+ * rather than error. Re-installing OUR own Deployment (carries the managed-by
+ * label) is allowed; a missing/inaccessible Deployment is nothing to clobber; an
+ * unparseable response is inconclusive and not blocked. `run` is injectable for
+ * cluster-free assertions.
+ */
+export async function assertNoForeignDeployment(
+  context: string | null,
+  namespace: string,
+  run: (ctx: string | null, args: string[]) => Promise<RunResult> = kubectl,
+): Promise<void> {
+  const existing = await run(context, ["get", "deployment", DEPLOYMENT_NAME, "-n", namespace, "-o", "json"]);
+  if (existing.code !== 0) return; // not found / no access → nothing to adopt
+  let labels: Record<string, string> | undefined;
+  try {
+    labels = (JSON.parse(existing.stdout) as { metadata?: { labels?: Record<string, string> } }).metadata?.labels;
+  } catch {
+    return; // unparseable → inconclusive, don't block the install
+  }
+  if (!isAssistantManaged(labels)) {
+    throw new Error(
+      `A Deployment named "${DEPLOYMENT_NAME}" already exists in ${namespace} and isn't managed by Rigel. Remove it or install into a different namespace.`,
+    );
+  }
+}
+
+/** A `kubectl get secrets ... -o json` reader used by the credential actions.
+ *  Returns the parsed `items` (empty on any failure/parse error). Reads KEYS
+ *  ONLY downstream — a value is never decoded, returned, or logged. */
+async function listSecretsBy(
+  context: string | null,
+  args: string[],
+  run: (ctx: string | null, args: string[]) => Promise<RunResult>,
+): Promise<SecretLike[]> {
+  const res = await run(context, args);
+  if (res.code !== 0) return [];
+  try {
+    return (JSON.parse(res.stdout) as { items?: SecretLike[] }).items ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** The managed Secrets the credential actions resolve over: every Secret carrying
+ *  the credential-store label OR managed-by rigel-assistant (covers BYO sources +
+ *  the legacy fixed-name Secrets for fallback). */
+const MANAGED_SECRETS_ARGS = (namespace: string): string[] => [
+  "get", "secrets", "-l", "app.kubernetes.io/managed-by=rigel-assistant",
+  "-n", namespace, "-o", "json",
+];
+
+/**
+ * Per-credential readiness for the UI's chips. Lists the managed Secrets by
+ * label (one call), resolves via the name-agnostic `resolveCredentialSources`,
+ * and returns `{ credentials: { <id>: { ready, secretName } }, conflicts,
+ * needsReconcile }` — ids + backing Secret NAMES only, never values, never data.
+ * `conflicts` are ids claimed by >1 credential-store Secret (first-by-name wins);
+ * `needsReconcile` is true when a legacy install has fallback-resolved credentials
+ * not yet stamped with annotations (drives the UI's Repair button).
+ *
+ * `run` is injectable so the resolution can be asserted without a live cluster
+ * (defaults to the real kubectl).
+ */
+export async function credentialStatus(
+  context: string | null,
+  namespace: string,
+  run: (ctx: string | null, args: string[]) => Promise<RunResult> = kubectl,
+): Promise<RunResult> {
+  const items = await listSecretsBy(context, MANAGED_SECRETS_ARGS(namespace), run);
+  const { sources, conflicts } = resolveCredentialSources(items);
+  // ids → { ready, secretName }. The data key + any value are intentionally
+  // dropped here (the client only ever sees ids + Secret names).
+  const credentials: Record<string, { ready: boolean; secretName: string }> = {};
+  for (const [id, src] of Object.entries(sources)) {
+    if (!src) continue;
+    credentials[id] = { ready: src.hasValue, secretName: src.secretName };
+  }
+  return {
+    code: 0,
+    stdout: JSON.stringify({ credentials, conflicts, needsReconcile: needsReconcile(items) }),
+    stderr: "",
+  };
+}
+
+/**
+ * Make a LEGACY install's fallback credential resolution explicit: list the
+ * managed Secrets (one labelled call), build the metadata-only label/annotate
+ * commands via `reconcileCommands`, run each (ensureOk), and report a
+ * `{ stamped: <ids> }` summary. Conflict-safe (never re-stamps an annotation-
+ * claimed id) and idempotent (no commands → no-op success). Changes Secret
+ * METADATA ONLY — NO Deployment apply, NO rollout — since the agent env already
+ * points at these Secrets. `run` is injectable for cluster-free assertions; a
+ * value is never read, returned, or logged.
+ */
+export async function reconcileCredentialAnnotations(
+  context: string | null,
+  namespace: string,
+  run: (ctx: string | null, args: string[]) => Promise<RunResult> = kubectl,
+): Promise<RunResult> {
+  const items = await listSecretsBy(context, MANAGED_SECRETS_ARGS(namespace), run);
+  const cmds = reconcileCommands(items, namespace);
+  for (const args of cmds) {
+    ensureOk(await run(context, args), "Failed to reconcile credential labels");
+  }
+  // One `annotate` per id stamped; the count of annotate commands is the id count.
+  const stamped = cmds.filter((c) => c[0] === "annotate").length;
+  return { code: 0, stdout: JSON.stringify({ stamped }), stderr: "" };
+}
+
+/**
+ * Candidate Secrets for the BYO source picker: name, type, and data KEY NAMES
+ * only (never values). Filters out service-account tokens and Helm release
+ * Secrets to reduce noise. `run` is injectable for cluster-free assertions.
+ */
+export async function listCredentialSecrets(
+  context: string | null,
+  namespace: string,
+  run: (ctx: string | null, args: string[]) => Promise<RunResult> = kubectl,
+): Promise<RunResult> {
+  const items = await listSecretsBy(
+    context,
+    ["get", "secrets", "-n", namespace, "-o", "json"],
+    run,
+  );
+  const secrets = items
+    .filter((s) => {
+      const type = (s as SecretLike & { type?: string }).type ?? "";
+      if (type === "kubernetes.io/service-account-token") return false;
+      if (type.startsWith("helm.sh/release.")) return false;
+      return true;
+    })
+    .map((s) => ({
+      name: s.metadata.name,
+      type: (s as SecretLike & { type?: string }).type ?? "",
+      keys: Object.keys(s.data ?? {}), // KEY NAMES only — never the values
+    }));
+  return { code: 0, stdout: JSON.stringify({ secrets }), stderr: "" };
+}
+
+/**
+ * Verify the chosen Secret exists and holds `dataKey` (reads KEYS ONLY), run the
+ * single-owner label/annotate commands, then strategic-merge patch ONLY this
+ * credential's env var onto the agent Deployment so it repoints (the patch rolls
+ * the pod). Image, models, and every other env are left untouched, so a repoint
+ * never resets unrelated config. A value never leaves the cluster. `run` is
+ * injectable so the call sequence is asserted without a live cluster.
+ */
+export async function setCredentialSource(
+  context: string | null,
+  namespace: string,
+  req: AssistantRequest,
+  run: (ctx: string | null, args: string[]) => Promise<RunResult> = kubectl,
+): Promise<RunResult> {
+  const credentialId = req.credentialId;
+  const secretName = (req.secretName ?? "").trim();
+  const dataKey = (req.dataKey ?? "").trim();
+  if (!credentialId) throw new Error("setCredentialSource requires a credentialId.");
+  if (secretName === "") throw new Error("setCredentialSource requires a secretName.");
+  if (dataKey === "") throw new Error("setCredentialSource requires a dataKey.");
+
+  // 1. Validate the Secret + key exist — KEYS ONLY (no value is read/returned).
+  const chosen = await listSecretsBy(
+    context,
+    ["get", "secret", secretName, "-n", namespace, "-o", "json"],
+    // `get secret <name>` returns a single object, not a list; wrap it so the
+    // shared list reader can parse a one-element `items` array uniformly.
+    async (ctx, args) => {
+      const res = await run(ctx, args);
+      if (res.code !== 0) return res;
+      try {
+        const obj = JSON.parse(res.stdout) as SecretLike;
+        return { code: 0, stdout: JSON.stringify({ items: [obj] }), stderr: "" };
+      } catch {
+        return { code: 1, stdout: "", stderr: "unparseable secret" };
+      }
+    },
+  );
+  const secret = chosen[0];
+  if (!secret || secret.metadata?.name !== secretName) {
+    throw new Error(`Secret ${secretName} not found in ${namespace}.`);
+  }
+  if (!(dataKey in (secret.data ?? {}))) {
+    throw new Error(`Secret ${secretName} has no key "${dataKey}".`);
+  }
+
+  // 2. Single-owner label/annotate (+ sibling removals) over the current sources.
+  const current = await listSecretsBy(context, MANAGED_SECRETS_ARGS(namespace), run);
+  for (const args of credentialSourceCommands({ credentialId, secretName, dataKey }, current, namespace)) {
+    ensureOk(await run(context, args), `Failed to point ${credentialId} at ${secretName}`);
+  }
+
+  // 3. Repoint ONLY this credential's env var (the patch rolls the agent).
+  return patchCredentialEnv(context, namespace, credentialId, { secretName, dataKey }, run, "Source saved, but updating the agent failed");
+}
+
+/**
+ * Clear a credential's BYO source so it falls back to the managed default: run
+ * the clear commands (drop the annotation), then patch the env var back to the
+ * default Secret/key. `run` injectable for cluster-free assertions.
+ */
+export async function clearCredentialSource(
+  context: string | null,
+  namespace: string,
+  req: AssistantRequest,
+  run: (ctx: string | null, args: string[]) => Promise<RunResult> = kubectl,
+): Promise<RunResult> {
+  const credentialId = req.credentialId;
+  if (!credentialId) throw new Error("clearCredentialSource requires a credentialId.");
+  const current = await listSecretsBy(context, MANAGED_SECRETS_ARGS(namespace), run);
+  for (const args of clearCredentialSourceCommands(credentialId, current, namespace)) {
+    ensureOk(await run(context, args), `Failed to clear the source for ${credentialId}`);
+  }
+  return patchCredentialEnv(context, namespace, credentialId, defaultCredentialSource(credentialId), run, "Source cleared, but updating the agent failed");
+}
+
+/**
+ * Strategic-merge patch ONE credential's env var on the agent Deployment so it
+ * repoints at `source`. Env merges by `name`, so image/models/other env are
+ * untouched; mutating the pod template triggers a rollout on its own. Only Secret
+ * names + key names are sent — never a value.
+ */
+async function patchCredentialEnv(
+  context: string | null,
+  namespace: string,
+  credentialId: keyof AssistantCredentials,
+  source: { secretName: string; dataKey: string },
+  run: (ctx: string | null, args: string[]) => Promise<RunResult>,
+  errorLabel: string,
+): Promise<RunResult> {
+  const patch = credentialEnvPatch(credentialId, source);
+  const result = await run(context, [
+    "patch", "deployment", "rigel-assistant", "-n", namespace, "--type=strategic", "-p", patch,
+  ]);
+  ensureOk(result, errorLabel);
+  return result;
+}
+
 // ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
@@ -359,6 +762,12 @@ export async function handleAssistant(
       return setKillSwitch(context, namespace, req.enabled === true);
     case "updateToken":
       return updateToken(context, namespace, req.token ?? "");
+    case "setModels":
+      return setModels(context, namespace, req);
+    case "setCredentials":
+      return setCredentials(context, namespace, req);
+    case "setLimits":
+      return setLimits(context, namespace, req);
     case "restart":
       return restartAgent(context, namespace);
     case "silence":
@@ -375,6 +784,16 @@ export async function handleAssistant(
     case "deleteAlert":
     case "toggleAlert":
       return mutateAlerts(context, namespace, req);
+    case "credentialStatus":
+      return credentialStatus(context, namespace);
+    case "listCredentialSecrets":
+      return listCredentialSecrets(context, namespace);
+    case "setCredentialSource":
+      return setCredentialSource(context, namespace, req);
+    case "clearCredentialSource":
+      return clearCredentialSource(context, namespace, req);
+    case "reconcileCredentialAnnotations":
+      return reconcileCredentialAnnotations(context, namespace);
     default:
       throw new Error(`unknown action: ${String(req.action)}`);
   }

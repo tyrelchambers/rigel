@@ -1,40 +1,406 @@
 ---
+import { Icon } from "astro-icon/components";
 import Base from "../layouts/Base.astro";
 import Nav from "../components/Nav.astro";
-import PageHeader from "../components/PageHeader.astro";
-import FinalCta from "../components/FinalCta.astro";
 import Footer from "../components/Footer.astro";
+
+const helpedWith = [
+    "Debugging pods that kept crash-looping",
+    "Hardening config I'd left too loose",
+    "Untangling service and DNS networking",
+    "Catching misconfigurations",
+    "Setting up database high-availability and backups",
+    "Deploying self-hostable apps",
+];
+
+const benefits = [
+    {
+        icon: "lucide:server",
+        tone: "blue",
+        title: "Self-host apps easily",
+        body: "I deploy new apps onto my existing cluster in minutes — no extra servers to provision, no new bills to sign off on.",
+    },
+    {
+        icon: "lucide:heart-pulse",
+        tone: "green",
+        title: "High availability",
+        body: "My production websites and self-hosted apps stay up, with workloads that reschedule themselves when a node blips.",
+    },
+    {
+        icon: "lucide:house",
+        tone: "blue",
+        title: "Infrastructure I already own",
+        body: "Everything runs on hardware that's already paid for and humming in my homelab — I'm just using what I have.",
+    },
+];
 ---
 
 <Base
-  title="About Rigel"
-  description="Rigel is an AI-native desktop app for macOS that diagnoses, fixes, and monitors your clusters so you can run production Kubernetes without an ops team."
+    title="Why I built Rigel"
+    description="Rigel is built by a solo developer who runs a real Kubernetes cluster at home. This is the story of why I built an AI-assisted Kubernetes manager for people who self-host."
 >
-  <Nav />
-  <main id="main">
-    <PageHeader
-      eyebrowIcon="lucide:anchor"
-      eyebrow="ABOUT"
-      title="Run Kubernetes without an ops team."
-      subtitle="Rigel is an AI-native desktop app for your clusters. It reads your logs and events like a senior SRE, hands you fixes as buttons you approve, and keeps watch around the clock, so a small team can run production Kubernetes with confidence."
-    />
+    <Nav />
+    <main id="main" class="bg-[#0A0A0C]">
+        <!-- Hero -->
+        <section class="px-6 sm:px-8 lg:px-12">
+            <div
+                class="mx-auto flex min-h-[520px] max-w-[960px] flex-col items-center justify-center py-24 text-center"
+            >
+                <h1
+                    data-reveal
+                    class="mt-7 max-w-[15ch] text-[clamp(2.4rem,6vw,3.875rem)] font-semibold leading-[1.08] tracking-[-0.025em] text-white"
+                >
+                    I run my own cluster. So I built the tool I always wished I
+                    had.
+                </h1>
+                <p
+                    data-reveal
+                    class="mt-7 max-w-[700px] text-[19px] leading-[1.5] text-[#C9C9CF]"
+                >
+                    I'm a solo developer who self-hosts everything on my own
+                    Kubernetes cluster. Rigel is the app I created to bridge the
+                    gap between a Kubernetes manager with a UI and AI.
+                </p>
+                <div data-reveal class="mt-9 flex items-center gap-2">
+                    <span class="h-px w-6 bg-white/10"></span>
+                    <span
+                        class="font-mono text-[11px] tracking-[0.16em] text-[#6B6B73]"
+                        >WRITTEN BY THE FOUNDER</span
+                    >
+                </div>
+            </div>
+        </section>
 
-    <section class="mx-auto max-w-[760px] px-6 py-16 sm:px-8 lg:py-20">
-      <div class="flex flex-col gap-6 text-fg-secondary">
-        <p class="text-[17px] leading-relaxed">
-          Most Kubernetes tooling assumes you already have an ops team.
-          Rigel is built for the rest of us: developers and small teams
-          who want production-grade infrastructure without the headcount.
-        </p>
-        <p class="text-[17px] leading-relaxed">
-          Everything runs on your own hardware, every mutation is shown as the
-          exact command before it runs, and nothing happens without your
-          approval. You keep control of your data and your bill.
-        </p>
-      </div>
-    </section>
+        <!-- The Homelab -->
+        <section class="px-6 py-20 sm:px-8 lg:px-12 lg:py-24">
+            <div
+                class="mx-auto flex max-w-[1200px] flex-col gap-12 lg:flex-row lg:items-center lg:gap-[72px]"
+            >
+                <div
+                    data-reveal
+                    class="flex flex-col gap-6 lg:w-[540px] lg:shrink-0"
+                >
+                    <h2
+                        class="text-[clamp(2rem,4.2vw,2.625rem)] font-semibold leading-[1.1] tracking-[-0.01em] text-white"
+                    >
+                        I run my own Kubernetes cluster at home.
+                    </h2>
+                    <div
+                        class="flex flex-col gap-[18px] text-[16.5px] leading-[1.6] text-[#C9C9CF]"
+                    >
+                        <p>
+                            Rigel is the realization of my use of AI in managing
+                            my own Kubernetes cluster that I use across multiple
+                            nodes.
+                        </p>
+                        <p>
+                            Two on-premise nodes and one off-premise server my
+                            self-hosted apps and those I have in production that
+                            serve actual users.
+                        </p>
+                    </div>
+                </div>
 
-    <FinalCta />
-  </main>
-  <Footer />
+                <!-- Cluster panel -->
+                <div
+                    data-reveal
+                    class="flex-1 overflow-hidden rounded-xl border border-[#ffffff1f] bg-[#141417]"
+                >
+                    <div
+                        class="flex items-center justify-between px-7 py-[22px]"
+                    >
+                        <span
+                            class="font-mono text-xs tracking-[0.12em] text-[#8C8C95]"
+                            >HOME CLUSTER</span
+                        >
+                        <div class="flex items-center gap-1.5">
+                            <span class="size-[7px] rounded-full bg-[#34D07F]"
+                            ></span>
+                            <span
+                                class="font-mono text-xs tracking-[0.08em] text-[#34D07F]"
+                                >ONLINE</span
+                            >
+                        </div>
+                    </div>
+                    <div class="h-px bg-[#ffffff14]"></div>
+                    <div class="flex items-end gap-[18px] px-7 py-[34px]">
+                        <span
+                            class="font-mono text-[clamp(4.5rem,11vw,6.5rem)] font-semibold leading-[0.85] tracking-[-0.03em] text-white"
+                            >3</span
+                        >
+                        <div class="flex flex-col gap-1.5 pb-3">
+                            <span class="text-2xl font-semibold text-white"
+                                >nodes</span
+                            >
+                            <span class="text-sm text-[#8C8C95]"
+                                >bare-metal Kubernetes cluster</span
+                            >
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Leaning on AI -->
+        <section class="px-6 py-20 sm:px-8 lg:px-12 lg:py-24">
+            <div
+                class="mx-auto flex max-w-[1200px] flex-col gap-12 lg:flex-row lg:items-center lg:gap-[72px]"
+            >
+                <div data-reveal class="flex flex-1 flex-col gap-6">
+                    <h2
+                        class="text-[clamp(1.9rem,4vw,2.375rem)] font-semibold leading-[1.12] tracking-[-0.01em] text-white"
+                    >
+                        I started leaning on AI to investigate and diagnose
+                        cluster issues.
+                    </h2>
+                    <div
+                        class="flex flex-col gap-[18px] text-[16.5px] leading-[1.6] text-[#C9C9CF]"
+                    >
+                        <p>
+                            I actually have very little Kubernetes knowledge and
+                            the only reason I use it is because cloud options
+                            are expensive. I used Docker for a while, but found
+                            I didn't like the way I had to use it. I wanted an
+                            orchestrator.
+                        </p>
+                        <p>
+                            Without AI, I wouldn't be self-hosting my own
+                            cluster. Not at all. It's such a complex system
+                            (k8s). I know why there are ops teams now.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Helped-with card -->
+                <div
+                    data-reveal
+                    class="flex flex-col gap-5 rounded-[10px] border border-[#ffffff1f] bg-[#141417] p-7 lg:w-[400px] lg:shrink-0"
+                >
+                    <span
+                        class="font-mono text-xs tracking-[0.12em] text-[#8C8C95]"
+                        >HOW IT BENEFITS ME</span
+                    >
+                    <div class="flex flex-col gap-4">
+                        {
+                            helpedWith.map((item) => (
+                                <div class="flex items-start gap-3">
+                                    <span class="mt-[7px] size-1.5 shrink-0 rounded-full bg-[#34D07F]" />
+                                    <span class="text-[14.5px] leading-[1.5] text-[#C9C9CF]">
+                                        {item}
+                                    </span>
+                                </div>
+                            ))
+                        }
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Building Rigel -->
+        <section class="px-6 py-20 sm:px-8 lg:px-12 lg:py-24">
+            <div
+                class="mx-auto flex max-w-[1200px] flex-col gap-12 lg:flex-row lg:gap-24"
+            >
+                <div
+                    data-reveal
+                    class="flex flex-col gap-5 lg:w-[440px] lg:shrink-0"
+                >
+                    <div class="flex items-center gap-2">
+                        <span class="size-1.5 rounded-full bg-[#4FB0F2]"></span>
+                        <span
+                            class="font-mono text-xs font-medium tracking-[0.2em] text-[#8C8C95]"
+                            >THE DECISION</span
+                        >
+                    </div>
+                    <h2
+                        class="text-[clamp(2.1rem,4.6vw,2.875rem)] font-semibold leading-[1.08] tracking-[-0.025em] text-white"
+                    >
+                        So I made the help permanent.
+                    </h2>
+                </div>
+
+                <div data-reveal class="flex flex-1 flex-col gap-[26px]">
+                    <p class="text-[18px] leading-[1.55] text-[#C9C9CF]">
+                        The AI was so good that I stopped dreading my cluster
+                        and started enjoying it. But I didn't want that help to
+                        live in a browser tab I kept switching back to — I
+                        wanted it built into the tool itself, always there,
+                        right next to the pods and logs.
+                    </p>
+                    <p class="text-[18px] leading-[1.55] text-[#C9C9CF]">
+                        So I built Rigel: a permanent, AI-assisted Kubernetes
+                        manager that sits on my desktop. I'll admit it plainly —
+                        without AI in the loop, I couldn't run my own cluster
+                        nearly as well as I do now. Rigel is the tool I built
+                        for myself, then opened up to everyone.
+                    </p>
+                    <p class="text-[18px] leading-[1.55] text-[#C9C9CF]">
+                        Before Rigel, it was me, Rancher, K9s, and Claude. I
+                        wanted the UI of Rancher with the keystrokes of K9s, but
+                        with AI assistance built in a way that made it a
+                        frist-class citizen.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- What It Changed -->
+        <section class="px-6 py-20 sm:px-8 lg:px-12 lg:py-24">
+            <div class="mx-auto flex max-w-[1200px] flex-col gap-11">
+                <div data-reveal class="flex flex-col gap-[18px]">
+                    <span
+                        class="font-mono text-[13px] tracking-[0.15em] text-[#4FB0F2]"
+                        >THE PAYOFF</span
+                    >
+                    <h2
+                        class="max-w-[820px] text-[clamp(2rem,4.2vw,2.625rem)] font-semibold leading-[1.1] text-white"
+                    >
+                        What actually changed once I moved it all in-house.
+                    </h2>
+                    <p
+                        class="max-w-[680px] text-[16px] leading-[1.5] text-[#8C8C95]"
+                    >
+                        The day I cut over my workloads, the numbers got simpler
+                        and the setup got mine.
+                    </p>
+                </div>
+
+                <div class="flex flex-col gap-5 lg:flex-row">
+                    <!-- Savings hero -->
+                    <div
+                        data-reveal
+                        class="flex flex-col justify-between gap-8 rounded-xl border border-[#ffffff1f] bg-[#141417] p-10 lg:w-[480px] lg:shrink-0"
+                    >
+                        <div class="flex flex-col gap-[18px]">
+                            <span
+                                class="font-mono text-xs tracking-[0.12em] text-[#6B6B73]"
+                                >SAVED EVERY MONTH</span
+                            >
+                            <div class="flex items-end gap-2.5">
+                                <span
+                                    class="font-mono text-[clamp(3.5rem,9vw,5.25rem)] font-semibold leading-none tracking-[-0.03em] text-[#34D07F]"
+                                    >$150</span
+                                >
+                                <span
+                                    class="pb-3.5 font-mono text-xl text-[#8C8C95]"
+                                    >/ month</span
+                                >
+                            </div>
+                        </div>
+                        <p class="text-[15.5px] leading-[1.55] text-[#C9C9CF]">
+                            That's what I stopped paying the day I moved my
+                            workloads off a cloud VPS and onto the Kubernetes
+                            cluster I already run at home.
+                        </p>
+                        <div
+                            class="flex w-fit items-center gap-2 rounded-md bg-[#34D07F1F] px-3 py-[7px]"
+                        >
+                            <Icon
+                                name="lucide:trending-down"
+                                class="size-[15px] text-[#34D07F]"
+                            />
+                            <span class="font-mono text-xs text-[#34D07F]"
+                                >vs. cloud VPS</span
+                            >
+                        </div>
+                    </div>
+
+                    <!-- Benefit cards -->
+                    <div class="flex flex-1 flex-col gap-5">
+                        {
+                            benefits.map((b) => (
+                                <div
+                                    data-reveal
+                                    class="flex items-start gap-[18px] rounded-[10px] border border-[#ffffff1f] bg-[#141417] p-6"
+                                >
+                                    <span
+                                        class:list={[
+                                            "grid size-10 shrink-0 place-items-center rounded-lg",
+                                            b.tone === "green"
+                                                ? "bg-[#34D07F1F]"
+                                                : "bg-[#4FB0F21F]",
+                                        ]}
+                                    >
+                                        <Icon
+                                            name={b.icon}
+                                            class:list={[
+                                                "size-5",
+                                                b.tone === "green"
+                                                    ? "text-[#34D07F]"
+                                                    : "text-[#4FB0F2]",
+                                            ]}
+                                        />
+                                    </span>
+                                    <div class="flex flex-col gap-[7px]">
+                                        <h3 class="text-[19px] font-semibold text-white">
+                                            {b.title}
+                                        </h3>
+                                        <p class="text-[14.5px] leading-[1.55] text-[#C9C9CF]">
+                                            {b.body}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))
+                        }
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Closing Note + CTA -->
+        <section class="px-6 py-24 sm:px-8 lg:px-12">
+            <div
+                data-reveal
+                class="mx-auto flex max-w-[920px] flex-col items-center gap-7 text-center"
+            >
+                <span
+                    class="font-mono text-[13px] tracking-[0.15em] text-[#4FB0F2]"
+                    >ONE MORE THING</span
+                >
+                <p
+                    class="max-w-[840px] text-[clamp(1.5rem,3.2vw,1.875rem)] font-medium leading-[1.32] text-white"
+                >
+                    Rigel is the tool I built so I could keep running my own
+                    infrastructure with confidence. If you self-host too, I hope
+                    it does the same for you.
+                </p>
+                <div class="flex items-center gap-3 py-2">
+                    <span
+                        class="grid size-10 place-items-center rounded-full border border-[#4FB0F233] bg-[#4FB0F21F]"
+                    >
+                        <span
+                            class="font-mono text-sm font-semibold text-[#4FB0F2]"
+                            >TC</span
+                        >
+                    </span>
+                    <div class="flex flex-col items-start gap-0.5 text-left">
+                        <span class="text-[15px] font-semibold text-white"
+                            >Tyrel</span
+                        >
+                        <span class="font-mono text-xs text-[#8C8C95]"
+                            >Founder &amp; sole developer of Rigel</span
+                        >
+                    </div>
+                </div>
+                <div
+                    class="flex flex-wrap items-center justify-center gap-3.5 pt-2"
+                >
+                    <a
+                        href="/#cta"
+                        class="inline-flex items-center gap-2 rounded-lg bg-[#4FB0F2] px-6 py-[15px] text-[15px] font-semibold text-[#0A0A0C] transition-colors hover:bg-[#6cc0f6]"
+                    >
+                        <span>Try Rigel on your cluster</span>
+                        <span aria-hidden="true">→</span>
+                    </a>
+                    <a
+                        href="/features"
+                        class="inline-flex items-center rounded-lg border border-[#ffffff1f] px-6 py-[15px] text-[15px] font-medium text-white transition-colors hover:border-white/30"
+                    >
+                        See what it does
+                    </a>
+                </div>
+            </div>
+        </section>
+    </main>
+    <Footer />
 </Base>

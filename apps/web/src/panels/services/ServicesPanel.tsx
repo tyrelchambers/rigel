@@ -10,6 +10,8 @@ import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
+import { RelatedResources } from "@/panels/components/RelatedResources";
+import { useFocusRow } from "@/panels/components/useFocusRow";
 import { useForwards } from "@/lib/api";
 import type { Service } from "./types";
 import type { Pod } from "../pods/types";
@@ -73,6 +75,8 @@ export default function ServicesPanel() {
   );
 
   const shown = filtered.length;
+
+  useFocusRow("service", allServices, (svc) => svc.metadata.uid, (k) => setExpanded((prev) => new Set(prev).add(k)));
 
   function toggleExpand(uid: string) {
     setExpanded((prev) => {
@@ -392,6 +396,9 @@ function ServiceDetail({ service }: { service: Service }) {
       <div style={{ color: "var(--fg-tertiary)", fontFamily: "ui-monospace, monospace", fontSize: 10 }}>
         Age: {relativeAge(service.metadata.creationTimestamp)} ago
       </div>
+
+      {/* Related resources */}
+      <RelatedResources sourceKind="service" source={service} />
     </div>
   );
 }

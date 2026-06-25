@@ -33,6 +33,11 @@ export interface AssistantInstallConfig {
   maxPerNight: number;
   maxAttemptsPerIncident: number;
   confirmPolls: number;
+  /** Per-role provider+model+effort selections seeded into assistant-config on
+   * install. Optional: when absent the ConfigMap seeds claude worker/supervisor
+   * (matching the WORKER_MODEL/SUPERVISOR_MODEL env fallbacks). */
+  worker?: RoleSelectionInput;
+  supervisor?: RoleSelectionInput;
 }
 
 /** Defaults baked into the install form (mirrors `AssistantInstallConfig.default`). */
@@ -54,6 +59,290 @@ export const DEFAULT_INSTALL_CONFIG: AssistantInstallConfig = {
 export const SECRET_NAME = "rigel-assistant-token";
 /** Annotation the installer stamps on the token Secret at mint time. */
 export const ISSUED_AT_ANNOTATION = "rigel.assistant/token-issued-at";
+
+/** Multi-key Secret holding one entry per provider credential the user supplied.
+ * Distinct from the legacy single-key SECRET_NAME so existing installs are
+ * untouched (the Deployment injects from BOTH, each optional). */
+export const CREDENTIALS_SECRET_NAME = "rigel-assistant-credentials";
+
+/** The agent Deployment's name. Its owned objects all carry the managed-by label
+ *  below, so we can tell OUR install apart from a same-named foreign Deployment. */
+export const DEPLOYMENT_NAME = "rigel-assistant";
+
+/** True when an object's labels mark it as managed by the Rigel assistant. Lets
+ *  discovery + install avoid adopting or operating on a same-named object we
+ *  don't own (`kubectl apply` would otherwise silently merge into it). */
+export function isAssistantManaged(labels?: Record<string, string>): boolean {
+  return labels?.["app.kubernetes.io/managed-by"] === "rigel-assistant";
+}
+
+/** The provider credentials a user can supply. Each maps to one Secret key and,
+ * via the Deployment env, to the exact var the matching bridge's authEnv() reads:
+ *   claudeToken          → CLAUDE_CODE_OAUTH_TOKEN  (claude)
+ *   anthropicApiKey      → ANTHROPIC_API_KEY        (claude fallback)
+ *   codexApiKey          → CODEX_API_KEY            (codex fallback)
+ *   codexAuthContent     → CODEX_AUTH_CONTENT       (codex preferred; ~/.codex/auth.json)
+ *   geminiApiKey         → GEMINI_API_KEY           (gemini)
+ *   opencodeApiKey       → OPENCODE_API_KEY         (opencode fallback)
+ *   opencodeAuthContent  → OPENCODE_AUTH_CONTENT    (opencode preferred) */
+export interface AssistantCredentials {
+  claudeToken?: string;
+  anthropicApiKey?: string;
+  codexApiKey?: string;
+  codexAuthContent?: string;
+  geminiApiKey?: string;
+  opencodeApiKey?: string;
+  opencodeAuthContent?: string;
+}
+
+/** Stable ordered list of (key) so YAML output is deterministic. */
+const CREDENTIAL_KEYS: (keyof AssistantCredentials)[] = [
+  "claudeToken",
+  "anthropicApiKey",
+  "codexApiKey",
+  "codexAuthContent",
+  "geminiApiKey",
+  "opencodeApiKey",
+  "opencodeAuthContent",
+];
+
+/** Discovery label a Secret carries to participate as a credential source, so
+ *  resolution can `kubectl get secrets -l <this>=true` instead of fixed names. */
+export const CREDENTIAL_STORE_LABEL = "rigel.assistant/credential-store";
+/** Per-credential correlation annotation prefix: `<prefix><id>: "<dataKey>"`
+ *  declares "my data key <dataKey> provides credential <id>". */
+export const CREDENTIAL_ANNOTATION_PREFIX = "rigel.assistant/credential.";
+
+/** Canonical provider credential → the agent env var it feeds + its default
+ *  managed source. The single source of truth for resolution + env render. */
+export interface CredentialEnvEntry {
+  id: keyof AssistantCredentials;
+  env: string;
+  defaultSecret: string; // SECRET_NAME for claudeToken, else CREDENTIALS_SECRET_NAME
+  defaultKey: string;    // data key in the default Secret
+}
+
+/** Ordered to mirror today's Deployment env exactly (and CREDENTIAL_KEYS). */
+export const CREDENTIAL_ENV: CredentialEnvEntry[] = [
+  { id: "claudeToken",         env: "CLAUDE_CODE_OAUTH_TOKEN", defaultSecret: SECRET_NAME,             defaultKey: "token" },
+  { id: "anthropicApiKey",     env: "ANTHROPIC_API_KEY",       defaultSecret: CREDENTIALS_SECRET_NAME, defaultKey: "anthropicApiKey" },
+  { id: "codexApiKey",         env: "CODEX_API_KEY",           defaultSecret: CREDENTIALS_SECRET_NAME, defaultKey: "codexApiKey" },
+  { id: "codexAuthContent",    env: "CODEX_AUTH_CONTENT",      defaultSecret: CREDENTIALS_SECRET_NAME, defaultKey: "codexAuthContent" },
+  { id: "geminiApiKey",        env: "GEMINI_API_KEY",          defaultSecret: CREDENTIALS_SECRET_NAME, defaultKey: "geminiApiKey" },
+  { id: "opencodeApiKey",      env: "OPENCODE_API_KEY",        defaultSecret: CREDENTIALS_SECRET_NAME, defaultKey: "opencodeApiKey" },
+  { id: "opencodeAuthContent", env: "OPENCODE_AUTH_CONTENT",   defaultSecret: CREDENTIALS_SECRET_NAME, defaultKey: "opencodeAuthContent" },
+];
+
+/** The set of valid credential ids, for fast membership checks. */
+const CREDENTIAL_IDS = new Set<string>(CREDENTIAL_ENV.map((e) => e.id));
+
+/** Minimal shape of a Secret as resolution needs it (a `kubectl get -o json`
+ *  item, with `data` base64-encoded — we only ever check key presence + that the
+ *  encoded value is a non-empty string, never decode/log a value). */
+export interface SecretLike {
+  metadata: { name: string; labels?: Record<string, string>; annotations?: Record<string, string> };
+  data?: Record<string, string>;
+}
+
+/** Where a resolved credential is backed: a Secret name + data key, plus whether
+ *  that key currently holds a non-empty value. Never carries the value itself. */
+export interface ResolvedSource {
+  secretName: string;
+  dataKey: string;
+  hasValue: boolean;
+}
+
+export interface CredentialResolution {
+  sources: Partial<Record<keyof AssistantCredentials, ResolvedSource>>;
+  /** Credential ids claimed by more than one credential-store Secret (the
+   *  alphabetically-first Secret won; surfaced so the UI can warn, never silent). */
+  conflicts: (keyof AssistantCredentials)[];
+}
+
+/** True when the Secret's `data` holds a non-empty (base64) value for `key`. */
+function hasNonEmptyData(secret: SecretLike, key: string): boolean {
+  const v = secret.data?.[key];
+  return typeof v === "string" && v !== "";
+}
+
+/**
+ * Resolve, per credential id, the backing `{ secretName, dataKey, hasValue }`:
+ *
+ *  1. Annotations first: every Secret carrying `rigel.assistant/credential-store=true`
+ *     contributes each `rigel.assistant/credential.<id>` annotation as a candidate.
+ *     Single owner per id — if >1 Secret claims one id, the alphabetically-first
+ *     (by Secret name) wins and the id is reported in `conflicts`. Unknown ids are
+ *     ignored.
+ *  2. Legacy fallback: for any id with no annotated source, fall back to
+ *     CREDENTIAL_ENV's default Secret name + key (so un-migrated installs keep
+ *     working until re-stamped). Annotations always win over the fallback.
+ *
+ * Pure — never touches the cluster, never returns/logs a secret value.
+ */
+export function resolveCredentialSources(secrets: SecretLike[]): CredentialResolution {
+  const sources: Partial<Record<keyof AssistantCredentials, ResolvedSource>> = {};
+  const conflicts: (keyof AssistantCredentials)[] = [];
+
+  // 1. Annotation-driven candidates from credential-store Secrets, processed in
+  //    alphabetical Secret-name order so the first claimant wins deterministically.
+  const stores = secrets
+    .filter((s) => s.metadata.labels?.[CREDENTIAL_STORE_LABEL] === "true")
+    .sort((a, b) => a.metadata.name.localeCompare(b.metadata.name));
+  for (const secret of stores) {
+    for (const [annKey, dataKey] of Object.entries(secret.metadata.annotations ?? {})) {
+      if (!annKey.startsWith(CREDENTIAL_ANNOTATION_PREFIX)) continue;
+      const id = annKey.slice(CREDENTIAL_ANNOTATION_PREFIX.length);
+      if (!CREDENTIAL_IDS.has(id)) continue; // unknown credential id — ignore
+      const cid = id as keyof AssistantCredentials;
+      if (sources[cid]) {
+        // Already claimed by an earlier (alphabetically-first) Secret.
+        if (!conflicts.includes(cid)) conflicts.push(cid);
+        continue;
+      }
+      sources[cid] = {
+        secretName: secret.metadata.name,
+        dataKey,
+        hasValue: hasNonEmptyData(secret, dataKey),
+      };
+    }
+  }
+
+  // 2. Legacy fallback for any id with no annotated source.
+  const byName = new Map(secrets.map((s) => [s.metadata.name, s]));
+  for (const entry of CREDENTIAL_ENV) {
+    if (sources[entry.id]) continue;
+    const secret = byName.get(entry.defaultSecret);
+    if (!secret) continue;
+    if (!(entry.defaultKey in (secret.data ?? {}))) continue;
+    sources[entry.id] = {
+      secretName: entry.defaultSecret,
+      dataKey: entry.defaultKey,
+      hasValue: hasNonEmptyData(secret, entry.defaultKey),
+    };
+  }
+
+  return { sources, conflicts };
+}
+
+/** All credential-store Secret names that currently annotate `credentialId`
+ *  (i.e. carry `rigel.assistant/credential.<id>`), in alphabetical name order. */
+function secretsClaimingCredential(
+  secrets: SecretLike[],
+  credentialId: keyof AssistantCredentials,
+): string[] {
+  const annKey = `${CREDENTIAL_ANNOTATION_PREFIX}${credentialId}`;
+  return secrets
+    .filter(
+      (s) =>
+        s.metadata.labels?.[CREDENTIAL_STORE_LABEL] === "true" &&
+        annKey in (s.metadata.annotations ?? {}),
+    )
+    .map((s) => s.metadata.name)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * Pure kubectl argv builders for repointing a credential at a chosen Secret.
+ * Returns `string[][]` (one argv per command); runs NOTHING and never carries a
+ * secret value — only the credential id, Secret names, and data key name.
+ *
+ * For `setCredentialSource({ credentialId, secretName, dataKey }, currentSecrets, namespace)`:
+ *  1. label the chosen Secret as a credential-store,
+ *  2. annotate it `rigel.assistant/credential.<id>=<dataKey>`,
+ *  3. remove that annotation from every OTHER credential-store Secret claiming
+ *     the id (single-owner per credential).
+ */
+export function credentialSourceCommands(
+  choice: { credentialId: keyof AssistantCredentials; secretName: string; dataKey: string },
+  currentSecrets: SecretLike[],
+  namespace: string,
+): string[][] {
+  const { credentialId, secretName, dataKey } = choice;
+  const annKey = `${CREDENTIAL_ANNOTATION_PREFIX}${credentialId}`;
+  const cmds: string[][] = [
+    ["label", "secret", secretName, `${CREDENTIAL_STORE_LABEL}=true`, "--overwrite", "-n", namespace],
+    ["annotate", "secret", secretName, `${annKey}=${dataKey}`, "--overwrite", "-n", namespace],
+  ];
+  // Single-owner: strip the id annotation from every other claimant.
+  for (const sibling of secretsClaimingCredential(currentSecrets, credentialId)) {
+    if (sibling === secretName) continue;
+    cmds.push(["annotate", "secret", sibling, `${annKey}-`, "-n", namespace]);
+  }
+  return cmds;
+}
+
+/**
+ * Pure kubectl argv builders to clear a credential's BYO source so resolution
+ * falls back to the managed default: remove the `rigel.assistant/credential.<id>`
+ * annotation from EVERY credential-store Secret EXCEPT the managed default
+ * (CREDENTIAL_ENV's defaultSecret for the id), which keeps the legacy mapping
+ * intact. Returns `string[][]`; runs nothing.
+ */
+export function clearCredentialSourceCommands(
+  credentialId: keyof AssistantCredentials,
+  currentSecrets: SecretLike[],
+  namespace: string,
+): string[][] {
+  const annKey = `${CREDENTIAL_ANNOTATION_PREFIX}${credentialId}`;
+  const managedDefault = CREDENTIAL_ENV.find((e) => e.id === credentialId)?.defaultSecret;
+  return secretsClaimingCredential(currentSecrets, credentialId)
+    .filter((name) => name !== managedDefault)
+    .map((name) => ["annotate", "secret", name, `${annKey}-`, "-n", namespace]);
+}
+
+/** Every credential id currently claimed by SOME credential-store Secret's
+ *  `rigel.assistant/credential.<id>` annotation (any claimant, valid id only). */
+function annotationClaimedIds(secrets: SecretLike[]): Set<keyof AssistantCredentials> {
+  const claimed = new Set<keyof AssistantCredentials>();
+  for (const secret of secrets) {
+    if (secret.metadata.labels?.[CREDENTIAL_STORE_LABEL] !== "true") continue;
+    for (const annKey of Object.keys(secret.metadata.annotations ?? {})) {
+      if (!annKey.startsWith(CREDENTIAL_ANNOTATION_PREFIX)) continue;
+      const id = annKey.slice(CREDENTIAL_ANNOTATION_PREFIX.length);
+      if (CREDENTIAL_IDS.has(id)) claimed.add(id as keyof AssistantCredentials);
+    }
+  }
+  return claimed;
+}
+
+/**
+ * Pure kubectl argv builders that make a LEGACY install's fallback resolution
+ * explicit: for each CREDENTIAL_ENV id whose default Secret exists, holds the
+ * default key, AND is NOT already annotation-claimed by ANY credential-store
+ * Secret, emit a label (`rigel.assistant/credential-store=true`) + an annotate
+ * (`rigel.assistant/credential.<id>=<defaultKey>`). One `label` command per
+ * Secret (shared across its ids).
+ *
+ * Conflict-safe by construction: an id any Secret already claims is skipped, so
+ * reconcile can never create a second claimant. Idempotent: already-stamped or
+ * absent ids produce nothing. Changes Secret METADATA ONLY — never an apply,
+ * rollout, restart, or patch — since the Deployment env already points at these
+ * Secrets. Runs nothing and never carries a value (ids + names + key names only).
+ */
+export function reconcileCommands(secrets: SecretLike[], namespace: string): string[][] {
+  const claimed = annotationClaimedIds(secrets);
+  const byName = new Map(secrets.map((s) => [s.metadata.name, s]));
+  const labelled = new Set<string>(); // default Secret names already given a label cmd
+  const cmds: string[][] = [];
+  for (const entry of CREDENTIAL_ENV) {
+    if (claimed.has(entry.id)) continue; // already annotation-driven → leave alone
+    const secret = byName.get(entry.defaultSecret);
+    if (!secret) continue; // no default Secret → nothing to stamp
+    if (!(entry.defaultKey in (secret.data ?? {}))) continue; // missing default key
+    if (!labelled.has(entry.defaultSecret)) {
+      cmds.push(["label", "secret", entry.defaultSecret, `${CREDENTIAL_STORE_LABEL}=true`, "--overwrite", "-n", namespace]);
+      labelled.add(entry.defaultSecret);
+    }
+    cmds.push(["annotate", "secret", entry.defaultSecret, `${CREDENTIAL_ANNOTATION_PREFIX}${entry.id}=${entry.defaultKey}`, "--overwrite", "-n", namespace]);
+  }
+  return cmds;
+}
+
+/** True when `reconcileCommands` would emit anything (a legacy install has
+ *  fallback-resolved credentials not yet made explicit via annotations). */
+export function needsReconcile(secrets: SecretLike[]): boolean {
+  return reconcileCommands(secrets, "x").length > 0;
+}
 
 // ---------------------------------------------------------------------------
 // Manifest builders — byte-for-byte port of AssistantInstaller.swift
@@ -82,6 +371,7 @@ metadata:
  * token can be rolled back without reapplying RBAC. Never shown in the preview.
  */
 export function secretYAML(token: string, issuedAt = "", namespace = "default"): string {
+  const claudeKey = CREDENTIAL_ENV.find((e) => e.id === "claudeToken")!.defaultKey;
   return `apiVersion: v1
 kind: Secret
 metadata:
@@ -89,11 +379,49 @@ metadata:
   namespace: ${namespace}
   labels:
     app.kubernetes.io/managed-by: rigel-assistant
+    ${CREDENTIAL_STORE_LABEL}: "true"
   annotations:
     ${ISSUED_AT_ANNOTATION}: "${issuedAt}"
+    ${CREDENTIAL_ANNOTATION_PREFIX}claudeToken: "${claudeKey}"
 type: Opaque
 stringData:
-  token: "${escape(token)}"`;
+  ${claudeKey}: "${escape(token)}"`;
+}
+
+/**
+ * The multi-key credentials Secret. Writes ONLY the keys whose value is a
+ * non-empty string, so a user who supplies one provider's key gets a Secret with
+ * just that key. The Deployment references every possible key with
+ * `optional: true`, so absent keys are simply not injected (no startup failure).
+ * Never previewed (carries secrets), same as secretYAML.
+ */
+export function credentialsSecretYAML(
+  creds: AssistantCredentials,
+  namespace = "default",
+): string {
+  const lines: string[] = [];
+  const annotations: string[] = [];
+  for (const key of CREDENTIAL_KEYS) {
+    const value = creds[key];
+    if (typeof value === "string" && value.trim() !== "") {
+      lines.push(`  ${key}: "${escape(value)}"`);
+      // Correlate this data key to its credential id. For the credentials Secret
+      // the data key IS the id, so the annotation value mirrors the key name.
+      annotations.push(`    ${CREDENTIAL_ANNOTATION_PREFIX}${key}: "${key}"`);
+    }
+  }
+  const stringData = lines.length > 0 ? `stringData:\n${lines.join("\n")}` : "stringData: {}";
+  const annotationsBlock = annotations.length > 0 ? `\n  annotations:\n${annotations.join("\n")}` : "";
+  return `apiVersion: v1
+kind: Secret
+metadata:
+  name: ${CREDENTIALS_SECRET_NAME}
+  namespace: ${namespace}
+  labels:
+    app.kubernetes.io/managed-by: rigel-assistant
+    ${CREDENTIAL_STORE_LABEL}: "true"${annotationsBlock}
+type: Opaque
+${stringData}`;
 }
 
 /** ServiceAccount + ClusterRole + ClusterRoleBinding + namespaced Role/RoleBinding. */
@@ -183,8 +511,35 @@ subjects:
     namespace: ${ns}`;
 }
 
-/** The three pre-created ConfigMaps: config (control surface), state, backups. */
-export function configMaps(ns: string): string {
+/** The three pre-created ConfigMaps: config (control surface, seeded with the
+ *  role selections + operational limits), state, backups. */
+export function configMaps(c: AssistantInstallConfig): string {
+  const ns = c.installNamespace;
+  // Seed role keys (default to claude worker=sonnet / supervisor=opus to match
+  // the WORKER_MODEL/SUPERVISOR_MODEL env fallbacks + parseRoleSelection defaults).
+  const worker = c.worker ?? { provider: "claude", model: c.workerModel };
+  const supervisor = c.supervisor ?? { provider: "claude", model: c.supervisorModel };
+  const roleLines = [
+    `  workerProvider: ${worker.provider}`,
+    `  workerModel: ${worker.model}`,
+    ...(worker.effort ? [`  workerEffort: ${worker.effort}`] : []),
+    `  supervisorProvider: ${supervisor.provider}`,
+    `  supervisorModel: ${supervisor.model}`,
+    ...(supervisor.effort ? [`  supervisorEffort: ${supervisor.effort}`] : []),
+  ].join("\n");
+  const nsList = c.namespaces
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join("\n");
+  const limitLines = [
+    `  pollIntervalMs: "${c.pollIntervalMs}"`,
+    `  maxPerResourcePerHour: "${c.maxPerResourcePerHour}"`,
+    `  maxPerNight: "${c.maxPerNight}"`,
+    `  maxAttemptsPerIncident: "${c.maxAttemptsPerIncident}"`,
+    `  confirmPolls: "${c.confirmPolls}"`,
+    `  namespaces: "${nsList}"`,
+  ].join("\n");
   return `apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -195,6 +550,8 @@ metadata:
 data:
   enabled: "true"
   mode: "auto"
+${roleLines}
+${limitLines}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -215,8 +572,90 @@ metadata:
 data: {}`;
 }
 
-/** The agent Deployment (replicas:1, Recreate, RBAC cage, env from config). */
-export function deployment(c: AssistantInstallConfig): string {
+/**
+ * Render the 7 credential env blocks (12-space indented, matching the Deployment
+ * template), each as a `secretKeyRef` resolved from `sources[id]` when present,
+ * else CREDENTIAL_ENV's default managed Secret + key. Every ref is `optional:
+ * true` so a missing credential never blocks startup. Pure — never reads a value.
+ */
+export function credentialEnvYAML(
+  sources: Partial<Record<keyof AssistantCredentials, ResolvedSource>> = {},
+): string {
+  // Explanatory comment kept between the legacy Claude token env and the
+  // provider-key block, exactly where it sat before this was extracted.
+  const PROVIDER_KEYS_COMMENT =
+    "            # Provider API keys from the multi-key credentials Secret. Each is\n" +
+    "            # optional so a missing credential never blocks startup; the matching\n" +
+    "            # bridge fails closed at run time if its role's provider has no key.";
+  return CREDENTIAL_ENV.map((entry, i) => {
+    const src = sources[entry.id];
+    const name = src?.secretName ?? entry.defaultSecret;
+    const key = src?.dataKey ?? entry.defaultKey;
+    const block = `            - name: ${entry.env}
+              valueFrom:
+                secretKeyRef:
+                  name: ${name}
+                  key: ${key}
+                  optional: true`;
+    // claudeToken is first; the comment precedes the remaining provider keys.
+    return i === 1 ? `${PROVIDER_KEYS_COMMENT}\n${block}` : block;
+  }).join("\n");
+}
+
+/**
+ * Strategic-merge patch that repoints ONE credential's env var at `source`,
+ * leaving the image, models, and every other env untouched (env merges by
+ * `name`). Used to apply a BYO source change without re-rendering — and so
+ * reverting a credential never resets unrelated Deployment config. The patch
+ * mutates the pod template, which triggers a rollout on its own.
+ *
+ * Pass the resolved managed default (CREDENTIAL_ENV) to revert a credential.
+ * `"agent"` is the container name in `deployment()` above.
+ */
+export function credentialEnvPatch(
+  credentialId: keyof AssistantCredentials,
+  source: { secretName: string; dataKey: string },
+): string {
+  const entry = CREDENTIAL_ENV.find((e) => e.id === credentialId);
+  if (!entry) throw new Error(`unknown credential id: ${credentialId}`);
+  return JSON.stringify({
+    spec: {
+      template: {
+        spec: {
+          containers: [
+            {
+              name: "agent",
+              env: [
+                {
+                  name: entry.env,
+                  valueFrom: { secretKeyRef: { name: source.secretName, key: source.dataKey, optional: true } },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    },
+  });
+}
+
+/** The managed default source (Secret + key) for a credential id, used to revert
+ *  a BYO repoint. */
+export function defaultCredentialSource(
+  credentialId: keyof AssistantCredentials,
+): { secretName: string; dataKey: string } {
+  const entry = CREDENTIAL_ENV.find((e) => e.id === credentialId);
+  if (!entry) throw new Error(`unknown credential id: ${credentialId}`);
+  return { secretName: entry.defaultSecret, dataKey: entry.defaultKey };
+}
+
+/** The agent Deployment (replicas:1, Recreate, RBAC cage, env from config).
+ *  `sources` repoints credential env at operator-supplied Secrets; the default
+ *  ({}) renders today's managed-Secret refs byte-for-byte. */
+export function deployment(
+  c: AssistantInstallConfig,
+  sources: Partial<Record<keyof AssistantCredentials, ResolvedSource>> = {},
+): string {
   return `apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -254,11 +693,7 @@ spec:
           image: "${c.image}"
           imagePullPolicy: IfNotPresent
           env:
-            - name: CLAUDE_CODE_OAUTH_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: ${SECRET_NAME}
-                  key: token
+${credentialEnvYAML(sources)}
             - name: WORKER_MODEL
               value: "${c.workerModel}"
             - name: SUPERVISOR_MODEL
@@ -297,7 +732,7 @@ spec:
 
 /** The previewable manifest: RBAC + ConfigMaps + Deployment (NO Secret). */
 export function manifestYAML(c: AssistantInstallConfig): string {
-  return [rbac(c.installNamespace), configMaps(c.installNamespace), deployment(c)].join("\n---\n");
+  return [rbac(c.installNamespace), configMaps(c), deployment(c)].join("\n---\n");
 }
 
 /**
@@ -306,7 +741,9 @@ export function manifestYAML(c: AssistantInstallConfig): string {
  * this guards any path that might render a token-bearing string.
  */
 export function maskToken(yaml: string): string {
-  return yaml.replace(/(token:\s*)"(?:[^"\\]|\\.)*"/g, '$1"***SECRET***"');
+  // Line-anchored so it redacts the stringData `token:` value only, never an
+  // annotation line like `rigel.assistant/credential.claudeToken: "token"`.
+  return yaml.replace(/^(\s*token:\s*)"(?:[^"\\]|\\.)*"/gm, '$1"***SECRET***"');
 }
 
 // ---------------------------------------------------------------------------
@@ -537,6 +974,71 @@ export function computeLiveIssues(
     }
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// assistant-config key builders (used by install seed + setModels + setLimits)
+// ---------------------------------------------------------------------------
+
+/** One role's selection as the server receives it (provider id is a plain string;
+ * the agent re-validates it against its provider set, so no enum needed here). */
+export interface RoleSelectionInput {
+  provider: string;
+  model: string;
+  /** Claude-family reasoning effort; omitted for other providers. */
+  effort?: string;
+}
+
+/** The operational limits a user can change live (subset can be provided). */
+export interface LimitsInput {
+  pollIntervalMs?: number;
+  maxPerResourcePerHour?: number;
+  maxPerNight?: number;
+  maxAttemptsPerIncident?: number;
+  confirmPolls?: number;
+  /** Monitored namespaces; empty array = all. */
+  namespaces?: string[];
+}
+
+/**
+ * Build the assistant-config updates for the per-role selections, using the EXACT
+ * keys `agent/src/runtimeConfig.ts parseRoleSelection` reads. `effort` keys are
+ * only emitted when set. A role omitted (undefined) contributes no keys, so a
+ * worker-only change never touches the supervisor keys.
+ */
+export function roleConfigUpdates(
+  worker?: RoleSelectionInput,
+  supervisor?: RoleSelectionInput,
+): Record<string, string> {
+  const updates: Record<string, string> = {};
+  if (worker) {
+    updates.workerProvider = worker.provider;
+    updates.workerModel = worker.model;
+    if (worker.effort && worker.effort.trim() !== "") updates.workerEffort = worker.effort;
+  }
+  if (supervisor) {
+    updates.supervisorProvider = supervisor.provider;
+    updates.supervisorModel = supervisor.model;
+    if (supervisor.effort && supervisor.effort.trim() !== "") updates.supervisorEffort = supervisor.effort;
+  }
+  return updates;
+}
+
+/**
+ * Build the assistant-config updates for the operational limits, using the EXACT
+ * keys `agent/src/runtimeConfig.ts parseLimits` reads. Numbers are stringified;
+ * namespaces is newline-joined ("" = all namespaces). Only provided fields are
+ * emitted, so a partial update never clobbers other limit keys.
+ */
+export function limitsConfigUpdates(limits: LimitsInput): Record<string, string> {
+  const updates: Record<string, string> = {};
+  if (limits.pollIntervalMs !== undefined) updates.pollIntervalMs = String(limits.pollIntervalMs);
+  if (limits.maxPerResourcePerHour !== undefined) updates.maxPerResourcePerHour = String(limits.maxPerResourcePerHour);
+  if (limits.maxPerNight !== undefined) updates.maxPerNight = String(limits.maxPerNight);
+  if (limits.maxAttemptsPerIncident !== undefined) updates.maxAttemptsPerIncident = String(limits.maxAttemptsPerIncident);
+  if (limits.confirmPolls !== undefined) updates.confirmPolls = String(limits.confirmPolls);
+  if (limits.namespaces !== undefined) updates.namespaces = limits.namespaces.join("\n");
+  return updates;
 }
 
 // ---------------------------------------------------------------------------

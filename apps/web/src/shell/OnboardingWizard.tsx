@@ -1,8 +1,9 @@
 /**
- * First-run setup. Auto-shown after login when no Claude token is configured
- * (dismissible; re-openable from Settings via the "rigel:open-setup" event).
- * A guided front-end over existing endpoints — captures the Claude token and
- * offers one-click installs of the Assistant, metrics-server, and Signal.
+ * First-run setup. Auto-shown after login when no AI agent is connected
+ * (dismissible; re-openable from Settings via the "rigel:open-setup" event). A
+ * guided front-end over existing flows: connect an AI agent through the real
+ * Agents picker, and offer one-click installs of the Assistant, metrics-server,
+ * and Signal. Every step is skippable.
  *
  * When `requireAboutYou` is true (desktop first run), prepends a required
  * "About you" step that cannot be skipped or dismissed until completed.
@@ -11,14 +12,14 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { Sparkles, Check, Bot, Activity, Bell } from "lucide-react";
 import {
-  useChatConfig,
-  useSetChatToken,
+  useAgents,
   useAssistantAction,
   useNodeMetrics,
   useInstallMetricsServer,
 } from "@/lib/api";
 import { Stepper } from "./onboarding/Stepper";
 import { AboutYouStep } from "./onboarding/AboutYouStep";
+import { AgentsTab } from "@/panels/settings/agents/AgentsTab";
 import { rigel } from "@/lib/desktop";
 
 export function OnboardingWizard({
@@ -35,7 +36,7 @@ export function OnboardingWizard({
   const [i, setI] = useState(0);
 
   const optionalSteps: { label: string; node: ReactNode }[] = [
-    { label: "AI copilot", node: <TokenCard /> },
+    { label: "AI agent", node: <AgentStep /> },
     { label: "Assistant", node: <AssistantCard /> },
     { label: "Metrics", node: <MetricsCard /> },
     {
@@ -67,7 +68,7 @@ export function OnboardingWizard({
                   setAboutDone(true);
                   onAboutYouDone?.();
                   // The steps array collapses to optionalSteps (About-you removed),
-                  // so reset to index 0 — the first optional step (AI copilot).
+                  // so reset to index 0 — the first optional step (AI agent).
                   setI(0);
                 }}
               />
@@ -92,7 +93,7 @@ export function OnboardingWizard({
   // Enter advances to the next step (or finishes on the last). It yields to the
   // focused control so it never discards typed input or double-fires: a focused
   // input/textarea lets that step's own form handle Enter (About-you "Continue",
-  // token "Save"), and a focused button gets its native click instead.
+  // an agent's API-key field), and a focused button gets its native click instead.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key !== "Enter" || e.isComposing) return;
@@ -117,7 +118,7 @@ export function OnboardingWizard({
 
         {!locked && (
           <span style={{ fontSize: 12.5, color: "var(--fg-secondary)", lineHeight: 1.5 }}>
-            A minute of optional setup. Everything here can also be changed later in Settings — skip
+            A minute of optional setup. Everything here can also be changed later in Settings. Skip
             anything you don't need.
           </span>
         )}
@@ -189,44 +190,31 @@ function Done() {
   );
 }
 
-function TokenCard() {
-  const { data: config } = useChatConfig();
-  const setToken = useSetChatToken();
-  const [token, setTokenInput] = useState("");
-  const configured = config?.configured ?? false;
+/**
+ * AI-agent setup step. Renders the real pick-and-connect flow (AgentsTab: the
+ * same grid of agents + per-agent auth used in Settings, then Agents) so
+ * onboarding connects an agent through the proper multi-agent path instead of
+ * saving a single Claude token. Completion mirrors ChatPane: the step is "Done"
+ * once the ACTIVE agent reports connected. The step is skippable — chat's
+ * empty-state guides anyone who continues without connecting.
+ */
+function AgentStep() {
+  const { data } = useAgents();
+  const activeAgent = data?.agents.find((a) => a.id === data?.activeAgentId);
+  const connected = activeAgent?.connection === "connected";
 
   return (
-    <ToolCard
-      icon={<Sparkles size={15} style={{ color: "var(--accent-primary)" }} />}
-      title="AI copilot (Rigel)"
-      desc="Chat needs a Claude subscription token — run `claude setup-token` and paste the sk-ant-oat-… value."
-      action={configured ? <Done /> : undefined}
-    >
-      {!configured && (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (token.trim() && !setToken.isPending) setToken.mutate(token.trim());
-          }}
-          style={{ display: "flex", gap: 8, marginTop: 2 }}
-        >
-          <input
-            type="password"
-            value={token}
-            onChange={(e) => setTokenInput(e.target.value)}
-            placeholder="sk-ant-oat-…"
-            style={input}
-          />
-          <button
-            type="submit"
-            disabled={!token.trim() || setToken.isPending}
-            style={{ ...ghostBtn, opacity: !token.trim() || setToken.isPending ? 0.6 : 1 }}
-          >
-            {setToken.isPending ? "Saving…" : "Save"}
-          </button>
-        </form>
-      )}
-    </ToolCard>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ fontSize: 12.5, color: "var(--fg-secondary)", lineHeight: 1.5, flex: 1 }}>
+          Pick the AI agent Rigel should use and connect it. You can change this any time in Settings, then Agents.
+        </span>
+        {connected && <Done />}
+      </div>
+      {/* The real Agents flow: grid → per-agent auth, with its own "Connect your
+          AI agent" heading. No settings chrome, so it embeds directly. */}
+      <AgentsTab />
+    </div>
   );
 }
 
@@ -317,17 +305,6 @@ const tool: React.CSSProperties = {
   background: "var(--surface-sunken)",
   border: "1px solid #26272B",
   borderRadius: 10,
-};
-const input: React.CSSProperties = {
-  flex: 1,
-  padding: "7px 10px",
-  borderRadius: 7,
-  background: "var(--surface-sunken)",
-  border: "1px solid #34353A",
-  color: "var(--fg-primary)",
-  fontSize: 12,
-  fontFamily: "ui-monospace, monospace",
-  outline: "none",
 };
 const primaryBtn: React.CSSProperties = {
   padding: "7px 16px",

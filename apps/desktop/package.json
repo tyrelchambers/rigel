@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "description": "Rigel desktop (Electron) — wraps the Node server + built SPA into a macOS app",
+  "homepage": "https://rigel.run",
   "main": "dist/main.js",
   "scripts": {
     "build": "pnpm --filter web build && node build.mjs",
@@ -12,7 +13,10 @@
     "smoke": "pnpm build && HELMSMAN_SMOKE=1 electron .",
     "dist": "pnpm build && electron-builder --mac --arm64",
     "dist:all": "pnpm build && electron-builder --mac --arm64 --x64",
-    "release": "pnpm build && electron-builder --mac --arm64 --x64 --publish always"
+    "release": "pnpm run release:mac",
+    "release:mac": "pnpm build && electron-builder --mac --arm64 --x64 --publish always",
+    "release:win": "pnpm build && electron-builder --win --x64 --publish always",
+    "release:linux": "pnpm build && electron-builder --linux --x64 --publish always"
   },
   "dependencies": {
     "node-pty": "1.1.0"

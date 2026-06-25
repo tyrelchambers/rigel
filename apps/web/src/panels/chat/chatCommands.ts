@@ -15,7 +15,7 @@ export const CHAT_COMMANDS: ChatCommandSpec[] = [
   { name: "investigate", aliases: [], description: "Audit cluster health" },
   { name: "logs", aliases: ["tail"], description: "Open the Logs tab tailing a deployment", argHint: "<deployment>" },
   { name: "restart", aliases: [], description: "Rollout-restart a deployment", argHint: "<deployment>" },
-  { name: "describe", aliases: [], description: "Paste a kubectl describe into chat", argHint: "<pod|deployment>" },
+  { name: "describe", aliases: [], description: "Paste a kubectl describe into chat", argHint: "<type> <name>" },
 ];
 
 /** "/logs <deployment>" — display string for the popover. */

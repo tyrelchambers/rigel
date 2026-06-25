@@ -3,9 +3,13 @@
 export { extractActionBlocks } from "@rigel/k8s/src/actionBlocks";
 import { claudeAuthEnv } from "./agentConfig";
 import { systemPrompt } from "./systemPrompt";
-import { spawn } from "node:child_process";
-import { createInterface } from "node:readline";
+import { streamAgentProcess, type ChatEvent } from "./agentProcess";
 import { fileURLToPath } from "node:url";
+
+// ChatEvent is the shared event type for all agent runners; it lives in
+// agentProcess.ts now. Re-export it so existing importers (runAgent.ts, etc.)
+// keep importing it from here unchanged.
+export type { ChatEvent } from "./agentProcess";
 
 const READ_ONLY_ALLOWLIST = [
   "Bash(kubectl get *)",
@@ -93,27 +97,6 @@ export function readAllowlist(contexts: string[]): string[] {
     ),
   );
   return [...READ_ONLY_ALLOWLIST, ...prefixed];
-}
-
-export interface ChatEvent {
-  type: "thinking" | "text" | "done" | "error" | "session" | "tool" | "toolResult";
-  text?: string;
-  /** Present on `session` events — the CLI session id (system init line). */
-  sessionId?: string;
-  /** tool/toolResult: the tool_use id (correlates a call with its result). */
-  toolId?: string;
-  /** tool: tool name, e.g. "Bash". */
-  toolName?: string;
-  /** tool: extracted Bash command (input.command), when present. */
-  command?: string;
-  /** tool: extracted Bash description (input.description), when present. */
-  description?: string;
-  /** tool: JSON.stringify(input), for an expandable raw view. */
-  inputJSON?: string;
-  /** toolResult: true if the tool errored or was denied. */
-  isError?: boolean;
-  /** toolResult: short output/stderr/denial text (truncate to ~600 chars). */
-  output?: string;
 }
 
 /**
@@ -215,9 +198,42 @@ export function mapClaudeEvent(ev: any): ChatEvent[] {
  *  - { type: "result", ... } -- final summary; signals end-of-stream.
  *  - Other types (system, user, tool_use, tool_result) are silently skipped.
  */
-/** CLI aliases the picker may send; anything else is ignored (no flag added). */
-const ALLOWED_MODELS = new Set(["opus", "sonnet", "haiku"]);
-const ALLOWED_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
+/**
+ * The full Claude model ids the picker advertises — single source of truth for the
+ * Claude model list shown in BOTH the chat composer and the Assistant Agents picker
+ * (agentModels.ts surfaces this set). Full ids (not the bare opus/sonnet/haiku
+ * aliases) so a selection matches the full-id defaults the UI ships and the in-cluster
+ * agent runs (see providerMeta DEFAULT_WORKER/SUPERVISOR + agent/src/providers/claude).
+ * `claude --model` accepts these full ids directly. Insertion order is preserved.
+ * Update when a new Claude model ships — there is no `claude` CLI command to list models.
+ */
+export const ALLOWED_MODELS = new Set([
+  "claude-opus-4-8",
+  "claude-sonnet-4-6",
+  "claude-haiku-4-5-20251001",
+  "claude-fable-5",
+]);
+
+/**
+ * Bare "latest" aliases the `claude` CLI also accepts for --model. The picker uses
+ * full ids, but a stored/legacy selection may still carry one of these, so we keep
+ * honoring them rather than silently dropping a valid model.
+ */
+const CLAUDE_ALIASES = new Set(["opus", "sonnet", "haiku", "fable"]);
+
+export const ALLOWED_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
+
+/**
+ * True when `model` is a Claude model string the `claude` CLI accepts for --model:
+ * one of our advertised full ids or a bare latest-alias. Used (a) to gate the
+ * --model flag in buildClaudeArgs, and (b) by the codex/gemini/opencode bridges to
+ * SKIP a stale Claude selection rather than passing it as their own `-m` (which would
+ * error, e.g. on "opus" / "claude-opus-4-8"), falling back to their configured default.
+ * Shared so the rule stays in one place.
+ */
+export function isClaudeModel(model: string): boolean {
+  return ALLOWED_MODELS.has(model) || CLAUDE_ALIASES.has(model);
+}
 
 export interface RunClaudeOpts {
   model?: string;
@@ -253,7 +269,7 @@ export function buildClaudeArgs(
   argv.push("--settings", permissionHookSettings());
   // Apply the composer's model/effort selection as launch flags (validated so a
   // bad value can't inject arbitrary args or break the CLI).
-  if (opts?.model && ALLOWED_MODELS.has(opts.model)) argv.push("--model", opts.model);
+  if (opts?.model && isClaudeModel(opts.model)) argv.push("--model", opts.model);
   if (opts?.effort && ALLOWED_EFFORTS.has(opts.effort)) argv.push("--effort", opts.effort);
   // Resume the prior session so the model keeps conversation + action-result
   // history across turns. Only when we actually have an id (first turn is fresh).
@@ -278,67 +294,8 @@ export async function* runClaude(
     ...(await claudeAuthEnv()),
   };
 
-  const proc = spawn(argv[0], argv.slice(1), {
-    stdio: ["ignore", "pipe", "pipe"],
-    env,
-  });
-
-  // Accumulate stderr from spawn time so it's available for the error path even
-  // though the stream is consumed live (Node Readables don't replay).
-  const stderrChunks: Buffer[] = [];
-  proc.stderr!.on("data", (buf: Buffer) => stderrChunks.push(buf));
-
-  // Capture the exit code up front: the "close" event can fire before the
-  // stdout reader loop below finishes draining, so awaiting it afterwards would
-  // hang. This promise latches the code regardless of ordering. An "error"
-  // (e.g. claude not on PATH → ENOENT, where "close" never fires) resolves it
-  // too, with the message captured as stderr so the error path surfaces it.
-  const exitPromise: Promise<number | null> = new Promise((resolve) => {
-    proc.once("close", (code) => resolve(code));
-    proc.once("error", (err: Error) => {
-      stderrChunks.push(Buffer.from(err.message));
-      resolve(-1);
-    });
-  });
-
-  // Stop: aborting kills the claude subprocess; the stdout reader then ends and
-  // we exit the turn cleanly (no spurious "exited with code 143" error below).
-  const onAbort = () => {
-    try {
-      proc.kill();
-    } catch {
-      /* already gone */
-    }
-  };
-  if (signal) {
-    if (signal.aborted) onAbort();
-    else signal.addEventListener("abort", onAbort, { once: true });
-  }
-
-  // Newline-delimited stream-json: each stdout line is one CLI event object.
-  // readline's async iterator pulls lines as the generator's consumer pulls
-  // events, and ends when stdout closes (process exit or kill on abort).
-  const rl = createInterface({ input: proc.stdout! });
-  for await (const line of rl) {
-    if (!line.trim()) continue;
-    let ev: any;
-    try {
-      ev = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    for (const e of mapClaudeEvent(ev)) yield e;
-  }
-
-  const exitCode = await exitPromise;
-  if (signal) signal.removeEventListener("abort", onAbort);
-  if (signal?.aborted) {
-    // Interrupted by the user — end the turn quietly, not as an error.
-    yield { type: "done" };
-    return;
-  }
-  if (exitCode !== 0) {
-    const errText = Buffer.concat(stderrChunks).toString("utf8");
-    yield { type: "error", text: errText.trim() || `claude exited with code ${exitCode}` };
-  }
+  // The spawn/stream/abort lifecycle is shared with other agent runners (codex,
+  // …) via streamAgentProcess; claudeBridge owns only the argv/env build and the
+  // claude-specific JSONL→ChatEvent mapping.
+  yield* streamAgentProcess({ argv, env, signal, mapEvent: mapClaudeEvent });
 }

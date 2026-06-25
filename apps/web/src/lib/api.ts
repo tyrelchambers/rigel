@@ -318,6 +318,9 @@ export type AssistantAction =
   | "setMode"
   | "kill"
   | "updateToken"
+  | "setModels"
+  | "setCredentials"
+  | "setLimits"
   | "restart"
   | "silence"
   | "unsilence"
@@ -326,7 +329,65 @@ export type AssistantAction =
   | "setSignal"
   | "saveAlert"
   | "deleteAlert"
-  | "toggleAlert";
+  | "toggleAlert"
+  | "credentialStatus"
+  | "listCredentialSecrets"
+  | "setCredentialSource"
+  | "clearCredentialSource"
+  | "reconcileCredentialAnnotations";
+
+export interface AssistantRoleSelection {
+  provider: string;
+  model: string;
+  effort?: string;
+}
+
+/** Provider credentials → the rigel-assistant-credentials Secret keys. */
+export interface AssistantCredentials {
+  claudeToken?: string;
+  anthropicApiKey?: string;
+  codexApiKey?: string;
+  codexAuthContent?: string;
+  geminiApiKey?: string;
+  opencodeApiKey?: string;
+  opencodeAuthContent?: string;
+}
+
+/** Per-credential readiness + backing Secret name from the server's
+ *  credentialStatus read. Names only — the value never leaves the cluster. */
+export interface CredentialSourceStatus {
+  ready: boolean;
+  secretName: string;
+}
+
+/** credentialStatus response: per-credential `{ ready, secretName }` keyed by the
+ *  AssistantCredentials credential id (only present ids are included). `conflicts`
+ *  are ids claimed by more than one credential-store Secret (alphabetically-first
+ *  wins; surfaced so the UI can warn). `needsReconcile` is true when a legacy
+ *  install has fallback-resolved credentials not yet stamped with annotations
+ *  (drives the Repair button). Both names/ids only — never values. */
+export interface CredentialStatusResponse {
+  credentials: Partial<Record<keyof AssistantCredentials, CredentialSourceStatus>>;
+  conflicts?: (keyof AssistantCredentials)[];
+  needsReconcile?: boolean;
+}
+
+/** A candidate Secret for the BYO source picker: name, type, and data KEY NAMES
+ *  only (never values). */
+export interface CredentialSecret {
+  name: string;
+  type: string;
+  keys: string[];
+}
+
+export interface AssistantLimits {
+  pollIntervalMs?: number;
+  maxPerResourcePerHour?: number;
+  maxPerNight?: number;
+  maxAttemptsPerIncident?: number;
+  confirmPolls?: number;
+  namespaces?: string[];
+}
 
 export interface AssistantRequest {
   action: AssistantAction;
@@ -355,6 +416,25 @@ export interface AssistantRequest {
   // toggleAlert / deleteAlert fields
   alertId?: string;
   alertEnabled?: boolean;
+  // Multi-provider control plane (Plan 2). provider is a plain string (the four
+  // agent ids: claude | codex | gemini | opencode); effort is Claude-family only.
+  worker?: AssistantRoleSelection;
+  supervisor?: AssistantRoleSelection;
+  credentials?: AssistantCredentials;
+  limits?: AssistantLimits;
+  // BYO credential source (setCredentialSource / clearCredentialSource). Only
+  // ids + Secret/data-key NAMES — never a secret value.
+  credentialId?: keyof AssistantCredentials;
+  secretName?: string;
+  dataKey?: string;
+}
+
+/** Shape returned by the assistant route on success (stdout is present for read
+ *  actions like credentialStatus; mutations return an empty stdout). */
+export interface AssistantRunResult {
+  success: true;
+  stdout: string;
+  stderr: string;
 }
 
 /**
@@ -362,7 +442,7 @@ export interface AssistantRequest {
  * error message on failure. The token (when present) is sent in the JSON body
  * over the same authenticated channel and is never logged client-side.
  */
-async function postAssistant(req: AssistantRequest): Promise<{ success: true }> {
+export async function postAssistant(req: AssistantRequest): Promise<AssistantRunResult> {
   const res = await fetch("/api/assistant", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -372,13 +452,31 @@ async function postAssistant(req: AssistantRequest): Promise<{ success: true }> 
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((err as { error?: string }).error ?? res.statusText);
   }
-  return res.json() as Promise<{ success: true }>;
+  return res.json() as Promise<AssistantRunResult>;
 }
 
 /** Mutation hook for every assistant control action. */
 export function useAssistantAction() {
-  return useMutation<{ success: true }, Error, AssistantRequest>({
+  return useMutation<AssistantRunResult, Error, AssistantRequest>({
     mutationFn: postAssistant,
+  });
+}
+
+/**
+ * Candidate Secrets in the agent's namespace for the BYO credential-source
+ * picker — names + data key NAMES only (values never reach the client). Enabled
+ * once a namespace is known; refetched lazily (Secrets don't churn fast).
+ */
+export function useCredentialSecrets(namespace: string | undefined) {
+  return useQuery<CredentialSecret[], Error>({
+    queryKey: ["assistant-credentialSecrets", namespace] as const,
+    queryFn: async () => {
+      const res = await postAssistant({ action: "listCredentialSecrets", namespace });
+      const parsed = JSON.parse(res.stdout || "{}") as { secrets?: CredentialSecret[] };
+      return parsed.secrets ?? [];
+    },
+    enabled: !!namespace,
+    staleTime: 30_000,
   });
 }
 
@@ -742,7 +840,7 @@ export function useSetChatToken() {
 }
 
 // ── Agents (multi-backend settings) ──────────────────────────────────────────
-export type AgentId = "claude" | "codex" | "gemini" | "opencode" | "openrouter";
+export type AgentId = "claude" | "codex" | "gemini" | "opencode";
 export type AgentAuthMethod = "subscription" | "apiKey";
 export type AgentConnection = "connected" | "notConnected" | "comingSoon";
 
@@ -776,6 +874,34 @@ export function useAgents() {
   });
 }
 
+/**
+ * Models + reasoning-effort levels a given agent can run, for the composer's
+ * agent-aware model picker. `efforts` is non-empty only for Claude; the others
+ * return `[]` (effort is a Claude-only concept). opencode's models are discovered
+ * live server-side (`opencode models`), so they can be empty when it isn't
+ * installed.
+ */
+export interface AgentModels {
+  models: string[];
+  efforts: string[];
+}
+
+async function fetchAgentModels(id: AgentId): Promise<AgentModels> {
+  const res = await fetch(`/api/agents/${id}/models`);
+  if (!res.ok) throw new Error("failed to load agent models");
+  return (await res.json()) as AgentModels;
+}
+
+/** The active agent's selectable models/efforts. Enabled once an id is known. */
+export function useAgentModels(agentId: AgentId | undefined) {
+  return useQuery({
+    queryKey: ["agentModels", agentId] as const,
+    queryFn: () => fetchAgentModels(agentId as AgentId),
+    enabled: !!agentId,
+    staleTime: 5 * 60_000,
+  });
+}
+
 export interface SetAgentAuthVars {
   id: AgentId;
   authMethod: AgentAuthMethod;
@@ -793,6 +919,26 @@ export function useSetAgentAuth() {
       });
       if (!res.ok) throw new Error((await res.text()) || "failed to save");
       return (await res.json()) as AgentView;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agents"] }),
+  });
+}
+
+/** Set the active agent (the one chat/the assistant use), then refresh agents. */
+export function useSetActiveAgent() {
+  const qc = useQueryClient();
+  return useMutation<AgentsResponse, Error, AgentId>({
+    mutationFn: async (id) => {
+      const res = await fetch("/api/agents/active", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error ?? "Failed to set active agent");
+      }
+      return (await res.json()) as AgentsResponse;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["agents"] }),
   });

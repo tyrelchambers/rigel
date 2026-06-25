@@ -82,8 +82,40 @@ mac:
       arch:
         - arm64
         - x64
+  # Explicit name so the marketing download-page resolver matches by a known
+  # pattern (e.g. Rigel-0.2.0-arm64.dmg / Rigel-0.2.0-x64.dmg).
+  artifactName: Rigel-${version}-${arch}.dmg
   # UNSIGNED / ad-hoc build: code-signing + notarization are deferred (need the
   # user's Apple Developer ID certificate). identity:null makes electron-builder
   # ad-hoc sign locally so it builds without certs. See report for the signing
   # follow-up (set identity + afterSign notarize + secrets).
   identity: null
+
+# UNSIGNED Windows build: NSIS installer, x64 only. No Authenticode cert, so
+# users see a SmartScreen warning (More info -> Run anyway) on first launch.
+# Signing is a later phase. Explicit name -> Rigel-Setup-0.2.0.exe.
+win:
+  icon: build/icon.png
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: Rigel-Setup-${version}.exe
+
+# UNSIGNED Linux build: AppImage + .deb, x64 only. electron-builder bundles fpm
+# for the .deb, so no extra apt deps are needed on ubuntu-latest. Explicit name
+# -> Rigel-0.2.0-x86_64.AppImage / Rigel-0.2.0-amd64.deb (arch token differs per
+# packaging format; the resolver matches by extension, not a fixed arch string).
+linux:
+  icon: build/icon.png
+  category: Development
+  # The .deb target requires a Debian maintainer ("Name <email>").
+  maintainer: Tyrel Chambers <noreply@rigel.run>
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+  artifactName: Rigel-${version}-${arch}.${ext}

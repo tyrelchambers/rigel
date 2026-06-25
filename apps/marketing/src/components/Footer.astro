@@ -2,14 +2,12 @@
 import { Icon } from "astro-icon/components";
 import Logo from "./Logo.astro";
 
-// Root-absolute hrefs so the footer resolves correctly from any page.
 const columns = [
     {
         title: "PRODUCT",
         links: [
             { label: "Features", href: "/features" },
             { label: "App catalog", href: "/catalog" },
-            { label: "Compare", href: "/compare" },
             { label: "Security", href: "/security" },
             { label: "Smart alerts", href: "/features#lookout" },
         ],
@@ -26,7 +24,6 @@ const columns = [
     {
         title: "RESOURCES",
         links: [
-            { label: "Docs", href: "/docs" },
             { label: "Changelog", href: "/changelog" },
             { label: "About", href: "/about" },
         ],
@@ -52,7 +49,6 @@ const social = [
         <div
             class="flex flex-col gap-12 lg:flex-row lg:justify-between lg:gap-20"
         >
-            <!-- brand -->
             <div data-reveal class="max-w-[340px]">
                 <div class="flex items-center gap-3">
                     <Logo class="size-[34px] text-fg" />
@@ -61,22 +57,11 @@ const social = [
                     >
                 </div>
                 <p class="mt-5 text-[13.5px] leading-relaxed text-fg-secondary">
-                    Run production Kubernetes without an ops team. A desktop
-                    app for macOS that diagnoses, fixes, and monitors your
-                    clusters so you don't have to.
+                    Run production Kubernetes without an ops team. A desktop app
+                    that diagnoses, fixes, and monitors your clusters.
                 </p>
-                <div class="mt-5 flex items-center gap-2 text-fg-tertiary">
-                    <Icon
-                        name="lucide:anchor"
-                        class="size-[13px] text-accent"
-                    />
-                    <span class="font-mono text-[11px] tracking-[0.12em]"
-                        >EST. 2025</span
-                    >
-                </div>
             </div>
 
-            <!-- link columns -->
             <div
                 data-reveal
                 style="--reveal-delay:100ms"

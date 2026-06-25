@@ -13,6 +13,21 @@ test("ADDED then MODIFIED upserts; DELETED removes", () => {
   expect(cache.has("a")).toBe(false);
 });
 
+// Under --all-namespaces, two resources can share a name across namespaces (e.g.
+// the kube-root-ca.crt ConfigMap exists in every namespace). The cache must key
+// by namespace/name so they don't clobber each other; a bare-name key collapses
+// them to one and the snapshot drops the rest.
+test("applyEvent keys by namespace/name so cross-namespace names don't collide", () => {
+  const cache = new Map<string, any>();
+  applyEvent(cache, { type: "ADDED", object: { metadata: { name: "cm", namespace: "a" }, spec: 1 } });
+  applyEvent(cache, { type: "ADDED", object: { metadata: { name: "cm", namespace: "b" }, spec: 2 } });
+  expect(cache.size).toBe(2);
+  // Deleting one namespace's copy leaves the other intact.
+  applyEvent(cache, { type: "DELETED", object: { metadata: { name: "cm", namespace: "a" } } });
+  expect(cache.size).toBe(1);
+  expect([...cache.values()][0].spec).toBe(2);
+});
+
 // ── Fake spawn harness ──────────────────────────────────────────────────────
 // Each spawned kubectl is a fake ChildProcess (EventEmitter + stdout + kill()).
 // We distinguish the one-shot LIST (`get ... -o json` WITHOUT --watch-only)
@@ -137,6 +152,27 @@ test("omitted context and explicit-default context share one watch (no duplicate
   expect(rec.lists().length).toBe(listsAfterFirst); // no new spawn
   expect(snapshots.length).toBe(1); // served warm from cache
   expect(snapshots[0].map((p: any) => p.metadata.name)).toEqual(["a"]);
+});
+
+// (a4) An --all-namespaces (namespace "*") LIST snapshot must retain every item
+//      even when names repeat across namespaces.
+test("all-namespaces snapshot retains same-named resources from different namespaces", async () => {
+  const rec = makeRecorder();
+  const mgr = new WatchManager(null, rec.spawnFn as any);
+
+  const snapshots: any[][] = [];
+  mgr.subscribe({ kind: "configmaps", namespace: "*" }, (items) => snapshots.push(items), () => {});
+
+  rec.lastList().emitList([
+    { metadata: { name: "kube-root-ca.crt", namespace: "default" } },
+    { metadata: { name: "kube-root-ca.crt", namespace: "kube-system" } },
+    { metadata: { name: "kube-root-ca.crt", namespace: "app" } },
+  ]);
+  await new Promise((r) => setImmediate(r));
+
+  expect(snapshots.length).toBe(1);
+  expect(snapshots[0].length).toBe(3);
+  expect(snapshots[0].map((c) => c.metadata.namespace).sort()).toEqual(["app", "default", "kube-system"]);
 });
 
 // (b) Last listener leaving does NOT stop immediately, but DOES stop after the

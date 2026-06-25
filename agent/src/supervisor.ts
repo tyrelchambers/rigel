@@ -1,5 +1,5 @@
-import { runClaude } from "./claude.js";
-import type { Config } from "./config.js";
+import { runModel } from "./runModel.js";
+import type { RuntimeConfig } from "./runtimeConfig.js";
 import type { Incident } from "./detector.js";
 import type { SuggestedAction } from "./action.js";
 
@@ -77,7 +77,7 @@ export interface SupervisorOutput {
 }
 
 export async function runSupervisor(
-  cfg: Config,
+  rc: RuntimeConfig,
   incident: Incident,
   action: SuggestedAction,
   workerAnalysis: string,
@@ -98,13 +98,35 @@ ${workerAnalysis}
 
 Independently verify against the live cluster (read-only), then return your verdict.`;
 
-  const result = await runClaude({
-    model: cfg.supervisorModel,
+  const result = await runModel({
+    role: "supervisor",
+    config: rc,
     prompt,
-    appendSystemPrompt: SYSTEM_PROMPT,
-    allowedTools: READ_ONLY_TOOLS,
-    jsonSchema: VERDICT_SCHEMA,
+    systemPrompt: SYSTEM_PROMPT,
+    allowedReads: READ_ONLY_TOOLS,
+    structuredSchema: VERDICT_SCHEMA,
+    // Wrap parseVerdict in a boolean check so a malformed verdict triggers
+    // runModel's one reprompt, then fail-closed (THROW → loop escalates).
+    validateStructured: (o) => {
+      try {
+        parseVerdict(o);
+        return true;
+      } catch {
+        return false;
+      }
+    },
     timeoutMs: 150_000,
   });
+
+  if (result.isError || result.structuredOutput === undefined) {
+    // Fail closed: never auto-approve on a bad/absent verdict. The loop's existing
+    // catch maps this throw to "escalated/queued".
+    throw new Error(
+      `supervisor verdict unavailable (fail-closed): ${result.errorMessage ?? "no structured output"}`,
+    );
+  }
+  // runModel already ran validateStructured (which wraps parseVerdict) before returning
+  // isError:false, so parseVerdict here is guaranteed to succeed — and it NORMALIZES the
+  // verdict (clamps confidence to [0,1], defaults reason) rather than trusting raw output.
   return { verdict: parseVerdict(result.structuredOutput), costUsd: result.costUsd };
 }

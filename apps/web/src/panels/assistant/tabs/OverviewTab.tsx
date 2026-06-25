@@ -1,4 +1,5 @@
-// OverviewTab — last report, pending-approval banner, recent activity.
+// OverviewTab — last report, pending-approval banner, recent activity, and the
+// owned-resources card.
 
 import { AlertTriangle, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,6 +7,7 @@ import { auditEntryId } from "@rigel/k8s";
 import { useAssistantCtx } from "../AssistantContext";
 import { Card, Section } from "../components/primitives";
 import { AuditRow } from "../AuditRow";
+import { OwnedResources } from "../OwnedResources";
 
 export function OverviewTab() {
   const { d, ns, working, run, setTab, openAllActivity } = useAssistantCtx();
@@ -78,6 +80,8 @@ export function OverviewTab() {
           </p>
         </Card>
       )}
+
+      <OwnedResources />
 
       {/* Suppress unused variable warning */}
       {void openAllActivity}

@@ -63,7 +63,6 @@
     color: #fff;
   }
 
-  /* Thin dark scrollbar to match the surface */
   * {
     scrollbar-color: var(--color-line-strong) transparent;
   }
@@ -71,7 +70,6 @@
 
 /* ─── Reusable cosmetics ─────────────────────────────────────────────────── */
 
-/* Faint nautical chart grid used behind the hero and showcase sections. */
 .chart-grid {
   background-image:
     linear-gradient(to right, rgba(255, 255, 255, 0.022) 1px, transparent 1px),
@@ -88,7 +86,6 @@
   pointer-events: none;
 }
 
-/* Gradient ink for the big closing-CTA headline (white → sky). */
 .ink-gradient {
   background: linear-gradient(180deg, #ffffff 0%, #bae6fd 55%, #38bdf8 100%);
   -webkit-background-clip: text;
@@ -131,7 +128,6 @@
   color: var(--color-accent-hover);
 }
 
-/* Inline code reads as a chip on the elevated surface. */
 .prose-docs :not(pre) > code {
   font-family: var(--font-mono);
   font-weight: 500;
@@ -147,7 +143,6 @@
   content: none;
 }
 
-/* Fenced blocks: elevated surface, subtle border, monospace. */
 .prose-docs pre {
   font-family: var(--font-mono);
   background-color: var(--color-surface-elevated);
@@ -266,12 +261,10 @@
   .anim-cursor {
     animation: cursor-blink 1.1s steps(1) infinite;
   }
-  /* Slow breathing on the ambient glow blobs. */
   .anim-glow {
     animation: glow-breathe 9s ease-in-out infinite;
   }
 
-  /* On-load entrance for above-the-fold hero content. */
   .rise {
     animation: rise-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
   }

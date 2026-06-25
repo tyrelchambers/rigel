@@ -93,7 +93,8 @@ export default function SecretsPanel() {
     [allSecrets, search],
   );
 
-  // Cmd-K focus: open the editor for a secret picked in the command palette.
+  // Cmd-K focus: open the editor for a secret picked in the command palette or
+  // navigated to from a related-resources link.
   useEffect(() => {
     if (focusRequest?.kind !== "secret") return;
     const match = allSecrets.find(

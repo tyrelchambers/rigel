@@ -8,6 +8,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { readFile, unlink, writeFile } from "node:fs/promises";
+import { decryptSecret, encryptSecret } from "./secretStore";
 
 function tokenFile(): string {
   return join(homedir(), ".claude", "rigel-oauth-token");
@@ -20,7 +21,7 @@ function envToken(): string | null {
 
 async function fileToken(): Promise<string | null> {
   try {
-    const t = (await readFile(tokenFile(), "utf8")).trim();
+    const t = decryptSecret((await readFile(tokenFile(), "utf8")).trim());
     return t || null;
   } catch {
     // ENOENT (file absent) or any read error → treat as no token.
@@ -40,8 +41,9 @@ export async function setClaudeToken(token: string): Promise<void> {
     await clearClaudeToken();
     return;
   }
-  // mode 0o600 replaces the prior chmod-spawn: owner read/write only.
-  await writeFile(tokenFile(), t, { mode: 0o600 });
+  // mode 0o600 replaces the prior chmod-spawn: owner read/write only. Encrypted
+  // at rest with the OS keychain on desktop; plaintext fallback in dev/tests.
+  await writeFile(tokenFile(), encryptSecret(t), { mode: 0o600 });
 }
 
 export async function clearClaudeToken(): Promise<void> {

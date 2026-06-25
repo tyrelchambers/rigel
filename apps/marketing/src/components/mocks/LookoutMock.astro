@@ -1,5 +1,6 @@
 ---
 import { Icon } from "astro-icon/components";
+import Logo from "../Logo.astro";
 
 const parsed = [
   { icon: "lucide:message-square", label: "Signal" },
@@ -9,13 +10,11 @@ const parsed = [
 ---
 
 <div class="relative mx-auto w-full max-w-[480px] lg:pb-14">
-  <!-- faint sonar ring -->
   <div
     class="pointer-events-none absolute -right-6 top-24 hidden size-[150px] rounded-full border border-accent/40 opacity-50 lg:block"
   >
   </div>
 
-  <!-- alert composer -->
   <div
     class="relative rounded-lg border border-line-strong bg-surface shadow-2xl shadow-black/60"
   >
@@ -34,7 +33,6 @@ const parsed = [
     </div>
 
     <div class="flex flex-col gap-3.5 p-4">
-      <!-- nl input -->
       <div
         class="flex items-center gap-2.5 rounded-md border border-line-strong bg-surface-sunken px-3 py-3"
       >
@@ -66,7 +64,6 @@ const parsed = [
     </div>
   </div>
 
-  <!-- Signal notification -->
   <div
     class="mt-4 w-full rounded-lg border border-line-strong bg-surface-elevated p-3.5 shadow-2xl shadow-black/70 lg:absolute lg:-bottom-2 lg:right-0 lg:mt-0 lg:w-[320px]"
   >
@@ -74,7 +71,7 @@ const parsed = [
       <span
         class="grid size-7 place-items-center rounded-md bg-accent text-fg-inverse shadow-[0_0_14px_-2px_rgba(56,189,248,0.7)]"
       >
-        <Icon name="lucide:anchor" class="size-[15px]" />
+        <Logo class="size-[15px]" />
       </span>
       <span class="flex-1 text-[13.5px] font-semibold text-fg">Rigel</span>
       <span class="font-mono text-[11px] text-fg-tertiary">now</span>

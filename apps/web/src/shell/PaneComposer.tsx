@@ -8,14 +8,32 @@
  *   (↑/↓ to move, Enter/Tab to pick, Esc to dismiss).
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Box, Layers, Server, Check } from "lucide-react";
 import {
-  CLAUDE_MODELS,
-  CLAUDE_EFFORTS,
+  Box,
+  Layers,
+  Server,
+  Check,
+  ChevronDown,
+  Search,
+  Network,
+  Globe,
+  Lock,
+  FileText,
+  Database,
+  ClipboardList,
+  Clock,
+  HardDrive,
+  Boxes,
+} from "lucide-react";
+import {
+  effortName,
   modelLabel,
+  modelName,
   type ModelConfig,
 } from "@/panels/chat/composerModel";
 import { scopeLabel, type ScopeSelection } from "@/panels/chat/composerScope";
+import type { AgentId } from "@/lib/api";
+import { AgentGlyph } from "@/panels/settings/agents/agentGlyphs";
 import {
   commandDisplay,
   commandInsertion,
@@ -26,16 +44,22 @@ import {
   type MentionCandidate,
   type MentionKind,
 } from "@/panels/chat/mentions";
+import type {
+  DescribeIconKey,
+  DescribeOption,
+} from "@/panels/chat/describeResources";
+import { subscribe, unsubscribe } from "@/lib/ws";
 import {
   computeTrigger,
   commandRest,
+  describeInsertion,
   type ComposerTrigger,
 } from "./composerTriggerLogic";
 
 // ── PaneComposer ─────────────────────────────────────────────────────────────
 
 const PLACEHOLDER = "Ask Rigel…  (/ for commands, @ to mention a resource)";
-const PLACEHOLDER_UNCONFIGURED = "Connect an API key in Settings to chat";
+const PLACEHOLDER_UNCONFIGURED = "Connect an agent in Settings to chat";
 const LINE_HEIGHT = 20;
 const MIN_LINES = 3;
 const MAX_LINES = 14;
@@ -48,20 +72,50 @@ interface PaneComposerProps {
   onStop: () => void;
   isStreaming: boolean;
   disabled?: boolean;
-  /** True when there's no AI token/API key — drives the disabled placeholder. */
+  /** True when the active agent isn't connected — drives the disabled placeholder. */
   notConfigured?: boolean;
-  modelConfig: ModelConfig;
+  /** The active agent id — drives the chip glyph + the pretty/raw model label. */
+  agentId?: AgentId;
+  /** The active agent's selectable model ids (from GET /api/agents/<id>/models). */
+  models: string[];
+  /** The active agent's reasoning-effort levels (Claude-only; empty otherwise). */
+  efforts: string[];
+  /** The active agent's current selection, or null while models are unknown. */
+  modelConfig: ModelConfig | null;
   onModelConfig: (c: ModelConfig) => void;
   mentionCandidates: MentionCandidate[];
   scopeConfig: ScopeSelection;
   onScopeConfig: (s: ScopeSelection) => void;
   contextNames: string[];
+  /** Live resource map (for the /describe namespace + instance stages). */
+  resources: Record<string, unknown>;
+  /** Active namespace filter; null = All namespaces. */
+  namespaceFilter: string | null;
 }
+
+/** Show a search box for long model lists (always for opencode's provider/model). */
+const MODEL_SEARCH_THRESHOLD = 8;
 
 const MENTION_ICON: Record<MentionKind, typeof Box> = {
   pod: Box,
   deployment: Layers,
   node: Server,
+};
+
+const DESCRIBE_ICON: Record<DescribeIconKey, typeof Box> = {
+  pod: Box,
+  deployment: Layers,
+  service: Network,
+  ingress: Globe,
+  secret: Lock,
+  configmap: FileText,
+  statefulset: Database,
+  daemonset: Layers,
+  job: ClipboardList,
+  cronjob: Clock,
+  pvc: HardDrive,
+  node: Server,
+  namespace: Boxes,
 };
 
 /**
@@ -80,12 +134,17 @@ export function PaneComposer({
   isStreaming,
   disabled,
   notConfigured,
+  agentId,
+  models,
+  efforts,
   modelConfig,
   onModelConfig,
   mentionCandidates,
   scopeConfig,
   onScopeConfig,
   contextNames,
+  resources,
+  namespaceFilter,
 }: PaneComposerProps) {
   const internalRef = useRef<HTMLTextAreaElement>(null);
   const textareaRef = (ref ?? internalRef) as React.RefObject<HTMLTextAreaElement>;
@@ -94,6 +153,23 @@ export function PaneComposer({
   const [dismissed, setDismissed] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
   const [scopeOpen, setScopeOpen] = useState(false);
+  const [modelQuery, setModelQuery] = useState("");
+
+  // Reset the model search whenever the picker closes or the agent changes.
+  useEffect(() => {
+    if (!modelOpen) setModelQuery("");
+  }, [modelOpen]);
+  useEffect(() => {
+    setModelQuery("");
+  }, [agentId]);
+
+  // Show the filter box for long lists (always for opencode's provider/model set).
+  const showModelSearch = agentId === "opencode" || models.length > MODEL_SEARCH_THRESHOLD;
+  const filteredModels = useMemo(() => {
+    const q = modelQuery.trim().toLowerCase();
+    if (!q) return models;
+    return models.filter((m) => m.toLowerCase().includes(q));
+  }, [models, modelQuery]);
 
   // Auto-grow textarea
   useEffect(() => {
@@ -105,19 +181,39 @@ export function PaneComposer({
     el.style.height = `${Math.min(Math.max(el.scrollHeight, min), max)}px`;
   }, [value, textareaRef]);
 
-  // Active "/" (leading) or "@<token>" trigger from the text up to the caret.
+  // Active command / mention / describe trigger from the text up to the caret.
   const trigger = useMemo<ComposerTrigger | null>(
-    () => computeTrigger(value, caret, mentionCandidates),
-    [value, caret, mentionCandidates],
+    () => computeTrigger(value, caret, { mentionCandidates, resources, namespaceFilter }),
+    [value, caret, mentionCandidates, resources, namespaceFilter],
   );
 
-  const triggerKey = trigger ? `${trigger.kind}:${trigger.query}` : "";
+  const triggerKey = trigger
+    ? `${trigger.kind}:${trigger.kind === "describe" ? trigger.stage : ""}:${trigger.query}`
+    : "";
   useEffect(() => {
     setSel(0);
     setDismissed(false);
   }, [triggerKey]);
 
   const popoverOpen = trigger !== null && !dismissed;
+
+  // On-demand watch for the /describe instance stage so its list is populated.
+  // Subscriptions are ref-counted + linger on the ws layer, so this is safe
+  // alongside other consumers. Cluster-scoped kinds watch all namespaces.
+  const describeWatchKind =
+    trigger?.kind === "describe" && trigger.stage === "instance" ? trigger.resourceKind?.kind : undefined;
+  const describeWatchNs =
+    trigger?.kind === "describe" && trigger.stage === "instance"
+      ? trigger.resourceKind?.scope === "cluster"
+        ? "*"
+        : (trigger.namespace ?? "*")
+      : undefined;
+  useEffect(() => {
+    if (!describeWatchKind) return;
+    const ns = describeWatchNs ?? "*";
+    subscribe(describeWatchKind, ns);
+    return () => unsubscribe(describeWatchKind, ns);
+  }, [describeWatchKind, describeWatchNs]);
 
   function syncCaret() {
     const el = textareaRef.current;
@@ -146,26 +242,41 @@ export function PaneComposer({
     onChange(value.slice(0, trigger.start) + ins + value.slice(caret));
     setCaretAt(trigger.start + ins.length);
   }
+  /**
+   * Advance the /describe picker. Each stage rebuilds the command canonically
+   * from the parsed state so the final text is identical regardless of path:
+   * type -> "/describe <type> ", namespace -> "/describe <type> -n <ns> ",
+   * instance -> "/describe <type> <name>[ -n <ns>]".
+   */
+  function pickDescribe(opt: DescribeOption) {
+    if (trigger?.kind !== "describe") return;
+    const head = describeInsertion(trigger, opt);
+    onChange(head + value.slice(caret));
+    setCaretAt(head.length);
+  }
   function selectCurrent() {
-    if (!trigger) return;
+    if (!trigger || trigger.items.length === 0) return;
     if (trigger.kind === "command") pickCommand(trigger.items[sel]);
-    else pickMention(trigger.items[sel]);
+    else if (trigger.kind === "mention") pickMention(trigger.items[sel]);
+    else pickDescribe(trigger.items[sel]);
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (popoverOpen && trigger) {
       const n = trigger.items.length;
-      if (e.key === "ArrowDown") {
+      // With no items (a /describe "no results" popover) let Enter/Tab/arrows
+      // fall through to normal editing/send; only Escape dismisses.
+      if (n > 0 && e.key === "ArrowDown") {
         e.preventDefault();
         setSel((s) => (s + 1) % n);
         return;
       }
-      if (e.key === "ArrowUp") {
+      if (n > 0 && e.key === "ArrowUp") {
         e.preventDefault();
         setSel((s) => (s - 1 + n) % n);
         return;
       }
-      if (e.key === "Enter" || e.key === "Tab") {
+      if (n > 0 && (e.key === "Enter" || e.key === "Tab")) {
         e.preventDefault();
         selectCurrent();
         return;
@@ -207,47 +318,90 @@ export function PaneComposer({
         position: "relative",
       }}
     >
-      {/* `/` command or `@` mention popover (above the input) */}
+      {/* `/` command, `@` mention, or `/describe` resource picker (above input) */}
       {popoverOpen && trigger && (
         <div style={popoverStyle}>
-          {trigger.kind === "command"
-            ? trigger.items.map((c, i) => (
+          {trigger.kind === "command" &&
+            trigger.items.map((c, i) => (
+              <button
+                key={c.name}
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  pickCommand(c);
+                }}
+                onMouseEnter={() => setSel(i)}
+                style={popRowStyle(i === sel)}
+              >
+                <span style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 12, fontWeight: 600, color: i === sel ? "var(--fg-inverse)" : "var(--fg-primary)" }}>
+                  {commandDisplay(c)}
+                </span>
+                <span
+                  style={{
+                    marginLeft: "auto",
+                    fontSize: 11,
+                    color: i === sel ? "rgba(10,10,10,0.8)" : "var(--fg-tertiary)",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {c.description}
+                </span>
+              </button>
+            ))}
+
+          {trigger.kind === "mention" &&
+            trigger.items.map((c, i) => {
+              const Icon = MENTION_ICON[c.kind];
+              return (
                 <button
-                  key={c.name}
+                  key={c.id}
                   type="button"
                   onMouseDown={(e) => {
                     e.preventDefault();
-                    pickCommand(c);
+                    pickMention(c);
                   }}
                   onMouseEnter={() => setSel(i)}
                   style={popRowStyle(i === sel)}
                 >
-                  <span style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 12, fontWeight: 600, color: i === sel ? "var(--fg-inverse)" : "var(--fg-primary)" }}>
-                    {commandDisplay(c)}
-                  </span>
+                  <Icon style={{ width: 12, height: 12, color: i === sel ? "var(--fg-inverse)" : "var(--fg-secondary)", flexShrink: 0 }} />
                   <span
                     style={{
-                      marginLeft: "auto",
-                      fontSize: 11,
-                      color: i === sel ? "rgba(10,10,10,0.8)" : "var(--fg-tertiary)",
-                      whiteSpace: "nowrap",
+                      fontFamily: "var(--font-mono, monospace)",
+                      fontSize: 12,
+                      fontWeight: 500,
+                      color: i === sel ? "var(--fg-inverse)" : "var(--fg-primary)",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
                     }}
                   >
-                    {c.description}
+                    {c.name}
+                  </span>
+                  {c.namespace && (
+                    <span style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 10, color: i === sel ? "rgba(10,10,10,0.7)" : "var(--fg-tertiary)", whiteSpace: "nowrap" }}>
+                      {c.namespace}
+                    </span>
+                  )}
+                  <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono, monospace)", fontSize: 9, fontWeight: 600, letterSpacing: 0.5, color: i === sel ? "rgba(10,10,10,0.7)" : "var(--fg-tertiary)" }}>
+                    {MENTION_KIND_LABEL[c.kind]}
                   </span>
                 </button>
-              ))
-            : trigger.items.map((c, i) => {
-                const Icon = MENTION_ICON[c.kind];
+              );
+            })}
+
+          {trigger.kind === "describe" &&
+            (trigger.items.length > 0 ? (
+              trigger.items.map((opt, i) => {
+                const Icon = DESCRIBE_ICON[opt.iconKey];
                 return (
                   <button
-                    key={c.id}
+                    key={`${opt.value}-${opt.namespace ?? ""}`}
                     type="button"
                     onMouseDown={(e) => {
                       e.preventDefault();
-                      pickMention(c);
+                      pickDescribe(opt);
                     }}
                     onMouseEnter={() => setSel(i)}
                     style={popRowStyle(i === sel)}
@@ -264,42 +418,97 @@ export function PaneComposer({
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {c.name}
+                      {opt.label}
                     </span>
-                    {c.namespace && (
-                      <span style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 10, color: i === sel ? "rgba(10,10,10,0.7)" : "var(--fg-tertiary)", whiteSpace: "nowrap" }}>
-                        {c.namespace}
-                      </span>
-                    )}
                     <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono, monospace)", fontSize: 9, fontWeight: 600, letterSpacing: 0.5, color: i === sel ? "rgba(10,10,10,0.7)" : "var(--fg-tertiary)" }}>
-                      {MENTION_KIND_LABEL[c.kind]}
+                      {opt.badge}
                     </span>
                   </button>
                 );
-              })}
+              })
+            ) : (
+              <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--fg-tertiary)" }}>
+                {describeEmptyLabel(trigger)}
+              </div>
+            ))}
         </div>
       )}
 
-      {/* Model picker menu — rendered outside the rounded container so its
-          upward-opening menu isn't clipped by the container's overflow:hidden. */}
-      {modelOpen && (
+      {/* Model picker menu — agent-aware. Rendered outside the rounded container
+          so its upward-opening menu isn't clipped by the container's
+          overflow:hidden. The model list + the effort section come from the
+          ACTIVE agent's GET /api/agents/<id>/models response. */}
+      {modelOpen && modelConfig && (
         <>
           <div style={{ position: "fixed", inset: 0, zIndex: 25 }} onClick={() => setModelOpen(false)} />
-          <div style={modelMenuStyle}>
-            <div style={modelSectionLabel}>MODEL</div>
-            {CLAUDE_MODELS.map((m) => (
-              <button key={m.id} type="button" onClick={() => onModelConfig({ ...modelConfig, model: m.id })} style={modelRowStyle(modelConfig.model === m.id)}>
-                {modelConfig.model === m.id ? <Check style={checkStyle} /> : <span style={{ width: 12 }} />}
-                {m.name}
-              </button>
-            ))}
-            <div style={{ ...modelSectionLabel, marginTop: 6 }}>EFFORT</div>
-            {CLAUDE_EFFORTS.map((ef) => (
-              <button key={ef.id} type="button" onClick={() => onModelConfig({ ...modelConfig, effort: ef.id })} style={modelRowStyle(modelConfig.effort === ef.id)}>
-                {modelConfig.effort === ef.id ? <Check style={checkStyle} /> : <span style={{ width: 12 }} />}
-                {ef.name}
-              </button>
-            ))}
+          <div style={modelMenuStyle} role="listbox" aria-label="Model">
+            <div style={modelSectionLabel}>{modelHeaderLabel(agentId)}</div>
+
+            {showModelSearch && (
+              <div style={modelSearchStyle}>
+                <Search size={13} style={{ color: "var(--fg-tertiary)", flexShrink: 0 }} />
+                <input
+                  type="text"
+                  value={modelQuery}
+                  onChange={(e) => setModelQuery(e.target.value)}
+                  placeholder="Search models…"
+                  aria-label="Search models"
+                  autoFocus
+                  style={modelSearchInputStyle}
+                />
+              </div>
+            )}
+
+            <div style={{ maxHeight: 220, overflowY: "auto" }}>
+              {filteredModels.length === 0 ? (
+                <div style={{ ...modelSectionLabel, color: "var(--fg-tertiary)", fontWeight: 400 }}>
+                  No matches
+                </div>
+              ) : (
+                filteredModels.map((m) => {
+                  const active = modelConfig.model === m;
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      onClick={() => onModelConfig({ ...modelConfig, model: m })}
+                      style={modelRowStyle(active)}
+                    >
+                      <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {modelName(agentId, m)}
+                      </span>
+                      {active && <Check style={checkStyle} />}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Reasoning effort — Claude only (efforts is empty otherwise). */}
+            {efforts.length > 0 && (
+              <>
+                <div style={effortDividerStyle} />
+                <div style={{ ...modelSectionLabel, marginTop: 2 }}>Reasoning effort</div>
+                <div style={effortSegmentStyle}>
+                  {efforts.map((ef) => {
+                    const active = modelConfig.effort === ef;
+                    return (
+                      <button
+                        key={ef}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => onModelConfig({ ...modelConfig, effort: ef })}
+                        style={effortPillStyle(active)}
+                      >
+                        {effortName(ef)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         </>
       )}
@@ -365,9 +574,24 @@ export function PaneComposer({
         />
         {/* Control row */}
         <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px 8px", position: "relative" }}>
-          {/* Model picker */}
-          <button type="button" onClick={() => setModelOpen((o) => !o)} title="Choose model and reasoning effort" style={{ ...pillStyle, cursor: "pointer" }}>
-            {modelLabel(modelConfig)}
+          {/* Model picker — the active agent's glyph + selected model + chevron. */}
+          <button
+            type="button"
+            onClick={() => setModelOpen((o) => !o)}
+            disabled={!modelConfig}
+            title="Choose model"
+            aria-label="Choose model"
+            style={{ ...pillStyle, display: "flex", alignItems: "center", gap: 5, cursor: modelConfig ? "pointer" : "default" }}
+          >
+            {agentId && (
+              <span style={{ display: "flex", color: "var(--accent-primary)", flexShrink: 0 }}>
+                <AgentGlyph id={agentId} size={12} />
+              </span>
+            )}
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 140 }}>
+              {modelConfig ? modelLabel(agentId, modelConfig.model) : "Model"}
+            </span>
+            <ChevronDown size={11} style={{ color: "var(--fg-tertiary)", flexShrink: 0 }} />
           </button>
 
           {/* Scope picker — hidden when only one cluster is available */}
@@ -481,41 +705,106 @@ const modelMenuStyle: React.CSSProperties = {
   bottom: "100%",
   marginBottom: 6,
   zIndex: 30,
-  background: "var(--surface-elevated)",
-  border: "1px solid #34353A",
-  borderRadius: 8,
-  boxShadow: "0 12px 32px rgba(0,0,0,0.5)",
-  padding: 6,
-  width: 200,
+  background: "#18181B",
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 12,
+  boxShadow: "0 12px 32px rgba(0,0,0,0.55)",
+  padding: 8,
+  width: 280,
 };
 
 const modelSectionLabel: React.CSSProperties = {
-  fontSize: 9,
+  fontSize: 11,
   fontWeight: 600,
-  letterSpacing: 0.5,
+  letterSpacing: 0.3,
   color: "var(--fg-tertiary)",
-  padding: "3px 8px 2px",
+  padding: "4px 8px 6px",
+};
+
+const modelSearchStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  background: "var(--surface-sunken)",
+  border: "1px solid #26272B",
+  borderRadius: 8,
+  padding: "7px 10px",
+  margin: "0 2px 6px",
+};
+
+const modelSearchInputStyle: React.CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  background: "transparent",
+  border: "none",
+  outline: "none",
+  color: "var(--fg-primary)",
+  fontSize: 12,
+  fontFamily: "var(--font-geist, system-ui, sans-serif)",
 };
 
 function modelRowStyle(active: boolean): React.CSSProperties {
   return {
     display: "flex",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
     width: "100%",
     textAlign: "left",
-    padding: "5px 8px",
-    borderRadius: 6,
+    padding: "8px 10px",
+    borderRadius: 8,
     border: "none",
     cursor: "pointer",
-    background: active ? "var(--surface-elevated)" : "transparent",
-    color: active ? "var(--fg-primary)" : "var(--fg-secondary)",
+    background: active ? "rgba(56,189,248,0.08)" : "transparent",
+    color: active ? "var(--fg-primary)" : "#C9C9CF",
+    fontFamily: "var(--font-mono, ui-monospace, monospace)",
     fontSize: 12,
-    fontWeight: 500,
+    fontWeight: 400,
   };
 }
 
-const checkStyle: React.CSSProperties = { width: 12, height: 12, color: "var(--accent-primary)", flexShrink: 0 };
+const checkStyle: React.CSSProperties = { width: 14, height: 14, color: "#38BDF8", flexShrink: 0 };
+
+const effortDividerStyle: React.CSSProperties = {
+  height: 1,
+  background: "rgba(255,255,255,0.07)",
+  margin: "6px 2px",
+};
+
+const effortSegmentStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 6,
+  padding: "0 2px 2px",
+  flexWrap: "wrap",
+};
+
+function effortPillStyle(active: boolean): React.CSSProperties {
+  return {
+    flex: "1 1 auto",
+    textAlign: "center",
+    padding: "5px 8px",
+    borderRadius: 7,
+    border: `1px solid ${active ? "rgba(56,189,248,0.5)" : "#34353A"}`,
+    cursor: "pointer",
+    background: active ? "rgba(56,189,248,0.12)" : "transparent",
+    color: active ? "var(--fg-primary)" : "var(--fg-secondary)",
+    fontSize: 11,
+    fontWeight: 500,
+    whiteSpace: "nowrap",
+  };
+}
+
+/** Empty-state line for the /describe namespace + instance stages. */
+function describeEmptyLabel(trigger: Extract<ComposerTrigger, { kind: "describe" }>): string {
+  if (trigger.stage === "namespace") return "No namespaces found";
+  const kind = trigger.resourceKind?.label.toLowerCase() ?? "resources";
+  return trigger.namespace ? `No ${kind} in ${trigger.namespace}` : `No ${kind} found`;
+}
+
+/** "CLAUDE · MODEL" / "CODEX · MODEL" / "OPENCODE · PROVIDER / MODEL". */
+function modelHeaderLabel(agentId: AgentId | undefined): string {
+  if (agentId === "opencode") return "OPENCODE · PROVIDER / MODEL";
+  return `${(agentId ?? "agent").toUpperCase()} · MODEL`;
+}
 
 function sendBtnStyle(bg: string): React.CSSProperties {
   return {

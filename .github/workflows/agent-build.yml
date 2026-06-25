@@ -74,7 +74,21 @@ jobs:
       - name: Deploy the pinned image
         # Pin to the immutable per-commit tag. `rollout restart` reuses the node's
         # cached :latest (imagePullPolicy IfNotPresent), so it never picks up a new
-        # build; `set image` to a unique tag forces the pull + a rollout.
+        # build; `set image` to a unique tag forces the pull + a rollout. The agent
+        # can be installed in any namespace (not just default), so discover where
+        # rigel-assistant lives; if it isn't installed yet the image is still built
+        # and pushed and we skip the rollout.
         run: |
-          kubectl set image deployment/rigel-assistant agent=${{ env.IMAGE }}:${{ github.sha }} -n default
-          kubectl rollout status deployment/rigel-assistant -n default --timeout=120s
+          # Find OUR agent Deployment by its name + managed-by labels (not
+          # `get <name> -A`, which is invalid; not managed-by alone, which catalog
+          # apps like signal-cli-rest also carry). Resolves to the install namespace.
+          NS=$(kubectl get deployments -A \
+                 -l app.kubernetes.io/name=rigel-assistant,app.kubernetes.io/managed-by=rigel-assistant \
+                 -o jsonpath='{.items[0].metadata.namespace}' 2>/dev/null || true)
+          if [ -z "$NS" ]; then
+            echo "::notice::rigel-assistant not found in any namespace; image pushed, skipping rollout."
+            exit 0
+          fi
+          echo "Deploying rigel-assistant in namespace: $NS"
+          kubectl set image deployment/rigel-assistant agent=${{ env.IMAGE }}:${{ github.sha }} -n "$NS"
+          kubectl rollout status deployment/rigel-assistant -n "$NS" --timeout=120s

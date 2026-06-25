@@ -1,6 +1,9 @@
 import type { Deployment, ContainerSummary } from "./types";
 import type { Pod } from "../pods/types";
 import type { ActionBlock } from "@/lib/api";
+import { restartCount } from "../pods/podDisplay";
+import { selectorMatches } from "@/lib/relatedResources";
+import { flattenRoutes } from "../ingresses/ingressesDisplay";
 
 /**
  * Compact relative age of an ISO timestamp ("5s" / "3m" / "2h" / "1d"), or
@@ -202,6 +205,56 @@ export function selectorString(d: Deployment): string {
   const keys = Object.keys(labels).sort();
   if (keys.length === 0) return "—";
   return keys.map((k) => `${k}=${labels[k]}`).join(",");
+}
+
+/** Total container restarts summed across a deployment's child pods. */
+export function totalRestarts(d: Deployment, pods: Pod[]): number {
+  return childPods(d, pods).reduce((sum, p) => sum + restartCount(p), 0);
+}
+
+/** Rollout revision from the standard annotation, or null when absent. */
+export function deploymentRevision(d: Deployment): string | null {
+  return d.metadata.annotations?.["deployment.kubernetes.io/revision"] ?? null;
+}
+
+/** One external HTTP endpoint resolved for a deployment. */
+export interface Endpoint {
+  host: string;
+  url: string;
+}
+
+/**
+ * External HTTP endpoints for a deployment: ingress hosts whose backend service
+ * selects the deployment's pods. `https` when an ingress TLS block covers the
+ * host, else `http`. Deduped by host, sorted. `services`/`ingresses` are the raw
+ * store slices (key → object).
+ */
+export function deploymentEndpoints(
+  d: Deployment,
+  services: Record<string, any>,
+  ingresses: Record<string, any>,
+): Endpoint[] {
+  const ns = d.metadata.namespace ?? "default";
+  const podLabels = d.spec?.template?.metadata?.labels;
+  // Services in this namespace that front the deployment's pods.
+  const serviceNames = new Set(
+    Object.values(services)
+      .filter((s) => (s?.metadata?.namespace ?? "default") === ns && selectorMatches(s?.spec?.selector, podLabels))
+      .map((s) => s?.metadata?.name as string),
+  );
+  if (serviceNames.size === 0) return [];
+
+  const byHost = new Map<string, Endpoint>();
+  for (const ing of Object.values(ingresses)) {
+    if ((ing?.metadata?.namespace ?? "default") !== ns) continue;
+    const tlsHosts = new Set<string>((ing?.spec?.tls ?? []).flatMap((t: any) => (t?.hosts ?? []) as string[]));
+    for (const route of flattenRoutes(ing)) {
+      if (route.host === "*" || !serviceNames.has(route.service) || byHost.has(route.host)) continue;
+      const scheme = tlsHosts.has(route.host) ? "https" : "http";
+      byHost.set(route.host, { host: route.host, url: `${scheme}://${route.host}/` });
+    }
+  }
+  return [...byHost.values()].sort((a, b) => a.host.localeCompare(b.host));
 }
 
 /**

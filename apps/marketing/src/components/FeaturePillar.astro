@@ -2,87 +2,94 @@
 import { Icon } from "astro-icon/components";
 
 interface Point {
-  icon: string;
-  text: string;
+    icon: string;
+    text: string;
 }
 interface Props {
-  id?: string;
-  eyebrowIcon: string;
-  eyebrow: string;
-  heading: string;
-  copy: string;
-  points: Point[];
-  reverse?: boolean;
-  variant?: "primary" | "sunken";
+    id?: string;
+    eyebrowIcon?: string;
+    eyebrow: string;
+    heading: string;
+    copy: string;
+    points: Point[];
+    reverse?: boolean;
+    variant?: "primary" | "sunken";
 }
 const {
-  id,
-  eyebrowIcon,
-  eyebrow,
-  heading,
-  copy,
-  points,
-  reverse = false,
-  variant = "primary",
+    id,
+    eyebrowIcon,
+    eyebrow,
+    heading,
+    copy,
+    points,
+    reverse = false,
+    variant = "primary",
 } = Astro.props;
 
 const bg = variant === "sunken" ? "bg-surface-sunken" : "bg-surface";
 ---
 
 <section
-  id={id}
-  class:list={[
-    "relative overflow-hidden border-t border-line-subtle",
-    bg,
-  ]}
+    id={id}
+    class:list={["relative overflow-hidden border-t border-line-subtle", bg]}
 >
-  <div
-    class="glow anim-glow absolute size-[460px] opacity-[0.08]"
-    style={reverse ? "left:-6rem;top:3rem" : "right:-6rem;top:2rem"}
-  >
-  </div>
-
-  <div
-    class="relative mx-auto grid max-w-[1200px] items-center gap-14 px-6 py-24 sm:px-8 lg:grid-cols-2 lg:gap-24 lg:py-28 lg:px-12"
-  >
-    <!-- text column -->
-    <div data-reveal class={reverse ? "lg:order-2" : ""}>
-      <div class="flex items-center gap-2.5">
-        <Icon name={eyebrowIcon} class="size-[15px] text-accent" />
-        <span class="font-mono text-xs tracking-[0.14em] text-fg-tertiary"
-          >{eyebrow}</span
-        >
-      </div>
-      <h2
-        class="mt-5 text-[clamp(2rem,4.5vw,2.75rem)] font-bold leading-[1.06] tracking-[-0.025em] text-fg"
-      >
-        {heading}
-      </h2>
-      <p class="mt-5 max-w-[480px] text-[15.5px] leading-[1.65] text-fg-secondary">
-        {copy}
-      </p>
-
-      <ul class="mt-7 flex flex-col gap-4">
-        {
-          points.map((p) => (
-            <li class="flex items-start gap-3">
-              <span class="mt-0.5 grid size-[22px] shrink-0 place-items-center rounded bg-accent/15 text-accent">
-                <Icon name={p.icon} class="size-[13px]" />
-              </span>
-              <span class="text-sm leading-snug text-fg-secondary">{p.text}</span>
-            </li>
-          ))
-        }
-      </ul>
-    </div>
-
-    <!-- visual column -->
     <div
-      data-reveal
-      style="--reveal-delay:120ms"
-      class:list={["min-w-0", reverse ? "lg:order-1" : ""]}
+        class="glow anim-glow absolute size-[460px] opacity-[0.08]"
+        style={reverse ? "left:-6rem;top:3rem" : "right:-6rem;top:2rem"}
     >
-      <slot />
     </div>
-  </div>
+
+    <div
+        class="relative mx-auto grid max-w-[1200px] items-center gap-14 px-6 py-24 sm:px-8 lg:grid-cols-2 lg:gap-24 lg:py-28 lg:px-12"
+    >
+        <div data-reveal class={reverse ? "lg:order-2" : ""}>
+            <div class="flex items-center gap-2.5">
+                {
+                    eyebrowIcon && (
+                        <Icon
+                            name={eyebrowIcon}
+                            class="size-[15px] text-accent"
+                        />
+                    )
+                }
+                <span
+                    class="font-mono text-xs tracking-[0.14em] text-fg-tertiary"
+                    >{eyebrow}</span
+                >
+            </div>
+            <h2
+                class="mt-5 text-[clamp(2rem,4.5vw,2.75rem)] font-bold leading-[1.06] tracking-[-0.025em] text-fg"
+            >
+                {heading}
+            </h2>
+            <p
+                class="mt-5 max-w-[480px] text-[15.5px] leading-[1.65] text-fg-secondary"
+            >
+                {copy}
+            </p>
+
+            <ul class="mt-7 flex flex-col gap-4">
+                {
+                    points.map((p) => (
+                        <li class="flex items-start gap-3">
+                            <span class="mt-0.5 grid size-[22px] shrink-0 place-items-center rounded bg-accent/15 text-accent">
+                                <Icon name={p.icon} class="size-[13px]" />
+                            </span>
+                            <span class="text-sm leading-snug text-fg-secondary">
+                                {p.text}
+                            </span>
+                        </li>
+                    ))
+                }
+            </ul>
+        </div>
+
+        <div
+            data-reveal
+            style="--reveal-delay:120ms"
+            class:list={["min-w-0", reverse ? "lg:order-1" : ""]}
+        >
+            <slot />
+        </div>
+    </div>
 </section>

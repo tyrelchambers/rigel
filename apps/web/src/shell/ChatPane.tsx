@@ -23,19 +23,21 @@ import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { BatchConfirmSheet, type BatchConfirmItem } from "@/components/BatchConfirmSheet";
 import { PurgeSheet } from "@/panels/purge/PurgeSheet";
 import type { ActionBlock, ActionResult } from "@/lib/api";
-import { useChatConfig, useSuggestions, executeAction, useContexts } from "@/lib/api";
+import { useAgents, useAgentModels, useSuggestions, executeAction, useContexts } from "@/lib/api";
 import { chatFeedback, visibleSummary, batchFeedback, type BatchRun } from "@/panels/chat/workloadResultReport";
 import { SuggestedPromptsRow } from "@/panels/chat/SuggestedPromptsRow";
 import { stripActionBlocks, type SuggestedAction } from "@/lib/actionBlocks";
 import { onChatEvent, sendChat, interruptChat, subscribe, unsubscribe } from "@/lib/ws";
-import { registerChatHandoff, handoffToChat } from "@/lib/chatHandoff";
+import { registerChatHandoff, handoffToChat, type ChatHandoffOpts } from "@/lib/chatHandoff";
 import { useCluster } from "@/store/cluster";
 import { MessageBubble } from "@/panels/chat/MessageBubble";
 import { ThinkingPane } from "@/panels/chat/ThinkingPane";
 import {
-  loadModelConfig,
+  loadModelConfigs,
   saveModelConfig,
+  resolveModelConfig,
   type ModelConfig,
+  type ModelConfigMap,
 } from "@/panels/chat/composerModel";
 import {
   loadScope,
@@ -85,7 +87,7 @@ import { RigelMark } from "@/components/RigelMark";
  * call this to inject a message into the pane.
  */
 export interface ChatPaneHandle {
-  send: (prompt: string) => void;
+  send: (prompt: string, opts?: ChatHandoffOpts) => void;
 }
 
 interface ChatPaneProps {
@@ -154,7 +156,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyEntries, setHistoryEntries] = useState<ChatHistoryEntry[]>([]);
   const [liveThinking, setLiveThinking] = useState("");
-  const [isThinking, setIsThinking] = useState(false);
   const [turnStartedAt, setTurnStartedAt] = useState<Date | null>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [usageLimit, setUsageLimit] = useState<string | null>(null);
@@ -162,6 +163,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
 
   const connected = useCluster((s) => s.connected);
   const resources = useCluster((s) => s.resources);
+  const namespaceFilter = useCluster((s) => s.namespaceFilter);
 
   // Subscribe to deployments (all namespaces) so we can read the agent's
   // install namespace without pulling in the full useAssistant hook.
@@ -175,16 +177,13 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     return agent?.metadata?.namespace ?? "default";
   });
 
-  // Model/effort selection (persisted) + @-mention candidates from the store.
-  const [modelConfig, setModelConfigState] = useState<ModelConfig>(() => loadModelConfig());
-  const setModelConfig = useCallback((c: ModelConfig) => {
-    setModelConfigState(c);
-    saveModelConfig(c);
-  }, []);
-  const modelConfigRef = useRef<ModelConfig>(modelConfig);
-  modelConfigRef.current = modelConfig;
+  // Model/effort selection is PER AGENT (persisted): a map keyed by agentId. The
+  // composer reflects the ACTIVE agent's selection, resolved against that agent's
+  // currently-advertised models/efforts (useAgentModels below). @-mention
+  // candidates come from the store.
+  const [modelConfigs, setModelConfigs] = useState<ModelConfigMap>(() => loadModelConfigs());
 
-  // Cluster-scope selection (persisted) — tells the Helmsman which contexts to read.
+  // Cluster-scope selection (persisted) — which contexts the agent may read from.
   const [scopeConfig, setScopeConfig] = useState<ScopeSelection>(() => loadScope());
   const scopeConfigRef = useRef(scopeConfig);
   useEffect(() => {
@@ -193,7 +192,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   }, [scopeConfig]);
   const { data: contexts } = useContexts();
   const contextNames = useMemo(() => (contexts ?? []).map((c) => c.name), [contexts]);
-
   // Mirror sessionId into a ref so the handoff `submit` closure (registered once)
   // sends the CURRENT session id and resumes the conversation across turns.
   const sessionIdRef = useRef<string | null>(sessionId);
@@ -218,11 +216,42 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // AI copilot config — drives the "not configured" empty-state below and
-  // disables the composer when no AI token/API key is configured. Treat the
-  // loading state (chatConfig == null) as enabled to avoid a disabled flash.
-  const { data: chatConfig } = useChatConfig();
-  const notConfigured = chatConfig != null && !chatConfig.configured;
+  // Chat enablement follows the ACTIVE agent's connection (not a Claude-only
+  // token check): the composer is enabled iff the active agent is connected.
+  // This drives the "not configured" empty-state below and disables the composer
+  // otherwise. While the agents query is still loading (data undefined) treat as
+  // not-configured (disabled) — brief and safe, and avoids enabling a composer
+  // for an agent that may turn out to be disconnected.
+  const agents = useAgents();
+  const activeAgentId = agents.data?.activeAgentId;
+  const activeAgent = agents.data?.agents.find((a) => a.id === activeAgentId);
+  const notConfigured = activeAgent?.connection !== "connected";
+
+  // The active agent's selectable models/efforts (drives the agent-aware picker).
+  const { data: agentModels } = useAgentModels(activeAgentId);
+  const models = useMemo(() => agentModels?.models ?? [], [agentModels]);
+  const efforts = useMemo(() => agentModels?.efforts ?? [], [agentModels]);
+
+  // The active agent's resolved selection: stored choice when still valid, else a
+  // sensible default from the agent's list. Null while models are still unknown.
+  const modelConfig = useMemo(
+    () => resolveModelConfig(activeAgentId, activeAgentId ? modelConfigs[activeAgentId] : undefined, models, efforts),
+    [activeAgentId, modelConfigs, models, efforts],
+  );
+  // Persist + apply a new selection for the ACTIVE agent.
+  const setModelConfig = useCallback(
+    (c: ModelConfig) => {
+      if (!activeAgentId) return;
+      saveModelConfig(activeAgentId, c);
+      setModelConfigs((prev) => ({ ...prev, [activeAgentId]: c }));
+    },
+    [activeAgentId],
+  );
+  // Mirror the resolved active config into a ref so the once-registered handoff
+  // closure + action/batch callbacks send the CURRENT agent's selection.
+  const modelConfigRef = useRef<ModelConfig | null>(modelConfig);
+  modelConfigRef.current = modelConfig;
+
   // Cluster-aware suggestion chips above the composer.
   const { data: suggestions } = useSuggestions();
   const liveThinkingRef = useRef("");
@@ -236,16 +265,34 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     bottomRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
   }, []);
 
+  // Begin a fresh conversation. The previous one stays saved (autosave keyed by
+  // conversationId). Shared by the New-chat button and the new-thread handoff.
+  const resetConversation = useCallback(() => {
+    setConversationId(newId());
+    createdAtRef.current = Date.now();
+    setMessages([]);
+    setSessionId(null);
+    setUsageLimit(null);
+    setInputText("");
+    setIsStreaming(false);
+    setLiveThinking("");
+    liveThinkingRef.current = "";
+  }, []);
+
   // ── Expose send handle + global handoff ───────────────────────────────────
   // The handle (for App-level callers) and the global registry (for any panel)
   // share one submit: it appends the user message to the transcript and streams
   // the reply in this always-visible pane — so handoffs never navigate.
   useEffect(() => {
-    const submit = (prompt: string) => {
+    const submit = (prompt: string, opts?: ChatHandoffOpts) => {
       if (!prompt.trim()) return;
-      setMessages((prev) => [...prev, makeMessage("user", prompt)]);
+      if (opts?.newThread) {
+        resetConversation();
+        setMessages([makeMessage("user", prompt)]);
+      } else {
+        setMessages((prev) => [...prev, makeMessage("user", prompt)]);
+      }
       setIsStreaming(true);
-      setIsThinking(false);
       setLiveThinking("");
       liveThinkingRef.current = "";
       const start = new Date();
@@ -253,11 +300,15 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
       turnStartedAtRef.current = start;
       setIsAtBottom(true);
       isAtBottomRef.current = true;
-      sendChat(prompt, { ...modelConfigRef.current, sessionId: sessionIdRef.current ?? undefined, scope: scopeToWire(scopeConfigRef.current) });
+      sendChat(prompt, {
+        ...modelConfigRef.current,
+        sessionId: opts?.newThread ? undefined : sessionIdRef.current ?? undefined,
+        scope: scopeToWire(scopeConfigRef.current),
+      });
     };
     if (handleRef) handleRef.current = { send: submit };
     registerChatHandoff(submit);
-  }, [handleRef]);
+  }, [handleRef, resetConversation]);
 
   // ── WebSocket chat event handling ─────────────────────────────────────────
   useEffect(() => {
@@ -266,7 +317,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
         case "thinking":
           liveThinkingRef.current += event.text ?? "";
           setLiveThinking(liveThinkingRef.current);
-          setIsThinking(true);
           break;
         case "text":
           setMessages((prev) => appendTextDelta(prev, event.text ?? ""));
@@ -277,7 +327,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
           const thinking = liveThinkingRef.current;
           setMessages((prev) => stampThinking(prev, thinking, secs));
           setIsStreaming(false);
-          setIsThinking(false);
           setLiveThinking("");
           liveThinkingRef.current = "";
           setUsageLimit(null);
@@ -289,7 +338,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
             makeMessage("system", `⚠︎ ${event.text ?? "The session ended unexpectedly."}`),
           ]);
           setIsStreaming(false);
-          setIsThinking(false);
           setLiveThinking("");
           liveThinkingRef.current = "";
           setAutoFocusComposer(true);
@@ -400,7 +448,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     setMessages((prev) => [...prev, makeMessage("user", text)]);
     setInputText("");
     setIsStreaming(true);
-    setIsThinking(false);
     setLiveThinking("");
     liveThinkingRef.current = "";
     const start = new Date();
@@ -414,7 +461,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   function handleStop() {
     interruptChat();
     setIsStreaming(false);
-    setIsThinking(false);
     setLiveThinking("");
     liveThinkingRef.current = "";
     setMessages((prev) => [...prev, makeMessage("system", "⏹ Stopped by user.")]);
@@ -422,16 +468,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
 
   function startNewChat() {
     // The previous conversation stays saved; this just begins a fresh one.
-    setConversationId(newId());
-    createdAtRef.current = Date.now();
-    setMessages([]);
-    setSessionId(null);
-    setUsageLimit(null);
-    setInputText("");
-    setIsStreaming(false);
-    setIsThinking(false);
-    setLiveThinking("");
-    liveThinkingRef.current = "";
+    resetConversation();
   }
 
   // ── Chat history modal ─────────────────────────────────────────────────────
@@ -448,7 +485,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     setUsageLimit(null);
     setInputText("");
     setIsStreaming(false);
-    setIsThinking(false);
     setLiveThinking("");
     liveThinkingRef.current = "";
     setHistoryOpen(false);
@@ -493,7 +529,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     const title = info.action.label ?? "Action";
     setMessages((prev) => [...prev, makeMessage("system", visibleSummary(title, info.result))]);
     setIsStreaming(true);
-    setIsThinking(false);
     setLiveThinking("");
     liveThinkingRef.current = "";
     const start = new Date();
@@ -527,7 +562,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   async function executeBatch(items: BatchConfirmItem[]) {
     setPendingBatch(null);
     setIsStreaming(true);
-    setIsThinking(false);
     setLiveThinking("");
     liveThinkingRef.current = "";
     const start = new Date();
@@ -564,7 +598,11 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   }
 
   const shortId = shortSessionId(sessionId);
-  const showThinkingPane = isStreaming && isThinking;
+  // Show the working indicator whenever a turn is in flight — for EVERY agent, and
+  // from the moment we send (before any thinking/text arrives), so there's always a
+  // visible "the AI is working" signal. The reasoning body inside only expands once
+  // thinking text has actually arrived (Claude/Codex/OpenCode reasoning events).
+  const showThinkingPane = isStreaming;
 
   return (
     <>
@@ -690,9 +728,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
               gap: 10,
             }}
           >
-            <ChatPaneEmptyState
-              show={!!chatConfig && !chatConfig.configured && messages.length === 0}
-            />
+            <ChatPaneEmptyState show={notConfigured && messages.length === 0} />
             {messages.map((m) => (
               <MessageBubble
                 key={m.id}
@@ -740,7 +776,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
           />
         )}
 
-        {/* ── "no API key" hint (above the composer) ───────────────────────── */}
+        {/* ── "connect an agent" hint (above the composer) ─────────────────── */}
         {notConfigured && (
           <div
             style={{
@@ -753,7 +789,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
               flexShrink: 0,
             }}
           >
-            <span style={{ lineHeight: 1.4 }}>Add an API key to start chatting.</span>
+            <span style={{ lineHeight: 1.4 }}>Connect an agent to start chatting.</span>
             <button
               type="button"
               onClick={() => navigate("/settings")}
@@ -785,12 +821,17 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
           isStreaming={isStreaming}
           disabled={!connected || !!usageLimit || notConfigured}
           notConfigured={notConfigured}
+          agentId={activeAgentId}
+          models={models}
+          efforts={efforts}
           modelConfig={modelConfig}
           onModelConfig={setModelConfig}
           mentionCandidates={mentionCandidates}
           scopeConfig={scopeConfig}
           onScopeConfig={setScopeConfig}
           contextNames={contextNames}
+          resources={resources}
+          namespaceFilter={namespaceFilter}
         />
 
         <ConfirmSheet

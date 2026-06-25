@@ -5,8 +5,9 @@
 // chatConfig.ts. This file only stores the chosen auth method + any API keys.
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { readFile, writeFile } from "node:fs/promises";
+import { access, readFile, writeFile } from "node:fs/promises";
 import { effectiveClaudeToken, setClaudeToken } from "./chatConfig";
+import { decryptSecret, encryptSecret } from "./secretStore";
 import {
   getAgent,
   listAgents,
@@ -49,10 +50,85 @@ export async function claudeAuthEnv(): Promise<Record<string, string>> {
   const cfg = await readAgentsConfig();
   const entry = cfg.agents.claude;
   if (entry?.authMethod === "apiKey" && entry.apiKey) {
-    return { ANTHROPIC_API_KEY: entry.apiKey };
+    const key = decryptSecret(entry.apiKey);
+    if (key) return { ANTHROPIC_API_KEY: key };
   }
   const token = await effectiveClaudeToken();
   return token ? { CLAUDE_CODE_OAUTH_TOKEN: token } : {};
+}
+
+/** Env vars to launch Codex with, per its active auth method. */
+export async function codexAuthEnv(): Promise<Record<string, string>> {
+  const cfg = await readAgentsConfig();
+  const entry = cfg.agents.codex;
+  if (entry?.authMethod === "apiKey" && entry.apiKey) {
+    // CODEX_API_KEY (not OPENAI_API_KEY): `codex exec` builds its session with
+    // enable_codex_api_key_env=true (codex-rs/exec/src/lib.rs), so it reads the
+    // key from CODEX_API_KEY. OPENAI_API_KEY is only consulted by the TUI/realtime
+    // paths, never by headless exec. Verified against the codex source.
+    const key = decryptSecret(entry.apiKey);
+    if (key) return { CODEX_API_KEY: key };
+  }
+  // Subscription: Codex reads its own ~/.codex/auth.json; nothing to inject.
+  return {};
+}
+
+/** A ChatGPT-subscription login exists iff Codex's auth.json is on disk. */
+export async function codexSubscriptionConnected(): Promise<boolean> {
+  const home = process.env.CODEX_HOME ?? join(homedir(), ".codex");
+  try {
+    await access(join(home, "auth.json"));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Env vars to launch Gemini with, per its active auth method. */
+export async function geminiAuthEnv(): Promise<Record<string, string>> {
+  const cfg = await readAgentsConfig();
+  const entry = cfg.agents.gemini;
+  if (entry?.authMethod === "apiKey" && entry.apiKey) {
+    const key = decryptSecret(entry.apiKey);
+    if (key) return { GEMINI_API_KEY: key };
+  }
+  // Subscription: Gemini reads its own ~/.gemini/oauth_creds.json; nothing to inject.
+  return {};
+}
+
+/** A Google-OAuth login exists iff Gemini's oauth_creds.json is on disk
+ * (mirrors codexSubscriptionConnected). */
+export async function geminiConnected(): Promise<boolean> {
+  try {
+    await access(join(homedir(), ".gemini", "oauth_creds.json"));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Env vars to launch OpenCode with. OpenCode is login-managed: `opencode providers
+ * login` stores creds in its own auth.json, so there is no Rigel-managed key to
+ * inject — always {}. (Mirrors codexAuthEnv's subscription branch.) */
+export async function opencodeAuthEnv(): Promise<Record<string, string>> {
+  return {};
+}
+
+/**
+ * An OpenCode login exists iff its auth.json is on disk AND parses to a non-empty
+ * object (≥1 credential). Login lives at `$XDG_DATA_HOME/opencode/auth.json`, or
+ * `~/.local/share/opencode/auth.json` when XDG_DATA_HOME is unset. Mirrors
+ * codexSubscriptionConnected, but also reads the file so an empty `{}` (no providers
+ * logged in) doesn't count as connected.
+ */
+export async function opencodeConnected(): Promise<boolean> {
+  const dataHome = process.env.XDG_DATA_HOME ?? join(homedir(), ".local", "share");
+  try {
+    const parsed = JSON.parse(await readFile(join(dataHome, "opencode", "auth.json"), "utf8"));
+    return !!parsed && typeof parsed === "object" && Object.keys(parsed).length > 0;
+  } catch {
+    return false;
+  }
 }
 
 export type AgentConnection = "connected" | "notConnected" | "comingSoon";
@@ -67,7 +143,29 @@ export async function agentConnection(id: AgentId): Promise<AgentConnection> {
     }
     return (await effectiveClaudeToken()) ? "connected" : "notConnected";
   }
-  return cfg.agents[id]?.apiKey ? "connected" : "notConnected";
+  if (id === "codex") {
+    if (authMethodFor(cfg, "codex") === "apiKey") {
+      return cfg.agents.codex?.apiKey ? "connected" : "notConnected";
+    }
+    return (await codexSubscriptionConnected()) ? "connected" : "notConnected";
+  }
+  if (id === "opencode") {
+    // OpenCode is login-managed only (no Rigel-stored key); connected iff its own
+    // auth.json holds ≥1 credential.
+    return (await opencodeConnected()) ? "connected" : "notConnected";
+  }
+  if (id === "gemini") {
+    if (authMethodFor(cfg, "gemini") === "apiKey") {
+      return cfg.agents.gemini?.apiKey ? "connected" : "notConnected";
+    }
+    // Subscription: connected iff Gemini's own oauth_creds.json is on disk.
+    return (await geminiConnected()) ? "connected" : "notConnected";
+  }
+  // Exhaustiveness guard: every AgentId is handled above, so `id` is `never` here.
+  // Adding a new AgentId without a connection branch fails the build on this line.
+  return ((_exhaustive: never): AgentConnection => {
+    throw new Error(`agentConnection: unhandled agent id ${String(_exhaustive)}`);
+  })(id);
 }
 
 export interface AgentView {
@@ -120,7 +218,7 @@ export async function setAgentAuth(id: AgentId, input: SetAgentAuthInput): Promi
 
   if (id === "claude") {
     if (input.authMethod === "apiKey") {
-      cfg.agents.claude = { authMethod: "apiKey", apiKey: secret || undefined };
+      cfg.agents.claude = { authMethod: "apiKey", apiKey: secret ? encryptSecret(secret) : undefined };
     } else {
       cfg.agents.claude = { authMethod: "subscription" };
       await setClaudeToken(secret); // persists/clears the OAuth token file
@@ -128,11 +226,23 @@ export async function setAgentAuth(id: AgentId, input: SetAgentAuthInput): Promi
   } else {
     cfg.agents[id] = {
       authMethod: input.authMethod,
-      apiKey: input.authMethod === "apiKey" ? secret || undefined : undefined,
+      apiKey: input.authMethod === "apiKey" && secret ? encryptSecret(secret) : undefined,
     };
   }
   await writeAgentsConfig(cfg);
   const view = (await agentsView()).agents.find((a) => a.id === id);
   if (!view) throw new Error(`agent vanished: ${id}`);
   return view;
+}
+
+/** Switch the active agent. Only an available agent can be activated. */
+export async function setActiveAgent(id: AgentId): Promise<AgentsResponse> {
+  const desc = getAgent(id);
+  if (!desc) throw new Error(`unknown agent: ${id}`);
+  if (desc.status === "comingSoon") throw new Error(`agent not available: ${id}`);
+
+  const cfg = await readAgentsConfig();
+  cfg.activeAgentId = id;
+  await writeAgentsConfig(cfg);
+  return await agentsView();
 }

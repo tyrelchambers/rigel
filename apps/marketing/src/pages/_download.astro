@@ -1,0 +1,217 @@
+---
+import { Icon } from "astro-icon/components";
+import Base from "../layouts/Base.astro";
+import Nav from "../components/Nav.astro";
+import Footer from "../components/Footer.astro";
+import {
+  getLatestRelease,
+  RELEASES_URL,
+} from "../lib/releases";
+
+// Resolved at build time. With zero releases this returns a safe fallback
+// (version null, empty assets) so every link below points at the releases page
+// and the page still renders. A published release rebuilds the site (see
+// marketing-build.yml) and bakes the real asset URLs in.
+const { version, url: releaseUrl, assets } = await getLatestRelease();
+
+// Each platform variant is an <a download href={asset ?? RELEASES_URL}> — when
+// an asset is missing the link gracefully falls back to the releases page.
+const platforms = [
+  {
+    // Real brand marks from simple-icons (monochrome, tint to currentColor).
+    // Note: lucide:apple is a fruit, not the Apple logo — don't use it here.
+    name: "macOS",
+    icon: "simple-icons:apple",
+    variants: [
+      { label: "Apple Silicon (.dmg)", href: assets.macArm },
+      { label: "Intel (.dmg)", href: assets.macIntel },
+    ],
+  },
+  {
+    name: "Windows",
+    icon: "simple-icons:windows",
+    variants: [{ label: "Installer (.exe) · x64", href: assets.win }],
+  },
+  {
+    name: "Linux",
+    icon: "simple-icons:linux",
+    variants: [
+      { label: "AppImage", href: assets.linuxAppImage },
+      { label: "Debian (.deb)", href: assets.linuxDeb },
+    ],
+  },
+];
+
+// The primary button defaults to Apple Silicon; the is:inline script below
+// relabels + repoints it to the visitor's detected platform.
+const primaryHref = assets.macArm ?? RELEASES_URL;
+const versionLabel = version ? `v${version}` : null;
+---
+
+<Base
+  title="Download Rigel Desktop"
+  description="Download the Rigel desktop app for macOS, Windows, and Linux. Connect to your clusters, diagnose issues, and apply the fixes you approve."
+>
+  <Nav />
+  <main id="main">
+    <section class="chart-grid relative overflow-hidden bg-surface-sunken">
+      <div
+        class="relative mx-auto flex max-w-[820px] flex-col items-center px-6 pb-12 pt-20 text-center sm:px-8 lg:pt-28"
+      >
+        <h1
+          class="rise ink-gradient max-w-[16ch] text-[clamp(2.6rem,8vw,3.875rem)] font-bold leading-[1.03] tracking-[-0.03em]"
+          style="animation-delay:0.05s"
+        >
+          Download Rigel Desktop
+        </h1>
+
+        <p
+          class="rise mt-6 max-w-[620px] text-[17px] leading-relaxed text-fg-secondary"
+          style="animation-delay:0.15s"
+        >
+          Connect to your clusters, diagnose issues, and apply the fixes you
+          approve.
+        </p>
+
+        <div class="rise mt-8 flex flex-col items-center gap-3" style="animation-delay:0.22s">
+          <a
+            id="primary-download"
+            href={primaryHref}
+            download
+            data-mac-arm={assets.macArm ?? RELEASES_URL}
+            data-mac-intel={assets.macIntel ?? RELEASES_URL}
+            data-win={assets.win ?? RELEASES_URL}
+            data-linux={assets.linuxAppImage ?? RELEASES_URL}
+            class="inline-flex items-center gap-2.5 rounded-xl bg-accent px-7 py-[15px] text-[16px] font-semibold text-fg-inverse transition-colors hover:bg-accent-hover"
+          >
+            <Icon name="lucide:download" class="size-[18px]" />
+            <span id="primary-download-label">Download for macOS</span>
+          </a>
+
+          {versionLabel && (
+            <p class="flex items-center gap-2 font-mono text-[12.5px] text-fg-tertiary">
+              <span id="primary-download-meta">Apple Silicon · {versionLabel}</span>
+              <span aria-hidden="true">·</span>
+              <a
+                href={releaseUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-accent transition-colors hover:text-accent-hover"
+              >
+                What's new ↗
+              </a>
+            </p>
+          )}
+        </div>
+      </div>
+    </section>
+
+    <section
+      class="mx-auto flex max-w-[1200px] flex-wrap justify-center gap-5 px-6 py-8 sm:px-8 lg:px-12"
+    >
+      {
+        platforms.map((p) => (
+          <div
+            data-reveal
+            class="flex w-full max-w-[360px] flex-col gap-4 rounded-2xl border border-line-subtle bg-surface p-6"
+          >
+            <div class="flex items-center gap-2.5">
+              <Icon name={p.icon} class="size-5 text-fg-secondary" />
+              <span class="text-[18px] font-semibold text-fg">{p.name}</span>
+            </div>
+            <div class="flex flex-col gap-2">
+              {p.variants.map((v) => (
+                <a
+                  href={v.href ?? RELEASES_URL}
+                  download
+                  class="group flex items-center justify-between gap-3 rounded-lg border border-line-subtle bg-surface-elevated px-3.5 py-2.5 text-sm text-fg-secondary transition-colors hover:border-line-strong hover:text-fg"
+                >
+                  <span>{v.label}</span>
+                  <Icon
+                    name="lucide:download"
+                    class="size-[15px] text-fg-tertiary transition-colors group-hover:text-accent"
+                  />
+                </a>
+              ))}
+            </div>
+          </div>
+        ))
+      }
+    </section>
+
+    <section
+      class="mx-auto max-w-[1200px] px-6 pb-20 pt-6 sm:px-8 lg:px-12"
+    >
+      <div
+        class="flex flex-col items-center gap-4 border-t border-line-subtle pt-8 text-center sm:flex-row sm:justify-between sm:text-left"
+      >
+        <p class="max-w-[680px] text-[13px] leading-relaxed text-fg-tertiary">
+          Builds are currently unsigned. macOS: right-click → Open on first
+          launch. Windows: More info → Run anyway.
+        </p>
+        <div class="flex items-center gap-5">
+          <a
+            href={RELEASES_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="whitespace-nowrap text-[13px] font-medium text-accent transition-colors hover:text-accent-hover"
+          >
+            All releases ↗
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+  <Footer />
+
+  <!-- OS auto-detect: progressive enhancement only. The static platform cards
+       already cover every OS if JS is off. We relabel + repoint the primary
+       button to the visitor's platform. -->
+  <script is:inline>
+    (function () {
+      var btn = document.getElementById("primary-download");
+      var label = document.getElementById("primary-download-label");
+      var meta = document.getElementById("primary-download-meta");
+      if (!btn || !label) return;
+
+      var ua = (navigator.userAgent || "").toLowerCase();
+      var platform = (navigator.platform || "").toLowerCase();
+      var os; // "mac-arm" | "mac-intel" | "win" | "linux"
+      var name; // human label suffix for the meta line
+
+      if (/win/.test(ua) || /win/.test(platform)) {
+        os = "win";
+        name = "Windows";
+      } else if (/linux|x11/.test(ua) && !/android/.test(ua)) {
+        os = "linux";
+        name = "Linux";
+      } else if (/mac/.test(ua) || /mac/.test(platform)) {
+        // Apple Silicon vs Intel is not reliably exposed; default to Apple
+        // Silicon (the Intel build stays one click away on the card).
+        os = "mac-arm";
+        name = "Apple Silicon";
+      } else {
+        return; // unknown — leave the macOS default
+      }
+
+      var href = btn.getAttribute("data-" + os);
+      if (href) btn.setAttribute("href", href);
+
+      var labels = {
+        "mac-arm": "Download for macOS",
+        win: "Download for Windows",
+        linux: "Download for Linux",
+      };
+      label.textContent = labels[os] || label.textContent;
+
+      // Update the leading "<arch/platform>" token in the meta line, keeping
+      // the version + What's new that the server rendered.
+      if (meta) {
+        var rest = meta.textContent || "";
+        var sepIndex = rest.indexOf("·");
+        meta.textContent =
+          sepIndex >= 0 ? name + " " + rest.slice(sepIndex) : rest;
+      }
+    })();
+  </script>
+</Base>

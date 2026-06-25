@@ -86,7 +86,6 @@ const CATEGORY_FALLBACK_ICON: Record<string, string> = {
   media: "lucide:film",
 };
 
-// Best icon for an app: its mapped symbol, else its category icon, else a box.
 export function iconForApp(app: {
   iconSystemName?: string | null;
   category: string;

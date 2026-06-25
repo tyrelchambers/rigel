@@ -28,6 +28,7 @@ import GitOpsPanel from "./panels/gitops/GitOpsPanel";
 import HelmPanel from "./panels/helm/HelmPanel";
 import { TerminalDrawer, TOGGLE_TERMINAL_EVENT } from "@/shell/TerminalDrawer";
 import { ResourceYamlViewer } from "@/components/ResourceYamlViewer";
+import { Toaster } from "@/components/ui/sonner";
 import { connectCluster } from "@/lib/ws";
 import { useChatConfig } from "@/lib/api";
 import { rigel } from "@/lib/desktop";
@@ -39,6 +40,7 @@ import ChatPane, { type ChatPaneHandle } from "@/shell/ChatPane";
 import { CommandPalette, useCommandPalette } from "@/shell/CommandPalette";
 import { GlobalHeader } from "@/shell/GlobalHeader";
 import { loadSidebarCollapsed, saveSidebarCollapsed } from "@/shell/navCollapse";
+import { registerChatReveal } from "@/lib/chatHandoff";
 
 function readTerminalOpen(): boolean {
   try { return localStorage.getItem("rigel.terminal.open") === "1"; } catch { return false; }
@@ -150,6 +152,17 @@ export default function App() {
         /* ignore quota / private-browsing errors */
       }
       return next;
+    });
+  }, []);
+  // Let a new-thread chat handoff un-hide a collapsed chat pane.
+  useEffect(() => {
+    registerChatReveal(() => {
+      setChatHidden(false);
+      try {
+        localStorage.setItem("rigel.chat.hidden", "0");
+      } catch {
+        /* ignore quota / private-browsing errors */
+      }
     });
   }, []);
   useEffect(() => {
@@ -288,6 +301,9 @@ export default function App() {
 
       {/* Global read-only YAML viewer (opened from any context menu). */}
       <ResourceYamlViewer />
+
+      {/* Toast host — background action progress (see lib/actionRunner). */}
+      <Toaster />
     </div>
   );
 }

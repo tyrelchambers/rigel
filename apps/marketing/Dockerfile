@@ -24,7 +24,12 @@ RUN pnpm install --frozen-lockfile --filter @rigel/marketing...
 # package.json. Without this, `astro build` fails to resolve the entry.
 COPY packages/catalog ./packages/catalog
 
-# Build the static output to apps/marketing/dist.
+# Build the static output to apps/marketing/dist. The download page resolves
+# the latest GitHub release at build time; an optional GITHUB_TOKEN authenticates
+# that API call (dodges the 60/hr unauthenticated limit in CI). With no token
+# the resolver still builds green via its releases-page fallback.
+ARG GITHUB_TOKEN=""
+ENV GITHUB_TOKEN=$GITHUB_TOKEN
 COPY apps/marketing ./apps/marketing
 RUN pnpm --filter @rigel/marketing build
 

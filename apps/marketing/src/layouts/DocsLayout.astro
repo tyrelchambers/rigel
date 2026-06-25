@@ -11,8 +11,6 @@ interface Props {
 }
 const { title, description } = Astro.props;
 
-// Build the sidebar from the docs collection: sort by order, then group by
-// category in the canonical order ("Get started" before "Guides").
 const categoryOrder = ["Get started", "Guides"] as const;
 const entries = (await getCollection("docs")).sort(
   (a, b) => a.data.order - b.data.order,
@@ -31,7 +29,6 @@ const current = Astro.url.pathname.replace(/\/$/, "");
     <div
       class="mx-auto grid max-w-[1200px] gap-10 px-6 py-12 sm:px-8 lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-14 lg:px-12 lg:py-16"
     >
-      <!-- sidebar -->
       <aside class="lg:sticky lg:top-24 lg:h-fit lg:self-start">
         <nav aria-label="Docs" class="flex flex-col gap-7">
           {
@@ -75,7 +72,6 @@ const current = Astro.url.pathname.replace(/\/$/, "");
         </nav>
       </aside>
 
-      <!-- content -->
       <article class="min-w-0">
         <header class="mb-8 border-b border-line-subtle pb-7">
           <h1

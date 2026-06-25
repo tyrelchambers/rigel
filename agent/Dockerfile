@@ -29,6 +29,36 @@ RUN apk add --no-cache ca-certificates libstdc++ libgcc bash curl \
 # `claude -p` against the subscription via CLAUDE_CODE_OAUTH_TOKEN. Never --bare.
 RUN npm install -g @anthropic-ai/claude-code
 
+# Codex CLI — musl static binary from GitHub releases (arch-aware). We use the
+# release tarball, NOT npm: @openai/codex's npm optional deps are glibc-only (no
+# musl), so they won't run on Alpine. The tarball contains a single binary named
+# after the arch (codex-<arch>), which we rename to `codex`. The agent's codex
+# bridge shells `codex exec --json` (CODEX_API_KEY or a CODEX_AUTH_CONTENT
+# subscription auth.json).
+RUN apk add --no-cache --virtual .codex-dl curl tar \
+ && case "$(uname -m)" in \
+      x86_64)  CODEX_ARCH=x86_64-unknown-linux-musl ;; \
+      aarch64) CODEX_ARCH=aarch64-unknown-linux-musl ;; \
+      *)       CODEX_ARCH=x86_64-unknown-linux-musl ;; \
+    esac \
+ && curl -fsSL -o /tmp/codex.tar.gz "https://github.com/openai/codex/releases/latest/download/codex-${CODEX_ARCH}.tar.gz" \
+ && tar -xzf /tmp/codex.tar.gz -C /tmp \
+ && mv "/tmp/codex-${CODEX_ARCH}" /usr/local/bin/codex \
+ && chmod +x /usr/local/bin/codex \
+ && rm -f /tmp/codex.tar.gz \
+ && apk del .codex-dl
+
+# Gemini CLI — npm global (Node is already in the image). The gemini bridge shells
+# `gemini -o stream-json --approval-mode yolo` authenticated via GEMINI_API_KEY.
+RUN npm install -g @google/gemini-cli
+
+# OpenCode CLI — npm global. opencode-ai ships musl optional deps
+# (opencode-linux-x64-musl / opencode-linux-arm64-musl), so npm resolves the
+# right binary on Alpine (no manual download needed, unlike Codex). The opencode
+# bridge shells `opencode run --format json` authenticated via
+# OPENCODE_AUTH_CONTENT / OPENCODE_API_KEY.
+RUN npm install -g opencode-ai
+
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
@@ -38,6 +68,10 @@ COPY --from=build /app/dist ./dist
 # dir so `claude -p` doesn't pick up stray repo context.
 RUN mkdir -p /workspace && chown node:node /workspace
 ENV NODE_ENV=production
+# The guarded-kubectl shim (agent/src/guardedKubectl.ts → dist/guardedKubectl.js)
+# is exec'd by the non-Claude bridges. In the production image there is no tsx, so
+# point the shim's runner at the compiled .js (mirrors RIGEL_GUARD_CMD in the chat).
+ENV RIGEL_AGENT_GUARD_CMD="node /app/dist/guardedKubectl.js"
 USER node
 WORKDIR /workspace
 CMD ["node", "/app/dist/index.js"]

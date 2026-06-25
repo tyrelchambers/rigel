@@ -12,7 +12,15 @@ export function AgentsTab() {
   }
 
   const current = selected ? data.agents.find((a) => a.id === selected) : null;
-  if (current) return <AgentSetup agent={current} onBack={() => setSelected(null)} />;
+  if (current) {
+    return (
+      <AgentSetup
+        agent={current}
+        isActive={current.id === data.activeAgentId}
+        onBack={() => setSelected(null)}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col" style={{ gap: 16 }}>
@@ -24,7 +32,7 @@ export function AgentsTab() {
       </div>
       <div className="grid" style={{ gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
         {data.agents.map((a) => (
-          <AgentCard key={a.id} agent={a} onOpen={setSelected} />
+          <AgentCard key={a.id} agent={a} isActive={a.id === data.activeAgentId} onOpen={setSelected} />
         ))}
       </div>
     </div>

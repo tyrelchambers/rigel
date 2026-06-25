@@ -103,6 +103,9 @@ export {
   type AssistantLiveIssue,
   DEFAULT_INSTALL_CONFIG,
   SECRET_NAME,
+  DEPLOYMENT_NAME,
+  CREDENTIAL_ENV,
+  isAssistantManaged,
   ISSUED_AT_ANNOTATION,
   TOKEN_LIFETIME_DAYS,
   TOKEN_WARN_WITHIN_DAYS,
@@ -126,6 +129,8 @@ export {
   computeLiveIssues,
   mergedConfigMapJSON,
   clearedReportConfigMapJSON,
+  reconcileCommands,
+  needsReconcile,
 } from "./assistant";
 
 export {

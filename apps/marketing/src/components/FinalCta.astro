@@ -3,35 +3,39 @@ import EarlyAccessForm from "./EarlyAccessForm.astro";
 ---
 
 <section
-  id="cta"
-  class="chart-grid relative overflow-hidden border-t border-line-subtle bg-surface-sunken"
+    id="cta"
+    class="chart-grid relative overflow-hidden border-t border-line-subtle bg-surface-sunken"
 >
-  <div
-    class="glow anim-glow absolute left-1/2 top-1/2 size-[640px] -translate-x-1/2 -translate-y-1/2 opacity-[0.12]"
-  >
-  </div>
-
-  <div
-    class="relative mx-auto flex max-w-[820px] flex-col items-center px-6 py-28 text-center sm:px-8 lg:py-36"
-  >
-    <h2
-      data-reveal
-      class="ink-gradient text-[clamp(3rem,12vw,6.5rem)] font-bold leading-none tracking-[-0.04em]"
+    <div
+        class="glow anim-glow absolute left-1/2 top-1/2 size-[640px] -translate-x-1/2 -translate-y-1/2 opacity-[0.12]"
     >
-      Skip the ops team.
-    </h2>
-
-    <p
-      data-reveal
-      style="--reveal-delay:100ms"
-      class="mt-6 max-w-[620px] text-[16.5px] leading-relaxed text-fg-secondary"
-    >
-      A desktop app for macOS, almost ready. Leave your email and we'll let
-      you know the moment you can download it.
-    </p>
-
-    <div data-reveal style="--reveal-delay:180ms" class="flex w-full justify-center">
-      <EarlyAccessForm />
     </div>
-  </div>
+
+    <div
+        class="relative mx-auto flex max-w-[820px] flex-col items-center px-6 py-28 text-center sm:px-8 lg:py-36"
+    >
+        <h2
+            data-reveal
+            class="ink-gradient text-[clamp(3rem,12vw,6.5rem)] font-bold leading-none tracking-[-0.04em]"
+        >
+            Skip the ops team.
+        </h2>
+
+        <p
+            data-reveal
+            style="--reveal-delay:100ms"
+            class="mt-6 max-w-[620px] text-[16.5px] leading-relaxed text-fg-secondary"
+        >
+            Leave your email and we'll let you know the moment you can download
+            it.
+        </p>
+
+        <div
+            data-reveal
+            style="--reveal-delay:180ms"
+            class="flex w-full justify-center"
+        >
+            <EarlyAccessForm />
+        </div>
+    </div>
 </section>

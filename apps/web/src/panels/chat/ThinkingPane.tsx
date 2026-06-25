@@ -12,9 +12,10 @@ interface Props {
 }
 
 /**
- * ThinkingPane — shown only while streaming and thinking has arrived. Rotating
- * verb + spinner + elapsed seconds, with a collapsible reasoning body that
- * auto-scrolls to the tail and fades at the top.
+ * ThinkingPane — the "AI is working" indicator, shown for the whole in-flight turn
+ * (any agent, from the moment we send). Animated Rigel mark (Loader) + rotating
+ * verb + elapsed seconds. The collapsible reasoning body only appears once thinking
+ * text has actually arrived; without it, the pane is just the live working signal.
  */
 export function ThinkingPane({ liveThinking, turnStartedAt }: Props) {
   const [open, setOpen] = useState(false);

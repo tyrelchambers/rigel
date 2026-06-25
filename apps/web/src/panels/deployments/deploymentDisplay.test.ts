@@ -23,6 +23,9 @@ import {
   matchesSearch,
   sortDeployments,
   namespaceOptions,
+  totalRestarts,
+  deploymentRevision,
+  deploymentEndpoints,
 } from "./deploymentDisplay";
 
 function dep(overrides: Partial<Deployment> = {}): Deployment {
@@ -284,5 +287,58 @@ describe("namespaceOptions", () => {
     const a = dep({ metadata: { name: "x", namespace: "prod", uid: "1" } });
     const b = dep({ metadata: { name: "y", namespace: "dev", uid: "2" } });
     expect(namespaceOptions([a, b], { staging: {}, prod: {} })).toEqual(["dev", "prod", "staging"]);
+  });
+});
+
+describe("totalRestarts", () => {
+  const d = dep({ spec: { replicas: 2, selector: { matchLabels: { app: "web" } } } });
+  test("sums container restarts across child pods only", () => {
+    const a = pod({ metadata: { name: "web-1", namespace: "default", uid: "1", labels: { app: "web" } }, status: { containerStatuses: [{ name: "c", ready: true, restartCount: 2 }] } });
+    const b = pod({ metadata: { name: "web-2", namespace: "default", uid: "2", labels: { app: "web" } }, status: { containerStatuses: [{ name: "c", ready: true, restartCount: 3 }] } });
+    const other = pod({ metadata: { name: "api-1", namespace: "default", uid: "3", labels: { app: "api" } }, status: { containerStatuses: [{ name: "c", ready: true, restartCount: 99 }] } });
+    expect(totalRestarts(d, [a, b, other])).toBe(5);
+  });
+  test("zero with no matching pods", () => {
+    expect(totalRestarts(d, [])).toBe(0);
+  });
+});
+
+describe("deploymentRevision", () => {
+  test("reads the rollout-revision annotation", () => {
+    expect(deploymentRevision(dep({ metadata: { name: "web", uid: "u1", annotations: { "deployment.kubernetes.io/revision": "12" } } }))).toBe("12");
+  });
+  test("null when absent", () => {
+    expect(deploymentRevision(dep())).toBeNull();
+  });
+});
+
+describe("deploymentEndpoints", () => {
+  const d = dep({
+    metadata: { name: "big-o", namespace: "default", uid: "u1" },
+    spec: { selector: { matchLabels: { app: "big-o" } }, template: { metadata: { labels: { app: "big-o" } }, spec: { containers: [] } } },
+  });
+  const svc = { "default/big-o": { metadata: { name: "big-o", namespace: "default" }, spec: { selector: { app: "big-o" } } } };
+
+  test("https when ingress TLS covers the host", () => {
+    const ing = { "default/big-o": { metadata: { name: "big-o", namespace: "default" }, spec: {
+      tls: [{ hosts: ["big-o.tyrelchambers.com"] }],
+      rules: [{ host: "big-o.tyrelchambers.com", http: { paths: [{ path: "/", backend: { service: { name: "big-o", port: { number: 80 } } } }] } }],
+    } } };
+    expect(deploymentEndpoints(d, svc, ing)).toEqual([{ host: "big-o.tyrelchambers.com", url: "https://big-o.tyrelchambers.com/" }]);
+  });
+
+  test("http when no TLS, and wildcard hosts are skipped", () => {
+    const ing = { "default/big-o": { metadata: { name: "big-o", namespace: "default" }, spec: {
+      rules: [
+        { host: "big-o.local", http: { paths: [{ path: "/", backend: { service: { name: "big-o", port: { number: 80 } } } }] } },
+        { http: { paths: [{ path: "/", backend: { service: { name: "big-o", port: { number: 80 } } } }] } },
+      ],
+    } } };
+    expect(deploymentEndpoints(d, svc, ing)).toEqual([{ host: "big-o.local", url: "http://big-o.local/" }]);
+  });
+
+  test("empty when no service selects the deployment's pods", () => {
+    const ing = { "default/x": { metadata: { name: "x", namespace: "default" }, spec: { rules: [{ host: "x.local", http: { paths: [{ path: "/", backend: { service: { name: "other", port: { number: 80 } } } }] } }] } } };
+    expect(deploymentEndpoints(d, {}, ing)).toEqual([]);
   });
 });

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
+import { useFocusRow } from "@/panels/components/useFocusRow";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { PanelHeader } from "@/panels/components/PanelHeader";
@@ -26,9 +27,6 @@ export default function DeploymentsPanel() {
   const isLoading = useCluster((s) => s.isLoading);
   const error = useCluster((s) => s.error);
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
-  const focusRequest = useCluster((s) => s.focusRequest);
-  const setFocusRequest = useCluster((s) => s.setFocusRequest);
-
   const [search, setSearch] = useState("");
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -76,20 +74,8 @@ export default function DeploymentsPanel() {
     [allDeployments, search],
   );
 
-  // Cmd-K focus: expand + scroll to a deployment picked in the command palette.
-  useEffect(() => {
-    if (focusRequest?.kind !== "deployment") return;
-    const match = allDeployments.find(
-      (d) => (d.metadata.uid ?? `${d.metadata.namespace}/${d.metadata.name}`) === focusRequest.key,
-    );
-    if (!match) return; // not streamed yet; effect re-runs when allDeployments updates
-    const k = key(match);
-    setExpanded((prev) => new Set(prev).add(k));
-    setFocusRequest(null);
-    setTimeout(() => {
-      document.querySelector(`[data-row-key="${CSS.escape(k)}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
-    }, 50);
-  }, [focusRequest, allDeployments]);
+  // Cmd-K / related-resources focus: expand + scroll to a deployment.
+  useFocusRow("deployment", allDeployments, key, (k) => setExpanded((prev) => new Set(prev).add(k)));
 
   // Drop a stale deployment focus request if we leave before it resolves.
   useEffect(() => {

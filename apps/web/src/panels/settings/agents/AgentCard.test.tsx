@@ -23,4 +23,11 @@ describe("AgentCard", () => {
     render(<AgentCard agent={{ ...base, id: "codex", status: "comingSoon", connection: "comingSoon" }} onOpen={() => {}} />);
     expect(screen.getByText("Coming soon")).toBeInTheDocument();
   });
+
+  it("shows the Active label (not Connected) and an accent border when active", () => {
+    render(<AgentCard agent={base} isActive onOpen={() => {}} />);
+    expect(screen.getByText("Active")).toBeInTheDocument();
+    expect(screen.queryByText("Connected")).not.toBeInTheDocument();
+    expect(screen.getByRole("button")).toHaveStyle({ border: "1.5px solid #5FC9EC" });
+  });
 });

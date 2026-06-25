@@ -2,7 +2,7 @@
 // this free of heavy imports (claudeBridge/agentConfig) so nothing import-cycles
 // through it. Only "claude" is wired to a real runner today (see runAgent.ts).
 
-export type AgentId = "claude" | "codex" | "gemini" | "opencode" | "openrouter";
+export type AgentId = "claude" | "codex" | "gemini" | "opencode";
 export type AgentAuthMethod = "subscription" | "apiKey";
 
 export interface AgentDescriptor {
@@ -34,7 +34,7 @@ const AGENTS: AgentDescriptor[] = [
     id: "codex",
     label: "Codex",
     vendor: "OpenAI",
-    status: "comingSoon",
+    status: "available",
     authMethods: ["subscription", "apiKey"],
     installUrl: "https://github.com/openai/codex",
     installLabel: "Install Codex",
@@ -43,7 +43,7 @@ const AGENTS: AgentDescriptor[] = [
     id: "gemini",
     label: "Gemini",
     vendor: "Google",
-    status: "comingSoon",
+    status: "available",
     authMethods: ["subscription", "apiKey"],
     installUrl: "https://github.com/google-gemini/gemini-cli",
     installLabel: "Install Gemini CLI",
@@ -52,19 +52,12 @@ const AGENTS: AgentDescriptor[] = [
     id: "opencode",
     label: "OpenCode",
     vendor: "OpenCode",
-    status: "comingSoon",
-    authMethods: ["subscription", "apiKey"],
+    status: "available",
+    // OpenCode is login-managed (`opencode providers login` stores its own creds);
+    // there is no Rigel-managed key, so only the subscription/login method is offered.
+    authMethods: ["subscription"],
     installUrl: "https://opencode.ai",
     installLabel: "Install OpenCode",
-  },
-  {
-    id: "openrouter",
-    label: "OpenRouter",
-    vendor: "OpenRouter",
-    status: "comingSoon",
-    authMethods: ["apiKey"],
-    installUrl: "https://openrouter.ai/keys",
-    installLabel: "Get an OpenRouter key",
   },
 ];
 

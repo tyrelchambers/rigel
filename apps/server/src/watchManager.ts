@@ -1,11 +1,22 @@
 import { WatchEventParser, type WatchEvent } from "@rigel/k8s/src/watch";
 import { spawn, type ChildProcess } from "node:child_process";
 
+// Cache key for a watched object: `namespace/name` for namespaced resources,
+// bare `name` for cluster-scoped ones. Namespace-qualified so same-named objects
+// in different namespaces (e.g. the kube-root-ca.crt ConfigMap in every ns) don't
+// clobber each other under --all-namespaces. Mirrors the client's resourceKey.
+export function cacheKey(obj: any): string | undefined {
+  const name = obj?.metadata?.name;
+  if (!name) return undefined;
+  const ns = obj?.metadata?.namespace;
+  return ns ? `${ns}/${name}` : name;
+}
+
 export function applyEvent(cache: Map<string, any>, e: WatchEvent): void {
-  const name = e.object?.metadata?.name;
-  if (!name) return;
-  if (e.type === "DELETED") cache.delete(name);
-  else cache.set(name, e.object);
+  const key = cacheKey(e.object);
+  if (!key) return;
+  if (e.type === "DELETED") cache.delete(key);
+  else cache.set(key, e.object);
 }
 
 type Sub = { context?: string | null; kind: string; namespace: string };
@@ -191,8 +202,8 @@ export class WatchManager {
         try {
           const parsed = JSON.parse(out) as { items?: any[] };
           for (const item of parsed.items ?? []) {
-            const name = item?.metadata?.name;
-            if (name) next.set(name, item);
+            const key = cacheKey(item);
+            if (key) next.set(key, item);
           }
         } catch {
           // Malformed JSON: treat as an empty authoritative list rather than

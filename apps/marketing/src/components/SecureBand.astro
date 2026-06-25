@@ -2,80 +2,85 @@
 import { Icon } from "astro-icon/components";
 
 const guards = [
-  {
-    icon: "lucide:file-check",
-    title: "Nothing runs unconfirmed",
-    desc: "Every change is confirmed before it runs, and the assistant's fixes show you the exact command first.",
-  },
-  {
-    icon: "lucide:laptop",
-    title: "Runs on your Mac",
-    desc: "A local desktop app, not a server. There's nothing exposed to the internet and no login to manage; it talks to your clusters straight from your machine.",
-  },
-  {
-    icon: "lucide:server",
-    title: "Your keys, your cluster",
-    desc: "Your kubeconfig and credentials stay on your machine and in your clusters. Nothing is sent to us.",
-  },
-  {
-    icon: "lucide:folder-lock",
-    title: "Namespace scoping",
-    desc: "One shared namespace filter scopes the entire console to exactly what you want to touch.",
-  },
+    {
+        icon: "lucide:file-check",
+        title: "The assistant does the work",
+        desc: "If a node goes down overnight, the assistants will work together to contain the blast radius.",
+    },
+    {
+        icon: "lucide:laptop",
+        title: "Runs on your machine",
+        desc: "A local desktop app that uses your established kube config to talk directly to your cluster.",
+    },
+    {
+        icon: "lucide:server",
+        title: "Your keys on your cluster",
+        desc: "Your kubeconfig and credentials stay on your machine and in your clusters. Nothing is sent to us.",
+    },
+    {
+        icon: "lucide:folder-lock",
+        title: "Namespace scoping",
+        desc: "One shared namespace filter scopes the entire console to exactly what you want to touch.",
+    },
 ];
 ---
 
 <section
-  id="secure"
-  class="relative scroll-mt-20 overflow-hidden border-t border-line-subtle bg-surface-sunken"
+    id="secure"
+    class="relative scroll-mt-20 overflow-hidden border-t border-line-subtle bg-surface-sunken"
 >
-  <div
-    class="glow anim-glow absolute -left-32 top-1/2 size-[460px] -translate-y-1/2 opacity-[0.07]"
-  >
-  </div>
-
-  <div
-    class="relative mx-auto max-w-[1200px] px-6 py-20 sm:px-8 lg:px-12 lg:py-24"
-  >
-    <div data-reveal class="max-w-[640px]">
-      <div class="flex items-center gap-2.5">
-        <Icon name="lucide:shield-check" class="size-[15px] text-accent" />
-        <span class="font-mono text-xs tracking-[0.15em] text-fg-tertiary"
-          >PRIVATE BY DEFAULT</span
-        >
-      </div>
-      <h2
-        class="mt-5 text-[clamp(1.85rem,3.6vw,2.5rem)] font-bold leading-[1.08] tracking-[-0.03em] text-fg"
-      >
-        You're always in control.
-      </h2>
-      <p class="mt-5 max-w-[520px] text-[15.5px] leading-[1.65] text-fg-secondary">
-        Rigel can do a lot, but it never acts behind your back. Approval is
-        explicit, it runs entirely on your own machine, and nothing it touches
-        leaves your control.
-      </p>
+    <div
+        class="glow anim-glow absolute -left-32 top-1/2 size-[460px] -translate-y-1/2 opacity-[0.07]"
+    >
     </div>
 
     <div
-      class="mt-12 grid gap-px overflow-hidden rounded-xl border border-line-subtle bg-line-subtle sm:grid-cols-2 lg:grid-cols-4"
+        class="relative mx-auto max-w-[1200px] px-6 py-20 sm:px-8 lg:px-12 lg:py-24"
     >
-      {
-        guards.map((g, i) => (
-          <div
-            data-reveal
-            style={`--reveal-delay:${i * 70}ms`}
-            class="flex flex-col gap-3.5 bg-surface-sunken p-6"
-          >
-            <span class="grid size-[34px] place-items-center rounded-lg bg-accent/15 text-accent">
-              <Icon name={g.icon} class="size-[18px]" />
-            </span>
-            <h3 class="text-[15px] font-semibold tracking-tight text-fg">
-              {g.title}
-            </h3>
-            <p class="text-[13px] leading-snug text-fg-secondary">{g.desc}</p>
-          </div>
-        ))
-      }
+        <div data-reveal class="max-w-[640px]">
+            <div class="flex items-center gap-2.5">
+                <span
+                    class="font-mono text-xs tracking-[0.15em] text-fg-tertiary"
+                    >PRIVATE BY DEFAULT</span
+                >
+            </div>
+            <h2
+                class="mt-5 text-[clamp(1.85rem,3.6vw,2.5rem)] font-bold leading-[1.08] tracking-[-0.03em] text-fg"
+            >
+                You're always in control.
+            </h2>
+            <p
+                class="mt-5 max-w-[520px] text-[15.5px] leading-[1.65] text-fg-secondary"
+            >
+                Rigel can do a lot and it excels in diagnosing and suggesting
+                fixes. Non-mutating commands run autonomously while mutating
+                commands require your approval via raised action buttons from
+                the chat.
+            </p>
+        </div>
+
+        <div
+            class="mt-12 grid gap-px overflow-hidden rounded-xl border border-line-subtle bg-line-subtle sm:grid-cols-2 lg:grid-cols-4"
+        >
+            {
+                guards.map((g, i) => (
+                    <div
+                        data-reveal
+                        style={`--reveal-delay:${i * 70}ms`}
+                        class="flex flex-col gap-3.5 bg-surface-sunken p-6"
+                    >
+                        <span class="grid size-[34px] place-items-center rounded-lg bg-accent/15 text-accent">
+                            <Icon name={g.icon} class="size-[18px]" />
+                        </span>
+                        <h3 class="text-[15px] font-semibold tracking-tight text-fg">
+                            {g.title}
+                        </h3>
+                        <p class="text-[13px] leading-snug text-fg-secondary">
+                            {g.desc}
+                        </p>
+                    </div>
+                ))
+            }
+        </div>
     </div>
-  </div>
 </section>

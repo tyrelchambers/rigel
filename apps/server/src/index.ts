@@ -41,7 +41,8 @@ import { backupKubeconfig } from "./kubeconfigBackup";
 import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusMetrics";
 import { handleUpdates, type UpdatesRequest } from "./updates";
 import { chatConfig, setClaudeToken } from "./chatConfig";
-import { agentsView, setAgentAuth } from "./agentConfig";
+import { agentsView, setAgentAuth, setActiveAgent } from "./agentConfig";
+import { agentModels } from "./agentModels";
 import { getAgent, type AgentAuthMethod } from "./agentRegistry";
 import { buildSuggestions } from "./suggestions";
 import { getClusterYamlSchema } from "./clusterSchema";
@@ -224,7 +225,9 @@ async function handler(req: Request): Promise<Response> {
       });
     }
 
-    // GET  /api/chat-config — is the AI copilot's Claude token configured?
+    // GET  /api/chat-config — reports whether a Claude token is present. Chat
+    // ENABLEMENT now follows the ACTIVE agent's connection (see /api/agents);
+    // this route remains for the Claude-specific Settings/token surface.
     // POST /api/chat-config { token } — set it (empty clears); env-set tokens
     // take precedence and are not overwritten. Lets a self-hoster enable chat
     // from the Settings screen without an env restart.
@@ -239,6 +242,18 @@ async function handler(req: Request): Promise<Response> {
 
     if (url.pathname === "/api/agents" && req.method === "GET") {
       return Response.json(await agentsView());
+    }
+
+    // POST /api/agents/active  { id } — switch the active agent.
+    if (url.pathname === "/api/agents/active" && req.method === "POST") {
+      const body = (await req.json().catch(() => ({}))) as { id?: unknown };
+      const id = typeof body.id === "string" ? body.id : "";
+      const agent = getAgent(id);
+      if (!agent) return Response.json({ error: "unknown agent" }, { status: 404 });
+      if (agent.status === "comingSoon") {
+        return Response.json({ error: "agent not available yet" }, { status: 409 });
+      }
+      return Response.json(await setActiveAgent(agent.id));
     }
 
     // POST /api/agents/<id>/auth  { authMethod, secret? }
@@ -267,6 +282,20 @@ async function handler(req: Request): Promise<Response> {
       }
       const view = await setAgentAuth(agent.id, { authMethod, secret });
       return Response.json(view);
+    }
+
+    // GET /api/agents/<id>/models — the models + efforts this agent can run, for
+    // the composer's agent-aware model picker. claude/codex are static sets;
+    // opencode is discovered live via `opencode models`. 404 for an unknown id.
+    if (
+      url.pathname.startsWith("/api/agents/") &&
+      url.pathname.endsWith("/models") &&
+      req.method === "GET"
+    ) {
+      const id = url.pathname.split("/")[3] ?? "";
+      const agent = getAgent(id);
+      if (!agent) return Response.json({ error: "unknown agent" }, { status: 404 });
+      return Response.json(await agentModels(agent.id));
     }
 
     // POST /api/action — execute or preview a chat action-block mutation.
@@ -812,7 +841,7 @@ async function handler(req: Request): Promise<Response> {
             { status: 500 },
           );
         }
-        return Response.json({ success: true });
+        return Response.json({ success: true, stdout: result.stdout, stderr: result.stderr });
       } catch (err) {
         // Log WITHOUT the token (err.message carries kubectl stderr, never the
         // Secret payload — that only ever lives on the process stdin pipe).

@@ -3,6 +3,7 @@
 // `@rigel/k8s` so it stays byte-identical with the Swift source of truth.
 
 import { useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import {
@@ -16,11 +17,20 @@ import {
   parseAlertRules,
   ISSUED_AT_ANNOTATION,
   SECRET_NAME,
+  isAssistantManaged,
   type AssistantClusterState,
   type AssistantLiveIssue,
   type TokenExpiryStatus,
   type AlertRule,
 } from "@rigel/k8s";
+import type {
+  AssistantCredentials,
+  AssistantRoleSelection,
+  AssistantLimits,
+  CredentialSourceStatus,
+} from "@/lib/api";
+import { postAssistant } from "@/lib/api";
+import { DEFAULT_WORKER, DEFAULT_SUPERVISOR } from "./agents/providerMeta";
 
 // Minimal shapes for the watched resources (we only read what we render).
 interface Meta {
@@ -89,6 +99,24 @@ export interface AssistantDerived {
   backupYAML: (ref: string) => string | undefined;
   /** Parsed alert rules from the assistant-config ConfigMap. */
   alertRules: AlertRule[];
+  /** Per-role provider/model/effort, parsed from assistant-config (defaults applied). */
+  roles: { worker: AssistantRoleSelection; supervisor: AssistantRoleSelection };
+  /** Operational limits parsed from assistant-config (absent keys omitted). */
+  limits: AssistantLimits;
+  /** Per-provider credential readiness, from the server's credentialStatus read
+   *  (key names only — values never leave the cluster). A "set" sentinel per ready
+   *  credential id so the shared `credentialReady` helper keeps working. */
+  creds: AssistantCredentials;
+  /** Per-credential `{ ready, secretName }` (the backing Secret), from
+   *  credentialStatus. Drives the row readiness chip + the source dialog. Names
+   *  only — values never leave the cluster. */
+  credentialSources: Partial<Record<keyof AssistantCredentials, CredentialSourceStatus>>;
+  /** Credential ids claimed by more than one credential-store Secret (the
+   *  alphabetically-first wins). Drives the per-row amber conflict marker. */
+  credentialConflicts: (keyof AssistantCredentials)[];
+  /** True when a legacy install has fallback-resolved credentials not yet stamped
+   *  with annotations. Drives the "Repair credential labels" button. */
+  credentialNeedsReconcile: boolean;
 }
 
 /**
@@ -110,6 +138,35 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
       for (const k of kinds) unsubscribe(k, "*");
     };
   }, []);
+
+  // The credential read must target where the agent ACTUALLY lives, not just the
+  // form's install hint — otherwise a token saved in the agent's real namespace
+  // reads back as "Not set". Resolve it from the (uniquely named) agent Deployment
+  // once the watch has it, falling back to the hint before the agent exists.
+  const credentialNamespace = useMemo(() => {
+    const deps = (resources["deployments"] ?? {}) as Record<string, DeploymentLike>;
+    const agent = Object.values(deps).find(
+      (d) => d.metadata.name === "rigel-assistant" && isAssistantManaged(d.metadata.labels),
+    );
+    return agent?.metadata.namespace ?? installNamespaceHint;
+  }, [resources, installNamespaceHint]);
+
+  const credStatus = useQuery({
+    queryKey: ["assistant-credentialStatus", credentialNamespace],
+    queryFn: async () => {
+      const res = await postAssistant({ action: "credentialStatus", namespace: credentialNamespace });
+      const parsed = JSON.parse(res.stdout || "{}") as {
+        credentials?: Partial<Record<keyof AssistantCredentials, CredentialSourceStatus>>;
+        conflicts?: (keyof AssistantCredentials)[];
+        needsReconcile?: boolean;
+      };
+      return {
+        credentials: parsed.credentials ?? {},
+        conflicts: parsed.conflicts ?? [],
+        needsReconcile: parsed.needsReconcile ?? false,
+      };
+    },
+  });
 
   const deployments = useMemo(
     () => Object.values((resources["deployments"] ?? {}) as Record<string, DeploymentLike>),
@@ -133,7 +190,10 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
   );
 
   return useMemo<AssistantDerived>(() => {
-    const agentDeployment = deployments.find((d) => d.metadata.name === "rigel-assistant") ?? null;
+    // Match by name AND our managed-by label, so a same-named Deployment we don't
+    // own is never mistaken for an installed assistant (and never operated on).
+    const agentDeployment =
+      deployments.find((d) => d.metadata.name === "rigel-assistant" && isAssistantManaged(d.metadata.labels)) ?? null;
     const isInstalled = agentDeployment != null;
     const installedNamespace = agentDeployment ? agentDeployment.metadata.namespace ?? "default" : null;
     const stateNamespace = installedNamespace ?? installNamespaceHint;
@@ -201,6 +261,72 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
       allNamespaceNames: namespaces.map((n) => n.metadata.name).sort(),
       backupYAML: (ref) => configMap("assistant-backups")?.data?.[ref],
       alertRules: parseAlertRules(configData["alertRules"]),
+      roles: parseRolesFromConfig(configData),
+      limits: parseLimitsFromConfig(configData),
+      creds: credsFromSources(credStatus.data?.credentials ?? {}),
+      credentialSources: credStatus.data?.credentials ?? {},
+      credentialConflicts: credStatus.data?.conflicts ?? [],
+      credentialNeedsReconcile: credStatus.data?.needsReconcile ?? false,
     };
-  }, [deployments, pods, configMaps, secrets, namespaces, installNamespaceHint]);
+  }, [deployments, pods, configMaps, secrets, namespaces, installNamespaceHint, credStatus.data]);
+}
+
+/** Build the presence view from the per-credential `{ ready, secretName }` map the
+ *  server reported (values never reach the client). Each credential id that resolves
+ *  to a ready source gets a non-empty sentinel so the shared
+ *  credentialReady(creds, provider) helper reports that provider ready. */
+export function credsFromSources(
+  sources: Partial<Record<keyof AssistantCredentials, CredentialSourceStatus>>,
+): AssistantCredentials {
+  const out: AssistantCredentials = {};
+  for (const [id, src] of Object.entries(sources)) {
+    if (src?.ready) (out as Record<string, string>)[id] = "set";
+  }
+  return out;
+}
+
+/** Parse the per-role selections from the assistant-config data map, defaulting
+ *  to the out-of-box Claude worker/supervisor when no role keys are present. */
+export function parseRolesFromConfig(
+  data: Record<string, string>,
+): { worker: AssistantRoleSelection; supervisor: AssistantRoleSelection } {
+  const role = (
+    p: string | undefined,
+    m: string | undefined,
+    e: string | undefined,
+    fallback: AssistantRoleSelection,
+  ): AssistantRoleSelection => {
+    if (!p && !m) return fallback;
+    return {
+      provider: p ?? fallback.provider,
+      model: m ?? fallback.model,
+      ...(e ? { effort: e } : {}),
+    };
+  };
+  return {
+    worker: role(data.workerProvider, data.workerModel, data.workerEffort, DEFAULT_WORKER),
+    supervisor: role(
+      data.supervisorProvider,
+      data.supervisorModel,
+      data.supervisorEffort,
+      DEFAULT_SUPERVISOR,
+    ),
+  };
+}
+
+/** Parse the operational limits from the assistant-config data map (numbers
+ *  coerced; namespaces split on commas/newlines; absent keys omitted). */
+export function parseLimitsFromConfig(data: Record<string, string>): AssistantLimits {
+  const num = (v: string | undefined): number | undefined =>
+    v === undefined || v.trim() === "" ? undefined : Number(v);
+  const limits: AssistantLimits = {};
+  if (data.pollIntervalMs !== undefined) limits.pollIntervalMs = num(data.pollIntervalMs);
+  if (data.maxPerResourcePerHour !== undefined) limits.maxPerResourcePerHour = num(data.maxPerResourcePerHour);
+  if (data.maxPerNight !== undefined) limits.maxPerNight = num(data.maxPerNight);
+  if (data.maxAttemptsPerIncident !== undefined) limits.maxAttemptsPerIncident = num(data.maxAttemptsPerIncident);
+  if (data.confirmPolls !== undefined) limits.confirmPolls = num(data.confirmPolls);
+  if (data.namespaces !== undefined) {
+    limits.namespaces = data.namespaces.split(/[,\n]/).map((s) => s.trim()).filter(Boolean);
+  }
+  return limits;
 }
