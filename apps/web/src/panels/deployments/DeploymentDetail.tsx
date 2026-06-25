@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import type { ActionBlock } from "@/lib/api";
 import type { GitDeployment } from "@/panels/gitops/gitApi";
 import { buildLinkAction, buildUnlinkAction, linkedSourceName, type WorkloadRef } from "@/panels/gitops/linkSource";
+import { RelatedResources } from "@/panels/components/RelatedResources";
 import type { Deployment } from "./types";
 import type { Pod } from "../pods/types";
 import { containerSummaries, strategyDescription, selectorString, relativeAge } from "./deploymentDisplay";
@@ -156,6 +157,9 @@ export function DeploymentDetail({
           )}
         </div>
       </div>
+
+      {/* Related resources */}
+      <RelatedResources sourceKind="deployment" source={deployment} />
 
       {/* Source link — actions live in the row's right-click / kebab menu. */}
       <div

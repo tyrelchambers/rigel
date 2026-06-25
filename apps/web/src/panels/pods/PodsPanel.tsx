@@ -12,6 +12,8 @@ import { StatusBadge } from "@/panels/components/StatusBadge";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { LoadingState } from "@/panels/components/LoadingState";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
+import { RelatedResources } from "@/panels/components/RelatedResources";
+import { useFocusRow } from "@/panels/components/useFocusRow";
 import type { ActionBlock } from "@/lib/api";
 import type { Pod } from "./types";
 import {
@@ -57,6 +59,8 @@ export default function PodsPanel() {
   function podKey(pod: Pod): string {
     return pod.metadata.uid || `${pod.metadata.namespace}/${pod.metadata.name}`;
   }
+
+  useFocusRow("pod", allPods, podKey, (k) => setExpanded((prev) => new Set(prev).add(k)));
 
   function toggleExpand(pod: Pod) {
     const k = podKey(pod);
@@ -360,6 +364,9 @@ function PodDetail({ pod }: PodDetailProps) {
           </ul>
         </div>
       )}
+
+      {/* Related resources */}
+      <RelatedResources sourceKind="pod" source={pod} />
     </div>
   );
 }
