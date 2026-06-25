@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useClusterTools } from "@/lib/api";
 import { sendClusterCreate, sendClusterStop, onClusterEvent } from "@/lib/ws";
+import { toast } from "sonner";
 
 const VERSIONS = [
   { id: "default", label: "Latest" },
@@ -66,6 +67,11 @@ export function CreateClusterModal({ open, onOpenChange }: { open: boolean; onOp
         qc.invalidateQueries({ queryKey: ["contexts"] });
         setCreating(false);
         onOpenChange(false);
+        toast.success(`Cluster "${e.context ?? name}" created`, {
+          description: e.backupPath
+            ? `Kubeconfig backed up to ${e.backupPath}`
+            : "Your kubeconfig couldn't be backed up.",
+        });
       }
     });
     return off;
