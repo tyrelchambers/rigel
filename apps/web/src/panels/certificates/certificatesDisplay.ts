@@ -154,3 +154,80 @@ export function sortCertViews(views: CertView[]): CertView[] {
     return a.name.localeCompare(b.name);
   });
 }
+
+// ---------------------------------------------------------------------------
+// Spelled-out duration helpers for the card UI.
+// ---------------------------------------------------------------------------
+
+/** Singular/plural helper for a unit name. */
+function pluralize(n: number, unit: string): string {
+  return `${n} ${unit}${n === 1 ? "" : "s"}`;
+}
+
+/**
+ * Converts a number of seconds into the largest spelled-out unit:
+ * "62 days", "3 hours", "5 minutes", "45 seconds".
+ */
+function spelledDuration(seconds: number): string {
+  const s = Math.floor(Math.abs(seconds));
+  if (s < 60) return pluralize(s, "second");
+  if (s < 3600) return pluralize(Math.floor(s / 60), "minute");
+  if (s < 86400) return pluralize(Math.floor(s / 3600), "hour");
+  return pluralize(Math.floor(s / 86400), "day");
+}
+
+/**
+ * Full expiry phrase for the card header right group:
+ *   "Expires in 62 days" | "Expired 5 days ago" | "" (if missing/invalid).
+ */
+export function expiresPhrase(iso: string | undefined, now: number = Date.now()): string {
+  if (!iso) return "";
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return "";
+  const dt = (then - now) / 1000;
+  if (dt >= 0) return `Expires in ${spelledDuration(dt)}`;
+  return `Expired ${spelledDuration(-dt)} ago`;
+}
+
+/**
+ * Age phrase for the DETAILS row:
+ *   "Created 27 days ago" | "" (if missing/invalid).
+ */
+export function agePhrase(iso: string | undefined, now: number = Date.now()): string {
+  if (!iso) return "";
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return "";
+  const dt = (now - then) / 1000;
+  if (dt < 0) return `Created 0 seconds ago`;
+  return `Created ${spelledDuration(dt)} ago`;
+}
+
+/**
+ * Short relative phrase for the NOT AFTER detail value:
+ *   "in 62 days" | "expired 5 days ago" | "—" (if missing/invalid).
+ */
+export function notAfterRelative(iso: string | undefined, now: number = Date.now()): string {
+  if (!iso) return "—";
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return "—";
+  const dt = (then - now) / 1000;
+  if (dt >= 0) return `in ${spelledDuration(dt)}`;
+  return `expired ${spelledDuration(-dt)} ago`;
+}
+
+/**
+ * Absolute date string for the secondary NOT AFTER text:
+ *   "Aug 20, 2026" | "—" (if missing/invalid).
+ * Uses UTC to avoid timezone shifts for certificate validity dates.
+ */
+export function absoluteDate(iso: string | undefined): string {
+  if (!iso) return "—";
+  const then = new Date(iso);
+  if (Number.isNaN(then.getTime())) return "—";
+  return then.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}

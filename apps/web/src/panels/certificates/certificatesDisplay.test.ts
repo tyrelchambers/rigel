@@ -7,6 +7,10 @@ import {
   matchesSearch,
   sortCertViews,
   expiryLabel,
+  expiresPhrase,
+  agePhrase,
+  notAfterRelative,
+  absoluteDate,
 } from "./certificatesDisplay";
 import type { Certificate, CertificateRequest, Order, Challenge } from "./types";
 
@@ -120,5 +124,115 @@ describe("matchesSearch / sortCertViews", () => {
     const a = buildCertViews([cert({ name: "b", namespace: "ns1" })], [], [], [])[0]!;
     const b = buildCertViews([cert({ name: "a", namespace: "ns2" })], [], [], [])[0]!;
     expect(sortCertViews([b, a]).map((v) => v.name)).toEqual(["b", "a"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// New spelled-duration helpers
+// ---------------------------------------------------------------------------
+
+describe("expiresPhrase", () => {
+  const now = Date.parse("2026-06-19T00:00:00Z");
+  const iso = (deltaSeconds: number) => new Date(now + deltaSeconds * 1000).toISOString();
+
+  it("returns empty string for missing or unparseable input", () => {
+    expect(expiresPhrase(undefined, now)).toBe("");
+    expect(expiresPhrase("not-a-date", now)).toBe("");
+  });
+
+  it("returns 'Expires in N days' for future dates", () => {
+    expect(expiresPhrase(iso(62 * 86400), now)).toBe("Expires in 62 days");
+    expect(expiresPhrase(iso(1 * 86400), now)).toBe("Expires in 1 day");
+  });
+
+  it("returns 'Expires in N hours' for sub-day future", () => {
+    expect(expiresPhrase(iso(3 * 3600), now)).toBe("Expires in 3 hours");
+    expect(expiresPhrase(iso(1 * 3600), now)).toBe("Expires in 1 hour");
+  });
+
+  it("returns 'Expires in N minutes' for sub-hour future", () => {
+    expect(expiresPhrase(iso(5 * 60), now)).toBe("Expires in 5 minutes");
+    expect(expiresPhrase(iso(1 * 60), now)).toBe("Expires in 1 minute");
+  });
+
+  it("returns 'Expires in N seconds' for sub-minute future", () => {
+    expect(expiresPhrase(iso(45), now)).toBe("Expires in 45 seconds");
+    expect(expiresPhrase(iso(1), now)).toBe("Expires in 1 second");
+  });
+
+  it("returns 'Expired N days ago' for past dates", () => {
+    expect(expiresPhrase(iso(-5 * 86400), now)).toBe("Expired 5 days ago");
+    expect(expiresPhrase(iso(-1 * 86400), now)).toBe("Expired 1 day ago");
+  });
+
+  it("returns 'Expired N hours ago' for recently past", () => {
+    expect(expiresPhrase(iso(-2 * 3600), now)).toBe("Expired 2 hours ago");
+  });
+});
+
+describe("agePhrase", () => {
+  const now = Date.parse("2026-06-19T00:00:00Z");
+  const iso = (deltaSeconds: number) => new Date(now - deltaSeconds * 1000).toISOString();
+
+  it("returns empty string for missing or unparseable input", () => {
+    expect(agePhrase(undefined, now)).toBe("");
+    expect(agePhrase("bad-date", now)).toBe("");
+  });
+
+  it("returns 'Created N days ago'", () => {
+    expect(agePhrase(iso(27 * 86400), now)).toBe("Created 27 days ago");
+    expect(agePhrase(iso(1 * 86400), now)).toBe("Created 1 day ago");
+  });
+
+  it("returns 'Created N hours ago' for sub-day", () => {
+    expect(agePhrase(iso(5 * 3600), now)).toBe("Created 5 hours ago");
+    expect(agePhrase(iso(1 * 3600), now)).toBe("Created 1 hour ago");
+  });
+
+  it("returns 'Created N minutes ago' for sub-hour", () => {
+    expect(agePhrase(iso(30 * 60), now)).toBe("Created 30 minutes ago");
+  });
+
+  it("returns 'Created N seconds ago' for sub-minute", () => {
+    expect(agePhrase(iso(10), now)).toBe("Created 10 seconds ago");
+  });
+});
+
+describe("notAfterRelative", () => {
+  const now = Date.parse("2026-06-19T00:00:00Z");
+  const iso = (deltaSeconds: number) => new Date(now + deltaSeconds * 1000).toISOString();
+
+  it("returns '—' for missing or unparseable input", () => {
+    expect(notAfterRelative(undefined, now)).toBe("—");
+    expect(notAfterRelative("bad", now)).toBe("—");
+  });
+
+  it("returns 'in N days' for future", () => {
+    expect(notAfterRelative(iso(62 * 86400), now)).toBe("in 62 days");
+    expect(notAfterRelative(iso(1 * 86400), now)).toBe("in 1 day");
+  });
+
+  it("returns 'expired N days ago' for past", () => {
+    expect(notAfterRelative(iso(-5 * 86400), now)).toBe("expired 5 days ago");
+    expect(notAfterRelative(iso(-1 * 86400), now)).toBe("expired 1 day ago");
+  });
+
+  it("handles hours and minutes", () => {
+    expect(notAfterRelative(iso(3 * 3600), now)).toBe("in 3 hours");
+    expect(notAfterRelative(iso(-2 * 3600), now)).toBe("expired 2 hours ago");
+    expect(notAfterRelative(iso(5 * 60), now)).toBe("in 5 minutes");
+  });
+});
+
+describe("absoluteDate", () => {
+  it("returns '—' for missing or unparseable input", () => {
+    expect(absoluteDate(undefined)).toBe("—");
+    expect(absoluteDate("bad-date")).toBe("—");
+  });
+
+  it("formats an ISO string as 'Mon D, YYYY'", () => {
+    // Use a fixed date and check the format shape without locale-dep on exact string
+    const result = absoluteDate("2026-08-20T00:00:00Z");
+    expect(result).toMatch(/^[A-Z][a-z]+ \d+, \d{4}$/);
   });
 });
