@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Minus, RotateCcw, ChevronRight, ChevronDown } from "lucide-react";
+import { MoreVertical, ChevronRight, ChevronDown } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
-import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { viewYaml } from "@/store/yamlViewer";
@@ -167,12 +166,6 @@ export default function NodesPanel() {
                   metrics={nodeMetrics}
                   disk={diskByNode.get(n.metadata.name)}
                   podCount={podCounts.get(n.metadata.name) ?? 0}
-                  onErrors={() => handoffToChat(buildHandoffPrompt("node", n.metadata.name, undefined, "Errors"))}
-                  onLogs={() => handoffToChat(buildHandoffPrompt("node", n.metadata.name, undefined, "Logs"))}
-                  onExplain={() => handoffToChat(buildHandoffPrompt("node", n.metadata.name, undefined, "Explain"))}
-                  onCordon={() => cordon(n)}
-                  onUncordon={() => uncordon(n)}
-                  onDrain={() => drain(n)}
                 />
               </ContextMenuTrigger>
               <ContextMenuContent>
@@ -217,6 +210,18 @@ export default function NodesPanel() {
 // NodeCard — title row + CPU/Memory/Disk/Pods usage bars (mirrors NodesPanel.swift)
 // ---------------------------------------------------------------------------
 
+/** Open the row's right-click context menu from a left-click on the kebab —
+ *  same affordance as ListRow (NodeCard isn't a ListRow). */
+function openNodeMenu(e: React.MouseEvent<HTMLButtonElement>) {
+  e.preventDefault();
+  e.stopPropagation();
+  const trigger = e.currentTarget.closest('[data-slot="context-menu-trigger"]');
+  const r = e.currentTarget.getBoundingClientRect();
+  trigger?.dispatchEvent(
+    new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: r.right, clientY: r.bottom }),
+  );
+}
+
 interface NodeCardProps {
   node: Node;
   isOpen: boolean;
@@ -224,12 +229,6 @@ interface NodeCardProps {
   metrics?: { cpu: number; memory: number };
   disk?: NodeDiskItem;
   podCount: number;
-  onErrors: () => void;
-  onLogs: () => void;
-  onExplain: () => void;
-  onCordon: () => void;
-  onUncordon: () => void;
-  onDrain: () => void;
 }
 
 function NodeCard({
@@ -239,12 +238,6 @@ function NodeCard({
   metrics,
   disk,
   podCount,
-  onErrors,
-  onLogs,
-  onExplain,
-  onCordon,
-  onUncordon,
-  onDrain,
 }: NodeCardProps) {
   const ready = isReady(node);
   const nodeRole = role(node);
@@ -321,17 +314,15 @@ function NodeCard({
             />
             {ready ? "Ready" : "NotReady"}
           </span>
-          <ActionButtonStrip
-            onErrors={(e) => { e.stopPropagation(); onErrors(); }}
-            onLogs={(e) => { e.stopPropagation(); onLogs(); }}
-            onExplain={(e) => { e.stopPropagation(); onExplain(); }}
-            extra={[
-              cordoned
-                ? { label: "Uncordon", Icon: RotateCcw, onClick: (e: React.MouseEvent) => { e.stopPropagation(); onUncordon(); } }
-                : { label: "Cordon", Icon: Minus, onClick: (e: React.MouseEvent) => { e.stopPropagation(); onCordon(); } },
-              { label: "Drain", Icon: RotateCcw, onClick: (e) => { e.stopPropagation(); onDrain(); }, destructive: true },
-            ]}
-          />
+          <button
+            type="button"
+            onClick={openNodeMenu}
+            aria-label="Node actions"
+            title="Actions"
+            className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-white/[0.07] hover:text-foreground"
+          >
+            <MoreVertical className="size-3.5" />
+          </button>
         </div>
 
         {/* Metrics row — CPU · Memory · Disk · Pods */}

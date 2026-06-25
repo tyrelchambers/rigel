@@ -1,8 +1,6 @@
-import { RefreshCw, Trash2 } from "lucide-react";
 import { ListRow } from "@/panels/components/ListRow";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { StatusBadge } from "@/panels/components/StatusBadge";
-import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { viewYaml } from "@/store/yamlViewer";
 import { relativeAge, readyFraction, daemonSetReady, daemonSetDesired } from "./workloadsDisplay";
 import type { DaemonSet, AskClaudeFn } from "./types";
@@ -85,26 +83,6 @@ export function DaemonSetRow({ d, k, isOpen, toggleExpand, askClaude, restartDae
         label={readyFraction(ready, desired)}
         variant={allReady ? "healthy" : "error"}
         title={`Ready: ${ready}/${desired}`}
-      />
-
-      {/* Actions */}
-      <ActionButtonStrip
-        onErrors={(e) => { e.stopPropagation(); askClaude("daemonset", d.metadata.name, d.metadata.namespace, "Errors"); }}
-        onLogs={(e) => { e.stopPropagation(); askClaude("daemonset", d.metadata.name, d.metadata.namespace, "Logs"); }}
-        onExplain={(e) => { e.stopPropagation(); askClaude("daemonset", d.metadata.name, d.metadata.namespace, "Explain"); }}
-        extra={[
-          {
-            label: "Restart",
-            Icon: RefreshCw,
-            onClick: (e) => { e.stopPropagation(); restartDaemonSet(d); },
-          },
-          {
-            label: "Delete",
-            Icon: Trash2,
-            onClick: (e) => { e.stopPropagation(); deleteDaemonSet(d); },
-            destructive: true,
-          },
-        ]}
       />
     </ListRow>
   );

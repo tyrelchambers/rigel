@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
@@ -17,7 +17,6 @@ import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { ListRow } from "@/panels/components/ListRow";
 import { StatusBadge } from "@/panels/components/StatusBadge";
-import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import type { ActionBlock } from "@/lib/api";
@@ -296,21 +295,6 @@ export default function NamespacesPanel() {
               >
                 {age}
               </span>
-
-              {/* Action strip — Errors / Logs / Explain + Delete */}
-              <ActionButtonStrip
-                onErrors={(e) => { e.stopPropagation(); askClaude(ns, "Errors"); }}
-                onLogs={(e) => { e.stopPropagation(); askClaude(ns, "Logs"); }}
-                onExplain={(e) => { e.stopPropagation(); askClaude(ns, "Explain"); }}
-                extra={[
-                  {
-                    label: "Delete",
-                    Icon: Trash2,
-                    onClick: (e) => { e.stopPropagation(); handleDelete(ns); },
-                    destructive: true,
-                  },
-                ]}
-              />
             </ListRow>
           );
         })}

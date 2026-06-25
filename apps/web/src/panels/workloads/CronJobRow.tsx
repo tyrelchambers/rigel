@@ -1,8 +1,6 @@
-import { Zap, Play, Pause, Trash2 } from "lucide-react";
 import { ListRow } from "@/panels/components/ListRow";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { StatusBadge } from "@/panels/components/StatusBadge";
-import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { TagPill } from "@/panels/components/TagPill";
 import { viewYaml } from "@/store/yamlViewer";
 import { isCronJobSuspended, cronJobActiveCount, lastScheduleAgo } from "./workloadsDisplay";
@@ -109,41 +107,6 @@ export function CronJobRow({ c, k, isOpen, toggleExpand, askClaude, triggerCronJ
           variant="pending"
         />
       )}
-
-      {/* Actions */}
-      <ActionButtonStrip
-        onErrors={(e) => { e.stopPropagation(); askClaude("cronjob", c.metadata.name, c.metadata.namespace, "Errors"); }}
-        onLogs={(e) => { e.stopPropagation(); askClaude("cronjob", c.metadata.name, c.metadata.namespace, "Logs"); }}
-        onExplain={(e) => { e.stopPropagation(); askClaude("cronjob", c.metadata.name, c.metadata.namespace, "Explain"); }}
-        extra={[
-          {
-            label: "Trigger",
-            Icon: Zap,
-            onClick: (e) => { e.stopPropagation(); triggerCronJob(c); },
-          },
-          ...(suspended
-            ? [
-                {
-                  label: "Resume",
-                  Icon: Play,
-                  onClick: (e: React.MouseEvent) => { e.stopPropagation(); resumeCronJob(c); },
-                },
-              ]
-            : [
-                {
-                  label: "Suspend",
-                  Icon: Pause,
-                  onClick: (e: React.MouseEvent) => { e.stopPropagation(); suspendCronJob(c); },
-                },
-              ]),
-          {
-            label: "Delete",
-            Icon: Trash2,
-            onClick: (e) => { e.stopPropagation(); deleteCronJob(c); },
-            destructive: true,
-          },
-        ]}
-      />
     </ListRow>
   );
 }

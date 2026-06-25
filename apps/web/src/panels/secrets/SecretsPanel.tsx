@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { ListRow } from "@/panels/components/ListRow";
 import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
-import { ActionButtonStrip } from "@/panels/components/ActionButtonStrip";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { PanelHeader } from "@/panels/components/PanelHeader";
@@ -237,20 +236,6 @@ export default function SecretsPanel() {
               >
                 {relativeAge(secret.metadata.creationTimestamp)}
               </span>
-
-              {/* Action button strip — Errors / Logs / Explain + Edit */}
-              <ActionButtonStrip
-                onErrors={(e) => { e.stopPropagation(); askClaude(secret, "Errors"); }}
-                onLogs={(e) => { e.stopPropagation(); askClaude(secret, "Logs"); }}
-                onExplain={(e) => { e.stopPropagation(); askClaude(secret, "Explain"); }}
-                extra={[
-                  {
-                    label: "Edit",
-                    Icon: Pencil,
-                    onClick: (e) => { e.stopPropagation(); openEdit(secret); },
-                  },
-                ]}
-              />
             </ListRow>
           );
         })}
