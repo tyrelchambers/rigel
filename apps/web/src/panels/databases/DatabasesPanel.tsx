@@ -38,12 +38,12 @@ import {
   dsn,
   matchPods,
   matchesDatabase,
-  phaseDotClass,
+  phaseBadgeVariant,
   podNodes,
   readyFraction,
   relativeAge,
   sourceBadgeLabel,
-  walDotClass,
+  walBadgeVariant,
 } from "./databasesDisplay";
 
 // ---------------------------------------------------------------------------
@@ -398,7 +398,7 @@ export default function DatabasesPanel() {
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex gap-3">
-      <span className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground w-32 shrink-0">
+      <span className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground w-28 shrink-0">
         {label}
       </span>
       <div className="min-w-0 flex-1">{children}</div>
@@ -406,7 +406,7 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
-function DatabaseDetail({
+export function DatabaseDetail({
   instance,
   matchedPods,
   capabilities: caps,
@@ -441,7 +441,7 @@ function DatabaseDetail({
     // `db-detail-mono` (index.css) forces a TRUE monospace on every `font-mono`
     // value inside: the app's `font-mono` is mapped to the proportional Geist
     // (via @theme inline, so a runtime --font-mono override has no effect).
-    <div className="db-detail-mono space-y-3">
+    <div className="db-detail-mono space-y-2">
       {/* ACTION BAR — above IMAGE. Disabled buttons show their reason as a
           tooltip (or no tooltip for silent-disabled image-detected actions). */}
       {caps.actions.length > 0 && (
@@ -491,11 +491,10 @@ function DatabaseDetail({
 
       {/* STATUS */}
       <DetailRow label="STATUS">
-        <span
-          className={`text-xs font-mono ${instance.isHealthy ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`}
-        >
-          {instance.phaseText}
-        </span>
+        <StatusBadge
+          label={instance.phaseText}
+          variant={instance.isHealthy ? "healthy" : "pending"}
+        />
       </DetailRow>
 
       {/* AGE */}
@@ -522,8 +521,7 @@ function DatabaseDetail({
               <li key={p.name} className="flex items-center gap-2 text-xs">
                 <span className="text-muted-foreground/60">├─</span>
                 <span className="font-mono text-muted-foreground">{p.name}</span>
-                <span className={`size-2 shrink-0 rounded-full ${phaseDotClass(p.phase)}`} />
-                <span className="text-muted-foreground">{p.phase}</span>
+                <StatusBadge label={p.phase} variant={phaseBadgeVariant(p.phase)} />
                 {p.isPrimary && (
                   <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">
                     primary
@@ -558,7 +556,7 @@ function DatabaseDetail({
         <DetailRow label="BACKUPS & HEALTH">
           <div className="space-y-1 text-xs">
             <div className="flex gap-2">
-              <span className="w-28 text-muted-foreground">Last backup</span>
+              <span className="w-24 text-muted-foreground">Last backup</span>
               <span
                 className="font-mono select-text text-muted-foreground"
                 title={instance.lastBackup ?? undefined}
@@ -567,15 +565,14 @@ function DatabaseDetail({
               </span>
             </div>
             <div className="flex gap-2">
-              <span className="w-28 text-muted-foreground">Schedule</span>
+              <span className="w-24 text-muted-foreground">Schedule</span>
               <span className="font-mono select-text text-muted-foreground">
                 {instance.scheduledBackup ?? "none configured"}
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-28 text-muted-foreground">WAL archiving</span>
-              <span className={`size-2 shrink-0 rounded-full ${walDotClass(wal)}`} />
-              <span className="text-muted-foreground">{wal}</span>
+              <span className="w-24 text-muted-foreground">WAL archiving</span>
+              <StatusBadge label={wal} variant={walBadgeVariant(wal)} />
             </div>
           </div>
         </DetailRow>
