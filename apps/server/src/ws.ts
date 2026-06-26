@@ -5,6 +5,7 @@ import { runAgent } from "./runAgent";
 import { LogStreamManager, type LogTarget } from "./logStream";
 import { TerminalSession } from "./terminal";
 import { ClusterCreateManager } from "./clusterCreateManager";
+import { ActionRunManager } from "./actionRunManager";
 import { parseChatScope, resolveReadContexts } from "./chatScope";
 import { listContexts } from "./contexts";
 
@@ -18,6 +19,8 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null,
   const terminals = new WeakMap<WebSocket, TerminalSession>();
   // One in-flight cluster-create per connection — killed on cluster.stop/close.
   const creates = new WeakMap<WebSocket, ClusterCreateManager>();
+  // Action-run manager per connection — multiple concurrent runs keyed by id.
+  const actionRunners = new WeakMap<WebSocket, ActionRunManager>();
 
   // Resolve a subscribe/unsubscribe message's effective context (explicit
   // non-empty string, else the connection default) and its per-connection key.
@@ -33,6 +36,7 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null,
       logStreams.set(ws, new LogStreamManager(ws, context));
       terminals.set(ws, new TerminalSession(ws));
       creates.set(ws, new ClusterCreateManager(ws, kubeconfigPath));
+      actionRunners.set(ws, new ActionRunManager(ws, context));
     },
     close(ws: WebSocket) {
       unsubs.get(ws)?.forEach((u) => u());
@@ -40,6 +44,7 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null,
       chatAborts.get(ws)?.abort();
       terminals.get(ws)?.stop();
       creates.get(ws)?.stop();
+      actionRunners.get(ws)?.stop();
     },
     message(ws: WebSocket, raw: string | Buffer) {
       const m = JSON.parse(String(raw));
@@ -144,6 +149,8 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null,
         creates.get(ws)?.create({ tool: m.tool, name: m.name, version: m.version });
       } else if (m.type === "cluster.stop") {
         creates.get(ws)?.stop();
+      } else if (m.type === "action.run" && typeof m.id === "string" && m.action != null) {
+        actionRunners.get(ws)?.run({ id: m.id, action: m.action });
       }
     },
   };

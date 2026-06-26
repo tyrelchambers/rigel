@@ -1,5 +1,6 @@
 import { useCluster } from "@/store/cluster";
 import type { ChatEvent } from "@/panels/chat/types";
+import type { ActionBlock } from "@/lib/api";
 import {
   LINGER_MS,
   finishLinger,
@@ -79,6 +80,38 @@ export function sendClusterStop(): void {
 export function onClusterEvent(cb: ClusterCallback): () => void {
   clusterListeners.push(cb);
   return () => { clusterListeners = clusterListeners.filter((c) => c !== cb); };
+}
+
+/** A streamed action-run event from the server. */
+export type ActionEvent =
+  | { type: "action.progress"; id: string; line: string }
+  | { type: "action.done"; id: string; code: number }
+  | { type: "action.error"; id: string; message: string };
+type ActionCallback = (e: ActionEvent) => void;
+const actionListeners = new Map<string, Set<ActionCallback>>();
+
+/**
+ * Subscribe to action-run frames for a specific run `id`. Returns an unsubscribe fn.
+ * Multiple concurrent runs are isolated by id so they never cross-talk.
+ */
+export function onActionEvent(id: string, cb: ActionCallback): () => void {
+  let listeners = actionListeners.get(id);
+  if (!listeners) {
+    listeners = new Set();
+    actionListeners.set(id, listeners);
+  }
+  listeners.add(cb);
+  return () => {
+    const set = actionListeners.get(id);
+    if (!set) return;
+    set.delete(cb);
+    if (set.size === 0) actionListeners.delete(id);
+  };
+}
+
+/** Send an action.run frame to start executing a chat action-block on the server. */
+export function runAction(id: string, action: ActionBlock): void {
+  rawSend(JSON.stringify({ type: "action.run", id, action }));
 }
 
 /** A line streamed from the server's kubectl-logs process. */
@@ -234,6 +267,12 @@ export function connectCluster(): void {
       termListeners.forEach((cb) => cb(m as TermMessage));
     } else if (m.type === "cluster.progress" || m.type === "cluster.done" || m.type === "cluster.error") {
       clusterListeners.forEach((cb) => cb(m as ClusterEvent));
+    } else if (
+      (m.type === "action.progress" || m.type === "action.done" || m.type === "action.error") &&
+      typeof m.id === "string"
+    ) {
+      const listeners = actionListeners.get(m.id);
+      if (listeners) listeners.forEach((cb) => cb(m as ActionEvent));
     } else if (m.type === "snapshot") {
       // Authoritative full set for this subscription: REPLACE the kind's items
       // (not merge) so switching namespace swaps the data instead of piling the
