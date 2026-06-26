@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { spawnEnv } from "./toolPath";
 
 /**
  * kubectl plugins (invoked as `kubectl <plugin> …`, e.g. the cnpg plugin)
@@ -47,7 +48,12 @@ export function runProcess(
   args: string[],
   opts?: { env?: NodeJS.ProcessEnv },
 ): Promise<RunResult> {
-  return collectProcess(spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"], env: opts?.env }));
+  // Base spawnEnv on the caller-provided env (so explicit vars like KUBECONFIG
+  // are preserved) or on process.env when none is given. This prepends the
+  // gcloud SDK bin to PATH so component-installed tools (gke-gcloud-auth-plugin)
+  // are visible to kubectl and cloud-connect checks even with a Homebrew gcloud.
+  const env = spawnEnv(opts?.env ?? process.env);
+  return collectProcess(spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"], env }));
 }
 
 /**
@@ -55,7 +61,9 @@ export function runProcess(
  * Use for commands like `kubectl apply -f -` that read from stdin.
  */
 export function runProcessWithStdin(bin: string, args: string[], input: string): Promise<RunResult> {
-  const proc = spawn(bin, args, { stdio: ["pipe", "pipe", "pipe"] });
+  // Same gcloud SDK bin PATH fix as runProcess — this is the path used by
+  // `kubectl apply -f -` / `kubectl delete -f -` (catalog installs, assistant agent).
+  const proc = spawn(bin, args, { stdio: ["pipe", "pipe", "pipe"], env: spawnEnv() });
   proc.stdin!.on("error", () => {}); // absorb EPIPE if the child exits before draining stdin
   proc.stdin!.write(input);
   proc.stdin!.end();

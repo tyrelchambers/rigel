@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { buildKubectlArgs } from "@rigel/k8s/src/run";
+import { spawnEnv } from "@rigel/k8s/src/toolPath";
 import { buildCommand, PurgeActionError, type ActionBlock } from "./actions";
 
 interface JsonSink { send(data: string): unknown }
@@ -78,6 +79,7 @@ export class ActionRunManager {
     try {
       proc = this.spawnFn("kubectl", fullArgv, {
         stdio: ["ignore", "pipe", "pipe"],
+        env: spawnEnv(),
       });
     } catch (err) {
       return this.error(id, err instanceof Error ? err.message : String(err));

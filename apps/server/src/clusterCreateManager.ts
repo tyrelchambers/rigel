@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { validateClusterName, buildKindCreateArgs, buildK3dCreateArgs } from "./clusterCreate";
+import { spawnEnv } from "@rigel/k8s/src/toolPath";
 import { backupKubeconfig } from "./kubeconfigBackup";
 
 interface JsonSink { send(data: string): unknown }
@@ -47,7 +48,7 @@ export class ClusterCreateManager {
     try {
       proc = this.spawnFn(req.tool, argv, {
         stdio: ["ignore", "pipe", "pipe"],
-        env: { ...process.env, KUBECONFIG: this.kubeconfigPath },
+        env: spawnEnv({ ...process.env, KUBECONFIG: this.kubeconfigPath }),
       });
     } catch (err) {
       return this.error(err instanceof Error ? err.message : String(err));
