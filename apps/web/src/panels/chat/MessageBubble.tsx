@@ -10,6 +10,7 @@ import { SuggestedAlertList } from "./SuggestedAlertList";
 import { ToolCard } from "./ToolCard";
 import { RigelMark } from "@/components/RigelMark";
 import type { ChatMessage } from "./types";
+import { CodeBlock } from "./CodeBlock";
 
 interface Props {
   message: ChatMessage;
@@ -105,7 +106,7 @@ export function MessageBubble({ message, onAction, onRunBatch, onAnswer, agentNa
           <ToolCard tool={message.tool} />
         ) : isAssistant ? (
           <div className="chat-md select-text">
-            <Markdown remarkPlugins={[remarkGfm]}>{display}</Markdown>
+            <Markdown remarkPlugins={[remarkGfm]} components={{ pre: CodeBlock }}>{display}</Markdown>
           </div>
         ) : display ? (
           <p
