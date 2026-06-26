@@ -1046,18 +1046,22 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
 export const cloudCheck = (provider: CloudProvider) =>
   postJson<CloudCheckResult>("/api/cloud/check", { provider });
 
-export const cloudListClusters = (provider: CloudProvider) =>
+export const cloudListClusters = (provider: CloudProvider, params: Record<string, string> = {}) =>
   postJson<{ clusters?: CloudCluster[]; error?: string; stderr?: string }>(
-    "/api/cloud/clusters", { provider, params: {} },
+    "/api/cloud/clusters", { provider, params },
   );
 
-export async function cloudConnect(provider: CloudProvider, cluster: CloudCluster) {
+export async function cloudConnect(provider: CloudProvider, cluster: CloudCluster, params: Record<string, string> = {}) {
   const r = await postJson<{ context?: string; backupPath?: string | null; error?: string; stderr?: string }>(
-    "/api/cloud/connect", { provider, cluster, params: {} },
+    "/api/cloud/connect", { provider, cluster, params },
   );
   if (r.error) throw new Error(r.stderr || r.error);
   return r;
 }
+
+export interface ParamOptions { options: string[]; default?: string }
+export const cloudParamOptions = (provider: CloudProvider, key: string) =>
+  postJson<ParamOptions>("/api/cloud/param-options", { provider, key });
 
 export async function importKubeconfig(kubeconfig: string) {
   const r = await postJson<{ ok: boolean; backupPath?: string | null; added?: string[]; error?: string }>(

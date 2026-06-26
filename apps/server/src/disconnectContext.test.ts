@@ -58,6 +58,45 @@ test("buildDisconnectCommands returns null for an empty contexts list", () => {
   expect(buildDisconnectCommands({}, "X")).toBeNull();
 });
 
+test("buildDisconnectCommands appends use-context to another context when removing the current-context", () => {
+  const view = {
+    "current-context": "X",
+    contexts: [
+      { name: "X", context: { cluster: "C", user: "U" } },
+      { name: "Y", context: { cluster: "D", user: "V" } },
+    ],
+  };
+  const cmds = buildDisconnectCommands(view, "X");
+  expect(cmds?.at(-1)).toEqual(["config", "use-context", "Y"]);
+});
+
+test("buildDisconnectCommands appends unset current-context when removing the only context that is current", () => {
+  const view = {
+    "current-context": "X",
+    contexts: [
+      { name: "X", context: { cluster: "C", user: "U" } },
+    ],
+  };
+  const cmds = buildDisconnectCommands(view, "X");
+  expect(cmds?.at(-1)).toEqual(["config", "unset", "current-context"]);
+});
+
+test("buildDisconnectCommands does not append use-context/unset when current-context is a different context", () => {
+  const view = {
+    "current-context": "Y",
+    contexts: [
+      { name: "X", context: { cluster: "C", user: "U" } },
+      { name: "Y", context: { cluster: "D", user: "V" } },
+    ],
+  };
+  const cmds = buildDisconnectCommands(view, "X");
+  expect(cmds).toEqual([
+    ["config", "delete-context", "X"],
+    ["config", "delete-cluster", "C"],
+    ["config", "delete-user", "U"],
+  ]);
+});
+
 // ---------- disconnectContext ----------
 
 const kubeconfigPath = "/home/u/.kube/config";
@@ -79,6 +118,26 @@ test("disconnectContext success path: backs up and runs all delete commands", as
   expect(calls).toContainEqual(["config", "delete-context", "X"]);
   expect(calls).toContainEqual(["config", "delete-cluster", "C"]);
   expect(calls).toContainEqual(["config", "delete-user", "U"]);
+});
+
+test("disconnectContext sends the repoint command when removing the current context", async () => {
+  const calls: string[][] = [];
+  const view = JSON.stringify({
+    "current-context": "do-ctx",
+    contexts: [
+      { name: "do-ctx", context: { cluster: "do-cl", user: "do-user" } },
+      { name: "local", context: { cluster: "local-cl", user: "local-user" } },
+    ],
+  });
+  const run: Run = async (args) => {
+    calls.push(args);
+    if (args[0] === "config" && args[1] === "view") return ok(view);
+    return ok();
+  };
+  const backup = vi.fn(async () => null);
+  const result = await disconnectContext("do-ctx", { kubeconfigPath, run, backup });
+  expect(result.ok).toBe(true);
+  expect(calls).toContainEqual(["config", "use-context", "local"]);
 });
 
 test("disconnectContext returns error when a delete command fails", async () => {

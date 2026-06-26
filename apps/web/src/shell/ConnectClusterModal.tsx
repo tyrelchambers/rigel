@@ -2,17 +2,11 @@ import { useEffect, useState } from "react";
 import { Cloud, Upload } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { listCloudProviders, type ProviderDescriptor } from "@rigel/cloud-connect/src/index";
-import { CLUSTER_ICONS, type IconId } from "./clusterIcons";
+import { CLUSTER_ICONS } from "./clusterIcons";
 import { ConnectWizard } from "./ConnectWizard";
 import { ImportKubeconfigPanel } from "./ImportKubeconfigPanel";
 
 type Selection = { kind: "provider"; descriptor: ProviderDescriptor } | { kind: "import" } | null;
-
-const COMING_SOON: { id: IconId; label: string }[] = [
-  { id: "aws", label: "Amazon EKS" },
-  { id: "gcp", label: "Google GKE" },
-  { id: "azure", label: "Azure AKS" },
-];
 
 function ProviderTile({
   label, icon, disabled, onClick,
@@ -61,10 +55,6 @@ export function ConnectClusterModal({ open, onOpenChange }: { open: boolean; onO
             );
           })}
           <ProviderTile label="Import a kubeconfig" icon={<Upload size={26} />} onClick={() => setSelection({ kind: "import" })} />
-          {COMING_SOON.map((p) => {
-            const Icon = CLUSTER_ICONS[p.id].Component;
-            return <ProviderTile key={p.id} label={p.label} icon={<Icon size={26} />} disabled />;
-          })}
         </div>
       ) : selection.kind === "provider" ? (
         <ConnectWizard descriptor={selection.descriptor} onConnected={() => onOpenChange(false)} />

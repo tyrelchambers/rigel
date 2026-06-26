@@ -3,6 +3,7 @@ import type { RunResult } from "@rigel/k8s/src/run";
 import { backupKubeconfig } from "./kubeconfigBackup";
 
 interface RawView {
+  "current-context"?: string;
   contexts?: { name: string; context?: { cluster?: string; user?: string } }[];
 }
 
@@ -22,6 +23,11 @@ export function buildDisconnectCommands(view: RawView, target: string): string[]
   const user = t.context?.user;
   if (cluster && !others.some((c) => c.context?.cluster === cluster)) cmds.push(["config", "delete-cluster", cluster]);
   if (user && !others.some((c) => c.context?.user === user)) cmds.push(["config", "delete-user", user]);
+  // kubectl config delete-context leaves a dangling current-context when we remove
+  // the current one; repoint it so bare kubectl keeps working (unset if none remain).
+  if (view["current-context"] === target) {
+    cmds.push(others.length ? ["config", "use-context", others[0]!.name] : ["config", "unset", "current-context"]);
+  }
   return cmds;
 }
 

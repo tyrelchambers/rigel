@@ -1,18 +1,11 @@
 import { test, expect, vi } from "vitest";
 import {
-  cloudCheck, cloudListClusters, cloudConnect, cloudHealth, importKubeconfig,
+  cloudCheck, cloudListClusters, cloudConnect, cloudHealth, importKubeconfig, cloudParamOptions,
   type Run,
 } from "./cloudConnect";
 
 const ok = (stdout = "") => ({ code: 0, stdout, stderr: "" });
 const fail = (stderr = "", code = 1) => ({ code, stdout: "", stderr });
-
-test("cloudCheck reports installed + authenticated when both probes exit 0", async () => {
-  const run: Run = async () => ok();
-  expect(await cloudCheck("digitalocean", run)).toEqual({
-    cliInstalled: true, extraBinariesInstalled: true, authenticated: true,
-  });
-});
 
 test("cloudCheck reports not-authenticated when the auth probe fails", async () => {
   const run: Run = async (_bin, args) => (args[0] === "account" ? fail("not logged in") : ok());
@@ -29,10 +22,10 @@ test("cloudCheck resolves with account email when auth-check returns JSON with e
   expect(result.account).toBe("me@example.com");
 });
 
-test("cloudCheck stays authenticated with no account key when the auth-check stdout is not valid JSON", async () => {
+test("cloudCheck reports not-authenticated when the auth-check has no resolvable account", async () => {
   const run: Run = async (_bin, args) => (args[0] === "account" ? ok("") : ok());
   const result = await cloudCheck("digitalocean", run);
-  expect(result.authenticated).toBe(true);
+  expect(result.authenticated).toBe(false);
   expect("account" in result).toBe(false);
 });
 
@@ -155,4 +148,39 @@ test("importKubeconfig rejects when the incoming kubeconfig view is not valid JS
     tmpPath: "/tmp/rigel-import-3.yaml",
   });
   expect(res).toEqual({ ok: false, error: "invalid kubeconfig" });
+});
+
+test("cloudListClusters stamps the region from params when the list payload omits it", async () => {
+  const run: Run = async () => ok(JSON.stringify({ clusters: ["prod"] }));
+  expect(await cloudListClusters("aws", { region: "us-east-1" }, run)).toEqual({
+    clusters: [{ id: "prod", name: "prod", region: "us-east-1" }],
+  });
+});
+
+test("cloudListClusters leaves an existing region untouched", async () => {
+  const run: Run = async () => ok(JSON.stringify([{ id: "a", name: "prod", region: "nyc1" }]));
+  expect(await cloudListClusters("digitalocean", { region: "us-east-1" }, run)).toEqual({
+    clusters: [{ id: "a", name: "prod", region: "nyc1" }],
+  });
+});
+
+test("cloudParamOptions returns AWS static regions + the configured default", async () => {
+  const run: Run = async (_bin, args) =>
+    args.join(" ") === "configure get region" ? ok("eu-west-1\n") : fail("unexpected");
+  const r = await cloudParamOptions("aws", "region", run);
+  expect(r.options).toContain("us-east-1");
+  expect(r.default).toBe("eu-west-1");
+});
+
+test("cloudParamOptions fetches GCP projects + default, ignoring (unset)", async () => {
+  const run: Run = async (_bin, args) =>
+    args[0] === "projects" ? ok("proj-a\nproj-b\n") : ok("(unset)\n");
+  const r = await cloudParamOptions("gcp", "project", run);
+  expect(r.options).toEqual(["proj-a", "proj-b"]);
+  expect(r.default).toBeUndefined();
+});
+
+test("cloudParamOptions returns empty options for an unknown provider/param", async () => {
+  const run: Run = async () => ok();
+  expect(await cloudParamOptions("azure", "region", run)).toEqual({ options: [] });
 });

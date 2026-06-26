@@ -23,9 +23,13 @@ export async function cloudCheck(provider: string, run: Run = runProcess): Promi
   let account: string | null | undefined;
   if (cliInstalled) {
     const a = await run(d.binary, d.authCheckArgs);
-    authenticated = a.code === 0;
-    if (authenticated && d.parseAccount) {
-      try { account = d.parseAccount(a.stdout); } catch { account = null; }
+    if (a.code === 0) {
+      if (d.parseAccount) {
+        try { account = d.parseAccount(a.stdout); } catch { account = null; }
+        authenticated = !!account;
+      } else {
+        authenticated = true;
+      }
     }
   }
   return { cliInstalled, extraBinariesInstalled, authenticated, ...(account ? { account } : {}) };
@@ -48,10 +52,40 @@ export async function cloudListClusters(
   const res = await run(d.binary, d.listClustersArgs(params));
   if (res.code !== 0) return { error: "failed to list clusters", stderr: res.stderr };
   try {
-    return { clusters: d.parseClusterList(res.stdout) };
+    const clusters = d.parseClusterList(res.stdout).map((c) =>
+      c.region || !params.region ? c : { ...c, region: params.region });
+    return { clusters };
   } catch {
     return { error: "could not parse cluster list", stderr: res.stdout };
   }
+}
+
+export interface ParamOptions {
+  options: string[];
+  default?: string;
+}
+
+/** Fetch the dropdown options + pre-selected default for a provider's required param. */
+export async function cloudParamOptions(provider: string, key: string, run: Run = runProcess): Promise<ParamOptions> {
+  const d = descriptorFor(provider);
+  const spec = d?.requiredParams.find((p) => p.key === key);
+  if (!d || !spec) return { options: [] };
+  let options: string[] = spec.staticOptions ?? [];
+  if (spec.optionsArgs) {
+    const res = await run(d.binary, spec.optionsArgs);
+    if (res.code === 0) {
+      options = res.stdout.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    }
+  }
+  let def: string | undefined;
+  if (spec.defaultArgs) {
+    const r = await run(d.binary, spec.defaultArgs);
+    if (r.code === 0) {
+      const v = r.stdout.trim();
+      if (v && v !== "(unset)") def = v;
+    }
+  }
+  return { options, ...(def ? { default: def } : {}) };
 }
 
 export interface ConnectDeps {

@@ -39,7 +39,7 @@ import { detectClusterTools } from "./clusterTools";
 import { toolForContext, buildKindDeleteArgs, buildK3dDeleteArgs } from "./clusterCreate";
 import { backupKubeconfig } from "./kubeconfigBackup";
 import {
-  cloudCheck, cloudListClusters, cloudConnect, cloudHealth, importKubeconfig,
+  cloudCheck, cloudListClusters, cloudConnect, cloudHealth, importKubeconfig, cloudParamOptions,
 } from "./cloudConnect";
 import { disconnectContext } from "./disconnectContext";
 import { canConnect, type ConnectTarget } from "./entitlements";
@@ -169,6 +169,18 @@ async function handler(req: Request): Promise<Response> {
         return Response.json({ error: "provider required" }, { status: 422 });
       }
       return Response.json(await cloudListClusters(body.provider, body.params ?? {}));
+    }
+
+    // POST /api/cloud/param-options { provider, key } — dropdown options + default
+    // for a required connect param (AWS region, GCP project). Read-only. 200.
+    if (url.pathname === "/api/cloud/param-options" && req.method === "POST") {
+      let body: { provider?: string; key?: string };
+      try { body = (await req.json()) as typeof body; }
+      catch { return Response.json({ error: "invalid JSON body" }, { status: 400 }); }
+      if (typeof body.provider !== "string" || typeof body.key !== "string") {
+        return Response.json({ error: "provider and key required" }, { status: 422 });
+      }
+      return Response.json(await cloudParamOptions(body.provider, body.key));
     }
 
     // POST /api/cloud/connect { provider, cluster, params } — write the kubeconfig

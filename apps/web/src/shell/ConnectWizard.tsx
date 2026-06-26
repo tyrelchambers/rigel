@@ -2,25 +2,31 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Check, CloudOff, Copy, ExternalLink, RefreshCw, UserRound } from "lucide-react";
+import { Check, ChevronDown, CloudOff, Copy, ExternalLink, RefreshCw, ShieldAlert, UserRound } from "lucide-react";
 import { FaApple, FaLinux, FaWindows } from "react-icons/fa";
 import {
-  type ProviderDescriptor, type CloudCluster, type CheckResult, nextStepFromCheck,
+  type ProviderDescriptor, type CloudCluster, type CheckResult, type ParamSpec, nextStepFromCheck, diagnoseError,
 } from "@rigel/cloud-connect/src/index";
 import {
   cloudCheck as defaultCheck, cloudListClusters as defaultList, cloudConnect as defaultConnect,
+  cloudParamOptions as defaultParamOptions,
   type CloudProvider,
 } from "@/lib/api";
 
 interface Actions {
   check: (provider: CloudProvider) => Promise<CheckResult>;
-  list: (provider: CloudProvider) => Promise<{ clusters?: CloudCluster[]; error?: string; stderr?: string }>;
-  connect: (provider: CloudProvider, cluster: CloudCluster) => Promise<{ context?: string; backupPath?: string | null }>;
+  list: (provider: CloudProvider, params: Record<string, string>) => Promise<{ clusters?: CloudCluster[]; error?: string; stderr?: string }>;
+  connect: (provider: CloudProvider, cluster: CloudCluster, params: Record<string, string>) => Promise<{ context?: string; backupPath?: string | null }>;
+  paramOptions: (provider: CloudProvider, key: string) => Promise<{ options: string[]; default?: string }>;
 }
 
-const defaultActions: Actions = { check: defaultCheck, list: defaultList, connect: defaultConnect };
+const defaultActions: Actions = {
+  check: defaultCheck, list: defaultList, connect: defaultConnect, paramOptions: defaultParamOptions,
+};
 
-type Phase = "checking" | "needs-cli" | "needs-extra" | "needs-login" | "listing" | "pick" | "connecting" | "error";
+type Phase = "checking" | "needs-cli" | "needs-extra" | "needs-login" | "needs-params" | "listing" | "pick" | "connecting" | "error";
+
+type ParamField = { spec: ParamSpec; options: string[]; value: string; fromDefault: boolean };
 
 /** Detect the current OS from the user agent. */
 function detectOS(): "macos" | "linux" | "windows" | null {
@@ -217,6 +223,125 @@ function PlatformCard({
   );
 }
 
+function Step({ n, text }: { n: number; text: string }) {
+  return (
+    <div style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>
+      <div style={{
+        width: 18, height: 18, borderRadius: "50%", flexShrink: 0,
+        background: "var(--accent-dim)", display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600, color: "var(--accent-primary)" }}>{n}</span>
+      </div>
+      <span style={{ fontSize: 13, color: "var(--fg-secondary)", lineHeight: 1.5 }}>{text}</span>
+    </div>
+  );
+}
+
+function ErrorPanel({ descriptor, error, account, onRetry }: { descriptor: ProviderDescriptor; error: string; account: string | null; onRetry: () => void }) {
+  const hint = diagnoseError(descriptor, error);
+  const [showDetails, setShowDetails] = useState(!hint);
+  const [copied, setCopied] = useState(false);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (copyTimer.current) clearTimeout(copyTimer.current); }, []);
+
+  function copyError() {
+    if (!navigator.clipboard) return;
+    if (copyTimer.current) clearTimeout(copyTimer.current);
+    navigator.clipboard.writeText(error).then(() => {
+      setCopied(true);
+      copyTimer.current = setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {});
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Head */}
+      <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+        <div style={{
+          width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+          background: "var(--surface-elevated)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <ShieldAlert size={19} color="var(--status-failed)" />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: "var(--fg-primary)" }}>
+            {hint ? hint.title : `Couldn't reach ${descriptor.displayName}`}
+          </div>
+          <div style={{ fontSize: 13, color: "var(--fg-secondary)", lineHeight: 1.5 }}>
+            {hint
+              ? "Grant the access below, then try again."
+              : `This is usually a permissions or configuration issue on the ${descriptor.displayName} side.`}
+          </div>
+          {account ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+              <UserRound size={13} color="var(--fg-tertiary)" style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: 12, color: "var(--fg-tertiary)", flexShrink: 0 }}>Signed in as</span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--fg-secondary)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{account}</span>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {/* How to fix */}
+      {hint && (
+        <div style={{
+          display: "flex", flexDirection: "column", gap: 11, padding: 14, borderRadius: 12,
+          background: "var(--surface-elevated)", border: "1px solid var(--border-subtle)",
+        }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.04em", color: "var(--fg-tertiary)" }}>HOW TO FIX</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            {hint.steps.map((s, i) => <Step key={s} n={i + 1} text={s} />)}
+          </div>
+        </div>
+      )}
+
+      {/* Error details */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <button type="button" onClick={() => setShowDetails((v) => !v)} style={{
+            display: "flex", alignItems: "center", gap: 6, background: "transparent", border: "none",
+            cursor: "pointer", color: "var(--fg-secondary)", fontSize: 12, padding: 0,
+          }}>
+            <ChevronDown size={15} style={{ transform: showDetails ? "rotate(180deg)" : "rotate(0deg)" }} />
+            Error details
+          </button>
+          <button type="button" aria-label={copied ? "Copied" : "Copy error"} onClick={copyError} style={{
+            display: "flex", alignItems: "center", gap: 5, background: "transparent", border: "none",
+            cursor: "pointer", color: copied ? "var(--fg-secondary)" : "var(--accent-primary)", fontSize: 12,
+          }}>
+            {copied ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}
+          </button>
+        </div>
+        {showDetails && (
+          <div style={{
+            padding: "10px 12px", borderRadius: 8,
+            background: "var(--surface-sunken)", border: "1px solid var(--border-subtle)",
+          }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--fg-secondary)", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+              {error}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 6 }}>
+        {hint?.docsUrl ? (
+          <a href={hint.docsUrl} target="_blank" rel="noreferrer" style={{
+            display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--accent-primary)", textDecoration: "none",
+          }}>
+            {hint.docsLabel ?? "Docs"} <ExternalLink size={11} />
+          </a>
+        ) : <span />}
+        <Button onClick={onRetry}>
+          <RefreshCw size={14} style={{ marginRight: 6 }} /> Try again
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function ConnectWizard({
   descriptor, actions = defaultActions, onConnected,
 }: {
@@ -230,7 +355,23 @@ export function ConnectWizard({
   const [clusters, setClusters] = useState<CloudCluster[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [account, setAccount] = useState<string | null>(null);
+  const [paramFields, setParamFields] = useState<ParamField[]>([]);
+  const [params, setParams] = useState<Record<string, string>>({});
   const detectedOS = detectOS();
+
+  async function listClusters(p: Record<string, string>) {
+    setParams(p);
+    setPhase("listing");
+    try {
+      const res = await actions.list(provider, p);
+      if (res.error) { setError(res.stderr || res.error); setPhase("error"); return; }
+      setClusters(res.clusters ?? []);
+      setPhase("pick");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "list failed");
+      setPhase("error");
+    }
+  }
 
   async function runCheck() {
     setPhase("checking");
@@ -239,15 +380,23 @@ export function ConnectWizard({
       const check = await actions.check(provider);
       setAccount(check.account ?? null);
       const step = nextStepFromCheck(check);
-      if (step === "ready") {
-        setPhase("listing");
-        const res = await actions.list(provider);
-        if (res.error) { setError(res.stderr || res.error); setPhase("error"); return; }
-        setClusters(res.clusters ?? []);
-        setPhase("pick");
-      } else {
-        setPhase(step);
+      if (step !== "ready") { setPhase(step); return; }
+      if (descriptor.requiredParams.length > 0) {
+        const fields: ParamField[] = [];
+        for (const spec of descriptor.requiredParams) {
+          let opts;
+          try { opts = await actions.paramOptions(provider, spec.key); }
+          catch { setError(`Couldn't load ${spec.label.toLowerCase()} options.`); setPhase("error"); return; }
+          const options = opts.default && !opts.options.includes(opts.default)
+            ? [opts.default, ...opts.options]
+            : opts.options;
+          fields.push({ spec, options, value: opts.default ?? options[0] ?? "", fromDefault: !!opts.default });
+        }
+        setParamFields(fields);
+        setPhase("needs-params");
+        return;
       }
+      await listClusters({});
     } catch (e) {
       setError(e instanceof Error ? e.message : "check failed");
       setPhase("error");
@@ -260,7 +409,7 @@ export function ConnectWizard({
     setPhase("connecting");
     setError(null);
     try {
-      const r = await actions.connect(provider, cluster);
+      const r = await actions.connect(provider, cluster, params);
       qc.invalidateQueries({ queryKey: ["contexts"] });
       toast.success(`Connected to "${cluster.name}"`, {
         description: r.backupPath ? `Kubeconfig backed up to ${r.backupPath}` : undefined,
@@ -280,7 +429,7 @@ export function ConnectWizard({
     return <div style={{ fontSize: 13, color: "var(--fg-secondary)" }}>{msg}</div>;
   }
 
-  if (phase === "needs-cli" || phase === "needs-extra") {
+  if (phase === "needs-cli") {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {/* Heading */}
@@ -321,6 +470,79 @@ export function ConnectWizard({
     );
   }
 
+  if (phase === "needs-extra" && descriptor.extraInstallHelp) {
+    const x = descriptor.extraInstallHelp;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--fg-primary)" }}>Install {x.binary}</div>
+          <div style={{ fontSize: 13, color: "var(--fg-secondary)", lineHeight: 1.5 }}>
+            kubectl needs {x.binary} to reach {descriptor.displayName} clusters. Install it, then re-check.
+          </div>
+        </div>
+        <CommandField command={x.command} />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <a href={x.docsUrl} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--accent-primary)", textDecoration: "none" }}>
+            Plugin docs <ExternalLink size={11} />
+          </a>
+          <Button onClick={() => void runCheck()}>Re-check</Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === "needs-extra") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ fontSize: 13, color: "var(--fg-secondary)", lineHeight: 1.5 }}>
+          kubectl needs an extra command-line tool to reach {descriptor.displayName} clusters. Install it from the {descriptor.displayName} docs, then re-check.
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <Button onClick={() => void runCheck()}>Re-check</Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === "needs-params") {
+    const submit = () => void listClusters(Object.fromEntries(paramFields.map((f) => [f.spec.key, f.value])));
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {paramFields.map((f, i) => (
+          <div key={f.spec.key} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <label htmlFor={`param-${f.spec.key}`} style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--fg-tertiary)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+              {f.spec.label}
+            </label>
+            <select
+              id={`param-${f.spec.key}`}
+              value={f.value}
+              onChange={(e) => {
+                const v = e.target.value;
+                setParamFields((prev) => prev.map((p, j) => (j === i ? { ...p, value: v } : p)));
+              }}
+              style={{
+                width: "100%", appearance: "none", cursor: "pointer",
+                background: "var(--surface-sunken)", color: "var(--fg-primary)",
+                border: "1px solid var(--border-strong)", borderRadius: 8,
+                padding: "10px 12px", fontFamily: "var(--font-mono)", fontSize: 13,
+              }}
+            >
+              {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+            {f.fromDefault ? (
+              <span style={{ fontSize: 11.5, color: "var(--fg-tertiary)", lineHeight: 1.4 }}>
+                Pre-selected from your {descriptor.displayName} CLI config.
+              </span>
+            ) : null}
+          </div>
+        ))}
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <Button onClick={submit} disabled={paramFields.some((f) => !f.value)}>Continue</Button>
+        </div>
+      </div>
+    );
+  }
+
   if (phase === "needs-login") {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -332,12 +554,7 @@ export function ConnectWizard({
   }
 
   if (phase === "error") {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ color: "var(--destructive)", fontSize: 13 }}>{error}</div>
-        <div><Button onClick={() => void runCheck()}>Try again</Button></div>
-      </div>
-    );
+    return <ErrorPanel descriptor={descriptor} error={error ?? "The connection failed."} account={account} onRetry={() => void runCheck()} />;
   }
 
   // pick

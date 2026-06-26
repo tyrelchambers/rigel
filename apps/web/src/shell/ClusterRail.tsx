@@ -42,12 +42,19 @@ export function ClusterRail() {
   const isCloud = ["digitalocean", "aws", "gcp", "azure"].includes(activeProvider);
   const health = useClusterHealth(active?.name ?? null, activeProvider, isCloud);
 
-  // Once contexts load, adopt the kubeconfig's active one as the initial active
-  // context (no teardown). initContext only acts while currentContext is unset.
+  // Keep the active context valid against the live kubeconfig list. On first load
+  // (activeContext null) adopt the kubeconfig's active context. If the active
+  // context later disappears (disconnected, deleted, or edited externally),
+  // re-point at a valid one so panels don't query a context that's gone.
   useEffect(() => {
-    const initial = contexts?.find((c) => c.active) ?? contexts?.[0];
-    if (initial) initContext(initial.name);
-  }, [contexts]);
+    if (!contexts || contexts.length === 0) return;
+    const fallback = contexts.find((c) => c.active) ?? contexts[0];
+    if (activeContext === null) {
+      initContext(fallback.name);
+    } else if (!contexts.some((c) => c.name === activeContext)) {
+      switchCluster(fallback.name);
+    }
+  }, [contexts, activeContext]);
 
   function setIcon(contextName: string, id: IconId) {
     setIconOverrides((prev) => {
@@ -210,16 +217,11 @@ export function ClusterRail() {
         onConfirm={() => {
           const removed = removeFor;
           if (!removed) return;
-          const wasActive = activeContext === removed;
           disconnect.mutate(removed, {
             onSuccess: (data) => {
               toast.success(`Removed "${removed}" from Rigel`, {
                 description: data.backupPath ? `Kubeconfig backed up to ${data.backupPath}` : undefined,
               });
-              if (wasActive) {
-                const next = contexts?.find((c) => c.name !== removed);
-                if (next) switchCluster(next.name);
-              }
               setRemoveFor(null);
             },
             onError: (err) => {
