@@ -21,12 +21,14 @@ import {
   latestCompletedBackup,
   matchPods,
   matchesDatabase,
+  phaseBadgeVariant,
   podNodes,
   readyColorClass,
   relativeAge,
   sortInstances,
   sourceBadgeLabel,
   walArchivingStatus,
+  walBadgeVariant,
 } from "./databasesDisplay";
 import type { DatabaseSecret } from "./types";
 
@@ -422,6 +424,24 @@ describe("badge helpers", () => {
   test("readyColorClass switches on health", () => {
     expect(readyColorClass(true)).toContain("green");
     expect(readyColorClass(false)).toContain("red");
+  });
+});
+
+describe("phaseBadgeVariant", () => {
+  test("maps pod phases to StatusBadge variants", () => {
+    expect(phaseBadgeVariant("Running")).toBe("healthy");
+    expect(phaseBadgeVariant("Pending")).toBe("pending");
+    expect(phaseBadgeVariant("Failed")).toBe("error");
+    expect(phaseBadgeVariant("Succeeded")).toBe("neutral");
+    expect(phaseBadgeVariant("Unknown")).toBe("neutral");
+  });
+});
+
+describe("walBadgeVariant", () => {
+  test("maps WAL archiving status to StatusBadge variants", () => {
+    expect(walBadgeVariant("healthy")).toBe("healthy");
+    expect(walBadgeVariant("failing")).toBe("error");
+    expect(walBadgeVariant("unknown")).toBe("neutral");
   });
 });
 

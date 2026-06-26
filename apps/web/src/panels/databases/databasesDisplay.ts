@@ -22,6 +22,7 @@ import type {
   WorkloadDB,
 } from "./types";
 import type { ActionBlock } from "@/lib/api";
+import type { StatusBadgeVariant } from "@/panels/components/StatusBadge";
 
 // ---------------------------------------------------------------------------
 // Age
@@ -472,29 +473,29 @@ export function kindColorClass(kind: DatabaseKind): string {
   }
 }
 
-/** Pod phase status-dot color class (background). */
-export function phaseDotClass(phase: string): string {
+/** Pod phase -> StatusBadge variant. */
+export function phaseBadgeVariant(phase: string): StatusBadgeVariant {
   switch (phase) {
     case "Running":
-      return "bg-green-500";
+      return "healthy";
     case "Pending":
-      return "bg-yellow-500";
+      return "pending";
     case "Failed":
-      return "bg-red-500";
+      return "error";
     default: // Succeeded / Unknown / other
-      return "bg-muted-foreground";
+      return "neutral";
   }
 }
 
-/** WAL archiving status-dot color class (background). */
-export function walDotClass(status: WalArchivingStatus): string {
+/** WAL archiving status -> StatusBadge variant. */
+export function walBadgeVariant(status: WalArchivingStatus): StatusBadgeVariant {
   switch (status) {
     case "healthy":
-      return "bg-green-500";
+      return "healthy";
     case "failing":
-      return "bg-red-500";
+      return "error";
     case "unknown":
-      return "bg-muted-foreground";
+      return "neutral";
   }
 }
 
