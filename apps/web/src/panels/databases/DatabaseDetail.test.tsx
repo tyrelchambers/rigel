@@ -49,17 +49,20 @@ function renderDetail() {
 }
 
 describe("DatabaseDetail state badges", () => {
-  it("renders a non-healthy STATUS as an amber/pending StatusBadge", () => {
+  it("renders a non-healthy STATUS as an amber/pending StatusBadge that wraps", () => {
     renderDetail();
+    // STATUS can hold long freeform CNPG phase text, so its badge wraps.
     expect(screen.getByText("Failing over")).toHaveStyle({
       color: "var(--status-pending)",
+      whiteSpace: "normal",
     });
   });
 
-  it("renders a pod phase as a StatusBadge with no phase dot", () => {
+  it("renders a pod phase as a non-wrapping StatusBadge with no phase dot", () => {
     const { container } = renderDetail();
     expect(screen.getByText("Running")).toHaveStyle({
       color: "var(--status-running)",
+      whiteSpace: "nowrap",
     });
     // The phase status dot is gone; the only round pill left in a pod row is
     // the `primary` chip (which is rounded-full but not size-2).

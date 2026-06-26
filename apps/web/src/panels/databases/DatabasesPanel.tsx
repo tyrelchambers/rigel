@@ -494,6 +494,7 @@ export function DatabaseDetail({
         <StatusBadge
           label={instance.phaseText}
           variant={instance.isHealthy ? "healthy" : "pending"}
+          wrap
         />
       </DetailRow>
 

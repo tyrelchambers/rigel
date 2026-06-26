@@ -19,6 +19,8 @@ interface StatusBadgeProps {
   variant?: StatusBadgeVariant;
   /** Optional tooltip. */
   title?: string;
+  /** Allow long labels to wrap instead of staying on one line. Defaults to false. */
+  wrap?: boolean;
 }
 
 const COLORS: Record<StatusBadgeVariant, { text: string; bg: string }> = {
@@ -28,7 +30,7 @@ const COLORS: Record<StatusBadgeVariant, { text: string; bg: string }> = {
   neutral: { text: "var(--fg-secondary)", bg: "rgba(161,161,170,0.12)" },
 };
 
-export function StatusBadge({ label, variant = "neutral", title }: StatusBadgeProps) {
+export function StatusBadge({ label, variant = "neutral", title, wrap = false }: StatusBadgeProps) {
   const { text, bg } = COLORS[variant];
   return (
     <span
@@ -41,7 +43,7 @@ export function StatusBadge({ label, variant = "neutral", title }: StatusBadgePr
         background: bg,
         padding: "1px 6px",
         borderRadius: 4,
-        whiteSpace: "nowrap",
+        whiteSpace: wrap ? "normal" : "nowrap",
         flexShrink: 0,
       }}
     >
