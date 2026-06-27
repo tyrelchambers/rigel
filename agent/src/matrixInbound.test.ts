@@ -1,6 +1,6 @@
 // agent/src/matrixInbound.test.ts
-import { describe, expect, test } from "vitest";
-import { parseSyncEvents, isAllowedSender, SeenEventIds } from "./matrixInbound.js";
+import { describe, expect, test, vi } from "vitest";
+import { parseSyncEvents, isAllowedSender, SeenEventIds, handleMatrixInbound, type MatrixInboundContext, type MatrixInboundHandlers } from "./matrixInbound.js";
 
 describe("parseSyncEvents", () => {
   const SAMPLE = {
@@ -58,5 +58,89 @@ describe("SeenEventIds", () => {
     seen.mark("$3"); // evicts $1
     expect(seen.has("$1")).toBe(false);
     expect(seen.has("$3")).toBe(true);
+  });
+});
+
+function fakeHandlers(over: Partial<MatrixInboundHandlers> = {}): MatrixInboundHandlers & { replies: string[] } {
+  const replies: string[] = [];
+  return {
+    replies,
+    sync: vi.fn(async () => ({ next_batch: "s2", rooms: { join: {} } })),
+    reply: vi.fn(async (text: string) => { replies.push(text); }),
+    help: () => "HELP",
+    status: vi.fn(async () => "STATUS"),
+    queue: vi.fn(async () => "QUEUE"),
+    approve: vi.fn(async (i: number) => `APPROVED ${i}`),
+    diagnose: vi.fn(async (q: string) => `DIAGNOSED: ${q}`),
+    ...over,
+  };
+}
+
+const CTX: MatrixInboundContext = {
+  enabled: true,
+  homeserverUrl: "https://hs",
+  accessToken: "tok",
+  roomId: "!room:hs",
+  allow: ["@me:hs"],
+  since: "s1",
+};
+
+function syncWith(events: unknown[], nextBatch = "s2") {
+  return { next_batch: nextBatch, rooms: { join: { "!room:hs": { timeline: { events } } } } };
+}
+
+describe("handleMatrixInbound", () => {
+  test("returns the prior cursor and does nothing when disabled/unconfigured", async () => {
+    const h = fakeHandlers();
+    expect(await handleMatrixInbound({ ...CTX, enabled: false }, h, new SeenEventIds())).toBe("s1");
+    expect(await handleMatrixInbound({ ...CTX, accessToken: undefined }, h, new SeenEventIds())).toBe("s1");
+    expect(h.sync).not.toHaveBeenCalled();
+  });
+
+  test("routes a diagnosis question from an allowed sender and returns next_batch", async () => {
+    const raw = syncWith([
+      { type: "m.room.message", event_id: "$1", sender: "@me:hs", origin_server_ts: 5, content: { msgtype: "m.text", body: "why down?" } },
+    ]);
+    const h = fakeHandlers({ sync: vi.fn(async () => raw) });
+    const next = await handleMatrixInbound(CTX, h, new SeenEventIds());
+    expect(h.diagnose).toHaveBeenCalledWith("why down?", "@me:hs", 5);
+    expect(h.replies).toEqual(["DIAGNOSED: why down?"]);
+    expect(next).toBe("s2");
+  });
+
+  test("ignores messages from senders not on the allowlist", async () => {
+    const raw = syncWith([
+      { type: "m.room.message", event_id: "$1", sender: "@stranger:hs", origin_server_ts: 5, content: { msgtype: "m.text", body: "status" } },
+    ]);
+    const h = fakeHandlers({ sync: vi.fn(async () => raw) });
+    await handleMatrixInbound(CTX, h, new SeenEventIds());
+    expect(h.status).not.toHaveBeenCalled();
+    expect(h.replies).toEqual([]);
+  });
+
+  test("does not re-process an event id already seen", async () => {
+    const raw = syncWith([
+      { type: "m.room.message", event_id: "$dup", sender: "@me:hs", origin_server_ts: 5, content: { msgtype: "m.text", body: "status" } },
+    ]);
+    const h = fakeHandlers({ sync: vi.fn(async () => raw) });
+    const seen = new SeenEventIds();
+    await handleMatrixInbound(CTX, h, seen);
+    await handleMatrixInbound(CTX, h, seen);
+    expect(h.status).toHaveBeenCalledTimes(1);
+  });
+
+  test("a sync failure is swallowed and keeps the prior cursor", async () => {
+    const h = fakeHandlers({ sync: vi.fn(async () => { throw new Error("unreachable"); }) });
+    expect(await handleMatrixInbound(CTX, h, new SeenEventIds())).toBe("s1");
+    expect(h.replies).toEqual([]);
+  });
+
+  test("chunks a long reply into multiple sends", async () => {
+    const raw = syncWith([
+      { type: "m.room.message", event_id: "$1", sender: "@me:hs", origin_server_ts: 5, content: { msgtype: "m.text", body: "explain" } },
+    ]);
+    const h = fakeHandlers({ sync: vi.fn(async () => raw), diagnose: vi.fn(async () => "x".repeat(3000)) });
+    await handleMatrixInbound(CTX, h, new SeenEventIds());
+    expect(h.replies.length).toBeGreaterThan(1);
   });
 });

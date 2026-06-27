@@ -1,4 +1,5 @@
 // agent/src/matrixInbound.ts
+import { parseCommand, dispatchCommand, chunkText, type CommandHandlers } from "./signalInbound.js";
 /**
  * Inbound Matrix: the operator texts the assistant over a Matrix room to diagnose
  * the cluster and approve queued fixes. This module is the pure, testable core —
@@ -84,4 +85,61 @@ export class SeenEventIds {
       if (old !== undefined) this.seen.delete(old);
     }
   }
+}
+
+export interface MatrixInboundContext {
+  /** Whether inbound command handling is turned on (assistant-config matrixInbound). */
+  enabled: boolean;
+  homeserverUrl?: string;
+  accessToken?: string;
+  roomId?: string;
+  /** Authorized sender Matrix ids (the operator's own id by default). */
+  allow: string[];
+  /** The `since` cursor from the last poll (undefined on first run). */
+  since?: string;
+}
+
+export interface MatrixInboundHandlers extends CommandHandlers {
+  /** GET /_matrix/client/v3/sync with the stored cursor; returns the parsed body. */
+  sync(since: string | undefined): Promise<unknown>;
+  /** PUT a reply into the configured room. */
+  reply(text: string): Promise<void>;
+}
+
+/**
+ * One inbound poll: sync from the cursor, drop anything unauthorized or already
+ * seen, route each event to its command, and reply (chunked). Never throws — a
+ * handler failure becomes an error reply and a sync failure keeps the prior
+ * cursor, so inbound never disturbs the remediation loop. Returns the new `since`
+ * cursor for the caller to persist (the prior cursor on a failed/empty sync).
+ */
+export async function handleMatrixInbound(
+  ctx: MatrixInboundContext,
+  h: MatrixInboundHandlers,
+  seen: SeenEventIds,
+): Promise<string | undefined> {
+  if (!ctx.enabled || !ctx.homeserverUrl || !ctx.accessToken || !ctx.roomId) return ctx.since;
+  let raw: unknown;
+  try {
+    raw = await h.sync(ctx.since);
+  } catch (e) {
+    h.log?.(`matrix sync failed: ${String(e)}`);
+    return ctx.since;
+  }
+  const { events, nextBatch } = parseSyncEvents(raw, ctx.roomId);
+  for (const ev of events) {
+    if (seen.has(ev.eventId)) continue;
+    seen.mark(ev.eventId);
+    if (!isAllowedSender(ev.sender, ctx.allow)) {
+      h.log?.(`matrix: ignoring message from unauthorized sender ${ev.sender}`);
+      continue;
+    }
+    const cmd = parseCommand(ev.body);
+    h.log?.(`matrix: ${cmd.kind} from ${ev.sender}`);
+    const reply = await dispatchCommand(cmd, h, ev.sender, ev.timestamp);
+    for (const chunk of chunkText(reply)) {
+      await h.reply(chunk);
+    }
+  }
+  return nextBatch || ctx.since;
 }
