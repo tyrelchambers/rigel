@@ -328,6 +328,7 @@ export type AssistantAction =
   | "clearReport"
   | "clearActivity"
   | "setSignal"
+  | "setMatrix"
   | "saveAlert"
   | "deleteAlert"
   | "toggleAlert"
@@ -412,6 +413,13 @@ export interface AssistantRequest {
   number?: string;
   recipients?: string;
   inbound?: boolean;
+  // setMatrix — Matrix channel config (token → Secret; rest → assistant-config).
+  matrixHomeserverUrl?: string;
+  matrixUserId?: string;
+  matrixAccessToken?: string;
+  matrixRoomId?: string;
+  matrixAllowedSenders?: string;
+  matrixInbound?: boolean;
   // saveAlert payload (model block, validated server-side)
   alert?: SuggestedAlert;
   // toggleAlert / deleteAlert fields
@@ -653,6 +661,53 @@ export async function sendSignalTest(args: {
     body: JSON.stringify({ action: "sendTest", ...args }),
   });
   if (!res.ok) await throwApiError(res);
+}
+
+// ---------------------------------------------------------------------------
+// Matrix connect proxy — POST /api/matrix
+// ---------------------------------------------------------------------------
+
+export interface MatrixLoginResult {
+  accessToken: string;
+  userId: string;
+}
+
+/** Log the bot in (username + password) and return a token + the resolved id. */
+export async function matrixLogin(homeserver: string, user: string, password: string): Promise<MatrixLoginResult> {
+  const res = await fetch("/api/matrix", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "login", homeserver, user, password }),
+  });
+  if (!res.ok) await throwApiError(res);
+  return (await res.json()) as MatrixLoginResult;
+}
+
+/** Validate a pasted access token against the homeserver (whoami); returns the id. */
+export async function matrixValidate(homeserver: string, accessToken: string): Promise<{ userId: string }> {
+  const res = await fetch("/api/matrix", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "validate", homeserver, accessToken }),
+  });
+  if (!res.ok) await throwApiError(res);
+  return (await res.json()) as { userId: string };
+}
+
+/** Provision an unencrypted room and invite the allowed senders; returns its id. */
+export async function matrixCreateRoom(
+  homeserver: string,
+  accessToken: string,
+  roomName: string,
+  invite: string[],
+): Promise<{ roomId: string }> {
+  const res = await fetch("/api/matrix", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "createRoom", homeserver, accessToken, roomName, invite }),
+  });
+  if (!res.ok) await throwApiError(res);
+  return (await res.json()) as { roomId: string };
 }
 
 // ---------------------------------------------------------------------------
