@@ -115,9 +115,13 @@ registration must be off and accounts locked down.
 
 The agent uses an **unencrypted room** and plain HTTP, exactly like the Signal bridge. It
 does not implement megolm. Because most Matrix clients (notably Element X) refuse to create
-unencrypted rooms, **the agent provisions the room**: it creates an unencrypted room, names
-it, and invites the allowed user(s). The user accepts in their client and chats there. The
-"first contact" wizard step reflects this (Rigel created a room and invited you).
+unencrypted rooms, **Rigel provisions the room during setup**: the wizard, acting as the bot
+with the bot token, creates an unencrypted room, invites the allowed user(s), and stores the
+room id in `assistant-config`. The agent then simply reads and writes that room. The user
+accepts the invite in their client and chats there. The "first contact" wizard step reflects
+this (Rigel created a room and invited you). Room creation lives server-side (in the desktop
+app's server, next to the other Matrix API calls), not in the agent, since the bot token and
+the guided setup flow both live there.
 
 Privacy follows the path: on a homeserver the user owns (A or C) the room content sits only
 on their own server, and transport is TLS over the tailnet or in-cluster, so nothing third
