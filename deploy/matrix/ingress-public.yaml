@@ -1,0 +1,30 @@
+# Public HTTPS endpoint for OpenClaw (which blocks tailnet/private IPs via its SSRF guard).
+# The tailnet-only ingress (ingress.yaml) stays for Element / personal use; this adds a
+# public path. Synapse server_name remains matrix.tail8a13da.ts.net; this is only a
+# connection endpoint. Hardened: registration off, federation off, token auth.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: matrix-public
+  namespace: personal
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.middlewares: default-redirect-https@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: matrix.tybit.luxe
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: synapse
+                port:
+                  number: 8008
+  tls:
+    - hosts:
+        - matrix.tybit.luxe
+      secretName: matrix-tls

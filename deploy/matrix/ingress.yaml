@@ -1,0 +1,15 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: matrix
+  namespace: personal
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: synapse
+      port:
+        number: 8008
+  tls:
+    - hosts:
+        - matrix

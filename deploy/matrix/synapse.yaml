@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: synapse-media
+  namespace: personal
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: nfs
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: synapse
+  namespace: personal
+  labels: { app: synapse }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: synapse }
+  template:
+    metadata:
+      labels: { app: synapse }
+    spec:
+      securityContext:
+        fsGroup: 991
+        runAsUser: 991
+        runAsGroup: 991
+      containers:
+        - name: synapse
+          image: ghcr.io/element-hq/synapse:v1.155.0
+          env:
+            - name: SYNAPSE_CONFIG_PATH
+              value: /config/homeserver.yaml
+          ports:
+            - containerPort: 8008
+          volumeMounts:
+            - { name: config, mountPath: /config, readOnly: true }
+            - { name: media, mountPath: /data }
+          readinessProbe:
+            httpGet: { path: /health, port: 8008 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: 8008 }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests: { cpu: 100m, memory: 512Mi }
+            limits: { memory: 1Gi }
+      volumes:
+        - name: config
+          secret:
+            secretName: synapse-config
+        - name: media
+          persistentVolumeClaim:
+            claimName: synapse-media
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: synapse
+  namespace: personal
+spec:
+  selector: { app: synapse }
+  ports:
+    - name: http
+      port: 8008
+      targetPort: 8008
