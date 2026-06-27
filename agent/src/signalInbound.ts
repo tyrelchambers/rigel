@@ -160,15 +160,47 @@ export interface InboundContext {
   allow: string[];
 }
 
-export interface InboundHandlers {
-  receive(apiUrl: string, number: string): Promise<unknown>;
-  reply(recipient: string, text: string): Promise<void>;
+/** The transport-agnostic command surface: the five things any inbound channel
+ *  routes to. Shared verbatim by the Signal and Matrix inbound loops. */
+export interface CommandHandlers {
   help(): string;
   status(): Promise<string>;
   queue(): Promise<string>;
   approve(index: number): Promise<string>;
   diagnose(question: string, source: string, timestamp: number): Promise<string>;
   log?(msg: string): void;
+}
+
+export interface InboundHandlers extends CommandHandlers {
+  receive(apiUrl: string, number: string): Promise<unknown>;
+  reply(recipient: string, text: string): Promise<void>;
+}
+
+/** Route a parsed command to the matching handler, turning a handler throw into
+ *  an error reply string. `source`/`timestamp` thread into diagnosis (the
+ *  channel's sender id + message time). Shared by Signal and Matrix inbound. */
+export async function dispatchCommand(
+  cmd: Command,
+  h: CommandHandlers,
+  source: string,
+  timestamp: number,
+): Promise<string> {
+  try {
+    switch (cmd.kind) {
+      case "help":
+        return h.help();
+      case "status":
+        return await h.status();
+      case "queue":
+        return await h.queue();
+      case "approve":
+        return await h.approve(cmd.index);
+      case "diagnose":
+        return await h.diagnose(cmd.text, source, timestamp);
+    }
+  } catch (e) {
+    return `Sorry — that failed: ${String(e)}`;
+  }
 }
 
 /**
@@ -199,28 +231,7 @@ export async function handleInbound(
     }
     const cmd = parseCommand(msg.text);
     h.log?.(`signal: ${cmd.kind} from ${msg.source}`);
-    let reply: string;
-    try {
-      switch (cmd.kind) {
-        case "help":
-          reply = h.help();
-          break;
-        case "status":
-          reply = await h.status();
-          break;
-        case "queue":
-          reply = await h.queue();
-          break;
-        case "approve":
-          reply = await h.approve(cmd.index);
-          break;
-        case "diagnose":
-          reply = await h.diagnose(cmd.text, msg.source, msg.timestamp);
-          break;
-      }
-    } catch (e) {
-      reply = `Sorry — that failed: ${String(e)}`;
-    }
+    const reply = await dispatchCommand(cmd, h, msg.source, msg.timestamp);
     for (const chunk of chunkText(reply)) {
       await h.reply(msg.source, chunk);
     }
