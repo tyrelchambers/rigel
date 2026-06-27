@@ -1037,3 +1037,16 @@ describe("needsReconcile", () => {
     expect(needsReconcile([])).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Matrix access token env injection (Task 8)
+// ---------------------------------------------------------------------------
+
+test("the agent Deployment injects the Matrix access token from its Secret, optional", () => {
+  const yaml = manifestYAML(DEFAULT_INSTALL_CONFIG);
+  expect(yaml).toContain("- name: MATRIX_ACCESS_TOKEN");
+  expect(yaml).toContain("name: rigel-matrix-token");
+  expect(yaml).toContain("key: accessToken");
+  // optional: true so installs without Matrix configured still start.
+  expect(yaml).toMatch(/MATRIX_ACCESS_TOKEN[\s\S]*?optional: true/);
+});
