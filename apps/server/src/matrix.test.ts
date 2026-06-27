@@ -6,6 +6,9 @@ import {
   whoamiRequest,
   createRoomRequest,
   handleMatrix,
+  evaluatePoll,
+  pollRequest,
+  sendTestRequest,
 } from "./matrix";
 
 test("normalizeHomeserver trims whitespace and trailing slashes", () => {
@@ -65,10 +68,111 @@ describe("handleMatrix guards (short-circuit before any network call)", () => {
     if (r.kind === "error") expect(r.status).toBe(422);
   });
 
+  test("poll requires homeserver + accessToken + roomId", async () => {
+    const missing = [
+      { action: "poll" as const, accessToken: "t", roomId: "!r:hs" },           // no homeserver
+      { action: "poll" as const, homeserver: "https://hs", roomId: "!r:hs" },   // no token
+      { action: "poll" as const, homeserver: "https://hs", accessToken: "t" },  // no roomId
+    ];
+    for (const req of missing) {
+      const r = await handleMatrix(req);
+      expect(r.kind).toBe("error");
+      if (r.kind === "error") expect(r.status).toBe(422);
+    }
+  });
+
+  test("sendTest requires homeserver + accessToken + roomId", async () => {
+    const missing = [
+      { action: "sendTest" as const, accessToken: "t", roomId: "!r:hs" },
+      { action: "sendTest" as const, homeserver: "https://hs", roomId: "!r:hs" },
+      { action: "sendTest" as const, homeserver: "https://hs", accessToken: "t" },
+    ];
+    for (const req of missing) {
+      const r = await handleMatrix(req);
+      expect(r.kind).toBe("error");
+      if (r.kind === "error") expect(r.status).toBe(422);
+    }
+  });
+
   test("an unknown action is a 422 error", async () => {
     // @ts-expect-error — exercising the default branch
     const r = await handleMatrix({ action: "bogus" });
     expect(r.kind).toBe("error");
     if (r.kind === "error") expect(r.status).toBe(422);
+  });
+});
+
+// ── evaluatePoll ────────────────────────────────────────────────────────────
+describe("evaluatePoll", () => {
+  const BOT = "@rigel:hs";
+  const USER = "@me:hs";
+  const opts = { botUserId: BOT, allowedSenders: [USER] };
+
+  function msg(sender: string, ts: number) {
+    return { type: "m.room.message", sender, origin_server_ts: ts };
+  }
+
+  test("no events → userMessaged=false, botReplied=false", () => {
+    expect(evaluatePoll([], opts)).toEqual({ userMessaged: false, botReplied: false });
+  });
+
+  test("user message only → userMessaged=true, botReplied=false", () => {
+    expect(evaluatePoll([msg(USER, 1000)], opts)).toEqual({ userMessaged: true, botReplied: false });
+  });
+
+  test("user message then bot reply → both true", () => {
+    const events = [msg(USER, 1000), msg(BOT, 2000)];
+    expect(evaluatePoll(events, opts)).toEqual({ userMessaged: true, botReplied: true });
+  });
+
+  test("bot message BEFORE user → botReplied=false (pre-existing bot msg does not count)", () => {
+    const events = [msg(BOT, 500), msg(USER, 1000)];
+    expect(evaluatePoll(events, opts)).toEqual({ userMessaged: true, botReplied: false });
+  });
+
+  test("malformed events are skipped without throwing", () => {
+    const events = [null, undefined, {}, { type: "m.room.message" }, { type: "m.room.message", sender: 42 }, msg(USER, 1000)];
+    expect(() => evaluatePoll(events as unknown[], opts)).not.toThrow();
+    expect(evaluatePoll(events as unknown[], opts)).toEqual({ userMessaged: true, botReplied: false });
+  });
+
+  test("non-m.room.message event types are ignored", () => {
+    const events = [
+      { type: "m.room.member", sender: USER, origin_server_ts: 1000 },
+      { type: "m.reaction", sender: BOT, origin_server_ts: 2000 },
+    ];
+    expect(evaluatePoll(events, opts)).toEqual({ userMessaged: false, botReplied: false });
+  });
+});
+
+// ── pollRequest ─────────────────────────────────────────────────────────────
+describe("pollRequest", () => {
+  test("returns correct GET URL with encoded roomId and Bearer header", () => {
+    const { url, headers } = pollRequest("https://hs/", "tok", "!room:hs");
+    expect(url).toBe(
+      "https://hs/_matrix/client/v3/rooms/%21room%3Ahs/messages?dir=b&limit=50",
+    );
+    expect(headers.authorization).toBe("Bearer tok");
+  });
+});
+
+// ── sendTestRequest ─────────────────────────────────────────────────────────
+describe("sendTestRequest", () => {
+  test("returns PUT URL with encoded roomId, Bearer header, and m.text body", () => {
+    const { url, headers, body } = sendTestRequest("https://hs", "tok", "!room:hs");
+    expect(url).toMatch(
+      /^https:\/\/hs\/_matrix\/client\/v3\/rooms\/%21room%3Ahs\/send\/m\.room\.message\/.+$/,
+    );
+    expect(headers.authorization).toBe("Bearer tok");
+    expect(headers["content-type"]).toBe("application/json");
+    const b = body as { msgtype: string; body: string };
+    expect(b.msgtype).toBe("m.text");
+    expect(b.body).toMatch(/Test from Rigel/);
+  });
+
+  test("generates a unique txnId on each call", () => {
+    const a = sendTestRequest("https://hs", "tok", "!r:hs");
+    const b = sendTestRequest("https://hs", "tok", "!r:hs");
+    expect(a.url).not.toBe(b.url);
   });
 });
