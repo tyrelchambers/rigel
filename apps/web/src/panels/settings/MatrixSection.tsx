@@ -99,6 +99,7 @@ export function MatrixSection({ derived }: { derived: SettingsDerived }) {
 
   const modal = (
     <MatrixConnectModal
+      key="matrix-wizard"
       open={wizardOpen}
       onClose={() => setWizardOpen(false)}
       namespace={namespace}

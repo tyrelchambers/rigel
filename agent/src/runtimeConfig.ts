@@ -89,7 +89,7 @@ export function parseMatrixConfig(
   const trimOrUndef = (v?: string) => (v && v.trim() ? v.trim() : undefined);
   const token = env.MATRIX_ACCESS_TOKEN;
   return {
-    homeserverUrl: trimOrUndef(data["matrixHomeserverUrl"]),
+    homeserverUrl: (env.MATRIX_HOMESERVER_URL && env.MATRIX_HOMESERVER_URL.trim()) ? env.MATRIX_HOMESERVER_URL.trim() : trimOrUndef(data["matrixHomeserverUrl"]),
     userId: trimOrUndef(data["matrixUserId"]),
     accessToken: token && token.trim() ? token.trim() : undefined,
     roomId: trimOrUndef(data["matrixRoomId"]),

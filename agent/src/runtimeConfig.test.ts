@@ -191,4 +191,28 @@ describe("parseMatrixConfig", () => {
       inbound: false,
     });
   });
+
+  test("MATRIX_HOMESERVER_URL env overrides matrixHomeserverUrl from config", () => {
+    const m = parseMatrixConfig(
+      { matrixHomeserverUrl: "https://config-hs" },
+      { MATRIX_HOMESERVER_URL: "http://synapse.personal.svc.cluster.local:8008" } as NodeJS.ProcessEnv,
+    );
+    expect(m.homeserverUrl).toBe("http://synapse.personal.svc.cluster.local:8008");
+  });
+
+  test("falls back to matrixHomeserverUrl from config when MATRIX_HOMESERVER_URL is unset", () => {
+    const m = parseMatrixConfig(
+      { matrixHomeserverUrl: "https://config-hs" },
+      {} as NodeJS.ProcessEnv,
+    );
+    expect(m.homeserverUrl).toBe("https://config-hs");
+  });
+
+  test("ignores a blank MATRIX_HOMESERVER_URL and falls back to config", () => {
+    const m = parseMatrixConfig(
+      { matrixHomeserverUrl: "https://config-hs" },
+      { MATRIX_HOMESERVER_URL: "   " } as NodeJS.ProcessEnv,
+    );
+    expect(m.homeserverUrl).toBe("https://config-hs");
+  });
 });

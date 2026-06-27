@@ -161,6 +161,31 @@ describe("MatrixConnectModal", () => {
     }
   });
 
+  it("shows the generic unreachable message (not tailnet-specific) when the homeserver does not respond", async () => {
+    matrixValidate.mockRejectedValueOnce(new Error("getaddrinfo ENOTFOUND hs.example.com"));
+    open();
+    chooseAndContinue(/already have a homeserver/i);
+    fireEvent.change(screen.getByLabelText(/homeserver/i), { target: { value: "https://hs.example.com" } });
+    fireEvent.change(screen.getByLabelText(/access token/i), { target: { value: "tok" } });
+    click(/^continue$/i);
+    await waitFor(() =>
+      expect(screen.getByText(/reachable from this machine/i)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/tailnet/i)).not.toBeInTheDocument();
+  });
+
+  it("advances to first-contact view after a successful connect, not back to step 1", async () => {
+    open();
+    chooseAndContinue(/already have a homeserver/i);
+    fireEvent.change(screen.getByLabelText(/homeserver/i), { target: { value: "https://hs" } });
+    fireEvent.change(screen.getByLabelText(/access token/i), { target: { value: "tok" } });
+    click(/^continue$/i);
+    await waitFor(() =>
+      expect(screen.getByText(/say hello to rigel/i)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/where should rigel's matrix live/i)).not.toBeInTheDocument();
+  });
+
   it("the firstContact 'Send a test' button calls matrixSendTest with the connected room", async () => {
     open();
     chooseAndContinue(/already have a homeserver/i);

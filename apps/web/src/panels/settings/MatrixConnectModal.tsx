@@ -86,7 +86,7 @@ function classifyError(message: string, homeserver: string): ErrInfo {
       title: "Homeserver unreachable",
       icon: <WifiOff className="size-[17px]" />,
       lead: "Rigel can't reach the homeserver.",
-      cause: `${homeserver || "The homeserver"} didn't respond. Check the URL and that the server is up on your tailnet.`,
+      cause: `${homeserver || "The homeserver"} didn't respond. Check the URL and that the homeserver is reachable from this machine.`,
       detail: message,
     };
   }
