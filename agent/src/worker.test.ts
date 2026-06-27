@@ -6,7 +6,9 @@ import type { Incident } from "./detector.js";
 
 function rc(): RuntimeConfig {
   return {
-    enabled: true, mode: "auto", silenced: new Set(), signalRecipients: [], signalInbound: false, alertRules: [],
+    enabled: true, mode: "auto", silenced: new Set(), signalRecipients: [], signalInbound: false,
+    matrix: { homeserverUrl: undefined, userId: undefined, accessToken: undefined, roomId: undefined, allowedSenders: [], inbound: false },
+    alertRules: [],
     worker: { provider: "claude", model: "claude-sonnet-4-6" },
     supervisor: { provider: "claude", model: "claude-opus-4-8" },
     limits: { pollIntervalMs: 30000, maxPerResourcePerHour: 3, maxPerNight: 20, maxAttemptsPerIncident: 3, confirmPolls: 2, namespaces: [] },

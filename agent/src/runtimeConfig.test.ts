@@ -1,5 +1,5 @@
 import { describe, expect, it, test, vi } from "vitest";
-import { parseWindow, inWindow, decideAutonomy, readRuntimeConfig, parseAlertRulesFromConfig } from "./runtimeConfig.js";
+import { parseWindow, inWindow, decideAutonomy, readRuntimeConfig, parseAlertRulesFromConfig, parseMatrixConfig } from "./runtimeConfig.js";
 import { kubectl } from "./kubectl.js";
 import type { Config } from "./config.js";
 
@@ -156,5 +156,39 @@ describe("readRuntimeConfig — operational limits", () => {
     expect(rc.enabled).toBe(false);
     expect(rc.worker.provider).toBe("claude");
     expect(rc.limits.pollIntervalMs).toBe(30_000);
+  });
+});
+
+describe("parseMatrixConfig", () => {
+  test("reads matrix keys from config and the access token from env", () => {
+    const m = parseMatrixConfig(
+      {
+        matrixHomeserverUrl: " https://hs ",
+        matrixUserId: "@rigel:hs",
+        matrixRoomId: "!r:hs",
+        matrixAllowedSenders: "@me:hs, @you:hs",
+        matrixInbound: "true",
+      },
+      { MATRIX_ACCESS_TOKEN: " tok " } as NodeJS.ProcessEnv,
+    );
+    expect(m).toEqual({
+      homeserverUrl: "https://hs",
+      userId: "@rigel:hs",
+      accessToken: "tok",
+      roomId: "!r:hs",
+      allowedSenders: ["@me:hs", "@you:hs"],
+      inbound: true,
+    });
+  });
+
+  test("defaults: no keys/env → undefineds, empty allowlist, inbound false", () => {
+    expect(parseMatrixConfig({}, {} as NodeJS.ProcessEnv)).toEqual({
+      homeserverUrl: undefined,
+      userId: undefined,
+      accessToken: undefined,
+      roomId: undefined,
+      allowedSenders: [],
+      inbound: false,
+    });
   });
 });
