@@ -37,6 +37,7 @@ export function MatrixConnectModal({
   const [allowed, setAllowed] = useState(defaultAllowed ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const allowedSendersEmpty = parseAllowedSenders(allowed).length === 0;
 
   function reset() {
     setStep("path");
@@ -200,7 +201,7 @@ export function MatrixConnectModal({
             <Button size="sm" variant="outline" onClick={() => setStep("path")} disabled={busy}>
               Back
             </Button>
-            <Button size="sm" onClick={connect} disabled={busy}>
+            <Button size="sm" onClick={connect} disabled={busy || allowedSendersEmpty} aria-disabled={busy || allowedSendersEmpty}>
               {busy ? "Connecting…" : "Connect"}
             </Button>
           </div>

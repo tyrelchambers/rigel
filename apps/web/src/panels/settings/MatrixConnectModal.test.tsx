@@ -66,6 +66,20 @@ describe("MatrixConnectModal", () => {
     await waitFor(() => expect(matrixCreateRoom).toHaveBeenCalledWith("https://hs", "tok-paste", "Rigel", ["@me:hs"]));
   });
 
+  it("disables Connect and fires no API calls when allowed-senders is empty", async () => {
+    render(<MatrixConnectModal open onClose={() => {}} namespace="default" defaultAllowed="" />);
+    fireEvent.click(screen.getByRole("button", { name: /already have a homeserver/i }));
+    // No allowed senders — Connect must be disabled.
+    const connectBtn = screen.getByRole("button", { name: /^connect$/i });
+    expect(connectBtn).toBeDisabled();
+    fireEvent.click(connectBtn);
+    // None of the API calls should have fired.
+    expect(matrixValidate).not.toHaveBeenCalled();
+    expect(matrixLogin).not.toHaveBeenCalled();
+    expect(matrixCreateRoom).not.toHaveBeenCalled();
+    expect(mutateAsync).not.toHaveBeenCalled();
+  });
+
   it("path B prefills matrix.org and shows the privacy caveat", () => {
     open();
     fireEvent.click(screen.getByRole("button", { name: /public homeserver/i }));

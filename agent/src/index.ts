@@ -448,7 +448,7 @@ async function handleMatrixInboundIO(
   loop: LoopState,
 ): Promise<void> {
   const m = rc.matrix;
-  const allow = m.allowedSenders.length > 0 ? m.allowedSenders : m.userId ? [m.userId] : [];
+  const allow = m.allowedSenders;
   if (allow.length === 0) {
     log("matrix inbound: no authorized senders configured — skipping");
     return;
@@ -463,7 +463,7 @@ async function handleMatrixInboundIO(
     ...buildCommandHandlers(cfg, rc, cb, loop),
   };
   const next = await handleMatrixInbound(
-    { enabled: true, homeserverUrl: m.homeserverUrl, accessToken: m.accessToken, roomId: m.roomId, allow, since: loop.matrixSince },
+    { enabled: true, homeserverUrl: m.homeserverUrl, accessToken: m.accessToken, roomId: m.roomId, allow, botUserId: m.userId, since: loop.matrixSince },
     handlers,
     loop.seenMatrix,
   );

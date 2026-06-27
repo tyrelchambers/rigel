@@ -95,6 +95,10 @@ export interface MatrixInboundContext {
   roomId?: string;
   /** Authorized sender Matrix ids (the operator's own id by default). */
   allow: string[];
+  /** The bot's own Matrix id, so its own sent messages are never processed.
+   *  When set, any event whose sender matches this id is skipped before the
+   *  allowlist check, preventing the bot from reacting to its own replies. */
+  botUserId?: string;
   /** The `since` cursor from the last poll (undefined on first run). */
   since?: string;
 }
@@ -130,6 +134,7 @@ export async function handleMatrixInbound(
   for (const ev of events) {
     if (seen.has(ev.eventId)) continue;
     seen.mark(ev.eventId);
+    if (ctx.botUserId && ev.sender === ctx.botUserId) continue;
     if (!isAllowedSender(ev.sender, ctx.allow)) {
       h.log?.(`matrix: ignoring message from unauthorized sender ${ev.sender}`);
       continue;

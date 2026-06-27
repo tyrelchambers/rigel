@@ -135,6 +135,19 @@ describe("handleMatrixInbound", () => {
     expect(h.replies).toEqual([]);
   });
 
+  test("skips messages from the bot's own id even when that id is on the allowlist", async () => {
+    const botId = "@rigel-bot:hs";
+    const raw = syncWith([
+      { type: "m.room.message", event_id: "$self1", sender: botId, origin_server_ts: 1, content: { msgtype: "m.text", body: "status" } },
+    ]);
+    const h = fakeHandlers({ sync: vi.fn(async () => raw) });
+    // Include the bot id in allow to prove the self-skip wins over the allowlist.
+    await handleMatrixInbound({ ...CTX, allow: [...CTX.allow, botId], botUserId: botId }, h, new SeenEventIds());
+    expect(h.status).not.toHaveBeenCalled();
+    expect(h.diagnose).not.toHaveBeenCalled();
+    expect(h.replies).toEqual([]);
+  });
+
   test("chunks a long reply into multiple sends", async () => {
     const raw = syncWith([
       { type: "m.room.message", event_id: "$1", sender: "@me:hs", origin_server_ts: 5, content: { msgtype: "m.text", body: "explain" } },
