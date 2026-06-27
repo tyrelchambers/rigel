@@ -55,6 +55,7 @@ import { getClusterYamlSchema } from "./clusterSchema";
 import { stripStatusBlock } from "@rigel/k8s/src/manifestClean";
 import { handleAssistant, type AssistantRequest } from "./assistant";
 import { handleSignal, type SignalRequest } from "./signal";
+import { handleMatrix, type MatrixRequest } from "./matrix";
 import { PortForwardManager, type TargetKind } from "./portForward";
 
 const KUBECONFIG = resolveKubeconfigPath(process.env, homedir());
@@ -977,6 +978,26 @@ async function handler(req: Request): Promise<Response> {
         return new Response(result.bytes as unknown as BodyInit, {
           headers: { "Content-Type": "image/png" },
         });
+      }
+      return Response.json(result.body);
+    }
+
+    // POST /api/matrix — Matrix connect proxy for the desktop wizard. Outbound
+    // HTTP to the user's homeserver only (no kubectl). Dispatches on `action`:
+    //   login → { accessToken, userId } | validate → { userId } | createRoom → { roomId }
+    if (url.pathname === "/api/matrix" && req.method === "POST") {
+      let body: MatrixRequest;
+      try {
+        body = (await req.json()) as MatrixRequest;
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      if (typeof body.action !== "string") {
+        return Response.json({ error: "missing action" }, { status: 422 });
+      }
+      const result = await handleMatrix(body);
+      if (result.kind === "error") {
+        return Response.json({ error: result.message }, { status: result.status });
       }
       return Response.json(result.body);
     }
