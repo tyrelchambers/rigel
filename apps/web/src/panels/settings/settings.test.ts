@@ -71,3 +71,21 @@ describe("shared signal logic reachable via the web alias", () => {
     expect(parseRecipients(" +1555, +1666 ,")).toEqual(["+1555", "+1666"]);
   });
 });
+
+import { deriveMatrixConnected, matrixConfigUpdates, parseAllowedSenders } from "@rigel/k8s";
+
+describe("shared matrix logic reachable via the web alias", () => {
+  it("derives connected only when homeserver + user + room are all set", () => {
+    expect(deriveMatrixConnected({})).toBe(false);
+    expect(deriveMatrixConnected({ matrixHomeserverUrl: "https://hs", matrixUserId: "@r:hs" })).toBe(false);
+    expect(deriveMatrixConnected({ matrixHomeserverUrl: "https://hs", matrixUserId: "@r:hs", matrixRoomId: "!x:hs" })).toBe(true);
+  });
+
+  it("builds config updates from only provided fields", () => {
+    expect(matrixConfigUpdates({ roomId: "!x:hs", inbound: false })).toEqual({ matrixRoomId: "!x:hs", matrixInbound: "false" });
+  });
+
+  it("parses allowed senders on comma/newline", () => {
+    expect(parseAllowedSenders("@a:h, @b:h")).toEqual(["@a:h", "@b:h"]);
+  });
+});
