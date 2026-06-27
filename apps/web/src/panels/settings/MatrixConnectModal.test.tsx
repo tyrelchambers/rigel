@@ -93,4 +93,25 @@ describe("MatrixConnectModal", () => {
     expect((screen.getByLabelText(/homeserver/i) as HTMLInputElement).value).toBe("https://matrix.org");
     expect(screen.getByText(/isn't private to you/i)).toBeInTheDocument();
   });
+
+  it("credentials step (path A) shows the Read the guide link pointing at the access-token guide", () => {
+    open();
+    chooseAndContinue(/already have a homeserver/i);
+    const link = screen.getByRole("link", { name: /read the guide/i });
+    expect(link).toHaveAttribute(
+      "href",
+      "https://outline.tybit.luxe/doc/matrix-access-tokens-bot-accounts-for-the-rigel-assistant-UKyuTZRbBw",
+    );
+    expect(link).toHaveAttribute("target", "_blank");
+  });
+
+  it("credentials step (path B) also shows the Read the guide link", () => {
+    open();
+    chooseAndContinue(/public homeserver/i);
+    const link = screen.getByRole("link", { name: /read the guide/i });
+    expect(link).toHaveAttribute(
+      "href",
+      "https://outline.tybit.luxe/doc/matrix-access-tokens-bot-accounts-for-the-rigel-assistant-UKyuTZRbBw",
+    );
+  });
 });

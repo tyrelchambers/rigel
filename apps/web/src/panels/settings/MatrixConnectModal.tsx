@@ -34,6 +34,7 @@ import {
   Loader2,
   Terminal,
   AlertTriangle,
+  BookOpen,
 } from "lucide-react";
 import { parseAllowedSenders } from "@rigel/k8s";
 import { matrixLogin, matrixValidate, matrixCreateRoom, useAssistantAction } from "@/lib/api";
@@ -445,6 +446,20 @@ export function MatrixConnectModal({
               </div>
             </div>
           )}
+
+          <div className="flex items-center gap-1.5">
+            <BookOpen className="size-[13px] shrink-0" style={{ color: CAPTION }} />
+            <span style={{ fontSize: 11.5, color: LABEL }}>New to access tokens?</span>
+            <a
+              href="https://outline.tybit.luxe/doc/matrix-access-tokens-bot-accounts-for-the-rigel-assistant-UKyuTZRbBw"
+              target="_blank"
+              rel="noreferrer"
+              className="hover:underline"
+              style={{ fontSize: 11.5, color: "var(--accent-primary)" }}
+            >
+              Read the guide
+            </a>
+          </div>
         </WizardBody>
       </WizardShell>
     );
