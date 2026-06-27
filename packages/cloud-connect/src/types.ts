@@ -82,6 +82,14 @@ export interface ProviderDescriptor {
   /** Parse the account identity (e.g. email) from the auth-check stdout, for display. */
   parseAccount?: (stdout: string) => string | null;
   connectArgs: (cluster: CloudCluster, params: Record<string, string>) => string[];
+  /**
+   * Extra commands to run AFTER connect, in order, sharing connect's KUBECONFIG env.
+   * AKS: `kubelogin convert-kubeconfig -l azurecli` rewrites the just-added context
+   * to use the token `az login` already cached, replacing the interactive device-code
+   * prompt `az aks get-credentials` writes by default for Entra-ID clusters (which
+   * would hang Rigel's non-interactive kubectl). No-op for cert-embedded configs.
+   */
+  postConnect?: (cluster: CloudCluster, params: Record<string, string>) => Array<{ binary: string; args: string[] }>;
   /** Lowercased-substring matches on kubectl/CLI stderr meaning "re-login". */
   authErrorPatterns: string[];
   /** URL to the provider's console page for creating/viewing clusters. */

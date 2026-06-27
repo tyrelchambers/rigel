@@ -115,6 +115,10 @@ export async function cloudConnect(
   const backupPath = await backup(deps.kubeconfigPath);
   const res = await run(d.binary, d.connectArgs(cluster, params), { env });
   if (res.code !== 0) return { error: "connect failed", stderr: res.stderr, backupPath };
+  for (const step of d.postConnect?.(cluster, params) ?? []) {
+    const r = await run(step.binary, step.args, { env });
+    if (r.code !== 0) return { error: "post-connect failed", stderr: r.stderr, backupPath };
+  }
   const cur = await run("kubectl", ["config", "current-context"], { env });
   return { context: cur.code === 0 ? cur.stdout.trim() : undefined, backupPath };
 }

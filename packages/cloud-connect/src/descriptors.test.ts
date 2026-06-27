@@ -55,6 +55,9 @@ test("Azure descriptor lists clusters with resource group, no params", () => {
     "aks", "get-credentials", "--resource-group", "rg1", "--name", "prod",
   ]);
   expect(d.parseAccount!(JSON.stringify({ user: { name: "jane@contoso.com" } }))).toBe("jane@contoso.com");
+  expect(d.postConnect!({ id: "prod", name: "prod", region: "eastus", resourceGroup: "rg1" }, {})).toEqual([
+    { binary: "kubelogin", args: ["convert-kubeconfig", "-l", "azurecli"] },
+  ]);
 });
 
 test("listCloudProviders returns all four providers", () => {

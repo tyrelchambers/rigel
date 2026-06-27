@@ -83,6 +83,37 @@ test("cloudConnect runs connect then returns the new current-context + backup", 
   expect(calls[0]).toEqual(["doctl", "kubernetes", "cluster", "kubeconfig", "save", "abc"]);
 });
 
+test("cloudConnect runs the AKS kubelogin convert step after get-credentials", async () => {
+  const calls: string[][] = [];
+  const run: Run = async (bin, args, opts) => {
+    calls.push([bin, ...args]);
+    if (args[0] === "config" && args[1] === "current-context") return ok("prod\n");
+    expect(opts?.env?.KUBECONFIG).toBe("/k");
+    return ok();
+  };
+  const res = await cloudConnect(
+    "azure",
+    { id: "prod", name: "prod", region: "eastus", resourceGroup: "rg1" },
+    {},
+    { kubeconfigPath: "/k", run, backup: async () => null },
+  );
+  expect(res.context).toBe("prod");
+  expect(calls[0]).toEqual(["az", "aks", "get-credentials", "--resource-group", "rg1", "--name", "prod"]);
+  expect(calls[1]).toEqual(["kubelogin", "convert-kubeconfig", "-l", "azurecli"]);
+});
+
+test("cloudConnect surfaces a failure in the AKS post-connect step", async () => {
+  const run: Run = async (bin) => (bin === "kubelogin" ? fail("kubelogin: command not found", -1) : ok());
+  const res = await cloudConnect(
+    "azure",
+    { id: "prod", name: "prod", region: "eastus", resourceGroup: "rg1" },
+    {},
+    { kubeconfigPath: "/k", run, backup: async () => null },
+  );
+  expect(res.error).toBe("post-connect failed");
+  expect(res.stderr).toBe("kubelogin: command not found");
+});
+
 test("cloudConnect surfaces stderr when the connect command fails", async () => {
   const run: Run = async (_bin, args) =>
     args[0] === "kubernetes" ? fail("403 forbidden") : ok();

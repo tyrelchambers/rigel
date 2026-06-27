@@ -224,6 +224,9 @@ export const azure: ProviderDescriptor = {
     return typeof d?.user?.name === "string" ? d.user.name : null;
   },
   connectArgs: (cluster) => ["aks", "get-credentials", "--resource-group", cluster.resourceGroup ?? "", "--name", cluster.name],
+  // Entra-ID AKS clusters get a device-code kubelogin user by default; convert it to
+  // use the cached `az login` token so Rigel's non-interactive kubectl can authenticate.
+  postConnect: () => [{ binary: "kubelogin", args: ["convert-kubeconfig", "-l", "azurecli"] }],
   authErrorPatterns: ["aadsts", "az login", "no subscription found"],
   consoleUrl: "https://portal.azure.com",
   errorHints: [
