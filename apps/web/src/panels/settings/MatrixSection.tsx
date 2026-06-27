@@ -1,23 +1,59 @@
-// Matrix channel — a second chat channel alongside Signal. Resting states mirror
-// SignalSection's state machine (not connected / connected / error). The connect
-// wizard lives in MatrixConnectModal (paths A and B).
+// Matrix channel — the settings "Channels" Matrix card, a faithful build of the
+// Pencil frame wDsq8 (three resting states: NOT CONNECTED / CONNECTED / ERROR).
+// State machine mirrors the derived matrixStatus; the connect wizard lives in
+// MatrixConnectModal.
 import { useState } from "react";
-import { AlertTriangle } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { matrixStatusColor, matrixStatusLabel, parseAllowedSenders } from "@rigel/k8s";
+import { AlertTriangle, MessageSquare, Plus, RefreshCw, Unplug } from "lucide-react";
+import { matrixStatusColor, parseAllowedSenders, type MatrixStatus } from "@rigel/k8s";
 import { useAssistantAction } from "@/lib/api";
 import type { SettingsDerived } from "./useSettings";
 import { MatrixConnectModal } from "./MatrixConnectModal";
+import { IconTile, GreenToggle, SUB, CAPTION } from "./MatrixWizardParts";
 
-const DOT_CLASS: Record<string, string> = {
-  gray: "bg-muted-foreground/50",
-  amber: "bg-amber-500",
-  green: "bg-green-500",
-  red: "bg-destructive",
+const DOT: Record<string, string> = {
+  gray: CAPTION,
+  amber: "var(--status-pending)",
+  green: "var(--status-running)",
+  red: "var(--status-failed)",
 };
 
+const STATUS_TEXT: Record<string, string> = {
+  notConnected: "Not connected",
+  connecting: "Connecting…",
+  connected: "Connected",
+  error: "Can't reach homeserver",
+};
+
+/** Section card shell — the design's elevated #1B1C1F card. */
 function Card({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-lg border bg-card p-3">{children}</div>;
+  return (
+    <div
+      className="flex flex-col gap-3.5 rounded-[14px]"
+      style={{ background: "var(--surface-elevated)", border: "1px solid rgba(255,255,255,0.07)", padding: 18 }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Tile + "Matrix" + status dot/label — the head shared by all three states. */
+function Head({ tone, status }: { tone: "neutral" | "accent" | "red"; status: MatrixStatus }) {
+  const dot = DOT[matrixStatusColor(status)] ?? CAPTION;
+  const statusColor = status === "error" ? "#E08A82" : SUB;
+  return (
+    <div className="flex items-center gap-3">
+      <IconTile tone={tone} size={38} radius={10}>
+        <MessageSquare className="size-[18px]" style={tone === "neutral" ? { color: SUB } : undefined} />
+      </IconTile>
+      <div className="flex flex-col gap-[3px]">
+        <span style={{ fontSize: 15, fontWeight: 600, color: "#FFFFFF" }}>Matrix</span>
+        <div className="flex items-center gap-[7px]">
+          <span className="inline-block size-[7px] rounded-full" style={{ background: dot }} />
+          <span style={{ fontSize: 12, color: statusColor }}>{STATUS_TEXT[status] ?? status}</span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function MatrixSection({ derived }: { derived: SettingsDerived }) {
@@ -26,7 +62,6 @@ export function MatrixSection({ derived }: { derived: SettingsDerived }) {
     matrixStatus,
     matrixHomeserverUrl,
     matrixUserId,
-    matrixRoomId,
     matrixAllowedSenders,
     matrixInbound,
   } = derived;
@@ -34,8 +69,6 @@ export function MatrixSection({ derived }: { derived: SettingsDerived }) {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const dot = DOT_CLASS[matrixStatusColor(matrixStatus)];
-  const label = matrixStatusLabel(matrixStatus);
   const senders = parseAllowedSenders(matrixAllowedSenders);
 
   async function toggleInbound() {
@@ -47,71 +80,133 @@ export function MatrixSection({ derived }: { derived: SettingsDerived }) {
     }
   }
 
-  return (
-    <Card>
-      <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Matrix</h2>
-        <span className="font-mono text-[10px] text-muted-foreground">ns: {namespace}</span>
-      </div>
+  async function disconnect() {
+    setError(null);
+    try {
+      await setMatrix.mutateAsync({
+        action: "setMatrix",
+        namespace,
+        matrixHomeserverUrl: "",
+        matrixUserId: "",
+        matrixRoomId: "",
+        matrixAllowedSenders: "",
+        matrixInbound: false,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
 
-      <div className="mb-3 flex items-center gap-2">
-        <span className={`inline-block h-2.5 w-2.5 rounded-full ${dot}`} />
-        <span className="font-mono text-xs">{label}</span>
-      </div>
+  const modal = (
+    <MatrixConnectModal
+      open={wizardOpen}
+      onClose={() => setWizardOpen(false)}
+      namespace={namespace}
+      defaultAllowed={matrixAllowedSenders}
+    />
+  );
 
-      {error && (
-        <div className="mb-3 flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span className="select-text">{error}</span>
-        </div>
-      )}
+  const errorBanner = error && (
+    <div
+      className="flex items-start gap-2 rounded-md p-2"
+      style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.4)" }}
+    >
+      <AlertTriangle className="mt-0.5 size-3.5 shrink-0" style={{ color: "var(--status-failed)" }} />
+      <span className="select-text" style={{ fontSize: 12, color: "var(--status-failed)" }}>
+        {error}
+      </span>
+    </div>
+  );
 
-      {matrixStatus !== "connected" ? (
-        <Button size="sm" onClick={() => setWizardOpen(true)}>
-          Connect Matrix
-        </Button>
-      ) : (
-        <div className="space-y-3">
-          <div className="space-y-1 text-xs">
-            <div className="font-mono">Connected as {matrixUserId}</div>
-            <div className="text-muted-foreground">Homeserver: {matrixHomeserverUrl}</div>
-            <div className="text-muted-foreground">Room: {matrixRoomId}</div>
-            <div className="text-muted-foreground">
-              Allowed senders: {senders.length > 0 ? senders.join(", ") : "(bot only)"}
+  // ── CONNECTED ────────────────────────────────────────────────────────────
+  if (matrixStatus === "connected") {
+    const rows: { k: string; v: string }[] = [
+      { k: "HOMESERVER", v: matrixHomeserverUrl.replace(/^https?:\/\//, "") || "—" },
+      { k: "BOT", v: matrixUserId || "—" },
+      { k: "ALLOWED SENDERS", v: senders.join(", ") || "(bot only)" },
+    ];
+    return (
+      <Card>
+        <Head tone="accent" status="connected" />
+        {errorBanner}
+        <div className="flex flex-col gap-2.5">
+          {rows.map((r) => (
+            <div key={r.k} className="flex flex-col gap-[3px]">
+              <span className="font-mono" style={{ fontSize: 10, letterSpacing: 0.6, color: CAPTION }}>
+                {r.k}
+              </span>
+              <span className="select-text font-mono" style={{ fontSize: 12, color: "#E6E6EA" }}>
+                {r.v}
+              </span>
             </div>
-          </div>
-
-          <button
-            className="flex items-center gap-2 text-left"
+          ))}
+        </div>
+        <div className="flex items-center justify-between" style={{ paddingTop: 2 }}>
+          <span style={{ fontSize: 12.5, fontWeight: 500, color: "#E6E6EA" }}>Enabled</span>
+          <GreenToggle
+            on={matrixInbound}
             onClick={toggleInbound}
             disabled={setMatrix.isPending}
-          >
-            <span
-              className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
-                matrixInbound ? "bg-green-500" : "bg-muted-foreground/40"
-              }`}
-            >
-              <span
-                className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-                  matrixInbound ? "translate-x-3.5" : "translate-x-0.5"
-                }`}
-              />
-            </span>
-            <span className="text-xs">Let me text the assistant back (two-way)</span>
-          </button>
-
-          <Button size="sm" variant="outline" onClick={() => setWizardOpen(true)}>
-            Reconnect
-          </Button>
+            label="Two-way replies"
+          />
         </div>
-      )}
+        <button
+          type="button"
+          onClick={disconnect}
+          disabled={setMatrix.isPending}
+          className="flex items-center gap-[7px] self-start transition-opacity hover:opacity-80 disabled:opacity-50"
+        >
+          <Unplug className="size-[14px]" style={{ color: "#E07A6A" }} />
+          <span style={{ fontSize: 12.5, fontWeight: 500, color: "#E07A6A" }}>Disconnect</span>
+        </button>
+        {modal}
+      </Card>
+    );
+  }
 
-      <MatrixConnectModal
-        open={wizardOpen}
-        onClose={() => setWizardOpen(false)}
-        namespace={namespace}
-        defaultAllowed={matrixAllowedSenders}
-      />
+  // ── ERROR ──────────────────────────────────────────────────────────────
+  if (matrixStatus === "error") {
+    return (
+      <Card>
+        <Head tone="red" status="error" />
+        {errorBanner}
+        <span style={{ fontSize: 12.5, color: "#B98A86", lineHeight: 1.45 }}>
+          {matrixHomeserverUrl
+            ? `${matrixHomeserverUrl.replace(/^https?:\/\//, "")} didn't respond to Rigel.`
+            : "The homeserver didn't respond to Rigel."}
+        </span>
+        <button
+          type="button"
+          onClick={() => setWizardOpen(true)}
+          className="flex w-full items-center justify-center gap-[7px] rounded-[9px] transition-colors hover:bg-[var(--accent-dim)]"
+          style={{ background: "var(--accent-dim)", border: "1px solid var(--accent-primary)", padding: "10px 0" }}
+        >
+          <RefreshCw className="size-[14px]" style={{ color: "var(--accent-primary)" }} />
+          <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--accent-primary)" }}>Reconnect</span>
+        </button>
+        {modal}
+      </Card>
+    );
+  }
+
+  // ── NOT CONNECTED ──────────────────────────────────────────────────────
+  return (
+    <Card>
+      <Head tone="neutral" status="notConnected" />
+      {errorBanner}
+      <span style={{ fontSize: 12.5, color: SUB, lineHeight: 1.45 }}>
+        Message Rigel from Element. Runs alongside Signal.
+      </span>
+      <button
+        type="button"
+        onClick={() => setWizardOpen(true)}
+        className="flex w-full items-center justify-center gap-[7px] rounded-[9px] transition-opacity hover:opacity-90"
+        style={{ background: "var(--accent-primary)", padding: "10px 0" }}
+      >
+        <Plus className="size-[15px]" style={{ color: "#0A0A0A" }} />
+        <span style={{ fontSize: 13.5, fontWeight: 600, color: "#0A0A0A" }}>Connect Matrix</span>
+      </button>
+      {modal}
     </Card>
   );
 }

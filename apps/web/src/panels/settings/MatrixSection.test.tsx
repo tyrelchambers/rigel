@@ -33,9 +33,9 @@ describe("MatrixSection", () => {
     expect(screen.getByText(/@me:hs/)).toBeInTheDocument();
   });
 
-  it("toggles two-way inbound via setMatrix", async () => {
+  it("toggles two-way inbound via setMatrix", () => {
     render(<MatrixSection derived={derived({ matrixStatus: "connected", matrixHomeserverUrl: "https://hs", matrixUserId: "@rigel:hs", matrixRoomId: "!r:hs", matrixInbound: false })} />);
-    fireEvent.click(screen.getByRole("button", { name: /text the assistant/i }));
+    fireEvent.click(screen.getByRole("switch", { name: /two-way/i }));
     expect(mutateAsync).toHaveBeenCalledWith({ action: "setMatrix", namespace: "default", matrixInbound: true });
   });
 });

@@ -22,19 +22,26 @@ beforeEach(() => {
   mutateAsync.mockClear();
 });
 
-function open() {
-  render(<MatrixConnectModal open onClose={() => {}} namespace="default" defaultAllowed="@me:hs" />);
+function open(allowed = "@me:hs") {
+  render(<MatrixConnectModal open onClose={() => {}} namespace="default" defaultAllowed={allowed} />);
+}
+
+const click = (re: RegExp) => fireEvent.click(screen.getByRole("button", { name: re }));
+/** Step 1: select a where-option card, then advance with Continue → step 2. */
+function chooseAndContinue(card: RegExp) {
+  click(card);
+  click(/^continue$/i);
 }
 
 describe("MatrixConnectModal", () => {
   it("path A + login: logs in, creates a room, saves via setMatrix", async () => {
     open();
-    fireEvent.click(screen.getByRole("button", { name: /already have a homeserver/i }));
+    chooseAndContinue(/already have a homeserver/i);
     fireEvent.change(screen.getByLabelText(/homeserver/i), { target: { value: "https://hs" } });
-    fireEvent.click(screen.getByRole("button", { name: /^log in$/i })); // switch to login mode
+    click(/^log in$/i); // segmented → login mode
     fireEvent.change(screen.getByLabelText(/username/i), { target: { value: "rigel" } });
     fireEvent.change(screen.getByLabelText(/password/i), { target: { value: "pw" } });
-    fireEvent.click(screen.getByRole("button", { name: /^connect$/i }));
+    click(/^continue$/i); // step-2 primary triggers connect()
 
     await waitFor(() => expect(matrixLogin).toHaveBeenCalledWith("https://hs", "rigel", "pw"));
     expect(matrixValidate).not.toHaveBeenCalled();
@@ -55,24 +62,24 @@ describe("MatrixConnectModal", () => {
 
   it("path A + token: validates the pasted token instead of logging in", async () => {
     open();
-    fireEvent.click(screen.getByRole("button", { name: /already have a homeserver/i }));
+    chooseAndContinue(/already have a homeserver/i);
     fireEvent.change(screen.getByLabelText(/homeserver/i), { target: { value: "https://hs" } });
-    // token mode is the default
+    // token mode is the default for path A
     fireEvent.change(screen.getByLabelText(/access token/i), { target: { value: "tok-paste" } });
-    fireEvent.click(screen.getByRole("button", { name: /^connect$/i }));
+    click(/^continue$/i);
 
     await waitFor(() => expect(matrixValidate).toHaveBeenCalledWith("https://hs", "tok-paste"));
     expect(matrixLogin).not.toHaveBeenCalled();
     await waitFor(() => expect(matrixCreateRoom).toHaveBeenCalledWith("https://hs", "tok-paste", "Rigel", ["@me:hs"]));
   });
 
-  it("disables Connect and fires no API calls when allowed-senders is empty", async () => {
-    render(<MatrixConnectModal open onClose={() => {}} namespace="default" defaultAllowed="" />);
-    fireEvent.click(screen.getByRole("button", { name: /already have a homeserver/i }));
-    // No allowed senders — Connect must be disabled.
-    const connectBtn = screen.getByRole("button", { name: /^connect$/i });
-    expect(connectBtn).toBeDisabled();
-    fireEvent.click(connectBtn);
+  it("disables Continue and fires no API calls when allowed-senders is empty", () => {
+    open("");
+    chooseAndContinue(/already have a homeserver/i);
+    // No allowed senders — the step-2 Continue must be disabled.
+    const continueBtn = screen.getByRole("button", { name: /^continue$/i });
+    expect(continueBtn).toBeDisabled();
+    fireEvent.click(continueBtn);
     // None of the API calls should have fired.
     expect(matrixValidate).not.toHaveBeenCalled();
     expect(matrixLogin).not.toHaveBeenCalled();
@@ -82,8 +89,8 @@ describe("MatrixConnectModal", () => {
 
   it("path B prefills matrix.org and shows the privacy caveat", () => {
     open();
-    fireEvent.click(screen.getByRole("button", { name: /public homeserver/i }));
+    chooseAndContinue(/public homeserver/i);
     expect((screen.getByLabelText(/homeserver/i) as HTMLInputElement).value).toBe("https://matrix.org");
-    expect(screen.getByText(/can read/i)).toBeInTheDocument();
+    expect(screen.getByText(/isn't private to you/i)).toBeInTheDocument();
   });
 });
