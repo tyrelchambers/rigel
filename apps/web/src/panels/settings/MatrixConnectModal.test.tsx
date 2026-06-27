@@ -1,15 +1,19 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 
 const matrixLogin = vi.fn(async () => ({ accessToken: "tok-login", userId: "@rigel:hs" }));
 const matrixValidate = vi.fn(async () => ({ userId: "@rigel:hs" }));
 const matrixCreateRoom = vi.fn(async () => ({ roomId: "!room:hs" }));
+const matrixPoll = vi.fn(async () => ({ userMessaged: false, botReplied: false }));
+const matrixSendTest = vi.fn(async () => ({ ok: true as const }));
 const mutateAsync = vi.fn(async () => ({ success: true as const, stdout: "", stderr: "" }));
 vi.mock("@/lib/api", () => ({
   matrixLogin: (...a: unknown[]) => matrixLogin(...(a as [])),
   matrixValidate: (...a: unknown[]) => matrixValidate(...(a as [])),
   matrixCreateRoom: (...a: unknown[]) => matrixCreateRoom(...(a as [])),
+  matrixPoll: (...a: unknown[]) => matrixPoll(...(a as [])),
+  matrixSendTest: (...a: unknown[]) => matrixSendTest(...(a as [])),
   useAssistantAction: () => ({ mutateAsync, isPending: false }),
 }));
 
@@ -19,6 +23,8 @@ beforeEach(() => {
   matrixLogin.mockClear();
   matrixValidate.mockClear();
   matrixCreateRoom.mockClear();
+  matrixPoll.mockClear();
+  matrixSendTest.mockClear();
   mutateAsync.mockClear();
 });
 
@@ -112,6 +118,65 @@ describe("MatrixConnectModal", () => {
     expect(link).toHaveAttribute(
       "href",
       "https://outline.tybit.luxe/doc/matrix-access-tokens-bot-accounts-for-the-rigel-assistant-UKyuTZRbBw",
+    );
+  });
+
+  it("poll loop advances the tracker as poll results change, then stops", async () => {
+    vi.useFakeTimers();
+    try {
+      // First tick: user messaged; second tick: bot replied.
+      matrixPoll
+        .mockResolvedValueOnce({ userMessaged: true, botReplied: false })
+        .mockResolvedValueOnce({ userMessaged: true, botReplied: true });
+
+      open();
+      chooseAndContinue(/already have a homeserver/i);
+      fireEvent.change(screen.getByLabelText(/homeserver/i), { target: { value: "https://hs" } });
+      fireEvent.change(screen.getByLabelText(/access token/i), { target: { value: "tok-paste" } });
+      click(/^continue$/i);
+
+      // connect() runs async; flush microtasks so we land on firstContact.
+      await act(async () => { await Promise.resolve(); });
+      await act(async () => { await Promise.resolve(); });
+      await act(async () => { await Promise.resolve(); });
+      expect(screen.getByText(/say hello to rigel/i)).toBeInTheDocument();
+      // Row 1 starts live (badge present).
+      expect(screen.getByText("Live")).toBeInTheDocument();
+
+      // First poll tick → userMessaged=true: "Live" badge clears.
+      await act(async () => { await vi.advanceTimersByTimeAsync(3500); });
+      expect(matrixPoll).toHaveBeenCalledTimes(1);
+      expect(screen.queryByText("Live")).not.toBeInTheDocument();
+
+      // Second poll tick → botReplied=true: poll stops, no spinners remain.
+      await act(async () => { await vi.advanceTimersByTimeAsync(3500); });
+      expect(matrixPoll).toHaveBeenCalledTimes(2);
+      expect(document.querySelector(".animate-spin")).toBeNull();
+
+      // Further time passes — poll does NOT fire again (loop stopped on botReplied).
+      await act(async () => { await vi.advanceTimersByTimeAsync(7000); });
+      expect(matrixPoll).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("the firstContact 'Send a test' button calls matrixSendTest with the connected room", async () => {
+    open();
+    chooseAndContinue(/already have a homeserver/i);
+    fireEvent.change(screen.getByLabelText(/homeserver/i), { target: { value: "https://hs" } });
+    fireEvent.change(screen.getByLabelText(/access token/i), { target: { value: "tok-paste" } });
+    click(/^continue$/i);
+
+    await waitFor(() => expect(screen.getByText(/say hello to rigel/i)).toBeInTheDocument());
+
+    click(/send a test message from rigel/i);
+    await waitFor(() =>
+      expect(matrixSendTest).toHaveBeenCalledWith({
+        homeserver: "https://hs",
+        accessToken: "tok-paste",
+        roomId: "!room:hs",
+      }),
     );
   });
 });

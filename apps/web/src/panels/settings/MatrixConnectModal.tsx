@@ -12,7 +12,7 @@
 //   token mode → matrixValidate → matrixCreateRoom → setMatrix
 //   login mode → matrixLogin    → matrixCreateRoom → setMatrix
 //   Connect is gated on a non-empty allowed-senders list (a critical fix).
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   MessageSquare,
   Server,
@@ -37,7 +37,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import { parseAllowedSenders } from "@rigel/k8s";
-import { matrixLogin, matrixValidate, matrixCreateRoom, useAssistantAction } from "@/lib/api";
+import { matrixLogin, matrixValidate, matrixCreateRoom, matrixPoll, matrixSendTest, useAssistantAction } from "@/lib/api";
 import { useCopyToClipboard } from "@/lib/useCopyToClipboard";
 import {
   WizardShell,
@@ -125,10 +125,43 @@ export function MatrixConnectModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [connectedUser, setConnectedUser] = useState("");
+  const [connectedRoomId, setConnectedRoomId] = useState("");
+  const [connectedAccessToken, setConnectedAccessToken] = useState("");
+  const [connectedAllowedSenders, setConnectedAllowedSenders] = useState<string[]>([]);
+  const [pollResult, setPollResult] = useState<{ userMessaged: boolean; botReplied: boolean }>({
+    userMessaged: false,
+    botReplied: false,
+  });
+  const [sendingTest, setSendingTest] = useState(false);
 
   const senderList = parseAllowedSenders(allowed);
   const allowedSendersEmpty = senderList.length === 0;
   const botHandle = connectedUser || "@rigel:example.com";
+
+  // Poll the bot room every 3.5s while on the first-contact screen. Stops when
+  // the bot has replied or the screen is left. Transient failures are tolerated.
+  useEffect(() => {
+    if (view !== "firstContact" || pollResult.botReplied) return;
+    const id = setInterval(() => {
+      void (async () => {
+        try {
+          const result = await matrixPoll({
+            homeserver,
+            accessToken: connectedAccessToken,
+            roomId: connectedRoomId,
+            botUserId: connectedUser,
+            allowedSenders: connectedAllowedSenders,
+          });
+          // Monotonic: once the bot has replied, never let a stale/out-of-order
+          // poll response (or an empty last-50 window) regress the tracker.
+          setPollResult((prev) => (prev.botReplied ? prev : result));
+        } catch {
+          // Keep polling on transient failures — never crash the wizard.
+        }
+      })();
+    }, 3500);
+    return () => clearInterval(id);
+  }, [view, pollResult.botReplied, homeserver, connectedAccessToken, connectedRoomId, connectedUser, connectedAllowedSenders]);
 
   function reset() {
     setView("where");
@@ -143,6 +176,11 @@ export function MatrixConnectModal({
     setBusy(false);
     setError(null);
     setConnectedUser("");
+    setConnectedRoomId("");
+    setConnectedAccessToken("");
+    setConnectedAllowedSenders([]);
+    setPollResult({ userMessaged: false, botReplied: false });
+    setSendingTest(false);
   }
 
   function close() {
@@ -157,6 +195,21 @@ export function MatrixConnectModal({
     setHomeserver(selected === "B" ? "https://matrix.org" : "");
     setAuthMode(selected === "B" ? "login" : "token");
     setView("details");
+  }
+
+  async function handleSendTest() {
+    setSendingTest(true);
+    try {
+      await matrixSendTest({
+        homeserver,
+        accessToken: connectedAccessToken,
+        roomId: connectedRoomId,
+      });
+    } catch {
+      // Surface nothing intrusive — the button just re-enables; user can retry.
+    } finally {
+      setSendingTest(false);
+    }
   }
 
   async function connect() {
@@ -187,6 +240,9 @@ export function MatrixConnectModal({
         matrixInbound: true,
       });
       setConnectedUser(userId);
+      setConnectedRoomId(roomId);
+      setConnectedAccessToken(accessToken);
+      setConnectedAllowedSenders(senders);
       setView("firstContact");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -538,35 +594,45 @@ export function MatrixConnectModal({
             ))}
           </div>
 
-          {/* Live handshake tracker.
-              TODO(phase-1): no Matrix message-poll endpoint exists yet, so only the
-              first row goes live after createRoom. "Message received" / "Rigel replied"
-              stay pending until a room-poll signal source lands. The three-row tracker
-              UI itself matches the design (frame tXkqG) exactly. */}
+          {/* Live handshake tracker (frame tXkqG). Driven by the poll loop above. */}
           <div
             className="flex flex-col gap-1 rounded-[12px]"
             style={{ background: "#17181B", border: "1px solid rgba(255,255,255,0.07)", padding: "8px 16px" }}
           >
             <TrackerRow
-              state="active"
+              state={pollResult.userMessaged ? "done" : "active"}
               title="Waiting for your message"
               sub="Listening in the matrix room"
-              right={<span className="font-mono" style={{ fontSize: 11, color: "var(--accent-primary)" }}>Live</span>}
+              right={
+                pollResult.userMessaged ? undefined : (
+                  <span className="font-mono" style={{ fontSize: 11, color: "var(--accent-primary)" }}>Live</span>
+                )
+              }
             />
-            <TrackerRow state="pending" title="Message received" sub="Rigel sees your text" />
-            <TrackerRow state="pending" title="Rigel replied" sub="Reply delivered to Element" />
+            <TrackerRow
+              state={pollResult.botReplied ? "done" : pollResult.userMessaged ? "active" : "pending"}
+              title="Message received"
+              sub="Rigel sees your text"
+            />
+            <TrackerRow
+              state={pollResult.botReplied ? "done" : "pending"}
+              title="Rigel replied"
+              sub="Reply delivered to Element"
+            />
           </div>
 
-          {/* Send a test (no Matrix test-send endpoint in Phase 1). */}
           <button
             type="button"
-            onClick={() => {
-              /* TODO(phase-1): wire to a Matrix test-send endpoint when it exists. */
-            }}
-            className="flex w-full items-center justify-center gap-2 rounded-[9px] transition-colors hover:bg-white/[0.08]"
+            onClick={handleSendTest}
+            disabled={sendingTest}
+            className="flex w-full items-center justify-center gap-2 rounded-[9px] transition-colors hover:bg-white/[0.08] disabled:opacity-60"
             style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.1)", padding: "11px 0" }}
           >
-            <Send className="size-[15px]" style={{ color: STEP_TXT }} />
+            {sendingTest ? (
+              <Loader2 className="size-[15px] animate-spin" style={{ color: STEP_TXT }} />
+            ) : (
+              <Send className="size-[15px]" style={{ color: STEP_TXT }} />
+            )}
             <span style={{ fontSize: 13, fontWeight: 500, color: "#FFFFFF" }}>Send a test message from Rigel</span>
           </button>
         </WizardBody>
@@ -593,10 +659,9 @@ export function MatrixConnectModal({
             <BackButton
               label="Send a test"
               chevron={false}
-              icon={<Send className="size-[15px]" />}
-              onClick={() => {
-                /* TODO(phase-1): wire to a Matrix test-send endpoint when it exists. */
-              }}
+              icon={sendingTest ? <Loader2 className="size-[15px] animate-spin" /> : <Send className="size-[15px]" />}
+              onClick={handleSendTest}
+              disabled={sendingTest}
             />
           }
           right={<PrimaryButton label="Done" icon={<Check className="size-4" />} onClick={close} />}
