@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { matrixLogin, matrixValidate, matrixCreateRoom } from "./api";
+import { matrixLogin, matrixValidate, matrixCreateRoom, matrixPoll, matrixSendTest } from "./api";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -40,5 +40,69 @@ describe("matrix api helpers", () => {
       new Response(JSON.stringify({ error: "boom" }), { status: 400 }),
     );
     await expect(matrixLogin("https://hs", "r", "p")).rejects.toThrow(/boom/);
+  });
+});
+
+describe("matrixPoll", () => {
+  it("posts poll action and returns userMessaged/botReplied", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        new Response(JSON.stringify({ userMessaged: true, botReplied: false }), { status: 200 }),
+      );
+    const r = await matrixPoll({
+      homeserver: "https://hs",
+      accessToken: "tok",
+      roomId: "!room:hs",
+      botUserId: "@rigel:hs",
+      allowedSenders: ["@me:hs"],
+    });
+    expect(r).toEqual({ userMessaged: true, botReplied: false });
+    const [path, init] = fetchMock.mock.calls[0];
+    expect(path).toBe("/api/matrix");
+    expect(JSON.parse(String(init?.body))).toEqual({
+      action: "poll",
+      homeserver: "https://hs",
+      accessToken: "tok",
+      roomId: "!room:hs",
+      botUserId: "@rigel:hs",
+      allowedSenders: ["@me:hs"],
+    });
+  });
+
+  it("throws the server error on failure", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ error: "poll failed" }), { status: 502 }),
+    );
+    await expect(
+      matrixPoll({ homeserver: "https://hs", accessToken: "t", roomId: "!r:hs", botUserId: "@b:hs", allowedSenders: [] }),
+    ).rejects.toThrow(/poll failed/);
+  });
+});
+
+describe("matrixSendTest", () => {
+  it("posts sendTest action and returns ok:true", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const r = await matrixSendTest({ homeserver: "https://hs", accessToken: "tok", roomId: "!room:hs" });
+    expect(r).toEqual({ ok: true });
+    const [path, init] = fetchMock.mock.calls[0];
+    expect(path).toBe("/api/matrix");
+    expect(JSON.parse(String(init?.body))).toEqual({
+      action: "sendTest",
+      homeserver: "https://hs",
+      accessToken: "tok",
+      roomId: "!room:hs",
+    });
+  });
+
+  it("throws the server error on failure", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ error: "send failed" }), { status: 502 }),
+    );
+    await expect(
+      matrixSendTest({ homeserver: "https://hs", accessToken: "t", roomId: "!r:hs" }),
+    ).rejects.toThrow(/send failed/);
   });
 });

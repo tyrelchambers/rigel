@@ -710,6 +710,43 @@ export async function matrixCreateRoom(
   return (await res.json()) as { roomId: string };
 }
 
+export interface MatrixPollResult {
+  userMessaged: boolean;
+  botReplied: boolean;
+}
+
+/** Poll the bot room for user messages and bot replies; returns the handshake state. */
+export async function matrixPoll(args: {
+  homeserver: string;
+  accessToken: string;
+  roomId: string;
+  botUserId: string;
+  allowedSenders: string[];
+}): Promise<MatrixPollResult> {
+  const res = await fetch("/api/matrix", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "poll", ...args }),
+  });
+  if (!res.ok) await throwApiError(res);
+  return (await res.json()) as MatrixPollResult;
+}
+
+/** Send a test message from Rigel into the bot room. */
+export async function matrixSendTest(args: {
+  homeserver: string;
+  accessToken: string;
+  roomId: string;
+}): Promise<{ ok: true }> {
+  const res = await fetch("/api/matrix", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "sendTest", ...args }),
+  });
+  if (!res.ok) await throwApiError(res);
+  return (await res.json()) as { ok: true };
+}
+
 // ---------------------------------------------------------------------------
 // Port-forward — POST /api/portforward (docs/parity/portforward.md)
 //
