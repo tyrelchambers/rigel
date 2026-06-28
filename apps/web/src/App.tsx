@@ -93,7 +93,7 @@ export default function App() {
 
   // First-run onboarding: auto-show once when set up is incomplete (no Claude
   // token) and not previously dismissed; re-openable from Settings via an event.
-  // On desktop, prepends a required "About you" step when needsSignup() is true.
+  // Name/email capture is handled earlier by the full-screen AccountGate below.
   const { data: chatConfig } = useChatConfig();
   const [showOnboarding, setShowOnboarding] = useState(false);
   // First-run gate: the app does not render until name+email exist. `null` =
