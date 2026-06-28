@@ -288,7 +288,6 @@ async function boot(): Promise<void> {
   // Background retry of any undelivered signup (offline on a previous run).
   void deliver(installStore, fetch, SIGNUP_ENDPOINT, SIGNUP_APP_KEY);
 
-  ipcMain.handle("rigel:needs-signup", () => !installStore.captured);
   ipcMain.handle("rigel:submit-signup", (_e, data: { name: string; email: string }) =>
     submitSignup(installStore, fetch, SIGNUP_ENDPOINT, SIGNUP_APP_KEY, data.name, data.email, app.getVersion(), process.platform),
   );

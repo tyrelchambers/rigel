@@ -39,7 +39,7 @@ export function AccountGate({ onDone }: { onDone: () => void }) {
             <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent-primary)" }} />
             <span
               style={{
-                fontFamily: "var(--font-mono, monospace)",
+                fontFamily: "var(--font-mono, ui-monospace)",
                 fontSize: 11,
                 fontWeight: 600,
                 letterSpacing: 1.5,
@@ -49,7 +49,7 @@ export function AccountGate({ onDone }: { onDone: () => void }) {
               RIGEL
             </span>
           </div>
-          <span style={{ fontSize: 18, fontWeight: 600, color: "var(--fg-primary)" }}>Welcome to Rigel</span>
+          <h1 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "var(--fg-primary)" }}>Welcome to Rigel</h1>
         </div>
         <AboutYouStep submitSignup={(d) => rigel!.submitSignup(d)} onDone={onDone} />
       </div>

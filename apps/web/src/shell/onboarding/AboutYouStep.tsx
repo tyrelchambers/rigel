@@ -55,7 +55,7 @@ export function AboutYouStep({
       </span>
       <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5 }}>
         Name
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" style={inputStyle} />
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" style={inputStyle} autoFocus />
       </label>
       <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5 }}>
         Email

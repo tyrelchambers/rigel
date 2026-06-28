@@ -220,7 +220,7 @@ export default function App() {
   }, [toggleTerminal]);
 
   if (accountMissing === null) {
-    return <div style={{ height: "100vh", background: "var(--surface-primary)" }} />;
+    return <div style={{ height: "100vh", background: "var(--surface-sunken)" }} />;
   }
   if (accountMissing) {
     return <AccountGate onDone={() => setAccountMissing(false)} />;
