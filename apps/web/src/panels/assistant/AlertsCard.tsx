@@ -136,7 +136,7 @@ export function AlertsCard() {
     <Card className="space-y-2">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold">Alerts</p>
-        <Button size="sm" variant="secondary" onClick={() => setOpen(true)}>
+        <Button size="sm" variant="muted" onClick={() => setOpen(true)}>
           + New alert
         </Button>
       </div>
@@ -169,7 +169,7 @@ export function AlertsCard() {
               </div>
               <div className="flex shrink-0 gap-1">
                 <Button
-                  variant="ghost"
+                  variant="muted"
                   size="sm"
                   disabled={working}
                   onClick={() =>
@@ -184,7 +184,7 @@ export function AlertsCard() {
                   {rule.enabled ? "Disable" : "Enable"}
                 </Button>
                 <Button
-                  variant="ghost"
+                  variant="muted"
                   size="sm"
                   disabled={working}
                   onClick={() =>
@@ -349,7 +349,7 @@ export function AlertsCard() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
+            <Button variant="muted" onClick={() => setOpen(false)}>
               Cancel
             </Button>
             <Button onClick={create} disabled={working || !valid}>

@@ -91,7 +91,7 @@ export function CredentialsManager({
         {credentialNeedsReconcile && onReconcile && (
           <Button
             size="sm"
-            variant="ghost"
+            variant="muted"
             disabled={disabled}
             onClick={onReconcile}
             title="Stamp the credential labels onto this install's managed Secrets. This only updates Secret metadata and does not restart the agent."
@@ -194,7 +194,7 @@ function CredentialRow({
         >
           {ready ? "Key ready" : "Not set"}
         </span>
-        <Button size="sm" variant="secondary" disabled={disabled} onClick={() => setSourceOpen(true)}>
+        <Button size="sm" variant="muted" disabled={disabled} onClick={() => setSourceOpen(true)}>
           Source
         </Button>
       </div>

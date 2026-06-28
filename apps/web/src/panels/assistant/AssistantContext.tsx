@@ -114,7 +114,7 @@ function AuditRowSummary({ e }: { e: AssistantAuditEntry }) {
       )}
       {backup && (
         <Button
-          variant="secondary"
+          variant="muted"
           size="sm"
           className="mt-1"
           onClick={() => openRevert(backup, e.proposal ?? e.incident)}
@@ -165,7 +165,7 @@ function AssistantDialogs(p: DialogsProps) {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => p.setConfirmCreateNs(false)}>
+            <Button variant="muted" onClick={() => p.setConfirmCreateNs(false)}>
               Cancel
             </Button>
             <Button
@@ -198,7 +198,7 @@ function AssistantDialogs(p: DialogsProps) {
           </pre>
           <DialogFooter>
             <Button
-              variant="outline"
+              variant="muted"
               disabled={p.reverting}
               onClick={() => p.setPendingRevert(null)}
             >
@@ -248,7 +248,7 @@ function AssistantDialogs(p: DialogsProps) {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => p.setConfirmUninstall(false)}>
+            <Button variant="muted" onClick={() => p.setConfirmUninstall(false)}>
               Cancel
             </Button>
             <Button

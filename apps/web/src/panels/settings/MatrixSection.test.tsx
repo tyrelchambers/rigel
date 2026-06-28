@@ -33,9 +33,22 @@ describe("MatrixSection", () => {
     expect(screen.getByText(/@me:hs/)).toBeInTheDocument();
   });
 
+  it("shows the three detail captions when connected", () => {
+    render(<MatrixSection derived={derived({ matrixStatus: "connected", matrixHomeserverUrl: "https://hs", matrixUserId: "@rigel:hs", matrixRoomId: "!r:hs", matrixAllowedSenders: "@me:hs", matrixInbound: true })} />);
+    expect(screen.getByText("HOMESERVER")).toBeInTheDocument();
+    expect(screen.getByText("BOT")).toBeInTheDocument();
+    expect(screen.getByText("ALLOWED SENDERS")).toBeInTheDocument();
+  });
+
   it("toggles two-way inbound via setMatrix", () => {
     render(<MatrixSection derived={derived({ matrixStatus: "connected", matrixHomeserverUrl: "https://hs", matrixUserId: "@rigel:hs", matrixRoomId: "!r:hs", matrixInbound: false })} />);
     fireEvent.click(screen.getByRole("switch", { name: /two-way/i }));
     expect(mutateAsync).toHaveBeenCalledWith({ action: "setMatrix", namespace: "default", matrixInbound: true });
+  });
+
+  it("clicking Disconnect calls setMatrix with empty homeserver", () => {
+    render(<MatrixSection derived={derived({ matrixStatus: "connected", matrixHomeserverUrl: "https://hs", matrixUserId: "@rigel:hs", matrixRoomId: "!r:hs" })} />);
+    fireEvent.click(screen.getByRole("button", { name: /disconnect/i }));
+    expect(mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ action: "setMatrix", matrixHomeserverUrl: "" }));
   });
 });

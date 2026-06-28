@@ -101,7 +101,7 @@ export function CredentialSourceDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="bg-card">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AgentGlyph id={id} size={20} />
@@ -148,7 +148,7 @@ export function CredentialSourceDialog({
                   onChange={(e) => setValue(e.target.value)}
                   placeholder={method.placeholder}
                   rows={5}
-                  className="w-full resize-y rounded-md border bg-background px-2 py-1.5 font-mono text-xs outline-none focus:ring-2 focus:ring-ring"
+                  className="w-full resize-y rounded-md border border-[var(--border-subtle)] bg-background px-2 py-1.5 font-mono text-xs outline-none focus:border-primary"
                 />
               ) : (
                 <input
@@ -158,10 +158,10 @@ export function CredentialSourceDialog({
                   value={value}
                   onChange={(e) => setValue(e.target.value)}
                   placeholder={method.placeholder}
-                  className={`w-full ${inputClass}`}
+                  className={`w-full ${inputClass} border-[var(--border-subtle)] focus:border-primary`}
                 />
               )}
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-[var(--fg-tertiary)]">
                 Stored as a Kubernetes Secret managed by Rigel. The value is never shown again after
                 saving.
               </p>
@@ -171,7 +171,7 @@ export function CredentialSourceDialog({
               <PickerField label="Secret">
                 <DropdownMenu>
                   <DropdownMenuTrigger
-                    className="flex flex-1 items-center justify-between rounded-md border bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+                    className="flex flex-1 items-center justify-between rounded-md border border-[var(--border-subtle)] bg-background px-2 py-1.5 text-sm outline-none focus:border-primary"
                     aria-label="Secret"
                   >
                     <span className="truncate">{secretName || "Choose a Secret"}</span>
@@ -191,7 +191,7 @@ export function CredentialSourceDialog({
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     disabled={!chosenSecret}
-                    className="flex flex-1 items-center justify-between rounded-md border bg-background px-2 py-1.5 font-mono text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+                    className="flex flex-1 items-center justify-between rounded-md border border-[var(--border-subtle)] bg-background px-2 py-1.5 font-mono text-sm outline-none focus:border-primary disabled:opacity-50"
                     aria-label="Key"
                   >
                     <span className="truncate">{dataKey || "Choose a key"}</span>
@@ -233,7 +233,7 @@ export function CredentialSourceDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="muted" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button disabled={!canSave} onClick={save}>
