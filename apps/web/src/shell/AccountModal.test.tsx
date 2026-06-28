@@ -20,9 +20,3 @@ test("Done closes the modal", () => {
   fireEvent.click(screen.getByText("Done"));
   expect(onOpenChange).toHaveBeenCalledWith(false);
 });
-
-test("falls back to honest empty-state text when name/email are absent", () => {
-  render(<AccountModal open onOpenChange={vi.fn()} />);
-  expect(screen.getByText("Your account")).toBeTruthy();
-  expect(screen.getByText("Details not available yet")).toBeTruthy();
-});

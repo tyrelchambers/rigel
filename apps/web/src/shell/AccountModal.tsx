@@ -26,10 +26,10 @@ export function AccountModal({ open, onOpenChange, name, email, plan = "Free" }:
           </div>
           <div className="flex min-w-0 flex-col gap-0.5">
             <span className="truncate text-sm font-semibold" style={{ color: "var(--fg-primary)" }}>
-              {name || "Your account"}
+              {name}
             </span>
             <span className="truncate font-mono text-xs" style={{ color: "var(--fg-secondary)" }}>
-              {email || "Details not available yet"}
+              {email}
             </span>
           </div>
         </div>
