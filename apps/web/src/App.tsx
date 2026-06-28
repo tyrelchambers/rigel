@@ -33,6 +33,7 @@ import { connectCluster } from "@/lib/ws";
 import { useChatConfig } from "@/lib/api";
 import { rigel } from "@/lib/desktop";
 import { OnboardingWizard } from "@/shell/OnboardingWizard";
+import { AccountGate } from "@/shell/AccountGate";
 import NavStrip from "@/shell/NavStrip";
 import { ClusterRail } from "@/shell/ClusterRail";
 import StatusBar from "@/shell/StatusBar";
@@ -95,7 +96,9 @@ export default function App() {
   // On desktop, prepends a required "About you" step when needsSignup() is true.
   const { data: chatConfig } = useChatConfig();
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [requireAboutYou, setRequireAboutYou] = useState(false);
+  // First-run gate: the app does not render until name+email exist. `null` =
+  // still checking (desktop); off-desktop there's no bridge, so no gate.
+  const [accountMissing, setAccountMissing] = useState<boolean | null>(rigel ? null : false);
 
   // Account modal — refetch the captured name/email each time the modal opens,
   // so it reflects a profile written during this session (e.g. right after the
@@ -119,24 +122,22 @@ export default function App() {
     return () => window.removeEventListener("rigel:open-setup", open);
   }, []);
   useEffect(() => {
+    if (!rigel) return; // off-desktop: no gate (accountMissing starts false)
     let cancelled = false;
-    (async () => {
-      const needs = rigel ? await rigel.needsSignup() : false;
-      if (cancelled) return;
-      if (needs) {
-        setRequireAboutYou(true);
-        setShowOnboarding(true);
-        return;
-      }
-      // Existing optional-onboarding condition:
-      if (chatConfig && !chatConfig.configured && !localStorage.getItem("rigel_onboarded")) {
-        setShowOnboarding(true);
-      }
-    })();
+    rigel
+      .getSignupData()
+      .then((p) => { if (!cancelled) setAccountMissing(!p || !p.name || !p.email); })
+      .catch(() => { if (!cancelled) setAccountMissing(true); });
     return () => { cancelled = true; };
-  }, [chatConfig]);
+  }, []);
+
+  useEffect(() => {
+    if (accountMissing !== false) return; // hold optional onboarding until the gate clears
+    if (chatConfig && !chatConfig.configured && !localStorage.getItem("rigel_onboarded")) {
+      setShowOnboarding(true);
+    }
+  }, [chatConfig, accountMissing]);
   function closeOnboarding() {
-    if (requireAboutYou) return; // guarded until About-you is complete
     setShowOnboarding(false);
     localStorage.setItem("rigel_onboarded", "1");
   }
@@ -218,15 +219,16 @@ export default function App() {
     };
   }, [toggleTerminal]);
 
+  if (accountMissing === null) {
+    return <div style={{ height: "100vh", background: "var(--surface-primary)" }} />;
+  }
+  if (accountMissing) {
+    return <AccountGate onDone={() => setAccountMissing(false)} />;
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "row", height: "100vh", background: "var(--surface-primary)" }}>
-      {showOnboarding && (
-        <OnboardingWizard
-          onClose={closeOnboarding}
-          requireAboutYou={requireAboutYou}
-          onAboutYouDone={() => setRequireAboutYou(false)}
-        />
-      )}
+      {showOnboarding && <OnboardingWizard onClose={closeOnboarding} />}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <AccountModal
         open={accountOpen}

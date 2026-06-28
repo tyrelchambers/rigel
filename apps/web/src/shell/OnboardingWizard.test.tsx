@@ -34,7 +34,7 @@ function renderWizard(agents?: AgentsResponse) {
   render(
     <QueryClientProvider client={qc}>
       <MemoryRouter>
-        <OnboardingWizard onClose={onClose} requireAboutYou={false} />
+        <OnboardingWizard onClose={onClose} />
       </MemoryRouter>
     </QueryClientProvider>,
   );

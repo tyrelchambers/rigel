@@ -4,9 +4,6 @@
  * guided front-end over existing flows: connect an AI agent through the real
  * Agents picker, and offer one-click installs of the Assistant, metrics-server,
  * and Signal. Every step is skippable.
- *
- * When `requireAboutYou` is true (desktop first run), prepends a required
- * "About you" step that cannot be skipped or dismissed until completed.
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
@@ -18,24 +15,13 @@ import {
   useInstallMetricsServer,
 } from "@/lib/api";
 import { Stepper } from "./onboarding/Stepper";
-import { AboutYouStep } from "./onboarding/AboutYouStep";
 import { AgentsTab } from "@/panels/settings/agents/AgentsTab";
-import { rigel } from "@/lib/desktop";
 
-export function OnboardingWizard({
-  onClose,
-  requireAboutYou,
-  onAboutYouDone,
-}: {
-  onClose: () => void;
-  requireAboutYou: boolean;
-  onAboutYouDone?: () => void;
-}) {
+export function OnboardingWizard({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
-  const [aboutDone, setAboutDone] = useState(!requireAboutYou);
   const [i, setI] = useState(0);
 
-  const optionalSteps: { label: string; node: ReactNode }[] = [
+  const steps: { label: string; node: ReactNode }[] = [
     { label: "AI agent", node: <AgentStep /> },
     { label: "Assistant", node: <AssistantCard /> },
     { label: "Metrics", node: <MetricsCard /> },
@@ -56,100 +42,63 @@ export function OnboardingWizard({
     },
   ];
 
-  const steps: { label: string; node: ReactNode }[] =
-    requireAboutYou && !aboutDone
-      ? [
-          {
-            label: "About you",
-            node: (
-              <AboutYouStep
-                submitSignup={(d) => rigel!.submitSignup(d)}
-                onDone={() => {
-                  setAboutDone(true);
-                  onAboutYouDone?.();
-                  // The steps array collapses to optionalSteps (About-you removed),
-                  // so reset to index 0 — the first optional step (AI agent).
-                  setI(0);
-                }}
-              />
-            ),
-          },
-          ...optionalSteps,
-        ]
-      : optionalSteps;
-
-  // While the About-you step is active, the wizard is non-dismissible.
-  const locked = requireAboutYou && !aboutDone;
-
-  function handleBackdropClick() {
-    if (!locked) onClose();
-  }
-
   const isFirst = i === 0;
   const isLast = i === steps.length - 1;
-  // Don't show Back/Skip/Next/Done while on the locked About-you step — it has its own "Continue →".
-  const showFooter = !locked;
 
   // Enter advances to the next step (or finishes on the last). It yields to the
   // focused control so it never discards typed input or double-fires: a focused
-  // input/textarea lets that step's own form handle Enter (About-you "Continue",
-  // an agent's API-key field), and a focused button gets its native click instead.
+  // input/textarea/button/link handles Enter itself.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key !== "Enter" || e.isComposing) return;
       const tag = (document.activeElement as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "BUTTON" || tag === "A") return;
-      if (locked) return; // the About-you gate owns its own submit
       e.preventDefault();
       if (isLast) onClose();
       else setI((n) => n + 1);
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [locked, isLast, onClose]);
+  }, [isLast, onClose]);
 
   return (
-    <div style={overlay} onClick={handleBackdropClick}>
+    <div style={overlay} onClick={onClose}>
       <div style={card} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
           <Sparkles size={18} style={{ color: "var(--accent-primary)" }} />
           <span style={{ fontSize: 17, fontWeight: 600, color: "var(--fg-primary)" }}>Welcome to Rigel</span>
         </div>
 
-        {!locked && (
-          <span style={{ fontSize: 12.5, color: "var(--fg-secondary)", lineHeight: 1.5 }}>
-            A minute of optional setup. Everything here can also be changed later in Settings. Skip
-            anything you don't need.
-          </span>
-        )}
+        <span style={{ fontSize: 12.5, color: "var(--fg-secondary)", lineHeight: 1.5 }}>
+          A minute of optional setup. Everything here can also be changed later in Settings. Skip
+          anything you don't need.
+        </span>
 
         <Stepper labels={steps.map((s) => s.label)} current={i} />
 
         {steps[i].node}
 
-        {showFooter && (
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
-            <div>
-              {!isFirst && (
-                <button type="button" onClick={() => setI((n) => n - 1)} style={ghostBtn}>
-                  Back
-                </button>
-              )}
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              {!isLast && (
-                <button type="button" onClick={() => setI((n) => n + 1)} style={ghostBtn}>
-                  Skip
-                </button>
-              )}
-              {isLast ? (
-                <button type="button" onClick={onClose} style={primaryBtn}>Done</button>
-              ) : (
-                <button type="button" onClick={() => setI((n) => n + 1)} style={primaryBtn}>Next →</button>
-              )}
-            </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+          <div>
+            {!isFirst && (
+              <button type="button" onClick={() => setI((n) => n - 1)} style={ghostBtn}>
+                Back
+              </button>
+            )}
           </div>
-        )}
+          <div style={{ display: "flex", gap: 8 }}>
+            {!isLast && (
+              <button type="button" onClick={() => setI((n) => n + 1)} style={ghostBtn}>
+                Skip
+              </button>
+            )}
+            {isLast ? (
+              <button type="button" onClick={onClose} style={primaryBtn}>Done</button>
+            ) : (
+              <button type="button" onClick={() => setI((n) => n + 1)} style={primaryBtn}>Next →</button>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
