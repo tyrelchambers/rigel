@@ -152,6 +152,23 @@ export {
 } from "./signal";
 
 export {
+  type MatrixStatus,
+  MATRIX_SECRET_NAME,
+  MATRIX_ACCESS_TOKEN_KEY,
+  matrixSecretYAML,
+  matrixConfigUpdates,
+  matrixHomeserverUrl,
+  matrixUserId,
+  matrixRoomId,
+  matrixAllowedSenders,
+  matrixInbound,
+  parseAllowedSenders,
+  deriveMatrixConnected,
+  matrixStatusColor,
+  matrixStatusLabel,
+} from "./matrix";
+
+export {
   type RegistryCredential,
   type DockerConfigJsonAuth,
   type DockerConfigJsonData,

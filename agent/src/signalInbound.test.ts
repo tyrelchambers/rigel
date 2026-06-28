@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import {
   chunkText,
+  dispatchCommand,
   handleInbound,
   HELP_TEXT,
   isAuthorized,
@@ -8,6 +9,7 @@ import {
   parseCommand,
   parseReceived,
   SeenTimestamps,
+  type CommandHandlers,
   type InboundHandlers,
 } from "./signalInbound.js";
 
@@ -211,5 +213,26 @@ describe("handleInbound", () => {
     });
     await handleInbound(CTX, h, new SeenTimestamps());
     expect(h.replies.length).toBeGreaterThan(1);
+  });
+});
+
+describe("dispatchCommand", () => {
+  const handlers: CommandHandlers = {
+    help: () => "HELP",
+    status: async () => "STATUS",
+    queue: async () => "QUEUE",
+    approve: async (i: number) => `APPROVED ${i}`,
+    diagnose: async (q: string, source: string, ts: number) => `DX ${q} ${source} ${ts}`,
+  };
+
+  test("routes each command kind and threads source/timestamp into diagnose", async () => {
+    expect(await dispatchCommand({ kind: "help" }, handlers, "+1", 9)).toBe("HELP");
+    expect(await dispatchCommand({ kind: "approve", index: 2 }, handlers, "+1", 9)).toBe("APPROVED 2");
+    expect(await dispatchCommand({ kind: "diagnose", text: "why?" }, handlers, "@me:hs", 42)).toBe("DX why? @me:hs 42");
+  });
+
+  test("turns a handler throw into an error reply string", async () => {
+    const boom: CommandHandlers = { ...handlers, status: async () => { throw new Error("down"); } };
+    expect(await dispatchCommand({ kind: "status" }, boom, "+1", 0)).toContain("down");
   });
 });

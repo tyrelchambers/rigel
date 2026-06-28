@@ -2,15 +2,21 @@ import { classifyRisk, RiskTier } from "./classifier.js";
 import { evaluateAlertRules, emptyAlertState } from "./alerts.js";
 import { loadConfig, type Config } from "./config.js";
 import { readRuntimeConfig, decideAutonomy, type RuntimeConfig } from "./runtimeConfig.js";
-import { notifyWebhook, notifySignal, receiveSignal } from "./notify.js";
+import { notifyWebhook, notifySignal, receiveSignal, notifyMatrix, receiveMatrix, markMatrixRead, setMatrixTyping } from "./notify.js";
 import { runDiagnosis } from "./diagnose.js";
 import { SessionStore } from "./sessionStore.js";
 import {
   handleInbound,
   HELP_TEXT,
   SeenTimestamps,
+  type CommandHandlers,
   type InboundHandlers,
 } from "./signalInbound.js";
+import {
+  handleMatrixInbound,
+  SeenEventIds,
+  type MatrixInboundHandlers,
+} from "./matrixInbound.js";
 import {
   detectDegradedDeployments,
   detectUnhealthyPods,
@@ -86,6 +92,10 @@ interface LoopState {
   handled: Set<string>;
   /** Inbound Signal messages already processed, so none is answered twice. */
   seen: SeenTimestamps;
+  /** Inbound Matrix events already processed, so none is answered twice. */
+  seenMatrix: SeenEventIds;
+  /** Persisted /sync cursor — undefined until the first Matrix inbound poll. */
+  matrixSince?: string;
   /** Per-sender claude diagnosis threads (1-hour idle reset, in-memory). */
   sessions: SessionStore;
 }
@@ -352,27 +362,27 @@ async function tick(
       log(`signal inbound error: ${String(e)}`);
     }
   }
+
+  // Two-way Matrix: independent of Signal — runs if enabled, never blocks it.
+  if (rc.matrix.inbound && rc.matrix.homeserverUrl && rc.matrix.accessToken && rc.matrix.roomId) {
+    try {
+      await handleMatrixInboundIO(cfg, rc, cb, loop);
+    } catch (e) {
+      log(`matrix inbound error: ${String(e)}`);
+    }
+  }
 }
 
-/** Wire the real IO handlers and run one inbound poll. `approve` runs a
- * previously-queued, supervised fix through the same circuit breaker + backup
- * path as the autonomous loop. */
-async function handleSignalInbound(
+/** The transport-agnostic command handlers (help/status/queue/approve/diagnose),
+ *  shared by the Signal and Matrix inbound loops. `approve` runs a queued,
+ *  supervised fix through the same circuit breaker + backup path as the loop. */
+function buildCommandHandlers(
   cfg: Config,
   rc: RuntimeConfig,
   cb: CircuitBreaker,
   loop: LoopState,
-): Promise<void> {
-  // Allowlist: explicit recipients, else fall back to the linked number itself.
-  const allow = rc.signalRecipients.length > 0 ? rc.signalRecipients : rc.signalNumber ? [rc.signalNumber] : [];
-  if (allow.length === 0) {
-    log("signal inbound: no authorized numbers configured — skipping");
-    return;
-  }
-
-  const handlers: InboundHandlers = {
-    receive: (apiUrl, number) => receiveSignal(apiUrl, number),
-    reply: (to, text) => notifySignal(rc.signalApiUrl!, rc.signalNumber!, [to], text),
+): CommandHandlers {
+  return {
     help: () => HELP_TEXT,
     status: async () => {
       const s = await readState(cfg.stateConfigMap, cfg.stateNamespace);
@@ -401,8 +411,69 @@ async function handleSignalInbound(
       ),
     log,
   };
+}
+
+/** Wire the real IO handlers and run one inbound poll. `approve` runs a
+ * previously-queued, supervised fix through the same circuit breaker + backup
+ * path as the autonomous loop. */
+async function handleSignalInbound(
+  cfg: Config,
+  rc: RuntimeConfig,
+  cb: CircuitBreaker,
+  loop: LoopState,
+): Promise<void> {
+  // Allowlist: explicit recipients, else fall back to the linked number itself.
+  const allow = rc.signalRecipients.length > 0 ? rc.signalRecipients : rc.signalNumber ? [rc.signalNumber] : [];
+  if (allow.length === 0) {
+    log("signal inbound: no authorized numbers configured — skipping");
+    return;
+  }
+
+  const handlers: InboundHandlers = {
+    receive: (apiUrl, number) => receiveSignal(apiUrl, number),
+    reply: (to, text) => notifySignal(rc.signalApiUrl!, rc.signalNumber!, [to], text),
+    ...buildCommandHandlers(cfg, rc, cb, loop),
+  };
 
   await handleInbound({ enabled: true, apiUrl: rc.signalApiUrl, number: rc.signalNumber, allow }, handlers, loop.seen);
+}
+
+/** Wire the real IO handlers and run one Matrix inbound poll. Allowlist: explicit
+ *  allowed senders, else fall back to the bot's own id. Persists the /sync cursor
+ *  to assistant-state so a restart resumes cleanly. */
+async function handleMatrixInboundIO(
+  cfg: Config,
+  rc: RuntimeConfig,
+  cb: CircuitBreaker,
+  loop: LoopState,
+): Promise<void> {
+  const m = rc.matrix;
+  const allow = m.allowedSenders;
+  if (allow.length === 0) {
+    log("matrix inbound: no authorized senders configured — skipping");
+    return;
+  }
+  if (loop.matrixSince === undefined) {
+    const s = await readState(cfg.stateConfigMap, cfg.stateNamespace);
+    loop.matrixSince = s.matrixSince;
+  }
+  const handlers: MatrixInboundHandlers = {
+    sync: (since) => receiveMatrix(m.homeserverUrl!, m.accessToken!, since),
+    reply: (text) => notifyMatrix(m.homeserverUrl!, m.accessToken!, m.roomId!, text),
+    markRead: (eventId) => markMatrixRead(m.homeserverUrl!, m.accessToken!, m.roomId!, eventId),
+    setTyping: (typing) => setMatrixTyping(m.homeserverUrl!, m.accessToken!, m.roomId!, m.userId ?? "", typing),
+    ...buildCommandHandlers(cfg, rc, cb, loop),
+  };
+  const next = await handleMatrixInbound(
+    { enabled: true, homeserverUrl: m.homeserverUrl, accessToken: m.accessToken, roomId: m.roomId, allow, botUserId: m.userId, since: loop.matrixSince },
+    handlers,
+    loop.seenMatrix,
+  );
+  if (next !== loop.matrixSince) {
+    loop.matrixSince = next;
+    const s = await readState(cfg.stateConfigMap, cfg.stateNamespace);
+    await writeState(cfg.stateConfigMap, cfg.stateNamespace, { ...s, matrixSince: next });
+  }
 }
 
 /** Execute a queued suggestion the operator approved over Signal. The human is
@@ -512,6 +583,9 @@ function flushNotifications(rc: RuntimeConfig, notifications: string[]): void {
   if (rc.signalApiUrl && rc.signalNumber) {
     void notifySignal(rc.signalApiUrl, rc.signalNumber, rc.signalRecipients, text);
   }
+  if (rc.matrix.homeserverUrl && rc.matrix.accessToken && rc.matrix.roomId) {
+    void notifyMatrix(rc.matrix.homeserverUrl, rc.matrix.accessToken, rc.matrix.roomId, text);
+  }
 }
 
 async function main(): Promise<void> {
@@ -524,7 +598,7 @@ async function main(): Promise<void> {
     maxAttemptsPerIncident: cfg.maxAttemptsPerIncident,
     windowMs: cfg.windowMs,
   });
-  const loop: LoopState = { streaks: new Map(), handled: new Set(), seen: new SeenTimestamps(), sessions: new SessionStore() };
+  const loop: LoopState = { streaks: new Map(), handled: new Set(), seen: new SeenTimestamps(), seenMatrix: new SeenEventIds(), sessions: new SessionStore() };
 
   // eslint-disable-next-line no-constant-condition
   while (true) {

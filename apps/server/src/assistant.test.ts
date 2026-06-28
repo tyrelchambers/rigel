@@ -694,3 +694,35 @@ describe("assertNoForeignDeployment (install ownership guard)", () => {
     await expect(assertNoForeignDeployment(null, "default", run)).resolves.toBeUndefined();
   });
 });
+
+import { setMatrixUpdates, setMatrixSecret } from "./assistant";
+
+test("setMatrixUpdates maps only the provided matrix fields", () => {
+  expect(
+    setMatrixUpdates({
+      action: "setMatrix",
+      matrixHomeserverUrl: "https://hs",
+      matrixUserId: "@rigel:hs",
+      matrixRoomId: "!r:hs",
+      matrixAllowedSenders: "@me:hs",
+      matrixInbound: true,
+    }),
+  ).toEqual({
+    matrixHomeserverUrl: "https://hs",
+    matrixUserId: "@rigel:hs",
+    matrixRoomId: "!r:hs",
+    matrixAllowedSenders: "@me:hs",
+    matrixInbound: "true",
+  });
+  // An inbound-only toggle never clobbers the other keys.
+  expect(setMatrixUpdates({ action: "setMatrix", matrixInbound: false })).toEqual({ matrixInbound: "false" });
+});
+
+test("setMatrixSecret returns the token Secret YAML only when a token is supplied", () => {
+  const yaml = setMatrixSecret({ action: "setMatrix", matrixAccessToken: "tok" }, "agents");
+  expect(yaml).not.toBeNull();
+  expect(yaml).toContain("name: rigel-matrix-token");
+  expect(yaml).toContain('accessToken: "tok"');
+  expect(setMatrixSecret({ action: "setMatrix" }, "agents")).toBeNull();
+  expect(setMatrixSecret({ action: "setMatrix", matrixAccessToken: "   " }, "agents")).toBeNull();
+});

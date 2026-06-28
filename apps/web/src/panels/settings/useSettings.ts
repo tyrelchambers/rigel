@@ -11,7 +11,14 @@ import {
   signalNumber as deriveSignalNumber,
   signalRecipients as deriveRecipients,
   signalInbound as deriveInbound,
+  deriveMatrixConnected,
+  matrixHomeserverUrl as deriveMatrixHomeserver,
+  matrixUserId as deriveMatrixUserId,
+  matrixRoomId as deriveMatrixRoomId,
+  matrixAllowedSenders as deriveMatrixAllowed,
+  matrixInbound as deriveMatrixInbound,
   type SignalBridgeStatus,
+  type MatrixStatus,
 } from "@rigel/k8s";
 
 interface Meta {
@@ -87,6 +94,13 @@ export interface SettingsDerived {
   /** Two-way inbound flag. */
   inbound: boolean;
   hasSavedNumber: boolean;
+  /** Matrix channel: connected when homeserver+user+room are saved. */
+  matrixStatus: MatrixStatus;
+  matrixHomeserverUrl: string;
+  matrixUserId: string;
+  matrixRoomId: string;
+  matrixAllowedSenders: string;
+  matrixInbound: boolean;
 }
 
 /**
@@ -136,6 +150,12 @@ export function useSettings(applying: boolean): SettingsDerived {
       recipients: deriveRecipients(config),
       inbound: deriveInbound(config),
       hasSavedNumber: savedNumber,
+      matrixStatus: deriveMatrixConnected(config) ? "connected" : "notConnected",
+      matrixHomeserverUrl: deriveMatrixHomeserver(config),
+      matrixUserId: deriveMatrixUserId(config),
+      matrixRoomId: deriveMatrixRoomId(config),
+      matrixAllowedSenders: deriveMatrixAllowed(config),
+      matrixInbound: deriveMatrixInbound(config),
     };
   }, [deployments, configMaps, applying]);
 }

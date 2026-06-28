@@ -41,6 +41,7 @@ export interface RuntimeConfig {
   /** Two-way Signal: when on, the agent polls the bridge for inbound messages
    * and answers diagnosis questions / approval commands. Off by default. */
   signalInbound: boolean;
+  matrix: MatrixRuntime;
   alertRules: AlertRule[];
   worker: RoleSelection;
   supervisor: RoleSelection;
@@ -65,6 +66,39 @@ export function parseRoleSelection(
   const model = rawModel || fallbackModel;
   const rawEffort = (data[`${role}Effort`] ?? "").trim();
   return { provider, model, effort: rawEffort || undefined };
+}
+
+/** The Matrix channel config: connection + bot identity from the ConfigMap, plus
+ *  the access token injected from a Secret as the MATRIX_ACCESS_TOKEN env var. */
+export interface MatrixRuntime {
+  homeserverUrl?: string;
+  userId?: string;
+  accessToken?: string;
+  roomId?: string;
+  allowedSenders: string[];
+  inbound: boolean;
+}
+
+/** Parse the Matrix block: connection/identity/room/allowlist from the config
+ *  data, the access token from `env.MATRIX_ACCESS_TOKEN` (it never lives in the
+ *  ConfigMap). Pure. */
+export function parseMatrixConfig(
+  data: Record<string, string>,
+  env: NodeJS.ProcessEnv = process.env,
+): MatrixRuntime {
+  const trimOrUndef = (v?: string) => (v && v.trim() ? v.trim() : undefined);
+  const token = env.MATRIX_ACCESS_TOKEN;
+  return {
+    homeserverUrl: (env.MATRIX_HOMESERVER_URL && env.MATRIX_HOMESERVER_URL.trim()) ? env.MATRIX_HOMESERVER_URL.trim() : trimOrUndef(data["matrixHomeserverUrl"]),
+    userId: trimOrUndef(data["matrixUserId"]),
+    accessToken: token && token.trim() ? token.trim() : undefined,
+    roomId: trimOrUndef(data["matrixRoomId"]),
+    allowedSenders: (data["matrixAllowedSenders"] ?? "")
+      .split(/[\n,]/)
+      .map((s) => s.trim())
+      .filter(Boolean),
+    inbound: data["matrixInbound"] === "true",
+  };
 }
 
 /** Parse one numeric limit, falling back to the Config value on absence/junk. */
@@ -125,7 +159,7 @@ export function decideAutonomy(
 function disabledDefaults(cfg: Config): RuntimeConfig {
   return {
     enabled: false, mode: "auto", silenced: new Set(), window: undefined,
-    signalRecipients: [], signalInbound: false, alertRules: [],
+    signalRecipients: [], signalInbound: false, matrix: parseMatrixConfig({}, {} as NodeJS.ProcessEnv), alertRules: [],
     worker: parseRoleSelection({}, "worker", cfg.workerModel),
     supervisor: parseRoleSelection({}, "supervisor", cfg.supervisorModel),
     limits: parseLimits({}, cfg),
@@ -164,6 +198,7 @@ export async function readRuntimeConfig(cfg: Config): Promise<RuntimeConfig> {
     signalNumber: data.signalNumber && data.signalNumber.trim() ? data.signalNumber.trim() : undefined,
     signalRecipients,
     signalInbound: data.signalInbound === "true",
+    matrix: parseMatrixConfig(data, process.env),
     alertRules: parseAlertRulesFromConfig(data),
     worker: parseRoleSelection(data, "worker", cfg.workerModel),
     supervisor: parseRoleSelection(data, "supervisor", cfg.supervisorModel),

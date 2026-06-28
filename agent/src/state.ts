@@ -103,6 +103,9 @@ export interface AssistantState {
   audit: AuditEntry[];
   queue: QueuedSuggestion[];
   report: string;
+  /** Matrix /sync cursor, persisted so a restart resumes without reprocessing or
+   *  missing events. Absent until the first inbound poll. */
+  matrixSince?: string;
 }
 
 export function emptyState(): AssistantState {

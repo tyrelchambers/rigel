@@ -1,5 +1,5 @@
 import { describe, expect, it, test, vi } from "vitest";
-import { parseWindow, inWindow, decideAutonomy, readRuntimeConfig, parseAlertRulesFromConfig } from "./runtimeConfig.js";
+import { parseWindow, inWindow, decideAutonomy, readRuntimeConfig, parseAlertRulesFromConfig, parseMatrixConfig } from "./runtimeConfig.js";
 import { kubectl } from "./kubectl.js";
 import type { Config } from "./config.js";
 
@@ -156,5 +156,63 @@ describe("readRuntimeConfig — operational limits", () => {
     expect(rc.enabled).toBe(false);
     expect(rc.worker.provider).toBe("claude");
     expect(rc.limits.pollIntervalMs).toBe(30_000);
+  });
+});
+
+describe("parseMatrixConfig", () => {
+  test("reads matrix keys from config and the access token from env", () => {
+    const m = parseMatrixConfig(
+      {
+        matrixHomeserverUrl: " https://hs ",
+        matrixUserId: "@rigel:hs",
+        matrixRoomId: "!r:hs",
+        matrixAllowedSenders: "@me:hs, @you:hs",
+        matrixInbound: "true",
+      },
+      { MATRIX_ACCESS_TOKEN: " tok " } as NodeJS.ProcessEnv,
+    );
+    expect(m).toEqual({
+      homeserverUrl: "https://hs",
+      userId: "@rigel:hs",
+      accessToken: "tok",
+      roomId: "!r:hs",
+      allowedSenders: ["@me:hs", "@you:hs"],
+      inbound: true,
+    });
+  });
+
+  test("defaults: no keys/env → undefineds, empty allowlist, inbound false", () => {
+    expect(parseMatrixConfig({}, {} as NodeJS.ProcessEnv)).toEqual({
+      homeserverUrl: undefined,
+      userId: undefined,
+      accessToken: undefined,
+      roomId: undefined,
+      allowedSenders: [],
+      inbound: false,
+    });
+  });
+
+  test("MATRIX_HOMESERVER_URL env overrides matrixHomeserverUrl from config", () => {
+    const m = parseMatrixConfig(
+      { matrixHomeserverUrl: "https://config-hs" },
+      { MATRIX_HOMESERVER_URL: "http://synapse.personal.svc.cluster.local:8008" } as NodeJS.ProcessEnv,
+    );
+    expect(m.homeserverUrl).toBe("http://synapse.personal.svc.cluster.local:8008");
+  });
+
+  test("falls back to matrixHomeserverUrl from config when MATRIX_HOMESERVER_URL is unset", () => {
+    const m = parseMatrixConfig(
+      { matrixHomeserverUrl: "https://config-hs" },
+      {} as NodeJS.ProcessEnv,
+    );
+    expect(m.homeserverUrl).toBe("https://config-hs");
+  });
+
+  test("ignores a blank MATRIX_HOMESERVER_URL and falls back to config", () => {
+    const m = parseMatrixConfig(
+      { matrixHomeserverUrl: "https://config-hs" },
+      { MATRIX_HOMESERVER_URL: "   " } as NodeJS.ProcessEnv,
+    );
+    expect(m.homeserverUrl).toBe("https://config-hs");
   });
 });

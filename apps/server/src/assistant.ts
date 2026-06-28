@@ -41,6 +41,7 @@ import {
   type SecretLike,
 } from "@rigel/k8s/src/assistant";
 import { signalConfigUpdates } from "@rigel/k8s/src/signal";
+import { matrixConfigUpdates, matrixSecretYAML } from "@rigel/k8s/src/matrix";
 import { normalizeAlertRule, parseAlertRules, serializeAlertRules, nextAlertRules, type SuggestedAlert } from "@rigel/k8s";
 import { effectiveClaudeToken } from "./chatConfig";
 
@@ -112,6 +113,7 @@ export type AssistantAction =
   | "clearReport"
   | "clearActivity"
   | "setSignal"
+  | "setMatrix"
   | "saveAlert" | "deleteAlert" | "toggleAlert"
   | "credentialStatus"
   | "setCredentialSource"
@@ -146,6 +148,14 @@ export interface AssistantRequest {
   number?: string;
   recipients?: string;
   inbound?: boolean;
+  // setMatrix — Matrix channel config. The token goes to a Secret (env-injected),
+  // the rest into assistant-config (read live each tick).
+  matrixHomeserverUrl?: string;
+  matrixUserId?: string;
+  matrixAccessToken?: string;
+  matrixRoomId?: string;
+  matrixAllowedSenders?: string;
+  matrixInbound?: boolean;
   // alert rules (saveAlert/deleteAlert/toggleAlert)
   alert?: SuggestedAlert;   // saveAlert payload (model block, validated server-side)
   alertId?: string;          // delete/toggle
@@ -345,6 +355,31 @@ async function setSignal(
   return patchConfig(context, namespace, updates);
 }
 
+/**
+ * Read-modify-write `assistant-config` with the Matrix settings (only provided
+ * fields) and, when a token is supplied, write the access-token Secret. A new/
+ * changed token reaches the agent via the injected MATRIX_ACCESS_TOKEN env, so a
+ * token write rolls the agent; a config-only edit is read live each tick (no
+ * restart). Mirrors setSignal + the credential-Secret restart pattern.
+ */
+async function setMatrix(
+  context: string | null,
+  namespace: string,
+  req: AssistantRequest,
+): Promise<RunResult> {
+  const tokenYaml = setMatrixSecret(req, namespace);
+  if (tokenYaml) {
+    ensureOk(await applyStdin(context, tokenYaml), "Failed to write the Matrix token Secret");
+  }
+  const updates = setMatrixUpdates(req);
+  let last: RunResult = { code: 0, stdout: "", stderr: "" };
+  if (Object.keys(updates).length > 0) {
+    last = await patchConfig(context, namespace, updates);
+  }
+  if (tokenYaml) return restartAgent(context, namespace);
+  return last;
+}
+
 /** Read-modify-write the `alertRules` key of `assistant-config`. */
 async function mutateAlerts(
   context: string | null,
@@ -371,6 +406,24 @@ async function mutateAlerts(
 /** Pure: the assistant-config limit-key updates for a setLimits request. */
 export function setLimitsUpdates(req: AssistantRequest): Record<string, string> {
   return limitsConfigUpdates(req.limits ?? {});
+}
+
+/** Pure: the assistant-config matrix-key updates for a setMatrix request. */
+export function setMatrixUpdates(req: AssistantRequest): Record<string, string> {
+  return matrixConfigUpdates({
+    homeserverUrl: req.matrixHomeserverUrl,
+    userId: req.matrixUserId,
+    roomId: req.matrixRoomId,
+    allowedSenders: req.matrixAllowedSenders,
+    inbound: req.matrixInbound,
+  });
+}
+
+/** Pure: the Matrix token Secret YAML for a setMatrix request, or null when no
+ *  token is supplied (a config-only edit). */
+export function setMatrixSecret(req: AssistantRequest, namespace: string): string | null {
+  const token = (req.matrixAccessToken ?? "").trim();
+  return token === "" ? null : matrixSecretYAML(token, namespace);
 }
 
 /** Live limit change: read-modify-write the limit keys in assistant-config. No
@@ -780,6 +833,8 @@ export async function handleAssistant(
       return clearActivity(context, namespace);
     case "setSignal":
       return setSignal(context, namespace, req);
+    case "setMatrix":
+      return setMatrix(context, namespace, req);
     case "saveAlert":
     case "deleteAlert":
     case "toggleAlert":

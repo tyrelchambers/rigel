@@ -32,6 +32,7 @@ import {
   type SelfHostDefaults,
 } from "./useSettings";
 import { AgentsTab } from "./agents/AgentsTab";
+import { MatrixSection } from "./MatrixSection";
 
 // The kubectl context keys the self-host localStorage. The server resolves the
 // active context; the client reads it once from /api/health-adjacent state.
@@ -479,6 +480,7 @@ export default function SettingsPanel() {
       <AgentsTab />
       <SelfHostSection />
       <SignalSection derived={derived} applying={applying} setApplying={setApplying} />
+      <MatrixSection derived={derived} />
     </div>
   );
 }

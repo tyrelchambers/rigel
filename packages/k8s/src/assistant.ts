@@ -717,6 +717,12 @@ ${credentialEnvYAML(sources)}
             # panel stuck on "Setting up the assistant…".
             - name: STATE_NAMESPACE
               value: "${c.installNamespace}"
+            - name: MATRIX_ACCESS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: rigel-matrix-token
+                  key: accessToken
+                  optional: true
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
