@@ -1,15 +1,14 @@
 /**
  * GlobalHeader — a slim full-width bar across the top of every view.
  *
- * Left:  sidebar collapse toggle + the global NamespaceSelector (shown only on
- *        namespace-scoped routes, where the filter actually applies).
+ * Left:  sidebar collapse toggle + the global NamespaceSelector.
  * Right: a search affordance that opens the existing ⌘K CommandPalette, and a
  *        compact WS connection-status indicator (reuses store `connected`).
  *
  * Inline styles + CSS custom properties to match App.tsx / NavStrip.tsx.
  */
 import { PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
-import { NamespaceSelector, useIsNamespaceScoped } from "./NamespaceBar";
+import { NamespaceSelector } from "./NamespaceBar";
 import { useCluster } from "@/store/cluster";
 import { RigelMark } from "@/components/RigelMark";
 
@@ -22,7 +21,6 @@ interface GlobalHeaderProps {
 
 export function GlobalHeader({ sidebarCollapsed, onToggleSidebar, onOpenSearch }: GlobalHeaderProps) {
   const connected = useCluster((s) => s.connected);
-  const namespaceScoped = useIsNamespaceScoped();
 
   const dotColor = connected ? "var(--status-running)" : "var(--status-pending)";
   const statusLabel = connected ? "Connected" : "Reconnecting";
@@ -74,8 +72,7 @@ export function GlobalHeader({ sidebarCollapsed, onToggleSidebar, onOpenSearch }
         )}
       </button>
 
-      {/* Global namespace filter — only where it applies */}
-      {namespaceScoped && <NamespaceSelector />}
+      <NamespaceSelector />
 
       {/* Spacer */}
       <div style={{ marginLeft: "auto" }} />

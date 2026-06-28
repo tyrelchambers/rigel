@@ -1,43 +1,13 @@
 /**
  * Namespace selector — one shared per-context selection stored in the Zustand
- * cluster store (namespaceFilter). Mirrors NamespaceBar.swift.
- *
- * The selector is now embedded in the shared PanelHeader (see
- * panels/components/PanelHeader.tsx) so the namespace row and the panel title
- * read as ONE cohesive header element, rather than a separate full-bleed bar
- * above an inset sub-header.
+ * cluster store (namespaceFilter). Rendered once in the GlobalHeader so it's
+ * available on every panel; panels that aren't namespace-scoped simply ignore
+ * the filter.
  */
 import { useEffect, useState } from "react";
-import { useLocation } from "react-router";
 import { SquareDashed, ChevronDown, Check } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
-
-/**
- * Routes whose panels are namespace-scoped (mirrors PanelKind.isNamespaceScoped).
- * The namespace selector is only shown when the active route is in this set.
- */
-export const NAMESPACE_SCOPED_ROUTES = new Set([
-  "/deployments",
-  "/pods",
-  "/workloads",
-  "/rightsizing",
-  "/ingresses",
-  "/services",
-  "/secrets",
-  "/configmaps",
-  "/storage",
-  "/rbac",
-  "/events",
-  "/logs",
-]);
-
-/** True when the current route is namespace-scoped. */
-export function useIsNamespaceScoped(): boolean {
-  const location = useLocation();
-  const basePath = "/" + (location.pathname.replace(/^\//, "").split("/")[0] ?? "");
-  return NAMESPACE_SCOPED_ROUTES.has(basePath);
-}
 
 /**
  * The "Namespace [All namespaces ▾]" trigger + dropdown. Inline (no band/border
