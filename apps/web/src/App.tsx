@@ -39,6 +39,7 @@ import StatusBar from "@/shell/StatusBar";
 import ChatPane, { type ChatPaneHandle } from "@/shell/ChatPane";
 import { CommandPalette, useCommandPalette } from "@/shell/CommandPalette";
 import { GlobalHeader } from "@/shell/GlobalHeader";
+import { AccountModal } from "@/shell/AccountModal";
 import { loadSidebarCollapsed, saveSidebarCollapsed } from "@/shell/navCollapse";
 import { registerChatReveal } from "@/lib/chatHandoff";
 
@@ -95,6 +96,15 @@ export default function App() {
   const { data: chatConfig } = useChatConfig();
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [requireAboutYou, setRequireAboutYou] = useState(false);
+
+  // Account modal — the captured name/email is fetched once on mount via the
+  // optional desktop bridge (degrades to no data on an older preload / web).
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [account, setAccount] = useState<{ name: string; email: string } | null>(null);
+  useEffect(() => {
+    rigel?.getSignupData?.().then(setAccount).catch(() => setAccount(null));
+  }, []);
+
   useEffect(() => {
     const open = () => setShowOnboarding(true);
     window.addEventListener("rigel:open-setup", open);
@@ -210,6 +220,12 @@ export default function App() {
         />
       )}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <AccountModal
+        open={accountOpen}
+        onOpenChange={setAccountOpen}
+        name={account?.name}
+        email={account?.email}
+      />
 
       {/* ── Cluster rail — far left, FULL window height (top of the window to
           the bottom), Discord-style: the whole app lives to the right of it. ─ */}
@@ -223,6 +239,7 @@ export default function App() {
           sidebarCollapsed={sidebarCollapsed}
           onToggleSidebar={toggleSidebar}
           onOpenSearch={() => setPaletteOpen(true)}
+          onOpenAccount={() => setAccountOpen(true)}
         />
 
         {/* ── Main row: NavStrip + content column + ChatPane ─────────────────── */}
