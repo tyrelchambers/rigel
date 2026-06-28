@@ -7,7 +7,7 @@
  *
  * Inline styles + CSS custom properties to match App.tsx / NavStrip.tsx.
  */
-import { PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Search, User } from "lucide-react";
 import { NamespaceSelector } from "./NamespaceBar";
 import { useCluster } from "@/store/cluster";
 import { RigelMark } from "@/components/RigelMark";
@@ -17,9 +17,11 @@ interface GlobalHeaderProps {
   onToggleSidebar: () => void;
   /** Opens the existing CommandPalette (reuses App's setPaletteOpen). */
   onOpenSearch: () => void;
+  /** Opens the Account modal. */
+  onOpenAccount: () => void;
 }
 
-export function GlobalHeader({ sidebarCollapsed, onToggleSidebar, onOpenSearch }: GlobalHeaderProps) {
+export function GlobalHeader({ sidebarCollapsed, onToggleSidebar, onOpenSearch, onOpenAccount }: GlobalHeaderProps) {
   const connected = useCluster((s) => s.connected);
 
   const dotColor = connected ? "var(--status-running)" : "var(--status-pending)";
@@ -132,6 +134,28 @@ export function GlobalHeader({ sidebarCollapsed, onToggleSidebar, onOpenSearch }
           {statusLabel}
         </span>
       </div>
+
+      {/* Account — user avatar opens the Account modal */}
+      <button
+        onClick={onOpenAccount}
+        title="Account"
+        aria-label="Account"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 28,
+          height: 28,
+          borderRadius: "50%",
+          background: "var(--accent-dim)",
+          border: "1px solid var(--border-subtle)",
+          cursor: "pointer",
+          flexShrink: 0,
+        }}
+        className="hover:opacity-90 transition-opacity"
+      >
+        <User size={15} style={{ color: "var(--accent-primary)" }} />
+      </button>
     </header>
   );
 }
