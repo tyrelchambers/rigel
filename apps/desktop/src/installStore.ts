@@ -9,7 +9,7 @@ export interface SignupPayload {
   appVersion: string;
   platform: string;
 }
-interface State { installId: string; captured: boolean; pending: SignupPayload | null }
+interface State { installId: string; captured: boolean; pending: SignupPayload | null; profile: { name: string; email: string } | null }
 
 export class InstallStore {
   private file: string;
@@ -22,13 +22,24 @@ export class InstallStore {
   private load(): State {
     try {
       const s = JSON.parse(readFileSync(this.file, "utf8"));
-      return { installId: s.installId ?? "", captured: !!s.captured, pending: s.pending ?? null };
-    } catch { return { installId: "", captured: false, pending: null }; }
+      return {
+        installId: s.installId ?? "",
+        captured: !!s.captured,
+        pending: s.pending ?? null,
+        profile: s.profile ?? (s.pending ? { name: s.pending.name, email: s.pending.email } : null),
+      };
+    } catch { return { installId: "", captured: false, pending: null, profile: null }; }
   }
   private save() { writeFileSync(this.file, JSON.stringify(this.state), { mode: 0o600 }); }
   get installId() { return this.state.installId; }
   get captured() { return this.state.captured; }
   get pending() { return this.state.pending; }
-  setCapturedWithPending(p: SignupPayload) { this.state.captured = true; this.state.pending = p; this.save(); }
+  get profile() { return this.state.profile; }
+  setCapturedWithPending(p: SignupPayload) {
+    this.state.captured = true;
+    this.state.pending = p;
+    this.state.profile = { name: p.name, email: p.email };
+    this.save();
+  }
   clearPending() { this.state.pending = null; this.save(); }
 }

@@ -1,5 +1,5 @@
 import { test, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InstallStore } from "./installStore";
@@ -25,4 +25,25 @@ test("starts uncaptured; setCapturedWithPending flips captured + stores pending;
   s.clearPending();
   expect(new InstallStore(dir).pending).toBeNull();
   expect(new InstallStore(dir).captured).toBe(true); // captured stays
+});
+
+test("setCapturedWithPending stores a durable profile that survives clearPending", () => {
+  const s = new InstallStore(dir);
+  s.setCapturedWithPending({ installId: s.installId, name: "Tyrel", email: "t@x.com", appVersion: "1", platform: "darwin" });
+  expect(s.profile).toEqual({ name: "Tyrel", email: "t@x.com" });
+  s.clearPending();
+  expect(new InstallStore(dir).profile).toEqual({ name: "Tyrel", email: "t@x.com" }); // survives delivery
+  expect(new InstallStore(dir).pending).toBeNull();
+});
+
+test("backfills profile from legacy pending when the profile field is absent", () => {
+  writeFileSync(join(dir, "rigel-install.json"), JSON.stringify({
+    installId: "x", captured: true,
+    pending: { installId: "x", name: "Old", email: "o@x.com", appVersion: "1", platform: "linux" },
+  }));
+  expect(new InstallStore(dir).profile).toEqual({ name: "Old", email: "o@x.com" });
+});
+
+test("profile is null on a fresh store", () => {
+  expect(new InstallStore(dir).profile).toBeNull();
 });

@@ -292,6 +292,7 @@ async function boot(): Promise<void> {
   ipcMain.handle("rigel:submit-signup", (_e, data: { name: string; email: string }) =>
     submitSignup(installStore, fetch, SIGNUP_ENDPOINT, SIGNUP_APP_KEY, data.name, data.email, app.getVersion(), process.platform),
   );
+  ipcMain.handle("rigel:get-signup-data", () => installStore.profile);
   ipcMain.handle("rigel:open-chart-file", async () => {
     const res = await dialog.showOpenDialog({
       title: "Select a Helm chart (.tgz) or chart folder",
