@@ -67,15 +67,13 @@ export function AboutYouStep({
           style={inputStyle}
         />
       </label>
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <button
-          type="submit"
-          disabled={!valid || busy}
-          style={{ ...primaryBtnStyle, opacity: !valid || busy ? 0.6 : 1 }}
-        >
-          {busy ? "Saving…" : "Continue →"}
-        </button>
-      </div>
+      <button
+        type="submit"
+        disabled={!valid || busy}
+        style={{ ...primaryBtnStyle, width: "100%", opacity: !valid || busy ? 0.6 : 1 }}
+      >
+        {busy ? "Saving…" : "Continue"}
+      </button>
     </form>
   );
 }
