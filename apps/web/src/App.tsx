@@ -97,13 +97,21 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [requireAboutYou, setRequireAboutYou] = useState(false);
 
-  // Account modal — the captured name/email is fetched once on mount via the
-  // optional desktop bridge (degrades to no data on an older preload / web).
+  // Account modal — refetch the captured name/email each time the modal opens,
+  // so it reflects a profile written during this session (e.g. right after the
+  // first-run signup), not just whatever existed at mount. `rigel` is undefined
+  // off-desktop; the method itself is always present on a real bridge.
   const [accountOpen, setAccountOpen] = useState(false);
   const [account, setAccount] = useState<{ name: string; email: string } | null>(null);
   useEffect(() => {
-    rigel?.getSignupData?.().then(setAccount).catch(() => setAccount(null));
-  }, []);
+    if (!accountOpen) return;
+    let cancelled = false;
+    rigel
+      ?.getSignupData()
+      .then((d) => { if (!cancelled) setAccount(d); })
+      .catch(() => { if (!cancelled) setAccount(null); });
+    return () => { cancelled = true; };
+  }, [accountOpen]);
 
   useEffect(() => {
     const open = () => setShowOnboarding(true);
