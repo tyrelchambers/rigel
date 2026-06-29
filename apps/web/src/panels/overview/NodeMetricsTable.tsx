@@ -60,8 +60,8 @@ export function NodeMetricsTable({ rows, readyByName, hasMetrics, reclaimable }:
         <div className="ov-mtable-grid">
           <div className="ov-mtable-headrow">
             <span className="ov-mtable-h">NODE</span>
-            <span className="ov-mtable-h">CPU</span>
-            <span className="ov-mtable-h">MEMORY</span>
+            <span className="ov-mtable-h">CPU <span className="ov-mtable-h-sub">(used / allocatable)</span></span>
+            <span className="ov-mtable-h">MEMORY <span className="ov-mtable-h-sub">(used / allocatable)</span></span>
           </div>
           {rows.map((n) => (
             <div className="ov-mtable-row" key={n.name}>

@@ -21,6 +21,7 @@ test("renders a row per node with name, percentages, and column heads", () => {
   expect(screen.getByText("NODE")).toBeTruthy();
   expect(screen.getByText("MEMORY")).toBeTruthy();
   expect(screen.getByText("Node overview")).toBeTruthy();
+  expect(screen.getAllByText("(used / allocatable)").length).toBe(2); // CPU + MEMORY
 });
 
 test("flags >=80% utilization with an amber fill, lower usage with the default fill", () => {

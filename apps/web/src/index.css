@@ -446,6 +446,7 @@
 .ov-mtable-row { padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); }
 .ov-mtable-row:last-child { border-bottom: none; }
 .ov-mtable-h { font-family: var(--font-mono, ui-monospace); font-size: 11px; letter-spacing: 1px; color: var(--fg-tertiary); }
+.ov-mtable-h-sub { letter-spacing: normal; text-transform: none; font-weight: 400; opacity: 0.8; }
 .ov-mtable-node { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .ov-mtable-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .ov-mtable-name { font-size: 13px; font-weight: 500; color: var(--fg-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
