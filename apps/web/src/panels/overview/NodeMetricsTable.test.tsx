@@ -26,8 +26,8 @@ test("renders a row per node with name, percentages, and column heads", () => {
 
 test("flags >=80% utilization with an amber fill, lower usage with the default fill", () => {
   const { container } = render(<NodeMetricsTable rows={rows} readyByName={{}} hasMetrics reclaimable={null} />);
-  expect(container.querySelector(".ov-mtable-fill--warn")).toBeTruthy(); // 82% memory
-  expect(container.querySelectorAll(".ov-mtable-fill:not(.ov-mtable-fill--warn)").length).toBeGreaterThan(0);
+  expect(container.querySelector('[data-warn="true"]')).toBeTruthy(); // 82% memory
+  expect(container.querySelectorAll('[data-warn="false"]').length).toBeGreaterThan(0);
 });
 
 test("shows the metrics-server empty state when unavailable", () => {
