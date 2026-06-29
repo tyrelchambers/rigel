@@ -413,27 +413,7 @@
   text-transform: uppercase;
 }
 
-/* Gauge card */
-.ov-gauge-body {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-}
-.ov-gauge { position: relative; width: 108px; height: 108px; }
-.ov-gauge-pct {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-mono, ui-monospace);
-  font-size: 26px;
-  color: var(--fg-primary);
-}
-.ov-gauge-raw { font-family: var(--font-mono, ui-monospace); font-size: 12px; color: var(--fg-secondary); }
+/* Metrics-server empty state (shared by the node-metrics table) */
 .ov-gauge-empty {
   flex: 1;
   display: flex;
@@ -445,22 +425,6 @@
 }
 .ov-gauge-dash { width: 28px; height: 2px; border-radius: 1px; background: var(--border-strong); }
 .ov-gauge-empty-text { font-size: 12px; color: var(--fg-tertiary); text-align: center; line-height: 1.45; }
-
-/* Per-node ring gauges (CPU/Memory per node) — equal-width columns that fill the
-   card; auto-fit spreads a few nodes across the full width and wraps many. */
-.ov-nodegrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 18px 16px; align-items: start; padding-top: 8px; }
-.ov-node-gauge { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
-/* Ring scales to fill its column (responsive SVG), capped so it never gets absurd. */
-.ov-node-ring { position: relative; width: 100%; max-width: 150px; aspect-ratio: 1 / 1; margin: 0 auto; }
-.ov-node-pct {
-  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-mono, ui-monospace); font-size: 18px; font-weight: 600; color: var(--fg-primary);
-}
-.ov-node-name {
-  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: 10px; color: var(--fg-secondary);
-}
-.ov-node-detail { font-family: var(--font-mono, ui-monospace); font-size: 9px; color: var(--fg-tertiary); }
 
 /* Layout C — dense per-node metrics table (replaces the per-node ring gauges) */
 .ov-mtable { padding: 18px; }

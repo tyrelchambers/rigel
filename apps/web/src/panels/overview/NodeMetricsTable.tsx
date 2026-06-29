@@ -1,7 +1,7 @@
 import { Recycle } from "lucide-react";
 import { formatCpu, formatBytes, type NodeResourceTotals } from "./overviewDisplay";
 
-const WARN_THRESHOLD = 0.8;
+const WARN_PERCENT = 80;
 
 export interface ReclaimableSummary {
   fraction: number;
@@ -23,16 +23,18 @@ function pct(fraction: number): string {
 }
 
 function MetricCell({ fraction, raw }: { fraction: number; raw: string }) {
-  const f = clamp01(fraction);
+  // Round once so the bar width, the label, and the warn color all agree at the
+  // boundary (a row reading "80%" is always amber, never split blue/amber).
+  const percent = Math.round(clamp01(fraction) * 100);
   return (
     <div className="ov-mtable-cell">
       <div className="ov-mtable-track">
         <div
-          className={"ov-mtable-fill" + (f >= WARN_THRESHOLD ? " ov-mtable-fill--warn" : "")}
-          style={{ width: `${f * 100}%` }}
+          className={"ov-mtable-fill" + (percent >= WARN_PERCENT ? " ov-mtable-fill--warn" : "")}
+          style={{ width: `${percent}%` }}
         />
       </div>
-      <span className="ov-mtable-pct">{pct(f)}</span>
+      <span className="ov-mtable-pct">{percent}%</span>
       <span className="ov-mtable-raw">{raw}</span>
     </div>
   );
@@ -65,6 +67,9 @@ export function NodeMetricsTable({ rows, readyByName, hasMetrics, reclaimable }:
               <div className="ov-mtable-node">
                 <span
                   className="ov-mtable-dot"
+                  role="img"
+                  aria-label={readyByName[n.name] ? "Ready" : "Not Ready"}
+                  title={readyByName[n.name] ? "Ready" : "Not Ready"}
                   style={{ background: readyByName[n.name] ? "var(--status-running)" : "var(--status-failed)" }}
                 />
                 <span className="ov-mtable-name" title={n.name}>{n.name}</span>
