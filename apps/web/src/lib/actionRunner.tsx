@@ -87,7 +87,7 @@ export function runActionInBackground(opts: RunBackgroundActionOptions): void {
     // Render the live-progress toast (Infinity duration — we drive dismissal above).
     // The toast only reflects state; result reporting is owned by the WS
     // subscription above, so the toast needs no result callback.
-    toastId = toast.custom(() => <ActionProgressToast id={runId} label={label} />, {
+    toastId = toast.custom((t) => <ActionProgressToast id={runId} label={label} toastId={t} />, {
       duration: Infinity,
     });
 

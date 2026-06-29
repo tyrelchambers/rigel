@@ -1942,3 +1942,11 @@
   padding-top: 14px;
   border-top: 1px solid var(--border-subtle);
 }
+
+/* ─── Sonner: no hover-lift on action toasts ────────────────────────────────
+ * Sonner shifts toasts upward when the toaster is hovered (it sets
+ * --y: translateY(calc(var(--lift) * var(--offset))) on [data-expanded='true']).
+ * Pin --y so the toast stays put on hover. */
+[data-sonner-toaster] [data-sonner-toast][data-expanded="true"] {
+  --y: translateY(0) !important;
+}

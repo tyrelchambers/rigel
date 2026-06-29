@@ -15,12 +15,17 @@ vi.mock("@/lib/ws", () => ({
   onActionEvent: (id: string, cb: (e: ActionEvent) => void) => mockOnActionEvent(id, cb),
 }));
 
+// Mock sonner so the dismiss button can be asserted without a Toaster host.
+const toastDismiss = vi.fn();
+vi.mock("sonner", () => ({ toast: { dismiss: (...a: unknown[]) => toastDismiss(...a) } }));
+
 import { ActionProgressToast } from "./ActionProgressToast";
 
 afterEach(() => {
   cleanup();
   eventCallbacks.clear();
   mockOnActionEvent.mockClear();
+  toastDismiss.mockClear();
 });
 
 /** Helper: fire an event on the given run id. */
@@ -35,10 +40,11 @@ describe("ActionProgressToast", () => {
     render(<ActionProgressToast id="r1" label="Delete X" />);
 
     expect(mockOnActionEvent).toHaveBeenCalledWith("r1", expect.any(Function));
-    // Running label
-    expect(screen.getByText("Running: Delete X")).toBeDefined();
-    // Streaming cursor visible (expanded by default)
-    expect(screen.getByText(/█ streaming…/)).toBeDefined();
+    // Title is the bare label; the running status is a separate subline.
+    expect(screen.getByText("Delete X")).toBeDefined();
+    expect(screen.getByText("Running…")).toBeDefined();
+    // Streaming cursor visible (expanded by default).
+    expect(screen.getByText(/streaming…/)).toBeDefined();
   });
 
   test("appends progress lines and they render in the output panel", () => {
@@ -54,16 +60,16 @@ describe("ActionProgressToast", () => {
   test("chevron toggle collapses and expands the output panel", () => {
     render(<ActionProgressToast id="r1" label="Delete X" />);
 
-    // Cursor visible by default (expanded)
-    expect(screen.getByText(/█ streaming…/)).toBeDefined();
+    // Cursor visible by default (expanded).
+    expect(screen.getByText(/streaming…/)).toBeDefined();
 
     // Collapse
     fireEvent.click(screen.getByLabelText("Collapse output"));
-    expect(screen.queryByText(/█ streaming…/)).toBeNull();
+    expect(screen.queryByText(/streaming…/)).toBeNull();
 
     // Expand again
     fireEvent.click(screen.getByLabelText("Expand output"));
-    expect(screen.getByText(/█ streaming…/)).toBeDefined();
+    expect(screen.getByText(/streaming…/)).toBeDefined();
   });
 
   test("action.done code 0 → done state with check and line count", () => {
@@ -73,12 +79,11 @@ describe("ActionProgressToast", () => {
     emit("r1", { type: "action.progress", id: "r1", line: "step 2" });
     emit("r1", { type: "action.done", id: "r1", code: 0 });
 
-    // Label without "Running:" prefix
     expect(screen.getByText("Delete X")).toBeDefined();
-    // Meta line
+    // Status subline
     expect(screen.getByText(/Done · 2 lines/)).toBeDefined();
     // Cursor gone
-    expect(screen.queryByText(/█ streaming…/)).toBeNull();
+    expect(screen.queryByText(/streaming…/)).toBeNull();
   });
 
   test("action.error → error state shows the message", () => {
@@ -89,7 +94,7 @@ describe("ActionProgressToast", () => {
 
     expect(screen.getByText("Drain node")).toBeDefined();
     expect(screen.getByText("node not found")).toBeDefined();
-    expect(screen.queryByText(/█ streaming…/)).toBeNull();
+    expect(screen.queryByText(/streaming…/)).toBeNull();
   });
 
   test("action.done non-zero code → error state with exit code message", () => {
@@ -99,6 +104,13 @@ describe("ActionProgressToast", () => {
 
     expect(screen.getByText("Scale down")).toBeDefined();
     expect(screen.getByText(/Exited with code 1/)).toBeDefined();
+  });
+
+  test("dismiss button closes this toast via sonner", () => {
+    render(<ActionProgressToast id="r1" label="Delete X" toastId="t-9" />);
+
+    fireEvent.click(screen.getByLabelText("Dismiss"));
+    expect(toastDismiss).toHaveBeenCalledWith("t-9");
   });
 
   test("unsubscribes on unmount", () => {
