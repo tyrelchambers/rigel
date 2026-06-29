@@ -462,6 +462,38 @@
 }
 .ov-node-detail { font-family: var(--font-mono, ui-monospace); font-size: 9px; color: var(--fg-tertiary); }
 
+/* Layout C — dense per-node metrics table (replaces the per-node ring gauges) */
+.ov-mtable { padding: 18px; }
+.ov-mtable-hdr { display: flex; align-items: center; justify-content: flex-end; }
+.ov-mtable-reclaim {
+  display: flex; align-items: center; gap: 9px;
+  background: var(--surface-sunken); border: 1px solid var(--border-subtle);
+  border-radius: 999px; padding: 6px 13px;
+}
+.ov-mtable-reclaim-icon { width: 13px; height: 13px; color: var(--status-running); flex-shrink: 0; }
+.ov-mtable-reclaim-label { font-size: 12px; color: var(--fg-secondary); }
+.ov-mtable-reclaim-pct { font-family: var(--font-mono, ui-monospace); font-size: 12px; font-weight: 600; color: var(--status-running); }
+.ov-mtable-reclaim-detail { font-family: var(--font-mono, ui-monospace); font-size: 11px; color: var(--fg-tertiary); }
+
+.ov-mtable-grid { display: flex; flex-direction: column; border: 1px solid var(--border-subtle); border-radius: 8px; overflow: hidden; }
+.ov-mtable-headrow, .ov-mtable-row { display: grid; grid-template-columns: 180px 1fr 1fr; gap: 24px; align-items: center; }
+.ov-mtable-headrow { background: var(--surface-sunken); padding: 10px 16px; border-bottom: 1px solid var(--border-subtle); }
+.ov-mtable-row { padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); }
+.ov-mtable-row:last-child { border-bottom: none; }
+.ov-mtable-h { font-family: var(--font-mono, ui-monospace); font-size: 11px; letter-spacing: 1px; color: var(--fg-tertiary); }
+.ov-mtable-node { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.ov-mtable-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.ov-mtable-name { font-size: 13px; font-weight: 500; color: var(--fg-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-mtable-cell { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ov-mtable-track { flex: 1; max-width: 200px; height: 8px; border-radius: 999px; background: var(--surface-sunken); overflow: hidden; }
+.ov-mtable-fill { height: 8px; border-radius: 999px; background: var(--accent-primary); transition: width 0.4s ease; }
+.ov-mtable-fill--warn { background: var(--status-pending); }
+.ov-mtable-pct { font-family: var(--font-mono, ui-monospace); font-size: 13px; font-weight: 600; color: var(--fg-primary); flex-shrink: 0; }
+.ov-mtable-raw { font-family: var(--font-mono, ui-monospace); font-size: 11px; color: var(--fg-tertiary); flex-shrink: 0; }
+@media (max-width: 1100px) {
+  .ov-mtable-headrow, .ov-mtable-row { grid-template-columns: 140px 1fr 1fr; gap: 14px; }
+}
+
 /* Stat card (Deployments / Pods / Nodes) */
 .ov-stat-content {
   flex: 1;
