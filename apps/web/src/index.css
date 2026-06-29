@@ -428,7 +428,8 @@
 
 /* Layout C — dense per-node metrics table (replaces the per-node ring gauges) */
 .ov-mtable { padding: 18px; }
-.ov-mtable-hdr { display: flex; align-items: center; justify-content: flex-end; }
+.ov-mtable-hdr { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ov-mtable-title { margin: 0; font-size: 14px; font-weight: 600; color: var(--fg-primary); }
 .ov-mtable-reclaim {
   display: flex; align-items: center; gap: 9px;
   background: var(--surface-sunken); border: 1px solid var(--border-subtle);

@@ -44,16 +44,17 @@ function MetricCell({ fraction, raw }: { fraction: number; raw: string }) {
 export function NodeMetricsTable({ rows, readyByName, hasMetrics, reclaimable }: NodeMetricsTableProps) {
   return (
     <section className="ov-card ov-mtable">
-      {reclaimable && (
-        <div className="ov-mtable-hdr">
+      <div className="ov-mtable-hdr">
+        <h2 className="ov-mtable-title">Node overview</h2>
+        {reclaimable && (
           <div className="ov-mtable-reclaim" title="Reclaimable memory (from right-sizing)">
             <Recycle className="ov-mtable-reclaim-icon" />
             <span className="ov-mtable-reclaim-label">Reclaimable</span>
             <span className="ov-mtable-reclaim-pct">{pct(reclaimable.fraction)}</span>
             <span className="ov-mtable-reclaim-detail">{reclaimable.detail}</span>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {hasMetrics && rows.length > 0 ? (
         <div className="ov-mtable-grid">
