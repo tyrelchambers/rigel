@@ -12,6 +12,10 @@ export function Toaster(props: ToasterProps) {
     <Sonner
       theme="dark"
       position="bottom-right"
+      // Always-expanded: sonner otherwise toggles data-expanded on hover, which
+      // re-applies a translateY and makes toasts shift. Keeping it expanded means
+      // no hover toggle, so toasts stay put.
+      expand
       closeButton
       richColors
       style={

@@ -69,13 +69,17 @@ export function runActionInBackground(opts: RunBackgroundActionOptions): void {
         const code = e.code;
         const result: ActionResult = { code, stdout: "", stderr: "" };
         if (fromChat) onResult?.({ action, result, commandString });
-        if (code === 0) {
-          // Auto-dismiss after 4 s on success.
-          setTimeout(() => {
-            if (toastId !== undefined) toast.dismiss(toastId);
-          }, 4000);
+        if (code === 0 && toastId !== undefined) {
+          // Hand the timer back to sonner: re-render the same toast with a finite
+          // duration so sonner owns the auto-dismiss AND pauses it on hover (its
+          // built-in behaviour). React keeps the component mounted (same id), so
+          // the "done" state and output are preserved.
+          toast.custom((t) => <ActionProgressToast id={runId} label={label} toastId={t} />, {
+            id: toastId,
+            duration: 4000,
+          });
         }
-        // Error exits (code !== 0) leave the toast up so the user reads it.
+        // Error exits (code !== 0) leave the toast up (duration: Infinity).
       } else if (e.type === "action.error") {
         unsub();
         const result: ActionResult = { code: 1, stdout: "", stderr: e.message };
