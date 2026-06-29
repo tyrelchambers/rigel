@@ -85,6 +85,20 @@ export function nodeReadyCount(nodes: Node[]): { ready: number; total: number } 
 }
 
 /**
+ * Per-node Ready lookup keyed by node name: `true` when the node's `Ready`
+ * condition is `"True"`, else `false` (including a missing condition). Companion
+ * to `nodeReadyCount` for per-row status display.
+ */
+export function nodeReadyByName(nodes: Node[]): Record<string, boolean> {
+  const map: Record<string, boolean> = {};
+  for (const n of nodes) {
+    const cond = n.status?.conditions?.find((c) => c.type === "Ready");
+    map[n.metadata.name] = cond?.status === "True";
+  }
+  return map;
+}
+
+/**
  * Sum, across all nodes, of active pressure conditions: any condition with
  * `type !== "Ready"` and `status === "True"` (DiskPressure, MemoryPressure,
  * PIDPressure, NetworkUnavailable, and so on).
