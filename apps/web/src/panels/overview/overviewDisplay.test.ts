@@ -5,6 +5,7 @@ import {
   deploymentHealth,
   unhealthyDeploymentCount,
   nodeReadyCount,
+  nodeReadyByName,
   nodePressureCount,
   parseCpuQuantity,
   parseMemQuantity,
@@ -182,6 +183,22 @@ describe("nodeReadyCount", () => {
 
   test("empty maps to 0/0", () => {
     expect(nodeReadyCount([])).toEqual({ ready: 0, total: 0 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// nodeReadyByName
+// ---------------------------------------------------------------------------
+
+describe("nodeReadyByName", () => {
+  test("nodeReadyByName maps each node to its Ready condition", () => {
+    const nodes = [
+      { metadata: { name: "a" }, status: { conditions: [{ type: "Ready", status: "True" }] } },
+      { metadata: { name: "b" }, status: { conditions: [{ type: "Ready", status: "False" }] } },
+      { metadata: { name: "c" }, status: { conditions: [] } },
+      { metadata: { name: "d" } },
+    ] as unknown as Node[];
+    expect(nodeReadyByName(nodes)).toEqual({ a: true, b: false, c: false, d: false });
   });
 });
 
