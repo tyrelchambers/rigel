@@ -2,14 +2,13 @@
  * GlobalHeader — a slim full-width bar across the top of every view.
  *
  * Left:  sidebar collapse toggle + the global NamespaceSelector.
- * Right: a search affordance that opens the existing ⌘K CommandPalette, and a
- *        compact WS connection-status indicator (reuses store `connected`).
+ * Right: a search affordance that opens the existing ⌘K CommandPalette, and the
+ *        account avatar.
  *
  * Inline styles + CSS custom properties to match App.tsx / NavStrip.tsx.
  */
 import { PanelLeftClose, PanelLeftOpen, Search, User } from "lucide-react";
 import { NamespaceSelector } from "./NamespaceBar";
-import { useCluster } from "@/store/cluster";
 import { RigelMark } from "@/components/RigelMark";
 
 interface GlobalHeaderProps {
@@ -22,11 +21,6 @@ interface GlobalHeaderProps {
 }
 
 export function GlobalHeader({ sidebarCollapsed, onToggleSidebar, onOpenSearch, onOpenAccount }: GlobalHeaderProps) {
-  const connected = useCluster((s) => s.connected);
-
-  const dotColor = connected ? "var(--status-running)" : "var(--status-pending)";
-  const statusLabel = connected ? "Connected" : "Reconnecting";
-
   return (
     <header
       style={{
@@ -115,25 +109,6 @@ export function GlobalHeader({ sidebarCollapsed, onToggleSidebar, onOpenSearch, 
           ⌘K
         </span>
       </button>
-
-      {/* Connection status indicator */}
-      <div
-        style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}
-        title={statusLabel}
-      >
-        <span
-          style={{
-            width: 7,
-            height: 7,
-            borderRadius: "50%",
-            background: dotColor,
-            flexShrink: 0,
-          }}
-        />
-        <span style={{ fontSize: 12, color: "var(--fg-secondary)", fontWeight: 500 }}>
-          {statusLabel}
-        </span>
-      </div>
 
       {/* Account — user avatar opens the Account modal */}
       <button
