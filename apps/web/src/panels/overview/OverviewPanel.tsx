@@ -1,8 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Cpu,
-  MemoryStick,
-  Recycle,
   Layers,
   Box,
   Server,
@@ -13,7 +10,6 @@ import {
   History,
   Trash2,
   Sparkles,
-  Hourglass,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCluster } from "@/store/cluster";
@@ -40,13 +36,13 @@ import {
   phaseCounts,
   unhealthyDeploymentCount,
   nodeReadyCount,
+  nodeReadyByName,
   nodePressureCount,
   clusterResourceTotals,
   perNodeResourceTotals,
-  formatCpu,
   formatBytes,
-  type NodeResourceTotals,
 } from "./overviewDisplay";
+import { NodeMetricsTable } from "./NodeMetricsTable";
 import {
   sortEvents,
   isWarning,
@@ -163,7 +159,7 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
   // Reclaimable memory — same right-sizing pipeline the Right-Sizing panel uses,
   // but forced cluster-wide so it matches the rest of this dashboard (the
   // Right-Sizing panel itself stays namespace-scoped).
-  const { workloads: rsWorkloads, usingBackend: rsBackend, detecting: rsDetecting } = useRightSizing({ clusterWide: true });
+  const { workloads: rsWorkloads, usingBackend: rsBackend } = useRightSizing({ clusterWide: true });
   const reclaimBytes = useMemo(
     () => rsWorkloads.reduce((sum, w) => sum + Math.max(0, w.reclaimableMemBytes), 0),
     [rsWorkloads],
@@ -174,10 +170,15 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
     rsBackend &&
     rsWorkloads.length > 0 &&
     rsWorkloads.every((w) => w.containers.every((c) => c.hoursCovered < MIN_HOURS));
-  const rsMaxHours = rsWorkloads.reduce(
-    (m, w) => Math.max(m, ...w.containers.map((c) => c.hoursCovered), 0),
-    0,
-  );
+
+  const readyByName = useMemo(() => nodeReadyByName(nodes), [nodes]);
+  const reclaimable =
+    rsBackend && !rsWarmingUp && totals.memAllocatable > 0
+      ? {
+          fraction: Math.min(1, reclaimBytes / totals.memAllocatable),
+          detail: `${formatBytes(String(reclaimBytes))} of ${formatBytes(String(totals.memAllocatable))}`,
+        }
+      : null;
 
   const deployUnhealthy = unhealthyDeploymentCount(deployments);
   const phases = useMemo(() => phaseCounts(pods), [pods]);
@@ -245,46 +246,13 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
       <div className="ov-content">
         {error && <pre className="ov-error">{error}</pre>}
 
-        {/* Row 1 — Per-node CPU/memory utilization + reclaimable */}
-        <div className="ov-row ov-row-3">
-          <NodeGaugesCard
-            icon={Cpu}
-            title="CPU per node"
-            color="#60A5FA"
-            nodes={perNode}
-            metric="cpu"
-            show={hasMetrics}
-            emptyText="metrics-server unavailable — install it to see live CPU usage."
-          />
-          <NodeGaugesCard
-            icon={MemoryStick}
-            title="Memory per node"
-            color="#38BDF8"
-            nodes={perNode}
-            metric="memory"
-            show={hasMetrics}
-            emptyText="metrics-server unavailable — install it to see live memory usage."
-          />
-          {/* Reclaimable memory from the right-sizing pipeline (shared hook).
-              Mirrors the Right-Sizing tab states: loader while detecting,
-              "collecting data" while the backend warms up, then the gauge. */}
-          <GaugeCard
-            icon={Recycle}
-            title="Reclaimable"
-            color="#10B981"
-            loading={rsDetecting}
-            fraction={
-              rsBackend && !rsWarmingUp && totals.memAllocatable > 0
-                ? Math.min(1, reclaimBytes / totals.memAllocatable)
-                : null
-            }
-            detail={
-              rsBackend && !rsWarmingUp
-                ? `${formatBytes(String(reclaimBytes))} of ${formatBytes(String(totals.memAllocatable))}`
-                : ""
-            }
-            note={rsBackend && rsWarmingUp ? `Collecting data · ${rsMaxHours}h of ${MIN_HOURS}h` : undefined}
-            emptyText="connect a metrics backend in Right-Sizing to see reclaimable memory."
+        {/* Row 1 — Dense per-node metrics table (Layout C) + reclaimable badge */}
+        <div className="ov-row">
+          <NodeMetricsTable
+            rows={perNode}
+            readyByName={readyByName}
+            hasMetrics={hasMetrics}
+            reclaimable={reclaimable}
           />
         </div>
 
@@ -428,152 +396,6 @@ function CardHeader({ icon: Icon, title, right }: { icon: LucideIcon; title: str
         <span className="ov-card-hdr-label">{title}</span>
       </div>
       {right && <div className="ov-card-hdr-right">{right}</div>}
-    </div>
-  );
-}
-
-/** Ring gauge card (108px donut). `fraction === null` renders the empty state. */
-function GaugeCard({
-  icon,
-  title,
-  fraction,
-  color,
-  detail,
-  emptyText,
-  loading = false,
-  note,
-}: {
-  icon: LucideIcon;
-  title: string;
-  fraction: number | null;
-  color: string;
-  detail: string;
-  emptyText: string;
-  /** Show a spinner + "Loading…" while the data source is still resolving. */
-  loading?: boolean;
-  /** Replaces emptyText in the non-gauge slot (e.g. a "collecting data" note). */
-  note?: string;
-}) {
-  const RADIUS = 47;
-  const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
-
-  return (
-    <div className="ov-card">
-      <CardHeader icon={icon} title={title} />
-      {loading ? (
-        <div className="ov-gauge-empty">
-          <Loader size={20} color="var(--accent-primary)" />
-          <span className="ov-gauge-empty-text">Loading usage history…</span>
-        </div>
-      ) : fraction === null ? (
-        <div className="ov-gauge-empty">
-          {note ? (
-            <Hourglass className="size-5" style={{ color: "var(--accent-primary)" }} />
-          ) : (
-            <div className="ov-gauge-dash" />
-          )}
-          <span className="ov-gauge-empty-text">{note ?? emptyText}</span>
-        </div>
-      ) : (
-        <div className="ov-gauge-body">
-          <div className="ov-gauge">
-            <svg width="108" height="108" viewBox="0 0 108 108" style={{ display: "block" }}>
-              <circle cx="54" cy="54" r={RADIUS} fill="none" stroke="#34353A" strokeWidth="14" />
-              <circle
-                cx="54"
-                cy="54"
-                r={RADIUS}
-                fill="none"
-                stroke={color}
-                strokeWidth="14"
-                strokeLinecap="round"
-                strokeDasharray={`${CIRCUMFERENCE * clamp01(fraction)} ${CIRCUMFERENCE}`}
-                transform="rotate(-90 54 54)"
-                style={{ transition: "stroke-dasharray 0.4s ease" }}
-              />
-            </svg>
-            <div className="ov-gauge-pct">{Math.round(clamp01(fraction) * 100)}%</div>
-          </div>
-          <span className="ov-gauge-raw">{detail}</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** A card of per-node ring gauges for one metric (CPU or memory). */
-function NodeGaugesCard({
-  icon,
-  title,
-  color,
-  nodes,
-  metric,
-  show,
-  emptyText,
-}: {
-  icon: LucideIcon;
-  title: string;
-  color: string;
-  nodes: NodeResourceTotals[];
-  metric: "cpu" | "memory";
-  show: boolean;
-  emptyText: string;
-}) {
-  return (
-    <div className="ov-card">
-      <CardHeader icon={icon} title={title} />
-      {!show || nodes.length === 0 ? (
-        <div className="ov-gauge-empty">
-          <div className="ov-gauge-dash" />
-          <span className="ov-gauge-empty-text">{emptyText}</span>
-        </div>
-      ) : (
-        <div className="ov-nodegrid">
-          {nodes.map((n) => (
-            <NodeGauge
-              key={n.name}
-              name={n.name}
-              color={color}
-              fraction={metric === "cpu" ? n.cpuFraction : n.memFraction}
-              detail={
-                metric === "cpu"
-                  ? `${formatCpu(n.cpuUsed)}/${formatCpu(n.cpuAllocatable)}`
-                  : `${formatBytes(String(n.memUsed))}/${formatBytes(String(n.memAllocatable))}`
-              }
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** One node ring (104px) with % in the center and a name + used/alloc below. */
-function NodeGauge({ name, fraction, color, detail }: { name: string; fraction: number; color: string; detail: string }) {
-  const R = 44;
-  const C = 2 * Math.PI * R;
-  return (
-    <div className="ov-node-gauge">
-      <div className="ov-node-ring">
-        <svg width="100%" height="100%" viewBox="0 0 104 104" style={{ display: "block" }}>
-          <circle cx="52" cy="52" r={R} fill="none" stroke="#34353A" strokeWidth="12" />
-          <circle
-            cx="52"
-            cy="52"
-            r={R}
-            fill="none"
-            stroke={color}
-            strokeWidth="12"
-            strokeLinecap="round"
-            strokeDasharray={`${C * clamp01(fraction)} ${C}`}
-            transform="rotate(-90 52 52)"
-            style={{ transition: "stroke-dasharray 0.4s ease" }}
-          />
-        </svg>
-        <div className="ov-node-pct">{Math.round(clamp01(fraction) * 100)}%</div>
-      </div>
-      <span className="ov-node-name" title={name}>{name}</span>
-      <span className="ov-node-detail">{detail}</span>
     </div>
   );
 }
@@ -812,11 +634,6 @@ export function WarningRow({
       </div>
     </div>
   );
-}
-
-/** Clamp a fraction to [0, 1]. */
-function clamp01(n: number): number {
-  return Math.min(Math.max(n, 0), 1);
 }
 
 /** Pluralize a noun by count: 1 → "1 deployment", else "N deployments". */
