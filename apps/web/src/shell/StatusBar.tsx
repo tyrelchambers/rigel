@@ -8,6 +8,13 @@
 import { useEffect, useState } from "react";
 import { useCluster } from "@/store/cluster";
 import { TOGGLE_TERMINAL_EVENT } from "@/shell/TerminalDrawer";
+import { connectionStatus, type ConnectionTone } from "@/shell/connectionStatus";
+
+const TONE_COLOR: Record<ConnectionTone, string> = {
+  ok: "var(--status-running)",
+  warn: "var(--status-pending)",
+  error: "var(--status-failed)",
+};
 
 interface HealthData {
   context?: string;
@@ -38,9 +45,8 @@ export default function StatusBar({ chatHidden, onToggleChat }: StatusBarProps =
   const podCount = Object.keys(resources["pods"] ?? {}).length;
   const nodeCount = Object.keys(resources["nodes"] ?? {}).length;
 
-  const kubectlOk = connected && !error;
-  const statusColor = kubectlOk ? "var(--status-running)" : "var(--status-failed)";
-  const statusLabel = kubectlOk ? "kubectl: ok" : "kubectl: error";
+  const { label: statusLabel, tone: statusTone } = connectionStatus(connected, error);
+  const statusColor = TONE_COLOR[statusTone];
 
   // Namespace label for left side — use context name or namespace filter
   const namespaceLabel = namespaceFilter ?? activeContext ?? health.context ?? null;
@@ -92,7 +98,7 @@ export default function StatusBar({ chatHidden, onToggleChat }: StatusBarProps =
               flexShrink: 0,
             }}
           />
-          <MonoChip style={{ color: kubectlOk ? "var(--fg-secondary)" : "var(--status-failed)" }} title={error ?? undefined}>
+          <MonoChip style={{ color: statusTone === "ok" ? "var(--fg-secondary)" : statusColor }} title={error ?? undefined}>
             {statusLabel}
           </MonoChip>
         </div>

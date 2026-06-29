@@ -15,6 +15,7 @@ import { join } from "node:path";
 import { readFileSync, writeFileSync } from "node:fs";
 import { InstallStore } from "./installStore";
 import { submitSignup, deliver } from "./signup";
+import { decideRestart } from "./restartPolicy";
 
 const SIGNUP_ENDPOINT = "https://api.rigel.run";
 // Shared key for the signups endpoint — deliberately baked into the client
@@ -44,6 +45,14 @@ const SMOKE = process.env.HELMSMAN_SMOKE === "1";
 let serverProc: UtilityProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
 let serverPort = 0;
+// Set true once the user is intentionally quitting, so a server child killed as
+// part of shutdown is NOT mistaken for a crash and respawned (see before-quit).
+let quitting = false;
+// Timestamps of recent unexpected server exits, for the crash-loop guard.
+const serverCrashes: number[] = [];
+// Settle delay before respawning a crashed server. The renderer's WebSocket
+// reconnect (apps/web/src/lib/ws.ts) re-establishes once the new server binds.
+const SERVER_RESTART_DELAY_MS = 800;
 
 // ── Free-port helper ────────────────────────────────────────────────────────
 // Ask the OS for an ephemeral port (listen(0)), read it, release it. There's a
@@ -209,9 +218,36 @@ function forkServer(port: number): UtilityProcess {
   child.on("exit", (code) => {
     console.log(`[rigel] server exited (code=${code})`);
     serverProc = null;
+    // Respawn only an UNEXPECTED death while a window is up. Intentional quit
+    // (quitting), the headless smoke run, and the pre-window boot phase (the boot
+    // health race owns that failure) are all left alone.
+    if (quitting || SMOKE || mainWindow === null) return;
+    scheduleServerRestart();
   });
 
   return child;
+}
+
+// Respawn the crashed server on the SAME port so the renderer's existing origin
+// (and its WebSocket reconnect) keep working with no window reload. A crash loop
+// is capped — past the limit we surface the failure instead of hot-looping.
+function scheduleServerRestart(): void {
+  const now = Date.now();
+  serverCrashes.push(now);
+  const decision = decideRestart(serverCrashes, now);
+  if (!decision.restart) {
+    console.error(`[rigel] giving up on the server: ${decision.reason}`);
+    dialog.showErrorBox(
+      "Rigel background server stopped",
+      `The local server ${decision.reason}. Please quit and reopen Rigel.`,
+    );
+    return;
+  }
+  console.log(`[rigel] server crashed — restarting on :${serverPort} in ${SERVER_RESTART_DELAY_MS}ms`);
+  setTimeout(() => {
+    if (quitting || mainWindow === null) return;
+    serverProc = forkServer(serverPort);
+  }, SERVER_RESTART_DELAY_MS);
 }
 
 // ── Health gate ─────────────────────────────────────────────────────────────
@@ -420,10 +456,10 @@ app.on("activate", () => {
 // allowing the Electron process to terminate. This gives the server's SIGTERM
 // hook time to run portForwards.stopAll() and reap its kubectl/PTY children.
 // A 3 s timeout prevents a stuck child from hanging the quit indefinitely.
-let quitting = false;
 app.on("before-quit", (event) => {
-  if (!serverProc || quitting) return;
-  quitting = true;
+  if (quitting) return;
+  quitting = true; // suppress any in-flight server-restart timer
+  if (!serverProc) return; // nothing to drain; let the quit proceed
   event.preventDefault();
   const child = serverProc;
   const finish = () => { try { app.exit(0); } catch { /* noop */ } };

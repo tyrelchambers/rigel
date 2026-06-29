@@ -57,6 +57,7 @@ import { handleAssistant, type AssistantRequest } from "./assistant";
 import { handleSignal, type SignalRequest } from "./signal";
 import { handleMatrix, type MatrixRequest } from "./matrix";
 import { PortForwardManager, type TargetKind } from "./portForward";
+import { makeFatalHandler } from "./fatalHandler";
 
 const KUBECONFIG = resolveKubeconfigPath(process.env, homedir());
 const PORT = Number(process.env.PORT ?? 8787);
@@ -1114,3 +1115,13 @@ for (const sig of ["SIGINT", "SIGTERM"] as const) {
     void portForwards.stopAll().finally(() => process.exit(0));
   });
 }
+
+// Last-resort crash guard: log, reap port-forward children, and exit non-zero so
+// the desktop supervisor restarts a clean server (the web client reconnects).
+const onFatal = makeFatalHandler(
+  () => portForwards.stopAll(),
+  (code) => process.exit(code),
+  (...args) => console.error(...args),
+);
+process.on("uncaughtException", onFatal);
+process.on("unhandledRejection", onFatal);

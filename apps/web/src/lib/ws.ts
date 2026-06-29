@@ -13,6 +13,28 @@ import {
 
 let socket: WebSocket | null = null;
 
+// Reconnect-with-backoff. The socket drops when the machine sleeps or the
+// server hiccups; without this the UI would sit on a permanent "disconnected"
+// state forever (connectCluster is only called once at mount). Grows 1s, 2s,
+// 4s... capped at 30s; reset to base on every successful open. Mirrors the
+// server-side watch restart backoff (apps/server/src/watchManager.ts).
+const RECONNECT_BASE_MS = 1_000;
+const RECONNECT_MAX_MS = 30_000;
+const RECONNECT_MAX_EXP = 6;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let reconnectAttempts = 0;
+
+function scheduleReconnect(): void {
+  if (reconnectTimer) return; // an attempt is already pending
+  const exp = Math.min(reconnectAttempts, RECONNECT_MAX_EXP);
+  const delay = Math.min(RECONNECT_BASE_MS * 2 ** exp, RECONNECT_MAX_MS);
+  reconnectAttempts += 1;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connectCluster();
+  }, delay);
+}
+
 // The active kubeconfig context every subscribe/unsubscribe frame is stamped
 // with. null until the rail resolves it (→ frames omit `context`, so the server
 // uses its boot context, which is the active one — no behavior change pre-rail).
@@ -230,9 +252,15 @@ export function onTermEvent(callback: TermCallback): () => void {
 }
 
 export function connectCluster(): void {
+  // A manual (re)connect supersedes any pending backoff timer.
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
   socket = new WebSocket(`ws://${location.host}/ws`);
   const store = useCluster.getState();
   socket.onopen = () => {
+    reconnectAttempts = 0; // a healthy connection clears the backoff
     store.setConnected(true);
     store.setError(null);
     // (Re)send every in-use watch subscription. Panels mount before the socket
@@ -252,9 +280,13 @@ export function connectCluster(): void {
   socket.onclose = () => {
     store.setConnected(false);
     store.setLoading(false);
+    // Keep trying: the status bar reads !connected as "reconnecting…".
+    scheduleReconnect();
   };
+  // A transport error isn't a kubectl/watch failure — it's a dropped socket,
+  // and onclose follows to drive the reconnect. Don't set the scary `error`
+  // string (that field is reserved for genuine server-reported watch errors).
   socket.onerror = () => {
-    store.setError("websocket connection failed");
     store.setLoading(false);
   };
   socket.onmessage = (ev) => {
