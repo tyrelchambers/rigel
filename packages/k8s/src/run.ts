@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { spawnEnv } from "./toolPath";
+import { spawnEnv } from "./toolPath.js";
 
 /**
  * kubectl plugins (invoked as `kubectl <plugin> …`, e.g. the cnpg plugin)

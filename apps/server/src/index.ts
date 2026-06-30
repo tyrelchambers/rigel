@@ -23,6 +23,7 @@ import { handlePurge, type PurgeRequest } from "./purge";
 import {
   loadSources, saveSources, diffSource, applySource, previewRepoFix, proposeRepoFix,
   loadGithubToken, githubAccountStatus, connectGithub, disconnectGithub, listGithubRepos, listRepoTree, readRepoFile,
+  linkRepo, resolveDeploymentLink, ClusterWriteError,
 } from "./git";
 import {
   sanitizeSourceName,
@@ -812,6 +813,51 @@ async function handler(req: Request): Promise<Response> {
       const merged = sources.filter((s) => s.name !== name);
       await saveSources(context, merged);
       return Response.json({ sources: merged });
+    }
+
+    // GET /api/git/link?namespace=&deployment= — per-project link status. Resolves
+    // the Deployment's rigel.dev/source-repo annotation against rigel-git-sources
+    // → { linked, link: { source, repo: "owner/name", repoURL, branch, path } | null }.
+    if (url.pathname === "/api/git/link" && req.method === "GET") {
+      const namespace = url.searchParams.get("namespace");
+      const deployment = url.searchParams.get("deployment");
+      if (!namespace || !deployment) {
+        return Response.json({ error: "missing namespace or deployment" }, { status: 422 });
+      }
+      return Response.json(await resolveDeploymentLink(context, namespace, deployment));
+    }
+
+    // POST /api/git/link — bind a running Deployment to a GitOps source (the
+    // "Link to repo" flow). Body: { namespace, deployment, repoURL, branch?, path? }.
+    // Creates/extends a rigel-git-sources entry AND stamps the live Deployment
+    // with the provenance annotations (no redeploy).
+    if (url.pathname === "/api/git/link" && req.method === "POST") {
+      let body: { namespace?: string; deployment?: string; repoURL?: string; branch?: string; path?: string };
+      try {
+        body = (await req.json()) as typeof body;
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      if (!body.namespace || !body.deployment || !body.repoURL) {
+        return Response.json({ error: "missing namespace, deployment, or repoURL" }, { status: 422 });
+      }
+      try {
+        const result = await linkRepo(context, {
+          namespace: body.namespace,
+          deployment: body.deployment,
+          repoURL: body.repoURL,
+          branch: body.branch,
+          path: body.path,
+        });
+        return Response.json(result);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        // A cluster WRITE failure (saveSources / annotate) is infra, not bad
+        // input — surface it as 5xx so callers can distinguish it from a
+        // validation/collision error (422).
+        const status = err instanceof ClusterWriteError ? 500 : 422;
+        return Response.json({ error: msg }, { status });
+      }
     }
 
     // POST /api/git/sync — { repo, deployment, dryRun? }. dryRun → kubectl diff

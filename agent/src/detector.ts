@@ -5,7 +5,9 @@
  * degraded deployments) plus OOMKilled detection from a container's last
  * terminated state. Claude is only woken when one of these fires.
  */
-export type IncidentKind = "unhealthyPod" | "degradedDeployment";
+import { scanLogsForErrors } from "./logScan.js";
+
+export type IncidentKind = "unhealthyPod" | "degradedDeployment" | "loggedError";
 
 export interface Incident {
   incidentKind: IncidentKind;
@@ -57,6 +59,54 @@ export function detectUnhealthyPods(raw: unknown): Incident[] {
     if (reason !== undefined) {
       incidents.push({ incidentKind: "unhealthyPod", namespace, name, reason, detail: "", restarts });
     }
+  }
+  return incidents;
+}
+
+/**
+ * Fetch a bounded chunk of a pod's recent logs (returns null if unreadable, e.g.
+ * RBAC denied or a multi-container pod that needs `-c`). Injected so detection
+ * stays unit-testable and the actual `kubectl logs --tail` lives in one place
+ * (the loop wiring) rather than coupling this module to a subprocess.
+ */
+export type PodLogTailer = (namespace: string, podName: string) => Promise<string | null>;
+
+/**
+ * Slice-1 bounded log-error detection: for RUNNING pods the status checks did NOT
+ * already flag (an app logging errors without crashing), tail a small window of
+ * recent output and run the noise-controlled signature scanner. Matches surface as
+ * `loggedError` incidents whose `reason` is the normalized signature, so they
+ * fingerprint, debounce (confirmPolls) and dedupe exactly like a status signal.
+ *
+ * `alreadyFlagged` holds `"namespace/name"` keys already covered by the status
+ * checks, so we never double-report a pod. Cost is one tailer call per remaining
+ * running pod — keep the tailer bounded (`--tail`/`--limit-bytes`).
+ */
+export async function detectLogErrors(
+  raw: unknown,
+  alreadyFlagged: ReadonlySet<string>,
+  tail: PodLogTailer,
+): Promise<Incident[]> {
+  const incidents: Incident[] = [];
+  for (const pod of items(raw)) {
+    const phase: string = pod.status?.phase ?? "";
+    if (phase !== "Running") continue;
+    const name: string = pod.metadata?.name ?? "?";
+    const namespace: string = pod.metadata?.namespace ?? "default";
+    if (alreadyFlagged.has(`${namespace}/${name}`)) continue;
+
+    const logText = await tail(namespace, name);
+    if (logText == null) continue;
+    const scan = scanLogsForErrors(logText);
+    if (!scan.matched) continue;
+
+    incidents.push({
+      incidentKind: "loggedError",
+      namespace,
+      name,
+      reason: scan.signature ?? "LogError",
+      detail: scan.reason ?? "",
+    });
   }
   return incidents;
 }

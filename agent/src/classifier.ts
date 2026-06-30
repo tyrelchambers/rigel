@@ -18,7 +18,10 @@ export enum RiskTier {
 }
 
 const LOW: ReadonlySet<string> = new Set(["restart", "rollback", "deletePod", "cordon"]);
-const MEDIUM: ReadonlySet<string> = new Set(["scale", "setEnv", "uncordon"]);
+// `openFixPR` opens a pull request against the workload's GitOps source rather
+// than mutating the cluster, so it never clears LOW: the Opus supervisor must vet
+// the proposed change before a PR is opened on the user's behalf.
+const MEDIUM: ReadonlySet<string> = new Set(["scale", "setEnv", "uncordon", "openFixPR"]);
 
 export function classifyRisk(kind: string): RiskTier {
   if (LOW.has(kind)) return RiskTier.Low;

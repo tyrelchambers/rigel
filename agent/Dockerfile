@@ -5,20 +5,29 @@
 # failed to suspend thread"). The musl Bun build that claude-code installs on
 # Alpine is unaffected — verified on the cluster's 6.17 nodes.
 
-# ── build stage: compile TypeScript → dist ───────────────────────────────────
+# ── build stage: esbuild bundle → dist ───────────────────────────────────────
+# Build context is the repo ROOT (see agent-build.yml / release-images.yml): the
+# agent is a standalone npm project but consumes @rigel/k8s BY SOURCE via the
+# tsconfig "paths" alias (../packages/k8s/src), so both must be laid out as
+# siblings for the esbuild bundle (npm run build → build.mjs) to inline it.
 FROM node:22-alpine AS build
 WORKDIR /app
-COPY package.json package-lock.json tsconfig.json ./
+COPY agent/package.json agent/package-lock.json agent/tsconfig.json agent/build.mjs ./agent/
+COPY agent/src ./agent/src
+COPY packages/k8s/src ./packages/k8s/src
+WORKDIR /app/agent
 RUN npm ci
-COPY src ./src
+# Bundles dist/index.js + dist/fixRunner.js + dist/guardedKubectl.js, each a
+# self-contained ESM file with @rigel/k8s inlined (Node builtins external).
 RUN npm run build
 
 # ── runtime stage ────────────────────────────────────────────────────────────
 FROM node:22-alpine
 
-# Runtime libs: ca-certificates (HTTPS to Anthropic + dl.k8s.io), and
-# libstdc++/libgcc which the musl Bun binary links against.
-RUN apk add --no-cache ca-certificates libstdc++ libgcc bash curl \
+# Runtime libs: ca-certificates (HTTPS to Anthropic + dl.k8s.io), git (the
+# fix-runner Job clones/pushes via @rigel/k8s repoFix), and libstdc++/libgcc
+# which the musl Bun binary links against.
+RUN apk add --no-cache ca-certificates libstdc++ libgcc bash git curl \
  && case "$(uname -m)" in x86_64) KARCH=amd64;; aarch64) KARCH=arm64;; *) KARCH=amd64;; esac \
  && KVER="$(curl -fsSL https://dl.k8s.io/release/stable.txt)" \
  && curl -fsSL -o /usr/local/bin/kubectl "https://dl.k8s.io/release/${KVER}/bin/linux/${KARCH}/kubectl" \
@@ -60,9 +69,11 @@ RUN npm install -g @google/gemini-cli
 RUN npm install -g opencode-ai
 
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
-COPY --from=build /app/dist ./dist
+# package.json carries "type":"module" so the bundled dist/*.js run as ESM. The
+# agent has NO runtime deps (esbuild inlined @rigel/k8s; the model CLIs are global
+# above), so there is nothing to `npm ci` here.
+COPY agent/package.json ./package.json
+COPY --from=build /app/agent/dist ./dist
 
 # Run as the unprivileged built-in `node` user (UID 1000), in an empty working
 # dir so `claude -p` doesn't pick up stray repo context.

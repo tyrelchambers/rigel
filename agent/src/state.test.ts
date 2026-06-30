@@ -1,5 +1,17 @@
 import { describe, expect, test } from "vitest";
-import { appendAudit, capBackups, emptyState, reconcileQueue, type AuditEntry, type QueuedSuggestion } from "./state.js";
+import {
+  appendAudit,
+  autoSilence,
+  capBackups,
+  countFixPrBudget,
+  emptyState,
+  reconcileQueue,
+  recordPullRequest,
+  resolveFixAudit,
+  type AuditEntry,
+  type PullRequestRecord,
+  type QueuedSuggestion,
+} from "./state.js";
 
 function entry(at: string, fingerprint: string): AuditEntry {
   return {
@@ -35,6 +47,152 @@ describe("appendAudit", () => {
     const before = emptyState();
     appendAudit(before, entry("t", "a"), 50);
     expect(before.audit).toEqual([]);
+  });
+});
+
+describe("autoSilence", () => {
+  test("adds a fingerprint, newest-first", () => {
+    const s = autoSilence(autoSilence(emptyState(), "a"), "b");
+    expect(s.autoSilenced).toEqual(["b", "a"]);
+  });
+
+  test("is a no-op (does not reorder) when the fingerprint is already silenced", () => {
+    const s1 = autoSilence(autoSilence(emptyState(), "a"), "b");
+    const s2 = autoSilence(s1, "a");
+    expect(s2.autoSilenced).toEqual(["b", "a"]);
+    expect(s2).toBe(s1); // same reference — no new state when nothing changed
+  });
+
+  test("caps the list, dropping the oldest", () => {
+    let s = emptyState();
+    for (let i = 0; i < 5; i++) s = autoSilence(s, `fp${i}`, 3);
+    expect(s.autoSilenced).toEqual(["fp4", "fp3", "fp2"]);
+  });
+
+  test("does not mutate the input state", () => {
+    const before = emptyState();
+    autoSilence(before, "a");
+    expect(before.autoSilenced).toBeUndefined();
+  });
+});
+
+describe("recordPullRequest", () => {
+  function pr(over: Partial<PullRequestRecord> = {}): PullRequestRecord {
+    return {
+      at: "2026-06-30T12:00:00Z", fingerprint: "fp", filePath: "a.yaml", incident: "i",
+      app: "memos", repo: "https://github.com/me/infra", branch: "rigel/fix", prUrl: "https://x/pull/1",
+      title: "t", summary: "", status: "open", kind: "config", ...over,
+    };
+  }
+
+  test("adds a record newest-first and reports added", () => {
+    const r1 = recordPullRequest(emptyState(), pr({ prUrl: "https://x/pull/1" }));
+    const r2 = recordPullRequest(r1.state, pr({ fingerprint: "fp2", prUrl: "https://x/pull/2" }));
+    expect(r2.added).toBe(true);
+    expect(r2.state.pullRequests!.map((p) => p.prUrl)).toEqual(["https://x/pull/2", "https://x/pull/1"]);
+  });
+
+  test("dedups on fingerprint+filePath (no double-record), reports added=false", () => {
+    const r1 = recordPullRequest(emptyState(), pr());
+    const r2 = recordPullRequest(r1.state, pr({ prUrl: "https://x/pull/999" }));
+    expect(r2.added).toBe(false);
+    expect(r2.state.pullRequests).toHaveLength(1);
+    expect(r2.state).toBe(r1.state); // unchanged reference
+  });
+
+  test("same fingerprint but a DIFFERENT file is a distinct record", () => {
+    const r1 = recordPullRequest(emptyState(), pr({ filePath: "a.yaml" }));
+    const r2 = recordPullRequest(r1.state, pr({ filePath: "b.yaml" }));
+    expect(r2.added).toBe(true);
+    expect(r2.state.pullRequests).toHaveLength(2);
+  });
+
+  test("caps the list, dropping the oldest", () => {
+    let s = emptyState();
+    for (let i = 0; i < 5; i++) s = recordPullRequest(s, pr({ fingerprint: `fp${i}` }), 3).state;
+    expect(s.pullRequests).toHaveLength(3);
+    expect(s.pullRequests!.map((p) => p.fingerprint)).toEqual(["fp4", "fp3", "fp2"]);
+  });
+
+  test("does not mutate the input state", () => {
+    const before = emptyState();
+    recordPullRequest(before, pr());
+    expect(before.pullRequests).toBeUndefined();
+  });
+});
+
+describe("countFixPrBudget", () => {
+  const NOW = Date.parse("2026-06-30T12:00:00Z");
+  const DAY = 24 * 3_600_000;
+  function rec(over: Partial<PullRequestRecord>): PullRequestRecord {
+    return {
+      at: new Date(NOW).toISOString(), fingerprint: "fp", filePath: "a.yaml", incident: "i",
+      app: "memos", repo: "https://github.com/me/infra", title: "t", summary: "",
+      status: "open", kind: "config", ...over,
+    };
+  }
+
+  test("counts only OPEN records inside the 24h window", () => {
+    const prs = [
+      rec({ status: "open", at: new Date(NOW - 1000).toISOString() }), // in window
+      rec({ status: "failed", at: new Date(NOW - 1000).toISOString() }), // not an opened PR
+      rec({ status: "open", at: new Date(NOW - DAY - 1000).toISOString() }), // aged out
+    ];
+    expect(countFixPrBudget(prs, 0, NOW)).toBe(1);
+  });
+
+  test("adds the in-flight Job count to the recorded-open count", () => {
+    expect(countFixPrBudget([rec({ status: "open" })], 2, NOW)).toBe(3);
+  });
+
+  test("a record exactly at the window edge still counts (>= since)", () => {
+    expect(countFixPrBudget([rec({ status: "open", at: new Date(NOW - DAY).toISOString() })], 0, NOW)).toBe(1);
+  });
+
+  test("a record aging just past the window frees its slot", () => {
+    expect(countFixPrBudget([rec({ status: "open", at: new Date(NOW - DAY - 1).toISOString() })], 0, NOW)).toBe(0);
+  });
+
+  test("an unparsable `at` is dropped (not counted)", () => {
+    expect(countFixPrBudget([rec({ status: "open", at: "not-a-date" })], 0, NOW)).toBe(0);
+  });
+
+  test("undefined / empty pullRequests with no in-flight is 0", () => {
+    expect(countFixPrBudget(undefined, 0, NOW)).toBe(0);
+    expect(countFixPrBudget([], 0, NOW)).toBe(0);
+  });
+});
+
+describe("resolveFixAudit", () => {
+  const terminal: AuditEntry = {
+    at: "2026-06-30T12:00:00Z", fingerprint: "fp", incident: "i", proposal: "Open fix PR",
+    tier: "medium", outcome: "success", detail: "Rigel opened a fix PR: https://x/pull/1",
+  };
+
+  function pending(over: Partial<AuditEntry> = {}): AuditEntry {
+    return { at: "t", fingerprint: "fp", incident: "i", proposal: "Open fix PR", tier: "medium", outcome: "queued", detail: "pending the fix-runner", ...over };
+  }
+
+  test("replaces the matching pending entry in place (no growth)", () => {
+    const s = appendAudit(emptyState(), pending(), 200);
+    const out = resolveFixAudit(s, "fp", "Open fix PR", terminal, 200);
+    expect(out.audit).toHaveLength(1);
+    expect(out.audit[0]).toBe(terminal);
+  });
+
+  test("prepends when no pending entry exists (e.g. rotated out)", () => {
+    const out = resolveFixAudit(emptyState(), "fp", "Open fix PR", terminal, 200);
+    expect(out.audit).toEqual([terminal]);
+  });
+
+  test("never matches an ESCALATED entry (it carries a verdict)", () => {
+    const escalated = pending({ verdict: "escalated", detail: "Opus escalated the fix" });
+    const s = appendAudit(emptyState(), escalated, 200);
+    const out = resolveFixAudit(s, "fp", "Open fix PR", terminal, 200);
+    // The escalated entry is left intact; the terminal is prepended.
+    expect(out.audit).toHaveLength(2);
+    expect(out.audit[0]).toBe(terminal);
+    expect(out.audit[1]).toBe(escalated);
   });
 });
 

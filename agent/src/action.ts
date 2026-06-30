@@ -15,6 +15,29 @@ export interface SuggestedAction {
   namespace?: string;
   replicas?: number;
   env?: Record<string, string>;
+  /** `openFixPR` only — the workload's GitOps source/deployment name (from its
+   * annotation) that the fix PR is opened against. */
+  source?: string;
+  /** `openFixPR` only — repo-relative path of the file to write. */
+  filePath?: string;
+  /** `openFixPR` only — full new contents for `filePath`. */
+  content?: string;
+  /** `openFixPR` only — pull-request title. */
+  title?: string;
+  /** `openFixPR` only — pull-request body. */
+  body?: string;
+}
+
+/**
+ * Kinds that are NOT kubectl mutations: instead of touching the cluster they open
+ * a fix PR against the workload's GitOps source, executed by the fix-runner (a
+ * Job) in a later task — never through `toKubectlInvocations`. The executor/caller
+ * branches on this so an `openFixPR` can never be mistaken for a kubectl command.
+ */
+const REPO_FIX_KINDS: ReadonlySet<string> = new Set(["openFixPR"]);
+
+export function isRepoFixAction(kind: string): boolean {
+  return REPO_FIX_KINDS.has(kind);
 }
 
 /**
@@ -92,6 +115,10 @@ export function toKubectlInvocations(action: SuggestedAction): string[][] {
       return [["cordon", need(action.node, "node")]];
     case "uncordon":
       return [["uncordon", need(action.node, "node")]];
+    case "openFixPR":
+      // Not a kubectl action — opening a PR against the GitOps source is the
+      // fix-runner's job. Fail loudly here so it can never silently run a command.
+      throw new Error("openFixPR is not a kubectl action (handled by the fix-runner)");
     default:
       throw new Error(`unsupported action kind: ${action.kind}`);
   }
@@ -119,6 +146,10 @@ export function backupTarget(action: SuggestedAction): BackupTarget {
     case "cordon":
     case "uncordon":
       return { kind: "node", name: need(action.node, "node"), namespace: null };
+    case "openFixPR":
+      // No cluster resource to snapshot — the fix-runner opens a PR; reverting is
+      // a git operation, not a `kubectl apply` of a backup.
+      throw new Error("openFixPR has no kubectl backup target (handled by the fix-runner)");
     default:
       throw new Error(`unsupported action kind: ${action.kind}`);
   }

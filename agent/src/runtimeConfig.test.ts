@@ -1,5 +1,5 @@
 import { describe, expect, it, test, vi } from "vitest";
-import { parseWindow, inWindow, decideAutonomy, readRuntimeConfig, parseAlertRulesFromConfig, parseMatrixConfig } from "./runtimeConfig.js";
+import { parseWindow, inWindow, decideAutonomy, readRuntimeConfig, parseAlertRulesFromConfig, parseMatrixConfig, parseAutofixConfig, parseAutofixScope, parseAutofixMaxPerDay } from "./runtimeConfig.js";
 import { kubectl } from "./kubectl.js";
 import type { Config } from "./config.js";
 
@@ -156,6 +156,87 @@ describe("readRuntimeConfig — operational limits", () => {
     expect(rc.enabled).toBe(false);
     expect(rc.worker.provider).toBe("claude");
     expect(rc.limits.pollIntervalMs).toBe(30_000);
+  });
+});
+
+describe("parseAutofixScope", () => {
+  test("empty / absent / malformed → empty scope", () => {
+    expect(parseAutofixScope(undefined)).toEqual({ projects: [] });
+    expect(parseAutofixScope("")).toEqual({ projects: [] });
+    expect(parseAutofixScope("not json")).toEqual({ projects: [] });
+  });
+  test("parses projects, trimming and dropping non-strings", () => {
+    const raw = JSON.stringify({ projects: [" prod/api ", "staging/web", 7, ""] });
+    expect(parseAutofixScope(raw)).toEqual({ projects: ["prod/api", "staging/web"] });
+  });
+  test("missing projects key defaults to an empty array", () => {
+    expect(parseAutofixScope(JSON.stringify({}))).toEqual({ projects: [] });
+  });
+  test("tolerates a legacy stored `namespaces` key WITHOUT using it", () => {
+    // Pre-per-project installs may still have a namespaces key persisted; it must
+    // never crash and never widen the scope — only `projects` is honored.
+    const raw = JSON.stringify({ namespaces: ["prod", "staging"], projects: ["prod/api"] });
+    expect(parseAutofixScope(raw)).toEqual({ projects: ["prod/api"] });
+    expect(parseAutofixScope(JSON.stringify({ namespaces: ["prod"] }))).toEqual({ projects: [] });
+  });
+});
+
+describe("parseAutofixMaxPerDay", () => {
+  test("defaults to 5 when absent/blank", () => {
+    expect(parseAutofixMaxPerDay(undefined)).toBe(5);
+    expect(parseAutofixMaxPerDay("")).toBe(5);
+    expect(parseAutofixMaxPerDay("   ")).toBe(5);
+  });
+  test("parses a whole-number override (floored)", () => {
+    expect(parseAutofixMaxPerDay("3")).toBe(3);
+    expect(parseAutofixMaxPerDay("2.9")).toBe(2);
+    expect(parseAutofixMaxPerDay("0")).toBe(0); // 0 honored — no fix PRs
+  });
+  test("fails safe to the default on garbage / negatives", () => {
+    expect(parseAutofixMaxPerDay("nope")).toBe(5);
+    expect(parseAutofixMaxPerDay("-1")).toBe(5);
+    expect(parseAutofixMaxPerDay("NaN")).toBe(5);
+  });
+});
+
+describe("parseAutofixConfig", () => {
+  test("defaults disabled + empty scope + maxPerDay 5 when keys absent", () => {
+    expect(parseAutofixConfig({})).toEqual({ enabled: false, scope: { projects: [] }, maxPerDay: 5 });
+  });
+  test("only the literal \"true\" enables autofix", () => {
+    expect(parseAutofixConfig({ autofixEnabled: "true" }).enabled).toBe(true);
+    expect(parseAutofixConfig({ autofixEnabled: "yes" }).enabled).toBe(false);
+    expect(parseAutofixConfig({ autofixEnabled: "1" }).enabled).toBe(false);
+  });
+  test("parses the scope + per-day cap alongside the enable flag", () => {
+    const cfg = parseAutofixConfig({
+      autofixEnabled: "true",
+      autofixScope: JSON.stringify({ projects: ["prod/api"] }),
+      autofixMaxPerDay: "3",
+    });
+    expect(cfg).toEqual({ enabled: true, scope: { projects: ["prod/api"] }, maxPerDay: 3 });
+  });
+});
+
+describe("readRuntimeConfig — autofix", () => {
+  test("defaults off + empty scope + maxPerDay 5 when keys are absent", async () => {
+    mockConfigMap({ enabled: "true" });
+    const rc = await readRuntimeConfig(CFG);
+    expect(rc.autofix).toEqual({ enabled: false, scope: { projects: [] }, maxPerDay: 5 });
+  });
+  test("reads the enable flag + scope + per-day cap from the config map", async () => {
+    mockConfigMap({
+      enabled: "true",
+      autofixEnabled: "true",
+      autofixScope: JSON.stringify({ projects: ["default/memos"] }),
+      autofixMaxPerDay: "2",
+    });
+    const rc = await readRuntimeConfig(CFG);
+    expect(rc.autofix).toEqual({ enabled: true, scope: { projects: ["default/memos"] }, maxPerDay: 2 });
+  });
+  test("fail-closed (autofix off) on an unreadable config map", async () => {
+    vi.mocked(kubectl).mockResolvedValueOnce({ stdout: "", stderr: "nf", code: 1 });
+    expect((await readRuntimeConfig(CFG)).autofix.enabled).toBe(false);
   });
 });
 

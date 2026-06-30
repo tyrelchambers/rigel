@@ -44,6 +44,13 @@ spec:
                 secretKeyRef:
                   name: assistant-claude-token
                   key: token
+            # Fallback image for the one-shot fix-runner Job. The agent normally
+            # resolves its OWN running image at startup (kubectl get pod $HOSTNAME)
+            # so a fix Job always runs the exact reviewed code, even after CI's
+            # `kubectl set image` (which updates the running image but NOT this env).
+            # This value is used only when that self-lookup can't run/fails.
+            - name: RIGEL_FIX_RUNNER_IMAGE
+              value: ghcr.io/OWNER/rigel-assistant:latest # ← fallback; set by installer (same tag as image)
             - name: WORKER_MODEL
               value: claude-sonnet-4-6
             - name: SUPERVISOR_MODEL

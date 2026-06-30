@@ -493,6 +493,12 @@ rules:
     resources: [configmaps]
     resourceNames: [assistant-config, assistant-state, assistant-backups]
     verbs: [get, update, patch]
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [create, delete]
+  - apiGroups: ["batch"]
+    resources: [jobs]
+    verbs: [create, delete, get, list, watch]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -508,7 +514,17 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: rigel-assistant
-    namespace: ${ns}`;
+    namespace: ${ns}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rigel-fix-runner
+  namespace: ${ns}
+  labels:
+    app.kubernetes.io/name: rigel-fix-runner
+    app.kubernetes.io/managed-by: rigel-assistant
+automountServiceAccountToken: false`;
 }
 
 /** The three pre-created ConfigMaps: config (control surface, seeded with the
@@ -710,6 +726,11 @@ ${credentialEnvYAML(sources)}
               value: "${c.confirmPolls}"
             - name: NAMESPACES
               value: "${c.namespaces}"
+            # The one-shot fix-runner Job runs the SAME image as the agent so an
+            # approved fix PR is opened by the exact reviewed code (CI pins the
+            # immutable per-sha tag via kubectl set image — see agent-build.yml).
+            - name: RIGEL_FIX_RUNNER_IMAGE
+              value: "${c.image}"
             # State/config/backups live in the install namespace (that's where
             # the RBAC Role and the pre-created ConfigMaps are, and where the web
             # panel reads them). Without this the agent defaults to "default" and,
@@ -824,12 +845,37 @@ export interface AssistantQueuedSuggestion {
   action?: SuggestedAction;
 }
 
+/**
+ * A fix PR the agent opened (or tried to), surfaced from the agent-owned
+ * `state.json` (mirrors agent/src/state.ts `PullRequestRecord`). The agent only
+ * emits `open`/`failed` today; the UI renders `merged` defensively too (the wire
+ * is an untyped string), so it can show a merged PR if one is ever recorded.
+ */
+export interface AssistantPullRequest {
+  at: string;
+  fingerprint: string;
+  filePath: string;
+  incident: string;
+  /** The workload / GitOps slug the PR is for. */
+  app: string;
+  /** The repo URL the PR was opened against. */
+  repo: string;
+  branch?: string;
+  prUrl?: string;
+  title: string;
+  summary: string;
+  status: "open" | "merged" | "failed";
+  kind: string;
+}
+
 export interface AssistantClusterState {
   updatedAt?: string;
   status?: AssistantAgentStatus;
   audit: AssistantAuditEntry[];
   queue: AssistantQueuedSuggestion[];
   report: string;
+  /** Fix PRs the agent opened (or tried to). Empty when absent. */
+  pullRequests: AssistantPullRequest[];
 }
 
 /**
@@ -854,6 +900,7 @@ export function decodeClusterState(raw: string | undefined | null): AssistantClu
     audit: Array.isArray(o.audit) ? (o.audit as AssistantAuditEntry[]) : [],
     queue: Array.isArray(o.queue) ? (o.queue as AssistantQueuedSuggestion[]) : [],
     report: typeof o.report === "string" ? o.report : "",
+    pullRequests: Array.isArray(o.pullRequests) ? (o.pullRequests as AssistantPullRequest[]) : [],
   };
 }
 
@@ -1004,6 +1051,56 @@ export interface LimitsInput {
   confirmPolls?: number;
   /** Monitored namespaces; empty array = all. */
   namespaces?: string[];
+}
+
+/**
+ * The autofix (agent-opened fix PRs) control surface a user can change live: the
+ * master opt-in, the rolling-24h cap, and the scope it applies to. Any subset can
+ * be provided. Scope is a list of project ids ONLY; a project id is
+ * `"<namespace>/<deployment>"`. (A namespace holds deployments from many repos,
+ * so opting in a whole namespace is never one-to-one.)
+ */
+export interface AutofixInput {
+  enabled?: boolean;
+  /** Rolling-24h cap on agent-opened fix PRs. */
+  maxPerDay?: number;
+  scope?: { projects?: string[] };
+}
+
+/** Trim, drop empties, and dedupe a scope list (stable first-seen order). */
+function cleanScopeList(v: string[] | undefined): string[] {
+  if (!v) return [];
+  const out: string[] = [];
+  for (const raw of v) {
+    const s = (raw ?? "").trim();
+    if (s !== "" && !out.includes(s)) out.push(s);
+  }
+  return out;
+}
+
+/**
+ * Build the assistant-config updates for the autofix control surface, using the
+ * EXACT keys + encodings `agent/src/runtimeConfig.ts` (parseAutofixConfig /
+ * parseAutofixScope / parseAutofixMaxPerDay) reads:
+ *   autofixEnabled   — "true" | "false" (the agent treats only "true" as enabled)
+ *   autofixMaxPerDay — a non-negative integer, stringified (clamped + floored)
+ *   autofixScope     — JSON.stringify({ projects }) (trimmed, deduped)
+ * Only provided fields are emitted, so a partial update never clobbers the others
+ * (toggling the opt-in leaves the scope + cap intact, like limitsConfigUpdates).
+ * A non-finite maxPerDay is dropped (the agent fails safe to its default).
+ */
+export function autofixConfigUpdates(input: AutofixInput): Record<string, string> {
+  const updates: Record<string, string> = {};
+  if (input.enabled !== undefined) updates.autofixEnabled = input.enabled ? "true" : "false";
+  if (input.maxPerDay !== undefined && Number.isFinite(input.maxPerDay)) {
+    updates.autofixMaxPerDay = String(Math.max(0, Math.floor(input.maxPerDay)));
+  }
+  if (input.scope !== undefined) {
+    updates.autofixScope = JSON.stringify({
+      projects: cleanScopeList(input.scope.projects),
+    });
+  }
+  return updates;
 }
 
 /**

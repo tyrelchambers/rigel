@@ -8,6 +8,7 @@ import { InstallView } from "../tabs/InstallView";
 import { OverviewTab } from "../tabs/OverviewTab";
 import { NeedsYouTab } from "../tabs/NeedsYouTab";
 import { RulesTab } from "../tabs/RulesTab";
+import { AutoFixTab } from "../tabs/AutoFixTab";
 import { ActivityTab } from "../tabs/ActivityTab";
 import { SettingsTab } from "../tabs/SettingsTab";
 import { AgentsTab } from "../tabs/AgentsTab";
@@ -27,7 +28,8 @@ export function TabContent() {
 
   // Installed but the agent hasn't written its first state yet — i.e. it's
   // starting up right after an install. Show progress instead of a bare skeleton.
-  const needsState = tab === "overview" || tab === "needs" || tab === "rules" || tab === "activity";
+  const needsState =
+    tab === "overview" || tab === "needs" || tab === "rules" || tab === "autofix" || tab === "activity";
   if (needsState && !ready.state) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
@@ -49,6 +51,8 @@ export function TabContent() {
       return <NeedsYouTab />;
     case "rules":
       return <RulesTab />;
+    case "autofix":
+      return <AutoFixTab />;
     case "agents":
       return <AgentsTab />;
     case "activity":

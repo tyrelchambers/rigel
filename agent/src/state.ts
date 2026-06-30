@@ -90,6 +90,35 @@ export function reconcileQueue(
   return { kept, cleared };
 }
 
+/**
+ * A fix PR the agent opened (or tried to). Recorded by the Phase-4 reconcile once
+ * the one-shot fix-runner Job finishes and reports its result, so Rigel can render
+ * the agent's PR history. `at` is when it was recorded; `prUrl`/`branch` are absent
+ * on a failure. `filePath` (with `fingerprint`) is the dedup identity so a Job
+ * reconciled twice before GC is not double-recorded. */
+export interface PullRequestRecord {
+  at: string;
+  fingerprint: string;
+  /** The fixed file's repo-relative path — half the dedup key, also useful UI. */
+  filePath: string;
+  /** Human-readable incident description (the loop's `describe`). */
+  incident: string;
+  /** The workload / GitOps slug the PR is for. */
+  app: string;
+  /** The repo URL the PR was opened against. */
+  repo: string;
+  /** The PR's head branch (from the runner), absent on failure. */
+  branch?: string;
+  /** The opened PR URL, absent on failure. */
+  prUrl?: string;
+  title: string;
+  /** A short result line — the runner's note, or the failure message. */
+  summary: string;
+  status: "open" | "failed";
+  /** The fix class. Today only config-file PRs exist (`openFixPR`). */
+  kind: "config";
+}
+
 export interface AgentStatus {
   heartbeatAt: string;
   enabled: boolean;
@@ -106,7 +135,21 @@ export interface AssistantState {
   /** Matrix /sync cursor, persisted so a restart resumes without reprocessing or
    *  missing events. Absent until the first inbound poll. */
   matrixSince?: string;
+  /** Fingerprints the agent auto-silenced after an "acceptable" triage, so the
+   *  same benign incident doesn't re-fire. Agent-owned and persisted here (the
+   *  human `silenced` set lives separately in assistant-config); the loop unions
+   *  both when filtering detected incidents. Capped, newest-first. */
+  autoSilenced?: string[];
+  /** Fix PRs the agent opened (or tried to), recorded by the reconcile once each
+   *  one-shot fix-runner Job finishes. Capped, newest-first. Absent until the
+   *  first fix is reconciled. */
+  pullRequests?: PullRequestRecord[];
 }
+
+/** Cap on the agent-owned auto-silence list, so it can't grow without bound. On
+ *  overflow the oldest entry drops; if its incident recurs and is still benign it
+ *  is simply re-triaged and re-silenced. */
+const MAX_AUTO_SILENCED = 200;
 
 export function emptyState(): AssistantState {
   return { updatedAt: "", audit: [], queue: [], report: "", alertState: emptyAlertState() };
@@ -117,6 +160,86 @@ export function emptyState(): AssistantState {
 export function appendAudit(state: AssistantState, entry: AuditEntry, maxEntries: number): AssistantState {
   const audit = [entry, ...state.audit].slice(0, maxEntries);
   return { ...state, audit, updatedAt: entry.at };
+}
+
+/** Add a fingerprint to the agent-owned auto-silence set (newest-first, deduped,
+ * capped). Pure — returns a new state, never mutates the input. A no-op when the
+ * fingerprint is already silenced, so it doesn't reorder/grow the list. */
+export function autoSilence(state: AssistantState, fingerprint: string, max = MAX_AUTO_SILENCED): AssistantState {
+  const existing = state.autoSilenced ?? [];
+  if (existing.includes(fingerprint)) return state;
+  return { ...state, autoSilenced: [fingerprint, ...existing].slice(0, max) };
+}
+
+/** Cap on the recorded fix-PR history, so it can't grow without bound. */
+const MAX_PULL_REQUESTS = 100;
+
+/**
+ * Record a fix PR (newest-first, capped), deduped by `fingerprint` + `filePath` so
+ * a Job reconciled more than once before its GC isn't double-recorded. Returns the
+ * new state and whether it was actually `added` — the reconcile gates the audit
+ * update + the operator notification on `added` so they fire exactly once. Pure —
+ * never mutates the input. */
+export function recordPullRequest(
+  state: AssistantState,
+  record: PullRequestRecord,
+  max = MAX_PULL_REQUESTS,
+): { state: AssistantState; added: boolean } {
+  const existing = state.pullRequests ?? [];
+  const dup = existing.some(
+    (p) => p.fingerprint === record.fingerprint && p.filePath === record.filePath,
+  );
+  if (dup) return { state, added: false };
+  return { state: { ...state, pullRequests: [record, ...existing].slice(0, max) }, added: true };
+}
+
+/** The rolling window for the per-day fix-PR budget (24h). */
+export const FIX_PR_BUDGET_WINDOW_MS = 24 * 3_600_000;
+
+/**
+ * Count fix PRs that consume the rolling-24h budget: real opened PRs recorded in
+ * the window (`status: "open"`) PLUS the fix Jobs currently in flight (dispatched
+ * but not yet reconciled into `pullRequests`). The two are disjoint in steady
+ * state — a reconciled Job is GC'd the same tick it is recorded — so the only
+ * overlap is a Job whose post-record GC failed, which OVER-counts (conservative,
+ * never under-counts), keeping the cap unbreachable. A "failed" record never
+ * counts (it opened no PR); a record whose `at` is unparsable is dropped. Pure —
+ * the caller adds any same-tick dispatches on top of this baseline. */
+export function countFixPrBudget(
+  pullRequests: PullRequestRecord[] | undefined,
+  inFlightJobCount: number,
+  nowMs: number,
+  windowMs = FIX_PR_BUDGET_WINDOW_MS,
+): number {
+  const since = nowMs - windowMs;
+  const recordedOpen = (pullRequests ?? []).filter((p) => {
+    if (p.status !== "open") return false;
+    const at = Date.parse(p.at);
+    return Number.isFinite(at) && at >= since;
+  }).length;
+  return recordedOpen + Math.max(0, inFlightJobCount);
+}
+
+/**
+ * Replace the dispatch's PENDING fix-PR audit entry (the "queued pending the
+ * fix-runner" placeholder) for this `fingerprint` + `title` with its terminal
+ * outcome (opened / failed). When no pending entry is found (e.g. rotated out of
+ * the capped log), the terminal entry is prepended instead. The pending entry is
+ * the only queued/medium entry with NO verdict for this fingerprint+proposal —
+ * escalated items carry a verdict, so they are never matched. Pure. */
+export function resolveFixAudit(
+  state: AssistantState,
+  fingerprint: string,
+  title: string,
+  terminal: AuditEntry,
+  maxEntries: number,
+): AssistantState {
+  const idx = state.audit.findIndex(
+    (e) => e.fingerprint === fingerprint && e.outcome === "queued" && e.verdict === undefined && e.proposal === title,
+  );
+  if (idx === -1) return appendAudit(state, terminal, maxEntries);
+  const audit = state.audit.map((e, i) => (i === idx ? terminal : e));
+  return { ...state, audit, updatedAt: terminal.at };
 }
 
 /** Keep only the newest `max` backup keys. Backup keys are timestamp-prefixed,

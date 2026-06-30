@@ -150,6 +150,27 @@ test("setLimitsUpdates throws-worthy empty input is detectable (no keys)", () =>
   expect(setLimitsUpdates({ action: "setLimits" })).toEqual({});
 });
 
+import { setAutofixUpdates } from "./assistant";
+
+test("setAutofixUpdates writes the EXACT autofix keys/encodings the agent reads", () => {
+  const updates = setAutofixUpdates({
+    action: "setAutofix",
+    autofixEnabled: true,
+    autofixMaxPerDay: 7,
+    autofixScope: { projects: ["prod/web", "prod/api"] },
+  });
+  expect(updates).toEqual({
+    autofixEnabled: "true",
+    autofixMaxPerDay: "7",
+    autofixScope: JSON.stringify({ projects: ["prod/web", "prod/api"] }),
+  });
+});
+
+test("setAutofixUpdates emits only the provided fields (empty input → no keys)", () => {
+  expect(setAutofixUpdates({ action: "setAutofix", autofixEnabled: false })).toEqual({ autofixEnabled: "false" });
+  expect(setAutofixUpdates({ action: "setAutofix" })).toEqual({});
+});
+
 import { credentialStatus } from "./assistant";
 import type { RunResult } from "@rigel/k8s/src/run";
 

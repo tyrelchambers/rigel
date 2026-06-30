@@ -30,6 +30,10 @@ describe("classifyRisk", () => {
     expect(classifyRisk("uncordon")).toBe(RiskTier.Medium);
   });
 
+  test("openFixPR is MEDIUM (supervisor vets it before a PR opens)", () => {
+    expect(classifyRisk("openFixPR")).toBe(RiskTier.Medium);
+  });
+
   test("an unknown kind is BLOCKED (fail safe — never executable)", () => {
     expect(classifyRisk("deleteNamespace")).toBe(RiskTier.Blocked);
     expect(classifyRisk("drain")).toBe(RiskTier.Blocked);

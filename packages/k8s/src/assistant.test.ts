@@ -133,6 +133,27 @@ test("our Deployment carries the managed-by label (so discovery can tell it apar
   expect(deployment(config())).toContain("app.kubernetes.io/managed-by: rigel-assistant");
 });
 
+test("RBAC lets the agent orchestrate fix Jobs (create Jobs + per-fix ConfigMaps)", () => {
+  const yaml = manifestYAML(config());
+  expect(yaml).toContain("resources: [jobs]");
+  // configmaps create/delete for the per-fix spec ConfigMaps (separate rule from
+  // the resourceName-scoped get/update/patch on the three state ConfigMaps).
+  expect(yaml).toMatch(/resources: \[configmaps\]\n\s+verbs: \[create, delete\]/);
+});
+
+test("RBAC adds the zero-access rigel-fix-runner ServiceAccount (no binding, no token)", () => {
+  const yaml = manifestYAML(config({ installNamespace: "agents" }));
+  expect(yaml).toContain("name: rigel-fix-runner\n  namespace: agents");
+  expect(yaml).toContain("automountServiceAccountToken: false");
+  // It must NOT be a subject of any binding — it needs zero cluster access.
+  expect(yaml).not.toMatch(/name: rigel-fix-runner\n\s+namespace: agents\n[\s\S]*?roleRef/);
+});
+
+test("the fix-runner Job image tracks the agent image (same immutable tag)", () => {
+  const yaml = deployment(config({ image: "ghcr.io/acme/rigel-assistant:sha-abc" }));
+  expect(yaml).toContain('- name: RIGEL_FIX_RUNNER_IMAGE\n              value: "ghcr.io/acme/rigel-assistant:sha-abc"');
+});
+
 // ---------------------------------------------------------------------------
 // Token expiry (parity with TokenExpiryTests.swift)
 // ---------------------------------------------------------------------------
@@ -176,6 +197,32 @@ test("decodeClusterState defaults missing collections to empty", () => {
   expect(s!.audit).toEqual([]);
   expect(s!.queue).toEqual([]);
   expect(s!.report).toBe("");
+  expect(s!.pullRequests).toEqual([]);
+});
+
+test("decodeClusterState parses the agent's fix-PR history", () => {
+  const raw = JSON.stringify({
+    pullRequests: [
+      {
+        at: "t",
+        fingerprint: "f",
+        filePath: "k8s/deploy.yaml",
+        incident: "OOMKilled",
+        app: "default/api",
+        repo: "https://github.com/tyrel/api",
+        branch: "rigel/fix-oom-7f3",
+        prUrl: "https://github.com/tyrel/api/pull/1",
+        title: "Raise memory limit",
+        summary: "opened",
+        status: "open",
+        kind: "config",
+      },
+    ],
+  });
+  const s = decodeClusterState(raw)!;
+  expect(s.pullRequests).toHaveLength(1);
+  expect(s.pullRequests[0]!.status).toBe("open");
+  expect(s.pullRequests[0]!.prUrl).toContain("/pull/1");
 });
 
 test("decodeClusterState parses audit/queue/report/status", () => {
@@ -1049,4 +1096,114 @@ test("the agent Deployment injects the Matrix access token from its Secret, opti
   expect(yaml).toContain("key: accessToken");
   // optional: true so installs without Matrix configured still start.
   expect(yaml).toMatch(/MATRIX_ACCESS_TOKEN[\s\S]*?optional: true/);
+});
+
+// ---------------------------------------------------------------------------
+// autofixConfigUpdates — agent-opened fix PR control surface (Phase 5)
+//
+// HIGHEST-RISK contract: what this writes to assistant-config MUST be exactly
+// what the in-cluster agent reads. The three parse functions below are verbatim
+// mirrors of agent/src/runtimeConfig.ts (parseAutofixConfig / parseAutofixScope /
+// parseAutofixMaxPerDay) — kept local so the test has no cross-package dep. The
+// round-trip assertions decode our updates with the agent's exact logic and
+// confirm we get the intended config back. If the agent reader ever changes,
+// update these mirrors in lockstep.
+// ---------------------------------------------------------------------------
+
+import { autofixConfigUpdates } from "./assistant";
+
+const DEFAULT_AUTOFIX_MAX_PER_DAY = 5;
+// --- verbatim mirror of agent/src/runtimeConfig.ts ---
+function agentParseAutofixMaxPerDay(raw: string | undefined): number {
+  const v = (raw ?? "").trim();
+  if (!v) return DEFAULT_AUTOFIX_MAX_PER_DAY;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : DEFAULT_AUTOFIX_MAX_PER_DAY;
+}
+function agentParseAutofixScope(raw: string | undefined): { projects: string[] } {
+  if (!raw || !raw.trim()) return { projects: [] };
+  let obj: unknown;
+  try {
+    obj = JSON.parse(raw);
+  } catch {
+    return { projects: [] };
+  }
+  const o = obj as { projects?: unknown };
+  const strings = (v: unknown): string[] =>
+    Array.isArray(v)
+      ? v.filter((x): x is string => typeof x === "string" && x.trim() !== "").map((s) => s.trim())
+      : [];
+  return { projects: strings(o?.projects) };
+}
+function agentParseAutofixConfig(data: Record<string, string>) {
+  return {
+    enabled: data["autofixEnabled"] === "true",
+    scope: agentParseAutofixScope(data["autofixScope"]),
+    maxPerDay: agentParseAutofixMaxPerDay(data["autofixMaxPerDay"]),
+  };
+}
+
+describe("autofixConfigUpdates", () => {
+  test("emits the EXACT keys the agent reads, with the agent's encodings", () => {
+    const updates = autofixConfigUpdates({
+      enabled: true,
+      maxPerDay: 8,
+      scope: { projects: ["prod/web", "default/api"] },
+    });
+    expect(updates).toEqual({
+      autofixEnabled: "true",
+      autofixMaxPerDay: "8",
+      autofixScope: JSON.stringify({ projects: ["prod/web", "default/api"] }),
+    });
+  });
+
+  test("round-trips through the agent's parser to the intended config", () => {
+    const updates = autofixConfigUpdates({
+      enabled: true,
+      maxPerDay: 3,
+      scope: { projects: ["staging/api", "staging/worker"] },
+    });
+    const parsed = agentParseAutofixConfig(updates);
+    expect(parsed).toEqual({
+      enabled: true,
+      maxPerDay: 3,
+      scope: { projects: ["staging/api", "staging/worker"] },
+    });
+  });
+
+  test("disabled + empty scope round-trips to the agent's disabled state", () => {
+    const updates = autofixConfigUpdates({ enabled: false, maxPerDay: 0, scope: { projects: [] } });
+    expect(updates.autofixEnabled).toBe("false");
+    const parsed = agentParseAutofixConfig(updates);
+    expect(parsed.enabled).toBe(false);
+    expect(parsed.maxPerDay).toBe(0); // 0 disables fix PRs but is honored, not the default
+    expect(parsed.scope).toEqual({ projects: [] });
+  });
+
+  test("clamps + floors maxPerDay to a non-negative integer", () => {
+    expect(autofixConfigUpdates({ maxPerDay: 5.9 }).autofixMaxPerDay).toBe("5");
+    expect(autofixConfigUpdates({ maxPerDay: -4 }).autofixMaxPerDay).toBe("0");
+  });
+
+  test("drops a non-finite maxPerDay (agent fails safe to its default)", () => {
+    const updates = autofixConfigUpdates({ maxPerDay: Number.NaN });
+    expect(updates.autofixMaxPerDay).toBeUndefined();
+    expect(agentParseAutofixMaxPerDay(updates.autofixMaxPerDay)).toBe(DEFAULT_AUTOFIX_MAX_PER_DAY);
+  });
+
+  test("trims, drops empties, and dedupes scope entries", () => {
+    const updates = autofixConfigUpdates({
+      scope: { projects: [" prod/web ", "prod/web", "", "prod/api"] },
+    });
+    expect(JSON.parse(updates.autofixScope)).toEqual({
+      projects: ["prod/web", "prod/api"],
+    });
+  });
+
+  test("emits only the provided fields (partial update never clobbers the others)", () => {
+    expect(autofixConfigUpdates({ enabled: true })).toEqual({ autofixEnabled: "true" });
+    expect(autofixConfigUpdates({})).toEqual({});
+    // A scope-only update leaves enabled/maxPerDay untouched.
+    expect(Object.keys(autofixConfigUpdates({ scope: { projects: ["x/y"] } }))).toEqual(["autofixScope"]);
+  });
 });

@@ -1,7 +1,7 @@
 import { runModel } from "./runModel.js";
 import type { RuntimeConfig } from "./runtimeConfig.js";
 import type { Incident } from "./detector.js";
-import type { SuggestedAction } from "./action.js";
+import { isRepoFixAction, type SuggestedAction } from "./action.js";
 
 /**
  * The Opus supervisor: a second, independent, deliberately adversarial review
@@ -36,10 +36,10 @@ const VERDICT_SCHEMA = JSON.stringify({
   additionalProperties: false,
 });
 
-const SYSTEM_PROMPT = `You are the SUPERVISOR in an autonomous Kubernetes remediation system. A cheaper model proposed a change while the operator is asleep. Your job is adversarial: find any reason the proposed action is WRONG, unjustified by the evidence, riskier than it looks, or unlikely to fix the root cause.
+const SYSTEM_PROMPT = `You are the SUPERVISOR in an autonomous Kubernetes remediation system. A cheaper model proposed a change while the operator is asleep — either a kubectl remediation or a source-fix pull request (openFixPR). Your job is adversarial: find any reason the proposal is WRONG, unjustified by the evidence, riskier than it looks, or unlikely to fix the root cause.
 
 Decide:
-- "approve" ONLY if you are confident the action is correct, safe, and addresses the incident.
+- "approve" ONLY if you are confident the proposal is correct, safe, and addresses the incident.
 - "reject" if it is wrong, unsupported by the evidence, or likely to make things worse.
 - "escalate" if it might be right but you are not confident enough to act unattended — defer to a human.
 
@@ -83,20 +83,9 @@ export async function runSupervisor(
   workerAnalysis: string,
   command: string,
 ): Promise<SupervisorOutput> {
-  const loc = incident.namespace ? `${incident.namespace}/${incident.name}` : incident.name;
-  const prompt = `Incident: [${incident.incidentKind}] ${loc} — ${incident.reason}${
-    incident.detail ? ` (${incident.detail})` : ""
-  }
-
-The worker proposed this remediation:
-  label: ${action.label}
-  kind: ${action.kind}
-  command that will run: ${command}
-
-Worker's analysis:
-${workerAnalysis}
-
-Independently verify against the live cluster (read-only), then return your verdict.`;
+  const prompt = isRepoFixAction(action.kind)
+    ? buildFixPrompt(incident, action, workerAnalysis)
+    : buildCommandPrompt(incident, action, workerAnalysis, command);
 
   const result = await runModel({
     role: "supervisor",
@@ -129,4 +118,49 @@ Independently verify against the live cluster (read-only), then return your verd
   // isError:false, so parseVerdict here is guaranteed to succeed — and it NORMALIZES the
   // verdict (clamps confidence to [0,1], defaults reason) rather than trusting raw output.
   return { verdict: parseVerdict(result.structuredOutput), costUsd: result.costUsd };
+}
+
+function locOf(incident: Incident): string {
+  const loc = incident.namespace ? `${incident.namespace}/${incident.name}` : incident.name;
+  return `[${incident.incidentKind}] ${loc} — ${incident.reason}${incident.detail ? ` (${incident.detail})` : ""}`;
+}
+
+/** Review prompt for a kubectl remediation: judge whether the COMMAND is correct. */
+function buildCommandPrompt(incident: Incident, action: SuggestedAction, workerAnalysis: string, command: string): string {
+  return `Incident: ${locOf(incident)}
+
+The worker proposed this remediation:
+  label: ${action.label}
+  kind: ${action.kind}
+  command that will run: ${command}
+
+Worker's analysis:
+${workerAnalysis}
+
+Independently verify against the live cluster (read-only), then return your verdict.`;
+}
+
+/** Review prompt for an openFixPR proposal: judge the QUALITY of the file change
+ *  — does it address the diagnosed root cause, is it minimal, does it touch only
+ *  this one file with no unrelated edits, is it safe to merge unattended? */
+function buildFixPrompt(incident: Incident, action: SuggestedAction, workerAnalysis: string): string {
+  return `Incident: ${locOf(incident)}
+
+The worker proposes opening a fix PULL REQUEST against the workload's GitOps source instead of mutating the cluster:
+  title: ${action.title ?? action.label}
+  source: ${action.source ?? "(unspecified)"}
+  file to change: ${action.filePath ?? "(unspecified)"}
+  PR body: ${action.body ?? ""}
+
+Proposed full new contents of ${action.filePath ?? "the file"}:
+${action.content ?? "(no content provided)"}
+
+Worker's analysis:
+${workerAnalysis}
+
+Judge the QUALITY of this fix:
+- Does the change actually address the diagnosed ROOT CAUSE (not just a symptom)?
+- Is it the MINIMAL edit needed, touching only this ONE file with no unrelated changes?
+- Is it safe to merge UNATTENDED (no secrets, no risky/destructive config, no broad rewrites)?
+Investigate the live cluster read-only to confirm the root cause, then return your verdict: approve only a correct, minimal, safe fix; reject a wrong, oversized, or unsafe one; escalate if you cannot be confident.`;
 }

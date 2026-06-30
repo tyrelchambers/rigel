@@ -5,6 +5,9 @@ on:
     branches: [master]
     paths:
       - "agent/**"
+      # The agent image bundles @rigel/k8s by source (esbuild), so a shared-package
+      # change must rebuild it too — otherwise the deployed agent runs stale code.
+      - "packages/k8s/**"
       - ".github/workflows/agent-build.yml"
   workflow_dispatch:
 
@@ -37,7 +40,10 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: ./agent
+          # Repo root: the image bundles both agent/ and the shared packages/k8s/
+          # source (esbuild inlines @rigel/k8s). Dockerfile stays under agent/.
+          context: .
+          file: ./agent/Dockerfile
           platforms: linux/amd64
           push: true
           tags: |

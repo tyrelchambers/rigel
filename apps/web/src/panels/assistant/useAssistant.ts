@@ -19,6 +19,7 @@ import {
   SECRET_NAME,
   isAssistantManaged,
   type AssistantClusterState,
+  type AssistantPullRequest,
   type AssistantLiveIssue,
   type TokenExpiryStatus,
   type AlertRule,
@@ -103,6 +104,12 @@ export interface AssistantDerived {
   roles: { worker: AssistantRoleSelection; supervisor: AssistantRoleSelection };
   /** Operational limits parsed from assistant-config (absent keys omitted). */
   limits: AssistantLimits;
+  /** Autofix (agent-opened fix PR) control surface parsed from assistant-config:
+   *  master opt-in, rolling-24h cap, and the projects it applies to. */
+  autofix: AutofixView;
+  /** Fix PRs the agent opened (or tried to), newest-first. Empty until the first
+   *  fix is reconciled into assistant-state. */
+  pullRequests: AssistantPullRequest[];
   /** Per-provider credential readiness, from the server's credentialStatus read
    *  (key names only — values never leave the cluster). A "set" sentinel per ready
    *  credential id so the shared `credentialReady` helper keeps working. */
@@ -263,6 +270,8 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
       alertRules: parseAlertRules(configData["alertRules"]),
       roles: parseRolesFromConfig(configData),
       limits: parseLimitsFromConfig(configData),
+      autofix: parseAutofixFromConfig(configData),
+      pullRequests: clusterState?.pullRequests ?? [],
       creds: credsFromSources(credStatus.data?.credentials ?? {}),
       credentialSources: credStatus.data?.credentials ?? {},
       credentialConflicts: credStatus.data?.conflicts ?? [],
@@ -312,6 +321,53 @@ export function parseRolesFromConfig(
       DEFAULT_SUPERVISOR,
     ),
   };
+}
+
+/** Default rolling-24h cap on agent-opened fix PRs (mirrors the agent's
+ *  DEFAULT_AUTOFIX_MAX_PER_DAY in runtimeConfig.ts). */
+export const DEFAULT_AUTOFIX_MAX_PER_DAY = 5;
+
+/** Autofix control surface as parsed for the UI: master opt-in, daily cap, and
+ *  the scope it applies to — specific "<namespace>/<deployment>" projects. Scope
+ *  is per-project ONLY (a namespace holds deployments mapping to many repos). */
+export interface AutofixView {
+  enabled: boolean;
+  maxPerDay: number;
+  scope: { projects: string[] };
+}
+
+/**
+ * Parse the autofix keys out of the assistant-config data map, mirroring the
+ * agent's `parseAutofixConfig` (agent/src/runtimeConfig.ts) so the UI shows
+ * exactly what the agent will act on: `autofixEnabled` ("true" → on, default
+ * off), `autofixMaxPerDay` (default 5, garbage/negative → default), and
+ * `autofixScope` (a JSON `{ projects }`; a legacy `namespaces` key is tolerated
+ * but ignored; malformed → empty).
+ */
+export function parseAutofixFromConfig(data: Record<string, string>): AutofixView {
+  const rawMax = (data["autofixMaxPerDay"] ?? "").trim();
+  const maxNum = Number(rawMax);
+  const maxPerDay =
+    rawMax !== "" && Number.isFinite(maxNum) && maxNum >= 0
+      ? Math.floor(maxNum)
+      : DEFAULT_AUTOFIX_MAX_PER_DAY;
+
+  let scope: { projects: string[] } = { projects: [] };
+  const rawScope = data["autofixScope"];
+  if (rawScope && rawScope.trim() !== "") {
+    try {
+      const o = JSON.parse(rawScope) as { projects?: unknown };
+      const strings = (v: unknown): string[] =>
+        Array.isArray(v)
+          ? v.filter((x): x is string => typeof x === "string" && x.trim() !== "").map((s) => s.trim())
+          : [];
+      scope = { projects: strings(o?.projects) };
+    } catch {
+      /* malformed JSON → empty scope (fail safe) */
+    }
+  }
+
+  return { enabled: data["autofixEnabled"] === "true", maxPerDay, scope };
 }
 
 /** Parse the operational limits from the assistant-config data map (numbers

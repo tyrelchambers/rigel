@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { backupTarget, parseActions, toKubectlInvocations } from "./action.js";
+import { backupTarget, isRepoFixAction, parseActions, toKubectlInvocations } from "./action.js";
 
 describe("parseActions", () => {
   test("parses a single fenced action object", () => {
@@ -57,6 +57,46 @@ describe("parseActions", () => {
     const actions = parseActions(text);
     expect(actions[0]?.replicas).toBe(3);
     expect(actions[1]?.env).toEqual({ LOG: "debug" });
+  });
+
+  test("carries through openFixPR fields (source/filePath/content/title/body)", () => {
+    const text = [
+      "```action",
+      JSON.stringify({
+        label: "Open a fix PR",
+        kind: "openFixPR",
+        deployment: "memos",
+        namespace: "default",
+        source: "memos",
+        filePath: "deploy/memos.yaml",
+        content: "apiVersion: apps/v1\nkind: Deployment\n",
+        title: "Fix memos OOM by raising memory limit",
+        body: "The container was OOMKilled; this bumps the limit.",
+      }),
+      "```",
+    ].join("\n");
+    const actions = parseActions(text);
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({
+      kind: "openFixPR",
+      source: "memos",
+      filePath: "deploy/memos.yaml",
+      content: "apiVersion: apps/v1\nkind: Deployment\n",
+      title: "Fix memos OOM by raising memory limit",
+      body: "The container was OOMKilled; this bumps the limit.",
+    });
+  });
+});
+
+describe("isRepoFixAction", () => {
+  test("openFixPR is a repo-fix action (handled off the kubectl path)", () => {
+    expect(isRepoFixAction("openFixPR")).toBe(true);
+  });
+
+  test("kubectl kinds are not repo-fix actions", () => {
+    for (const kind of ["restart", "rollback", "scale", "setEnv", "deletePod", "cordon", "uncordon"]) {
+      expect(isRepoFixAction(kind)).toBe(false);
+    }
   });
 });
 
@@ -124,6 +164,12 @@ describe("toKubectlInvocations", () => {
   test("throws on an unsupported (non-executable) kind", () => {
     expect(() => toKubectlInvocations({ label: "", kind: "deleteNamespace", namespace: "x" })).toThrow();
   });
+
+  test("openFixPR is not a kubectl action — throws loudly rather than falling through", () => {
+    expect(() =>
+      toKubectlInvocations({ label: "", kind: "openFixPR", filePath: "deploy/x.yaml", content: "x" }),
+    ).toThrow(/fix-runner/);
+  });
 });
 
 describe("backupTarget", () => {
@@ -155,5 +201,11 @@ describe("backupTarget", () => {
 
   test("throws on an unsupported kind", () => {
     expect(() => backupTarget({ label: "", kind: "deleteNamespace", namespace: "x" })).toThrow();
+  });
+
+  test("openFixPR has no kubectl backup target — throws loudly", () => {
+    expect(() =>
+      backupTarget({ label: "", kind: "openFixPR", filePath: "deploy/x.yaml", content: "x" }),
+    ).toThrow(/fix-runner/);
   });
 });

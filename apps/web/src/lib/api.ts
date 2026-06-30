@@ -322,6 +322,7 @@ export type AssistantAction =
   | "setModels"
   | "setCredentials"
   | "setLimits"
+  | "setAutofix"
   | "restart"
   | "silence"
   | "unsilence"
@@ -391,6 +392,14 @@ export interface AssistantLimits {
   namespaces?: string[];
 }
 
+/** Autofix (agent-opened fix PR) scope: the specific projects opted in. A project
+ *  id is "<namespace>/<deployment>". Empty = nothing opted in. Per-project ONLY —
+ *  a namespace holds deployments mapping to many repos, so a whole-namespace opt-in
+ *  is never one-to-one (mirrors the agent's AutofixScope). */
+export interface AutofixScopeInput {
+  projects?: string[];
+}
+
 export interface AssistantRequest {
   action: AssistantAction;
   namespace?: string;
@@ -431,6 +440,12 @@ export interface AssistantRequest {
   supervisor?: AssistantRoleSelection;
   credentials?: AssistantCredentials;
   limits?: AssistantLimits;
+  // setAutofix — agent-opened fix PR control surface. Written to assistant-config
+  // with the EXACT keys the agent reads (autofixEnabled / autofixMaxPerDay /
+  // autofixScope). Only provided fields are written.
+  autofixEnabled?: boolean;
+  autofixMaxPerDay?: number;
+  autofixScope?: AutofixScopeInput;
   // BYO credential source (setCredentialSource / clearCredentialSource). Only
   // ids + Secret/data-key NAMES — never a secret value.
   credentialId?: keyof AssistantCredentials;
@@ -468,6 +483,33 @@ export async function postAssistant(req: AssistantRequest): Promise<AssistantRun
 export function useAssistantAction() {
   return useMutation<AssistantRunResult, Error, AssistantRequest>({
     mutationFn: postAssistant,
+  });
+}
+
+/** Set the agent's autofix opt-in / daily cap / scope (POST /api/assistant
+ *  `setAutofix`). Only the provided fields are written, so toggling the opt-in
+ *  never clobbers the scope and vice versa. */
+export interface SetAutofixInput {
+  namespace?: string;
+  enabled?: boolean;
+  maxPerDay?: number;
+  scope?: AutofixScopeInput;
+}
+
+export async function setAutofix(input: SetAutofixInput): Promise<AssistantRunResult> {
+  return postAssistant({
+    action: "setAutofix",
+    namespace: input.namespace,
+    autofixEnabled: input.enabled,
+    autofixMaxPerDay: input.maxPerDay,
+    autofixScope: input.scope,
+  });
+}
+
+/** Mutation hook for the autofix control surface. */
+export function useSetAutofix() {
+  return useMutation<AssistantRunResult, Error, SetAutofixInput>({
+    mutationFn: setAutofix,
   });
 }
 

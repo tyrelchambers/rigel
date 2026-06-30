@@ -108,6 +108,47 @@ export function provenanceAnnotations(target: ResolvedTarget): string[] {
   ];
 }
 
+/** A workload's resolved GitOps link, for the UI's per-project link status. */
+export interface RepoLink {
+  /** The matched deployment slug (== the rigel.dev/source-repo annotation value). */
+  source: string;
+  repoURL: string;
+  /** "owner/name" parsed from the repo URL, or null for a non-GitHub URL. */
+  repo: string | null;
+  branch: string;
+  /** Manifest directory the linked deployment tracks. */
+  path: string;
+}
+
+/**
+ * Resolve a workload's GitOps link from its Deployment annotations + the
+ * configured sources — the read side of the "Link to repo" flow. Mirrors the
+ * agent's resolveWorkloadRepo (agent/src/repoResolve.ts) resolution semantics:
+ * the rigel.dev/source-repo annotation names a deployment slug, looked up in the
+ * sources via findByDeployment; a stamped source-path overrides the configured
+ * one. Returns null (unlinked) when not provenance-stamped or the source is gone.
+ * Pure — no I/O — so it is unit-testable; the server does the kubectl reads.
+ */
+export function resolveRepoLink(
+  sources: GitSource[],
+  annotations: Record<string, string> | undefined | null,
+): RepoLink | null {
+  const ann = annotations ?? {};
+  const source = (ann[SOURCE_REPO_ANNOTATION] ?? "").trim();
+  if (!source) return null; // not provenance-stamped → not tracked by GitOps
+  const stampedPath = (ann[SOURCE_PATH_ANNOTATION] ?? "").trim();
+  const match = findByDeployment(sources, source);
+  if (!match) return null; // annotated, but the source is gone from the ConfigMap
+  const slug = parseRepoSlug(match.repo.repoURL);
+  return {
+    source,
+    repoURL: match.repo.repoURL,
+    repo: slug ? `${slug.owner}/${slug.repo}` : null,
+    branch: match.repo.branch,
+    path: stampedPath || match.dep.path,
+  };
+}
+
 /** Normalize a display name to a DNS-1123-ish slug (lowercase, [a-z0-9-]). */
 export function sanitizeSourceName(name: string): string {
   return name

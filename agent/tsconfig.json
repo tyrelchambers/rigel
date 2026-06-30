@@ -6,7 +6,7 @@
     "lib": ["ES2023"],
     "types": ["node"],
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": "..",
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
@@ -14,7 +14,10 @@
     "skipLibCheck": true,
     "declaration": false,
     "sourceMap": true,
-    "verbatimModuleSyntax": true
+    "verbatimModuleSyntax": true,
+    "paths": {
+      "@rigel/k8s/src/*": ["../packages/k8s/src/*"]
+    }
   },
   "include": ["src"],
   "exclude": ["dist", "node_modules"]

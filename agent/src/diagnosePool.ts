@@ -13,20 +13,37 @@
 import { mapPool } from "./pool.js";
 import type { SuggestedAction } from "./action.js";
 import type { Incident } from "./detector.js";
+import type { TriageVerdict } from "./worker.js";
+
+/** What Stage A needs back from one worker investigation. */
+export interface WorkerDiagnosis {
+  analysis: string;
+  actions: SuggestedAction[];
+  costUsd: number;
+  /** Triage verdict — gates whether Stage B may act at all. */
+  verdict: TriageVerdict;
+  verdictReason: string;
+  /** The worker model call FAILED (provider/credential error) — record low-noise, never act. */
+  failed: boolean;
+}
 
 /** One Stage-A result per confirmed incident, returned in input order. */
 export interface DiagnosisPacket {
   incident: Incident;
   analysis: string;
   actions: SuggestedAction[];
-  /** Worker call threw — Stage B records a fail-closed failure (and detects
+  verdict: TriageVerdict;
+  verdictReason: string;
+  /** The worker model call FAILED (provider/credential error). */
+  failed: boolean;
+  /** Worker call THREW — Stage B records a fail-closed failure (and detects
    * auth lapses). */
   error?: string;
 }
 
 export interface DiagnoseDeps {
   /** Investigate one incident (the Worker model call). */
-  diagnose(incident: Incident): Promise<{ analysis: string; actions: SuggestedAction[]; costUsd: number }>;
+  diagnose(incident: Incident): Promise<WorkerDiagnosis>;
   /** Max diagnoses in flight at once. */
   limit: number;
 }
@@ -43,9 +60,13 @@ export async function diagnoseConfirmed(
   return mapPool(incidents, deps.limit, async (incident): Promise<DiagnosisPacket> => {
     try {
       const out = await deps.diagnose(incident);
-      return { incident, analysis: out.analysis, actions: out.actions };
+      return {
+        incident, analysis: out.analysis, actions: out.actions,
+        verdict: out.verdict, verdictReason: out.verdictReason, failed: out.failed,
+      };
     } catch (e) {
-      return { incident, analysis: "", actions: [], error: String(e) };
+      // A THROW is fail-closed: verdict defaults to "uncertain", never "actionable".
+      return { incident, analysis: "", actions: [], verdict: "uncertain", verdictReason: "", failed: false, error: String(e) };
     }
   });
 }

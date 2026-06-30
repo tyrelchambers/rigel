@@ -25,6 +25,7 @@ import {
   silencedSet,
   roleConfigUpdates,
   limitsConfigUpdates,
+  autofixConfigUpdates,
   resolveCredentialSources,
   credentialSourceCommands,
   clearCredentialSourceCommands,
@@ -107,6 +108,7 @@ export type AssistantAction =
   | "setModels"
   | "setCredentials"
   | "setLimits"
+  | "setAutofix"
   | "restart"
   | "silence"
   | "unsilence"
@@ -138,6 +140,12 @@ export interface AssistantRequest {
   supervisor?: RoleSelectionInput;
   credentials?: AssistantCredentials;
   limits?: LimitsInput;
+  // setAutofix — agent-opened fix PR control surface. Written to assistant-config
+  // with the EXACT keys the agent reads (autofixEnabled / autofixMaxPerDay /
+  // autofixScope). A project id is "<namespace>/<deployment>".
+  autofixEnabled?: boolean;
+  autofixMaxPerDay?: number;
+  autofixScope?: { projects?: string[] };
   monitorNamespaces?: string;
   mode?: string;
   window?: string;
@@ -408,6 +416,17 @@ export function setLimitsUpdates(req: AssistantRequest): Record<string, string> 
   return limitsConfigUpdates(req.limits ?? {});
 }
 
+/** Pure: the assistant-config autofix-key updates for a setAutofix request. Maps
+ *  the request's autofix fields onto autofixConfigUpdates, which writes the EXACT
+ *  keys/encodings the agent reads. Only provided fields are emitted. */
+export function setAutofixUpdates(req: AssistantRequest): Record<string, string> {
+  return autofixConfigUpdates({
+    enabled: req.autofixEnabled,
+    maxPerDay: req.autofixMaxPerDay,
+    scope: req.autofixScope,
+  });
+}
+
 /** Pure: the assistant-config matrix-key updates for a setMatrix request. */
 export function setMatrixUpdates(req: AssistantRequest): Record<string, string> {
   return matrixConfigUpdates({
@@ -436,6 +455,20 @@ async function setLimits(
   const updates = setLimitsUpdates(req);
   if (Object.keys(updates).length === 0) {
     throw new Error("setLimits requires at least one limit field.");
+  }
+  return patchConfig(context, namespace, updates);
+}
+
+/** Live autofix opt-in/scope change: read-modify-write the autofix keys in
+ *  assistant-config. No restart — the agent reads rc.autofix each poll. */
+async function setAutofix(
+  context: string | null,
+  namespace: string,
+  req: AssistantRequest,
+): Promise<RunResult> {
+  const updates = setAutofixUpdates(req);
+  if (Object.keys(updates).length === 0) {
+    throw new Error("setAutofix requires at least one of autofixEnabled, autofixMaxPerDay, or autofixScope.");
   }
   return patchConfig(context, namespace, updates);
 }
@@ -821,6 +854,8 @@ export async function handleAssistant(
       return setCredentials(context, namespace, req);
     case "setLimits":
       return setLimits(context, namespace, req);
+    case "setAutofix":
+      return setAutofix(context, namespace, req);
     case "restart":
       return restartAgent(context, namespace);
     case "silence":

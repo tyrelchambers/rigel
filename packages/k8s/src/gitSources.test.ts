@@ -10,6 +10,7 @@ import {
   provenanceAnnotations,
   resolveTarget,
   findByDeployment,
+  resolveRepoLink,
   upsertDeployment,
   SOURCE_REPO_ANNOTATION,
   SOURCE_PATH_ANNOTATION,
@@ -213,4 +214,53 @@ test("parseGitSources: tolerates missing/garbage data", () => {
   expect(parseGitSources("")).toEqual([]);
   expect(parseGitSources("not json")).toEqual([]);
   expect(parseGitSources("{}")).toEqual([]);
+});
+
+// ---------------------------------------------------------------------------
+// resolveRepoLink — per-project link status (read side of "Link to repo")
+// ---------------------------------------------------------------------------
+
+const linkSources: GitSource[] = [
+  {
+    name: "me-web",
+    repoURL: "https://github.com/me/web.git",
+    branch: "main",
+    deployments: [{ name: "default-web", path: "k8s/prod" }],
+  },
+];
+
+test("resolveRepoLink: resolves a stamped Deployment to its repo owner/name", () => {
+  const link = resolveRepoLink(linkSources, { [SOURCE_REPO_ANNOTATION]: "default-web" });
+  expect(link).toEqual({
+    source: "default-web",
+    repoURL: "https://github.com/me/web.git",
+    repo: "me/web",
+    branch: "main",
+    path: "k8s/prod",
+  });
+});
+
+test("resolveRepoLink: a stamped source-path overrides the configured path", () => {
+  const link = resolveRepoLink(linkSources, {
+    [SOURCE_REPO_ANNOTATION]: "default-web",
+    [SOURCE_PATH_ANNOTATION]: "k8s/staging",
+  });
+  expect(link?.path).toBe("k8s/staging");
+});
+
+test("resolveRepoLink: unlinked when not provenance-stamped", () => {
+  expect(resolveRepoLink(linkSources, {})).toBeNull();
+  expect(resolveRepoLink(linkSources, null)).toBeNull();
+  expect(resolveRepoLink(linkSources, { [SOURCE_REPO_ANNOTATION]: "   " })).toBeNull();
+});
+
+test("resolveRepoLink: unlinked when the annotated source is gone from the ConfigMap", () => {
+  expect(resolveRepoLink(linkSources, { [SOURCE_REPO_ANNOTATION]: "ghost" })).toBeNull();
+});
+
+test("resolveRepoLink: repo is null for a non-GitHub URL", () => {
+  const sources: GitSource[] = [
+    { name: "gl", repoURL: "https://gitlab.com/me/web", branch: "main", deployments: [{ name: "gl-web", path: "." }] },
+  ];
+  expect(resolveRepoLink(sources, { [SOURCE_REPO_ANNOTATION]: "gl-web" })?.repo).toBeNull();
 });

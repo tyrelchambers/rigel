@@ -7,14 +7,11 @@
 // Reuses the existing apply pipeline conventions: kubectl is run via the argv
 // runner (no shell), manifests applied with `kubectl apply -f <dir> -R`, and a
 // `kubectl diff` provides the pre-apply preview surfaced in the UI.
-import { rm, mkdir, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
-import { kubectl, runProcess, type RunResult } from "@rigel/k8s/src/run";
+import { createHash } from "node:crypto";
+import { kubectl, type RunResult } from "@rigel/k8s/src/run";
 import {
   GIT_SOURCES_CONFIGMAP,
   GITHUB_SECRET,
-  buildAuthedCloneURL,
-  fixBranchName,
   gitSourcesConfigMapJSON,
   githubSecretJSON,
   normalizeManifestPath,
@@ -23,23 +20,34 @@ import {
   parseRepoContents,
   parseRepoSlug,
   provenanceAnnotations,
-  redactURL,
+  resolveRepoLink,
+  sanitizeSourceName,
+  findByDeployment,
+  upsertDeployment,
   safeRepoFilePath,
   type GitSource,
   type ResolvedTarget,
   type GithubRepo,
   type RepoEntry,
+  type RepoLink,
 } from "@rigel/k8s/src/gitSources";
+// Repo-fix core (clone → branch → commit → push → open PR) now lives in
+// @rigel/k8s so the in-cluster agent Job and this chat path share ONE
+// implementation. ensureCheckout is used below by diffSource/applySource;
+// the rest is re-exported so callers keep importing it from "./git" unchanged.
+import { ensureCheckout } from "@rigel/k8s/src/repoFix";
+export {
+  ensureCheckout,
+  previewRepoFix,
+  proposeRepoFix,
+  type CheckoutResult,
+  type RepoFixInput,
+  type RepoFixPreview,
+  type RepoFixResult,
+} from "@rigel/k8s/src/repoFix";
 import { applyManifest } from "./install";
 
 const STATE_NAMESPACE = process.env.HELMSMAN_NAMESPACE ?? "default";
-const REPO_ROOT = `${process.env.TMPDIR ?? "/tmp"}/rigel-repos`;
-
-const runGit = (args: string[]) => runProcess("git", args);
-
-function repoDir(name: string): string {
-  return `${REPO_ROOT}/${name}`;
-}
 
 // ---------------------------------------------------------------------------
 // State: source list (ConfigMap) + tokens (Secret)
@@ -60,6 +68,207 @@ export async function loadSources(context: string | null): Promise<GitSource[]> 
 /** Persist the full source list (apply the ConfigMap). */
 export async function saveSources(context: string | null, sources: GitSource[]): Promise<RunResult> {
   return applyManifest(context, gitSourcesConfigMapJSON(STATE_NAMESPACE, sources));
+}
+
+// ---------------------------------------------------------------------------
+// "Link to repo" — bind a running Deployment to a GitOps source (no redeploy)
+// ---------------------------------------------------------------------------
+
+/** Input for linking one running Deployment to a repo + manifest path. */
+export interface LinkRepoInput {
+  /** The Deployment's namespace (where the annotation is stamped). */
+  namespace: string;
+  /** The Deployment name to link + stamp. */
+  deployment: string;
+  /** Remote repo URL, e.g. https://github.com/owner/repo(.git). */
+  repoURL: string;
+  branch?: string;
+  /** Manifest directory within the repo ("." = root). */
+  path?: string;
+}
+
+/** What was linked, for the API response + the UI's link status. */
+export interface LinkRepoResult {
+  ok: boolean;
+  /** The deployment's provenance id == the stamped rigel.dev/source-repo value. */
+  source: string;
+  /** "owner/name" parsed from the repo URL. */
+  repo: string;
+  /** The git-source slug the deployment lives under. */
+  repoName: string;
+  repoURL: string;
+  branch: string;
+  path: string;
+}
+
+/** The result of planning a link: the source list to persist + the annotate to run. */
+export interface RepoLinkPlan {
+  sources: GitSource[];
+  annotate: { namespace: string; deployment: string; args: string[] };
+  result: LinkRepoResult;
+}
+
+/**
+ * A cluster WRITE failed (saveSources / `kubectl annotate`) — distinct from a
+ * validation/collision error so the API can map it to 5xx rather than 422
+ * (bad-input). Carries the kubectl detail in `.message` (never a secret).
+ */
+export class ClusterWriteError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ClusterWriteError";
+  }
+}
+
+/** Kubernetes object-name limit; the provenance id doubles as a resource name. */
+const MAX_NAME_LEN = 63;
+
+/**
+ * Derive the collision-resistant provenance id for a (namespace, deployment)
+ * pair. It doubles as the GitDeployment name, the `/tmp/rigel-repos/<name>`
+ * workdir, AND the `rigel.dev/source-repo` annotation value, so it must be
+ * DNS-1123 (lowercase [a-z0-9-], <=63 chars) and can't contain "/".
+ *
+ * A naive `<ns>-<deployment>` slug is AMBIGUOUS — dashes are legal in both, so
+ * (prod, web-api) and (prod-web, api) both collapse to `prod-web-api` and would
+ * silently merge into one GitDeployment. We disambiguate by appending the first
+ * 7 hex of sha256("<ns>/<deployment>") (the EXACT, unsanitized pair), which
+ * collides only on a true sha256 collision. Deterministic, so re-linking the
+ * same workload upserts the same entry. The slug prefix is truncated (never the
+ * hash) to stay within 63 chars.
+ */
+export function provenanceId(namespace: string, deployment: string): string {
+  const ns = (namespace ?? "").trim();
+  const dep = (deployment ?? "").trim();
+  const hash = createHash("sha256").update(`${ns}/${dep}`).digest("hex").slice(0, 7);
+  const slug = sanitizeSourceName(`${ns}-${dep}`);
+  // Reserve room for "-<hash>"; trim a trailing dash so we never produce "--".
+  const prefix = slug.slice(0, MAX_NAME_LEN - hash.length - 1).replace(/-+$/, "");
+  return prefix ? `${prefix}-${hash}` : hash;
+}
+
+/** Whether two repo URLs name the same repo (ignoring a trailing .git / slash). */
+function sameRepoURL(a: string, b: string): boolean {
+  const norm = (u: string) => (u ?? "").trim().replace(/\.git$/, "").replace(/\/+$/, "");
+  return norm(a) === norm(b);
+}
+
+/**
+ * Pure planner for "Link to repo": derive the deterministic source slug + the
+ * collision-resistant deployment provenance id from (repoURL, namespace,
+ * deployment), create-or-extend the matching `rigel-git-sources` entry with a
+ * deployment at `path`, and compute the provenance annotation pairs to stamp on
+ * the workload. The provenance id is BOTH the GitDeployment name AND the
+ * rigel.dev/source-repo value, so the agent's repoResolve can map the workload
+ * back to this source.
+ *
+ * Reuses the existing source primitives (parseRepoSlug / sanitizeSourceName /
+ * upsertDeployment / findByDeployment / provenanceAnnotations) — no duplicated
+ * write logic. Throws (plain Error → HTTP 422) on a bad repoURL, missing ids, a
+ * cross-repo collision, or a source-slug clash with a different repo URL.
+ */
+export function planRepoLink(sources: GitSource[], input: LinkRepoInput): RepoLinkPlan {
+  const repoURL = (input.repoURL ?? "").trim();
+  if (repoURL === "") throw new Error("repoURL is required");
+  const ns = (input.namespace ?? "").trim();
+  const deployment = (input.deployment ?? "").trim();
+  if (ns === "" || deployment === "") throw new Error("namespace and deployment are required");
+
+  const slug = parseRepoSlug(repoURL);
+  if (!slug) throw new Error(`could not parse owner/repo from repoURL: ${repoURL}`);
+  const repoName = sanitizeSourceName(`${slug.owner}-${slug.repo}`);
+  if (repoName === "") throw new Error("could not derive a source slug from the repo URL");
+  // Collision-resistant provenance id (see provenanceId): stamped on the workload
+  // + used as the GitDeployment name so resolveWorkloadRepo/resolveRepoLink
+  // resolve it back. Never empty (the hash is always present).
+  const source = provenanceId(ns, deployment);
+  const path = normalizeManifestPath(input.path ?? ".");
+
+  // A deployment id is a global key — it can't already belong to a DIFFERENT repo.
+  const owner = findByDeployment(sources, source);
+  if (owner && owner.repo.name !== repoName) {
+    throw new Error(`deployment id "${source}" is already linked to repo "${owner.repo.name}"`);
+  }
+
+  // Two different repo URLs can sanitize to the SAME slug (e.g. me/my_app and
+  // me/my-app → "me-my-app"). Reusing that slug for a different URL would silently
+  // repoint the existing source's OTHER deployments — refuse instead of repoint.
+  const existing = sources.find((s) => s.name === repoName);
+  if (existing && !sameRepoURL(existing.repoURL, repoURL)) {
+    throw new Error(
+      `source slug "${repoName}" is already used by ${existing.repoURL}; cannot link a different repo (${repoURL}) under the same slug`,
+    );
+  }
+
+  const branch = (input.branch ?? "").trim() || existing?.branch || "main";
+  const deployments = upsertDeployment(existing?.deployments ?? [], { name: source, path });
+  const next: GitSource = { name: repoName, repoURL, branch, deployments };
+  const merged = existing ? sources.map((s) => (s.name === repoName ? next : s)) : [...sources, next];
+
+  return {
+    sources: merged,
+    annotate: {
+      namespace: ns,
+      deployment,
+      args: provenanceAnnotations({ name: source, repoURL, branch, path }),
+    },
+    result: { ok: true, source, repo: `${slug.owner}/${slug.repo}`, repoName, repoURL, branch, path },
+  };
+}
+
+/**
+ * Link a running Deployment to a GitOps source: persist the create-or-extend
+ * `rigel-git-sources` entry (reusing saveSources) AND stamp the live Deployment
+ * with the provenance annotations via `kubectl annotate --overwrite` — no
+ * redeploy. Idempotent (upsert + --overwrite), so a retry after a partial failure
+ * recovers. A planning/validation problem throws a plain Error (→ 422); a cluster
+ * write failure throws ClusterWriteError (→ 5xx).
+ */
+export async function linkRepo(context: string | null, input: LinkRepoInput): Promise<LinkRepoResult> {
+  const sources = await loadSources(context);
+  const plan = planRepoLink(sources, input); // plain Error on bad input → 422
+  const saved = await saveSources(context, plan.sources);
+  if (saved.code !== 0) throw new ClusterWriteError(saved.stderr || saved.stdout || "failed to save the git source");
+  const stamp = await kubectl(context, [
+    "annotate",
+    "deployment",
+    plan.annotate.deployment,
+    "-n",
+    plan.annotate.namespace,
+    ...plan.annotate.args,
+    "--overwrite",
+  ]);
+  if (stamp.code !== 0) {
+    throw new ClusterWriteError(
+      `linked the source, but stamping the Deployment failed: ${stamp.stderr || stamp.stdout || `exit ${stamp.code}`}`,
+    );
+  }
+  return plan.result;
+}
+
+/**
+ * Resolve whether a Deployment is repo-linked — the read path the UI uses for
+ * per-project link status. Reads the workload's provenance annotations, then
+ * resolves them against the configured sources via the shared resolveRepoLink
+ * (same semantics as the agent's resolveWorkloadRepo). Unlinked (link: null) when
+ * the Deployment is missing/unreadable, unstamped, or names a vanished source.
+ */
+export async function resolveDeploymentLink(
+  context: string | null,
+  namespace: string,
+  deployment: string,
+): Promise<{ linked: boolean; link: RepoLink | null }> {
+  const res = await kubectl(context, ["get", "deployment", deployment, "-n", namespace, "-o", "json"]);
+  if (res.code !== 0) return { linked: false, link: null };
+  let annotations: Record<string, string> = {};
+  try {
+    annotations =
+      (JSON.parse(res.stdout) as { metadata?: { annotations?: Record<string, string> } }).metadata?.annotations ?? {};
+  } catch {
+    return { linked: false, link: null };
+  }
+  const link = resolveRepoLink(await loadSources(context), annotations);
+  return { linked: link !== null, link };
 }
 
 // ---------------------------------------------------------------------------
@@ -204,41 +413,6 @@ function nextLink(header: string | null): string | null {
 // Repo operations
 // ---------------------------------------------------------------------------
 
-export interface CheckoutResult {
-  ok: boolean;
-  sha?: string;
-  dir?: string;
-  message: string;
-}
-
-/**
- * Shallow-clone the target's branch fresh into /tmp and return the checked-out
- * directory + HEAD sha. The token is embedded only for the clone, then scrubbed
- * from the stored remote so it isn't left at rest in .git/config.
- */
-export async function ensureCheckout(
-  target: ResolvedTarget,
-  token: string | null,
-  shallow = true,
-): Promise<CheckoutResult> {
-  const dir = repoDir(target.name);
-  const authed = buildAuthedCloneURL(target.repoURL, token);
-  await rm(dir, { recursive: true, force: true });
-  await mkdir(REPO_ROOT, { recursive: true });
-
-  const depth = shallow ? ["--depth", "1"] : [];
-  const clone = await runGit(["clone", ...depth, "--single-branch", "--branch", target.branch, authed, dir]);
-  if (clone.code !== 0) {
-    return { ok: false, message: redactURL(clone.stderr || clone.stdout || "git clone failed") };
-  }
-  // Scrub the token from the persisted remote.
-  await runGit(["-C", dir, "remote", "set-url", "origin", target.repoURL]);
-
-  const head = await runGit(["-C", dir, "rev-parse", "HEAD"]);
-  const sha = head.code === 0 ? head.stdout.trim() : undefined;
-  return { ok: true, sha, dir, message: "ok" };
-}
-
 /** Absolute manifest directory for a checked-out target. */
 function manifestDir(dir: string, target: ResolvedTarget): string {
   const path = normalizeManifestPath(target.path);
@@ -275,126 +449,4 @@ export async function applySource(context: string | null, target: ResolvedTarget
     await kubectl(context, ["annotate", "-f", dir, "-R", ...provenanceAnnotations(target), "--overwrite"]);
   }
   return { ...res, sha: co.sha };
-}
-
-// ---------------------------------------------------------------------------
-// AI fix → pull request (feature 3c)
-// ---------------------------------------------------------------------------
-
-export interface RepoFixInput {
-  source: ResolvedTarget;
-  token: string | null;
-  filePath: string;
-  content: string;
-  title: string;
-  body?: string;
-}
-
-export interface RepoFixPreview {
-  ok: boolean;
-  diff?: string;
-  message?: string;
-}
-
-export interface RepoFixResult {
-  ok: boolean;
-  prUrl?: string;
-  branch?: string;
-  message?: string;
-}
-
-/** Clone, write the proposed file, and return the `git diff` (no commit/push). */
-export async function previewRepoFix(input: RepoFixInput): Promise<RepoFixPreview> {
-  let rel: string;
-  try {
-    rel = safeRepoFilePath(input.filePath);
-  } catch (e) {
-    return { ok: false, message: e instanceof Error ? e.message : String(e) };
-  }
-  const co = await ensureCheckout(input.source, input.token);
-  if (!co.ok || !co.dir) return { ok: false, message: co.message };
-
-  await writeProposedFile(co.dir, rel, input.content);
-  // --intent-to-add makes brand-new files show up in `git diff`.
-  await runGit(["-C", co.dir, "add", "--intent-to-add", rel]);
-  const diff = await runGit(["-C", co.dir, "diff", "--", rel]);
-  return { ok: true, diff: diff.stdout || "(new file — no prior version)" };
-}
-
-/** Clone, branch, commit the fix, push, and open a PR via the GitHub REST API. */
-export async function proposeRepoFix(input: RepoFixInput): Promise<RepoFixResult> {
-  const slug = parseRepoSlug(input.source.repoURL);
-  if (!slug) return { ok: false, message: "could not parse owner/repo from the source repoURL" };
-  if (!input.token) return { ok: false, message: "a token with repo + pull-request scope is required to open a PR" };
-
-  let rel: string;
-  try {
-    rel = safeRepoFilePath(input.filePath);
-  } catch (e) {
-    return { ok: false, message: e instanceof Error ? e.message : String(e) };
-  }
-
-  // Full single-branch clone (not shallow) so pushing the new branch is accepted.
-  const co = await ensureCheckout(input.source, input.token, false);
-  if (!co.ok || !co.dir) return { ok: false, message: co.message };
-
-  const branch = fixBranchName(input.title, randomSuffix());
-  const created = await runGit(["-C", co.dir, "checkout", "-b", branch]);
-  if (created.code !== 0) return { ok: false, message: created.stderr || "failed to create branch" };
-
-  await writeProposedFile(co.dir, rel, input.content);
-  await runGit(["-C", co.dir, "add", rel]);
-  const commit = await runGit([
-    "-C", co.dir,
-    "-c", "user.email=rigel@users.noreply.github.com",
-    "-c", "user.name=Rigel",
-    "commit", "-m", input.title,
-  ]);
-  if (commit.code !== 0) {
-    return { ok: false, message: commit.stderr || commit.stdout || "nothing to commit (file unchanged?)" };
-  }
-
-  // Push using the authed URL directly (the stored remote was scrubbed).
-  const authed = buildAuthedCloneURL(input.source.repoURL, input.token);
-  const push = await runGit(["-C", co.dir, "push", authed, `${branch}:${branch}`]);
-  if (push.code !== 0) return { ok: false, branch, message: redactURL(push.stderr || "git push failed") };
-
-  return createPullRequest(slug, input.token, {
-    title: input.title,
-    head: branch,
-    base: input.source.branch,
-    body: input.body ?? "",
-  });
-}
-
-async function writeProposedFile(dir: string, rel: string, content: string): Promise<void> {
-  const abs = `${dir}/${rel}`;
-  await mkdir(dirname(abs), { recursive: true });
-  await writeFile(abs, content);
-}
-
-function randomSuffix(): string {
-  return Math.random().toString(36).slice(2, 8);
-}
-
-async function createPullRequest(
-  slug: { owner: string; repo: string },
-  token: string,
-  pr: { title: string; head: string; base: string; body: string },
-): Promise<RepoFixResult> {
-  const res = await fetch(`https://api.github.com/repos/${slug.owner}/${slug.repo}/pulls`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/vnd.github+json",
-      "Content-Type": "application/json",
-      "User-Agent": "rigel",
-    },
-    body: JSON.stringify(pr),
-  });
-  const json = (await res.json().catch(() => ({}))) as { html_url?: string; message?: string };
-  if (!res.ok) {
-    return { ok: false, branch: pr.head, message: `GitHub PR creation failed: ${json.message ?? res.statusText}` };
-  }
-  return { ok: true, prUrl: json.html_url, branch: pr.head, message: "ok" };
 }

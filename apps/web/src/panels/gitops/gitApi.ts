@@ -189,3 +189,73 @@ export function useDeleteDeployment() {
 export function syncDeployment(repo: string, deployment: string, dryRun: boolean): Promise<SyncResult> {
   return req<SyncResult>("/api/git/sync", json({ repo, deployment, dryRun }));
 }
+
+// ── Link to repo (bind a running Deployment to a GitOps source) ────────────────
+
+/** A workload's resolved GitOps link (mirrors the server `RepoLink`). */
+export interface RepoLink {
+  /** The matched deployment slug == the rigel.dev/source-repo annotation value. */
+  source: string;
+  repoURL: string;
+  /** "owner/name", or null for a non-GitHub URL. */
+  repo: string | null;
+  branch: string;
+  path: string;
+}
+
+/** Per-Deployment link status from GET /api/git/link. */
+export interface LinkStatus {
+  linked: boolean;
+  link: RepoLink | null;
+}
+
+export interface LinkRepoInput {
+  namespace: string;
+  deployment: string;
+  repoURL: string;
+  branch?: string;
+  path?: string;
+}
+
+/** What was linked (mirrors the server `LinkRepoResult`). */
+export interface LinkRepoResult {
+  ok: boolean;
+  source: string;
+  repo: string;
+  repoName: string;
+  repoURL: string;
+  branch: string;
+  path: string;
+}
+
+/**
+ * Per-project link status: whether a Deployment is bound to a GitOps source.
+ * Enabled once a namespace + deployment are known. Used by the deployment list /
+ * link control to show "Linked to owner/name" vs "Not linked".
+ */
+export function useRepoLink(namespace: string | null | undefined, deployment: string | null | undefined) {
+  return useQuery({
+    queryKey: ["repo-link", namespace, deployment],
+    queryFn: () =>
+      req<LinkStatus>(
+        `/api/git/link?namespace=${encodeURIComponent(namespace!)}&deployment=${encodeURIComponent(deployment!)}`,
+      ),
+    enabled: !!namespace && !!deployment,
+  });
+}
+
+/**
+ * Link a running Deployment to a repo (the "Link to repo" flow): creates/extends
+ * a rigel-git-sources entry AND stamps the live Deployment's provenance
+ * annotation — no redeploy. Refreshes the sources list + that deployment's link.
+ */
+export function useLinkRepo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: LinkRepoInput) => req<LinkRepoResult>("/api/git/link", json(input)),
+    onSuccess: (_r, input) => {
+      qc.invalidateQueries({ queryKey: ["git-sources"] });
+      qc.invalidateQueries({ queryKey: ["repo-link", input.namespace, input.deployment] });
+    },
+  });
+}

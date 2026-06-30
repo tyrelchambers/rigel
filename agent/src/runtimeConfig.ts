@@ -12,6 +12,28 @@ export interface OperationalLimits {
   namespaces: string[];
 }
 
+/** The surface autofix (agent-opened fix PRs + the log-error scan that feeds it)
+ *  is allowed to touch: specific `namespace/deployment` projects. Empty = nothing
+ *  opted in. Scope is per-project ONLY — a namespace holds deployments mapping to
+ *  many different repos, so opting in a whole namespace is never one-to-one. */
+export interface AutofixScope {
+  projects: string[];
+}
+
+/** Autofix control surface: the master opt-in plus the scope it applies to. Read
+ *  from the assistant-config ConfigMap; the WRITE side (UI/control plane) lands in
+ *  a later task. Defaults safely to disabled + empty scope. */
+export interface AutofixConfig {
+  enabled: boolean;
+  scope: AutofixScope;
+  /** Rolling-24h cap on agent-opened fix PRs (the daily budget). Default 5;
+   *  fail-safe to the default on a missing/garbage value. 0 disables fix PRs. */
+  maxPerDay: number;
+}
+
+/** Default rolling-24h cap on agent-opened fix PRs. */
+export const DEFAULT_AUTOFIX_MAX_PER_DAY = 5;
+
 const PROVIDERS = new Set<ProviderId>(["claude", "codex", "gemini", "opencode"]);
 
 /**
@@ -46,6 +68,48 @@ export interface RuntimeConfig {
   worker: RoleSelection;
   supervisor: RoleSelection;
   limits: OperationalLimits;
+  autofix: AutofixConfig;
+}
+
+/** Parse the autofix opt-in (`autofixEnabled`, default false) + scope
+ *  (`autofixScope`, a JSON `{ projects }`, default empty) from the
+ *  assistant-config data map. Tolerant of absence/junk — fails safe to disabled. */
+export function parseAutofixConfig(data: Record<string, string>): AutofixConfig {
+  return {
+    enabled: data["autofixEnabled"] === "true",
+    scope: parseAutofixScope(data["autofixScope"]),
+    maxPerDay: parseAutofixMaxPerDay(data["autofixMaxPerDay"]),
+  };
+}
+
+/** Parse the rolling-24h fix-PR cap (`autofixMaxPerDay`). Default 5; a
+ *  non-finite/negative/garbage value fails safe to the default. Floored to a whole
+ *  number; 0 is honored (no fix PRs). */
+export function parseAutofixMaxPerDay(raw: string | undefined): number {
+  const v = (raw ?? "").trim();
+  if (!v) return DEFAULT_AUTOFIX_MAX_PER_DAY;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : DEFAULT_AUTOFIX_MAX_PER_DAY;
+}
+
+/** Decode the `autofixScope` JSON blob into a normalized `{ projects }`. A legacy
+ *  stored `namespaces` key (from the pre-per-project scope) is tolerated but
+ *  ignored, never used. Non-string / non-array members are dropped; malformed
+ *  JSON → empty scope. */
+export function parseAutofixScope(raw: string | undefined): AutofixScope {
+  if (!raw || !raw.trim()) return { projects: [] };
+  let obj: unknown;
+  try {
+    obj = JSON.parse(raw);
+  } catch {
+    return { projects: [] };
+  }
+  const o = obj as { projects?: unknown };
+  const strings = (v: unknown): string[] =>
+    Array.isArray(v)
+      ? v.filter((x): x is string => typeof x === "string" && x.trim() !== "").map((s) => s.trim())
+      : [];
+  return { projects: strings(o?.projects) };
 }
 
 /** Parse the `alertRules` JSON blob out of the assistant-config data map. */
@@ -163,6 +227,7 @@ function disabledDefaults(cfg: Config): RuntimeConfig {
     worker: parseRoleSelection({}, "worker", cfg.workerModel),
     supervisor: parseRoleSelection({}, "supervisor", cfg.supervisorModel),
     limits: parseLimits({}, cfg),
+    autofix: parseAutofixConfig({}),
   };
 }
 
@@ -203,5 +268,6 @@ export async function readRuntimeConfig(cfg: Config): Promise<RuntimeConfig> {
     worker: parseRoleSelection(data, "worker", cfg.workerModel),
     supervisor: parseRoleSelection(data, "supervisor", cfg.supervisorModel),
     limits: parseLimits(data, cfg),
+    autofix: parseAutofixConfig(data),
   };
 }

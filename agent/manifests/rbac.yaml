@@ -88,6 +88,18 @@ rules:
     resources: [configmaps]
     resourceNames: [assistant-config, assistant-state, assistant-backups]
     verbs: [get, update, patch]
+  # Fix-PR orchestration. For each approved openFixPR the agent creates a per-fix
+  # `rigel-fix-<id>` ConfigMap (the fix spec) + a one-shot Job that opens the PR.
+  # `create` carries no object name yet, so it can't be resourceName-scoped — this
+  # is ns-scoped to the state namespace instead. (get/list/watch on configmaps and
+  # jobs are already granted cluster-wide by the ClusterRole above for diagnosis;
+  # listed here too so the namespaced role is self-describing.)
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [create, delete]
+  - apiGroups: ["batch"]
+    resources: [jobs]
+    verbs: [create, delete, get, list, watch]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -104,3 +116,22 @@ subjects:
   - kind: ServiceAccount
     name: rigel-assistant
     namespace: default
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# The fix-runner Job's ServiceAccount. The other half of the privilege split:
+# this SA holds the GitHub token (mounted from the `rigel-github` Secret) but has
+# ZERO cluster access — DELIBERATELY no Role/RoleBinding/ClusterRoleBinding. A
+# fix Job only uses its mounted Secret + per-fix ConfigMap and outbound git/HTTPS
+# to open a PR; it never talks to the API server (its pod even sets
+# automountServiceAccountToken: false). So the token-holding pod can't touch the
+# cluster, and the cluster-capable agent never holds the token.
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rigel-fix-runner
+  namespace: default
+  labels:
+    app.kubernetes.io/name: rigel-fix-runner
+    app.kubernetes.io/managed-by: rigel-assistant
+automountServiceAccountToken: false

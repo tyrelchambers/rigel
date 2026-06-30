@@ -1,7 +1,7 @@
 // OverviewTab — last report, pending-approval banner, recent activity, and the
 // owned-resources card.
 
-import { AlertTriangle, ChevronRight } from "lucide-react";
+import { AlertTriangle, ChevronRight, GitPullRequest } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { auditEntryId } from "@rigel/k8s";
 import { useAssistantCtx } from "../AssistantContext";
@@ -14,6 +14,7 @@ export function OverviewTab() {
   const audit = d.clusterState?.audit ?? [];
   const queue = d.clusterState?.queue ?? [];
   const report = d.clusterState?.report ?? "";
+  const prCount = d.pullRequests.length;
 
   return (
     <div className="space-y-3.5">
@@ -45,6 +46,20 @@ export function OverviewTab() {
           <AlertTriangle className="size-4 text-amber-500" />
           <span className="text-sm font-medium">
             {queue.length} fix{queue.length === 1 ? "" : "es"} awaiting your approval
+          </span>
+          <ChevronRight className="ml-auto size-4 text-muted-foreground" />
+        </button>
+      )}
+
+      {prCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setTab("autofix")}
+          className="flex w-full items-center gap-2 rounded-lg border bg-card p-3 text-left hover:bg-muted/50"
+        >
+          <GitPullRequest className="size-4 text-[var(--status-running)]" />
+          <span className="text-sm font-medium">
+            Agent opened {prCount} pull request{prCount === 1 ? "" : "s"}
           </span>
           <ChevronRight className="ml-auto size-4 text-muted-foreground" />
         </button>

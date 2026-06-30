@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  detectLogErrors,
   detectUnhealthyPods,
   detectDegradedDeployments,
   fingerprint,
@@ -8,6 +9,13 @@ import {
 
 function podList(...items: unknown[]) {
   return { items };
+}
+
+function runningPod(name: string, namespace = "default") {
+  return {
+    metadata: { name, namespace },
+    status: { phase: "Running", containerStatuses: [{ restartCount: 0, state: { running: {} } }] },
+  };
 }
 
 describe("detectUnhealthyPods", () => {
@@ -97,6 +105,62 @@ describe("detectDegradedDeployments", () => {
       items: [{ metadata: { name: "z", namespace: "default" }, spec: { replicas: 0 }, status: {} }],
     };
     expect(detectDegradedDeployments(raw)).toEqual([]);
+  });
+});
+
+describe("detectLogErrors", () => {
+  const PANIC = "panic: runtime error: nil map write\ngoroutine 1 [running]:\nmain.go:10";
+
+  test("flags a running pod whose recent logs show an error signature", async () => {
+    const raw = podList(runningPod("memos-abc"));
+    const incidents = await detectLogErrors(raw, new Set(), async () => PANIC);
+    expect(incidents).toHaveLength(1);
+    expect(incidents[0]).toMatchObject({
+      incidentKind: "loggedError",
+      namespace: "default",
+      name: "memos-abc",
+    });
+    // reason is the stable signature, so it fingerprints/dedupes across ticks
+    expect(incidents[0]?.reason).toBeTruthy();
+  });
+
+  test("skips pods already flagged by the status checks (no double-report)", async () => {
+    const raw = podList(runningPod("memos-abc"));
+    const tail = async () => PANIC;
+    const incidents = await detectLogErrors(raw, new Set(["default/memos-abc"]), tail);
+    expect(incidents).toEqual([]);
+  });
+
+  test("does not scan non-Running pods", async () => {
+    const raw = podList({
+      metadata: { name: "pending-1", namespace: "default" },
+      status: { phase: "Pending" },
+    });
+    let tailed = 0;
+    await detectLogErrors(raw, new Set(), async () => {
+      tailed++;
+      return PANIC;
+    });
+    expect(tailed).toBe(0);
+  });
+
+  test("skips pods whose logs could not be read (tailer returned null)", async () => {
+    const raw = podList(runningPod("memos-abc"));
+    const incidents = await detectLogErrors(raw, new Set(), async () => null);
+    expect(incidents).toEqual([]);
+  });
+
+  test("does not flag a running pod with healthy logs", async () => {
+    const raw = podList(runningPod("ok"));
+    const incidents = await detectLogErrors(raw, new Set(), async () => "INFO all good\nINFO serving");
+    expect(incidents).toEqual([]);
+  });
+
+  test("fingerprint of a log-error incident is stable across the signature reason", async () => {
+    const raw = podList(runningPod("memos-abc"));
+    const incidents = await detectLogErrors(raw, new Set(), async () => PANIC);
+    const fp = fingerprint(incidents[0]!);
+    expect(fp.startsWith("loggedError|default|memos-abc|")).toBe(true);
   });
 });
 

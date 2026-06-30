@@ -9,6 +9,9 @@ node_modules
 .git
 .github
 docs
-agent
 .claude
 .DS_Store
+# NOTE: `agent/` is intentionally NOT ignored — the rigel-assistant image builds
+# from the repo root (context: .) so it can pull in both `agent/` and the shared
+# `packages/k8s/` source for the esbuild bundle. The `**/node_modules` + `**/dist`
+# globs above already keep that context lean. (Other images don't COPY agent/.)

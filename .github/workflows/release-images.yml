@@ -29,7 +29,8 @@ jobs:
       matrix:
         include:
           - name: rigel-assistant
-            context: ./agent
+            # Repo root: the image bundles agent/ + the shared packages/k8s/ source.
+            context: .
             file: ./agent/Dockerfile
           - name: rigel-marketing
             context: .

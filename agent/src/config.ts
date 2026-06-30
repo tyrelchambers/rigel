@@ -1,4 +1,4 @@
-import { kubectl } from "./kubectl.js";
+import { kubectl, type KubectlResult } from "./kubectl.js";
 
 /**
  * Configuration is split in two:
@@ -33,6 +33,10 @@ export interface Config {
   maxBackups: number;
   /** TTL backstop for queued suggestions we can't actively re-validate. */
   queueTtlMs: number;
+  /** The image the one-shot fix-runner Job runs (the SAME immutable tag as the
+   *  agent; set by the installer). Empty when unconfigured — dispatch then
+   *  records a failure instead of creating a broken Job. */
+  fixRunnerImage: string;
 }
 
 function num(name: string, fallback: number): number {
@@ -70,7 +74,48 @@ export function loadConfig(): Config {
     auditMaxEntries: num("AUDIT_MAX_ENTRIES", 200),
     maxBackups: num("MAX_BACKUPS", 50),
     queueTtlMs: num("QUEUE_TTL_HOURS", 48) * 3_600_000,
+    fixRunnerImage: str("RIGEL_FIX_RUNNER_IMAGE", ""),
   };
+}
+
+export interface FixImageDeps {
+  kubectl: (args: string[]) => Promise<KubectlResult>;
+  /** The pod name — `HOSTNAME` in-cluster. Undefined outside a pod. */
+  hostname: string | undefined;
+  log: (msg: string) => void;
+}
+
+/**
+ * Resolve the agent's OWN running image so each fix Job runs the EXACT same
+ * immutable tag the (reviewed) agent is running. CI deploys with `kubectl set
+ * image` (per-sha pin), which updates the Deployment's container image but NOT the
+ * `RIGEL_FIX_RUNNER_IMAGE` env — so that env drifts stale and a fix Job would run
+ * old code. Reading the running pod's container image (`kubectl get pod $HOSTNAME
+ * -o jsonpath=…`) avoids the drift. Falls back to the env-configured image when the
+ * self-lookup can't run (no HOSTNAME) or fails (RBAC, missing pod, empty result),
+ * logging the fallback so a misconfigured install is visible.
+ */
+export async function resolveFixRunnerImage(cfg: Config, deps: FixImageDeps): Promise<string> {
+  const pod = deps.hostname?.trim();
+  if (!pod) {
+    deps.log("fix-runner image: HOSTNAME is unset — falling back to RIGEL_FIX_RUNNER_IMAGE");
+    return cfg.fixRunnerImage;
+  }
+  let res: KubectlResult;
+  try {
+    res = await deps.kubectl([
+      "get", "pod", pod, "-n", cfg.stateNamespace, "-o", "jsonpath={.spec.containers[0].image}",
+    ]);
+  } catch (e) {
+    deps.log(`fix-runner image: self-lookup threw (${String(e)}) — falling back to RIGEL_FIX_RUNNER_IMAGE`);
+    return cfg.fixRunnerImage;
+  }
+  const image = res.stdout.trim();
+  if (res.code !== 0 || image === "") {
+    deps.log(`fix-runner image: self-lookup failed (exit ${res.code}) — falling back to RIGEL_FIX_RUNNER_IMAGE`);
+    return cfg.fixRunnerImage;
+  }
+  return image;
 }
 
 /** Read the kill-switch. Fail-closed: if the config ConfigMap is missing or

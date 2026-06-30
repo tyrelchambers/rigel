@@ -46,6 +46,7 @@ function rc(): RuntimeConfig {
     worker: { provider: "claude", model: "claude-sonnet-4-6" },
     supervisor: { provider: "claude", model: "claude-opus-4-8" },
     limits: { pollIntervalMs: 30000, maxPerResourcePerHour: 3, maxPerNight: 20, maxAttemptsPerIncident: 3, confirmPolls: 2, namespaces: [] },
+    autofix: { enabled: false, scope: { projects: [] }, maxPerDay: 5 },
   } as RuntimeConfig;
 }
 const INC = { incidentKind: "degradedDeployment", name: "api", namespace: "default", reason: "Unavailable" } as Incident;
@@ -90,5 +91,25 @@ describe("runSupervisor", () => {
   test("a fail-closed runModel result THROWS so the loop escalates (never auto-approves)", async () => {
     vi.spyOn(runModelMod, "runModel").mockResolvedValue({ text: "", costUsd: 0, isError: true, errorMessage: "no valid verdict after reprompt" });
     await expect(runSupervisor(rc(), INC, ACT, "a", "cmd")).rejects.toThrow(/verdict/i);
+  });
+
+  test("for an openFixPR action it judges FIX QUALITY (file content + minimal/root-cause/safe), not a kubectl command", async () => {
+    const FIX: SuggestedAction = {
+      label: "Open fix PR", kind: "openFixPR", source: "memos",
+      filePath: "apps/memos/deployment.yaml", content: "kind: Deployment\nimage: memos:0.24.1",
+      title: "Pin memos to a healthy tag", body: "The :latest tag CrashLoops.",
+    } as SuggestedAction;
+    const spy = vi.spyOn(runModelMod, "runModel").mockResolvedValue({
+      text: "{}", costUsd: 0, isError: false, structuredOutput: { decision: "approve", confidence: 0.8, reason: "minimal and correct" },
+    });
+    const out = await runSupervisor(rc(), INC, FIX, "the tag is wrong", "");
+    const prompt = spy.mock.calls[0]![0].prompt;
+    expect(prompt).toContain("apps/memos/deployment.yaml");
+    expect(prompt).toContain("kind: Deployment\nimage: memos:0.24.1");
+    expect(prompt).toMatch(/root cause/i);
+    expect(prompt).toMatch(/minimal/i);
+    expect(prompt).toMatch(/one file|single file|unrelated/i);
+    // Reuses the same approve/reject/escalate verdict space.
+    expect(out.verdict.decision).toBe("approve");
   });
 });
