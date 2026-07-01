@@ -134,3 +134,39 @@ describe("computeRelated", () => {
     expect(groups.find((g) => g.kind === "secrets")!.items.map((i) => i.name)).toEqual(["web-tls"]);
   });
 });
+
+describe("relatedKindsFor — jobs & cronjobs", () => {
+  it("job resolves pods + config kinds", () => {
+    expect(relatedKindsFor("job")).toEqual(["pods", "configmaps", "secrets", "persistentvolumeclaims"]);
+  });
+  it("cronjob resolves jobs", () => {
+    expect(relatedKindsFor("cronjob")).toEqual(["jobs"]);
+  });
+});
+
+describe("computeRelated — job", () => {
+  const jobObj = {
+    metadata: { name: "backup", namespace: "prod", uid: "j1" },
+    spec: { template: { spec: { containers: [{ envFrom: [{ secretRef: { name: "backup-creds" } }] }] } } },
+  };
+  it("finds pods owned by the job and secrets from its template", () => {
+    const podA = { metadata: { name: "backup-abc", namespace: "prod", uid: "p1", ownerReferences: [{ uid: "j1", kind: "Job" }] }, spec: { containers: [] }, status: { phase: "Succeeded", containerStatuses: [{ ready: true }] } };
+    const podB = { metadata: { name: "other-xyz", namespace: "prod", uid: "p2", ownerReferences: [{ uid: "zzz" }] }, spec: { containers: [] }, status: { phase: "Running" } };
+    const groups = computeRelated("job", jobObj, store({ pods: [podA, podB], secrets: [{ metadata: { name: "backup-creds", namespace: "prod", uid: "s1" } }] }));
+    const pods = groups.find((g) => g.kind === "pods");
+    expect(pods?.items.map((i) => i.name)).toEqual(["backup-abc"]);
+    const secrets = groups.find((g) => g.kind === "secrets");
+    expect(secrets?.items.map((i) => i.name)).toEqual(["backup-creds"]);
+  });
+});
+
+describe("computeRelated — cronjob", () => {
+  const cronObj = { metadata: { name: "nightly", namespace: "prod", uid: "cj1" } };
+  it("finds jobs owned by the cronjob", () => {
+    const jobA = { metadata: { name: "nightly-1", namespace: "prod", uid: "j1", ownerReferences: [{ uid: "cj1", kind: "CronJob" }] } };
+    const jobB = { metadata: { name: "unrelated", namespace: "prod", uid: "j2", ownerReferences: [{ uid: "other" }] } };
+    const groups = computeRelated("cronjob", cronObj, store({ jobs: [jobA, jobB] }));
+    const jobs = groups.find((g) => g.kind === "jobs");
+    expect(jobs?.items.map((i) => i.name)).toEqual(["nightly-1"]);
+  });
+});

@@ -29,6 +29,7 @@ const GROUP_META: Record<string, { label: string; icon: string }> = {
   deployments: { label: "Deployment", icon: "layers" },
   statefulsets: { label: "StatefulSet", icon: "layers" },
   daemonsets: { label: "DaemonSet", icon: "layers" },
+  jobs: { label: "Jobs", icon: "layers" },
   ingresses: { label: "Ingresses", icon: "route" },
   nodes: { label: "Node", icon: "server" },
 };
@@ -85,6 +86,10 @@ export function relatedKindsFor(sourceKind: string): string[] {
       return ["services", "pods", "secrets"];
     case "service":
       return ["pods", "ingresses"];
+    case "job":
+      return ["pods", "configmaps", "secrets", "persistentvolumeclaims"];
+    case "cronjob":
+      return ["jobs"];
     default:
       return [];
   }
@@ -93,6 +98,11 @@ export function relatedKindsFor(sourceKind: string): string[] {
 function ns(o: Obj): string { return o?.metadata?.namespace ?? "default"; }
 function values(slice: Slice | undefined): Obj[] { return slice ? Object.values(slice) : []; }
 function sameNs(o: Obj, n: string): boolean { return (o?.metadata?.namespace ?? "default") === n; }
+
+function ownedByUid(child: Obj, uid: string | undefined): boolean {
+  if (!uid) return false;
+  return (child?.metadata?.ownerReferences ?? []).some((r: Obj) => r?.uid === uid);
+}
 
 function podStatus(pod: Obj): RelatedStatus {
   const phase = pod?.status?.phase;
@@ -185,6 +195,20 @@ export function computeRelated(sourceKind: string, source: Obj, store: Store): R
     const name = source?.metadata?.name;
     const ings = values(store.ingresses).filter((ing) => sameNs(ing, n) && ingressReferencesService(ing, name));
     groups.push(group("ingresses", ings.map((ing) => refFromObj("ingresses", ing))));
+  } else if (sourceKind === "job") {
+    const uid = source?.metadata?.uid;
+    groups.push(group("pods", values(store.pods)
+      .filter((p) => sameNs(p, n) && ownedByUid(p, uid))
+      .map((p) => ({ ...refFromObj("pods", p, podStatus(p)), node: p?.spec?.nodeName }))));
+    const refs = podRefs(source?.spec?.template?.spec);
+    groups.push(group("configmaps", refsByName("configmaps", refs.configmaps, n, store.configmaps)));
+    groups.push(group("secrets", refsByName("secrets", refs.secrets, n, store.secrets)));
+    groups.push(group("persistentvolumeclaims", refsByName("persistentvolumeclaims", refs.pvcs, n, store.persistentvolumeclaims)));
+  } else if (sourceKind === "cronjob") {
+    const uid = source?.metadata?.uid;
+    groups.push(group("jobs", values(store.jobs)
+      .filter((j) => sameNs(j, n) && ownedByUid(j, uid))
+      .map((j) => refFromObj("jobs", j))));
   }
 
   return groups.filter((g): g is RelatedGroup => g !== null);
