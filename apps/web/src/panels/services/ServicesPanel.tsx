@@ -9,13 +9,11 @@ import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-m
 import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
-import { RelatedResources } from "@/panels/components/RelatedResources";
 import { useFocusRow } from "@/panels/components/useFocusRow";
 import { useForwards } from "@/lib/api";
 import type { Service } from "./types";
 import type { Pod } from "../pods/types";
 import {
-  relativeAge,
   typeLabel,
   isExternalName,
   portSummaries,
@@ -28,6 +26,7 @@ import { getForwardingServices } from "./portForward";
 import { ActiveForwardsList } from "./ActiveForwardsList";
 import { PortForwardDialog, type PortForwardTarget } from "./PortForwardDialog";
 import { PanelHeader } from "@/panels/components/PanelHeader";
+import { ServiceDetail } from "./ServiceDetail";
 
 // ---------------------------------------------------------------------------
 // IMPLEMENTED: Port-forward (docs/parity/portforward.md).
@@ -307,79 +306,6 @@ export default function ServicesPanel() {
         activeForwards={forwards}
         onClose={() => setForwardTarget(null)}
       />
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Expanded detail: PORTS, SELECTOR (if any), EXTERNAL (if any)
-// ---------------------------------------------------------------------------
-
-function ServiceDetail({ service }: { service: Service }) {
-  const ports = service.spec?.ports ?? [];
-  const selector = service.spec?.selector ?? {};
-  const selectorEntries = Object.entries(selector);
-  const external = externalAddress(service);
-
-  return (
-    <div className="space-y-3">
-      {/* PORTS */}
-      <div className="space-y-1">
-        <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-          Ports
-        </h3>
-        {ports.length === 0 ? (
-          <p className="text-xs text-muted-foreground">no ports</p>
-        ) : (
-          <ul className="space-y-0.5 text-xs font-mono">
-            {ports.map((p, i) => {
-              const target = p.targetPort != null ? String(p.targetPort) : `${p.port}`;
-              const proto = p.protocol ?? "TCP";
-              const node = p.nodePort != null ? `, NodePort: ${p.nodePort}` : "";
-              const label = p.name ? `${p.name} ` : "";
-              return (
-                <li key={`${p.port}-${i}`} style={{ color: "var(--fg-secondary)" }}>
-                  {label}({p.port} → {target} / {proto}{node})
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-
-      {/* SELECTOR (only when non-empty) */}
-      {selectorEntries.length > 0 && (
-        <div className="space-y-1">
-          <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-            Selector
-          </h3>
-          <ul className="space-y-0.5 text-xs font-mono" style={{ color: "var(--fg-secondary)" }}>
-            {selectorEntries.map(([k, v]) => (
-              <li key={k}>
-                {k}={v}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* EXTERNAL (only when present) */}
-      {external && (
-        <div className="space-y-1">
-          <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-            External
-          </h3>
-          <p className="text-xs font-mono break-all" style={{ color: "var(--fg-secondary)" }}>{external}</p>
-        </div>
-      )}
-
-      {/* Age */}
-      <div style={{ color: "var(--fg-tertiary)", fontFamily: "ui-monospace, monospace", fontSize: 10 }}>
-        Age: {relativeAge(service.metadata.creationTimestamp)} ago
-      </div>
-
-      {/* Related resources */}
-      <RelatedResources sourceKind="service" source={service} />
     </div>
   );
 }

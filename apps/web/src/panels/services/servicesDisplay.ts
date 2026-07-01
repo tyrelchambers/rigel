@@ -110,3 +110,27 @@ export function sortServices(services: Service[]): Service[] {
     return a.metadata.name.localeCompare(b.metadata.name);
   });
 }
+
+/**
+ * Long, humanized age from an ISO timestamp: "165 days", "1 hour", "3 minutes",
+ * "just now". `—` when missing/invalid. Pass `now` for test determinism.
+ * (Distinct from the compact `relativeAge` — this reads as words in the detail view.)
+ */
+export function humanAge(iso: string | undefined, now: number = Date.now()): string {
+  if (!iso) return "—";
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return "—";
+  const s = Math.max(0, Math.floor((now - then) / 1000));
+  const units: [number, string][] = [
+    [86400, "day"],
+    [3600, "hour"],
+    [60, "minute"],
+  ];
+  for (const [secs, label] of units) {
+    if (s >= secs) {
+      const n = Math.floor(s / secs);
+      return `${n} ${label}${n === 1 ? "" : "s"}`;
+    }
+  }
+  return "just now";
+}
