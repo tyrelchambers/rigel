@@ -1,5 +1,5 @@
 import { describe, expect, it, test, vi } from "vitest";
-import { parseWindow, inWindow, decideAutonomy, readRuntimeConfig, parseAlertRulesFromConfig, parseMatrixConfig, parseAutofixConfig, parseAutofixScope, parseAutofixMaxPerDay } from "./runtimeConfig.js";
+import { parseWindow, inWindow, decideAutonomy, readRuntimeConfig, parseAlertRulesFromConfig, parseMatrixConfig, parseAutofixConfig, parseAutofixScope, parseAutofixMaxPerDay, parseHHMM, parseDigestsFromConfig, parseDigestRunNow } from "./runtimeConfig.js";
 import { kubectl } from "./kubectl.js";
 import type { Config } from "./config.js";
 
@@ -295,5 +295,37 @@ describe("parseMatrixConfig", () => {
       { MATRIX_HOMESERVER_URL: "   " } as NodeJS.ProcessEnv,
     );
     expect(m.homeserverUrl).toBe("https://config-hs");
+  });
+});
+
+describe("parseHHMM", () => {
+  it("parses to minutes-of-day", () => {
+    expect(parseHHMM("07:00")).toBe(420);
+    expect(parseHHMM("00:30")).toBe(30);
+  });
+  it("returns null on garbage", () => {
+    expect(parseHHMM("25:00")).toBeNull();
+    expect(parseHHMM("x")).toBeNull();
+  });
+});
+
+describe("parseDigestsFromConfig", () => {
+  it("parses the digests key, tolerant of junk", () => {
+    expect(parseDigestsFromConfig({})).toEqual([]);
+    expect(parseDigestsFromConfig({ digests: "nope" })).toEqual([]);
+    const one = JSON.stringify([{ id: "a", enabled: true, label: "M", channel: "signal", days: [1], time: "07:00", timezone: "UTC", lookback: { mode: "sinceLast" }, createdAt: "" }]);
+    expect(parseDigestsFromConfig({ digests: one })).toHaveLength(1);
+  });
+});
+
+describe("parseDigestRunNow", () => {
+  it("parses a run-now token", () => {
+    expect(parseDigestRunNow({})).toBeUndefined();
+    expect(parseDigestRunNow({ digestRunNow: JSON.stringify({ id: "a", mode: "preview", token: "t" }) }))
+      .toEqual({ id: "a", mode: "preview", token: "t" });
+  });
+  it("returns undefined on junk or bad mode", () => {
+    expect(parseDigestRunNow({ digestRunNow: "x" })).toBeUndefined();
+    expect(parseDigestRunNow({ digestRunNow: JSON.stringify({ id: "a", mode: "boom", token: "t" }) })).toBeUndefined();
   });
 });

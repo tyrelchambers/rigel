@@ -119,6 +119,31 @@ export interface PullRequestRecord {
   kind: "config";
 }
 
+/** A compact, persisted record of a confirmed incident the agent observed in the
+ * window, so a scheduled digest can describe everything that happened — not only
+ * what it acted on (the audit log). Deliberately tiny: NO analysis/detail blobs,
+ * to protect the assistant-state ConfigMap size. Upserted by fingerprint. */
+export interface IncidentRecord {
+  at: string;
+  lastSeenAt: string;
+  fingerprint: string;
+  location: string;
+  reason: string;
+  disposition: "autoFixed" | "queued" | "flagged" | "failed" | "resolved";
+  resolvedAt?: string;
+  note?: string;
+}
+
+/** Per-subscription digest send-state. Agent-owned, persisted in assistant-state. */
+export interface DigestState {
+  /** subscriptionId -> ISO send time. Restart-safe gating; prevents double-sends. */
+  lastSentAt: Record<string, string>;
+  /** Idempotency token for the server-triggered "Send now"/"Preview". */
+  lastRunNowToken?: string;
+  /** Last rendered preview text, for the web to show. */
+  lastPreview?: { id: string; at: string; text: string };
+}
+
 export interface AgentStatus {
   heartbeatAt: string;
   enabled: boolean;
@@ -144,6 +169,88 @@ export interface AssistantState {
    *  one-shot fix-runner Job finishes. Capped, newest-first. Absent until the
    *  first fix is reconciled. */
   pullRequests?: PullRequestRecord[];
+  /** Rolling incident history for digests. Capped, newest-first. */
+  incidents?: IncidentRecord[];
+  /** Scheduled-digest send-state. */
+  digestState?: DigestState;
+}
+
+/** Cap on the rolling incident history, and the max age before pruning. */
+export const MAX_INCIDENTS = 300;
+export const INCIDENT_MAX_AGE_MS = 14 * 24 * 3_600_000;
+
+/** Shared cap + age-prune (newest-first, relative to a reference instant). */
+function capPrune(list: IncidentRecord[], refMs: number, max: number): IncidentRecord[] {
+  const cutoff = refMs - INCIDENT_MAX_AGE_MS;
+  return list
+    .filter((r) => {
+      const t = Date.parse(r.lastSeenAt);
+      return !Number.isFinite(t) || t >= cutoff;
+    })
+    .slice(0, max);
+}
+
+/** Upsert an incident by fingerprint, SETTING its disposition. An OPEN (unresolved)
+ * record with the same fingerprint is refreshed in place (preserving first-seen
+ * `at`, advancing `lastSeenAt`/`disposition`/`note`); otherwise it is prepended.
+ * Used by the remediate funnel (record()). Pure — never mutates the input. */
+export function recordIncident(state: AssistantState, rec: IncidentRecord, max = MAX_INCIDENTS): AssistantState {
+  const existing = state.incidents ?? [];
+  const idx = existing.findIndex((r) => r.fingerprint === rec.fingerprint && r.disposition !== "resolved");
+  let next: IncidentRecord[];
+  if (idx >= 0) {
+    const cur = existing[idx]!;
+    const merged: IncidentRecord = { ...cur, lastSeenAt: rec.lastSeenAt, disposition: rec.disposition, note: rec.note ?? cur.note };
+    next = [merged, ...existing.slice(0, idx), ...existing.slice(idx + 1)];
+  } else {
+    next = [rec, ...existing];
+  }
+  return { ...state, incidents: capPrune(next, Date.parse(rec.lastSeenAt), max) };
+}
+
+/** Note an incident sighting WITHOUT changing an existing record's disposition:
+ * create a "flagged" record if absent, else just refresh `lastSeenAt`. Used by the
+ * always-on observe phase so it never downgrades a disposition the remediate phase
+ * set (e.g. "autoFixed"/"queued"). Pure. */
+export function touchIncident(
+  state: AssistantState,
+  sight: { at: string; lastSeenAt: string; fingerprint: string; location: string; reason: string },
+  max = MAX_INCIDENTS,
+): AssistantState {
+  const existing = state.incidents ?? [];
+  const idx = existing.findIndex((r) => r.fingerprint === sight.fingerprint && r.disposition !== "resolved");
+  if (idx >= 0) {
+    const cur = existing[idx]!;
+    const merged: IncidentRecord = { ...cur, lastSeenAt: sight.lastSeenAt };
+    const next = [merged, ...existing.slice(0, idx), ...existing.slice(idx + 1)];
+    return { ...state, incidents: capPrune(next, Date.parse(sight.lastSeenAt), max) };
+  }
+  const rec: IncidentRecord = { ...sight, disposition: "flagged" };
+  return { ...state, incidents: capPrune([rec, ...existing], Date.parse(sight.lastSeenAt), max) };
+}
+
+/** Mark the open record for `fingerprint` resolved (idempotent no-op otherwise). */
+export function resolveIncident(state: AssistantState, fingerprint: string, at: string): AssistantState {
+  const existing = state.incidents ?? [];
+  let changed = false;
+  const next = existing.map((r) => {
+    if (r.fingerprint === fingerprint && r.disposition !== "resolved") {
+      changed = true;
+      return { ...r, disposition: "resolved" as const, resolvedAt: at, lastSeenAt: at };
+    }
+    return r;
+  });
+  return changed ? { ...state, incidents: next } : state;
+}
+
+/** Map an audit outcome to an incident disposition. */
+export function dispositionFromAudit(entry: AuditEntry): IncidentRecord["disposition"] {
+  switch (entry.outcome as Outcome) {
+    case "success": return "autoFixed";
+    case "queued": return "queued";
+    case "failure": return "failed";
+    default: return "flagged"; // "skipped"
+  }
 }
 
 /** Cap on the agent-owned auto-silence list, so it can't grow without bound. On

@@ -12,6 +12,7 @@ import { AutoFixTab } from "../tabs/AutoFixTab";
 import { ActivityTab } from "../tabs/ActivityTab";
 import { SettingsTab } from "../tabs/SettingsTab";
 import { AgentsTab } from "../tabs/AgentsTab";
+import { ReportsTab } from "../tabs/ReportsTab";
 
 export function TabContent() {
   const { phase, d, tab } = useAssistantCtx();
@@ -57,6 +58,8 @@ export function TabContent() {
       return <AgentsTab />;
     case "activity":
       return <ActivityTab />;
+    case "reports":
+      return <ReportsTab />;
     case "settings":
       return <SettingsTab />;
   }

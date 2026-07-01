@@ -1,4 +1,4 @@
-import { test, expect } from "vitest";
+import { test, it, expect } from "vitest";
 import {
   DEFAULT_INSTALL_CONFIG,
   SECRET_NAME,
@@ -1206,4 +1206,21 @@ describe("autofixConfigUpdates", () => {
     // A scope-only update leaves enabled/maxPerDay untouched.
     expect(Object.keys(autofixConfigUpdates({ scope: { projects: ["x/y"] } }))).toEqual(["autofixScope"]);
   });
+});
+
+// ---------------------------------------------------------------------------
+// digestState decode (Task 3 — scheduled digests)
+// ---------------------------------------------------------------------------
+
+it("decodes digestState (lastSentAt + lastPreview)", () => {
+  const raw = JSON.stringify({
+    updatedAt: "2026-06-30T07:00:00.000Z", audit: [], queue: [], report: "",
+    digestState: {
+      lastSentAt: { a: "2026-06-30T07:00:00.000Z" },
+      lastPreview: { id: "a", at: "2026-06-30T06:59:00.000Z", text: "All clear." },
+    },
+  });
+  const s = decodeClusterState(raw);
+  expect(s?.digestState?.lastSentAt.a).toBe("2026-06-30T07:00:00.000Z");
+  expect(s?.digestState?.lastPreview?.text).toBe("All clear.");
 });

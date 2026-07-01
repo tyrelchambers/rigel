@@ -2,6 +2,7 @@ import { kubectl } from "./kubectl.js";
 import type { Config } from "./config.js";
 import { parseAlertRules, type AlertRule } from "./alerts.js";
 import type { ProviderId, RoleSelection } from "./providers/types.js";
+import { parseDigests, type DigestSubscription } from "@rigel/k8s/src/digest.js";
 
 export interface OperationalLimits {
   pollIntervalMs: number;
@@ -69,6 +70,8 @@ export interface RuntimeConfig {
   supervisor: RoleSelection;
   limits: OperationalLimits;
   autofix: AutofixConfig;
+  digests: DigestSubscription[];
+  digestRunNow?: DigestRunNow;
 }
 
 /** Parse the autofix opt-in (`autofixEnabled`, default false) + scope
@@ -194,13 +197,48 @@ export function parseLimits(data: Record<string, string>, cfg: Config): Operatio
   };
 }
 
+/** Parse "HH:MM" (24h) into minutes-of-day. Null on malformed input. */
+export function parseHHMM(raw: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(raw.trim());
+  if (!m) return null;
+  const h = Number(m[1]), mi = Number(m[2]);
+  if (h > 23 || mi > 59) return null;
+  return h * 60 + mi;
+}
+
 /** Parse "HH:MM-HH:MM" into minutes-of-day. Null on malformed input. */
 export function parseWindow(raw: string): TimeWindow | null {
-  const m = /^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$/.exec(raw.trim());
+  const m = /^(.+)-(.+)$/.exec(raw.trim());
   if (!m) return null;
-  const sh = Number(m[1]), sm = Number(m[2]), eh = Number(m[3]), em = Number(m[4]);
-  if (sh > 23 || eh > 23 || sm > 59 || em > 59) return null;
-  return { startMin: sh * 60 + sm, endMin: eh * 60 + em };
+  const startMin = parseHHMM(m[1]!);
+  const endMin = parseHHMM(m[2]!);
+  if (startMin === null || endMin === null) return null;
+  return { startMin, endMin };
+}
+
+export function parseDigestsFromConfig(data: Record<string, string>): DigestSubscription[] {
+  return parseDigests(data["digests"]);
+}
+
+export interface DigestRunNow {
+  id: string;
+  mode: "send" | "preview";
+  token: string;
+}
+
+/** Parse the server-written `digestRunNow` trigger. Undefined on absence/junk. */
+export function parseDigestRunNow(data: Record<string, string>): DigestRunNow | undefined {
+  const raw = data["digestRunNow"];
+  if (!raw) return undefined;
+  try {
+    const o = JSON.parse(raw) as Partial<DigestRunNow>;
+    if (typeof o.id === "string" && typeof o.token === "string" && (o.mode === "send" || o.mode === "preview")) {
+      return { id: o.id, mode: o.mode, token: o.token };
+    }
+  } catch {
+    // fallthrough
+  }
+  return undefined;
 }
 
 /** Is minute-of-day `now` inside the window? Handles overnight wraparound. */
@@ -228,6 +266,7 @@ function disabledDefaults(cfg: Config): RuntimeConfig {
     supervisor: parseRoleSelection({}, "supervisor", cfg.supervisorModel),
     limits: parseLimits({}, cfg),
     autofix: parseAutofixConfig({}),
+    digests: [],
   };
 }
 
@@ -269,5 +308,7 @@ export async function readRuntimeConfig(cfg: Config): Promise<RuntimeConfig> {
     supervisor: parseRoleSelection(data, "supervisor", cfg.supervisorModel),
     limits: parseLimits(data, cfg),
     autofix: parseAutofixConfig(data),
+    digests: parseDigestsFromConfig(data),
+    digestRunNow: parseDigestRunNow(data),
   };
 }

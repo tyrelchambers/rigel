@@ -46,13 +46,18 @@ import {
   appendAudit,
   autoSilence,
   countFixPrBudget,
+  dispositionFromAudit,
   readState,
   reconcileQueue,
+  recordIncident,
+  resolveIncident,
   storeBackup,
+  touchIncident,
   writeState,
   type AssistantState,
   type AuditEntry,
 } from "./state.js";
+import { evaluateDigests } from "./digest.js";
 
 const VERSION = "0.1.0";
 
@@ -224,15 +229,13 @@ export async function tick(
     status: { heartbeatAt: ts, enabled: rc.enabled, version: VERSION },
   };
 
-  if (!rc.enabled) {
-    log("kill-switch is off — idle");
-    await writeState(cfg.stateConfigMap, cfg.stateNamespace, state);
-    return;
-  }
-
-  // Drop incidents the operator has silenced (known noise) — no detection,
-  // no action on those fingerprints. The agent's own auto-silence set (benign
-  // incidents the worker judged "acceptable") is unioned in, so they don't re-fire.
+  // ---- OBSERVE (always runs, even when the kill-switch is off) ----
+  // Detection + the rolling incident history + scheduled digests must stay live
+  // while remediation is paused, so this is no longer gated on rc.enabled — only the
+  // remediate phase below is. Drop incidents the operator has silenced (known noise)
+  // — no detection, no action on those fingerprints. The agent's own auto-silence set
+  // (benign incidents the worker judged "acceptable") is unioned in so they don't
+  // re-fire.
   const detection = await detectAll(cfg, rc.autofix);
   // Live namespace scope from rc.limits (was deploy-time cfg.namespaces in detectAll).
   const nsAllow = rc.limits.namespaces;
@@ -245,52 +248,12 @@ export async function tick(
     return !rc.silenced.has(fp) && !autoSilenced.has(fp);
   });
 
-  // Re-validate the approval queue against live detection: auto-clear queued
-  // suggestions whose incident has cleared (or whose resource is gone), so the
-  // queue stays trustworthy.
-  {
-    const presentNow = new Set(incidents.map(fingerprint));
-    const checkedKinds = new Set<string>();
-    if (detection.podsOk) checkedKinds.add("unhealthyPod");
-    // Only treat loggedError absence as "resolved" when the log scan actually ran
-    // this tick (autofix on + in-scope pods); otherwise a disabled/skipped scan
-    // would wrongly auto-clear a previously-queued loggedError item.
-    if (detection.logScanned) checkedKinds.add("loggedError");
-    if (detection.depsOk) checkedKinds.add("degradedDeployment");
-    const recon = reconcileQueue(state.queue, presentNow, checkedKinds, now, cfg.queueTtlMs);
-    if (recon.cleared.length > 0) {
-      state = { ...state, queue: recon.kept };
-      for (const c of recon.cleared) {
-        state = appendAudit(
-          state,
-          {
-            at: ts, fingerprint: c.item.fingerprint ?? "", incident: c.item.incident,
-            proposal: c.item.suggestion, tier: "low", outcome: "skipped", detail: c.reason,
-          },
-          cfg.auditMaxEntries,
-        );
-      }
-      log(`reconcile: auto-cleared ${recon.cleared.length} moot queued item(s)`);
-    }
-  }
-
-  // Custom alert rules — deterministic, model-less, free-riding the fetch above.
-  const alertResult = evaluateAlertRules(
-    rc.alertRules,
-    detection.pods,
-    detection.deps,
-    state.alertState ?? emptyAlertState(),
-    now,
-  );
-  state = { ...state, alertState: alertResult.alertState };
-  for (const ev of alertResult.events) notifications.push(ev.message);
-
   const present = new Set(incidents.map(fingerprint));
-
   // Recovered incidents fall out of the debounce/handled tracking so a fresh
-  // recurrence re-triggers.
+  // recurrence re-triggers — and any open history record is marked resolved.
   for (const fp of [...loop.streaks.keys()]) {
     if (!present.has(fp)) {
+      state = resolveIncident(state, fp, ts);
       loop.streaks.delete(fp);
       loop.handled.delete(fp);
     }
@@ -305,423 +268,487 @@ export async function tick(
     return (loop.streaks.get(fp) ?? 0) >= rc.limits.confirmPolls && !loop.handled.has(fp);
   });
 
-  if (incidents.length > 0) {
-    log(`tick: ${incidents.length} present, confirmPolls=${rc.limits.confirmPolls}, streaks=[${[...loop.streaks.entries()].map(([k, v]) => `${k}=${v}`).join("; ")}], ${confirmed.length} confirmed, ${loop.handled.size} handled`);
+  // Note every confirmed incident in the rolling history (create as "flagged" if
+  // new, else just refresh lastSeenAt). touchIncident NEVER downgrades a disposition
+  // the remediate phase set via record(), so this is safe to run every tick.
+  for (const i of confirmed) {
+    const fp = fingerprint(i);
+    state = touchIncident(state, {
+      at: ts, lastSeenAt: ts, fingerprint: fp,
+      location: shortFingerprint(fp), reason: fp.split("|")[3] ?? "",
+    });
   }
-  if (confirmed.length > 0) log(`handling ${confirmed.length} confirmed incident(s)`);
 
-  // Resolve autofix eligibility ONCE per confirmed incident: the owning-Deployment
-  // walk (pod→ReplicaSet→Deployment for pod incidents) + the scope check + the
-  // GitOps-source lookup. Used twice: Stage A tells the worker it MAY open a fix PR
-  // (only when a source actually resolved), and Stage B reuses it to route an
-  // openFixPR proposal without re-resolving — and without the 2b bug of treating a
-  // pod name as a Deployment name. Short-circuits to no cluster IO when autofix is
-  // off / out of scope, so this is cheap when autofix isn't in play.
-  const eligibility = new Map<string, AutofixEligibility>(
-    await Promise.all(
-      confirmed.map(async (incident) => {
-        let e: AutofixEligibility;
-        try {
-          e = await resolveAutofixEligibility(rc.autofix, incident, detection.pods, {
-            resolveRepo: (ns, dep) => resolveWorkloadRepo({ kubectl }, ns, dep, cfg.stateNamespace),
-          });
-        } catch (err) {
-          // Conservative bias: a resolve failure (e.g. a kubectl spawn error that
-          // REJECTS, not just a non-zero exit) ⇒ not eligible ⇒ no PR. Never let it
-          // abort the tick — the rest of remediation (the verdict-independent
-          // kubectl path for every confirmed incident) must still run.
-          log(`eligibility resolve failed for ${fingerprint(incident)} — treating as not eligible: ${String(err)}`);
-          e = { inScope: false, repo: null };
-        }
-        return [fingerprint(incident), e] as const;
-      }),
-    ),
-  );
-
-  // Stage A: investigate every confirmed incident concurrently (bounded). The
-  // Worker model call is the slow, side-effect-free part, so overlapping the
-  // calls cuts wall-clock when several incidents land in one tick. The
-  // deterministic guardrails stay in Stage B below.
-  const packets = await diagnoseConfirmed(
+  // Fix-Job GC list is produced by the remediate phase but consumed after the
+  // durable write below, so it lives in the tick scope (not the remediate block).
+  let fixGc: string[] = [];
+  if (rc.enabled) {
+    // Re-validate the approval queue against live detection: auto-clear queued
+    // suggestions whose incident has cleared (or whose resource is gone), so the
+    // queue stays trustworthy.
     {
-      diagnose: (incident) => runWorker(rc, [incident], eligibility.get(fingerprint(incident))?.repo ?? null),
-      limit: cfg.maxConcurrentDiagnoses,
-    },
-    confirmed,
-  );
-
-  // Per-day fix-PR budget baseline, computed ONCE per tick before any dispatch:
-  // real opened PRs still inside the rolling 24h window PLUS the fix Jobs currently
-  // in flight (dispatched a prior tick, not yet reconciled into pullRequests). New
-  // dispatches this tick are added via fixPrsDispatchedThisTick below, so the cap
-  // holds even before the reconcile records them. The Jobs are listed ONCE (not
-  // re-listed per dispatch) to dodge read-after-write races; the in-tick counter
-  // covers same-tick dispatches. Independent of the kubectl circuit breaker (that
-  // caps per-resource-per-hour cluster mutations; this caps PR creation per day).
-  let fixBudgetBaseline = 0;
-  let fixPrsDispatchedThisTick = 0;
-  // Fail CLOSED: if the in-flight Job list can't be read this tick we can't verify
-  // how many fixes are already pending, so we DEFER all fix-PR dispatch rather than
-  // assume zero in-flight (which could open up to ~2x the cap). A non-zero exit
-  // (RBAC / 429 / timeout) or a spawn throw both surface as `null` from listFixJobs
-  // — a failed list is a DISTINCT call+verb from the dedup `get job` + `apply`, so it
-  // does NOT imply create would fail; assuming so was the I1 over-open hole.
-  let fixListUnreadable = false;
-  if (rc.autofix.enabled && confirmed.length > 0) {
-    let inFlight: unknown[] | null;
-    try {
-      inFlight = await fixReconcileDeps(cfg).listFixJobs();
-    } catch {
-      inFlight = null;
-    }
-    if (inFlight === null) {
-      fixListUnreadable = true;
-    } else {
-      fixBudgetBaseline = countFixPrBudget(state.pullRequests, inFlight.length, now);
-    }
-  }
-
-  // Stage B: decide + execute one incident at a time, in confirmed order, so the
-  // circuit breaker and audit log stay deterministic regardless of which
-  // diagnosis finished first.
-  for (const packet of packets) {
-    const incident = packet.incident;
-    const fp = fingerprint(incident);
-    const resourceKey = `${incident.namespace}/${incident.name}`;
-
-    // Diagnosed — mark handled so we don't re-dispatch next tick.
-    loop.handled.add(fp);
-
-    if (packet.error) {
-      // Fail closed: a worker THROW never results in an action.
-      const msg = packet.error;
-      state = workerAuthReport(state, msg);
-      state = record(state, cfg, {
-        at: ts, fingerprint: fp, incident: describe(incident), tier: "low",
-        outcome: "failure", detail: `worker failed (fail-closed): ${msg}`,
-      });
-      continue;
+      const presentNow = new Set(incidents.map(fingerprint));
+      const checkedKinds = new Set<string>();
+      if (detection.podsOk) checkedKinds.add("unhealthyPod");
+      // Only treat loggedError absence as "resolved" when the log scan actually ran
+      // this tick (autofix on + in-scope pods); otherwise a disabled/skipped scan
+      // would wrongly auto-clear a previously-queued loggedError item.
+      if (detection.logScanned) checkedKinds.add("loggedError");
+      if (detection.depsOk) checkedKinds.add("degradedDeployment");
+      const recon = reconcileQueue(state.queue, presentNow, checkedKinds, now, cfg.queueTtlMs);
+      if (recon.cleared.length > 0) {
+        state = { ...state, queue: recon.kept };
+        for (const c of recon.cleared) {
+          state = appendAudit(
+            state,
+            {
+              at: ts, fingerprint: c.item.fingerprint ?? "", incident: c.item.incident,
+              proposal: c.item.suggestion, tier: "low", outcome: "skipped", detail: c.reason,
+            },
+            cfg.auditMaxEntries,
+          );
+        }
+        log(`reconcile: auto-cleared ${recon.cleared.length} moot queued item(s)`);
+      }
     }
 
-    const analysis = packet.analysis;
-    const actions = packet.actions;
+    // Custom alert rules — deterministic, model-less, free-riding the fetch above.
+    const alertResult = evaluateAlertRules(
+      rc.alertRules,
+      detection.pods,
+      detection.deps,
+      state.alertState ?? emptyAlertState(),
+      now,
+    );
+    state = { ...state, alertState: alertResult.alertState };
+    for (const ev of alertResult.events) notifications.push(ev.message);
 
-    if (packet.failed) {
-      // The worker model call FAILED (provider/credential error) — NOT a triage.
-      // Record low-noise (skipped) and never act; surface an auth lapse loudly.
-      state = workerAuthReport(state, packet.verdictReason || analysis);
-      state = record(state, cfg, {
-        at: ts, fingerprint: fp, incident: describe(incident), tier: "low",
-        outcome: "skipped", detail: `worker unavailable (fail-closed): ${truncate(packet.verdictReason || analysis)}`,
-      });
-      continue;
+    if (incidents.length > 0) {
+      log(`tick: ${incidents.length} present, confirmPolls=${rc.limits.confirmPolls}, streaks=[${[...loop.streaks.entries()].map(([k, v]) => `${k}=${v}`).join("; ")}], ${confirmed.length} confirmed, ${loop.handled.size} handled`);
+    }
+    if (confirmed.length > 0) log(`handling ${confirmed.length} confirmed incident(s)`);
+
+    // Resolve autofix eligibility ONCE per confirmed incident: the owning-Deployment
+    // walk (pod→ReplicaSet→Deployment for pod incidents) + the scope check + the
+    // GitOps-source lookup. Used twice: Stage A tells the worker it MAY open a fix PR
+    // (only when a source actually resolved), and Stage B reuses it to route an
+    // openFixPR proposal without re-resolving — and without the 2b bug of treating a
+    // pod name as a Deployment name. Short-circuits to no cluster IO when autofix is
+    // off / out of scope, so this is cheap when autofix isn't in play.
+    const eligibility = new Map<string, AutofixEligibility>(
+      await Promise.all(
+        confirmed.map(async (incident) => {
+          let e: AutofixEligibility;
+          try {
+            e = await resolveAutofixEligibility(rc.autofix, incident, detection.pods, {
+              resolveRepo: (ns, dep) => resolveWorkloadRepo({ kubectl }, ns, dep, cfg.stateNamespace),
+            });
+          } catch (err) {
+            // Conservative bias: a resolve failure (e.g. a kubectl spawn error that
+            // REJECTS, not just a non-zero exit) ⇒ not eligible ⇒ no PR. Never let it
+            // abort the tick — the rest of remediation (the verdict-independent
+            // kubectl path for every confirmed incident) must still run.
+            log(`eligibility resolve failed for ${fingerprint(incident)} — treating as not eligible: ${String(err)}`);
+            e = { inScope: false, repo: null };
+          }
+          return [fingerprint(incident), e] as const;
+        }),
+      ),
+    );
+
+    // Stage A: investigate every confirmed incident concurrently (bounded). The
+    // Worker model call is the slow, side-effect-free part, so overlapping the
+    // calls cuts wall-clock when several incidents land in one tick. The
+    // deterministic guardrails stay in Stage B below.
+    const packets = await diagnoseConfirmed(
+      {
+        diagnose: (incident) => runWorker(rc, [incident], eligibility.get(fingerprint(incident))?.repo ?? null),
+        limit: cfg.maxConcurrentDiagnoses,
+      },
+      confirmed,
+    );
+
+    // Per-day fix-PR budget baseline, computed ONCE per tick before any dispatch:
+    // real opened PRs still inside the rolling 24h window PLUS the fix Jobs currently
+    // in flight (dispatched a prior tick, not yet reconciled into pullRequests). New
+    // dispatches this tick are added via fixPrsDispatchedThisTick below, so the cap
+    // holds even before the reconcile records them. The Jobs are listed ONCE (not
+    // re-listed per dispatch) to dodge read-after-write races; the in-tick counter
+    // covers same-tick dispatches. Independent of the kubectl circuit breaker (that
+    // caps per-resource-per-hour cluster mutations; this caps PR creation per day).
+    let fixBudgetBaseline = 0;
+    let fixPrsDispatchedThisTick = 0;
+    // Fail CLOSED: if the in-flight Job list can't be read this tick we can't verify
+    // how many fixes are already pending, so we DEFER all fix-PR dispatch rather than
+    // assume zero in-flight (which could open up to ~2x the cap). A non-zero exit
+    // (RBAC / 429 / timeout) or a spawn throw both surface as `null` from listFixJobs
+    // — a failed list is a DISTINCT call+verb from the dedup `get job` + `apply`, so it
+    // does NOT imply create would fail; assuming so was the I1 over-open hole.
+    let fixListUnreadable = false;
+    if (rc.autofix.enabled && confirmed.length > 0) {
+      let inFlight: unknown[] | null;
+      try {
+        inFlight = await fixReconcileDeps(cfg).listFixJobs();
+      } catch {
+        inFlight = null;
+      }
+      if (inFlight === null) {
+        fixListUnreadable = true;
+      } else {
+        fixBudgetBaseline = countFixPrBudget(state.pullRequests, inFlight.length, now);
+      }
     }
 
-    // Verdict-based SUPPRESSION (auto-silence / queue-note) applies ONLY to
-    // `loggedError` incidents — the log-scan signals where a benign or uncertain
-    // triage is the whole point of asking the worker. A STATUS incident
-    // (unhealthyPod / degradedDeployment) is NEVER silenced or queued because of
-    // the verdict: its kubectl remediation runs verdict-independently below, exactly
-    // as it did before triage existed. (The verdict still further gates an
-    // `openFixPR` for any kind — handled per-action.)
-    if (incident.incidentKind === "loggedError") {
-      if (packet.verdict === "acceptable") {
-        // Benign/expected — auto-silence the fingerprint so it doesn't re-fire.
-        if (!(state.autoSilenced ?? []).includes(fp)) newlySilenced++;
-        state = autoSilence(state, fp);
+    // Stage B: decide + execute one incident at a time, in confirmed order, so the
+    // circuit breaker and audit log stay deterministic regardless of which
+    // diagnosis finished first.
+    for (const packet of packets) {
+      const incident = packet.incident;
+      const fp = fingerprint(incident);
+      const resourceKey = `${incident.namespace}/${incident.name}`;
+
+      // Diagnosed — mark handled so we don't re-dispatch next tick.
+      loop.handled.add(fp);
+
+      if (packet.error) {
+        // Fail closed: a worker THROW never results in an action.
+        const msg = packet.error;
+        state = workerAuthReport(state, msg);
         state = record(state, cfg, {
           at: ts, fingerprint: fp, incident: describe(incident), tier: "low",
-          outcome: "skipped", detail: `acceptable — auto-silenced: ${truncate(packet.verdictReason || analysis)}`,
-          analysis: truncate(analysis),
+          outcome: "failure", detail: `worker failed (fail-closed): ${msg}`,
         });
-        log(`acceptable → silenced ${fp}`);
         continue;
       }
-      if (packet.verdict === "uncertain") {
-        // Not confident enough to act — queue a low-noise note for a human, no
-        // notification, no autonomous action (even if an action was proposed).
-        const note = packet.verdictReason.trim() || "uncertain — needs a human look";
-        state = queue(state, cfg, ts, fp, describe(incident), note, "uncertain — flagged for review");
+
+      const analysis = packet.analysis;
+      const actions = packet.actions;
+
+      if (packet.failed) {
+        // The worker model call FAILED (provider/credential error) — NOT a triage.
+        // Record low-noise (skipped) and never act; surface an auth lapse loudly.
+        state = workerAuthReport(state, packet.verdictReason || analysis);
         state = record(state, cfg, {
-          at: ts, fingerprint: fp, incident: describe(incident), proposal: note, tier: "low",
-          outcome: "queued", detail: `uncertain: ${truncate(packet.verdictReason || analysis)}`, analysis: truncate(analysis),
+          at: ts, fingerprint: fp, incident: describe(incident), tier: "low",
+          outcome: "skipped", detail: `worker unavailable (fail-closed): ${truncate(packet.verdictReason || analysis)}`,
         });
         continue;
       }
-    }
 
-    // Remediation. A kubectl action executes regardless of the verdict (the
-    // classifier / circuit breaker / MEDIUM supervisor below are the real safety
-    // net); an `openFixPR` additionally requires an "actionable" verdict (gated in
-    // its own branch). No proposed action ⇒ nothing to do (skipped, low-noise).
-    if (!actions || actions.length === 0) {
-      state = record(state, cfg, {
-        at: ts, fingerprint: fp, incident: describe(incident), tier: "low",
-        outcome: "skipped", detail: truncate(analysis),
-      });
-      continue;
-    }
+      // Verdict-based SUPPRESSION (auto-silence / queue-note) applies ONLY to
+      // `loggedError` incidents — the log-scan signals where a benign or uncertain
+      // triage is the whole point of asking the worker. A STATUS incident
+      // (unhealthyPod / degradedDeployment) is NEVER silenced or queued because of
+      // the verdict: its kubectl remediation runs verdict-independently below, exactly
+      // as it did before triage existed. (The verdict still further gates an
+      // `openFixPR` for any kind — handled per-action.)
+      if (incident.incidentKind === "loggedError") {
+        if (packet.verdict === "acceptable") {
+          // Benign/expected — auto-silence the fingerprint so it doesn't re-fire.
+          if (!(state.autoSilenced ?? []).includes(fp)) newlySilenced++;
+          state = autoSilence(state, fp);
+          state = record(state, cfg, {
+            at: ts, fingerprint: fp, incident: describe(incident), tier: "low",
+            outcome: "skipped", detail: `acceptable — auto-silenced: ${truncate(packet.verdictReason || analysis)}`,
+            analysis: truncate(analysis),
+          });
+          log(`acceptable → silenced ${fp}`);
+          continue;
+        }
+        if (packet.verdict === "uncertain") {
+          // Not confident enough to act — queue a low-noise note for a human, no
+          // notification, no autonomous action (even if an action was proposed).
+          const note = packet.verdictReason.trim() || "uncertain — needs a human look";
+          state = queue(state, cfg, ts, fp, describe(incident), note, "uncertain — flagged for review");
+          state = record(state, cfg, {
+            at: ts, fingerprint: fp, incident: describe(incident), proposal: note, tier: "low",
+            outcome: "queued", detail: `uncertain: ${truncate(packet.verdictReason || analysis)}`, analysis: truncate(analysis),
+          });
+          continue;
+        }
+      }
 
-    const action = actions[0]!;
-
-    // Repo-fix proposals (openFixPR) never mutate the cluster — they open a PR
-    // against the workload's GitOps source. They are routed entirely off the
-    // kubectl/preview path (previewCommand / executeAction THROW for openFixPR), so
-    // an openFixPR can NEVER reach the kubectl executor. Gating, in order:
-    //   1. the verdict must be "actionable" — a non-actionable verdict means no PR;
-    //   2. the proposal must be DISPATCHABLE (in scope + a resolved GitOps source) —
-    //      otherwise dispatchRepoFix records the precise skip and no review is spent;
-    //   3. the adversarial fix-quality supervisor (buildFixPrompt) must APPROVE the
-    //      proposed file change before a PR is opened on the user's behalf —
-    //      reject ⇒ skip, escalate / supervisor-error ⇒ queue for a human.
-    // Eligibility is reused from Stage A (the owning-Deployment walk), not
-    // re-derived from the action (which mistook a pod name for a Deployment — 2b).
-    if (isRepoFixAction(action.kind)) {
-      if (packet.verdict !== "actionable") {
+      // Remediation. A kubectl action executes regardless of the verdict (the
+      // classifier / circuit breaker / MEDIUM supervisor below are the real safety
+      // net); an `openFixPR` additionally requires an "actionable" verdict (gated in
+      // its own branch). No proposed action ⇒ nothing to do (skipped, low-noise).
+      if (!actions || actions.length === 0) {
         state = record(state, cfg, {
-          at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label, tier: "medium",
-          outcome: "skipped",
-          detail: `openFixPR proposed, but the worker verdict was "${packet.verdict}" (not actionable) — no PR`,
-          analysis: truncate(analysis),
+          at: ts, fingerprint: fp, incident: describe(incident), tier: "low",
+          outcome: "skipped", detail: truncate(analysis),
         });
         continue;
       }
-      const e = eligibility.get(fp) ?? { inScope: false, repo: null };
-      if (!e.inScope || !e.repo) {
-        // Not dispatchable (autofix off / out of scope / not GitOps-tracked): let
-        // dispatchRepoFix record the exact skip — an adversarial review of a fix
-        // that can never open a PR would be wasted. The early-return skip guards
-        // run BEFORE any Job/ConfigMap creation, so this path never creates a Job.
+
+      const action = actions[0]!;
+
+      // Repo-fix proposals (openFixPR) never mutate the cluster — they open a PR
+      // against the workload's GitOps source. They are routed entirely off the
+      // kubectl/preview path (previewCommand / executeAction THROW for openFixPR), so
+      // an openFixPR can NEVER reach the kubectl executor. Gating, in order:
+      //   1. the verdict must be "actionable" — a non-actionable verdict means no PR;
+      //   2. the proposal must be DISPATCHABLE (in scope + a resolved GitOps source) —
+      //      otherwise dispatchRepoFix records the precise skip and no review is spent;
+      //   3. the adversarial fix-quality supervisor (buildFixPrompt) must APPROVE the
+      //      proposed file change before a PR is opened on the user's behalf —
+      //      reject ⇒ skip, escalate / supervisor-error ⇒ queue for a human.
+      // Eligibility is reused from Stage A (the owning-Deployment walk), not
+      // re-derived from the action (which mistook a pod name for a Deployment — 2b).
+      if (isRepoFixAction(action.kind)) {
+        if (packet.verdict !== "actionable") {
+          state = record(state, cfg, {
+            at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label, tier: "medium",
+            outcome: "skipped",
+            detail: `openFixPR proposed, but the worker verdict was "${packet.verdict}" (not actionable) — no PR`,
+            analysis: truncate(analysis),
+          });
+          continue;
+        }
+        const e = eligibility.get(fp) ?? { inScope: false, repo: null };
+        if (!e.inScope || !e.repo) {
+          // Not dispatchable (autofix off / out of scope / not GitOps-tracked): let
+          // dispatchRepoFix record the exact skip — an adversarial review of a fix
+          // that can never open a PR would be wasted. The early-return skip guards
+          // run BEFORE any Job/ConfigMap creation, so this path never creates a Job.
+          const outcome = await dispatchRepoFix(repoFixDeps(), state, {
+            at: ts, fingerprint: fp, incident: describe(incident), action, analysis,
+            repo: e.repo, inScope: e.inScope, auditMaxEntries: cfg.auditMaxEntries,
+            namespace: cfg.stateNamespace, image: cfg.fixRunnerImage,
+          });
+          state = outcome.state;
+          if (outcome.notification) notifications.push(outcome.notification);
+          continue;
+        }
+        // Per-day fix-PR budget cap: at most rc.autofix.maxPerDay opened PRs in a
+        // rolling 24h. Checked BEFORE the fix-quality supervisor so an exhausted
+        // budget never spends an Opus review, and BEFORE any Job is created, so we
+        // can never open more than the cap. An unreadable in-flight list defers ALL
+        // dispatch this tick (fail closed). Skipped fixes are recorded for the audit.
+        const cap = rc.autofix.maxPerDay;
+        if (fixListUnreadable || fixBudgetBaseline + fixPrsDispatchedThisTick >= cap) {
+          const detail = fixListUnreadable
+            ? "fix-PR budget unverifiable (the in-flight fix-Job list was unreadable this tick): deferring"
+            : `daily fix-PR budget reached (${cap}/${cap}): not opening another fix PR until a slot frees up`;
+          state = record(state, cfg, {
+            at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
+            tier: "medium", outcome: "skipped", detail, analysis: truncate(analysis),
+          });
+          log(fixListUnreadable
+            ? `fix-PR budget unverifiable (in-flight Job list unreadable); skipping ${action.label}`
+            : `fix-PR budget reached (${cap}/${cap}); skipping ${action.label}`);
+          continue;
+        }
+        // Dispatchable: the fix-quality supervisor judges the PROPOSED FILE CHANGE
+        // (root-cause / minimal / safe-to-merge), NOT a kubectl command — pass an
+        // empty command so previewCommand (which THROWS for openFixPR) is never run.
+        let sup: SupervisorOutput;
+        try {
+          sup = await runSupervisor(rc, incident, action, analysis, "");
+        } catch (err) {
+          // Fail closed: supervisor unreachable / malformed verdict → never open a PR.
+          state = queue(state, cfg, ts, fp, describe(incident), action.label, "fix PR — supervisor error (fail-closed)", action);
+          state = record(state, cfg, {
+            at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
+            tier: "medium", verdict: "escalated", outcome: "queued",
+            detail: `fix-quality supervisor failed (fail-closed): ${String(err)}`,
+          });
+          continue;
+        }
+        if (sup.verdict.decision === "reject") {
+          state = record(state, cfg, {
+            at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
+            tier: "medium", verdict: "rejected", outcome: "skipped",
+            detail: `Opus rejected the fix (conf ${sup.verdict.confidence.toFixed(2)}): ${sup.verdict.reason}`, analysis: truncate(analysis),
+          });
+          continue;
+        }
+        if (sup.verdict.decision === "escalate") {
+          state = queue(state, cfg, ts, fp, describe(incident), action.label, `fix PR — Opus escalated: ${sup.verdict.reason}`, action);
+          state = record(state, cfg, {
+            at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
+            tier: "medium", verdict: "escalated", outcome: "queued",
+            detail: `Opus escalated the fix (conf ${sup.verdict.confidence.toFixed(2)}): ${sup.verdict.reason}`, analysis: truncate(analysis),
+          });
+          notifications.push(`▸ Needs approval (Opus escalated fix PR): ${action.label} — ${describe(incident)}`);
+          continue;
+        }
+        // approve → create the fix ConfigMap + Job via the seam (dispatchRepoFix
+        // queues it pending the fix-runner, which opens the actual PR).
+        log(`Opus approved fix PR (conf ${sup.verdict.confidence.toFixed(2)}): ${action.label}`);
         const outcome = await dispatchRepoFix(repoFixDeps(), state, {
           at: ts, fingerprint: fp, incident: describe(incident), action, analysis,
           repo: e.repo, inScope: e.inScope, auditMaxEntries: cfg.auditMaxEntries,
           namespace: cfg.stateNamespace, image: cfg.fixRunnerImage,
         });
         state = outcome.state;
-        if (outcome.notification) notifications.push(outcome.notification);
+        if (outcome.notification) {
+          notifications.push(outcome.notification);
+          // A fix is now in flight (Job created, or already existed) — charge it to
+          // the rolling budget so further dispatches THIS tick respect the cap.
+          fixPrsDispatchedThisTick++;
+        }
         continue;
       }
-      // Per-day fix-PR budget cap: at most rc.autofix.maxPerDay opened PRs in a
-      // rolling 24h. Checked BEFORE the fix-quality supervisor so an exhausted
-      // budget never spends an Opus review, and BEFORE any Job is created, so we
-      // can never open more than the cap. An unreadable in-flight list defers ALL
-      // dispatch this tick (fail closed). Skipped fixes are recorded for the audit.
-      const cap = rc.autofix.maxPerDay;
-      if (fixListUnreadable || fixBudgetBaseline + fixPrsDispatchedThisTick >= cap) {
-        const detail = fixListUnreadable
-          ? "fix-PR budget unverifiable (the in-flight fix-Job list was unreadable this tick): deferring"
-          : `daily fix-PR budget reached (${cap}/${cap}): not opening another fix PR until a slot frees up`;
+
+      const tier = classifyRisk(action.kind);
+      const tierStr = tier === RiskTier.Medium ? "medium" : "low";
+
+      if (tier === RiskTier.Blocked) {
+        state = queue(state, cfg, ts, fp, describe(incident), action.label, "destructive — RBAC-blocked; run manually in Rigel");
         state = record(state, cfg, {
           at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-          tier: "medium", outcome: "skipped", detail, analysis: truncate(analysis),
+          tier: "blocked", outcome: "queued", detail: "queued for human (destructive)", analysis: truncate(analysis),
         });
-        log(fixListUnreadable
-          ? `fix-PR budget unverifiable (in-flight Job list unreadable); skipping ${action.label}`
-          : `fix-PR budget reached (${cap}/${cap}); skipping ${action.label}`);
+        notifications.push(`▸ Needs approval (destructive): ${action.label} — ${describe(incident)}`);
         continue;
       }
-      // Dispatchable: the fix-quality supervisor judges the PROPOSED FILE CHANGE
-      // (root-cause / minimal / safe-to-merge), NOT a kubectl command — pass an
-      // empty command so previewCommand (which THROWS for openFixPR) is never run.
-      let sup: SupervisorOutput;
+
+      // MEDIUM actions must clear the adversarial Opus supervisor first. LOW
+      // actions execute on the deterministic guardrails alone.
+      let execVerdict: "auto" | "approved" = "auto";
+      if (tier === RiskTier.Medium) {
+        const command = previewCommand(action);
+        let sup: SupervisorOutput;
+        try {
+          sup = await runSupervisor(rc, incident, action, analysis, command);
+        } catch (e) {
+          // Fail closed: supervisor unreachable / malformed verdict → never act.
+          state = queue(state, cfg, ts, fp, describe(incident), action.label, "medium-risk — supervisor error (fail-closed)", action);
+          state = record(state, cfg, {
+            at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
+            tier: "medium", verdict: "escalated", outcome: "queued", detail: `supervisor failed (fail-closed): ${String(e)}`,
+          });
+          continue;
+        }
+        if (sup.verdict.decision === "reject") {
+          state = record(state, cfg, {
+            at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
+            tier: "medium", verdict: "rejected", outcome: "skipped",
+            detail: `Opus rejected (conf ${sup.verdict.confidence.toFixed(2)}): ${sup.verdict.reason}`,
+          });
+          continue;
+        }
+        if (sup.verdict.decision === "escalate") {
+          state = queue(state, cfg, ts, fp, describe(incident), action.label, `medium-risk — Opus escalated: ${sup.verdict.reason}`, action);
+          state = record(state, cfg, {
+            at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
+            tier: "medium", verdict: "escalated", outcome: "queued",
+            detail: `Opus escalated (conf ${sup.verdict.confidence.toFixed(2)}): ${sup.verdict.reason}`, analysis: truncate(analysis),
+          });
+          notifications.push(`▸ Needs approval (Opus escalated): ${action.label} — ${describe(incident)}`);
+          continue;
+        }
+        execVerdict = "approved";
+        log(`Opus approved (conf ${sup.verdict.confidence.toFixed(2)}): ${action.label}`);
+      }
+
+      // Autonomy gate: advisory mode (or being outside the quiet-hours window)
+      // queues the action for approval instead of auto-executing — even LOW and
+      // Opus-approved MEDIUM.
+      if (decideAutonomy(rc.mode, rc.window, minOfDay(now)) === "queue") {
+        const why = rc.mode === "advisory" ? "advisory mode — suggestion only" : "outside quiet-hours window — queued for approval";
+        state = queue(state, cfg, ts, fp, describe(incident), action.label, why, action);
+        state = record(state, cfg, {
+          at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
+          command: previewCommand(action), tier: tierStr, outcome: "queued", detail: why, analysis: truncate(analysis),
+        });
+        notifications.push(`▸ Needs approval: ${action.label} — ${describe(incident)} (${why})`);
+        continue;
+      }
+
+      // LOW (auto) or MEDIUM (Opus-approved) — execute under the circuit breaker.
+      const cbVerdict = cb.canAct(fp, resourceKey, now);
+      if (!cbVerdict.allowed) {
+        state = record(state, cfg, {
+          at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
+          tier: tierStr, outcome: "skipped", detail: cbVerdict.reason ?? "blocked by circuit breaker", analysis: truncate(analysis),
+        });
+        continue;
+      }
+
+      cb.record(fp, resourceKey, now);
       try {
-        sup = await runSupervisor(rc, incident, action, analysis, "");
-      } catch (err) {
-        // Fail closed: supervisor unreachable / malformed verdict → never open a PR.
-        state = queue(state, cfg, ts, fp, describe(incident), action.label, "fix PR — supervisor error (fail-closed)", action);
+        const result = await executeAction(action);
+        let backupRef: string | undefined;
+        if (result.backupYaml) {
+          const key = `${ts}_${fp}`.replace(/[^A-Za-z0-9_.-]/g, "_");
+          backupRef = await storeBackup(cfg.backupsConfigMap, cfg.stateNamespace, key, result.backupYaml, cfg.maxBackups);
+        }
         state = record(state, cfg, {
           at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-          tier: "medium", verdict: "escalated", outcome: "queued",
-          detail: `fix-quality supervisor failed (fail-closed): ${String(err)}`,
+          command: result.commands.join(" && "), tier: tierStr, verdict: execVerdict,
+          outcome: result.success ? "success" : "failure", detail: truncate(result.output), backupRef, analysis: truncate(analysis),
         });
-        continue;
-      }
-      if (sup.verdict.decision === "reject") {
-        state = record(state, cfg, {
-          at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-          tier: "medium", verdict: "rejected", outcome: "skipped",
-          detail: `Opus rejected the fix (conf ${sup.verdict.confidence.toFixed(2)}): ${sup.verdict.reason}`, analysis: truncate(analysis),
-        });
-        continue;
-      }
-      if (sup.verdict.decision === "escalate") {
-        state = queue(state, cfg, ts, fp, describe(incident), action.label, `fix PR — Opus escalated: ${sup.verdict.reason}`, action);
-        state = record(state, cfg, {
-          at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-          tier: "medium", verdict: "escalated", outcome: "queued",
-          detail: `Opus escalated the fix (conf ${sup.verdict.confidence.toFixed(2)}): ${sup.verdict.reason}`, analysis: truncate(analysis),
-        });
-        notifications.push(`▸ Needs approval (Opus escalated fix PR): ${action.label} — ${describe(incident)}`);
-        continue;
-      }
-      // approve → create the fix ConfigMap + Job via the seam (dispatchRepoFix
-      // queues it pending the fix-runner, which opens the actual PR).
-      log(`Opus approved fix PR (conf ${sup.verdict.confidence.toFixed(2)}): ${action.label}`);
-      const outcome = await dispatchRepoFix(repoFixDeps(), state, {
-        at: ts, fingerprint: fp, incident: describe(incident), action, analysis,
-        repo: e.repo, inScope: e.inScope, auditMaxEntries: cfg.auditMaxEntries,
-        namespace: cfg.stateNamespace, image: cfg.fixRunnerImage,
-      });
-      state = outcome.state;
-      if (outcome.notification) {
-        notifications.push(outcome.notification);
-        // A fix is now in flight (Job created, or already existed) — charge it to
-        // the rolling budget so further dispatches THIS tick respect the cap.
-        fixPrsDispatchedThisTick++;
-      }
-      continue;
-    }
-
-    const tier = classifyRisk(action.kind);
-    const tierStr = tier === RiskTier.Medium ? "medium" : "low";
-
-    if (tier === RiskTier.Blocked) {
-      state = queue(state, cfg, ts, fp, describe(incident), action.label, "destructive — RBAC-blocked; run manually in Rigel");
-      state = record(state, cfg, {
-        at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-        tier: "blocked", outcome: "queued", detail: "queued for human (destructive)", analysis: truncate(analysis),
-      });
-      notifications.push(`▸ Needs approval (destructive): ${action.label} — ${describe(incident)}`);
-      continue;
-    }
-
-    // MEDIUM actions must clear the adversarial Opus supervisor first. LOW
-    // actions execute on the deterministic guardrails alone.
-    let execVerdict: "auto" | "approved" = "auto";
-    if (tier === RiskTier.Medium) {
-      const command = previewCommand(action);
-      let sup: SupervisorOutput;
-      try {
-        sup = await runSupervisor(rc, incident, action, analysis, command);
+        log(`${result.success ? "✓" : "✗"} ${action.label} — ${result.commands.join(" && ")}`);
+        notifications.push(`${result.success ? "✓" : "✗"} ${action.label} — ${describe(incident)}`);
       } catch (e) {
-        // Fail closed: supervisor unreachable / malformed verdict → never act.
-        state = queue(state, cfg, ts, fp, describe(incident), action.label, "medium-risk — supervisor error (fail-closed)", action);
         state = record(state, cfg, {
           at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-          tier: "medium", verdict: "escalated", outcome: "queued", detail: `supervisor failed (fail-closed): ${String(e)}`,
+          tier: tierStr, verdict: execVerdict, outcome: "failure", detail: String(e), analysis: truncate(analysis),
         });
-        continue;
       }
-      if (sup.verdict.decision === "reject") {
-        state = record(state, cfg, {
-          at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-          tier: "medium", verdict: "rejected", outcome: "skipped",
-          detail: `Opus rejected (conf ${sup.verdict.confidence.toFixed(2)}): ${sup.verdict.reason}`,
-        });
-        continue;
-      }
-      if (sup.verdict.decision === "escalate") {
-        state = queue(state, cfg, ts, fp, describe(incident), action.label, `medium-risk — Opus escalated: ${sup.verdict.reason}`, action);
-        state = record(state, cfg, {
-          at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-          tier: "medium", verdict: "escalated", outcome: "queued",
-          detail: `Opus escalated (conf ${sup.verdict.confidence.toFixed(2)}): ${sup.verdict.reason}`, analysis: truncate(analysis),
-        });
-        notifications.push(`▸ Needs approval (Opus escalated): ${action.label} — ${describe(incident)}`);
-        continue;
-      }
-      execVerdict = "approved";
-      log(`Opus approved (conf ${sup.verdict.confidence.toFixed(2)}): ${action.label}`);
     }
 
-    // Autonomy gate: advisory mode (or being outside the quiet-hours window)
-    // queues the action for approval instead of auto-executing — even LOW and
-    // Opus-approved MEDIUM.
-    if (decideAutonomy(rc.mode, rc.window, minOfDay(now)) === "queue") {
-      const why = rc.mode === "advisory" ? "advisory mode — suggestion only" : "outside quiet-hours window — queued for approval";
-      state = queue(state, cfg, ts, fp, describe(incident), action.label, why, action);
-      state = record(state, cfg, {
-        at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-        command: previewCommand(action), tier: tierStr, outcome: "queued", detail: why, analysis: truncate(analysis),
-      });
-      notifications.push(`▸ Needs approval: ${action.label} — ${describe(incident)} (${why})`);
-      continue;
-    }
-
-    // LOW (auto) or MEDIUM (Opus-approved) — execute under the circuit breaker.
-    const cbVerdict = cb.canAct(fp, resourceKey, now);
-    if (!cbVerdict.allowed) {
-      state = record(state, cfg, {
-        at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-        tier: tierStr, outcome: "skipped", detail: cbVerdict.reason ?? "blocked by circuit breaker", analysis: truncate(analysis),
-      });
-      continue;
-    }
-
-    cb.record(fp, resourceKey, now);
+    // Phase-4 loop close: reconcile any FINISHED fix-runner Jobs — record the opened
+    // PR (or the failure) and surface a notification. Recording happens BEFORE the
+    // durable state write below; GC happens AFTER it, so a crash mid-reconcile
+    // re-processes a still-present Job (dedup-safe) instead of losing an opened PR.
     try {
-      const result = await executeAction(action);
-      let backupRef: string | undefined;
-      if (result.backupYaml) {
-        const key = `${ts}_${fp}`.replace(/[^A-Za-z0-9_.-]/g, "_");
-        backupRef = await storeBackup(cfg.backupsConfigMap, cfg.stateNamespace, key, result.backupYaml, cfg.maxBackups);
-      }
-      state = record(state, cfg, {
-        at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-        command: result.commands.join(" && "), tier: tierStr, verdict: execVerdict,
-        outcome: result.success ? "success" : "failure", detail: truncate(result.output), backupRef, analysis: truncate(analysis),
+      const recon = await reconcileFixJobs(fixReconcileDeps(cfg), state, {
+        at: ts, auditMaxEntries: cfg.auditMaxEntries,
       });
-      log(`${result.success ? "✓" : "✗"} ${action.label} — ${result.commands.join(" && ")}`);
-      notifications.push(`${result.success ? "✓" : "✗"} ${action.label} — ${describe(incident)}`);
+      state = recon.state;
+      notifications.push(...recon.notifications);
+      fixGc = recon.gc;
     } catch (e) {
-      state = record(state, cfg, {
-        at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-        tier: tierStr, verdict: execVerdict, outcome: "failure", detail: String(e), analysis: truncate(analysis),
-      });
+      log(`fix reconcile error: ${String(e)}`);
     }
+
+    // Surface auto-silence in the operator report so suppressed-but-benign issues
+    // aren't invisible (the raw audit was the only signal before). Edge-triggered —
+    // only when something was NEWLY silenced this tick — so a manual "Clear" isn't
+    // instantly undone by the persistent auto-silence set. The line is refreshed in
+    // place (prior one stripped) and everything else (e.g. a sticky worker-credential
+    // warning) is preserved.
+    if (newlySilenced > 0) {
+      state = { ...state, report: withAutoSilenceLine(state.report, state.autoSilenced ?? []) };
+    }
+  } else {
+    log("kill-switch is off — observing only (digests still run)");
   }
 
-  // Phase-4 loop close: reconcile any FINISHED fix-runner Jobs — record the opened
-  // PR (or the failure) and surface a notification. Recording happens BEFORE the
-  // durable state write below; GC happens AFTER it, so a crash mid-reconcile
-  // re-processes a still-present Job (dedup-safe) instead of losing an opened PR.
-  let fixGc: string[] = [];
-  try {
-    const recon = await reconcileFixJobs(fixReconcileDeps(cfg), state, {
-      at: ts, auditMaxEntries: cfg.auditMaxEntries,
-    });
-    state = recon.state;
-    notifications.push(...recon.notifications);
-    fixGc = recon.gc;
-  } catch (e) {
-    log(`fix reconcile error: ${String(e)}`);
-  }
-
-  // Surface auto-silence in the operator report so suppressed-but-benign issues
-  // aren't invisible (the raw audit was the only signal before). Edge-triggered —
-  // only when something was NEWLY silenced this tick — so a manual "Clear" isn't
-  // instantly undone by the persistent auto-silence set. The line is refreshed in
-  // place (prior one stripped) and everything else (e.g. a sticky worker-credential
-  // warning) is preserved.
-  if (newlySilenced > 0) {
-    state = { ...state, report: withAutoSilenceLine(state.report, state.autoSilenced ?? []) };
-  }
-
+  // ---- REPORT (always runs) ----
+  // Evaluate scheduled digests (arm new ones / send due ones) and persist their
+  // send-state in the SAME durable write, so a digest still fires on schedule even
+  // while remediation is paused.
+  state = await evaluateDigests(rc, state, detection, now);
   await writeState(cfg.stateConfigMap, cfg.stateNamespace, state);
 
-  // GC reconciled fix resources AFTER the durable state write (idempotent deletes).
-  for (const name of fixGc) await gcFixResources(cfg, name);
+  if (rc.enabled) {
+    // GC reconciled fix resources AFTER the durable state write (idempotent deletes).
+    for (const name of fixGc) await gcFixResources(cfg, name);
 
-  // Best-effort outbound notification for what happened this tick.
-  flushNotifications(rc, notifications);
+    // Best-effort outbound notification for what happened this tick.
+    flushNotifications(rc, notifications);
 
-  // Two-way Signal: answer any inbound diagnosis questions / approval commands.
-  // Gated on the kill-switch (we already returned above when disabled) and the
-  // explicit signalInbound opt-in. Never throws — failures stay out of the loop.
-  if (rc.signalInbound && rc.signalApiUrl && rc.signalNumber) {
-    try {
-      await handleSignalInbound(cfg, rc, cb, loop);
-    } catch (e) {
-      log(`signal inbound error: ${String(e)}`);
+    // Two-way Signal: answer any inbound diagnosis questions / approval commands.
+    // Gated on the kill-switch and the explicit signalInbound opt-in. Never throws —
+    // failures stay out of the loop.
+    if (rc.signalInbound && rc.signalApiUrl && rc.signalNumber) {
+      try {
+        await handleSignalInbound(cfg, rc, cb, loop);
+      } catch (e) {
+        log(`signal inbound error: ${String(e)}`);
+      }
     }
-  }
 
-  // Two-way Matrix: independent of Signal — runs if enabled, never blocks it.
-  if (rc.matrix.inbound && rc.matrix.homeserverUrl && rc.matrix.accessToken && rc.matrix.roomId) {
-    try {
-      await handleMatrixInboundIO(cfg, rc, cb, loop);
-    } catch (e) {
-      log(`matrix inbound error: ${String(e)}`);
+    // Two-way Matrix: independent of Signal — runs if enabled, never blocks it.
+    if (rc.matrix.inbound && rc.matrix.homeserverUrl && rc.matrix.accessToken && rc.matrix.roomId) {
+      try {
+        await handleMatrixInboundIO(cfg, rc, cb, loop);
+      } catch (e) {
+        log(`matrix inbound error: ${String(e)}`);
+      }
     }
   }
 }
@@ -900,7 +927,18 @@ function minOfDay(now: number): number {
 }
 
 function record(state: AssistantState, cfg: Config, entry: AuditEntry): AssistantState {
-  return appendAudit(state, entry, cfg.auditMaxEntries);
+  let next = appendAudit(state, entry, cfg.auditMaxEntries);
+  // Mirror the disposition into the rolling incident history so a digest can
+  // describe what was acted on, not only what was observed. Upserts by fingerprint
+  // (the observe phase already created a "flagged" record via touchIncident), so a
+  // remediation outcome UPGRADES it (flagged → autoFixed/queued/failed) in place.
+  next = recordIncident(next, {
+    at: entry.at, lastSeenAt: entry.at, fingerprint: entry.fingerprint,
+    location: shortFingerprint(entry.fingerprint), reason: entry.fingerprint.split("|")[3] ?? "",
+    disposition: dispositionFromAudit(entry),
+    note: entry.proposal,
+  });
+  return next;
 }
 
 /** Surface a loud report when the worker provider's credential is failing (an

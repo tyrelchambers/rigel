@@ -1,13 +1,18 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, it, test } from "vitest";
 import {
   appendAudit,
   autoSilence,
   capBackups,
   countFixPrBudget,
+  dispositionFromAudit,
   emptyState,
   reconcileQueue,
+  recordIncident,
   recordPullRequest,
   resolveFixAudit,
+  resolveIncident,
+  touchIncident,
+  type AssistantState,
   type AuditEntry,
   type PullRequestRecord,
   type QueuedSuggestion,
@@ -209,6 +214,64 @@ describe("capBackups", () => {
 
   test("a cap of zero drops everything", () => {
     expect(capBackups({ "2026-01-01_a": "1" }, 0)).toEqual({});
+  });
+});
+
+const empty = (): AssistantState => ({ updatedAt: "", audit: [], queue: [], report: "" });
+
+describe("recordIncident", () => {
+  it("prepends a new record", () => {
+    const s = recordIncident(empty(), {
+      at: "t1", lastSeenAt: "t1", fingerprint: "unhealthyPod|ns|p|x",
+      location: "ns/p", reason: "x", disposition: "flagged",
+    }, 300);
+    expect(s.incidents).toHaveLength(1);
+    expect(s.incidents![0]!.fingerprint).toBe("unhealthyPod|ns|p|x");
+  });
+  it("upserts an open record by fingerprint (refresh, no dup)", () => {
+    let s = recordIncident(empty(), { at: "t1", lastSeenAt: "t1", fingerprint: "fp", location: "l", reason: "r", disposition: "flagged" }, 300);
+    s = recordIncident(s, { at: "t2", lastSeenAt: "t2", fingerprint: "fp", location: "l", reason: "r", disposition: "autoFixed" }, 300);
+    expect(s.incidents).toHaveLength(1);
+    expect(s.incidents![0]!.disposition).toBe("autoFixed");
+    expect(s.incidents![0]!.at).toBe("t1");        // first-seen preserved
+    expect(s.incidents![0]!.lastSeenAt).toBe("t2"); // refreshed
+  });
+  it("caps the list", () => {
+    let s = empty();
+    for (let i = 0; i < 5; i++) s = recordIncident(s, { at: `t${i}`, lastSeenAt: `t${i}`, fingerprint: `fp${i}`, location: "l", reason: "r", disposition: "flagged" }, 3);
+    expect(s.incidents).toHaveLength(3);
+  });
+});
+
+describe("touchIncident", () => {
+  it("creates a flagged record when absent", () => {
+    const s = touchIncident(empty(), { at: "t1", lastSeenAt: "t1", fingerprint: "fp", location: "l", reason: "r" }, 300);
+    expect(s.incidents![0]!.disposition).toBe("flagged");
+  });
+  it("refreshes lastSeenAt but NEVER downgrades an existing disposition", () => {
+    let s = recordIncident(empty(), { at: "t1", lastSeenAt: "t1", fingerprint: "fp", location: "l", reason: "r", disposition: "autoFixed" }, 300);
+    s = touchIncident(s, { at: "t2", lastSeenAt: "t2", fingerprint: "fp", location: "l", reason: "r" }, 300);
+    expect(s.incidents).toHaveLength(1);
+    expect(s.incidents![0]!.disposition).toBe("autoFixed"); // not downgraded to flagged
+    expect(s.incidents![0]!.lastSeenAt).toBe("t2");
+  });
+});
+
+describe("resolveIncident", () => {
+  it("marks the open record resolved", () => {
+    let s = recordIncident(empty(), { at: "t1", lastSeenAt: "t1", fingerprint: "fp", location: "l", reason: "r", disposition: "flagged" }, 300);
+    s = resolveIncident(s, "fp", "t9");
+    expect(s.incidents![0]!.disposition).toBe("resolved");
+    expect(s.incidents![0]!.resolvedAt).toBe("t9");
+  });
+});
+
+describe("dispositionFromAudit", () => {
+  it("maps outcomes", () => {
+    expect(dispositionFromAudit({ at: "", fingerprint: "", incident: "", tier: "low", outcome: "success", detail: "" })).toBe("autoFixed");
+    expect(dispositionFromAudit({ at: "", fingerprint: "", incident: "", tier: "low", outcome: "queued", detail: "" })).toBe("queued");
+    expect(dispositionFromAudit({ at: "", fingerprint: "", incident: "", tier: "low", outcome: "failure", detail: "" })).toBe("failed");
+    expect(dispositionFromAudit({ at: "", fingerprint: "", incident: "", tier: "low", outcome: "skipped", detail: "" })).toBe("flagged");
   });
 });
 

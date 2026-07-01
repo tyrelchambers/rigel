@@ -43,7 +43,7 @@ import {
 } from "@rigel/k8s/src/assistant";
 import { signalConfigUpdates } from "@rigel/k8s/src/signal";
 import { matrixConfigUpdates, matrixSecretYAML } from "@rigel/k8s/src/matrix";
-import { normalizeAlertRule, parseAlertRules, serializeAlertRules, nextAlertRules, type SuggestedAlert } from "@rigel/k8s";
+import { normalizeAlertRule, parseAlertRules, serializeAlertRules, nextAlertRules, type SuggestedAlert, parseDigests, serializeDigests, normalizeDigest, nextDigests, type DigestInput } from "@rigel/k8s";
 import { effectiveClaudeToken } from "./chatConfig";
 
 // ---------------------------------------------------------------------------
@@ -117,6 +117,7 @@ export type AssistantAction =
   | "setSignal"
   | "setMatrix"
   | "saveAlert" | "deleteAlert" | "toggleAlert"
+  | "saveDigest" | "deleteDigest" | "toggleDigest" | "sendDigestNow"
   | "credentialStatus"
   | "setCredentialSource"
   | "clearCredentialSource"
@@ -168,6 +169,11 @@ export interface AssistantRequest {
   alert?: SuggestedAlert;   // saveAlert payload (model block, validated server-side)
   alertId?: string;          // delete/toggle
   alertEnabled?: boolean;    // toggle
+  // scheduled digests (saveDigest/deleteDigest/toggleDigest/sendDigestNow)
+  digest?: DigestInput;     // saveDigest payload (validated server-side)
+  digestId?: string;        // delete/toggle/sendDigestNow
+  digestEnabled?: boolean;  // toggle
+  digestMode?: "send" | "preview"; // sendDigestNow
   // BYO credential source (setCredentialSource/clearCredentialSource). The
   // server reads the chosen Secret's KEYS only — a value never crosses the wire.
   credentialId?: keyof AssistantCredentials;
@@ -409,6 +415,48 @@ async function mutateAlerts(
     next = nextAlertRules(rules, { op: "toggle", id: req.alertId, enabled: req.alertEnabled === true });
   }
   return patchConfig(context, namespace, { alertRules: serializeAlertRules(next) });
+}
+
+/** Read-modify-write the `digests` key of `assistant-config`. */
+export async function mutateDigests(
+  context: string | null,
+  namespace: string,
+  req: AssistantRequest,
+): Promise<RunResult> {
+  const existing = await readConfigMapData(context, namespace, "assistant-config");
+  const list = parseDigests(existing["digests"]);
+  let next;
+  if (req.action === "saveDigest") {
+    if (!req.digest) throw new Error("saveDigest requires a `digest` payload.");
+    const existingEntry = req.digestId ? list.find((s) => s.id === req.digestId) : undefined;
+    if (existingEntry) {
+      const normalized = normalizeDigest(req.digest, existingEntry.id, Date.now());
+      next = list.map((s) => s.id === existingEntry.id ? { ...normalized, createdAt: s.createdAt } : s);
+    } else {
+      const sub = normalizeDigest(req.digest, crypto.randomUUID(), Date.now());
+      next = nextDigests(list, { op: "add", sub });
+    }
+  } else if (req.action === "deleteDigest") {
+    if (!req.digestId) throw new Error("deleteDigest requires `digestId`.");
+    next = nextDigests(list, { op: "delete", id: req.digestId });
+  } else {
+    if (!req.digestId) throw new Error("toggleDigest requires `digestId`.");
+    next = nextDigests(list, { op: "toggle", id: req.digestId, enabled: req.digestEnabled === true });
+  }
+  return patchConfig(context, namespace, { digests: serializeDigests(next) });
+}
+
+/** Pure: the assistant-config update that triggers a one-shot digest run. The agent
+ * compares the token to its persisted lastRunNowToken and runs on a fresh one. */
+export function digestRunNowUpdate(req: AssistantRequest): Record<string, string> {
+  if (!req.digestId) throw new Error("sendDigestNow requires `digestId`.");
+  return {
+    digestRunNow: JSON.stringify({
+      id: req.digestId,
+      mode: req.digestMode === "preview" ? "preview" : "send",
+      token: crypto.randomUUID(),
+    }),
+  };
 }
 
 /** Pure: the assistant-config limit-key updates for a setLimits request. */
@@ -874,6 +922,12 @@ export async function handleAssistant(
     case "deleteAlert":
     case "toggleAlert":
       return mutateAlerts(context, namespace, req);
+    case "saveDigest":
+    case "deleteDigest":
+    case "toggleDigest":
+      return mutateDigests(context, namespace, req);
+    case "sendDigestNow":
+      return patchConfig(context, namespace, digestRunNowUpdate(req));
     case "credentialStatus":
       return credentialStatus(context, namespace);
     case "listCredentialSecrets":

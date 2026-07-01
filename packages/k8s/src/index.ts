@@ -2,6 +2,7 @@
 // from Sources/Rigel/Cluster/ via the parity orchestrator.
 
 export * from "./alerts";
+export * from "./digest";
 
 export { openapiV2ToYamlSchema, gvkApiVersion } from "./openapiSchema";
 
@@ -104,6 +105,7 @@ export {
   type AssistantClusterState,
   type AssistantPullRequest,
   type AssistantLiveIssue,
+  type AssistantDigestState,
   DEFAULT_INSTALL_CONFIG,
   SECRET_NAME,
   DEPLOYMENT_NAME,

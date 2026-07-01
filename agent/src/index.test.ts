@@ -19,10 +19,25 @@ vi.mock("./kubectl.js", () => {
 });
 vi.mock("./worker.js", () => ({ runWorker: vi.fn() }));
 vi.mock("./supervisor.js", () => ({ runSupervisor: vi.fn() }));
+// The digest path sends to a channel + composes an AI headline; mock both so a
+// scheduled digest can be driven without a real network/provider call. Existing
+// tests configure no channels, so flushNotifications already no-ops past these.
+vi.mock("./notify.js", () => ({
+  notifyWebhook: vi.fn(),
+  notifySignal: vi.fn(),
+  receiveSignal: vi.fn(),
+  notifyMatrix: vi.fn(),
+  markMatrixRead: vi.fn(),
+  setMatrixTyping: vi.fn(),
+  receiveMatrix: vi.fn(),
+}));
+vi.mock("./runModel.js", () => ({ runModel: vi.fn() }));
 
 import { kubectl } from "./kubectl.js";
 import { runWorker } from "./worker.js";
 import { runSupervisor } from "./supervisor.js";
+import { notifySignal } from "./notify.js";
+import { runModel } from "./runModel.js";
 import { tick, createLoopState } from "./index.js";
 import { CircuitBreaker } from "./guardrails.js";
 
@@ -201,6 +216,9 @@ beforeEach(() => {
   // An actionable, dispatchable openFixPR now clears the fix-quality supervisor
   // before dispatch — default it to approve; reject/escalate tests override.
   vi.mocked(runSupervisor).mockResolvedValue(sup("approve"));
+  // The digest AI headline — default to a deterministic line so composeDigestMessage
+  // never makes a real provider call.
+  vi.mocked(runModel).mockResolvedValue({ isError: false, text: "Quiet night." } as never);
 });
 afterEach(() => vi.clearAllMocks());
 
@@ -625,5 +643,114 @@ describe("tick() — auto-silence report visibility", () => {
     const state = captured();
     expect(state!.autoSilenced).toHaveLength(1);
     expect(state!.report).toMatch(/Auto-silenced 1 benign issue\(s\): default\/logger-7d9f-abc/);
+  });
+});
+
+describe("tick() — two-phase split: incident history + scheduled digests", () => {
+  // A daily digest at 00:00 UTC: today's slot is always ≤ now (the UTC day has
+  // already started), so an armed-yesterday subscription is unconditionally due.
+  const SIGNAL_DIGEST = {
+    id: "a", enabled: true, label: "Morning", channel: "signal",
+    days: [0, 1, 2, 3, 4, 5, 6], time: "00:00", timezone: "UTC",
+    lookback: { mode: "sinceLast" }, createdAt: "2026-06-30T00:00:00.000Z",
+  };
+
+  test("records a confirmed incident to history even while paused (enabled=false)", async () => {
+    const { captured } = wireCluster({ configData: { enabled: "false", confirmPolls: "1" } });
+
+    await tick(makeConfig(), newCb(), createLoopState());
+
+    const state = captured();
+    expect(state).toBeDefined();
+    // The observe phase ran despite the kill-switch — the incident is in the history.
+    expect(state!.incidents).toHaveLength(1);
+    expect(state!.incidents![0]).toMatchObject({ fingerprint: CRASH_FP, disposition: "flagged" });
+    // Paused: remediation (the worker) never ran.
+    expect(vi.mocked(runWorker)).not.toHaveBeenCalled();
+  });
+
+  test("a confirmed incident the remediate phase fixes is recorded as autoFixed (single record)", async () => {
+    vi.mocked(runWorker).mockResolvedValue(workerOut({ actions: [RESTART], verdict: "actionable" }));
+    const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1" } });
+
+    await tick(makeConfig(), newCb(), createLoopState());
+
+    const state = captured();
+    // touchIncident created it "flagged" in observe; record() UPGRADED it via the
+    // success outcome — one record, not two.
+    expect(state!.incidents).toHaveLength(1);
+    expect(state!.incidents![0]).toMatchObject({ fingerprint: CRASH_FP, disposition: "autoFixed" });
+    expect(state!.audit[0]).toMatchObject({ proposal: "Restart memos", outcome: "success" });
+  });
+
+  test("a recovered incident is marked resolved in the history", async () => {
+    // A prior tick saw + flagged CRASH_FP (seed it + prime the debounce streak); now
+    // the pod is gone, so the observe phase must resolve the open record.
+    const loop = createLoopState();
+    loop.streaks.set(CRASH_FP, 1);
+    loop.handled.add(CRASH_FP);
+    const seed = {
+      updatedAt: "", audit: [], queue: [], report: "",
+      incidents: [{
+        at: "2026-06-30T00:00:00.000Z", lastSeenAt: "2026-06-30T00:05:00.000Z",
+        fingerprint: CRASH_FP, location: "default/memos-7d9f-abc",
+        reason: "CrashLoopBackOff", disposition: "flagged",
+      }],
+    };
+    const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1" }, pods: [], stateSeed: seed });
+
+    await tick(makeConfig(), newCb(), loop);
+
+    const state = captured();
+    expect(state!.incidents).toHaveLength(1);
+    expect(state!.incidents![0]).toMatchObject({ fingerprint: CRASH_FP, disposition: "resolved" });
+    expect(state!.incidents![0]?.resolvedAt).toBeTruthy();
+  });
+
+  test("a due digest sends to its channel and stamps lastSentAt before writeState", async () => {
+    const { captured } = wireCluster({
+      configData: {
+        enabled: "true", confirmPolls: "1",
+        signalApiUrl: "http://sig", signalNumber: "+15550001111",
+        digests: JSON.stringify([SIGNAL_DIGEST]),
+      },
+      pods: [],
+      stateSeed: { updatedAt: "", audit: [], queue: [], report: "", digestState: { lastSentAt: { a: "2020-01-01T00:00:00.000Z" } } },
+    });
+
+    const before = Date.now();
+    await tick(makeConfig(), newCb(), createLoopState());
+    const after = Date.now();
+
+    // Went out via the SIGNAL channel exactly once (not flushNotifications — there
+    // were no incidents this tick)...
+    expect(vi.mocked(notifySignal)).toHaveBeenCalledTimes(1);
+    // ...and the persisted send-state advanced from the armed-yesterday seed to ~now.
+    const stamped = captured()!.digestState!.lastSentAt.a!;
+    expect(stamped).not.toBe("2020-01-01T00:00:00.000Z");
+    const t = Date.parse(stamped);
+    expect(t).toBeGreaterThanOrEqual(before);
+    expect(t).toBeLessThanOrEqual(after);
+  });
+
+  test("a stale run-now token does NOT re-send", async () => {
+    // lastSentAt is in the FUTURE so the schedule isn't due either — the only thing
+    // that could send is the run-now trigger, whose token was already processed.
+    const future = new Date(Date.now() + 3_600_000).toISOString();
+    const { captured } = wireCluster({
+      configData: {
+        enabled: "true", confirmPolls: "1",
+        signalApiUrl: "http://sig", signalNumber: "+15550001111",
+        digests: JSON.stringify([SIGNAL_DIGEST]),
+        digestRunNow: JSON.stringify({ id: "a", mode: "send", token: "tok-1" }),
+      },
+      pods: [],
+      stateSeed: { updatedAt: "", audit: [], queue: [], report: "", digestState: { lastSentAt: { a: future }, lastRunNowToken: "tok-1" } },
+    });
+
+    await tick(makeConfig(), newCb(), createLoopState());
+
+    expect(vi.mocked(notifySignal)).not.toHaveBeenCalled();
+    expect(captured()!.digestState!.lastSentAt.a).toBe(future);
   });
 });

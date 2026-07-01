@@ -1,4 +1,4 @@
-import { test, expect, describe } from "vitest";
+import { test, expect, describe, vi, afterEach } from "vitest";
 import { validateInstall } from "./assistant";
 
 // Install validation (mirrors Swift AssistantViewModel.install() guards). The
@@ -746,4 +746,86 @@ test("setMatrixSecret returns the token Secret YAML only when a token is supplie
   expect(yaml).toContain('accessToken: "tok"');
   expect(setMatrixSecret({ action: "setMatrix" }, "agents")).toBeNull();
   expect(setMatrixSecret({ action: "setMatrix", matrixAccessToken: "   " }, "agents")).toBeNull();
+});
+
+// ---------------------------------------------------------------------------
+// mutateDigests / digestRunNowUpdate (scheduled digests, Phase 7 / Task 13)
+// ---------------------------------------------------------------------------
+
+import { mutateDigests, digestRunNowUpdate } from "./assistant";
+import * as runMod from "@rigel/k8s/src/run";
+
+describe("mutateDigests", () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  test("adds a digest without clobbering other config keys", async () => {
+    const existingData = { alertRules: '["some-rule"]', digests: "[]" };
+    let appliedStdin = "";
+    vi.spyOn(runMod, "kubectl").mockResolvedValue({
+      code: 0, stdout: JSON.stringify({ data: existingData }), stderr: "",
+    });
+    vi.spyOn(runMod, "runProcessWithStdin").mockImplementation(async (_prog, _args, stdin) => {
+      appliedStdin = stdin as string;
+      return { code: 0, stdout: "", stderr: "" };
+    });
+    await mutateDigests(null, "default", {
+      action: "saveDigest",
+      digest: {
+        label: "Morning", channel: "signal", days: [1, 2, 3, 4, 5],
+        time: "07:00", timezone: "UTC", lookback: { mode: "sinceLast" },
+      },
+    });
+    const cm = JSON.parse(appliedStdin) as { data: Record<string, string> };
+    expect(cm.data.alertRules).toBe('["some-rule"]'); // unchanged
+    const digests = JSON.parse(cm.data.digests) as unknown[];
+    expect(digests).toHaveLength(1);
+    expect((digests[0] as { label: string }).label).toBe("Morning");
+    expect(typeof (digests[0] as { id: string }).id).toBe("string");
+  });
+
+  test("saveDigest WITH digestId updates in place: same id, same createdAt, no extra entry", async () => {
+    const existingCreatedAt = "2026-01-01T00:00:00.000Z";
+    const existingDigests = JSON.stringify([{
+      id: "existing-id", enabled: true, label: "Old label", channel: "signal",
+      days: [1], time: "07:00", timezone: "UTC", lookback: { mode: "sinceLast" },
+      createdAt: existingCreatedAt,
+    }]);
+    const existingData = { digests: existingDigests };
+    let appliedStdin = "";
+    vi.spyOn(runMod, "kubectl").mockResolvedValue({
+      code: 0, stdout: JSON.stringify({ data: existingData }), stderr: "",
+    });
+    vi.spyOn(runMod, "runProcessWithStdin").mockImplementation(async (_prog, _args, stdin) => {
+      appliedStdin = stdin as string;
+      return { code: 0, stdout: "", stderr: "" };
+    });
+    await mutateDigests(null, "default", {
+      action: "saveDigest",
+      digestId: "existing-id",
+      digest: {
+        label: "Updated label", channel: "signal", days: [1, 2, 3, 4, 5],
+        time: "08:00", timezone: "UTC", lookback: { mode: "sinceLast" }, enabled: false,
+      },
+    });
+    const cm = JSON.parse(appliedStdin) as { data: Record<string, string> };
+    const digests = JSON.parse(cm.data.digests) as { id: string; label: string; createdAt: string; enabled: boolean; time: string }[];
+    // Only one entry (no extra entry added).
+    expect(digests).toHaveLength(1);
+    // Same id preserved.
+    expect(digests[0].id).toBe("existing-id");
+    // createdAt preserved from the original.
+    expect(digests[0].createdAt).toBe(existingCreatedAt);
+    // Updated fields applied.
+    expect(digests[0].label).toBe("Updated label");
+    expect(digests[0].time).toBe("08:00");
+    expect(digests[0].enabled).toBe(false);
+  });
+
+  test("sendDigestNow writes a fresh digestRunNow token", () => {
+    const up = digestRunNowUpdate({ action: "sendDigestNow", digestId: "a", digestMode: "preview" });
+    const parsed = JSON.parse(up.digestRunNow) as { id: string; mode: string; token: string };
+    expect(parsed.id).toBe("a");
+    expect(parsed.mode).toBe("preview");
+    expect(typeof parsed.token).toBe("string");
+  });
 });

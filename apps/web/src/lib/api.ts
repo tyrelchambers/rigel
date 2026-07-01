@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ActiveForward } from "@/panels/services/portForward";
-import type { SuggestedAlert } from "@rigel/k8s";
+import type { SuggestedAlert, DigestInput } from "@rigel/k8s";
 import type { CheckResult, CloudProvider, CloudCluster } from "@rigel/cloud-connect/src/index";
 
 /**
@@ -333,6 +333,10 @@ export type AssistantAction =
   | "saveAlert"
   | "deleteAlert"
   | "toggleAlert"
+  | "saveDigest"
+  | "deleteDigest"
+  | "toggleDigest"
+  | "sendDigestNow"
   | "credentialStatus"
   | "listCredentialSecrets"
   | "setCredentialSource"
@@ -434,6 +438,11 @@ export interface AssistantRequest {
   // toggleAlert / deleteAlert fields
   alertId?: string;
   alertEnabled?: boolean;
+  // scheduled digests (saveDigest/deleteDigest/toggleDigest/sendDigestNow)
+  digest?: DigestInput;
+  digestId?: string;
+  digestEnabled?: boolean;
+  digestMode?: "send" | "preview";
   // Multi-provider control plane (Plan 2). provider is a plain string (the four
   // agent ids: claude | codex | gemini | opencode); effort is Claude-family only.
   worker?: AssistantRoleSelection;

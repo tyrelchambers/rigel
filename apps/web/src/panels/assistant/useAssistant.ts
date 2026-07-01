@@ -15,6 +15,7 @@ import {
   computeLiveIssues,
   parseTokenExpiry,
   parseAlertRules,
+  parseDigests,
   ISSUED_AT_ANNOTATION,
   SECRET_NAME,
   isAssistantManaged,
@@ -23,6 +24,8 @@ import {
   type AssistantLiveIssue,
   type TokenExpiryStatus,
   type AlertRule,
+  type DigestSubscription,
+  type AssistantDigestState,
 } from "@rigel/k8s";
 import type {
   AssistantCredentials,
@@ -110,6 +113,10 @@ export interface AssistantDerived {
   /** Fix PRs the agent opened (or tried to), newest-first. Empty until the first
    *  fix is reconciled into assistant-state. */
   pullRequests: AssistantPullRequest[];
+  /** Scheduled digest subscriptions, parsed from assistant-config. */
+  digests: DigestSubscription[];
+  /** Per-subscription send-state (last-sent + last preview), from assistant-state. */
+  digestState: AssistantDigestState | null;
   /** Per-provider credential readiness, from the server's credentialStatus read
    *  (key names only — values never leave the cluster). A "set" sentinel per ready
    *  credential id so the shared `credentialReady` helper keeps working. */
@@ -272,6 +279,8 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
       limits: parseLimitsFromConfig(configData),
       autofix: parseAutofixFromConfig(configData),
       pullRequests: clusterState?.pullRequests ?? [],
+      digests: parseDigests(configData["digests"]),
+      digestState: clusterState?.digestState ?? null,
       creds: credsFromSources(credStatus.data?.credentials ?? {}),
       credentialSources: credStatus.data?.credentials ?? {},
       credentialConflicts: credStatus.data?.conflicts ?? [],

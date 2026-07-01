@@ -846,6 +846,17 @@ export interface AssistantQueuedSuggestion {
 }
 
 /**
+ * Per-subscription digest send-state, surfaced from the agent-owned `state.json`
+ * for the web panel (last-sent timestamp + last preview text). Incident history
+ * stays agent-internal and is never decoded here.
+ */
+export interface AssistantDigestState {
+  lastSentAt: Record<string, string>;
+  lastRunNowToken?: string;
+  lastPreview?: { id: string; at: string; text: string };
+}
+
+/**
  * A fix PR the agent opened (or tried to), surfaced from the agent-owned
  * `state.json` (mirrors agent/src/state.ts `PullRequestRecord`). The agent only
  * emits `open`/`failed` today; the UI renders `merged` defensively too (the wire
@@ -876,6 +887,8 @@ export interface AssistantClusterState {
   report: string;
   /** Fix PRs the agent opened (or tried to). Empty when absent. */
   pullRequests: AssistantPullRequest[];
+  /** Scheduled-digest send-state (last-sent + last preview). Absent when no digests fired. */
+  digestState?: AssistantDigestState;
 }
 
 /**
@@ -894,6 +907,18 @@ export function decodeClusterState(raw: string | undefined | null): AssistantClu
   }
   if (typeof obj !== "object" || obj === null) return null;
   const o = obj as Record<string, unknown>;
+  const rawDigestState = o.digestState && typeof o.digestState === "object"
+    ? (o.digestState as Record<string, unknown>) : null;
+  const digestState = rawDigestState
+    ? {
+        lastSentAt: (rawDigestState.lastSentAt && typeof rawDigestState.lastSentAt === "object")
+          ? rawDigestState.lastSentAt as Record<string, string> : {},
+        lastRunNowToken: typeof rawDigestState.lastRunNowToken === "string"
+          ? rawDigestState.lastRunNowToken : undefined,
+        lastPreview: (rawDigestState.lastPreview && typeof rawDigestState.lastPreview === "object")
+          ? rawDigestState.lastPreview as { id: string; at: string; text: string } : undefined,
+      }
+    : undefined;
   return {
     updatedAt: typeof o.updatedAt === "string" ? o.updatedAt : undefined,
     status: (o.status as AssistantAgentStatus | undefined) ?? undefined,
@@ -901,6 +926,7 @@ export function decodeClusterState(raw: string | undefined | null): AssistantClu
     queue: Array.isArray(o.queue) ? (o.queue as AssistantQueuedSuggestion[]) : [],
     report: typeof o.report === "string" ? o.report : "",
     pullRequests: Array.isArray(o.pullRequests) ? (o.pullRequests as AssistantPullRequest[]) : [],
+    digestState,
   };
 }
 

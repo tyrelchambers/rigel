@@ -12,6 +12,7 @@ function rc(): RuntimeConfig {
     supervisor: { provider: "claude", model: "claude-opus-4-8" },
     limits: { pollIntervalMs: 30000, maxPerResourcePerHour: 3, maxPerNight: 20, maxAttemptsPerIncident: 3, confirmPolls: 2, namespaces: [] },
     autofix: { enabled: false, scope: { projects: [] }, maxPerDay: 5 },
+    digests: [],
   } as RuntimeConfig;
 }
 
