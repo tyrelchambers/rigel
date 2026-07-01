@@ -78,13 +78,4 @@ export interface Deployment {
   status?: DeploymentStatus;
 }
 
-/** Summary of a single container for the expanded SPEC block. */
-export interface ContainerSummary {
-  name: string;
-  image: string;
-  ports: number[];
-  cpuReq?: string;
-  cpuLim?: string;
-  memReq?: string;
-  memLim?: string;
-}
+export type { ContainerSummary } from "@/panels/components/ContainerCards";

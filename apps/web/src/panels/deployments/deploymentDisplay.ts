@@ -4,6 +4,7 @@ import type { ActionBlock } from "@/lib/api";
 import { restartCount } from "../pods/podDisplay";
 import { selectorMatches } from "@/lib/relatedResources";
 import { flattenRoutes } from "../ingresses/ingressesDisplay";
+import { summarizeContainers } from "@/panels/components/ContainerCards";
 
 /**
  * Compact relative age of an ISO timestamp ("5s" / "3m" / "2h" / "1d"), or
@@ -174,16 +175,7 @@ export function imageTag(image: string | undefined): string {
 
 /** Per-container summaries for the expanded SPEC block. */
 export function containerSummaries(d: Deployment): ContainerSummary[] {
-  const containers = d.spec?.template?.spec?.containers ?? [];
-  return containers.map((c) => ({
-    name: c.name,
-    image: c.image ?? "—",
-    ports: (c.ports ?? []).map((p) => p.containerPort),
-    cpuReq: c.resources?.requests?.cpu,
-    cpuLim: c.resources?.limits?.cpu,
-    memReq: c.resources?.requests?.memory,
-    memLim: c.resources?.limits?.memory,
-  }));
+  return summarizeContainers(d.spec?.template?.spec?.containers);
 }
 
 /** "RollingUpdate · maxSurge 25% · maxUnavailable 25%" (or just the type). */
