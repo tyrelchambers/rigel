@@ -49,8 +49,8 @@ export function StatefulSetRow({ s, k, isOpen, toggleExpand, askClaude, restartS
       <button
         type="button"
         onClick={() => toggleExpand(k)}
-        className="shrink-0 font-mono text-xs font-medium leading-none hover:underline"
-        style={{ color: allReady ? "var(--status-running)" : "var(--status-failed)" }}
+        className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
+        style={{ color: allReady ? undefined : "var(--status-running)" }}
       >
         {s.metadata.name}
       </button>
