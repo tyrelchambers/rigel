@@ -10,6 +10,7 @@ import {
   endpointCount,
   matchesSearch,
   sortServices,
+  humanAge,
 } from "./servicesDisplay";
 
 function service(overrides: Partial<Service> = {}): Service {
@@ -178,5 +179,21 @@ describe("sortServices", () => {
       "ns2/a",
       "ns2/b",
     ]);
+  });
+});
+
+const NOW = 1_700_000_000_000;
+describe("humanAge", () => {
+  test("days plural / singular", () => {
+    expect(humanAge(new Date(NOW - 165 * 86400_000).toISOString(), NOW)).toBe("165 days");
+    expect(humanAge(new Date(NOW - 1 * 86400_000).toISOString(), NOW)).toBe("1 day");
+  });
+  test("hours and minutes", () => {
+    expect(humanAge(new Date(NOW - 3 * 3600_000).toISOString(), NOW)).toBe("3 hours");
+    expect(humanAge(new Date(NOW - 5 * 60_000).toISOString(), NOW)).toBe("5 minutes");
+  });
+  test("just now and missing", () => {
+    expect(humanAge(new Date(NOW - 10_000).toISOString(), NOW)).toBe("just now");
+    expect(humanAge(undefined, NOW)).toBe("—");
   });
 });
