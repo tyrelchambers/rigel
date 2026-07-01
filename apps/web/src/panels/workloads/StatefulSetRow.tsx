@@ -90,7 +90,7 @@ export function StatefulSetRow({ s, k, isOpen, toggleExpand, askClaude, restartS
       {/* Ready badge */}
       <StatusBadge
         label={readyFraction(ready, desired)}
-        variant={allReady ? "healthy" : "error"}
+        variant={allReady ? "healthy" : "pending"}
         title={`Ready: ${ready}/${desired}`}
       />
     </ListRow>

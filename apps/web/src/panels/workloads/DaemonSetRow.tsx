@@ -88,7 +88,7 @@ export function DaemonSetRow({ d, k, isOpen, toggleExpand, askClaude, restartDae
       {/* Ready badge */}
       <StatusBadge
         label={readyFraction(ready, desired)}
-        variant={allReady ? "healthy" : "error"}
+        variant={allReady ? "healthy" : "pending"}
         title={`Ready: ${ready}/${desired}`}
       />
     </ListRow>

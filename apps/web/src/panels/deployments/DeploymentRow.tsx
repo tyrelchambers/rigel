@@ -221,7 +221,7 @@ export function DeploymentRow({
       {/* Ready badge — shared StatusBadge */}
       <StatusBadge
         label={readyText(d)}
-        variant={isReady(d) ? "healthy" : "error"}
+        variant={isReady(d) ? "healthy" : redeploying ? "pending" : "error"}
       />
     </ListRow>
   );
