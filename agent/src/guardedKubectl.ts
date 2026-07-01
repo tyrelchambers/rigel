@@ -119,8 +119,21 @@ async function writeWrapper(
   await chmod(p, 0o755);
 }
 
-// Run as the shim only when executed directly (not when imported by tests).
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+/**
+ * True when `entryPath` (process.argv[1]) is THIS shim run directly, e.g.
+ * `node dist/guardedKubectl.js …`. Matches the invoked FILENAME, which survives
+ * esbuild bundling — unlike a `fileURLToPath(import.meta.url) === process.argv[1]`
+ * check, which is WRONG here: the provider bridges import `provisionGuardBin`, so
+ * esbuild inlines this module into dist/index.js (and dist/fixRunner.js) and
+ * rewrites import.meta.url to the host bundle's path, making that check TRUE on
+ * agent startup — the shim then runs with no args and crashes the container.
+ */
+export function isShimEntry(entryPath: string | undefined): boolean {
+  return !!entryPath && /(?:^|[\\/])guardedKubectl\.(?:js|ts)$/.test(entryPath);
+}
+
+// Run as the shim only when THIS file is the process entry (bundling-safe).
+if (isShimEntry(process.argv[1])) {
   runGuard(process.argv.slice(2)).then(
     (code) => process.exit(code),
     (err) => {

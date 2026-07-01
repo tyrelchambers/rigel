@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { guardVerdict, runGuard, provisionGuardBin, wrapperScript } from "./guardedKubectl.js";
+import { guardVerdict, runGuard, provisionGuardBin, wrapperScript, isShimEntry } from "./guardedKubectl.js";
 
 const GUARD_ENTRY = fileURLToPath(new URL("./guardedKubectl.ts", import.meta.url));
 
@@ -69,5 +69,26 @@ describe("wrapperScript", () => {
     const text = wrapperScript(runner, "kubectl", "/usr/local/bin/kubectl");
     expect(text).toContain(`'kubectl' '/usr/local/bin/kubectl'`);
     expect(text).toMatch(/"\$@"\s*$/m);
+  });
+});
+
+describe("isShimEntry (bundling-safe self-exec detection)", () => {
+  test("true only when THIS file is the process entry", () => {
+    expect(isShimEntry("/app/dist/guardedKubectl.js")).toBe(true);
+    expect(isShimEntry("/repo/agent/src/guardedKubectl.ts")).toBe(true);
+    expect(isShimEntry("guardedKubectl.js")).toBe(true);
+  });
+  test("false when this module is bundled into another entry (the crash we shipped)", () => {
+    // esbuild inlines this module into dist/index.js + dist/fixRunner.js (the
+    // bridges import provisionGuardBin). The self-exec must NOT fire for them,
+    // otherwise `node dist/index.js` runs the shim with no args and exits 2.
+    expect(isShimEntry("/app/dist/index.js")).toBe(false);
+    expect(isShimEntry("/app/dist/fixRunner.js")).toBe(false);
+  });
+  test("false for missing / unrelated entries", () => {
+    expect(isShimEntry(undefined)).toBe(false);
+    expect(isShimEntry("")).toBe(false);
+    expect(isShimEntry("/node_modules/.bin/vitest")).toBe(false);
+    expect(isShimEntry("/app/dist/guardedKubectlHelper.js")).toBe(false);
   });
 });
