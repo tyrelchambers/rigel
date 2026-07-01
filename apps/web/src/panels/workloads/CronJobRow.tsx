@@ -1,4 +1,5 @@
 import { ListRow } from "@/panels/components/ListRow";
+import { WorkloadDetail } from "./WorkloadDetail";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { TagPill } from "@/panels/components/TagPill";
@@ -43,7 +44,13 @@ export function CronJobRow({ c, k, isOpen, toggleExpand, askClaude, triggerCronJ
   );
 
   return (
-    <ListRow rowKey={k} isOpen={isOpen} onToggle={() => toggleExpand(k)} contextMenu={rowMenu}>
+    <ListRow
+      rowKey={k}
+      isOpen={isOpen}
+      onToggle={() => toggleExpand(k)}
+      contextMenu={rowMenu}
+      expandedContent={<WorkloadDetail workload={c} kind="cronjobs" />}
+    >
       {/* Name */}
       <button
         type="button"

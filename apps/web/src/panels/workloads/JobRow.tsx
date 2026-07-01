@@ -1,4 +1,5 @@
 import { ListRow } from "@/panels/components/ListRow";
+import { WorkloadDetail } from "./WorkloadDetail";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { viewYaml } from "@/store/yamlViewer";
@@ -31,7 +32,13 @@ export function JobRow({ j, k, isOpen, toggleExpand, askClaude, deleteJob }: Job
   );
 
   return (
-    <ListRow rowKey={k} isOpen={isOpen} onToggle={() => toggleExpand(k)} contextMenu={rowMenu}>
+    <ListRow
+      rowKey={k}
+      isOpen={isOpen}
+      onToggle={() => toggleExpand(k)}
+      contextMenu={rowMenu}
+      expandedContent={<WorkloadDetail workload={j} kind="jobs" />}
+    >
       {/* Name */}
       <button
         type="button"

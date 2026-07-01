@@ -1,4 +1,5 @@
 import { ListRow } from "@/panels/components/ListRow";
+import { WorkloadDetail } from "./WorkloadDetail";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { viewYaml } from "@/store/yamlViewer";
@@ -35,7 +36,13 @@ export function DaemonSetRow({ d, k, isOpen, toggleExpand, askClaude, restartDae
   );
 
   return (
-    <ListRow rowKey={k} isOpen={isOpen} onToggle={() => toggleExpand(k)} contextMenu={rowMenu}>
+    <ListRow
+      rowKey={k}
+      isOpen={isOpen}
+      onToggle={() => toggleExpand(k)}
+      contextMenu={rowMenu}
+      expandedContent={<WorkloadDetail workload={d} kind="daemonsets" />}
+    >
       {/* Name */}
       <button
         type="button"
