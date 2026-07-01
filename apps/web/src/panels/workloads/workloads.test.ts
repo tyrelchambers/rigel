@@ -19,6 +19,16 @@ import {
   sortWorkloads,
   jobPhaseVariant,
 } from "./workloadsDisplay";
+import {
+  formatSelector,
+  workloadUpdateStrategy,
+  workloadContainers,
+  volumeClaimTemplateSummaries,
+  jobConditionSummaries,
+  cronJobActiveNames,
+  workloadSpecFields,
+} from "./workloadsDisplay";
+import type { StatefulSet, DaemonSet } from "./types";
 
 const NOW = 1_686_789_123_000; // fixed Date.now() in ms
 
@@ -246,5 +256,96 @@ describe("compareWorkloads / sortWorkloads", () => {
     const a = { metadata: { name: "x" } };
     const b = { metadata: { name: "y", namespace: "z" } };
     expect(compareWorkloads(a, b)).toBeLessThan(0);
+  });
+});
+
+describe("formatSelector", () => {
+  test("joins sorted matchLabels", () => {
+    expect(formatSelector({ tier: "web", app: "x" })).toBe("app=x,tier=web");
+  });
+  test("returns a dash when empty or undefined", () => {
+    expect(formatSelector({})).toBe("—");
+    expect(formatSelector(undefined)).toBe("—");
+  });
+});
+
+describe("workloadUpdateStrategy", () => {
+  test("reads spec.updateStrategy.type, defaulting to RollingUpdate", () => {
+    expect(workloadUpdateStrategy({ metadata: { name: "s" }, spec: { updateStrategy: { type: "OnDelete" } } } as StatefulSet)).toBe("OnDelete");
+    expect(workloadUpdateStrategy({ metadata: { name: "s" } } as StatefulSet)).toBe("RollingUpdate");
+  });
+});
+
+describe("workloadContainers", () => {
+  test("reads spec.template for sts/ds/job", () => {
+    const j = job({ spec: { template: { spec: { containers: [{ name: "c", image: "busybox" }] } } } });
+    expect(workloadContainers(j, "jobs")).toEqual([{ name: "c", image: "busybox" }]);
+  });
+  test("reads spec.jobTemplate.spec.template for cronjobs", () => {
+    const c = cron({ spec: { jobTemplate: { spec: { template: { spec: { containers: [{ name: "cj", image: "alpine" }] } } } } } });
+    expect(workloadContainers(c, "cronjobs")).toEqual([{ name: "cj", image: "alpine" }]);
+  });
+  test("returns an empty array when there is no template", () => {
+    expect(workloadContainers(job(), "jobs")).toEqual([]);
+  });
+});
+
+describe("volumeClaimTemplateSummaries", () => {
+  test("summarizes name / storage / storageClass", () => {
+    const sts = { metadata: { name: "db" }, spec: { volumeClaimTemplates: [
+      { metadata: { name: "data" }, spec: { storageClassName: "fast", resources: { requests: { storage: "10Gi" } } } },
+    ] } } as StatefulSet;
+    expect(volumeClaimTemplateSummaries(sts)).toEqual([{ name: "data", storage: "10Gi", storageClass: "fast" }]);
+  });
+  test("returns an empty array when absent", () => {
+    expect(volumeClaimTemplateSummaries({ metadata: { name: "db" } } as StatefulSet)).toEqual([]);
+  });
+});
+
+describe("jobConditionSummaries", () => {
+  test("maps conditions with reason/message", () => {
+    const j = job({ status: { conditions: [{ type: "Failed", status: "True", reason: "BackoffLimitExceeded", message: "too many retries" }] } });
+    expect(jobConditionSummaries(j)).toEqual([{ type: "Failed", status: "True", reason: "BackoffLimitExceeded", message: "too many retries" }]);
+  });
+  test("returns an empty array when there are no conditions", () => {
+    expect(jobConditionSummaries(job())).toEqual([]);
+  });
+});
+
+describe("cronJobActiveNames", () => {
+  test("extracts names of active job refs", () => {
+    const c = cron({ status: { active: [{ name: "run-1" }, { name: "run-2" }, {}] } });
+    expect(cronJobActiveNames(c)).toEqual(["run-1", "run-2"]);
+  });
+});
+
+describe("workloadSpecFields", () => {
+  test("statefulset fields", () => {
+    const sts = { metadata: { name: "db", namespace: "prod", creationTimestamp: undefined }, spec: { replicas: 3, serviceName: "db-svc", selector: { matchLabels: { app: "db" } } }, status: { readyReplicas: 2 } } as StatefulSet;
+    const f = workloadSpecFields(sts, "statefulsets", NOW);
+    expect(f.find((x) => x.label === "Replicas")?.value).toBe("3");
+    expect(f.find((x) => x.label === "Ready")?.value).toBe("2/3");
+    expect(f.find((x) => x.label === "Service")?.value).toBe("db-svc");
+    expect(f.find((x) => x.label === "Selector")?.value).toBe("app=db");
+  });
+  test("daemonset fields", () => {
+    const ds = { metadata: { name: "cni", namespace: "kube-system" }, status: { numberReady: 4, desiredNumberScheduled: 5, numberAvailable: 4, updatedNumberScheduled: 5 } } as DaemonSet;
+    const f = workloadSpecFields(ds, "daemonsets", NOW);
+    expect(f.find((x) => x.label === "Desired")?.value).toBe("5");
+    expect(f.find((x) => x.label === "Available")?.value).toBe("4");
+  });
+  test("job fields include status, completions and duration", () => {
+    const j = job({ status: { succeeded: 1, startTime: new Date(NOW - 60_000).toISOString(), completionTime: new Date(NOW).toISOString(), conditions: [{ type: "Complete", status: "True" }] }, spec: { completions: 1 } });
+    const f = workloadSpecFields(j, "jobs", NOW);
+    expect(f.find((x) => x.label === "Status")?.value).toBe("Complete");
+    expect(f.find((x) => x.label === "Completions")?.value).toBe("1/1");
+    expect(f.find((x) => x.label === "Duration")?.value).toBe("1m");
+  });
+  test("cronjob fields include schedule and concurrency", () => {
+    const c = cron({ spec: { schedule: "*/5 * * * *", concurrencyPolicy: "Forbid" } });
+    const f = workloadSpecFields(c, "cronjobs", NOW);
+    expect(f.find((x) => x.label === "Schedule")?.value).toBe("*/5 * * * *");
+    expect(f.find((x) => x.label === "Concurrency")?.value).toBe("Forbid");
+    expect(f.find((x) => x.label === "Last schedule")?.value).toBe("Never");
   });
 });

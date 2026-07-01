@@ -6,6 +6,7 @@ import type {
   Workload,
   WorkloadKind,
 } from "./types";
+import type { RawContainer } from "@/panels/components/ContainerCards";
 
 /**
  * Compact relative age of an ISO timestamp ("5s" / "3m" / "2h" / "1d"), or
@@ -205,5 +206,131 @@ export function kindLabel(kind: WorkloadKind): string {
       return "Jobs";
     case "cronjobs":
       return "CronJobs";
+  }
+}
+
+// --- Detail helpers --------------------------------------------------------
+
+/** "app=web,tier=frontend" from matchLabels sorted by key. "—" when empty. */
+export function formatSelector(matchLabels: Record<string, string> | undefined): string {
+  const keys = Object.keys(matchLabels ?? {}).sort();
+  if (keys.length === 0) return "—";
+  return keys.map((k) => `${k}=${matchLabels![k]}`).join(",");
+}
+
+/** Update-strategy type for a StatefulSet/DaemonSet, defaulting to RollingUpdate. */
+export function workloadUpdateStrategy(workload: StatefulSet | DaemonSet): string {
+  return workload.spec?.updateStrategy?.type ?? "RollingUpdate";
+}
+
+/** The pod-template containers for a workload (jobTemplate path for cronjobs). */
+export function workloadContainers(workload: Workload, kind: WorkloadKind): RawContainer[] {
+  if (kind === "cronjobs") {
+    return (workload as CronJob).spec?.jobTemplate?.spec?.template?.spec?.containers ?? [];
+  }
+  return (workload as StatefulSet | DaemonSet | Job).spec?.template?.spec?.containers ?? [];
+}
+
+export interface VolumeClaimSummary {
+  name: string;
+  storage: string;
+  storageClass: string;
+}
+
+/** Summaries of a StatefulSet's volumeClaimTemplates. */
+export function volumeClaimTemplateSummaries(sts: StatefulSet): VolumeClaimSummary[] {
+  return (sts.spec?.volumeClaimTemplates ?? []).map((v) => ({
+    name: v.metadata?.name ?? "—",
+    storage: v.spec?.resources?.requests?.storage ?? "—",
+    storageClass: v.spec?.storageClassName ?? "—",
+  }));
+}
+
+export interface JobConditionSummary {
+  type: string;
+  status: string;
+  reason?: string;
+  message?: string;
+}
+
+/** A Job's status conditions, normalized for display. */
+export function jobConditionSummaries(job: Job): JobConditionSummary[] {
+  return (job.status?.conditions ?? []).map((c) => ({
+    type: c.type ?? "—",
+    status: c.status ?? "—",
+    reason: c.reason,
+    message: c.message,
+  }));
+}
+
+/** Names of a CronJob's currently-active jobs. */
+export function cronJobActiveNames(cronJob: CronJob): string[] {
+  return (cronJob.status?.active ?? []).map((a) => a?.name).filter((n): n is string => !!n);
+}
+
+/** One label/value pair in the detail SPEC grid. */
+export interface SpecField {
+  label: string;
+  value: string;
+}
+
+/** Per-kind SPEC grid fields for the expanded workload detail. */
+export function workloadSpecFields(workload: Workload, kind: WorkloadKind, now: number = Date.now()): SpecField[] {
+  const base: SpecField[] = [
+    { label: "Namespace", value: workload.metadata.namespace ?? "default" },
+    { label: "Age", value: relativeAge(workload.metadata.creationTimestamp, now) },
+  ];
+  switch (kind) {
+    case "statefulsets": {
+      const s = workload as StatefulSet;
+      return [
+        ...base,
+        { label: "Replicas", value: String(statefulSetDesired(s)) },
+        { label: "Ready", value: readyFraction(statefulSetReady(s), statefulSetDesired(s)) },
+        { label: "Service", value: s.spec?.serviceName ?? "—" },
+        { label: "Strategy", value: workloadUpdateStrategy(s) },
+        { label: "Selector", value: formatSelector(s.spec?.selector?.matchLabels) },
+      ];
+    }
+    case "daemonsets": {
+      const d = workload as DaemonSet;
+      return [
+        ...base,
+        { label: "Desired", value: String(daemonSetDesired(d)) },
+        { label: "Ready", value: String(daemonSetReady(d)) },
+        { label: "Available", value: String(d.status?.numberAvailable ?? 0) },
+        { label: "Up-to-date", value: String(d.status?.updatedNumberScheduled ?? 0) },
+        { label: "Node selector", value: formatSelector(d.spec?.template?.spec?.nodeSelector) },
+        { label: "Strategy", value: workloadUpdateStrategy(d) },
+        { label: "Selector", value: formatSelector(d.spec?.selector?.matchLabels) },
+      ];
+    }
+    case "jobs": {
+      const j = workload as Job;
+      return [
+        ...base,
+        { label: "Status", value: jobPhase(j) },
+        { label: "Completions", value: jobCompletionsLabel(j) },
+        { label: "Parallelism", value: String(j.spec?.parallelism ?? 1) },
+        { label: "Succeeded", value: String(j.status?.succeeded ?? 0) },
+        { label: "Failed", value: String(j.status?.failed ?? 0) },
+        { label: "Started", value: j.status?.startTime ? relativeAge(j.status.startTime, now) : "—" },
+        { label: "Completed", value: j.status?.completionTime ? relativeAge(j.status.completionTime, now) : "—" },
+        { label: "Duration", value: jobDuration(j, now) ?? "—" },
+        { label: "Backoff limit", value: String(j.spec?.backoffLimit ?? 6) },
+      ];
+    }
+    case "cronjobs": {
+      const c = workload as CronJob;
+      return [
+        ...base,
+        { label: "Schedule", value: c.spec?.schedule ?? "—" },
+        { label: "Suspend", value: isCronJobSuspended(c) ? "Yes" : "No" },
+        { label: "Concurrency", value: c.spec?.concurrencyPolicy ?? "Allow" },
+        { label: "Last schedule", value: lastScheduleAgo(c, now) ?? "Never" },
+        { label: "Active", value: String(cronJobActiveCount(c)) },
+        { label: "History (ok/fail)", value: `${c.spec?.successfulJobsHistoryLimit ?? 3}/${c.spec?.failedJobsHistoryLimit ?? 1}` },
+      ];
+    }
   }
 }
