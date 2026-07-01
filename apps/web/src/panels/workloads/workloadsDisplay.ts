@@ -272,6 +272,7 @@ export function cronJobActiveNames(cronJob: CronJob): string[] {
 export interface SpecField {
   label: string;
   value: string;
+  span?: boolean;
 }
 
 /** Per-kind SPEC grid fields for the expanded workload detail. */
@@ -289,7 +290,7 @@ export function workloadSpecFields(workload: Workload, kind: WorkloadKind, now: 
         { label: "Ready", value: readyFraction(statefulSetReady(s), statefulSetDesired(s)) },
         { label: "Service", value: s.spec?.serviceName ?? "—" },
         { label: "Strategy", value: workloadUpdateStrategy(s) },
-        { label: "Selector", value: formatSelector(s.spec?.selector?.matchLabels) },
+        { label: "Selector", value: formatSelector(s.spec?.selector?.matchLabels), span: true },
       ];
     }
     case "daemonsets": {
@@ -300,9 +301,9 @@ export function workloadSpecFields(workload: Workload, kind: WorkloadKind, now: 
         { label: "Ready", value: String(daemonSetReady(d)) },
         { label: "Available", value: String(d.status?.numberAvailable ?? 0) },
         { label: "Up-to-date", value: String(d.status?.updatedNumberScheduled ?? 0) },
-        { label: "Node selector", value: formatSelector(d.spec?.template?.spec?.nodeSelector) },
+        { label: "Node selector", value: formatSelector(d.spec?.template?.spec?.nodeSelector), span: true },
         { label: "Strategy", value: workloadUpdateStrategy(d) },
-        { label: "Selector", value: formatSelector(d.spec?.selector?.matchLabels) },
+        { label: "Selector", value: formatSelector(d.spec?.selector?.matchLabels), span: true },
       ];
     }
     case "jobs": {

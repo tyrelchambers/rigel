@@ -7,7 +7,7 @@ vi.mock("@/lib/ws", () => ({ subscribe: vi.fn(), unsubscribe: vi.fn() }));
 
 import { WorkloadDetail } from "./WorkloadDetail";
 import { useCluster } from "@/store/cluster";
-import type { StatefulSet, CronJob } from "./types";
+import type { StatefulSet, CronJob, Job, DaemonSet } from "./types";
 
 beforeEach(() => {
   useCluster.setState({ resources: {} });
@@ -47,5 +47,32 @@ describe("WorkloadDetail", () => {
     expect(screen.getByText("0 0 * * *")).toBeTruthy();
     expect(screen.getByText("Active Jobs")).toBeTruthy();
     expect(screen.getByText("nightly-123")).toBeTruthy();
+  });
+
+  it("renders Job conditions with reason", () => {
+    const job: Job = {
+      metadata: { name: "backup", namespace: "prod", uid: "j1" },
+      spec: { completions: 1, template: { spec: { containers: [{ name: "dump", image: "pg-dump:1" }] } } },
+      status: {
+        succeeded: 0,
+        conditions: [{ type: "Failed", status: "True", reason: "BackoffLimitExceeded", message: "too many retries" }],
+      },
+    };
+    renderDetail(<WorkloadDetail workload={job} kind="jobs" />);
+    expect(screen.getByText("Conditions")).toBeTruthy();
+    expect(screen.getByText("Failed=True")).toBeTruthy();
+    expect(screen.getByText("BackoffLimitExceeded")).toBeTruthy();
+  });
+
+  it("renders DaemonSet spec fields", () => {
+    const ds: DaemonSet = {
+      metadata: { name: "cni", namespace: "kube-system", uid: "d1" },
+      spec: { template: { spec: { containers: [{ name: "agent", image: "cni:2" }] } } },
+      status: { numberReady: 4, desiredNumberScheduled: 5, numberAvailable: 4, updatedNumberScheduled: 5 },
+    };
+    renderDetail(<WorkloadDetail workload={ds} kind="daemonsets" />);
+    expect(screen.getByText("cni:2")).toBeTruthy();
+    // "Desired" field value 5 renders in the grid
+    expect(screen.getByText("Desired")).toBeTruthy();
   });
 });
