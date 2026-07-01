@@ -4,6 +4,8 @@
 // not depend on workspace-package linking for a type-only import (same pattern
 // as deployments/types.ts and pods/types.ts).
 
+import type { RawContainer } from "@/panels/components/ContainerCards";
+
 /** Shared metadata sub-object for every workload kind. */
 export interface WorkloadMeta {
   name: string;
@@ -11,12 +13,41 @@ export interface WorkloadMeta {
   uid?: string;
   creationTimestamp?: string; // ISO 8601
   labels?: Record<string, string>;
+  annotations?: Record<string, string>;
+}
+
+/** Pod template embedded in a workload spec. */
+export interface PodTemplateSpec {
+  metadata?: { labels?: Record<string, string> };
+  spec?: {
+    containers?: RawContainer[];
+    nodeSelector?: Record<string, string>;
+  };
+}
+export interface LabelSelector {
+  matchLabels?: Record<string, string>;
+}
+export interface UpdateStrategy {
+  type?: string;
 }
 
 // --- StatefulSet -----------------------------------------------------------
 
+export interface VolumeClaimTemplate {
+  metadata?: { name?: string };
+  spec?: {
+    storageClassName?: string;
+    resources?: { requests?: { storage?: string } };
+  };
+}
+
 export interface StatefulSetSpec {
   replicas?: number;
+  serviceName?: string;
+  selector?: LabelSelector;
+  updateStrategy?: UpdateStrategy;
+  template?: PodTemplateSpec;
+  volumeClaimTemplates?: VolumeClaimTemplate[];
 }
 
 export interface StatefulSetStatus {
@@ -32,14 +63,22 @@ export interface StatefulSet {
 
 // --- DaemonSet -------------------------------------------------------------
 
+export interface DaemonSetSpec {
+  selector?: LabelSelector;
+  updateStrategy?: UpdateStrategy;
+  template?: PodTemplateSpec;
+}
+
 export interface DaemonSetStatus {
   numberReady?: number;
   desiredNumberScheduled?: number;
+  numberAvailable?: number;
+  updatedNumberScheduled?: number;
 }
 
 export interface DaemonSet {
   metadata: WorkloadMeta;
-  spec?: Record<string, unknown>;
+  spec?: DaemonSetSpec;
   status?: DaemonSetStatus;
 }
 
@@ -48,16 +87,23 @@ export interface DaemonSet {
 export interface JobCondition {
   type?: string;
   status?: string;
+  reason?: string;
+  message?: string;
 }
 
 export interface JobSpec {
   completions?: number;
+  parallelism?: number;
+  backoffLimit?: number;
   suspend?: boolean;
+  selector?: LabelSelector;
+  template?: PodTemplateSpec;
 }
 
 export interface JobStatus {
   active?: number;
   succeeded?: number;
+  failed?: number;
   startTime?: string; // ISO 8601
   completionTime?: string; // ISO 8601
   conditions?: JobCondition[];
@@ -71,14 +117,23 @@ export interface Job {
 
 // --- CronJob ---------------------------------------------------------------
 
+export interface ActiveObjectRef {
+  name?: string;
+  namespace?: string;
+  uid?: string;
+}
+
 export interface CronJobSpec {
   schedule?: string;
   suspend?: boolean;
+  concurrencyPolicy?: string;
+  successfulJobsHistoryLimit?: number;
+  failedJobsHistoryLimit?: number;
+  jobTemplate?: { spec?: JobSpec };
 }
 
 export interface CronJobStatus {
-  /** References to currently-running jobs. */
-  active?: unknown[];
+  active?: ActiveObjectRef[];
   lastScheduleTime?: string; // ISO 8601
 }
 
