@@ -27,18 +27,18 @@ export function ServiceDetail({ service }: { service: Service }) {
             <div className="flex flex-wrap gap-2">
               {ports.map((p, i) => {
                 const head = p.nodePort != null ? `${p.port}:${p.nodePort}` : String(p.port);
-                const showTarget = p.targetPort != null && String(p.targetPort) !== String(p.port);
+                const accent = p.name || (p.targetPort != null && String(p.targetPort) !== String(p.port) ? String(p.targetPort) : "");
                 return (
                   <div
                     key={`${p.port}-${i}`}
                     className="inline-flex items-center gap-[7px] rounded-sm bg-white/[0.05] px-2.5 py-[5px]"
                   >
                     <span className="font-mono text-[13px] font-semibold text-foreground">{head}</span>
-                    {showTarget && (
+                    {accent && (
                       <>
                         <ArrowRight className="size-3 text-[var(--fg-tertiary)]" />
                         <span className="font-mono text-[13px] text-[var(--accent-primary)]">
-                          {String(p.targetPort)}
+                          {accent}
                         </span>
                       </>
                     )}
@@ -96,7 +96,7 @@ function ClusterIpValue({ clusterIP }: { clusterIP: string | undefined }) {
 
   return (
     <div className="flex items-center gap-[9px]">
-      <span className="font-mono text-[14px] font-medium text-foreground">{clusterIP || "None"}</span>
+      <span className="font-mono text-[14px] font-medium text-foreground">{clusterIP || "—"}</span>
       {hasIp && (
         <button
           type="button"

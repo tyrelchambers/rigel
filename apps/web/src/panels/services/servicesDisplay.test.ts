@@ -196,4 +196,10 @@ describe("humanAge", () => {
     expect(humanAge(new Date(NOW - 10_000).toISOString(), NOW)).toBe("just now");
     expect(humanAge(undefined, NOW)).toBe("—");
   });
+  test("invalid ISO, future, and the minute boundary", () => {
+    expect(humanAge("not-a-date", NOW)).toBe("—");
+    expect(humanAge(new Date(NOW + 5_000).toISOString(), NOW)).toBe("just now");
+    expect(humanAge(new Date(NOW - 59_000).toISOString(), NOW)).toBe("just now");
+    expect(humanAge(new Date(NOW - 60_000).toISOString(), NOW)).toBe("1 minute");
+  });
 });
