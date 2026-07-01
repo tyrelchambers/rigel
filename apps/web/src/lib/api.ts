@@ -419,6 +419,9 @@ export interface AssistantRequest {
   monitorNamespaces?: string;
   mode?: string;
   window?: string;
+  /** Notify webhook (Slack/Discord/ntfy) URL, saved alongside the autonomy mode.
+   *  Written only when present, so a mode change never clears it and vice versa. */
+  webhook?: string;
   enabled?: boolean;
   fingerprint?: string;
   // setSignal — Signal notifications bridge config (docs/parity/settings.md §2).

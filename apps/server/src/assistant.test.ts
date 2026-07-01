@@ -89,7 +89,28 @@ test("buildInstallConfig falls back to legacy model knobs + defaults when no sel
   expect(cfg.supervisor).toBeUndefined();
 });
 
-import { setModelsUpdates, setCredentialsSecrets } from "./assistant";
+import { setModelsUpdates, setCredentialsSecrets, setModeUpdates } from "./assistant";
+
+test("setModeUpdates writes only mode + trimmed window when no webhook is supplied", () => {
+  const updates = setModeUpdates({ action: "setMode", mode: "window", window: " 22:00-07:00 " });
+  expect(updates).toEqual({ mode: "window", window: "22:00-07:00" });
+  // Leaving the webhook out must not touch (and so never clear) the stored URL.
+  expect("webhookUrl" in updates).toBe(false);
+});
+
+test("setModeUpdates persists a trimmed webhookUrl alongside the mode when supplied", () => {
+  const updates = setModeUpdates({
+    action: "setMode",
+    mode: "auto",
+    webhook: "  https://hooks.example/x  ",
+  });
+  expect(updates).toEqual({ mode: "auto", window: "", webhookUrl: "https://hooks.example/x" });
+});
+
+test("setModeUpdates writes an empty webhookUrl to clear it (explicit empty string)", () => {
+  const updates = setModeUpdates({ action: "setMode", mode: "auto", webhook: "" });
+  expect(updates.webhookUrl).toBe("");
+});
 
 test("setModelsUpdates produces the assistant-config role keys for a worker-only switch", () => {
   const updates = setModelsUpdates({

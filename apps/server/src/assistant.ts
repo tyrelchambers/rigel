@@ -557,13 +557,25 @@ async function setCredentials(
   return result;
 }
 
+/** Pure: the assistant-config keys a setMode request writes. Always `mode` +
+ *  `window`; `webhookUrl` only when a webhook is supplied (so the shared "Save"
+ *  on the Rules screen persists the notify URL without a mode change clearing
+ *  it, and vice versa — patchConfig merges only the provided keys). */
+export function setModeUpdates(req: AssistantRequest): Record<string, string> {
+  const updates: Record<string, string> = {
+    mode: req.mode ?? "auto",
+    window: (req.window ?? "").trim(),
+  };
+  if (req.webhook !== undefined) updates.webhookUrl = req.webhook.trim();
+  return updates;
+}
+
 async function setMode(
   context: string | null,
   namespace: string,
-  mode: string,
-  window: string,
+  req: AssistantRequest,
 ): Promise<RunResult> {
-  return patchConfig(context, namespace, { mode, window: window.trim() });
+  return patchConfig(context, namespace, setModeUpdates(req));
 }
 
 async function setKillSwitch(
@@ -891,7 +903,7 @@ export async function handleAssistant(
     case "uninstall":
       return uninstallAssistant(context, namespace);
     case "setMode":
-      return setMode(context, namespace, req.mode ?? "auto", req.window ?? "");
+      return setMode(context, namespace, req);
     case "kill":
       return setKillSwitch(context, namespace, req.enabled === true);
     case "updateToken":
