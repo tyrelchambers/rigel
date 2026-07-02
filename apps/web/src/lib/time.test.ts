@@ -76,6 +76,10 @@ describe("spelledSeconds", () => {
     expect(spelledSeconds(5 * 60)).toBe("5 minutes");
     expect(spelledSeconds(1 * 60)).toBe("1 minute");
   });
+  test("picks the largest unit and floors across a boundary", () => {
+    expect(spelledSeconds(90000)).toBe("1 day"); // 25h → largest unit is days
+    expect(spelledSeconds(5400)).toBe("1 hour"); // 90m → largest unit is hours
+  });
   test("belowMinute default is 'just now'", () => {
     expect(spelledSeconds(45)).toBe("just now");
     expect(spelledSeconds(0)).toBe("just now");

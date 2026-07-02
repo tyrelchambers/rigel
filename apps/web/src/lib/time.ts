@@ -70,23 +70,19 @@ export function compactAge(
   // clampFuture takes precedence over belowMinute: a future instant renders
   // "0s", never "just now" (no caller combines the two today).
   if (clampFuture && sec < 0) return withSuffix("0s");
-  if (sec < SEC_PER_MINUTE) {
-    if (belowMinute === "just now") return "just now";
-    return withSuffix(`${sec}s`);
-  }
-  if (sec < SEC_PER_HOUR) return withSuffix(`${Math.floor(sec / SEC_PER_MINUTE)}m`);
-  if (maxUnit === "h" || sec < SEC_PER_DAY) return withSuffix(`${Math.floor(sec / SEC_PER_HOUR)}h`);
-  return withSuffix(`${Math.floor(sec / SEC_PER_DAY)}d`);
+  if (belowMinute === "just now" && sec < SEC_PER_MINUTE) return "just now";
+  // sec is already a whole-second integer, so compactFromSeconds owns the ladder.
+  return withSuffix(compactFromSeconds(sec, maxUnit));
 }
 
-/** Compact rendering ("5s" / "3m" / "2h" / "1d") of a raw NON-NEGATIVE second
- * count, picking the largest unit via `Math.floor`. Shares the bucket ladder
- * with `compactAge` (which measures an instant); use this when the caller
- * already holds a plain second delta. */
-export function compactFromSeconds(seconds: number): string {
+/** Compact rendering ("5s" / "3m" / "2h" / "1d") of a raw second count, picking
+ * the largest unit via `Math.floor`. `maxUnit:"h"` caps at hours (never rolls
+ * up to days). This owns the bucket ladder; `compactAge` delegates here after
+ * resolving its instant/special-case concerns. */
+export function compactFromSeconds(seconds: number, maxUnit: "h" | "d" = "d"): string {
   if (seconds < SEC_PER_MINUTE) return `${Math.floor(seconds)}s`;
   if (seconds < SEC_PER_HOUR) return `${Math.floor(seconds / SEC_PER_MINUTE)}m`;
-  if (seconds < SEC_PER_DAY) return `${Math.floor(seconds / SEC_PER_HOUR)}h`;
+  if (maxUnit === "h" || seconds < SEC_PER_DAY) return `${Math.floor(seconds / SEC_PER_HOUR)}h`;
   return `${Math.floor(seconds / SEC_PER_DAY)}d`;
 }
 
@@ -102,6 +98,9 @@ export function compactFromSeconds(seconds: number): string {
  */
 export function spelledSeconds(
   seconds: number,
+  // NB: defaults to "just now" (spelledAge's need); this is the OPPOSITE of
+  // CompactAgeOpts.belowMinute, which defaults to "seconds" — each option
+  // default serves its primary caller.
   opts: { belowMinute?: "just now" | "seconds" } = {},
 ): string {
   const { belowMinute = "just now" } = opts;
