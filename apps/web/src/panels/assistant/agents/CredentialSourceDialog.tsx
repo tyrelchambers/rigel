@@ -12,6 +12,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogTitle,
   DialogDescription,
   DialogFooter,
@@ -103,17 +104,16 @@ export function CredentialSourceDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-card">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <AgentGlyph id={id} size={20} />
-            {label} credential source
-          </DialogTitle>
+          <AgentGlyph id={id} size={20} />
+          <DialogTitle>{label} credential source</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
           <DialogDescription>
             Choose where the assistant reads this provider's credential. Saving updates the agent
             Deployment and restarts it.
           </DialogDescription>
-        </DialogHeader>
 
-        <div className="space-y-3">
+          <div className="mt-3 space-y-3">
           {byoEnabled && (
             <SegmentedTabs
               tabs={[
@@ -230,7 +230,8 @@ export function CredentialSourceDialog({
               </button>
             </p>
           )}
-        </div>
+          </div>
+        </DialogBody>
 
         <DialogFooter>
           <Button variant="muted" onClick={() => onOpenChange(false)}>

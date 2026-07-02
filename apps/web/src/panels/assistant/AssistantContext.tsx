@@ -15,6 +15,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogTitle,
   DialogDescription,
   DialogFooter,
@@ -159,11 +160,13 @@ function AssistantDialogs(p: DialogsProps) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create namespace "{installNamespace}"?</DialogTitle>
+          </DialogHeader>
+          <DialogBody>
             <DialogDescription>
               Namespace "{installNamespace}" doesn't exist. Create it and install the assistant
               there?
             </DialogDescription>
-          </DialogHeader>
+          </DialogBody>
           <DialogFooter>
             <Button variant="muted" onClick={() => p.setConfirmCreateNs(false)}>
               Cancel
@@ -188,14 +191,16 @@ function AssistantDialogs(p: DialogsProps) {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Revert "{p.pendingRevert?.label}"?</DialogTitle>
+          </DialogHeader>
+          <DialogBody>
             <DialogDescription>
               Re-applies the pre-mutation snapshot the agent captured. Review the exact YAML before
               it runs.
             </DialogDescription>
-          </DialogHeader>
-          <pre className="max-h-72 select-text overflow-auto rounded-md bg-muted p-2 font-mono text-[11px] whitespace-pre">
-            {p.pendingRevert?.yaml}
-          </pre>
+            <pre className="mt-3 max-h-72 select-text overflow-auto rounded-md bg-muted p-2 font-mono text-[11px] whitespace-pre">
+              {p.pendingRevert?.yaml}
+            </pre>
+          </DialogBody>
           <DialogFooter>
             <Button
               variant="muted"
@@ -243,10 +248,12 @@ function AssistantDialogs(p: DialogsProps) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Uninstall the assistant?</DialogTitle>
+          </DialogHeader>
+          <DialogBody>
             <DialogDescription>
               Removes the agent Deployment, RBAC, and token. Keeps the audit history.
             </DialogDescription>
-          </DialogHeader>
+          </DialogBody>
           <DialogFooter>
             <Button variant="muted" onClick={() => p.setConfirmUninstall(false)}>
               Cancel
@@ -266,15 +273,17 @@ function AssistantDialogs(p: DialogsProps) {
 
       {/* Full activity modal */}
       <Dialog open={p.showAllActivity} onOpenChange={p.setShowAllActivity}>
-        <DialogContent className="max-h-[80vh] overflow-auto max-w-2xl">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Activity — {audit.length} entries</DialogTitle>
           </DialogHeader>
-          <div className="space-y-2">
-            {audit.map((e) => (
-              <AuditRowSummary key={`${e.incident}-${e.at}`} e={e} />
-            ))}
-          </div>
+          <DialogBody>
+            <div className="space-y-2">
+              {audit.map((e) => (
+                <AuditRowSummary key={`${e.incident}-${e.at}`} e={e} />
+              ))}
+            </div>
+          </DialogBody>
         </DialogContent>
       </Dialog>
 

@@ -12,6 +12,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogTitle,
   DialogDescription,
   DialogFooter,
@@ -249,21 +250,21 @@ function CredentialHelpDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <AgentGlyph id={id} size={20} />
-            Connect {label}
-          </DialogTitle>
+          <AgentGlyph id={id} size={20} />
+          <DialogTitle>Connect {label}</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
           <DialogDescription>
             Choose how the assistant signs in as {label}. Your credential is stored as a Kubernetes
             Secret in the cluster and is never shown again after saving.
           </DialogDescription>
-        </DialogHeader>
 
-        <div className="space-y-3">
-          {PROVIDER_AUTH[id].map((m) => (
-            <MethodCard key={m.kind} method={m} />
-          ))}
-        </div>
+          <div className="mt-3 space-y-3">
+            {PROVIDER_AUTH[id].map((m) => (
+              <MethodCard key={m.kind} method={m} />
+            ))}
+          </div>
+        </DialogBody>
 
         <DialogFooter>
           <DialogClose render={<Button>Got it</Button>} />

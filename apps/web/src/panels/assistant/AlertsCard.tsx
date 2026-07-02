@@ -7,6 +7,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogTitle,
   DialogDescription,
   DialogFooter,
@@ -261,13 +262,14 @@ export function AlertsCard() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>New alert</DialogTitle>
+          </DialogHeader>
+          <DialogBody>
             <DialogDescription>
               Get notified when a resource hits a condition. Or just ask in chat —{" "}
               <em>"text me if…"</em>.
             </DialogDescription>
-          </DialogHeader>
 
-          <div className="space-y-3">
+            <div className="mt-3 space-y-3">
             <Field label="Watch" labelWidth="w-auto">
               <select
                 value={scope}
@@ -403,7 +405,8 @@ export function AlertsCard() {
                 className={inputClass}
               />
             </Field>
-          </div>
+            </div>
+          </DialogBody>
 
           <DialogFooter>
             <Button variant="muted" onClick={() => setOpen(false)}>
