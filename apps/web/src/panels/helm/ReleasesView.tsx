@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/dialog";
 import { YamlEditor } from "@/components/YamlEditorLazy";
 import { SectionLabel } from "@/panels/components/MetaCard";
-import { CircleArrowUp, FileCode, Lock, Trash2, Undo2 } from "lucide-react";
+import { ChevronRight, CircleArrowUp, FileCode, Lock, Package, Trash2, Undo2 } from "lucide-react";
+import { compactAge } from "@/lib/time";
 import { buildHelmRollbackArgs, buildHelmUninstallArgs, type HelmRelease, type HelmRevision } from "@rigel/k8s/src/helm";
 import { releasesFromSecretsMap, releaseStatusTone, formatTimestamp, type StatusTone } from "./releases";
 import { useHelmRollback, useHelmUninstall } from "./helmApi";
@@ -125,13 +126,14 @@ const TONE: Record<StatusTone, string> = {
   neutral: "#8C8C95",
 };
 
-/** A colored status dot + label pill for a Helm release status. */
-function StatusBadge({ status, className }: { status: string; className?: string }) {
+/** A colored status dot + label pill for a Helm release status. `filled` tints
+ *  the pill background with the status color (per the improved card design). */
+function StatusBadge({ status, className, filled }: { status: string; className?: string; filled?: boolean }) {
   const color = TONE[releaseStatusTone(status)];
   return (
     <span
       className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium", className)}
-      style={{ background: "rgba(255,255,255,0.05)", color }}
+      style={{ background: filled ? `${color}1F` : "rgba(255,255,255,0.05)", color }}
     >
       <span className="size-1.5 rounded-full" style={{ background: color }} />
       {status}
@@ -139,23 +141,55 @@ function StatusBadge({ status, className }: { status: string; className?: string
   );
 }
 
-/** A release card: name + status, chart·version, namespace chip + current revision. */
+/** A labeled stat cell in a release card: uppercase mono label over its value. */
+function CardStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex min-w-0 flex-1 flex-col gap-1">
+      <span className="font-mono text-[9.5px] uppercase tracking-[0.6px] text-[var(--fg-tertiary)]">{label}</span>
+      <span className="truncate font-mono text-[12.5px] font-medium text-[var(--fg-primary)]">{value}</span>
+    </div>
+  );
+}
+
+/** A release card: an icon tile with the release + chart name and a status pill,
+ *  a Version/App/Rev stat row, and a namespace chip · age with a Details link. */
 function ReleaseCard({ release, onClick }: { release: HelmRelease; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex flex-col gap-1.5 rounded-lg border p-3 text-left hover:bg-white/[0.04]"
-      style={{ borderColor: "var(--border-strong)" }}
+      className="flex flex-col gap-[13px] rounded-lg border p-4 text-left transition-colors border-[var(--border-subtle)] bg-[var(--surface-elevated)] hover:bg-white/[0.02]"
     >
-      <div className="flex items-center gap-2">
-        <span className="min-w-0 truncate font-medium">{release.name}</span>
-        <StatusBadge status={release.status} className="ml-auto shrink-0" />
+      <div className="flex w-full items-center gap-2.5">
+        <div className="flex size-[34px] shrink-0 items-center justify-center rounded-[9px] border border-[var(--border-subtle)] bg-[var(--surface-sunken)]">
+          <Package className="size-[17px] text-[var(--fg-secondary)]" aria-hidden />
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="truncate text-[15px] font-semibold text-[var(--fg-primary)]">{release.name}</span>
+          <span className="truncate font-mono text-xs text-[var(--fg-tertiary)]">{release.chartName}</span>
+        </div>
+        <StatusBadge status={release.status} filled className="shrink-0" />
       </div>
-      <div className="truncate text-xs text-muted-foreground">{release.chartName} · {release.chartVersion}</div>
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span className="truncate rounded bg-white/[0.05] px-1.5 py-0.5 font-mono">{release.namespace}</span>
-        <span className="ml-auto shrink-0">rev {release.currentRevision}</span>
+
+      <div className="h-px w-full bg-[var(--border-subtle)]" />
+
+      <div className="flex w-full gap-2.5">
+        <CardStat label="Version" value={release.chartVersion} />
+        <CardStat label="App" value={release.appVersion ?? "—"} />
+        <CardStat label="Rev" value={String(release.currentRevision)} />
+      </div>
+
+      <div className="flex w-full items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate rounded border px-[7px] py-0.5 font-mono text-[11px] border-[var(--border-subtle)] bg-white/[0.04] text-[var(--fg-tertiary)]">
+            {release.namespace}
+          </span>
+          <span className="shrink-0 text-[11.5px] text-[var(--fg-tertiary)]">· {compactAge(release.updated, { suffix: true })}</span>
+        </div>
+        <span className="flex shrink-0 items-center gap-1 text-[12.5px] font-medium text-[var(--accent-primary)]">
+          Details
+          <ChevronRight className="size-3.5" aria-hidden />
+        </span>
       </div>
     </button>
   );
