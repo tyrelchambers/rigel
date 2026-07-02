@@ -1,3 +1,4 @@
+import { formatInTimeZone } from "date-fns-tz";
 import type {
   Certificate, CertificateRequest, Order, Challenge,
   CertView, RequestNode, OrderNode, ChallengeNode, Condition,
@@ -224,10 +225,5 @@ export function absoluteDate(iso: string | undefined): string {
   if (!iso) return "—";
   const then = new Date(iso);
   if (Number.isNaN(then.getTime())) return "—";
-  return then.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  });
+  return formatInTimeZone(then, "UTC", "MMM d, yyyy");
 }

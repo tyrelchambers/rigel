@@ -1,3 +1,4 @@
+import { format } from "date-fns";
 import type { EventBucket, EventTypeFilter, K8sEvent } from "./types";
 import { compactAge } from "@/lib/time";
 
@@ -47,7 +48,7 @@ export function absoluteWhen(iso: string | undefined | null): string | null {
   if (!iso) return null;
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "medium" });
+  return format(date, "MMM d, yyyy, h:mm:ss a");
 }
 
 /**

@@ -14,6 +14,7 @@ import {
   fnv1aColorIndex,
   deploymentColorIndex,
 } from "@rigel/k8s";
+import { format } from "date-fns";
 import type { Deployment } from "../deployments/types";
 
 export { POD_COLORS, isProbeLine, isErrorLine, fnv1aColorIndex, deploymentColorIndex };
@@ -194,10 +195,7 @@ export function sortByTimestamp(lines: LogLine[]): LogLine[] {
 /** Format a parsed timestamp as "HH:MM:SS" (24h, local). "" when null. */
 export function formatTimestamp(ts: Date | null): string {
   if (!ts) return "";
-  const hh = String(ts.getHours()).padStart(2, "0");
-  const mm = String(ts.getMinutes()).padStart(2, "0");
-  const ss = String(ts.getSeconds()).padStart(2, "0");
-  return `${hh}:${mm}:${ss}`;
+  return format(ts, "HH:mm:ss");
 }
 
 // --- Sidebar (deployment list) helpers -------------------------------------

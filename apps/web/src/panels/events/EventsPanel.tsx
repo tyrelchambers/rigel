@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { addMinutes, format } from "date-fns";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { cn } from "@/lib/utils";
@@ -72,9 +73,8 @@ function eventVariant(type: string | null | undefined): StatusBadgeVariant {
  * time when both ends share it, so the range reads cleanly.
  */
 function bucketTimeRange(start: number): string {
-  const opts: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
-  const from = new Date(start).toLocaleTimeString(undefined, opts);
-  const to = new Date(start + 60_000).toLocaleTimeString(undefined, opts);
+  const from = format(new Date(start), "h:mm a");
+  const to = format(addMinutes(new Date(start), 1), "h:mm a");
   // "2:15 PM" + "2:16 PM" → "2:15 - 2:16 PM" when both share the meridiem.
   // Split on any whitespace: ICU emits a narrow no-break space (U+202F)
   // before the meridiem in many locales, not a plain space.
