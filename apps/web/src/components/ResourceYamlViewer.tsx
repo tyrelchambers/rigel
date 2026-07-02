@@ -15,18 +15,7 @@ import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { YamlEditor } from "@/components/YamlEditorLazy";
 import { useClusterYamlSchema } from "@/lib/useClusterYamlSchema";
 import { useYamlViewer } from "@/store/yamlViewer";
-import type { ActionBlock } from "@/lib/api";
-
-async function fetchResourceYaml(kind: string, name: string, namespace?: string, clean?: boolean): Promise<string> {
-  const params = new URLSearchParams({ kind, name });
-  if (namespace) params.set("namespace", namespace);
-  if (clean) params.set("clean", "1");
-  const res = await fetch(`/api/resource?${params.toString()}`);
-  const data = (await res.json().catch(() => ({}))) as { code?: number; yaml?: string; stderr?: string; error?: string };
-  if (!res.ok) throw new Error(data.error ?? res.statusText);
-  if (data.code !== 0) throw new Error(data.stderr || "kubectl get failed");
-  return data.yaml ?? "";
-}
+import { fetchResourceYaml, type ActionBlock } from "@/lib/api";
 
 export function ResourceYamlViewer() {
   const target = useYamlViewer((s) => s.target);

@@ -1,6 +1,6 @@
-import type { ReactNode } from "react";
 import { ArrowRight, Copy, Check, Calendar } from "lucide-react";
 import { RelatedResources } from "@/panels/components/RelatedResources";
+import { MetaCard, SectionLabel } from "@/panels/components/MetaCard";
 import { useCopyToClipboard } from "@/lib/useCopyToClipboard";
 import { humanAge } from "./servicesDisplay";
 import type { Service } from "./types";
@@ -115,19 +115,3 @@ function ClusterIpValue({ clusterIP }: { clusterIP: string | undefined }) {
   );
 }
 
-function MetaCard({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-1 flex-col gap-[9px] rounded-md border px-[15px] py-[13px] bg-[var(--surface-elevated)] border-[var(--border-subtle)]">
-      <SectionLabel>{label}</SectionLabel>
-      {children}
-    </div>
-  );
-}
-
-function SectionLabel({ children }: { children: ReactNode }) {
-  return (
-    <span className="font-mono text-[10.5px] uppercase tracking-[1px] text-[var(--fg-tertiary)]">
-      {children}
-    </span>
-  );
-}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CircleDashed, FileArchive, Plus, Pencil } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
@@ -13,17 +13,8 @@ import { PanelHeader } from "@/panels/components/PanelHeader";
 import { useFocusRow } from "@/panels/components/useFocusRow";
 import type { ConfigMap } from "./types";
 import { ConfigMapEditor } from "./ConfigMapEditor";
-import {
-  relativeAge,
-  keyCount,
-  binaryKeyCount,
-  keysSorted,
-  isBinaryKey,
-  plaintextBytes,
-  binaryBytes,
-  matchesSearch,
-  sortConfigMaps,
-} from "./configmapsDisplay";
+import { ConfigMapDetail } from "./ConfigMapDetail";
+import { relativeAge, keyCount, matchesSearch, sortConfigMaps } from "./configmapsDisplay";
 
 // ---------------------------------------------------------------------------
 // CREATE + EDIT are implemented via ConfigMapEditor → POST /api/apply
@@ -216,107 +207,6 @@ export default function ConfigMapsPanel() {
         onClose={() => setEditorOpen(false)}
         onApplied={() => setEditorOpen(false)}
       />
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Expanded detail: STATUS summary + KEYS section (sorted, with values).
-// ---------------------------------------------------------------------------
-
-/** Expanded detail: STATUS summary + KEYS section (sorted, with values). */
-function ConfigMapDetail({ configMap, onEdit }: { configMap: ConfigMap; onEdit: () => void }) {
-  const keys = keysSorted(configMap);
-  const total = keyCount(configMap);
-  const binary = binaryKeyCount(configMap);
-  const labelEntries = Object.entries(configMap.metadata.labels ?? {});
-
-  return (
-    <div className="space-y-3">
-      {/* STATUS */}
-      <div className="space-y-1">
-        <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-          Status
-        </h3>
-        <dl className="grid grid-cols-[5rem_1fr] gap-x-3 gap-y-0.5 text-xs font-mono">
-          <dt className="text-muted-foreground">KEYS</dt>
-          <dd>{total}</dd>
-          {binary > 0 && (
-            <>
-              <dt className="text-muted-foreground">BINARY</dt>
-              <dd>{binary}</dd>
-            </>
-          )}
-          <dt className="text-muted-foreground">AGE</dt>
-          <dd>{relativeAge(configMap.metadata.creationTimestamp)}</dd>
-          {labelEntries.length > 0 && (
-            <>
-              <dt className="text-muted-foreground">LABELS</dt>
-              <dd className="break-all">
-                {labelEntries.map(([k, v]) => `${k}=${v}`).join(", ")}
-              </dd>
-            </>
-          )}
-        </dl>
-      </div>
-
-      {/* KEYS */}
-      <div className="space-y-1">
-        <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-          Keys ({total})
-        </h3>
-        {keys.length === 0 ? (
-          <p className="text-xs text-muted-foreground/70">No data keys</p>
-        ) : (
-          <ul className="space-y-2">
-            {keys.map((key) => {
-              const binaryKey = isBinaryKey(configMap, key);
-              if (binaryKey) {
-                const bytes = binaryBytes(configMap.binaryData?.[key] ?? "");
-                return (
-                  <li key={key} className="rounded-md border bg-background/40 p-2">
-                    <div className="flex items-center gap-2">
-                      <FileArchive className="size-3.5 text-muted-foreground" aria-hidden />
-                      <span className="select-text font-mono text-xs">{key}</span>
-                    </div>
-                    <p className="mt-1 rounded-md p-2 text-xs font-mono text-muted-foreground/70">
-                      {`<binary, ${bytes} bytes>`}
-                    </p>
-                  </li>
-                );
-              }
-              const value = configMap.data?.[key] ?? "";
-              const bytes = plaintextBytes(value);
-              return (
-                <li key={key} className="rounded-md border bg-background/40 p-2">
-                  <div className="flex items-center gap-2">
-                    <CircleDashed className="size-3.5 text-muted-foreground" aria-hidden />
-                    <span className="select-text font-mono text-xs">{key}</span>
-                    <span className="font-mono text-xs text-muted-foreground">{bytes}B</span>
-                  </div>
-                  <pre className="mt-1 max-h-[200px] select-text overflow-auto rounded-md border p-2 text-xs font-mono text-muted-foreground/80 whitespace-pre-wrap break-all">
-                    {value}
-                  </pre>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-
-      {/* Edit button */}
-      <div
-        className="flex items-center gap-2 border-t pt-3"
-        style={{ borderColor: "var(--border-subtle)" }}
-      >
-        <span className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground mr-2">
-          Manage
-        </span>
-        <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={onEdit}>
-          <Pencil className="size-3" />
-          Edit
-        </Button>
-      </div>
     </div>
   );
 }

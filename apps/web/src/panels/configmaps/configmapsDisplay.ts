@@ -6,8 +6,98 @@ import type { ConfigMap } from "./types";
  * `ConfigMapsViewModel.filteredConfigMaps`. See `docs/parity/configmaps.md`.
  */
 
-// Re-export the shared relativeAge so the panel imports one age formatter.
-export { relativeAge } from "../pods/podDisplay";
+// Re-export the shared age formatters so the panel imports one of each.
+export { relativeAge, humanAge } from "../pods/podDisplay";
+
+/** Detected value kind for a plaintext ConfigMap key (drives the type badge). */
+export type ValueKind = "certificate" | "json" | "yaml" | "text";
+
+/**
+ * Human-readable byte size: "566 B", "1.5 KB", "2 MB". Whole values drop the
+ * decimal ("1 KB", not "1.0 KB"); ≥10 of a unit rounds to an integer.
+ */
+export function humanBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let v = n / 1024;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i += 1;
+  }
+  const rounded = v >= 10 ? Math.round(v) : Math.round(v * 10) / 10;
+  return `${rounded} ${units[i]}`;
+}
+
+/**
+ * Lightweight ("Medium") value-kind detection for the key preview badge:
+ *   - `certificate` — value contains a PEM certificate header.
+ *   - `json` — trimmed value starts with `{`/`[` and parses as JSON.
+ *   - `yaml` — key ends `.yaml`/`.yml` (extension heuristic, no structural parse).
+ *   - `text` — anything else.
+ * No deep format parsing (that would be the "Full" tier).
+ */
+export function valueKind(key: string, value: string): ValueKind {
+  if (value.includes("-----BEGIN CERTIFICATE-----")) return "certificate";
+  const trimmed = value.trimStart();
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    try {
+      JSON.parse(value);
+      return "json";
+    } catch {
+      // not valid JSON — fall through to the extension/text checks
+    }
+  }
+  const lower = key.toLowerCase();
+  if (lower.endsWith(".yaml") || lower.endsWith(".yml")) return "yaml";
+  return "text";
+}
+
+/** Uppercase badge label for a value kind. */
+export function kindLabel(kind: ValueKind): string {
+  switch (kind) {
+    case "certificate":
+      return "CERTIFICATE";
+    case "json":
+      return "JSON";
+    case "yaml":
+      return "YAML";
+    default:
+      return "TEXT";
+  }
+}
+
+/**
+ * Split a value into display lines, dropping a single trailing newline so a
+ * value ending in "\n" counts as N lines, not N+1. An empty string is one
+ * (empty) line.
+ */
+export function valueLines(value: string): string[] {
+  const lines = value.split("\n");
+  if (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
+  return lines;
+}
+
+// Deterministic namespace → dot color. Mirrors the design's per-namespace
+// identity dot; the app has no shared namespace-color helper, so this is a small
+// self-contained hash into a fixed palette (matches the Pencil pod.color set).
+const NS_DOT_PALETTE = [
+  "#60A5FA",
+  "#34D399",
+  "#FB923C",
+  "#A855F7",
+  "#EC4899",
+  "#22D3EE",
+  "#FACC15",
+  "#2DD4BF",
+];
+
+/** Stable color for a namespace's identity dot (same ns → same color). */
+export function namespaceDotColor(ns: string): string {
+  let h = 0;
+  for (let i = 0; i < ns.length; i += 1) h = (h * 31 + ns.charCodeAt(i)) >>> 0;
+  return NS_DOT_PALETTE[h % NS_DOT_PALETTE.length];
+}
 
 /**
  * Total key count across plaintext + binary data. Mirrors Swift

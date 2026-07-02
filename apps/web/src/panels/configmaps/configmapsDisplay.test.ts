@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import type { ConfigMap } from "./types";
 import {
   relativeAge,
+  humanAge,
   keyCount,
   binaryKeyCount,
   keysSorted,
@@ -10,6 +11,11 @@ import {
   binaryBytes,
   matchesSearch,
   sortConfigMaps,
+  humanBytes,
+  valueKind,
+  kindLabel,
+  valueLines,
+  namespaceDotColor,
 } from "./configmapsDisplay";
 
 function cm(overrides: Partial<ConfigMap> = {}): ConfigMap {
@@ -156,5 +162,95 @@ describe("relativeAge", () => {
   });
   test("missing timestamp → —", () => {
     expect(relativeAge(undefined, now)).toBe("—");
+  });
+});
+
+describe("humanAge (re-exported shared formatter)", () => {
+  const now = Date.parse("2026-06-09T12:00:00Z");
+  test("long form with pluralization", () => {
+    expect(humanAge("2025-12-26T12:00:00Z", now)).toBe("165 days");
+    expect(humanAge("2026-06-08T12:00:00Z", now)).toBe("1 day");
+    expect(humanAge("2026-06-09T11:00:00Z", now)).toBe("1 hour");
+    expect(humanAge("2026-06-09T11:57:00Z", now)).toBe("3 minutes");
+    expect(humanAge("2026-06-09T11:59:59Z", now)).toBe("just now");
+  });
+  test("missing timestamp → —", () => {
+    expect(humanAge(undefined, now)).toBe("—");
+  });
+});
+
+describe("humanBytes", () => {
+  test("bytes under 1 KB", () => {
+    expect(humanBytes(0)).toBe("0 B");
+    expect(humanBytes(566)).toBe("566 B");
+    expect(humanBytes(1023)).toBe("1023 B");
+  });
+  test("KB / MB with trimmed decimals", () => {
+    expect(humanBytes(1024)).toBe("1 KB");
+    expect(humanBytes(1536)).toBe("1.5 KB");
+    expect(humanBytes(10 * 1024)).toBe("10 KB");
+    expect(humanBytes(1024 * 1024)).toBe("1 MB");
+    expect(humanBytes(1536 * 1024)).toBe("1.5 MB");
+  });
+});
+
+describe("valueKind", () => {
+  test("certificate via PEM header", () => {
+    expect(valueKind("ca.crt", "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----")).toBe(
+      "certificate",
+    );
+  });
+  test("json via leading brace/bracket that parses", () => {
+    expect(valueKind("config.json", '{"a":1}')).toBe("json");
+    expect(valueKind("list", "[1, 2, 3]")).toBe("json");
+    expect(valueKind("x", "  \n{\"a\":1}")).toBe("json");
+  });
+  test("brace that does not parse falls back to text", () => {
+    expect(valueKind("broken", "{not json")).toBe("text");
+  });
+  test("yaml by key extension", () => {
+    expect(valueKind("database.yaml", "a: 1\nb: 2")).toBe("yaml");
+    expect(valueKind("values.YML", "a: 1")).toBe("yaml");
+  });
+  test("plain text default", () => {
+    expect(valueKind("notes", "hello world")).toBe("text");
+    expect(valueKind("EMPTY", "")).toBe("text");
+  });
+});
+
+describe("kindLabel", () => {
+  test("uppercase labels", () => {
+    expect(kindLabel("certificate")).toBe("CERTIFICATE");
+    expect(kindLabel("json")).toBe("JSON");
+    expect(kindLabel("yaml")).toBe("YAML");
+    expect(kindLabel("text")).toBe("TEXT");
+  });
+});
+
+describe("valueLines", () => {
+  test("splits on newline", () => {
+    expect(valueLines("a\nb\nc")).toEqual(["a", "b", "c"]);
+  });
+  test("drops a single trailing newline (N lines, not N+1)", () => {
+    expect(valueLines("a\nb\n")).toEqual(["a", "b"]);
+  });
+  test("empty string is one empty line", () => {
+    expect(valueLines("")).toEqual([""]);
+  });
+  test("single line", () => {
+    expect(valueLines("solo")).toEqual(["solo"]);
+  });
+});
+
+describe("namespaceDotColor", () => {
+  test("deterministic for the same namespace", () => {
+    expect(namespaceDotColor("default")).toBe(namespaceDotColor("default"));
+    expect(namespaceDotColor("cert-manager")).toBe(namespaceDotColor("cert-manager"));
+  });
+  test("returns a palette hex color", () => {
+    const hex = /^#[0-9A-F]{6}$/i;
+    for (const ns of ["default", "cert-manager", "cnpg-system", "", "kube-system"]) {
+      expect(namespaceDotColor(ns)).toMatch(hex);
+    }
   });
 });

@@ -120,6 +120,33 @@ export async function deleteManifestYaml(yaml: string): Promise<ActionResult> {
   return res.json() as Promise<ActionResult>;
 }
 
+/**
+ * Fetch a resource's YAML via `GET /api/resource` (server runs the guarded
+ * `kubectl get -o yaml`). With `clean`, the server strips status + managedFields
+ * so the manifest is ready to re-apply. Shared by the YAML viewer and the
+ * ConfigMaps Download YAML / Copy actions.
+ */
+export async function fetchResourceYaml(
+  kind: string,
+  name: string,
+  namespace?: string,
+  clean?: boolean,
+): Promise<string> {
+  const params = new URLSearchParams({ kind, name });
+  if (namespace) params.set("namespace", namespace);
+  if (clean) params.set("clean", "1");
+  const res = await fetch(`/api/resource?${params.toString()}`);
+  const data = (await res.json().catch(() => ({}))) as {
+    code?: number;
+    yaml?: string;
+    stderr?: string;
+    error?: string;
+  };
+  if (!res.ok) throw new Error(data.error ?? res.statusText);
+  if (data.code !== 0) throw new Error(data.stderr || "kubectl get failed");
+  return data.yaml ?? "";
+}
+
 export interface RepoFixResponse {
   ok: boolean;
   diff?: string; // dryRun preview
