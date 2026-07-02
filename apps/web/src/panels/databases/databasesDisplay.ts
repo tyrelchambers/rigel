@@ -34,7 +34,7 @@ import { compactAge } from "@/lib/time";
  * "—" when missing. Pass `now` for determinism in tests.
  */
 export function relativeAge(iso: string | undefined, now: number = Date.now()): string {
-  return compactAge(iso, { now, clampFuture: true }) as string;
+  return compactAge(iso, { now, clampFuture: true });
 }
 
 // ---------------------------------------------------------------------------

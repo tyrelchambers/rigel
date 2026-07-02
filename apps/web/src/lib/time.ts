@@ -7,6 +7,10 @@
 
 import { differenceInSeconds } from "date-fns";
 
+const SEC_PER_MINUTE = 60;
+const SEC_PER_HOUR = 3600;
+const SEC_PER_DAY = 86400;
+
 /** Parse an ISO string or epoch-ms number to epoch ms, or null when unusable. */
 function parseInstant(input: string | number | undefined | null): number | null {
   if (input == null) return null;
@@ -38,6 +42,14 @@ export interface CompactAgeOpts {
  */
 export function compactAge(
   input: string | number | undefined | null,
+  opts?: CompactAgeOpts & { invalid?: string },
+): string;
+export function compactAge(
+  input: string | number | undefined | null,
+  opts: CompactAgeOpts & { invalid: null },
+): string | null;
+export function compactAge(
+  input: string | number | undefined | null,
   opts: CompactAgeOpts = {},
 ): string | null {
   const {
@@ -55,14 +67,16 @@ export function compactAge(
   const sec = differenceInSeconds(now, then);
   const withSuffix = (s: string) => (suffix ? `${s} ago` : s);
 
+  // clampFuture takes precedence over belowMinute: a future instant renders
+  // "0s", never "just now" (no caller combines the two today).
   if (clampFuture && sec < 0) return withSuffix("0s");
-  if (sec < 60) {
+  if (sec < SEC_PER_MINUTE) {
     if (belowMinute === "just now") return "just now";
     return withSuffix(`${sec}s`);
   }
-  if (sec < 3600) return withSuffix(`${Math.floor(sec / 60)}m`);
-  if (maxUnit === "h" || sec < 86400) return withSuffix(`${Math.floor(sec / 3600)}h`);
-  return withSuffix(`${Math.floor(sec / 86400)}d`);
+  if (sec < SEC_PER_HOUR) return withSuffix(`${Math.floor(sec / SEC_PER_MINUTE)}m`);
+  if (maxUnit === "h" || sec < SEC_PER_DAY) return withSuffix(`${Math.floor(sec / SEC_PER_HOUR)}h`);
+  return withSuffix(`${Math.floor(sec / SEC_PER_DAY)}d`);
 }
 
 /**
@@ -80,9 +94,9 @@ export function spelledAge(
 
   const s = Math.max(0, differenceInSeconds(now, then));
   const units: [number, string][] = [
-    [86400, "day"],
-    [3600, "hour"],
-    [60, "minute"],
+    [SEC_PER_DAY, "day"],
+    [SEC_PER_HOUR, "hour"],
+    [SEC_PER_MINUTE, "minute"],
   ];
   for (const [secs, label] of units) {
     if (s >= secs) {

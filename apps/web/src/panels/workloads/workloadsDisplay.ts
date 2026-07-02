@@ -15,7 +15,7 @@ import { compactAge } from "@/lib/time";
  * determinism in tests.
  */
 export function relativeAge(iso: string | undefined, now: number = Date.now()): string {
-  return compactAge(iso, { now, clampFuture: true }) as string;
+  return compactAge(iso, { now, clampFuture: true });
 }
 
 // --- StatefulSet / DaemonSet ready fraction --------------------------------
@@ -126,7 +126,7 @@ export function jobCompletionsLabel(job: Job): string {
 export function lastScheduleAgo(cronJob: CronJob, now: number = Date.now()): string | null {
   const t = cronJob.status?.lastScheduleTime;
   if (!t) return null;
-  return compactAge(t, { now, suffix: true });
+  return compactAge(t, { now, suffix: true, invalid: null });
 }
 
 /** Count of currently-active jobs for a CronJob (`status.active?.length ?? 0`). */

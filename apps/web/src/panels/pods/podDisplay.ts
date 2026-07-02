@@ -7,7 +7,7 @@ import { compactAge, spelledAge } from "@/lib/time";
  * `Sources/Rigel/Cluster/KubeTypes.swift`. Pass `now` for determinism.
  */
 export function relativeAge(iso: string | undefined, now: number = Date.now()): string {
-  return compactAge(iso, { now, clampFuture: true }) as string;
+  return compactAge(iso, { now, clampFuture: true });
 }
 
 /** Phase → pill color class. Unknown phases render gray; nil handled by caller. */

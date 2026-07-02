@@ -36,7 +36,7 @@ export function when(event: K8sEvent): string | undefined {
  * `K8sEvent.relativeAge(now:)` and the shared web `relativeAge`.
  */
 export function relativeAge(iso: string | undefined | null, now: number = Date.now()): string {
-  return compactAge(iso, { now, clampFuture: true }) as string;
+  return compactAge(iso, { now, clampFuture: true });
 }
 
 /**

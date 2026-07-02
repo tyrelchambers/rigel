@@ -83,5 +83,5 @@ export function deleteSession(id: string): void {
 
 /** "just now" / "5m ago" / "3h ago" / "2d ago" from an epoch-ms timestamp. */
 export function ageDescription(ms: number): string {
-  return compactAge(ms, { suffix: true, belowMinute: "just now" }) as string;
+  return compactAge(ms, { suffix: true, belowMinute: "just now" });
 }
