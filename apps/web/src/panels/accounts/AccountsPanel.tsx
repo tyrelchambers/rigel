@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Package, Star, Trash2 } from "lucide-react";
+import { FileCode2, Package, Star, Trash2 } from "lucide-react";
 import type { Secret } from "@rigel/k8s";
 import { Loader } from "@/components/Loader";
+import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import {
@@ -213,6 +214,7 @@ function AddAccountSheet({
   const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   // Reset the form each time the sheet opens (never persist a token in state).
   useEffect(() => {
@@ -221,6 +223,7 @@ function AddAccountSheet({
       setSubmitted(false);
       setBusy(false);
       setServerError(null);
+      setShowPreview(false);
     }
   }, [open]);
 
@@ -279,22 +282,6 @@ function AddAccountSheet({
     }
   }
 
-  function modeButton(mode: AddMode, label: string) {
-    const active = form.mode === mode;
-    return (
-      <button
-        type="button"
-        onClick={() => set("mode", mode)}
-        aria-pressed={active}
-        className={`flex-1 rounded-md px-3 py-1 text-sm ${
-          active ? "bg-background shadow-sm font-medium" : "text-muted-foreground"
-        }`}
-      >
-        {label}
-      </button>
-    );
-  }
-
   function field(
     key: keyof AccountForm,
     label: string,
@@ -332,11 +319,15 @@ function AddAccountSheet({
             Store registry pull credentials as a cluster Secret so installs pull authenticated.
           </DialogDescription>
 
-          {/* Mode picker */}
-          <div className="flex gap-1 rounded-lg bg-muted p-1">
-            {modeButton("create", "Create")}
-            {modeButton("reference", "Reference existing")}
-          </div>
+          {/* Mode picker — segmented tab rail */}
+          <SegmentedTabs
+            tabs={[
+              { id: "create", label: "Create" },
+              { id: "reference", label: "Reference existing" },
+            ]}
+            active={form.mode}
+            onChange={(id) => set("mode", id as AddMode)}
+          />
 
           {field("registry", "Registry", { placeholder: "docker.io" })}
           {field("username", "Username", { optional: form.mode === "reference" })}
@@ -354,13 +345,24 @@ function AddAccountSheet({
             Use as the default for installs
           </label>
 
-          {/* Preview (create mode only) — .dockerconfigjson masked as [hidden]. */}
+          {/* Preview (create mode only) — on demand; .dockerconfigjson masked as
+              [hidden]. Kept behind a button so the form stays the focus. */}
           {form.mode === "create" && (
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground">Preview</p>
-              <pre className="max-h-48 overflow-auto rounded-md bg-muted px-3 py-2 text-xs font-mono whitespace-pre-wrap break-all">
-                {previewYAML(form)}
-              </pre>
+            <div className="space-y-1.5">
+              <button
+                type="button"
+                onClick={() => setShowPreview((v) => !v)}
+                aria-expanded={showPreview}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+              >
+                <FileCode2 className="size-3.5" aria-hidden />
+                {showPreview ? "Hide YAML" : "Preview YAML"}
+              </button>
+              {showPreview && (
+                <pre className="max-h-48 overflow-auto rounded-md bg-muted px-3 py-2 text-xs font-mono whitespace-pre-wrap break-all">
+                  {previewYAML(form)}
+                </pre>
+              )}
             </div>
           )}
 
