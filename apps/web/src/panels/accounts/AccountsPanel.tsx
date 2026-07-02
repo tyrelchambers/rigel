@@ -3,6 +3,7 @@ import { FileCode2, Package, Star, Trash2 } from "lucide-react";
 import type { Secret } from "@rigel/k8s";
 import { Loader } from "@/components/Loader";
 import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
+import { YamlEditor } from "@/components/YamlEditorLazy";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import {
@@ -359,9 +360,9 @@ function AddAccountSheet({
                 {showPreview ? "Hide YAML" : "Preview YAML"}
               </button>
               {showPreview && (
-                <pre className="max-h-48 overflow-auto rounded-md bg-muted px-3 py-2 text-xs font-mono whitespace-pre-wrap break-all">
-                  {previewYAML(form)}
-                </pre>
+                <div className="overflow-hidden rounded-md border border-[var(--border-subtle)]">
+                  <YamlEditor value={previewYAML(form)} readOnly language="yaml" height="240px" />
+                </div>
               )}
             </div>
           )}
