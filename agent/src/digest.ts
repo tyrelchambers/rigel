@@ -25,7 +25,14 @@ const pad2 = (n: number): string => String(n).padStart(2, "0");
 /** The absolute instant of a local wall-clock time in `tz` (DST-aware). The
  * timezone-neutral date-string form lets `fromZonedTime` resolve the wall-clock
  * fields in `tz` (and disambiguate DST transitions) without the runner's local
- * offset leaking in. */
+ * offset leaking in.
+ *
+ * For the ambiguous fall-back hour, date-fns-tz picks one offset
+ * deterministically. This can differ from the old two-pass result in
+ * positive-offset zones (e.g. Europe/London), but each slot still resolves to
+ * exactly one instant, so a digest fires once/day (never double-fires).
+ * America/Toronto (and other negative-offset zones) match the old behavior
+ * byte-for-byte. */
 function zonedWallToUtc(tz: string, y: number, mo: number, d: number, h: number, mi: number): number {
   return fromZonedTime(`${y}-${pad2(mo)}-${pad2(d)}T${pad2(h)}:${pad2(mi)}:00`, tz).getTime();
 }
