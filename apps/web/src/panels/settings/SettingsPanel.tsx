@@ -4,6 +4,7 @@
 //   3. App defaults — per-cluster self-host install defaults.
 
 import { useState } from "react";
+import { Bot, Radio, SlidersHorizontal } from "lucide-react";
 import { TabBar, Tab } from "@/components/ui/Tabs";
 import { AiAgentsTab } from "./tabs/AiAgentsTab";
 import { ChannelsTab } from "./tabs/ChannelsTab";
@@ -11,26 +12,28 @@ import { AppDefaultsTab } from "./tabs/AppDefaultsTab";
 
 type SettingsTab = "agents" | "channels" | "defaults";
 const TABS = [
-  { id: "agents", label: "AI agents" },
-  { id: "channels", label: "Channels" },
-  { id: "defaults", label: "App defaults" },
+  { id: "agents", label: "AI agents", icon: Bot },
+  { id: "channels", label: "Channels", icon: Radio },
+  { id: "defaults", label: "App defaults", icon: SlidersHorizontal },
 ];
 
 export default function SettingsPanel() {
   const [tab, setTab] = useState<SettingsTab>("agents");
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-bold text-foreground">Settings</h1>
-        <p className="text-sm text-muted-foreground">
-          Connect agents, wire up channels, and set self-host defaults.
-        </p>
+    <div className="flex w-full flex-col gap-6 px-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-xl font-bold text-foreground">Settings</h1>
+          <p className="text-sm text-muted-foreground">
+            Connect agents, wire up channels, and set self-host defaults.
+          </p>
+        </div>
+        <TabBar value={tab} onValueChange={(id) => setTab(id as SettingsTab)} className="shrink-0">
+          {TABS.map((t) => (
+            <Tab key={t.id} value={t.id} icon={t.icon}>{t.label}</Tab>
+          ))}
+        </TabBar>
       </div>
-      <TabBar value={tab} onValueChange={(id) => setTab(id as SettingsTab)}>
-        {TABS.map((t) => (
-          <Tab key={t.id} value={t.id}>{t.label}</Tab>
-        ))}
-      </TabBar>
       {tab === "agents" && <AiAgentsTab />}
       {tab === "channels" && <ChannelsTab />}
       {tab === "defaults" && <AppDefaultsTab />}
