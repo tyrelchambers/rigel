@@ -10,7 +10,6 @@ import {
   Plus,
   TriangleAlert,
   Trash2,
-  X,
 } from "lucide-react";
 import type { ConfigMap } from "./types";
 import type { KVRow } from "@rigel/k8s";
@@ -21,7 +20,16 @@ import {
   rowsToConfigMapData,
   seedConfigMapRows,
 } from "@rigel/k8s";
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogIcon,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { YamlEditor } from "@/components/YamlEditorLazy";
 import { useClusterYamlSchema } from "@/lib/useClusterYamlSchema";
 import { useCopyToClipboard } from "@/lib/useCopyToClipboard";
@@ -135,46 +143,30 @@ export function ConfigMapEditor({ target, open, onClose, onApplied }: ConfigMapE
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent
-        showCloseButton={false}
-        className="flex max-h-[86vh] w-[calc(100%-2rem)] max-w-[760px] flex-col gap-0 overflow-hidden rounded-2xl border border-[var(--border-strong)] bg-[var(--surface-elevated)] p-0 ring-0"
-      >
-        {/* Header */}
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--border-subtle)] px-6 pb-[18px] pt-[22px]">
-          <div className="flex items-start gap-3">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-[9px] bg-[var(--accent-primary)]/[0.15]">
-              <TileIcon className="size-[18px] text-[var(--accent-primary)]" />
-            </div>
-            <div className="flex flex-col gap-[3px]">
-              <DialogTitle className="flex items-center gap-2 font-heading text-[20px] font-bold leading-tight text-foreground">
-                {isEdit ? (
-                  <>
-                    <span>Edit</span>
-                    <span className="font-mono text-[19px] font-semibold">{name}</span>
-                  </>
-                ) : (
-                  "New ConfigMap"
-                )}
-              </DialogTitle>
-              <DialogDescription className="text-[13px] text-[var(--fg-tertiary)]">
-                {isEdit
-                  ? "Modify plaintext data. Name, namespace, and binary data are preserved."
-                  : "Create a ConfigMap with plaintext key/value data. Multi-line values are supported."}
-              </DialogDescription>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="flex size-[30px] shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-[var(--fg-secondary)] transition-colors hover:text-foreground"
-          >
-            <X className="size-4" />
-          </button>
-        </div>
+      <DialogContent className="max-h-[86vh] w-[calc(100%-2rem)] max-w-[760px]">
+        <DialogHeader>
+          <DialogIcon>
+            <TileIcon className="size-[15px]" />
+          </DialogIcon>
+          <DialogTitle className="flex items-center gap-2 font-heading text-base font-semibold leading-tight text-foreground">
+            {isEdit ? (
+              <>
+                <span>Edit</span>
+                <span className="font-mono text-[15px] font-semibold">{name}</span>
+              </>
+            ) : (
+              "New ConfigMap"
+            )}
+          </DialogTitle>
+        </DialogHeader>
 
-        {/* Body */}
-        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-6">
+        <DialogBody className="flex flex-col gap-5">
+          <DialogDescription className="text-[13px] text-[var(--fg-tertiary)]">
+            {isEdit
+              ? "Modify plaintext data. Name, namespace, and binary data are preserved."
+              : "Create a ConfigMap with plaintext key/value data. Multi-line values are supported."}
+          </DialogDescription>
+
           {/* Form ⇄ YAML segmented toggle */}
           <div className="inline-flex w-fit gap-[2px] rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] p-[3px]">
             {(["form", "yaml"] as const).map((m) => (
@@ -264,10 +256,9 @@ export function ConfigMapEditor({ target, open, onClose, onApplied }: ConfigMapE
               {serverError}
             </pre>
           )}
-        </div>
+        </DialogBody>
 
-        {/* Footer */}
-        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-6 pb-5 pt-4">
+        <DialogFooter className="items-center sm:justify-between">
           <div className="flex items-center gap-[7px]">
             <TriangleAlert className="size-[13px] text-[var(--fg-tertiary)]" aria-hidden />
             <span className="text-[12.5px] text-[var(--fg-tertiary)]">
@@ -295,7 +286,7 @@ export function ConfigMapEditor({ target, open, onClose, onApplied }: ConfigMapE
               {busy ? "Applying…" : isEdit ? "Apply changes" : "Create"}
             </button>
           </div>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

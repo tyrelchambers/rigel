@@ -10,6 +10,7 @@ import {
 } from "@rigel/catalog";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -226,10 +227,10 @@ export function CatalogInstallWizard({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="wizard-dialog max-h-[88vh] w-[min(940px,94vw)] max-w-none sm:max-w-none overflow-auto">
-        <DialogHeader className="wizard-header">
+      <DialogContent className="wizard-dialog max-h-[88vh] w-[min(940px,94vw)] max-w-none sm:max-w-none">
+        <DialogHeader showClose={false}>
           {/* App identity row */}
-          <div className="wizard-app-row">
+          <div className="wizard-app-row min-w-0 flex-1">
             <div
               className="wizard-app-icon"
               style={{ background: "var(--border-subtle)", border: "1px solid #34353A" }}
@@ -272,7 +273,7 @@ export function CatalogInstallWizard({
           )}
         </DialogHeader>
 
-        <div className="wizard-body">
+        <DialogBody className="wizard-body p-0">
           {step === "configure" && (
             <ConfigureStep
               app={app}
@@ -338,7 +339,7 @@ export function CatalogInstallWizard({
               onHandoff={() => handoffToChat("The install failed")}
             />
           )}
-        </div>
+        </DialogBody>
       </DialogContent>
     </Dialog>
   );

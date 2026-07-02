@@ -16,9 +16,12 @@ import {
 } from "@rigel/k8s";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
+  DialogHeader,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { KeyValueEditor } from "../components/KeyValueEditor";
@@ -204,158 +207,161 @@ export function SecretEditor({ target, open, onClose, onApplied }: SecretEditorP
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="p-0 gap-0 max-w-3xl max-h-[84vh] overflow-auto">
-        <div className="flex flex-col gap-0.5 p-4">
+      <DialogContent className="max-w-3xl max-h-[84vh]">
+        <DialogHeader>
           <DialogTitle>{isEdit ? `Edit ${name}` : "New Secret"}</DialogTitle>
+        </DialogHeader>
+
+        <DialogBody className="flex flex-col gap-4">
           <DialogDescription>
             {isEdit
               ? "Modify the secret data. Name, namespace, and type are fixed; binary values are read-only."
               : "Create a Secret. Plaintext values are base64-encoded into the manifest on apply."}
           </DialogDescription>
-        </div>
 
-        {/* Form ⇄ YAML preview toggle */}
-        <div className="flex items-center gap-1 px-4 pt-1">
-          <Button size="sm" variant={mode === "form" ? "default" : "outline"} onClick={() => setMode("form")}>Form</Button>
-          <Button size="sm" variant={mode === "yaml" ? "default" : "outline"} onClick={() => setMode("yaml")}>YAML</Button>
-        </div>
-
-        {mode === "form" ? (
-        <div className="space-y-4 px-4 py-2">
-          {/* Metadata */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Name</label>
-              <input
-                type="text"
-                value={name}
-                placeholder="my-secret"
-                disabled={isEdit}
-                onChange={(e) => setName(e.target.value)}
-                className={fieldInput}
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Namespace</label>
-              <input
-                type="text"
-                value={namespace}
-                placeholder="default"
-                disabled={isEdit}
-                onChange={(e) => setNamespace(e.target.value)}
-                className={fieldInput}
-              />
-            </div>
+          {/* Form ⇄ YAML preview toggle */}
+          <div className="flex items-center gap-1">
+            <Button size="sm" variant={mode === "form" ? "default" : "outline"} onClick={() => setMode("form")}>Form</Button>
+            <Button size="sm" variant={mode === "yaml" ? "default" : "outline"} onClick={() => setMode("yaml")}>YAML</Button>
           </div>
 
-          {/* Type picker */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">Type</label>
-            {isEdit ? (
-              <div className="flex items-center gap-2">
-                <span className="inline-block rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                  {CREATABLE_SECRET_TYPES.find((t) => t.id === type)?.displayName ?? "Opaque"}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  (type can&apos;t be changed after creation)
-                </span>
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {CREATABLE_SECRET_TYPES.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    aria-pressed={type === t.id}
-                    onClick={() => applyTypeChange(t.id)}
-                    className={`rounded-md border px-2.5 py-1 text-xs font-medium ${
-                      type === t.id
-                        ? "border-transparent bg-primary text-primary-foreground"
-                        : "bg-background text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {t.displayName}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Type-aware data editor */}
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">
-              {dataBlockTitle(type)}
-            </label>
-
-            {type === DOCKER_TYPE ? (
-              <div className="space-y-3">
-                <DockerField
-                  label="Registry server"
-                  placeholder="ghcr.io"
-                  value={docker.server}
-                  onChange={(v) => setDockerField("server", v)}
-                />
-                <DockerField
-                  label="Username"
-                  placeholder="user"
-                  value={docker.username}
-                  onChange={(v) => setDockerField("username", v)}
-                />
-                <DockerField
-                  label="Password / token"
-                  placeholder="••••••••"
-                  type="password"
-                  value={docker.password}
-                  onChange={(v) => setDockerField("password", v)}
-                />
-                <DockerField
-                  label="Email"
-                  placeholder="user@example.com"
-                  optional
-                  value={docker.email}
-                  onChange={(v) => setDockerField("email", v)}
+          {mode === "form" ? (
+          <div className="space-y-4">
+            {/* Metadata */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Name</label>
+                <input
+                  type="text"
+                  value={name}
+                  placeholder="my-secret"
+                  disabled={isEdit}
+                  onChange={(e) => setName(e.target.value)}
+                  className={fieldInput}
                 />
               </div>
-            ) : (
-              <KeyValueEditor
-                rows={rows}
-                onRowsChange={setRows}
-                readonlyKeyNames={pinnedKeys}
-                fixedRows={pinnedKeys.length > 0}
-                keyPlaceholder="key"
-                maskValues={type === "kubernetes.io/basic-auth"}
-              />
-            )}
-
-            {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
-          </div>
-
-        </div>
-        ) : (
-          <div className="space-y-2 px-4 py-2">
-            <p className="text-xs text-muted-foreground">
-              Live preview of the manifest applied with <code className="font-mono">kubectl apply -f -</code>. Plaintext values are base64-encoded.
-            </p>
-            <div className="h-[52vh] w-full overflow-hidden rounded-md border" style={{ background: "#0B0C0E", borderColor: "#26272B" }}>
-              <YamlEditor value={yaml} readOnly schema={schema ?? null} />
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Namespace</label>
+                <input
+                  type="text"
+                  value={namespace}
+                  placeholder="default"
+                  disabled={isEdit}
+                  onChange={(e) => setNamespace(e.target.value)}
+                  className={fieldInput}
+                />
+              </div>
             </div>
+  
+            {/* Type picker */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Type</label>
+              {isEdit ? (
+                <div className="flex items-center gap-2">
+                  <span className="inline-block rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                    {CREATABLE_SECRET_TYPES.find((t) => t.id === type)?.displayName ?? "Opaque"}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    (type can&apos;t be changed after creation)
+                  </span>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {CREATABLE_SECRET_TYPES.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      aria-pressed={type === t.id}
+                      onClick={() => applyTypeChange(t.id)}
+                      className={`rounded-md border px-2.5 py-1 text-xs font-medium ${
+                        type === t.id
+                          ? "border-transparent bg-primary text-primary-foreground"
+                          : "bg-background text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {t.displayName}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+  
+            {/* Type-aware data editor */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">
+                {dataBlockTitle(type)}
+              </label>
+  
+              {type === DOCKER_TYPE ? (
+                <div className="space-y-3">
+                  <DockerField
+                    label="Registry server"
+                    placeholder="ghcr.io"
+                    value={docker.server}
+                    onChange={(v) => setDockerField("server", v)}
+                  />
+                  <DockerField
+                    label="Username"
+                    placeholder="user"
+                    value={docker.username}
+                    onChange={(v) => setDockerField("username", v)}
+                  />
+                  <DockerField
+                    label="Password / token"
+                    placeholder="••••••••"
+                    type="password"
+                    value={docker.password}
+                    onChange={(v) => setDockerField("password", v)}
+                  />
+                  <DockerField
+                    label="Email"
+                    placeholder="user@example.com"
+                    optional
+                    value={docker.email}
+                    onChange={(v) => setDockerField("email", v)}
+                  />
+                </div>
+              ) : (
+                <KeyValueEditor
+                  rows={rows}
+                  onRowsChange={setRows}
+                  readonlyKeyNames={pinnedKeys}
+                  fixedRows={pinnedKeys.length > 0}
+                  keyPlaceholder="key"
+                  maskValues={type === "kubernetes.io/basic-auth"}
+                />
+              )}
+  
+              {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+            </div>
+  
           </div>
-        )}
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Live preview of the manifest applied with <code className="font-mono">kubectl apply -f -</code>. Plaintext values are base64-encoded.
+              </p>
+              <div className="h-[52vh] w-full overflow-hidden rounded-md border" style={{ background: "#0B0C0E", borderColor: "#26272B" }}>
+                <YamlEditor value={yaml} readOnly schema={schema ?? null} />
+              </div>
+            </div>
+          )}
 
-        {serverError && (
-          <pre className="mx-4 rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
-            {serverError}
-          </pre>
-        )}
+          {serverError && (
+            <pre className="rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+              {serverError}
+            </pre>
+          )}
+        </DialogBody>
 
-        <div className="mt-auto flex flex-col gap-2 p-4">
+        <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
           <Button onClick={handleApply} disabled={busy || !valid}>
             {busy ? "Applying…" : isEdit ? "Apply changes" : "Create"}
           </Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
