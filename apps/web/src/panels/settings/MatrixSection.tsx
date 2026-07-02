@@ -9,6 +9,7 @@ import { useAssistantAction } from "@/lib/api";
 import type { SettingsDerived } from "./useSettings";
 import { MatrixConnectModal } from "./MatrixConnectModal";
 import { IconTile, GreenToggle } from "./MatrixWizardParts";
+import { ChannelDisconnectDialog } from "./ChannelDisconnectDialog";
 
 const DOT: Record<string, string> = {
   gray: "var(--fg-tertiary)",
@@ -67,6 +68,8 @@ export function MatrixSection({ derived }: { derived: SettingsDerived }) {
   const setMatrix = useAssistantAction();
   const [wizardOpen, setWizardOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [disconnectOpen, setDisconnectOpen] = useState(false);
+  const [disconnectError, setDisconnectError] = useState<string | null>(null);
 
   const senders = parseAllowedSenders(matrixAllowedSenders);
 
@@ -80,7 +83,7 @@ export function MatrixSection({ derived }: { derived: SettingsDerived }) {
   }
 
   async function disconnect() {
-    setError(null);
+    setDisconnectError(null);
     try {
       await setMatrix.mutateAsync({
         action: "setMatrix",
@@ -91,8 +94,9 @@ export function MatrixSection({ derived }: { derived: SettingsDerived }) {
         matrixAllowedSenders: "",
         matrixInbound: false,
       });
+      setDisconnectOpen(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setDisconnectError(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -149,7 +153,10 @@ export function MatrixSection({ derived }: { derived: SettingsDerived }) {
             </div>
             <button
               type="button"
-              onClick={disconnect}
+              onClick={() => {
+                setDisconnectError(null);
+                setDisconnectOpen(true);
+              }}
               disabled={setMatrix.isPending}
               className="flex items-center gap-[7px] transition-opacity hover:opacity-80 disabled:opacity-50"
             >
@@ -173,6 +180,15 @@ export function MatrixSection({ derived }: { derived: SettingsDerived }) {
           ))}
         </div>
         {modal}
+        <ChannelDisconnectDialog
+          open={disconnectOpen}
+          onOpenChange={setDisconnectOpen}
+          onConfirm={disconnect}
+          pending={setMatrix.isPending}
+          error={disconnectError}
+          channel="Matrix"
+          description="This clears the homeserver, bot user, and allowed senders from Rigel's config. Notifications stop immediately. You can reconnect anytime."
+        />
       </div>
     );
   }

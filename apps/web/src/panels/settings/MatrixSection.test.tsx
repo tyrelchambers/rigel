@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within, waitFor } from "@testing-library/react";
 import type { SettingsDerived } from "./useSettings";
 
 const mutateAsync = vi.fn(async () => ({ success: true as const, stdout: "", stderr: "" }));
@@ -46,9 +46,39 @@ describe("MatrixSection", () => {
     expect(mutateAsync).toHaveBeenCalledWith({ action: "setMatrix", namespace: "default", matrixInbound: true });
   });
 
-  it("clicking Disconnect calls setMatrix with empty homeserver", () => {
-    render(<MatrixSection derived={derived({ matrixStatus: "connected", matrixHomeserverUrl: "https://hs", matrixUserId: "@rigel:hs", matrixRoomId: "!r:hs" })} />);
+  const connected = () => derived({ matrixStatus: "connected", matrixHomeserverUrl: "https://hs", matrixUserId: "@rigel:hs", matrixRoomId: "!r:hs" });
+
+  it("clicking Disconnect opens a confirm dialog instead of calling setMatrix directly", () => {
+    render(<MatrixSection derived={connected()} />);
     fireEvent.click(screen.getByRole("button", { name: /disconnect/i }));
-    expect(mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ action: "setMatrix", matrixHomeserverUrl: "" }));
+    expect(mutateAsync).not.toHaveBeenCalled();
+    expect(within(screen.getByRole("dialog")).getByText(/disconnect matrix/i)).toBeInTheDocument();
+  });
+
+  it("Cancel closes the dialog without calling setMatrix", () => {
+    render(<MatrixSection derived={connected()} />);
+    fireEvent.click(screen.getByRole("button", { name: /disconnect/i }));
+    fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    expect(mutateAsync).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("confirming clears the Matrix config via setMatrix and closes the dialog", async () => {
+    render(<MatrixSection derived={connected()} />);
+    fireEvent.click(screen.getByRole("button", { name: /disconnect/i }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^disconnect$/i }));
+    await waitFor(() =>
+      expect(mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ action: "setMatrix", matrixHomeserverUrl: "" })),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("keeps the dialog open and shows the error when disconnect fails", async () => {
+    mutateAsync.mockRejectedValueOnce(new Error("nope"));
+    render(<MatrixSection derived={connected()} />);
+    fireEvent.click(screen.getByRole("button", { name: /disconnect/i }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^disconnect$/i }));
+    await waitFor(() => expect(screen.getByText("nope")).toBeInTheDocument());
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 });

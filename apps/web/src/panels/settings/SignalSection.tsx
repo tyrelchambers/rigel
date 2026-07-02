@@ -19,7 +19,7 @@ import { useAssistantAction } from "@/lib/api";
 import { fetchSignalQR, fetchSignalAccounts, sendSignalTest } from "@/lib/api";
 import { useSettings } from "./useSettings";
 import { GreenToggle } from "./MatrixWizardParts";
-import { SignalDisconnectDialog } from "./SignalDisconnectDialog";
+import { ChannelDisconnectDialog } from "./ChannelDisconnectDialog";
 
 const DOT_CLASS: Record<string, string> = {
   gray: "bg-muted-foreground/50",
@@ -381,12 +381,14 @@ export function SignalSection({
         </>
       )}
 
-      <SignalDisconnectDialog
+      <ChannelDisconnectDialog
         open={disconnectOpen}
         onOpenChange={setDisconnectOpen}
         onConfirm={disconnect}
         pending={setSignal.isPending}
         error={disconnectError}
+        channel="Signal"
+        description="This removes the linked phone number and recipients from Rigel's config. Notifications stop immediately. The signal-cli-rest bridge stays deployed, so you can re-link anytime."
       />
     </div>
   );

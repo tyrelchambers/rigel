@@ -2,39 +2,50 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import { fireEvent } from "@testing-library/react";
-import { SignalDisconnectDialog } from "./SignalDisconnectDialog";
+import { ChannelDisconnectDialog } from "./ChannelDisconnectDialog";
 
-describe("SignalDisconnectDialog", () => {
+const base = {
+  channel: "Signal",
+  description: "Notifications stop immediately.",
+};
+
+describe("ChannelDisconnectDialog", () => {
   it("renders no dialog when closed", () => {
     render(
-      <SignalDisconnectDialog open={false} onOpenChange={() => {}} onConfirm={() => {}} pending={false} />,
+      <ChannelDisconnectDialog open={false} onOpenChange={() => {}} onConfirm={() => {}} pending={false} {...base} />,
     );
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("shows the destructive confirm copy when open", () => {
+  it("shows the destructive confirm copy for the given channel", () => {
     render(
-      <SignalDisconnectDialog open onOpenChange={() => {}} onConfirm={() => {}} pending={false} />,
+      <ChannelDisconnectDialog open onOpenChange={() => {}} onConfirm={() => {}} pending={false} {...base} />,
     );
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText(/disconnect signal/i)).toBeInTheDocument();
     expect(within(dialog).getByText(/notifications stop immediately/i)).toBeInTheDocument();
   });
 
+  it("titles the dialog with whatever channel is passed", () => {
+    render(
+      <ChannelDisconnectDialog open onOpenChange={() => {}} onConfirm={() => {}} pending={false} channel="Matrix" description="x" />,
+    );
+    expect(within(screen.getByRole("dialog")).getByText(/disconnect matrix/i)).toBeInTheDocument();
+  });
+
   it("calls onConfirm when the Disconnect button is clicked", () => {
     const onConfirm = vi.fn();
     render(
-      <SignalDisconnectDialog open onOpenChange={() => {}} onConfirm={onConfirm} pending={false} />,
+      <ChannelDisconnectDialog open onOpenChange={() => {}} onConfirm={onConfirm} pending={false} {...base} />,
     );
-    const dialog = screen.getByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: /^disconnect$/i }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^disconnect$/i }));
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 
   it("calls onOpenChange(false) when Cancel is clicked", () => {
     const onOpenChange = vi.fn();
     render(
-      <SignalDisconnectDialog open onOpenChange={onOpenChange} onConfirm={() => {}} pending={false} />,
+      <ChannelDisconnectDialog open onOpenChange={onOpenChange} onConfirm={() => {}} pending={false} {...base} />,
     );
     fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
     expect(onOpenChange).toHaveBeenCalledWith(false);
@@ -42,7 +53,7 @@ describe("SignalDisconnectDialog", () => {
 
   it("disables both buttons while pending", () => {
     render(
-      <SignalDisconnectDialog open onOpenChange={() => {}} onConfirm={() => {}} pending />,
+      <ChannelDisconnectDialog open onOpenChange={() => {}} onConfirm={() => {}} pending {...base} />,
     );
     expect(screen.getByRole("button", { name: /cancel/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /disconnecting/i })).toBeDisabled();
@@ -50,7 +61,7 @@ describe("SignalDisconnectDialog", () => {
 
   it("renders the error message inside the dialog when provided", () => {
     render(
-      <SignalDisconnectDialog open onOpenChange={() => {}} onConfirm={() => {}} pending={false} error="Boom" />,
+      <ChannelDisconnectDialog open onOpenChange={() => {}} onConfirm={() => {}} pending={false} error="Boom" {...base} />,
     );
     expect(within(screen.getByRole("dialog")).getByText("Boom")).toBeInTheDocument();
   });

@@ -1,8 +1,10 @@
-// Destructive confirm dialog for the Signal "Disconnect" action. Presentation
-// only — the actual teardown (clearing assistant-config's Signal keys via the
-// setSignal assistant action) lives in SignalSection.disconnect(). Uses the
-// standardized Dialog primitives, not a Sheet.
+// Destructive confirm dialog for disconnecting a notification channel
+// (Signal, Matrix). Presentation only — the actual teardown (clearing the
+// channel's keys in assistant-config via the setSignal/setMatrix action) lives
+// in the calling section's disconnect() handler. Uses the standardized Dialog
+// primitives, not a Sheet.
 
+import { type ReactNode } from "react";
 import { AlertTriangle, Unplug } from "lucide-react";
 import {
   Dialog,
@@ -19,22 +21,31 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
   pending: boolean;
+  /** Channel name, shown as "Disconnect {channel}" in the title. */
+  channel: string;
+  /** Body copy explaining what this disconnect tears down. */
+  description: ReactNode;
+  /** Teardown error, surfaced inside the dialog (not the card banner behind it). */
   error?: string | null;
 }
 
-export function SignalDisconnectDialog({ open, onOpenChange, onConfirm, pending, error }: Props) {
+export function ChannelDisconnectDialog({
+  open,
+  onOpenChange,
+  onConfirm,
+  pending,
+  channel,
+  description,
+  error,
+}: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Disconnect Signal</DialogTitle>
+          <DialogTitle>Disconnect {channel}</DialogTitle>
         </DialogHeader>
         <DialogBody>
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            This removes the linked phone number and recipients from Rigel&apos;s config.
-            Notifications stop immediately. The signal-cli-rest bridge stays deployed, so
-            you can re-link anytime.
-          </p>
+          <p className="text-sm leading-relaxed text-muted-foreground">{description}</p>
           {error && (
             <div className="mt-3 flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
