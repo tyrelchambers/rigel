@@ -79,6 +79,47 @@ export function compactAge(
   return withSuffix(`${Math.floor(sec / SEC_PER_DAY)}d`);
 }
 
+/** Compact rendering ("5s" / "3m" / "2h" / "1d") of a raw NON-NEGATIVE second
+ * count, picking the largest unit via `Math.floor`. Shares the bucket ladder
+ * with `compactAge` (which measures an instant); use this when the caller
+ * already holds a plain second delta. */
+export function compactFromSeconds(seconds: number): string {
+  if (seconds < SEC_PER_MINUTE) return `${Math.floor(seconds)}s`;
+  if (seconds < SEC_PER_HOUR) return `${Math.floor(seconds / SEC_PER_MINUTE)}m`;
+  if (seconds < SEC_PER_DAY) return `${Math.floor(seconds / SEC_PER_HOUR)}h`;
+  return `${Math.floor(seconds / SEC_PER_DAY)}d`;
+}
+
+/**
+ * Spelled-out largest-unit rendering of a raw second count, floored and
+ * pluralized ("165 days" / "1 hour" / "45 seconds"). Negative/NaN clamp to 0.
+ * `belowMinute` picks the sub-60s form: "just now" (the default, for ages) or
+ * "seconds" ("45 seconds", for the certificate duration phrases). Kept as a
+ * plain integer ladder — date-fns' `formatDistanceStrict` is NOT byte-identical
+ * here (it rolls days into months at 30d, and its DST normalization mis-floors
+ * day counts that straddle a transition), so the spelled words are produced
+ * locally, exactly as `compactAge` does for the compact form.
+ */
+export function spelledSeconds(
+  seconds: number,
+  opts: { belowMinute?: "just now" | "seconds" } = {},
+): string {
+  const { belowMinute = "just now" } = opts;
+  const s = Math.max(0, Math.floor(seconds));
+  const units: [number, string][] = [
+    [SEC_PER_DAY, "day"],
+    [SEC_PER_HOUR, "hour"],
+    [SEC_PER_MINUTE, "minute"],
+  ];
+  for (const [secs, label] of units) {
+    if (s >= secs) {
+      const n = Math.floor(s / secs);
+      return `${n} ${label}${n === 1 ? "" : "s"}`;
+    }
+  }
+  return belowMinute === "seconds" ? `${s} second${s === 1 ? "" : "s"}` : "just now";
+}
+
 /**
  * Long, spelled-out age ("just now" / "1 minute" / "3 minutes" / "1 hour" /
  * "165 days") of an ISO string or epoch-ms instant relative to `now`. Largest
@@ -91,18 +132,5 @@ export function spelledAge(
 ): string {
   const then = parseInstant(input);
   if (then === null) return "";
-
-  const s = Math.max(0, differenceInSeconds(now, then));
-  const units: [number, string][] = [
-    [SEC_PER_DAY, "day"],
-    [SEC_PER_HOUR, "hour"],
-    [SEC_PER_MINUTE, "minute"],
-  ];
-  for (const [secs, label] of units) {
-    if (s >= secs) {
-      const n = Math.floor(s / secs);
-      return `${n} ${label}${n === 1 ? "" : "s"}`;
-    }
-  }
-  return "just now";
+  return spelledSeconds(differenceInSeconds(now, then));
 }

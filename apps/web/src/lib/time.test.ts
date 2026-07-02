@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { compactAge, spelledAge } from "./time";
+import { compactAge, compactFromSeconds, spelledAge, spelledSeconds } from "./time";
 
 const now = Date.parse("2026-06-09T12:00:00Z");
 const at = (iso: string) => Date.parse(iso);
@@ -49,6 +49,44 @@ describe("compactAge", () => {
   test("belowMinute + suffix together (ageDescription shape)", () => {
     expect(compactAge(at("2026-06-09T11:55:00Z"), { now, suffix: true, belowMinute: "just now" })).toBe("5m ago");
     expect(compactAge(at("2026-06-09T11:59:40Z"), { now, suffix: true, belowMinute: "just now" })).toBe("just now");
+  });
+});
+
+describe("compactFromSeconds", () => {
+  test("largest unit via floor", () => {
+    expect(compactFromSeconds(45)).toBe("45s");
+    expect(compactFromSeconds(0)).toBe("0s");
+    expect(compactFromSeconds(5 * 60)).toBe("5m");
+    expect(compactFromSeconds(3 * 3600)).toBe("3h");
+    expect(compactFromSeconds(344 * 86400)).toBe("344d");
+  });
+  test("floors fractional and partial units", () => {
+    expect(compactFromSeconds(59.9)).toBe("59s");
+    expect(compactFromSeconds(90)).toBe("1m");
+    expect(compactFromSeconds(90 * 60)).toBe("1h");
+  });
+});
+
+describe("spelledSeconds", () => {
+  test("largest unit, pluralized, floored", () => {
+    expect(spelledSeconds(62 * 86400)).toBe("62 days");
+    expect(spelledSeconds(1 * 86400)).toBe("1 day");
+    expect(spelledSeconds(3 * 3600)).toBe("3 hours");
+    expect(spelledSeconds(1 * 3600)).toBe("1 hour");
+    expect(spelledSeconds(5 * 60)).toBe("5 minutes");
+    expect(spelledSeconds(1 * 60)).toBe("1 minute");
+  });
+  test("belowMinute default is 'just now'", () => {
+    expect(spelledSeconds(45)).toBe("just now");
+    expect(spelledSeconds(0)).toBe("just now");
+  });
+  test("belowMinute 'seconds' spells the sub-minute count", () => {
+    expect(spelledSeconds(45, { belowMinute: "seconds" })).toBe("45 seconds");
+    expect(spelledSeconds(1, { belowMinute: "seconds" })).toBe("1 second");
+    expect(spelledSeconds(0, { belowMinute: "seconds" })).toBe("0 seconds");
+  });
+  test("negatives clamp to zero", () => {
+    expect(spelledSeconds(-5, { belowMinute: "seconds" })).toBe("0 seconds");
   });
 });
 
