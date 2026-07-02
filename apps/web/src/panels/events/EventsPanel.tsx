@@ -73,11 +73,12 @@ function eventVariant(type: string | null | undefined): StatusBadgeVariant {
  * time when both ends share it, so the range reads cleanly.
  */
 function bucketTimeRange(start: number): string {
+  // en-US 12h output is intentional and consistent with the rest of the app
+  // (no i18n); the meridiem dedup below relies on it.
   const from = format(new Date(start), "h:mm a");
   const to = format(addMinutes(new Date(start), 1), "h:mm a");
   // "2:15 PM" + "2:16 PM" → "2:15 - 2:16 PM" when both share the meridiem.
-  // Split on any whitespace: ICU emits a narrow no-break space (U+202F)
-  // before the meridiem in many locales, not a plain space.
+  // Split on whitespace to separate the meridiem so the two ends can compare it.
   const fromParts = from.split(/\s/);
   const toParts = to.split(/\s/);
   if (fromParts.length === 2 && toParts.length === 2 && fromParts[1] === toParts[1]) {

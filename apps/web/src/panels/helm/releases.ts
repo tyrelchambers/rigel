@@ -22,5 +22,6 @@ export function formatTimestamp(value: string | null | undefined): string {
   if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
+  // en-US output is intentional and consistent with the rest of the app (no i18n).
   return format(d, "MMM d, yyyy, h:mm a");
 }
