@@ -9,7 +9,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
+import { TabBar, Tab } from "@/components/ui/Tabs";
 import { AgentGlyph } from "@/panels/settings/agents/agentGlyphs";
 import { useAgentModels, useAgents, type AgentId, type AssistantRoleSelection } from "@/lib/api";
 import { Card, Field } from "../components/primitives";
@@ -116,11 +116,11 @@ export function RolePicker({
 
       {isClaudeFamily(provider) && (
         <Field label="Reasoning" labelWidth="w-20">
-          <SegmentedTabs
-            tabs={EFFORTS}
-            active={value.effort ?? "high"}
-            onChange={(id) => onChange({ ...value, effort: id })}
-          />
+          <TabBar value={value.effort ?? "high"} onValueChange={(id) => onChange({ ...value, effort: id })}>
+            {EFFORTS.map((e) => (
+              <Tab key={e.id} value={e.id}>{e.label}</Tab>
+            ))}
+          </TabBar>
         </Field>
       )}
     </Card>

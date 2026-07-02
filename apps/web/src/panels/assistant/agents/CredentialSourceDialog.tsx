@@ -1,5 +1,5 @@
 // CredentialSourceDialog — choose where the assistant reads a provider's credential
-// (Pencil frame GGza6). Two modes via a SegmentedTabs toggle:
+// (Pencil frame GGza6). Two modes via a TabBar toggle:
 //   - "Managed by Rigel": the paste-a-key editor (method toggle + input/textarea),
 //      same path as before — the value is written to our managed Secret.
 //   - "Use an existing Secret": a Secret picker (names only) + a key picker (that
@@ -24,7 +24,7 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
+import { TabBar, Tab } from "@/components/ui/Tabs";
 import { AgentGlyph } from "@/panels/settings/agents/agentGlyphs";
 import { useCredentialSecrets, type AgentId, type AssistantCredentials } from "@/lib/api";
 import { inputClass } from "../components/primitives";
@@ -115,27 +115,22 @@ export function CredentialSourceDialog({
 
           <div className="mt-3 space-y-3">
           {byoEnabled && (
-            <SegmentedTabs
-              tabs={[
-                { id: "managed", label: "Managed by Rigel" },
-                { id: "existing", label: "Use an existing Secret" },
-              ]}
-              active={mode}
-              onChange={(m) => setMode(m as Mode)}
-            />
+            <TabBar value={mode} onValueChange={(m) => setMode(m as Mode)}>
+              <Tab value="managed">Managed by Rigel</Tab>
+              <Tab value="existing">Use an existing Secret</Tab>
+            </TabBar>
           )}
 
           {/* The method toggle is shared: it selects which credential (env var)
               this dialog configures, for providers that accept more than one. */}
           {methods.length > 1 && (
-            <SegmentedTabs
-              tabs={methods.map((m) => ({
-                id: m.kind,
-                label: m.kind === "subscription" ? "Subscription" : "API key",
-              }))}
-              active={methodKind}
-              onChange={(k) => setMethodKind(k as AuthMethodHelp["kind"])}
-            />
+            <TabBar value={methodKind} onValueChange={(k) => setMethodKind(k as AuthMethodHelp["kind"])}>
+              {methods.map((m) => (
+                <Tab key={m.kind} value={m.kind}>
+                  {m.kind === "subscription" ? "Subscription" : "API key"}
+                </Tab>
+              ))}
+            </TabBar>
           )}
 
           {mode === "managed" ? (

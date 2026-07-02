@@ -4,13 +4,13 @@
 //   3. App defaults — per-cluster self-host install defaults.
 
 import { useState } from "react";
-import { SegmentedTabs, type SegmentedTab } from "@/components/ui/SegmentedTabs";
+import { TabBar, Tab } from "@/components/ui/Tabs";
 import { AiAgentsTab } from "./tabs/AiAgentsTab";
 import { ChannelsTab } from "./tabs/ChannelsTab";
 import { AppDefaultsTab } from "./tabs/AppDefaultsTab";
 
 type SettingsTab = "agents" | "channels" | "defaults";
-const TABS: SegmentedTab[] = [
+const TABS = [
   { id: "agents", label: "AI agents" },
   { id: "channels", label: "Channels" },
   { id: "defaults", label: "App defaults" },
@@ -26,7 +26,11 @@ export default function SettingsPanel() {
           Connect agents, wire up channels, and set self-host defaults.
         </p>
       </div>
-      <SegmentedTabs tabs={TABS} active={tab} onChange={(id) => setTab(id as SettingsTab)} />
+      <TabBar value={tab} onValueChange={(id) => setTab(id as SettingsTab)}>
+        {TABS.map((t) => (
+          <Tab key={t.id} value={t.id}>{t.label}</Tab>
+        ))}
+      </TabBar>
       {tab === "agents" && <AiAgentsTab />}
       {tab === "channels" && <ChannelsTab />}
       {tab === "defaults" && <AppDefaultsTab />}

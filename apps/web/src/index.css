@@ -776,7 +776,9 @@
 
 .catalog-search-icon {
     position: absolute;
-    left: 10px;
+    left: 11px;
+    top: 50%;
+    transform: translateY(-50%);
     width: 13px;
     height: 13px;
     color: var(--fg-tertiary);
@@ -786,11 +788,13 @@
 
 .catalog-search-input {
     width: 220px;
-    padding: 6px 10px 6px 30px;
-    font-size: 12px;
+    /* 10px vertical + 13px font makes the box match the segmented tab rail's
+       height exactly (tab py-[7px] + rail p-[3px] + borders). */
+    padding: 10px 12px 10px 32px;
+    font-size: 13px;
     background: var(--surface-elevated);
     border: 1px solid var(--border-strong);
-    border-radius: 8px;
+    border-radius: var(--radius-md); /* match the segmented tabs rail (rounded-md) */
     color: var(--fg-primary);
     outline: none;
     transition:

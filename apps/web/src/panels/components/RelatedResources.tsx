@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { ChevronRight, Server } from "lucide-react";
-import { SegmentedTabs, type SegmentedTab } from "@/components/ui/SegmentedTabs";
+import { TabBar, Tab } from "@/components/ui/Tabs";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { goToResource } from "@/lib/resourceNav";
@@ -29,7 +29,6 @@ export function RelatedResources({ sourceKind, source }: { sourceKind: string; s
   // empties out) falls back to the first tab without an effect.
   const activeKind = groups.some((g) => g.kind === active) ? active : groups[0].kind;
   const activeGroup = groups.find((g) => g.kind === activeKind)!;
-  const tabs: SegmentedTab[] = groups.map((g) => ({ id: g.kind, label: g.label, badge: g.items.length }));
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -38,7 +37,11 @@ export function RelatedResources({ sourceKind, source }: { sourceKind: string; s
         {/* Rail: one tab per related kind. Scrolls horizontally if the kind list
             outgrows the panel (a pod has up to ~8 related kinds). */}
         <div style={{ padding: "8px 10px", borderBottom: "1px solid rgba(255,255,255,0.04)", overflowX: "auto" }}>
-          <SegmentedTabs tabs={tabs} active={activeKind} onChange={setActive} />
+          <TabBar value={activeKind} onValueChange={setActive}>
+            {groups.map((g) => (
+              <Tab key={g.kind} value={g.kind} badge={g.items.length}>{g.label}</Tab>
+            ))}
+          </TabBar>
         </div>
         {activeGroup.items.map((it) => <Row key={it.key} item={it} onGo={() => goToResource(navigate, it)} />)}
       </div>

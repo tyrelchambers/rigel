@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
+import { LayoutList, PackagePlus, Store } from "lucide-react";
+import { TabBar, Tab } from "@/components/ui/Tabs";
+import { PanelHeader } from "@/panels/components/PanelHeader";
 import type { HelmRelease } from "@rigel/k8s/src/helm";
 import { ReleasesView } from "./ReleasesView";
 import { InstallChartView } from "./InstallChartView";
@@ -12,17 +14,16 @@ export default function HelmPanel() {
   const [chartPrefill, setChartPrefill] = useState<ChartPrefill | null>(null);
 
   return (
-    <div className="flex h-full flex-col gap-4 p-4">
-      <SegmentedTabs
-        tabs={[
-          { id: "releases", label: "Releases" },
-          { id: "browse", label: "Browse charts" },
-          { id: "install", label: "Install chart" },
-        ]}
-        active={tab}
-        onChange={setTab}
-      />
-      {tab === "releases" ? (
+    <div className="flex h-full flex-col">
+      <PanelHeader title="Helm" subtitle="Installed releases and chart repositories">
+        <TabBar value={tab} onValueChange={setTab}>
+          <Tab value="releases" icon={LayoutList}>Releases</Tab>
+          <Tab value="browse" icon={Store}>Browse charts</Tab>
+          <Tab value="install" icon={PackagePlus}>Install chart</Tab>
+        </TabBar>
+      </PanelHeader>
+      <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
+        {tab === "releases" ? (
         <ReleasesView onUpgrade={(r) => { setPrefill(r); setChartPrefill(null); setTab("install"); }} />
       ) : tab === "browse" ? (
         <BrowseChartsView
@@ -34,6 +35,7 @@ export default function HelmPanel() {
       ) : (
         <InstallChartView prefill={prefill} chartPrefill={chartPrefill} />
       )}
+      </div>
     </div>
   );
 }

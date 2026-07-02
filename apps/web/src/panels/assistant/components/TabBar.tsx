@@ -1,7 +1,7 @@
 // TabBar — always-rendered tab navigation on the shared segmented rail.
 // Skeleton rail → "Set up" pill → real 5-tab rail, per the loading matrix.
 
-import { SegmentedTabs, type SegmentedTab } from "@/components/ui/SegmentedTabs";
+import { TabBar as TabRail, Tab } from "@/components/ui/Tabs";
 import { useAssistantCtx, type TabKey } from "../AssistantContext";
 import { Bar } from "./primitives";
 
@@ -14,7 +14,7 @@ export function TabBar() {
   // Loading — skeleton shaped like the segmented rail.
   if (phase === "loading") {
     return (
-      <div className="inline-flex gap-[3px] rounded-[10px] p-[3px]" style={{ background: "rgba(255,255,255,0.04)" }}>
+      <div className="inline-flex gap-[2px] rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] p-[3px]">
         {[1, 2, 3, 4, 5, 6].map((i) => (
           <Bar key={i} className="h-[30px] w-20 rounded-md" />
         ))}
@@ -37,7 +37,7 @@ export function TabBar() {
   const needsBadge = ready.state ? queue.length + d.liveIssues.length : undefined;
   const activityBadge = ready.state ? audit.length : undefined;
 
-  const tabs: SegmentedTab[] = [
+  const tabs = [
     { id: "overview", label: "Overview" },
     { id: "needs", label: "Needs you", badge: needsBadge },
     { id: "rules", label: "Rules" },
@@ -48,5 +48,11 @@ export function TabBar() {
     { id: "settings", label: "Settings" },
   ];
 
-  return <SegmentedTabs tabs={tabs} active={tab} onChange={(id) => setTab(id as TabKey)} />;
+  return (
+    <TabRail value={tab} onValueChange={(id) => setTab(id as TabKey)}>
+      {tabs.map((t) => (
+        <Tab key={t.id} value={t.id} badge={t.badge}>{t.label}</Tab>
+      ))}
+    </TabRail>
+  );
 }

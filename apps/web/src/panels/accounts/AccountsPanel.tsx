@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FileCode2, Package, Star, Trash2 } from "lucide-react";
 import type { Secret } from "@rigel/k8s";
 import { Loader } from "@/components/Loader";
-import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
+import { TabBar, Tab } from "@/components/ui/Tabs";
 import { YamlEditor } from "@/components/YamlEditorLazy";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
@@ -321,14 +321,10 @@ function AddAccountSheet({
           </DialogDescription>
 
           {/* Mode picker — segmented tab rail */}
-          <SegmentedTabs
-            tabs={[
-              { id: "create", label: "Create" },
-              { id: "reference", label: "Reference existing" },
-            ]}
-            active={form.mode}
-            onChange={(id) => set("mode", id as AddMode)}
-          />
+          <TabBar value={form.mode} onValueChange={(id) => set("mode", id as AddMode)}>
+            <Tab value="create">Create</Tab>
+            <Tab value="reference">Reference existing</Tab>
+          </TabBar>
 
           {field("registry", "Registry", { placeholder: "docker.io" })}
           {field("username", "Username", { optional: form.mode === "reference" })}

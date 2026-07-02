@@ -35,7 +35,7 @@ import {
   filterCatalog,
   type Scope,
 } from "./catalogDisplay";
-import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
+import { TabBar, Tab } from "@/components/ui/Tabs";
 import { CatalogDetailSheet } from "./CatalogDetailSheet";
 import { CatalogInstallWizard } from "./CatalogInstallWizard";
 import { PurgeSheet } from "@/panels/purge/PurgeSheet";
@@ -265,16 +265,6 @@ export default function CatalogPanel() {
           </div>
 
           <div className="catalog-header-controls">
-            {/* Scope segmented control */}
-            <SegmentedTabs
-              tabs={[
-                { id: "all", label: "All" },
-                { id: "installed", label: "Installed", badge: installedIDs.size },
-              ]}
-              active={scope}
-              onChange={(id) => setScope(id as typeof scope)}
-            />
-
             {/* Search */}
             <div className="catalog-search-wrap">
               <Search className="catalog-search-icon" aria-hidden />
@@ -295,6 +285,12 @@ export default function CatalogPanel() {
                 />
               )}
             </div>
+
+            {/* Scope segmented control */}
+            <TabBar value={scope} onValueChange={(id) => setScope(id as typeof scope)}>
+              <Tab value="all">All</Tab>
+              <Tab value="installed" badge={installedIDs.size}>Installed</Tab>
+            </TabBar>
           </div>
         </div>
 

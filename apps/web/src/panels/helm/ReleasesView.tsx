@@ -11,6 +11,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { YamlEditor } from "@/components/YamlEditorLazy";
+import { SectionLabel } from "@/panels/components/MetaCard";
+import { CircleArrowUp, FileCode, Lock, Trash2, Undo2 } from "lucide-react";
 import { buildHelmRollbackArgs, buildHelmUninstallArgs, type HelmRelease, type HelmRevision } from "@rigel/k8s/src/helm";
 import { releasesFromSecretsMap, releaseStatusTone, formatTimestamp, type StatusTone } from "./releases";
 import { useHelmRollback, useHelmUninstall } from "./helmApi";
@@ -137,16 +139,6 @@ function StatusBadge({ status, className }: { status: string; className?: string
   );
 }
 
-/** A labeled metadata field: a small uppercase caption above its value. */
-function Field({ label, mono, children }: { label: string; mono?: boolean; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
-      <span className={cn("text-sm", mono && "font-mono")}>{children}</span>
-    </div>
-  );
-}
-
 /** A release card: name + status, chart·version, namespace chip + current revision. */
 function ReleaseCard({ release, onClick }: { release: HelmRelease; onClick: () => void }) {
   return (
@@ -169,8 +161,20 @@ function ReleaseCard({ release, onClick }: { release: HelmRelease; onClick: () =
   );
 }
 
-/** The release detail body shown inside the dialog: metadata + actions, revision
- *  picker (with rollback), and read-only values + manifest. */
+/** A sunken meta cell: a small uppercase mono label above its value. Sits in a
+ *  responsive `auto-fit` grid so the cells wrap instead of overlapping. */
+function MetaField({ label, mono = true, children }: { label: string; mono?: boolean; children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5 rounded-md border px-3.5 py-2.5 border-[var(--border-subtle)] bg-[var(--surface-sunken)]">
+      <span className="font-mono text-[10px] uppercase tracking-[0.6px] text-[var(--fg-tertiary)]">{label}</span>
+      <span className={cn("truncate text-[13px] text-[var(--fg-primary)]", mono && "font-mono")}>{children}</span>
+    </div>
+  );
+}
+
+/** The release detail body shown inside the dialog: a responsive header (title +
+ *  actions that wrap instead of overlapping), a wrapping meta grid, then the
+ *  full-width revision history with the read-only current values below it. */
 function ReleaseDetail({
   release,
   shownRev,
@@ -186,57 +190,127 @@ function ReleaseDetail({
   onUninstall: () => void;
   onRollback: (revision: number) => void;
 }) {
+  const [showManifest, setShowManifest] = useState(false);
+  const dot = TONE[releaseStatusTone(release.status)];
+  // The greatest revision below the current one, i.e. the Rollback target.
+  const previousRevision = release.revisions
+    .map((r) => r.revision)
+    .filter((n) => n < release.currentRevision)
+    .sort((a, b) => b - a)[0];
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex flex-wrap items-start gap-x-6 gap-y-3">
-          <Field label="Status"><StatusBadge status={release.status} /></Field>
-          <Field label="Namespace" mono>{release.namespace}</Field>
-          <Field label="Chart">{release.chartName} {release.chartVersion}</Field>
-          <Field label="Revision">{release.currentRevision}</Field>
-          <Field label="Updated">{formatTimestamp(release.updated)}</Field>
+    <div className="flex flex-col gap-4">
+      {/* Header: title block and actions wrap onto separate lines when narrow. */}
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+        <div className="flex min-w-[200px] flex-1 flex-col gap-1.5">
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+            <span className="size-2.5 shrink-0 rounded-full" style={{ background: dot }} />
+            <span className="min-w-0 truncate text-lg font-bold text-[var(--fg-primary)]">{release.name}</span>
+            <StatusBadge status={release.status} />
+          </div>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--fg-tertiary)]">
+            <span className="rounded bg-white/[0.04] px-2 py-0.5 font-mono text-[var(--fg-secondary)]">{release.namespace}</span>
+            <span className="font-mono">{release.chartName} {release.chartVersion}</span>
+            <span className="font-mono">· rev {release.currentRevision}</span>
+          </div>
         </div>
-        <div className="flex shrink-0 gap-2">
-          <Button variant="secondary" onClick={onUpgrade}>Upgrade</Button>
-          <Button className="bg-destructive text-white hover:bg-destructive/90" onClick={onUninstall}>Uninstall</Button>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-1.5">
-        {release.revisions.map((rv) => (
-          <div
-            key={rv.revision}
-            className="inline-flex items-center rounded-md border text-xs"
-            style={{ borderColor: "var(--border-strong)", background: shownRev?.revision === rv.revision ? "rgba(255,255,255,0.06)" : "transparent" }}
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <Button size="sm" onClick={onUpgrade}><CircleArrowUp />Upgrade</Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={previousRevision == null}
+            onClick={() => previousRevision != null && onRollback(previousRevision)}
           >
-            <button type="button" onClick={() => onSelectRev(rv)} className="px-2 py-1">
-              rev {rv.revision} · {rv.status}
-            </button>
-            {rv.revision !== release.currentRevision && (
-              <button
-                type="button"
-                aria-label={`Roll back to revision ${rv.revision}`}
-                className="px-1.5 py-1 text-muted-foreground hover:text-foreground"
-                onClick={() => onRollback(rv.revision)}
-              >
-                ↺
-              </button>
-            )}
-          </div>
-        ))}
+            <Undo2 />Rollback
+          </Button>
+          <Button size="sm" variant={showManifest ? "muted" : "outline"} onClick={() => setShowManifest((v) => !v)}>
+            <FileCode />Manifest
+          </Button>
+          <Button size="sm" variant="destructive" onClick={onUninstall}><Trash2 />Uninstall</Button>
+        </div>
       </div>
 
-      {shownRev && (
-        <div className="space-y-3">
-          <div>
-            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Values</div>
-            <YamlEditor value={toYaml(shownRev.config)} readOnly height="200px" schema={null} />
-          </div>
-          <div>
-            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Manifest</div>
-            <YamlEditor value={shownRev.manifest ?? ""} readOnly height="320px" schema={null} />
-          </div>
+      {/* Meta grid: auto-fit cells wrap to new rows rather than overlapping. */}
+      <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
+        <MetaField label="Chart">{release.chartName}</MetaField>
+        <MetaField label="Chart version">{shownRev?.chartVersion ?? release.chartVersion}</MetaField>
+        <MetaField label="App version">{shownRev?.appVersion ?? release.appVersion ?? "—"}</MetaField>
+        <MetaField label="Revision">{shownRev?.revision ?? release.currentRevision}</MetaField>
+        <MetaField label="Updated" mono={false}>{formatTimestamp(shownRev?.updated ?? release.updated)}</MetaField>
+      </div>
+
+      {/* Revision history, full width. */}
+      <section className="flex flex-col gap-2">
+        <SectionLabel>Revision history · {release.revisions.length}</SectionLabel>
+        <div className="flex flex-col gap-1.5">
+          {release.revisions.map((rv) => {
+            const selected = shownRev?.revision === rv.revision;
+            const tone = TONE[releaseStatusTone(rv.status)];
+            return (
+              <div
+                key={rv.revision}
+                role="button"
+                tabIndex={0}
+                aria-pressed={selected}
+                onClick={() => onSelectRev(rv)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onSelectRev(rv);
+                  }
+                }}
+                className="flex cursor-pointer items-center justify-between gap-2 rounded-md border px-3 py-2 text-xs hover:bg-white/[0.03]"
+                style={
+                  selected
+                    ? { background: "var(--accent-dim)", borderColor: "rgba(56,189,248,0.35)" }
+                    : { borderColor: "var(--border-subtle)" }
+                }
+              >
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span className="size-1.5 shrink-0 rounded-full" style={{ background: tone }} />
+                  <span className="font-mono text-[var(--fg-primary)]">rev {rv.revision}</span>
+                  <span className="font-mono" style={{ color: tone }}>{rv.status}</span>
+                </div>
+                <div className="flex shrink-0 items-center gap-2.5">
+                  <span className="font-mono text-[var(--fg-tertiary)]">{formatTimestamp(rv.updated)}</span>
+                  {rv.revision !== release.currentRevision && (
+                    <button
+                      type="button"
+                      aria-label={`Roll back to revision ${rv.revision}`}
+                      className="text-[var(--fg-tertiary)] hover:text-[var(--fg-primary)]"
+                      onClick={(e) => { e.stopPropagation(); onRollback(rv.revision); }}
+                    >
+                      <Undo2 className="size-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
+      </section>
+
+      {/* Current values, below the history, in the Monaco editor. */}
+      <section className="flex flex-col gap-2">
+        <div className="flex items-center justify-between gap-2">
+          <SectionLabel>Current values</SectionLabel>
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--fg-tertiary)]">
+            <Lock className="size-3" />read-only
+          </span>
+        </div>
+        <div className="overflow-hidden rounded-md border border-[var(--border-subtle)]">
+          <YamlEditor value={toYaml(shownRev?.config)} readOnly height="300px" schema={null} />
+        </div>
+      </section>
+
+      {showManifest && (
+        <section className="flex flex-col gap-2">
+          <SectionLabel>Manifest</SectionLabel>
+          <div className="overflow-hidden rounded-md border border-[var(--border-subtle)]">
+            <YamlEditor value={shownRev?.manifest ?? ""} readOnly height="360px" schema={null} />
+          </div>
+        </section>
       )}
     </div>
   );
