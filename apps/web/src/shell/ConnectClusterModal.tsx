@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Cloud, Upload } from "lucide-react";
-import { Modal } from "@/components/ui/modal";
+import { Dialog, DialogBody, DialogContent, DialogHeader, DialogIcon, DialogTitle } from "@/components/ui/dialog";
 import { listCloudProviders, type ProviderDescriptor } from "@rigel/cloud-connect/src/index";
 import { CLUSTER_ICONS } from "./clusterIcons";
 import { ConnectWizard } from "./ConnectWizard";
@@ -40,7 +40,15 @@ export function ConnectClusterModal({ open, onOpenChange }: { open: boolean; onO
     : selection?.kind === "import" ? "Import a kubeconfig" : "Connect a cluster";
 
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title={title} icon={<Cloud className="size-[17px]" />} maxWidth="!max-w-md">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogIcon>
+            <Cloud className="size-[17px]" />
+          </DialogIcon>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
       {selection === null ? (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
           {providers.map((d) => {
@@ -61,6 +69,8 @@ export function ConnectClusterModal({ open, onOpenChange }: { open: boolean; onO
       ) : (
         <ImportKubeconfigPanel onDone={() => onOpenChange(false)} />
       )}
-    </Modal>
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
   );
 }

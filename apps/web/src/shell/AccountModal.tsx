@@ -1,5 +1,5 @@
 import { User, LogOut } from "lucide-react";
-import { Modal } from "@/components/ui/modal";
+import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface AccountModalProps {
   open: boolean;
@@ -15,7 +15,12 @@ const HAIRLINE = "rgba(255,255,255,0.07)";
 /** Basic account panel: avatar + name + email, a plan badge, and a (cosmetic) Sign out. */
 export function AccountModal({ open, onOpenChange, name, email, plan = "Free" }: AccountModalProps) {
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title="Account" maxWidth="!max-w-md">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Account</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
       <div className="flex flex-col gap-5">
         <div className="flex items-center gap-3.5">
           <div
@@ -66,6 +71,8 @@ export function AccountModal({ open, onOpenChange, name, email, plan = "Free" }:
           </button>
         </div>
       </div>
-    </Modal>
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
   );
 }
