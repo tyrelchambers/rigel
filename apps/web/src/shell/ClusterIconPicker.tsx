@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Unplug } from "lucide-react";
-import { Modal } from "@/components/ui/modal";
+import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CLUSTER_ICONS, ICON_PALETTE, type IconId } from "./clusterIcons";
 
 /**
@@ -35,7 +35,7 @@ export function ClusterIconPicker({
     : ICON_PALETTE;
 
   return (
-    <Modal
+    <Dialog
       open={open}
       onOpenChange={(o) => {
         if (!o) {
@@ -43,8 +43,12 @@ export function ClusterIconPicker({
           onClose();
         }
       }}
-      title={contextName ? `Icon for "${contextName}"` : "Choose an icon"}
     >
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{contextName ? `Icon for "${contextName}"` : "Choose an icon"}</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
       <input
         autoFocus
         value={query}
@@ -124,6 +128,8 @@ export function ClusterIconPicker({
           )}
         </div>
       ) : null}
-    </Modal>
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
   );
 }

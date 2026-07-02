@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Boxes, Check, CircleCheck, CircleX, Copy, RefreshCw } from "lucide-react";
-import { Modal } from "@/components/ui/modal";
+import { Dialog, DialogBody, DialogContent, DialogHeader, DialogIcon, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useClusterTools } from "@/lib/api";
@@ -96,13 +96,18 @@ export function CreateClusterModal({ open, onOpenChange }: { open: boolean; onOp
   }
 
   return (
-    <Modal
+    <Dialog
       open={open}
       onOpenChange={(o) => { if (!o && creating) sendClusterStop(); onOpenChange(o); }}
-      title="Create cluster"
-      icon={<Boxes className="size-[17px]" />}
-      maxWidth="!max-w-md"
     >
+      <DialogContent>
+        <DialogHeader>
+          <DialogIcon>
+            <Boxes className="size-[17px]" />
+          </DialogIcon>
+          <DialogTitle>Create cluster</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
       {!tools ? (
         <p className="text-sm text-muted-foreground">Checking your environment…</p>
       ) : !ready ? (
@@ -243,7 +248,9 @@ export function CreateClusterModal({ open, onOpenChange }: { open: boolean; onOp
           </div>
         </div>
       )}
-    </Modal>
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
   );
 }
 

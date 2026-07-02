@@ -7,6 +7,7 @@ import { viewYaml } from "@/store/yamlViewer";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -314,22 +315,24 @@ export default function NamespacesPanel() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>New Namespace</DialogTitle>
+          </DialogHeader>
+          <DialogBody className="space-y-3">
             <DialogDescription>
               Names use lowercase letters, digits, and hyphens (DNS-1123).
             </DialogDescription>
-          </DialogHeader>
-          <input
-            type="text"
-            autoFocus
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && nameValid) confirmCreate();
-            }}
-            placeholder="namespace name"
-            aria-label="namespace name"
-            className="w-full rounded-md border bg-background px-3 py-1.5 text-sm font-mono outline-none focus:ring-2 focus:ring-ring"
-          />
+            <input
+              type="text"
+              autoFocus
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && nameValid) confirmCreate();
+              }}
+              placeholder="namespace name"
+              aria-label="namespace name"
+              className="w-full rounded-md border bg-background px-3 py-1.5 text-sm font-mono outline-none focus:ring-2 focus:ring-ring"
+            />
+          </DialogBody>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>
               Cancel

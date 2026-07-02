@@ -37,54 +37,97 @@ function DialogOverlay({
   );
 }
 
+// Graphite shell — the app-wide default for every dialog. Padding-free flex
+// column: DialogHeader / DialogBody / DialogFooter own their own spacing.
+// Anchored a fixed distance from the top (not vertically centered) so the modal
+// doesn't jump as its content height changes. The surface-elevated background
+// is the app-wide dialog color and lives here and nowhere else.
 function DialogContent({
   className,
   children,
-  showCloseButton = true,
   ...props
-}: DialogPrimitive.Popup.Props & {
-  showCloseButton?: boolean;
-}) {
+}: DialogPrimitive.Popup.Props) {
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          // Anchored a fixed distance from the top (not vertically centered) so a
-          // modal doesn't jump as its content height changes. Graphite body with a
-          // hairline ring + soft shadow — the shared default for every modal.
-          "fixed top-[8vh] left-1/2 z-50 grid w-[calc(100%-2rem)] max-w-md max-h-[84vh] -translate-x-1/2 gap-4 overflow-y-auto rounded-2xl bg-[#101012] p-4 text-sm text-popover-foreground ring-1 ring-white/10 shadow-[0_30px_80px_rgba(0,0,0,0.45)] duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed top-[8vh] left-1/2 z-50 flex max-h-[85vh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 flex-col overflow-hidden rounded-2xl bg-[var(--surface-elevated)] text-sm text-popover-foreground shadow-[0_30px_80px_rgba(0,0,0,0.45)] ring-1 ring-white/10 duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className,
         )}
         {...props}
       >
         {children}
-        {showCloseButton && (
-          <DialogPrimitive.Close
-            data-slot="dialog-close"
-            render={
-              <Button
-                variant="ghost"
-                className="absolute top-2 right-2"
-                size="icon-sm"
-              />
-            }
-          >
-            <XIcon />
-            <span className="sr-only">Close</span>
-          </DialogPrimitive.Close>
-        )}
       </DialogPrimitive.Popup>
     </DialogPortal>
   );
 }
 
-function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
+// The one header treatment: a hairline-separated bar. Children (a DialogTitle,
+// a DialogIcon + DialogTitle, or a tab row) sit on the left; the close X is
+// rendered here on the right unless showClose is false.
+function DialogHeader({
+  className,
+  showClose = true,
+  children,
+  ...props
+}: React.ComponentProps<"div"> & { showClose?: boolean }) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex flex-col gap-2", className)}
+      className={cn(
+        "flex shrink-0 items-center justify-between gap-4 border-b border-white/[0.07] px-[18px] py-3.5",
+        className,
+      )}
+      {...props}
+    >
+      <div className="flex min-w-0 flex-1 items-center gap-2.5">{children}</div>
+      {showClose && (
+        <DialogPrimitive.Close
+          data-slot="dialog-close"
+          render={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="shrink-0 text-[var(--fg-tertiary)] hover:text-[var(--fg-primary)]"
+            />
+          }
+        >
+          <XIcon className="size-4" />
+          <span className="sr-only">Close</span>
+        </DialogPrimitive.Close>
+      )}
+    </div>
+  );
+}
+
+// Leading-icon tile for a header (ports the old ModalIcon). background={false}
+// for a bare icon. Icon inherits white via currentColor.
+function DialogIcon({
+  background = true,
+  className,
+  ...props
+}: React.ComponentProps<"div"> & { background?: boolean }) {
+  return (
+    <div
+      data-slot="dialog-icon"
+      className={cn(
+        "flex size-[30px] shrink-0 items-center justify-center text-white",
+        background && "rounded-lg bg-white/[0.07]",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+// The one padded scroll region. Everything between header and footer goes here.
+function DialogBody({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="dialog-body"
+      className={cn("flex-1 overflow-y-auto px-6 pt-6 pb-7", className)}
       {...props}
     />
   );
@@ -102,7 +145,7 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:flex-row sm:justify-end",
+        "flex shrink-0 flex-col-reverse gap-2 border-t border-white/[0.07] px-6 py-4 sm:flex-row sm:justify-end",
         className,
       )}
       {...props}
@@ -148,11 +191,13 @@ function DialogDescription({
 
 export {
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
+  DialogIcon,
   DialogOverlay,
   DialogPortal,
   DialogTitle,

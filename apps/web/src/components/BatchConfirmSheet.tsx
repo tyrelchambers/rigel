@@ -5,6 +5,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogBody,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -79,18 +80,17 @@ export function BatchConfirmSheet({ actions, open, onClose, onConfirm }: Props) 
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="overflow-hidden p-0 gap-0" style={{ border: `1px solid ${accentBorder}` }}>
+      <DialogContent style={{ border: `1px solid ${accentBorder}` }}>
         <DialogHeader
-          className="px-4 pt-4 pb-3"
           style={{ background: accentHeaderBg, borderBottom: `1px solid ${accentColor}40` }}
         >
           <DialogTitle>{`Run ${actions.length} action${actions.length === 1 ? "" : "s"}`}</DialogTitle>
+        </DialogHeader>
+
+        <DialogBody className="flex flex-col gap-3">
           <DialogDescription>
             Review each command before it runs. They run in order and stop at the first failure. This cannot be undone.
           </DialogDescription>
-        </DialogHeader>
-
-        <div className="p-4">
           <ul className="max-h-72 space-y-2 overflow-auto">
             {actions.map((action, i) => {
               const p = previews[i];
@@ -122,9 +122,9 @@ export function BatchConfirmSheet({ actions, open, onClose, onConfirm }: Props) 
               );
             })}
           </ul>
-        </div>
+        </DialogBody>
 
-        <DialogFooter className="border-t border-border/40 bg-background/60 px-4 py-3">
+        <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button
             style={{ background: accentColor, color: "var(--fg-primary)", border: "none" }}

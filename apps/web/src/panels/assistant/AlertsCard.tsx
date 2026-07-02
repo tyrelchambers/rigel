@@ -2,21 +2,119 @@
 // Built to Pencil frame "Assistant — Rules (improved)" (Alerts card).
 
 import { useMemo, useState } from "react";
-import { Bell, CircleX, Cpu, Plus, Repeat } from "lucide-react";
+import {
+  Bell,
+  BellPlus,
+  BellRing,
+  ChevronDown,
+  CircleX,
+  Cpu,
+  Plus,
+  Repeat,
+  Send,
+  Sparkles,
+  WandSparkles,
+  X,
+} from "lucide-react";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
-  DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { useAssistantCtx } from "./AssistantContext";
-import { Field, inputClass } from "./components/primitives";
 import { alertRuleSummary, type SuggestedAlert, type AlertTarget, type AlertCondition } from "@/lib/alerts";
 import type { AlertScope } from "@rigel/k8s";
+
+// Shared styling for the styled form controls in the New alert dialog — a
+// surface-sunken box with a hairline border and accent focus (Pencil frame
+// "New alert modal (improved)").
+const controlClass =
+  "w-full rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3.5 py-[11px] text-sm text-[var(--fg-primary)] outline-none transition-colors focus:border-[var(--accent-primary)]";
+
+/** A vertical form field: label (with optional right adornment) above a control. */
+function AlertField({
+  label,
+  right,
+  className,
+  children,
+}: {
+  label: string;
+  right?: React.ReactNode;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={cn("flex flex-col gap-[7px]", className)}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[13px] font-medium text-[var(--fg-secondary)]">{label}</span>
+        {right}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** Native select styled to match the design, with a custom chevron. */
+function AlertSelect({
+  value,
+  onChange,
+  children,
+}: {
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="relative">
+      <select
+        value={value}
+        onChange={onChange}
+        className={cn(controlClass, "cursor-pointer appearance-none pr-9")}
+      >
+        {children}
+      </select>
+      <ChevronDown className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-[var(--fg-tertiary)]" />
+    </div>
+  );
+}
+
+/** Uppercase mono section caption (TARGET / CONDITION). */
+function Caption({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="font-mono text-[10.5px] tracking-[0.08em] text-[var(--fg-tertiary)] uppercase">
+      {children}
+    </span>
+  );
+}
+
+/** Severity pill shown on the "When" field. */
+function SeverityChip({ critical }: { critical: boolean }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-mono text-[10.5px]",
+        critical ? "bg-red-500/10 text-red-500" : "bg-amber-400/10 text-amber-400",
+      )}
+    >
+      <span className={cn("size-1.5 rounded-full", critical ? "bg-red-500" : "bg-amber-400")} />
+      {critical ? "critical" : "warning"}
+    </span>
+  );
+}
+
+const COND_VERBS: Record<AlertCondType, string> = {
+  podRestarts: "restarting too often",
+  crashLoop: "crash-looping",
+  oomKilled: "OOM-killed",
+  pendingTooLong: "stuck pending",
+  notReady: "not ready",
+  deploymentDegraded: "degraded",
+};
 
 /** Empty-state "Try" chips. Each hands its phrasing to a fresh chat thread — the
  *  agent turns the sentence into a saved alert rule (systemPrompt's ```alert
@@ -157,6 +255,17 @@ export function AlertsCard() {
         ? "CNPG cluster name"
         : "deployment name";
 
+  // Live preview sentence + severity, mirroring the Pencil frame.
+  const critical = condType === "crashLoop" || condType === "oomKilled";
+  const subjectLabel =
+    scope === "workload"
+      ? kind
+      : scope === "cluster"
+        ? "cluster"
+        : scope === "namespace"
+          ? "resource"
+          : scope;
+
   return (
     <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-[22px]">
       <div className="flex items-start justify-between gap-4">
@@ -256,163 +365,252 @@ export function AlertsCard() {
         </div>
       )}
 
-      {/* New alert dialog */}
+      {/* New alert dialog — Pencil frame "New alert modal (improved)" */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>New alert</DialogTitle>
-            <DialogDescription>
-              Get notified when a resource hits a condition. Or just ask in chat —{" "}
-              <em>"text me if…"</em>.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3">
-            <Field label="Watch" labelWidth="w-auto">
-              <select
-                value={scope}
-                onChange={(e) => handleScopeChange(e.target.value as AlertScope)}
-                className={inputClass}
-              >
-                <option value="cluster">Cluster</option>
-                <option value="namespace">Namespace</option>
-                <option value="workload">Workload</option>
-                <option value="pod">Pod</option>
-                <option value="database">Database</option>
-              </select>
-            </Field>
-
-            {scope === "workload" && (
-              <Field label="Kind" labelWidth="w-auto">
-                <select
-                  value={kind}
-                  onChange={(e) => setKind(e.target.value as AlertKind)}
-                  className={inputClass}
-                >
-                  <option value="Deployment">Deployment</option>
-                  <option value="StatefulSet">StatefulSet</option>
-                  <option value="DaemonSet">DaemonSet</option>
-                </select>
-              </Field>
-            )}
-
-            {needsNamespace && (
-              <Field label="Namespace" labelWidth="w-auto">
-                <select
-                  value={namespace}
-                  onChange={(e) => setNamespace(e.target.value)}
-                  className={inputClass}
-                >
-                  {d.allNamespaceNames.length > 0 ? (
-                    d.allNamespaceNames.map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))
-                  ) : (
-                    <option value={namespace}>{namespace}</option>
-                  )}
-                </select>
-              </Field>
-            )}
-
-            {needsName && (
-              <Field label="Name" labelWidth="w-auto">
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder={namePlaceholder}
-                  className={inputClass}
-                />
-              </Field>
-            )}
-
-            <Field label="When" labelWidth="w-auto">
-              <select
-                value={condType}
-                onChange={(e) => setCondType(e.target.value as AlertCondType)}
-                className={inputClass}
-              >
-                {(Object.keys(COND_LABELS) as AlertCondType[])
-                  .filter((c) => c !== "deploymentDegraded" || allowsDegraded)
-                  .map((c) => (
-                    <option key={c} value={c}>
-                      {COND_LABELS[c]}
-                    </option>
-                  ))}
-              </select>
-            </Field>
-
-            {condType === "podRestarts" && (
-              <Field label="Threshold / window" labelWidth="w-auto">
-                <div className="flex flex-1 items-center gap-2 text-sm">
-                  <input
-                    type="number"
-                    min={1}
-                    value={threshold}
-                    onChange={(e) => setThreshold(Math.max(1, Number(e.target.value) || 1))}
-                    className="w-16 rounded-md border bg-background px-2 py-1.5 font-mono text-sm outline-none focus:ring-2 focus:ring-ring"
-                  />
-                  <span className="text-muted-foreground">times in</span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={windowMinutes}
-                    onChange={(e) =>
-                      setWindowMinutes(Math.max(1, Number(e.target.value) || 1))
-                    }
-                    className="w-16 rounded-md border bg-background px-2 py-1.5 font-mono text-sm outline-none focus:ring-2 focus:ring-ring"
-                  />
-                  <span className="text-muted-foreground">min</span>
-                </div>
-              </Field>
-            )}
-
-            {(condType === "pendingTooLong" ||
-              condType === "notReady" ||
-              condType === "deploymentDegraded") && (
-              <Field label="For (minutes)" labelWidth="w-auto">
-                <input
-                  type="number"
-                  min={0}
-                  value={minutes}
-                  onChange={(e) => setMinutes(Math.max(0, Number(e.target.value) || 0))}
-                  className={inputClass}
-                />
-              </Field>
-            )}
-
-            <Field label="Cooldown (min)" labelWidth="w-auto">
-              <div className="flex flex-1 items-center gap-2">
-                <input
-                  type="number"
-                  min={0}
-                  value={cooldown}
-                  onChange={(e) => setCooldown(Math.max(0, Number(e.target.value) || 0))}
-                  className="w-16 rounded-md border bg-background px-2 py-1.5 font-mono text-sm outline-none focus:ring-2 focus:ring-ring"
-                />
-                <span className="text-xs text-muted-foreground">0 = default</span>
+        <DialogContent className="max-w-[720px]">
+          {/* Header */}
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border-subtle)] px-6 pt-[22px] pb-[18px]">
+            <div className="flex items-center gap-3">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-[9px] bg-[var(--accent-dim)]">
+                <Bell className="size-[18px] text-[var(--accent-primary)]" />
               </div>
-            </Field>
-
-            <Field label="Label" labelWidth="w-auto">
-              <input
-                value={label}
-                onChange={(e) => setLabel(e.target.value)}
-                placeholder={defaultLabel()}
-                className={inputClass}
-              />
-            </Field>
+              <div className="flex flex-col gap-[3px]">
+                <DialogTitle className="text-xl font-bold text-[var(--fg-primary)]">
+                  New alert
+                </DialogTitle>
+                <DialogDescription className="text-[13px] text-[var(--fg-tertiary)]">
+                  Get notified when a resource hits a condition.
+                </DialogDescription>
+              </div>
+            </div>
+            <DialogClose className="flex size-[30px] shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-[var(--fg-secondary)] transition-colors hover:bg-white/[0.08]">
+              <X className="size-4" />
+              <span className="sr-only">Close</span>
+            </DialogClose>
           </div>
 
-          <DialogFooter>
-            <Button variant="muted" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={create} disabled={working || !valid}>
-              Create alert
-            </Button>
-          </DialogFooter>
+          {/* Body */}
+          <div className="flex flex-1 flex-col gap-[18px] overflow-y-auto px-6 py-6">
+            {/* Chat hint */}
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                handoffToChat(
+                  "Text me if a pod in default restarts more than 3 times in 5 minutes.",
+                  { newThread: true },
+                );
+              }}
+              className="flex w-full items-center gap-2.5 rounded-md border border-[var(--accent-primary)]/25 bg-[var(--accent-primary)]/[0.08] px-3.5 py-2.5 text-left transition-colors hover:bg-[var(--accent-primary)]/[0.12]"
+            >
+              <Sparkles className="size-[15px] shrink-0 text-[var(--accent-primary)]" />
+              <span className="text-[13px] text-[var(--fg-secondary)]">
+                Prefer chat? Try{" "}
+                <span className="text-[var(--accent-primary)] italic">
+                  "text me if a pod in default restarts &gt; 3× in 5 min"
+                </span>
+              </span>
+            </button>
+
+            {/* Target */}
+            <Caption>Target</Caption>
+            <div className="flex flex-col gap-4">
+              <div className="flex gap-4">
+                <AlertField label="Watch" className="flex-1">
+                  <AlertSelect
+                    value={scope}
+                    onChange={(e) => handleScopeChange(e.target.value as AlertScope)}
+                  >
+                    <option value="cluster">Cluster</option>
+                    <option value="namespace">Namespace</option>
+                    <option value="workload">Workload</option>
+                    <option value="pod">Pod</option>
+                    <option value="database">Database</option>
+                  </AlertSelect>
+                </AlertField>
+                {scope === "workload" && (
+                  <AlertField label="Kind" className="flex-1">
+                    <AlertSelect value={kind} onChange={(e) => setKind(e.target.value as AlertKind)}>
+                      <option value="Deployment">Deployment</option>
+                      <option value="StatefulSet">StatefulSet</option>
+                      <option value="DaemonSet">DaemonSet</option>
+                    </AlertSelect>
+                  </AlertField>
+                )}
+              </div>
+
+              {(needsNamespace || needsName) && (
+                <div className="flex gap-4">
+                  {needsNamespace && (
+                    <AlertField label="Namespace" className="flex-1">
+                      <AlertSelect value={namespace} onChange={(e) => setNamespace(e.target.value)}>
+                        {d.allNamespaceNames.length > 0 ? (
+                          d.allNamespaceNames.map((n) => (
+                            <option key={n} value={n}>
+                              {n}
+                            </option>
+                          ))
+                        ) : (
+                          <option value={namespace}>{namespace}</option>
+                        )}
+                      </AlertSelect>
+                    </AlertField>
+                  )}
+                  {needsName && (
+                    <AlertField label="Name" className="flex-1">
+                      <input
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder={namePlaceholder}
+                        className={controlClass}
+                      />
+                    </AlertField>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Condition */}
+            <Caption>Condition</Caption>
+            <div className="flex flex-col gap-4">
+              <AlertField label="When" right={<SeverityChip critical={critical} />}>
+                <AlertSelect
+                  value={condType}
+                  onChange={(e) => setCondType(e.target.value as AlertCondType)}
+                >
+                  {(Object.keys(COND_LABELS) as AlertCondType[])
+                    .filter((c) => c !== "deploymentDegraded" || allowsDegraded)
+                    .map((c) => (
+                      <option key={c} value={c}>
+                        {COND_LABELS[c]}
+                      </option>
+                    ))}
+                </AlertSelect>
+              </AlertField>
+
+              {condType === "podRestarts" && (
+                <AlertField label="Threshold / window">
+                  <div className="flex items-center gap-2.5 text-sm text-[var(--fg-secondary)]">
+                    <input
+                      type="number"
+                      min={1}
+                      value={threshold}
+                      onChange={(e) => setThreshold(Math.max(1, Number(e.target.value) || 1))}
+                      className={cn(controlClass, "w-20 font-mono")}
+                    />
+                    <span>times in</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={windowMinutes}
+                      onChange={(e) => setWindowMinutes(Math.max(1, Number(e.target.value) || 1))}
+                      className={cn(controlClass, "w-20 font-mono")}
+                    />
+                    <span>min</span>
+                  </div>
+                </AlertField>
+              )}
+
+              {(condType === "pendingTooLong" ||
+                condType === "notReady" ||
+                condType === "deploymentDegraded") && (
+                <AlertField label="For (minutes)">
+                  <input
+                    type="number"
+                    min={0}
+                    value={minutes}
+                    onChange={(e) => setMinutes(Math.max(0, Number(e.target.value) || 0))}
+                    className={cn(controlClass, "font-mono")}
+                  />
+                </AlertField>
+              )}
+
+              <div className="flex items-end gap-4">
+                <AlertField label="Cooldown (min)">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex w-[120px] items-center justify-between rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3.5 py-[11px]">
+                      <input
+                        type="number"
+                        min={0}
+                        value={cooldown}
+                        onChange={(e) => setCooldown(Math.max(0, Number(e.target.value) || 0))}
+                        className="w-full bg-transparent font-mono text-sm text-[var(--fg-primary)] outline-none [appearance:textfield]"
+                      />
+                      <span className="font-mono text-xs text-[var(--fg-tertiary)]">min</span>
+                    </div>
+                    <span className="text-[12.5px] whitespace-nowrap text-[var(--fg-tertiary)]">
+                      0 = default
+                    </span>
+                  </div>
+                </AlertField>
+                <AlertField
+                  label="Label"
+                  className="flex-1"
+                  right={
+                    <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.04] px-2 py-0.5 font-mono text-[10px] text-[var(--fg-tertiary)]">
+                      <WandSparkles className="size-2.5" />
+                      auto
+                    </span>
+                  }
+                >
+                  <input
+                    value={label}
+                    onChange={(e) => setLabel(e.target.value)}
+                    placeholder={defaultLabel()}
+                    className={controlClass}
+                  />
+                </AlertField>
+              </div>
+            </div>
+
+            {/* Live preview */}
+            <div className="flex items-center gap-2.5 rounded-md border border-[var(--accent-primary)]/30 bg-[var(--accent-primary)]/[0.08] px-3.5 py-3">
+              <BellRing className="size-4 shrink-0 text-[var(--accent-primary)]" />
+              <p className="text-[13px] leading-snug text-[var(--fg-secondary)]">
+                Alert me when {scope === "cluster" ? "the " : "a "}
+                <span className="font-semibold text-[var(--fg-primary)]">{subjectLabel}</span>
+                {needsName && name.trim() !== "" ? (
+                  <>
+                    {" "}
+                    named <span className="font-semibold text-[var(--fg-primary)]">{name}</span>
+                  </>
+                ) : null}
+                {needsNamespace ? (
+                  <>
+                    {" "}
+                    in <span className="font-semibold text-[var(--fg-primary)]">{namespace}</span>
+                  </>
+                ) : null}
+                {" is "}
+                <span className="font-semibold text-[var(--accent-primary)]">
+                  {COND_VERBS[condType]}
+                </span>
+                .
+              </p>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--border-subtle)] px-6 pt-4 pb-5">
+            <div className="flex items-center gap-2 text-[12.5px] text-[var(--fg-tertiary)]">
+              <Send className="size-[13px]" />
+              Delivered to your notification channels.
+            </div>
+            <div className="flex items-center gap-2.5">
+              <DialogClose className="rounded-md border border-[var(--border-strong)] px-5 py-[11px] text-sm font-semibold text-[var(--fg-secondary)] transition-colors hover:text-[var(--fg-primary)]">
+                Cancel
+              </DialogClose>
+              <button
+                type="button"
+                onClick={create}
+                disabled={working || !valid}
+                className="inline-flex items-center gap-2 rounded-md bg-[var(--accent-primary)] px-[22px] py-[11px] text-sm font-bold text-[var(--fg-inverse)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <BellPlus className="size-[15px]" />
+                Create alert
+              </button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

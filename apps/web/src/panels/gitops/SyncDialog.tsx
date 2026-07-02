@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -51,10 +52,10 @@ export function SyncDialog({ target, onClose }: { target: DeploymentRef; onClose
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Sync {dep.name}</DialogTitle>
-          <DialogDescription>{repo.repoURL} · {repo.branch} · {dep.path}</DialogDescription>
         </DialogHeader>
 
-        <div className="py-1">
+        <DialogBody className="flex flex-col gap-3">
+          <DialogDescription>{repo.repoURL} · {repo.branch} · {dep.path}</DialogDescription>
           {phase === "diffing" && <p className="text-sm text-muted-foreground">Cloning repo and computing diff…</p>}
           {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive whitespace-pre-wrap">{error}</p>}
           {(phase === "preview" || phase === "applying") && !error && (
@@ -69,7 +70,7 @@ export function SyncDialog({ target, onClose }: { target: DeploymentRef; onClose
               <pre className="max-h-80 overflow-auto rounded-lg bg-destructive/10 p-3 text-xs font-mono text-destructive whitespace-pre-wrap">{result.stderr || result.stdout}</pre>
             )
           )}
-        </div>
+        </DialogBody>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>{phase === "done" ? "Close" : "Cancel"}</Button>

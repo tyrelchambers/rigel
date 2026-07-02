@@ -7,6 +7,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogTitle,
   DialogDescription,
   DialogFooter,
@@ -169,6 +170,8 @@ export function AssistantConfigSection({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Save credential and restart the agent?</DialogTitle>
+          </DialogHeader>
+          <DialogBody>
             <DialogDescription>
               {pending?.kind === "clear"
                 ? "Reverting to the Rigel-managed Secret re-renders the agent Deployment and rolls the agent pod. In-flight work is interrupted."
@@ -176,7 +179,7 @@ export function AssistantConfigSection({
                   ? "Pointing this credential at the chosen Secret re-renders the agent Deployment and rolls the agent pod. The secret value never leaves the cluster. In-flight work is interrupted."
                   : "Saving this key updates the cluster Secret and rolls the agent pod so it picks up the new credential. In-flight work is interrupted."}
             </DialogDescription>
-          </DialogHeader>
+          </DialogBody>
           <DialogFooter>
             <Button variant="muted" onClick={() => setPending(null)}>
               Cancel

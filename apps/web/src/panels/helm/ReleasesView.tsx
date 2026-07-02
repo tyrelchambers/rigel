@@ -3,7 +3,13 @@ import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Modal } from "@/components/ui/modal";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { YamlEditor } from "@/components/YamlEditorLazy";
 import { buildHelmRollbackArgs, buildHelmUninstallArgs, type HelmRelease, type HelmRevision } from "@rigel/k8s/src/helm";
 import { releasesFromSecretsMap, releaseStatusTone, formatTimestamp, type StatusTone } from "./releases";
@@ -74,23 +80,28 @@ export function ReleasesView({ onUpgrade }: { onUpgrade: (r: HelmRelease) => voi
         </div>
       )}
 
-      <Modal
+      <Dialog
         open={current != null}
         onOpenChange={(o) => { if (!o) { setSelected(null); setRev(null); } }}
-        title={current?.name ?? "Release"}
-        maxWidth="!max-w-4xl"
       >
-        {current && (
-          <ReleaseDetail
-            release={current}
-            shownRev={shownRev}
-            onSelectRev={setRev}
-            onUpgrade={() => { onUpgrade(current); setSelected(null); }}
-            onUninstall={() => { setPending({ op: "uninstall", release: current }); setError(null); }}
-            onRollback={(revision) => { setPending({ op: "rollback", release: current, revision }); setError(null); }}
-          />
-        )}
-      </Modal>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>{current?.name ?? "Release"}</DialogTitle>
+          </DialogHeader>
+          <DialogBody>
+            {current && (
+              <ReleaseDetail
+                release={current}
+                shownRev={shownRev}
+                onSelectRev={setRev}
+                onUpgrade={() => { onUpgrade(current); setSelected(null); }}
+                onUninstall={() => { setPending({ op: "uninstall", release: current }); setError(null); }}
+                onRollback={(revision) => { setPending({ op: "rollback", release: current, revision }); setError(null); }}
+              />
+            )}
+          </DialogBody>
+        </DialogContent>
+      </Dialog>
 
       <HelmConfirmModal
         open={pending != null}

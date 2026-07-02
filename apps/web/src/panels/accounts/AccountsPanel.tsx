@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { Package, Star, Trash2 } from "lucide-react";
+import { FileCode2, Package, Star, Trash2 } from "lucide-react";
 import type { Secret } from "@rigel/k8s";
 import { Loader } from "@/components/Loader";
+import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
+import { YamlEditor } from "@/components/YamlEditorLazy";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
+  DialogFooter,
+  DialogHeader,
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
@@ -210,6 +215,7 @@ function AddAccountSheet({
   const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   // Reset the form each time the sheet opens (never persist a token in state).
   useEffect(() => {
@@ -218,6 +224,7 @@ function AddAccountSheet({
       setSubmitted(false);
       setBusy(false);
       setServerError(null);
+      setShowPreview(false);
     }
   }, [open]);
 
@@ -276,22 +283,6 @@ function AddAccountSheet({
     }
   }
 
-  function modeButton(mode: AddMode, label: string) {
-    const active = form.mode === mode;
-    return (
-      <button
-        type="button"
-        onClick={() => set("mode", mode)}
-        aria-pressed={active}
-        className={`flex-1 rounded-md px-3 py-1 text-sm ${
-          active ? "bg-background shadow-sm font-medium" : "text-muted-foreground"
-        }`}
-      >
-        {label}
-      </button>
-    );
-  }
-
   function field(
     key: keyof AccountForm,
     label: string,
@@ -319,20 +310,25 @@ function AddAccountSheet({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="p-0 gap-0 max-h-[90vh] overflow-auto max-w-lg">
-        <div className="flex flex-col gap-0.5 p-4">
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
           <DialogTitle>Add account</DialogTitle>
+        </DialogHeader>
+
+        <DialogBody className="space-y-3">
           <DialogDescription>
             Store registry pull credentials as a cluster Secret so installs pull authenticated.
           </DialogDescription>
-        </div>
 
-        <div className="space-y-3 px-4 py-2">
-          {/* Mode picker */}
-          <div className="flex gap-1 rounded-lg bg-muted p-1">
-            {modeButton("create", "Create")}
-            {modeButton("reference", "Reference existing")}
-          </div>
+          {/* Mode picker — segmented tab rail */}
+          <SegmentedTabs
+            tabs={[
+              { id: "create", label: "Create" },
+              { id: "reference", label: "Reference existing" },
+            ]}
+            active={form.mode}
+            onChange={(id) => set("mode", id as AddMode)}
+          />
 
           {field("registry", "Registry", { placeholder: "docker.io" })}
           {field("username", "Username", { optional: form.mode === "reference" })}
@@ -350,13 +346,24 @@ function AddAccountSheet({
             Use as the default for installs
           </label>
 
-          {/* Preview (create mode only) — .dockerconfigjson masked as [hidden]. */}
+          {/* Preview (create mode only) — on demand; .dockerconfigjson masked as
+              [hidden]. Kept behind a button so the form stays the focus. */}
           {form.mode === "create" && (
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground">Preview</p>
-              <pre className="max-h-48 overflow-auto rounded-md bg-muted px-3 py-2 text-xs font-mono whitespace-pre-wrap break-all">
-                {previewYAML(form)}
-              </pre>
+            <div className="space-y-1.5">
+              <button
+                type="button"
+                onClick={() => setShowPreview((v) => !v)}
+                aria-expanded={showPreview}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+              >
+                <FileCode2 className="size-3.5" aria-hidden />
+                {showPreview ? "Hide YAML" : "Preview YAML"}
+              </button>
+              {showPreview && (
+                <div className="overflow-hidden rounded-md border border-[var(--border-subtle)]">
+                  <YamlEditor value={previewYAML(form)} readOnly language="yaml" height="240px" />
+                </div>
+              )}
             </div>
           )}
 
@@ -365,16 +372,16 @@ function AddAccountSheet({
               {serverError}
             </pre>
           )}
-        </div>
+        </DialogBody>
 
-        <div className="mt-auto flex flex-col gap-2 p-4">
+        <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={busy}>
             {busy ? "Applying…" : form.mode === "create" ? "Create & apply" : "Add reference"}
           </Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -395,9 +402,11 @@ function DeleteConfirmSheet({
 }) {
   return (
     <Dialog open={!!account} onOpenChange={(o) => { if (!o) onCancel(); }}>
-      <DialogContent className="p-0 gap-0 max-w-lg">
-        <div className="flex flex-col gap-0.5 p-4">
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
           <DialogTitle>Remove account?</DialogTitle>
+        </DialogHeader>
+        <DialogBody className="space-y-3">
           <DialogDescription>
             {account && (
               <span className="font-mono">
@@ -406,19 +415,19 @@ function DeleteConfirmSheet({
               </span>
             )}
           </DialogDescription>
-        </div>
-        <div className="px-4 py-2 text-sm text-muted-foreground">
-          This removes the account from Rigel&apos;s list. The Secret will remain in the cluster
-          (use the Secrets panel to delete it if needed).
-        </div>
-        <div className="mt-auto flex flex-col gap-2 p-4">
+          <p className="text-sm text-muted-foreground">
+            This removes the account from Rigel&apos;s list. The Secret will remain in the cluster
+            (use the Secrets panel to delete it if needed).
+          </p>
+        </DialogBody>
+        <DialogFooter>
           <Button variant="outline" onClick={onCancel}>
             Cancel
           </Button>
           <Button variant="destructive" onClick={onConfirm}>
             Remove
           </Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

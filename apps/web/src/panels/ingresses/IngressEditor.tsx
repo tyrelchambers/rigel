@@ -16,9 +16,12 @@ import {
 } from "@rigel/k8s";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
+  DialogHeader,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { KeyValueEditor } from "../components/KeyValueEditor";
@@ -158,182 +161,185 @@ export function IngressEditor({ target, open, onClose, onApplied }: IngressEdito
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="p-0 gap-0 max-w-3xl max-h-[84vh] overflow-auto">
-        <div className="flex flex-col gap-0.5 p-4">
+      <DialogContent className="max-w-3xl max-h-[84vh]">
+        <DialogHeader>
           <DialogTitle>Edit {name}</DialogTitle>
+        </DialogHeader>
+
+        <DialogBody className="flex flex-col gap-4">
           <DialogDescription>
             Modify the ingress's class, rules, TLS, and annotations. Name and namespace are preserved.
           </DialogDescription>
-        </div>
 
-        {/* Form ⇄ YAML toggle */}
-        <div className="flex items-center gap-1 px-4">
-          <Button size="sm" variant={mode === "form" ? "default" : "outline"} onClick={() => setMode("form")}>Form</Button>
-          <Button size="sm" variant={mode === "yaml" ? "default" : "outline"} onClick={enterYaml}>YAML</Button>
-        </div>
+          {/* Form ⇄ YAML toggle */}
+          <div className="flex items-center gap-1">
+            <Button size="sm" variant={mode === "form" ? "default" : "outline"} onClick={() => setMode("form")}>Form</Button>
+            <Button size="sm" variant={mode === "yaml" ? "default" : "outline"} onClick={enterYaml}>YAML</Button>
+          </div>
 
-        {mode === "form" ? (
-          <div className="space-y-4 px-4 py-2">
-            {/* Identity */}
-            <div className="grid grid-cols-2 gap-3">
-              <Labeled label="Name">
-                <input type="text" value={name} disabled className={fieldInput} />
+          {mode === "form" ? (
+            <div className="space-y-4">
+              {/* Identity */}
+              <div className="grid grid-cols-2 gap-3">
+                <Labeled label="Name">
+                  <input type="text" value={name} disabled className={fieldInput} />
+                </Labeled>
+                <Labeled label="Namespace">
+                  <input type="text" value={namespace} disabled className={fieldInput} />
+                </Labeled>
+              </div>
+  
+              <Labeled label="Ingress class">
+                <input
+                  type="text"
+                  value={ingressClassName}
+                  placeholder="nginx"
+                  onChange={(e) => setIngressClassName(e.target.value)}
+                  className={fieldInput}
+                />
               </Labeled>
-              <Labeled label="Namespace">
-                <input type="text" value={namespace} disabled className={fieldInput} />
-              </Labeled>
-            </div>
-
-            <Labeled label="Ingress class">
-              <input
-                type="text"
-                value={ingressClassName}
-                placeholder="nginx"
-                onChange={(e) => setIngressClassName(e.target.value)}
-                className={fieldInput}
-              />
-            </Labeled>
-
-            {/* Rules */}
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-muted-foreground">Rules</label>
-              {rules.map((rule, ri) => (
-                <div key={ri} className="space-y-2 rounded-md border bg-background/40 p-2.5">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={rule.host}
-                      placeholder="host (e.g. rigel.sh) — blank = all hosts"
-                      onChange={(e) => updateRule(ri, { host: e.target.value })}
-                      className={fieldInput}
-                      aria-label="host"
-                    />
-                    {rules.length > 1 && (
-                      <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove rule" onClick={() => removeRule(ri)}>
-                        <Minus className="size-4 text-destructive" aria-hidden />
-                      </Button>
-                    )}
-                  </div>
-
-                  {rule.paths.map((p, pi) => (
-                    <div key={pi} className="flex flex-wrap items-center gap-2 pl-3">
+  
+              {/* Rules */}
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">Rules</label>
+                {rules.map((rule, ri) => (
+                  <div key={ri} className="space-y-2 rounded-md border bg-background/40 p-2.5">
+                    <div className="flex items-center gap-2">
                       <input
                         type="text"
-                        value={p.path}
-                        placeholder="/"
-                        onChange={(e) => updatePath(ri, pi, { path: e.target.value })}
-                        className={`${fieldInput} w-24`}
-                        aria-label="path"
+                        value={rule.host}
+                        placeholder="host (e.g. rigel.sh) — blank = all hosts"
+                        onChange={(e) => updateRule(ri, { host: e.target.value })}
+                        className={fieldInput}
+                        aria-label="host"
                       />
-                      <select
-                        value={p.pathType}
-                        onChange={(e) => updatePath(ri, pi, { pathType: e.target.value })}
-                        className={`${fieldInput} w-44`}
-                        aria-label="path type"
-                      >
-                        {PATH_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                      <span className="text-xs text-muted-foreground">→</span>
-                      <input
-                        type="text"
-                        value={p.serviceName}
-                        placeholder="service"
-                        onChange={(e) => updatePath(ri, pi, { serviceName: e.target.value })}
-                        className={`${fieldInput} w-32`}
-                        aria-label="service name"
-                      />
-                      <span className="text-xs text-muted-foreground">:</span>
-                      <input
-                        type="text"
-                        value={p.servicePort}
-                        placeholder="80"
-                        onChange={(e) => updatePath(ri, pi, { servicePort: e.target.value })}
-                        className={`${fieldInput} w-20`}
-                        aria-label="service port"
-                      />
-                      {rule.paths.length > 1 && (
-                        <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove path" onClick={() => removePath(ri, pi)}>
+                      {rules.length > 1 && (
+                        <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove rule" onClick={() => removeRule(ri)}>
                           <Minus className="size-4 text-destructive" aria-hidden />
                         </Button>
                       )}
                     </div>
-                  ))}
-                  <Button type="button" variant="outline" size="sm" className="ml-3" onClick={() => addPath(ri)}>
-                    <Plus className="size-3.5" aria-hidden /> Add path
-                  </Button>
-                </div>
-              ))}
-              <Button type="button" variant="outline" size="sm" onClick={addRule}>
-                <Plus className="size-3.5" aria-hidden /> Add rule
-              </Button>
+  
+                    {rule.paths.map((p, pi) => (
+                      <div key={pi} className="flex flex-wrap items-center gap-2 pl-3">
+                        <input
+                          type="text"
+                          value={p.path}
+                          placeholder="/"
+                          onChange={(e) => updatePath(ri, pi, { path: e.target.value })}
+                          className={`${fieldInput} w-24`}
+                          aria-label="path"
+                        />
+                        <select
+                          value={p.pathType}
+                          onChange={(e) => updatePath(ri, pi, { pathType: e.target.value })}
+                          className={`${fieldInput} w-44`}
+                          aria-label="path type"
+                        >
+                          {PATH_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                        <span className="text-xs text-muted-foreground">→</span>
+                        <input
+                          type="text"
+                          value={p.serviceName}
+                          placeholder="service"
+                          onChange={(e) => updatePath(ri, pi, { serviceName: e.target.value })}
+                          className={`${fieldInput} w-32`}
+                          aria-label="service name"
+                        />
+                        <span className="text-xs text-muted-foreground">:</span>
+                        <input
+                          type="text"
+                          value={p.servicePort}
+                          placeholder="80"
+                          onChange={(e) => updatePath(ri, pi, { servicePort: e.target.value })}
+                          className={`${fieldInput} w-20`}
+                          aria-label="service port"
+                        />
+                        {rule.paths.length > 1 && (
+                          <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove path" onClick={() => removePath(ri, pi)}>
+                            <Minus className="size-4 text-destructive" aria-hidden />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    <Button type="button" variant="outline" size="sm" className="ml-3" onClick={() => addPath(ri)}>
+                      <Plus className="size-3.5" aria-hidden /> Add path
+                    </Button>
+                  </div>
+                ))}
+                <Button type="button" variant="outline" size="sm" onClick={addRule}>
+                  <Plus className="size-3.5" aria-hidden /> Add rule
+                </Button>
+              </div>
+  
+              {/* TLS */}
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">TLS</label>
+                {tls.length === 0 && <p className="text-xs text-muted-foreground">No TLS configured.</p>}
+                {tls.map((t, ti) => (
+                  <div key={ti} className="flex flex-wrap items-center gap-2 rounded-md border bg-background/40 p-2">
+                    <input
+                      type="text"
+                      value={t.hosts}
+                      placeholder="hosts (comma-separated)"
+                      onChange={(e) => updateTls(ti, { hosts: e.target.value })}
+                      className={`${fieldInput} flex-1`}
+                      aria-label="tls hosts"
+                    />
+                    <span className="text-xs text-muted-foreground">→</span>
+                    <input
+                      type="text"
+                      value={t.secretName}
+                      placeholder="tls-secret"
+                      onChange={(e) => updateTls(ti, { secretName: e.target.value })}
+                      className={`${fieldInput} w-44`}
+                      aria-label="tls secret name"
+                    />
+                    <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove TLS" onClick={() => removeTls(ti)}>
+                      <Minus className="size-4 text-destructive" aria-hidden />
+                    </Button>
+                  </div>
+                ))}
+                <Button type="button" variant="outline" size="sm" onClick={addTls}>
+                  <Plus className="size-3.5" aria-hidden /> Add TLS
+                </Button>
+              </div>
+  
+              {/* Annotations */}
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">Annotations</label>
+                <KeyValueEditor rows={annotationRows} onRowsChange={setAnnotationRows} keyPlaceholder="key (e.g. cert-manager.io/cluster-issuer)" />
+              </div>
+  
+              {labels && Object.keys(labels).length > 0 && (
+                <p className="text-xs font-mono text-muted-foreground/70">
+                  {Object.keys(labels).length} label(s) preserved unchanged.
+                </p>
+              )}
             </div>
-
-            {/* TLS */}
+          ) : (
             <div className="space-y-2">
-              <label className="text-xs font-medium text-muted-foreground">TLS</label>
-              {tls.length === 0 && <p className="text-xs text-muted-foreground">No TLS configured.</p>}
-              {tls.map((t, ti) => (
-                <div key={ti} className="flex flex-wrap items-center gap-2 rounded-md border bg-background/40 p-2">
-                  <input
-                    type="text"
-                    value={t.hosts}
-                    placeholder="hosts (comma-separated)"
-                    onChange={(e) => updateTls(ti, { hosts: e.target.value })}
-                    className={`${fieldInput} flex-1`}
-                    aria-label="tls hosts"
-                  />
-                  <span className="text-xs text-muted-foreground">→</span>
-                  <input
-                    type="text"
-                    value={t.secretName}
-                    placeholder="tls-secret"
-                    onChange={(e) => updateTls(ti, { secretName: e.target.value })}
-                    className={`${fieldInput} w-44`}
-                    aria-label="tls secret name"
-                  />
-                  <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove TLS" onClick={() => removeTls(ti)}>
-                    <Minus className="size-4 text-destructive" aria-hidden />
-                  </Button>
-                </div>
-              ))}
-              <Button type="button" variant="outline" size="sm" onClick={addTls}>
-                <Plus className="size-3.5" aria-hidden /> Add TLS
-              </Button>
-            </div>
-
-            {/* Annotations */}
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-muted-foreground">Annotations</label>
-              <KeyValueEditor rows={annotationRows} onRowsChange={setAnnotationRows} keyPlaceholder="key (e.g. cert-manager.io/cluster-issuer)" />
-            </div>
-
-            {labels && Object.keys(labels).length > 0 && (
-              <p className="text-xs font-mono text-muted-foreground/70">
-                {Object.keys(labels).length} label(s) preserved unchanged.
+              <p className="text-xs text-muted-foreground">
+                Edit the manifest directly. Switching back to <b>Form</b> rebuilds this from the fields (raw edits are discarded). Applied with <code className="font-mono">kubectl apply -f -</code>.
               </p>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-2 px-4 py-2">
-            <p className="text-xs text-muted-foreground">
-              Edit the manifest directly. Switching back to <b>Form</b> rebuilds this from the fields (raw edits are discarded). Applied with <code className="font-mono">kubectl apply -f -</code>.
-            </p>
-            <div className="h-[52vh] w-full overflow-hidden rounded-md border" style={{ background: "#0B0C0E", borderColor: "#26272B" }}>
-              <YamlEditor value={yamlText} onChange={setYamlText} schema={schema ?? null} />
+              <div className="h-[52vh] w-full overflow-hidden rounded-md border" style={{ background: "#0B0C0E", borderColor: "#26272B" }}>
+                <YamlEditor value={yamlText} onChange={setYamlText} schema={schema ?? null} />
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {serverError && (
-          <pre className="mx-4 rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
-            {serverError}
-          </pre>
-        )}
+          {serverError && (
+            <pre className="rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+              {serverError}
+            </pre>
+          )}
+        </DialogBody>
 
-        <div className="mt-auto flex flex-col gap-2 p-4">
+        <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
           <Button onClick={handleApply} disabled={busy || !valid}>{busy ? "Applying…" : "Apply changes"}</Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

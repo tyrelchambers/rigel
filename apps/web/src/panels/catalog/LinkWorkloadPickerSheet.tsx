@@ -8,7 +8,9 @@ import {
 } from "@rigel/catalog";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
+  DialogHeader,
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
@@ -127,43 +129,44 @@ export function LinkWorkloadPickerSheet({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="p-0 gap-0 max-h-[85vh] overflow-hidden max-w-2xl">
-        <div className="flex flex-col gap-0.5 p-4">
+      <DialogContent className="max-h-[85vh] max-w-2xl">
+        <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Link2 className="size-4" />
             {containerStep ? "Choose a container" : `Link a workload to ${app.name}`}
           </DialogTitle>
+        </DialogHeader>
+
+        <DialogBody className="flex flex-1 flex-col gap-3 overflow-hidden">
           <DialogDescription>
             {containerStep
               ? `Pick which container of ${containerStep.name} backs ${app.name}.`
               : "Pick the Deployment, StatefulSet, or DaemonSet that runs this app. The next step shows the exact kubectl command."}
           </DialogDescription>
-        </div>
 
-        {containerStep ? (
-          // ─── Step 2: container picker (multi-container only) ───
-          <div className="flex-1 overflow-y-auto px-4 pb-4">
-            <div className="overflow-hidden rounded-md border">
-              {containerStep.containers.map((c) => (
-                <button
-                  key={c.name}
-                  type="button"
-                  onClick={() => selectContainer(containerStep, c.name)}
-                  className="flex w-full flex-col items-start gap-0.5 border-b px-2.5 py-2 text-left last:border-b-0 hover:bg-muted/50"
-                >
-                  <span className="font-mono text-xs">{c.name}</span>
-                  {c.image && (
-                    <span className="font-mono text-[10px] text-muted-foreground">{c.image}</span>
-                  )}
-                </button>
-              ))}
+          {containerStep ? (
+            // ─── Step 2: container picker (multi-container only) ───
+            <div className="flex-1 overflow-y-auto">
+              <div className="overflow-hidden rounded-md border">
+                {containerStep.containers.map((c) => (
+                  <button
+                    key={c.name}
+                    type="button"
+                    onClick={() => selectContainer(containerStep, c.name)}
+                    className="flex w-full flex-col items-start gap-0.5 border-b px-2.5 py-2 text-left last:border-b-0 hover:bg-muted/50"
+                  >
+                    <span className="font-mono text-xs">{c.name}</span>
+                    {c.image && (
+                      <span className="font-mono text-[10px] text-muted-foreground">{c.image}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        ) : (
-          <>
-            {/* Search */}
-            <div className="px-4">
-              <div className="flex items-center gap-2 rounded-md border bg-background px-2.5">
+          ) : (
+            <>
+              {/* Search */}
+              <div className="flex items-center gap-2 rounded-md border bg-background px-2.5 shrink-0">
                 <Search className="size-3.5 text-muted-foreground" />
                 <input
                   type="text"
@@ -173,48 +176,48 @@ export function LinkWorkloadPickerSheet({
                   className="w-full bg-transparent py-1.5 text-sm outline-none"
                 />
               </div>
-            </div>
 
-            {/* List */}
-            <div className="flex-1 overflow-y-auto px-4 pb-4">
-              {!hasAny ? (
-                <p className="py-3 text-sm text-muted-foreground">No workloads</p>
-              ) : !hasMatches ? (
-                <p className="py-3 text-sm text-muted-foreground">No matches.</p>
-              ) : (
-                <div className="space-y-3">
-                  {groups.map((g) => (
-                    <div key={g.namespace}>
-                      <div className="mb-1 px-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                        {g.namespace}
-                      </div>
-                      <div className="overflow-hidden rounded-md border">
-                        {g.workloads.map((w) => (
-                          <button
-                            key={`${w.kind}/${w.namespace}/${w.name}`}
-                            type="button"
-                            onClick={() => selectWorkload(w)}
-                            className="flex w-full items-center gap-2 border-b px-2.5 py-1.5 text-left last:border-b-0 hover:bg-muted/50"
-                          >
-                            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                              {KIND_BADGE[w.kind]}
-                            </span>
-                            <span className="font-mono text-xs">{w.name}</span>
-                            {w.boundTo && w.boundTo !== app.id && (
-                              <span className="ml-auto font-mono text-[10px] text-muted-foreground">
-                                bound to {w.boundTo}
+              {/* List */}
+              <div className="flex-1 overflow-y-auto">
+                {!hasAny ? (
+                  <p className="py-3 text-sm text-muted-foreground">No workloads</p>
+                ) : !hasMatches ? (
+                  <p className="py-3 text-sm text-muted-foreground">No matches.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {groups.map((g) => (
+                      <div key={g.namespace}>
+                        <div className="mb-1 px-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                          {g.namespace}
+                        </div>
+                        <div className="overflow-hidden rounded-md border">
+                          {g.workloads.map((w) => (
+                            <button
+                              key={`${w.kind}/${w.namespace}/${w.name}`}
+                              type="button"
+                              onClick={() => selectWorkload(w)}
+                              className="flex w-full items-center gap-2 border-b px-2.5 py-1.5 text-left last:border-b-0 hover:bg-muted/50"
+                            >
+                              <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                                {KIND_BADGE[w.kind]}
                               </span>
-                            )}
-                          </button>
-                        ))}
+                              <span className="font-mono text-xs">{w.name}</span>
+                              {w.boundTo && w.boundTo !== app.id && (
+                                <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+                                  bound to {w.boundTo}
+                                </span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </>
-        )}
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </DialogBody>
       </DialogContent>
     </Dialog>
   );

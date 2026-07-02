@@ -1,4 +1,4 @@
-import { Modal } from "@/components/ui/modal";
+import { Dialog, DialogBody, DialogContent, DialogHeader, DialogIcon, DialogTitle } from "@/components/ui/dialog";
 import { Unplug, ShieldCheck } from "lucide-react";
 import { classifyProvider, providerLabel } from "./clusterTile";
 import { CLUSTER_ICONS, providerDefaultIcon } from "./clusterIcons";
@@ -15,7 +15,15 @@ export function RemoveClusterDialog({
   const provider = cluster ? classifyProvider(cluster) : "generic";
   const Icon = CLUSTER_ICONS[providerDefaultIcon(provider)].Component;
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title="Remove cluster" icon={<Unplug className="size-[17px]" />} maxWidth="!max-w-md">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogIcon>
+            <Unplug className="size-[17px]" />
+          </DialogIcon>
+          <DialogTitle>Remove cluster</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <div style={{ fontSize: 15, fontWeight: 600, color: "var(--fg-primary)" }}>Remove this cluster from Rigel?</div>
 
@@ -41,6 +49,8 @@ export function RemoveClusterDialog({
           </button>
         </div>
       </div>
-    </Modal>
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
   );
 }

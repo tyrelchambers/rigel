@@ -172,6 +172,14 @@
     html {
         @apply font-sans;
     }
+    /* The app owns its own scroll regions (100vh shell + inner overflow-auto
+       areas). Pin html/body so the document itself never scrolls, even if an
+       inner region briefly overflows. */
+    html,
+    body {
+        height: 100%;
+        overflow: hidden;
+    }
 }
 
 /* ─── Dark scrollbars (app-wide) ────────────────────────────────────────────── */

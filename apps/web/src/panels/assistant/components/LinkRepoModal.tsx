@@ -2,15 +2,18 @@
 // agent can open fix PRs against it. Reproduces the Pencil "Link to repo" modal
 // (frame xSyQL): icon-tiled header with the deployment subtitle, intro, repo
 // URL + branch + manifest-path fields, an accent note, and the primary action.
-// Built on the shared Dialog primitive (graphite #101012 body, hairline ring,
+// Built on the shared Dialog primitive (surface-elevated body, hairline ring,
 // 16px radius all come from DialogContent).
 
 import { useEffect, useState } from "react";
-import { GitBranch, Info, X } from "lucide-react";
+import { GitBranch, Info } from "lucide-react";
 import {
   Dialog,
-  DialogClose,
   DialogContent,
+  DialogHeader,
+  DialogBody,
+  DialogFooter,
+  DialogIcon,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useLinkRepo } from "@/panels/gitops/gitApi";
@@ -97,74 +100,60 @@ export function LinkRepoModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        showCloseButton={false}
-        className="flex max-h-[85vh] w-[calc(100%-2rem)] max-w-[540px] flex-col gap-0 overflow-hidden p-0"
-      >
-        {/* Header — icon tile + title/subtitle + close, hairline-separated */}
-        <div className="flex items-center justify-between gap-4 border-b border-[var(--border-subtle)] px-[22px] py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.07]">
-              <GitBranch className="size-4 text-[var(--accent-primary)]" />
-            </div>
-            <div className="flex flex-col gap-1">
-              <DialogTitle className="font-sans text-base font-semibold text-[var(--fg-primary)]">
-                Link to repo
-              </DialogTitle>
-              <p className="text-xs text-[var(--fg-tertiary)]">
-                {deployment} · creates a GitOps source
-              </p>
-            </div>
-          </div>
-          <DialogClose
-            className="flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-white/[0.05]"
-            aria-label="Close"
-          >
-            <X className="size-[18px] text-[var(--fg-tertiary)]" />
-          </DialogClose>
-        </div>
-
-        {/* Body */}
-        <div className="flex flex-col gap-4 px-[22px] py-[22px]">
-          <p className="text-[13px] leading-[1.5] text-[var(--fg-secondary)]">
-            Point Rigel at this project's GitHub repo. It creates a GitOps source (the repo mapping)
-            and stamps the deployment so it can open fix PRs. It won't deploy from the repo unless
-            you set that up separately.
-          </p>
-
-          <ModalField
-            label="Repository URL"
-            value={repoURL}
-            onChange={setRepoURL}
-            placeholder="https://github.com/owner/repo"
-          />
-
-          <div className="flex gap-3">
-            <ModalField label="Branch" value={branch} onChange={setBranch} placeholder="main" />
-            <ModalField
-              label="Manifest path (optional)"
-              value={path}
-              onChange={setPath}
-              placeholder="k8s/"
-            />
-          </div>
-
-          <div className="flex items-center gap-2 rounded-lg bg-[var(--accent-dim)] px-3 py-2.5">
-            <Info className="size-3.5 shrink-0 text-[var(--accent-primary)]" />
-            <span className="text-[11px] text-[var(--fg-secondary)]">
-              Writes a rigel-git-sources entry and annotates the live deployment. No redeploy.
-            </span>
-          </div>
-
-          {link.error && (
-            <p className="font-mono text-[11px] text-[var(--status-failed)]">
-              {link.error.message}
+      <DialogContent className="max-w-[540px]">
+        <DialogHeader>
+          <DialogIcon>
+            <GitBranch className="size-4 text-[var(--accent-primary)]" />
+          </DialogIcon>
+          <div className="flex min-w-0 flex-col gap-1">
+            <DialogTitle>Link to repo</DialogTitle>
+            <p className="truncate text-xs text-[var(--fg-tertiary)]">
+              {deployment} · creates a GitOps source
             </p>
-          )}
-        </div>
+          </div>
+        </DialogHeader>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between gap-3 px-[22px] pb-[18px] pt-2.5">
+        <DialogBody>
+          <div className="flex flex-col gap-4">
+            <p className="text-[13px] leading-[1.5] text-[var(--fg-secondary)]">
+              Point Rigel at this project's GitHub repo. It creates a GitOps source (the repo mapping)
+              and stamps the deployment so it can open fix PRs. It won't deploy from the repo unless
+              you set that up separately.
+            </p>
+
+            <ModalField
+              label="Repository URL"
+              value={repoURL}
+              onChange={setRepoURL}
+              placeholder="https://github.com/owner/repo"
+            />
+
+            <div className="flex gap-3">
+              <ModalField label="Branch" value={branch} onChange={setBranch} placeholder="main" />
+              <ModalField
+                label="Manifest path (optional)"
+                value={path}
+                onChange={setPath}
+                placeholder="k8s/"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 rounded-lg bg-[var(--accent-dim)] px-3 py-2.5">
+              <Info className="size-3.5 shrink-0 text-[var(--accent-primary)]" />
+              <span className="text-[11px] text-[var(--fg-secondary)]">
+                Writes a rigel-git-sources entry and annotates the live deployment. No redeploy.
+              </span>
+            </div>
+
+            {link.error && (
+              <p className="font-mono text-[11px] text-[var(--status-failed)]">
+                {link.error.message}
+              </p>
+            )}
+          </div>
+        </DialogBody>
+
+        <DialogFooter className="sm:justify-between">
           <button
             type="button"
             onClick={() => onOpenChange(false)}
@@ -181,7 +170,7 @@ export function LinkRepoModal({
             <GitBranch className="size-4" />
             {link.isPending ? "Linking…" : "Create source & link"}
           </button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

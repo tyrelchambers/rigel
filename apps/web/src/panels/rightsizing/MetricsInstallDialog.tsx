@@ -4,7 +4,13 @@
 // owned by the panel, so the exact `kubectl apply -f -` is shown before it runs.
 
 import { useState, type ReactNode } from "react";
-import { Modal } from "@/components/ui/modal";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { YamlEditor } from "@/components/YamlEditorLazy";
@@ -68,7 +74,12 @@ export function MetricsInstallDialog({ open, onOpenChange, onInstall }: Props) {
   const note = BACKENDS.find((b) => b.id === backend)?.note ?? "";
 
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title="Set up a metrics backend" maxWidth="!max-w-3xl">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Set up a metrics backend</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
       <div className="flex flex-col gap-5">
         <p className="text-sm leading-relaxed text-muted-foreground">
           Installs a lightweight, PromQL-compatible store that scrapes container usage continuously,
@@ -160,7 +171,7 @@ export function MetricsInstallDialog({ open, onOpenChange, onInstall }: Props) {
         </div>
       </div>
 
-      {/* Footer — full-bleed hairline, breaking out of the Modal body padding. */}
+      {/* Footer — full-bleed hairline, breaking out of the DialogBody padding. */}
       <div className="-mx-6 -mb-7 mt-6 flex items-center justify-end gap-2 border-t border-white/[0.07] px-6 py-3.5">
         <Button variant="ghost" onClick={() => onOpenChange(false)}>
           Cancel
@@ -169,6 +180,8 @@ export function MetricsInstallDialog({ open, onOpenChange, onInstall }: Props) {
           Install
         </Button>
       </div>
-    </Modal>
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
   );
 }

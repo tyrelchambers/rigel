@@ -108,10 +108,7 @@ export function WizardShell({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        showCloseButton={false}
-        className="flex w-[540px] max-w-[calc(100vw-2rem)] max-h-[84vh] flex-col gap-0 overflow-hidden p-0"
-      >
+      <DialogContent className="flex w-[540px] max-w-[calc(100vw-2rem)] max-h-[84vh] flex-col gap-0 overflow-hidden p-0">
         <DialogTitle className="sr-only">{title}</DialogTitle>
 
         {progress != null && (

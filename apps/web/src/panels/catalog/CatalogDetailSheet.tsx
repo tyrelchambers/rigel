@@ -17,9 +17,12 @@ import {
 import { categoryDisplayName, type CatalogApp } from "@rigel/catalog";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
+  DialogHeader,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useCluster } from "@/store/cluster";
@@ -147,12 +150,9 @@ export function CatalogDetailSheet({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        showCloseButton={false}
-        className="detail-sheet detail-sheet-modal max-w-none sm:max-w-none"
-      >
+      <DialogContent className="detail-sheet detail-sheet-modal max-w-none sm:max-w-none">
         {/* ── Header (top, full width) ─────────────────────────────────────── */}
-        <div className="detail-sheet-header">
+        <DialogHeader>
           <div className="detail-sheet-hero">
             <div className="detail-sheet-icon" aria-hidden>
               <Icon className="detail-sheet-icon-glyph" />
@@ -167,27 +167,18 @@ export function CatalogDetailSheet({
                   </span>
                 )}
               </DialogTitle>
-              <DialogDescription className="detail-sheet-tagline">
-                {app.tagline}
-              </DialogDescription>
             </div>
-            <button
-              type="button"
-              className="detail-sheet-close"
-              onClick={() => onOpenChange(false)}
-              aria-label="Close"
-              title="Close"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="size-3.5" aria-hidden>
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
-            </button>
           </div>
-        </div>
+        </DialogHeader>
 
         {/* ── Body: two columns when installable (left info + right NODE FIT),
               single info column when installed (management view). ─────────── */}
-        <div className={`detail-sheet-cols${isInstalled ? " detail-sheet-cols-single" : ""}`}>
+        <DialogBody className="flex min-h-0 flex-1 flex-col p-0 overflow-hidden">
+          <DialogDescription className="detail-sheet-tagline px-5 pt-4">
+            {app.tagline}
+          </DialogDescription>
+
+          <div className={`detail-sheet-cols${isInstalled ? " detail-sheet-cols-single" : ""}`}>
           {/* Left column — info + REQUIREMENTS. */}
           <div className={`detail-sheet-left${isInstalled ? " detail-sheet-left-single" : ""}`}>
             {/* INSTALLED status block — Swift's `installedBlock`. Installed only. */}
@@ -340,10 +331,11 @@ export function CatalogDetailSheet({
               />
             </div>
           )}
-        </div>
+          </div>
+        </DialogBody>
 
         {/* ── Footer (bottom, full width) ──────────────────────────────────── */}
-        <div className="detail-sheet-footer">
+        <DialogFooter className="items-center">
           {isInstalled ? (
             <>
               {latest && onUpdate && (
@@ -402,7 +394,7 @@ export function CatalogDetailSheet({
               </Button>
             </>
           )}
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

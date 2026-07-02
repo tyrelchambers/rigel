@@ -9,7 +9,7 @@ export function AssistantBody() {
   const { actionError } = useAssistantCtx();
 
   return (
-    <div className="flex-1 space-y-3 overflow-auto p-4">
+    <div className="min-h-0 flex-1 space-y-3 overflow-auto p-4">
       {actionError && (
         <pre className="select-text rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
           {actionError}
