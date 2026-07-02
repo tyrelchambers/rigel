@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -42,15 +43,15 @@ export function AddDeploymentDialog({ repo, onClose }: { repo: GitSource; onClos
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Add deployment to {repo.name}</DialogTitle>
-          <DialogDescription>Pick a manifest folder in {repo.repoURL} · {repo.branch}.</DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col gap-3 py-1">
+        <DialogBody className="flex flex-col gap-3">
+          <DialogDescription>Pick a manifest folder in {repo.repoURL} · {repo.branch}.</DialogDescription>
           <Field label="Deployment name" value={name} onChange={(v) => { setEdited(true); setName(v); }} placeholder="marketing" />
           <RepoPathBrowser repo={repoFullName} branch={repo.branch} value={path} onChange={setPath} />
           {save.isError && (
             <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{save.error.message}</p>
           )}
-        </div>
+        </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={save.isPending}>Cancel</Button>
           <Button onClick={handleSave} disabled={!canSave}>{save.isPending ? "Saving…" : "Add deployment"}</Button>

@@ -5,6 +5,7 @@
 import { useMemo, useState } from "react";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -36,9 +37,11 @@ export function AddSourceDialog({ onClose }: { onClose: () => void }) {
           <>
             <DialogHeader>
               <DialogTitle>Add Git repo</DialogTitle>
-              <DialogDescription>Checking your GitHub connection…</DialogDescription>
             </DialogHeader>
-            <div className="py-2"><FormSkeleton /></div>
+            <DialogBody className="flex flex-col gap-3">
+              <DialogDescription>Checking your GitHub connection…</DialogDescription>
+              <FormSkeleton />
+            </DialogBody>
           </>
         ) : connected ? (
           <PickRepoStep onClose={onClose} />
@@ -68,9 +71,9 @@ function ConnectStep({ onClose }: { onClose: () => void }) {
     <>
       <DialogHeader>
         <DialogTitle>Connect GitHub</DialogTitle>
-        <DialogDescription>Rigel needs a personal access token to list your repos and open PRs. It's stored as a cluster Secret.</DialogDescription>
       </DialogHeader>
-      <div className="flex flex-col gap-3 py-1">
+      <DialogBody className="flex flex-col gap-3">
+        <DialogDescription>Rigel needs a personal access token to list your repos and open PRs. It's stored as a cluster Secret.</DialogDescription>
         <a href={GITHUB_TOKEN_URL} target="_blank" rel="noreferrer" className="text-xs hover:underline" style={{ color: "var(--accent-primary)" }}>
           Create a personal access token (classic, “repo” scope)
         </a>
@@ -85,7 +88,7 @@ function ConnectStep({ onClose }: { onClose: () => void }) {
           style={{ padding: "8px 10px", borderRadius: 8, background: "#08080A", border: "1px solid #26272B", color: "var(--fg-primary)", fontSize: 13, fontFamily: "ui-monospace, monospace", outline: "none" }}
         />
         {connect.isError && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{connect.error.message}</p>}
-      </div>
+      </DialogBody>
       <DialogFooter>
         <Button variant="outline" onClick={onClose} disabled={connect.isPending}>Cancel</Button>
         <Button onClick={handleConnect} disabled={!token || connect.isPending}>{connect.isPending ? "Connecting…" : "Connect & continue"}</Button>
@@ -131,9 +134,9 @@ function PickRepoStep({ onClose }: { onClose: () => void }) {
     <>
       <DialogHeader>
         <DialogTitle>Add Git repo</DialogTitle>
-        <DialogDescription>Pick a repo, then add one or more manifest folders to deploy.</DialogDescription>
       </DialogHeader>
-      <div className="flex flex-col gap-3 py-1">
+      <DialogBody className="flex flex-col gap-3">
+        <DialogDescription>Pick a repo, then add one or more manifest folders to deploy.</DialogDescription>
         {isLoading ? (
           <FormSkeleton />
         ) : (
@@ -159,7 +162,7 @@ function PickRepoStep({ onClose }: { onClose: () => void }) {
         {save.isError && (
           <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{save.error.message}</p>
         )}
-      </div>
+      </DialogBody>
       <DialogFooter>
         <Button variant="outline" onClick={onClose} disabled={save.isPending}>Cancel</Button>
         <Button onClick={handleSave} disabled={!canSave}>{save.isPending ? "Saving…" : `Add repo${deployments.length ? ` (${deployments.length})` : ""}`}</Button>
