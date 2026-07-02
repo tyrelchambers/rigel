@@ -48,6 +48,7 @@ export function absoluteWhen(iso: string | undefined | null): string | null {
   if (!iso) return null;
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return null;
+  // en-US output is intentional and consistent with the rest of the app (no i18n).
   return format(date, "MMM d, yyyy, h:mm:ss a");
 }
 
