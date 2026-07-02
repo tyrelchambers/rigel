@@ -7,7 +7,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Trash2 } from "lucide-react";
-import { Modal } from "@/components/ui/modal";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { deleteManifestYaml } from "@/lib/api";
@@ -86,7 +92,12 @@ export function MetricsRemoveDialog({ open, onOpenChange, backend, onRemoved }: 
   }
 
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title="Remove metrics backend" maxWidth="!max-w-xl">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Remove metrics backend</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
       <div className="flex flex-col gap-4">
         <p className="text-sm leading-relaxed text-muted-foreground">
           Choose what to delete from the <span className="font-medium text-foreground">{backend.flavor}</span> backend
@@ -133,7 +144,7 @@ export function MetricsRemoveDialog({ open, onOpenChange, backend, onRemoved }: 
         {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</p>}
       </div>
 
-      {/* Footer — full-bleed hairline, breaking out of the Modal body padding. */}
+      {/* Footer — full-bleed hairline, breaking out of the DialogBody padding. */}
       <div className="-mx-6 -mb-7 mt-6 flex items-center justify-end gap-2 border-t border-white/[0.07] px-6 py-3.5">
         <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
           Cancel
@@ -143,6 +154,8 @@ export function MetricsRemoveDialog({ open, onOpenChange, backend, onRemoved }: 
           {pending ? "Removing…" : `Remove ${selected.length} resource${selected.length === 1 ? "" : "s"}`}
         </Button>
       </div>
-    </Modal>
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
   );
 }

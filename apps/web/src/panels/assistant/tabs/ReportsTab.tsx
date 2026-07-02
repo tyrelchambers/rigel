@@ -1,8 +1,8 @@
 // ReportsTab — scheduled cluster digests. Reproduces the Pencil design
 // (clankerlocal.pen: "Assistant — Reports tab" + "Assistant — Digest editor
-// (modal)"). The editor uses the app's standard <Modal> shell (never an ad-hoc
-// dialog); the body uses the app's var(--…) design tokens and premade
-// Button/Switch. Data wiring dispatches through the assistant `run` action.
+// (modal)"). The editor uses the app's standard Dialog shell; the body uses
+// the app's var(--…) design tokens and premade Button/Switch. Data wiring
+// dispatches through the assistant `run` action.
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
@@ -26,7 +26,14 @@ import {
 } from "@rigel/k8s";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Modal } from "@/components/ui/modal";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogHeader,
+  DialogIcon,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useSettings } from "@/panels/settings/useSettings";
 import { useAssistantCtx } from "../AssistantContext";
 import { relativeTime } from "../display";
@@ -408,200 +415,205 @@ export function ReportsTab() {
         )}
       </div>
 
-      {/* Create / edit modal — the app's standard Modal shell */}
-      <Modal
-        open={open}
-        onOpenChange={setOpen}
-        title={editingId ? "Edit digest" : "New scheduled digest"}
-        icon={<CalendarClock className="size-[18px] text-[var(--accent-primary)]" />}
-        iconBackground={false}
-        maxWidth="!max-w-xl"
-      >
-        <div className="flex flex-col gap-4">
-          <p className="text-[13px] leading-[1.5] text-[var(--fg-tertiary)]">
-            A short synopsis of overnight incidents, fixes, and current health, delivered on your
-            schedule.
-          </p>
-
-          {/* Label */}
-          <div className="flex flex-col gap-1.5">
-            <Caption>Label</Caption>
-            <input
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder="Morning cluster digest"
-              className={FIELD}
-            />
-          </div>
-
-          {/* Deliver to */}
-          <div className="flex flex-col gap-1.5">
-            <Caption>Deliver to</Caption>
-            <select
-              value={channel}
-              onChange={(e) => setChannel(e.target.value as DigestChannel)}
-              className={FIELD}
-              disabled={channelOptions.length === 0}
-            >
-              {channelOptions.length === 0 ? (
-                <option value="">No connected channels</option>
-              ) : (
-                <>
-                  {channel === "" && <option value="">Select a channel</option>}
-                  {channelOptions.map((c) => (
-                    <option key={c} value={c}>
-                      {CHANNEL_META[c].label}
-                    </option>
-                  ))}
-                </>
-              )}
-            </select>
-            <span className="text-[11.5px] text-[var(--fg-tertiary)]">
-              {channelOptions.length === 0
-                ? "Connect Signal, Matrix, or a webhook in Settings first."
-                : "Only your connected channels appear here."}
-            </span>
-          </div>
-
-          {/* Schedule */}
-          <div className="flex flex-col gap-2">
-            <Caption>Schedule</Caption>
-            <Segmented<Cadence>
-              value={cadence}
-              onChange={pickCadence}
-              options={[
-                { value: "daily", label: "Daily" },
-                { value: "weekly", label: "Weekly" },
-                { value: "custom", label: "Custom" },
-              ]}
-            />
-            <div className="flex gap-1.5">
-              {DAYS.map((day) => {
-                const on = days.includes(day.idx);
-                return (
-                  <button
-                    key={day.idx}
-                    type="button"
-                    aria-pressed={on}
-                    aria-label={day.name}
-                    onClick={() => toggleDay(day.idx)}
-                    className={`h-8 flex-1 rounded-sm border text-[12.5px] font-semibold transition-colors ${
-                      on
-                        ? "border-[var(--accent-primary)] bg-[var(--accent-dim)] text-[var(--accent-primary)]"
-                        : "border-[var(--border-subtle)] bg-[var(--surface-sunken)] text-[var(--fg-tertiary)] hover:text-[var(--fg-primary)]"
-                    }`}
-                  >
-                    {day.letter}
-                  </button>
-                );
-              })}
+      {/* Create / edit dialog — the app's standard Dialog shell */}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogIcon background={false}>
+              <CalendarClock className="size-[18px] text-[var(--accent-primary)]" />
+            </DialogIcon>
+            <DialogTitle>
+              {editingId ? "Edit digest" : "New scheduled digest"}
+            </DialogTitle>
+          </DialogHeader>
+          <DialogBody>
+          <div className="flex flex-col gap-4">
+            <p className="text-[13px] leading-[1.5] text-[var(--fg-tertiary)]">
+              A short synopsis of overnight incidents, fixes, and current health, delivered on your
+              schedule.
+            </p>
+  
+            {/* Label */}
+            <div className="flex flex-col gap-1.5">
+              <Caption>Label</Caption>
+              <input
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                placeholder="Morning cluster digest"
+                className={FIELD}
+              />
             </div>
-            <div className="flex gap-3">
-              <div className="flex flex-1 flex-col gap-1.5">
-                <Caption>Send time</Caption>
-                <input
-                  type="time"
-                  value={time}
-                  onChange={(e) => setTime(e.target.value)}
-                  className={`${FIELD} font-mono`}
-                />
-              </div>
-              <div className="flex flex-1 flex-col gap-1.5">
-                <Caption>Timezone</Caption>
-                <select
-                  value={timezone}
-                  onChange={(e) => setTimezone(e.target.value)}
-                  className={FIELD}
-                >
-                  {zoneOptions.map((z) => (
-                    <option key={z} value={z}>
-                      {z}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* What it covers */}
-          <div className="flex flex-col gap-2">
-            <Caption>What it covers</Caption>
-            <Segmented<"sinceLast" | "fixed">
-              value={lookbackMode}
-              onChange={setLookbackMode}
-              options={[
-                { value: "sinceLast", label: "Since the last digest" },
-                { value: "fixed", label: "Fixed window" },
-              ]}
-            />
-            {lookbackMode === "fixed" && (
-              <div className="flex items-center gap-2 pt-0.5">
-                <input
-                  type="number"
-                  min={1}
-                  max={168}
-                  value={lookbackHours}
-                  onChange={(e) => setLookbackHours(Math.max(1, Number(e.target.value) || 1))}
-                  className={`${FIELD} w-24 font-mono`}
-                />
-                <span className="text-xs text-[var(--fg-tertiary)]">hours</span>
-              </div>
-            )}
-          </div>
-
-          {/* Preview */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <Caption>Preview</Caption>
-              <Button
-                type="button"
-                variant="muted"
-                size="sm"
-                disabled={!editingId || working}
-                onClick={() => editingId && fireSendNow(editingId, "preview")}
+  
+            {/* Deliver to */}
+            <div className="flex flex-col gap-1.5">
+              <Caption>Deliver to</Caption>
+              <select
+                value={channel}
+                onChange={(e) => setChannel(e.target.value as DigestChannel)}
+                className={FIELD}
+                disabled={channelOptions.length === 0}
               >
-                <Eye />
-                Generate preview
-              </Button>
+                {channelOptions.length === 0 ? (
+                  <option value="">No connected channels</option>
+                ) : (
+                  <>
+                    {channel === "" && <option value="">Select a channel</option>}
+                    {channelOptions.map((c) => (
+                      <option key={c} value={c}>
+                        {CHANNEL_META[c].label}
+                      </option>
+                    ))}
+                  </>
+                )}
+              </select>
+              <span className="text-[11.5px] text-[var(--fg-tertiary)]">
+                {channelOptions.length === 0
+                  ? "Connect Signal, Matrix, or a webhook in Settings first."
+                  : "Only your connected channels appear here."}
+              </span>
             </div>
-            <div className="rounded-md border border-[var(--border-subtle)] bg-black/25 p-3">
-              {!editingId ? (
-                <p className="text-xs text-[var(--fg-tertiary)]">
-                  Save the digest first, then generate a preview.
-                </p>
-              ) : awaitingPreview ? (
-                <p className="text-xs text-[var(--fg-tertiary)]">
-                  Generating… the agent renders this within ~30s.
-                </p>
-              ) : editPreview ? (
-                <pre className="max-h-56 overflow-auto font-mono text-[11px] whitespace-pre-wrap text-[var(--fg-secondary)] select-text">
-                  {editPreview.text}
-                </pre>
-              ) : (
-                <p className="text-xs text-[var(--fg-tertiary)]">
-                  Generate a preview to see the digest text.
-                </p>
+  
+            {/* Schedule */}
+            <div className="flex flex-col gap-2">
+              <Caption>Schedule</Caption>
+              <Segmented<Cadence>
+                value={cadence}
+                onChange={pickCadence}
+                options={[
+                  { value: "daily", label: "Daily" },
+                  { value: "weekly", label: "Weekly" },
+                  { value: "custom", label: "Custom" },
+                ]}
+              />
+              <div className="flex gap-1.5">
+                {DAYS.map((day) => {
+                  const on = days.includes(day.idx);
+                  return (
+                    <button
+                      key={day.idx}
+                      type="button"
+                      aria-pressed={on}
+                      aria-label={day.name}
+                      onClick={() => toggleDay(day.idx)}
+                      className={`h-8 flex-1 rounded-sm border text-[12.5px] font-semibold transition-colors ${
+                        on
+                          ? "border-[var(--accent-primary)] bg-[var(--accent-dim)] text-[var(--accent-primary)]"
+                          : "border-[var(--border-subtle)] bg-[var(--surface-sunken)] text-[var(--fg-tertiary)] hover:text-[var(--fg-primary)]"
+                      }`}
+                    >
+                      {day.letter}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex gap-3">
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <Caption>Send time</Caption>
+                  <input
+                    type="time"
+                    value={time}
+                    onChange={(e) => setTime(e.target.value)}
+                    className={`${FIELD} font-mono`}
+                  />
+                </div>
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <Caption>Timezone</Caption>
+                  <select
+                    value={timezone}
+                    onChange={(e) => setTimezone(e.target.value)}
+                    className={FIELD}
+                  >
+                    {zoneOptions.map((z) => (
+                      <option key={z} value={z}>
+                        {z}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+  
+            {/* What it covers */}
+            <div className="flex flex-col gap-2">
+              <Caption>What it covers</Caption>
+              <Segmented<"sinceLast" | "fixed">
+                value={lookbackMode}
+                onChange={setLookbackMode}
+                options={[
+                  { value: "sinceLast", label: "Since the last digest" },
+                  { value: "fixed", label: "Fixed window" },
+                ]}
+              />
+              {lookbackMode === "fixed" && (
+                <div className="flex items-center gap-2 pt-0.5">
+                  <input
+                    type="number"
+                    min={1}
+                    max={168}
+                    value={lookbackHours}
+                    onChange={(e) => setLookbackHours(Math.max(1, Number(e.target.value) || 1))}
+                    className={`${FIELD} w-24 font-mono`}
+                  />
+                  <span className="text-xs text-[var(--fg-tertiary)]">hours</span>
+                </div>
               )}
             </div>
-          </div>
-
-          {/* Footer: Enabled on the left, actions on the right */}
-          <div className="flex items-center justify-between pt-1">
-            <div className="flex items-center gap-2.5">
-              <Switch checked={enabled} onCheckedChange={setEnabled} aria-label="Enabled" />
-              <span className="text-[13px] text-[var(--fg-secondary)]">Enabled</span>
+  
+            {/* Preview */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <Caption>Preview</Caption>
+                <Button
+                  type="button"
+                  variant="muted"
+                  size="sm"
+                  disabled={!editingId || working}
+                  onClick={() => editingId && fireSendNow(editingId, "preview")}
+                >
+                  <Eye />
+                  Generate preview
+                </Button>
+              </div>
+              <div className="rounded-md border border-[var(--border-subtle)] bg-black/25 p-3">
+                {!editingId ? (
+                  <p className="text-xs text-[var(--fg-tertiary)]">
+                    Save the digest first, then generate a preview.
+                  </p>
+                ) : awaitingPreview ? (
+                  <p className="text-xs text-[var(--fg-tertiary)]">
+                    Generating… the agent renders this within ~30s.
+                  </p>
+                ) : editPreview ? (
+                  <pre className="max-h-56 overflow-auto font-mono text-[11px] whitespace-pre-wrap text-[var(--fg-secondary)] select-text">
+                    {editPreview.text}
+                  </pre>
+                ) : (
+                  <p className="text-xs text-[var(--fg-tertiary)]">
+                    Generate a preview to see the digest text.
+                  </p>
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-2.5">
-              <Button variant="muted" onClick={() => setOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={save} disabled={working || !valid}>
-                Save digest
-              </Button>
+  
+            {/* Footer: Enabled on the left, actions on the right */}
+            <div className="flex items-center justify-between pt-1">
+              <div className="flex items-center gap-2.5">
+                <Switch checked={enabled} onCheckedChange={setEnabled} aria-label="Enabled" />
+                <span className="text-[13px] text-[var(--fg-secondary)]">Enabled</span>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <Button variant="muted" onClick={() => setOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={save} disabled={working || !valid}>
+                  Save digest
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-      </Modal>
+          </DialogBody>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
