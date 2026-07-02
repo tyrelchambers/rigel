@@ -2,6 +2,7 @@ import { useState } from "react";
 import { TriangleAlert } from "lucide-react";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -41,13 +42,13 @@ export function PortForwardDialog({
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       {target && (
-        <DialogBody key={`${target.namespace}/${target.service}/${target.remotePort}`} target={target} activeForwards={activeForwards} onClose={onClose} />
+        <ForwardForm key={`${target.namespace}/${target.service}/${target.remotePort}`} target={target} activeForwards={activeForwards} onClose={onClose} />
       )}
     </Dialog>
   );
 }
 
-function DialogBody({
+function ForwardForm({
   target,
   activeForwards,
   onClose,
@@ -80,6 +81,9 @@ function DialogBody({
     <DialogContent>
       <DialogHeader>
         <DialogTitle>Forward port</DialogTitle>
+      </DialogHeader>
+
+      <DialogBody className="space-y-3">
         <DialogDescription>
           Forward a local port on the server to{" "}
           <span className="font-mono">
@@ -87,9 +91,7 @@ function DialogBody({
           </span>
           .
         </DialogDescription>
-      </DialogHeader>
 
-      <div className="space-y-3">
         <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
           <span className="text-muted-foreground">Service</span>
           <span className="font-mono">{target.service}</span>
@@ -134,7 +136,7 @@ function DialogBody({
             adjust the server's bind address or publish the port.
           </span>
         </p>
-      </div>
+      </DialogBody>
 
       <DialogFooter>
         <Button variant="outline" onClick={onClose} disabled={start.isPending}>

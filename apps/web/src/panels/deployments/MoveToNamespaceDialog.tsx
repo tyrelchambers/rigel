@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -42,27 +43,29 @@ export function MoveToNamespaceDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Move {deployment.metadata.name} to another namespace</DialogTitle>
+        </DialogHeader>
+        <DialogBody className="space-y-3">
           <DialogDescription>
             From <span className="font-mono">{src}</span>. There's no native move — Rigel will recreate it (and related resources) in the target namespace, then delete the originals, with each step confirmed in chat.
           </DialogDescription>
-        </DialogHeader>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">Target namespace</span>
-          <input
-            list="ns-move-options"
-            value={target}
-            onChange={(e) => setTarget(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
-            placeholder="e.g. staging"
-            autoFocus
-            spellCheck={false}
-            className="w-full rounded-md border bg-background px-3 py-1.5 text-sm font-mono outline-none focus:ring-2 focus:ring-ring"
-          />
-          <datalist id="ns-move-options">
-            {namespaces.filter((n) => n !== src).map((n) => <option key={n} value={n} />)}
-          </datalist>
-          {trimmed === src && <span className="text-xs text-destructive">Pick a namespace different from the source.</span>}
-        </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground">Target namespace</span>
+            <input
+              list="ns-move-options"
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+              placeholder="e.g. staging"
+              autoFocus
+              spellCheck={false}
+              className="w-full rounded-md border bg-background px-3 py-1.5 text-sm font-mono outline-none focus:ring-2 focus:ring-ring"
+            />
+            <datalist id="ns-move-options">
+              {namespaces.filter((n) => n !== src).map((n) => <option key={n} value={n} />)}
+            </datalist>
+            {trimmed === src && <span className="text-xs text-destructive">Pick a namespace different from the source.</span>}
+          </label>
+        </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={submit} disabled={!valid}>Plan move in chat</Button>

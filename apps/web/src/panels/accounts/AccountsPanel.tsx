@@ -6,7 +6,10 @@ import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
+  DialogFooter,
+  DialogHeader,
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
@@ -319,15 +322,16 @@ function AddAccountSheet({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="p-0 gap-0 max-h-[90vh] overflow-auto max-w-lg">
-        <div className="flex flex-col gap-0.5 p-4">
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
           <DialogTitle>Add account</DialogTitle>
+        </DialogHeader>
+
+        <DialogBody className="space-y-3">
           <DialogDescription>
             Store registry pull credentials as a cluster Secret so installs pull authenticated.
           </DialogDescription>
-        </div>
 
-        <div className="space-y-3 px-4 py-2">
           {/* Mode picker */}
           <div className="flex gap-1 rounded-lg bg-muted p-1">
             {modeButton("create", "Create")}
@@ -365,16 +369,16 @@ function AddAccountSheet({
               {serverError}
             </pre>
           )}
-        </div>
+        </DialogBody>
 
-        <div className="mt-auto flex flex-col gap-2 p-4">
+        <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={busy}>
             {busy ? "Applying…" : form.mode === "create" ? "Create & apply" : "Add reference"}
           </Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -395,9 +399,11 @@ function DeleteConfirmSheet({
 }) {
   return (
     <Dialog open={!!account} onOpenChange={(o) => { if (!o) onCancel(); }}>
-      <DialogContent className="p-0 gap-0 max-w-lg">
-        <div className="flex flex-col gap-0.5 p-4">
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
           <DialogTitle>Remove account?</DialogTitle>
+        </DialogHeader>
+        <DialogBody className="space-y-3">
           <DialogDescription>
             {account && (
               <span className="font-mono">
@@ -406,19 +412,19 @@ function DeleteConfirmSheet({
               </span>
             )}
           </DialogDescription>
-        </div>
-        <div className="px-4 py-2 text-sm text-muted-foreground">
-          This removes the account from Rigel&apos;s list. The Secret will remain in the cluster
-          (use the Secrets panel to delete it if needed).
-        </div>
-        <div className="mt-auto flex flex-col gap-2 p-4">
+          <p className="text-sm text-muted-foreground">
+            This removes the account from Rigel&apos;s list. The Secret will remain in the cluster
+            (use the Secrets panel to delete it if needed).
+          </p>
+        </DialogBody>
+        <DialogFooter>
           <Button variant="outline" onClick={onCancel}>
             Cancel
           </Button>
           <Button variant="destructive" onClick={onConfirm}>
             Remove
           </Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
