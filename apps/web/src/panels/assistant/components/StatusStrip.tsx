@@ -1,23 +1,52 @@
-// StatusStrip — compact single-line summary strip for the assistant dashboard.
-// One slim horizontal row (status pill, inline stat pairs, token) that wraps
-// gracefully on narrow widths. Each value shows a skeleton until its specific
-// data source is ready.
+// StatusStrip — compact summary strip for the assistant dashboard. One bordered
+// row: the live state on the left with inline stat pairs (awaiting / live /
+// fixed / failed), the token budget pushed to the right. Wraps gracefully on
+// narrow widths; each value shows a skeleton until its data source is ready.
+// Built to Pencil frame "Assistant — Overview (improved)" (status strip).
 
+import { Timer } from "lucide-react";
 import { useAssistantCtx } from "../AssistantContext";
-import { Card, Bar } from "./primitives";
+import { Bar } from "./primitives";
 import { tokenLabel, tokenColorClass, auditCount } from "../display";
+
+// Card shell shared across every phase so the strip keeps a stable shape.
+function Strip({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-[18px] py-3.5">
+      {children}
+    </div>
+  );
+}
 
 // Subtle vertical divider between groups.
 function Divider() {
-  return <span aria-hidden className="h-4 w-px shrink-0 bg-border" />;
+  return <span aria-hidden className="h-[22px] w-px shrink-0 bg-[var(--border-strong)]" />;
 }
 
 // One inline "LABEL value" pair on a single line.
 function InlineStat({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <span className="flex items-baseline gap-1 whitespace-nowrap">
-      <span className="font-mono text-[9px] font-medium uppercase text-muted-foreground">
+    <span className="flex items-center gap-1.5 whitespace-nowrap">
+      <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--fg-tertiary)]">
         {label}
+      </span>
+      {children}
+    </span>
+  );
+}
+
+// A settled stat value (mono, colour-coded).
+function StatValue({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <span className={`font-mono text-[15px] font-semibold ${className}`}>{children}</span>;
+}
+
+/** Timer-icon token group, right-aligned. */
+function TokenGroup({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="flex items-center gap-2 whitespace-nowrap">
+      <Timer className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />
+      <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--fg-tertiary)]">
+        Token
       </span>
       {children}
     </span>
@@ -32,68 +61,65 @@ export function StatusStrip() {
 
   // Skeleton value for any stat whose source hasn't arrived yet.
   const skelVal = <Bar className="h-3.5 w-8" />;
+  const stats = ["Awaiting", "Live", "Fixed", "Failed"] as const;
 
   // Loading: render the strip shape with skeleton values throughout.
   if (phase === "loading") {
     return (
-      <Card className="px-3 py-2">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
-          <span className="flex items-center gap-1.5">
-            <span className="h-2 w-2 shrink-0 rounded-full bg-muted" />
-            <Bar className="h-3.5 w-12" />
+      <Strip>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          <span className="flex items-center gap-2">
+            <span className="size-2 shrink-0 rounded-full bg-muted" />
+            <Bar className="h-3.5 w-14" />
           </span>
           <Divider />
-          {["Awaiting", "Live", "Fixed", "Failed"].map((label) => (
+          {stats.map((label) => (
             <InlineStat key={label} label={label}>
               {skelVal}
             </InlineStat>
           ))}
-          <Divider />
-          <InlineStat label="Token">{skelVal}</InlineStat>
         </div>
-      </Card>
+        <TokenGroup>{skelVal}</TokenGroup>
+      </Strip>
     );
   }
 
   // Settled with no agent present — not installed.
   if (phase === "install") {
-    const dash = <span className="text-sm font-semibold text-muted-foreground">—</span>;
+    const dash = <StatValue className="text-[var(--fg-tertiary)]">—</StatValue>;
     return (
-      <Card className="px-3 py-2">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
-          <span className="flex items-center gap-1.5">
-            <span className="h-2 w-2 shrink-0 rounded-full bg-muted-foreground" />
-            <span className="text-sm font-semibold text-muted-foreground">Not installed</span>
+      <Strip>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          <span className="flex items-center gap-2">
+            <span className="size-2 shrink-0 rounded-full bg-[var(--fg-tertiary)]" />
+            <span className="text-[15px] font-semibold text-[var(--fg-tertiary)]">Not installed</span>
           </span>
           <Divider />
-          {["Awaiting", "Live", "Fixed", "Failed"].map((label) => (
+          {stats.map((label) => (
             <InlineStat key={label} label={label}>
               {dash}
             </InlineStat>
           ))}
-          <Divider />
-          <InlineStat label="Token">{dash}</InlineStat>
         </div>
-      </Card>
+        <TokenGroup>{dash}</TokenGroup>
+      </Strip>
     );
   }
 
   // Installed — show real values, but skeleton per-stat until its source ready.
   return (
-    <Card className="px-3 py-2">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
-        {/* Status pill — ready.deployments (already true here) */}
-        <span className="flex items-center gap-1.5 whitespace-nowrap">
+    <Strip>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+        {/* Status — ready.deployments (already true here) */}
+        <span className="flex items-center gap-2 whitespace-nowrap">
           <span
-            className={`h-2 w-2 shrink-0 rounded-full ${
-              d.enabled ? "bg-green-500" : "bg-muted-foreground"
+            className={`size-2 shrink-0 rounded-full ${
+              d.enabled ? "bg-[var(--status-running)]" : "bg-[var(--fg-tertiary)]"
             }`}
           />
           <span
-            className={`text-sm font-semibold ${
-              d.enabled
-                ? "text-green-600 dark:text-green-400"
-                : "text-muted-foreground"
+            className={`text-[15px] font-semibold ${
+              d.enabled ? "text-[var(--status-running)]" : "text-[var(--fg-tertiary)]"
             }`}
           >
             {d.enabled ? "Active" : "Paused"}
@@ -105,32 +131,26 @@ export function StatusStrip() {
         {/* Awaiting — ready.state */}
         <InlineStat label="Awaiting">
           {ready.state ? (
-            <span
-              className={`text-sm font-semibold ${
-                queue.length === 0
-                  ? "text-muted-foreground"
-                  : "text-amber-600 dark:text-amber-400"
-              }`}
+            <StatValue
+              className={queue.length === 0 ? "text-[var(--fg-primary)]" : "text-[var(--status-pending)]"}
             >
               {queue.length}
-            </span>
+            </StatValue>
           ) : (
             skelVal
           )}
         </InlineStat>
 
-        {/* Live issues — ready.pods (label shortened to "Live") */}
+        {/* Live issues — ready.pods */}
         <InlineStat label="Live">
           {ready.pods ? (
-            <span
-              className={`text-sm font-semibold ${
-                d.liveIssues.length === 0
-                  ? "text-green-600 dark:text-green-400"
-                  : "text-red-600 dark:text-red-400"
-              }`}
+            <StatValue
+              className={
+                d.liveIssues.length === 0 ? "text-[var(--status-running)]" : "text-[var(--status-failed)]"
+              }
             >
               {d.liveIssues.length}
-            </span>
+            </StatValue>
           ) : (
             skelVal
           )}
@@ -139,9 +159,7 @@ export function StatusStrip() {
         {/* Fixed — ready.state */}
         <InlineStat label="Fixed">
           {ready.state ? (
-            <span className="text-sm font-semibold text-green-600 dark:text-green-400">
-              {auditCount(audit, "success")}
-            </span>
+            <StatValue className="text-[var(--status-running)]">{auditCount(audit, "success")}</StatValue>
           ) : (
             skelVal
           )}
@@ -150,33 +168,29 @@ export function StatusStrip() {
         {/* Failed — ready.state */}
         <InlineStat label="Failed">
           {ready.state ? (
-            <span
-              className={`text-sm font-semibold ${
-                auditCount(audit, "failure") === 0
-                  ? "text-muted-foreground"
-                  : "text-red-600 dark:text-red-400"
-              }`}
+            <StatValue
+              className={
+                auditCount(audit, "failure") === 0 ? "text-[var(--fg-primary)]" : "text-[var(--status-failed)]"
+              }
             >
               {auditCount(audit, "failure")}
-            </span>
-          ) : (
-            skelVal
-          )}
-        </InlineStat>
-
-        <Divider />
-
-        {/* Token — ready.secrets */}
-        <InlineStat label="Token">
-          {ready.secrets && d.tokenExpiry ? (
-            <span className={`text-sm font-semibold ${tokenColorClass(d.tokenExpiry.level)}`}>
-              {tokenLabel(d.tokenExpiry)}
-            </span>
+            </StatValue>
           ) : (
             skelVal
           )}
         </InlineStat>
       </div>
-    </Card>
+
+      {/* Token — ready.secrets */}
+      <TokenGroup>
+        {ready.secrets && d.tokenExpiry ? (
+          <span className={`font-mono text-sm font-semibold ${tokenColorClass(d.tokenExpiry.level)}`}>
+            {tokenLabel(d.tokenExpiry)}
+          </span>
+        ) : (
+          skelVal
+        )}
+      </TokenGroup>
+    </Strip>
   );
 }
