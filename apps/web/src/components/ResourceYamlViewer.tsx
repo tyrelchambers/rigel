@@ -6,9 +6,9 @@
 // the guarded ConfirmSheet (no new mutation path).
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Copy, Check, FileCode, Pencil, Play, X } from "lucide-react";
+import { Copy, Check, FileCode, Pencil, Play } from "lucide-react";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogBody,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
@@ -61,15 +61,10 @@ export function ResourceYamlViewer() {
   return (
     <>
       <Dialog open onOpenChange={(o) => { if (!o) close(); }}>
-        <DialogContent showCloseButton={false} className="max-w-4xl">
-          <DialogHeader className="flex-row items-center gap-3">
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
             <FileCode className="size-5 shrink-0" style={{ color: "var(--accent-primary)" }} />
-            <div className="flex min-w-0 flex-1 flex-col">
-              <DialogTitle className="truncate font-mono text-[15px]">{title}</DialogTitle>
-              <DialogDescription className="text-xs">
-                {subtitle}{editing ? " · editing" : ""}
-              </DialogDescription>
-            </div>
+            <DialogTitle className="min-w-0 flex-1 truncate font-mono text-[15px]">{title}</DialogTitle>
             {target.editable && !editing && data && (
               <Button variant="outline" size="sm" className="gap-1.5" onClick={startEdit}>
                 <Pencil className="size-3.5" /> Edit
@@ -85,29 +80,32 @@ export function ResourceYamlViewer() {
                 {copied ? "Copied" : "Copy"}
               </Button>
             )}
-            <Button variant="ghost" size="icon-sm" className="shrink-0 text-muted-foreground" onClick={close} aria-label="Close">
-              <X className="size-4" />
-            </Button>
           </DialogHeader>
 
-          {isLoading ? (
-            <div className="py-10 text-center text-sm text-muted-foreground">Loading…</div>
-          ) : isError ? (
-            <pre className="max-h-[60vh] overflow-auto rounded-lg bg-destructive/10 p-3 text-xs font-mono text-destructive whitespace-pre-wrap">
-              {error instanceof Error ? error.message : String(error)}
-            </pre>
-          ) : (
-            <div style={{ height: "65vh", borderRadius: 8, overflow: "hidden", border: "1px solid #26272B" }}>
-              {/* Edit mode is schema-aware; read-only view is syntax-highlight only
-                  (no validation squiggles on a manifest you can't edit). */}
-              <YamlEditor
-                value={editing ? draft : (data ?? "")}
-                onChange={editing ? setDraft : undefined}
-                readOnly={!editing}
-                schema={editing ? (schema ?? null) : null}
-              />
-            </div>
-          )}
+          <DialogBody className="flex flex-col gap-3">
+            <DialogDescription className="text-xs">
+              {subtitle}{editing ? " · editing" : ""}
+            </DialogDescription>
+
+            {isLoading ? (
+              <div className="py-10 text-center text-sm text-muted-foreground">Loading…</div>
+            ) : isError ? (
+              <pre className="max-h-[60vh] overflow-auto rounded-lg bg-destructive/10 p-3 text-xs font-mono text-destructive whitespace-pre-wrap">
+                {error instanceof Error ? error.message : String(error)}
+              </pre>
+            ) : (
+              <div style={{ height: "65vh", borderRadius: 8, overflow: "hidden", border: "1px solid #26272B" }}>
+                {/* Edit mode is schema-aware; read-only view is syntax-highlight only
+                    (no validation squiggles on a manifest you can't edit). */}
+                <YamlEditor
+                  value={editing ? draft : (data ?? "")}
+                  onChange={editing ? setDraft : undefined}
+                  readOnly={!editing}
+                  schema={editing ? (schema ?? null) : null}
+                />
+              </div>
+            )}
+          </DialogBody>
         </DialogContent>
       </Dialog>
 

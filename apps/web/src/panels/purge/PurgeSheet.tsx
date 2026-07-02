@@ -4,8 +4,11 @@ import { Loader } from "@/components/Loader";
 import {
   Dialog,
   DialogContent,
+  DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogBody,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -130,47 +133,45 @@ export function PurgeSheet({ target, open, onClose }: PurgeSheetProps) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
-      <DialogContent
-        className="p-0 gap-0 border-t-2 border-destructive/50 max-h-[85vh] overflow-hidden max-w-2xl"
-      >
-        <div className="flex flex-col gap-0.5 p-4">
+      <DialogContent className="border-t-2 border-destructive/50 max-w-2xl">
+        <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Trash2 className="size-4 text-destructive" />
             <span>Purge {appName}</span>
           </DialogTitle>
+        </DialogHeader>
+
+        <DialogBody className="flex flex-col gap-3">
           <DialogDescription className="font-mono text-xs">
             namespace: {namespace}
           </DialogDescription>
-        </div>
 
-        {/* Loading discovery */}
-        {discovery.isPending && (
-          <div className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
-            <Loader size={16} />
-            Discovering resources…
-          </div>
-        )}
+          {/* Loading discovery */}
+          {discovery.isPending && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader size={16} />
+              Discovering resources…
+            </div>
+          )}
 
-        {/* Discovery error */}
-        {discovery.isError && (
-          <div className="px-4 py-2">
+          {/* Discovery error */}
+          {discovery.isError && (
             <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
               {discovery.error.message}
             </p>
-          </div>
-        )}
+          )}
 
-        {/* Blocked state — protected namespace */}
-        {plan && blocked && (
-          <div className="mx-4 my-2 flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-3">
-            <Lock className="mt-0.5 size-4 shrink-0 text-destructive" />
-            <p className="text-sm text-destructive">{plan.blockedReason}</p>
-          </div>
-        )}
+          {/* Blocked state — protected namespace */}
+          {plan && blocked && (
+            <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-3">
+              <Lock className="mt-0.5 size-4 shrink-0 text-destructive" />
+              <p className="text-sm text-destructive">{plan.blockedReason}</p>
+            </div>
+          )}
 
-        {/* Normal state */}
-        {plan && !blocked && (
-          <div className="flex flex-col gap-3 overflow-y-auto px-4">
+          {/* Normal state */}
+          {plan && !blocked && (
+            <>
             {/* Warning prose */}
             <p className="text-xs text-muted-foreground">
               This permanently deletes the selected resources from the cluster.
@@ -293,10 +294,11 @@ export function PurgeSheet({ target, open, onClose }: PurgeSheetProps) {
                 {exec.error.message}
               </p>
             )}
-          </div>
-        )}
+            </>
+          )}
+        </DialogBody>
 
-        <div className="mt-auto flex flex-col gap-2 p-4 flex-row justify-end">
+        <DialogFooter>
           <Button variant="outline" onClick={handleClose} disabled={exec.isPending}>
             Cancel
           </Button>
@@ -310,7 +312,7 @@ export function PurgeSheet({ target, open, onClose }: PurgeSheetProps) {
               Purge
             </Button>
           )}
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

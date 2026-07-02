@@ -3,8 +3,10 @@ import { Trash2, Search } from "lucide-react";
 import {
   Dialog,
   DialogContent,
+  DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogBody,
 } from "@/components/ui/dialog";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
@@ -58,20 +60,21 @@ export function PurgePickerSheet({ open, onClose, onPick }: PurgePickerSheetProp
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="p-0 gap-0 max-h-[85vh] overflow-hidden max-w-2xl">
-        <div className="flex flex-col gap-0.5 p-4">
+      <DialogContent className="max-h-[85vh] max-w-2xl">
+        <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Trash2 className="size-4 text-destructive" />
             Purge an app
           </DialogTitle>
+        </DialogHeader>
+
+        <DialogBody className="flex flex-col gap-3">
           <DialogDescription>
             Pick a deployment to remove. The next step previews every resource and
             requires you to type the app name.
           </DialogDescription>
-        </div>
 
-        {/* Search */}
-        <div className="px-4">
+          {/* Search */}
           <div className="flex items-center gap-2 rounded-md border bg-background px-2.5">
             <Search className="size-3.5 text-muted-foreground" />
             <input
@@ -82,10 +85,8 @@ export function PurgePickerSheet({ open, onClose, onPick }: PurgePickerSheetProp
               className="w-full bg-transparent py-1.5 text-sm outline-none"
             />
           </div>
-        </div>
 
-        {/* List */}
-        <div className="flex-1 overflow-y-auto px-4 pb-4">
+          {/* List */}
           {!hasAny ? (
             <p className="py-3 text-sm text-muted-foreground">No purgeable deployments</p>
           ) : !hasMatches ? (
@@ -118,7 +119,7 @@ export function PurgePickerSheet({ open, onClose, onPick }: PurgePickerSheetProp
                 ))}
             </div>
           )}
-        </div>
+        </DialogBody>
       </DialogContent>
     </Dialog>
   );

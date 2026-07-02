@@ -5,6 +5,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogBody,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -323,17 +324,19 @@ export function ConfirmSheet({
       }}
     >
       <DialogContent
-        showCloseButton={false}
-        className="overflow-hidden p-0 gap-0 max-w-3xl"
+        className="max-w-3xl"
         style={{
           border: `1px solid ${accentColor}40`,
           boxShadow:
             "0 24px 60px -20px rgba(0,0,0,0.7), 0 8px 24px rgba(0,0,0,0.6)",
         }}
       >
-        {/* Header — icon chip + title + risk pill over an accent-tinted wash */}
+        {/* Header — icon chip + title + risk pill over an accent-tinted wash.
+            No close X here — the sheet is intentionally dismissed only via
+            Cancel/backdrop/escape, matching the prior showCloseButton={false}. */}
         <DialogHeader
-          className="min-w-0 flex-row items-start gap-3.5 px-5 pb-4 pt-5"
+          showClose={false}
+          className="items-start gap-3.5 px-5 pb-4 pt-5"
           style={{
             background: `linear-gradient(180deg, ${accentColor}1A 0%, transparent 100%)`,
             borderBottom: `1px solid ${accentColor}24`,
@@ -352,14 +355,9 @@ export function ConfirmSheet({
               strokeWidth={2}
             />
           </div>
-          <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <DialogTitle className="text-[15px] leading-snug line-clamp-2 break-words">
-              {title}
-            </DialogTitle>
-            <DialogDescription className="text-[13px] leading-relaxed">
-              {description}
-            </DialogDescription>
-          </div>
+          <DialogTitle className="min-w-0 flex-1 text-[15px] leading-snug line-clamp-2 break-words">
+            {title}
+          </DialogTitle>
           <span
             className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
             style={{
@@ -373,7 +371,11 @@ export function ConfirmSheet({
         </DialogHeader>
 
         {/* Body */}
-        <div className="flex flex-col gap-4 px-5 py-5">
+        <DialogBody className="flex flex-col gap-4">
+          <DialogDescription className="text-[13px] leading-relaxed">
+            {description}
+          </DialogDescription>
+
           {/* Apply manifest resource summary */}
           {isApply &&
             action?.manifest &&
@@ -546,14 +548,10 @@ export function ConfirmSheet({
               {error.message}
             </p>
           )}
-        </div>
-        {/* end body */}
+        </DialogBody>
 
         {/* Footer */}
-        <DialogFooter
-          className="mx-0 mb-0 border-t px-5 py-4"
-          style={{ borderColor: "#1F1F24", background: "#0C0C0F" }}
-        >
+        <DialogFooter>
           <Button
             variant="outline"
             onClick={handleClose}
