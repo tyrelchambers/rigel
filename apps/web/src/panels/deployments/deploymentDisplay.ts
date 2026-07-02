@@ -5,6 +5,7 @@ import { restartCount } from "../pods/podDisplay";
 import { selectorMatches } from "@/lib/relatedResources";
 import { flattenRoutes } from "../ingresses/ingressesDisplay";
 import { summarizeContainers } from "@/panels/components/ContainerCards";
+import { compactAge } from "@/lib/time";
 
 /**
  * Compact relative age of an ISO timestamp ("5s" / "3m" / "2h" / "1d"), or
@@ -12,15 +13,7 @@ import { summarizeContainers } from "@/panels/components/ContainerCards";
  * determinism in tests.
  */
 export function relativeAge(iso: string | undefined, now: number = Date.now()): string {
-  if (!iso) return "—";
-  const then = Date.parse(iso);
-  if (Number.isNaN(then)) return "—";
-  const dt = (now - then) / 1000; // seconds
-  if (dt < 0) return "0s";
-  if (dt < 60) return `${Math.floor(dt)}s`;
-  if (dt < 3600) return `${Math.floor(dt / 60)}m`;
-  if (dt < 86400) return `${Math.floor(dt / 3600)}h`;
-  return `${Math.floor(dt / 86400)}d`;
+  return compactAge(iso, { now, clampFuture: true }) as string;
 }
 
 /** Desired replica count: `spec.replicas ?? 1`. */

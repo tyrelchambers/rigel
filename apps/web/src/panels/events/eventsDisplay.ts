@@ -1,4 +1,5 @@
 import type { EventBucket, EventTypeFilter, K8sEvent } from "./types";
+import { compactAge } from "@/lib/time";
 
 /**
  * Pure display helpers for the Events panel. Mirrors the Swift `K8sEvent`
@@ -35,15 +36,7 @@ export function when(event: K8sEvent): string | undefined {
  * `K8sEvent.relativeAge(now:)` and the shared web `relativeAge`.
  */
 export function relativeAge(iso: string | undefined | null, now: number = Date.now()): string {
-  if (!iso) return "—";
-  const then = Date.parse(iso);
-  if (Number.isNaN(then)) return "—";
-  const dt = (now - then) / 1000; // seconds
-  if (dt < 0) return "0s";
-  if (dt < 60) return `${Math.floor(dt)}s`;
-  if (dt < 3600) return `${Math.floor(dt / 60)}m`;
-  if (dt < 86400) return `${Math.floor(dt / 3600)}h`;
-  return `${Math.floor(dt / 86400)}d`;
+  return compactAge(iso, { now, clampFuture: true }) as string;
 }
 
 /**

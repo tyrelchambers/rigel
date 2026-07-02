@@ -7,6 +7,7 @@ import type {
   WorkloadKind,
 } from "./types";
 import type { RawContainer } from "@/panels/components/ContainerCards";
+import { compactAge } from "@/lib/time";
 
 /**
  * Compact relative age of an ISO timestamp ("5s" / "3m" / "2h" / "1d"), or
@@ -14,15 +15,7 @@ import type { RawContainer } from "@/panels/components/ContainerCards";
  * determinism in tests.
  */
 export function relativeAge(iso: string | undefined, now: number = Date.now()): string {
-  if (!iso) return "—";
-  const then = Date.parse(iso);
-  if (Number.isNaN(then)) return "—";
-  const dt = (now - then) / 1000; // seconds
-  if (dt < 0) return "0s";
-  if (dt < 60) return `${Math.floor(dt)}s`;
-  if (dt < 3600) return `${Math.floor(dt / 60)}m`;
-  if (dt < 86400) return `${Math.floor(dt / 3600)}h`;
-  return `${Math.floor(dt / 86400)}d`;
+  return compactAge(iso, { now, clampFuture: true }) as string;
 }
 
 // --- StatefulSet / DaemonSet ready fraction --------------------------------
@@ -113,10 +106,7 @@ export function jobDuration(job: Job, now: number = Date.now()): string | null {
   const start = job.status?.startTime;
   if (!start) return null;
   const end = job.status?.completionTime ? new Date(job.status.completionTime).getTime() : now;
-  const dt = (end - new Date(start).getTime()) / 1000; // seconds
-  if (dt < 60) return `${Math.floor(dt)}s`;
-  if (dt < 3600) return `${Math.floor(dt / 60)}m`;
-  return `${Math.floor(dt / 3600)}h`;
+  return compactAge(start, { now: end, maxUnit: "h" });
 }
 
 /** "X/Y" completions: `status.succeeded ?? 0` / `spec.completions ?? 1`. */
@@ -136,11 +126,7 @@ export function jobCompletionsLabel(job: Job): string {
 export function lastScheduleAgo(cronJob: CronJob, now: number = Date.now()): string | null {
   const t = cronJob.status?.lastScheduleTime;
   if (!t) return null;
-  const dt = (now - new Date(t).getTime()) / 1000; // seconds
-  if (dt < 60) return `${Math.floor(dt)}s ago`;
-  if (dt < 3600) return `${Math.floor(dt / 60)}m ago`;
-  if (dt < 86400) return `${Math.floor(dt / 3600)}h ago`;
-  return `${Math.floor(dt / 86400)}d ago`;
+  return compactAge(t, { now, suffix: true });
 }
 
 /** Count of currently-active jobs for a CronJob (`status.active?.length ?? 0`). */

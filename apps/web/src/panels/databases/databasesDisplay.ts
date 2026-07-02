@@ -23,6 +23,7 @@ import type {
 } from "./types";
 import type { ActionBlock } from "@/lib/api";
 import type { StatusBadgeVariant } from "@/panels/components/StatusBadge";
+import { compactAge } from "@/lib/time";
 
 // ---------------------------------------------------------------------------
 // Age
@@ -33,15 +34,7 @@ import type { StatusBadgeVariant } from "@/panels/components/StatusBadge";
  * "—" when missing. Pass `now` for determinism in tests.
  */
 export function relativeAge(iso: string | undefined, now: number = Date.now()): string {
-  if (!iso) return "—";
-  const then = Date.parse(iso);
-  if (Number.isNaN(then)) return "—";
-  const dt = (now - then) / 1000; // seconds
-  if (dt < 0) return "0s";
-  if (dt < 60) return `${Math.floor(dt)}s`;
-  if (dt < 3600) return `${Math.floor(dt / 60)}m`;
-  if (dt < 86400) return `${Math.floor(dt / 3600)}h`;
-  return `${Math.floor(dt / 86400)}d`;
+  return compactAge(iso, { now, clampFuture: true }) as string;
 }
 
 // ---------------------------------------------------------------------------
