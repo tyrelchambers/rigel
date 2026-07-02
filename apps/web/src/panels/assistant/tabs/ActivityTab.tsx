@@ -1,11 +1,12 @@
-// ActivityTab — paginated audit log.
+// ActivityTab — the assistant's activity feed.
+// Built to Pencil frame "Assistant — Activity (improved)": a header row
+// ("Activity" + count, "See all" / "Clear all") above a list of rich cards.
 
 import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { auditEntryId } from "@rigel/k8s";
+import { cn } from "@/lib/utils";
 import { useAssistantCtx } from "../AssistantContext";
-import { Card, Section } from "../components/primitives";
-import { AuditRow } from "../AuditRow";
+import { ActivityCard } from "../ActivityCard";
 
 export function ActivityTab() {
   const { d, openAllActivity, run, ns, working } = useAssistantCtx();
@@ -44,39 +45,51 @@ export function ActivityTab() {
   }
 
   return (
-    <div className="space-y-3.5">
-      <Section
-        title={`Activity (${audit.length})`}
-        right={
-          <div className="flex items-center gap-1.5">
-            {audit.length > 10 && (
-              <Button variant="ghost" size="sm" onClick={openAllActivity}>
-                See all
-              </Button>
-            )}
-            <Button
-              variant={confirming ? "destructive" : "ghost"}
-              size="sm"
-              disabled={working || audit.length === 0}
-              onClick={onClear}
+    <div className="flex flex-col gap-4">
+      {/* Activity header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-base font-semibold text-[var(--fg-primary)]">Activity</span>
+          <span className="font-mono text-[13px] text-[var(--fg-tertiary)]">{audit.length}</span>
+        </div>
+        <div className="flex items-center gap-4">
+          {audit.length > 10 && (
+            <button
+              type="button"
+              onClick={openAllActivity}
+              className="text-[13px] font-medium text-[var(--accent-primary)] hover:underline"
             >
-              {confirming ? "Confirm clear" : "Clear all"}
-            </Button>
-          </div>
-        }
-      >
-        <Card>
-          {audit.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No actions yet.</p>
-          ) : (
-            <div className="max-h-80 space-y-2 overflow-auto">
-              {audit.slice(0, 10).map((e) => (
-                <AuditRow key={auditEntryId(e)} e={e} />
-              ))}
-            </div>
+              See all
+            </button>
           )}
-        </Card>
-      </Section>
+          <button
+            type="button"
+            disabled={working || audit.length === 0}
+            onClick={onClear}
+            className={cn(
+              "text-[13px] transition-colors disabled:opacity-40",
+              confirming
+                ? "font-semibold text-red-500"
+                : "text-[var(--fg-tertiary)] hover:text-[var(--fg-secondary)]",
+            )}
+          >
+            {confirming ? "Confirm clear" : "Clear all"}
+          </button>
+        </div>
+      </div>
+
+      {/* List */}
+      {audit.length === 0 ? (
+        <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-6 py-8 text-center">
+          <p className="text-sm text-[var(--fg-tertiary)]">No activity yet.</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {audit.slice(0, 10).map((e) => (
+            <ActivityCard key={auditEntryId(e)} e={e} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
