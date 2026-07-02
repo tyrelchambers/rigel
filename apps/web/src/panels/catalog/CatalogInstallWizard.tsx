@@ -229,8 +229,11 @@ export function CatalogInstallWizard({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="wizard-dialog max-h-[88vh] w-[min(940px,94vw)] max-w-none sm:max-w-none">
         <DialogHeader showClose={false}>
+          {/* Two stacked rows (identity above breadcrumb) inside the single-row
+              header slot — mirrors the old column-layout .wizard-header. */}
+          <div className="flex w-full flex-col gap-4">
           {/* App identity row */}
-          <div className="wizard-app-row min-w-0 flex-1">
+          <div className="wizard-app-row">
             <div
               className="wizard-app-icon"
               style={{ background: "var(--border-subtle)", border: "1px solid #34353A" }}
@@ -271,6 +274,7 @@ export function CatalogInstallWizard({
               })}
             </div>
           )}
+          </div>
         </DialogHeader>
 
         <DialogBody className="wizard-body p-0">
