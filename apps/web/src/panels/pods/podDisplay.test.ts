@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import type { Pod } from "./types";
 import {
   relativeAge,
+  humanAge,
   phaseColorClass,
   readyText,
   restartCount,
@@ -29,6 +30,27 @@ describe("relativeAge", () => {
     expect(relativeAge("2026-06-09T12:00:30Z", now)).toBe("0s");
     expect(relativeAge(undefined, now)).toBe("—");
     expect(relativeAge("not-a-date", now)).toBe("—");
+  });
+});
+
+describe("humanAge", () => {
+  const now = Date.parse("2026-06-09T12:00:00Z");
+  test("missing / invalid yields dash", () => {
+    expect(humanAge(undefined, now)).toBe("—");
+    expect(humanAge("not-a-date", now)).toBe("—");
+  });
+  test("sub-minute and future clamp to 'just now'", () => {
+    expect(humanAge("2026-06-09T11:59:30Z", now)).toBe("just now");
+    expect(humanAge("2026-06-09T12:00:00Z", now)).toBe("just now");
+    expect(humanAge("2026-06-09T12:05:00Z", now)).toBe("just now");
+  });
+  test("largest unit, pluralized", () => {
+    expect(humanAge("2026-06-09T11:59:00Z", now)).toBe("1 minute");
+    expect(humanAge("2026-06-09T11:55:00Z", now)).toBe("5 minutes");
+    expect(humanAge("2026-06-09T11:00:00Z", now)).toBe("1 hour");
+    expect(humanAge("2026-06-09T10:00:00Z", now)).toBe("2 hours");
+    expect(humanAge("2026-06-08T12:00:00Z", now)).toBe("1 day");
+    expect(humanAge("2025-12-26T12:00:00Z", now)).toBe("165 days");
   });
 });
 

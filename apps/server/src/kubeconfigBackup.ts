@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { copyFile } from "node:fs/promises";
+import { format } from "date-fns";
 
 /** The backup path for a kubeconfig: `<path>.rigel-backup-<stamp>`, same dir. */
 export function backupKubeconfigPath(kubeconfigPath: string, stamp: string): string {
@@ -8,11 +9,7 @@ export function backupKubeconfigPath(kubeconfigPath: string, stamp: string): str
 
 /** A compact filesystem-local timestamp like 20260621-101500. */
 export function backupStamp(now: Date): string {
-  const p = (n: number) => String(n).padStart(2, "0");
-  return (
-    `${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}` +
-    `-${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}`
-  );
+  return format(now, "yyyyMMdd-HHmmss");
 }
 
 interface FsLike {

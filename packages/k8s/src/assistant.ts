@@ -11,6 +11,9 @@
 // docs/parity/contracts.md for the shared action-block protocol used by queued
 // suggestions and revert.
 
+import { differenceInMilliseconds } from "date-fns";
+import { millisecondsInSecond, secondsInDay } from "date-fns/constants";
+
 import type { SuggestedAction } from "./actionBlocks";
 
 // ---------------------------------------------------------------------------
@@ -780,6 +783,14 @@ export function maskToken(yaml: string): string {
 export const TOKEN_LIFETIME_DAYS = 365;
 export const TOKEN_WARN_WITHIN_DAYS = 30;
 
+/**
+ * Fixed milliseconds-per-day (86_400_000), derived from date-fns constants. The
+ * token countdown is a deliberate fixed-length day count (NOT calendar/DST
+ * aware), so we do raw-millisecond math rather than `addDays`/`differenceInDays`
+ * (which are calendar/TZ-dependent and would shift boundary results at DST).
+ */
+const MS_PER_DAY = secondsInDay * millisecondsInSecond;
+
 export type TokenExpiryLevel = "ok" | "warning" | "expired";
 
 export interface TokenExpiryStatus {
@@ -793,8 +804,8 @@ export interface TokenExpiryStatus {
  * warns, otherwise ok.
  */
 export function tokenExpiryStatus(issuedAt: Date, now: Date): TokenExpiryStatus {
-  const expiryMs = issuedAt.getTime() + TOKEN_LIFETIME_DAYS * 86_400_000;
-  const remaining = Math.floor((expiryMs - now.getTime()) / 86_400_000);
+  const expiryMs = issuedAt.getTime() + TOKEN_LIFETIME_DAYS * MS_PER_DAY;
+  const remaining = Math.floor(differenceInMilliseconds(expiryMs, now) / MS_PER_DAY);
   let level: TokenExpiryLevel;
   if (remaining <= 0) level = "expired";
   else if (remaining <= TOKEN_WARN_WITHIN_DAYS) level = "warning";

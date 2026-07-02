@@ -6,6 +6,7 @@ import type { DigestSubscription } from "@rigel/k8s/src/digest.js";
 import type { RuntimeConfig } from "./runtimeConfig.js";
 import { parseHHMM } from "./runtimeConfig.js";
 import type { AssistantState, IncidentRecord, PullRequestRecord } from "./state.js";
+import { fromZonedTime, toZonedTime } from "date-fns-tz";
 
 /** The data a single digest summarizes — assembled purely from already-fetched
  * tick state, no new cluster reads. */
@@ -19,40 +20,27 @@ export interface DigestData {
   health: { totalPods: number; totalDeployments: number; currentIncidents: number };
 }
 
-/** The zone's UTC offset (ms) at a given absolute instant. */
-function tzOffsetMs(tz: string, utcMs: number): number {
-  const dtf = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
-  });
-  const p: Record<string, number> = {};
-  for (const part of dtf.formatToParts(new Date(utcMs))) {
-    if (part.type !== "literal") p[part.type] = Number(part.value);
-  }
-  // 24:00 → 0 normalization that some engines emit for midnight
-  const hour = p.hour === 24 ? 0 : p.hour!;
-  const asUTC = Date.UTC(p.year!, p.month! - 1, p.day!, hour, p.minute!, p.second!);
-  return asUTC - utcMs;
-}
+const pad2 = (n: number): string => String(n).padStart(2, "0");
 
-/** The absolute instant of a local wall-clock time in `tz` (DST-aware; two-pass). */
+/** The absolute instant of a local wall-clock time in `tz` (DST-aware). The
+ * timezone-neutral date-string form lets `fromZonedTime` resolve the wall-clock
+ * fields in `tz` (and disambiguate DST transitions) without the runner's local
+ * offset leaking in.
+ *
+ * For the ambiguous fall-back hour, date-fns-tz picks one offset
+ * deterministically. This can differ from the old two-pass result in
+ * positive-offset zones (e.g. Europe/London), but each slot still resolves to
+ * exactly one instant, so a digest fires once/day (never double-fires).
+ * America/Toronto (and other negative-offset zones) match the old behavior
+ * byte-for-byte. */
 function zonedWallToUtc(tz: string, y: number, mo: number, d: number, h: number, mi: number): number {
-  const naive = Date.UTC(y, mo - 1, d, h, mi);
-  const off1 = tzOffsetMs(tz, naive);
-  const guess = naive - off1;
-  const off2 = tzOffsetMs(tz, guess);
-  return naive - off2;
+  return fromZonedTime(`${y}-${pad2(mo)}-${pad2(d)}T${pad2(h)}:${pad2(mi)}:00`, tz).getTime();
 }
 
-/** The local Y/M/D + weekday for an instant, in `tz`. */
+/** The local Y/M/D + weekday for an instant, in `tz` (weekday 0=Sun..6=Sat). */
 function localParts(tz: string, utcMs: number): { y: number; mo: number; d: number; weekday: number } {
-  const dtf = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", weekday: "short",
-  });
-  const p: Record<string, string> = {};
-  for (const part of dtf.formatToParts(new Date(utcMs))) p[part.type] = part.value;
-  const WD: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
-  return { y: Number(p.year), mo: Number(p.month), d: Number(p.day), weekday: WD[p.weekday!]! };
+  const z = toZonedTime(utcMs, tz);
+  return { y: z.getFullYear(), mo: z.getMonth() + 1, d: z.getDate(), weekday: z.getDay() };
 }
 
 /** The most recent scheduled slot instant that is ≤ now, or null when none in the

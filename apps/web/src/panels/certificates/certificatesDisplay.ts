@@ -1,3 +1,5 @@
+import { formatInTimeZone } from "date-fns-tz";
+import { compactFromSeconds, spelledSeconds } from "../../lib/time";
 import type {
   Certificate, CertificateRequest, Order, Challenge,
   CertView, RequestNode, OrderNode, ChallengeNode, Condition,
@@ -5,14 +7,6 @@ import type {
 
 // Re-export the shared relativeAge so the panel imports one age formatter.
 export { relativeAge } from "../pods/podDisplay";
-
-/** Largest sensible unit for a duration in seconds ("344d" / "3h" / "5m" / "5s"). */
-function compactDuration(seconds: number): string {
-  if (seconds < 60) return `${Math.floor(seconds)}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
-  return `${Math.floor(seconds / 86400)}d`;
-}
 
 /**
  * Future-aware expiry label for a certificate `notAfter` timestamp. Unlike the
@@ -28,8 +22,8 @@ export function expiryLabel(iso: string | undefined, now: number = Date.now()): 
   const then = Date.parse(iso);
   if (Number.isNaN(then)) return "—";
   const dt = (then - now) / 1000; // seconds until expiry (negative once expired)
-  if (dt >= 0) return `in ${compactDuration(dt)}`;
-  return `expired ${compactDuration(-dt)} ago`;
+  if (dt >= 0) return `in ${compactFromSeconds(dt)}`;
+  return `expired ${compactFromSeconds(-dt)} ago`;
 }
 
 const CERT_NAME_ANNOTATION = "cert-manager.io/certificate-name";
@@ -159,21 +153,13 @@ export function sortCertViews(views: CertView[]): CertView[] {
 // Spelled-out duration helpers for the card UI.
 // ---------------------------------------------------------------------------
 
-/** Singular/plural helper for a unit name. */
-function pluralize(n: number, unit: string): string {
-  return `${n} ${unit}${n === 1 ? "" : "s"}`;
-}
-
 /**
  * Converts a number of seconds into the largest spelled-out unit:
- * "62 days", "3 hours", "5 minutes", "45 seconds".
+ * "62 days", "3 hours", "5 minutes", "45 seconds". Delegates to the shared
+ * `spelledSeconds` ladder with the sub-minute "N seconds" form.
  */
 function spelledDuration(seconds: number): string {
-  const s = Math.floor(Math.abs(seconds));
-  if (s < 60) return pluralize(s, "second");
-  if (s < 3600) return pluralize(Math.floor(s / 60), "minute");
-  if (s < 86400) return pluralize(Math.floor(s / 3600), "hour");
-  return pluralize(Math.floor(s / 86400), "day");
+  return spelledSeconds(Math.abs(seconds), { belowMinute: "seconds" });
 }
 
 /**
@@ -224,10 +210,5 @@ export function absoluteDate(iso: string | undefined): string {
   if (!iso) return "—";
   const then = new Date(iso);
   if (Number.isNaN(then.getTime())) return "—";
-  return then.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  });
+  return formatInTimeZone(then, "UTC", "MMM d, yyyy");
 }

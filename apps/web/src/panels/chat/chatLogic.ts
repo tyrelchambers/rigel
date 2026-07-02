@@ -1,5 +1,6 @@
 // Pure chat helpers — kept out of the React component so they can be unit
 // tested in isolation. Mirrors the Swift ChatPanel view-model logic.
+import { differenceInMilliseconds } from "date-fns";
 import type { ActionBlock } from "@/lib/api";
 import type { SuggestedAction } from "@/lib/actionBlocks";
 import type { ChatMessage, ChatRole } from "./types";
@@ -37,9 +38,11 @@ export function makeMessage(role: ChatRole, text: string): ChatMessage {
   return { id: newId(), role, text };
 }
 
-/** Elapsed whole seconds from a start instant to now (or a given end). */
+/** Elapsed whole seconds from a start instant to now (or a given end). Rounds
+ * to nearest (via `differenceInMilliseconds`), NOT truncated like plain
+ * `differenceInSeconds`, so 7.6s → 8. */
 export function elapsedSeconds(start: Date, end: Date = new Date()): number {
-  return Math.max(0, Math.round((end.getTime() - start.getTime()) / 1000));
+  return Math.max(0, Math.round(differenceInMilliseconds(end, start) / 1000));
 }
 
 /**

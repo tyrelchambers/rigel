@@ -1,5 +1,6 @@
 // One row per deployment within a RepoCard — its sync status, "Sync now", and the
 // linked-workloads chips. Independently syncable.
+import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, Trash2, CheckCircle2, AlertTriangle, X, Plus, Boxes, FileCode } from "lucide-react";
 import type { Deployment } from "@/panels/deployments/types";
@@ -76,7 +77,11 @@ function SyncStatus({ dep }: { dep: GitDeployment }) {
   if (!dep.lastSyncedAt) {
     return <span className="text-[11px]" style={{ color: "var(--fg-tertiary)" }}>Never synced</span>;
   }
-  const when = new Date(dep.lastSyncedAt).toLocaleString();
+  // en-US output is intentional and consistent with the rest of the app (no i18n).
+  const syncedAt = new Date(dep.lastSyncedAt);
+  const when = Number.isNaN(syncedAt.getTime())
+    ? dep.lastSyncedAt
+    : format(syncedAt, "MMM d, yyyy, h:mm:ss a");
   const sha = dep.lastSyncedSha?.slice(0, 7);
   if (dep.lastStatus === "error") {
     return (

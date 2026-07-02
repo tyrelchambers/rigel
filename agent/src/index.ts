@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { realpathSync } from "node:fs";
+import { getHours, getMinutes } from "date-fns";
 import { classifyRisk, RiskTier } from "./classifier.js";
 import { evaluateAlertRules, emptyAlertState } from "./alerts.js";
 import { loadConfig, resolveFixRunnerImage, type Config } from "./config.js";
@@ -923,7 +924,7 @@ async function approveQueued(cfg: Config, cb: CircuitBreaker, index: number): Pr
 /** Local minutes-of-day (respects the container TZ env) for the quiet-hours window. */
 function minOfDay(now: number): number {
   const d = new Date(now);
-  return d.getHours() * 60 + d.getMinutes();
+  return getHours(d) * 60 + getMinutes(d);
 }
 
 function record(state: AssistantState, cfg: Config, entry: AuditEntry): AssistantState {

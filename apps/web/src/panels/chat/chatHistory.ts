@@ -4,6 +4,7 @@
  * recent, and the history sheet lists/resumes/deletes the rest.
  */
 import type { ChatMessage } from "./types";
+import { compactAge } from "@/lib/time";
 
 const KEY = "rigel.chat.sessions";
 const MAX_SESSIONS = 50;
@@ -82,9 +83,5 @@ export function deleteSession(id: string): void {
 
 /** "just now" / "5m ago" / "3h ago" / "2d ago" from an epoch-ms timestamp. */
 export function ageDescription(ms: number): string {
-  const dt = (Date.now() - ms) / 1000;
-  if (dt < 60) return "just now";
-  if (dt < 3600) return `${Math.floor(dt / 60)}m ago`;
-  if (dt < 86400) return `${Math.floor(dt / 3600)}h ago`;
-  return `${Math.floor(dt / 86400)}d ago`;
+  return compactAge(ms, { suffix: true, belowMinute: "just now" });
 }

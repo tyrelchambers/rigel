@@ -3,6 +3,7 @@
 // be unit-tested without a DOM.
 
 import type { TokenExpiryStatus } from "@rigel/k8s";
+import { compactAge } from "@/lib/time";
 
 /** Summary-strip / credentials token label. */
 export function tokenLabel(t: TokenExpiryStatus): string {
@@ -65,13 +66,8 @@ export function auditCanExpand(detail: string, analysis: string | undefined): bo
 
 /** Compact relative time from an ISO-8601 string, tolerating fractional seconds. */
 export function relativeTime(iso: string, now: number = Date.now()): string {
-  const ms = Date.parse(iso);
-  if (Number.isNaN(ms)) return "";
-  const dt = (now - ms) / 1000;
-  if (dt < 60) return `${Math.max(0, Math.floor(dt))}s`;
-  if (dt < 3600) return `${Math.floor(dt / 60)}m`;
-  if (dt < 86400) return `${Math.floor(dt / 3600)}h`;
-  return `${Math.floor(dt / 86400)}d`;
+  // clampFuture reproduces the original's `Math.max(0, …)` on the seconds bucket.
+  return compactAge(iso, { now, invalid: "", clampFuture: true });
 }
 
 /** Count audit entries with a given outcome. */

@@ -1,4 +1,5 @@
 import type { Pod } from "./types";
+import { compactAge, spelledAge } from "@/lib/time";
 
 /**
  * Compact relative age of an ISO timestamp ("5s" / "3m" / "2h" / "1d"), or
@@ -6,15 +7,7 @@ import type { Pod } from "./types";
  * `Sources/Rigel/Cluster/KubeTypes.swift`. Pass `now` for determinism.
  */
 export function relativeAge(iso: string | undefined, now: number = Date.now()): string {
-  if (!iso) return "—";
-  const then = Date.parse(iso);
-  if (Number.isNaN(then)) return "—";
-  const dt = (now - then) / 1000; // seconds
-  if (dt < 0) return "0s";
-  if (dt < 60) return `${Math.floor(dt)}s`;
-  if (dt < 3600) return `${Math.floor(dt / 60)}m`;
-  if (dt < 86400) return `${Math.floor(dt / 3600)}h`;
-  return `${Math.floor(dt / 86400)}d`;
+  return compactAge(iso, { now, clampFuture: true });
 }
 
 /** Phase → pill color class. Unknown phases render gray; nil handled by caller. */
@@ -135,19 +128,7 @@ export function humanAge(iso: string | undefined, now: number = Date.now()): str
   if (!iso) return "—";
   const then = Date.parse(iso);
   if (Number.isNaN(then)) return "—";
-  const s = Math.max(0, Math.floor((now - then) / 1000));
-  const units: [number, string][] = [
-    [86400, "day"],
-    [3600, "hour"],
-    [60, "minute"],
-  ];
-  for (const [secs, label] of units) {
-    if (s >= secs) {
-      const n = Math.floor(s / secs);
-      return `${n} ${label}${n === 1 ? "" : "s"}`;
-    }
-  }
-  return "just now";
+  return spelledAge(then, now);
 }
 
 /** Stable display sort: namespace, then name. */
