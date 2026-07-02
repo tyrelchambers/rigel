@@ -104,3 +104,14 @@ test("signalConfigUpdates includes only provided fields", () => {
   expect(signalConfigUpdates({ recipients: "" })).toEqual({ signalRecipients: "" });
   expect(signalConfigUpdates({})).toEqual({});
 });
+
+test("signalConfigUpdates clears every key for a disconnect", () => {
+  expect(
+    signalConfigUpdates({ apiUrl: "", number: "", recipients: "", inbound: false }),
+  ).toEqual({
+    signalApiUrl: "",
+    signalNumber: "",
+    signalRecipients: "",
+    signalInbound: "false",
+  });
+});

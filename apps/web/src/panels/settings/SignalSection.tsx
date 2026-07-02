@@ -5,7 +5,7 @@
 // assistant-config ConfigMap. Styled to match the Matrix channel card.
 
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, ChevronRight, AlertTriangle, MessageCircle } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, AlertTriangle, MessageCircle, Unplug } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Loader } from "@/components/Loader";
 import {
@@ -19,6 +19,7 @@ import { useAssistantAction } from "@/lib/api";
 import { fetchSignalQR, fetchSignalAccounts, sendSignalTest } from "@/lib/api";
 import { useSettings } from "./useSettings";
 import { GreenToggle } from "./MatrixWizardParts";
+import { SignalDisconnectDialog } from "./SignalDisconnectDialog";
 
 const DOT_CLASS: Record<string, string> = {
   gray: "bg-muted-foreground/50",
@@ -42,6 +43,8 @@ export function SignalSection({
 
   const [error, setError] = useState<string | null>(null);
   const [showManifest, setShowManifest] = useState(false);
+  const [disconnectOpen, setDisconnectOpen] = useState(false);
+  const [disconnectError, setDisconnectError] = useState<string | null>(null);
 
   // Linking flow state.
   const [linking, setLinking] = useState(false);
@@ -169,6 +172,23 @@ export function SignalSection({
     }
   }
 
+  async function disconnect() {
+    setDisconnectError(null);
+    try {
+      await setSignal.mutateAsync({
+        action: "setSignal",
+        namespace,
+        apiUrl: "",
+        number: "",
+        recipients: "",
+        inbound: false,
+      });
+      setDisconnectOpen(false);
+    } catch (err) {
+      setDisconnectError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   async function sendTest() {
     setError(null);
     setTestResult(null);
@@ -262,6 +282,15 @@ export function SignalSection({
             >
               Re-link
             </Button>
+            <button
+              type="button"
+              onClick={() => { setDisconnectError(null); setDisconnectOpen(true); }}
+              disabled={setSignal.isPending}
+              className="flex items-center gap-[7px] transition-opacity hover:opacity-80 disabled:opacity-50"
+            >
+              <Unplug className="size-[14px] text-destructive" />
+              <span className="text-xs font-medium text-destructive">Disconnect</span>
+            </button>
           </div>
         )}
       </div>
@@ -351,6 +380,14 @@ export function SignalSection({
           </div>
         </>
       )}
+
+      <SignalDisconnectDialog
+        open={disconnectOpen}
+        onOpenChange={setDisconnectOpen}
+        onConfirm={disconnect}
+        pending={setSignal.isPending}
+        error={disconnectError}
+      />
     </div>
   );
 }
