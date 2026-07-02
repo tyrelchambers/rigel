@@ -2,7 +2,7 @@
 // agent can open fix PRs against it. Reproduces the Pencil "Link to repo" modal
 // (frame xSyQL): icon-tiled header with the deployment subtitle, intro, repo
 // URL + branch + manifest-path fields, an accent note, and the primary action.
-// Built on the shared Dialog primitive (graphite #101012 body, hairline ring,
+// Built on the shared Dialog primitive (surface-elevated body, hairline ring,
 // 16px radius all come from DialogContent).
 
 import { useEffect, useState } from "react";

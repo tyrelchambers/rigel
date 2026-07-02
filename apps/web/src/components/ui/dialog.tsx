@@ -40,8 +40,8 @@ function DialogOverlay({
 // Graphite shell — the app-wide default for every dialog. Padding-free flex
 // column: DialogHeader / DialogBody / DialogFooter own their own spacing.
 // Anchored a fixed distance from the top (not vertically centered) so the modal
-// doesn't jump as its content height changes. The bespoke #101012 graphite
-// (darker than --surface-primary on purpose) lives here and nowhere else.
+// doesn't jump as its content height changes. The surface-elevated background
+// is the app-wide dialog color and lives here and nowhere else.
 function DialogContent({
   className,
   children,
@@ -53,7 +53,7 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed top-[8vh] left-1/2 z-50 flex max-h-[85vh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 flex-col overflow-hidden rounded-2xl bg-[#101012] text-sm text-popover-foreground shadow-[0_30px_80px_rgba(0,0,0,0.45)] ring-1 ring-white/10 duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed top-[8vh] left-1/2 z-50 flex max-h-[85vh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 flex-col overflow-hidden rounded-2xl bg-[var(--surface-elevated)] text-sm text-popover-foreground shadow-[0_30px_80px_rgba(0,0,0,0.45)] ring-1 ring-white/10 duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className,
         )}
         {...props}

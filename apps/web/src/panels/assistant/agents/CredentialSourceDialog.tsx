@@ -102,7 +102,7 @@ export function CredentialSourceDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-card">
+      <DialogContent>
         <DialogHeader>
           <AgentGlyph id={id} size={20} />
           <DialogTitle>{label} credential source</DialogTitle>
