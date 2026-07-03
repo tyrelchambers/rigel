@@ -8,9 +8,9 @@ import {
   Info,
   Lock,
   Plus,
-  TriangleAlert,
   Trash2,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { ConfigMap } from "./types";
 import type { KVRow } from "@rigel/k8s";
 import {
@@ -258,34 +258,13 @@ export function ConfigMapEditor({ target, open, onClose, onApplied }: ConfigMapE
           )}
         </DialogBody>
 
-        <DialogFooter className="items-center sm:justify-between">
-          <div className="flex items-center gap-[7px]">
-            <TriangleAlert className="size-[13px] text-[var(--fg-tertiary)]" aria-hidden />
-            <span className="text-[12.5px] text-[var(--fg-tertiary)]">
-              {isEdit
-                ? "Changes apply immediately to the live cluster."
-                : "Creates a new ConfigMap in the cluster."}
-            </span>
-          </div>
-          <div className="flex items-center gap-[10px]">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={busy}
-              className="rounded-md border border-[var(--border-strong)] px-5 py-[11px] text-[14px] font-semibold text-[var(--fg-secondary)] transition-colors hover:text-foreground disabled:opacity-60"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleApply}
-              disabled={busy || !valid}
-              className="flex items-center gap-2 rounded-md bg-[var(--accent-primary)] px-[22px] py-[11px] text-[14px] font-bold text-[var(--fg-inverse)] transition-opacity disabled:opacity-60"
-            >
-              <Check className="size-[15px]" aria-hidden />
-              {busy ? "Applying…" : isEdit ? "Apply changes" : "Create"}
-            </button>
-          </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button onClick={handleApply} disabled={busy || !valid}>
+            {busy ? "Applying…" : isEdit ? "Apply changes" : "Create"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

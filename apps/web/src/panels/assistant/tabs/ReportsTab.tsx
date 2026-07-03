@@ -602,7 +602,7 @@ export function ReportsTab() {
                 <span className="text-[13px] text-[var(--fg-secondary)]">Enabled</span>
               </div>
               <div className="flex items-center gap-2.5">
-                <Button variant="muted" onClick={() => setOpen(false)}>
+                <Button variant="outline" onClick={() => setOpen(false)}>
                   Cancel
                 </Button>
                 <Button onClick={save} disabled={working || !valid}>

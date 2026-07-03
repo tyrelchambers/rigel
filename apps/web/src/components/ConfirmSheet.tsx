@@ -563,12 +563,8 @@ export function ConfirmSheet({
           </Button>
           {!(isFix && fix.phase === "done") && (
             <Button
-              className="gap-1.5 font-medium transition-transform active:scale-[0.98]"
-              style={{
-                background: accentColor,
-                color: "var(--fg-primary)",
-                border: "none",
-              }}
+              variant={isDestructive ? "destructive" : "default"}
+              className="transition-transform active:scale-[0.98]"
               onClick={
                 isFix ? handlePropose : isApply ? handleApply : handleExecute
               }

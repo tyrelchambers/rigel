@@ -1,4 +1,5 @@
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogIcon, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { Unplug, ShieldCheck } from "lucide-react";
 import { classifyProvider, providerLabel } from "./clusterTile";
 import { CLUSTER_ICONS, providerDefaultIcon } from "./clusterIcons";
@@ -43,10 +44,10 @@ export function RemoveClusterDialog({
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button type="button" onClick={() => onOpenChange(false)} style={{ fontSize: 13, color: "var(--fg-secondary)", background: "transparent", border: "1px solid var(--border-strong)", borderRadius: 8, padding: "8px 14px", cursor: "pointer" }}>Cancel</button>
-          <button type="button" disabled={busy} onClick={onConfirm} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: "var(--fg-primary)", background: "var(--surface-elevated)", border: "1px solid var(--border-strong)", borderRadius: 8, padding: "8px 14px", cursor: busy ? "default" : "pointer" }}>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button disabled={busy} onClick={onConfirm}>
             <Unplug size={14} />{busy ? "Removing…" : "Remove from Rigel"}
-          </button>
+          </Button>
         </div>
       </div>
         </DialogBody>

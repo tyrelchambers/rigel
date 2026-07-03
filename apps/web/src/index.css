@@ -1697,30 +1697,6 @@
     flex-shrink: 0;
 }
 
-.detail-sheet-cancel-btn {
-    font-size: 13px !important;
-    font-weight: 500 !important;
-    padding: 9px 16px !important;
-    border-radius: 8px !important;
-}
-
-.detail-sheet-install-btn {
-    background: var(--accent-primary) !important;
-    color: var(--fg-primary) !important;
-    border: none !important;
-    font-size: 13px !important;
-    font-weight: 600 !important;
-    padding: 9px 20px !important;
-    border-radius: 8px !important;
-    transition:
-        background 120ms,
-        box-shadow 120ms !important;
-}
-.detail-sheet-install-btn:hover {
-    background: var(--accent-hover) !important;
-    box-shadow: 0 0 20px rgba(56, 189, 248, 0.3) !important;
-}
-
 /* Narrow viewports: stack the two columns so the modal stays usable on
  * small screens. The default/desktop layout is the two-column wide one above. */
 @media (max-width: 720px) {

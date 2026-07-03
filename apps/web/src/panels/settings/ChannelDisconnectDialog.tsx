@@ -54,7 +54,7 @@ export function ChannelDisconnectDialog({
           )}
         </DialogBody>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
             Cancel
           </Button>
           <Button variant="destructive" onClick={onConfirm} disabled={pending}>

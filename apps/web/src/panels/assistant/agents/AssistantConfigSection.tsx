@@ -181,7 +181,7 @@ export function AssistantConfigSection({
             </DialogDescription>
           </DialogBody>
           <DialogFooter>
-            <Button variant="muted" onClick={() => setPending(null)}>
+            <Button variant="outline" onClick={() => setPending(null)}>
               Cancel
             </Button>
             <Button onClick={confirmCredential}>Save &amp; restart</Button>

@@ -168,7 +168,7 @@ function AssistantDialogs(p: DialogsProps) {
             </DialogDescription>
           </DialogBody>
           <DialogFooter>
-            <Button variant="muted" onClick={() => p.setConfirmCreateNs(false)}>
+            <Button variant="outline" onClick={() => p.setConfirmCreateNs(false)}>
               Cancel
             </Button>
             <Button
@@ -203,7 +203,7 @@ function AssistantDialogs(p: DialogsProps) {
           </DialogBody>
           <DialogFooter>
             <Button
-              variant="muted"
+              variant="outline"
               disabled={p.reverting}
               onClick={() => p.setPendingRevert(null)}
             >
@@ -255,7 +255,7 @@ function AssistantDialogs(p: DialogsProps) {
             </DialogDescription>
           </DialogBody>
           <DialogFooter>
-            <Button variant="muted" onClick={() => p.setConfirmUninstall(false)}>
+            <Button variant="outline" onClick={() => p.setConfirmUninstall(false)}>
               Cancel
             </Button>
             <Button

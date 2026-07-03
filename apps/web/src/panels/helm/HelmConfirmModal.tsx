@@ -2,9 +2,11 @@ import {
   Dialog,
   DialogBody,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 interface HelmConfirmModalProps {
   open: boolean;
@@ -14,10 +16,12 @@ interface HelmConfirmModalProps {
   command: string[];
   running: boolean;
   error?: string | null;
+  /** Red confirm treatment for removals (e.g. uninstall). */
+  destructive?: boolean;
   onConfirm: () => void;
 }
 
-export function HelmConfirmModal({ open, onOpenChange, title, command, running, error, onConfirm }: HelmConfirmModalProps) {
+export function HelmConfirmModal({ open, onOpenChange, title, command, running, error, destructive, onConfirm }: HelmConfirmModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
@@ -26,19 +30,19 @@ export function HelmConfirmModal({ open, onOpenChange, title, command, running, 
         </DialogHeader>
         <DialogBody>
           <p className="mb-2 text-sm text-muted-foreground">This will run:</p>
-          <pre className="mb-4 overflow-x-auto rounded-md bg-black/30 p-3 text-xs">
+          <pre className="overflow-x-auto rounded-md bg-black/30 p-3 text-xs">
             {["helm", ...command].join(" ")}
           </pre>
-          {error && <p className="mb-3 text-sm text-red-400">{error}</p>}
-          <div className="flex justify-end gap-2">
-            <button type="button" className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-white/[0.05]" onClick={() => onOpenChange(false)} disabled={running}>
-              Cancel
-            </button>
-            <button type="button" className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-50" onClick={onConfirm} disabled={running}>
-              {running ? "Running…" : "Run"}
-            </button>
-          </div>
+          {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
         </DialogBody>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={running}>
+            Cancel
+          </Button>
+          <Button variant={destructive ? "destructive" : "default"} onClick={onConfirm} disabled={running}>
+            {running ? "Running…" : "Run"}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

@@ -127,7 +127,7 @@ export function BatchConfirmSheet({ actions, open, onClose, onConfirm }: Props) 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button
-            style={{ background: accentColor, color: "var(--fg-primary)", border: "none" }}
+            variant={destructive ? "destructive" : "default"}
             onClick={handleConfirm}
             disabled={loading}
           >

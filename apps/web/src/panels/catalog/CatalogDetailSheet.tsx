@@ -341,7 +341,6 @@ export function CatalogDetailSheet({
               {latest && onUpdate && (
                 <Button
                   onClick={() => onUpdate(latest)}
-                  className="detail-sheet-install-btn gap-1.5"
                   title={`Update ${app.name} to ${latest}`}
                 >
                   <RefreshCw className="size-3.5" aria-hidden />
@@ -365,7 +364,6 @@ export function CatalogDetailSheet({
               <Button
                 variant="outline"
                 onClick={() => onOpenChange(false)}
-                className="detail-sheet-cancel-btn"
               >
                 Close
               </Button>
@@ -375,14 +373,12 @@ export function CatalogDetailSheet({
               <Button
                 variant="outline"
                 onClick={() => onOpenChange(false)}
-                className="detail-sheet-cancel-btn"
               >
                 Cancel
               </Button>
               <Button
                 onClick={() => onInstall(selectedNode)}
                 disabled={!fit.anyFits}
-                className="detail-sheet-install-btn gap-1.5"
                 title={
                   fit.anyFits
                     ? "Start the install wizard"

@@ -110,6 +110,7 @@ export function ReleasesView({ onUpgrade }: { onUpgrade: (r: HelmRelease) => voi
         open={pending != null}
         onOpenChange={(o) => { if (!o) { setPending(null); setError(null); } }}
         title={pending?.op === "uninstall" ? `Uninstall ${pending.release.name}?` : "Roll back release?"}
+        destructive={pending?.op === "uninstall"}
         command={command}
         running={rollback.isPending || uninstall.isPending}
         error={error}

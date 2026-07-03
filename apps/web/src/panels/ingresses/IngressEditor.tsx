@@ -52,9 +52,6 @@ const boxInput =
 // Compact cell used inside path / TLS rows.
 const cellInput =
   "rounded border px-2.5 py-2 text-[13px] font-mono outline-none transition-colors border-[var(--border-subtle)] bg-[var(--surface-sunken)] text-[var(--fg-primary)] placeholder:text-[var(--fg-tertiary)] focus:border-[var(--accent-primary)]";
-// Soft-red icon/label button (remove).
-const removeBtn =
-  "flex shrink-0 items-center justify-center border border-[var(--destructive)]/20 bg-[var(--destructive)]/[0.08] text-[var(--destructive)] hover:bg-[var(--destructive)]/[0.14]";
 
 const PATH_TYPES = ["Prefix", "Exact", "ImplementationSpecific"];
 
@@ -252,9 +249,9 @@ export function IngressEditor({ target, open, onClose, onApplied }: IngressEdito
                         />
                       </div>
                       {rules.length > 1 && (
-                        <button type="button" onClick={() => removeRule(ri)} className={cn(removeBtn, "gap-1.5 rounded-md px-2.5 py-2 text-[13px] font-medium")}>
-                          <Trash2 className="size-3.5" aria-hidden /> Remove
-                        </button>
+                        <Button type="button" variant="destructive" size="sm" onClick={() => removeRule(ri)}>
+                          <Trash2 aria-hidden /> Remove
+                        </Button>
                       )}
                     </div>
 
@@ -274,9 +271,9 @@ export function IngressEditor({ target, open, onClose, onApplied }: IngressEdito
                           <span className="font-mono text-sm text-[var(--fg-tertiary)]">:</span>
                           <input value={p.servicePort} placeholder="80" onChange={(e) => updatePath(ri, pi, { servicePort: e.target.value })} aria-label="service port" className={cn(cellInput, "w-[56px]")} />
                           {rule.paths.length > 1 && (
-                            <button type="button" onClick={() => removePath(ri, pi)} aria-label="Remove path" className={cn(removeBtn, "size-7 rounded")}>
-                              <X className="size-3.5" aria-hidden />
-                            </button>
+                            <Button type="button" variant="destructive" size="icon-sm" aria-label="Remove path" onClick={() => removePath(ri, pi)}>
+                              <X aria-hidden />
+                            </Button>
                           )}
                         </div>
                       ))}
@@ -285,9 +282,9 @@ export function IngressEditor({ target, open, onClose, onApplied }: IngressEdito
                   </div>
                 ))}
 
-                <button type="button" onClick={addRule} className="flex w-full items-center justify-center gap-2 rounded-md border px-3.5 py-[11px] text-sm font-semibold border-[var(--accent-primary)]/25 bg-[var(--accent-primary)]/[0.05] text-[var(--accent-primary)] hover:bg-[var(--accent-primary)]/[0.1]">
-                  <Plus className="size-[15px]" aria-hidden /> Add rule
-                </button>
+                <Button type="button" variant="subtle" onClick={addRule} className="w-full">
+                  <Plus aria-hidden /> Add rule
+                </Button>
               </section>
 
               <Divider />
@@ -301,9 +298,9 @@ export function IngressEditor({ target, open, onClose, onApplied }: IngressEdito
                     <input value={t.hosts} placeholder="hosts (comma-separated)" onChange={(e) => updateTls(ti, { hosts: e.target.value })} aria-label="tls hosts" className={cn(cellInput, "min-w-[140px] flex-1")} />
                     <span className="font-mono text-sm text-[var(--fg-tertiary)]">→</span>
                     <input value={t.secretName} placeholder="tls-secret" onChange={(e) => updateTls(ti, { secretName: e.target.value })} aria-label="tls secret name" className={cn(cellInput, "w-[180px]")} />
-                    <button type="button" onClick={() => removeTls(ti)} aria-label="Remove TLS" className={cn(removeBtn, "size-7 rounded")}>
-                      <X className="size-3.5" aria-hidden />
-                    </button>
+                    <Button type="button" variant="destructive" size="icon-sm" aria-label="Remove TLS" onClick={() => removeTls(ti)}>
+                      <X aria-hidden />
+                    </Button>
                   </div>
                 ))}
                 <AddButton onClick={addTls}>Add TLS</AddButton>
@@ -371,13 +368,9 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 /** Outlined "+ Add …" button with an accent plus icon. */
 function AddButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex w-fit items-center gap-1.5 rounded-md border px-2.5 py-[7px] text-[13px] font-medium border-[var(--border-strong)] text-[var(--fg-secondary)] hover:bg-white/[0.03]"
-    >
-      <Plus className="size-3.5 text-[var(--accent-primary)]" aria-hidden /> {children}
-    </button>
+    <Button type="button" variant="outline" size="sm" className="w-fit" onClick={onClick}>
+      <Plus className="text-[var(--accent-primary)]" aria-hidden /> {children}
+    </Button>
   );
 }
 

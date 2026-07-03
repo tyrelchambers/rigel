@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from "react";
 import { GitBranch, Info } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -153,23 +154,14 @@ export function LinkRepoModal({
           </div>
         </DialogBody>
 
-        <DialogFooter className="sm:justify-between">
-          <button
-            type="button"
-            onClick={() => onOpenChange(false)}
-            className="rounded-[9px] px-3 py-2.5 text-[13px] font-medium text-[var(--fg-tertiary)] transition-colors hover:text-[var(--fg-primary)]"
-          >
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={!canSubmit}
-            className="inline-flex items-center gap-2 rounded-[9px] bg-[var(--accent-primary)] px-[18px] py-2.5 text-sm font-semibold text-[var(--fg-inverse)] transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-50"
-          >
-            <GitBranch className="size-4" />
+          </Button>
+          <Button onClick={submit} disabled={!canSubmit}>
+            <GitBranch aria-hidden />
             {link.isPending ? "Linking…" : "Create source & link"}
-          </button>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

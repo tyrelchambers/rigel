@@ -229,7 +229,7 @@ export function CredentialSourceDialog({
         </DialogBody>
 
         <DialogFooter>
-          <Button variant="muted" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button disabled={!canSave} onClick={save}>

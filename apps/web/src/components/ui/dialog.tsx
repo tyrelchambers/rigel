@@ -133,6 +133,12 @@ function DialogBody({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
+// The one modal footer: a hairline-topped, right-aligned action bar. Compose it
+// with <Button> children following the standard so every modal matches:
+//   • secondary / cancel  → variant="outline"
+//   • primary confirm      → default variant (accent fill)
+//   • destructive confirm  → variant="destructive"
+// Cancel goes first (left); the primary/destructive action goes last (right).
 function DialogFooter({
   className,
   showCloseButton = false,

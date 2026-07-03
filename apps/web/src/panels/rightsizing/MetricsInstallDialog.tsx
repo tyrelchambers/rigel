@@ -173,7 +173,7 @@ export function MetricsInstallDialog({ open, onOpenChange, onInstall }: Props) {
 
       {/* Footer — full-bleed hairline, breaking out of the DialogBody padding. */}
       <div className="-mx-6 -mb-7 mt-6 flex items-center justify-end gap-2 border-t border-white/[0.07] px-6 py-3.5">
-        <Button variant="ghost" onClick={() => onOpenChange(false)}>
+        <Button variant="outline" onClick={() => onOpenChange(false)}>
           Cancel
         </Button>
         <Button disabled={!valid} onClick={() => onInstall(resultingBackend(backend, ns), yaml)}>
