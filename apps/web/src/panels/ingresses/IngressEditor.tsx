@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Ingress } from "./types";
 import type { KVRow } from "@rigel/k8s";
 import {
@@ -18,16 +18,18 @@ import {
   Dialog,
   DialogBody,
   DialogContent,
-  DialogTitle,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
+  DialogIcon,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { TabBar, Tab } from "@/components/ui/Tabs";
 import { KeyValueEditor } from "../components/KeyValueEditor";
 import { YamlEditor } from "@/components/YamlEditorLazy";
 import { useClusterYamlSchema } from "@/lib/useClusterYamlSchema";
-import { Plus, Minus } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Box, Globe, Lock, Network, Plus, Server, Trash2, X } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // IngressEditor — edit an Ingress's values (class, rules, TLS, annotations) via
@@ -44,8 +46,15 @@ interface ApplyResult {
   stderr: string;
 }
 
-const fieldInput =
-  "w-full rounded-md border bg-background px-3 py-1.5 text-sm font-mono outline-none focus:ring-2 focus:ring-ring disabled:opacity-60 disabled:cursor-not-allowed";
+// Full-width field box (Name / Namespace / Ingress class).
+const boxInput =
+  "w-full rounded-md border px-3.5 py-[11px] text-sm font-mono outline-none transition-colors border-[var(--border-subtle)] bg-[var(--surface-sunken)] text-[var(--fg-primary)] placeholder:text-[var(--fg-tertiary)] focus:border-[var(--accent-primary)] disabled:cursor-not-allowed disabled:text-[var(--fg-secondary)]";
+// Compact cell used inside path / TLS rows.
+const cellInput =
+  "rounded border px-2.5 py-2 text-[13px] font-mono outline-none transition-colors border-[var(--border-subtle)] bg-[var(--surface-sunken)] text-[var(--fg-primary)] placeholder:text-[var(--fg-tertiary)] focus:border-[var(--accent-primary)]";
+// Soft-red icon/label button (remove).
+const removeBtn =
+  "flex shrink-0 items-center justify-center border border-[var(--destructive)]/20 bg-[var(--destructive)]/[0.08] text-[var(--destructive)] hover:bg-[var(--destructive)]/[0.14]";
 
 const PATH_TYPES = ["Prefix", "Exact", "ImplementationSpecific"];
 
@@ -159,171 +168,165 @@ export function IngressEditor({ target, open, onClose, onApplied }: IngressEdito
     }
   }
 
+  const ruleCount = `${rules.length} ${rules.length === 1 ? "rule" : "rules"}`;
+
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-3xl max-h-[84vh]">
+      <DialogContent className="max-w-[680px]">
         <DialogHeader>
-          <DialogTitle>Edit {name}</DialogTitle>
-        </DialogHeader>
-
-        <DialogBody className="flex flex-col gap-4">
-          <DialogDescription>
-            Modify the ingress's class, rules, TLS, and annotations. Name and namespace are preserved.
-          </DialogDescription>
-
-          {/* Form ⇄ YAML toggle */}
-          <div className="flex items-center gap-1">
-            <Button size="sm" variant={mode === "form" ? "default" : "outline"} onClick={() => setMode("form")}>Form</Button>
-            <Button size="sm" variant={mode === "yaml" ? "default" : "outline"} onClick={enterYaml}>YAML</Button>
-          </div>
-
-          {mode === "form" ? (
-            <div className="space-y-4">
-              {/* Identity */}
-              <div className="grid grid-cols-2 gap-3">
-                <Labeled label="Name">
-                  <input type="text" value={name} disabled className={fieldInput} />
-                </Labeled>
-                <Labeled label="Namespace">
-                  <input type="text" value={namespace} disabled className={fieldInput} />
-                </Labeled>
-              </div>
-  
-              <Labeled label="Ingress class">
-                <input
-                  type="text"
-                  value={ingressClassName}
-                  placeholder="nginx"
-                  onChange={(e) => setIngressClassName(e.target.value)}
-                  className={fieldInput}
-                />
-              </Labeled>
-  
-              {/* Rules */}
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground">Rules</label>
-                {rules.map((rule, ri) => (
-                  <div key={ri} className="space-y-2 rounded-md border bg-background/40 p-2.5">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={rule.host}
-                        placeholder="host (e.g. rigel.sh) — blank = all hosts"
-                        onChange={(e) => updateRule(ri, { host: e.target.value })}
-                        className={fieldInput}
-                        aria-label="host"
-                      />
-                      {rules.length > 1 && (
-                        <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove rule" onClick={() => removeRule(ri)}>
-                          <Minus className="size-4 text-destructive" aria-hidden />
-                        </Button>
-                      )}
-                    </div>
-  
-                    {rule.paths.map((p, pi) => (
-                      <div key={pi} className="flex flex-wrap items-center gap-2 pl-3">
-                        <input
-                          type="text"
-                          value={p.path}
-                          placeholder="/"
-                          onChange={(e) => updatePath(ri, pi, { path: e.target.value })}
-                          className={`${fieldInput} w-24`}
-                          aria-label="path"
-                        />
-                        <select
-                          value={p.pathType}
-                          onChange={(e) => updatePath(ri, pi, { pathType: e.target.value })}
-                          className={`${fieldInput} w-44`}
-                          aria-label="path type"
-                        >
-                          {PATH_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                        <span className="text-xs text-muted-foreground">→</span>
-                        <input
-                          type="text"
-                          value={p.serviceName}
-                          placeholder="service"
-                          onChange={(e) => updatePath(ri, pi, { serviceName: e.target.value })}
-                          className={`${fieldInput} w-32`}
-                          aria-label="service name"
-                        />
-                        <span className="text-xs text-muted-foreground">:</span>
-                        <input
-                          type="text"
-                          value={p.servicePort}
-                          placeholder="80"
-                          onChange={(e) => updatePath(ri, pi, { servicePort: e.target.value })}
-                          className={`${fieldInput} w-20`}
-                          aria-label="service port"
-                        />
-                        {rule.paths.length > 1 && (
-                          <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove path" onClick={() => removePath(ri, pi)}>
-                            <Minus className="size-4 text-destructive" aria-hidden />
-                          </Button>
-                        )}
-                      </div>
-                    ))}
-                    <Button type="button" variant="outline" size="sm" className="ml-3" onClick={() => addPath(ri)}>
-                      <Plus className="size-3.5" aria-hidden /> Add path
-                    </Button>
-                  </div>
-                ))}
-                <Button type="button" variant="outline" size="sm" onClick={addRule}>
-                  <Plus className="size-3.5" aria-hidden /> Add rule
-                </Button>
-              </div>
-  
-              {/* TLS */}
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground">TLS</label>
-                {tls.length === 0 && <p className="text-xs text-muted-foreground">No TLS configured.</p>}
-                {tls.map((t, ti) => (
-                  <div key={ti} className="flex flex-wrap items-center gap-2 rounded-md border bg-background/40 p-2">
-                    <input
-                      type="text"
-                      value={t.hosts}
-                      placeholder="hosts (comma-separated)"
-                      onChange={(e) => updateTls(ti, { hosts: e.target.value })}
-                      className={`${fieldInput} flex-1`}
-                      aria-label="tls hosts"
-                    />
-                    <span className="text-xs text-muted-foreground">→</span>
-                    <input
-                      type="text"
-                      value={t.secretName}
-                      placeholder="tls-secret"
-                      onChange={(e) => updateTls(ti, { secretName: e.target.value })}
-                      className={`${fieldInput} w-44`}
-                      aria-label="tls secret name"
-                    />
-                    <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove TLS" onClick={() => removeTls(ti)}>
-                      <Minus className="size-4 text-destructive" aria-hidden />
-                    </Button>
-                  </div>
-                ))}
-                <Button type="button" variant="outline" size="sm" onClick={addTls}>
-                  <Plus className="size-3.5" aria-hidden /> Add TLS
-                </Button>
-              </div>
-  
-              {/* Annotations */}
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground">Annotations</label>
-                <KeyValueEditor rows={annotationRows} onRowsChange={setAnnotationRows} keyPlaceholder="key (e.g. cert-manager.io/cluster-issuer)" />
-              </div>
-  
-              {labels && Object.keys(labels).length > 0 && (
-                <p className="text-xs font-mono text-muted-foreground/70">
-                  {Object.keys(labels).length} label(s) preserved unchanged.
-                </p>
+          <DialogIcon className="rounded-[9px] bg-[var(--accent-dim)] text-[var(--accent-primary)]">
+            <Network className="size-[18px]" aria-hidden />
+          </DialogIcon>
+          <div className="flex min-w-0 flex-col gap-1">
+            <div className="flex min-w-0 items-center gap-2">
+              <DialogTitle className="shrink-0 text-[17px] font-bold text-[var(--fg-primary)]">Edit Ingress</DialogTitle>
+              {name && (
+                <span className="flex min-w-0 items-center gap-1.5 rounded bg-[var(--accent-dim)] px-2 py-0.5">
+                  <Globe className="size-3 shrink-0 text-[var(--accent-primary)]" aria-hidden />
+                  <span className="truncate font-mono text-xs text-[var(--accent-primary)]">{name}</span>
+                </span>
               )}
             </div>
+            <span className="truncate text-xs text-[var(--fg-tertiary)]">
+              Namespace {namespace} · class {ingressClassName || "none"} · {ruleCount}
+            </span>
+          </div>
+        </DialogHeader>
+
+        <DialogBody className="flex flex-col gap-[18px]">
+          <TabBar value={mode} onValueChange={(m) => (m === "yaml" ? enterYaml() : setMode("form"))} className="self-start">
+            <Tab value="form">Form</Tab>
+            <Tab value="yaml">YAML</Tab>
+          </TabBar>
+
+          {mode === "form" ? (
+            <>
+              {/* INGRESS */}
+              <section className="flex flex-col gap-2.5">
+                <SectionCap>Ingress</SectionCap>
+                <div className="flex flex-col gap-3.5 sm:flex-row">
+                  <Field label="Name">
+                    <div className="relative">
+                      <input value={name} disabled aria-label="name" className={cn(boxInput, "pr-9")} />
+                      <Lock className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-[var(--fg-tertiary)]" aria-hidden />
+                    </div>
+                  </Field>
+                  <Field label="Namespace">
+                    <div className="relative">
+                      <input value={namespace} disabled aria-label="namespace" className={cn(boxInput, "pl-9")} />
+                      <Box className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-[var(--fg-tertiary)]" aria-hidden />
+                    </div>
+                  </Field>
+                  <Field label="Ingress class">
+                    <input
+                      value={ingressClassName}
+                      placeholder="nginx"
+                      onChange={(e) => setIngressClassName(e.target.value)}
+                      aria-label="ingress class"
+                      className={boxInput}
+                    />
+                  </Field>
+                </div>
+              </section>
+
+              <Divider />
+
+              {/* RULES */}
+              <section className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1">
+                  <SectionCap aside={ruleCount}>Rules</SectionCap>
+                  <span className="text-xs text-[var(--fg-tertiary)]">Each rule routes a host and its HTTP paths to a backend service.</span>
+                </div>
+
+                {rules.map((rule, ri) => (
+                  <div key={ri} className="flex flex-col gap-3 rounded-lg border p-3.5 border-[var(--border-subtle)] bg-[var(--surface-sunken)]">
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md border px-3 py-2 border-[var(--border-subtle)] bg-[var(--surface-elevated)] focus-within:border-[var(--accent-primary)]">
+                        <span className="shrink-0 rounded bg-white/[0.04] px-[7px] py-0.5 font-mono text-[9.5px] uppercase tracking-[1px] text-[var(--fg-tertiary)]">Host</span>
+                        <input
+                          value={rule.host}
+                          placeholder="all hosts"
+                          onChange={(e) => updateRule(ri, { host: e.target.value })}
+                          aria-label="host"
+                          className="min-w-0 flex-1 bg-transparent font-mono text-sm text-[var(--fg-primary)] outline-none placeholder:text-[var(--fg-tertiary)]"
+                        />
+                      </div>
+                      {rules.length > 1 && (
+                        <button type="button" onClick={() => removeRule(ri)} className={cn(removeBtn, "gap-1.5 rounded-md px-2.5 py-2 text-[13px] font-medium")}>
+                          <Trash2 className="size-3.5" aria-hidden /> Remove
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col gap-2 border-l-2 pl-3.5 border-[var(--accent-primary)]/25">
+                      <SectionCap aside={`${rule.paths.length} ${rule.paths.length === 1 ? "path" : "paths"}`}>Paths</SectionCap>
+                      {rule.paths.map((p, pi) => (
+                        <div key={pi} className="flex flex-wrap items-center gap-2 rounded-md border p-2 border-[var(--border-subtle)] bg-[var(--surface-elevated)]">
+                          <input value={p.path} placeholder="/" onChange={(e) => updatePath(ri, pi, { path: e.target.value })} aria-label="path" className={cn(cellInput, "w-[92px]")} />
+                          <select value={p.pathType} onChange={(e) => updatePath(ri, pi, { pathType: e.target.value })} aria-label="path type" className={cn(cellInput, "w-[132px]")}>
+                            {PATH_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                          <span className="font-mono text-sm text-[var(--fg-tertiary)]">→</span>
+                          <div className="flex min-w-[120px] flex-1 items-center gap-1.5 rounded border border-[var(--border-subtle)] bg-[var(--surface-sunken)] focus-within:border-[var(--accent-primary)]">
+                            <Server className="ml-2.5 size-3.5 shrink-0 text-[var(--fg-tertiary)]" aria-hidden />
+                            <input value={p.serviceName} placeholder="service" onChange={(e) => updatePath(ri, pi, { serviceName: e.target.value })} aria-label="service name" className="min-w-0 flex-1 bg-transparent py-2 pr-2.5 font-mono text-[13px] text-[var(--fg-primary)] outline-none placeholder:text-[var(--fg-tertiary)]" />
+                          </div>
+                          <span className="font-mono text-sm text-[var(--fg-tertiary)]">:</span>
+                          <input value={p.servicePort} placeholder="80" onChange={(e) => updatePath(ri, pi, { servicePort: e.target.value })} aria-label="service port" className={cn(cellInput, "w-[56px]")} />
+                          {rule.paths.length > 1 && (
+                            <button type="button" onClick={() => removePath(ri, pi)} aria-label="Remove path" className={cn(removeBtn, "size-7 rounded")}>
+                              <X className="size-3.5" aria-hidden />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      <AddButton onClick={() => addPath(ri)}>Add path</AddButton>
+                    </div>
+                  </div>
+                ))}
+
+                <button type="button" onClick={addRule} className="flex w-full items-center justify-center gap-2 rounded-md border px-3.5 py-[11px] text-sm font-semibold border-[var(--accent-primary)]/25 bg-[var(--accent-primary)]/[0.05] text-[var(--accent-primary)] hover:bg-[var(--accent-primary)]/[0.1]">
+                  <Plus className="size-[15px]" aria-hidden /> Add rule
+                </button>
+              </section>
+
+              <Divider />
+
+              {/* TLS */}
+              <section className="flex flex-col gap-2.5">
+                <SectionCap>TLS</SectionCap>
+                {tls.length === 0 && <p className="text-xs text-[var(--fg-tertiary)]">No TLS configured.</p>}
+                {tls.map((t, ti) => (
+                  <div key={ti} className="flex flex-wrap items-center gap-2 rounded-md border p-2 border-[var(--border-subtle)] bg-[var(--surface-sunken)]">
+                    <input value={t.hosts} placeholder="hosts (comma-separated)" onChange={(e) => updateTls(ti, { hosts: e.target.value })} aria-label="tls hosts" className={cn(cellInput, "min-w-[140px] flex-1")} />
+                    <span className="font-mono text-sm text-[var(--fg-tertiary)]">→</span>
+                    <input value={t.secretName} placeholder="tls-secret" onChange={(e) => updateTls(ti, { secretName: e.target.value })} aria-label="tls secret name" className={cn(cellInput, "w-[180px]")} />
+                    <button type="button" onClick={() => removeTls(ti)} aria-label="Remove TLS" className={cn(removeBtn, "size-7 rounded")}>
+                      <X className="size-3.5" aria-hidden />
+                    </button>
+                  </div>
+                ))}
+                <AddButton onClick={addTls}>Add TLS</AddButton>
+              </section>
+
+              <Divider />
+
+              {/* ANNOTATIONS */}
+              <section className="flex flex-col gap-2.5">
+                <SectionCap>Annotations</SectionCap>
+                <KeyValueEditor rows={annotationRows} onRowsChange={setAnnotationRows} keyPlaceholder="key (e.g. cert-manager.io/cluster-issuer)" />
+              </section>
+
+              {labels && Object.keys(labels).length > 0 && (
+                <p className="font-mono text-xs text-[var(--fg-tertiary)]">{Object.keys(labels).length} label(s) preserved unchanged.</p>
+              )}
+            </>
           ) : (
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">
-                Edit the manifest directly. Switching back to <b>Form</b> rebuilds this from the fields (raw edits are discarded). Applied with <code className="font-mono">kubectl apply -f -</code>.
+            <div className="flex flex-col gap-2">
+              <p className="text-xs text-[var(--fg-tertiary)]">
+                Edit the manifest directly. Switching back to <b>Form</b> rebuilds this from the fields (raw edits are discarded).
               </p>
-              <div className="h-[52vh] w-full overflow-hidden rounded-md border" style={{ background: "#0B0C0E", borderColor: "#26272B" }}>
+              <div className="h-[52vh] w-full overflow-hidden rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)]">
                 <YamlEditor value={yamlText} onChange={setYamlText} schema={schema ?? null} />
               </div>
             </div>
@@ -338,18 +341,47 @@ export function IngressEditor({ target, open, onClose, onApplied }: IngressEdito
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button onClick={handleApply} disabled={busy || !valid}>{busy ? "Applying…" : "Apply changes"}</Button>
+          <Button onClick={handleApply} disabled={busy || !valid}>{busy ? "Saving…" : "Save changes"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
+/** A section caption: uppercase mono label with an optional right-aligned count. */
+function SectionCap({ children, aside }: { children: ReactNode; aside?: ReactNode }) {
   return (
-    <div className="space-y-1">
-      <label className="text-xs font-medium text-muted-foreground">{label}</label>
+    <div className="flex items-center justify-between gap-2">
+      <span className="font-mono text-[10.5px] uppercase tracking-[1px] text-[var(--fg-tertiary)]">{children}</span>
+      {aside && <span className="font-mono text-[10.5px] text-[var(--fg-tertiary)]">{aside}</span>}
+    </div>
+  );
+}
+
+/** A labeled form field: a medium label above its control. */
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-1 flex-col gap-[7px]">
+      <span className="text-[13px] font-medium text-[var(--fg-secondary)]">{label}</span>
       {children}
     </div>
   );
+}
+
+/** Outlined "+ Add …" button with an accent plus icon. */
+function AddButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-fit items-center gap-1.5 rounded-md border px-2.5 py-[7px] text-[13px] font-medium border-[var(--border-strong)] text-[var(--fg-secondary)] hover:bg-white/[0.03]"
+    >
+      <Plus className="size-3.5 text-[var(--accent-primary)]" aria-hidden /> {children}
+    </button>
+  );
+}
+
+/** Full-width hairline divider between sections. */
+function Divider() {
+  return <div className="h-px w-full bg-[var(--border-subtle)]" />;
 }
