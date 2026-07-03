@@ -14,7 +14,7 @@ import { grantRisk } from "./risk";
 
 /** Stable identity key for a subject. NUL-separated so parts can't collide. */
 export function subjectKey(s: { kind?: string; name?: string; namespace?: string }): string {
-  return `${s.kind ?? ""} ${s.namespace ?? ""} ${s.name ?? ""}`;
+  return `${s.kind ?? ""}\u0000${s.namespace ?? ""}\u0000${s.name ?? ""}`;
 }
 
 type AnyBinding = RoleBinding | ClusterRoleBinding;

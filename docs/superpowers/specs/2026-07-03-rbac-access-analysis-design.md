@@ -54,7 +54,7 @@ All five RBAC kinds are already watched into the Zustand cluster store via the g
 
 ### Risk classification
 Pure predicate `ruleRisk(rule): 'dangerous' | 'wildcard' | null`:
-- **dangerous**: verbs include any of `escalate`, `bind`, `impersonate`; OR `secrets` in resources with `get`/`list`/`watch`/`*`; OR the grant is `cluster-admin` (roleRef name) / wildcard verb **and** wildcard resource **and** cluster scope.
+- **dangerous**: verbs include any of `escalate`, `bind`, `impersonate`; OR `secrets` in resources with `get`/`list`/`watch`/`*`; OR full wildcard (wildcard verb **and** wildcard resource — this covers `cluster-admin` and any `*/*` grant). `ruleRisk` is a pure per-rule predicate with no scope input, so a namespaced `*/*` Role is also flagged dangerous (intentional: it still grants secrets/exec/etc. within its namespace).
 - **wildcard**: `*` in verbs or resources (that isn't already dangerous).
 
 (Exact rule set to be confirmed against the `.pen` legend — dangerous + wildcard are the only two tiers shown.)
