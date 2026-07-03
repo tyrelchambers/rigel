@@ -1,115 +1,35 @@
 import { useEffect, useMemo, useState } from "react";
+import { Eye } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
-import { ListRow } from "@/panels/components/ListRow";
-import { StatusBadge } from "@/panels/components/StatusBadge";
-import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { PanelHeader } from "@/panels/components/PanelHeader";
-import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
-import { viewYaml } from "@/store/yamlViewer";
+import { NamespaceSelector } from "@/shell/NamespaceBar";
 import type {
-  ServiceAccount,
-  Role,
   ClusterRole,
-  RoleBinding,
   ClusterRoleBinding,
-  RbacKind,
+  ListSubject,
+  Role,
+  RoleBinding,
+  RbacView,
+  ScopeFilter,
 } from "./types";
+import { sortByName, sortByNamespaceName, matchesSearch } from "./rbacDisplay";
+import { grantRisk } from "./risk";
 import {
-  subjectsSummary,
-  rulesSummary,
-  matchesSearch,
-  sortByNamespaceName,
-  sortByName,
-} from "./rbacDisplay";
+  collectSubjects,
+  effectiveGrants,
+  rbacCounts,
+  resolveRoleRules,
+  subjectsForRole,
+} from "./access";
+import { RbacStatusStrip } from "./components/RbacStatusStrip";
+import { RbacList, type RoleItem } from "./components/RbacList";
+import { SubjectDetail } from "./components/SubjectDetail";
+import { RoleDetail } from "./components/RoleDetail";
 
-// ---------------------------------------------------------------------------
-// DEFERRED ACTIONS (docs/parity/rbac.md §5). This is a READ-ONLY panel. The
-// following row context-menu items are intentionally NON-FUNCTIONAL stubs and
-// must NOT be wired up without a new feature spec + infra:
-//   - View YAML (needs a server YAML endpoint + viewer UI).
-//   - Delete <kind> (needs ConfirmSheet wiring + server mutation route). When
-//     wired, deletions emit `deleteResource` action blocks per
-//     docs/parity/contracts.md §1.
-// No action blocks are emitted by this panel.
-// ---------------------------------------------------------------------------
-
-const KIND_TABS: { kind: RbacKind; label: string }[] = [
-  { kind: "serviceaccounts", label: "ServiceAccounts" },
-  { kind: "roles", label: "Roles" },
-  { kind: "rolebindings", label: "RoleBindings" },
-  { kind: "clusterroles", label: "ClusterRoles" },
-  { kind: "clusterrolebindings", label: "ClusterRoleBindings" },
-];
-
-/** "0 secrets" / "1 secret" / "N secrets" with correct pluralization. */
-function secretsLabel(n: number): string {
-  return `${n} ${n === 1 ? "secret" : "secrets"}`;
-}
-
-/** "0 rules" / "1 rule" / "N rules" with correct pluralization. */
-function rulesLabel(n: number): string {
-  return `${n} ${n === 1 ? "rule" : "rules"}`;
-}
-
-/** roleRef → "<kind>/<name>" with the given default kind, or "—" if absent. */
-function roleRefLabel(
-  roleRef: { kind?: string; name?: string } | undefined,
-  defaultKind: string,
-): string {
-  if (!roleRef || !roleRef.name) return "—";
-  const kind = roleRef.kind ?? defaultKind;
-  return `${kind}/${roleRef.name}`;
-}
-
-/** Namespace chip — dim bordered monospace pill (namespaced kinds only). */
-function NamespaceChip({ namespace }: { namespace: string }) {
-  return (
-    <span
-      style={{
-        fontFamily: "ui-monospace, monospace",
-        fontSize: 10,
-        color: "var(--fg-tertiary)",
-        background: "var(--surface-sunken)",
-        padding: "1px 5px",
-        borderRadius: 4,
-        border: "1px solid #26272B",
-        whiteSpace: "nowrap",
-      }}
-    >
-      {namespace}
-    </span>
-  );
-}
-
-/** Expanded rules detail shared by Role and ClusterRole rows. */
-function RulesDetail({ summary }: { summary: string }) {
-  return (
-    <pre className="rounded-md bg-muted/30 px-3 py-2 text-xs font-mono text-muted-foreground whitespace-pre-wrap break-all">
-      {summary}
-    </pre>
-  );
-}
-
-/** Expanded subjects/roleRef detail for RoleBinding and ClusterRoleBinding rows. */
-function BindingDetail({ roleRef, subjects }: { roleRef: string; subjects: string }) {
-  return (
-    <div className="space-y-1.5">
-      <div className="flex gap-3">
-        <span className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground w-16 shrink-0">
-          ROLE REF
-        </span>
-        <span className="font-mono text-xs text-muted-foreground">{roleRef}</span>
-      </div>
-      <div className="flex gap-3">
-        <span className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground w-16 shrink-0">
-          SUBJECTS
-        </span>
-        <span className="font-mono text-xs text-muted-foreground">{subjects}</span>
-      </div>
-    </div>
-  );
+function values<T>(rec: Record<string, T> | undefined): T[] {
+  return Object.values(rec ?? {});
 }
 
 export default function RbacPanel() {
@@ -118,430 +38,181 @@ export default function RbacPanel() {
   const error = useCluster((s) => s.error);
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
 
-  const [activeKind, setActiveKind] = useState<RbacKind>("serviceaccounts");
+  const [view, setView] = useState<RbacView>("subjects");
+  const [scope, setScope] = useState<ScopeFilter>("all");
   const [search, setSearch] = useState("");
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
-  // Namespace-scoped kinds: re-subscribe when the namespace filter changes.
   useEffect(() => {
     const ns = namespaceFilter ?? "*";
     subscribe("serviceaccounts", ns);
     subscribe("roles", ns);
     subscribe("rolebindings", ns);
+    subscribe("clusterroles", "*");
+    subscribe("clusterrolebindings", "*");
     return () => {
       unsubscribe("serviceaccounts", ns);
       unsubscribe("roles", ns);
       unsubscribe("rolebindings", ns);
-    };
-  }, [namespaceFilter]);
-
-  // Cluster-scoped kinds: subscribe once with "*" on mount.
-  useEffect(() => {
-    subscribe("clusterroles", "*");
-    subscribe("clusterrolebindings", "*");
-    return () => {
       unsubscribe("clusterroles", "*");
       unsubscribe("clusterrolebindings", "*");
     };
-  }, []);
+  }, [namespaceFilter]);
 
-  const allServiceAccounts = useMemo(
-    () =>
-      sortByNamespaceName(
-        Object.values(
-          (resources["serviceaccounts"] ?? {}) as Record<string, ServiceAccount>,
-        ),
-      ),
+  const roles = useMemo(
+    () => sortByNamespaceName(values<Role>(resources["roles"] as Record<string, Role>)),
     [resources],
   );
-  const allRoles = useMemo(
-    () =>
-      sortByNamespaceName(
-        Object.values((resources["roles"] ?? {}) as Record<string, Role>),
-      ),
+  const clusterRoles = useMemo(
+    () => sortByName(values<ClusterRole>(resources["clusterroles"] as Record<string, ClusterRole>)),
     [resources],
   );
-  const allRoleBindings = useMemo(
-    () =>
-      sortByNamespaceName(
-        Object.values((resources["rolebindings"] ?? {}) as Record<string, RoleBinding>),
-      ),
+  const roleBindings = useMemo(
+    () => values<RoleBinding>(resources["rolebindings"] as Record<string, RoleBinding>),
     [resources],
   );
-  const allClusterRoles = useMemo(
-    () =>
-      sortByName(
-        Object.values((resources["clusterroles"] ?? {}) as Record<string, ClusterRole>),
-      ),
-    [resources],
-  );
-  const allClusterRoleBindings = useMemo(
-    () =>
-      sortByName(
-        Object.values(
-          (resources["clusterrolebindings"] ?? {}) as Record<string, ClusterRoleBinding>,
-        ),
-      ),
+  const clusterRoleBindings = useMemo(
+    () => values<ClusterRoleBinding>(resources["clusterrolebindings"] as Record<string, ClusterRoleBinding>),
     [resources],
   );
 
-  const filteredServiceAccounts = useMemo(
-    () =>
-      allServiceAccounts.filter((sa) =>
-        matchesSearch(
-          [
-            sa.metadata.name,
-            sa.metadata.namespace,
-            secretsLabel(sa.secrets?.length ?? 0),
-          ],
-          search,
-        ),
-      ),
-    [allServiceAccounts, search],
-  );
-  const filteredRoles = useMemo(
-    () =>
-      allRoles.filter((r) =>
-        matchesSearch(
-          [r.metadata.name, r.metadata.namespace, rulesSummary(r.rules)],
-          search,
-        ),
-      ),
-    [allRoles, search],
-  );
-  const filteredRoleBindings = useMemo(
-    () =>
-      allRoleBindings.filter((rb) =>
-        matchesSearch(
-          [
-            rb.metadata.name,
-            rb.metadata.namespace,
-            rb.roleRef?.name,
-            subjectsSummary(rb.subjects),
-          ],
-          search,
-        ),
-      ),
-    [allRoleBindings, search],
-  );
-  const filteredClusterRoles = useMemo(
-    () =>
-      allClusterRoles.filter((cr) =>
-        matchesSearch([cr.metadata.name, rulesSummary(cr.rules)], search),
-      ),
-    [allClusterRoles, search],
-  );
-  const filteredClusterRoleBindings = useMemo(
-    () =>
-      allClusterRoleBindings.filter((crb) =>
-        matchesSearch(
-          [crb.metadata.name, crb.roleRef?.name, subjectsSummary(crb.subjects)],
-          search,
-        ),
-      ),
-    [allClusterRoleBindings, search],
+  // Apply the scope filter to the binding/role pools.
+  const scopedRB = scope === "cluster" ? [] : roleBindings;
+  const scopedCRB = scope === "namespaced" ? [] : clusterRoleBindings;
+  const scopedRoles = scope === "cluster" ? [] : roles;
+  const scopedCR = scope === "namespaced" ? [] : clusterRoles;
+
+  const counts = useMemo(
+    () => rbacCounts(scopedRB, scopedCRB, scopedRoles, scopedCR),
+    [scopedRB, scopedCRB, scopedRoles, scopedCR],
   );
 
-  function toggleExpand(uid: string) {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(uid)) next.delete(uid);
-      else next.add(uid);
-      return next;
-    });
+  const subjects = useMemo(
+    () =>
+      collectSubjects(scopedRB, scopedCRB, scopedRoles, scopedCR).filter((s) =>
+        matchesSearch([s.name, s.kind, s.namespace], search),
+      ),
+    [scopedRB, scopedCRB, scopedRoles, scopedCR, search],
+  );
+
+  const roleItems: RoleItem[] = useMemo(() => {
+    const rItems: RoleItem[] = scopedRoles.map((r) => ({
+      key: `Role ${r.metadata.namespace ?? ""} ${r.metadata.name}`,
+      kind: "Role",
+      name: r.metadata.name,
+      namespace: r.metadata.namespace,
+      dangerous: grantRisk(r.rules) === "dangerous",
+    }));
+    const cItems: RoleItem[] = scopedCR.map((r) => ({
+      key: `ClusterRole  ${r.metadata.name}`,
+      kind: "ClusterRole",
+      name: r.metadata.name,
+      dangerous: grantRisk(r.rules) === "dangerous",
+    }));
+    return [...rItems, ...cItems].filter((r) => matchesSearch([r.name, r.kind, r.namespace], search));
+  }, [scopedRoles, scopedCR, search]);
+
+  // Default-select the first item when the view or its list changes.
+  const listKeys = view === "subjects" ? subjects.map((s) => s.key) : roleItems.map((r) => r.key);
+  useEffect(() => {
+    if (selectedKey && listKeys.includes(selectedKey)) return;
+    setSelectedKey(listKeys[0] ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, listKeys.join("|")]);
+
+  const selectedSubject = subjects.find((s) => s.key === selectedKey) ?? null;
+  const selectedRole = roleItems.find((r) => r.key === selectedKey) ?? null;
+
+  const grants = useMemo(
+    () =>
+      selectedSubject
+        ? effectiveGrants(selectedSubject.key, scopedRB, scopedCRB, scopedRoles, scopedCR)
+        : [],
+    [selectedSubject, scopedRB, scopedCRB, scopedRoles, scopedCR],
+  );
+
+  const roleRules = selectedRole
+    ? resolveRoleRules(
+        { kind: selectedRole.kind, name: selectedRole.name },
+        selectedRole.namespace,
+        scopedRoles,
+        scopedCR,
+      )
+    : [];
+  const boundSubjects = selectedRole
+    ? subjectsForRole(
+        { kind: selectedRole.kind, name: selectedRole.name, namespace: selectedRole.namespace },
+        scopedRB,
+        scopedCRB,
+      )
+    : [];
+
+  function askAboutSubject(s: ListSubject) {
+    const ref = s.namespace ? `${s.namespace}/${s.name}` : s.name;
+    handoffToChat(
+      `Explain the RBAC access for ${s.kind} "${ref}": which roles is it bound to, what can it do, and is anything over-privileged?`,
+    );
   }
 
-  function rowKey(meta: { uid?: string; name: string; namespace?: string }): string {
-    return meta.uid ?? `${meta.namespace ?? ""}/${meta.name}`;
-  }
-
-  function askClaude(kind: string, name: string, namespace: string | undefined, topic: "Errors" | "Logs" | "Explain") {
-    handoffToChat(buildHandoffPrompt(kind, name, namespace, topic));
-  }
+  const empty = view === "subjects" ? subjects.length === 0 : roleItems.length === 0;
 
   return (
-    <div className="flex h-full flex-col">
-      <PanelHeader title="RBAC" subtitle="Roles & bindings" loading={isLoading}>
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search…"
-          className="w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
-        />
+    <div className="flex h-full flex-col gap-5 bg-[var(--surface-primary)] p-9">
+      <PanelHeader title="RBAC" subtitle="Who can do what, to what" loading={isLoading}>
+        <div className="flex items-center gap-[10px]">
+          <NamespaceSelector />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Filter by subject, role, or resource…"
+            className="w-[300px] rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[13px] py-[9px] text-[13px] text-[var(--fg-primary)] outline-none placeholder:text-[var(--fg-tertiary)]"
+          />
+        </div>
       </PanelHeader>
 
-      <div className="flex-1 overflow-auto">
-      {/* Kind toggle pills */}
-      <div
-        className="flex items-center gap-1 overflow-x-auto px-4 py-2"
-        style={{ borderBottom: "1px solid #26272B" }}
-      >
-        {KIND_TABS.map((t) => (
-          <button
-            key={t.kind}
-            type="button"
-            onClick={() => setActiveKind(t.kind)}
-            aria-pressed={activeKind === t.kind}
-            className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              activeKind === t.kind
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <RbacStatusStrip counts={counts} scope={scope} onScopeChange={setScope} />
 
-      {/* Error banner */}
       {error && (
-        <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
+        <pre className="rounded-[var(--radius-md)] bg-[#EF44441A] px-4 py-2 font-[var(--font-mono)] text-xs whitespace-pre-wrap break-all text-[var(--status-failed)]">
           {error}
         </pre>
       )}
 
-      {/* Row list */}
-      <div className="flex flex-col gap-0.5 px-3 py-2">
-        {/* ServiceAccounts */}
-        {activeKind === "serviceaccounts" &&
-          filteredServiceAccounts.map((sa) => {
-            const k = rowKey(sa.metadata);
-            const isOpen = expanded.has(k);
-            const count = sa.secrets?.length ?? 0;
-            const rowMenu = (
-              <>
-                <ContextMenuItem onClick={() => askClaude("serviceaccount", sa.metadata.name, sa.metadata.namespace, "Errors")}>Ask Claude: Errors</ContextMenuItem>
-                <ContextMenuItem onClick={() => askClaude("serviceaccount", sa.metadata.name, sa.metadata.namespace, "Logs")}>Ask Claude: Logs</ContextMenuItem>
-                <ContextMenuItem onClick={() => askClaude("serviceaccount", sa.metadata.name, sa.metadata.namespace, "Explain")}>Ask Claude: Explain</ContextMenuItem>
-                <ContextMenuSeparator />
-                <ContextMenuItem onClick={() => viewYaml("serviceaccount", sa.metadata.name, sa.metadata.namespace)}>View YAML…</ContextMenuItem>
-              </>
-            );
-            return (
-              <ListRow
-                key={k}
-                rowKey={k}
-                isOpen={isOpen}
-                onToggle={() => toggleExpand(k)}
-                contextMenu={rowMenu}
-              >
-                <button
-                  type="button"
-                  onClick={() => toggleExpand(k)}
-                  className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
-                >
-                  {sa.metadata.name}
-                </button>
-
-                {sa.metadata.namespace && (
-                  <NamespaceChip namespace={sa.metadata.namespace} />
-                )}
-
-                <StatusBadge label={secretsLabel(count)} variant="neutral" />
-
-                <span className="flex-1" />
-              </ListRow>
-            );
-          })}
-
-        {/* Roles */}
-        {activeKind === "roles" &&
-          filteredRoles.map((r) => {
-            const k = rowKey(r.metadata);
-            const isOpen = expanded.has(k);
-            const count = r.rules?.length ?? 0;
-            const rowMenu = (
-              <>
-                <ContextMenuItem onClick={() => askClaude("role", r.metadata.name, r.metadata.namespace, "Errors")}>Ask Claude: Errors</ContextMenuItem>
-                <ContextMenuItem onClick={() => askClaude("role", r.metadata.name, r.metadata.namespace, "Logs")}>Ask Claude: Logs</ContextMenuItem>
-                <ContextMenuItem onClick={() => askClaude("role", r.metadata.name, r.metadata.namespace, "Explain")}>Ask Claude: Explain</ContextMenuItem>
-                <ContextMenuSeparator />
-                <ContextMenuItem onClick={() => viewYaml("role", r.metadata.name, r.metadata.namespace)}>View YAML…</ContextMenuItem>
-                <ContextMenuItem onClick={() => toggleExpand(k)}>{isOpen ? "Collapse" : "Details…"}</ContextMenuItem>
-              </>
-            );
-            return (
-              <ListRow
-                key={k}
-                rowKey={k}
-                isOpen={isOpen}
-                onToggle={() => toggleExpand(k)}
-                contextMenu={rowMenu}
-                expandedContent={<RulesDetail summary={rulesSummary(r.rules)} />}
-              >
-                <button
-                  type="button"
-                  onClick={() => toggleExpand(k)}
-                  className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
-                >
-                  {r.metadata.name}
-                </button>
-
-                {r.metadata.namespace && (
-                  <NamespaceChip namespace={r.metadata.namespace} />
-                )}
-
-                <StatusBadge label={rulesLabel(count)} variant="neutral" />
-
-                <span className="flex-1" />
-              </ListRow>
-            );
-          })}
-
-        {/* RoleBindings */}
-        {activeKind === "rolebindings" &&
-          filteredRoleBindings.map((rb) => {
-            const k = rowKey(rb.metadata);
-            const isOpen = expanded.has(k);
-            const rowMenu = (
-              <>
-                <ContextMenuItem onClick={() => askClaude("rolebinding", rb.metadata.name, rb.metadata.namespace, "Errors")}>Ask Claude: Errors</ContextMenuItem>
-                <ContextMenuItem onClick={() => askClaude("rolebinding", rb.metadata.name, rb.metadata.namespace, "Logs")}>Ask Claude: Logs</ContextMenuItem>
-                <ContextMenuItem onClick={() => askClaude("rolebinding", rb.metadata.name, rb.metadata.namespace, "Explain")}>Ask Claude: Explain</ContextMenuItem>
-                <ContextMenuSeparator />
-                <ContextMenuItem onClick={() => viewYaml("rolebinding", rb.metadata.name, rb.metadata.namespace)}>View YAML…</ContextMenuItem>
-                <ContextMenuItem onClick={() => toggleExpand(k)}>{isOpen ? "Collapse" : "Details…"}</ContextMenuItem>
-              </>
-            );
-            return (
-              <ListRow
-                key={k}
-                rowKey={k}
-                isOpen={isOpen}
-                onToggle={() => toggleExpand(k)}
-                contextMenu={rowMenu}
-                expandedContent={
-                  <BindingDetail
-                    roleRef={roleRefLabel(rb.roleRef, "Role")}
-                    subjects={subjectsSummary(rb.subjects)}
-                  />
-                }
-              >
-                <button
-                  type="button"
-                  onClick={() => toggleExpand(k)}
-                  className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
-                >
-                  {rb.metadata.name}
-                </button>
-
-                {rb.metadata.namespace && (
-                  <NamespaceChip namespace={rb.metadata.namespace} />
-                )}
-
-                <StatusBadge label={roleRefLabel(rb.roleRef, "Role")} variant="neutral" />
-
-                <span className="flex-1" />
-              </ListRow>
-            );
-          })}
-
-        {/* ClusterRoles */}
-        {activeKind === "clusterroles" &&
-          filteredClusterRoles.map((cr) => {
-            const k = rowKey(cr.metadata);
-            const isOpen = expanded.has(k);
-            const count = cr.rules?.length ?? 0;
-            const rowMenu = (
-              <>
-                <ContextMenuItem onClick={() => askClaude("clusterrole", cr.metadata.name, undefined, "Errors")}>Ask Claude: Errors</ContextMenuItem>
-                <ContextMenuItem onClick={() => askClaude("clusterrole", cr.metadata.name, undefined, "Logs")}>Ask Claude: Logs</ContextMenuItem>
-                <ContextMenuItem onClick={() => askClaude("clusterrole", cr.metadata.name, undefined, "Explain")}>Ask Claude: Explain</ContextMenuItem>
-                <ContextMenuSeparator />
-                <ContextMenuItem onClick={() => viewYaml("clusterrole", cr.metadata.name)}>View YAML…</ContextMenuItem>
-                <ContextMenuItem onClick={() => toggleExpand(k)}>{isOpen ? "Collapse" : "Details…"}</ContextMenuItem>
-              </>
-            );
-            return (
-              <ListRow
-                key={k}
-                rowKey={k}
-                isOpen={isOpen}
-                onToggle={() => toggleExpand(k)}
-                contextMenu={rowMenu}
-                expandedContent={<RulesDetail summary={rulesSummary(cr.rules)} />}
-              >
-                <button
-                  type="button"
-                  onClick={() => toggleExpand(k)}
-                  className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
-                >
-                  {cr.metadata.name}
-                </button>
-
-                {/* ClusterRoles are cluster-scoped — no namespace chip */}
-
-                <StatusBadge label={rulesLabel(count)} variant="neutral" />
-
-                <span className="flex-1" />
-              </ListRow>
-            );
-          })}
-
-        {/* ClusterRoleBindings */}
-        {activeKind === "clusterrolebindings" &&
-          filteredClusterRoleBindings.map((crb) => {
-            const k = rowKey(crb.metadata);
-            const isOpen = expanded.has(k);
-            const rowMenu = (
-              <>
-                <ContextMenuItem onClick={() => askClaude("clusterrolebinding", crb.metadata.name, undefined, "Errors")}>Ask Claude: Errors</ContextMenuItem>
-                <ContextMenuItem onClick={() => askClaude("clusterrolebinding", crb.metadata.name, undefined, "Logs")}>Ask Claude: Logs</ContextMenuItem>
-                <ContextMenuItem onClick={() => askClaude("clusterrolebinding", crb.metadata.name, undefined, "Explain")}>Ask Claude: Explain</ContextMenuItem>
-                <ContextMenuSeparator />
-                <ContextMenuItem onClick={() => viewYaml("clusterrolebinding", crb.metadata.name)}>View YAML…</ContextMenuItem>
-                <ContextMenuItem onClick={() => toggleExpand(k)}>{isOpen ? "Collapse" : "Details…"}</ContextMenuItem>
-              </>
-            );
-            return (
-              <ListRow
-                key={k}
-                rowKey={k}
-                isOpen={isOpen}
-                onToggle={() => toggleExpand(k)}
-                contextMenu={rowMenu}
-                expandedContent={
-                  <BindingDetail
-                    roleRef={roleRefLabel(crb.roleRef, "ClusterRole")}
-                    subjects={subjectsSummary(crb.subjects)}
-                  />
-                }
-              >
-                <button
-                  type="button"
-                  onClick={() => toggleExpand(k)}
-                  className="shrink-0 font-mono text-xs font-medium leading-none hover:underline text-foreground"
-                >
-                  {crb.metadata.name}
-                </button>
-
-                {/* ClusterRoleBindings are cluster-scoped — no namespace chip */}
-
-                <StatusBadge label={roleRefLabel(crb.roleRef, "ClusterRole")} variant="neutral" />
-
-                <span className="flex-1" />
-              </ListRow>
-            );
-          })}
+      <div className="flex min-h-0 flex-1 gap-6">
+        <RbacList
+          view={view}
+          onViewChange={setView}
+          subjects={subjects}
+          roleItems={roleItems}
+          selectedKey={selectedKey}
+          onSelectSubject={(s) => setSelectedKey(s.key)}
+          onSelectRole={(r) => setSelectedKey(r.key)}
+        />
+        <div className="flex min-w-0 flex-1 overflow-auto">
+          {empty ? (
+            <p className="text-sm text-[var(--fg-tertiary)]">
+              {view === "subjects" ? "No subjects found." : "No roles found."}
+            </p>
+          ) : view === "subjects" && selectedSubject ? (
+            <SubjectDetail subject={selectedSubject} grants={grants} onAsk={askAboutSubject} />
+          ) : view === "roles" && selectedRole ? (
+            <RoleDetail
+              roleName={selectedRole.name}
+              roleKind={selectedRole.kind}
+              roleNamespace={selectedRole.namespace}
+              rules={roleRules}
+              boundSubjects={boundSubjects}
+            />
+          ) : null}
+        </div>
       </div>
 
-      {/* Empty states */}
-      {!isLoading && activeKind === "serviceaccounts" && allServiceAccounts.length === 0 && (
-        <p className="px-4 py-4 text-sm text-muted-foreground">No service accounts found</p>
-      )}
-      {!isLoading && activeKind === "roles" && allRoles.length === 0 && (
-        <p className="px-4 py-4 text-sm text-muted-foreground">No roles found</p>
-      )}
-      {!isLoading && activeKind === "rolebindings" && allRoleBindings.length === 0 && (
-        <p className="px-4 py-4 text-sm text-muted-foreground">No role bindings found</p>
-      )}
-      {!isLoading && activeKind === "clusterroles" && allClusterRoles.length === 0 && (
-        <p className="px-4 py-4 text-sm text-muted-foreground">No cluster roles found</p>
-      )}
-      {!isLoading && activeKind === "clusterrolebindings" && allClusterRoleBindings.length === 0 && (
-        <p className="px-4 py-4 text-sm text-muted-foreground">No cluster role bindings found</p>
-      )}
+      <div className="flex items-center justify-center gap-2 pt-1">
+        <Eye className="size-[13px] text-[var(--fg-tertiary)]" />
+        <span className="text-[12px] text-[var(--fg-tertiary)]">
+          Read-only view. RBAC is inspected here, not edited.
+        </span>
       </div>
     </div>
   );
