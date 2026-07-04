@@ -1,12 +1,7 @@
 // packages/k8s/src/reliabilityAudit.test.ts
 import { describe, it, expect } from "vitest";
-import {
-  analyzeReliability,
-  sortFindings,
-  reliabilityCounts,
-  SEVERITY_RANK,
-  type AuditWorkload,
-} from "./reliabilityAudit";
+import { analyzeReliability } from "./reliabilityAudit";
+import { sortFindings, auditCounts, SEVERITY_RANK, type AuditWorkload } from "./auditCommon";
 
 /** A minimal healthy Deployment with 2 replicas, both probes, requests, a fixed
  *  image, anti-affinity, no hostPath — trips NOTHING. Spread + override per test. */
@@ -164,7 +159,7 @@ describe("analyzeReliability", () => {
   });
 });
 
-describe("sortFindings / reliabilityCounts", () => {
+describe("sortFindings / auditCounts", () => {
   it("orders a scrambled mix by severity then namespace, name, type", () => {
     // A multi-replica workload with no anti-affinity emits an info noAntiAffinity;
     // it also lacks a PDB (warning). A single-replica workload in another namespace
@@ -202,7 +197,7 @@ describe("sortFindings / reliabilityCounts", () => {
     const spread = healthy({ name: "api", hasAntiAffinity: false, labels: { app: "api" } });
     const info = analyzeReliability({ workloads: [spread], pdbs: [{ namespace: "default", selector: { app: "api" } }], hpas: [] });
 
-    const counts = reliabilityCounts([...multi, ...info]);
+    const counts = auditCounts([...multi, ...info]);
     expect(counts.critical).toBe(0);
     expect(counts.warning).toBe(multi.length);
     expect(counts.info).toBe(1);

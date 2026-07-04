@@ -4,50 +4,19 @@
 // Mirrors the discriminated-union + pure-helper shape of alerts.ts. Reusable by the
 // web hook, a future report panel, and the in-cluster agent.
 
-export type Severity = "critical" | "warning" | "info";
-export type WorkloadKind = "Deployment" | "StatefulSet" | "DaemonSet";
-
-/** Severity ordering for urgency-first sorting (lower = more urgent). */
-export const SEVERITY_RANK: Record<Severity, number> = {
-  critical: 0,
-  warning: 1,
-  info: 2,
-};
-
-export interface AuditContainer {
-  name: string;
-  image?: string;
-  hasLiveness: boolean;
-  hasReadiness: boolean;
-  hasCpuRequest: boolean;
-  hasMemRequest: boolean;
-}
-
-export interface AuditWorkload {
-  kind: WorkloadKind;
-  name: string;
-  namespace: string;
-  /** Desired replica count. Meaningless for DaemonSets (excluded from replica checks). */
-  replicas: number;
-  /** Pod-template labels — used to match PodDisruptionBudget selectors. */
-  labels: Record<string, string>;
-  containers: AuditContainer[];
-  hasAntiAffinity: boolean;
-  hasHostPath: boolean;
-}
-
-export interface AuditPdb {
-  namespace: string;
-  /** `spec.selector.matchLabels`. Empty object matches every pod in the namespace. */
-  selector: Record<string, string>;
-}
-
-export interface AuditHpa {
-  namespace: string;
-  targetKind: string;
-  targetName: string;
-  minReplicas: number;
-}
+import {
+  type Severity,
+  type AuditWorkloadKind,
+  type AuditContainer,
+  type AuditWorkload,
+  type AuditPdb,
+  type AuditHpa,
+  type AuditFinding,
+  SEVERITY_RANK,
+  sortFindings,
+  auditCounts,
+  type AuditCounts,
+} from "./auditCommon";
 
 export type ReliabilityFindingType =
   | "singleReplica"
@@ -59,17 +28,9 @@ export type ReliabilityFindingType =
   | "latestImageTag"
   | "hostPathVolume";
 
-export interface ReliabilityFinding {
+export interface ReliabilityFinding extends AuditFinding {
   type: ReliabilityFindingType;
-  severity: Severity;
-  kind: WorkloadKind;
-  name: string;
-  namespace: string;
-  /** Set for container-scoped findings (probes, requests, image tag). */
-  container?: string;
-  rationale: string;
-  /** Human hint describing the remediation (maps to an action-block kind). */
-  fix: string;
+  kind: AuditWorkloadKind;
 }
 
 export interface ReliabilityAuditInput {
@@ -189,7 +150,7 @@ export function analyzeReliability(input: ReliabilityAuditInput): ReliabilityFin
           type: "missingResourceRequests",
           severity: "warning",
           rationale: `Container has no ${missing} request, so the scheduler cannot place it reliably and it is first to be evicted under pressure.`,
-          fix: "Set resources.requests for cpu and memory on the container.",
+          fix: "Set cpu and memory requests, sized from observed usage — a metrics backend or the Right-sizing panel is needed to recommend values.",
         });
       }
       if (imageTagIsMutable(c.image)) {
@@ -204,37 +165,4 @@ export function analyzeReliability(input: ReliabilityAuditInput): ReliabilityFin
     }
   }
   return findings;
-}
-
-export interface ReliabilityCounts {
-  critical: number;
-  warning: number;
-  info: number;
-  total: number;
-  workloadsAffected: number;
-}
-
-/** Stable urgency-first sort: severity rank, then namespace, then name, then type. */
-export function sortFindings(findings: ReliabilityFinding[]): ReliabilityFinding[] {
-  return [...findings].sort(
-    (a, b) =>
-      SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] ||
-      a.namespace.localeCompare(b.namespace) ||
-      a.name.localeCompare(b.name) ||
-      a.type.localeCompare(b.type),
-  );
-}
-
-export function reliabilityCounts(findings: ReliabilityFinding[]): ReliabilityCounts {
-  const affected = new Set<string>();
-  let critical = 0;
-  let warning = 0;
-  let info = 0;
-  for (const f of findings) {
-    affected.add(`${f.kind}/${f.namespace}/${f.name}`);
-    if (f.severity === "critical") critical++;
-    else if (f.severity === "warning") warning++;
-    else info++;
-  }
-  return { critical, warning, info, total: findings.length, workloadsAffected: affected.size };
 }
