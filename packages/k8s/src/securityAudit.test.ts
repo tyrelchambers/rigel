@@ -113,4 +113,24 @@ describe("analyzeSecurity", () => {
     const clears = analyzeSecurity({ workloads: [nonRootContainer] });
     expect(clears.some((x) => x.type === "runsAsRoot")).toBe(false);
   });
+
+  it("flags a container that allows privilege escalation as a warning, and clears when disabled", () => {
+    const w = healthySecure();
+    w.containers[0].allowPrivilegeEscalation = true;
+    const out = analyzeSecurity({ workloads: [w] });
+    const f = out.find((x) => x.type === "allowsPrivilegeEscalation");
+    expect(f).toBeDefined();
+    expect(f?.severity).toBe("warning");
+    expect(f?.container).toBe("web");
+
+    const clean = analyzeSecurity({ workloads: [healthySecure()] });
+    expect(clean.some((x) => x.type === "allowsPrivilegeEscalation")).toBe(false);
+  });
+
+  it("flags a container with allowPrivilegeEscalation unset (not explicitly false)", () => {
+    const w = healthySecure();
+    w.containers[0].allowPrivilegeEscalation = undefined;
+    const out = analyzeSecurity({ workloads: [w] });
+    expect(out.some((x) => x.type === "allowsPrivilegeEscalation")).toBe(true);
+  });
 });

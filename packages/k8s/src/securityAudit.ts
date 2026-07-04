@@ -78,6 +78,16 @@ export function analyzeSecurity(input: SecurityAuditInput): SecurityFinding[] {
           fix: "Set securityContext.runAsNonRoot: true (and a non-zero runAsUser).",
         });
       }
+
+      if (c.allowPrivilegeEscalation !== false) {
+        findings.push({
+          ...cbase,
+          type: "allowsPrivilegeEscalation",
+          severity: "warning",
+          rationale: "Container allows privilege escalation, so a process can gain more privileges than its parent (e.g. via setuid).",
+          fix: "Set securityContext.allowPrivilegeEscalation: false.",
+        });
+      }
     }
   }
   return findings;
