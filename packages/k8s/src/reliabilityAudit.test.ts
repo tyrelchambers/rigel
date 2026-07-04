@@ -117,6 +117,25 @@ describe("analyzeReliability", () => {
     expect(f?.severity).toBe("warning");
     expect(f?.container).toBeUndefined();
   });
+
+  it("flags a multi-replica workload without anti-affinity as info", () => {
+    const out = analyzeReliability({
+      workloads: [healthy({ hasAntiAffinity: false })],
+      pdbs: [{ namespace: "default", selector: { app: "web" } }],
+      hpas: [],
+    });
+    const f = out.find((x) => x.type === "noAntiAffinity");
+    expect(f?.severity).toBe("info");
+  });
+
+  it("does not flag anti-affinity on a single-replica workload", () => {
+    const out = analyzeReliability({
+      workloads: [healthy({ replicas: 1, hasAntiAffinity: false })],
+      pdbs: [],
+      hpas: [],
+    });
+    expect(out.some((x) => x.type === "noAntiAffinity")).toBe(false);
+  });
 });
 
 export { healthy };

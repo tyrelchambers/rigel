@@ -131,6 +131,16 @@ export function analyzeReliability(input: ReliabilityAuditInput): ReliabilityFin
       });
     }
 
+    if (isReplicated(w) && w.replicas >= 2 && !w.hasAntiAffinity) {
+      findings.push({
+        ...base,
+        type: "noAntiAffinity",
+        severity: "info",
+        rationale: "Multiple replicas have no pod anti-affinity, so Kubernetes may co-locate them on one node — a single node failure can take them all down.",
+        fix: "Add podAntiAffinity across kubernetes.io/hostname to spread replicas over nodes.",
+      });
+    }
+
     for (const c of w.containers) {
       const cbase = { ...base, container: c.name } as const;
       if (!c.hasLiveness) {
