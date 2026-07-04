@@ -14,6 +14,16 @@ import type {
   WorkloadKind,
   WorkloadRightSizing,
 } from "./types";
+import {
+  podBelongsTo,
+  windowStatsFromUsage,
+  type UsageRow,
+} from "@rigel/k8s/src/usage";
+
+// Moved to @rigel/k8s (shared with the server's Prometheus route and the audit
+// CLI's performance audit); re-exported here so existing right-sizing imports
+// keep working unchanged.
+export { podBelongsTo, windowStatsFromUsage, type UsageRow };
 
 /** Minimal shape of a workload object from the store (deploy/sts/ds). */
 export interface WorkloadObject {
@@ -51,54 +61,8 @@ export function containerResources(c: {
   };
 }
 
-/** Does a pod name belong to this workload? Matches the Swift `<name>-*` rule. */
-export function podBelongsTo(podName: string, workloadName: string): boolean {
-  return podName === workloadName || podName.startsWith(`${workloadName}-`);
-}
-
-// --- Backend usage source (Prometheus / VictoriaMetrics via the server) -----
-
-/** One per-(namespace, pod, container) usage row from GET /api/metrics/usage. */
-export interface UsageRow {
-  namespace: string;
-  pod: string;
-  container: string;
-  cpuPeak: number; // cores
-  cpuTypical: number; // cores
-  memPeak: number; // bytes
-  memTypical: number; // bytes
-  hoursCovered: number;
-}
-
-/**
- * WindowStats for one workload/container from backend usage rows: the
- * worst-case across the workload's pods (peak = max, typical = max of per-pod
- * p95, hours = max), matching the Swift `max by (container)` aggregation.
- */
-export function windowStatsFromUsage(
-  rows: UsageRow[],
-  ns: string,
-  workload: string,
-  container: string,
-): WindowStats {
-  let matched = false;
-  let cpuPeak = 0;
-  let cpuTypical = 0;
-  let memPeak = 0;
-  let memTypical = 0;
-  let hoursCovered = 0;
-  for (const r of rows) {
-    if (r.namespace !== ns || r.container !== container) continue;
-    if (!podBelongsTo(r.pod, workload)) continue;
-    matched = true;
-    cpuPeak = Math.max(cpuPeak, r.cpuPeak);
-    cpuTypical = Math.max(cpuTypical, r.cpuTypical);
-    memPeak = Math.max(memPeak, r.memPeak);
-    memTypical = Math.max(memTypical, r.memTypical);
-    hoursCovered = Math.max(hoursCovered, r.hoursCovered);
-  }
-  return { container, cpuPeak, cpuTypical, memPeak, memTypical, hoursCovered: matched ? hoursCovered : 0 };
-}
+// podBelongsTo, UsageRow, and windowStatsFromUsage moved to @rigel/k8s/src/usage
+// (see the re-export above) so the CLI and server share the same implementation.
 
 const KIND_MAP: Record<string, WorkloadKind> = {
   deployments: "deployment",

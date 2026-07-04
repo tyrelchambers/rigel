@@ -24,6 +24,11 @@ import {
   promEncode,
   parsePromInstant,
 } from "@rigel/k8s/src/prometheus";
+import {
+  type UsageRow,
+  usageQueries,
+  mergeUsage,
+} from "@rigel/k8s/src/usage";
 
 // Re-export so existing importers of this module keep working unchanged.
 export {
@@ -35,24 +40,18 @@ export {
   proxyBase,
   promEncode,
   parsePromInstant,
+  usageQueries,
+  mergeUsage,
 };
 
 /** Matches the install scrape_interval (60s); used to estimate hours of history. */
 const SCRAPE_INTERVAL_SECONDS = 60;
-/** History window queried, matching the Swift source. */
-const WINDOW = "30d";
 
-/** Per-(namespace, pod, container) aggregate usage over the window. */
-export interface PodUsage {
-  namespace: string;
-  pod: string;
-  container: string;
-  cpuPeak: number; // cores
-  cpuTypical: number; // cores
-  memPeak: number; // bytes
-  memTypical: number; // bytes
-  hoursCovered: number;
-}
+/** Per-(namespace, pod, container) aggregate usage over the window. Moved to
+ *  @rigel/k8s/src/usage (shared with the web right-sizing panel and the audit
+ *  CLI's performance audit) as `UsageRow`; aliased here so existing importers
+ *  of this module keep working unchanged. */
+export type PodUsage = UsageRow;
 
 export interface UsageResult {
   available: boolean;
@@ -63,64 +62,6 @@ export interface UsageResult {
 /** The single best backend (auto-detect default). */
 export function detectBackendFromServices(services: ServiceJson[]): PromBackend | null {
   return pickBackend(detectAllBackendsFromServices(services));
-}
-
-/** Workload pod selector for the window queries. Adds the namespace when scoped. */
-function selectorFor(namespace: string): string {
-  const base = `container!="",container!="POD"`;
-  return namespace && namespace !== "*" ? `namespace="${namespace}",${base}` : base;
-}
-
-/**
- * The five instant queries (order: memPeak, memTypical, cpuPeak, cpuTypical,
- * count), each grouped `by (namespace, pod, container)`. Verbatim shape from the
- * Swift `PrometheusMetricsSource`, batched across all pods rather than per
- * workload so the panel costs five queries total instead of five per workload.
- */
-export function usageQueries(namespace: string): string[] {
-  const sel = selectorFor(namespace);
-  const g = "max by (namespace, pod, container)";
-  return [
-    `${g} (max_over_time(container_memory_working_set_bytes{${sel}}[${WINDOW}]))`,
-    `${g} (quantile_over_time(0.95, container_memory_working_set_bytes{${sel}}[${WINDOW}]))`,
-    `${g} (max_over_time(rate(container_cpu_usage_seconds_total{${sel}}[5m])[${WINDOW}:5m]))`,
-    `${g} (quantile_over_time(0.95, rate(container_cpu_usage_seconds_total{${sel}}[5m])[${WINDOW}:5m]))`,
-    `${g} (count_over_time(container_memory_working_set_bytes{${sel}}[${WINDOW}]))`,
-  ];
-}
-
-interface UsageQuerySet {
-  memPeak: PromSeries[];
-  memTypical: PromSeries[];
-  cpuPeak: PromSeries[];
-  cpuTypical: PromSeries[];
-  count: PromSeries[];
-}
-
-/** Fold the five query results into one PodUsage row per (namespace, pod, container). */
-export function mergeUsage(q: UsageQuerySet, stepSeconds: number): PodUsage[] {
-  const map = new Map<string, PodUsage>();
-  const row = (m: Record<string, string>): PodUsage | null => {
-    const { namespace, pod, container } = m;
-    if (!namespace || !pod || !container) return null;
-    const key = `${namespace}/${pod}/${container}`;
-    let u = map.get(key);
-    if (!u) {
-      u = { namespace, pod, container, cpuPeak: 0, cpuTypical: 0, memPeak: 0, memTypical: 0, hoursCovered: 0 };
-      map.set(key, u);
-    }
-    return u;
-  };
-  const val = (s: PromSeries): number => {
-    const n = Number(s.value?.[1]);
-    return Number.isFinite(n) ? n : 0;
-  };
-  for (const s of q.memPeak) { const u = row(s.metric); if (u) u.memPeak = val(s); }
-  for (const s of q.memTypical) { const u = row(s.metric); if (u) u.memTypical = val(s); }
-  for (const s of q.cpuPeak) { const u = row(s.metric); if (u) u.cpuPeak = val(s); }
-  for (const s of q.cpuTypical) { const u = row(s.metric); if (u) u.cpuTypical = val(s); }
-  for (const s of q.count) { const u = row(s.metric); if (u) u.hoursCovered = Math.round((val(s) * stepSeconds) / 3600); }
-  return [...map.values()];
 }
 
 /** All metrics backends in the cluster (for the source picker). [] when none. */
