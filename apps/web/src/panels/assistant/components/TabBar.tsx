@@ -45,6 +45,7 @@ export function TabBar() {
     { id: "agents", label: "Agents" },
     { id: "activity", label: "Activity", badge: activityBadge },
     { id: "reports", label: "Reports" },
+    { id: "audits", label: "Audits" },
     { id: "settings", label: "Settings" },
   ];
 
