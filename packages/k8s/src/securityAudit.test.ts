@@ -114,6 +114,20 @@ describe("analyzeSecurity", () => {
     expect(clears.some((x) => x.type === "runsAsRoot")).toBe(false);
   });
 
+  it("treats an explicit container-level runAsNonRoot:false as root even when the pod default is true", () => {
+    // An explicit container override wins over the pod default in either
+    // direction: a container saying "I run as root" must not be masked by a
+    // pod-level "runAsNonRoot: true".
+    const w = healthySecure({ podRunAsNonRoot: true });
+    w.containers[0].runAsNonRoot = false;
+    w.containers[0].runAsUser = undefined;
+    const out = analyzeSecurity({ workloads: [w] });
+    const f = out.find((x) => x.type === "runsAsRoot");
+    expect(f).toBeDefined();
+    expect(f?.severity).toBe("warning");
+    expect(f?.container).toBe("web");
+  });
+
   it("flags a container that allows privilege escalation as a warning, and clears when disabled", () => {
     const w = healthySecure();
     w.containers[0].allowPrivilegeEscalation = true;

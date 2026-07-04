@@ -33,6 +33,7 @@ const DANGEROUS_CAPS = new Set(["SYS_ADMIN", "NET_ADMIN", "NET_RAW", "ALL"]);
  *  setting wins over the pod default. */
 function runsAsNonRoot(c: AuditContainer, w: AuditWorkload): boolean {
   if (c.runAsNonRoot === true) return true;
+  if (c.runAsNonRoot === false) return false;
   if (c.runAsUser !== undefined) return c.runAsUser !== 0;
   if (w.podRunAsNonRoot === true) return true;
   if (w.podRunAsUser !== undefined) return w.podRunAsUser !== 0;
