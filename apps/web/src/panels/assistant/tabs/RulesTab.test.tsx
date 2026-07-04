@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RulesTab } from "./RulesTab";
 import { AssistantContext, type AssistantContextValue } from "../AssistantContext";
 import type { AssistantDerived } from "../useAssistant";
@@ -20,6 +21,7 @@ function derived(overrides: Partial<AssistantDerived> = {}): AssistantDerived {
     alertRules: [],
     silenced: [],
     allNamespaceNames: ["default"],
+    allNodeNames: [],
     ...overrides,
   } as AssistantDerived;
 }
@@ -29,10 +31,13 @@ function ctx(d: AssistantDerived): AssistantContextValue {
 }
 
 function wrap(d = derived()) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <AssistantContext value={ctx(d)}>
-      <RulesTab />
-    </AssistantContext>,
+    <QueryClientProvider client={qc}>
+      <AssistantContext value={ctx(d)}>
+        <RulesTab />
+      </AssistantContext>
+    </QueryClientProvider>,
   );
 }
 
@@ -85,10 +90,13 @@ describe("RulesTab", () => {
   it("shows the quiet-window editor only in Quiet-hours mode", () => {
     const { rerender } = wrap(derived({ autonomyMode: "auto" }));
     expect(screen.queryByText("Quiet window")).not.toBeInTheDocument();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     rerender(
-      <AssistantContext value={ctx(derived({ autonomyMode: "window", quietWindow: "22:00-07:00" }))}>
-        <RulesTab />
-      </AssistantContext>,
+      <QueryClientProvider client={qc}>
+        <AssistantContext value={ctx(derived({ autonomyMode: "window", quietWindow: "22:00-07:00" }))}>
+          <RulesTab />
+        </AssistantContext>
+      </QueryClientProvider>,
     );
     expect(screen.getByText("Quiet window")).toBeInTheDocument();
   });

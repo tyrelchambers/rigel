@@ -2,6 +2,7 @@
 // Built to Pencil frame "Assistant — Rules (improved)" (Alerts card).
 
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Bell,
   BellPlus,
@@ -27,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { useAssistantCtx } from "./AssistantContext";
+import { fetchBackends } from "@/panels/rightsizing/useRightSizing";
 import { alertRuleSummary, type SuggestedAlert, type AlertTarget, type AlertCondition } from "@/lib/alerts";
 import type { AlertScope } from "@rigel/k8s";
 
@@ -114,6 +116,7 @@ const COND_VERBS: Record<AlertCondType, string> = {
   pendingTooLong: "stuck pending",
   notReady: "not ready",
   deploymentDegraded: "degraded",
+  metricThreshold: "over its resource threshold",
 };
 
 /** Empty-state "Try" chips. Each hands its phrasing to a fresh chat thread — the
@@ -130,6 +133,7 @@ const ALERT_SUGGESTIONS = [
     icon: Cpu,
     label: "Node memory > 90%",
     prompt: "Alert me when a node's memory usage goes above 90%.",
+    preset: "nodeMemory",
   },
   {
     icon: CircleX,
@@ -145,7 +149,8 @@ type AlertCondType =
   | "oomKilled"
   | "pendingTooLong"
   | "notReady"
-  | "deploymentDegraded";
+  | "deploymentDegraded"
+  | "metricThreshold";
 
 const COND_LABELS: Record<AlertCondType, string> = {
   podRestarts: "Restarts spike",
@@ -154,12 +159,16 @@ const COND_LABELS: Record<AlertCondType, string> = {
   pendingTooLong: "Stuck pending",
   notReady: "Not ready",
   deploymentDegraded: "Deployment degraded",
+  metricThreshold: "Resource usage",
 };
 
 const DEGRADED_SCOPES: AlertScope[] = ["cluster", "namespace", "workload"];
 
 export function AlertsCard() {
   const { d, ns, working, run } = useAssistantCtx();
+
+  const backendsQuery = useQuery({ queryKey: ["metrics-backends"], queryFn: fetchBackends });
+  const hasBackend = (backendsQuery.data?.length ?? 0) > 0;
 
   const [open, setOpen] = useState(false);
   const [scope, setScope] = useState<AlertScope>("workload");
@@ -172,6 +181,10 @@ export function AlertsCard() {
   const [minutes, setMinutes] = useState(5);
   const [cooldown, setCooldown] = useState(0);
   const [label, setLabel] = useState("");
+  const [metric, setMetric] = useState<"cpuPercent" | "memoryPercent">("memoryPercent");
+  const [comparator, setComparator] = useState<"above" | "below">("above");
+  const [metricPct, setMetricPct] = useState(90);
+  const [nodeName, setNodeName] = useState(""); // "" = all nodes
 
   const needsNamespace = scope !== "cluster";
   const needsName = scope === "workload" || scope === "pod" || scope === "database";
@@ -184,6 +197,12 @@ export function AlertsCard() {
     }
   }
 
+  function handleCondChange(next: AlertCondType) {
+    setCondType(next);
+    if (next === "metricThreshold") setScope("node");
+    else if (scope === "node") setScope("workload");
+  }
+
   function defaultLabel() {
     const verb: Record<AlertCondType, string> = {
       podRestarts: "restart spikes",
@@ -192,24 +211,55 @@ export function AlertsCard() {
       pendingTooLong: "stuck pending",
       notReady: "not ready",
       deploymentDegraded: "degraded",
+      metricThreshold: `${metric === "cpuPercent" ? "CPU" : "memory"} ${comparator} ${metricPct}%`,
     };
+    if (condType === "metricThreshold") {
+      return `${nodeName || "node"} ${verb.metricThreshold}`;
+    }
     const subject =
       scope === "cluster" ? "cluster" : scope === "namespace" ? namespace : name || scope;
     return `${subject} ${verb[condType]}`;
   }
 
-  const valid = useMemo(
-    () =>
+  const valid = useMemo(() => {
+    if (condType === "metricThreshold") return metricPct > 0 && metricPct <= 100 && minutes >= 0;
+    return (
       (!needsNamespace || namespace.trim() !== "") &&
       (!needsName || name.trim() !== "") &&
       (condType !== "podRestarts" || (threshold > 0 && windowMinutes > 0)) &&
       (condType !== "pendingTooLong" || minutes >= 0) &&
       (condType !== "notReady" || minutes >= 0) &&
-      (condType !== "deploymentDegraded" || minutes >= 0),
-    [needsNamespace, needsName, namespace, name, condType, threshold, windowMinutes, minutes],
-  );
+      (condType !== "deploymentDegraded" || minutes >= 0)
+    );
+  }, [needsNamespace, needsName, namespace, name, condType, threshold, windowMinutes, minutes, metricPct]);
 
   function create() {
+    if (condType === "metricThreshold") {
+      const target: AlertTarget = { scope: "node" };
+      if (nodeName.trim()) target.name = nodeName.trim();
+      const condition: AlertCondition = {
+        type: "metricThreshold",
+        metric,
+        comparator,
+        threshold: Number(metricPct),
+        minutes: Number(minutes),
+      };
+      const text = label.trim() || defaultLabel();
+      const alert: SuggestedAlert = {
+        label: `Alert: ${text}`,
+        text,
+        target,
+        condition,
+        ...(cooldown > 0 ? { cooldownMinutes: Number(cooldown) } : {}),
+      };
+      run({ action: "saveAlert", namespace: ns, alert }, () => {
+        setOpen(false);
+        setName("");
+        setLabel("");
+      });
+      return;
+    }
+
     const target: AlertTarget = { scope };
     if (needsNamespace) target.namespace = namespace.trim();
     if (needsName) target.name = name.trim();
@@ -306,7 +356,19 @@ export function AlertsCard() {
               <button
                 key={s.label}
                 type="button"
-                onClick={() => handoffToChat(s.prompt, { newThread: true })}
+                onClick={() => {
+                  if ("preset" in s && s.preset === "nodeMemory" && hasBackend) {
+                    handleCondChange("metricThreshold");
+                    setMetric("memoryPercent");
+                    setComparator("above");
+                    setMetricPct(90);
+                    setMinutes(10);
+                    setNodeName("");
+                    setOpen(true);
+                  } else {
+                    handoffToChat(s.prompt, { newThread: true });
+                  }
+                }}
                 className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3 py-1.5 text-[13px] text-[var(--fg-secondary)] transition-colors hover:border-[var(--accent-primary)] hover:text-[var(--fg-primary)]"
               >
                 <s.icon className="size-3.5 text-[var(--accent-primary)]" />
@@ -417,16 +479,27 @@ export function AlertsCard() {
             <div className="flex flex-col gap-4">
               <div className="flex gap-4">
                 <AlertField label="Watch" className="flex-1">
-                  <AlertSelect
-                    value={scope}
-                    onChange={(e) => handleScopeChange(e.target.value as AlertScope)}
-                  >
-                    <option value="cluster">Cluster</option>
-                    <option value="namespace">Namespace</option>
-                    <option value="workload">Workload</option>
-                    <option value="pod">Pod</option>
-                    <option value="database">Database</option>
-                  </AlertSelect>
+                  {condType === "metricThreshold" ? (
+                    <AlertSelect value={nodeName} onChange={(e) => setNodeName(e.target.value)}>
+                      <option value="">All nodes</option>
+                      {d.allNodeNames.map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </AlertSelect>
+                  ) : (
+                    <AlertSelect
+                      value={scope}
+                      onChange={(e) => handleScopeChange(e.target.value as AlertScope)}
+                    >
+                      <option value="cluster">Cluster</option>
+                      <option value="namespace">Namespace</option>
+                      <option value="workload">Workload</option>
+                      <option value="pod">Pod</option>
+                      <option value="database">Database</option>
+                    </AlertSelect>
+                  )}
                 </AlertField>
                 {scope === "workload" && (
                   <AlertField label="Kind" className="flex-1">
@@ -439,7 +512,7 @@ export function AlertsCard() {
                 )}
               </div>
 
-              {(needsNamespace || needsName) && (
+              {condType !== "metricThreshold" && (needsNamespace || needsName) && (
                 <div className="flex gap-4">
                   {needsNamespace && (
                     <AlertField label="Namespace" className="flex-1">
@@ -476,10 +549,11 @@ export function AlertsCard() {
               <AlertField label="When" right={<SeverityChip critical={critical} />}>
                 <AlertSelect
                   value={condType}
-                  onChange={(e) => setCondType(e.target.value as AlertCondType)}
+                  onChange={(e) => handleCondChange(e.target.value as AlertCondType)}
                 >
                   {(Object.keys(COND_LABELS) as AlertCondType[])
                     .filter((c) => c !== "deploymentDegraded" || allowsDegraded)
+                    .filter((c) => c !== "metricThreshold" || hasBackend)
                     .map((c) => (
                       <option key={c} value={c}>
                         {COND_LABELS[c]}
@@ -523,6 +597,51 @@ export function AlertsCard() {
                     className={cn(controlClass, "font-mono")}
                   />
                 </AlertField>
+              )}
+
+              {condType === "metricThreshold" && (
+                <>
+                  <AlertField label="Metric">
+                    <AlertSelect
+                      value={metric}
+                      onChange={(e) => setMetric(e.target.value as "cpuPercent" | "memoryPercent")}
+                    >
+                      <option value="memoryPercent">Memory %</option>
+                      <option value="cpuPercent">CPU %</option>
+                    </AlertSelect>
+                  </AlertField>
+                  <AlertField label="Threshold">
+                    <div className="flex items-center gap-2.5 text-sm text-[var(--fg-secondary)]">
+                      <AlertSelect
+                        value={comparator}
+                        onChange={(e) => setComparator(e.target.value as "above" | "below")}
+                      >
+                        <option value="above">above</option>
+                        <option value="below">below</option>
+                      </AlertSelect>
+                      <input
+                        type="number"
+                        min={1}
+                        max={100}
+                        value={metricPct}
+                        onChange={(e) =>
+                          setMetricPct(Math.min(100, Math.max(1, Number(e.target.value) || 1)))
+                        }
+                        className={cn(controlClass, "w-20 font-mono")}
+                      />
+                      <span>%</span>
+                    </div>
+                  </AlertField>
+                  <AlertField label="For (minutes)">
+                    <input
+                      type="number"
+                      min={0}
+                      value={minutes}
+                      onChange={(e) => setMinutes(Math.max(0, Number(e.target.value) || 0))}
+                      className={cn(controlClass, "font-mono")}
+                    />
+                  </AlertField>
+                </>
               )}
 
               <div className="flex items-end gap-4">
@@ -575,7 +694,7 @@ export function AlertsCard() {
                     named <span className="font-semibold text-[var(--fg-primary)]">{name}</span>
                   </>
                 ) : null}
-                {needsNamespace ? (
+                {needsNamespace && scope !== "node" ? (
                   <>
                     {" "}
                     in <span className="font-semibold text-[var(--fg-primary)]">{namespace}</span>
