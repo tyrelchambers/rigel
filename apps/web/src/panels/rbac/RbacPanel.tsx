@@ -5,7 +5,6 @@ import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { buildRbacAccessPrompt } from "@/panels/components/chatHandoffPrompts";
-import { NamespaceSelector } from "@/shell/NamespaceBar";
 import type {
   ClusterRole,
   ClusterRoleBinding,
@@ -159,62 +158,61 @@ export default function RbacPanel() {
   const empty = view === "subjects" ? subjects.length === 0 : roleItems.length === 0;
 
   return (
-    <div className="flex h-full flex-col gap-5 bg-[var(--surface-primary)] p-9">
+    <div className="flex h-full flex-col">
       <PanelHeader title="RBAC" subtitle="Who can do what, to what" loading={isLoading}>
-        <div className="flex items-center gap-[10px]">
-          <NamespaceSelector />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Filter by subject, role, or resource…"
-            className="w-[300px] rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[13px] py-[9px] text-[13px] text-[var(--fg-primary)] outline-none placeholder:text-[var(--fg-tertiary)]"
-          />
-        </div>
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Filter by subject, role, or resource…"
+          className="w-64 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3 py-1.5 text-sm text-[var(--fg-primary)] outline-none placeholder:text-[var(--fg-tertiary)] focus:ring-2 focus:ring-[var(--ring)]"
+        />
       </PanelHeader>
 
-      <RbacStatusStrip counts={counts} scope={scope} onScopeChange={setScope} />
+      <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
+        <RbacStatusStrip counts={counts} scope={scope} onScopeChange={setScope} />
 
-      {error && (
-        <pre className="rounded-[var(--radius-md)] bg-[var(--status-failed)]/10 px-4 py-2 font-[var(--font-mono)] text-xs whitespace-pre-wrap break-all text-[var(--status-failed)]">
-          {error}
-        </pre>
-      )}
+        {error && (
+          <pre className="rounded-[var(--radius-md)] bg-[var(--status-failed)]/10 px-4 py-2 font-[var(--font-mono)] text-xs whitespace-pre-wrap break-all text-[var(--status-failed)]">
+            {error}
+          </pre>
+        )}
 
-      <div className="flex min-h-0 flex-1 gap-6">
-        <RbacList
-          view={view}
-          onViewChange={setView}
-          subjects={subjects}
-          roleItems={roleItems}
-          selectedKey={selectedKey}
-          onSelectSubject={(s) => setSelectedKey(s.key)}
-          onSelectRole={(r) => setSelectedKey(r.key)}
-        />
-        <div className="flex min-w-0 flex-1 overflow-auto">
-          {empty ? (
-            <p className="text-sm text-[var(--fg-tertiary)]">
-              {view === "subjects" ? "No subjects found." : "No roles found."}
-            </p>
-          ) : view === "subjects" && selectedSubject ? (
-            <SubjectDetail subject={selectedSubject} grants={grants} onAsk={askAboutSubject} />
-          ) : view === "roles" && selectedRole ? (
-            <RoleDetail
-              roleName={selectedRole.name}
-              roleKind={selectedRole.kind}
-              roleNamespace={selectedRole.namespace}
-              rules={roleRules}
-              boundSubjects={boundSubjects}
-            />
-          ) : null}
+        <div className="flex min-h-0 flex-1 gap-6">
+          <RbacList
+            view={view}
+            onViewChange={setView}
+            subjects={subjects}
+            roleItems={roleItems}
+            selectedKey={selectedKey}
+            onSelectSubject={(s) => setSelectedKey(s.key)}
+            onSelectRole={(r) => setSelectedKey(r.key)}
+          />
+          <div className="flex min-w-0 flex-1 overflow-auto">
+            {empty ? (
+              <p className="text-sm text-[var(--fg-tertiary)]">
+                {view === "subjects" ? "No subjects found." : "No roles found."}
+              </p>
+            ) : view === "subjects" && selectedSubject ? (
+              <SubjectDetail subject={selectedSubject} grants={grants} onAsk={askAboutSubject} />
+            ) : view === "roles" && selectedRole ? (
+              <RoleDetail
+                roleName={selectedRole.name}
+                roleKind={selectedRole.kind}
+                roleNamespace={selectedRole.namespace}
+                rules={roleRules}
+                boundSubjects={boundSubjects}
+              />
+            ) : null}
+          </div>
         </div>
-      </div>
 
-      <div className="flex items-center justify-center gap-2 pt-1">
-        <Eye className="size-[13px] text-[var(--fg-tertiary)]" />
-        <span className="text-[12px] text-[var(--fg-tertiary)]">
-          Read-only view. RBAC is inspected here, not edited.
-        </span>
+        <div className="flex items-center justify-center gap-2 pt-1">
+          <Eye className="size-[13px] text-[var(--fg-tertiary)]" />
+          <span className="text-[12px] text-[var(--fg-tertiary)]">
+            Read-only view. RBAC is inspected here, not edited.
+          </span>
+        </div>
       </div>
     </div>
   );
