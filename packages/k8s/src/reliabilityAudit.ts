@@ -130,6 +130,18 @@ export function analyzeReliability(input: ReliabilityAuditInput): ReliabilityFin
           fix: "Add a readinessProbe to the container spec.",
         });
       }
+      if (!c.hasCpuRequest || !c.hasMemRequest) {
+        const missing = [!c.hasCpuRequest ? "cpu" : null, !c.hasMemRequest ? "memory" : null]
+          .filter(Boolean)
+          .join(" and ");
+        findings.push({
+          ...cbase,
+          type: "missingResourceRequests",
+          severity: "warning",
+          rationale: `Container has no ${missing} request, so the scheduler cannot place it reliably and it is first to be evicted under pressure.`,
+          fix: "Set resources.requests for cpu and memory on the container.",
+        });
+      }
     }
   }
   return findings;

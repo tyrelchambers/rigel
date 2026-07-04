@@ -79,6 +79,20 @@ describe("analyzeReliability", () => {
     const out = analyzeReliability({ workloads: [w], pdbs: [{ namespace: "default", selector: { app: "web" } }], hpas: [] });
     expect(out.some((x) => x.type === "noReadinessProbe" && x.container === "web")).toBe(true);
   });
+
+  it("flags a container missing cpu or memory requests", () => {
+    const w = healthy();
+    w.containers[0].hasCpuRequest = false;
+    const out = analyzeReliability({ workloads: [w], pdbs: [{ namespace: "default", selector: { app: "web" } }], hpas: [] });
+    const f = out.find((x) => x.type === "missingResourceRequests");
+    expect(f?.severity).toBe("warning");
+    expect(f?.container).toBe("web");
+  });
+
+  it("does not flag requests when both cpu and memory are set", () => {
+    const out = analyzeReliability({ workloads: [healthy()], pdbs: [{ namespace: "default", selector: { app: "web" } }], hpas: [] });
+    expect(out.some((x) => x.type === "missingResourceRequests")).toBe(false);
+  });
 });
 
 export { healthy };
