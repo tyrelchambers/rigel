@@ -109,6 +109,28 @@ export function analyzeReliability(input: ReliabilityAuditInput): ReliabilityFin
         fix: "Scale to 2 or more replicas (or set an HPA with minReplicas >= 2).",
       });
     }
+
+    for (const c of w.containers) {
+      const cbase = { ...base, container: c.name } as const;
+      if (!c.hasLiveness) {
+        findings.push({
+          ...cbase,
+          type: "noLivenessProbe",
+          severity: "warning",
+          rationale: "Container has no liveness probe, so Kubernetes cannot detect and restart a hung process.",
+          fix: "Add a livenessProbe to the container spec.",
+        });
+      }
+      if (!c.hasReadiness) {
+        findings.push({
+          ...cbase,
+          type: "noReadinessProbe",
+          severity: "warning",
+          rationale: "Container has no readiness probe, so traffic can be routed to it before it is ready to serve.",
+          fix: "Add a readinessProbe to the container spec.",
+        });
+      }
+    }
   }
   return findings;
 }

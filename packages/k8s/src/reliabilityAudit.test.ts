@@ -63,6 +63,22 @@ describe("analyzeReliability", () => {
     const out = analyzeReliability({ workloads: [healthy({ kind: "DaemonSet", replicas: 1 })], pdbs: [], hpas: [] });
     expect(out.some((x) => x.type === "singleReplica")).toBe(false);
   });
+
+  it("flags a container missing a liveness probe", () => {
+    const w = healthy();
+    w.containers[0].hasLiveness = false;
+    const out = analyzeReliability({ workloads: [w], pdbs: [{ namespace: "default", selector: { app: "web" } }], hpas: [] });
+    const f = out.find((x) => x.type === "noLivenessProbe");
+    expect(f?.severity).toBe("warning");
+    expect(f?.container).toBe("web");
+  });
+
+  it("flags a container missing a readiness probe", () => {
+    const w = healthy();
+    w.containers[0].hasReadiness = false;
+    const out = analyzeReliability({ workloads: [w], pdbs: [{ namespace: "default", selector: { app: "web" } }], hpas: [] });
+    expect(out.some((x) => x.type === "noReadinessProbe" && x.container === "web")).toBe(true);
+  });
 });
 
 export { healthy };
