@@ -33,11 +33,13 @@ function IconBtn({
       aria-label={label}
       title={label}
       onClick={onClick}
-      className={`flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--border-subtle)] hover:bg-white/[0.05] ${
-        danger ? "text-[var(--status-failed)]" : "text-[var(--fg-tertiary)]"
+      className={`flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] border transition-colors ${
+        danger
+          ? "border-[var(--status-failed)]/40 bg-[var(--status-failed)]/10 text-[var(--status-failed)] hover:bg-[var(--status-failed)]/20"
+          : "border-[var(--border-strong)] bg-[var(--surface-sunken)] text-[var(--fg-secondary)] hover:bg-white/[0.08] hover:text-[var(--fg-primary)]"
       }`}
     >
-      <Icon className="size-[13px]" />
+      <Icon className="size-[14px]" />
     </button>
   );
 }

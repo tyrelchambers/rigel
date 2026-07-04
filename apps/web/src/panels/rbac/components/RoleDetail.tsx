@@ -48,7 +48,7 @@ export function RoleDetail({
               aria-label="Edit role"
               title="Edit role"
               onClick={onEdit}
-              className="flex items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border-strong)] px-3 py-1.5 text-[13px] text-[var(--fg-primary)] hover:bg-white/[0.04]"
+              className="flex items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface-sunken)] px-3 py-1.5 text-[13px] font-medium text-[var(--fg-primary)] transition-colors hover:bg-white/[0.08]"
             >
               <Pencil className="size-[13px]" /> Edit
             </button>
@@ -59,7 +59,7 @@ export function RoleDetail({
               aria-label="Edit role YAML"
               title="Edit YAML"
               onClick={onEditYaml}
-              className="flex size-8 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border-subtle)] text-[var(--fg-tertiary)] hover:bg-white/[0.05]"
+              className="flex size-8 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface-sunken)] text-[var(--fg-secondary)] transition-colors hover:bg-white/[0.08] hover:text-[var(--fg-primary)]"
             >
               <Code className="size-[14px]" />
             </button>
@@ -70,7 +70,7 @@ export function RoleDetail({
               aria-label="Delete role"
               title="Delete role"
               onClick={onDelete}
-              className="flex size-8 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border-subtle)] text-[var(--status-failed)] hover:bg-white/[0.05]"
+              className="flex size-8 items-center justify-center rounded-[var(--radius-md)] border border-[var(--status-failed)]/40 bg-[var(--status-failed)]/10 text-[var(--status-failed)] transition-colors hover:bg-[var(--status-failed)]/20"
             >
               <Trash2 className="size-[14px]" />
             </button>
