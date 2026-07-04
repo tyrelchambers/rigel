@@ -107,4 +107,19 @@ describe("analyzePerformance", () => {
     expect(out.some((x) => x.type === "cpuThrottlingRisk")).toBe(false);
     expect(out.some((x) => x.type === "memoryPressure")).toBe(false);
   });
+
+  it("flags memoryPressure when observed peak memory is >= 90% of the limit, carrying evidence", () => {
+    const hotMem: PerfUsageProvider = () => ({ cpuPeak: 0.1, memPeak: 950_000_000, hoursCovered: 30 * 24 });
+    const out = analyzePerformance({ workloads: [healthy()], hpas: [HPA_FOR_WEB], usage: hotMem });
+    const f = out.find((x) => x.type === "memoryPressure");
+    expect(f).toBeDefined();
+    expect(f?.severity).toBe("warning");
+    expect(f?.container).toBe("web");
+    expect(f?.evidence).toEqual({ cpuPeak: 0.1, memPeak: 950_000_000, cpuLimit: 1, memLimit: 1_000_000_000, hoursCovered: 30 * 24 });
+  });
+
+  it("does not flag memoryPressure when no usage provider is supplied (spec-only degradation)", () => {
+    const out = analyzePerformance({ workloads: [healthy()], hpas: [HPA_FOR_WEB] });
+    expect(out.some((x) => x.type === "memoryPressure")).toBe(false);
+  });
 });

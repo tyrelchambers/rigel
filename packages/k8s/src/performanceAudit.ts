@@ -53,6 +53,7 @@ export interface PerformanceAuditInput {
 }
 
 const CPU_THROTTLE_FRACTION = 0.95;
+const MEM_PRESSURE_FRACTION = 0.9;
 /** Ignore metrics with too little history to trust (matches right-sizing's floor). */
 const MIN_HOURS = 24;
 
@@ -111,6 +112,16 @@ export function analyzePerformance(input: PerformanceAuditInput): PerformanceFin
             severity: "warning",
             rationale: `Observed peak CPU (${u!.cpuPeak.toFixed(2)} cores) is at or above 95% of the ${c.cpuLimit}-core limit over the window, so the container is likely being CPU-throttled.`,
             fix: "Raise the CPU limit toward the observed peak (with headroom), or remove it if bursting is acceptable.",
+            evidence,
+          });
+        }
+        if (c.memLimit !== undefined && u!.memPeak >= MEM_PRESSURE_FRACTION * c.memLimit) {
+          findings.push({
+            ...cbase,
+            type: "memoryPressure",
+            severity: "warning",
+            rationale: "Observed peak memory is at or above 90% of the container's memory limit over the window, so it is at risk of being OOM-killed.",
+            fix: "Raise the memory limit toward the observed peak (with headroom), or reduce the workload's memory use.",
             evidence,
           });
         }
