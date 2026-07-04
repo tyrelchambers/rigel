@@ -133,4 +133,19 @@ describe("analyzeSecurity", () => {
     const out = analyzeSecurity({ workloads: [w] });
     expect(out.some((x) => x.type === "allowsPrivilegeEscalation")).toBe(true);
   });
+
+  it("flags added capabilities as a warning, calling out dangerous ones, and clears when none are added", () => {
+    const w = healthySecure();
+    w.containers[0].addedCapabilities = ["NET_BIND_SERVICE", "SYS_ADMIN"];
+    const out = analyzeSecurity({ workloads: [w] });
+    const f = out.find((x) => x.type === "addedCapabilities");
+    expect(f).toBeDefined();
+    expect(f?.severity).toBe("warning");
+    expect(f?.container).toBe("web");
+    expect(f?.rationale).toContain("SYS_ADMIN");
+    expect(f?.rationale).not.toContain("NET_BIND_SERVICE");
+
+    const clean = analyzeSecurity({ workloads: [healthySecure()] });
+    expect(clean.some((x) => x.type === "addedCapabilities")).toBe(false);
+  });
 });

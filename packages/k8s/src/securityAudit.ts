@@ -26,6 +26,9 @@ export interface SecurityAuditInput {
   workloads: AuditWorkload[];
 }
 
+/** Capabilities worth calling out explicitly in the rationale. */
+const DANGEROUS_CAPS = new Set(["SYS_ADMIN", "NET_ADMIN", "NET_RAW", "ALL"]);
+
 /** Is the container effectively guaranteed to run as a non-root user? A container
  *  setting wins over the pod default. */
 function runsAsNonRoot(c: AuditContainer, w: AuditWorkload): boolean {
@@ -86,6 +89,18 @@ export function analyzeSecurity(input: SecurityAuditInput): SecurityFinding[] {
           severity: "warning",
           rationale: "Container allows privilege escalation, so a process can gain more privileges than its parent (e.g. via setuid).",
           fix: "Set securityContext.allowPrivilegeEscalation: false.",
+        });
+      }
+
+      if (c.addedCapabilities && c.addedCapabilities.length > 0) {
+        const flagged = c.addedCapabilities.filter((cap) => DANGEROUS_CAPS.has(cap));
+        const note = flagged.length > 0 ? ` including ${flagged.join(", ")}` : "";
+        findings.push({
+          ...cbase,
+          type: "addedCapabilities",
+          severity: "warning",
+          rationale: `Container adds Linux capabilities${note}, expanding what a compromised process can do to the host.`,
+          fix: "Drop unneeded capabilities (capabilities.drop: [ALL], then add back only what is required).",
         });
       }
     }
