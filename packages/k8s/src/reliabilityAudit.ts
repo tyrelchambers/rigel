@@ -121,6 +121,16 @@ export function analyzeReliability(input: ReliabilityAuditInput): ReliabilityFin
       });
     }
 
+    if (w.hasHostPath) {
+      findings.push({
+        ...base,
+        type: "hostPathVolume",
+        severity: "warning",
+        rationale: "Pod mounts a hostPath volume, which pins it to a specific node and loses its data if the pod is rescheduled elsewhere.",
+        fix: "Replace the hostPath volume with a PersistentVolumeClaim.",
+      });
+    }
+
     for (const c of w.containers) {
       const cbase = { ...base, container: c.name } as const;
       if (!c.hasLiveness) {

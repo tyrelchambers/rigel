@@ -106,6 +106,17 @@ describe("analyzeReliability", () => {
     const flagged = out.filter((x) => x.type === "latestImageTag").map((x) => x.name).sort();
     expect(flagged).toEqual(["a", "b"]);
   });
+
+  it("flags a workload with a hostPath volume", () => {
+    const out = analyzeReliability({
+      workloads: [healthy({ hasHostPath: true })],
+      pdbs: [{ namespace: "default", selector: { app: "web" } }],
+      hpas: [],
+    });
+    const f = out.find((x) => x.type === "hostPathVolume");
+    expect(f?.severity).toBe("warning");
+    expect(f?.container).toBeUndefined();
+  });
 });
 
 export { healthy };
