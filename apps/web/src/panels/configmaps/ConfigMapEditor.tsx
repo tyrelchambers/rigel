@@ -31,6 +31,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { YamlEditor } from "@/components/YamlEditorLazy";
+import { NamespaceField } from "@/components/NamespaceField";
+import { useCluster } from "@/store/cluster";
 import { useClusterYamlSchema } from "@/lib/useClusterYamlSchema";
 import { useCopyToClipboard } from "@/lib/useCopyToClipboard";
 import { KindBadge } from "./KindBadge";
@@ -89,7 +91,9 @@ export function ConfigMapEditor({ target, open, onClose, onApplied }: ConfigMapE
       setRows(seedConfigMapRows(target));
     } else {
       setName("");
-      setNamespace("default");
+      // Default to the namespace currently selected in the namespace bar
+      // (null = "All namespaces" → fall back to "default").
+      setNamespace(useCluster.getState().namespaceFilter ?? "default");
       setRows([blankRow()]);
     }
   }, [open, target]);
@@ -200,7 +204,7 @@ export function ConfigMapEditor({ target, open, onClose, onApplied }: ConfigMapE
                   {isEdit ? (
                     <LockedValue value={namespace} />
                   ) : (
-                    <TextField value={namespace} onChange={setNamespace} placeholder="default" />
+                    <NamespaceField value={namespace} onChange={setNamespace} ariaLabel="Namespace" />
                   )}
                 </IdentityField>
               </div>

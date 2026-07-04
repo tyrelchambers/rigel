@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import type { PolicyRule } from "../types";
 import { ruleRisk } from "../risk";
 import { buildRoleYaml } from "../manifest";
-import { NamespaceField } from "./NamespaceField";
+import { NamespaceField } from "@/components/NamespaceField";
 import { TokenInput } from "./TokenInput";
 
 export interface RoleTarget {
