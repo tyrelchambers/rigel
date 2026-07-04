@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link2, Plus, X, Code } from "lucide-react";
 import {
   Dialog,
@@ -41,6 +41,12 @@ interface Props {
   onEditYaml?: () => void;
   /** All roles/clusterroles in scope, used to populate the roleRef dropdown. */
   roleOptions?: RoleOption[];
+  /**
+   * In create mode, derive a suggested binding name from the chosen roleRef name
+   * (recomputed until the user edits the name field by hand). Return "" for no
+   * suggestion. Ignored in edit mode.
+   */
+  nameSuggestion?: (roleRefName: string) => string;
 }
 
 const SUBJECT_KINDS = ["ServiceAccount", "User", "Group"] as const;
@@ -49,10 +55,19 @@ function selectClass(w: string) {
   return `${w} appearance-none rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[11px] py-[9px] text-[12.5px] text-[var(--fg-primary)] outline-none`;
 }
 
-export function BindingEditor({ target, open, onClose, onApply, onEditYaml, roleOptions }: Props) {
+export function BindingEditor({
+  target,
+  open,
+  onClose,
+  onApply,
+  onEditYaml,
+  roleOptions,
+  nameSuggestion,
+}: Props) {
   const isEdit = target != null && target.name.trim() !== "";
   const [kind, setKind] = useState<"RoleBinding" | "ClusterRoleBinding">(target?.kind ?? "RoleBinding");
   const [name, setName] = useState(target?.name ?? "");
+  const [nameTouched, setNameTouched] = useState(false);
   const [namespace, setNamespace] = useState(target?.namespace ?? "default");
   const [roleRef, setRoleRef] = useState<RoleRef>(target?.roleRef ?? { kind: "Role", name: "" });
   const [subjects, setSubjects] = useState<Subject[]>(
@@ -79,6 +94,12 @@ export function BindingEditor({ target, open, onClose, onApply, onEditYaml, role
     if (roleRef.name && !opts.includes(roleRef.name)) opts = [roleRef.name, ...opts];
     return opts;
   }, [roleOptions, roleRef.kind, roleRef.name, namespace]);
+
+  // Auto-suggest the binding name from the chosen role, until the user edits it.
+  useEffect(() => {
+    if (isEdit || !nameSuggestion || nameTouched) return;
+    setName(nameSuggestion(roleRef.name ?? ""));
+  }, [isEdit, nameSuggestion, nameTouched, roleRef.name]);
 
   const valid = name.trim() !== "" && (roleRef.name ?? "").trim() !== "";
 
@@ -115,7 +136,10 @@ export function BindingEditor({ target, open, onClose, onApply, onEditYaml, role
             <div className="flex flex-wrap items-center gap-3">
               <input
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setNameTouched(true);
+                }}
                 placeholder="name"
                 aria-label="Binding name"
                 className="min-w-[160px] flex-1 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[11px] py-[9px] font-[var(--font-mono)] text-[12.5px] text-[var(--fg-primary)] outline-none"

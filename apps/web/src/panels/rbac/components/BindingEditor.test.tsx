@@ -73,3 +73,28 @@ test("roleRef name is a dropdown filtered to the binding's scope", () => {
   fireEvent.click(screen.getByRole("button", { name: /^Apply$/ }));
   expect(onApply.mock.calls[0][0].yaml).toContain("name: 'reader'");
 });
+
+test("nameSuggestion auto-fills the create-mode name until the user edits it", () => {
+  render(
+    <BindingEditor
+      target={{ kind: "ClusterRoleBinding", name: "", roleRef: { kind: "ClusterRole", name: "" }, subjects: [] }}
+      open
+      onClose={vi.fn()}
+      onApply={vi.fn()}
+      roleOptions={[
+        { kind: "ClusterRole", name: "view" },
+        { kind: "ClusterRole", name: "edit" },
+      ]}
+      nameSuggestion={(r) => (r ? `rigel-assistant-${r}` : "")}
+    />,
+  );
+  const nameInput = screen.getByLabelText("Binding name") as HTMLInputElement;
+  const roleSelect = screen.getByLabelText("Role ref name");
+  // picking a role suggests the name
+  fireEvent.change(roleSelect, { target: { value: "view" } });
+  expect(nameInput.value).toBe("rigel-assistant-view");
+  // once the user edits the name, later role changes don't clobber it
+  fireEvent.change(nameInput, { target: { value: "custom-name" } });
+  fireEvent.change(roleSelect, { target: { value: "edit" } });
+  expect(nameInput.value).toBe("custom-name");
+});

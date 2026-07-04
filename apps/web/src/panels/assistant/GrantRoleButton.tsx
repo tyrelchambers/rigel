@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ShieldPlus } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
@@ -58,6 +58,20 @@ export function GrantRoleButton({ namespace }: Props) {
     [resources],
   );
 
+  // Suggest a binding name from the chosen role, sanitised to a valid k8s name
+  // (role names like "system:controller:foo" contain colons that aren't allowed).
+  const nameSuggestion = useCallback(
+    (roleName: string) =>
+      roleName
+        ? `rigel-assistant-${roleName}`
+            .toLowerCase()
+            .replace(/[^a-z0-9.-]+/g, "-")
+            .replace(/^-+|-+$/g, "")
+            .slice(0, 253)
+        : "",
+    [],
+  );
+
   const target: BindingTarget = useMemo(
     () => ({
       kind: "ClusterRoleBinding",
@@ -82,6 +96,7 @@ export function GrantRoleButton({ namespace }: Props) {
           target={target}
           open
           roleOptions={roleOptions}
+          nameSuggestion={nameSuggestion}
           onClose={() => setOpen(false)}
           onApply={(result) => {
             setOpen(false);

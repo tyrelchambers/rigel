@@ -30,9 +30,9 @@ test("grants the assistant a clusterrole via a pre-seeded binding", () => {
   expect(screen.getByText("New binding")).toBeTruthy();
   expect((screen.getByLabelText("Subject name") as HTMLInputElement).value).toBe("rigel-assistant");
 
-  // Name the binding and pick the clusterrole.
-  fireEvent.change(screen.getByLabelText("Binding name"), { target: { value: "rigel-assistant-view" } });
+  // Pick the clusterrole — the binding name auto-suggests from it.
   fireEvent.change(screen.getByLabelText("Role ref name"), { target: { value: "view" } });
+  expect((screen.getByLabelText("Binding name") as HTMLInputElement).value).toBe("rigel-assistant-view");
   fireEvent.click(screen.getByRole("button", { name: /^Apply$/ }));
 
   const confirm = screen.getByTestId("confirm").textContent ?? "";
