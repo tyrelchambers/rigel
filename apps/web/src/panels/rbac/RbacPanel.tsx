@@ -347,6 +347,10 @@ export default function RbacPanel() {
         <BindingEditor
           target={bindingEditor.target}
           open
+          roleOptions={[
+            ...roles.map((r) => ({ kind: "Role" as const, name: r.metadata.name, namespace: r.metadata.namespace })),
+            ...clusterRoles.map((r) => ({ kind: "ClusterRole" as const, name: r.metadata.name })),
+          ]}
           onClose={() => setBindingEditor(null)}
           onApply={applyFromEditor}
           onEditYaml={

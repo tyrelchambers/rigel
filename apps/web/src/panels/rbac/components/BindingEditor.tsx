@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link2, Plus, X, Code } from "lucide-react";
 import {
   Dialog,
@@ -26,12 +26,21 @@ export interface BindingTarget {
   focusSubjects?: boolean;
 }
 
+/** A role the binding can reference, for the roleRef dropdown. */
+export interface RoleOption {
+  kind: "Role" | "ClusterRole";
+  name: string;
+  namespace?: string;
+}
+
 interface Props {
   target: BindingTarget | null;
   open: boolean;
   onClose: () => void;
   onApply: (result: { yaml: string; label: string }) => void;
   onEditYaml?: () => void;
+  /** All roles/clusterroles in scope, used to populate the roleRef dropdown. */
+  roleOptions?: RoleOption[];
 }
 
 const SUBJECT_KINDS = ["ServiceAccount", "User", "Group"] as const;
@@ -40,9 +49,9 @@ function selectClass(w: string) {
   return `${w} appearance-none rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[11px] py-[9px] text-[12.5px] text-[var(--fg-primary)] outline-none`;
 }
 
-export function BindingEditor({ target, open, onClose, onApply, onEditYaml }: Props) {
+export function BindingEditor({ target, open, onClose, onApply, onEditYaml, roleOptions }: Props) {
   const isEdit = target != null && target.name.trim() !== "";
-  const [kind] = useState<"RoleBinding" | "ClusterRoleBinding">(target?.kind ?? "RoleBinding");
+  const [kind, setKind] = useState<"RoleBinding" | "ClusterRoleBinding">(target?.kind ?? "RoleBinding");
   const [name, setName] = useState(target?.name ?? "");
   const [namespace, setNamespace] = useState(target?.namespace ?? "default");
   const [roleRef, setRoleRef] = useState<RoleRef>(target?.roleRef ?? { kind: "Role", name: "" });
@@ -53,6 +62,23 @@ export function BindingEditor({ target, open, onClose, onApply, onEditYaml }: Pr
   function setSubject(i: number, patch: Partial<Subject>) {
     setSubjects((ss) => ss.map((s, j) => (j === i ? { ...s, ...patch } : s)));
   }
+
+  // A RoleBinding may reference a Role (same namespace) or a ClusterRole; a
+  // ClusterRoleBinding may only reference a ClusterRole.
+  function selectKind(k: "RoleBinding" | "ClusterRoleBinding") {
+    setKind(k);
+    if (k === "ClusterRoleBinding") setRoleRef((rr) => ({ ...rr, kind: "ClusterRole" }));
+  }
+
+  const roleNameOptions = useMemo(() => {
+    const wantKind = roleRef.kind ?? "Role";
+    let opts = (roleOptions ?? [])
+      .filter((o) => o.kind === wantKind && (wantKind === "ClusterRole" || o.namespace === namespace))
+      .map((o) => o.name);
+    opts = Array.from(new Set(opts)).sort((a, b) => a.localeCompare(b));
+    if (roleRef.name && !opts.includes(roleRef.name)) opts = [roleRef.name, ...opts];
+    return opts;
+  }, [roleOptions, roleRef.kind, roleRef.name, namespace]);
 
   const valid = name.trim() !== "" && (roleRef.name ?? "").trim() !== "";
 
@@ -94,6 +120,18 @@ export function BindingEditor({ target, open, onClose, onApply, onEditYaml }: Pr
                 aria-label="Binding name"
                 className="min-w-[160px] flex-1 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[11px] py-[9px] font-[var(--font-mono)] text-[12.5px] text-[var(--fg-primary)] outline-none"
               />
+              <div className="flex overflow-hidden rounded-[var(--radius-md)] border border-[var(--border-subtle)]">
+                {(["RoleBinding", "ClusterRoleBinding"] as const).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => selectKind(k)}
+                    className={`px-3 py-[9px] text-[12px] ${kind === k ? "bg-white/[0.08] text-[var(--fg-primary)]" : "text-[var(--fg-tertiary)]"}`}
+                  >
+                    {k}
+                  </button>
+                ))}
+              </div>
               {kind === "RoleBinding" && (
                 <NamespaceField value={namespace} onChange={setNamespace} className="w-[160px]" />
               )}
@@ -108,19 +146,38 @@ export function BindingEditor({ target, open, onClose, onApply, onEditYaml }: Pr
               <select
                 aria-label="Role ref kind"
                 value={roleRef.kind ?? "Role"}
-                onChange={(e) => setRoleRef({ ...roleRef, kind: e.target.value })}
-                className={selectClass("w-[160px]")}
+                disabled={kind === "ClusterRoleBinding"}
+                onChange={(e) => setRoleRef({ ...roleRef, kind: e.target.value, name: "" })}
+                className={selectClass("w-[160px]") + (kind === "ClusterRoleBinding" ? " opacity-60" : "")}
               >
                 <option value="Role">Role</option>
                 <option value="ClusterRole">ClusterRole</option>
               </select>
-              <input
-                aria-label="Role ref name"
-                value={roleRef.name ?? ""}
-                onChange={(e) => setRoleRef({ ...roleRef, name: e.target.value })}
-                placeholder="role name"
-                className="flex-1 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[11px] py-[9px] font-[var(--font-mono)] text-[12.5px] text-[var(--fg-primary)] outline-none"
-              />
+              {roleNameOptions.length > 0 ? (
+                <select
+                  aria-label="Role ref name"
+                  value={roleRef.name ?? ""}
+                  onChange={(e) => setRoleRef({ ...roleRef, name: e.target.value })}
+                  className={selectClass("flex-1")}
+                >
+                  <option value="" disabled>
+                    Select role…
+                  </option>
+                  {roleNameOptions.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  aria-label="Role ref name"
+                  value={roleRef.name ?? ""}
+                  onChange={(e) => setRoleRef({ ...roleRef, name: e.target.value })}
+                  placeholder="role name"
+                  className="flex-1 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[11px] py-[9px] font-[var(--font-mono)] text-[12.5px] text-[var(--fg-primary)] outline-none"
+                />
+              )}
             </div>
           </div>
 
@@ -157,6 +214,7 @@ export function BindingEditor({ target, open, onClose, onApply, onEditYaml }: Pr
                   value={s.namespace ?? "default"}
                   onChange={(ns) => setSubject(i, { namespace: ns })}
                   disabled={!isSa}
+                  ariaLabel="Subject namespace"
                   className="w-[130px]"
                 />
                 <button

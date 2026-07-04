@@ -85,4 +85,23 @@ describe("buildBindingYaml", () => {
     expect(yaml).not.toContain("namespace:");
     expect(yaml).toContain("subjects: []");
   });
+
+  it("always emits a namespace for a ServiceAccount subject, defaulting to 'default'", () => {
+    const yaml = buildBindingYaml(
+      { kind: "ClusterRoleBinding", name: "cb" },
+      { kind: "ClusterRole", name: "admin" },
+      [{ kind: "ServiceAccount", name: "app" }],
+    );
+    expect(yaml).toContain("  - kind: ServiceAccount\n    name: 'app'\n    namespace: 'default'");
+  });
+});
+
+describe("metaBlock multi-line values", () => {
+  it("emits a multi-line annotation value as a literal block scalar", () => {
+    const yaml = buildRoleYaml(
+      { kind: "ClusterRole", name: "admin", annotations: { note: "line1\nline2" } },
+      [],
+    );
+    expect(yaml).toContain("  annotations:\n    'note': |-\n      line1\n      line2");
+  });
 });

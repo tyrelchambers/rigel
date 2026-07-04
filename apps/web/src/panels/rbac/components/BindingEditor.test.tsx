@@ -38,3 +38,38 @@ test("removing a subject drops it from the manifest", () => {
   fireEvent.click(screen.getByRole("button", { name: /^Apply$/ }));
   expect(onApply.mock.calls[0][0].yaml).toContain("subjects: []");
 });
+
+test("subject namespace is disabled for non-ServiceAccount subjects", () => {
+  render(
+    <BindingEditor
+      target={{ ...binding, subjects: [{ kind: "Group", name: "g" }] }}
+      open
+      onClose={vi.fn()}
+      onApply={vi.fn()}
+    />,
+  );
+  expect((screen.getByLabelText("Subject namespace") as HTMLSelectElement).disabled).toBe(true);
+});
+
+test("roleRef name is a dropdown filtered to the binding's scope", () => {
+  const onApply = vi.fn();
+  render(
+    <BindingEditor
+      target={{ kind: "RoleBinding", name: "b1", namespace: "default", roleRef: { kind: "Role", name: "" }, subjects: [] }}
+      open
+      onClose={vi.fn()}
+      onApply={onApply}
+      roleOptions={[
+        { kind: "Role", name: "reader", namespace: "default" },
+        { kind: "Role", name: "editor", namespace: "other" },
+      ]}
+    />,
+  );
+  const roleSelect = screen.getByLabelText("Role ref name");
+  expect(screen.getByRole("option", { name: "reader" })).toBeTruthy();
+  // a Role in another namespace is not offered
+  expect(screen.queryByRole("option", { name: "editor" })).toBeNull();
+  fireEvent.change(roleSelect, { target: { value: "reader" } });
+  fireEvent.click(screen.getByRole("button", { name: /^Apply$/ }));
+  expect(onApply.mock.calls[0][0].yaml).toContain("name: 'reader'");
+});

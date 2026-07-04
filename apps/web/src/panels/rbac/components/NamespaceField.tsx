@@ -8,10 +8,11 @@ interface Props {
   onChange: (namespace: string) => void;
   disabled?: boolean;
   className?: string;
+  ariaLabel?: string;
 }
 
 /** Namespace dropdown fed by the namespaces watch. Owns its own subscription. */
-export function NamespaceField({ value, onChange, disabled, className }: Props) {
+export function NamespaceField({ value, onChange, disabled, className, ariaLabel }: Props) {
   const resources = useCluster((s) => s.resources);
   useEffect(() => {
     subscribe("namespaces", "*");
@@ -24,6 +25,7 @@ export function NamespaceField({ value, onChange, disabled, className }: Props) 
       <select
         value={value}
         disabled={disabled}
+        aria-label={ariaLabel}
         onChange={(e) => onChange(e.target.value)}
         className="w-full appearance-none rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] py-[9px] pl-[11px] pr-8 text-[12.5px] text-[var(--fg-primary)] outline-none"
       >

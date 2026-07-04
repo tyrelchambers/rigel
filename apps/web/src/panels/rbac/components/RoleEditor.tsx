@@ -35,7 +35,7 @@ interface Props {
 }
 
 function blankRule(): PolicyRule {
-  return { apiGroups: [""], resources: [], verbs: [] };
+  return { apiGroups: [], resources: [], verbs: [] };
 }
 
 export function RoleEditor({ target, open, onClose, onApply, onEditYaml }: Props) {
@@ -138,7 +138,12 @@ export function RoleEditor({ target, open, onClose, onApply, onEditYaml }: Props
                     <Trash2 className="size-[13px]" />
                   </button>
                 </div>
-                <TokenInput label="API GROUPS" tokens={r.apiGroups ?? []} onChange={(t) => setRule(i, { apiGroups: t })} placeholder="core" />
+                <TokenInput
+                  label="API GROUPS"
+                  tokens={(r.apiGroups ?? []).map((g) => (g === "" ? "core" : g))}
+                  onChange={(t) => setRule(i, { apiGroups: t.map((g) => (g === "core" ? "" : g)) })}
+                  placeholder="core"
+                />
                 <TokenInput label="RESOURCES" tokens={r.resources ?? []} onChange={(t) => setRule(i, { resources: t })} danger={(t) => t === "secrets" || t === "*"} />
                 <TokenInput label="VERBS" tokens={r.verbs ?? []} onChange={(t) => setRule(i, { verbs: t })} danger={(t) => ["*", "escalate", "bind", "impersonate"].includes(t)} />
               </div>

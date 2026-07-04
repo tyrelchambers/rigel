@@ -25,7 +25,17 @@ function metaBlock(meta: RbacMeta): string[] {
   const mapBlock = (key: string, m?: Record<string, string>) => {
     if (!m || Object.keys(m).length === 0) return;
     lines.push(`  ${key}:`);
-    for (const k of Object.keys(m).sort()) lines.push(`    ${q(k)}: ${q(m[k]!)}`);
+    for (const k of Object.keys(m).sort()) {
+      const v = m[k]!;
+      if (v.includes("\n")) {
+        // Multi-line values (e.g. a PEM/cert in an annotation) can't be a
+        // single-quoted scalar — emit a literal block scalar so apply succeeds.
+        lines.push(`    ${q(k)}: |-`);
+        for (const line of v.split("\n")) lines.push(`      ${line}`);
+      } else {
+        lines.push(`    ${q(k)}: ${q(v)}`);
+      }
+    }
   };
   mapBlock("labels", meta.labels);
   mapBlock("annotations", meta.annotations);
@@ -65,7 +75,12 @@ export function buildBindingYaml(meta: RbacMeta, roleRef: RoleRef, subjects: Sub
       lines.push(`  - kind: ${kind}`);
       if (kind === "User" || kind === "Group") lines.push("    apiGroup: rbac.authorization.k8s.io");
       lines.push(`    name: ${q(s.name ?? "")}`);
-      if (kind === "ServiceAccount" && s.namespace) lines.push(`    namespace: ${q(s.namespace)}`);
+      // A ServiceAccount subject MUST carry a namespace or the apiserver rejects
+      // it — default to "default" when the source object omitted it.
+      if (kind === "ServiceAccount") {
+        const ns = s.namespace && s.namespace.trim() !== "" ? s.namespace : "default";
+        lines.push(`    namespace: ${q(ns)}`);
+      }
     }
   }
   return lines.join("\n") + "\n";
