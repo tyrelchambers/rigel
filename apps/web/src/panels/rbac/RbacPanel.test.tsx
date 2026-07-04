@@ -110,3 +110,18 @@ test("deleting a role opens the confirm sheet", () => {
   fireEvent.click(screen.getByRole("button", { name: "Delete role" }));
   expect(screen.getByTestId("confirm").textContent).toContain("Delete clusterrole admin");
 });
+
+test("editing a role opens the RoleEditor and applying opens the confirm sheet", () => {
+  setResources({
+    clusterroles: {
+      "2": { metadata: { name: "admin", uid: "2" }, rules: [{ apiGroups: ["*"], resources: ["*"], verbs: ["*"] }] },
+    },
+  });
+  render(<RbacPanel />);
+  fireEvent.click(screen.getByRole("tab", { name: "Roles" }));
+  fireEvent.click(screen.getByRole("button", { name: "Edit role" }));
+  // RoleEditor mounted
+  expect(screen.getByText(/Edit role · admin/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: /^Apply$/ }));
+  expect(screen.getByTestId("confirm").textContent).toContain("Apply ClusterRole admin");
+});

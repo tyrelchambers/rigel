@@ -31,6 +31,7 @@ import { RbacStatusStrip } from "./components/RbacStatusStrip";
 import { RbacList, type RoleItem } from "./components/RbacList";
 import { SubjectDetail } from "./components/SubjectDetail";
 import { RoleDetail } from "./components/RoleDetail";
+import { RoleEditor, type RoleTarget } from "./components/RoleEditor";
 
 function values<T>(rec: Record<string, T> | undefined): T[] {
   return Object.values(rec ?? {});
@@ -47,6 +48,7 @@ export default function RbacPanel() {
   const [search, setSearch] = useState("");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
+  const [roleEditor, setRoleEditor] = useState<{ target: RoleTarget | null } | null>(null);
 
   useEffect(() => {
     // Subjects are derived from bindings, so ServiceAccounts aren't watched here
@@ -180,6 +182,28 @@ export default function RbacPanel() {
   function editBindingYaml(g: Grant) {
     editYaml(bindingResourceKind(g), g.bindingName, bindingNamespace(g));
   }
+  function openRoleEditor(r: RoleItem) {
+    const pool = r.kind === "ClusterRole" ? clusterRoles : roles;
+    const obj = pool.find(
+      (x) => x.metadata.name === r.name && (r.kind === "ClusterRole" || x.metadata.namespace === r.namespace),
+    );
+    setRoleEditor({
+      target: {
+        kind: r.kind,
+        name: r.name,
+        namespace: r.namespace,
+        labels: obj?.metadata.labels,
+        annotations: obj?.metadata.annotations,
+        rules: obj?.rules ?? [],
+      },
+    });
+  }
+  function setBindingEditorClose() {}
+  function applyFromEditor(result: { yaml: string; label: string }) {
+    setRoleEditor(null);
+    setBindingEditorClose();
+    setPendingAction({ kind: "applyManifest", label: result.label, manifest: result.yaml });
+  }
 
   const empty = view === "subjects" ? subjects.length === 0 : roleItems.length === 0;
 
@@ -234,6 +258,7 @@ export default function RbacPanel() {
                 roleNamespace={selectedRole.namespace}
                 rules={roleRules}
                 boundSubjects={boundSubjects}
+                onEdit={() => openRoleEditor(selectedRole)}
                 onEditYaml={() => editRoleYaml(selectedRole)}
                 onDelete={() => deleteRoleItem(selectedRole)}
               />
@@ -247,6 +272,24 @@ export default function RbacPanel() {
         open={!!pendingAction}
         onClose={() => setPendingAction(null)}
       />
+
+      {roleEditor && (
+        <RoleEditor
+          target={roleEditor.target}
+          open
+          onClose={() => setRoleEditor(null)}
+          onApply={applyFromEditor}
+          onEditYaml={
+            roleEditor.target
+              ? () => {
+                  const t = roleEditor.target!;
+                  setRoleEditor(null);
+                  editYaml(t.kind === "ClusterRole" ? "clusterrole" : "role", t.name, t.namespace);
+                }
+              : undefined
+          }
+        />
+      )}
     </div>
   );
 }
