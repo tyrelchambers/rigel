@@ -1,20 +1,14 @@
-// apps/web/src/panels/assistant/tabs/AuditSkillsTab.tsx
-// Audits tab — the launcher for HELM-20 audit skills. Each card is a pure
-// launcher: Run hands off `/rigel-<kind>-audit` to a fresh chat thread, and
-// Claude Code expands the slash command into the matching SKILL.md, which
-// shells out to the `rigel-audit` CLI (single, shared detection path) and
-// walks the findings with the user. The user's chat bubble shows the friendly
-// `runLabel`; the slash command is what's actually sent to the model.
 import { ShieldCheck, Gauge, HeartPulse, type LucideIcon } from "lucide-react";
+import { canRunAudit, type AuditKind } from "@rigel/k8s";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { AuditSkillCard } from "../audits/AuditSkillCard";
+import { useAuditEntitlement } from "../audits/useAuditEntitlement";
 
 interface AuditSkill {
-  key: "reliability" | "security" | "performance";
+  key: AuditKind;
   title: string;
   Icon: LucideIcon;
   description: string;
-  /** Friendly text shown in the chat bubble in place of the raw slash command. */
   runLabel: string;
 }
 
@@ -49,6 +43,8 @@ const AUDIT_SKILLS: AuditSkill[] = [
 ];
 
 export function AuditSkillsTab() {
+  const entitlement = useAuditEntitlement();
+
   return (
     <div className="space-y-3.5">
       <div className="min-w-0">
@@ -60,18 +56,23 @@ export function AuditSkillsTab() {
       </div>
 
       <div className="space-y-2.5">
-        {AUDIT_SKILLS.map((skill) => (
-          <AuditSkillCard
-            key={skill.key}
-            title={skill.title}
-            description={skill.description}
-            Icon={skill.Icon}
-            status="live"
-            onRun={() =>
-              handoffToChat(`/rigel-${skill.key}-audit`, { newThread: true, displayText: skill.runLabel })
-            }
-          />
-        ))}
+        {AUDIT_SKILLS.map((skill) => {
+          const gate = canRunAudit(skill.key, entitlement);
+          return (
+            <AuditSkillCard
+              key={skill.key}
+              title={skill.title}
+              description={skill.description}
+              Icon={skill.Icon}
+              locked={gate.allowed ? undefined : { reason: gate.reason ?? "This audit requires an upgrade." }}
+              onRun={
+                gate.allowed
+                  ? () => handoffToChat(`/rigel-${skill.key}-audit`, { newThread: true, displayText: skill.runLabel })
+                  : undefined
+              }
+            />
+          );
+        })}
       </div>
     </div>
   );

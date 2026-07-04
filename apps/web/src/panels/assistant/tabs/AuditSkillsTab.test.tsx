@@ -2,22 +2,29 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { HeartPulse } from "lucide-react";
+import { DEFAULT_AUDIT_ENTITLEMENT } from "@rigel/k8s";
 import { AuditSkillsTab } from "./AuditSkillsTab";
 import { AuditSkillCard } from "../audits/AuditSkillCard";
 
 vi.mock("@/lib/chatHandoff", () => ({ handoffToChat: vi.fn() }));
 import { handoffToChat } from "@/lib/chatHandoff";
 
-beforeEach(() => vi.clearAllMocks());
+vi.mock("../audits/useAuditEntitlement", () => ({ useAuditEntitlement: vi.fn() }));
+import { useAuditEntitlement } from "../audits/useAuditEntitlement";
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(useAuditEntitlement).mockReturnValue(DEFAULT_AUDIT_ENTITLEMENT);
+});
 
 describe("AuditSkillsTab", () => {
-  it("renders all three audit cards as live launchers with no 'Coming soon'", () => {
+  it("renders all three audit cards as live launchers when everything is unlocked", () => {
     render(<AuditSkillsTab />);
     expect(screen.getByText("Reliability")).toBeInTheDocument();
     expect(screen.getByText("Security")).toBeInTheDocument();
     expect(screen.getByText("Performance")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /run audit/i })).toHaveLength(3);
-    expect(screen.queryByText("Coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText("Upgrade")).not.toBeInTheDocument();
   });
 
   it("hands off /rigel-reliability-audit to a new thread with a friendly bubble label", () => {
@@ -46,6 +53,15 @@ describe("AuditSkillsTab", () => {
       expect.objectContaining({ newThread: true, displayText: expect.stringContaining("performance audit") }),
     );
   });
+
+  it("locks an audit the entitlement does not unlock, blocking its launch", () => {
+    vi.mocked(useAuditEntitlement).mockReturnValue({ unlocked: ["reliability", "performance"] });
+    render(<AuditSkillsTab />);
+    expect(screen.getAllByRole("button", { name: /run audit/i })).toHaveLength(2);
+    expect(screen.getByText("Upgrade")).toBeInTheDocument();
+    expect(screen.getByText(/security audit is a premium skill/i)).toBeInTheDocument();
+    expect(handoffToChat).not.toHaveBeenCalled();
+  });
 });
 
 describe("AuditSkillCard count summary", () => {
@@ -55,7 +71,6 @@ describe("AuditSkillCard count summary", () => {
         title="Reliability"
         description="d"
         Icon={HeartPulse}
-        status="live"
         counts={{ critical: 0, warning: 0, info: 0, total: 0, workloadsAffected: 0 }}
       />,
     );
@@ -68,7 +83,6 @@ describe("AuditSkillCard count summary", () => {
         title="Reliability"
         description="d"
         Icon={HeartPulse}
-        status="live"
         counts={{ critical: 1, warning: 2, info: 1, total: 4, workloadsAffected: 3 }}
       />,
     );
@@ -76,5 +90,19 @@ describe("AuditSkillCard count summary", () => {
     expect(screen.getByText("2 warning")).toBeInTheDocument();
     expect(screen.getByText("1 info")).toBeInTheDocument();
     expect(screen.queryByText("No issues found")).not.toBeInTheDocument();
+  });
+
+  it("renders the locked treatment with its reason instead of a run button", () => {
+    render(
+      <AuditSkillCard
+        title="Security"
+        description="d"
+        Icon={HeartPulse}
+        locked={{ reason: "Upgrade to unlock it." }}
+      />,
+    );
+    expect(screen.getByText("Upgrade")).toBeInTheDocument();
+    expect(screen.getByText("Upgrade to unlock it.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /run audit/i })).not.toBeInTheDocument();
   });
 });

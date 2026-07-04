@@ -1,8 +1,4 @@
-// apps/web/src/panels/assistant/audits/AuditSkillCard.tsx
-// A single audit-skill launcher card on the Audits tab. Live cards show a live
-// finding count + severity breakdown + Run button; "coming soon" cards are
-// disabled placeholders (the future home of premium/locked state, HELM-16).
-import type { LucideIcon } from "lucide-react";
+import { Lock, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { AuditCounts } from "@rigel/k8s";
 
@@ -10,17 +6,16 @@ export interface AuditSkillCardProps {
   title: string;
   description: string;
   Icon: LucideIcon;
-  status: "live" | "soon";
   counts?: AuditCounts;
   onRun?: () => void;
+  locked?: { reason: string };
 }
 
-export function AuditSkillCard({ title, description, Icon, status, counts, onRun }: AuditSkillCardProps) {
-  const soon = status === "soon";
+export function AuditSkillCard({ title, description, Icon, counts, onRun, locked }: AuditSkillCardProps) {
   return (
     <div
       className={`rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-4 ${
-        soon ? "opacity-60" : ""
+        locked ? "opacity-60" : ""
       }`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -31,9 +26,10 @@ export function AuditSkillCard({ title, description, Icon, status, counts, onRun
             <p className="mt-0.5 text-xs text-[var(--fg-tertiary)]">{description}</p>
           </div>
         </div>
-        {soon ? (
-          <span className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] font-medium text-[var(--fg-tertiary)] ring-1 ring-[var(--border-subtle)]">
-            Coming soon
+        {locked ? (
+          <span className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[10px] font-medium text-[var(--fg-tertiary)] ring-1 ring-[var(--border-subtle)]">
+            <Lock className="size-3" />
+            Upgrade
           </span>
         ) : (
           <Button size="sm" className="shrink-0" onClick={onRun}>
@@ -42,26 +38,32 @@ export function AuditSkillCard({ title, description, Icon, status, counts, onRun
         )}
       </div>
 
-      {!soon && counts && (
-        <div className="mt-3 flex items-center gap-3 border-t border-[var(--border-subtle)] pt-3 font-mono text-xs">
-          {counts.total === 0 ? (
-            <span className="text-green-600 dark:text-green-400">No issues found</span>
-          ) : (
-            <>
-              <span className="text-[var(--fg-secondary)]">
-                {counts.total} issue{counts.total === 1 ? "" : "s"} · {counts.workloadsAffected} workload
-                {counts.workloadsAffected === 1 ? "" : "s"}
-              </span>
-              {counts.critical > 0 && (
-                <span className="text-red-600 dark:text-red-400">{counts.critical} critical</span>
-              )}
-              {counts.warning > 0 && (
-                <span className="text-amber-600 dark:text-amber-400">{counts.warning} warning</span>
-              )}
-              {counts.info > 0 && <span className="text-[var(--fg-tertiary)]">{counts.info} info</span>}
-            </>
-          )}
-        </div>
+      {locked ? (
+        <p className="mt-3 border-t border-[var(--border-subtle)] pt-3 text-xs text-[var(--fg-tertiary)]">
+          {locked.reason}
+        </p>
+      ) : (
+        counts && (
+          <div className="mt-3 flex items-center gap-3 border-t border-[var(--border-subtle)] pt-3 font-mono text-xs">
+            {counts.total === 0 ? (
+              <span className="text-green-600 dark:text-green-400">No issues found</span>
+            ) : (
+              <>
+                <span className="text-[var(--fg-secondary)]">
+                  {counts.total} issue{counts.total === 1 ? "" : "s"} · {counts.workloadsAffected} workload
+                  {counts.workloadsAffected === 1 ? "" : "s"}
+                </span>
+                {counts.critical > 0 && (
+                  <span className="text-red-600 dark:text-red-400">{counts.critical} critical</span>
+                )}
+                {counts.warning > 0 && (
+                  <span className="text-amber-600 dark:text-amber-400">{counts.warning} warning</span>
+                )}
+                {counts.info > 0 && <span className="text-[var(--fg-tertiary)]">{counts.info} info</span>}
+              </>
+            )}
+          </div>
+        )
       )}
     </div>
   );
