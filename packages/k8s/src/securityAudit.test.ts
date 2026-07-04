@@ -148,4 +148,24 @@ describe("analyzeSecurity", () => {
     const clean = analyzeSecurity({ workloads: [healthySecure()] });
     expect(clean.some((x) => x.type === "addedCapabilities")).toBe(false);
   });
+
+  it("flags a writable root filesystem as info, and clears when read-only", () => {
+    const w = healthySecure();
+    w.containers[0].readOnlyRootFilesystem = false;
+    const out = analyzeSecurity({ workloads: [w] });
+    const f = out.find((x) => x.type === "writableRootFilesystem");
+    expect(f).toBeDefined();
+    expect(f?.severity).toBe("info");
+    expect(f?.container).toBe("web");
+
+    const clean = analyzeSecurity({ workloads: [healthySecure()] });
+    expect(clean.some((x) => x.type === "writableRootFilesystem")).toBe(false);
+  });
+
+  it("flags a writable root filesystem when readOnlyRootFilesystem is unset (not explicitly true)", () => {
+    const w = healthySecure();
+    w.containers[0].readOnlyRootFilesystem = undefined;
+    const out = analyzeSecurity({ workloads: [w] });
+    expect(out.some((x) => x.type === "writableRootFilesystem")).toBe(true);
+  });
 });

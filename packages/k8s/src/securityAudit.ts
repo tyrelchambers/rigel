@@ -103,6 +103,16 @@ export function analyzeSecurity(input: SecurityAuditInput): SecurityFinding[] {
           fix: "Drop unneeded capabilities (capabilities.drop: [ALL], then add back only what is required).",
         });
       }
+
+      if (c.readOnlyRootFilesystem !== true) {
+        findings.push({
+          ...cbase,
+          type: "writableRootFilesystem",
+          severity: "info",
+          rationale: "Container's root filesystem is writable, so a compromise can persist changes or drop tooling into the image.",
+          fix: "Set securityContext.readOnlyRootFilesystem: true (mount an emptyDir for paths that need writes).",
+        });
+      }
     }
   }
   return findings;
