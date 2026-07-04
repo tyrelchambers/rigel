@@ -5,6 +5,7 @@ import { claudeAuthEnv } from "./agentConfig";
 import { systemPrompt } from "./systemPrompt";
 import { streamAgentProcess, type ChatEvent } from "./agentProcess";
 import { fileURLToPath } from "node:url";
+import path from "node:path";
 
 // ChatEvent is the shared event type for all agent runners; it lives in
 // agentProcess.ts now. Re-export it so existing importers (runAgent.ts, etc.)
@@ -277,6 +278,11 @@ export function buildClaudeArgs(
   for (const tool of readAllowlist(readContexts)) {
     argv.push("--allowedTools", tool);
   }
+  // Audit skills (HELM-20): let the model expand /rigel-<kind>-audit skills and
+  // run the `rigel-audit` CLI they shell out to. Harmless when no skills are
+  // installed / the binary isn't on PATH — the tool just goes unused.
+  argv.push("--allowedTools", "Skill");
+  argv.push("--allowedTools", "Bash(rigel-audit *)");
   return argv;
 }
 
@@ -292,10 +298,23 @@ export async function* runClaude(
     ...(process.env as Record<string, string>),
     ...(context ? { KUBECONFIG_CONTEXT: context } : {}),
     ...(await claudeAuthEnv()),
+    // Audit skills (HELM-20): when the packaged app ships a `rigel-audit`
+    // binary, its dir is prepended to PATH so the CLI resolves without a
+    // system-wide install. Optional — unset in dev/Docker, where behavior is
+    // unchanged.
+    ...(process.env.RIGEL_AUDIT_BIN_DIR
+      ? { PATH: `${process.env.RIGEL_AUDIT_BIN_DIR}${path.delimiter}${process.env.PATH}` }
+      : {}),
   };
+
+  // Audit skills (HELM-20): when set, the packaged app points this at the
+  // resources dir bundling `.claude/skills/rigel-*-audit` so Claude Code
+  // discovers them as project skills (spawn cwd is where it looks). Optional —
+  // unset in dev/Docker, where cwd defaults to the parent process's cwd.
+  const cwd = process.env.RIGEL_SKILLS_DIR || undefined;
 
   // The spawn/stream/abort lifecycle is shared with other agent runners (codex,
   // …) via streamAgentProcess; claudeBridge owns only the argv/env build and the
   // claude-specific JSONL→ChatEvent mapping.
-  yield* streamAgentProcess({ argv, env, signal, mapEvent: mapClaudeEvent });
+  yield* streamAgentProcess({ argv, env, signal, cwd, mapEvent: mapClaudeEvent });
 }

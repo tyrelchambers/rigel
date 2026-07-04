@@ -345,3 +345,14 @@ test("buildClaudeArgs passes per-context read allowlist for a fan-out turn", () 
   expect(sys).toContain("prod");
   expect(sys.toLowerCase()).toContain("read-only");
 });
+
+// ---------------------------------------------------------------------------
+// audit skills (HELM-20): Skill tool + rigel-audit CLI allowlisted
+// ---------------------------------------------------------------------------
+test("buildClaudeArgs allowlists the Skill tool and the rigel-audit CLI", () => {
+  const argv = buildClaudeArgs("hi", "default", {});
+  // --allowedTools is repeated per-tool; find each occurrence's value.
+  const values = argv.flatMap((v, i) => (argv[i - 1] === "--allowedTools" ? [v] : []));
+  expect(values).toContain("Skill");
+  expect(values).toContain("Bash(rigel-audit *)");
+});
