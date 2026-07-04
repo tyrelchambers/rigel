@@ -4,6 +4,7 @@ import type { Secret } from "@rigel/k8s";
 import { Loader } from "@/components/Loader";
 import { TabBar, Tab } from "@/components/ui/Tabs";
 import { YamlEditor } from "@/components/YamlEditorLazy";
+import { NamespaceField } from "@/components/NamespaceField";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import {
@@ -218,9 +219,12 @@ function AddAccountSheet({
   const [showPreview, setShowPreview] = useState(false);
 
   // Reset the form each time the sheet opens (never persist a token in state).
+  // Seed the namespace from the currently-selected namespace bar filter
+  // (null = "All namespaces" → keep the form's default).
   useEffect(() => {
     if (open) {
-      setForm(emptyForm());
+      const seed = emptyForm();
+      setForm({ ...seed, namespace: useCluster.getState().namespaceFilter ?? seed.namespace });
       setSubmitted(false);
       setBusy(false);
       setServerError(null);
@@ -331,7 +335,14 @@ function AddAccountSheet({
           {form.mode === "create" &&
             field("password", "Access token", { type: "password", placeholder: "••••••••" })}
           {field("secretName", "Secret name", { placeholder: "rigel-dockerhub" })}
-          {field("namespace", "Namespace", { placeholder: "default" })}
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Namespace</label>
+            <NamespaceField
+              value={form.namespace}
+              onChange={(ns) => set("namespace", ns)}
+              ariaLabel="Namespace"
+            />
+          </div>
 
           <label className="flex items-center gap-2 text-sm">
             <input

@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import type { RoleRef, Subject } from "../types";
 import { buildBindingYaml } from "../manifest";
-import { NamespaceField } from "./NamespaceField";
+import { NamespaceField } from "@/components/NamespaceField";
 
 export interface BindingTarget {
   kind: "RoleBinding" | "ClusterRoleBinding";
