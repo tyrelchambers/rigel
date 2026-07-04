@@ -1,5 +1,5 @@
 import { describe, expect, test, vi, afterEach } from "vitest";
-import { runDiagnosis } from "./diagnose.js";
+import { runDiagnosis, READ_ONLY_TOOLS } from "./diagnose.js";
 import * as runModelMod from "./runModel.js";
 import type { RuntimeConfig } from "./runtimeConfig.js";
 
@@ -26,8 +26,15 @@ describe("runDiagnosis", () => {
     expect(call.role).toBe("worker");
     expect(call.resumeSessionId).toBe("prev-sess");
     expect(call.allowedReads).toContain("Bash(kubectl get *)");
+    // The deterministic audit CLI is allowlisted so an operator can ask for an audit.
+    expect(call.allowedReads).toContain("Bash(rigel-audit *)");
     expect(out.text).toBe("nginx is healthy");
     expect(out.sessionId).toBe("sess-9");
+  });
+
+  test("allowlist exposes the read-only kubectl surface plus the rigel-audit CLI", () => {
+    expect(READ_ONLY_TOOLS).toContain("Bash(kubectl get *)");
+    expect(READ_ONLY_TOOLS).toContain("Bash(rigel-audit *)");
   });
 
   test("throws on a fail-closed result so the caller replies with an error, not silence", async () => {
