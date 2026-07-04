@@ -55,6 +55,13 @@ test("manifest contains core objects", () => {
   expect(yaml).toContain("kind: ConfigMap");
 });
 
+test("ClusterRole grants PDB + HPA reads for the audits", () => {
+  const yaml = manifestYAML(config());
+  // The reliability/performance audit engines read PodDisruptionBudgets and HPAs.
+  expect(yaml).toContain("poddisruptionbudgets");
+  expect(yaml).toContain("horizontalpodautoscalers");
+});
+
 test("manifest substitutes image and knobs", () => {
   const yaml = manifestYAML(config());
   expect(yaml).toContain("ghcr.io/acme/rigel-assistant:latest");
