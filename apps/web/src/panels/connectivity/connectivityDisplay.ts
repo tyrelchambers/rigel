@@ -32,6 +32,15 @@ export function getFlowHealth(flow: Pick<Flow, "issues" | "isExternal">): Health
   return flow.isExternal ? "broken" : "warn";
 }
 
+/** Health → CSS color token. Shared by the flow row and its expanded detail. */
+export function healthColor(health: Health): string {
+  return health === "ok"
+    ? "var(--status-running)"
+    : health === "warn"
+      ? "var(--status-pending)"
+      : "var(--status-failed)";
+}
+
 /** Sort rank for health: broken (0) → warn (1) → ok (2). */
 function healthRank(h: Health): number {
   return h === "broken" ? 0 : h === "warn" ? 1 : 2;

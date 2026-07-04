@@ -23,7 +23,7 @@ import type { Ingress } from "../ingresses/types";
 import type { Service } from "../services/types";
 import type { Pod } from "../pods/types";
 import type { Flow, Health } from "./types";
-import { computeFlows } from "./connectivityDisplay";
+import { computeFlows, healthColor } from "./connectivityDisplay";
 
 // ---------------------------------------------------------------------------
 // Navigation uses goToResource to jump to the Services or Pods panel and focus
@@ -203,8 +203,6 @@ function FlowRow({ flow }: { flow: Flow }) {
   const navigate = useNavigate();
   const podsDisabled = flow.totalPods === 0;
   const tintClass = HEALTH_TEXT[flow.health];
-  const healthColor =
-    flow.health === "ok" ? "var(--status-running)" : flow.health === "warn" ? "var(--status-pending)" : "var(--status-failed)";
 
   function handleSelectService() {
     goToResource(navigate, {
@@ -305,8 +303,8 @@ function FlowRow({ flow }: { flow: Flow }) {
             className="rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
           >
             <Chip
-              icon={<Boxes className="size-3.5" style={{ color: healthColor }} />}
-              style={{ color: healthColor }}
+              icon={<Boxes className="size-3.5" style={{ color: healthColor(flow.health) }} />}
+              style={{ color: healthColor(flow.health) }}
             >
               {flow.serviceExists ? `${flow.readyPods}/${flow.totalPods}` : "no service"}
             </Chip>
