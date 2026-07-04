@@ -54,10 +54,10 @@ export function SubjectDetail({ subject, grants, onAsk }: Props) {
         : plural(namespaces.size, "namespace", "namespaces");
 
   return (
-    <div className="flex flex-1 flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-[14px]">
-          <span className="font-[var(--font-mono)] text-[18px] font-semibold text-[var(--fg-primary)]">
+    <div className="flex min-w-0 flex-1 flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-[14px] gap-y-1">
+          <span className="break-all font-[var(--font-mono)] text-[18px] font-semibold text-[var(--fg-primary)]">
             {subject.name}
           </span>
           <span className="text-[13px] text-[var(--fg-tertiary)]">
@@ -67,14 +67,14 @@ export function SubjectDetail({ subject, grants, onAsk }: Props) {
         <button
           type="button"
           onClick={() => onAsk(subject)}
-          className="flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-strong)] px-[15px] py-[9px] text-[13px] text-[var(--fg-primary)] hover:bg-[#FFFFFF08]"
+          className="flex shrink-0 items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-strong)] px-[15px] py-[9px] text-[13px] text-[var(--fg-primary)] hover:bg-white/[0.04]"
         >
           <MessageSquare className="size-[14px]" />
           Ask Rigel about access
         </button>
       </div>
 
-      <div className="flex items-center gap-[22px] rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-4 py-3">
+      <div className="flex flex-wrap items-center gap-x-[22px] gap-y-2 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-4 py-3">
         <SummaryItem Icon={Layers} text={plural(grants.length, "role bound", "roles bound")} />
         <span className="h-4 w-px bg-[var(--border-strong)]" />
         <SummaryItem Icon={Box} text={scopeText} />
@@ -86,7 +86,7 @@ export function SubjectDetail({ subject, grants, onAsk }: Props) {
         />
       </div>
 
-      <div className="flex items-end justify-between">
+      <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-2">
         <div className="flex flex-col gap-[3px]">
           <span className="font-[var(--font-mono)] text-[11px] font-semibold tracking-[1px] text-[var(--fg-secondary)]">
             ACCESS

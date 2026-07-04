@@ -11,13 +11,13 @@ export function BindingCard({ grant }: { grant: Grant }) {
   const rules = grant.rules;
   return (
     <div className="flex flex-col gap-[13px] rounded-[var(--radius-lg)] border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-[18px]">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-[10px]">
-          <Link2 className="size-[15px] text-[var(--fg-tertiary)]" />
-          <span className="font-[var(--font-mono)] text-[14px] font-semibold text-[var(--fg-primary)]">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-[10px]">
+          <Link2 className="size-[15px] shrink-0 text-[var(--fg-tertiary)]" />
+          <span className="break-all font-[var(--font-mono)] text-[14px] font-semibold text-[var(--fg-primary)]">
             {grant.bindingName}
           </span>
-          <span className="flex items-center gap-[5px] rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-white/[0.05] px-2 py-[2px]">
+          <span className="flex shrink-0 items-center gap-[5px] rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-white/[0.05] px-2 py-[2px]">
             <Box className="size-[10px] text-[var(--fg-tertiary)]" />
             <span className="text-[11.5px] font-medium text-[var(--fg-secondary)]">
               {grant.scope.kind === "Namespaced" ? "Namespaced" : "Cluster"}
@@ -29,7 +29,7 @@ export function BindingCard({ grant }: { grant: Grant }) {
             )}
           </span>
         </div>
-        <div className="flex items-center gap-[9px]">
+        <div className="flex shrink-0 items-center gap-[9px]">
           <span className="text-[12px] text-[var(--fg-tertiary)]">grants</span>
           <ArrowRight className="size-[14px] text-[var(--fg-tertiary)]" />
           <span className="flex items-center gap-[6px] rounded-[var(--radius-sm)] border border-[var(--accent-primary)]/25 bg-[var(--accent-dim)] px-[9px] py-[3px]">

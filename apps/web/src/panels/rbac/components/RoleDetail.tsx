@@ -19,9 +19,9 @@ function subjectIcon(kind: string | undefined) {
 
 export function RoleDetail({ roleName, roleKind, roleNamespace, rules, boundSubjects }: Props) {
   return (
-    <div className="flex flex-1 flex-col gap-4">
-      <div className="flex items-center gap-[14px]">
-        <span className="font-[var(--font-mono)] text-[18px] font-semibold text-[var(--fg-primary)]">
+    <div className="flex min-w-0 flex-1 flex-col gap-4">
+      <div className="flex flex-wrap items-baseline gap-x-[14px] gap-y-1">
+        <span className="break-all font-[var(--font-mono)] text-[18px] font-semibold text-[var(--fg-primary)]">
           {roleName}
         </span>
         <span className="text-[13px] text-[var(--fg-tertiary)]">
@@ -44,12 +44,12 @@ export function RoleDetail({ roleName, roleKind, roleNamespace, rules, boundSubj
           {boundSubjects.map((b, i) => {
             const Icon = subjectIcon(b.subject.kind);
             return (
-              <div key={`${b.bindingName}:${i}`} className="flex items-center gap-[11px] px-[11px] py-[9px]">
-                <Icon className="size-[15px] text-[var(--fg-tertiary)]" />
-                <span className="font-[var(--font-mono)] text-[13px] text-[var(--fg-primary)]">
+              <div key={`${b.bindingName}:${i}`} className="flex flex-wrap items-center gap-x-[11px] gap-y-1 px-[11px] py-[9px]">
+                <Icon className="size-[15px] shrink-0 text-[var(--fg-tertiary)]" />
+                <span className="break-all font-[var(--font-mono)] text-[13px] text-[var(--fg-primary)]">
                   {b.subject.name}
                 </span>
-                <span className="text-[11px] text-[var(--fg-tertiary)]">
+                <span className="break-words text-[11px] text-[var(--fg-tertiary)]">
                   {b.subject.kind}
                   {b.subject.namespace ? ` · ${b.subject.namespace}` : ""} · via {b.bindingName}
                 </span>
