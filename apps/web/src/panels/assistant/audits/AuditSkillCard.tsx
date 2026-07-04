@@ -1,0 +1,65 @@
+// apps/web/src/panels/assistant/audits/AuditSkillCard.tsx
+// A single audit-skill launcher card on the Audits tab. Live cards show a live
+// finding count + severity breakdown + Run button; "coming soon" cards are
+// disabled placeholders (the future home of premium/locked state, HELM-16).
+import type { LucideIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import type { ReliabilityCounts } from "@rigel/k8s";
+
+export interface AuditSkillCardProps {
+  title: string;
+  description: string;
+  Icon: LucideIcon;
+  status: "live" | "soon";
+  counts?: ReliabilityCounts;
+  onRun?: () => void;
+}
+
+export function AuditSkillCard({ title, description, Icon, status, counts, onRun }: AuditSkillCardProps) {
+  const soon = status === "soon";
+  return (
+    <div
+      className={`rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-4 ${
+        soon ? "opacity-60" : ""
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <Icon className="mt-0.5 size-[18px] shrink-0 text-[var(--accent-primary)]" />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-[var(--fg-primary)]">{title}</p>
+            <p className="mt-0.5 text-xs text-[var(--fg-tertiary)]">{description}</p>
+          </div>
+        </div>
+        {soon ? (
+          <span className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] font-medium text-[var(--fg-tertiary)] ring-1 ring-[var(--border-subtle)]">
+            Coming soon
+          </span>
+        ) : (
+          <Button size="sm" className="shrink-0" onClick={onRun}>
+            Run audit
+          </Button>
+        )}
+      </div>
+
+      {!soon && counts && (
+        <div className="mt-3 flex items-center gap-3 border-t border-[var(--border-subtle)] pt-3 font-mono text-xs">
+          {counts.total === 0 ? (
+            <span className="text-green-600 dark:text-green-400">No issues found</span>
+          ) : (
+            <>
+              <span className="text-[var(--fg-secondary)]">
+                {counts.total} issue{counts.total === 1 ? "" : "s"} · {counts.workloadsAffected} workload
+                {counts.workloadsAffected === 1 ? "" : "s"}
+              </span>
+              {counts.warning > 0 && (
+                <span className="text-amber-600 dark:text-amber-400">{counts.warning} warning</span>
+              )}
+              {counts.info > 0 && <span className="text-[var(--fg-tertiary)]">{counts.info} info</span>}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
