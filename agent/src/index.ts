@@ -3,6 +3,7 @@ import { realpathSync } from "node:fs";
 import { getHours, getMinutes } from "date-fns";
 import { classifyRisk, RiskTier } from "./classifier.js";
 import { evaluateAlertRules, emptyAlertState } from "./alerts.js";
+import { collectMetricSnapshot } from "./metrics.js";
 import { loadConfig, resolveFixRunnerImage, type Config } from "./config.js";
 import { readRuntimeConfig, decideAutonomy, type RuntimeConfig, type AutofixConfig } from "./runtimeConfig.js";
 import { selectLogScanPods } from "./autofixScope.js";
@@ -314,12 +315,17 @@ export async function tick(
     }
 
     // Custom alert rules — deterministic, model-less, free-riding the fetch above.
+    // Metric-threshold rules additionally need a per-node usage snapshot from the
+    // metrics backend; collectMetricSnapshot is a no-op (no cluster calls) unless
+    // an enabled metricThreshold rule exists and a backend is detected.
+    const metricSnapshot = await collectMetricSnapshot(rc.alertRules, now);
     const alertResult = evaluateAlertRules(
       rc.alertRules,
       detection.pods,
       detection.deps,
       state.alertState ?? emptyAlertState(),
       now,
+      metricSnapshot,
     );
     state = { ...state, alertState: alertResult.alertState };
     for (const ev of alertResult.events) notifications.push(ev.message);
