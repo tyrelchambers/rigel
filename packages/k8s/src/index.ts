@@ -34,6 +34,16 @@ export {
   analyzeSecurity,
 } from "./securityAudit";
 
+export {
+  type PerformanceFindingType,
+  type PerformanceFinding,
+  type PerfEvidence,
+  type PerfUsage,
+  type PerfUsageProvider,
+  type PerformanceAuditInput,
+  analyzePerformance,
+} from "./performanceAudit";
+
 export { openapiV2ToYamlSchema, gvkApiVersion } from "./openapiSchema";
 
 export {
