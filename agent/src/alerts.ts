@@ -4,7 +4,7 @@
 // packages/k8s/src/alerts.ts (the agent is a standalone deployable, so the types
 // are duplicated across the ConfigMap-JSON boundary, like detector.ts).
 
-export type AlertScope = "cluster" | "namespace" | "workload" | "pod" | "database";
+export type AlertScope = "cluster" | "namespace" | "workload" | "pod" | "database" | "node";
 
 export interface AlertTarget {
   scope: AlertScope;
@@ -20,7 +20,8 @@ export type AlertCondition =
   | { type: "oomKilled" }
   | { type: "pendingTooLong"; minutes: number }
   | { type: "notReady"; minutes: number }
-  | { type: "deploymentDegraded"; minutes: number };
+  | { type: "deploymentDegraded"; minutes: number }
+  | { type: "metricThreshold"; metric: "cpuPercent" | "memoryPercent"; comparator: "above" | "below"; threshold: number; minutes: number };
 
 export interface AlertRule {
   id: string;
@@ -32,9 +33,15 @@ export interface AlertRule {
   createdAt: string;
 }
 
+export interface MetricSnapshot {
+  cpuPercentByNode: Record<string, number>;
+  memoryPercentByNode: Record<string, number>;
+}
+
 export interface AlertState {
   lastFiredAt: Record<string, string>;
   restartBaselines: Record<string, { count: number; since: string }>;
+  metricBreaches: Record<string, { since: string }>;
 }
 
 export interface AlertEvent {
@@ -43,17 +50,21 @@ export interface AlertEvent {
 }
 
 export function emptyAlertState(): AlertState {
-  return { lastFiredAt: {}, restartBaselines: {} };
+  return { lastFiredAt: {}, restartBaselines: {}, metricBreaches: {} };
 }
 
 const CRASH_REASONS = new Set(["CrashLoopBackOff", "ImagePullBackOff", "ErrImagePull"]);
 const CONDITION_TYPES = new Set([
-  "podRestarts", "crashLoop", "oomKilled", "pendingTooLong", "notReady", "deploymentDegraded",
+  "podRestarts", "crashLoop", "oomKilled", "pendingTooLong", "notReady", "deploymentDegraded", "metricThreshold",
 ]);
 
 function conditionFieldsValid(c: { type?: string; threshold?: unknown; windowMinutes?: unknown; minutes?: unknown }): boolean {
   if (c.type === "podRestarts") return typeof c.threshold === "number" && c.threshold > 0 && typeof c.windowMinutes === "number" && c.windowMinutes > 0;
   if (c.type === "pendingTooLong" || c.type === "notReady" || c.type === "deploymentDegraded") return typeof c.minutes === "number" && c.minutes >= 0;
+  if (c.type === "metricThreshold") {
+    return typeof c.threshold === "number" && c.threshold > 0 && c.threshold <= 100 &&
+      typeof c.minutes === "number" && c.minutes >= 0;
+  }
   return true; // crashLoop / oomKilled have no numeric fields
 }
 
@@ -109,6 +120,7 @@ export function podMatchesTarget(pod: Pod, t: AlertTarget): boolean {
     case "pod": return name === t.name;
     case "database": return labels?.["cnpg.io/cluster"] === t.name;
     case "workload": return !!t.name && (name === t.name || name.startsWith(`${t.name}-`));
+    case "node": return false; // node-scoped alerts match nodes via MetricSnapshot, not pods
   }
 }
 
@@ -200,9 +212,10 @@ export function evaluateAlertRules(
   deps: Dep[],
   prev: AlertState,
   now: number,
+  metrics: MetricSnapshot = { cpuPercentByNode: {}, memoryPercentByNode: {} },
 ): { events: AlertEvent[]; alertState: AlertState } {
   const events: AlertEvent[] = [];
-  const next: AlertState = { lastFiredAt: {}, restartBaselines: {} };
+  const next: AlertState = { lastFiredAt: {}, restartBaselines: {}, metricBreaches: {} };
   const activeIds = new Set(rules.map((r) => r.id));
   for (const [id, at] of Object.entries(prev.lastFiredAt)) {
     if (activeIds.has(id)) next.lastFiredAt[id] = at;
@@ -210,7 +223,7 @@ export function evaluateAlertRules(
 
   for (const rule of rules) {
     if (!rule.enabled) continue;
-    const detail = evaluateCondition(rule, pods, deps, prev, next, now);
+    const detail = evaluateCondition(rule, pods, deps, prev, next, now, metrics);
     if (!detail) continue;
     const last = prev.lastFiredAt[rule.id];
     const elapsed = last ? now - Date.parse(last) : Infinity;
@@ -225,9 +238,44 @@ export function evaluateAlertRules(
 /** Returns a non-empty detail string when the rule's condition is met, else "".
  * For podRestarts, also updates next.restartBaselines as a side effect (avoids a second pod scan). */
 function evaluateCondition(
-  rule: AlertRule, pods: Pod[], deps: Dep[], prev: AlertState, next: AlertState, now: number,
+  rule: AlertRule, pods: Pod[], deps: Dep[], prev: AlertState, next: AlertState, now: number, metrics: MetricSnapshot,
 ): string {
   const c = rule.condition;
+  if (c.type === "metricThreshold") {
+    const byNode = c.metric === "cpuPercent" ? metrics.cpuPercentByNode : metrics.memoryPercentByNode;
+    const prevBreaches = prev.metricBreaches ?? {};
+    // Preserve this rule's existing breach timers by default. A timer is cleared
+    // ONLY by an explicit not-breached reading below. A node absent from the
+    // snapshot this tick — a whole-backend outage or a single-node scrape gap —
+    // keeps its timer so a transient gap doesn't reset the for-duration clock.
+    // (Trade-off: a node that breaches, loses metrics for a long stretch, then
+    // returns still-breaching fires immediately on return.) Growth is bounded
+    // the same way restartBaselines is: only observed/targeted nodes are ever
+    // stamped, and non-breaching nodes are deleted each tick.
+    for (const [key, b] of Object.entries(prevBreaches)) {
+      if (key.startsWith(`${rule.id}|`)) next.metricBreaches[key] = b;
+    }
+    let hit = "";
+    for (const node of Object.keys(byNode)) {
+      if (rule.target.name && node !== rule.target.name) continue;
+      const pct = byNode[node];
+      if (pct === undefined) continue;
+      const key = `${rule.id}|${node}`;
+      const breached = c.comparator === "above" ? pct > c.threshold : pct < c.threshold;
+      if (!breached) {
+        delete next.metricBreaches[key]; // explicit not-breached clears the timer
+        continue;
+      }
+      const b = prevBreaches[key] ?? { since: new Date(now).toISOString() };
+      next.metricBreaches[key] = b;
+      if (!hit && now - Date.parse(b.since) >= c.minutes * 60_000) {
+        const label = c.metric === "cpuPercent" ? "CPU" : "memory";
+        const op = c.comparator === "above" ? ">" : "<";
+        hit = `node "${node}" ${label} at ${Math.round(pct)}% (${op}${c.threshold}% for ${c.minutes}m)`;
+      }
+    }
+    return hit;
+  }
   if (c.type === "deploymentDegraded") {
     for (const d of deps) {
       if (!deploymentMatchesTarget(d, rule.target)) continue;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseAlertRules, evaluateAlertRules, emptyAlertState, type AlertRule } from "./alerts.js";
+import { parseAlertRules, evaluateAlertRules, emptyAlertState, type AlertRule, type MetricSnapshot } from "./alerts.js";
 
 const T0 = Date.parse("2026-06-15T00:00:00Z");
 const min = (n: number) => n * 60_000;
@@ -134,5 +134,79 @@ describe("parseAlertRules", () => {
   it("drops a rule whose condition is missing required numeric fields", () => {
     const bad = JSON.stringify([{ id: "x", text: "t", target: { scope: "cluster" }, condition: { type: "podRestarts" }, enabled: true, cooldownMinutes: 5, createdAt: "" }]);
     expect(parseAlertRules(bad)).toEqual([]);
+  });
+});
+
+const metricRule = (over: Partial<AlertRule> = {}): AlertRule => ({
+  id: "m1", enabled: true, text: "node mem", cooldownMinutes: 5,
+  target: { scope: "node" },
+  condition: { type: "metricThreshold", metric: "memoryPercent", comparator: "above", threshold: 90, minutes: 10 },
+  createdAt: "", ...over,
+});
+
+const snap = (mem: Record<string, number> = {}, cpu: Record<string, number> = {}): MetricSnapshot => ({
+  cpuPercentByNode: cpu, memoryPercentByNode: mem,
+});
+
+describe("metricThreshold", () => {
+  it("does not fire before the for-duration elapses, fires after", () => {
+    const r = metricRule();
+    let s = evaluateAlertRules([r], [], [], emptyAlertState(), T0, snap({ "node-a": 95 }));
+    expect(s.events).toEqual([]);
+    expect(s.alertState.metricBreaches["m1|node-a"]!.since).toBe(new Date(T0).toISOString());
+    const s2 = evaluateAlertRules([r], [], [], s.alertState, T0 + min(11), snap({ "node-a": 95 }));
+    expect(s2.events).toHaveLength(1);
+    expect(s2.events[0]!.message).toContain('node "node-a" memory at 95%');
+  });
+
+  it("clears the breach timer when the node drops below threshold", () => {
+    const r = metricRule();
+    let s = evaluateAlertRules([r], [], [], emptyAlertState(), T0, snap({ "node-a": 95 }));
+    const s2 = evaluateAlertRules([r], [], [], s.alertState, T0 + min(5), snap({ "node-a": 70 }));
+    expect(s2.alertState.metricBreaches["m1|node-a"]).toBeUndefined();
+  });
+
+  it("preserves the breach timer when metric data is missing this tick", () => {
+    const r = metricRule();
+    let s = evaluateAlertRules([r], [], [], emptyAlertState(), T0, snap({ "node-a": 95 }));
+    const s2 = evaluateAlertRules([r], [], [], s.alertState, T0 + min(5), snap({}));
+    expect(s2.alertState.metricBreaches["m1|node-a"]!.since).toBe(new Date(T0).toISOString());
+    expect(s2.events).toEqual([]);
+  });
+
+  it("honors comparator=below", () => {
+    const r = metricRule({ condition: { type: "metricThreshold", metric: "cpuPercent", comparator: "below", threshold: 5, minutes: 0 } });
+    const s = evaluateAlertRules([r], [], [], emptyAlertState(), T0, snap({}, { "node-a": 2 }));
+    expect(s.events).toHaveLength(1);
+    expect(s.events[0]!.message).toContain("CPU");
+  });
+
+  it("filters to a specific target node", () => {
+    const r = metricRule({ condition: { type: "metricThreshold", metric: "memoryPercent", comparator: "above", threshold: 90, minutes: 0 }, target: { scope: "node", name: "node-b" } });
+    const s = evaluateAlertRules([r], [], [], emptyAlertState(), T0, snap({ "node-a": 99, "node-b": 91 }));
+    expect(s.events).toHaveLength(1);
+    expect(s.events[0]!.message).toContain("node-b");
+    expect(s.events[0]!.message).not.toContain("node-a");
+  });
+
+  it("preserves a targeted node's timer when that node is absent but others report", () => {
+    const r = metricRule({ target: { scope: "node", name: "node-b" } });
+    let s = evaluateAlertRules([r], [], [], emptyAlertState(), T0, snap({ "node-b": 95 }));
+    // Next tick: node-b missing from the snapshot, node-a present. node-b's timer must survive.
+    const s2 = evaluateAlertRules([r], [], [], s.alertState, T0 + min(5), snap({ "node-a": 40 }));
+    expect(s2.alertState.metricBreaches["m1|node-b"]!.since).toBe(new Date(T0).toISOString());
+    expect(s2.events).toEqual([]);
+  });
+
+  it("emits exactly one event when several nodes breach past the duration", () => {
+    const r = metricRule({ condition: { type: "metricThreshold", metric: "memoryPercent", comparator: "above", threshold: 90, minutes: 0 } });
+    const s = evaluateAlertRules([r], [], [], emptyAlertState(), T0, snap({ "node-a": 95, "node-b": 97 }));
+    expect(s.events).toHaveLength(1);
+  });
+
+  it("does not fire when the value exactly equals the threshold (strict comparison)", () => {
+    const r = metricRule({ condition: { type: "metricThreshold", metric: "memoryPercent", comparator: "above", threshold: 90, minutes: 0 } });
+    const s = evaluateAlertRules([r], [], [], emptyAlertState(), T0, snap({ "node-a": 90 }));
+    expect(s.events).toEqual([]);
   });
 });
