@@ -125,3 +125,29 @@ test("editing a role opens the RoleEditor and applying opens the confirm sheet",
   fireEvent.click(screen.getByRole("button", { name: /^Apply$/ }));
   expect(screen.getByTestId("confirm").textContent).toContain("Apply ClusterRole admin");
 });
+
+test("editing a binding opens the BindingEditor and applies", () => {
+  setResources({
+    rolebindings: {
+      "1": {
+        metadata: { name: "b1", namespace: "default", uid: "1" },
+        roleRef: { kind: "ClusterRole", name: "admin" },
+        subjects: [{ kind: "ServiceAccount", name: "app", namespace: "default" }],
+      },
+    },
+    clusterroles: { "2": { metadata: { name: "admin", uid: "2" }, rules: [{ verbs: ["*"], resources: ["*"] }] } },
+  });
+  render(<RbacPanel />);
+  fireEvent.click(screen.getByRole("button", { name: "Edit binding" }));
+  expect(screen.getByText(/Edit binding · b1/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: /^Apply$/ }));
+  expect(screen.getByTestId("confirm").textContent).toContain("Apply RoleBinding b1");
+});
+
+test("New menu creates a role", () => {
+  setResources({});
+  render(<RbacPanel />);
+  fireEvent.click(screen.getByRole("button", { name: "New RBAC object" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "ClusterRole" }));
+  expect(screen.getByText("New role")).toBeTruthy();
+});

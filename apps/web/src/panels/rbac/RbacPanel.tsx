@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Plus } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
@@ -7,6 +8,12 @@ import { buildRbacAccessPrompt } from "@/panels/components/chatHandoffPrompts";
 import type { ActionBlock } from "@/lib/api";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { editYaml } from "@/store/yamlViewer";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { buildDeleteAction } from "./rbacActions";
 import type {
   ClusterRole,
@@ -32,6 +39,7 @@ import { RbacList, type RoleItem } from "./components/RbacList";
 import { SubjectDetail } from "./components/SubjectDetail";
 import { RoleDetail } from "./components/RoleDetail";
 import { RoleEditor, type RoleTarget } from "./components/RoleEditor";
+import { BindingEditor, type BindingTarget } from "./components/BindingEditor";
 
 function values<T>(rec: Record<string, T> | undefined): T[] {
   return Object.values(rec ?? {});
@@ -49,6 +57,7 @@ export default function RbacPanel() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
   const [roleEditor, setRoleEditor] = useState<{ target: RoleTarget | null } | null>(null);
+  const [bindingEditor, setBindingEditor] = useState<{ target: BindingTarget | null } | null>(null);
 
   useEffect(() => {
     // Subjects are derived from bindings, so ServiceAccounts aren't watched here
@@ -198,10 +207,37 @@ export default function RbacPanel() {
       },
     });
   }
-  function setBindingEditorClose() {}
+  function openBindingEditor(g: Grant, focusSubjects = false) {
+    const pool = g.bindingKind === "RoleBinding" ? roleBindings : clusterRoleBindings;
+    const ns = g.scope.kind === "Namespaced" ? g.scope.namespace : undefined;
+    const obj = pool.find(
+      (x) => x.metadata.name === g.bindingName && (g.bindingKind === "ClusterRoleBinding" || x.metadata.namespace === ns),
+    );
+    setBindingEditor({
+      target: {
+        kind: g.bindingKind,
+        name: g.bindingName,
+        namespace: ns,
+        labels: obj?.metadata.labels,
+        annotations: obj?.metadata.annotations,
+        roleRef: obj?.roleRef ?? g.roleRef,
+        subjects: obj?.subjects ?? [],
+        focusSubjects,
+      },
+    });
+  }
+  function newObject(kind: "Role" | "ClusterRole" | "RoleBinding" | "ClusterRoleBinding") {
+    if (kind === "Role" || kind === "ClusterRole") {
+      setRoleEditor({ target: { kind, name: "", namespace: "default", rules: [] } });
+    } else {
+      setBindingEditor({
+        target: { kind, name: "", namespace: "default", roleRef: { kind: "Role", name: "" }, subjects: [] },
+      });
+    }
+  }
   function applyFromEditor(result: { yaml: string; label: string }) {
     setRoleEditor(null);
-    setBindingEditorClose();
+    setBindingEditor(null);
     setPendingAction({ kind: "applyManifest", label: result.label, manifest: result.yaml });
   }
 
@@ -217,6 +253,20 @@ export default function RbacPanel() {
           placeholder="Filter by subject, role, or resource…"
           className="w-64 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3 py-1.5 text-sm text-[var(--fg-primary)] outline-none placeholder:text-[var(--fg-tertiary)] focus:ring-2 focus:ring-[var(--ring)]"
         />
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label="New RBAC object"
+            className="flex items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border-strong)] px-3 py-1.5 text-sm text-[var(--fg-primary)] hover:bg-white/[0.04]"
+          >
+            <Plus className="size-[14px]" /> New
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem onClick={() => newObject("Role")}>Role</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => newObject("ClusterRole")}>ClusterRole</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => newObject("RoleBinding")}>RoleBinding</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => newObject("ClusterRoleBinding")}>ClusterRoleBinding</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </PanelHeader>
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
@@ -248,6 +298,8 @@ export default function RbacPanel() {
                 subject={selectedSubject}
                 grants={grants}
                 onAsk={askAboutSubject}
+                onEditBinding={(g) => openBindingEditor(g)}
+                onAddSubject={(g) => openBindingEditor(g, true)}
                 onEditBindingYaml={editBindingYaml}
                 onDeleteBinding={deleteBinding}
               />
@@ -285,6 +337,24 @@ export default function RbacPanel() {
                   const t = roleEditor.target!;
                   setRoleEditor(null);
                   editYaml(t.kind === "ClusterRole" ? "clusterrole" : "role", t.name, t.namespace);
+                }
+              : undefined
+          }
+        />
+      )}
+
+      {bindingEditor && (
+        <BindingEditor
+          target={bindingEditor.target}
+          open
+          onClose={() => setBindingEditor(null)}
+          onApply={applyFromEditor}
+          onEditYaml={
+            bindingEditor.target && bindingEditor.target.name
+              ? () => {
+                  const t = bindingEditor.target!;
+                  setBindingEditor(null);
+                  editYaml(t.kind === "RoleBinding" ? "rolebinding" : "clusterrolebinding", t.name, t.namespace);
                 }
               : undefined
           }
