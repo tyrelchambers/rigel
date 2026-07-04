@@ -95,13 +95,13 @@ export function ConnectivityDetail({ flow }: { flow: Flow }) {
       {flow.isExternal && flow.ingressNames.length > 0 && (
         <div className="flex flex-col gap-[9px]">
           <SectionLabel>ROUTES</SectionLabel>
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1.5">
             {flow.ingressNames.map((ing) => (
               <button
                 key={ing}
                 type="button"
                 onClick={() => goIngress(ing)}
-                className="flex items-center gap-2 rounded px-1 py-0.5 text-left hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[13px] py-[10px] text-left transition-colors hover:bg-[var(--surface-elevated)] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Signpost className="size-3.5 text-[var(--fg-tertiary)]" aria-hidden />
                 <span className="font-mono text-[13px] text-[var(--fg-secondary)]">{ing}</span>
@@ -119,13 +119,13 @@ export function ConnectivityDetail({ flow }: { flow: Flow }) {
             {flow.serviceExists ? "No pods match this service" : "Service does not exist"}
           </p>
         ) : (
-          <div className="flex flex-col gap-0.5">
+          <div className="flex flex-col gap-1.5">
             {flow.pods.map((p) => (
               <button
                 key={p.name}
                 type="button"
                 onClick={() => goPod(p.name)}
-                className="flex items-center gap-2 rounded px-1 py-1 text-left hover:bg-white/[0.05] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[13px] py-[10px] text-left transition-colors hover:bg-[var(--surface-elevated)] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <span
                   className="size-[7px] shrink-0 rounded-full"
