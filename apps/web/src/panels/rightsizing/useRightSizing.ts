@@ -90,18 +90,22 @@ export function useRightSizing(opts?: { clusterWide?: boolean }): RightSizingDat
   const [usage, setUsage] = useState<UsageResponse | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  // Workload specs come from the live store.
+  // Workload specs come from the live store. Always watch cluster-wide ("*"):
+  // the store slice is keyed by kind only and replaceKind overwrites the whole
+  // slice per snapshot, so a namespace-scoped watch here would clobber the
+  // shared slice, and switching back to "All" warm-reuses a lingering "*"
+  // watch with no fresh snapshot, so the list never repopulates (HELM-31). The
+  // namespace is applied as a client-side filter in the panel instead.
   useEffect(() => {
-    const ns = resolveNamespaceScope(namespaceFilter, clusterWide);
-    subscribe("deployments", ns);
-    subscribe("statefulsets", ns);
-    subscribe("daemonsets", ns);
+    subscribe("deployments", "*");
+    subscribe("statefulsets", "*");
+    subscribe("daemonsets", "*");
     return () => {
-      unsubscribe("deployments", ns);
-      unsubscribe("statefulsets", ns);
-      unsubscribe("daemonsets", ns);
+      unsubscribe("deployments", "*");
+      unsubscribe("statefulsets", "*");
+      unsubscribe("daemonsets", "*");
     };
-  }, [namespaceFilter, clusterWide]);
+  }, []);
 
   // Detected backends for the picker.
   useEffect(() => {
