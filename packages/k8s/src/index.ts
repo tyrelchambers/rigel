@@ -24,6 +24,16 @@ export { parseQuantity } from "./quantity";
 export { extractAuditInputs } from "./extractAuditInputs";
 
 export {
+  type AuditKind,
+  type AuditEntitlement,
+  type AuditGate,
+  ALL_AUDIT_KINDS,
+  canRunAudit,
+  DEFAULT_AUDIT_ENTITLEMENT,
+  parseUnlockedAudits,
+} from "./auditEntitlement";
+
+export {
   type ReliabilityFindingType,
   type ReliabilityFinding,
   type ReliabilityAuditInput,
