@@ -3,7 +3,7 @@
 // server (which stores rules) and the web panel (which lists them). The agent
 // owns a mirror of these shapes in agent/src/alerts.ts (wire contract).
 
-export type AlertScope = "cluster" | "namespace" | "workload" | "pod" | "database";
+export type AlertScope = "cluster" | "namespace" | "workload" | "pod" | "database" | "node";
 
 export interface AlertTarget {
   scope: AlertScope;
@@ -13,13 +13,17 @@ export interface AlertTarget {
   labelSelector?: string;
 }
 
+export type MetricKind = "cpuPercent" | "memoryPercent";
+export type MetricComparator = "above" | "below";
+
 export type AlertCondition =
   | { type: "podRestarts"; threshold: number; windowMinutes: number }
   | { type: "crashLoop" }
   | { type: "oomKilled" }
   | { type: "pendingTooLong"; minutes: number }
   | { type: "notReady"; minutes: number }
-  | { type: "deploymentDegraded"; minutes: number };
+  | { type: "deploymentDegraded"; minutes: number }
+  | { type: "metricThreshold"; metric: MetricKind; comparator: MetricComparator; threshold: number; minutes: number };
 
 export interface SuggestedAlert {
   label: string;
@@ -39,22 +43,22 @@ export interface AlertRule {
   createdAt: string;
 }
 
-const SCOPES = new Set<AlertScope>(["cluster", "namespace", "workload", "pod", "database"]);
+const SCOPES = new Set<AlertScope>(["cluster", "namespace", "workload", "pod", "database", "node"]);
 const CONDITION_TYPES = new Set([
-  "podRestarts", "crashLoop", "oomKilled", "pendingTooLong", "notReady", "deploymentDegraded",
+  "podRestarts", "crashLoop", "oomKilled", "pendingTooLong", "notReady", "deploymentDegraded", "metricThreshold",
 ]);
 
 /** The condition's natural time window in minutes, or 0 for snapshot conditions. */
 function conditionWindowMinutes(c: AlertCondition): number {
   if (c.type === "podRestarts") return c.windowMinutes;
-  if (c.type === "pendingTooLong" || c.type === "notReady" || c.type === "deploymentDegraded") return c.minutes;
+  if (c.type === "pendingTooLong" || c.type === "notReady" || c.type === "deploymentDegraded" || c.type === "metricThreshold") return c.minutes;
   return 0;
 }
 
 /** Validate a target shape, throwing on anything malformed. */
 function validateTarget(t: AlertTarget): void {
   if (!t || !SCOPES.has(t.scope)) throw new Error(`invalid alert target scope: ${String(t?.scope)}`);
-  if (t.scope !== "cluster" && t.scope !== "namespace" && !t.name) {
+  if (t.scope !== "cluster" && t.scope !== "namespace" && t.scope !== "node" && !t.name) {
     throw new Error(`alert target scope "${t.scope}" requires a name`);
   }
   if (t.scope === "namespace" && !t.namespace) throw new Error(`namespace scope requires a namespace`);
@@ -71,6 +75,11 @@ function validateCondition(c: AlertCondition): void {
   if (c.type === "podRestarts" && (!(c.threshold > 0) || !(c.windowMinutes > 0))) {
     throw new Error("podRestarts needs threshold>0 and windowMinutes>0");
   }
+  if (c.type === "metricThreshold") {
+    if (c.metric !== "cpuPercent" && c.metric !== "memoryPercent") throw new Error("metricThreshold needs a valid metric");
+    if (c.comparator !== "above" && c.comparator !== "below") throw new Error("metricThreshold needs a valid comparator");
+    if (!(c.threshold > 0) || !(c.threshold <= 100)) throw new Error("metricThreshold needs threshold in (0,100]");
+  }
   for (const k of ["minutes"] as const) {
     if (k in c && !((c as unknown as Record<string, number>)[k] >= 0)) throw new Error(`${c.type} needs ${k}>=0`);
   }
@@ -83,6 +92,12 @@ export function normalizeAlertRule(block: SuggestedAlert, id: string, nowMs: num
   validateCondition(block.condition);
   if (block.condition.type === "deploymentDegraded" && (block.target.scope === "pod" || block.target.scope === "database")) {
     throw new Error('deploymentDegraded alerts require a cluster, namespace, or workload target');
+  }
+  if (block.condition.type === "metricThreshold" && block.target.scope !== "node") {
+    throw new Error("metricThreshold alerts require a node target");
+  }
+  if (block.target.scope === "node" && block.condition.type !== "metricThreshold") {
+    throw new Error("node-scoped alerts require a metric-threshold condition");
   }
   const windowMins = conditionWindowMinutes(block.condition);
   const cooldown = block.cooldownMinutes && block.cooldownMinutes > 0
@@ -158,6 +173,7 @@ export function alertRuleSummary(rule: AlertRule): string {
   const loc =
     t.scope === "cluster" ? "anything in the cluster"
     : t.scope === "namespace" ? `namespace ${t.namespace}`
+    : t.scope === "node" ? (t.name ? `node ${t.name}` : "any node")
     : `${t.scope} ${t.namespace ? `${t.namespace}/` : ""}${t.name}`;
   const c = rule.condition;
   const cond =
@@ -166,6 +182,7 @@ export function alertRuleSummary(rule: AlertRule): string {
     : c.type === "oomKilled" ? "OOM-killed"
     : c.type === "pendingTooLong" ? `pending >${c.minutes}m`
     : c.type === "notReady" ? `not ready ${c.minutes}m`
-    : `degraded ${c.minutes}m`;
+    : c.type === "deploymentDegraded" ? `degraded ${c.minutes}m`
+    : `${c.metric === "cpuPercent" ? "CPU" : "memory"} ${c.comparator} ${c.threshold}% for ${c.minutes}m`;
   return `${loc} — ${cond}`;
 }

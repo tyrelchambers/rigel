@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeAlertRule, parseAlertRules, serializeAlertRules, nextAlertRules, alertRuleSummary } from "./alerts";
+import { normalizeAlertRule, parseAlertRules, serializeAlertRules, nextAlertRules, alertRuleSummary, type SuggestedAlert } from "./alerts";
 
 const block = {
   label: "Alert: postgres down",
@@ -64,5 +64,56 @@ describe("nextAlertRules", () => {
 describe("alertRuleSummary", () => {
   it("renders a human one-liner with the target", () => {
     expect(alertRuleSummary(normalizeAlertRule(block, "id-1", 0))).toContain("database prod/postgres");
+  });
+});
+
+describe("metricThreshold condition", () => {
+  const metricBlock = (over: Partial<SuggestedAlert> = {}): SuggestedAlert => ({
+    label: "Alert: node memory high",
+    text: "alert when a node's memory goes above 90%",
+    target: { scope: "node" },
+    condition: { type: "metricThreshold", metric: "memoryPercent", comparator: "above", threshold: 90, minutes: 10 },
+    ...over,
+  });
+
+  it("normalizes a node metric rule and defaults cooldown from the for-duration", () => {
+    const r = normalizeAlertRule(metricBlock(), "id-m", 1_700_000_000_000);
+    expect(r.condition.type).toBe("metricThreshold");
+    expect(r.target.scope).toBe("node");
+    expect(r.cooldownMinutes).toBe(10);
+  });
+
+  it("accepts an optional specific node name", () => {
+    const r = normalizeAlertRule(metricBlock({ target: { scope: "node", name: "node-a" } }), "id-m2", 0);
+    expect(r.target.name).toBe("node-a");
+  });
+
+  it("rejects a metric rule whose target is not node scope", () => {
+    expect(() =>
+      normalizeAlertRule(metricBlock({ target: { scope: "namespace", namespace: "prod" } }), "x", 0),
+    ).toThrow(/require a node target/);
+  });
+
+  it("rejects a node-scoped rule with a non-metric condition", () => {
+    expect(() =>
+      normalizeAlertRule(
+        { label: "l", text: "t", target: { scope: "node" }, condition: { type: "crashLoop" } },
+        "x",
+        0,
+      ),
+    ).toThrow(/node-scoped/);
+  });
+
+  it("rejects an out-of-range threshold", () => {
+    expect(() =>
+      normalizeAlertRule(metricBlock({ condition: { type: "metricThreshold", metric: "cpuPercent", comparator: "above", threshold: 150, minutes: 5 } }), "x", 0),
+    ).toThrow(/threshold/);
+  });
+
+  it("summarizes node metric rules", () => {
+    const r = normalizeAlertRule(metricBlock(), "id-m", 0);
+    expect(alertRuleSummary(r)).toBe("any node — memory above 90% for 10m");
+    const r2 = normalizeAlertRule(metricBlock({ target: { scope: "node", name: "node-a" }, condition: { type: "metricThreshold", metric: "cpuPercent", comparator: "above", threshold: 80, minutes: 5 } }), "id-c", 0);
+    expect(alertRuleSummary(r2)).toBe("node node-a — CPU above 80% for 5m");
   });
 });
