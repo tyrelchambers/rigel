@@ -99,6 +99,7 @@ export interface AssistantDerived {
   liveIssues: AssistantLiveIssue[];
   tokenExpiry: TokenExpiryStatus | null;
   allNamespaceNames: string[];
+  allNodeNames: string[];
   /** Stored backup YAML for a revert, keyed by backupRef. */
   backupYAML: (ref: string) => string | undefined;
   /** Parsed alert rules from the assistant-config ConfigMap. */
@@ -146,7 +147,7 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
   // live issues span every namespace). These watches are keyed by name in the
   // shared store; the agent's own objects are uniquely named.
   useEffect(() => {
-    const kinds = ["deployments", "pods", "configmaps", "secrets", "namespaces"];
+    const kinds = ["deployments", "pods", "configmaps", "secrets", "namespaces", "nodes"];
     for (const k of kinds) subscribe(k, "*");
     return () => {
       for (const k of kinds) unsubscribe(k, "*");
@@ -200,6 +201,10 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
   );
   const namespaces = useMemo(
     () => Object.values((resources["namespaces"] ?? {}) as Record<string, NamespaceLike>),
+    [resources],
+  );
+  const nodes = useMemo(
+    () => Object.values((resources["nodes"] ?? {}) as Record<string, { metadata: { name: string } }>),
     [resources],
   );
 
@@ -273,6 +278,7 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
       liveIssues: computeLiveIssues(pods, deployments),
       tokenExpiry,
       allNamespaceNames: namespaces.map((n) => n.metadata.name).sort(),
+      allNodeNames: nodes.map((n) => n.metadata.name).sort(),
       backupYAML: (ref) => configMap("assistant-backups")?.data?.[ref],
       alertRules: parseAlertRules(configData["alertRules"]),
       roles: parseRolesFromConfig(configData),
@@ -286,7 +292,7 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
       credentialConflicts: credStatus.data?.conflicts ?? [],
       credentialNeedsReconcile: credStatus.data?.needsReconcile ?? false,
     };
-  }, [deployments, pods, configMaps, secrets, namespaces, installNamespaceHint, credStatus.data]);
+  }, [deployments, pods, configMaps, secrets, namespaces, nodes, installNamespaceHint, credStatus.data]);
 }
 
 /** Build the presence view from the per-credential `{ ready, secretName }` map the
