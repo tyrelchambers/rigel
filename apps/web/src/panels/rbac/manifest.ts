@@ -1,5 +1,5 @@
 import { yamlSingleQuoted } from "@rigel/k8s";
-import type { PolicyRule } from "./types";
+import type { PolicyRule, RoleRef, Subject } from "./types";
 
 export interface RbacMeta {
   kind: "Role" | "ClusterRole" | "RoleBinding" | "ClusterRoleBinding";
@@ -44,6 +44,28 @@ export function buildRoleYaml(meta: RbacMeta, rules: PolicyRule[]): string {
       lines.push(`  - apiGroups: ${flowSeq(groups)}`);
       lines.push(`    resources: ${flowSeq(r.resources)}`);
       lines.push(`    verbs: ${flowSeq(r.verbs)}`);
+    }
+  }
+  return lines.join("\n") + "\n";
+}
+
+/** Build a RoleBinding/ClusterRoleBinding manifest. */
+export function buildBindingYaml(meta: RbacMeta, roleRef: RoleRef, subjects: Subject[]): string {
+  const lines = ["apiVersion: rbac.authorization.k8s.io/v1", `kind: ${meta.kind}`, ...metaBlock(meta)];
+  lines.push("roleRef:");
+  lines.push("  apiGroup: rbac.authorization.k8s.io");
+  lines.push(`  kind: ${roleRef.kind ?? "Role"}`);
+  lines.push(`  name: ${q(roleRef.name ?? "")}`);
+  if (subjects.length === 0) {
+    lines.push("subjects: []");
+  } else {
+    lines.push("subjects:");
+    for (const s of subjects) {
+      const kind = s.kind ?? "ServiceAccount";
+      lines.push(`  - kind: ${kind}`);
+      if (kind === "User" || kind === "Group") lines.push("    apiGroup: rbac.authorization.k8s.io");
+      lines.push(`    name: ${q(s.name ?? "")}`);
+      if (kind === "ServiceAccount" && s.namespace) lines.push(`    namespace: ${q(s.namespace)}`);
     }
   }
   return lines.join("\n") + "\n";
