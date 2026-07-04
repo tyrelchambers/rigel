@@ -12,6 +12,7 @@ import { useNavigate } from "react-router";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { useAssistantCtx } from "./AssistantContext";
+import { GrantRoleButton } from "./GrantRoleButton";
 
 interface OwnedResource {
   kind: string;
@@ -185,6 +186,7 @@ export function OwnedResources() {
         <span className="rounded-full border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-2 py-0.5 font-mono text-xs font-semibold text-[var(--fg-secondary)]">
           {total}
         </span>
+        <GrantRoleButton namespace={ns} />
       </div>
       <p className="text-[13px] text-[var(--fg-tertiary)]">
         Kubernetes objects this assistant owns in <span className="font-mono">{ns}</span>. Open one to
