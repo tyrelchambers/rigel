@@ -1,0 +1,23 @@
+{
+  "name": "@rigel/audit-cli",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "bin": {
+    "rigel-audit": "dist/rigel-audit.mjs"
+  },
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --banner:js=\"#!/usr/bin/env node\" --outfile=dist/rigel-audit.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@rigel/k8s": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "esbuild": "latest",
+    "typescript": "latest",
+    "vitest": "^4.1.8"
+  }
+}
