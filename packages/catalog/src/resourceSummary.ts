@@ -40,17 +40,70 @@ export interface ResourceRef { kind: string; name: string; namespace?: string }
  * a multi-doc manifest can be re-emitted (e.g. selective uninstall). */
 export interface ResourceDoc extends ResourceRef { doc: string }
 
-/** First column-0 `metadata:` block's 2-space-indented `name:`/`namespace:`. */
-function metaField(doc: string, field: "name" | "namespace"): string | undefined {
-  let inMeta = false;
-  for (const line of doc.split("\n")) {
-    if (line.length === 0) continue;
-    const col0 = !/\s/.test(line[0]);
-    if (col0) inMeta = line.startsWith("metadata:");
-    else if (inMeta && line.startsWith(`  ${field}:`)) {
-      const v = line.slice(`  ${field}:`.length).trim();
-      if (v.length > 0) return v;
+/** Strip matching surrounding single/double quotes from a scalar value. */
+function unquote(v: string): string {
+  if (v.length >= 2 && ((v[0] === '"' && v.endsWith('"')) || (v[0] === "'" && v.endsWith("'")))) {
+    return v.slice(1, -1);
+  }
+  return v;
+}
+
+/** Leading-space count of a line. */
+function indentOf(line: string): number {
+  let n = 0;
+  while (n < line.length && line[n] === " ") n++;
+  return n;
+}
+
+/** Pull `field` out of an inline flow mapping like `{name: x, namespace: y}`. */
+function flowField(inline: string, field: "name" | "namespace"): string | undefined {
+  const inner = inline.slice(inline.indexOf("{") + 1, inline.lastIndexOf("}"));
+  for (const part of inner.split(",")) {
+    const idx = part.indexOf(":");
+    if (idx === -1) continue;
+    if (part.slice(0, idx).trim() === field) {
+      const v = part.slice(idx + 1).trim();
+      if (v.length > 0) return unquote(v);
     }
+  }
+  return undefined;
+}
+
+/**
+ * Extract `name`/`namespace` from the first column-0 `metadata:` block. Handles
+ * block style at ANY indentation — reading only the block's DIRECT children, so a
+ * nested `labels.name` is never mistaken for the resource name — and inline flow
+ * mappings (`metadata: {name: x}`). Model-emitted manifests vary in indentation
+ * (2-space, 4-space, flow), so this must not assume a fixed 2-space layout.
+ */
+function metaField(doc: string, field: "name" | "namespace"): string | undefined {
+  const lines = doc.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.length === 0 || /\s/.test(line[0])) continue; // want a column-0 key
+    if (!line.startsWith("metadata:")) continue;
+
+    const inline = line.slice("metadata:".length).trim();
+    if (inline.startsWith("{")) return flowField(inline, field);
+
+    // Block style: the block's direct children share the shallowest following
+    // indent; lines deeper than that are nested values (labels/annotations) and
+    // must be skipped so their keys can't shadow the real name/namespace.
+    let childIndent = -1;
+    for (let j = i + 1; j < lines.length; j++) {
+      const l = lines[j];
+      if (l.trim().length === 0) continue;
+      const ind = indentOf(l);
+      if (ind === 0) break; // next top-level key → metadata block ended
+      if (childIndent === -1) childIndent = ind;
+      if (ind !== childIndent) continue; // nested deeper than a direct child
+      const trimmed = l.trim();
+      if (trimmed.startsWith(`${field}:`)) {
+        const v = trimmed.slice(field.length + 1).trim();
+        if (v.length > 0) return unquote(v);
+      }
+    }
+    return undefined;
   }
   return undefined;
 }
