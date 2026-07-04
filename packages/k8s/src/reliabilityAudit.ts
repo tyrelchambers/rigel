@@ -95,8 +95,9 @@ function hpaKeepsMultiReplica(w: AuditWorkload, hpas: AuditHpa[]): boolean {
   );
 }
 
-/** Extract the tag from an image ref, or null if untagged. Strips any @digest,
- *  and only treats a ':' after the last '/' as a tag (not a registry :port). */
+/** True when the image is untagged or pinned to :latest (a mutable reference);
+ *  false for a version- or digest-pinned image. Strips any @digest, and only
+ *  treats a ':' after the last '/' as a tag (not a registry :port). */
 export function imageTagIsMutable(image?: string): boolean {
   if (!image) return false;
   const noDigest = image.split("@")[0];

@@ -2,6 +2,8 @@
 import { describe, it, expect } from "vitest";
 import {
   analyzeReliability,
+  sortFindings,
+  reliabilityCounts,
   SEVERITY_RANK,
   type AuditWorkload,
 } from "./reliabilityAudit";
@@ -162,28 +164,50 @@ describe("analyzeReliability", () => {
   });
 });
 
-import { sortFindings, reliabilityCounts } from "./reliabilityAudit";
-
 describe("sortFindings / reliabilityCounts", () => {
-  it("orders findings by severity (critical, warning, info)", () => {
-    const findings = analyzeReliability({
-      workloads: [healthy({ replicas: 1, hasAntiAffinity: false })], // singleReplica (warning) + noAntiAffinity is skipped (replicas<2) → only warnings + PDB
-      pdbs: [],
-      hpas: [],
-    });
+  it("orders a scrambled mix by severity then namespace, name, type", () => {
+    // A multi-replica workload with no anti-affinity emits an info noAntiAffinity;
+    // it also lacks a PDB (warning). A single-replica workload in another namespace
+    // emits a warning singleReplica. Together this spans two severities and two
+    // namespaces, exercising the primary key and every tie-breaker.
+    const beta = healthy({ name: "beta", namespace: "zeta", hasAntiAffinity: false, labels: { app: "beta" } });
+    const alpha = healthy({ name: "alpha", namespace: "alpha", replicas: 1, labels: { app: "alpha" } });
+    const findings = analyzeReliability({ workloads: [beta, alpha], pdbs: [], hpas: [] });
+
+    // Sanity check the fixture actually spans severities before asserting the order.
+    expect(findings.some((f) => f.severity === "info")).toBe(true);
+    expect(findings.some((f) => f.severity === "warning")).toBe(true);
+
     const sorted = sortFindings(findings);
-    const ranks = sorted.map((f) => SEVERITY_RANK[f.severity]);
-    expect(ranks).toEqual([...ranks].sort((a, b) => a - b));
+    const order = sorted.map((f) => `${f.severity}:${f.namespace}/${f.name}:${f.type}`);
+    expect(order).toEqual([
+      // warnings first, ordered by namespace (alpha < zeta), then name, then type
+      "warning:alpha/alpha:singleReplica",
+      "warning:zeta/beta:noPodDisruptionBudget",
+      // info sorts last regardless of namespace
+      "info:zeta/beta:noAntiAffinity",
+    ]);
+
+    // Would fail against an identity sort: the engine emits the info finding for
+    // `beta` before the warning singleReplica for `alpha`.
+    expect(order).not.toEqual(findings.map((f) => `${f.severity}:${f.namespace}/${f.name}:${f.type}`));
   });
 
-  it("counts findings by severity and affected workloads", () => {
+  it("counts warning + info findings, keeps critical 0, and dedups workloads", () => {
+    // One workload with multiple findings across warning + info severities.
     const w = healthy({ replicas: 1, hasAntiAffinity: false, name: "web" });
-    w.containers[0].hasLiveness = false;
-    const counts = reliabilityCounts(analyzeReliability({ workloads: [w], pdbs: [], hpas: [] }));
-    expect(counts.warning).toBeGreaterThan(0);
+    w.containers[0].hasLiveness = false; // warning (probe) on top of singleReplica warning
+    const multi = analyzeReliability({ workloads: [w], pdbs: [], hpas: [] });
+    // Add an info-severity finding from a second, multi-replica workload.
+    const spread = healthy({ name: "api", hasAntiAffinity: false, labels: { app: "api" } });
+    const info = analyzeReliability({ workloads: [spread], pdbs: [{ namespace: "default", selector: { app: "api" } }], hpas: [] });
+
+    const counts = reliabilityCounts([...multi, ...info]);
+    expect(counts.critical).toBe(0);
+    expect(counts.warning).toBe(multi.length);
+    expect(counts.info).toBe(1);
     expect(counts.total).toBe(counts.critical + counts.warning + counts.info);
-    expect(counts.workloadsAffected).toBe(1);
+    // `web` has multiple findings but counts once; plus `api` = 2 workloads.
+    expect(counts.workloadsAffected).toBe(2);
   });
 });
-
-export { healthy };
