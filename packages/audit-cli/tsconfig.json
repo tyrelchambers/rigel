@@ -6,7 +6,16 @@
     "types": ["node"],
     "strict": true,
     "noEmit": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    // Resolve @rigel/k8s to its source so esbuild can inline it without the pnpm
+    // workspace symlink — needed by the agent image's npm/esbuild Docker build.
+    // Points at the same source the dev symlink reaches, so dev/vitest/desktop
+    // builds are unaffected. (No baseUrl — deprecated in TS 7; with
+    // moduleResolution "bundler" the paths resolve relative to this tsconfig.)
+    "paths": {
+      "@rigel/k8s": ["../k8s/src/index.ts"],
+      "@rigel/k8s/src/*": ["../k8s/src/*"]
+    }
   },
   "include": ["src"]
 }
