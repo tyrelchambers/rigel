@@ -10,14 +10,14 @@
 //   2. Cap the seeded rows to the highest-severity SEED_CAP findings (the list is
 //      already severity-sorted) and summarize the long tail as counts, so nothing
 //      is silently dropped and the chat context stays bounded.
-import { reliabilityCounts, type ReliabilityFinding } from "@rigel/k8s";
+import { auditCounts, type ReliabilityFinding } from "@rigel/k8s";
 
 /** Max findings seeded as rows; the rest are summarized as counts. */
 export const SEED_CAP = 40;
 
 /** "3 critical, 12 warning, 5 info" for a finding set (omits zero buckets). */
 function severityBreakdown(findings: ReliabilityFinding[]): string {
-  const c = reliabilityCounts(findings);
+  const c = auditCounts(findings);
   const parts: string[] = [];
   if (c.critical) parts.push(`${c.critical} critical`);
   if (c.warning) parts.push(`${c.warning} warning`);
@@ -50,7 +50,7 @@ export function buildReliabilityAuditPrompt(findings: ReliabilityFinding[]): str
   // summarize the remainder. Rows are compact — no rationale/fix (constant per type).
   const seeded = findings.slice(0, SEED_CAP);
   const overflow = findings.slice(SEED_CAP);
-  const counts = reliabilityCounts(findings);
+  const counts = auditCounts(findings);
   const rows = seeded.map((f) => ({
     type: f.type,
     severity: f.severity,

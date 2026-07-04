@@ -8,9 +8,9 @@ import { subscribe, unsubscribe } from "@/lib/ws";
 import {
   analyzeReliability,
   sortFindings,
-  reliabilityCounts,
+  auditCounts,
   type ReliabilityFinding,
-  type ReliabilityCounts,
+  type AuditCounts,
 } from "@rigel/k8s";
 import { extractAuditInputs } from "./extractAuditInputs";
 
@@ -24,7 +24,7 @@ const WATCH_KINDS = [
 
 export interface ReliabilityAuditData {
   findings: ReliabilityFinding[];
-  counts: ReliabilityCounts;
+  counts: AuditCounts;
 }
 
 export function useReliabilityAudit(): ReliabilityAuditData {
@@ -37,6 +37,6 @@ export function useReliabilityAudit(): ReliabilityAuditData {
 
   return useMemo(() => {
     const findings = sortFindings(analyzeReliability(extractAuditInputs(resources)));
-    return { findings, counts: reliabilityCounts(findings) };
+    return { findings, counts: auditCounts(findings) };
   }, [resources]);
 }

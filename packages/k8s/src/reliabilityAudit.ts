@@ -5,17 +5,11 @@
 // web hook, a future report panel, and the in-cluster agent.
 
 import {
-  type Severity,
   type AuditWorkloadKind,
-  type AuditContainer,
   type AuditWorkload,
   type AuditPdb,
   type AuditHpa,
   type AuditFinding,
-  SEVERITY_RANK,
-  sortFindings,
-  auditCounts,
-  type AuditCounts,
 } from "./auditCommon";
 
 export type ReliabilityFindingType =

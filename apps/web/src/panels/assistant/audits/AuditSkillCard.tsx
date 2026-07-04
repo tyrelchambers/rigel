@@ -4,14 +4,14 @@
 // disabled placeholders (the future home of premium/locked state, HELM-16).
 import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { ReliabilityCounts } from "@rigel/k8s";
+import type { AuditCounts } from "@rigel/k8s";
 
 export interface AuditSkillCardProps {
   title: string;
   description: string;
   Icon: LucideIcon;
   status: "live" | "soon";
-  counts?: ReliabilityCounts;
+  counts?: AuditCounts;
   onRun?: () => void;
 }
 

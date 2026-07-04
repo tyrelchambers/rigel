@@ -6,20 +6,25 @@ export * from "./digest";
 
 export {
   type Severity,
-  type WorkloadKind as ReliabilityWorkloadKind,
+  SEVERITY_RANK,
+  type AuditWorkloadKind,
+  type AuditWorkloadKind as ReliabilityWorkloadKind,
+  type AuditFinding,
   type AuditContainer,
   type AuditWorkload,
   type AuditPdb,
   type AuditHpa,
-  type ReliabilityAuditInput,
+  type AuditCounts,
+  sortFindings,
+  auditCounts,
+} from "./auditCommon";
+
+export {
   type ReliabilityFindingType,
   type ReliabilityFinding,
-  type ReliabilityCounts,
-  SEVERITY_RANK,
+  type ReliabilityAuditInput,
   imageTagIsMutable,
   analyzeReliability,
-  sortFindings,
-  reliabilityCounts,
 } from "./reliabilityAudit";
 
 export { openapiV2ToYamlSchema, gvkApiVersion } from "./openapiSchema";
