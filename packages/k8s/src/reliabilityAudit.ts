@@ -78,6 +78,37 @@ export interface ReliabilityAuditInput {
   hpas: AuditHpa[];
 }
 
-export function analyzeReliability(_input: ReliabilityAuditInput): ReliabilityFinding[] {
-  return [];
+/** Does a workload participate in replica-based checks? DaemonSets run one pod
+ *  per node, so replica count / PDB / anti-affinity don't apply the same way. */
+function isReplicated(w: AuditWorkload): boolean {
+  return w.kind === "Deployment" || w.kind === "StatefulSet";
+}
+
+/** Is this workload scaled by an HPA that guarantees >= 2 replicas? */
+function hpaKeepsMultiReplica(w: AuditWorkload, hpas: AuditHpa[]): boolean {
+  return hpas.some(
+    (h) =>
+      h.namespace === w.namespace &&
+      h.targetKind === w.kind &&
+      h.targetName === w.name &&
+      h.minReplicas >= 2,
+  );
+}
+
+export function analyzeReliability(input: ReliabilityAuditInput): ReliabilityFinding[] {
+  const findings: ReliabilityFinding[] = [];
+  for (const w of input.workloads) {
+    const base = { kind: w.kind, name: w.name, namespace: w.namespace } as const;
+
+    if (isReplicated(w) && w.replicas <= 1 && !hpaKeepsMultiReplica(w, input.hpas)) {
+      findings.push({
+        ...base,
+        type: "singleReplica",
+        severity: "warning",
+        rationale: "Runs a single replica, so any pod restart, eviction, or node failure causes downtime.",
+        fix: "Scale to 2 or more replicas (or set an HPA with minReplicas >= 2).",
+      });
+    }
+  }
+  return findings;
 }
