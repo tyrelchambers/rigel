@@ -60,4 +60,25 @@ describe("analyzePerformance", () => {
     const clean = analyzePerformance({ workloads: [healthy()], hpas: [HPA_FOR_WEB] });
     expect(clean.some((x) => x.type === "noMemoryLimit")).toBe(false);
   });
+
+  it("flags a multi-replica Deployment with no HPA as info, and clears when an HPA targets it", () => {
+    const withoutHpa = analyzePerformance({ workloads: [healthy()], hpas: [] });
+    const f = withoutHpa.find((x) => x.type === "noAutoscaling");
+    expect(f).toBeDefined();
+    expect(f?.severity).toBe("info");
+    expect(f?.container).toBeUndefined();
+
+    const withHpa = analyzePerformance({ workloads: [healthy()], hpas: [HPA_FOR_WEB] });
+    expect(withHpa.some((x) => x.type === "noAutoscaling")).toBe(false);
+  });
+
+  it("does not flag noAutoscaling on a single-replica Deployment", () => {
+    const out = analyzePerformance({ workloads: [healthy({ replicas: 1 })], hpas: [] });
+    expect(out.some((x) => x.type === "noAutoscaling")).toBe(false);
+  });
+
+  it("does not flag noAutoscaling on a StatefulSet, even with multiple replicas and no HPA", () => {
+    const out = analyzePerformance({ workloads: [healthy({ kind: "StatefulSet" })], hpas: [] });
+    expect(out.some((x) => x.type === "noAutoscaling")).toBe(false);
+  });
 });

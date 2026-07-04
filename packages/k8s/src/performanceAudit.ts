@@ -55,10 +55,25 @@ export interface PerformanceAuditInput {
 /** Ignore metrics with too little history to trust (matches right-sizing's floor). */
 const MIN_HOURS = 24;
 
+function hasHpa(w: AuditWorkload, hpas: AuditHpa[]): boolean {
+  return hpas.some((h) => h.namespace === w.namespace && h.targetKind === w.kind && h.targetName === w.name);
+}
+
 export function analyzePerformance(input: PerformanceAuditInput): PerformanceFinding[] {
   const findings: PerformanceFinding[] = [];
   for (const w of input.workloads) {
     const base = { kind: w.kind, name: w.name, namespace: w.namespace } as const;
+
+    // Spec: multi-replica Deployment with no HPA can't scale to load.
+    if (w.kind === "Deployment" && w.replicas >= 2 && !hasHpa(w, input.hpas)) {
+      findings.push({
+        ...base,
+        type: "noAutoscaling",
+        severity: "info",
+        rationale: "Runs multiple fixed replicas with no HorizontalPodAutoscaler, so it can't scale up under load or down when idle.",
+        fix: "Add a HorizontalPodAutoscaler targeting CPU or memory utilization.",
+      });
+    }
 
     for (const c of w.containers) {
       const cbase = { ...base, container: c.name } as const;
