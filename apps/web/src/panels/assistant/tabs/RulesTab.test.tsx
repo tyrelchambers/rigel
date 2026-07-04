@@ -21,7 +21,7 @@ function derived(overrides: Partial<AssistantDerived> = {}): AssistantDerived {
     alertRules: [],
     silenced: [],
     allNamespaceNames: ["default"],
-    allNodeNames: [],
+    allNodes: [],
     ...overrides,
   } as AssistantDerived;
 }

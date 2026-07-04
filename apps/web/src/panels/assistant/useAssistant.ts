@@ -99,7 +99,7 @@ export interface AssistantDerived {
   liveIssues: AssistantLiveIssue[];
   tokenExpiry: TokenExpiryStatus | null;
   allNamespaceNames: string[];
-  allNodeNames: string[];
+  allNodes: { name: string; hostname: string }[];
   /** Stored backup YAML for a revert, keyed by backupRef. */
   backupYAML: (ref: string) => string | undefined;
   /** Parsed alert rules from the assistant-config ConfigMap. */
@@ -204,7 +204,13 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
     [resources],
   );
   const nodes = useMemo(
-    () => Object.values((resources["nodes"] ?? {}) as Record<string, { metadata: { name: string } }>),
+    () =>
+      Object.values(
+        (resources["nodes"] ?? {}) as Record<
+          string,
+          { metadata: { name: string; labels?: Record<string, string> } }
+        >,
+      ),
     [resources],
   );
 
@@ -278,7 +284,12 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
       liveIssues: computeLiveIssues(pods, deployments),
       tokenExpiry,
       allNamespaceNames: namespaces.map((n) => n.metadata.name).sort(),
-      allNodeNames: nodes.map((n) => n.metadata.name).sort(),
+      allNodes: nodes
+        .map((n) => ({
+          name: n.metadata.name,
+          hostname: n.metadata.labels?.["kubernetes.io/hostname"] ?? n.metadata.name,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
       backupYAML: (ref) => configMap("assistant-backups")?.data?.[ref],
       alertRules: parseAlertRules(configData["alertRules"]),
       roles: parseRolesFromConfig(configData),

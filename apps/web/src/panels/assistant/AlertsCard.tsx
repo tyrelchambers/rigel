@@ -482,9 +482,9 @@ export function AlertsCard() {
                   {condType === "metricThreshold" ? (
                     <AlertSelect value={nodeName} onChange={(e) => setNodeName(e.target.value)}>
                       <option value="">All nodes</option>
-                      {d.allNodeNames.map((n) => (
-                        <option key={n} value={n}>
-                          {n}
+                      {d.allNodes.map((n) => (
+                        <option key={n.name} value={n.hostname}>
+                          {n.name}
                         </option>
                       ))}
                     </AlertSelect>
