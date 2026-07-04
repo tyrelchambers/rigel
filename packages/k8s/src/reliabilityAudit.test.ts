@@ -93,6 +93,19 @@ describe("analyzeReliability", () => {
     const out = analyzeReliability({ workloads: [healthy()], pdbs: [{ namespace: "default", selector: { app: "web" } }], hpas: [] });
     expect(out.some((x) => x.type === "missingResourceRequests")).toBe(false);
   });
+
+  it("flags a :latest image and an untagged image, but not a pinned one", () => {
+    const latest = healthy({ name: "a", labels: { app: "a" } });
+    latest.containers[0].image = "nginx:latest";
+    const untagged = healthy({ name: "b", labels: { app: "b" } });
+    untagged.containers[0].image = "nginx";
+    const pinned = healthy({ name: "c", labels: { app: "c" } });
+    pinned.containers[0].image = "registry:5000/nginx:1.27.0";
+    const pdbs = ["a", "b", "c"].map((app) => ({ namespace: "default", selector: { app } }));
+    const out = analyzeReliability({ workloads: [latest, untagged, pinned], pdbs, hpas: [] });
+    const flagged = out.filter((x) => x.type === "latestImageTag").map((x) => x.name).sort();
+    expect(flagged).toEqual(["a", "b"]);
+  });
 });
 
 export { healthy };

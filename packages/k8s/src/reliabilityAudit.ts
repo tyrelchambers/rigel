@@ -95,6 +95,17 @@ function hpaKeepsMultiReplica(w: AuditWorkload, hpas: AuditHpa[]): boolean {
   );
 }
 
+/** Extract the tag from an image ref, or null if untagged. Strips any @digest,
+ *  and only treats a ':' after the last '/' as a tag (not a registry :port). */
+export function imageTagIsMutable(image?: string): boolean {
+  if (!image) return false;
+  const noDigest = image.split("@")[0];
+  const lastSlash = noDigest.lastIndexOf("/");
+  const lastColon = noDigest.lastIndexOf(":");
+  const tag = lastColon > lastSlash ? noDigest.slice(lastColon + 1) : null;
+  return tag === null || tag === "latest"; // untagged implies :latest
+}
+
 export function analyzeReliability(input: ReliabilityAuditInput): ReliabilityFinding[] {
   const findings: ReliabilityFinding[] = [];
   for (const w of input.workloads) {
@@ -140,6 +151,15 @@ export function analyzeReliability(input: ReliabilityAuditInput): ReliabilityFin
           severity: "warning",
           rationale: `Container has no ${missing} request, so the scheduler cannot place it reliably and it is first to be evicted under pressure.`,
           fix: "Set resources.requests for cpu and memory on the container.",
+        });
+      }
+      if (imageTagIsMutable(c.image)) {
+        findings.push({
+          ...cbase,
+          type: "latestImageTag",
+          severity: "warning",
+          rationale: "Container uses a mutable image tag (:latest or untagged), so the running image can change unexpectedly and cannot be rolled back to a known version.",
+          fix: "Pin the image to a specific version tag or digest.",
         });
       }
     }
