@@ -81,4 +81,30 @@ describe("analyzePerformance", () => {
     const out = analyzePerformance({ workloads: [healthy({ kind: "StatefulSet" })], hpas: [] });
     expect(out.some((x) => x.type === "noAutoscaling")).toBe(false);
   });
+
+  it("flags cpuThrottlingRisk when observed peak CPU is >= 95% of the limit, carrying evidence", () => {
+    const hotCpu: PerfUsageProvider = () => ({ cpuPeak: 0.96, memPeak: 100_000_000, hoursCovered: 30 * 24 });
+    const out = analyzePerformance({ workloads: [healthy()], hpas: [HPA_FOR_WEB], usage: hotCpu });
+    const f = out.find((x) => x.type === "cpuThrottlingRisk");
+    expect(f).toBeDefined();
+    expect(f?.severity).toBe("warning");
+    expect(f?.container).toBe("web");
+    expect(f?.evidence).toEqual({ cpuPeak: 0.96, memPeak: 100_000_000, cpuLimit: 1, memLimit: 1_000_000_000, hoursCovered: 30 * 24 });
+  });
+
+  it("does not flag cpuThrottlingRisk when no usage provider is supplied (spec-only degradation)", () => {
+    // Same workload shape that would trip cpuThrottlingRisk if usage were supplied,
+    // but no `usage` provider at all means the metrics checks never run.
+    const out = analyzePerformance({ workloads: [healthy()], hpas: [HPA_FOR_WEB] });
+    expect(out.some((x) => x.type === "cpuThrottlingRisk")).toBe(false);
+    // And the spec-only findings that DID run carry no evidence.
+    expect(out.every((f) => f.evidence === undefined)).toBe(true);
+  });
+
+  it("skips metrics checks entirely when hoursCovered is below the 24h floor", () => {
+    const tooLittleHistory: PerfUsageProvider = () => ({ cpuPeak: 0.99, memPeak: 999_000_000, hoursCovered: 10 });
+    const out = analyzePerformance({ workloads: [healthy()], hpas: [HPA_FOR_WEB], usage: tooLittleHistory });
+    expect(out.some((x) => x.type === "cpuThrottlingRisk")).toBe(false);
+    expect(out.some((x) => x.type === "memoryPressure")).toBe(false);
+  });
 });
