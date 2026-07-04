@@ -1,4 +1,4 @@
-import { Link2, ArrowRight, FileBadge, Box } from "lucide-react";
+import { Link2, ArrowRight, FileBadge, Box, Pencil, UserPlus, Code, Trash2 } from "lucide-react";
 import type { Grant } from "../types";
 import { RuleRow } from "./RuleRow";
 
@@ -7,7 +7,42 @@ function roleRefLabel(grant: Grant): string {
   return `${kind}/${grant.roleRef.name ?? "—"}`;
 }
 
-export function BindingCard({ grant }: { grant: Grant }) {
+interface Props {
+  grant: Grant;
+  onEdit?: (grant: Grant) => void;
+  onAddSubject?: (grant: Grant) => void;
+  onEditYaml?: (grant: Grant) => void;
+  onDelete?: (grant: Grant) => void;
+}
+
+function IconBtn({
+  label,
+  Icon,
+  onClick,
+  danger,
+}: {
+  label: string;
+  Icon: typeof Pencil;
+  onClick?: () => void;
+  danger?: boolean;
+}) {
+  if (!onClick) return null;
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className={`flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--border-subtle)] hover:bg-white/[0.05] ${
+        danger ? "text-[var(--status-failed)]" : "text-[var(--fg-tertiary)]"
+      }`}
+    >
+      <Icon className="size-[13px]" />
+    </button>
+  );
+}
+
+export function BindingCard({ grant, onEdit, onAddSubject, onEditYaml, onDelete }: Props) {
   const rules = grant.rules;
   return (
     <div className="flex flex-col gap-[13px] rounded-[var(--radius-lg)] border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-[18px]">
@@ -38,6 +73,12 @@ export function BindingCard({ grant }: { grant: Grant }) {
               {roleRefLabel(grant)}
             </span>
           </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-[6px]">
+          <IconBtn label="Edit binding" Icon={Pencil} onClick={onEdit && (() => onEdit(grant))} />
+          <IconBtn label="Add subject" Icon={UserPlus} onClick={onAddSubject && (() => onAddSubject(grant))} />
+          <IconBtn label="Edit YAML" Icon={Code} onClick={onEditYaml && (() => onEditYaml(grant))} />
+          <IconBtn label="Delete binding" Icon={Trash2} danger onClick={onDelete && (() => onDelete(grant))} />
         </div>
       </div>
 
