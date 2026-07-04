@@ -13,20 +13,34 @@
  */
 
 import { kubectl } from "@rigel/k8s/src/run";
+import {
+  type PromBackend,
+  type PromSeries,
+  type ServiceJson,
+  flavorForPort,
+  detectAllBackendsFromServices,
+  pickBackend,
+  proxyBase,
+  promEncode,
+  parsePromInstant,
+} from "@rigel/k8s/src/prometheus";
 
-/** Service name Rigel's own metrics-install flow creates (MetricsInstallManifests). */
-const INSTALL_SERVICE = "rigel-metrics";
+// Re-export so existing importers of this module keep working unchanged.
+export {
+  type PromBackend,
+  type PromSeries,
+  flavorForPort,
+  detectAllBackendsFromServices,
+  pickBackend,
+  proxyBase,
+  promEncode,
+  parsePromInstant,
+};
+
 /** Matches the install scrape_interval (60s); used to estimate hours of history. */
 const SCRAPE_INTERVAL_SECONDS = 60;
 /** History window queried, matching the Swift source. */
 const WINDOW = "30d";
-
-export interface PromBackend {
-  namespace: string;
-  service: string;
-  port: number;
-  flavor: "VictoriaMetrics" | "Prometheus" | "Metrics";
-}
 
 /** Per-(namespace, pod, container) aggregate usage over the window. */
 export interface PodUsage {
@@ -46,118 +60,9 @@ export interface UsageResult {
   items: PodUsage[];
 }
 
-interface ServicePort {
-  name?: string;
-  port: number;
-}
-interface ServiceJson {
-  metadata?: { name?: string; namespace?: string };
-  spec?: { ports?: ServicePort[] };
-}
-
-/** Prometheus/VictoriaMetrics instant-query series: `{ metric, value:[t,"v"] }`. */
-export interface PromSeries {
-  metric: Record<string, string>;
-  value: [number, string];
-}
-
-export function flavorForPort(port: number): PromBackend["flavor"] {
-  if (port === 8428 || port === 8481) return "VictoriaMetrics";
-  if (port === 9090) return "Prometheus";
-  return "Metrics";
-}
-
-/**
- * All usable Prometheus/VictoriaMetrics backends in the cluster's services
- * (deduped). Ports the Swift `MetricsBackendDetector`, plus first-class
- * recognition of the `rigel-metrics` service our own install flow creates
- * (whose name doesn't contain "victoria"/"prometheus", so the generic rules
- * would miss it). Used to populate the source picker.
- */
-export function detectAllBackendsFromServices(services: ServiceJson[]): PromBackend[] {
-  const candidates: PromBackend[] = [];
-  for (const svc of services) {
-    const rawName = svc.metadata?.name ?? "";
-    const name = rawName.toLowerCase();
-    const ns = svc.metadata?.namespace ?? "default";
-    const ports = svc.spec?.ports ?? [];
-    if (!rawName) continue;
-
-    // Skip obvious non-query services (operators, exporters, alertmanager, ksm).
-    if (
-      name.includes("operator") ||
-      name.includes("node-exporter") ||
-      name.includes("alertmanager") ||
-      name.includes("kube-state")
-    ) {
-      continue;
-    }
-
-    // 1. The backend Rigel's install flow creates (Service "rigel-metrics").
-    if (name === INSTALL_SERVICE) {
-      const p =
-        ports.find((x) => x.port === 8428 || x.port === 9090 || x.port === 8481) ?? ports[0];
-      if (p) candidates.push({ namespace: ns, service: rawName, port: p.port, flavor: flavorForPort(p.port) });
-      continue;
-    }
-
-    // 2. Prometheus query API → 9090 (or a "web"/"http" port).
-    if (name.includes("prometheus")) {
-      const p =
-        ports.find((x) => x.port === 9090) ??
-        ports.find((x) => (x.name ?? "").includes("web") || (x.name ?? "") === "http");
-      if (p) {
-        candidates.push({ namespace: ns, service: rawName, port: p.port, flavor: "Prometheus" });
-        continue;
-      }
-    }
-
-    // 3. VictoriaMetrics single-node → 8428; vmselect → 8481.
-    if (name.includes("victoria") || name.startsWith("vmsingle") || name.includes("vmselect")) {
-      const p = ports.find((x) => x.port === 8428 || x.port === 8481) ?? ports[0];
-      if (p) candidates.push({ namespace: ns, service: rawName, port: p.port, flavor: "VictoriaMetrics" });
-    }
-  }
-
-  const seen = new Set<string>();
-  return candidates.filter((c) => {
-    const key = `${c.namespace}/${c.service}:${c.port}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-/** Preferred single backend from a candidate list: our installed one → VM → Prometheus. */
-export function pickBackend(list: PromBackend[]): PromBackend | null {
-  return (
-    list.find((c) => c.service === INSTALL_SERVICE) ??
-    list.find((c) => c.flavor === "VictoriaMetrics") ??
-    list.find((c) => c.flavor === "Prometheus") ??
-    list[0] ??
-    null
-  );
-}
-
 /** The single best backend (auto-detect default). */
 export function detectBackendFromServices(services: ServiceJson[]): PromBackend | null {
   return pickBackend(detectAllBackendsFromServices(services));
-}
-
-/** API-server proxy base to the backend's HTTP query API. */
-export function proxyBase(b: PromBackend): string {
-  return `/api/v1/namespaces/${b.namespace}/services/${b.service}:${b.port}/proxy`;
-}
-
-/**
- * Percent-encode every character that isn't ASCII-alphanumeric. Mirrors the
- * Swift source's `.alphanumerics` allow-set so PromQL's reserved characters
- * ({}"=,!~()[]: and spaces) survive the round-trip through the proxy.
- */
-export function promEncode(promql: string): string {
-  return promql.replace(/[^A-Za-z0-9]/g, (c) =>
-    "%" + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0"),
-  );
 }
 
 /** Workload pod selector for the window queries. Adds the namespace when scoped. */
@@ -182,17 +87,6 @@ export function usageQueries(namespace: string): string[] {
     `${g} (quantile_over_time(0.95, rate(container_cpu_usage_seconds_total{${sel}}[5m])[${WINDOW}:5m]))`,
     `${g} (count_over_time(container_memory_working_set_bytes{${sel}}[${WINDOW}]))`,
   ];
-}
-
-/** Decode a `kubectl get --raw .../api/v1/query` body into its result series. */
-export function parsePromInstant(stdout: string): PromSeries[] {
-  try {
-    const json = JSON.parse(stdout) as { status?: string; data?: { result?: unknown } };
-    if (json?.status !== "success") return [];
-    return Array.isArray(json.data?.result) ? (json.data!.result as PromSeries[]) : [];
-  } catch {
-    return [];
-  }
 }
 
 interface UsageQuerySet {
