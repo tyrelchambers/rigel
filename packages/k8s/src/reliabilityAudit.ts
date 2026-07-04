@@ -204,3 +204,36 @@ export function analyzeReliability(input: ReliabilityAuditInput): ReliabilityFin
   }
   return findings;
 }
+
+export interface ReliabilityCounts {
+  critical: number;
+  warning: number;
+  info: number;
+  total: number;
+  workloadsAffected: number;
+}
+
+/** Stable urgency-first sort: severity rank, then namespace, then name, then type. */
+export function sortFindings(findings: ReliabilityFinding[]): ReliabilityFinding[] {
+  return [...findings].sort(
+    (a, b) =>
+      SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] ||
+      a.namespace.localeCompare(b.namespace) ||
+      a.name.localeCompare(b.name) ||
+      a.type.localeCompare(b.type),
+  );
+}
+
+export function reliabilityCounts(findings: ReliabilityFinding[]): ReliabilityCounts {
+  const affected = new Set<string>();
+  let critical = 0;
+  let warning = 0;
+  let info = 0;
+  for (const f of findings) {
+    affected.add(`${f.kind}/${f.namespace}/${f.name}`);
+    if (f.severity === "critical") critical++;
+    else if (f.severity === "warning") warning++;
+    else info++;
+  }
+  return { critical, warning, info, total: findings.length, workloadsAffected: affected.size };
+}

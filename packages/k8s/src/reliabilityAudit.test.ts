@@ -162,4 +162,28 @@ describe("analyzeReliability", () => {
   });
 });
 
+import { sortFindings, reliabilityCounts } from "./reliabilityAudit";
+
+describe("sortFindings / reliabilityCounts", () => {
+  it("orders findings by severity (critical, warning, info)", () => {
+    const findings = analyzeReliability({
+      workloads: [healthy({ replicas: 1, hasAntiAffinity: false })], // singleReplica (warning) + noAntiAffinity is skipped (replicas<2) → only warnings + PDB
+      pdbs: [],
+      hpas: [],
+    });
+    const sorted = sortFindings(findings);
+    const ranks = sorted.map((f) => SEVERITY_RANK[f.severity]);
+    expect(ranks).toEqual([...ranks].sort((a, b) => a - b));
+  });
+
+  it("counts findings by severity and affected workloads", () => {
+    const w = healthy({ replicas: 1, hasAntiAffinity: false, name: "web" });
+    w.containers[0].hasLiveness = false;
+    const counts = reliabilityCounts(analyzeReliability({ workloads: [w], pdbs: [], hpas: [] }));
+    expect(counts.warning).toBeGreaterThan(0);
+    expect(counts.total).toBe(counts.critical + counts.warning + counts.info);
+    expect(counts.workloadsAffected).toBe(1);
+  });
+});
+
 export { healthy };
