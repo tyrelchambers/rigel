@@ -19,6 +19,8 @@ export {
   auditCounts,
 } from "./auditCommon";
 
+export { parseQuantity } from "./quantity";
+
 export {
   type ReliabilityFindingType,
   type ReliabilityFinding,
