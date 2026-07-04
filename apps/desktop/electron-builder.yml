@@ -58,6 +58,14 @@ extraResources:
   # Built SPA (apps/web/dist) served by the Node server at WEB_DIST.
   - from: ../web/dist
     to: web/dist
+  # Assistant audit skills — SKILL.md files discovered by the chat `claude`
+  # (cwd = resources/server, so its `.claude/skills` are project-level skills).
+  - from: ../server/.claude/skills
+    to: server/.claude/skills
+  # The rigel-audit CLI bundle the audit skills run (via ELECTRON_RUN_AS_NODE).
+  # Built by `pnpm --filter @rigel/audit-cli build` before packaging.
+  - from: ../../packages/audit-cli/dist/rigel-audit.mjs
+    to: server/rigel-audit.mjs
 
 # Native node-pty is shipped unpacked via extraResources (above), so no asar
 # unpacking is needed for it. Re-state the intent defensively in case node-pty

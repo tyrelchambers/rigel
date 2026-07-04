@@ -12,7 +12,7 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell, utilityProcess, type UtilityProcess } from "electron";
 import { createServer } from "node:net";
 import { join } from "node:path";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, chmodSync, mkdirSync } from "node:fs";
 import { InstallStore } from "./installStore";
 import { submitSignup, deliver } from "./signup";
 import { decideRestart } from "./restartPolicy";
@@ -151,6 +151,50 @@ function applyLoginPath(): void {
 // PACKAGED (next task): point at the same server.mjs + node-pty + WEB_DIST copied
 // under process.resourcesPath. Left compiling (not exercised) here; the packaging
 // task wires the actual asar/resource layout.
+/**
+ * Wire the assistant's audit skills into the forked server's env so the chat
+ * `claude` (spawned by the server) can discover the SKILL.md files and run the
+ * `rigel-audit` CLI:
+ *  - RIGEL_SKILLS_DIR — the dir whose `.claude/skills` claudeBridge sets as the
+ *    `claude` spawn cwd, so Claude Code discovers the project-level audit skills.
+ *  - RIGEL_AUDIT_BIN_DIR — a bin dir claudeBridge prepends to the `claude` spawn
+ *    PATH, holding a `rigel-audit` wrapper that runs the bundled CLI via
+ *    ELECTRON_RUN_AS_NODE (a packaged GUI app has no node/tsx on PATH — the same
+ *    trick as the permission hook, HELMSMAN_HOOK_CMD below).
+ * Best-effort: if setup fails the audit skills just won't run; the app still boots.
+ */
+function configureAuditSkillsEnv(env: NodeJS.ProcessEnv): void {
+  try {
+    // The SKILL.md files ship at <serverDir>/.claude/skills (extraResources in
+    // packaging; the repo's apps/server in dev). rigel-audit.mjs ships next to the
+    // server (packaged) or is the built CLI bundle (dev).
+    const serverDir = app.isPackaged
+      ? join(process.resourcesPath, "server")
+      : join(APPS_DIR, "server");
+    const cliMjs = app.isPackaged
+      ? join(serverDir, "rigel-audit.mjs")
+      : join(APPS_DIR, "..", "packages", "audit-cli", "dist", "rigel-audit.mjs");
+
+    env.RIGEL_SKILLS_DIR = serverDir;
+
+    const binDir = join(app.getPath("userData"), "bin");
+    mkdirSync(binDir, { recursive: true });
+    if (process.platform === "win32") {
+      const cmd = `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${process.execPath}" "${cliMjs}" %*\r\n`;
+      writeFileSync(join(binDir, "rigel-audit.cmd"), cmd);
+    } else {
+      const shq = (p: string) => `'${p.replace(/'/g, "'\\''")}'`;
+      const sh = `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec ${shq(process.execPath)} ${shq(cliMjs)} "$@"\n`;
+      const wrapper = join(binDir, "rigel-audit");
+      writeFileSync(wrapper, sh);
+      chmodSync(wrapper, 0o755);
+    }
+    env.RIGEL_AUDIT_BIN_DIR = binDir;
+  } catch (err) {
+    console.error("[rigel] audit skills setup failed (audits disabled):", err);
+  }
+}
+
 function forkServer(port: number): UtilityProcess {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
@@ -159,6 +203,8 @@ function forkServer(port: number): UtilityProcess {
   };
   // Make sure the (possibly fixed) login PATH reaches the child explicitly.
   if (process.env.PATH) env.PATH = process.env.PATH;
+  // Expose the audit skills + rigel-audit CLI to the chat claude (see helper).
+  configureAuditSkillsEnv(env);
 
   let entry: string;
   let cwd: string;

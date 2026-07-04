@@ -6,7 +6,7 @@
   "homepage": "https://rigel.run",
   "main": "dist/main.js",
   "scripts": {
-    "build": "pnpm --filter web build && node build.mjs",
+    "build": "pnpm --filter web build && pnpm --filter @rigel/audit-cli build && node build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "dev": "pnpm build && electron .",
