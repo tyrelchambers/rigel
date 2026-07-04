@@ -7,6 +7,10 @@ interface Props {
   subject: ListSubject;
   grants: Grant[];
   onAsk: (subject: ListSubject) => void;
+  onEditBinding?: (grant: Grant) => void;
+  onAddSubject?: (grant: Grant) => void;
+  onEditBindingYaml?: (grant: Grant) => void;
+  onDeleteBinding?: (grant: Grant) => void;
 }
 
 function plural(n: number, one: string, many: string): string {
@@ -40,7 +44,15 @@ function LegendDot({ color, label }: { color: string; label: string }) {
   );
 }
 
-export function SubjectDetail({ subject, grants, onAsk }: Props) {
+export function SubjectDetail({
+  subject,
+  grants,
+  onAsk,
+  onEditBinding,
+  onAddSubject,
+  onEditBindingYaml,
+  onDeleteBinding,
+}: Props) {
   const namespaces = new Set(
     grants.filter((g) => g.scope.kind === "Namespaced").map((g) => (g.scope as { namespace: string }).namespace),
   );
@@ -103,7 +115,14 @@ export function SubjectDetail({ subject, grants, onAsk }: Props) {
 
       <div className="flex flex-col gap-[14px]">
         {grants.map((g, i) => (
-          <BindingCard key={`${g.bindingKind}:${g.bindingName}:${i}`} grant={g} />
+          <BindingCard
+            key={`${g.bindingKind}:${g.bindingName}:${i}`}
+            grant={g}
+            onEdit={onEditBinding}
+            onAddSubject={onAddSubject}
+            onEditYaml={onEditBindingYaml}
+            onDelete={onDeleteBinding}
+          />
         ))}
       </div>
     </div>

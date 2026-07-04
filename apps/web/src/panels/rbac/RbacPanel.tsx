@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { Eye } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { buildRbacAccessPrompt } from "@/panels/components/chatHandoffPrompts";
+import type { ActionBlock } from "@/lib/api";
+import { ConfirmSheet } from "@/components/ConfirmSheet";
+import { editYaml } from "@/store/yamlViewer";
+import { buildDeleteAction } from "./rbacActions";
 import type {
   ClusterRole,
   ClusterRoleBinding,
+  Grant,
   ListSubject,
   Role,
   RoleBinding,
@@ -42,6 +46,7 @@ export default function RbacPanel() {
   const [scope, setScope] = useState<ScopeFilter>("all");
   const [search, setSearch] = useState("");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
 
   useEffect(() => {
     // Subjects are derived from bindings, so ServiceAccounts aren't watched here
@@ -155,6 +160,27 @@ export default function RbacPanel() {
     handoffToChat(buildRbacAccessPrompt(s));
   }
 
+  function deleteRoleItem(r: RoleItem) {
+    setPendingAction(
+      buildDeleteAction(r.kind === "ClusterRole" ? "clusterrole" : "role", r.name, r.namespace),
+    );
+  }
+  function editRoleYaml(r: RoleItem) {
+    editYaml(r.kind === "ClusterRole" ? "clusterrole" : "role", r.name, r.namespace);
+  }
+  function bindingResourceKind(g: Grant) {
+    return g.bindingKind === "RoleBinding" ? ("rolebinding" as const) : ("clusterrolebinding" as const);
+  }
+  function bindingNamespace(g: Grant) {
+    return g.scope.kind === "Namespaced" ? g.scope.namespace : undefined;
+  }
+  function deleteBinding(g: Grant) {
+    setPendingAction(buildDeleteAction(bindingResourceKind(g), g.bindingName, bindingNamespace(g)));
+  }
+  function editBindingYaml(g: Grant) {
+    editYaml(bindingResourceKind(g), g.bindingName, bindingNamespace(g));
+  }
+
   const empty = view === "subjects" ? subjects.length === 0 : roleItems.length === 0;
 
   return (
@@ -194,7 +220,13 @@ export default function RbacPanel() {
                 {view === "subjects" ? "No subjects found." : "No roles found."}
               </p>
             ) : view === "subjects" && selectedSubject ? (
-              <SubjectDetail subject={selectedSubject} grants={grants} onAsk={askAboutSubject} />
+              <SubjectDetail
+                subject={selectedSubject}
+                grants={grants}
+                onAsk={askAboutSubject}
+                onEditBindingYaml={editBindingYaml}
+                onDeleteBinding={deleteBinding}
+              />
             ) : view === "roles" && selectedRole ? (
               <RoleDetail
                 roleName={selectedRole.name}
@@ -202,18 +234,19 @@ export default function RbacPanel() {
                 roleNamespace={selectedRole.namespace}
                 rules={roleRules}
                 boundSubjects={boundSubjects}
+                onEditYaml={() => editRoleYaml(selectedRole)}
+                onDelete={() => deleteRoleItem(selectedRole)}
               />
             ) : null}
           </div>
         </div>
-
-        <div className="flex items-center justify-center gap-2 pt-1">
-          <Eye className="size-[13px] text-[var(--fg-tertiary)]" />
-          <span className="text-[12px] text-[var(--fg-tertiary)]">
-            Read-only view. RBAC is inspected here, not edited.
-          </span>
-        </div>
       </div>
+
+      <ConfirmSheet
+        action={pendingAction}
+        open={!!pendingAction}
+        onClose={() => setPendingAction(null)}
+      />
     </div>
   );
 }

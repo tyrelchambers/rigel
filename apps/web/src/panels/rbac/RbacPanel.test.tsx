@@ -5,6 +5,11 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 vi.mock("@/lib/ws", () => ({ subscribe: vi.fn(), unsubscribe: vi.fn() }));
 vi.mock("@/lib/chatHandoff", () => ({ handoffToChat: vi.fn() }));
 vi.mock("@/shell/NamespaceBar", () => ({ NamespaceSelector: () => null }));
+vi.mock("@/store/yamlViewer", () => ({ editYaml: vi.fn(), viewYaml: vi.fn() }));
+vi.mock("@/components/ConfirmSheet", () => ({
+  ConfirmSheet: ({ open, action }: { open: boolean; action: { label?: string } | null }) =>
+    open ? <div data-testid="confirm">{action?.label}</div> : null,
+}));
 
 const state: {
   resources: Record<string, Record<string, unknown>>;
@@ -85,4 +90,23 @@ test("Namespaced scope resolves a RoleBinding→ClusterRole grant and keeps it d
   // "Role not found in scope" fallback.
   expect(screen.getByText("ClusterRole/admin")).toBeTruthy();
   expect(screen.queryByText(/Role not found in scope/)).toBeNull();
+});
+
+test("deleting a role opens the confirm sheet", () => {
+  setResources({
+    clusterroles: {
+      "2": { metadata: { name: "admin", uid: "2" }, rules: [{ verbs: ["*"], resources: ["*"] }] },
+    },
+    clusterrolebindings: {
+      "1": {
+        metadata: { name: "cadmin", uid: "1" },
+        roleRef: { kind: "ClusterRole", name: "admin" },
+        subjects: [{ kind: "Group", name: "system:masters" }],
+      },
+    },
+  });
+  render(<RbacPanel />);
+  fireEvent.click(screen.getByRole("tab", { name: "Roles" }));
+  fireEvent.click(screen.getByRole("button", { name: "Delete role" }));
+  expect(screen.getByTestId("confirm").textContent).toContain("Delete clusterrole admin");
 });
