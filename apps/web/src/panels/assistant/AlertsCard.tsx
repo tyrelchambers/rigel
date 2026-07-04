@@ -7,15 +7,27 @@ import {
   Bell,
   BellPlus,
   BellRing,
+  Box,
   ChevronDown,
+  CircleAlert,
   CircleX,
+  Clock,
   Cpu,
+  Database,
+  Flame,
+  Globe,
+  History,
+  Pencil,
   Plus,
   Repeat,
+  RotateCcw,
   Send,
+  Server,
   Sparkles,
+  Trash2,
   WandSparkles,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import {
   Dialog,
@@ -24,12 +36,12 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { useAssistantCtx } from "./AssistantContext";
+import { relativeTime } from "./display";
 import { fetchBackends } from "@/panels/rightsizing/useRightSizing";
-import { alertRuleSummary, type SuggestedAlert, type AlertTarget, type AlertCondition } from "@/lib/alerts";
+import type { SuggestedAlert, AlertRule, AlertTarget, AlertCondition } from "@/lib/alerts";
 import type { AlertScope } from "@rigel/k8s";
 
 // Shared styling for the styled form controls in the New alert dialog — a
@@ -164,6 +176,62 @@ const COND_LABELS: Record<AlertCondType, string> = {
 
 const DEGRADED_SCOPES: AlertScope[] = ["cluster", "namespace", "workload"];
 
+// --- Alert row descriptors (Pencil frame "Alerts rows (improved)") ------------
+
+type Severity = "critical" | "warning";
+
+/** Icon + short badge + severity for a rule's condition, driving the row tile
+ *  and the leading condition pill. */
+function conditionMeta(c: AlertCondition): { Icon: LucideIcon; badge: string; sev: Severity } {
+  switch (c.type) {
+    case "oomKilled":
+      return { Icon: Flame, badge: "OOMKilled", sev: "critical" };
+    case "crashLoop":
+      return { Icon: Repeat, badge: "CrashLoop", sev: "critical" };
+    case "deploymentDegraded":
+      return { Icon: CircleX, badge: "Degraded", sev: "critical" };
+    case "podRestarts":
+      return { Icon: RotateCcw, badge: "Restarts", sev: "warning" };
+    case "pendingTooLong":
+      return { Icon: Clock, badge: "Pending", sev: "warning" };
+    case "notReady":
+      return { Icon: CircleAlert, badge: "Not ready", sev: "warning" };
+    case "metricThreshold": {
+      const m = c.metric === "cpuPercent" ? "CPU" : "Mem";
+      const op = c.comparator === "above" ? ">" : "<";
+      return { Icon: Cpu, badge: `${m} ${op}${c.threshold}%`, sev: "warning" };
+    }
+  }
+}
+
+/** Icon + compact label for a rule's target scope (the second meta chip). */
+function scopeMeta(t: AlertTarget): { Icon: LucideIcon; label: string } {
+  switch (t.scope) {
+    case "cluster":
+      return { Icon: Globe, label: "cluster-wide" };
+    case "namespace":
+      return { Icon: Box, label: `namespace: ${t.namespace ?? "?"}` };
+    case "workload":
+      return { Icon: Box, label: `${t.kind ?? "workload"} ${t.name ?? ""}`.trim() };
+    case "pod":
+      return { Icon: Box, label: `pod ${t.name ?? ""}`.trim() };
+    case "database":
+      return { Icon: Database, label: `db ${t.name ?? ""}`.trim() };
+    case "node":
+      return { Icon: Server, label: t.name ? `node ${t.name}` : "all nodes" };
+  }
+}
+
+/** Hairline meta chip: small icon + mono label (scope, channel). */
+function MetaChip({ Icon, children }: { Icon: LucideIcon; children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-[5px] rounded border border-[var(--border-subtle)] bg-white/[0.04] px-2 py-0.5">
+      <Icon className="size-[11px] shrink-0 text-[var(--fg-tertiary)]" />
+      <span className="font-mono text-[11px] text-[var(--fg-tertiary)]">{children}</span>
+    </span>
+  );
+}
+
 export function AlertsCard() {
   const { d, ns, working, run } = useAssistantCtx();
 
@@ -171,6 +239,8 @@ export function AlertsCard() {
   const hasBackend = (backendsQuery.data?.length ?? 0) > 0;
 
   const [open, setOpen] = useState(false);
+  // Rule id being edited (dialog is in edit mode) or null for a fresh alert.
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [scope, setScope] = useState<AlertScope>("workload");
   const [namespace, setNamespace] = useState("default");
   const [kind, setKind] = useState<AlertKind>("Deployment");
@@ -189,6 +259,54 @@ export function AlertsCard() {
   const needsNamespace = scope !== "cluster";
   const needsName = scope === "workload" || scope === "pod" || scope === "database";
   const allowsDegraded = DEGRADED_SCOPES.includes(scope);
+
+  // Reset the form to defaults and open it for a brand-new alert.
+  function startCreate() {
+    setEditingId(null);
+    setScope("workload");
+    setNamespace("default");
+    setKind("Deployment");
+    setName("");
+    setCondType("crashLoop");
+    setThreshold(3);
+    setWindowMinutes(60);
+    setMinutes(5);
+    setCooldown(0);
+    setLabel("");
+    setMetric("memoryPercent");
+    setComparator("above");
+    setMetricPct(90);
+    setNodeName("");
+    setOpen(true);
+  }
+
+  // Prefill the form from an existing rule and open it in edit mode. Saving
+  // reuses the rule id (server replaces in place), preserving its fire history.
+  function startEdit(rule: AlertRule) {
+    const t = rule.target;
+    const c = rule.condition;
+    setEditingId(rule.id);
+    setCondType(c.type);
+    setScope(t.scope);
+    setNamespace(t.namespace ?? "default");
+    setKind(t.kind ?? "Deployment");
+    setName(t.name ?? "");
+    setCooldown(rule.cooldownMinutes);
+    setLabel(rule.text);
+    if (c.type === "podRestarts") {
+      setThreshold(c.threshold);
+      setWindowMinutes(c.windowMinutes);
+    } else if (c.type === "pendingTooLong" || c.type === "notReady" || c.type === "deploymentDegraded") {
+      setMinutes(c.minutes);
+    } else if (c.type === "metricThreshold") {
+      setMetric(c.metric);
+      setComparator(c.comparator);
+      setMetricPct(c.threshold);
+      setMinutes(c.minutes);
+      setNodeName(t.name ?? "");
+    }
+    setOpen(true);
+  }
 
   function handleScopeChange(newScope: AlertScope) {
     setScope(newScope);
@@ -233,6 +351,17 @@ export function AlertsCard() {
     );
   }, [needsNamespace, needsName, namespace, name, condType, threshold, windowMinutes, minutes, metricPct]);
 
+  // Persist the assembled alert. `editingId` (when set) reuses the rule id so the
+  // server replaces in place; otherwise a fresh rule is created.
+  function save(alert: SuggestedAlert) {
+    run({ action: "saveAlert", namespace: ns, alert, ...(editingId ? { alertId: editingId } : {}) }, () => {
+      setOpen(false);
+      setName("");
+      setLabel("");
+      setEditingId(null);
+    });
+  }
+
   function create() {
     if (condType === "metricThreshold") {
       const target: AlertTarget = { scope: "node" };
@@ -252,11 +381,7 @@ export function AlertsCard() {
         condition,
         ...(cooldown > 0 ? { cooldownMinutes: Number(cooldown) } : {}),
       };
-      run({ action: "saveAlert", namespace: ns, alert }, () => {
-        setOpen(false);
-        setName("");
-        setLabel("");
-      });
+      save(alert);
       return;
     }
 
@@ -291,11 +416,7 @@ export function AlertsCard() {
       ...(cooldown > 0 ? { cooldownMinutes: Number(cooldown) } : {}),
     };
 
-    run({ action: "saveAlert", namespace: ns, alert }, () => {
-      setOpen(false);
-      setName("");
-      setLabel("");
-    });
+    save(alert);
   }
 
   const namePlaceholder =
@@ -327,7 +448,7 @@ export function AlertsCard() {
         </div>
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          onClick={startCreate}
           className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--accent-primary)] bg-[var(--accent-dim)] px-3.5 py-2 text-[13px] font-semibold text-[var(--accent-primary)] transition-colors hover:border-[var(--accent-hover)] hover:text-[var(--accent-hover)]"
         >
           <Plus className="size-[15px]" />
@@ -358,6 +479,7 @@ export function AlertsCard() {
                 type="button"
                 onClick={() => {
                   if ("preset" in s && s.preset === "nodeMemory" && hasBackend) {
+                    setEditingId(null);
                     handleCondChange("metricThreshold");
                     setMetric("memoryPercent");
                     setComparator("above");
@@ -378,57 +500,120 @@ export function AlertsCard() {
           </div>
         </div>
       ) : (
-        <div className="mt-4 space-y-2">
-          {d.alertRules.map((rule) => (
-            <div
-              key={rule.id}
-              className={`flex items-start justify-between gap-2 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] p-3 ${
-                rule.enabled ? "" : "opacity-50"
-              }`}
-            >
-              <div className="min-w-0 flex-1">
-                <span className="text-sm font-medium text-[var(--fg-primary)]">{rule.text}</span>
-                <span className="text-sm text-[var(--fg-tertiary)]"> {alertRuleSummary(rule)}</span>
-                {!rule.enabled && (
-                  <span className="ml-2 rounded bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-[var(--fg-tertiary)]">
-                    disabled
-                  </span>
+        <div className="mt-4 flex flex-col gap-2.5">
+          {d.alertRules.map((rule) => {
+            const { Icon, badge, sev } = conditionMeta(rule.condition);
+            const scopeChip = scopeMeta(rule.target);
+            const fired = d.alertLastFiredAt[rule.id];
+            const hasWebhook = d.webhookURL.trim() !== "";
+            const critical = sev === "critical";
+            return (
+              <div
+                key={rule.id}
+                className={cn(
+                  "flex items-center gap-3.5 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-4 py-[13px]",
+                  !rule.enabled && "opacity-[0.55]",
                 )}
-              </div>
-              <div className="flex shrink-0 gap-1">
-                <Button
-                  variant="muted"
-                  size="sm"
-                  disabled={working}
-                  onClick={() =>
-                    run({
-                      action: "toggleAlert",
-                      namespace: ns,
-                      alertId: rule.id,
-                      alertEnabled: !rule.enabled,
-                    })
-                  }
+              >
+                {/* Condition tile */}
+                <div
+                  className={cn(
+                    "flex size-9 shrink-0 items-center justify-center rounded-[9px]",
+                    critical ? "bg-red-500/10" : "bg-amber-400/10",
+                  )}
                 >
-                  {rule.enabled ? "Disable" : "Enable"}
-                </Button>
-                <Button
-                  variant="muted"
-                  size="sm"
-                  disabled={working}
-                  onClick={() =>
-                    run({ action: "deleteAlert", namespace: ns, alertId: rule.id })
-                  }
-                >
-                  Delete
-                </Button>
+                  <Icon className={cn("size-[17px]", critical ? "text-red-500" : "text-amber-400")} />
+                </div>
+
+                {/* Title + meta */}
+                <div className="flex min-w-0 flex-1 flex-col gap-[7px]">
+                  <p className="truncate text-[14.5px] font-semibold text-[var(--fg-primary)]">{rule.text}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={cn(
+                        "rounded px-2 py-0.5 font-mono text-[11px] font-semibold",
+                        critical ? "bg-red-500/10 text-red-500" : "bg-amber-400/10 text-amber-400",
+                      )}
+                    >
+                      {badge}
+                    </span>
+                    <MetaChip Icon={scopeChip.Icon}>{scopeChip.label}</MetaChip>
+                    {hasWebhook && <MetaChip Icon={Bell}>Webhook</MetaChip>}
+                    <span className="inline-flex items-center gap-[5px]">
+                      <History className="size-[11px] shrink-0 text-[var(--fg-tertiary)]" />
+                      <span className="text-[11.5px] text-[var(--fg-tertiary)]">
+                        {fired ? `${relativeTime(fired)} ago` : "never"}
+                      </span>
+                    </span>
+                    {!rule.enabled && (
+                      <span className="rounded bg-white/5 px-2 py-0.5 font-mono text-[10.5px] tracking-[0.03em] text-[var(--fg-tertiary)]">
+                        Disabled
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={rule.enabled}
+                    aria-label={rule.enabled ? "Disable alert" : "Enable alert"}
+                    disabled={working}
+                    onClick={() =>
+                      run({
+                        action: "toggleAlert",
+                        namespace: ns,
+                        alertId: rule.id,
+                        alertEnabled: !rule.enabled,
+                      })
+                    }
+                    className={cn(
+                      "inline-flex h-[22px] w-9 shrink-0 items-center rounded-full p-0.5 transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+                      rule.enabled ? "bg-emerald-500" : "bg-white/10",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "size-[18px] rounded-full transition-transform",
+                        rule.enabled ? "translate-x-[14px] bg-white" : "translate-x-0 bg-[var(--fg-tertiary)]",
+                      )}
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Edit alert"
+                    disabled={working}
+                    onClick={() => startEdit(rule)}
+                    className="rounded-md p-[7px] text-[var(--fg-tertiary)] transition-colors hover:bg-white/[0.06] hover:text-[var(--fg-secondary)] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Pencil className="size-[15px]" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Delete alert"
+                    disabled={working}
+                    onClick={() => run({ action: "deleteAlert", namespace: ns, alertId: rule.id })}
+                    className="rounded-md p-[7px] text-[var(--fg-tertiary)] transition-colors hover:bg-red-500/10 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Trash2 className="size-[15px]" />
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
       {/* New alert dialog — Pencil frame "New alert modal (improved)" */}
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(o) => {
+          setOpen(o);
+          if (!o) setEditingId(null);
+        }}
+      >
         <DialogContent className="max-w-[720px]">
           {/* Header */}
           <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border-subtle)] px-6 pt-[22px] pb-[18px]">
@@ -438,7 +623,7 @@ export function AlertsCard() {
               </div>
               <div className="flex flex-col gap-[3px]">
                 <DialogTitle className="text-xl font-bold text-[var(--fg-primary)]">
-                  New alert
+                  {editingId ? "Edit alert" : "New alert"}
                 </DialogTitle>
                 <DialogDescription className="text-[13px] text-[var(--fg-tertiary)]">
                   Get notified when a resource hits a condition.
@@ -726,7 +911,7 @@ export function AlertsCard() {
                 className="inline-flex items-center gap-2 rounded-md bg-[var(--accent-primary)] px-[22px] py-[11px] text-sm font-bold text-[var(--fg-inverse)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <BellPlus className="size-[15px]" />
-                Create alert
+                {editingId ? "Save changes" : "Create alert"}
               </button>
             </div>
           </div>

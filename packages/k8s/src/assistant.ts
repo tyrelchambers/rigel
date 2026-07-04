@@ -903,6 +903,8 @@ export interface AssistantClusterState {
   pullRequests: AssistantPullRequest[];
   /** Scheduled-digest send-state (last-sent + last preview). Absent when no digests fired. */
   digestState?: AssistantDigestState;
+  /** Per-rule last-fired timestamps (ISO), from the agent's alertState. Empty when no alert has fired. */
+  alertLastFiredAt?: Record<string, string>;
 }
 
 /**
@@ -933,6 +935,10 @@ export function decodeClusterState(raw: string | undefined | null): AssistantClu
           ? rawDigestState.lastPreview as { id: string; at: string; text: string } : undefined,
       }
     : undefined;
+  const rawAlertState = o.alertState && typeof o.alertState === "object"
+    ? (o.alertState as Record<string, unknown>) : null;
+  const alertLastFiredAt = rawAlertState && rawAlertState.lastFiredAt && typeof rawAlertState.lastFiredAt === "object"
+    ? (rawAlertState.lastFiredAt as Record<string, string>) : undefined;
   return {
     updatedAt: typeof o.updatedAt === "string" ? o.updatedAt : undefined,
     status: (o.status as AssistantAgentStatus | undefined) ?? undefined,
@@ -941,6 +947,7 @@ export function decodeClusterState(raw: string | undefined | null): AssistantClu
     report: typeof o.report === "string" ? o.report : "",
     pullRequests: Array.isArray(o.pullRequests) ? (o.pullRequests as AssistantPullRequest[]) : [],
     digestState,
+    alertLastFiredAt,
   };
 }
 

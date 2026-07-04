@@ -167,7 +167,7 @@ export interface AssistantRequest {
   matrixInbound?: boolean;
   // alert rules (saveAlert/deleteAlert/toggleAlert)
   alert?: SuggestedAlert;   // saveAlert payload (model block, validated server-side)
-  alertId?: string;          // delete/toggle
+  alertId?: string;          // delete/toggle, or saveAlert edit-in-place (replace by id)
   alertEnabled?: boolean;    // toggle
   // scheduled digests (saveDigest/deleteDigest/toggleDigest/sendDigestNow)
   digest?: DigestInput;     // saveDigest payload (validated server-side)
@@ -395,7 +395,7 @@ async function setMatrix(
 }
 
 /** Read-modify-write the `alertRules` key of `assistant-config`. */
-async function mutateAlerts(
+export async function mutateAlerts(
   context: string | null,
   namespace: string,
   req: AssistantRequest,
@@ -405,7 +405,10 @@ async function mutateAlerts(
   let next;
   if (req.action === "saveAlert") {
     if (!req.alert) throw new Error("saveAlert requires an `alert` payload.");
-    const rule = normalizeAlertRule(req.alert, crypto.randomUUID(), Date.now());
+    // With `alertId`, saveAlert edits in place: `nextAlertRules({op:"add"})`
+    // de-dupes by id, so reusing the id replaces the rule while keeping its
+    // identity (and thus the agent's per-rule lastFiredAt/cooldown state).
+    const rule = normalizeAlertRule(req.alert, req.alertId ?? crypto.randomUUID(), Date.now());
     next = nextAlertRules(rules, { op: "add", rule });
   } else if (req.action === "deleteAlert") {
     if (!req.alertId) throw new Error("deleteAlert requires `alertId`.");

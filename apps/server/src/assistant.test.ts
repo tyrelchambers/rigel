@@ -773,7 +773,7 @@ test("setMatrixSecret returns the token Secret YAML only when a token is supplie
 // mutateDigests / digestRunNowUpdate (scheduled digests, Phase 7 / Task 13)
 // ---------------------------------------------------------------------------
 
-import { mutateDigests, digestRunNowUpdate } from "./assistant";
+import { mutateDigests, digestRunNowUpdate, mutateAlerts } from "./assistant";
 import * as runMod from "@rigel/k8s/src/run";
 
 describe("mutateDigests", () => {
@@ -848,5 +848,70 @@ describe("mutateDigests", () => {
     expect(parsed.id).toBe("a");
     expect(parsed.mode).toBe("preview");
     expect(typeof parsed.token).toBe("string");
+  });
+});
+
+describe("mutateAlerts", () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  test("saveAlert without alertId appends a fresh rule with a generated id", async () => {
+    const existing = JSON.stringify([{
+      id: "rule-1", enabled: true, text: "old rule",
+      target: { scope: "cluster" }, condition: { type: "oomKilled" }, cooldownMinutes: 5, createdAt: "",
+    }]);
+    let appliedStdin = "";
+    vi.spyOn(runMod, "kubectl").mockResolvedValue({
+      code: 0, stdout: JSON.stringify({ data: { alertRules: existing } }), stderr: "",
+    });
+    vi.spyOn(runMod, "runProcessWithStdin").mockImplementation(async (_p, _a, stdin) => {
+      appliedStdin = stdin as string;
+      return { code: 0, stdout: "", stderr: "" };
+    });
+    await mutateAlerts(null, "default", {
+      action: "saveAlert",
+      alert: { label: "Alert: new", text: "new rule", target: { scope: "cluster" }, condition: { type: "crashLoop" } },
+    });
+    const cm = JSON.parse(appliedStdin) as { data: Record<string, string> };
+    const rules = JSON.parse(cm.data.alertRules) as { id: string; text: string }[];
+    expect(rules).toHaveLength(2);
+    expect(rules.map((r) => r.id)).toContain("rule-1");
+    const added = rules.find((r) => r.text === "new rule")!;
+    expect(added.id).not.toBe("rule-1");
+    expect(typeof added.id).toBe("string");
+  });
+
+  test("saveAlert WITH alertId replaces in place: same id, updated fields, no extra entry", async () => {
+    const existing = JSON.stringify([{
+      id: "rule-1", enabled: true, text: "old text",
+      target: { scope: "cluster" }, condition: { type: "oomKilled" }, cooldownMinutes: 5, createdAt: "2026-01-01T00:00:00.000Z",
+    }]);
+    let appliedStdin = "";
+    vi.spyOn(runMod, "kubectl").mockResolvedValue({
+      code: 0, stdout: JSON.stringify({ data: { alertRules: existing } }), stderr: "",
+    });
+    vi.spyOn(runMod, "runProcessWithStdin").mockImplementation(async (_p, _a, stdin) => {
+      appliedStdin = stdin as string;
+      return { code: 0, stdout: "", stderr: "" };
+    });
+    await mutateAlerts(null, "default", {
+      action: "saveAlert",
+      alertId: "rule-1",
+      alert: {
+        label: "Alert: updated", text: "updated text",
+        target: { scope: "namespace", namespace: "prod" }, condition: { type: "crashLoop" },
+      },
+    });
+    const cm = JSON.parse(appliedStdin) as { data: Record<string, string> };
+    const rules = JSON.parse(cm.data.alertRules) as {
+      id: string; text: string; target: { scope: string; namespace?: string }; condition: { type: string };
+    }[];
+    // No extra entry — the rule was replaced, not appended.
+    expect(rules).toHaveLength(1);
+    // Same id preserved (keeps the agent's per-rule fire history/cooldown attached).
+    expect(rules[0].id).toBe("rule-1");
+    // Updated fields applied.
+    expect(rules[0].text).toBe("updated text");
+    expect(rules[0].target.scope).toBe("namespace");
+    expect(rules[0].condition.type).toBe("crashLoop");
   });
 });

@@ -104,6 +104,8 @@ export interface AssistantDerived {
   backupYAML: (ref: string) => string | undefined;
   /** Parsed alert rules from the assistant-config ConfigMap. */
   alertRules: AlertRule[];
+  /** Per-rule last-fired ISO timestamps, from the agent's alertState (empty when none fired). */
+  alertLastFiredAt: Record<string, string>;
   /** Per-role provider/model/effort, parsed from assistant-config (defaults applied). */
   roles: { worker: AssistantRoleSelection; supervisor: AssistantRoleSelection };
   /** Operational limits parsed from assistant-config (absent keys omitted). */
@@ -292,6 +294,7 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
         .sort((a, b) => a.name.localeCompare(b.name)),
       backupYAML: (ref) => configMap("assistant-backups")?.data?.[ref],
       alertRules: parseAlertRules(configData["alertRules"]),
+      alertLastFiredAt: clusterState?.alertLastFiredAt ?? {},
       roles: parseRolesFromConfig(configData),
       limits: parseLimitsFromConfig(configData),
       autofix: parseAutofixFromConfig(configData),

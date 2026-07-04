@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AlertsTab } from "./AlertsTab";
 import { AssistantContext, type AssistantContextValue } from "../AssistantContext";
 import type { AssistantDerived } from "../useAssistant";
+import type { AlertRule } from "@rigel/k8s";
 
 vi.mock("@/lib/chatHandoff", () => ({ handoffToChat: vi.fn() }));
 import { handoffToChat } from "@/lib/chatHandoff";
@@ -19,12 +20,23 @@ function derived(overrides: Partial<AssistantDerived> = {}): AssistantDerived {
     quietWindow: "",
     webhookURL: "",
     alertRules: [],
+    alertLastFiredAt: {},
     silenced: [],
     allNamespaceNames: ["default"],
     allNodes: [],
     ...overrides,
   } as AssistantDerived;
 }
+
+const oomRule: AlertRule = {
+  id: "r1",
+  enabled: true,
+  text: "Alert when any pod is OOMKilled",
+  target: { scope: "cluster" },
+  condition: { type: "oomKilled" },
+  cooldownMinutes: 5,
+  createdAt: "",
+};
 
 function ctx(d: AssistantDerived): AssistantContextValue {
   return { d, ns: "default", working: false, run, setTab } as unknown as AssistantContextValue;
@@ -105,5 +117,50 @@ describe("AlertsTab", () => {
     wrap();
     await userEvent.click(screen.getByRole("button", { name: /Settings tab/i }));
     expect(setTab).toHaveBeenCalledWith("settings");
+  });
+
+  it("renders an improved alert row: condition badge, scope chip, channel, last-fired", () => {
+    wrap(
+      derived({
+        alertRules: [oomRule],
+        alertLastFiredAt: { r1: new Date(Date.now() - 3 * 3600_000).toISOString() },
+        webhookURL: "https://hooks.example/x",
+      }),
+    );
+    expect(screen.getByText(oomRule.text)).toBeInTheDocument();
+    expect(screen.getByText("OOMKilled")).toBeInTheDocument();
+    expect(screen.getByText("cluster-wide")).toBeInTheDocument();
+    expect(screen.getByText("Webhook")).toBeInTheDocument();
+    expect(screen.getByText(/ago$/)).toBeInTheDocument();
+  });
+
+  it("shows 'never' when a rule has not fired, and no channel chip without a webhook", () => {
+    wrap(derived({ alertRules: [oomRule] }));
+    expect(screen.getByText("never")).toBeInTheDocument();
+    expect(screen.queryByText("Webhook")).not.toBeInTheDocument();
+  });
+
+  it("toggling the row switch calls toggleAlert with the inverted enabled state", async () => {
+    wrap(derived({ alertRules: [oomRule] }));
+    await userEvent.click(screen.getByRole("switch", { name: /Disable alert/i }));
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "toggleAlert", alertId: "r1", alertEnabled: false }),
+    );
+  });
+
+  it("the trash button deletes the rule", async () => {
+    wrap(derived({ alertRules: [oomRule] }));
+    await userEvent.click(screen.getByRole("button", { name: /Delete alert/i }));
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "deleteAlert", alertId: "r1" }),
+    );
+  });
+
+  it("editing a rule opens the dialog in edit mode (Edit alert / Save changes)", async () => {
+    wrap(derived({ alertRules: [oomRule] }));
+    await userEvent.click(screen.getByRole("button", { name: /Edit alert/i }));
+    expect(screen.getByRole("button", { name: /Save changes/i })).toBeInTheDocument();
+    // Header reflects edit mode (distinct from the row's aria-label button).
+    expect(screen.getByText("Edit alert")).toBeInTheDocument();
   });
 });

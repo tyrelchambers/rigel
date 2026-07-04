@@ -239,6 +239,22 @@ test("decodeClusterState parses audit/queue/report/status", () => {
   expect(s.report).toBe("all good");
 });
 
+test("decodeClusterState surfaces per-rule alert last-fired timestamps", () => {
+  const raw = JSON.stringify({
+    alertState: {
+      lastFiredAt: { "rule-1": "2026-07-04T10:00:00.000Z" },
+      restartBaselines: {},
+      metricBreaches: {},
+    },
+  });
+  const s = decodeClusterState(raw)!;
+  expect(s.alertLastFiredAt).toEqual({ "rule-1": "2026-07-04T10:00:00.000Z" });
+});
+
+test("decodeClusterState leaves alertLastFiredAt undefined when alertState is absent", () => {
+  expect(decodeClusterState("{}")!.alertLastFiredAt).toBeUndefined();
+});
+
 test("decodeClusterState returns null on bad input", () => {
   expect(decodeClusterState(null)).toBeNull();
   expect(decodeClusterState("not json")).toBeNull();
