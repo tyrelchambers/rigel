@@ -8,6 +8,16 @@
 
 export type Health = "ok" | "warn" | "broken";
 
+/** A pod backing a flow's service, with its readiness derived at compute time. */
+export interface FlowPod {
+  /** Pod name. */
+  name: string;
+  /** True iff Running with all containers ready (isPodReady). */
+  ready: boolean;
+  /** Pod phase (e.g. "Running", "Pending"); "Unknown" when absent. */
+  phase: string;
+}
+
 /**
  * A derived request path: ingress hosts → ingress objects → service → backing
  * pods (or just service → pods for internal services). Mirrors the Swift
@@ -29,8 +39,8 @@ export interface Flow {
   readyPods: number;
   /** All pods matching the selector (running or not). */
   totalPods: number;
-  /** Matching pod names (sorted). */
-  podNames: string[];
+  /** Matching pods (sorted by name), each with derived readiness + phase. */
+  pods: FlowPod[];
   /** True iff any Ingress routes to this service. */
   isExternal: boolean;
   /** Reachability warnings; empty = healthy. */
