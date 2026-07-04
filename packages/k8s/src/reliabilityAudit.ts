@@ -106,6 +106,14 @@ export function imageTagIsMutable(image?: string): boolean {
   return tag === null || tag === "latest"; // untagged implies :latest
 }
 
+/** A PDB selects a workload when it is in the same namespace and every label in
+ *  its matchLabels is present (with the same value) on the workload's pod labels.
+ *  An empty selector matches every pod in the namespace. */
+function pdbSelects(pdb: AuditPdb, w: AuditWorkload): boolean {
+  if (pdb.namespace !== w.namespace) return false;
+  return Object.entries(pdb.selector).every(([k, v]) => w.labels[k] === v);
+}
+
 export function analyzeReliability(input: ReliabilityAuditInput): ReliabilityFinding[] {
   const findings: ReliabilityFinding[] = [];
   for (const w of input.workloads) {
@@ -138,6 +146,16 @@ export function analyzeReliability(input: ReliabilityAuditInput): ReliabilityFin
         severity: "info",
         rationale: "Multiple replicas have no pod anti-affinity, so Kubernetes may co-locate them on one node — a single node failure can take them all down.",
         fix: "Add podAntiAffinity across kubernetes.io/hostname to spread replicas over nodes.",
+      });
+    }
+
+    if (isReplicated(w) && w.replicas >= 2 && !input.pdbs.some((p) => pdbSelects(p, w))) {
+      findings.push({
+        ...base,
+        type: "noPodDisruptionBudget",
+        severity: "warning",
+        rationale: "Multiple replicas have no PodDisruptionBudget, so a voluntary disruption (node drain/upgrade) can evict every replica at once.",
+        fix: "Create a PodDisruptionBudget selecting this workload (e.g. minAvailable: 1).",
       });
     }
 

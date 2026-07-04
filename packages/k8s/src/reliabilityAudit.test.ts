@@ -136,6 +136,30 @@ describe("analyzeReliability", () => {
     });
     expect(out.some((x) => x.type === "noAntiAffinity")).toBe(false);
   });
+
+  it("flags a multi-replica workload with no PDB, and clears when one selects it", () => {
+    const withoutPdb = analyzeReliability({ workloads: [healthy()], pdbs: [], hpas: [] });
+    expect(withoutPdb.some((x) => x.type === "noPodDisruptionBudget")).toBe(true);
+
+    const withPdb = analyzeReliability({
+      workloads: [healthy()],
+      pdbs: [{ namespace: "default", selector: { app: "web" } }],
+      hpas: [],
+    });
+    expect(withPdb.some((x) => x.type === "noPodDisruptionBudget")).toBe(false);
+  });
+
+  it("does not count a PDB in another namespace or with a non-matching selector", () => {
+    const out = analyzeReliability({
+      workloads: [healthy()],
+      pdbs: [
+        { namespace: "other", selector: { app: "web" } },
+        { namespace: "default", selector: { app: "api" } },
+      ],
+      hpas: [],
+    });
+    expect(out.some((x) => x.type === "noPodDisruptionBudget")).toBe(true);
+  });
 });
 
 export { healthy };
