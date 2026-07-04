@@ -267,7 +267,7 @@ export function parseDockerCredsForm(payload: string): DockerCredsForm | null {
  * the Swift `Secret.yamlScalar` — safe for keys with dots, base64 `=`, and
  * arbitrary user input without per-character escaping.
  */
-function yamlSingleQuoted(s: string): string {
+export function yamlSingleQuoted(s: string): string {
   return `'${s.replace(/'/g, "''")}'`;
 }
 

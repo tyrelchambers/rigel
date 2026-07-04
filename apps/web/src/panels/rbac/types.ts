@@ -72,3 +72,36 @@ export type RbacKind =
   | "rolebindings"
   | "clusterroles"
   | "clusterrolebindings";
+
+/** Scope filter for the panel (status-strip toggle). */
+export type ScopeFilter = "all" | "namespaced" | "cluster";
+
+/** View toggle for the left list pane. */
+export type RbacView = "subjects" | "roles";
+
+/** A subject reference, normalized for identity comparison. */
+export interface SubjectRef {
+  kind: string; // "ServiceAccount" | "User" | "Group"
+  name: string;
+  namespace?: string; // present only for ServiceAccount
+}
+
+/** Where a binding takes effect. */
+export type BindingScope =
+  | { kind: "Namespaced"; namespace: string }
+  | { kind: "Cluster" };
+
+/** One resolved binding: a role's rules granted to a subject, with scope. */
+export interface Grant {
+  bindingName: string;
+  bindingKind: "RoleBinding" | "ClusterRoleBinding";
+  roleRef: RoleRef;
+  scope: BindingScope;
+  rules: PolicyRule[];
+}
+
+/** A subject as shown in the left list, with a precomputed danger flag. */
+export interface ListSubject extends SubjectRef {
+  key: string;
+  dangerous: boolean;
+}

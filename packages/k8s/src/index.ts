@@ -220,6 +220,7 @@ export {
   seedConfigMapRows,
   seedSecretRows,
   rowsToConfigMapData,
+  yamlSingleQuoted,
 } from "./configmapSecretEditor";
 
 export { stripStatusBlock } from "./manifestClean";
