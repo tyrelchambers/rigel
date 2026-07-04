@@ -219,7 +219,7 @@ function FlowRow({ flow }: { flow: Flow }) {
   function handleSelectPods() {
     if (podsDisabled) return;
     // Navigate to pods panel; focus the first pod if there is one.
-    const firstName = flow.podNames[0];
+    const firstName = flow.pods[0]?.name;
     if (!firstName) return;
     goToResource(navigate, {
       kind: "pods",

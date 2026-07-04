@@ -125,7 +125,7 @@ describe("computeFlows", () => {
     expect(f.serviceExists).toBe(true);
     expect(f.readyPods).toBe(1);
     expect(f.totalPods).toBe(1);
-    expect(f.podNames).toEqual(["api-1"]);
+    expect(f.pods).toEqual([{ name: "api-1", ready: true, phase: "Running" }]);
     expect(f.issues).toEqual([]);
     expect(f.health).toBe("ok");
   });
@@ -223,9 +223,9 @@ describe("computeFlows", () => {
     expect(flows).toHaveLength(2);
     const byNs = Object.fromEntries(flows.map((f) => [f.namespace, f]));
     expect(byNs.default.id).toBe("default/api");
-    expect(byNs.default.podNames).toEqual(["api-d"]);
+    expect(byNs.default.pods.map((p) => p.name)).toEqual(["api-d"]);
     expect(byNs.prod.id).toBe("prod/api");
-    expect(byNs.prod.podNames).toEqual(["api-p"]);
+    expect(byNs.prod.pods.map((p) => p.name)).toEqual(["api-p"]);
   });
 
   it("no-selector service: no pods matched, no issues", () => {
@@ -291,5 +291,25 @@ describe("computeFlows", () => {
       "ns1/ok-a", // ok, ns1
       "ns2/ok-b", // ok, ns2
     ]);
+  });
+
+  it("pods carry per-pod ready flag and phase, sorted by name", () => {
+    const flows = computeFlows(
+      [],
+      [service("api", "default", { app: "api" })],
+      [
+        pod("api-2", "default", { app: "api" }, { ready: [false] }),
+        pod("api-1", "default", { app: "api" }, { ready: [true] }),
+        pod("api-3", "default", { app: "api" }, { phase: "Pending" }),
+      ],
+    );
+    expect(flows).toHaveLength(1);
+    expect(flows[0].pods).toEqual([
+      { name: "api-1", ready: true, phase: "Running" },
+      { name: "api-2", ready: false, phase: "Running" },
+      { name: "api-3", ready: false, phase: "Pending" },
+    ]);
+    expect(flows[0].readyPods).toBe(1);
+    expect(flows[0].totalPods).toBe(3);
   });
 });

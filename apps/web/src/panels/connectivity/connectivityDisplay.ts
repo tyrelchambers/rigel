@@ -3,7 +3,7 @@ import type { Service } from "../services/types";
 import type { Pod } from "../pods/types";
 import { flattenRoutes } from "../ingresses/ingressesDisplay";
 import { typeLabel } from "../services/servicesDisplay";
-import type { Flow, Health } from "./types";
+import type { Flow, FlowPod, Health } from "./types";
 
 /**
  * Pure functions for the Connectivity panel. Direct port of the Swift
@@ -88,7 +88,14 @@ export function computeFlows(
             const labels = pod.metadata.labels ?? {};
             return selectorEntries.every(([k, v]) => labels[k] === v);
           });
-    const ready = matched.filter(isPodReady).length;
+    const flowPods: FlowPod[] = matched
+      .map((p) => ({
+        name: p.metadata.name,
+        ready: isPodReady(p),
+        phase: p.status?.phase ?? "Unknown",
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const ready = flowPods.filter((p) => p.ready).length;
 
     const issues: string[] = [];
     if (selectorEntries.length > 0) {
@@ -110,7 +117,7 @@ export function computeFlows(
         serviceExists: true,
         readyPods: ready,
         totalPods: matched.length,
-        podNames: matched.map((p) => p.metadata.name).sort((a, b) => a.localeCompare(b)),
+        pods: flowPods,
         isExternal,
         issues,
       }),
@@ -134,7 +141,7 @@ export function computeFlows(
         serviceExists: false,
         readyPods: 0,
         totalPods: 0,
-        podNames: [],
+        pods: [],
         isExternal: true,
         issues: ["Ingress points to a service that doesn't exist"],
       }),
