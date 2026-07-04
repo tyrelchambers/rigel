@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Globe,
   Signpost,
@@ -24,6 +24,7 @@ import type { Service } from "../services/types";
 import type { Pod } from "../pods/types";
 import type { Flow, Health } from "./types";
 import { computeFlows, healthColor } from "./connectivityDisplay";
+import { ConnectivityDetail } from "./ConnectivityDetail";
 
 // ---------------------------------------------------------------------------
 // Navigation uses goToResource to jump to the Services or Pods panel and focus
@@ -57,6 +58,17 @@ export default function ConnectivityPanel() {
   const isLoading = useCluster((s) => s.isLoading);
   const error = useCluster((s) => s.error);
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
+
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  function toggleExpand(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   // Subscribe to all three watches for the active namespace (or all). Clean up
   // on unmount / namespace change.
@@ -121,14 +133,24 @@ export default function ConnectivityPanel() {
             {external.length > 0 && (
               <Section title="External" count={external.length}>
                 {external.map((f) => (
-                  <FlowRow key={f.id} flow={f} />
+                  <FlowRow
+                    key={f.id}
+                    flow={f}
+                    isOpen={expanded.has(f.id)}
+                    onToggle={() => toggleExpand(f.id)}
+                  />
                 ))}
               </Section>
             )}
             {internal.length > 0 && (
               <Section title="Internal" count={internal.length}>
                 {internal.map((f) => (
-                  <FlowRow key={f.id} flow={f} />
+                  <FlowRow
+                    key={f.id}
+                    flow={f}
+                    isOpen={expanded.has(f.id)}
+                    onToggle={() => toggleExpand(f.id)}
+                  />
                 ))}
               </Section>
             )}
@@ -199,7 +221,15 @@ function Arrow() {
   return <ArrowRight className="size-3.5 shrink-0 text-muted-foreground/60" aria-hidden />;
 }
 
-function FlowRow({ flow }: { flow: Flow }) {
+function FlowRow({
+  flow,
+  isOpen,
+  onToggle,
+}: {
+  flow: Flow;
+  isOpen: boolean;
+  onToggle: () => void;
+}) {
   const navigate = useNavigate();
   const podsDisabled = flow.totalPods === 0;
   const tintClass = HEALTH_TEXT[flow.health];
@@ -238,9 +268,10 @@ function FlowRow({ flow }: { flow: Flow }) {
   return (
     <ListRow
       rowKey={flow.id}
-      isOpen={false}
-      onToggle={() => {}}
+      isOpen={isOpen}
+      onToggle={onToggle}
       contextMenu={rowMenu}
+      expandedContent={<ConnectivityDetail flow={flow} />}
     >
       {/* Flex-col container so the issues line stacks below the main chain */}
       <div className="flex flex-1 flex-col gap-1 min-w-0">
