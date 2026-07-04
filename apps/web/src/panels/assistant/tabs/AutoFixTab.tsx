@@ -173,7 +173,7 @@ function OptInCard() {
 }
 
 // ---------------------------------------------------------------------------
-// Off / On segmented toggle (RulesTab-style mode selector, per the design)
+// Off / On segmented toggle (AlertsTab-style mode selector, per the design)
 // ---------------------------------------------------------------------------
 
 function Toggle({

@@ -40,7 +40,7 @@ export function TabBar() {
   const tabs = [
     { id: "overview", label: "Overview" },
     { id: "needs", label: "Needs you", badge: needsBadge },
-    { id: "rules", label: "Rules" },
+    { id: "alerts", label: "Alerts" },
     { id: "autofix", label: "Auto Fix" },
     { id: "agents", label: "Agents" },
     { id: "activity", label: "Activity", badge: activityBadge },

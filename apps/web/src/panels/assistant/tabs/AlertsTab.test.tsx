@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { RulesTab } from "./RulesTab";
+import { AlertsTab } from "./AlertsTab";
 import { AssistantContext, type AssistantContextValue } from "../AssistantContext";
 import type { AssistantDerived } from "../useAssistant";
 
@@ -35,7 +35,7 @@ function wrap(d = derived()) {
   return render(
     <QueryClientProvider client={qc}>
       <AssistantContext value={ctx(d)}>
-        <RulesTab />
+        <AlertsTab />
       </AssistantContext>
     </QueryClientProvider>,
   );
@@ -47,7 +47,7 @@ beforeEach(() => {
   vi.mocked(handoffToChat).mockReset();
 });
 
-describe("RulesTab", () => {
+describe("AlertsTab", () => {
   it("renders the Alerts empty state (with Try chips) and the Autonomy card", () => {
     wrap();
     expect(screen.getByText("Alerts")).toBeInTheDocument();
@@ -94,7 +94,7 @@ describe("RulesTab", () => {
     rerender(
       <QueryClientProvider client={qc}>
         <AssistantContext value={ctx(derived({ autonomyMode: "window", quietWindow: "22:00-07:00" }))}>
-          <RulesTab />
+          <AlertsTab />
         </AssistantContext>
       </QueryClientProvider>,
     );

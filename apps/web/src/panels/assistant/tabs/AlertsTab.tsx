@@ -1,4 +1,4 @@
-// RulesTab — alert rules, autonomy mode, quiet window, and notify webhook.
+// AlertsTab — alert rules, autonomy mode, quiet window, and notify webhook.
 // Built to Pencil frame "Assistant — Rules (improved)".
 
 import { useEffect, useState } from "react";
@@ -16,7 +16,7 @@ const MODES = [
   { value: "window", label: "Quiet-hours", icon: Moon, desc: "Auto by day, hold changes overnight." },
 ] as const;
 
-export function RulesTab() {
+export function AlertsTab() {
   const { d, ns, working, run, setTab } = useAssistantCtx();
 
   const [windowText, setWindowText] = useState(d.quietWindow || "22:00-07:00");

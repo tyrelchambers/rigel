@@ -68,7 +68,7 @@ export function AssistantConfigSection({
   // bring-your-own existing Secret, or a revert to the managed default.
   const [pending, setPending] = useState<PendingCredChange | null>(null);
 
-  // Re-seed from live config when it changes (parity with RulesTab's effect).
+  // Re-seed from live config when it changes (parity with AlertsTab's effect).
   useEffect(() => {
     setWorker(roles.worker);
     setSupervisor(roles.supervisor);
