@@ -52,6 +52,9 @@ export function AuditSkillCard({ title, description, Icon, status, counts, onRun
                 {counts.total} issue{counts.total === 1 ? "" : "s"} · {counts.workloadsAffected} workload
                 {counts.workloadsAffected === 1 ? "" : "s"}
               </span>
+              {counts.critical > 0 && (
+                <span className="text-red-600 dark:text-red-400">{counts.critical} critical</span>
+              )}
               {counts.warning > 0 && (
                 <span className="text-amber-600 dark:text-amber-400">{counts.warning} warning</span>
               )}
