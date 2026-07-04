@@ -4,6 +4,24 @@
 export * from "./alerts";
 export * from "./digest";
 
+export {
+  type Severity,
+  type WorkloadKind as ReliabilityWorkloadKind,
+  type AuditContainer,
+  type AuditWorkload,
+  type AuditPdb,
+  type AuditHpa,
+  type ReliabilityAuditInput,
+  type ReliabilityFindingType,
+  type ReliabilityFinding,
+  type ReliabilityCounts,
+  SEVERITY_RANK,
+  imageTagIsMutable,
+  analyzeReliability,
+  sortFindings,
+  reliabilityCounts,
+} from "./reliabilityAudit";
+
 export { openapiV2ToYamlSchema, gvkApiVersion } from "./openapiSchema";
 
 export {
