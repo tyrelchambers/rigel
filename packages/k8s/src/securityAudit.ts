@@ -31,6 +31,21 @@ export function analyzeSecurity(input: SecurityAuditInput): SecurityFinding[] {
   for (const w of input.workloads) {
     const base = { kind: w.kind, name: w.name, namespace: w.namespace } as const;
 
+    const hostNs = [
+      w.hostNetwork ? "hostNetwork" : null,
+      w.hostPID ? "hostPID" : null,
+      w.hostIPC ? "hostIPC" : null,
+    ].filter(Boolean);
+    if (hostNs.length > 0) {
+      findings.push({
+        ...base,
+        type: "hostNamespace",
+        severity: "critical",
+        rationale: `Pod shares the host's ${hostNs.join(", ")}, breaking the container's isolation from the node.`,
+        fix: `Remove ${hostNs.join("/")} from the pod spec unless strictly required.`,
+      });
+    }
+
     for (const c of w.containers) {
       const cbase = { ...base, container: c.name } as const;
 

@@ -58,4 +58,26 @@ describe("analyzeSecurity", () => {
     const clean = analyzeSecurity({ workloads: [healthySecure()] });
     expect(clean.some((x) => x.type === "privilegedContainer")).toBe(false);
   });
+
+  it("flags a workload sharing the host network namespace as critical, and clears when isolated", () => {
+    const w = healthySecure({ hostNetwork: true });
+    const out = analyzeSecurity({ workloads: [w] });
+    const f = out.find((x) => x.type === "hostNamespace");
+    expect(f).toBeDefined();
+    expect(f?.severity).toBe("critical");
+    expect(f?.container).toBeUndefined();
+
+    const clean = analyzeSecurity({ workloads: [healthySecure()] });
+    expect(clean.some((x) => x.type === "hostNamespace")).toBe(false);
+  });
+
+  it("emits one hostNamespace finding naming all shared namespaces when multiple flags are set", () => {
+    const w = healthySecure({ hostNetwork: true, hostPID: true, hostIPC: true });
+    const out = analyzeSecurity({ workloads: [w] });
+    const matches = out.filter((x) => x.type === "hostNamespace");
+    expect(matches).toHaveLength(1);
+    expect(matches[0].rationale).toContain("hostNetwork");
+    expect(matches[0].rationale).toContain("hostPID");
+    expect(matches[0].rationale).toContain("hostIPC");
+  });
 });
