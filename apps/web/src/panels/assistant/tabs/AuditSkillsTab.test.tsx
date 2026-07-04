@@ -20,22 +20,31 @@ describe("AuditSkillsTab", () => {
     expect(screen.queryByText("Coming soon")).not.toBeInTheDocument();
   });
 
-  it("hands off /rigel-reliability-audit to a new chat thread on Run", () => {
+  it("hands off /rigel-reliability-audit to a new thread with a friendly bubble label", () => {
     render(<AuditSkillsTab />);
     fireEvent.click(screen.getAllByRole("button", { name: /run audit/i })[0]);
-    expect(handoffToChat).toHaveBeenCalledWith("/rigel-reliability-audit", { newThread: true });
+    expect(handoffToChat).toHaveBeenCalledWith(
+      "/rigel-reliability-audit",
+      expect.objectContaining({ newThread: true, displayText: expect.stringContaining("reliability audit") }),
+    );
   });
 
-  it("hands off /rigel-security-audit to a new chat thread on Run", () => {
+  it("hands off /rigel-security-audit to a new thread with a friendly bubble label", () => {
     render(<AuditSkillsTab />);
     fireEvent.click(screen.getAllByRole("button", { name: /run audit/i })[1]);
-    expect(handoffToChat).toHaveBeenCalledWith("/rigel-security-audit", { newThread: true });
+    expect(handoffToChat).toHaveBeenCalledWith(
+      "/rigel-security-audit",
+      expect.objectContaining({ newThread: true, displayText: expect.stringContaining("security audit") }),
+    );
   });
 
-  it("hands off /rigel-performance-audit to a new chat thread on Run", () => {
+  it("hands off /rigel-performance-audit to a new thread with a friendly bubble label", () => {
     render(<AuditSkillsTab />);
     fireEvent.click(screen.getAllByRole("button", { name: /run audit/i })[2]);
-    expect(handoffToChat).toHaveBeenCalledWith("/rigel-performance-audit", { newThread: true });
+    expect(handoffToChat).toHaveBeenCalledWith(
+      "/rigel-performance-audit",
+      expect.objectContaining({ newThread: true, displayText: expect.stringContaining("performance audit") }),
+    );
   });
 });
 

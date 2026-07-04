@@ -286,11 +286,14 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   useEffect(() => {
     const submit = (prompt: string, opts?: ChatHandoffOpts) => {
       if (!prompt.trim()) return;
+      // The bubble shows the friendly displayText when given; the model still
+      // receives the raw prompt (e.g. a /skill-name directive) via sendChat below.
+      const shown = opts?.displayText ?? prompt;
       if (opts?.newThread) {
         resetConversation();
-        setMessages([makeMessage("user", prompt)]);
+        setMessages([makeMessage("user", shown)]);
       } else {
-        setMessages((prev) => [...prev, makeMessage("user", prompt)]);
+        setMessages((prev) => [...prev, makeMessage("user", shown)]);
       }
       setIsStreaming(true);
       setLiveThinking("");

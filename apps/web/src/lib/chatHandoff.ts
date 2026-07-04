@@ -6,6 +6,13 @@
 export interface ChatHandoffOpts {
   /** Start a brand-new chat thread (prior conversation stays saved) + reveal the pane. */
   newThread?: boolean;
+  /**
+   * Friendly text to show in the user's chat bubble INSTEAD of the raw `prompt`.
+   * The `prompt` is still what's sent to the model — use this when the prompt is
+   * a machine directive (e.g. a `/skill-name` slash command) that reads poorly as
+   * a message. Falls back to `prompt` when omitted.
+   */
+  displayText?: string;
 }
 
 let handler: ((prompt: string, opts?: ChatHandoffOpts) => void) | null = null;
