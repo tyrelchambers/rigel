@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { parseArgs, runAudit } from "./index";
 import { groupByKind } from "./gather";
 import type { KubectlRunner } from "./kubectl";
@@ -170,6 +170,20 @@ describe("runAudit", () => {
     expect(findings.some((f) => f.type === "noMemoryLimit")).toBe(true);
     expect(findings.some((f) => f.type === "cpuThrottlingRisk" || f.type === "memoryPressure")).toBe(false);
     expect(findings.every((f) => f.evidence === undefined)).toBe(true);
+  });
+
+  it("refuses a locked audit before touching kubectl", async () => {
+    const runner = vi.fn<KubectlRunner>(async () => list([]));
+    await expect(
+      runAudit("security", runner, undefined, { unlocked: ["reliability"] }),
+    ).rejects.toThrow(/premium/i);
+    expect(runner).not.toHaveBeenCalled();
+  });
+
+  it("runs an unlocked audit", async () => {
+    const runner = stubRunner({ workloads: list([deployment({ name: "web", replicas: 1 })]) });
+    const out = await runAudit("reliability", runner, undefined, { unlocked: ["reliability"] });
+    expect(out.audit).toBe("reliability");
   });
 
   it("performance WITH a metrics backend attaches evidence and metrics findings", async () => {

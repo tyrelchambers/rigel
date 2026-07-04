@@ -15,9 +15,10 @@ import {
   type SecurityFinding,
   type PerformanceFinding,
   type AuditCounts,
+  type AuditKind,
 } from "@rigel/k8s";
 
-export type AuditKind = "reliability" | "security" | "performance";
+export type { AuditKind };
 
 export interface AuditRunResult<F> {
   audit: AuditKind;

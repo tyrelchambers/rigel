@@ -20,6 +20,7 @@ import {
   type AuditKind,
   type AuditRunResult,
 } from "./audits";
+import { canRunAudit, parseUnlockedAudits, type AuditEntitlement } from "@rigel/k8s";
 
 const AUDIT_KINDS: readonly AuditKind[] = ["reliability", "security", "performance"];
 
@@ -83,7 +84,11 @@ export async function runAudit(
   kind: AuditKind,
   runner: KubectlRunner,
   namespace?: string,
+  entitlement: AuditEntitlement = parseUnlockedAudits(process.env.RIGEL_UNLOCKED_AUDITS),
 ): Promise<AuditOutput> {
+  const gate = canRunAudit(kind, entitlement);
+  if (!gate.allowed) throw new Error(gate.reason ?? `The ${kind} audit is not available on this plan.`);
+
   const input = await gatherWorkloadResources(runner, namespace);
 
   if (kind === "reliability") return runReliability(input);
