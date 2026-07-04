@@ -1,31 +1,18 @@
 // @vitest-environment jsdom
 import { afterEach, expect, test, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
 vi.mock("@/lib/ws", () => ({ subscribe: vi.fn(), unsubscribe: vi.fn() }));
 vi.mock("@/lib/chatHandoff", () => ({ handoffToChat: vi.fn() }));
 vi.mock("@/shell/NamespaceBar", () => ({ NamespaceSelector: () => null }));
 
-const state = {
-  resources: {
-    rolebindings: {
-      "1": {
-        metadata: { name: "b1", namespace: "default", uid: "1" },
-        roleRef: { kind: "Role", name: "reader" },
-        subjects: [{ kind: "ServiceAccount", name: "rigel-agent", namespace: "default" }],
-      },
-    },
-    roles: {
-      "2": { metadata: { name: "reader", namespace: "default", uid: "2" }, rules: [{ verbs: ["get"], resources: ["pods"] }] },
-    },
-    clusterroles: {},
-    clusterrolebindings: {},
-    serviceaccounts: {},
-  },
-  isLoading: false,
-  error: null,
-  namespaceFilter: null,
-};
+const state: {
+  resources: Record<string, Record<string, unknown>>;
+  isLoading: boolean;
+  error: string | null;
+  namespaceFilter: string | null;
+} = { resources: {}, isLoading: false, error: null, namespaceFilter: null };
+
 vi.mock("@/store/cluster", () => ({
   useCluster: (sel: (s: typeof state) => unknown) => sel(state),
 }));
@@ -34,9 +21,68 @@ import RbacPanel from "./RbacPanel";
 
 afterEach(cleanup);
 
-test("renders the subject and its resolved binding on select", () => {
+function setResources(r: Record<string, Record<string, unknown>>) {
+  state.resources = {
+    roles: {},
+    clusterroles: {},
+    rolebindings: {},
+    clusterrolebindings: {},
+    ...r,
+  };
+}
+
+test("renders the subject derived from a binding", () => {
+  setResources({
+    rolebindings: {
+      "1": {
+        metadata: { name: "b1", namespace: "default", uid: "1" },
+        roleRef: { kind: "Role", name: "reader" },
+        subjects: [{ kind: "ServiceAccount", name: "rigel-agent", namespace: "default" }],
+      },
+    },
+    roles: {
+      "2": {
+        metadata: { name: "reader", namespace: "default", uid: "2" },
+        rules: [{ verbs: ["get"], resources: ["pods"] }],
+      },
+    },
+  });
   render(<RbacPanel />);
   expect(screen.getByText("RBAC")).toBeTruthy();
-  // subject appears in the list
   expect(screen.getAllByText("rigel-agent").length).toBeGreaterThan(0);
+});
+
+// Regression for the scope-resolution bug: a namespaced RoleBinding that
+// references a ClusterRole must still resolve that ClusterRole's rules under
+// "Namespaced" scope — otherwise the subject's rules vanish and DANGEROUS
+// under-reports to 0.
+test("Namespaced scope resolves a RoleBinding→ClusterRole grant and keeps it dangerous", () => {
+  setResources({
+    rolebindings: {
+      "1": {
+        metadata: { name: "grant-admin", namespace: "default", uid: "1" },
+        roleRef: { kind: "ClusterRole", name: "admin" },
+        subjects: [{ kind: "ServiceAccount", name: "app", namespace: "default" }],
+      },
+    },
+    clusterroles: {
+      "2": {
+        metadata: { name: "admin", uid: "2" },
+        rules: [{ apiGroups: ["*"], resources: ["*"], verbs: ["*"] }],
+      },
+    },
+  });
+  render(<RbacPanel />);
+
+  fireEvent.click(screen.getByRole("tab", { name: "Namespaced" }));
+
+  // DANGEROUS count stays 1 (scoped to just the DANGEROUS stat, since other
+  // counts also read 1 in this fixture).
+  const dangerousStat = screen.getByText("DANGEROUS").parentElement as HTMLElement;
+  expect(within(dangerousStat).getByText("1")).toBeTruthy();
+
+  // The binding card shows the ClusterRole ref and its resolved rules, not the
+  // "Role not found in scope" fallback.
+  expect(screen.getByText("ClusterRole/admin")).toBeTruthy();
+  expect(screen.queryByText(/Role not found in scope/)).toBeNull();
 });

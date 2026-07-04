@@ -41,6 +41,6 @@ test("switches to roles view", () => {
       onSelectRole={vi.fn()}
     />,
   );
-  fireEvent.click(screen.getByRole("button", { name: /Roles/i }));
+  fireEvent.click(screen.getByRole("tab", { name: "Roles" }));
   expect(onView).toHaveBeenCalledWith("roles");
 });

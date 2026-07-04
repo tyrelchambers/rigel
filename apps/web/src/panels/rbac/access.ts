@@ -136,14 +136,30 @@ export function collectSubjects(
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
 
-/** Status-strip counts. */
+/**
+ * Status-strip counts.
+ *
+ * Enumeration (which subjects/bindings/roles are listed) uses the scoped pools
+ * passed as `roleBindings`/`clusterRoleBindings`/`roles`/`clusterRoles`. Danger
+ * resolution uses `resolveRoles`/`resolveClusterRoles` — pass the FULL role
+ * pools there so a namespaced RoleBinding that references a ClusterRole still
+ * resolves its rules (and is correctly counted as dangerous). They default to
+ * the scoped pools for callers that don't distinguish the two.
+ */
 export function rbacCounts(
   roleBindings: RoleBinding[],
   clusterRoleBindings: ClusterRoleBinding[],
   roles: Role[],
   clusterRoles: ClusterRole[],
+  resolveRoles: Role[] = roles,
+  resolveClusterRoles: ClusterRole[] = clusterRoles,
 ): { subjects: number; roles: number; bindings: number; dangerous: number } {
-  const subjects = collectSubjects(roleBindings, clusterRoleBindings, roles, clusterRoles);
+  const subjects = collectSubjects(
+    roleBindings,
+    clusterRoleBindings,
+    resolveRoles,
+    resolveClusterRoles,
+  );
   return {
     subjects: subjects.length,
     roles: roles.length + clusterRoles.length,

@@ -1,4 +1,5 @@
 import { User, Users, Server, FileBadge } from "lucide-react";
+import { TabBar, Tab } from "@/components/ui/Tabs";
 import type { ListSubject, RbacView } from "../types";
 
 /** A role list item (namespaced Role or ClusterRole) for the Roles view. */
@@ -47,8 +48,8 @@ function Row({
       onClick={onClick}
       className={`flex w-full items-center gap-[11px] rounded-[var(--radius-md)] border px-[11px] py-[10px] text-left transition-colors ${
         selected
-          ? "border-[#38BDF859] bg-[var(--accent-dim)]"
-          : "border-transparent hover:bg-[#FFFFFF08]"
+          ? "border-[var(--accent-primary)]/35 bg-[var(--accent-dim)]"
+          : "border-transparent hover:bg-white/[0.04]"
       }`}
     >
       <Icon className="size-[15px] shrink-0 text-[var(--fg-tertiary)]" />
@@ -84,23 +85,10 @@ export function RbacList({
             {view === "subjects" ? subjects.length : roleItems.length}
           </span>
         </div>
-        <div className="flex gap-[2px] rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] p-[2px]">
-          {(["subjects", "roles"] as RbacView[]).map((v) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => onViewChange(v)}
-              aria-pressed={view === v}
-              className={`rounded-[3px] px-[10px] py-1 text-[12px] capitalize ${
-                view === v
-                  ? "bg-[#FFFFFF14] font-semibold text-[var(--fg-primary)]"
-                  : "text-[var(--fg-tertiary)]"
-              }`}
-            >
-              {v}
-            </button>
-          ))}
-        </div>
+        <TabBar value={view} onValueChange={(v) => onViewChange(v as RbacView)}>
+          <Tab value="subjects">Subjects</Tab>
+          <Tab value="roles">Roles</Tab>
+        </TabBar>
       </div>
 
       <div className="flex flex-col gap-[3px] overflow-auto p-2">

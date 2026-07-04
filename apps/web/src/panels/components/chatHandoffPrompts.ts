@@ -70,6 +70,20 @@ export function moveToNamespacePrompt(name: string, srcNamespace: string | undef
 }
 
 /**
+ * Build the "explain this subject's RBAC access" chat handoff prompt. Distinct
+ * from buildHandoffPrompt's fixed topics — it asks for a bindings→roles access
+ * walk and an over-privilege assessment for one subject.
+ */
+export function buildRbacAccessPrompt(subject: {
+  kind: string;
+  name: string;
+  namespace?: string;
+}): string {
+  const ref = subject.namespace ? `${subject.namespace}/${subject.name}` : subject.name;
+  return `Explain the RBAC access for ${subject.kind} "${ref}": which roles is it bound to, what can it do, and is anything over-privileged?`;
+}
+
+/**
  * Build the investigation prompt for a single Recent-warning event. Unlike
  * buildHandoffPrompt (keyed by kind/name/topic), this consumes a K8sEvent so it
  * can fold in the warning's reason and message — a distinct purpose, not a

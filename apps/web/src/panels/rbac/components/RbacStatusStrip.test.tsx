@@ -16,6 +16,6 @@ test("renders counts and switches scope", () => {
   );
   expect(screen.getByText("42")).toBeTruthy();
   expect(screen.getByText("3")).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "Cluster" }));
+  fireEvent.click(screen.getByRole("tab", { name: "Cluster" }));
   expect(onScope).toHaveBeenCalledWith("cluster");
 });

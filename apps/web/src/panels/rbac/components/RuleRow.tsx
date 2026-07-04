@@ -31,7 +31,7 @@ export function RuleRow({ rule }: { rule: PolicyRule }) {
   return (
     <div
       className={`flex gap-4 rounded-[var(--radius-md)] border bg-[var(--surface-sunken)] px-[13px] py-[11px] ${
-        dangerous ? "border-[#EF444426]" : "border-[var(--border-subtle)]"
+        dangerous ? "border-[var(--status-failed)]/15" : "border-[var(--border-subtle)]"
       }`}
     >
       <Cell label="API GROUP" items={[apiGroupLabel(rule.apiGroups)]} width="w-[120px] shrink-0" />

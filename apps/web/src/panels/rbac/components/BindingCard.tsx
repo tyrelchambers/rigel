@@ -17,7 +17,7 @@ export function BindingCard({ grant }: { grant: Grant }) {
           <span className="font-[var(--font-mono)] text-[14px] font-semibold text-[var(--fg-primary)]">
             {grant.bindingName}
           </span>
-          <span className="flex items-center gap-[5px] rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[#FFFFFF0D] px-2 py-[2px]">
+          <span className="flex items-center gap-[5px] rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-white/[0.05] px-2 py-[2px]">
             <Box className="size-[10px] text-[var(--fg-tertiary)]" />
             <span className="text-[11.5px] font-medium text-[var(--fg-secondary)]">
               {grant.scope.kind === "Namespaced" ? "Namespaced" : "Cluster"}
@@ -32,7 +32,7 @@ export function BindingCard({ grant }: { grant: Grant }) {
         <div className="flex items-center gap-[9px]">
           <span className="text-[12px] text-[var(--fg-tertiary)]">grants</span>
           <ArrowRight className="size-[14px] text-[var(--fg-tertiary)]" />
-          <span className="flex items-center gap-[6px] rounded-[var(--radius-sm)] border border-[#38BDF840] bg-[var(--accent-dim)] px-[9px] py-[3px]">
+          <span className="flex items-center gap-[6px] rounded-[var(--radius-sm)] border border-[var(--accent-primary)]/25 bg-[var(--accent-dim)] px-[9px] py-[3px]">
             <FileBadge className="size-[12px] text-[var(--accent-primary)]" />
             <span className="font-[var(--font-mono)] text-[12px] font-semibold text-[var(--accent-primary)]">
               {roleRefLabel(grant)}

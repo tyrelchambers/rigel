@@ -1,3 +1,4 @@
+import { TabBar, Tab } from "@/components/ui/Tabs";
 import type { ScopeFilter } from "../types";
 
 interface Props {
@@ -38,23 +39,13 @@ export function RbacStatusStrip({ counts, scope, onScopeChange }: Props) {
         <Stat label="BINDINGS" value={counts.bindings} />
         <Stat label="DANGEROUS" value={counts.dangerous} danger />
       </div>
-      <div className="flex gap-[3px] rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] p-[3px]">
+      <TabBar value={scope} onValueChange={(v) => onScopeChange(v as ScopeFilter)}>
         {SCOPES.map((s) => (
-          <button
-            key={s.value}
-            type="button"
-            onClick={() => onScopeChange(s.value)}
-            aria-pressed={scope === s.value}
-            className={`rounded-[var(--radius-sm)] px-[13px] py-[6px] text-[13px] transition-colors ${
-              scope === s.value
-                ? "bg-[#FFFFFF14] font-semibold text-[var(--fg-primary)]"
-                : "text-[var(--fg-secondary)] hover:text-[var(--fg-primary)]"
-            }`}
-          >
+          <Tab key={s.value} value={s.value}>
             {s.label}
-          </button>
+          </Tab>
         ))}
-      </div>
+      </TabBar>
     </div>
   );
 }

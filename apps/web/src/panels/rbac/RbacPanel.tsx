@@ -4,6 +4,7 @@ import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { PanelHeader } from "@/panels/components/PanelHeader";
+import { buildRbacAccessPrompt } from "@/panels/components/chatHandoffPrompts";
 import { NamespaceSelector } from "@/shell/NamespaceBar";
 import type {
   ClusterRole,
@@ -44,14 +45,14 @@ export default function RbacPanel() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
   useEffect(() => {
+    // Subjects are derived from bindings, so ServiceAccounts aren't watched here
+    // (an unbound SA has no access to analyze).
     const ns = namespaceFilter ?? "*";
-    subscribe("serviceaccounts", ns);
     subscribe("roles", ns);
     subscribe("rolebindings", ns);
     subscribe("clusterroles", "*");
     subscribe("clusterrolebindings", "*");
     return () => {
-      unsubscribe("serviceaccounts", ns);
       unsubscribe("roles", ns);
       unsubscribe("rolebindings", ns);
       unsubscribe("clusterroles", "*");
@@ -76,41 +77,45 @@ export default function RbacPanel() {
     [resources],
   );
 
-  // Apply the scope filter to the binding/role pools.
+  // Scope filters which bindings/roles are ENUMERATED (listed + counted). Rule
+  // RESOLUTION always uses the full role pools (roles/clusterRoles), because a
+  // namespaced RoleBinding can reference a ClusterRole — emptying the cluster
+  // role pool under "namespaced" scope would hide those rules and under-report
+  // danger. So `listRoles`/`listClusterRoles` drive the Roles list only.
   const scopedRB = scope === "cluster" ? [] : roleBindings;
   const scopedCRB = scope === "namespaced" ? [] : clusterRoleBindings;
-  const scopedRoles = scope === "cluster" ? [] : roles;
-  const scopedCR = scope === "namespaced" ? [] : clusterRoles;
+  const listRoles = scope === "cluster" ? [] : roles;
+  const listClusterRoles = scope === "namespaced" ? [] : clusterRoles;
 
   const counts = useMemo(
-    () => rbacCounts(scopedRB, scopedCRB, scopedRoles, scopedCR),
-    [scopedRB, scopedCRB, scopedRoles, scopedCR],
+    () => rbacCounts(scopedRB, scopedCRB, listRoles, listClusterRoles, roles, clusterRoles),
+    [scopedRB, scopedCRB, listRoles, listClusterRoles, roles, clusterRoles],
   );
 
   const subjects = useMemo(
     () =>
-      collectSubjects(scopedRB, scopedCRB, scopedRoles, scopedCR).filter((s) =>
+      collectSubjects(scopedRB, scopedCRB, roles, clusterRoles).filter((s) =>
         matchesSearch([s.name, s.kind, s.namespace], search),
       ),
-    [scopedRB, scopedCRB, scopedRoles, scopedCR, search],
+    [scopedRB, scopedCRB, roles, clusterRoles, search],
   );
 
   const roleItems: RoleItem[] = useMemo(() => {
-    const rItems: RoleItem[] = scopedRoles.map((r) => ({
+    const rItems: RoleItem[] = listRoles.map((r) => ({
       key: `Role ${r.metadata.namespace ?? ""} ${r.metadata.name}`,
       kind: "Role",
       name: r.metadata.name,
       namespace: r.metadata.namespace,
       dangerous: grantRisk(r.rules) === "dangerous",
     }));
-    const cItems: RoleItem[] = scopedCR.map((r) => ({
+    const cItems: RoleItem[] = listClusterRoles.map((r) => ({
       key: `ClusterRole  ${r.metadata.name}`,
       kind: "ClusterRole",
       name: r.metadata.name,
       dangerous: grantRisk(r.rules) === "dangerous",
     }));
     return [...rItems, ...cItems].filter((r) => matchesSearch([r.name, r.kind, r.namespace], search));
-  }, [scopedRoles, scopedCR, search]);
+  }, [listRoles, listClusterRoles, search]);
 
   // Default-select the first item when the view or its list changes.
   const listKeys = view === "subjects" ? subjects.map((s) => s.key) : roleItems.map((r) => r.key);
@@ -126,17 +131,17 @@ export default function RbacPanel() {
   const grants = useMemo(
     () =>
       selectedSubject
-        ? effectiveGrants(selectedSubject.key, scopedRB, scopedCRB, scopedRoles, scopedCR)
+        ? effectiveGrants(selectedSubject.key, scopedRB, scopedCRB, roles, clusterRoles)
         : [],
-    [selectedSubject, scopedRB, scopedCRB, scopedRoles, scopedCR],
+    [selectedSubject, scopedRB, scopedCRB, roles, clusterRoles],
   );
 
   const roleRules = selectedRole
     ? resolveRoleRules(
         { kind: selectedRole.kind, name: selectedRole.name },
         selectedRole.namespace,
-        scopedRoles,
-        scopedCR,
+        roles,
+        clusterRoles,
       )
     : [];
   const boundSubjects = selectedRole
@@ -148,10 +153,7 @@ export default function RbacPanel() {
     : [];
 
   function askAboutSubject(s: ListSubject) {
-    const ref = s.namespace ? `${s.namespace}/${s.name}` : s.name;
-    handoffToChat(
-      `Explain the RBAC access for ${s.kind} "${ref}": which roles is it bound to, what can it do, and is anything over-privileged?`,
-    );
+    handoffToChat(buildRbacAccessPrompt(s));
   }
 
   const empty = view === "subjects" ? subjects.length === 0 : roleItems.length === 0;
@@ -174,7 +176,7 @@ export default function RbacPanel() {
       <RbacStatusStrip counts={counts} scope={scope} onScopeChange={setScope} />
 
       {error && (
-        <pre className="rounded-[var(--radius-md)] bg-[#EF44441A] px-4 py-2 font-[var(--font-mono)] text-xs whitespace-pre-wrap break-all text-[var(--status-failed)]">
+        <pre className="rounded-[var(--radius-md)] bg-[var(--status-failed)]/10 px-4 py-2 font-[var(--font-mono)] text-xs whitespace-pre-wrap break-all text-[var(--status-failed)]">
           {error}
         </pre>
       )}
