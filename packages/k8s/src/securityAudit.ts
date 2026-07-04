@@ -113,6 +113,16 @@ export function analyzeSecurity(input: SecurityAuditInput): SecurityFinding[] {
           fix: "Set securityContext.readOnlyRootFilesystem: true (mount an emptyDir for paths that need writes).",
         });
       }
+
+      if (c.hostPorts && c.hostPorts.length > 0) {
+        findings.push({
+          ...cbase,
+          type: "hostPort",
+          severity: "info",
+          rationale: `Container binds host port ${c.hostPorts.join(", ")}, exposing it directly on the node and pinning scheduling.`,
+          fix: "Expose the container through a Service instead of a hostPort.",
+        });
+      }
     }
   }
   return findings;

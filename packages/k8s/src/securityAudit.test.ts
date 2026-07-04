@@ -168,4 +168,18 @@ describe("analyzeSecurity", () => {
     const out = analyzeSecurity({ workloads: [w] });
     expect(out.some((x) => x.type === "writableRootFilesystem")).toBe(true);
   });
+
+  it("flags a container binding a hostPort as info, and clears when none are bound", () => {
+    const w = healthySecure();
+    w.containers[0].hostPorts = [8080];
+    const out = analyzeSecurity({ workloads: [w] });
+    const f = out.find((x) => x.type === "hostPort");
+    expect(f).toBeDefined();
+    expect(f?.severity).toBe("info");
+    expect(f?.container).toBe("web");
+    expect(f?.rationale).toContain("8080");
+
+    const clean = analyzeSecurity({ workloads: [healthySecure()] });
+    expect(clean.some((x) => x.type === "hostPort")).toBe(false);
+  });
 });

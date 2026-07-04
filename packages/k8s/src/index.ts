@@ -27,6 +27,13 @@ export {
   analyzeReliability,
 } from "./reliabilityAudit";
 
+export {
+  type SecurityFindingType,
+  type SecurityFinding,
+  type SecurityAuditInput,
+  analyzeSecurity,
+} from "./securityAudit";
+
 export { openapiV2ToYamlSchema, gvkApiVersion } from "./openapiSchema";
 
 export {
