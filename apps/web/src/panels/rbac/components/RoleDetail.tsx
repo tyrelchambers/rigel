@@ -1,4 +1,4 @@
-import { Server, User, Users } from "lucide-react";
+import { Server, User, Users, Pencil, Code, Trash2 } from "lucide-react";
 import type { PolicyRule, Subject } from "../types";
 import type { Grant } from "../types";
 import { RuleRow } from "./RuleRow";
@@ -9,6 +9,9 @@ interface Props {
   roleNamespace?: string;
   rules: PolicyRule[];
   boundSubjects: { subject: Subject; bindingName: string; scope: Grant["scope"] }[];
+  onEdit?: () => void;
+  onEditYaml?: () => void;
+  onDelete?: () => void;
 }
 
 function subjectIcon(kind: string | undefined) {
@@ -17,16 +20,62 @@ function subjectIcon(kind: string | undefined) {
   return User;
 }
 
-export function RoleDetail({ roleName, roleKind, roleNamespace, rules, boundSubjects }: Props) {
+export function RoleDetail({
+  roleName,
+  roleKind,
+  roleNamespace,
+  rules,
+  boundSubjects,
+  onEdit,
+  onEditYaml,
+  onDelete,
+}: Props) {
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-4">
-      <div className="flex flex-wrap items-baseline gap-x-[14px] gap-y-1">
-        <span className="break-all font-[var(--font-mono)] text-[18px] font-semibold text-[var(--fg-primary)]">
-          {roleName}
-        </span>
-        <span className="text-[13px] text-[var(--fg-tertiary)]">
-          {roleKind === "Role" ? `Role · ${roleNamespace ?? ""}` : "ClusterRole"}
-        </span>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-baseline gap-x-[14px] gap-y-1">
+          <span className="break-all font-[var(--font-mono)] text-[18px] font-semibold text-[var(--fg-primary)]">
+            {roleName}
+          </span>
+          <span className="text-[13px] text-[var(--fg-tertiary)]">
+            {roleKind === "Role" ? `Role · ${roleNamespace ?? ""}` : "ClusterRole"}
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-[6px]">
+          {onEdit && (
+            <button
+              type="button"
+              aria-label="Edit role"
+              title="Edit role"
+              onClick={onEdit}
+              className="flex items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border-strong)] px-3 py-1.5 text-[13px] text-[var(--fg-primary)] hover:bg-white/[0.04]"
+            >
+              <Pencil className="size-[13px]" /> Edit
+            </button>
+          )}
+          {onEditYaml && (
+            <button
+              type="button"
+              aria-label="Edit role YAML"
+              title="Edit YAML"
+              onClick={onEditYaml}
+              className="flex size-8 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border-subtle)] text-[var(--fg-tertiary)] hover:bg-white/[0.05]"
+            >
+              <Code className="size-[14px]" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              aria-label="Delete role"
+              title="Delete role"
+              onClick={onDelete}
+              className="flex size-8 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border-subtle)] text-[var(--status-failed)] hover:bg-white/[0.05]"
+            >
+              <Trash2 className="size-[14px]" />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-col gap-[3px]">
