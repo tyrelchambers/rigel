@@ -80,4 +80,37 @@ describe("analyzeSecurity", () => {
     expect(matches[0].rationale).toContain("hostPID");
     expect(matches[0].rationale).toContain("hostIPC");
   });
+
+  it("flags a container not pinned to non-root as a warning, and clears when it is", () => {
+    const w = healthySecure();
+    w.containers[0].runAsNonRoot = undefined;
+    w.containers[0].runAsUser = undefined;
+    w.podRunAsNonRoot = undefined;
+    const out = analyzeSecurity({ workloads: [w] });
+    const f = out.find((x) => x.type === "runsAsRoot");
+    expect(f).toBeDefined();
+    expect(f?.severity).toBe("warning");
+    expect(f?.container).toBe("web");
+
+    const clean = analyzeSecurity({ workloads: [healthySecure()] });
+    expect(clean.some((x) => x.type === "runsAsRoot")).toBe(false);
+  });
+
+  it("prefers a container-level runAsUser/runAsNonRoot setting over the pod default", () => {
+    // Pod says non-root, but the container explicitly sets runAsUser: 0 (root) —
+    // the container setting must win and still trip the finding.
+    const rootContainer = healthySecure({ podRunAsNonRoot: true });
+    rootContainer.containers[0].runAsNonRoot = undefined;
+    rootContainer.containers[0].runAsUser = 0;
+    const trips = analyzeSecurity({ workloads: [rootContainer] });
+    expect(trips.some((x) => x.type === "runsAsRoot")).toBe(true);
+
+    // Pod has no non-root guarantee at all, but the container sets a non-zero
+    // runAsUser — the container setting must win and clear the finding.
+    const nonRootContainer = healthySecure({ podRunAsNonRoot: undefined, podRunAsUser: undefined });
+    nonRootContainer.containers[0].runAsNonRoot = undefined;
+    nonRootContainer.containers[0].runAsUser = 1000;
+    const clears = analyzeSecurity({ workloads: [nonRootContainer] });
+    expect(clears.some((x) => x.type === "runsAsRoot")).toBe(false);
+  });
 });
