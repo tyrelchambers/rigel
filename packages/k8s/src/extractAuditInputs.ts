@@ -1,24 +1,47 @@
-// apps/web/src/panels/assistant/audits/extractAuditInputs.ts
-// Adapter: turn the live Zustand cluster store (raw kubectl -o json objects,
-// keyed by watch-kind then name) into the normalized inputs the pure
-// reliability engine consumes. Mirrors rightsizing/aggregate.ts:buildRightSizing.
+// packages/k8s/src/extractAuditInputs.ts
+// Adapter: turn raw kubectl -o json objects (as delivered by the live web
+// Zustand cluster store, keyed by watch-kind then name — and, later, a plain
+// kubectl JSON list from the CLI) into the normalized inputs the pure
+// reliability/security/performance engines consume. Mirrors
+// rightsizing/aggregate.ts:buildRightSizing. No web-only deps: only
+// ./auditCommon and ./quantity.
 import type {
   AuditWorkload,
+  AuditWorkloadKind,
   AuditPdb,
   AuditHpa,
   AuditContainer,
-  ReliabilityAuditInput,
-  ReliabilityWorkloadKind,
-} from "@rigel/k8s";
+} from "./auditCommon";
+import type { ReliabilityAuditInput } from "./reliabilityAudit";
+import { parseQuantity } from "./quantity";
 
 type Dict = Record<string, unknown>;
+
+interface RawSecurityContext {
+  privileged?: boolean;
+  allowPrivilegeEscalation?: boolean;
+  runAsNonRoot?: boolean;
+  runAsUser?: number;
+  readOnlyRootFilesystem?: boolean;
+  capabilities?: { add?: string[] };
+}
 
 interface RawContainer {
   name: string;
   image?: string;
   livenessProbe?: unknown;
   readinessProbe?: unknown;
-  resources?: { requests?: Record<string, string> };
+  resources?: {
+    requests?: Record<string, string>;
+    limits?: Record<string, string>;
+  };
+  securityContext?: RawSecurityContext;
+  ports?: Array<{ hostPort?: number }>;
+}
+
+interface RawPodSecurityContext {
+  runAsNonRoot?: boolean;
+  runAsUser?: number;
 }
 
 interface RawWorkload {
@@ -31,6 +54,10 @@ interface RawWorkload {
         affinity?: { podAntiAffinity?: unknown };
         volumes?: Array<{ hostPath?: unknown }>;
         containers?: RawContainer[];
+        hostNetwork?: boolean;
+        hostPID?: boolean;
+        hostIPC?: boolean;
+        securityContext?: RawPodSecurityContext;
       };
     };
   };
@@ -46,7 +73,7 @@ interface RawHpa {
   spec?: { scaleTargetRef?: { kind?: string; name?: string }; minReplicas?: number };
 }
 
-const WORKLOAD_KINDS: Record<string, ReliabilityWorkloadKind> = {
+const WORKLOAD_KINDS: Record<string, AuditWorkloadKind> = {
   deployments: "Deployment",
   statefulsets: "StatefulSet",
   daemonsets: "DaemonSet",
@@ -54,13 +81,33 @@ const WORKLOAD_KINDS: Record<string, ReliabilityWorkloadKind> = {
 
 function mapContainer(c: RawContainer): AuditContainer {
   const req = c.resources?.requests ?? {};
+  const limits = c.resources?.limits ?? {};
+  const sc = c.securityContext ?? {};
+  const hasCpuLimit = limits.cpu != null;
+  const hasMemLimit = limits.memory != null;
   return {
     name: c.name,
     image: c.image,
+    // reliability
     hasLiveness: c.livenessProbe != null,
     hasReadiness: c.readinessProbe != null,
     hasCpuRequest: req.cpu != null,
     hasMemRequest: req.memory != null,
+    // security
+    privileged: sc.privileged,
+    allowPrivilegeEscalation: sc.allowPrivilegeEscalation,
+    runAsNonRoot: sc.runAsNonRoot,
+    runAsUser: sc.runAsUser,
+    readOnlyRootFilesystem: sc.readOnlyRootFilesystem,
+    addedCapabilities: sc.capabilities?.add ?? [],
+    hostPorts: (c.ports ?? [])
+      .filter((p) => p.hostPort != null)
+      .map((p) => p.hostPort as number),
+    // performance
+    hasCpuLimit,
+    hasMemLimit,
+    cpuLimit: hasCpuLimit ? parseQuantity(limits.cpu as string, "cpu") : undefined,
+    memLimit: hasMemLimit ? parseQuantity(limits.memory as string, "memory") : undefined,
   };
 }
 
@@ -74,6 +121,7 @@ export function extractAuditInputs(resources: Dict): ReliabilityAuditInput {
     for (const obj of Object.values(sliceOf(resources, watchKind))) {
       const w = obj as RawWorkload;
       const podSpec = w.spec?.template?.spec;
+      const podSc = podSpec?.securityContext ?? {};
       workloads.push({
         kind,
         name: w.metadata?.name ?? "",
@@ -83,6 +131,11 @@ export function extractAuditInputs(resources: Dict): ReliabilityAuditInput {
         containers: (podSpec?.containers ?? []).map(mapContainer),
         hasAntiAffinity: podSpec?.affinity?.podAntiAffinity != null,
         hasHostPath: (podSpec?.volumes ?? []).some((v) => v.hostPath != null),
+        hostNetwork: podSpec?.hostNetwork,
+        hostPID: podSpec?.hostPID,
+        hostIPC: podSpec?.hostIPC,
+        podRunAsNonRoot: podSc.runAsNonRoot,
+        podRunAsUser: podSc.runAsUser,
       });
     }
   }

@@ -21,6 +21,8 @@ export {
 
 export { parseQuantity } from "./quantity";
 
+export { extractAuditInputs } from "./extractAuditInputs";
+
 export {
   type ReliabilityFindingType,
   type ReliabilityFinding,

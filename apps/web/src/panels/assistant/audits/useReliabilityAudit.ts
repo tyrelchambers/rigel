@@ -9,10 +9,10 @@ import {
   analyzeReliability,
   sortFindings,
   auditCounts,
+  extractAuditInputs,
   type ReliabilityFinding,
   type AuditCounts,
 } from "@rigel/k8s";
-import { extractAuditInputs } from "./extractAuditInputs";
 
 const WATCH_KINDS = [
   "deployments",
