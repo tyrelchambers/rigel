@@ -1,21 +1,14 @@
 // apps/web/src/panels/assistant/tabs/AuditSkillsTab.tsx
-// Audits tab — the launcher for HELM-20 audit skills. Reliability is live
-// (deterministic engine → chat handoff); Security and Performance are disabled
-// "coming soon" cards (future home of premium/locked state, HELM-16). Findings
-// are surfaced in chat, so this tab is a launcher, not a report view.
+// Audits tab — the launcher for HELM-20 audit skills. Each card is a pure
+// launcher: Run hands off `/rigel-<kind>-audit` to a fresh chat thread, and
+// Claude Code expands the slash command into the matching SKILL.md, which
+// shells out to the `rigel-audit` CLI (single, shared detection path) and
+// walks the findings with the user. No web-computed counts here.
 import { ShieldCheck, Gauge, HeartPulse } from "lucide-react";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { AuditSkillCard } from "../audits/AuditSkillCard";
-import { useReliabilityAudit } from "../audits/useReliabilityAudit";
-import { buildReliabilityAuditPrompt } from "../audits/auditPrompt";
 
 export function AuditSkillsTab() {
-  const { findings, counts } = useReliabilityAudit();
-
-  function runReliability() {
-    handoffToChat(buildReliabilityAuditPrompt(findings), { newThread: true });
-  }
-
   return (
     <div className="space-y-3.5">
       <div className="min-w-0">
@@ -32,20 +25,21 @@ export function AuditSkillsTab() {
           description="Single replicas, missing probes, PodDisruptionBudgets, anti-affinity, resource requests, mutable image tags, hostPath volumes."
           Icon={HeartPulse}
           status="live"
-          counts={counts}
-          onRun={runReliability}
+          onRun={() => handoffToChat("/rigel-reliability-audit", { newThread: true })}
         />
         <AuditSkillCard
           title="Security"
           description="Privileged containers, root users, missing securityContext, hostPath / hostNetwork, wide RBAC."
           Icon={ShieldCheck}
-          status="soon"
+          status="live"
+          onRun={() => handoffToChat("/rigel-security-audit", { newThread: true })}
         />
         <AuditSkillCard
           title="Performance"
           description="CPU throttling, hotspots, slow startups, HPA tuning. Needs a metrics backend."
           Icon={Gauge}
-          status="soon"
+          status="live"
+          onRun={() => handoffToChat("/rigel-performance-audit", { newThread: true })}
         />
       </div>
     </div>

@@ -8,33 +8,34 @@ import { AuditSkillCard } from "../audits/AuditSkillCard";
 vi.mock("@/lib/chatHandoff", () => ({ handoffToChat: vi.fn() }));
 import { handoffToChat } from "@/lib/chatHandoff";
 
-vi.mock("../audits/useReliabilityAudit", () => ({
-  useReliabilityAudit: () => ({
-    findings: [
-      { type: "singleReplica", severity: "warning", kind: "Deployment", name: "web", namespace: "default", rationale: "x", fix: "y" },
-    ],
-    counts: { critical: 0, warning: 1, info: 0, total: 1, workloadsAffected: 1 },
-  }),
-}));
-
 beforeEach(() => vi.clearAllMocks());
 
 describe("AuditSkillsTab", () => {
-  it("renders the Reliability card and Coming soon cards", () => {
+  it("renders all three audit cards as live launchers with no 'Coming soon'", () => {
     render(<AuditSkillsTab />);
     expect(screen.getByText("Reliability")).toBeInTheDocument();
     expect(screen.getByText("Security")).toBeInTheDocument();
     expect(screen.getByText("Performance")).toBeInTheDocument();
-    expect(screen.getAllByText("Coming soon")).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /run audit/i })).toHaveLength(3);
+    expect(screen.queryByText("Coming soon")).not.toBeInTheDocument();
   });
 
-  it("hands off a findings-seeded prompt to a new chat thread on Run", () => {
+  it("hands off /rigel-reliability-audit to a new chat thread on Run", () => {
     render(<AuditSkillsTab />);
-    fireEvent.click(screen.getByRole("button", { name: /run audit/i }));
-    expect(handoffToChat).toHaveBeenCalledWith(
-      expect.stringContaining('"type": "singleReplica"'),
-      { newThread: true },
-    );
+    fireEvent.click(screen.getAllByRole("button", { name: /run audit/i })[0]);
+    expect(handoffToChat).toHaveBeenCalledWith("/rigel-reliability-audit", { newThread: true });
+  });
+
+  it("hands off /rigel-security-audit to a new chat thread on Run", () => {
+    render(<AuditSkillsTab />);
+    fireEvent.click(screen.getAllByRole("button", { name: /run audit/i })[1]);
+    expect(handoffToChat).toHaveBeenCalledWith("/rigel-security-audit", { newThread: true });
+  });
+
+  it("hands off /rigel-performance-audit to a new chat thread on Run", () => {
+    render(<AuditSkillsTab />);
+    fireEvent.click(screen.getAllByRole("button", { name: /run audit/i })[2]);
+    expect(handoffToChat).toHaveBeenCalledWith("/rigel-performance-audit", { newThread: true });
   });
 });
 
