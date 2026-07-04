@@ -10,19 +10,24 @@
 # agent is a standalone npm project but consumes @rigel/k8s BY SOURCE via the
 # tsconfig "paths" alias (../packages/k8s/src), so both must be laid out as
 # siblings for the esbuild bundle (npm run build → build.mjs) to inline it.
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 COPY agent/package.json agent/package-lock.json agent/tsconfig.json agent/build.mjs ./agent/
 COPY agent/src ./agent/src
 COPY packages/k8s/src ./packages/k8s/src
+COPY packages/audit-cli/package.json packages/audit-cli/tsconfig.json ./packages/audit-cli/
+COPY packages/audit-cli/src ./packages/audit-cli/src
 WORKDIR /app/agent
 RUN npm ci
 # Bundles dist/index.js + dist/fixRunner.js + dist/guardedKubectl.js, each a
 # self-contained ESM file with @rigel/k8s inlined (Node builtins external).
 RUN npm run build
+RUN npx esbuild ../packages/audit-cli/src/index.ts --bundle --platform=node \
+      --format=esm --tsconfig=../packages/audit-cli/tsconfig.json \
+      --outfile=/app/packages/audit-cli/dist/rigel-audit.mjs
 
 # ── runtime stage ────────────────────────────────────────────────────────────
-FROM node:22-alpine
+FROM node:26-alpine
 
 # Runtime libs: ca-certificates (HTTPS to Anthropic + dl.k8s.io), git (the
 # fix-runner Job clones/pushes via @rigel/k8s repoFix), and libstdc++/libgcc
@@ -74,6 +79,11 @@ WORKDIR /app
 # above), so there is nothing to `npm ci` here.
 COPY agent/package.json ./package.json
 COPY --from=build /app/agent/dist ./dist
+
+# rigel-audit CLI on PATH — the diagnose model runs `rigel-audit <kind> --json`.
+COPY --from=build /app/packages/audit-cli/dist/rigel-audit.mjs /usr/local/bin/rigel-audit.mjs
+RUN printf '#!/bin/sh\nexec node /usr/local/bin/rigel-audit.mjs "$@"\n' > /usr/local/bin/rigel-audit \
+ && chmod +x /usr/local/bin/rigel-audit
 
 # Run as the unprivileged built-in `node` user (UID 1000), in an empty working
 # dir so `claude -p` doesn't pick up stray repo context.
