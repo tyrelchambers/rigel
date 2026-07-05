@@ -1,9 +1,11 @@
-// Agent build — esbuild bundles the three runtime entrypoints to dist/:
+// Agent build — esbuild bundles the four runtime entrypoints to dist/:
 //
 //   index.js         the always-on remediation agent (image CMD)
 //   fixRunner.js     the one-shot fix-PR Job entry (the Job overrides command to run this)
 //   guardedKubectl.js  the read-only kubectl/helm shim the non-Claude bridges exec
 //                      (RIGEL_AGENT_GUARD_CMD points here)
+//   permissionHook.js  the chat turn's PreToolUse permission hook, run as its own
+//                      `claude --settings` subprocess (RIGEL_AGENT_HOOK_CMD points here)
 //
 // Why esbuild (not raw `tsc`): the agent now consumes `@rigel/k8s` BY SOURCE via
 // the tsconfig "paths" alias (../packages/k8s/src), and `rootDir: ..` makes a
@@ -33,4 +35,5 @@ await Promise.all([
   build({ ...common, entryPoints: ["src/index.ts"], outfile: "dist/index.js" }),
   build({ ...common, entryPoints: ["src/fixRunner.ts"], outfile: "dist/fixRunner.js" }),
   build({ ...common, entryPoints: ["src/guardedKubectl.ts"], outfile: "dist/guardedKubectl.js" }),
+  build({ ...common, entryPoints: ["src/permissionHook.ts"], outfile: "dist/permissionHook.js" }),
 ]);

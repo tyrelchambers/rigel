@@ -86,14 +86,21 @@ COPY --from=build /app/packages/audit-cli/dist/rigel-audit.mjs /usr/local/bin/ri
 RUN printf '#!/bin/sh\nexec node /usr/local/bin/rigel-audit.mjs "$@"\n' > /usr/local/bin/rigel-audit \
  && chmod +x /usr/local/bin/rigel-audit
 
-# Run as the unprivileged built-in `node` user (UID 1000), in an empty working
-# dir so `claude -p` doesn't pick up stray repo context.
+# Run as the unprivileged built-in `node` user (UID 1000), in a working dir that
+# holds only CLAUDE.md (the operator-editable soft guardrails) so `claude -p`
+# picks it up as context without picking up stray repo context.
 RUN mkdir -p /workspace && chown node:node /workspace
+COPY --chown=node:node agent/CLAUDE.md /workspace/CLAUDE.md
 ENV NODE_ENV=production
 # The guarded-kubectl shim (agent/src/guardedKubectl.ts → dist/guardedKubectl.js)
 # is exec'd by the non-Claude bridges. In the production image there is no tsx, so
 # point the shim's runner at the compiled .js (mirrors RIGEL_GUARD_CMD in the chat).
 ENV RIGEL_AGENT_GUARD_CMD="node /app/dist/guardedKubectl.js"
+# The chat turn's PreToolUse permission hook (agent/src/permissionHook.ts →
+# dist/permissionHook.js) runs as its own `claude --settings` subprocess. In the
+# production image there is no tsx, so point it at the compiled .js — mirrors
+# RIGEL_AGENT_GUARD_CMD above.
+ENV RIGEL_AGENT_HOOK_CMD="node /app/dist/permissionHook.js"
 USER node
 WORKDIR /workspace
 CMD ["node", "/app/dist/index.js"]
