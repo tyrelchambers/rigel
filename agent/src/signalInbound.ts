@@ -30,12 +30,10 @@ export type Command =
   | { kind: "diagnose"; text: string };
 
 export const HELP_TEXT = [
-  "Rigel assistant — text commands:",
-  "• ask anything (e.g. \"why is payments crashlooping?\") — I'll investigate read-only and reply.",
-  "• status — health and how many fixes are queued.",
-  "• queue — list fixes awaiting approval.",
-  "• approve N — run queued fix #N (defaults to #1).",
-  "• help — this message.",
+  "Rigel assistant — text me like an engineer:",
+  "• ask or tell me anything (\"why is payments down?\", \"restart the api\", \"scale web to 3\").",
+  "• I investigate and make reversible changes directly; destructive ones I'll propose — reply \"yes\" to run.",
+  "• status — health, spend, queued items.  •  help — this message.",
 ].join("\n");
 
 /** Strip spacing/formatting so "+1 (555) 010-1234" matches "+15550101234". */
