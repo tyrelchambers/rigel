@@ -30,11 +30,8 @@ jobs:
 
       - name: Verify package-lock.json is in sync with package.json
         run: |
-          npm install --package-lock-only --ignore-scripts
-          if ! git diff --quiet -- package-lock.json; then
-            echo "::error::agent/package-lock.json is out of sync with agent/package.json."
-            echo "Run 'npm install --package-lock-only' in agent/ and commit the lockfile."
-            git --no-pager diff -- package-lock.json
+          if ! npm ci --ignore-scripts; then
+            echo "::error::agent/package-lock.json is out of sync with agent/package.json. Run 'npm install' in agent/ and commit the lockfile."
             exit 1
           fi
           echo "agent/package-lock.json is in sync"
