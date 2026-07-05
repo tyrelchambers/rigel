@@ -4,18 +4,27 @@
 // such hook, so we enforce the SAME policy by placing wrapper scripts named
 // `kubectl`/`helm` FIRST on the provider subprocess's PATH (see provisionGuardBin).
 // Every kubectl/helm the model — or any child like `sh -c …` — execs resolves to
-// this shim, which classifies via commandPolicy.classifyCommand: reads run against
-// the real binary, cluster MUTATIONS are denied. Ported from apps/server.
+// this shim, which classifies via commandPolicy.classifyTier: reads + reversible
+// mutations run against the real binary, DESTRUCTIVE ones are denied. Ported
+// from apps/server (which is 2-tier: all mutations deny).
 import { spawn } from "node:child_process";
 import { mkdtemp, writeFile, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { classifyCommand, type CommandVerdict } from "@rigel/k8s/src/commandPolicy.js";
+import { classifyTier } from "@rigel/k8s/src/commandPolicy.js";
 
-/** Pure decision core: reconstruct `[logicalName, ...userArgs]` and defer to policy. */
+export interface CommandVerdict {
+  decision: "allow" | "deny";
+  reason: string;
+}
+
+/** Pure decision core: reconstruct `[logicalName, ...userArgs]` and defer to
+ *  policy. Reads + reversible mutations run; destructive/blocked deny. */
 export function guardVerdict(logicalName: string, userArgs: string[]): CommandVerdict {
-  return classifyCommand([logicalName, ...userArgs].join(" "));
+  const { tier, reason } = classifyTier([logicalName, ...userArgs].join(" "));
+  if (tier === "read" || tier === "reversible") return { decision: "allow", reason };
+  return { decision: "deny", reason };
 }
 
 /**

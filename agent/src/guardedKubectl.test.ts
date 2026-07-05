@@ -28,8 +28,8 @@ describe("guardVerdict — pure policy decisions", () => {
   test("cluster mutations are denied", () => {
     expect(guardVerdict("kubectl", ["delete", "pod", "x"]).decision).toBe("deny");
   });
-  test("helm mutations are denied", () => {
-    expect(guardVerdict("helm", ["install", "x", "./c"]).decision).toBe("deny");
+  test("destructive helm mutations are denied", () => {
+    expect(guardVerdict("helm", ["uninstall", "x"]).decision).toBe("deny");
   });
 });
 
@@ -91,4 +91,9 @@ describe("isShimEntry (bundling-safe self-exec detection)", () => {
     expect(isShimEntry("/node_modules/.bin/vitest")).toBe(false);
     expect(isShimEntry("/app/dist/guardedKubectlHelper.js")).toBe(false);
   });
+});
+
+test("shim allows reversible mutations, denies destructive", () => {
+  expect(guardVerdict("kubectl", ["rollout", "restart", "deploy/api"]).decision).toBe("allow");
+  expect(guardVerdict("kubectl", ["delete", "pod", "foo"]).decision).toBe("deny");
 });
