@@ -28,17 +28,17 @@ jobs:
       # sees a generic no-AVX2 CPU and bakes the *baseline* Bun, which segfaults
       # during GC on kernel 6.17. All target nodes are amd64.
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           # Repo root: the image bundles both agent/ and the shared packages/k8s/
           # source (esbuild inlines @rigel/k8s). Dockerfile stays under agent/.
@@ -98,3 +98,12 @@ jobs:
           echo "Deploying rigel-assistant in namespace: $NS"
           kubectl set image deployment/rigel-assistant agent=${{ env.IMAGE }}:${{ github.sha }} -n "$NS"
           kubectl rollout status deployment/rigel-assistant -n "$NS" --timeout=120s
+
+  notify-failure:
+    needs: [build, deploy]
+    if: failure()
+    uses: ./.github/workflows/ci-failure-issue.yml
+    with:
+      workflow: Build Assistant agent image
+    permissions:
+      issues: write

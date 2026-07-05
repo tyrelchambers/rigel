@@ -1,0 +1,39 @@
+name: Notify CI failure
+
+on:
+  workflow_call:
+    inputs:
+      workflow:
+        required: true
+        type: string
+
+jobs:
+  file-issue:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the CI-failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          WF: ${{ inputs.workflow }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gh label create ci-failure --color B60205 \
+            --description "A build/deploy workflow failed" --force
+
+          title="CI red: ${WF}"
+          existing=$(gh issue list --state open --label ci-failure \
+                       --json number,title \
+                       --jq "[.[] | select(.title == \"${title}\")][0].number // empty")
+
+          body=$(printf '**%s** failed on `%s` @ `%s`.\n\n[View run](%s)' \
+                   "$WF" "$GITHUB_REF_NAME" "$GITHUB_SHA" "$RUN_URL")
+
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --label ci-failure --body "$body"
+          fi
