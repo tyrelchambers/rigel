@@ -19,14 +19,12 @@ function derived(over: Partial<SettingsDerived> = {}): SettingsDerived {
     status: "linked",
     signalNumber: "+15550001111",
     recipients: "+15559998888",
-    inbound: false,
     hasSavedNumber: true,
     matrixStatus: "notConnected",
     matrixHomeserverUrl: "",
     matrixUserId: "",
     matrixRoomId: "",
     matrixAllowedSenders: "",
-    matrixInbound: false,
     ...over,
   } as SettingsDerived;
 }
@@ -34,6 +32,13 @@ function derived(over: Partial<SettingsDerived> = {}): SettingsDerived {
 const noop = () => {};
 
 beforeEach(() => mutateAsync.mockClear());
+
+describe("SignalSection — no two-way toggle", () => {
+  it("renders linked state without a Two-way control (always-on inbound)", () => {
+    render(<SignalSection derived={derived()} applying={false} setApplying={noop} />);
+    expect(screen.queryByText(/two-way/i)).not.toBeInTheDocument();
+  });
+});
 
 describe("SignalSection — disconnect", () => {
   it("shows a Disconnect trigger when linked", () => {
@@ -73,7 +78,6 @@ describe("SignalSection — disconnect", () => {
         apiUrl: "",
         number: "",
         recipients: "",
-        inbound: false,
       }),
     );
   });

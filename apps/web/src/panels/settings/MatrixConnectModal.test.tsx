@@ -61,7 +61,6 @@ describe("MatrixConnectModal", () => {
         matrixAccessToken: "tok-login",
         matrixRoomId: "!room:hs",
         matrixAllowedSenders: "@me:hs",
-        matrixInbound: true,
       }),
     );
   });

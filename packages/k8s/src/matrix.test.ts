@@ -8,7 +8,6 @@ import {
   matrixUserId,
   matrixRoomId,
   matrixAllowedSenders,
-  matrixInbound,
   parseAllowedSenders,
   deriveMatrixConnected,
   matrixStatusColor,
@@ -26,23 +25,20 @@ test("matrixSecretYAML defaults an empty namespace to default", () => {
   expect(matrixSecretYAML("t", "  ")).toContain("namespace: default");
 });
 
-test("matrixConfigUpdates includes only provided fields, inbound as a string", () => {
-  expect(matrixConfigUpdates({ homeserverUrl: "https://hs", inbound: true })).toEqual({
+test("matrixConfigUpdates includes only provided fields", () => {
+  expect(matrixConfigUpdates({ homeserverUrl: "https://hs" })).toEqual({
     matrixHomeserverUrl: "https://hs",
-    matrixInbound: "true",
   });
   expect(matrixConfigUpdates({ allowedSenders: "" })).toEqual({ matrixAllowedSenders: "" });
   expect(matrixConfigUpdates({})).toEqual({});
 });
 
 test("config readers pull the matrix keys", () => {
-  const d = { matrixHomeserverUrl: "https://hs", matrixUserId: "@r:hs", matrixRoomId: "!x:hs", matrixAllowedSenders: "@a:hs", matrixInbound: "true" };
+  const d = { matrixHomeserverUrl: "https://hs", matrixUserId: "@r:hs", matrixRoomId: "!x:hs", matrixAllowedSenders: "@a:hs" };
   expect(matrixHomeserverUrl(d)).toBe("https://hs");
   expect(matrixUserId(d)).toBe("@r:hs");
   expect(matrixRoomId(d)).toBe("!x:hs");
   expect(matrixAllowedSenders(d)).toBe("@a:hs");
-  expect(matrixInbound(d)).toBe(true);
-  expect(matrixInbound({})).toBe(false);
 });
 
 test("parseAllowedSenders splits on comma/newline and trims", () => {

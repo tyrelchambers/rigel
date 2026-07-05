@@ -3,12 +3,12 @@
 // State machine mirrors the derived matrixStatus; the connect wizard lives in
 // MatrixConnectModal.
 import { useState } from "react";
-import { AlertTriangle, MessageSquare, Plus, RefreshCw, Unplug } from "lucide-react";
+import { MessageSquare, Plus, RefreshCw, Unplug } from "lucide-react";
 import { matrixStatusColor, parseAllowedSenders, type MatrixStatus } from "@rigel/k8s";
 import { useAssistantAction } from "@/lib/api";
 import type { SettingsDerived } from "./useSettings";
 import { MatrixConnectModal } from "./MatrixConnectModal";
-import { IconTile, GreenToggle } from "./MatrixWizardParts";
+import { IconTile } from "./MatrixWizardParts";
 import { ChannelDisconnectDialog } from "./ChannelDisconnectDialog";
 
 const DOT: Record<string, string> = {
@@ -63,24 +63,13 @@ export function MatrixSection({ derived }: { derived: SettingsDerived }) {
     matrixHomeserverUrl,
     matrixUserId,
     matrixAllowedSenders,
-    matrixInbound,
   } = derived;
   const setMatrix = useAssistantAction();
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [disconnectOpen, setDisconnectOpen] = useState(false);
   const [disconnectError, setDisconnectError] = useState<string | null>(null);
 
   const senders = parseAllowedSenders(matrixAllowedSenders);
-
-  async function toggleInbound() {
-    setError(null);
-    try {
-      await setMatrix.mutateAsync({ action: "setMatrix", namespace, matrixInbound: !matrixInbound });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
 
   async function disconnect() {
     setDisconnectError(null);
@@ -92,7 +81,6 @@ export function MatrixSection({ derived }: { derived: SettingsDerived }) {
         matrixUserId: "",
         matrixRoomId: "",
         matrixAllowedSenders: "",
-        matrixInbound: false,
       });
       setDisconnectOpen(false);
     } catch (err) {
@@ -108,15 +96,6 @@ export function MatrixSection({ derived }: { derived: SettingsDerived }) {
       namespace={namespace}
       defaultAllowed={matrixAllowedSenders}
     />
-  );
-
-  const errorBanner = error && (
-    <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-destructive">
-      <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-      <span className="select-text" style={{ fontSize: 12 }}>
-        {error}
-      </span>
-    </div>
   );
 
   // ── CONNECTED ────────────────────────────────────────────────────────────
@@ -142,15 +121,6 @@ export function MatrixSection({ derived }: { derived: SettingsDerived }) {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-foreground">Enabled</span>
-              <GreenToggle
-                on={matrixInbound}
-                onClick={toggleInbound}
-                disabled={setMatrix.isPending}
-                label="Two-way replies"
-              />
-            </div>
             <button
               type="button"
               onClick={() => {
@@ -165,7 +135,6 @@ export function MatrixSection({ derived }: { derived: SettingsDerived }) {
             </button>
           </div>
         </div>
-        {errorBanner}
         <div className="h-px w-full bg-[var(--border-subtle)]" />
         <div className="grid grid-cols-3 gap-8">
           {rows.map((r) => (
@@ -198,7 +167,6 @@ export function MatrixSection({ derived }: { derived: SettingsDerived }) {
     return (
       <Card>
         <Head tone="red" status="error" />
-        {errorBanner}
         <span className="text-destructive" style={{ fontSize: 12.5, lineHeight: 1.45 }}>
           {matrixHomeserverUrl
             ? `${matrixHomeserverUrl.replace(/^https?:\/\//, "")} didn't respond to Rigel.`
@@ -222,7 +190,6 @@ export function MatrixSection({ derived }: { derived: SettingsDerived }) {
   return (
     <Card>
       <Head tone="neutral" status="notConnected" />
-      {errorBanner}
       <span className="text-muted-foreground" style={{ fontSize: 12.5, lineHeight: 1.45 }}>
         Message Rigel from Element. Runs alongside Signal.
       </span>

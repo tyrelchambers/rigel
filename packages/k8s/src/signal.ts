@@ -212,11 +212,6 @@ export function signalRecipients(configData: Record<string, string>): string {
   return configData["signalRecipients"] ?? "";
 }
 
-/** Two-way (inbound) flag from assistant-config; defaults to false. */
-export function signalInbound(configData: Record<string, string>): boolean {
-  return configData["signalInbound"] === "true";
-}
-
 /** True iff a non-empty sender number is saved (bridge is "linked"). */
 export function hasSavedNumber(configData: Record<string, string>): boolean {
   return signalNumber(configData).trim() !== "";
@@ -231,12 +226,10 @@ export function signalConfigUpdates(args: {
   apiUrl?: string;
   number?: string;
   recipients?: string;
-  inbound?: boolean;
 }): Record<string, string> {
   const out: Record<string, string> = {};
   if (args.apiUrl !== undefined) out["signalApiUrl"] = args.apiUrl;
   if (args.number !== undefined) out["signalNumber"] = args.number;
   if (args.recipients !== undefined) out["signalRecipients"] = args.recipients;
-  if (args.inbound !== undefined) out["signalInbound"] = args.inbound ? "true" : "false";
   return out;
 }

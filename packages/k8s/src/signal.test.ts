@@ -7,7 +7,6 @@ import {
   parseRecipients,
   signalApiUrl,
   hasSavedNumber,
-  signalInbound,
   signalConfigUpdates,
 } from "./signal";
 
@@ -87,19 +86,15 @@ test("signalApiUrl builds the in-cluster URL", () => {
   expect(signalApiUrl("ns1")).toBe("http://signal-cli-rest.ns1.svc.cluster.local:8080");
 });
 
-test("hasSavedNumber + signalInbound read config data", () => {
+test("hasSavedNumber reads config data", () => {
   expect(hasSavedNumber({ signalNumber: "+1555" })).toBe(true);
   expect(hasSavedNumber({ signalNumber: "  " })).toBe(false);
   expect(hasSavedNumber({})).toBe(false);
-  expect(signalInbound({ signalInbound: "true" })).toBe(true);
-  expect(signalInbound({ signalInbound: "false" })).toBe(false);
-  expect(signalInbound({})).toBe(false);
 });
 
 test("signalConfigUpdates includes only provided fields", () => {
-  expect(signalConfigUpdates({ number: "+1555", inbound: true })).toEqual({
+  expect(signalConfigUpdates({ number: "+1555" })).toEqual({
     signalNumber: "+1555",
-    signalInbound: "true",
   });
   expect(signalConfigUpdates({ recipients: "" })).toEqual({ signalRecipients: "" });
   expect(signalConfigUpdates({})).toEqual({});
@@ -107,11 +102,10 @@ test("signalConfigUpdates includes only provided fields", () => {
 
 test("signalConfigUpdates clears every key for a disconnect", () => {
   expect(
-    signalConfigUpdates({ apiUrl: "", number: "", recipients: "", inbound: false }),
+    signalConfigUpdates({ apiUrl: "", number: "", recipients: "" }),
   ).toEqual({
     signalApiUrl: "",
     signalNumber: "",
     signalRecipients: "",
-    signalInbound: "false",
   });
 });

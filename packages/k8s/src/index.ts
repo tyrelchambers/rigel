@@ -206,7 +206,6 @@ export {
   signalApiUrl,
   signalNumber,
   signalRecipients,
-  signalInbound,
   hasSavedNumber,
   signalConfigUpdates,
 } from "./signal";
@@ -221,7 +220,6 @@ export {
   matrixUserId,
   matrixRoomId,
   matrixAllowedSenders,
-  matrixInbound,
   parseAllowedSenders,
   deriveMatrixConnected,
   matrixStatusColor,

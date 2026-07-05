@@ -18,7 +18,6 @@ import {
 import { useAssistantAction } from "@/lib/api";
 import { fetchSignalQR, fetchSignalAccounts, sendSignalTest } from "@/lib/api";
 import { useSettings } from "./useSettings";
-import { GreenToggle } from "./MatrixWizardParts";
 import { ChannelDisconnectDialog } from "./ChannelDisconnectDialog";
 
 const DOT_CLASS: Record<string, string> = {
@@ -38,7 +37,7 @@ export function SignalSection({
   applying: boolean;
   setApplying: (v: boolean) => void;
 }) {
-  const { status, namespace, signalNumber, recipients, inbound } = derived;
+  const { status, namespace, signalNumber, recipients } = derived;
   const setSignal = useAssistantAction();
 
   const [error, setError] = useState<string | null>(null);
@@ -111,7 +110,6 @@ export function SignalSection({
       apiUrl: signalApiUrl(namespace),
       number,
       recipients,
-      inbound,
     });
     stopLinking();
   }
@@ -149,23 +147,6 @@ export function SignalSection({
         apiUrl: signalApiUrl(namespace),
         number: signalNumber,
         recipients: recipientText,
-        inbound,
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  async function toggleInbound() {
-    setError(null);
-    try {
-      await setSignal.mutateAsync({
-        action: "setSignal",
-        namespace,
-        apiUrl: signalApiUrl(namespace),
-        number: signalNumber,
-        recipients,
-        inbound: !inbound,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -181,7 +162,6 @@ export function SignalSection({
         apiUrl: "",
         number: "",
         recipients: "",
-        inbound: false,
       });
       setDisconnectOpen(false);
     } catch (err) {
@@ -265,15 +245,6 @@ export function SignalSection({
         )}
         {status === "linked" && (
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-foreground">Two-way</span>
-              <GreenToggle
-                on={inbound}
-                onClick={toggleInbound}
-                disabled={setSignal.isPending}
-                label="Let me text the assistant back"
-              />
-            </div>
             <Button
               size="sm"
               variant="muted"
@@ -372,11 +343,6 @@ export function SignalSection({
                 </span>
               )}
             </div>
-
-            <p className="text-[11px] text-[var(--fg-tertiary)]">
-              With two-way on, the assistant polls the bridge for replies from your recipients and acts
-              on them.
-            </p>
           </div>
         </>
       )}

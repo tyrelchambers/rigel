@@ -38,14 +38,12 @@ export function matrixConfigUpdates(args: {
   userId?: string;
   roomId?: string;
   allowedSenders?: string;
-  inbound?: boolean;
 }): Record<string, string> {
   const out: Record<string, string> = {};
   if (args.homeserverUrl !== undefined) out["matrixHomeserverUrl"] = args.homeserverUrl;
   if (args.userId !== undefined) out["matrixUserId"] = args.userId;
   if (args.roomId !== undefined) out["matrixRoomId"] = args.roomId;
   if (args.allowedSenders !== undefined) out["matrixAllowedSenders"] = args.allowedSenders;
-  if (args.inbound !== undefined) out["matrixInbound"] = args.inbound ? "true" : "false";
   return out;
 }
 
@@ -60,9 +58,6 @@ export function matrixRoomId(d: Record<string, string>): string {
 }
 export function matrixAllowedSenders(d: Record<string, string>): string {
   return d["matrixAllowedSenders"] ?? "";
-}
-export function matrixInbound(d: Record<string, string>): boolean {
-  return d["matrixInbound"] === "true";
 }
 
 /** Parse a comma/newline-separated allowed-senders string into a trimmed list. */

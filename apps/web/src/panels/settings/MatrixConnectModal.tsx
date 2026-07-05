@@ -237,7 +237,6 @@ export function MatrixConnectModal({
         matrixAccessToken: accessToken,
         matrixRoomId: roomId,
         matrixAllowedSenders: senders.join(", "),
-        matrixInbound: true,
       });
       setConnectedUser(userId);
       setConnectedRoomId(roomId);

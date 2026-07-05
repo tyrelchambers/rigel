@@ -43,12 +43,11 @@ test("unknown action is a 422 error", async () => {
   if (res.kind === "error") expect(res.status).toBe(422);
 });
 
-// The assistant `setSignal` write only patches the keys it is given, so a
-// recipients-only edit never clobbers the two-way toggle (read-modify-write is
-// applied by patchConfig on top of these updates).
+// The assistant `setSignal` write only patches the keys it is given
+// (read-modify-write is applied by patchConfig on top of these updates).
 test("setSignal updates include only provided keys", () => {
   expect(signalConfigUpdates({ recipients: "+1555,+1666" })).toEqual({
     signalRecipients: "+1555,+1666",
   });
-  expect(signalConfigUpdates({ inbound: false })).toEqual({ signalInbound: "false" });
+  expect(signalConfigUpdates({})).toEqual({});
 });

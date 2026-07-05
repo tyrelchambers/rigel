@@ -156,7 +156,6 @@ export interface AssistantRequest {
   apiUrl?: string;
   number?: string;
   recipients?: string;
-  inbound?: boolean;
   // setMatrix — Matrix channel config. The token goes to a Secret (env-injected),
   // the rest into assistant-config (read live each tick).
   matrixHomeserverUrl?: string;
@@ -164,7 +163,6 @@ export interface AssistantRequest {
   matrixAccessToken?: string;
   matrixRoomId?: string;
   matrixAllowedSenders?: string;
-  matrixInbound?: boolean;
   // alert rules (saveAlert/deleteAlert/toggleAlert)
   alert?: SuggestedAlert;   // saveAlert payload (model block, validated server-side)
   alertId?: string;          // delete/toggle, or saveAlert edit-in-place (replace by id)
@@ -364,7 +362,6 @@ async function setSignal(
     apiUrl: req.apiUrl,
     number: req.number,
     recipients: req.recipients,
-    inbound: req.inbound,
   });
   return patchConfig(context, namespace, updates);
 }
@@ -485,7 +482,6 @@ export function setMatrixUpdates(req: AssistantRequest): Record<string, string> 
     userId: req.matrixUserId,
     roomId: req.matrixRoomId,
     allowedSenders: req.matrixAllowedSenders,
-    inbound: req.matrixInbound,
   });
 }
 

@@ -455,14 +455,12 @@ export interface AssistantRequest {
   apiUrl?: string;
   number?: string;
   recipients?: string;
-  inbound?: boolean;
   // setMatrix — Matrix channel config (token → Secret; rest → assistant-config).
   matrixHomeserverUrl?: string;
   matrixUserId?: string;
   matrixAccessToken?: string;
   matrixRoomId?: string;
   matrixAllowedSenders?: string;
-  matrixInbound?: boolean;
   // saveAlert payload (model block, validated server-side)
   alert?: SuggestedAlert;
   // toggleAlert / deleteAlert fields

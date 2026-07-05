@@ -82,7 +82,7 @@ describe("shared matrix logic reachable via the web alias", () => {
   });
 
   it("builds config updates from only provided fields", () => {
-    expect(matrixConfigUpdates({ roomId: "!x:hs", inbound: false })).toEqual({ matrixRoomId: "!x:hs", matrixInbound: "false" });
+    expect(matrixConfigUpdates({ roomId: "!x:hs" })).toEqual({ matrixRoomId: "!x:hs" });
   });
 
   it("parses allowed senders on comma/newline", () => {

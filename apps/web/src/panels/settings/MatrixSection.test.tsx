@@ -12,9 +12,9 @@ function derived(over: Partial<SettingsDerived> = {}): SettingsDerived {
   return {
     namespace: "default",
     status: "notDeployed",
-    signalNumber: "", recipients: "", inbound: false, hasSavedNumber: false,
+    signalNumber: "", recipients: "", hasSavedNumber: false,
     matrixStatus: "notConnected", matrixHomeserverUrl: "", matrixUserId: "",
-    matrixRoomId: "", matrixAllowedSenders: "", matrixInbound: false,
+    matrixRoomId: "", matrixAllowedSenders: "",
     ...over,
   } as SettingsDerived;
 }
@@ -28,22 +28,22 @@ describe("MatrixSection", () => {
   });
 
   it("shows the connected summary (bot id + allowed senders)", () => {
-    render(<MatrixSection derived={derived({ matrixStatus: "connected", matrixHomeserverUrl: "https://hs", matrixUserId: "@rigel:hs", matrixRoomId: "!r:hs", matrixAllowedSenders: "@me:hs", matrixInbound: true })} />);
+    render(<MatrixSection derived={derived({ matrixStatus: "connected", matrixHomeserverUrl: "https://hs", matrixUserId: "@rigel:hs", matrixRoomId: "!r:hs", matrixAllowedSenders: "@me:hs" })} />);
     expect(screen.getByText(/@rigel:hs/)).toBeInTheDocument();
     expect(screen.getByText(/@me:hs/)).toBeInTheDocument();
   });
 
   it("shows the three detail captions when connected", () => {
-    render(<MatrixSection derived={derived({ matrixStatus: "connected", matrixHomeserverUrl: "https://hs", matrixUserId: "@rigel:hs", matrixRoomId: "!r:hs", matrixAllowedSenders: "@me:hs", matrixInbound: true })} />);
+    render(<MatrixSection derived={derived({ matrixStatus: "connected", matrixHomeserverUrl: "https://hs", matrixUserId: "@rigel:hs", matrixRoomId: "!r:hs", matrixAllowedSenders: "@me:hs" })} />);
     expect(screen.getByText("HOMESERVER")).toBeInTheDocument();
     expect(screen.getByText("BOT")).toBeInTheDocument();
     expect(screen.getByText("ALLOWED SENDERS")).toBeInTheDocument();
   });
 
-  it("toggles two-way inbound via setMatrix", () => {
-    render(<MatrixSection derived={derived({ matrixStatus: "connected", matrixHomeserverUrl: "https://hs", matrixUserId: "@rigel:hs", matrixRoomId: "!r:hs", matrixInbound: false })} />);
-    fireEvent.click(screen.getByRole("switch", { name: /two-way/i }));
-    expect(mutateAsync).toHaveBeenCalledWith({ action: "setMatrix", namespace: "default", matrixInbound: true });
+  it("renders the connected card without a Two-way control (always-on inbound)", () => {
+    render(<MatrixSection derived={derived({ matrixStatus: "connected", matrixHomeserverUrl: "https://hs", matrixUserId: "@rigel:hs", matrixRoomId: "!r:hs" })} />);
+    expect(screen.queryByText(/two-way/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("switch")).not.toBeInTheDocument();
   });
 
   const connected = () => derived({ matrixStatus: "connected", matrixHomeserverUrl: "https://hs", matrixUserId: "@rigel:hs", matrixRoomId: "!r:hs" });

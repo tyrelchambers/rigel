@@ -747,17 +747,14 @@ test("setMatrixUpdates maps only the provided matrix fields", () => {
       matrixUserId: "@rigel:hs",
       matrixRoomId: "!r:hs",
       matrixAllowedSenders: "@me:hs",
-      matrixInbound: true,
     }),
   ).toEqual({
     matrixHomeserverUrl: "https://hs",
     matrixUserId: "@rigel:hs",
     matrixRoomId: "!r:hs",
     matrixAllowedSenders: "@me:hs",
-    matrixInbound: "true",
   });
-  // An inbound-only toggle never clobbers the other keys.
-  expect(setMatrixUpdates({ action: "setMatrix", matrixInbound: false })).toEqual({ matrixInbound: "false" });
+  expect(setMatrixUpdates({ action: "setMatrix" })).toEqual({});
 });
 
 test("setMatrixSecret returns the token Secret YAML only when a token is supplied", () => {
