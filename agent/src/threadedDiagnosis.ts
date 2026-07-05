@@ -8,7 +8,12 @@
  * signalInbound.ts.
  */
 import type { SessionStore } from "./sessionStore.js";
-import type { DiagnosisOutput } from "./diagnose.js";
+
+export interface DiagnosisOutput {
+  text: string;
+  costUsd: number;
+  sessionId: string;
+}
 
 export interface ThreadedDiagnosisDeps {
   /** Per-sender session pointers (1-hour idle TTL). */

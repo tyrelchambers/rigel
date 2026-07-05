@@ -9,9 +9,10 @@
  *
  * Security model: only senders on the allowlist (the operator's own linked
  * number by default) are ever acted on; everything else is dropped silently.
- * Free-text is treated as a READ-ONLY diagnosis question. The only way to
- * mutate the cluster over Signal is to `approve` a suggestion the supervised
- * autonomous loop already vetted and queued — never an arbitrary command.
+ * Free text runs an act-capable agent turn: the agent investigates and makes
+ * reversible cluster changes directly, while destructive changes are only
+ * proposed and require a "yes"/"approve" reply to run. In every case the
+ * agent's RBAC is the hard ceiling on what it can touch.
  */
 
 export interface IncomingMessage {
@@ -150,7 +151,7 @@ export class SeenTimestamps {
 }
 
 export interface InboundContext {
-  /** Whether inbound command handling is turned on (assistant-config). */
+  /** Whether inbound command handling is turned on (the kill-switch, `rc.enabled`). */
   enabled: boolean;
   apiUrl?: string;
   number?: string;

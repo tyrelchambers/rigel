@@ -72,7 +72,8 @@ the box even with a confirmed "yes":
   ClusterRole (omitted by default — no value exfiltration).
 
 The **kill-switch** (`assistant-config`'s `enabled` field) is the master off —
-flipping it pauses the autonomous loop and inbound mutation execution alike.
+flipping it pauses the autonomous loop and the entire inbound block alike, so
+while paused the assistant answers nothing, not even read-only questions.
 Soft, operator-editable guardrails (tone, "never echo Secrets", "smallest fix
 first") live in `agent/CLAUDE.md`, mounted into the pod — edit and redeploy to
 change how the assistant behaves; it's a request, not an enforcement boundary

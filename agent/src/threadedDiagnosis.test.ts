@@ -1,7 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
-import { runThreadedDiagnosis, type ThreadedDiagnosisDeps } from "./threadedDiagnosis.js";
+import { runThreadedDiagnosis, type ThreadedDiagnosisDeps, type DiagnosisOutput } from "./threadedDiagnosis.js";
 import { SessionStore } from "./sessionStore.js";
-import type { DiagnosisOutput } from "./diagnose.js";
 
 const SOURCE = "+15550101234";
 const T0 = 1_000_000; // arbitrary base timestamp
