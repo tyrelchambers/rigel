@@ -20,7 +20,9 @@ export interface ExecutionResult {
 
 export async function executeAction(action: SuggestedAction): Promise<ExecutionResult> {
   const target = backupTarget(action);
-  const backupYaml = await getManifestYaml(target.kind, target.name, target.namespace);
+  const backupYaml = target.name
+    ? await getManifestYaml(target.kind, target.name, target.namespace)
+    : null;
 
   const commands: string[] = [];
   let output = "";

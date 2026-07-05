@@ -26,6 +26,8 @@ export interface SuggestedAction {
   title?: string;
   /** `openFixPR` only — pull-request body. */
   body?: string;
+  /** `command` only — raw kubectl/helm args (no binary, no --context). */
+  args?: string[];
 }
 
 /**
@@ -119,6 +121,8 @@ export function toKubectlInvocations(action: SuggestedAction): string[][] {
       // Not a kubectl action — opening a PR against the GitOps source is the
       // fix-runner's job. Fail loudly here so it can never silently run a command.
       throw new Error("openFixPR is not a kubectl action (handled by the fix-runner)");
+    case "command":
+      return [need(action.args, "args")];
     default:
       throw new Error(`unsupported action kind: ${action.kind}`);
   }
@@ -150,9 +154,29 @@ export function backupTarget(action: SuggestedAction): BackupTarget {
       // No cluster resource to snapshot — the fix-runner opens a PR; reverting is
       // a git operation, not a `kubectl apply` of a backup.
       throw new Error("openFixPR has no kubectl backup target (handled by the fix-runner)");
+    case "command": {
+      const args = need(action.args, "args");
+      const t = commandBackupTarget(args);
+      return t ?? { kind: "", name: "", namespace: null };
+    }
     default:
       throw new Error(`unsupported action kind: ${action.kind}`);
   }
+}
+
+/** Best-effort snapshot target for a generic command: only `delete <kind> <name>`
+ * is snapshottable (so the deleted object can be re-applied). Anything else has
+ * no single restorable target. Returns null when not a snapshottable delete. */
+export function commandBackupTarget(args: string[]): BackupTarget | null {
+  if (args[0] !== "delete") return null;
+  const kind = args[1];
+  const name = args[2];
+  if (!kind || !name || name.startsWith("-")) return null;
+  let namespace: string | null = null;
+  for (let i = 0; i < args.length - 1; i++) {
+    if (args[i] === "-n" || args[i] === "--namespace") namespace = args[i + 1]!;
+  }
+  return { kind, name, namespace };
 }
 
 function need<T>(value: T | undefined, field: string): T {

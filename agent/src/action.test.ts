@@ -209,3 +209,18 @@ describe("backupTarget", () => {
     ).toThrow(/fix-runner/);
   });
 });
+
+test("command action runs its raw args", () => {
+  const a = { label: "delete pod foo", kind: "command", args: ["delete", "pod", "foo", "-n", "default"] };
+  expect(toKubectlInvocations(a as any)).toEqual([["delete", "pod", "foo", "-n", "default"]]);
+});
+
+test("command action backup target parses delete <kind> <name> -n <ns>", () => {
+  const a = { label: "x", kind: "command", args: ["delete", "pod", "foo", "-n", "prod"] };
+  expect(backupTarget(a as any)).toEqual({ kind: "pod", name: "foo", namespace: "prod" });
+});
+
+test("command action with no snapshottable target returns null namespace target", () => {
+  const a = { label: "x", kind: "command", args: ["drain", "node-1"] };
+  expect(backupTarget(a as any)).toEqual({ kind: "", name: "", namespace: null });
+});
