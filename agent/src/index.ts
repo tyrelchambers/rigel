@@ -740,10 +740,10 @@ export async function tick(
     // Best-effort outbound notification for what happened this tick.
     flushNotifications(rc, notifications);
 
-    // Two-way Signal: answer any inbound diagnosis questions / approval commands.
-    // Gated on the kill-switch and the explicit signalInbound opt-in. Never throws —
-    // failures stay out of the loop.
-    if (rc.signalInbound && rc.signalApiUrl && rc.signalNumber) {
+    // Signal: answer any inbound diagnosis questions / approval commands whenever
+    // the channel is configured — no separate opt-in. Gated on the kill-switch
+    // (this whole block). Never throws — failures stay out of the loop.
+    if (rc.signalApiUrl && rc.signalNumber) {
       try {
         await handleSignalInbound(cfg, rc, cb, loop);
       } catch (e) {
@@ -751,8 +751,8 @@ export async function tick(
       }
     }
 
-    // Two-way Matrix: independent of Signal — runs if enabled, never blocks it.
-    if (rc.matrix.inbound && rc.matrix.homeserverUrl && rc.matrix.accessToken && rc.matrix.roomId) {
+    // Matrix: independent of Signal — runs whenever configured, never blocks it.
+    if (rc.matrix.homeserverUrl && rc.matrix.accessToken && rc.matrix.roomId) {
       try {
         await handleMatrixInboundIO(cfg, rc, cb, loop);
       } catch (e) {
@@ -900,7 +900,10 @@ async function approveQueued(cfg: Config, cb: CircuitBreaker, index: number): Pr
   const targetName = action.deployment ?? action.pod ?? action.node
     ?? (action.args ? action.args.slice(0, 3).join("-") : action.label);
   const resourceKey = `${ns}/${targetName}`;
-  const fp = item.incident; // best available fingerprint for this queued item
+  // Queued items now carry a real fingerprint (chat items = `chat|<sender>`,
+  // loop items = the incident fingerprint) — use it for correct per-incident
+  // circuit-breaker buckets instead of lumping all chat commands into one.
+  const fp = item.fingerprint || item.incident;
 
   return executeActionGuarded(cb, { action, fingerprint: fp, resourceKey }, {
     now: () => Date.now(),
@@ -956,7 +959,12 @@ function workerAuthReport(state: AssistantState, msg: string): AssistantState {
   };
 }
 
-function queue(
+/** Queue a suggestion, deduped by incident + label + action args. The args
+ *  check matters for `command` actions: two different destructive commands can
+ *  share a generic label, so matching on incident+suggestion alone would drop
+ *  the second one. Loop-queued actions have no `args` (null === null), so this
+ *  is a no-op there — only `command`-action dedup gets more precise. */
+export function queue(
   state: AssistantState,
   cfg: Config,
   at: string,
@@ -966,7 +974,11 @@ function queue(
   reason: string,
   action?: SuggestedAction,
 ): AssistantState {
-  const exists = state.queue.some((q) => q.incident === incident && q.suggestion === suggestion);
+  const exists = state.queue.some((q) =>
+    q.incident === incident &&
+    q.suggestion === suggestion &&
+    JSON.stringify(q.action?.args ?? null) === JSON.stringify(action?.args ?? null),
+  );
   if (exists) return state;
   return { ...state, queue: [{ at, fingerprint, incident, suggestion, reason, action }, ...state.queue].slice(0, cfg.auditMaxEntries) };
 }

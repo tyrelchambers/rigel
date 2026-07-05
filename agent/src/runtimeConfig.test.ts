@@ -78,21 +78,13 @@ describe("parseAlertRulesFromConfig", () => {
   });
 });
 
-describe("readRuntimeConfig — signalInbound", () => {
-  test("defaults off, and only the literal \"true\" turns it on", async () => {
-    mockConfigMap({ enabled: "true" });
-    expect((await readRuntimeConfig(CFG)).signalInbound).toBe(false);
-
-    mockConfigMap({ enabled: "true", signalInbound: "true" });
-    expect((await readRuntimeConfig(CFG)).signalInbound).toBe(true);
-
-    mockConfigMap({ enabled: "true", signalInbound: "yes" });
-    expect((await readRuntimeConfig(CFG)).signalInbound).toBe(false);
-  });
-
-  test("fail-closed (inbound off) when the config map is unreadable", async () => {
-    vi.mocked(kubectl).mockResolvedValueOnce({ stdout: "", stderr: "not found", code: 1 });
-    expect((await readRuntimeConfig(CFG)).signalInbound).toBe(false);
+describe("readRuntimeConfig — signal config", () => {
+  test("signalApiUrl/signalNumber pass through with no inbound toggle field", async () => {
+    mockConfigMap({ enabled: "true", signalApiUrl: "http://sig", signalNumber: "+1555" });
+    const rc = await readRuntimeConfig(CFG);
+    expect(rc.signalApiUrl).toBe("http://sig");
+    expect(rc.signalNumber).toBe("+1555");
+    expect((rc as any).signalInbound).toBeUndefined();
   });
 });
 
@@ -248,7 +240,6 @@ describe("parseMatrixConfig", () => {
         matrixUserId: "@rigel:hs",
         matrixRoomId: "!r:hs",
         matrixAllowedSenders: "@me:hs, @you:hs",
-        matrixInbound: "true",
       },
       { MATRIX_ACCESS_TOKEN: " tok " } as NodeJS.ProcessEnv,
     );
@@ -258,18 +249,16 @@ describe("parseMatrixConfig", () => {
       accessToken: "tok",
       roomId: "!r:hs",
       allowedSenders: ["@me:hs", "@you:hs"],
-      inbound: true,
     });
   });
 
-  test("defaults: no keys/env → undefineds, empty allowlist, inbound false", () => {
+  test("defaults: no keys/env → undefineds, empty allowlist", () => {
     expect(parseMatrixConfig({}, {} as NodeJS.ProcessEnv)).toEqual({
       homeserverUrl: undefined,
       userId: undefined,
       accessToken: undefined,
       roomId: undefined,
       allowedSenders: [],
-      inbound: false,
     });
   });
 

@@ -38,7 +38,7 @@ import { runWorker } from "./worker.js";
 import { runSupervisor } from "./supervisor.js";
 import { notifySignal } from "./notify.js";
 import { runModel } from "./runModel.js";
-import { tick, createLoopState } from "./index.js";
+import { tick, createLoopState, queue } from "./index.js";
 import { CircuitBreaker } from "./guardrails.js";
 
 const res = (stdout: string, code = 0): KubectlResult => ({ stdout, stderr: code === 0 ? "" : "err", code });
@@ -752,5 +752,34 @@ describe("tick() — two-phase split: incident history + scheduled digests", () 
 
     expect(vi.mocked(notifySignal)).not.toHaveBeenCalled();
     expect(captured()!.digestState!.lastSentAt.a).toBe(future);
+  });
+});
+
+describe("queue — dedup by incident + label + action args", () => {
+  const emptyState = (): AssistantState => ({ updatedAt: "", audit: [], queue: [], report: "" });
+
+  test("an identical re-detected suggestion is deduped (unchanged behavior)", () => {
+    const cfg = makeConfig();
+    const restart = { label: "restart api", kind: "restart", deployment: "api", namespace: "default" };
+    let state = queue(emptyState(), cfg, "t1", "fp1", "default/api: crash", "restart api", "auto", restart as any);
+    state = queue(state, cfg, "t2", "fp1", "default/api: crash", "restart api", "auto", restart as any);
+    expect(state.queue).toHaveLength(1);
+  });
+
+  test("two DIFFERENT chat command actions sharing a label both queue (not deduped)", () => {
+    const cfg = makeConfig();
+    const deletePvcA = { label: "delete orphaned PVC", kind: "command", args: ["delete", "pvc", "data-0", "-n", "payments"], destructive: true };
+    const deletePvcB = { label: "delete orphaned PVC", kind: "command", args: ["delete", "pvc", "data-1", "-n", "payments"], destructive: true };
+    let state = queue(emptyState(), cfg, "t1", "chat|+1555", "chat request", "delete orphaned PVC", "destructive — reply yes to run", deletePvcA as any);
+    state = queue(state, cfg, "t2", "chat|+1555", "chat request", "delete orphaned PVC", "destructive — reply yes to run", deletePvcB as any);
+    expect(state.queue).toHaveLength(2);
+  });
+
+  test("the exact same chat command action re-sent is still deduped", () => {
+    const cfg = makeConfig();
+    const deletePvc = { label: "delete orphaned PVC", kind: "command", args: ["delete", "pvc", "data-0", "-n", "payments"], destructive: true };
+    let state = queue(emptyState(), cfg, "t1", "chat|+1555", "chat request", "delete orphaned PVC", "destructive — reply yes to run", deletePvc as any);
+    state = queue(state, cfg, "t2", "chat|+1555", "chat request", "delete orphaned PVC", "destructive — reply yes to run", { ...deletePvc } as any);
+    expect(state.queue).toHaveLength(1);
   });
 });

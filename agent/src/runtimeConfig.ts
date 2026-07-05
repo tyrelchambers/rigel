@@ -61,9 +61,6 @@ export interface RuntimeConfig {
   signalApiUrl?: string;
   signalNumber?: string;
   signalRecipients: string[];
-  /** Two-way Signal: when on, the agent polls the bridge for inbound messages
-   * and answers diagnosis questions / approval commands. Off by default. */
-  signalInbound: boolean;
   matrix: MatrixRuntime;
   alertRules: AlertRule[];
   worker: RoleSelection;
@@ -143,7 +140,6 @@ export interface MatrixRuntime {
   accessToken?: string;
   roomId?: string;
   allowedSenders: string[];
-  inbound: boolean;
 }
 
 /** Parse the Matrix block: connection/identity/room/allowlist from the config
@@ -164,7 +160,6 @@ export function parseMatrixConfig(
       .split(/[\n,]/)
       .map((s) => s.trim())
       .filter(Boolean),
-    inbound: data["matrixInbound"] === "true",
   };
 }
 
@@ -261,7 +256,7 @@ export function decideAutonomy(
 function disabledDefaults(cfg: Config): RuntimeConfig {
   return {
     enabled: false, mode: "auto", silenced: new Set(), window: undefined,
-    signalRecipients: [], signalInbound: false, matrix: parseMatrixConfig({}, {} as NodeJS.ProcessEnv), alertRules: [],
+    signalRecipients: [], matrix: parseMatrixConfig({}, {} as NodeJS.ProcessEnv), alertRules: [],
     worker: parseRoleSelection({}, "worker", cfg.workerModel),
     supervisor: parseRoleSelection({}, "supervisor", cfg.supervisorModel),
     limits: parseLimits({}, cfg),
@@ -301,7 +296,6 @@ export async function readRuntimeConfig(cfg: Config): Promise<RuntimeConfig> {
     signalApiUrl: data.signalApiUrl && data.signalApiUrl.trim() ? data.signalApiUrl.trim() : undefined,
     signalNumber: data.signalNumber && data.signalNumber.trim() ? data.signalNumber.trim() : undefined,
     signalRecipients,
-    signalInbound: data.signalInbound === "true",
     matrix: parseMatrixConfig(data, process.env),
     alertRules: parseAlertRulesFromConfig(data),
     worker: parseRoleSelection(data, "worker", cfg.workerModel),
