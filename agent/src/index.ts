@@ -13,7 +13,6 @@ import { dispatchRepoFix } from "./repoFixDispatch.js";
 import { reconcileFixJobs, type FixReconcileDeps } from "./reconcileFixJobs.js";
 import { FIX_LABEL, FIX_LABEL_VALUE } from "./fixJob.js";
 import { notifyWebhook, notifySignal, receiveSignal, notifyMatrix, receiveMatrix, markMatrixRead, setMatrixTyping } from "./notify.js";
-import { runDiagnosis } from "./diagnose.js";
 import { SessionStore } from "./sessionStore.js";
 import {
   handleInbound,
@@ -38,6 +37,8 @@ import { kubectl, kubectlApply } from "./kubectl.js";
 import { isRepoFixAction, toKubectlInvocations, type SuggestedAction } from "./action.js";
 import type { RepoFixDeps } from "./repoFixDispatch.js";
 import { runThreadedDiagnosis } from "./threadedDiagnosis.js";
+import { runChatTurn } from "./chatTurn.js";
+import { routeChatReply } from "./chatHandler.js";
 import { runWorker } from "./worker.js";
 import { diagnoseConfirmed } from "./diagnosePool.js";
 import { runSupervisor, type SupervisorOutput } from "./supervisor.js";
@@ -786,17 +787,25 @@ function buildCommandHandlers(
       return `${lines.join("\n")}\n\nReply "approve N" to run one.`;
     },
     approve: (index) => approveQueued(cfg, cb, index),
-    diagnose: (question, source, timestamp) =>
-      runThreadedDiagnosis(
+    diagnose: async (message, source, timestamp) => {
+      const reply = await runThreadedDiagnosis(
         {
           sessions: loop.sessions,
-          diagnose: (q, resumeId) => runDiagnosis(rc, q, resumeId),
+          diagnose: (q, resumeId) => runChatTurn(rc, q, resumeId),
           log,
         },
         source,
         timestamp,
-        question,
-      ),
+        message,
+      );
+      return routeChatReply(reply, async (action) => {
+        let state = await readState(cfg.stateConfigMap, cfg.stateNamespace);
+        const label = action.label || "proposed change";
+        state = queue(state, cfg, new Date().toISOString(), `chat|${source}`, "chat request", label, "destructive — reply yes to run", action);
+        await writeState(cfg.stateConfigMap, cfg.stateNamespace, state);
+        return 1; // newest item is prepended at index 0 → 1-based #1
+      });
+    },
     log,
   };
 }
@@ -888,7 +897,8 @@ async function approveQueued(cfg: Config, cb: CircuitBreaker, index: number): Pr
   }
 
   const ns = action.namespace ?? "default";
-  const targetName = action.deployment ?? action.pod ?? action.node ?? action.label;
+  const targetName = action.deployment ?? action.pod ?? action.node
+    ?? (action.args ? action.args.slice(0, 3).join("-") : action.label);
   const resourceKey = `${ns}/${targetName}`;
   const fp = item.incident; // best available fingerprint for this queued item
 
