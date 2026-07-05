@@ -25,38 +25,65 @@ and **fail-closed** on any model/exec error.
 State is written to the `assistant-state` ConfigMap (audit timeline, queued
 suggestions, status) and backups to `assistant-backups` — both read by Rigel.
 
-## Two-way Signal (texting the assistant)
+## Texting the assistant
 
-With `signalInbound=true` in `assistant-config`, each tick the agent also polls
-the Signal bridge (`GET /v1/receive/<number>`) and answers messages — but only
-from numbers on `signalRecipients` (your own linked number by default); every
+A configured channel (Signal `signalApiUrl`+`signalNumber`, or Matrix
+`homeserverUrl`+`accessToken`+`roomId`) is conversational by default — there is
+no two-way toggle. Only senders on the allowlist (`signalRecipients` / Matrix
+`allowedSenders`, your own linked number/id by default) are answered; every
 other sender is dropped silently.
 
 ```
-inbound Signal msg → authorize (allowlist) → de-dupe (timestamp) → route:
-   free text   → read-only diagnosis (claude -p, get/describe/logs/top/events),
+inbound msg → authorize (allowlist) → de-dupe → route:
+   free text   → agentic turn (claude -p, real kubectl/helm Bash tool),
                  threaded per sender, auto-resetting after 1h idle → reply
    "status"    → health / spend / queue summary
-   "queue"     → list fixes awaiting approval
-   "approve N" → run queued fix #N through the SAME guardrails as the loop
-                 (classifier → circuit breaker → backup-before-mutate → executor)
+   "queue"     → list fixes awaiting approval/confirmation
+   "approve N" / "yes" → run queued item #N (defaults to the newest) through
+                 the SAME guardrails as the loop
    "help"      → command list
 ```
 
+The assistant is a full agent at parity with the in-app Rigel Assistant: it
+investigates freely with any read command, and **just runs reversible changes
+directly** (restart, scale, rollback, apply, edit, set, cordon, uncordon, label,
+helm upgrade) — no confirmation needed, you texted it to act. A **destructive**
+change (delete, drain, helm uninstall, anything irreversible) is never run
+directly: the assistant states what it would do and queues it, and you reply
+`yes` (or `approve N`) to run it.
+
+What it's actually allowed to do is set by RBAC, not the model or the chat
+flow — **`manifests/rbac.yaml` is the assistant's real ceiling**. A verb that
+isn't granted there is refused by the API server (403) regardless of what gets
+confirmed over chat. The default posture is read + reversible: broad
+cluster-wide reads (secrets omitted), node cordon/uncordon, and a namespaced
+`rigel-assistant-write` Role granting create/update/patch (no delete) on
+workloads/config/networking in the install namespace. Destructive verbs
+(`delete`, pod `eviction`/drain) ship commented out, so destructive is
+hard-blocked out of the box even with a confirmed "yes":
+- **Enable destructive** by uncommenting the `delete`/`eviction` rules in
+  `rbac.yaml` (chat confirmation still applies).
+- **Widen to more namespaces** by duplicating the `rigel-assistant-write`
+  Role/RoleBinding pair for each additional namespace.
+- **Grant Secrets** by adding verbs on the `secrets` resource to the
+  ClusterRole (omitted by default — no value exfiltration).
+
+The **kill-switch** (`assistant-config`'s `enabled` field) is the master off —
+flipping it pauses the autonomous loop and inbound mutation execution alike.
+Soft, operator-editable guardrails (tone, "never echo Secrets", "smallest fix
+first") live in `agent/CLAUDE.md`, mounted into the pod — edit and redeploy to
+change how the assistant behaves; it's a request, not an enforcement boundary
+(RBAC is the enforcement boundary).
+
 Design notes:
-- **Diagnosis is always read-only** — texting a question can never mutate the
-  cluster. Replies thread per sender via the CLI's own session (`--resume`); the
-  thread is in-memory and auto-resets after an hour of silence, so context stays
+- Replies thread per sender via the CLI's own session (`--resume`); the thread
+  is in-memory and auto-resets after an hour of silence, so context stays
   scoped to a burst of related questions and a pod restart is a clean slate.
-- **The only mutation path is `approve`**, and it runs a fix the supervised loop
-  already vetted and queued — never an arbitrary command. The human texting
-  `approve` is the approver, so a MEDIUM fix skips the *unattended* Opus
-  supervisor, but the RBAC cage, circuit breaker, and backup-before-mutate all
-  still apply; BLOCKED/destructive items are refused.
-- Diagnosis spends against the same monthly cap; at the cap, inbound replies say
-  so instead of investigating.
-- The pure routing/parsing/auth/chunking logic lives in `signalInbound.ts` and
-  is fully unit-tested; `index.ts` wires the real receive/send/model/executor IO.
+- Chat spends against the same monthly cap; at the cap, inbound replies say so
+  instead of investigating.
+- The pure routing/parsing/auth/chunking logic lives in `signalInbound.ts` /
+  `matrixInbound.ts` and is fully unit-tested; `index.ts` wires the real
+  receive/send/model/executor IO.
 
 ## Develop
 
