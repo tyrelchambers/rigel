@@ -1,24 +1,3 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# The RBAC cage — the REAL, cluster-enforced ceiling for the in-cluster assistant.
-# The assistant is a full agent, but it can only ever do what THIS Role grants:
-# a verb that isn't here is refused by the API server (403), no matter what the
-# model or the chat confirm flow does.
-#
-# DEFAULT POSTURE (this file): read + REVERSIBLE mutations (create/update/patch),
-# CLUSTER-WIDE. The autonomous loop deletes pods (a crashlooping managed pod
-# respawns) and patches nodes (cordon/uncordon) — both are allowed by default.
-# Every OTHER destructive/data-loss verb (deleting deployments/statefulsets/
-# daemonsets/replicasets, services, configmaps, PVCs, or evicting pods for
-# `kubectl drain`) is DELIBERATELY ABSENT below, commented out — destructive
-# actions beyond pod delete are hard-blocked out of the box. A confirmed "yes"
-# on one of those just 403s and the assistant reports which verb to grant.
-#   - To ENABLE more destructive verbs: uncomment the delete/eviction rules
-#     below (the chat still confirms them with "yes" before running).
-#   - Scope is already cluster-wide; the tuning knob is which verbs are granted,
-#     not which namespaces.
-#   - Secrets are read-omitted (no value exfiltration); add them to read/manage them.
-#   - `roles`/`rolebindings`/`clusterroles` verbs are omitted (no self-escalation).
-# ─────────────────────────────────────────────────────────────────────────────
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -35,7 +14,6 @@ metadata:
   labels:
     app.kubernetes.io/managed-by: rigel-assistant
 rules:
-  # broad read for investigation — secrets omitted by default
   - apiGroups: [""]
     resources: [pods, pods/log, pods/status, nodes, events, namespaces, services,
                 endpoints, persistentvolumeclaims, persistentvolumes,
@@ -65,8 +43,6 @@ rules:
   - apiGroups: ["metrics.k8s.io"]
     resources: [pods, nodes]
     verbs: [get, list]
-  # reversible mutations (no delete) — the auto-remediation loop + chat's
-  # auto-run path both act cluster-wide through these
   - apiGroups: [""]
     resources: [pods, services, configmaps, persistentvolumeclaims]
     verbs: [create, update, patch]
@@ -79,28 +55,12 @@ rules:
   - apiGroups: ["networking.k8s.io"]
     resources: [ingresses]
     verbs: [create, update, patch]
-  # pod deletion IS allowed by default: a crashlooping managed pod just
-  # respawns under its controller. The autonomous loop uses this directly;
-  # chat still confirms it with "yes" first.
   - apiGroups: [""]
     resources: [pods]
     verbs: [delete]
-  # cordon / uncordon (reversible) = patch on the node's .spec.unschedulable
   - apiGroups: [""]
     resources: [nodes]
     verbs: [patch]
-  # ── DESTRUCTIVE / DATA-LOSS (opt-in): uncomment to allow deletes on
-  # workloads/services/config/storage, or `kubectl drain` via eviction.
-  # Chat still confirms these with "yes" before running. ──
-  # - apiGroups: ["apps"]
-  #   resources: [deployments, statefulsets, daemonsets, replicasets]
-  #   verbs: [delete]
-  # - apiGroups: [""]
-  #   resources: [services, configmaps, persistentvolumeclaims]
-  #   verbs: [delete]
-  # - apiGroups: [""]
-  #   resources: [pods/eviction]
-  #   verbs: [create]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -117,9 +77,6 @@ subjects:
     name: rigel-assistant
     namespace: default
 ---
-# Namespaced role for the agent's OWN state ConfigMaps. Scoped by resourceNames
-# to the three assistant ConfigMaps; no `create` needed because the install
-# pre-creates them empty (see configmaps.yaml).
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -132,12 +89,6 @@ rules:
     resources: [configmaps]
     resourceNames: [assistant-config, assistant-state, assistant-backups]
     verbs: [get, update, patch]
-  # Fix-PR orchestration. For each approved openFixPR the agent creates a per-fix
-  # `rigel-fix-<id>` ConfigMap (the fix spec) + a one-shot Job that opens the PR.
-  # `create` carries no object name yet, so it can't be resourceName-scoped — this
-  # is ns-scoped to the state namespace instead. (get/list/watch on configmaps and
-  # jobs are already granted cluster-wide by the ClusterRole above for diagnosis;
-  # listed here too so the namespaced role is self-describing.)
   - apiGroups: [""]
     resources: [configmaps]
     verbs: [create, delete]
@@ -161,15 +112,6 @@ subjects:
     name: rigel-assistant
     namespace: default
 ---
-# ─────────────────────────────────────────────────────────────────────────────
-# The fix-runner Job's ServiceAccount. The other half of the privilege split:
-# this SA holds the GitHub token (mounted from the `rigel-github` Secret) but has
-# ZERO cluster access — DELIBERATELY no Role/RoleBinding/ClusterRoleBinding. A
-# fix Job only uses its mounted Secret + per-fix ConfigMap and outbound git/HTTPS
-# to open a PR; it never talks to the API server (its pod even sets
-# automountServiceAccountToken: false). So the token-holding pod can't touch the
-# cluster, and the cluster-capable agent never holds the token.
-# ─────────────────────────────────────────────────────────────────────────────
 apiVersion: v1
 kind: ServiceAccount
 metadata:
