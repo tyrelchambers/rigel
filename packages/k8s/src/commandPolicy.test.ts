@@ -1,0 +1,60 @@
+import { describe, test, expect } from "vitest";
+import { classifyTier, classifyCommand } from "./commandPolicy";
+
+describe("classifyTier", () => {
+  test("reads are read tier", () => {
+    expect(classifyTier("kubectl get pods -n default").tier).toBe("read");
+    expect(classifyTier("kubectl logs foo | jq .status").tier).toBe("read");
+    expect(classifyTier("kubectl auth can-i delete pods").tier).toBe("read");
+    expect(classifyTier("kubectl rollout status deploy/api").tier).toBe("read");
+  });
+
+  test("reversible mutations are reversible tier", () => {
+    for (const c of [
+      "kubectl rollout restart deployment/api -n default",
+      "kubectl scale deployment/api --replicas=3 -n default",
+      "kubectl apply -f app.yaml",
+      "kubectl patch deployment api -p '{}'",
+      "kubectl set env deployment/api FOO=bar",
+      "kubectl cordon node-1",
+      "helm upgrade app ./chart",
+    ]) {
+      expect(classifyTier(c).tier).toBe("reversible");
+    }
+  });
+
+  test("destructive mutations are destructive tier", () => {
+    for (const c of [
+      "kubectl delete pod foo -n default",
+      "kubectl delete namespace payments",
+      "kubectl drain node-1",
+      "helm uninstall app",
+    ]) {
+      expect(classifyTier(c).tier).toBe("destructive");
+    }
+  });
+
+  test("unknown mutation shapes bias to destructive", () => {
+    // a wrapped delete must not slip through as reversible
+    expect(classifyTier("sh -c 'kubectl delete pvc data-0'").tier).toBe("destructive");
+    expect(classifyTier("xargs kubectl delete pod").tier).toBe("destructive");
+  });
+
+  test("port-forward/proxy are blocked", () => {
+    expect(classifyTier("kubectl port-forward svc/api 8080:80").tier).toBe("blocked");
+  });
+});
+
+describe("classifyCommand (2-tier compat)", () => {
+  test("reads allow, mutations deny", () => {
+    expect(classifyCommand("kubectl get pods").decision).toBe("allow");
+    expect(classifyCommand("kubectl delete pod foo").decision).toBe("deny");
+    expect(classifyCommand("kubectl scale deploy/api --replicas=2").decision).toBe("deny");
+  });
+
+  test("cross-context mutation gets the cross-context reason", () => {
+    const v = classifyCommand("kubectl --context other delete pod foo", "active");
+    expect(v.decision).toBe("deny");
+    expect(v.reason).toMatch(/DIFFERENT cluster/);
+  });
+});
