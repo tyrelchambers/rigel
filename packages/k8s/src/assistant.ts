@@ -427,7 +427,20 @@ type: Opaque
 ${stringData}`;
 }
 
-/** ServiceAccount + ClusterRole + ClusterRoleBinding + namespaced Role/RoleBinding. */
+/**
+ * ServiceAccount + ClusterRole + ClusterRoleBinding + namespaced Role/RoleBinding.
+ *
+ * DEFAULT POSTURE: read + REVERSIBLE mutations (create/update/patch), CLUSTER-WIDE.
+ * The autonomous loop deletes pods (a crashlooping managed pod respawns) and
+ * patches nodes (cordon/uncordon) — both allowed by default. Every OTHER
+ * destructive/data-loss verb (deleting deployments/statefulsets/daemonsets/
+ * replicasets, services, configmaps, PVCs, or evicting pods for `kubectl drain`)
+ * is DELIBERATELY ABSENT below, commented out — destructive actions beyond pod
+ * delete are hard-blocked out of the box. A confirmed "yes" on one of those just
+ * 403s and the assistant reports which verb to grant.
+ * Secrets are read-omitted; `roles`/`rolebindings`/`clusterroles` verbs are
+ * omitted (no self-escalation). This MUST stay in sync with agent/manifests/rbac.yaml.
+ */
 export function rbac(ns: string): string {
   return `apiVersion: v1
 kind: ServiceAccount
@@ -444,14 +457,17 @@ metadata:
   labels:
     app.kubernetes.io/managed-by: rigel-assistant
 rules:
+  # broad read for investigation
   - apiGroups: [""]
-    resources: [pods, pods/log, nodes, events, namespaces, services, endpoints, persistentvolumeclaims, persistentvolumes, replicationcontrollers, configmaps]
+    resources: [pods, pods/log, pods/status, nodes, events, namespaces, services,
+                endpoints, persistentvolumeclaims, persistentvolumes,
+                replicationcontrollers, configmaps, serviceaccounts, resourcequotas, limitranges]
     verbs: [get, list, watch]
   - apiGroups: [""]
     resources: [services/proxy]
     verbs: [get]
   - apiGroups: ["apps"]
-    resources: [deployments, replicasets, statefulsets, daemonsets]
+    resources: [deployments, replicasets, statefulsets, daemonsets, deployments/scale, statefulsets/scale]
     verbs: [get, list, watch]
   - apiGroups: ["batch"]
     resources: [jobs, cronjobs]
@@ -462,21 +478,51 @@ rules:
   - apiGroups: ["autoscaling"]
     resources: [horizontalpodautoscalers]
     verbs: [get, list, watch]
+  - apiGroups: ["networking.k8s.io"]
+    resources: [ingresses, networkpolicies]
+    verbs: [get, list, watch]
+  - apiGroups: ["events.k8s.io"]
+    resources: [events]
+    verbs: [get, list, watch]
   - apiGroups: ["metrics.k8s.io"]
     resources: [pods, nodes]
     verbs: [get, list]
+  # reversible mutations (no delete) — the auto-remediation loop + chat's
+  # auto-run path both act cluster-wide through these
+  - apiGroups: [""]
+    resources: [pods, services, configmaps, persistentvolumeclaims]
+    verbs: [create, update, patch]
   - apiGroups: ["apps"]
-    resources: [deployments]
-    verbs: [patch, update]
-  - apiGroups: ["apps"]
-    resources: [deployments/scale]
-    verbs: [patch, update]
+    resources: [deployments, replicasets, statefulsets, daemonsets, deployments/scale, statefulsets/scale]
+    verbs: [create, update, patch]
+  - apiGroups: ["batch"]
+    resources: [jobs, cronjobs]
+    verbs: [create, update, patch]
+  - apiGroups: ["networking.k8s.io"]
+    resources: [ingresses]
+    verbs: [create, update, patch]
+  # pod deletion IS allowed by default: a crashlooping managed pod just
+  # respawns under its controller. The autonomous loop uses this directly;
+  # chat still confirms it with "yes" first.
   - apiGroups: [""]
     resources: [pods]
     verbs: [delete]
+  # cordon / uncordon (reversible) = patch on the node's .spec.unschedulable
   - apiGroups: [""]
     resources: [nodes]
     verbs: [patch]
+  # ── DESTRUCTIVE / DATA-LOSS (opt-in): uncomment to allow deletes on
+  # workloads/services/config/storage, or \`kubectl drain\` via eviction.
+  # Chat still confirms these with "yes" before running. ──
+  # - apiGroups: ["apps"]
+  #   resources: [deployments, statefulsets, daemonsets, replicasets]
+  #   verbs: [delete]
+  # - apiGroups: [""]
+  #   resources: [services, configmaps, persistentvolumeclaims]
+  #   verbs: [delete]
+  # - apiGroups: [""]
+  #   resources: [pods/eviction]
+  #   verbs: [create]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

@@ -55,16 +55,19 @@ directly: the assistant states what it would do and queues it, and you reply
 What it's actually allowed to do is set by RBAC, not the model or the chat
 flow — **`manifests/rbac.yaml` is the assistant's real ceiling**. A verb that
 isn't granted there is refused by the API server (403) regardless of what gets
-confirmed over chat. The default posture is read + reversible: broad
-cluster-wide reads (secrets omitted), node cordon/uncordon, and a namespaced
-`rigel-assistant-write` Role granting create/update/patch (no delete) on
-workloads/config/networking in the install namespace. Destructive verbs
-(`delete`, pod `eviction`/drain) ship commented out, so destructive is
-hard-blocked out of the box even with a confirmed "yes":
-- **Enable destructive** by uncommenting the `delete`/`eviction` rules in
-  `rbac.yaml` (chat confirmation still applies).
-- **Widen to more namespaces** by duplicating the `rigel-assistant-write`
-  Role/RoleBinding pair for each additional namespace.
+confirmed over chat. The default posture is read + reversible, CLUSTER-WIDE:
+broad reads (secrets omitted), create/update/patch (no delete) on
+workloads/config/networking, node cordon/uncordon, and pod deletion (a
+crashlooping managed pod just respawns — the autonomous loop uses this
+directly; chat still confirms it). Every OTHER destructive verb (deleting
+deployments/statefulsets/daemonsets/replicasets/services/configmaps/PVCs, pod
+`eviction`/drain) ships commented out, so destructive is hard-blocked out of
+the box even with a confirmed "yes":
+- **Enable more destructive verbs** by uncommenting the `delete`/`eviction`
+  rules in `rbac.yaml` (chat confirmation still applies).
+- **Narrow the scope** by replacing the cluster-wide reversible-write rules
+  with namespaced Role/RoleBinding pairs per namespace, if you don't want the
+  loop or chat acting outside a subset of namespaces.
 - **Grant Secrets** by adding verbs on the `secrets` resource to the
   ClusterRole (omitted by default — no value exfiltration).
 
