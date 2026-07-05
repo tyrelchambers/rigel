@@ -11,7 +11,7 @@ import { mkdtemp, writeFile, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { classifyCommand, type CommandVerdict } from "./commandPolicy.js";
+import { classifyCommand, type CommandVerdict } from "@rigel/k8s/src/commandPolicy.js";
 
 /** Pure decision core: reconstruct `[logicalName, ...userArgs]` and defer to policy. */
 export function guardVerdict(logicalName: string, userArgs: string[]): CommandVerdict {

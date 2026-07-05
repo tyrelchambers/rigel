@@ -15,7 +15,7 @@ import { mkdtemp, writeFile, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { classifyCommand, type CommandVerdict } from "./commandPolicy";
+import { classifyCommand, type CommandVerdict } from "@rigel/k8s";
 
 /**
  * Pure decision core. Reconstructs the command the agent asked to run as

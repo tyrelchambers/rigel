@@ -7,7 +7,7 @@
 // Wired via `--settings` in claudeBridge.ts (matcher: Bash). Output contract:
 //   {"hookSpecificOutput":{"hookEventName":"PreToolUse",
 //     "permissionDecision":"allow"|"deny","permissionDecisionReason":"..."}}
-import { classifyCommand } from "./commandPolicy";
+import { classifyCommand } from "@rigel/k8s";
 
 function emit(decision: "allow" | "deny", reason: string): void {
   process.stdout.write(

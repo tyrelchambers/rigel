@@ -1,4 +1,4 @@
-import type { CommandVerdict } from "../commandPolicy.js";
+import type { CommandVerdict } from "@rigel/k8s/src/commandPolicy.js";
 
 export type { CommandVerdict };
 
