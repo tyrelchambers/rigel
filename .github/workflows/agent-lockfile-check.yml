@@ -1,0 +1,37 @@
+name: Agent lockfile check
+
+on:
+  pull_request:
+    paths:
+      - "agent/package.json"
+      - "agent/package-lock.json"
+      - ".github/workflows/agent-lockfile-check.yml"
+  push:
+    branches: [master]
+    paths:
+      - "agent/package.json"
+      - "agent/package-lock.json"
+      - ".github/workflows/agent-lockfile-check.yml"
+  workflow_dispatch:
+
+jobs:
+  lockfile-in-sync:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Verify package-lock.json is in sync with package.json
+        run: |
+          if ! npm ci --ignore-scripts; then
+            echo "::error::agent/package-lock.json is out of sync with agent/package.json. Run 'npm install' in agent/ and commit the lockfile."
+            exit 1
+          fi
+          echo "agent/package-lock.json is in sync"
