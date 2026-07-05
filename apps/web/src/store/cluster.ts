@@ -8,6 +8,33 @@ function resourceVersionOf(o: unknown): string | undefined {
     ?.resourceVersion;
 }
 
+/** Safely read `metadata.namespace` off an unknown object. */
+function namespaceOf(o: unknown): string | undefined {
+  return (o as { metadata?: { namespace?: string } } | null | undefined)?.metadata?.namespace;
+}
+
+/**
+ * Merge a namespace-scoped snapshot into the previous slice: the snapshot is
+ * authoritative ONLY for its own namespace, so keep every prior item from a
+ * DIFFERENT namespace and swap in the incoming items for `scope`. Used when a
+ * cluster-wide ("*") watch and a namespace-scoped watch on the SAME kind are live
+ * at once (the Assistant panel): without this, the scoped snapshot's full-replace
+ * would wipe the wildcard's other-namespace items (e.g. an agent Deployment in a
+ * non-selected namespace), making a running assistant read as "Not installed".
+ */
+export function mergeScopedSnapshot(
+  prev: Record<string, unknown> | undefined,
+  items: Record<string, unknown>,
+  scope: string,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(prev ?? {})) {
+    if (namespaceOf(value) !== scope) out[key] = value; // keep other namespaces
+  }
+  for (const [key, value] of Object.entries(items)) out[key] = value; // this ns is authoritative
+  return out;
+}
+
 /**
  * Reconcile an incoming snapshot against the previous slice by resourceVersion,
  * reusing existing object references for unchanged items so derived memos stay
@@ -122,12 +149,19 @@ interface ClusterState {
   upsert: (kind: string, name: string, obj: unknown) => void;
   remove: (kind: string, name: string) => void;
   /**
-   * Replace ALL items for a kind with a fresh set. Used when a watch snapshot
-   * arrives: a snapshot is the authoritative full set for the current
-   * subscription, so switching namespace (a new subscription → new snapshot)
-   * must swap the data, not merge onto the previous namespace's items.
+   * Replace the items for a kind from a watch snapshot. A snapshot is the
+   * authoritative full set for its subscription, so by default it swaps the whole
+   * slice (switching namespace replaces the data, not merges it). When `scope` is
+   * a specific namespace AND `coexistWildcard` is true (a cluster-wide "*" watch
+   * for the same kind is also live), the snapshot is authoritative ONLY for its
+   * namespace and is merged so the wildcard's other-namespace items survive.
    */
-  replaceKind: (kind: string, items: Record<string, unknown>) => void;
+  replaceKind: (
+    kind: string,
+    items: Record<string, unknown>,
+    scope?: string,
+    coexistWildcard?: boolean,
+  ) => void;
   /**
    * Empty the local view for a kind (set `resources[kind]` to `{}`). This only
    * clears the client-side cache; it does not delete server-side objects. For
@@ -179,11 +213,19 @@ export const useCluster = create<ClusterState>((set) => ({
       delete next[name];
       return { resources: { ...s.resources, [kind]: next } };
     }),
-  replaceKind: (kind, items) =>
+  replaceKind: (kind, items, scope, coexistWildcard) =>
     set((s) => {
-      const reconciled = reconcileSlice(s.resources[kind], items);
+      const prev = s.resources[kind];
+      // A namespace-scoped snapshot that coexists with a cluster-wide ("*") watch
+      // for the same kind must not wipe the wildcard's other-namespace items —
+      // merge by namespace. Every other case (a "*" snapshot, or a scoped snapshot
+      // with no competing wildcard) is an authoritative full set → full replace,
+      // which preserves namespace-switch semantics.
+      const target =
+        scope && scope !== "*" && coexistWildcard ? mergeScopedSnapshot(prev, items, scope) : items;
+      const reconciled = reconcileSlice(prev, target);
       // Identical to the previous slice → no-op so subscribers don't re-render.
-      if (reconciled === s.resources[kind]) return {};
+      if (reconciled === prev) return {};
       return { resources: { ...s.resources, [kind]: reconciled } };
     }),
   clearKind: (kind) =>

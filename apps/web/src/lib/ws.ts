@@ -308,12 +308,16 @@ export function connectCluster(): void {
     } else if (m.type === "snapshot") {
       // Authoritative full set for this subscription: REPLACE the kind's items
       // (not merge) so switching namespace swaps the data instead of piling the
-      // new namespace on top of the old one.
+      // new namespace on top of the old one. EXCEPTION: when a cluster-wide ("*")
+      // watch for this kind is also active (e.g. the Assistant panel), a
+      // namespace-scoped snapshot must not clobber the wildcard's other-namespace
+      // items — the store merges it by namespace instead.
       store.setLoading(false);
       store.setError(null);
       const items: Record<string, unknown> = {};
       for (const o of m.items) items[resourceKey(o)] = o;
-      store.replaceKind(m.kind, items);
+      const coexistWildcard = m.namespace !== "*" && activeSubs.has(subKey(m.kind, "*"));
+      store.replaceKind(m.kind, items, m.namespace, coexistWildcard);
     } else if (m.type === "delta") {
       if (m.event === "DELETED") store.remove(m.kind, resourceKey(m.object));
       else store.upsert(m.kind, resourceKey(m.object), m.object);

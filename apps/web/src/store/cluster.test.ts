@@ -165,3 +165,78 @@ describe("replaceKind — identity reconciliation", () => {
     expect(after.c).toBe("x");
   });
 });
+
+describe("replaceKind — scoped snapshot (cluster-wide + namespaced watches coexist)", () => {
+  const K = "deployments";
+  // Namespaced object: metadata.namespace drives the scoped-merge logic.
+  function nsObj(namespace: string, name: string, rv?: string): Record<string, unknown> {
+    return { metadata: { name, namespace, ...(rv != null ? { resourceVersion: rv } : {}) } };
+  }
+  beforeEach(() => useCluster.getState().clearKind(K));
+
+  it("a namespace-scoped snapshot preserves other namespaces when a wildcard watch coexists", () => {
+    // Cluster-wide ("*") snapshot: the app in default + the agent in rigel-assistant.
+    useCluster.getState().replaceKind(
+      K,
+      {
+        "default/web": nsObj("default", "web", "1"),
+        "rigel-assistant/rigel-assistant": nsObj("rigel-assistant", "rigel-assistant", "1"),
+      },
+      "*",
+      false,
+    );
+    // A default-scoped snapshot lands while the "*" watch is still active.
+    useCluster.getState().replaceKind(K, { "default/web": nsObj("default", "web", "2") }, "default", true);
+    const slice = useCluster.getState().resources[K];
+    // The agent (other namespace) MUST survive — this is the bug being fixed.
+    expect(slice["rigel-assistant/rigel-assistant"]).toBeDefined();
+    expect((slice["default/web"] as { metadata: { resourceVersion: string } }).metadata.resourceVersion).toBe("2");
+  });
+
+  it("a namespace-scoped snapshot with NO coexisting wildcard fully replaces (namespace switch)", () => {
+    useCluster.getState().replaceKind(K, { "default/web": nsObj("default", "web", "1") }, "default", false);
+    useCluster.getState().replaceKind(K, { "kube-system/dns": nsObj("kube-system", "dns", "1") }, "kube-system", false);
+    const slice = useCluster.getState().resources[K];
+    expect(slice["default/web"]).toBeUndefined(); // old namespace swapped out
+    expect(slice["kube-system/dns"]).toBeDefined();
+  });
+
+  it("a wildcard snapshot is authoritative and fully replaces", () => {
+    useCluster.getState().replaceKind(
+      K,
+      { "default/web": nsObj("default", "web", "1"), "kube-system/dns": nsObj("kube-system", "dns", "1") },
+      "default",
+      true,
+    );
+    useCluster.getState().replaceKind(K, { "default/web": nsObj("default", "web", "2") }, "*", false);
+    const slice = useCluster.getState().resources[K];
+    expect(slice["kube-system/dns"]).toBeUndefined();
+    expect((slice["default/web"] as { metadata: { resourceVersion: string } }).metadata.resourceVersion).toBe("2");
+  });
+
+  it("scoped merge still removes a deleted item within its own namespace", () => {
+    useCluster.getState().replaceKind(
+      K,
+      {
+        "default/web": nsObj("default", "web", "1"),
+        "default/api": nsObj("default", "api", "1"),
+        "rigel-assistant/rigel-assistant": nsObj("rigel-assistant", "rigel-assistant", "1"),
+      },
+      "*",
+      false,
+    );
+    // default snapshot no longer carries "api" → removed; agent (other ns) kept.
+    useCluster.getState().replaceKind(K, { "default/web": nsObj("default", "web", "1") }, "default", true);
+    const slice = useCluster.getState().resources[K];
+    expect(slice["default/api"]).toBeUndefined();
+    expect(slice["rigel-assistant/rigel-assistant"]).toBeDefined();
+  });
+
+  it("backward compatible: replaceKind without scope args still full-replaces", () => {
+    useCluster.getState().replaceKind(K, { "default/a": nsObj("default", "a", "1") });
+    useCluster.getState().replaceKind(K, { "default/b": nsObj("default", "b", "1") });
+    const slice = useCluster.getState().resources[K];
+    expect(slice["default/a"]).toBeUndefined();
+    expect(slice["default/b"]).toBeDefined();
+  });
+});
