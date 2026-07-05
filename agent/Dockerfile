@@ -22,6 +22,7 @@ RUN npm ci
 # Bundles dist/index.js + dist/fixRunner.js + dist/guardedKubectl.js, each a
 # self-contained ESM file with @rigel/k8s inlined (Node builtins external).
 RUN npm run build
+RUN ln -s /app/agent/node_modules /app/node_modules
 RUN npx esbuild ../packages/audit-cli/src/index.ts --bundle --platform=node \
       --format=esm --tsconfig=../packages/audit-cli/tsconfig.json \
       --outfile=/app/packages/audit-cli/dist/rigel-audit.mjs
