@@ -43,6 +43,22 @@ describe("classifyTier", () => {
   test("port-forward/proxy are blocked", () => {
     expect(classifyTier("kubectl port-forward svc/api 8080:80").tier).toBe("blocked");
   });
+
+  test("flag+value before the verb still finds the verb", () => {
+    expect(classifyTier("kubectl -n prod delete pod foo").tier).toBe("destructive");
+  });
+
+  test("value flag before a read verb stays read", () => {
+    expect(classifyTier("kubectl --context x get pods").tier).toBe("read");
+  });
+
+  test("a namespace VALUE named 'delete' is not mistaken for the verb", () => {
+    expect(classifyTier("kubectl -n delete get pods").tier).toBe("read");
+  });
+
+  test("klog verbosity value flag doesn't swallow the verb", () => {
+    expect(classifyTier("kubectl --v 5 delete pod foo").tier).toBe("destructive");
+  });
 });
 
 describe("classifyCommand (2-tier compat)", () => {
@@ -56,5 +72,23 @@ describe("classifyCommand (2-tier compat)", () => {
     const v = classifyCommand("kubectl --context other delete pod foo", "active");
     expect(v.decision).toBe("deny");
     expect(v.reason).toMatch(/DIFFERENT cluster/);
+  });
+
+  test("inline --context=value form triggers the cross-context steer", () => {
+    expect(
+      classifyCommand("kubectl --context=other delete pod foo", "active").reason,
+    ).toMatch(/DIFFERENT cluster/);
+  });
+
+  test("fan-out READ on a non-active context still allows", () => {
+    expect(
+      classifyCommand("kubectl --context other get pods", "active").decision,
+    ).toBe("allow");
+  });
+
+  test("mutation on the ACTIVE context uses the normal approval hint", () => {
+    const v = classifyCommand("kubectl --context active delete pod foo", "active");
+    expect(v.decision).toBe("deny");
+    expect(v.reason).not.toMatch(/DIFFERENT cluster/);
   });
 });

@@ -6,8 +6,11 @@
 //     destructive confirm-over-text, blocked refused).
 // Security note: false positives (denying a read) only cost an approval; false
 // NEGATIVES (auto-running a destructive op) are the danger, so verb detection
-// skips global flags+values precisely and unknown mutation shapes bias to
-// "destructive".
+// skips global flags+values precisely. This is a DENYLIST keyed on explicit
+// mutation verb sets: unrecognized verbs — including kubectl plugin subcommands
+// like `kubectl cnpg destroy` — are treated as READS. The classifier does NOT
+// bias unknown verbs to destructive, so unrecognized plugin mutations are bounded
+// by RBAC (the cluster's hard ceiling), not this classifier.
 
 /** kubectl verbs that change cluster/pod state and are REVERSIBLE. */
 const KUBECTL_REVERSIBLE = new Set([
@@ -48,6 +51,7 @@ const VALUE_FLAGS = new Set([
   "--kube-context", "--kube-apiserver", "--kube-token", "--kube-as-user",
   "--kube-as-group", "--kube-ca-file", "--registry-config",
   "--repository-config", "--repository-cache", "--burst-limit",
+  "-v", "--v", "--vmodule",
 ]);
 
 export type Tier = "read" | "reversible" | "destructive" | "blocked";
@@ -209,7 +213,8 @@ export function classifyCommand(command: string, activeContext?: string | null):
   // reversible or destructive → mutation
   if (activeContext) {
     for (const seg of command.split(/;|&&|\|\||\||\n/)) {
-      if (segmentTier(seg) === "reversible" || segmentTier(seg) === "destructive") {
+      const segTier = segmentTier(seg);
+      if (segTier === "reversible" || segTier === "destructive") {
         if (segmentContexts(seg).some((c) => c !== activeContext)) {
           return { decision: "deny", reason: crossContextHint(activeContext) };
         }
