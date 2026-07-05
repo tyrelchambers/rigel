@@ -13,6 +13,7 @@ import { AddClusterChooser } from "./AddClusterChooser";
 import { ConnectClusterModal } from "./ConnectClusterModal";
 import { ClusterHealthBadge } from "./ClusterHealthBadge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { isMacDesktop } from "@/lib/desktop";
 import { toast } from "sonner";
 
 /**
@@ -86,7 +87,7 @@ export function ClusterRail() {
         display: "flex", flexDirection: "column", overflow: "hidden",
       }}
     >
-      <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "10px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+      <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: isMacDesktop ? "46px 0 10px" : "10px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
         <TooltipProvider delay={300}>
           {contexts.map((c) => {
             const isActive = c.name === activeContext;

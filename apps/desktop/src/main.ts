@@ -326,6 +326,8 @@ function createWindow(port: number): BrowserWindow {
     minWidth: 960,
     minHeight: 640,
     title: "Rigel",
+    titleBarStyle: "hiddenInset",
+    trafficLightPosition: { x: 16, y: 14 },
     show: !SMOKE, // headless smoke run keeps the window hidden
     backgroundColor: "#0b0f14",
     webPreferences: {

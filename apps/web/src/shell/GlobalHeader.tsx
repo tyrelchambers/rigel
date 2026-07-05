@@ -10,6 +10,7 @@
 import { PanelLeftClose, PanelLeftOpen, Search, User } from "lucide-react";
 import { NamespaceSelector } from "./NamespaceBar";
 import { RigelMark } from "@/components/RigelMark";
+import { isMacDesktop } from "@/lib/desktop";
 
 interface GlobalHeaderProps {
   sidebarCollapsed: boolean;
@@ -20,16 +21,20 @@ interface GlobalHeaderProps {
   onOpenAccount: () => void;
 }
 
+const DRAG = { WebkitAppRegion: "drag" } as unknown as React.CSSProperties;
+const NO_DRAG = { WebkitAppRegion: "no-drag" } as unknown as React.CSSProperties;
+
 export function GlobalHeader({ sidebarCollapsed, onToggleSidebar, onOpenSearch, onOpenAccount }: GlobalHeaderProps) {
   return (
     <header
       style={{
+        ...DRAG,
         flexShrink: 0,
         height: 42,
         display: "flex",
         alignItems: "center",
         gap: 12,
-        paddingLeft: 14,
+        paddingLeft: isMacDesktop ? 38 : 14,
         paddingRight: 14,
         background: "var(--surface-primary)",
         borderBottom: "1px solid var(--border-subtle)",
@@ -48,6 +53,7 @@ export function GlobalHeader({ sidebarCollapsed, onToggleSidebar, onOpenSearch, 
         title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         style={{
+          ...NO_DRAG,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -68,7 +74,9 @@ export function GlobalHeader({ sidebarCollapsed, onToggleSidebar, onOpenSearch, 
         )}
       </button>
 
-      <NamespaceSelector />
+      <div style={{ ...NO_DRAG, display: "flex", minWidth: 0 }}>
+        <NamespaceSelector />
+      </div>
 
       {/* Spacer */}
       <div style={{ marginLeft: "auto" }} />
@@ -79,6 +87,7 @@ export function GlobalHeader({ sidebarCollapsed, onToggleSidebar, onOpenSearch, 
         title="Search (⌘K)"
         aria-label="Search"
         style={{
+          ...NO_DRAG,
           display: "flex",
           alignItems: "center",
           gap: 8,
@@ -116,6 +125,7 @@ export function GlobalHeader({ sidebarCollapsed, onToggleSidebar, onOpenSearch, 
         title="Account"
         aria-label="Account"
         style={{
+          ...NO_DRAG,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",

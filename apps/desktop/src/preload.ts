@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("rigel", {
   desktop: true,
+  platform: process.platform,
   electronVersion: process.versions.electron,
   /** Record + deliver the signup. Resolves once captured locally (delivery retries in the background). */
   submitSignup: (data: { name: string; email: string }): Promise<{ ok: true }> =>
