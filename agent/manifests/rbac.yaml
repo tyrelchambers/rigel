@@ -1,14 +1,18 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# The RBAC cage. This is what makes "destructive actions are blocked entirely"
-# TRUE at the cluster level — not a prompt the model could talk its way past.
+# The RBAC cage — the REAL, cluster-enforced ceiling for the in-cluster assistant.
+# The assistant is a full agent, but it can only ever do what THIS Role grants:
+# a verb that isn't here is refused by the API server (403), no matter what the
+# model or the chat confirm flow does.
 #
-# The agent can read broadly for diagnosis (EXCEPT secrets) and perform exactly
-# the narrow set of safe mutations that back the LOW/MEDIUM action kinds. Every
-# destructive verb is simply absent, so the API server itself refuses them:
-#   - NO verbs on secrets (no value exfiltration)
-#   - NO delete on namespaces / persistentvolumeclaims / persistentvolumes
-#   - NO create on pods/eviction (so `kubectl drain` cannot work)
-#   - NO verbs on roles / rolebindings / clusterroles (no self-escalation)
+# DEFAULT POSTURE (this file): read + REVERSIBLE mutations only. Destructive verbs
+# (`delete`, pod `eviction`/drain) are DELIBERATELY ABSENT, so destructive actions
+# are hard-blocked out of the box — a confirmed "yes" on a delete just 403s and the
+# assistant reports which verb to grant.
+#   - To ENABLE destructive: uncomment the delete/eviction rules below (the chat
+#     still confirms them with "yes" before running).
+#   - To OPEN IT UP further: widen the write Role to more namespaces (duplicate it).
+#   - Secrets are read-omitted (no value exfiltration); add them to read/manage them.
+#   - `roles`/`rolebindings`/`clusterroles` verbs are omitted (no self-escalation).
 # ─────────────────────────────────────────────────────────────────────────────
 apiVersion: v1
 kind: ServiceAccount
@@ -26,17 +30,20 @@ metadata:
   labels:
     app.kubernetes.io/managed-by: rigel-assistant
 rules:
-  # ── broad read for diagnosis — secrets deliberately omitted ──
+  # broad read for investigation — secrets omitted by default
   - apiGroups: [""]
-    resources:
-      [pods, pods/log, nodes, events, namespaces, services, endpoints,
-       persistentvolumeclaims, persistentvolumes, replicationcontrollers, configmaps]
+    resources: [pods, pods/log, pods/status, nodes, events, namespaces, services,
+                endpoints, persistentvolumeclaims, persistentvolumes,
+                replicationcontrollers, configmaps, serviceaccounts, resourcequotas, limitranges]
     verbs: [get, list, watch]
   - apiGroups: ["apps"]
-    resources: [deployments, replicasets, statefulsets, daemonsets]
+    resources: [deployments, replicasets, statefulsets, daemonsets, deployments/scale, statefulsets/scale]
     verbs: [get, list, watch]
   - apiGroups: ["batch"]
     resources: [jobs, cronjobs]
+    verbs: [get, list, watch]
+  - apiGroups: ["networking.k8s.io"]
+    resources: [ingresses, networkpolicies]
     verbs: [get, list, watch]
   - apiGroups: ["events.k8s.io"]
     resources: [events]
@@ -44,19 +51,14 @@ rules:
   - apiGroups: ["metrics.k8s.io"]
     resources: [pods, nodes]
     verbs: [get, list]
-  # ── narrow mutations: exactly the LOW/MEDIUM action surface, nothing else ──
-  - apiGroups: ["apps"]
-    resources: [deployments]
-    verbs: [patch, update] # restart, setEnv, rollback
-  - apiGroups: ["apps"]
-    resources: [deployments/scale]
-    verbs: [patch, update] # scale
-  - apiGroups: [""]
-    resources: [pods]
-    verbs: [delete] # delete a crashlooping/stuck pod (controller recreates it)
+  # cordon / uncordon (reversible) = patch on the node's .spec.unschedulable
   - apiGroups: [""]
     resources: [nodes]
-    verbs: [patch] # cordon / uncordon (.spec.unschedulable)
+    verbs: [patch]
+  # ── DESTRUCTIVE (opt-in): uncomment to allow `kubectl drain` ──
+  # - apiGroups: [""]
+  #   resources: [pods/eviction]
+  #   verbs: [create]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -68,6 +70,47 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: rigel-assistant
+subjects:
+  - kind: ServiceAccount
+    name: rigel-assistant
+    namespace: default
+---
+# Reversible mutations only. `delete` is deliberately omitted → destructive is
+# hard-blocked by default. To ENABLE deletes over chat (still confirmed with
+# "yes"), add `delete` to the verb lists below.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: rigel-assistant-write
+  namespace: default   # ← the install namespace; duplicate for more namespaces
+  labels:
+    app.kubernetes.io/managed-by: rigel-assistant
+rules:
+  - apiGroups: [""]
+    resources: [pods, services, configmaps, persistentvolumeclaims]
+    verbs: [create, update, patch]
+  - apiGroups: ["apps"]
+    resources: [deployments, replicasets, statefulsets, daemonsets,
+                deployments/scale, statefulsets/scale]
+    verbs: [create, update, patch]
+  - apiGroups: ["batch"]
+    resources: [jobs, cronjobs]
+    verbs: [create, update, patch]
+  - apiGroups: ["networking.k8s.io"]
+    resources: [ingresses]
+    verbs: [create, update, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rigel-assistant-write
+  namespace: default
+  labels:
+    app.kubernetes.io/managed-by: rigel-assistant
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: rigel-assistant-write
 subjects:
   - kind: ServiceAccount
     name: rigel-assistant
