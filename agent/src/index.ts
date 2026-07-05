@@ -42,6 +42,7 @@ import { runWorker } from "./worker.js";
 import { diagnoseConfirmed } from "./diagnosePool.js";
 import { runSupervisor, type SupervisorOutput } from "./supervisor.js";
 import { executeAction } from "./executor.js";
+import { executeActionGuarded } from "./executeActionGuarded.js";
 import { CircuitBreaker } from "./guardrails.js";
 import { runSelfCheck, formatSelfCheck } from "./selfCheck.js";
 import {
@@ -869,7 +870,7 @@ async function handleMatrixInboundIO(
  * items are refused, the circuit breaker can veto, and we snapshot a backup
  * before mutating. Mirrors the executor path in `tick`. */
 async function approveQueued(cfg: Config, cb: CircuitBreaker, index: number): Promise<string> {
-  let state = await readState(cfg.stateConfigMap, cfg.stateNamespace);
+  const state = await readState(cfg.stateConfigMap, cfg.stateNamespace);
   const item = state.queue[index];
   if (!item) return `There's no queued fix #${index + 1}. Reply "queue" to see the list.`;
   if (!item.action) {
@@ -882,49 +883,33 @@ async function approveQueued(cfg: Config, cb: CircuitBreaker, index: number): Pr
     return `"${item.suggestion}" opens a fix PR and is handled automatically by the fix-runner — it isn't a command to run from here.`;
   }
   const tier = classifyRisk(action.kind);
-  if (tier === RiskTier.Blocked) {
+  if (tier === RiskTier.Blocked && action.kind !== "command") {
     return `"${item.suggestion}" is blocked from automatic execution. Run it from Rigel.`;
   }
 
-  const now = Date.now();
-  const ts = new Date(now).toISOString();
   const ns = action.namespace ?? "default";
   const targetName = action.deployment ?? action.pod ?? action.node ?? action.label;
   const resourceKey = `${ns}/${targetName}`;
   const fp = item.incident; // best available fingerprint for this queued item
 
-  const cbVerdict = cb.canAct(fp, resourceKey, now);
-  if (!cbVerdict.allowed) return `Can't run that right now — ${cbVerdict.reason}.`;
-  cb.record(fp, resourceKey, now);
-
-  try {
-    const result = await executeAction(action);
-    let backupRef: string | undefined;
-    if (result.backupYaml) {
-      const key = `${ts}_${fp}`.replace(/[^A-Za-z0-9_.-]/g, "_");
-      backupRef = await storeBackup(cfg.backupsConfigMap, cfg.stateNamespace, key, result.backupYaml, cfg.maxBackups);
-    }
-    state = appendAudit(
-      state,
-      {
-        at: ts, fingerprint: fp, incident: item.incident, proposal: action.label,
-        command: result.commands.join(" && "), tier: tier === RiskTier.Medium ? "medium" : "low",
-        verdict: "approved", outcome: result.success ? "success" : "failure",
-        detail: truncate(`approved via Signal — ${result.output}`), backupRef,
-      },
-      cfg.auditMaxEntries,
-    );
-    // Drop the item from the queue whether or not the command succeeded — a
-    // failed run is recorded in the audit log; re-queuing happens on re-detect.
-    state = { ...state, queue: state.queue.filter((_, i) => i !== index) };
-    await writeState(cfg.stateConfigMap, cfg.stateNamespace, state);
-    log(`${result.success ? "✓" : "✗"} approved-via-signal ${action.label} — ${result.commands.join(" && ")}`);
-    return result.success
-      ? `✓ Ran: ${action.label}\n${result.commands.join(" && ")}`
-      : truncate(`✗ Failed: ${action.label}\n${result.output}`, 1200);
-  } catch (e) {
-    return `✗ Error running ${action.label}: ${String(e)}`;
-  }
+  return executeActionGuarded(cb, { action, fingerprint: fp, resourceKey }, {
+    now: () => Date.now(),
+    execute: (a) => executeAction(a),
+    storeBackup: async (key, yaml) => storeBackup(cfg.backupsConfigMap, cfg.stateNamespace, key, yaml, cfg.maxBackups),
+    audit: async ({ command, success, output, backupRef }) => {
+      let s = await readState(cfg.stateConfigMap, cfg.stateNamespace);
+      s = appendAudit(s, {
+        at: new Date().toISOString(), fingerprint: fp, incident: item.incident, proposal: action.label,
+        command, tier: tier === RiskTier.Medium ? "medium" : "low",
+        verdict: "approved", outcome: success ? "success" : "failure", detail: truncate(`approved via Signal — ${output}`), backupRef,
+      }, cfg.auditMaxEntries);
+      // Drop the item from the queue whether or not the command succeeded — a
+      // failed run is recorded in the audit log; re-queuing happens on re-detect.
+      s = { ...s, queue: s.queue.filter((q) => q !== item) };
+      await writeState(cfg.stateConfigMap, cfg.stateNamespace, s);
+    },
+    log,
+  });
 }
 
 /** Local minutes-of-day (respects the container TZ env) for the quiet-hours window. */
