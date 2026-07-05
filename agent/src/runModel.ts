@@ -30,6 +30,8 @@ export interface RunModelOptions {
   resumeSessionId?: string;
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** Inline --settings JSON for the Claude bridge (PreToolUse permission hook). */
+  settingsJson?: string;
 }
 
 /**
@@ -62,6 +64,7 @@ export async function runModel(opts: RunModelOptions): Promise<ProviderResult> {
     resumeSessionId: opts.resumeSessionId,
     signal: opts.signal,
     timeoutMs: opts.timeoutMs,
+    settingsJson: opts.settingsJson,
   };
 
   const first = await bridge.run(base);

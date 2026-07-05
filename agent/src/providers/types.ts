@@ -59,6 +59,8 @@ export interface RunModelInput {
   signal?: AbortSignal;
   /** Per-turn wall-clock cap in ms. */
   timeoutMs?: number;
+  /** Inline --settings JSON (Claude only; others ignore). */
+  settingsJson?: string;
 }
 
 /**

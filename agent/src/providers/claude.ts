@@ -28,6 +28,7 @@ export const claudeBridge: ProviderBridge = {
         jsonSchema: input.structuredSchema,
         resumeSessionId: input.resumeSessionId,
         timeoutMs: input.timeoutMs,
+        settingsJson: input.settingsJson,
       });
       return {
         text: r.text,
