@@ -55,19 +55,27 @@ export interface RunClaudeOptions {
   jsonSchema?: string;
   /** When set, continue this prior CLI session via --resume instead of starting fresh. */
   resumeSessionId?: string;
+  /** Inline --settings JSON (e.g. a PreToolUse permission hook). */
+  settingsJson?: string;
   cwd?: string;
   timeoutMs?: number;
+}
+
+export function buildClaudeArgs(opts: RunClaudeOptions): string[] {
+  const args = ["-p", opts.prompt, "--model", opts.model, "--output-format", "json"];
+  for (const tool of opts.allowedTools ?? []) args.push("--allowedTools", tool);
+  if (opts.appendSystemPrompt) args.push("--append-system-prompt", opts.appendSystemPrompt);
+  if (opts.jsonSchema) args.push("--json-schema", opts.jsonSchema);
+  if (opts.settingsJson) args.push("--settings", opts.settingsJson);
+  if (opts.resumeSessionId) args.push("--resume", opts.resumeSessionId);
+  return args;
 }
 
 /** Invoke claude non-interactively and return the parsed envelope. Rejects on a
  * non-zero exit, a timeout, or an error envelope — callers treat any failure as
  * fail-closed (do not act). */
 export async function runClaude(opts: RunClaudeOptions): Promise<ClaudeResult> {
-  const args = ["-p", opts.prompt, "--model", opts.model, "--output-format", "json"];
-  for (const tool of opts.allowedTools ?? []) args.push("--allowedTools", tool);
-  if (opts.appendSystemPrompt) args.push("--append-system-prompt", opts.appendSystemPrompt);
-  if (opts.jsonSchema) args.push("--json-schema", opts.jsonSchema);
-  if (opts.resumeSessionId) args.push("--resume", opts.resumeSessionId);
+  const args = buildClaudeArgs(opts);
 
   const stdout = await new Promise<string>((resolve, reject) => {
     const child = spawn("claude", args, {

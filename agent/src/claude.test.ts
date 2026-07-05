@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { parseClaudeResult } from "./claude.js";
+import { buildClaudeArgs, parseClaudeResult } from "./claude.js";
 
 describe("parseClaudeResult", () => {
   test("extracts result text, cost, and success flag from a json envelope", () => {
@@ -63,4 +63,11 @@ describe("parseClaudeResult", () => {
     const stdout = JSON.stringify({ is_error: false, result: "hi", total_cost_usd: 0 });
     expect(parseClaudeResult(stdout).sessionId).toBeUndefined();
   });
+});
+
+test("buildClaudeArgs includes --settings when settingsJson is set", () => {
+  const args = buildClaudeArgs({ model: "sonnet", prompt: "hi", settingsJson: '{"hooks":{}}' });
+  const i = args.indexOf("--settings");
+  expect(i).toBeGreaterThan(-1);
+  expect(args[i + 1]).toBe('{"hooks":{}}');
 });
