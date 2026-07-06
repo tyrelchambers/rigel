@@ -1,5 +1,6 @@
 import { describe, test, expect } from "vitest";
 import { cell, hasCell, toggleCell, serializePolicy, parsePolicy, type RbacPolicy } from "./rbacPolicy";
+import { CAPABILITIES, DEFAULT_POLICY, capabilityState, setCapability } from "./rbacPolicy";
 
 const empty: RbacPolicy = { cells: [] };
 
@@ -22,5 +23,28 @@ describe("cell primitives", () => {
     const parsed = parsePolicy(serializePolicy(p));
     // roles are not representable → filtered on parse (no self-escalation)
     expect(parsed.cells).toEqual([cell("", "pods", "get")]);
+  });
+});
+
+describe("capabilities", () => {
+  test("DEFAULT_POLICY = read + reversible + pod-delete + node-patch (destructive off)", () => {
+    expect(capabilityState(DEFAULT_POLICY, "read")).toBe("on");
+    expect(capabilityState(DEFAULT_POLICY, "reversible")).toBe("on");
+    expect(capabilityState(DEFAULT_POLICY, "deletePods")).toBe("on");
+    expect(capabilityState(DEFAULT_POLICY, "cordon")).toBe("on");
+    expect(capabilityState(DEFAULT_POLICY, "deleteWorkloads")).toBe("off");
+    expect(capabilityState(DEFAULT_POLICY, "drain")).toBe("off");
+    expect(capabilityState(DEFAULT_POLICY, "secrets")).toBe("off");
+  });
+  test("setCapability toggles all of a capability's cells", () => {
+    const p = setCapability(DEFAULT_POLICY, "deleteWorkloads", true);
+    expect(capabilityState(p, "deleteWorkloads")).toBe("on");
+    const off = setCapability(p, "deleteWorkloads", false);
+    expect(capabilityState(off, "deleteWorkloads")).toBe("off");
+  });
+  test("partial state when only some cells are present", () => {
+    const cap = CAPABILITIES.find((c) => c.id === "reversible")!;
+    const partial: RbacPolicy = { cells: [cap.cells[0]] };
+    expect(capabilityState(partial, "reversible")).toBe("partial");
   });
 });

@@ -69,3 +69,85 @@ export function parsePolicy(json: string | undefined): RbacPolicy {
     return { cells: [] };
   }
 }
+
+export type Risk = "safe" | "destructive" | "secret";
+export interface Capability {
+  id: string;
+  label: string;
+  description: string;
+  risk: Risk;
+  /** The exact cells this capability grants. */
+  cells: string[];
+}
+
+const READ_VERBS: Verb[] = ["get", "list", "watch"];
+const WRITE_VERBS: Verb[] = ["create", "update", "patch"];
+/** `deployments/scale`/`statefulsets/scale` reads ship as part of the non-editable
+ *  baseline (see BASELINE_READ_RULES in assistant.ts), so the "read" capability
+ *  excludes them to avoid granting/duplicating a read the policy doesn't control. */
+const SCALE_SUBRESOURCES = ["deployments/scale", "statefulsets/scale"];
+const readResources = MATRIX_RESOURCES.filter(
+  (r) => !r.secret && r.resource !== "pods/eviction" && !SCALE_SUBRESOURCES.includes(r.resource),
+);
+const writeResources = MATRIX_RESOURCES.filter(
+  (r) => !r.secret && !["pods/eviction", "nodes"].includes(r.resource),
+);
+
+export const CAPABILITIES: Capability[] = [
+  {
+    id: "read", label: "Read everything", description: "Inspect any resource except Secrets", risk: "safe",
+    cells: readResources.flatMap((r) => READ_VERBS.map((v) => cell(r.apiGroup, r.resource, v))),
+  },
+  {
+    id: "reversible", label: "Restart · scale · rollback · edit",
+    description: "Reversible changes to workloads, pods, config and ingresses", risk: "safe",
+    cells: writeResources.flatMap((r) => WRITE_VERBS.map((v) => cell(r.apiGroup, r.resource, v))),
+  },
+  {
+    id: "deletePods", label: "Delete pods",
+    description: "Clear a crashlooping pod — it respawns under its controller", risk: "safe",
+    cells: [cell("", "pods", "delete")],
+  },
+  {
+    id: "cordon", label: "Cordon / uncordon nodes", description: "Mark a node un/schedulable", risk: "safe",
+    cells: [cell("", "nodes", "patch")],
+  },
+  {
+    id: "deleteWorkloads", label: "Delete workloads",
+    description: "Deployments, statefulsets, services, config, PVCs", risk: "destructive",
+    cells: [
+      ...["deployments", "statefulsets", "daemonsets", "replicasets"].map((r) => cell("apps", r, "delete")),
+      ...["services", "configmaps", "persistentvolumeclaims"].map((r) => cell("", r, "delete")),
+    ],
+  },
+  {
+    id: "drain", label: "Drain nodes", description: "Evict pods off a node", risk: "destructive",
+    cells: [cell("", "pods/eviction", "create")],
+  },
+  {
+    id: "secrets", label: "Manage secrets",
+    description: "Read and write Secret values — the model can see them", risk: "secret",
+    cells: [...READ_VERBS, ...WRITE_VERBS, "delete" as Verb].map((v) => cell("", "secrets", v)),
+  },
+];
+
+const CAP_BY_ID = new Map(CAPABILITIES.map((c) => [c.id, c]));
+
+export const DEFAULT_POLICY: RbacPolicy = {
+  cells: [...new Set(["read", "reversible", "deletePods", "cordon"].flatMap((id) => CAP_BY_ID.get(id)!.cells))].sort(),
+};
+
+export function capabilityState(policy: RbacPolicy, capId: string): "on" | "off" | "partial" {
+  const cap = CAP_BY_ID.get(capId);
+  if (!cap) return "off";
+  const present = cap.cells.filter((c) => hasCell(policy, c)).length;
+  if (present === 0) return "off";
+  if (present === cap.cells.length) return "on";
+  return "partial";
+}
+
+export function setCapability(policy: RbacPolicy, capId: string, on: boolean): RbacPolicy {
+  const cap = CAP_BY_ID.get(capId);
+  if (!cap) return policy;
+  return cap.cells.reduce((p, c) => toggleCell(p, c, on), policy);
+}
