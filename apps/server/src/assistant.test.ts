@@ -987,86 +987,85 @@ describe("getRbac", () => {
 describe("setRbac", () => {
   afterEach(() => { vi.restoreAllMocks(); });
 
-  test("active target: persists the policy and applies the ClusterRole to just the active context", async () => {
-    const applied: { ctx: string | null; args: string[]; stdin: unknown }[] = [];
+  test("persists + applies the ClusterRole to just the active context by default", async () => {
+    const applied: { args: string[]; stdin: unknown }[] = [];
     vi.spyOn(runMod, "kubectl").mockResolvedValue({ code: 0, stdout: JSON.stringify({ data: {} }), stderr: "" });
     vi.spyOn(runMod, "runProcessWithStdin").mockImplementation(async (_prog, args, stdin) => {
-      applied.push({ ctx: null, args, stdin });
+      applied.push({ args, stdin });
       return { code: 0, stdout: "", stderr: "" };
     });
     const policy = setCapability(DEFAULT_POLICY, "drain", true);
     const res = await setRbac("active-ctx", "default", {
-      action: "setRbac", policy: serializePolicy(policy), rbacTarget: "active",
+      action: "setRbac", policy: serializePolicy(policy), contexts: ["active-ctx"],
     });
     const result = JSON.parse(res.stdout) as { applied: string[]; failures: unknown[] };
     expect(result.applied).toEqual(["active-ctx"]);
     expect(result.failures).toEqual([]);
-    // First stdin write is the assistant-config ConfigMap; the second is the
-    // ClusterRole-only document (never the SA/Role/binding).
-    expect(applied[0]!.stdin).toContain("rbacPolicy");
+    expect(applied[0]!.stdin).toContain("rbacPolicy"); // config write
     expect(applied[1]!.stdin).toMatch(/kind: ClusterRole\b/);
     expect(applied[1]!.stdin).not.toMatch(/kind: ClusterRoleBinding/);
     expect(applied[1]!.stdin).toMatch(/pods\/eviction/);
   });
 
-  test("all target: applies to every discovered installed context", async () => {
-    vi.spyOn(runMod, "kubectl").mockImplementation(async (ctx, args) => {
-      if (args[0] === "get" && args[1] === "cm") {
-        return { code: 0, stdout: JSON.stringify({ data: {} }), stderr: "" };
-      }
-      if (args[0] === "config") {
-        return {
-          code: 0,
-          stdout: JSON.stringify({
-            "current-context": "ctx-a",
-            contexts: [{ name: "ctx-a", context: { cluster: "a" } }, { name: "ctx-b", context: { cluster: "b" } }],
-            clusters: [{ name: "a", cluster: {} }, { name: "b", cluster: {} }],
-          }),
-          stderr: "",
-        };
-      }
-      if (args[0] === "get" && args[1] === "deployment") {
-        return {
-          code: 0,
-          stdout: JSON.stringify({ metadata: { labels: { "app.kubernetes.io/managed-by": "rigel-assistant" } } }),
-          stderr: "",
-        };
-      }
-      return { code: 1, stdout: "", stderr: "unexpected call" };
-    });
-    const applyCalls: string[] = [];
-    vi.spyOn(runMod, "runProcessWithStdin").mockImplementation(async (_prog, fullArgs, stdin) => {
-      if (fullArgs.includes("apply")) applyCalls.push(String(stdin));
+  test("writes config AND applies the ClusterRole to EVERY passed context", async () => {
+    const configWrites: string[] = [];
+    const clusterRoleApplies: string[] = [];
+    vi.spyOn(runMod, "kubectl").mockResolvedValue({ code: 0, stdout: JSON.stringify({ data: {} }), stderr: "" });
+    vi.spyOn(runMod, "runProcessWithStdin").mockImplementation(async (_prog, _args, stdin) => {
+      const s = String(stdin);
+      if (s.includes("rbacPolicy")) configWrites.push(s);
+      if (/kind: ClusterRole\b/.test(s) && !/ClusterRoleBinding/.test(s)) clusterRoleApplies.push(s);
       return { code: 0, stdout: "", stderr: "" };
     });
-    const policy = setCapability(DEFAULT_POLICY, "drain", true);
     const res = await setRbac("ctx-a", "default", {
-      action: "setRbac", policy: serializePolicy(policy), rbacTarget: "all",
+      action: "setRbac", policy: serializePolicy(DEFAULT_POLICY), contexts: ["ctx-a", "ctx-b"],
     });
-    const result = JSON.parse(res.stdout) as { applied: string[]; failures: unknown[] };
+    const result = JSON.parse(res.stdout) as { applied: string[] };
     expect(result.applied.sort()).toEqual(["ctx-a", "ctx-b"]);
-    // Config write + one ClusterRole apply per discovered context.
-    const clusterRoleApplies = applyCalls.filter((s) => /kind: ClusterRole\b/.test(s) && !/ClusterRoleBinding/.test(s));
+    // The fix: config persisted to BOTH clusters, not just the active one.
+    expect(configWrites).toHaveLength(2);
     expect(clusterRoleApplies).toHaveLength(2);
   });
 
-  test("reports a non-zero code and names the failed context when the ClusterRole apply fails", async () => {
+  test("one context failing does not abort the others; names the failure", async () => {
     vi.spyOn(runMod, "kubectl").mockResolvedValue({ code: 0, stdout: JSON.stringify({ data: {} }), stderr: "" });
-    vi.spyOn(runMod, "runProcessWithStdin").mockImplementation(async (_prog, _fullArgs, stdin) => {
-      if (/kind: ClusterRole\b/.test(String(stdin))) return { code: 1, stdout: "", stderr: "Forbidden" };
+    vi.spyOn(runMod, "runProcessWithStdin").mockImplementation(async (_prog, fullArgs, stdin) => {
+      // Fail the ClusterRole apply only for ctx-b.
+      if (/kind: ClusterRole\b/.test(String(stdin)) && fullArgs.includes("ctx-b")) {
+        return { code: 1, stdout: "", stderr: "Forbidden" };
+      }
       return { code: 0, stdout: "", stderr: "" };
     });
-    const policy = setCapability(DEFAULT_POLICY, "drain", true);
-    const res = await setRbac("active-ctx", "default", {
-      action: "setRbac", policy: serializePolicy(policy), rbacTarget: "active",
+    const res = await setRbac("ctx-a", "default", {
+      action: "setRbac", policy: serializePolicy(DEFAULT_POLICY), contexts: ["ctx-a", "ctx-b"],
     });
     expect(res.code).not.toBe(0);
-    expect(res.stderr).toContain("active-ctx");
+    expect(res.stderr).toContain("ctx-b");
     expect(res.stderr).toContain("Forbidden");
     const result = JSON.parse(res.stdout) as { applied: string[]; failures: { context: string; error: string }[] };
-    expect(result.applied).toEqual([]);
-    expect(result.failures).toEqual([{ context: "active-ctx", error: "Forbidden" }]);
+    expect(result.applied).toEqual(["ctx-a"]);
+    expect(result.failures).toEqual([{ context: "ctx-b", error: "Forbidden" }]);
   });
+});
+
+test("installedContexts returns managed contexts with the active flag", async () => {
+  vi.spyOn(runMod, "kubectl").mockImplementation(async (_ctx, args) => {
+    if (args[0] === "config") {
+      return { code: 0, stdout: JSON.stringify({
+        "current-context": "ctx-a",
+        contexts: [{ name: "ctx-a", context: { cluster: "a" } }, { name: "ctx-b", context: { cluster: "b" } }],
+        clusters: [{ name: "a", cluster: {} }, { name: "b", cluster: {} }],
+      }), stderr: "" };
+    }
+    return { code: 0, stdout: JSON.stringify({ metadata: { labels: { "app.kubernetes.io/managed-by": "rigel-assistant" } } }), stderr: "" };
+  });
+  const res = await handleAssistant("ctx-a", { action: "installedContexts", namespace: "default" });
+  const parsed = JSON.parse(res.stdout) as { contexts: { name: string; active: boolean }[] };
+  expect(parsed.contexts).toEqual([
+    { name: "ctx-a", active: true },
+    { name: "ctx-b", active: false },
+  ]);
+  vi.restoreAllMocks();
 });
 
 test("handleAssistant routes getRbac/setRbac", async () => {
@@ -1078,7 +1077,7 @@ test("handleAssistant routes getRbac/setRbac", async () => {
   vi.spyOn(runMod, "kubectl").mockResolvedValue({ code: 0, stdout: JSON.stringify({ data: {} }), stderr: "" });
   vi.spyOn(runMod, "runProcessWithStdin").mockResolvedValue({ code: 0, stdout: "", stderr: "" });
   const setRes = await handleAssistant(null, {
-    action: "setRbac", namespace: "default", policy: serializePolicy(DEFAULT_POLICY), rbacTarget: "active",
+    action: "setRbac", namespace: "default", policy: serializePolicy(DEFAULT_POLICY), contexts: ["default"],
   });
   expect(JSON.parse(setRes.stdout)).toHaveProperty("applied");
   vi.restoreAllMocks();
@@ -1089,7 +1088,7 @@ test("handleAssistant routes getRbac/setRbac", async () => {
     return { code: 0, stdout: "", stderr: "" };
   });
   const failRes = await handleAssistant(null, {
-    action: "setRbac", namespace: "default", policy: serializePolicy(DEFAULT_POLICY), rbacTarget: "active",
+    action: "setRbac", namespace: "default", policy: serializePolicy(DEFAULT_POLICY), contexts: ["default"],
   });
   expect(failRes.code).not.toBe(0);
   expect(failRes.stderr).toContain("connection refused");

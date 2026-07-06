@@ -141,7 +141,8 @@ export type AssistantAction =
   | "listCredentialSecrets"
   | "reconcileCredentialAnnotations"
   | "getRbac"
-  | "setRbac";
+  | "setRbac"
+  | "installedContexts";
 
 export interface AssistantRequest {
   action: AssistantAction;
@@ -196,11 +197,12 @@ export interface AssistantRequest {
   credentialId?: keyof AssistantCredentials;
   secretName?: string;
   dataKey?: string;
-  // getRbac/setRbac — the operator-editable RBAC policy (docs/superpowers/specs/
-  // 2026-07-05-in-app-rbac-editor-design.md). `policy` is a serializePolicy()
-  // JSON string; `rbacTarget` picks the active context or every installed one.
+  // getRbac/setRbac/installedContexts — the operator-editable RBAC policy.
+  // `policy` is a serializePolicy() JSON string; `contexts` is the explicit set
+  // of kubeconfig contexts to persist+apply to (active alone, all installed, or
+  // a picked subset). Omitted → the active context.
   policy?: string;
-  rbacTarget?: "active" | "all";
+  contexts?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -609,11 +611,11 @@ export async function discoverInstalledContexts(
 }
 
 /**
- * Persist the operator's chosen RBAC policy (read-modify-write `assistant-config`,
- * exactly like every other live setting) and apply it as a ClusterRole to the
- * target context(s): the active context alone, or — for `rbacTarget: "all"` —
- * every context with the assistant installed (`discoverInstalledContexts`).
- * Never re-applies the namespaced SA/Role/binding (install-time only).
+ * Persist the operator's RBAC policy AND apply it as a ClusterRole to each
+ * context in `req.contexts` (default: the active context). For every target we
+ * read-modify-write `assistant-config` (so stored + live agree per cluster) and
+ * apply the ClusterRole-only document. Never re-applies the namespaced
+ * SA/Role/binding (install-time only). One failing context does not abort the rest.
  */
 export async function setRbac(
   context: string | null,
@@ -621,17 +623,34 @@ export async function setRbac(
   req: AssistantRequest,
 ): Promise<RunResult> {
   const policy = parsePolicy(req.policy);
-  await patchConfig(context, namespace, rbacConfigUpdate(policy));
-  const contexts =
-    req.rbacTarget === "all" ? await discoverInstalledContexts(namespace) : [context ?? ""];
-  const result = await applyPolicy({ policy, contexts }, { apply: (ctx, yaml) => applyStdin(ctx, yaml) });
-  if (result.failures.length > 0) {
-    const stderr = result.failures
-      .map((f) => `Failed to apply RBAC to ${f.context}: ${f.error}`)
-      .join("; ");
+  const contexts = req.contexts && req.contexts.length > 0 ? req.contexts : [context ?? ""];
+  const applied: string[] = [];
+  const failures: { context: string; error: string }[] = [];
+  for (const ctx of contexts) {
+    try {
+      await patchConfig(ctx, namespace, rbacConfigUpdate(policy));
+      const r = await applyPolicy({ policy, contexts: [ctx] }, { apply: (c, yaml) => applyStdin(c, yaml) });
+      if (r.failures.length > 0) failures.push({ context: ctx, error: r.failures[0]!.error });
+      else applied.push(ctx);
+    } catch (e) {
+      failures.push({ context: ctx, error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  const result = { applied, failures };
+  if (failures.length > 0) {
+    const stderr = failures.map((f) => `Failed to apply RBAC to ${f.context}: ${f.error}`).join("; ");
     return { code: 1, stdout: JSON.stringify(result), stderr };
   }
   return { code: 0, stdout: JSON.stringify(result), stderr: "" };
+}
+
+/** List the contexts with the assistant installed (for the editor's "all
+ *  clusters" / copy picker), flagging which is the active kubeconfig context. */
+export async function installedContexts(context: string | null, namespace: string): Promise<RunResult> {
+  const names = await discoverInstalledContexts(namespace);
+  const active = context ?? "";
+  const contexts = names.map((name) => ({ name, active: name === active }));
+  return { code: 0, stdout: JSON.stringify({ contexts }), stderr: "" };
 }
 
 /** Live role switch: read-modify-write the role keys in assistant-config. No
@@ -1067,6 +1086,8 @@ export async function handleAssistant(
       return getRbac(context, namespace);
     case "setRbac":
       return setRbac(context, namespace, req);
+    case "installedContexts":
+      return installedContexts(context, namespace);
     default:
       throw new Error(`unknown action: ${String(req.action)}`);
   }
