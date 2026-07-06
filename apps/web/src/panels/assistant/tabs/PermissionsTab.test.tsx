@@ -22,7 +22,10 @@ function wrap(overrides: Partial<AssistantContextValue> = {}) {
   );
 }
 
+let failSetRbac = false;
+
 beforeEach(() => {
+  failSetRbac = false;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
@@ -38,6 +41,12 @@ beforeEach(() => {
           );
         }
         if (body.action === "setRbac") {
+          if (failSetRbac) {
+            return new Response(
+              JSON.stringify({ error: "Failed to apply RBAC to kind-dev: Forbidden" }),
+              { status: 500 },
+            );
+          }
           return new Response(
             JSON.stringify({ success: true, stdout: JSON.stringify({ applied: ["kind-dev"], failures: [] }), stderr: "" }),
           );
@@ -93,6 +102,27 @@ describe("PermissionsTab", () => {
     await userEvent.click(screen.getByRole("button", { name: /review changes/i }));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("Review changes")).toBeInTheDocument();
+  });
+
+  it("a failed apply keeps the ReviewDialog open and shows the error instead of reporting success", async () => {
+    failSetRbac = true;
+    wrap();
+    await screen.findByText("Read everything");
+    await userEvent.click(screen.getByRole("switch", { name: /delete workloads/i }));
+    await userEvent.click(screen.getByRole("button", { name: /review changes/i }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: /^apply$/i }));
+    expect(await within(dialog).findByText(/Failed to apply RBAC to kind-dev: Forbidden/)).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("a failed apply from the footer Apply button shows the error inline", async () => {
+    failSetRbac = true;
+    wrap();
+    await screen.findByText("Read everything");
+    await userEvent.click(screen.getByRole("switch", { name: /delete workloads/i }));
+    await userEvent.click(screen.getByRole("button", { name: /^apply$/i }));
+    expect(await screen.findByText(/Failed to apply RBAC to kind-dev: Forbidden/)).toBeInTheDocument();
   });
 
   it("the target selector defaults to the active cluster and can switch to all installed clusters", async () => {

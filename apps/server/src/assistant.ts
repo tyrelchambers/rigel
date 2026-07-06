@@ -625,6 +625,12 @@ export async function setRbac(
   const contexts =
     req.rbacTarget === "all" ? await discoverInstalledContexts(namespace) : [context ?? ""];
   const result = await applyPolicy({ policy, contexts }, { apply: (ctx, yaml) => applyStdin(ctx, yaml) });
+  if (result.failures.length > 0) {
+    const stderr = result.failures
+      .map((f) => `Failed to apply RBAC to ${f.context}: ${f.error}`)
+      .join("; ");
+    return { code: 1, stdout: JSON.stringify(result), stderr };
+  }
   return { code: 0, stdout: JSON.stringify(result), stderr: "" };
 }
 

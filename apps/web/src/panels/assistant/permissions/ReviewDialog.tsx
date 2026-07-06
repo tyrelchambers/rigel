@@ -24,6 +24,7 @@ export function ReviewDialog({
   staged,
   targetLabel,
   confirming,
+  error,
   onConfirm,
 }: {
   open: boolean;
@@ -32,6 +33,7 @@ export function ReviewDialog({
   staged: RbacPolicy;
   targetLabel: string;
   confirming: boolean;
+  error?: string | null;
   onConfirm: () => void;
 }) {
   const diff = diffPolicies(applied, staged);
@@ -61,6 +63,7 @@ export function ReviewDialog({
           ) : (
             <p className="mt-3 text-sm text-muted-foreground">No pending changes.</p>
           )}
+          {error && <p className="mt-3 font-mono text-[11px] text-[var(--status-failed)]">{error}</p>}
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" disabled={confirming} onClick={() => onOpenChange(false)}>

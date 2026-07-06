@@ -95,6 +95,10 @@ export function PermissionsTab() {
         </div>
       </div>
 
+      {perms.applyError && !reviewOpen && (
+        <p className="font-mono text-[11px] text-[var(--status-failed)]">{perms.applyError.message}</p>
+      )}
+
       <ReviewDialog
         open={reviewOpen}
         onOpenChange={setReviewOpen}
@@ -102,6 +106,7 @@ export function PermissionsTab() {
         staged={perms.staged}
         targetLabel={targetLabel}
         confirming={perms.applying}
+        error={perms.applyError?.message}
         onConfirm={() => perms.apply(() => setReviewOpen(false))}
       />
     </div>

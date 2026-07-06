@@ -1049,6 +1049,24 @@ describe("setRbac", () => {
     const clusterRoleApplies = applyCalls.filter((s) => /kind: ClusterRole\b/.test(s) && !/ClusterRoleBinding/.test(s));
     expect(clusterRoleApplies).toHaveLength(2);
   });
+
+  test("reports a non-zero code and names the failed context when the ClusterRole apply fails", async () => {
+    vi.spyOn(runMod, "kubectl").mockResolvedValue({ code: 0, stdout: JSON.stringify({ data: {} }), stderr: "" });
+    vi.spyOn(runMod, "runProcessWithStdin").mockImplementation(async (_prog, _fullArgs, stdin) => {
+      if (/kind: ClusterRole\b/.test(String(stdin))) return { code: 1, stdout: "", stderr: "Forbidden" };
+      return { code: 0, stdout: "", stderr: "" };
+    });
+    const policy = setCapability(DEFAULT_POLICY, "drain", true);
+    const res = await setRbac("active-ctx", "default", {
+      action: "setRbac", policy: serializePolicy(policy), rbacTarget: "active",
+    });
+    expect(res.code).not.toBe(0);
+    expect(res.stderr).toContain("active-ctx");
+    expect(res.stderr).toContain("Forbidden");
+    const result = JSON.parse(res.stdout) as { applied: string[]; failures: { context: string; error: string }[] };
+    expect(result.applied).toEqual([]);
+    expect(result.failures).toEqual([{ context: "active-ctx", error: "Forbidden" }]);
+  });
 });
 
 test("handleAssistant routes getRbac/setRbac", async () => {
@@ -1063,5 +1081,17 @@ test("handleAssistant routes getRbac/setRbac", async () => {
     action: "setRbac", namespace: "default", policy: serializePolicy(DEFAULT_POLICY), rbacTarget: "active",
   });
   expect(JSON.parse(setRes.stdout)).toHaveProperty("applied");
+  vi.restoreAllMocks();
+
+  vi.spyOn(runMod, "kubectl").mockResolvedValue({ code: 0, stdout: JSON.stringify({ data: {} }), stderr: "" });
+  vi.spyOn(runMod, "runProcessWithStdin").mockImplementation(async (_prog, _fullArgs, stdin) => {
+    if (/kind: ClusterRole\b/.test(String(stdin))) return { code: 1, stdout: "", stderr: "connection refused" };
+    return { code: 0, stdout: "", stderr: "" };
+  });
+  const failRes = await handleAssistant(null, {
+    action: "setRbac", namespace: "default", policy: serializePolicy(DEFAULT_POLICY), rbacTarget: "active",
+  });
+  expect(failRes.code).not.toBe(0);
+  expect(failRes.stderr).toContain("connection refused");
   vi.restoreAllMocks();
 });
