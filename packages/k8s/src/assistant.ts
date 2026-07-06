@@ -444,7 +444,6 @@ const BASELINE_RULES: PolicyRule[] = [
   { apiGroups: ["metrics.k8s.io"], resources: ["pods", "nodes"], verbs: ["get", "list"] },
 ];
 
-/** Render an array of rules as ClusterRole YAML rule lines. */
 function rulesToYaml(rules: PolicyRule[]): string {
   return rules
     .map((r) => `  - apiGroups: [${r.apiGroups.map((g) => `"${g}"`).join(", ")}]\n    resources: [${r.resources.join(", ")}]\n    verbs: [${r.verbs.join(", ")}]`)
@@ -459,7 +458,7 @@ export function clusterRoleRules(policy: RbacPolicy = DEFAULT_POLICY): PolicyRul
 
 /** ServiceAccount + ClusterRole + ClusterRoleBinding + namespaced Role/RoleBinding.
  *  Keep in sync with agent/manifests/rbac.yaml. The ClusterRole's rules are the
- *  non-editable BASELINE_READ_RULES plus whatever `policy` grants (default
+ *  non-editable BASELINE_RULES plus whatever `policy` grants (default
  *  DEFAULT_POLICY renders the same effective permissions as the shipped manifest). */
 export function rbac(ns: string, policy: RbacPolicy = DEFAULT_POLICY): string {
   const ruleYaml = rulesToYaml(clusterRoleRules(policy));

@@ -25,7 +25,7 @@ import {
   type RoleSelectionInput,
   type LimitsInput,
 } from "./assistant";
-import { rbac, DEFAULT_POLICY, setCapability } from "./index";
+import { rbac, clusterRoleRules, cell, CAPABILITIES, DEFAULT_POLICY, setCapability } from "./index";
 
 function config(overrides: Partial<AssistantInstallConfig> = {}): AssistantInstallConfig {
   return {
@@ -96,6 +96,23 @@ test("rbac(DEFAULT_POLICY) renders exactly 15 ClusterRole rules with no duplicat
   const clusterRoleDoc = yaml.split("\n---\n").find((d) => /\bkind: ClusterRole\b/.test(d) && !/ClusterRoleBinding/.test(d))!;
   const ruleLines = clusterRoleDoc.split("\n").filter((l) => l.trim().startsWith("- apiGroups:"));
   expect(ruleLines).toHaveLength(15);
+});
+
+test("rbac() de-dups a stale stored policy that still holds baseline read cells", () => {
+  const stale = { cells: [...DEFAULT_POLICY.cells, cell("", "pods", "get"), cell("apps", "deployments", "watch")].sort() };
+  const yaml = rbac("default", stale);
+  const doc = yaml.split("\n---\n").find((d) => /\bkind: ClusterRole\b/.test(d) && !/ClusterRoleBinding/.test(d))!;
+  const ruleLines = doc.split("\n").filter((l) => l.trim().startsWith("- apiGroups:"));
+  expect(ruleLines).toHaveLength(15); // read cells collapse into the baseline, no extra rule
+});
+
+test("every baseline read cell is actually granted by clusterRoleRules(DEFAULT_POLICY)", () => {
+  const granted = new Set<string>();
+  for (const r of clusterRoleRules(DEFAULT_POLICY)) {
+    for (const g of r.apiGroups) for (const res of r.resources) for (const v of r.verbs) granted.add(`${g}|${res}|${v}`);
+  }
+  const readCells = CAPABILITIES.find((c) => c.id === "read")!.cells;
+  for (const c of readCells) expect(granted.has(c)).toBe(true);
 });
 
 test("install namespace applied to namespaced objects and subjects", () => {

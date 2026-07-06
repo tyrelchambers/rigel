@@ -85,7 +85,7 @@ export interface Capability {
 const READ_VERBS: Verb[] = ["get", "list", "watch"];
 const WRITE_VERBS: Verb[] = ["create", "update", "patch"];
 /** `deployments/scale`/`statefulsets/scale` reads ship as part of the non-editable
- *  baseline (see BASELINE_READ_RULES in assistant.ts), so the "read" capability
+ *  baseline (see BASELINE_RULES in assistant.ts), so the "read" capability
  *  excludes them to avoid granting/duplicating a read the policy doesn't control. */
 const SCALE_SUBRESOURCES = ["deployments/scale", "statefulsets/scale"];
 const readResources = MATRIX_RESOURCES.filter(
