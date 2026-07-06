@@ -10,7 +10,7 @@ test("clusterRoleOnly extracts just the ClusterRole document", () => {
 });
 
 test("applyPolicy applies the ClusterRole to each target context", async () => {
-  const apply = vi.fn(async () => ({ code: 0, stdout: "configured", stderr: "" }));
+  const apply = vi.fn(async (_context: string, _yaml: string) => ({ code: 0, stdout: "configured", stderr: "" }));
   const res = await applyPolicy({ policy: setCapability(DEFAULT_POLICY, "drain", true), contexts: ["ctx-a", "ctx-b"] }, { apply });
   expect(apply).toHaveBeenCalledTimes(2);
   expect(apply.mock.calls[0][0]).toBe("ctx-a");
