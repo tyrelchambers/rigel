@@ -1,6 +1,7 @@
 import { describe, test, expect } from "vitest";
 import { cell, hasCell, toggleCell, serializePolicy, parsePolicy, type RbacPolicy } from "./rbacPolicy";
 import { CAPABILITIES, DEFAULT_POLICY, capabilityState, setCapability } from "./rbacPolicy";
+import { policyToClusterRoleRules, diffPolicies } from "./rbacPolicy";
 
 const empty: RbacPolicy = { cells: [] };
 
@@ -46,5 +47,22 @@ describe("capabilities", () => {
     const cap = CAPABILITIES.find((c) => c.id === "reversible")!;
     const partial: RbacPolicy = { cells: [cap.cells[0]] };
     expect(capabilityState(partial, "reversible")).toBe("partial");
+  });
+});
+
+describe("render + diff", () => {
+  test("policyToClusterRoleRules groups cells by apiGroup+verbset into rules", () => {
+    const p: RbacPolicy = { cells: [cell("", "pods", "get"), cell("", "pods", "delete"), cell("apps", "deployments", "patch")] };
+    const rules = policyToClusterRoleRules(p);
+    // pods: {get,delete}; apps/deployments: {patch}. Order stable + sorted.
+    expect(rules).toContainEqual({ apiGroups: [""], resources: ["pods"], verbs: ["delete", "get"] });
+    expect(rules).toContainEqual({ apiGroups: ["apps"], resources: ["deployments"], verbs: ["patch"] });
+  });
+  test("diffPolicies returns added and removed cells", () => {
+    const a: RbacPolicy = { cells: [cell("", "pods", "get")] };
+    const b: RbacPolicy = { cells: [cell("", "pods", "get"), cell("apps", "deployments", "delete")] };
+    const d = diffPolicies(a, b);
+    expect(d.added).toEqual([cell("apps", "deployments", "delete")]);
+    expect(d.removed).toEqual([]);
   });
 });

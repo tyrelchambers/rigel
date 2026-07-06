@@ -151,3 +151,37 @@ export function setCapability(policy: RbacPolicy, capId: string, on: boolean): R
   if (!cap) return policy;
   return cap.cells.reduce((p, c) => toggleCell(p, c, on), policy);
 }
+
+export interface PolicyRule { apiGroups: string[]; resources: string[]; verbs: string[]; }
+
+/** Group cells into ClusterRole rules: for each (apiGroup, resource) collect its verbs,
+ *  then merge resources in the same apiGroup that share an identical verb set into one rule. */
+export function policyToClusterRoleRules(policy: RbacPolicy): PolicyRule[] {
+  const byGroupResource = new Map<string, Set<string>>(); // `${apiGroup}\n${resource}` -> verbs
+  for (const c of policy.cells) {
+    const [apiGroup, resource, verb] = c.split("|");
+    const k = `${apiGroup}\n${resource}`;
+    (byGroupResource.get(k) ?? byGroupResource.set(k, new Set()).get(k)!).add(verb);
+  }
+  const byGroupVerbset = new Map<string, { apiGroup: string; resources: string[]; verbs: string[] }>();
+  for (const [k, verbSet] of byGroupResource) {
+    const [apiGroup, resource] = k.split("\n");
+    const verbs = [...verbSet].sort();
+    const key = `${apiGroup}\n${verbs.join(",")}`;
+    const entry = byGroupVerbset.get(key) ?? byGroupVerbset.set(key, { apiGroup, resources: [], verbs }).get(key)!;
+    entry.resources.push(resource);
+  }
+  return [...byGroupVerbset.values()]
+    .map((e) => ({ apiGroups: [e.apiGroup], resources: e.resources.sort(), verbs: e.verbs }))
+    .sort((a, b) => (a.apiGroups[0] + a.resources[0]).localeCompare(b.apiGroups[0] + b.resources[0]));
+}
+
+export interface PolicyDiff { added: string[]; removed: string[]; }
+export function diffPolicies(current: RbacPolicy, next: RbacPolicy): PolicyDiff {
+  const cur = new Set(current.cells);
+  const nxt = new Set(next.cells);
+  return {
+    added: next.cells.filter((c) => !cur.has(c)).sort(),
+    removed: current.cells.filter((c) => !nxt.has(c)).sort(),
+  };
+}

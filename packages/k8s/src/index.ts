@@ -4,6 +4,7 @@
 export * from "./alerts";
 export * from "./digest";
 export * from "./commandPolicy";
+export * from "./rbacPolicy";
 
 export {
   type Severity,
