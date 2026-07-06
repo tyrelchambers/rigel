@@ -368,7 +368,9 @@ export type AssistantAction =
   | "listCredentialSecrets"
   | "setCredentialSource"
   | "clearCredentialSource"
-  | "reconcileCredentialAnnotations";
+  | "reconcileCredentialAnnotations"
+  | "getRbac"
+  | "setRbac";
 
 export interface AssistantRoleSelection {
   provider: string;
@@ -488,6 +490,11 @@ export interface AssistantRequest {
   credentialId?: keyof AssistantCredentials;
   secretName?: string;
   dataKey?: string;
+  // getRbac/setRbac — the Permissions tab's staged RbacPolicy, serialized (see
+  // @rigel/k8s serializePolicy), and which context(s) setRbac applies the
+  // rendered ClusterRole to.
+  policy?: string;
+  rbacTarget?: "active" | "all";
 }
 
 /** Shape returned by the assistant route on success (stdout is present for read
