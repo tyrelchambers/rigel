@@ -1,5 +1,5 @@
 /**
- * Cluster-scope selection for the chat composer: tells the Helmsman which
+ * Cluster-scope selection for the chat composer: tells Rigel which
  * kubeconfig contexts it may READ from this turn (active only, all, or a pick).
  * Mirrors composerModel.ts (type + label + localStorage persistence). The server
  * resolves the wire shape to a concrete read-context list; see chatScope.ts.
