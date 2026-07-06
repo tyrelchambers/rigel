@@ -599,7 +599,7 @@ export function PaneComposer({
             <button
               type="button"
               onClick={() => setScopeOpen((o) => !o)}
-              title="Choose which clusters the Helmsman may read from"
+              title="Choose which clusters Rigel may read from"
               style={{ ...pillStyle, cursor: "pointer" }}
             >
               {scopeLabel(scopeConfig)}
