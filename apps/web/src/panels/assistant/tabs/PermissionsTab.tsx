@@ -1,6 +1,6 @@
-// PermissionsTab — Simple/Advanced RBAC editor. Pencil frames jCXlB (Simple)
-// and riSgI (Advanced). Stages edits to an in-memory RbacPolicy, reviews the
-// diff, and applies it as a ClusterRole via setRbac.
+// PermissionsTab — Simple/Advanced RBAC editor. Stages edits to an in-memory
+// RbacPolicy, reviews the diff, and applies it as a ClusterRole via setRbac.
+// Scope: Apply (active cluster), Save to all clusters, or Copy to a subset.
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -12,12 +12,13 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { useContexts } from "@/lib/api";
+import { useContexts, useInstalledContexts } from "@/lib/api";
 import { useAssistantCtx } from "../AssistantContext";
 import { usePermissions } from "../permissions/usePermissions";
 import { SimpleView } from "../permissions/SimpleView";
 import { AdvancedView } from "../permissions/AdvancedView";
 import { ReviewDialog } from "../permissions/ReviewDialog";
+import { CopyToClustersDialog } from "../permissions/CopyToClustersDialog";
 
 type PermissionsView = "simple" | "advanced";
 
@@ -25,13 +26,14 @@ export function PermissionsTab() {
   const { ns } = useAssistantCtx();
   const [view, setView] = useState<PermissionsView>("simple");
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [copyOpen, setCopyOpen] = useState(false);
   const { data: contexts } = useContexts();
+  const { data: installed } = useInstalledContexts(ns);
   const perms = usePermissions(ns);
 
   const activeContextName = contexts?.find((c) => c.active)?.name ?? ns;
-  const targetLabel =
-    perms.target === "all" ? "all installed clusters" : `Active cluster · ${activeContextName}`;
-
+  const installedNames = (installed ?? []).map((c) => c.name);
+  const hasOthers = installedNames.some((n) => n !== activeContextName);
   const noChanges = perms.diff.count === 0;
 
   return (
@@ -50,33 +52,23 @@ export function PermissionsTab() {
         </TabBar>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--fg-secondary)]">
-        <span>Apply to</span>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            aria-label="Apply to"
-            className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-2.5 py-1.5 text-sm font-medium text-[var(--fg-primary)] outline-none"
+      {perms.drift && (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+          <span className="text-[12.5px] text-amber-300">
+            This cluster&apos;s live permissions differ from your saved policy.
+          </span>
+          <Button
+            variant="outline"
+            disabled={perms.applying}
+            onClick={() => perms.reapply([activeContextName])}
           >
-            {targetLabel}
-            <ChevronDown className="size-3.5 text-[var(--fg-tertiary)]" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuItem onClick={() => perms.setTarget("active")}>
-              Active cluster · {activeContextName}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => perms.setTarget("all")}>
-              All installed clusters
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+            Re-apply
+          </Button>
+        </div>
+      )}
 
       {view === "simple" ? (
-        <SimpleView
-          staged={perms.staged}
-          onToggleCapability={perms.toggleCapability}
-          disabled={perms.applying}
-        />
+        <SimpleView staged={perms.staged} onToggleCapability={perms.toggleCapability} disabled={perms.applying} />
       ) : (
         <AdvancedView staged={perms.staged} onToggleCell={perms.toggleCell} disabled={perms.applying} />
       )}
@@ -89,13 +81,35 @@ export function PermissionsTab() {
           <Button variant="ghost" disabled={noChanges} onClick={() => setReviewOpen(true)}>
             Review changes
           </Button>
-          <Button disabled={noChanges || perms.applying} onClick={() => perms.apply()}>
-            {perms.applying ? "Applying…" : "Apply"}
-          </Button>
+          <div className="flex items-center">
+            <Button disabled={noChanges || perms.applying} onClick={() => perms.apply([activeContextName])}>
+              {perms.applying ? "Applying…" : "Apply"}
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                aria-label="More apply options"
+                disabled={perms.applying || !hasOthers}
+                className="ml-1 inline-flex items-center rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-1.5 py-2 text-[var(--fg-secondary)] outline-none disabled:opacity-40"
+              >
+                <ChevronDown className="size-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  disabled={noChanges}
+                  onClick={() => perms.apply(installedNames)}
+                >
+                  Save to all clusters ({installedNames.length})
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setCopyOpen(true)}>
+                  Copy to clusters…
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
 
-      {perms.applyError && !reviewOpen && (
+      {perms.applyError && !reviewOpen && !copyOpen && (
         <p className="font-mono text-[11px] text-[var(--status-failed)]">{perms.applyError.message}</p>
       )}
 
@@ -104,10 +118,19 @@ export function PermissionsTab() {
         onOpenChange={setReviewOpen}
         applied={perms.applied}
         staged={perms.staged}
-        targetLabel={targetLabel}
+        targetLabel={`Active cluster · ${activeContextName}`}
         confirming={perms.applying}
         error={perms.applyError?.message}
-        onConfirm={() => perms.apply(() => setReviewOpen(false))}
+        onConfirm={() => perms.apply([activeContextName], () => setReviewOpen(false))}
+      />
+
+      <CopyToClustersDialog
+        open={copyOpen}
+        onOpenChange={setCopyOpen}
+        clusters={installed ?? []}
+        confirming={perms.applying}
+        error={perms.applyError?.message}
+        onConfirm={(picked) => perms.apply(picked, () => setCopyOpen(false))}
       />
     </div>
   );
