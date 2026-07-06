@@ -13,9 +13,9 @@ Follow-ups from the code review of the RBAC editor (HELM-52 / branch `feature/rb
 
 ## Decisions (agreed during design)
 
-- **Per-cluster policies.** Each cluster stores and runs its own assistant policy. A corporate operator can lock the assistant down on prod while granting more on dev; a solo user sets one policy and copies it everywhere.
-- **Copy, not broadcast.** The `active | all` target selector is removed. Editing and Apply always act on the **active** cluster only. Cross-cluster replication is an explicit, opt-in "Copy to clusters…" action.
-- **Copy the applied policy, not staged edits.** Copy is disabled while there are unsaved staged edits — the user Applies to the active cluster first, then copies what is actually saved.
+- **Per-cluster policies.** Each cluster stores and runs its own assistant policy. A corporate operator can lock the assistant down on prod while granting more on dev; a solo user sets one policy and pushes it everywhere.
+- **All mutations act on the current working (staged) policy.** No "save locally first" step — every save/copy pushes exactly what the editor currently shows, so in-progress edits reach other clusters in a single action.
+- **Three explicit scopes, one action.** The `active | all` broadcast dropdown is removed in favor of explicit buttons: **Apply** (active cluster), **Save to all clusters** (every installed cluster), and **Copy to clusters…** (a chosen subset). All three go through the same guarded review/confirm surface and the same server action, differing only in the cluster list they pass.
 - **Reads are a non-editable baseline floor.** The assistant can always read cluster state; "read" is no longer a toggle.
 - **Drift is surfaced, with a manual re-apply** until HELM-49 reconcile lands.
 
@@ -23,16 +23,19 @@ Follow-ups from the code review of the RBAC editor (HELM-52 / branch `feature/rb
 
 ### Server (`apps/server/src/assistant.ts`, `rbacApply.ts`)
 
-- `setRbac`: drop `rbacTarget`. Always `contexts = [context]`. Both `patchConfig(context, …)` and `applyPolicy({ policy, contexts: [context] })` run against the active context. Stored + live agree for that one cluster.
-- New action `copyRbac(context, namespace, { policy, targetContexts: string[] })`: for each target context, run `patchConfig(ctx, rbacConfigUpdate(policy))` **and** `applyPolicy({ policy, contexts: [ctx] })`. Collect per-context `{ context, ok, error? }` results; return them so the UI can show per-cluster outcome. Reuse `applyPolicy`/`clusterRoleOnly` — no new apply plumbing.
-- New action `installedContexts(namespace)`: expose `discoverInstalledContexts(namespace)` to the client as `{ name, active }[]` so the copy picker can list eligible clusters (managed `rigel-assistant` deployment present). Excludes the active cluster from copy targets.
+- Replace `setRbac`'s `rbacTarget` branch with a single action that takes an **explicit context list**: `setRbac(context, namespace, { policy, contexts: string[] })`. For each context in the list, run `patchConfig(ctx, rbacConfigUpdate(policy))` **and** `applyPolicy({ policy, contexts: [ctx] })` so stored + live agree on every cluster it touches. Collect per-context `{ context, ok, error? }` results and return them so the UI can show per-cluster outcome. Reuse `applyPolicy`/`clusterRoleOnly` — no new apply plumbing. This one action serves all three scopes; the client decides the list (`[active]`, all installed, or a picked subset).
+- New action `installedContexts(namespace)`: expose `discoverInstalledContexts(namespace)` to the client as `{ name, active }[]` so the UI can build the "all clusters" list and the copy-subset picker (managed `rigel-assistant` deployment present).
 
 ### Frontend (`apps/web/src/panels/assistant/`)
 
-- `PermissionsTab.tsx`: remove the `active | all` dropdown and `perms.setTarget`. Add a **"Copy to clusters…"** button next to Apply, disabled when `diff.count > 0` (unsaved edits) or when there are no other installed clusters.
-- `usePermissions.ts`: drop `target`/`setTarget`/`rbacTarget`. `apply` sends `{ action: "setRbac", namespace, policy }` (no target).
-- New `CopyToClustersDialog` (uses `ui/dialog.tsx`, per the Dialogs-not-Sheets convention): fetches `installedContexts`, renders a multi-select checkbox list of the other clusters, shows the policy being copied (reuse the review/diff dialog content), and on confirm calls `copyRbac`. Renders per-cluster success/failure on completion. Cluster selection is a checkbox list, never free text.
-- Guarded action: copy runs through the existing review/confirm surface before it mutates, consistent with every other mutation.
+- `PermissionsTab.tsx`: remove the `active | all` dropdown and `perms.setTarget`. Present three actions on the current staged policy:
+  - **Apply** (primary button) → `setRbac({ policy: staged, contexts: [activeContext] })`.
+  - **Save to all clusters** → `setRbac({ policy: staged, contexts: allInstalled })` (one click; includes in-progress edits).
+  - **Copy to clusters…** → opens the picker dialog, then `setRbac({ policy: staged, contexts: pickedSubset })`.
+  - To avoid toolbar clutter, "Save to all clusters" and "Copy to clusters…" hang off a caret/dropdown next to the primary Apply button. Both are hidden/disabled when there are no other installed clusters.
+- `usePermissions.ts`: drop `target`/`setTarget`/`rbacTarget`. The apply mutation takes an explicit `contexts` argument and sends `{ action: "setRbac", namespace, policy: serializePolicy(staged), contexts }`. All three buttons call the same mutation with different lists.
+- New `CopyToClustersDialog` (uses `ui/dialog.tsx`, per the Dialogs-not-Sheets convention): fetches `installedContexts`, renders a multi-select checkbox list of the **other** clusters (with a "select all"), shows the staged policy/diff being pushed (reuse the review/diff dialog content), and on confirm runs the mutation with the picked subset. Renders per-cluster success/failure on completion. Cluster selection is a checkbox list, never free text.
+- Guarded actions: every scope runs through the existing review/confirm surface before it mutates. The confirm names the exact cluster set being written.
 
 ## Item 1 — Drift indicator
 
@@ -65,6 +68,6 @@ Follow-ups from the code review of the RBAC editor (HELM-52 / branch `feature/rb
 ## Testing
 
 - `packages/k8s`: unit tests for `liveMatchesPolicy` (match, drift, null), the `rbac()` cross-dedup (15 rules, no dup, stale stored read cells still de-dup), `DEFAULT_POLICY` no longer contains read cells, `parsePolicy` strips baseline read cells.
-- `apps/server`: `setRbac` persists + applies to active only; `copyRbac` persists + applies to each target and reports per-context failures; `installedContexts` excludes the active/foreign contexts.
-- `apps/web`: `usePermissions` exposes `drift` and no `target`; Simple partial toggle clears; copy button disabled with unsaved edits.
+- `apps/server`: `setRbac` persists + applies to **each** context in the passed list (single active, all installed, or a subset) and reports per-context failures; a failure on one context doesn't abort the others; `installedContexts` returns only managed contexts with the `active` flag set.
+- `apps/web`: `usePermissions` exposes `drift` and no `target`; Apply / Save to all / Copy all push the current staged policy; Simple partial toggle clears in one click.
 - `pnpm --filter web typecheck`, `pnpm --filter web test`, `pnpm --filter @rigel/server test`, `pnpm --filter @rigel/k8s test`.
