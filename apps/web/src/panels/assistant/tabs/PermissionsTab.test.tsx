@@ -99,29 +99,28 @@ describe("PermissionsTab", () => {
     expect(screen.queryByText("Read everything")).not.toBeInTheDocument();
   });
 
-  it("footer hides the pending-changes count and disables actions with no staged edits", async () => {
+  it("footer hides the pending-changes count and disables Apply with no staged edits", async () => {
     wrap();
     await screen.findByText("Read everything");
-    expect(screen.getByRole("button", { name: /review changes/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /^apply$/i })).toBeDisabled();
   });
 
-  it("toggling a capability shows the pending count and enables the footer actions", async () => {
+  it("toggling a capability shows the pending count and enables Apply", async () => {
     wrap();
     await screen.findByText("Read everything");
     await userEvent.click(screen.getByRole("switch", { name: /delete workloads/i }));
     expect(await screen.findByText(/changes? pending/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /review changes/i })).toBeEnabled();
     expect(screen.getByRole("button", { name: /^apply$/i })).toBeEnabled();
   });
 
-  it("Review changes opens the ReviewDialog with the diff", async () => {
+  it("Apply opens the ReviewDialog showing the diff and the active cluster", async () => {
     wrap();
     await screen.findByText("Read everything");
     await userEvent.click(screen.getByRole("switch", { name: /delete workloads/i }));
-    await userEvent.click(screen.getByRole("button", { name: /review changes/i }));
+    await userEvent.click(screen.getByRole("button", { name: /^apply$/i }));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("Review changes")).toBeInTheDocument();
+    expect(within(dialog).getByText(/Active cluster · kind-dev/)).toBeInTheDocument();
   });
 
   it("a failed apply keeps the ReviewDialog open and shows the error instead of reporting success", async () => {
@@ -129,34 +128,36 @@ describe("PermissionsTab", () => {
     wrap();
     await screen.findByText("Read everything");
     await userEvent.click(screen.getByRole("switch", { name: /delete workloads/i }));
-    await userEvent.click(screen.getByRole("button", { name: /review changes/i }));
+    await userEvent.click(screen.getByRole("button", { name: /^apply$/i }));
     const dialog = await screen.findByRole("dialog");
     await userEvent.click(within(dialog).getByRole("button", { name: /^apply$/i }));
     expect(await within(dialog).findByText(/Failed to apply RBAC to kind-dev: Forbidden/)).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
-  it("a failed apply from the footer Apply button shows the error inline", async () => {
+  it("a failed Re-apply from the drift banner shows the error inline", async () => {
     failSetRbac = true;
+    appliedRules = clusterRoleRules(setCapability(DEFAULT_POLICY, "deleteWorkloads", true));
     wrap();
-    await screen.findByText("Read everything");
-    await userEvent.click(screen.getByRole("switch", { name: /delete workloads/i }));
-    await userEvent.click(screen.getByRole("button", { name: /^apply$/i }));
+    await screen.findByText(/live permissions differ from your saved policy/i);
+    await userEvent.click(screen.getByRole("button", { name: /re-apply/i }));
     expect(await screen.findByText(/Failed to apply RBAC to kind-dev: Forbidden/)).toBeInTheDocument();
   });
 
-  it("Apply applies to the active context only", async () => {
+  it("Apply confirms then applies to the active context only", async () => {
     const { unmount } = wrap();
     const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
     await screen.findByText("Read everything");
     await userEvent.click(screen.getByRole("switch", { name: /delete workloads/i }));
     await userEvent.click(screen.getByRole("button", { name: /^apply$/i }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: /^apply$/i }));
     await vi.waitFor(() => expect(setRbacBodies(fetchMock).length).toBeGreaterThan(0));
     expect(setRbacBodies(fetchMock)[0]).toEqual(expect.objectContaining({ contexts: ["kind-dev"] }));
     unmount();
   });
 
-  it("Save to all clusters applies to every installed context", async () => {
+  it("Save to all clusters confirms then applies to every installed context", async () => {
     installedContexts = [
       { name: "kind-dev", active: true },
       { name: "prod-cluster", active: false },
@@ -167,10 +168,32 @@ describe("PermissionsTab", () => {
     await userEvent.click(screen.getByRole("switch", { name: /delete workloads/i }));
     await userEvent.click(screen.getByRole("button", { name: /more apply options/i }));
     await userEvent.click(await screen.findByRole("menuitem", { name: /save to all clusters/i }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(/All installed clusters \(2\)/)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: /^apply$/i }));
     await vi.waitFor(() => expect(setRbacBodies(fetchMock).length).toBeGreaterThan(0));
     expect(setRbacBodies(fetchMock)[0]).toEqual(
       expect.objectContaining({ contexts: ["kind-dev", "prod-cluster"] }),
     );
+    unmount();
+  });
+
+  it("Copy to clusters confirms then applies to the picked subset", async () => {
+    installedContexts = [
+      { name: "kind-dev", active: true },
+      { name: "prod-cluster", active: false },
+    ];
+    const { unmount } = wrap();
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    await screen.findByText("Read everything");
+    await userEvent.click(screen.getByRole("switch", { name: /delete workloads/i }));
+    await userEvent.click(screen.getByRole("button", { name: /more apply options/i }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: /copy to clusters/i }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("checkbox", { name: "prod-cluster" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: /copy/i }));
+    await vi.waitFor(() => expect(setRbacBodies(fetchMock).length).toBeGreaterThan(0));
+    expect(setRbacBodies(fetchMock)[0]).toEqual(expect.objectContaining({ contexts: ["prod-cluster"] }));
     unmount();
   });
 

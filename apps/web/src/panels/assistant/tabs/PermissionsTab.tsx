@@ -1,6 +1,7 @@
 // PermissionsTab — Simple/Advanced RBAC editor. Stages edits to an in-memory
 // RbacPolicy, reviews the diff, and applies it as a ClusterRole via setRbac.
-// Scope: Apply (active cluster), Save to all clusters, or Copy to a subset.
+// Scope: Apply (active cluster), Save to all clusters, or Copy to a subset —
+// each confirmed through a dialog that shows the diff and names the cluster set.
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -21,11 +22,12 @@ import { ReviewDialog } from "../permissions/ReviewDialog";
 import { CopyToClustersDialog } from "../permissions/CopyToClustersDialog";
 
 type PermissionsView = "simple" | "advanced";
+type PendingApply = { contexts: string[]; label: string };
 
 export function PermissionsTab() {
   const { ns } = useAssistantCtx();
   const [view, setView] = useState<PermissionsView>("simple");
-  const [reviewOpen, setReviewOpen] = useState(false);
+  const [pending, setPending] = useState<PendingApply | null>(null);
   const [copyOpen, setCopyOpen] = useState(false);
   const { data: contexts } = useContexts();
   const { data: installed } = useInstalledContexts(ns);
@@ -78,11 +80,13 @@ export function PermissionsTab() {
           {perms.diff.count} change{perms.diff.count === 1 ? "" : "s"} pending
         </span>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" disabled={noChanges} onClick={() => setReviewOpen(true)}>
-            Review changes
-          </Button>
           <div className="flex items-center">
-            <Button disabled={noChanges || perms.applying} onClick={() => perms.apply([activeContextName])}>
+            <Button
+              disabled={noChanges || perms.applying}
+              onClick={() =>
+                setPending({ contexts: [activeContextName], label: `Active cluster · ${activeContextName}` })
+              }
+            >
               {perms.applying ? "Applying…" : "Apply"}
             </Button>
             <DropdownMenu>
@@ -96,7 +100,12 @@ export function PermissionsTab() {
               <DropdownMenuContent align="end">
                 <DropdownMenuItem
                   disabled={noChanges}
-                  onClick={() => perms.apply(installedNames)}
+                  onClick={() =>
+                    setPending({
+                      contexts: installedNames,
+                      label: `All installed clusters (${installedNames.length})`,
+                    })
+                  }
                 >
                   Save to all clusters ({installedNames.length})
                 </DropdownMenuItem>
@@ -109,25 +118,27 @@ export function PermissionsTab() {
         </div>
       </div>
 
-      {perms.applyError && !reviewOpen && !copyOpen && (
+      {perms.applyError && pending === null && !copyOpen && (
         <p className="font-mono text-[11px] text-[var(--status-failed)]">{perms.applyError.message}</p>
       )}
 
       <ReviewDialog
-        open={reviewOpen}
-        onOpenChange={setReviewOpen}
+        open={pending !== null}
+        onOpenChange={() => setPending(null)}
         applied={perms.applied}
         staged={perms.staged}
-        targetLabel={`Active cluster · ${activeContextName}`}
+        targetLabel={pending?.label ?? ""}
         confirming={perms.applying}
         error={perms.applyError?.message}
-        onConfirm={() => perms.apply([activeContextName], () => setReviewOpen(false))}
+        onConfirm={() => pending && perms.apply(pending.contexts, () => setPending(null))}
       />
 
       <CopyToClustersDialog
         open={copyOpen}
         onOpenChange={setCopyOpen}
         clusters={installed ?? []}
+        applied={perms.applied}
+        staged={perms.staged}
         confirming={perms.applying}
         error={perms.applyError?.message}
         onConfirm={(picked) => perms.apply(picked, () => setCopyOpen(false))}
