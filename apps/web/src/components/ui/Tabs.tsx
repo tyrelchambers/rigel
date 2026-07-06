@@ -55,6 +55,7 @@ export function Tab({
   icon: Icon,
   badge,
   disabled,
+  className,
   children,
 }: {
   value: string;
@@ -62,6 +63,8 @@ export function Tab({
   /** Trailing count badge; hidden when null/0. */
   badge?: number;
   disabled?: boolean;
+  /** Extra classes, e.g. `flex-1 justify-center` for full-width segments. */
+  className?: string;
   children: ReactNode;
 }) {
   const ctx = use(TabBarContext);
@@ -80,6 +83,7 @@ export function Tab({
         isActive
           ? "bg-white/[0.08] font-semibold text-[var(--fg-primary)]"
           : "font-normal text-[var(--fg-secondary)] hover:text-[var(--fg-primary)]",
+        className,
       )}
     >
       {Icon && (

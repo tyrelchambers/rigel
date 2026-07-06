@@ -192,10 +192,23 @@ export function sortByTimestamp(lines: LogLine[]): LogLine[] {
   });
 }
 
-/** Format a parsed timestamp as "HH:MM:SS" (24h, local). "" when null. */
-export function formatTimestamp(ts: Date | null): string {
+/**
+ * Format a parsed timestamp as "HH:MM:SS" (24h, local), or "HH:MM:SS.mmm" with
+ * `withMillis`. "" when null.
+ */
+export function formatTimestamp(ts: Date | null, withMillis = false): string {
   if (!ts) return "";
-  return format(ts, "HH:mm:ss");
+  return format(ts, withMillis ? "HH:mm:ss.SSS" : "HH:mm:ss");
+}
+
+/**
+ * The trailing segment of a pod name (its ReplicaSet/hash suffix), for the
+ * compact colored pod column. "big-o-6c9f-r929r" → "r929r"; a name with no
+ * dash is returned whole. The full name is still available for the tooltip.
+ */
+export function shortPodId(podName: string): string {
+  const i = podName.lastIndexOf("-");
+  return i >= 0 ? podName.slice(i + 1) : podName;
 }
 
 // --- Sidebar (deployment list) helpers -------------------------------------

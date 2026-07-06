@@ -39,18 +39,22 @@ describe("buildSidebarItems", () => {
     const [it0] = buildSidebarItems(resources, "deployments", "");
     expect(it0).toMatchObject({
       key: "default/web", name: "web", namespace: "default",
-      statusText: "1/2", unhealthy: true, selector: "app=web", pod: null,
+      statusText: "1/2", unhealthy: true, healthState: "degraded", selector: "app=web", pod: null,
     });
   });
   it("daemonset → numberReady/desired", () => {
     const [it0] = buildSidebarItems(resources, "daemonsets", "");
-    expect(it0).toMatchObject({ statusText: "3/3", unhealthy: false, selector: "app=fluentd", pod: null });
+    expect(it0).toMatchObject({ statusText: "3/3", unhealthy: false, healthState: "running", selector: "app=fluentd", pod: null });
+  });
+  it("workload with zero replicas → stopped", () => {
+    const scaled = { deployments: { "default/idle": { metadata: { name: "idle", namespace: "default" }, status: { readyReplicas: 0, replicas: 0 } } } };
+    expect(buildSidebarItems(scaled, "deployments", "")[0]).toMatchObject({ statusText: "0/0", healthState: "stopped" });
   });
   it("pod → phase as status, pod set, no selector; unhealthy when not Running", () => {
     const items = buildSidebarItems(resources, "pods", "");
     expect(items.map((i) => i.name)).toEqual(["web-abc", "web-def"]);
-    expect(items[0]).toMatchObject({ statusText: "Running", unhealthy: false, pod: "web-abc", selector: null });
-    expect(items[1]).toMatchObject({ statusText: "CrashLoopBackOff", unhealthy: true, pod: "web-def" });
+    expect(items[0]).toMatchObject({ statusText: "Running", unhealthy: false, healthState: "running", pod: "web-abc", selector: null });
+    expect(items[1]).toMatchObject({ statusText: "CrashLoopBackOff", unhealthy: true, healthState: "degraded", pod: "web-def" });
   });
   it("search matches by name (case-insensitive)", () => {
     expect(buildSidebarItems(resources, "pods", "ABC").map((i) => i.name)).toEqual(["web-abc"]);

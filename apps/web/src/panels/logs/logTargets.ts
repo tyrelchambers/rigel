@@ -13,6 +13,9 @@ export const LOG_KINDS: { kind: LogKind; label: string }[] = [
   { kind: "pods", label: "Pods" },
 ];
 
+/** Coarse run state driving the source row's status bar color. */
+export type HealthState = "running" | "degraded" | "stopped";
+
 /** A uniform sidebar row across all kinds. */
 export interface SidebarItem {
   key: string;
@@ -22,6 +25,8 @@ export interface SidebarItem {
   statusText: string;
   /** True when not fully ready / not Running (status shown in red). */
   unhealthy: boolean;
+  /** Coarse run state: running (green), degraded (amber), stopped (gray). */
+  healthState: HealthState;
   /** Label selector to tail (workloads); null for pods. */
   selector: string | null;
   /** Pod name to tail (pods); null for workloads. */
@@ -38,10 +43,11 @@ interface RawObj {
   };
 }
 
-function statusFor(kind: LogKind, o: RawObj): { statusText: string; unhealthy: boolean } {
+function statusFor(kind: LogKind, o: RawObj): { statusText: string; unhealthy: boolean; healthState: HealthState } {
   if (kind === "pods") {
     const phase = o.status?.phase ?? "Unknown";
-    return { statusText: phase, unhealthy: phase !== "Running" && phase !== "Succeeded" };
+    const running = phase === "Running" || phase === "Succeeded";
+    return { statusText: phase, unhealthy: !running, healthState: running ? "running" : "degraded" };
   }
   let ready = 0;
   let total = 0;
@@ -52,7 +58,8 @@ function statusFor(kind: LogKind, o: RawObj): { statusText: string; unhealthy: b
     ready = o.status?.readyReplicas ?? 0;
     total = o.status?.replicas ?? 0;
   }
-  return { statusText: `${ready}/${total}`, unhealthy: ready < total };
+  const healthState: HealthState = total === 0 ? "stopped" : ready >= total ? "running" : "degraded";
+  return { statusText: `${ready}/${total}`, unhealthy: ready < total, healthState };
 }
 
 /** Build the sorted, search-filtered sidebar list for one kind. */
@@ -68,13 +75,14 @@ export function buildSidebarItems(
     const name = o.metadata?.name ?? "";
     const namespace = o.metadata?.namespace ?? "default";
     if (q && !name.toLowerCase().includes(q) && !namespace.toLowerCase().includes(q)) continue;
-    const { statusText, unhealthy } = statusFor(kind, o);
+    const { statusText, unhealthy, healthState } = statusFor(kind, o);
     items.push({
       key: `${namespace}/${name}`,
       name,
       namespace,
       statusText,
       unhealthy,
+      healthState,
       selector: kind === "pods" ? null : labelSelector(o),
       pod: kind === "pods" ? name : null,
     });

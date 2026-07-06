@@ -10,6 +10,7 @@ import {
   distinctContainers,
   sortByTimestamp,
   formatTimestamp,
+  shortPodId,
   podColor,
   deploymentColor,
   deploymentKey,
@@ -145,6 +146,22 @@ describe("formatTimestamp", () => {
     const d = new Date(2025, 5, 9, 17, 5, 3);
     expect(formatTimestamp(d)).toBe("17:05:03");
     expect(formatTimestamp(null)).toBe("");
+  });
+  it("includes milliseconds with withMillis", () => {
+    const d = new Date(2025, 5, 9, 17, 5, 3, 42);
+    expect(formatTimestamp(d, true)).toBe("17:05:03.042");
+    expect(formatTimestamp(null, true)).toBe("");
+  });
+});
+
+describe("shortPodId", () => {
+  it("returns the trailing hash segment", () => {
+    expect(shortPodId("big-o-6c9f-r929r")).toBe("r929r");
+    expect(shortPodId("web-abc")).toBe("abc");
+  });
+  it("returns a dashless name whole", () => {
+    expect(shortPodId("mysql")).toBe("mysql");
+    expect(shortPodId("")).toBe("");
   });
 });
 
