@@ -25,6 +25,7 @@ import {
   type RoleSelectionInput,
   type LimitsInput,
 } from "./assistant";
+import { rbac, DEFAULT_POLICY, setCapability } from "./index";
 
 function config(overrides: Partial<AssistantInstallConfig> = {}): AssistantInstallConfig {
   return {
@@ -75,6 +76,19 @@ test("kill switch starts enabled", () => {
 
 test("RBAC cage never grants secrets access", () => {
   expect(manifestYAML(config()).toLowerCase()).not.toContain("secrets");
+});
+
+test("rbac(ns) with DEFAULT_POLICY renders the shipped ClusterRole verbs", () => {
+  const yaml = rbac("default");
+  expect(yaml).toMatch(/kind: ClusterRole/);
+  expect(yaml).toMatch(/resources: \[pods\]\n\s+verbs: \[.*delete.*\]/); // pod delete on by default
+  expect(yaml).not.toMatch(/deployments.*\n\s*verbs:.*delete/); // no workload delete by default
+  expect(yaml).not.toMatch(/secrets/); // secrets omitted by default
+});
+
+test("rbac(ns, policy) with deleteWorkloads enabled grants deployment delete", () => {
+  const p = setCapability(DEFAULT_POLICY, "deleteWorkloads", true);
+  expect(rbac("default", p)).toMatch(/deployments/);
 });
 
 test("install namespace applied to namespaced objects and subjects", () => {

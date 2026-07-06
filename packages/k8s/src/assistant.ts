@@ -15,6 +15,7 @@ import { differenceInMilliseconds } from "date-fns";
 import { millisecondsInSecond, secondsInDay } from "date-fns/constants";
 
 import type { SuggestedAction } from "./actionBlocks";
+import { policyToClusterRoleRules, DEFAULT_POLICY, type RbacPolicy } from "./rbacPolicy";
 
 // ---------------------------------------------------------------------------
 // Install configuration (mirrors Swift AssistantInstallConfig)
@@ -427,25 +428,9 @@ type: Opaque
 ${stringData}`;
 }
 
-/** ServiceAccount + ClusterRole + ClusterRoleBinding + namespaced Role/RoleBinding.
- *  Keep in sync with agent/manifests/rbac.yaml. */
-export function rbac(ns: string): string {
-  return `apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: rigel-assistant
-  namespace: ${ns}
-  labels:
-    app.kubernetes.io/managed-by: rigel-assistant
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: rigel-assistant
-  labels:
-    app.kubernetes.io/managed-by: rigel-assistant
-rules:
-  - apiGroups: [""]
+/** Non-editable baseline reads: diagnosis/audits/alerts need these regardless of
+ *  the policy, so they always ship ahead of the policy-rendered rules below. */
+const BASELINE_READ_RULES = `  - apiGroups: [""]
     resources: [pods, pods/log, pods/status, nodes, events, namespaces, services,
                 endpoints, persistentvolumeclaims, persistentvolumes,
                 replicationcontrollers, configmaps, serviceaccounts, resourcequotas, limitranges]
@@ -473,25 +458,33 @@ rules:
     verbs: [get, list, watch]
   - apiGroups: ["metrics.k8s.io"]
     resources: [pods, nodes]
-    verbs: [get, list]
-  - apiGroups: [""]
-    resources: [pods, services, configmaps, persistentvolumeclaims]
-    verbs: [create, update, patch]
-  - apiGroups: ["apps"]
-    resources: [deployments, replicasets, statefulsets, daemonsets, deployments/scale, statefulsets/scale]
-    verbs: [create, update, patch]
-  - apiGroups: ["batch"]
-    resources: [jobs, cronjobs]
-    verbs: [create, update, patch]
-  - apiGroups: ["networking.k8s.io"]
-    resources: [ingresses]
-    verbs: [create, update, patch]
-  - apiGroups: [""]
-    resources: [pods]
-    verbs: [delete]
-  - apiGroups: [""]
-    resources: [nodes]
-    verbs: [patch]
+    verbs: [get, list]`;
+
+/** ServiceAccount + ClusterRole + ClusterRoleBinding + namespaced Role/RoleBinding.
+ *  Keep in sync with agent/manifests/rbac.yaml. The ClusterRole's rules are the
+ *  non-editable BASELINE_READ_RULES plus whatever `policy` grants (default
+ *  DEFAULT_POLICY renders the same effective permissions as the shipped manifest). */
+export function rbac(ns: string, policy: RbacPolicy = DEFAULT_POLICY): string {
+  const policyRuleYaml = policyToClusterRoleRules(policy)
+    .map((r) => `  - apiGroups: [${r.apiGroups.map((g) => `"${g}"`).join(", ")}]\n    resources: [${r.resources.join(", ")}]\n    verbs: [${r.verbs.join(", ")}]`)
+    .join("\n");
+  const ruleYaml = [BASELINE_READ_RULES, policyRuleYaml].filter(Boolean).join("\n");
+  return `apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rigel-assistant
+  namespace: ${ns}
+  labels:
+    app.kubernetes.io/managed-by: rigel-assistant
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rigel-assistant
+  labels:
+    app.kubernetes.io/managed-by: rigel-assistant
+rules:
+${ruleYaml}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
