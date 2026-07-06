@@ -91,6 +91,13 @@ test("rbac(ns, policy) with deleteWorkloads enabled grants deployment delete", (
   expect(rbac("default", p)).toMatch(/deployments/);
 });
 
+test("rbac(DEFAULT_POLICY) renders exactly 15 ClusterRole rules with no duplicate read", () => {
+  const yaml = rbac("default");
+  const clusterRoleDoc = yaml.split("\n---\n").find((d) => /\bkind: ClusterRole\b/.test(d) && !/ClusterRoleBinding/.test(d))!;
+  const ruleLines = clusterRoleDoc.split("\n").filter((l) => l.trim().startsWith("- apiGroups:"));
+  expect(ruleLines).toHaveLength(15);
+});
+
 test("install namespace applied to namespaced objects and subjects", () => {
   const yaml = manifestYAML(config({ installNamespace: "agents" }));
   expect(yaml).toContain("namespace: agents");

@@ -173,6 +173,7 @@ export {
   namespaceYAML,
   secretYAML,
   rbac,
+  clusterRoleRules,
   configMaps,
   deployment,
   manifestYAML,

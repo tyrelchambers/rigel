@@ -15,7 +15,7 @@ import { differenceInMilliseconds } from "date-fns";
 import { millisecondsInSecond, secondsInDay } from "date-fns/constants";
 
 import type { SuggestedAction } from "./actionBlocks";
-import { policyToClusterRoleRules, DEFAULT_POLICY, type RbacPolicy } from "./rbacPolicy";
+import { policyToClusterRoleRules, subtractBaseline, DEFAULT_POLICY, type PolicyRule, type RbacPolicy } from "./rbacPolicy";
 
 // ---------------------------------------------------------------------------
 // Install configuration (mirrors Swift AssistantInstallConfig)
@@ -429,46 +429,40 @@ ${stringData}`;
 }
 
 /** Non-editable baseline reads: diagnosis/audits/alerts need these regardless of
- *  the policy, so they always ship ahead of the policy-rendered rules below. */
-const BASELINE_READ_RULES = `  - apiGroups: [""]
-    resources: [pods, pods/log, pods/status, nodes, events, namespaces, services,
-                endpoints, persistentvolumeclaims, persistentvolumes,
-                replicationcontrollers, configmaps, serviceaccounts, resourcequotas, limitranges]
-    verbs: [get, list, watch]
-  - apiGroups: [""]
-    resources: [services/proxy]
-    verbs: [get]
-  - apiGroups: ["apps"]
-    resources: [deployments, replicasets, statefulsets, daemonsets, deployments/scale, statefulsets/scale]
-    verbs: [get, list, watch]
-  - apiGroups: ["batch"]
-    resources: [jobs, cronjobs]
-    verbs: [get, list, watch]
-  - apiGroups: ["policy"]
-    resources: [poddisruptionbudgets]
-    verbs: [get, list, watch]
-  - apiGroups: ["autoscaling"]
-    resources: [horizontalpodautoscalers]
-    verbs: [get, list, watch]
-  - apiGroups: ["networking.k8s.io"]
-    resources: [ingresses, networkpolicies]
-    verbs: [get, list, watch]
-  - apiGroups: ["events.k8s.io"]
-    resources: [events]
-    verbs: [get, list, watch]
-  - apiGroups: ["metrics.k8s.io"]
-    resources: [pods, nodes]
-    verbs: [get, list]`;
+ *  the policy, so they always ship ahead of the policy-rendered rules. Structured
+ *  (not a YAML string) so both the manifest and the drift compare render from one
+ *  source and no read is duplicated. */
+const BASELINE_RULES: PolicyRule[] = [
+  { apiGroups: [""], resources: ["pods", "pods/log", "pods/status", "nodes", "events", "namespaces", "services", "endpoints", "persistentvolumeclaims", "persistentvolumes", "replicationcontrollers", "configmaps", "serviceaccounts", "resourcequotas", "limitranges"], verbs: ["get", "list", "watch"] },
+  { apiGroups: [""], resources: ["services/proxy"], verbs: ["get"] },
+  { apiGroups: ["apps"], resources: ["deployments", "replicasets", "statefulsets", "daemonsets", "deployments/scale", "statefulsets/scale"], verbs: ["get", "list", "watch"] },
+  { apiGroups: ["batch"], resources: ["jobs", "cronjobs"], verbs: ["get", "list", "watch"] },
+  { apiGroups: ["policy"], resources: ["poddisruptionbudgets"], verbs: ["get", "list", "watch"] },
+  { apiGroups: ["autoscaling"], resources: ["horizontalpodautoscalers"], verbs: ["get", "list", "watch"] },
+  { apiGroups: ["networking.k8s.io"], resources: ["ingresses", "networkpolicies"], verbs: ["get", "list", "watch"] },
+  { apiGroups: ["events.k8s.io"], resources: ["events"], verbs: ["get", "list", "watch"] },
+  { apiGroups: ["metrics.k8s.io"], resources: ["pods", "nodes"], verbs: ["get", "list"] },
+];
+
+/** Render an array of rules as ClusterRole YAML rule lines. */
+function rulesToYaml(rules: PolicyRule[]): string {
+  return rules
+    .map((r) => `  - apiGroups: [${r.apiGroups.map((g) => `"${g}"`).join(", ")}]\n    resources: [${r.resources.join(", ")}]\n    verbs: [${r.verbs.join(", ")}]`)
+    .join("\n");
+}
+
+/** The full ClusterRole rule set: the non-editable baseline plus the policy's
+ *  own rules with any baseline-covered read removed (structural de-dup). */
+export function clusterRoleRules(policy: RbacPolicy = DEFAULT_POLICY): PolicyRule[] {
+  return [...BASELINE_RULES, ...policyToClusterRoleRules(subtractBaseline(policy))];
+}
 
 /** ServiceAccount + ClusterRole + ClusterRoleBinding + namespaced Role/RoleBinding.
  *  Keep in sync with agent/manifests/rbac.yaml. The ClusterRole's rules are the
  *  non-editable BASELINE_READ_RULES plus whatever `policy` grants (default
  *  DEFAULT_POLICY renders the same effective permissions as the shipped manifest). */
 export function rbac(ns: string, policy: RbacPolicy = DEFAULT_POLICY): string {
-  const policyRuleYaml = policyToClusterRoleRules(policy)
-    .map((r) => `  - apiGroups: [${r.apiGroups.map((g) => `"${g}"`).join(", ")}]\n    resources: [${r.resources.join(", ")}]\n    verbs: [${r.verbs.join(", ")}]`)
-    .join("\n");
-  const ruleYaml = [BASELINE_READ_RULES, policyRuleYaml].filter(Boolean).join("\n");
+  const ruleYaml = rulesToYaml(clusterRoleRules(policy));
   return `apiVersion: v1
 kind: ServiceAccount
 metadata:

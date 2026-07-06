@@ -48,7 +48,7 @@ export function hasCell(policy: RbacPolicy, c: string): boolean {
 
 /** Add or remove a cell; result stays sorted + deduped. Ignores non-representable cells. */
 export function toggleCell(policy: RbacPolicy, c: string, on: boolean): RbacPolicy {
-  if (on && !REPRESENTABLE.has(c)) return policy;
+  if (on && (!REPRESENTABLE.has(c) || isBaselineReadCell(c))) return policy;
   const set = new Set(policy.cells);
   if (on) set.add(c);
   else set.delete(c);
@@ -56,7 +56,7 @@ export function toggleCell(policy: RbacPolicy, c: string, on: boolean): RbacPoli
 }
 
 export function serializePolicy(policy: RbacPolicy): string {
-  return JSON.stringify({ cells: [...new Set(policy.cells)].filter((c) => REPRESENTABLE.has(c)).sort() });
+  return JSON.stringify({ cells: [...new Set(policy.cells)].filter((c) => REPRESENTABLE.has(c) && !isBaselineReadCell(c)).sort() });
 }
 
 export function parsePolicy(json: string | undefined): RbacPolicy {
@@ -64,7 +64,7 @@ export function parsePolicy(json: string | undefined): RbacPolicy {
   try {
     const raw = JSON.parse(json) as { cells?: unknown };
     const cells = Array.isArray(raw.cells) ? raw.cells.filter((c): c is string => typeof c === "string") : [];
-    return { cells: [...new Set(cells)].filter((c) => REPRESENTABLE.has(c)).sort() };
+    return { cells: [...new Set(cells)].filter((c) => REPRESENTABLE.has(c) && !isBaselineReadCell(c)).sort() };
   } catch {
     return { cells: [] };
   }
@@ -78,6 +78,8 @@ export interface Capability {
   risk: Risk;
   /** The exact cells this capability grants. */
   cells: string[];
+  /** Baseline capabilities are always-on and non-editable (rendered informational). */
+  baseline?: boolean;
 }
 
 const READ_VERBS: Verb[] = ["get", "list", "watch"];
@@ -96,6 +98,7 @@ const writeResources = MATRIX_RESOURCES.filter(
 export const CAPABILITIES: Capability[] = [
   {
     id: "read", label: "Read everything", description: "Inspect any resource except Secrets", risk: "safe",
+    baseline: true,
     cells: readResources.flatMap((r) => READ_VERBS.map((v) => cell(r.apiGroup, r.resource, v))),
   },
   {
@@ -134,8 +137,23 @@ export const CAPABILITIES: Capability[] = [
 const CAP_BY_ID = new Map(CAPABILITIES.map((c) => [c.id, c]));
 
 export const DEFAULT_POLICY: RbacPolicy = {
-  cells: [...new Set(["read", "reversible", "deletePods", "cordon"].flatMap((id) => CAP_BY_ID.get(id)!.cells))].sort(),
+  cells: [...new Set(["reversible", "deletePods", "cordon"].flatMap((id) => CAP_BY_ID.get(id)!.cells))].sort(),
 };
+
+/** The get/list/watch cells that ship as part of the non-editable baseline
+ *  (BASELINE_RULES in assistant.ts). Equal to what the old "read" capability
+ *  granted; the capability stays for display but is baseline-managed now. */
+const BASELINE_READ_CELLS = new Set(CAP_BY_ID.get("read")!.cells);
+
+export function isBaselineReadCell(c: string): boolean {
+  return BASELINE_READ_CELLS.has(c);
+}
+
+/** Remove any baseline read cell so the rendered ClusterRole never duplicates a
+ *  read the baseline already grants — regardless of what a stored policy holds. */
+export function subtractBaseline(policy: RbacPolicy): RbacPolicy {
+  return { cells: policy.cells.filter((c) => !BASELINE_READ_CELLS.has(c)) };
+}
 
 export function capabilityState(policy: RbacPolicy, capId: string): "on" | "off" | "partial" {
   const cap = CAP_BY_ID.get(capId);

@@ -2,6 +2,7 @@ import { describe, test, expect } from "vitest";
 import { cell, hasCell, toggleCell, serializePolicy, parsePolicy, type RbacPolicy } from "./rbacPolicy";
 import { CAPABILITIES, DEFAULT_POLICY, capabilityState, setCapability } from "./rbacPolicy";
 import { policyToClusterRoleRules, diffPolicies } from "./rbacPolicy";
+import { isBaselineReadCell, subtractBaseline } from "./rbacPolicy";
 
 const empty: RbacPolicy = { cells: [] };
 
@@ -11,25 +12,25 @@ describe("cell primitives", () => {
     expect(cell("apps", "deployments", "patch")).toBe("apps|deployments|patch");
   });
   test("toggleCell adds and removes, stays sorted + deduped", () => {
-    let p = toggleCell(empty, cell("", "pods", "get"), true);
+    let p = toggleCell(empty, cell("", "pods", "delete"), true);
     p = toggleCell(p, cell("apps", "deployments", "patch"), true);
-    p = toggleCell(p, cell("", "pods", "get"), true); // idempotent add
-    expect(p.cells).toEqual(["apps|deployments|patch", "|pods|get"]);
-    expect(hasCell(p, cell("", "pods", "get"))).toBe(true);
-    p = toggleCell(p, cell("", "pods", "get"), false);
-    expect(hasCell(p, cell("", "pods", "get"))).toBe(false);
+    p = toggleCell(p, cell("", "pods", "delete"), true); // idempotent add
+    expect(p.cells).toEqual(["apps|deployments|patch", "|pods|delete"]);
+    expect(hasCell(p, cell("", "pods", "delete"))).toBe(true);
+    p = toggleCell(p, cell("", "pods", "delete"), false);
+    expect(hasCell(p, cell("", "pods", "delete"))).toBe(false);
   });
   test("serialize/parse round-trips and drops unknown/unrepresentable cells", () => {
-    const p: RbacPolicy = { cells: [cell("", "pods", "get"), cell("rbac.authorization.k8s.io", "roles", "create")] };
+    const p: RbacPolicy = { cells: [cell("", "pods", "delete"), cell("rbac.authorization.k8s.io", "roles", "create")] };
     const parsed = parsePolicy(serializePolicy(p));
     // roles are not representable → filtered on parse (no self-escalation)
-    expect(parsed.cells).toEqual([cell("", "pods", "get")]);
+    expect(parsed.cells).toEqual([cell("", "pods", "delete")]);
   });
 });
 
 describe("capabilities", () => {
-  test("DEFAULT_POLICY = read + reversible + pod-delete + node-patch (destructive off)", () => {
-    expect(capabilityState(DEFAULT_POLICY, "read")).toBe("on");
+  test("DEFAULT_POLICY = reversible + pod-delete + node-patch; read is baseline; destructive off", () => {
+    expect(capabilityState(DEFAULT_POLICY, "read")).toBe("off"); // reads are baseline now, not policy cells
     expect(capabilityState(DEFAULT_POLICY, "reversible")).toBe("on");
     expect(capabilityState(DEFAULT_POLICY, "deletePods")).toBe("on");
     expect(capabilityState(DEFAULT_POLICY, "cordon")).toBe("on");
@@ -64,5 +65,25 @@ describe("render + diff", () => {
     const d = diffPolicies(a, b);
     expect(d.added).toEqual([cell("apps", "deployments", "delete")]);
     expect(d.removed).toEqual([]);
+  });
+});
+
+describe("read baseline floor", () => {
+  test("DEFAULT_POLICY no longer contains read cells", () => {
+    // Reads ship as the non-editable baseline, not as policy cells.
+    expect(DEFAULT_POLICY.cells.some((c) => isBaselineReadCell(c))).toBe(false);
+  });
+
+  test("isBaselineReadCell matches get/list/watch on baseline-covered resources only", () => {
+    expect(isBaselineReadCell(cell("", "pods", "get"))).toBe(true);
+    expect(isBaselineReadCell(cell("apps", "deployments", "watch"))).toBe(true);
+    expect(isBaselineReadCell(cell("", "pods", "delete"))).toBe(false); // write verb
+    expect(isBaselineReadCell(cell("", "secrets", "get"))).toBe(false); // secrets never baseline
+    expect(isBaselineReadCell(cell("", "nodes", "patch"))).toBe(false); // cordon, editable
+  });
+
+  test("subtractBaseline drops baseline read cells, keeps the rest", () => {
+    const p = { cells: [cell("", "pods", "get"), cell("", "pods", "delete")].sort() };
+    expect(subtractBaseline(p).cells).toEqual([cell("", "pods", "delete")]);
   });
 });
