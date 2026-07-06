@@ -987,7 +987,7 @@ describe("getRbac", () => {
 describe("setRbac", () => {
   afterEach(() => { vi.restoreAllMocks(); });
 
-  test("persists + applies the ClusterRole to just the active context by default", async () => {
+  test("persists + applies the ClusterRole to a single explicit context", async () => {
     const applied: { args: string[]; stdin: unknown }[] = [];
     vi.spyOn(runMod, "kubectl").mockResolvedValue({ code: 0, stdout: JSON.stringify({ data: {} }), stderr: "" });
     vi.spyOn(runMod, "runProcessWithStdin").mockImplementation(async (_prog, args, stdin) => {
@@ -1001,10 +1001,53 @@ describe("setRbac", () => {
     const result = JSON.parse(res.stdout) as { applied: string[]; failures: unknown[] };
     expect(result.applied).toEqual(["active-ctx"]);
     expect(result.failures).toEqual([]);
-    expect(applied[0]!.stdin).toContain("rbacPolicy"); // config write
+    expect(applied[0]!.stdin).toContain("rbacPolicy");
     expect(applied[1]!.stdin).toMatch(/kind: ClusterRole\b/);
     expect(applied[1]!.stdin).not.toMatch(/kind: ClusterRoleBinding/);
     expect(applied[1]!.stdin).toMatch(/pods\/eviction/);
+  });
+
+  test("omitted contexts falls back to the active context alone", async () => {
+    const clusterRoleContexts: string[] = [];
+    vi.spyOn(runMod, "kubectl").mockResolvedValue({ code: 0, stdout: JSON.stringify({ data: {} }), stderr: "" });
+    vi.spyOn(runMod, "runProcessWithStdin").mockImplementation(async (_prog, fullArgs, stdin) => {
+      if (/kind: ClusterRole\b/.test(String(stdin)) && !/ClusterRoleBinding/.test(String(stdin))) {
+        clusterRoleContexts.push(fullArgs.includes("--context") ? fullArgs[fullArgs.indexOf("--context") + 1]! : "");
+      }
+      return { code: 0, stdout: "", stderr: "" };
+    });
+    const res = await setRbac("active-ctx", "default", {
+      action: "setRbac", policy: serializePolicy(DEFAULT_POLICY),
+    });
+    const result = JSON.parse(res.stdout) as { applied: string[] };
+    expect(result.applied).toEqual(["active-ctx"]);
+    expect(clusterRoleContexts).toEqual(["active-ctx"]);
+  });
+
+  test("empty contexts array falls back to the active context alone", async () => {
+    vi.spyOn(runMod, "kubectl").mockResolvedValue({ code: 0, stdout: JSON.stringify({ data: {} }), stderr: "" });
+    vi.spyOn(runMod, "runProcessWithStdin").mockResolvedValue({ code: 0, stdout: "", stderr: "" });
+    const res = await setRbac("active-ctx", "default", {
+      action: "setRbac", policy: serializePolicy(DEFAULT_POLICY), contexts: [],
+    });
+    const result = JSON.parse(res.stdout) as { applied: string[] };
+    expect(result.applied).toEqual(["active-ctx"]);
+  });
+
+  test("de-duplicates caller-supplied contexts", async () => {
+    const clusterRoleApplies: string[] = [];
+    vi.spyOn(runMod, "kubectl").mockResolvedValue({ code: 0, stdout: JSON.stringify({ data: {} }), stderr: "" });
+    vi.spyOn(runMod, "runProcessWithStdin").mockImplementation(async (_prog, _args, stdin) => {
+      const s = String(stdin);
+      if (/kind: ClusterRole\b/.test(s) && !/ClusterRoleBinding/.test(s)) clusterRoleApplies.push(s);
+      return { code: 0, stdout: "", stderr: "" };
+    });
+    const res = await setRbac("ctx-a", "default", {
+      action: "setRbac", policy: serializePolicy(DEFAULT_POLICY), contexts: ["ctx-a", "ctx-a", "ctx-b"],
+    });
+    const result = JSON.parse(res.stdout) as { applied: string[] };
+    expect(result.applied).toEqual(["ctx-a", "ctx-b"]);
+    expect(clusterRoleApplies).toHaveLength(2);
   });
 
   test("writes config AND applies the ClusterRole to EVERY passed context", async () => {
@@ -1022,7 +1065,6 @@ describe("setRbac", () => {
     });
     const result = JSON.parse(res.stdout) as { applied: string[] };
     expect(result.applied.sort()).toEqual(["ctx-a", "ctx-b"]);
-    // The fix: config persisted to BOTH clusters, not just the active one.
     expect(configWrites).toHaveLength(2);
     expect(clusterRoleApplies).toHaveLength(2);
   });
@@ -1030,7 +1072,6 @@ describe("setRbac", () => {
   test("one context failing does not abort the others; names the failure", async () => {
     vi.spyOn(runMod, "kubectl").mockResolvedValue({ code: 0, stdout: JSON.stringify({ data: {} }), stderr: "" });
     vi.spyOn(runMod, "runProcessWithStdin").mockImplementation(async (_prog, fullArgs, stdin) => {
-      // Fail the ClusterRole apply only for ctx-b.
       if (/kind: ClusterRole\b/.test(String(stdin)) && fullArgs.includes("ctx-b")) {
         return { code: 1, stdout: "", stderr: "Forbidden" };
       }
@@ -1045,6 +1086,43 @@ describe("setRbac", () => {
     const result = JSON.parse(res.stdout) as { applied: string[]; failures: { context: string; error: string }[] };
     expect(result.applied).toEqual(["ctx-a"]);
     expect(result.failures).toEqual([{ context: "ctx-b", error: "Forbidden" }]);
+  });
+
+  test("a thrown config-write failure is caught per context; others still succeed", async () => {
+    vi.spyOn(runMod, "kubectl").mockResolvedValue({ code: 0, stdout: JSON.stringify({ data: {} }), stderr: "" });
+    vi.spyOn(runMod, "runProcessWithStdin").mockImplementation(async (_prog, fullArgs, stdin) => {
+      if (String(stdin).includes("rbacPolicy") && fullArgs.includes("ctx-b")) {
+        return { code: 1, stdout: "", stderr: "config apply denied" };
+      }
+      return { code: 0, stdout: "", stderr: "" };
+    });
+    const res = await setRbac("ctx-a", "default", {
+      action: "setRbac", policy: serializePolicy(DEFAULT_POLICY), contexts: ["ctx-a", "ctx-b"],
+    });
+    expect(res.code).not.toBe(0);
+    const result = JSON.parse(res.stdout) as { applied: string[]; failures: { context: string; error: string }[] };
+    expect(result.applied).toEqual(["ctx-a"]);
+    expect(result.failures).toHaveLength(1);
+    expect(result.failures[0]!.context).toBe("ctx-b");
+    expect(result.failures[0]!.error).toContain("config apply denied");
+  });
+
+  test("the stored config is persisted even when that context's ClusterRole apply fails", async () => {
+    const configWrites: string[] = [];
+    vi.spyOn(runMod, "kubectl").mockResolvedValue({ code: 0, stdout: JSON.stringify({ data: {} }), stderr: "" });
+    vi.spyOn(runMod, "runProcessWithStdin").mockImplementation(async (_prog, _args, stdin) => {
+      const s = String(stdin);
+      if (s.includes("rbacPolicy")) configWrites.push(s);
+      if (/kind: ClusterRole\b/.test(s) && !/ClusterRoleBinding/.test(s)) return { code: 1, stdout: "", stderr: "Forbidden" };
+      return { code: 0, stdout: "", stderr: "" };
+    });
+    const res = await setRbac("ctx-a", "default", {
+      action: "setRbac", policy: serializePolicy(DEFAULT_POLICY), contexts: ["ctx-a"],
+    });
+    const result = JSON.parse(res.stdout) as { applied: string[]; failures: { context: string }[] };
+    expect(result.applied).toEqual([]);
+    expect(result.failures).toEqual([{ context: "ctx-a", error: "Forbidden" }]);
+    expect(configWrites).toHaveLength(1);
   });
 });
 

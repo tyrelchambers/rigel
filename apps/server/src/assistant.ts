@@ -623,11 +623,15 @@ export async function setRbac(
   req: AssistantRequest,
 ): Promise<RunResult> {
   const policy = parsePolicy(req.policy);
-  const contexts = req.contexts && req.contexts.length > 0 ? req.contexts : [context ?? ""];
+  const contexts = [...new Set(req.contexts && req.contexts.length > 0 ? req.contexts : [context ?? ""])];
   const applied: string[] = [];
   const failures: { context: string; error: string }[] = [];
   for (const ctx of contexts) {
     try {
+      // Persist BEFORE applying: the stored policy is the source of truth the
+      // drift indicator and any future reconcile repair the live role from, so a
+      // failed apply must still leave the intended policy on record — never a
+      // live ClusterRole with no matching stored policy.
       await patchConfig(ctx, namespace, rbacConfigUpdate(policy));
       const r = await applyPolicy({ policy, contexts: [ctx] }, { apply: (c, yaml) => applyStdin(c, yaml) });
       if (r.failures.length > 0) failures.push({ context: ctx, error: r.failures[0]!.error });
