@@ -168,9 +168,11 @@ interface ClusterState {
    * watched kinds (e.g. events) the next snapshot/delta will repopulate it.
    */
   clearKind: (kind: string) => void;
-  /** A request to focus/open a specific resource after navigation (set by the palette). */
-  focusRequest: { route: string; kind: string; key: string } | null;
-  setFocusRequest: (f: { route: string; kind: string; key: string } | null) => void;
+  /** A request to focus/open a specific resource after navigation (set by the palette).
+   *  Optional `search` seeds the destination panel's search box so the list narrows
+   *  to (ideally just) the target row. */
+  focusRequest: { route: string; kind: string; key: string; search?: string } | null;
+  setFocusRequest: (f: { route: string; kind: string; key: string; search?: string } | null) => void;
 }
 
 export const useCluster = create<ClusterState>((set) => ({

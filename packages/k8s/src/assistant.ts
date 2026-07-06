@@ -932,6 +932,12 @@ export interface AssistantClusterState {
   audit: AssistantAuditEntry[];
   queue: AssistantQueuedSuggestion[];
   report: string;
+  /** Fingerprints (`kind|ns|name|reason`) the agent auto-silenced as benign; the
+   *  full list behind the report's "Auto-silenced N …" summary line. Empty when absent. */
+  autoSilenced: string[];
+  /** Per-fingerprint human-readable reason (the raw log line behind the normalized
+   *  signature), keyed by the same fingerprint string. Empty when absent. */
+  autoSilencedReasons: Record<string, string>;
   /** Fix PRs the agent opened (or tried to). Empty when absent. */
   pullRequests: AssistantPullRequest[];
   /** Scheduled-digest send-state (last-sent + last preview). Absent when no digests fired. */
@@ -978,10 +984,39 @@ export function decodeClusterState(raw: string | undefined | null): AssistantClu
     audit: Array.isArray(o.audit) ? (o.audit as AssistantAuditEntry[]) : [],
     queue: Array.isArray(o.queue) ? (o.queue as AssistantQueuedSuggestion[]) : [],
     report: typeof o.report === "string" ? o.report : "",
+    autoSilenced: Array.isArray(o.autoSilenced)
+      ? (o.autoSilenced as unknown[]).filter((x): x is string => typeof x === "string")
+      : [],
+    autoSilencedReasons:
+      o.autoSilencedReasons && typeof o.autoSilencedReasons === "object"
+        ? Object.fromEntries(
+            Object.entries(o.autoSilencedReasons as Record<string, unknown>).filter(
+              (e): e is [string, string] => typeof e[1] === "string",
+            ),
+          )
+        : {},
     pullRequests: Array.isArray(o.pullRequests) ? (o.pullRequests as AssistantPullRequest[]) : [],
     digestState,
     alertLastFiredAt,
   };
+}
+
+/** A parsed incident fingerprint. The agent encodes incidents as
+ *  `incidentKind|namespace|name|reason` (reason optional). */
+export interface ParsedFingerprint {
+  incidentKind: string;
+  namespace: string;
+  name: string;
+  reason: string;
+}
+
+/** Split an incident fingerprint into its parts, or null when it lacks a
+ *  namespace/name (e.g. `chat|<sender>` or a bare token) and so can't identify a
+ *  resource. */
+export function parseIncidentFingerprint(fp: string): ParsedFingerprint | null {
+  const p = fp.split("|");
+  if (p.length < 3 || !p[1] || !p[2]) return null;
+  return { incidentKind: p[0] ?? "", namespace: p[1], name: p[2], reason: p[3] ?? "" };
 }
 
 /** Stable identity for an audit entry (mirrors Swift `id`). */

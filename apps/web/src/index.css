@@ -437,7 +437,8 @@
     flex-shrink: 0;
 }
 
-/* Scroll area */
+/* Scroll area — a query container so rows respond to the panel's own width
+ * (not the viewport), staying correct when the chat pane narrows the panel. */
 .ov-content {
     flex: 1;
     min-height: 0;
@@ -446,6 +447,8 @@
     flex-direction: column;
     gap: 20px;
     padding: 24px;
+    container-type: inline-size;
+    container-name: ovpanel;
 }
 
 .ov-error {
@@ -465,12 +468,19 @@
     gap: 20px;
 }
 .ov-row-3 {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 .ov-row-2 {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-@media (max-width: 1100px) {
+/* Collapse card rows on the panel's own width, so they still stack when the
+ * chat pane is open (viewport can stay wide while the panel is narrow). */
+@container ovpanel (max-width: 720px) {
+    .ov-row-3 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+@container ovpanel (max-width: 520px) {
     .ov-row-3,
     .ov-row-2 {
         grid-template-columns: 1fr;

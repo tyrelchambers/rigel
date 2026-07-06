@@ -26,9 +26,6 @@ const ERROR_BURST_THRESHOLD = 3;
 /** Defensive ceiling on lines scanned; the caller already bounds via `--tail`. */
 const MAX_LINES = 4000;
 
-/** Keep signatures bounded so a pathological log line can't bloat the fingerprint. */
-const MAX_SIGNATURE = 160;
-
 interface Signature {
   signature: string;
   reason: string;
@@ -71,8 +68,8 @@ function normalize(line: string): string {
 function sig(category: string, keyLine: string): Signature {
   const key = normalize(keyLine);
   return {
-    signature: `${category}:${key}`.slice(0, MAX_SIGNATURE),
-    reason: `${category}: ${truncate(keyLine.trim(), 200)}`,
+    signature: `${category}:${key}`,
+    reason: `${category}: ${keyLine.trim()}`,
   };
 }
 
@@ -152,13 +149,9 @@ function matchErrorBurst(lines: string[]): Signature | null {
   }
   if (best && best.count >= ERROR_BURST_THRESHOLD) {
     return {
-      signature: `error-burst:${best.key}`.slice(0, MAX_SIGNATURE),
-      reason: `${best.count} repeated ERROR-level lines: ${truncate(best.sample, 200)}`,
+      signature: `error-burst:${best.key}`,
+      reason: `${best.count} repeated ERROR-level lines: ${best.sample}`,
     };
   }
   return null;
-}
-
-function truncate(s: string, max: number): string {
-  return s.length > max ? s.slice(0, max) + "…" : s;
 }

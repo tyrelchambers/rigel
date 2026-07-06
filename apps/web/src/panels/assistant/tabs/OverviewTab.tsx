@@ -4,12 +4,11 @@
 // "Assistant — Overview (improved)".
 
 import { AlertTriangle, ChevronRight, GitPullRequest, Radar } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { auditEntryId } from "@rigel/k8s";
 import { useAssistantCtx } from "../AssistantContext";
-import { Card } from "../components/primitives";
 import { relativeTime } from "../display";
 import { AuditRow } from "../AuditRow";
+import { LastReportCard } from "../components/LastReportCard";
 import { OwnedResources } from "../OwnedResources";
 
 export function OverviewTab() {
@@ -17,27 +16,20 @@ export function OverviewTab() {
   const audit = d.clusterState?.audit ?? [];
   const queue = d.clusterState?.queue ?? [];
   const report = d.clusterState?.report ?? "";
+  const autoSilenced = d.clusterState?.autoSilenced ?? [];
+  const autoSilencedReasons = d.clusterState?.autoSilencedReasons ?? {};
   const prCount = d.pullRequests.length;
 
   return (
     <div className="space-y-5">
       {report && (
-        <Card>
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold">Last report</p>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={working}
-              onClick={() => run({ action: "clearReport", namespace: ns })}
-            >
-              Clear
-            </Button>
-          </div>
-          <p className="mt-1 select-text text-sm text-muted-foreground whitespace-pre-wrap">
-            {report}
-          </p>
-        </Card>
+        <LastReportCard
+          report={report}
+          autoSilenced={autoSilenced}
+          autoSilencedReasons={autoSilencedReasons}
+          working={working}
+          onClear={() => run({ action: "clearReport", namespace: ns })}
+        />
       )}
 
       {queue.length > 0 && (

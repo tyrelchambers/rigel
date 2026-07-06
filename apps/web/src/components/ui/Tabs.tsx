@@ -38,7 +38,7 @@ export function TabBar({
       <div
         role="tablist"
         className={cn(
-          "inline-flex items-center gap-[2px] rounded-md border p-[3px]",
+          "inline-flex max-w-full items-center gap-[2px] overflow-x-auto rounded-md border p-[3px]",
           "border-[var(--border-subtle)] bg-[var(--surface-sunken)]",
           className,
         )}
@@ -78,7 +78,7 @@ export function Tab({
       disabled={disabled}
       onClick={() => ctx.onValueChange(value)}
       className={cn(
-        "flex items-center gap-[7px] rounded-[4px] px-3.5 py-[7px] text-xs transition-colors",
+        "flex items-center gap-[7px] whitespace-nowrap rounded-[4px] px-3.5 py-[7px] text-xs transition-colors",
         "disabled:pointer-events-none disabled:opacity-50",
         isActive
           ? "bg-white/[0.08] font-semibold text-[var(--fg-primary)]"

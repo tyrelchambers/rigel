@@ -70,8 +70,15 @@ describe("autoSilence", () => {
 
   test("caps the list, dropping the oldest", () => {
     let s = emptyState();
-    for (let i = 0; i < 5; i++) s = autoSilence(s, `fp${i}`, 3);
+    for (let i = 0; i < 5; i++) s = autoSilence(s, `fp${i}`, { max: 3 });
     expect(s.autoSilenced).toEqual(["fp4", "fp3", "fp2"]);
+  });
+
+  test("carries a per-fingerprint reason, pruned in lockstep with the cap", () => {
+    let s = emptyState();
+    for (let i = 0; i < 5; i++) s = autoSilence(s, `fp${i}`, { reason: `why ${i}`, max: 3 });
+    expect(s.autoSilenced).toEqual(["fp4", "fp3", "fp2"]);
+    expect(s.autoSilencedReasons).toEqual({ fp4: "why 4", fp3: "why 3", fp2: "why 2" });
   });
 
   test("does not mutate the input state", () => {

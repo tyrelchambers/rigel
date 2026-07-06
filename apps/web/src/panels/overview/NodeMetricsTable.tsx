@@ -4,9 +4,11 @@ import { formatCpu, formatBytes, type NodeResourceTotals } from "./overviewDispl
 
 const WARN_PERCENT = 80;
 
-// Shared 3-column grid for the head row and each data row (narrows on small widths).
+// Shared 3-column grid for the head row and each data row. Tracks use minmax(0,…)
+// so the metric columns can shrink below their content instead of overflowing the
+// (overflow-hidden) table shell; container variants narrow it on the panel's width.
 const COLS =
-  "grid grid-cols-[180px_1fr_1fr] items-center gap-6 max-[1100px]:grid-cols-[140px_1fr_1fr] max-[1100px]:gap-3.5";
+  "grid grid-cols-[minmax(120px,180px)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-6 @max-[760px]:gap-3.5 @max-[620px]:grid-cols-[minmax(90px,140px)_minmax(0,1fr)_minmax(0,1fr)]";
 
 export interface ReclaimableSummary {
   fraction: number;
@@ -33,8 +35,8 @@ function MetricCell({ fraction, raw }: { fraction: number; raw: string }) {
   const percent = Math.round(clamp01(fraction) * 100);
   const warn = percent >= WARN_PERCENT;
   return (
-    <div className="flex min-w-0 items-center gap-3">
-      <div className="h-2 max-w-[200px] flex-1 overflow-hidden rounded-full bg-[var(--surface-sunken)]">
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--surface-sunken)]">
         <div
           data-warn={warn}
           className={cn(
@@ -44,8 +46,10 @@ function MetricCell({ fraction, raw }: { fraction: number; raw: string }) {
           style={{ width: `${percent}%` }}
         />
       </div>
-      <span className="shrink-0 font-mono text-xs font-semibold text-[var(--fg-primary)]">{percent}%</span>
-      <span className="shrink-0 font-mono text-2xs text-[var(--fg-tertiary)]">{raw}</span>
+      <div className="flex items-baseline gap-2">
+        <span className="font-mono text-xs font-semibold text-[var(--fg-primary)]">{percent}%</span>
+        <span className="min-w-0 truncate font-mono text-2xs text-[var(--fg-tertiary)]" title={raw}>{raw}</span>
+      </div>
     </div>
   );
 }

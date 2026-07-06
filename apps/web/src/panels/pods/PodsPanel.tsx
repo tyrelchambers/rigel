@@ -61,7 +61,7 @@ export default function PodsPanel() {
     return pod.metadata.uid || `${pod.metadata.namespace}/${pod.metadata.name}`;
   }
 
-  useFocusRow("pod", allPods, podKey, (k) => setExpanded((prev) => new Set(prev).add(k)));
+  useFocusRow("pod", allPods, podKey, (k) => setExpanded((prev) => new Set(prev).add(k)), setSearch);
 
   function toggleExpand(pod: Pod) {
     const k = podKey(pod);

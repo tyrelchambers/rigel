@@ -182,6 +182,8 @@ export {
   tokenExpiryStatus,
   parseTokenExpiry,
   decodeClusterState,
+  parseIncidentFingerprint,
+  type ParsedFingerprint,
   auditEntryId,
   queuedSuggestionId,
   isEnabled,

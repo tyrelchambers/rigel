@@ -165,6 +165,10 @@ export interface AssistantState {
    *  human `silenced` set lives separately in assistant-config); the loop unions
    *  both when filtering detected incidents. Capped, newest-first. */
   autoSilenced?: string[];
+  /** Human-readable reason per auto-silenced fingerprint (the un-normalized log
+   *  line behind the normalized signature), for display. Kept in lockstep with
+   *  `autoSilenced` (same cap/prune). Absent until the first log-error silence. */
+  autoSilencedReasons?: Record<string, string>;
   /** Fix PRs the agent opened (or tried to), recorded by the reconcile once each
    *  one-shot fix-runner Job finishes. Capped, newest-first. Absent until the
    *  first fix is reconciled. */
@@ -272,10 +276,23 @@ export function appendAudit(state: AssistantState, entry: AuditEntry, maxEntries
 /** Add a fingerprint to the agent-owned auto-silence set (newest-first, deduped,
  * capped). Pure — returns a new state, never mutates the input. A no-op when the
  * fingerprint is already silenced, so it doesn't reorder/grow the list. */
-export function autoSilence(state: AssistantState, fingerprint: string, max = MAX_AUTO_SILENCED): AssistantState {
+export function autoSilence(
+  state: AssistantState,
+  fingerprint: string,
+  opts: { reason?: string; max?: number } = {},
+): AssistantState {
+  const { reason, max = MAX_AUTO_SILENCED } = opts;
   const existing = state.autoSilenced ?? [];
   if (existing.includes(fingerprint)) return state;
-  return { ...state, autoSilenced: [fingerprint, ...existing].slice(0, max) };
+  const autoSilenced = [fingerprint, ...existing].slice(0, max);
+  // Rebuild the reason map against the capped list so it can't outgrow it.
+  const prev = state.autoSilencedReasons ?? {};
+  const autoSilencedReasons: Record<string, string> = {};
+  for (const fp of autoSilenced) {
+    const r = fp === fingerprint ? reason : prev[fp];
+    if (r) autoSilencedReasons[fp] = r;
+  }
+  return { ...state, autoSilenced, autoSilencedReasons };
 }
 
 /** Cap on the recorded fix-PR history, so it can't grow without bound. */

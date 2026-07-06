@@ -76,7 +76,7 @@ export default function DeploymentsPanel() {
   );
 
   // Cmd-K / related-resources focus: expand + scroll to a deployment.
-  useFocusRow("deployment", allDeployments, key, (k) => setExpanded((prev) => new Set(prev).add(k)));
+  useFocusRow("deployment", allDeployments, key, (k) => setExpanded((prev) => new Set(prev).add(k)), setSearch);
 
   // Drop a stale deployment focus request if we leave before it resolves.
   useEffect(() => {

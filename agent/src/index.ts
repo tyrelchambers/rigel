@@ -456,7 +456,7 @@ export async function tick(
         if (packet.verdict === "acceptable") {
           // Benign/expected — auto-silence the fingerprint so it doesn't re-fire.
           if (!(state.autoSilenced ?? []).includes(fp)) newlySilenced++;
-          state = autoSilence(state, fp);
+          state = autoSilence(state, fp, { reason: incident.detail });
           state = record(state, cfg, {
             at: ts, fingerprint: fp, incident: describe(incident), tier: "low",
             outcome: "skipped", detail: `acceptable — auto-silenced: ${truncate(packet.verdictReason || analysis)}`,

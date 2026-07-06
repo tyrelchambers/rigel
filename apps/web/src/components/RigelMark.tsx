@@ -331,7 +331,7 @@ export function RigelMark({
     <svg
       width={size}
       height={size}
-      viewBox="0 0 132 132"
+      viewBox="20 20 92 92"
       fill="none"
       className={className}
       style={{ flexShrink: 0, overflow: "visible", ...style }}

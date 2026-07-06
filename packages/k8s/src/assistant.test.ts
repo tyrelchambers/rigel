@@ -11,6 +11,7 @@ import {
   tokenExpiryStatus,
   parseTokenExpiry,
   decodeClusterState,
+  parseIncidentFingerprint,
   isEnabled,
   autonomyMode,
   quietWindow,
@@ -261,6 +262,57 @@ test("decodeClusterState defaults missing collections to empty", () => {
   expect(s!.queue).toEqual([]);
   expect(s!.report).toBe("");
   expect(s!.pullRequests).toEqual([]);
+  expect(s!.autoSilenced).toEqual([]);
+  expect(s!.autoSilencedReasons).toEqual({});
+});
+
+test("decodeClusterState parses the auto-silenced fingerprint list", () => {
+  const raw = JSON.stringify({
+    report: "Auto-silenced 2 benign issue(s): default/api, default/web",
+    autoSilenced: [
+      "loggedError|default|api-7845596fdb-r6xz5|ConnectionReset",
+      "unhealthyPod|default|web-abc|CrashLoopBackOff",
+      42, // non-string entries are dropped
+    ],
+  });
+  const s = decodeClusterState(raw)!;
+  expect(s.autoSilenced).toEqual([
+    "loggedError|default|api-7845596fdb-r6xz5|ConnectionReset",
+    "unhealthyPod|default|web-abc|CrashLoopBackOff",
+  ]);
+});
+
+test("decodeClusterState parses per-fingerprint auto-silence reasons", () => {
+  const raw = JSON.stringify({
+    autoSilenced: ["loggedError|default|api|sig"],
+    autoSilencedReasons: {
+      "loggedError|default|api|sig": "fatal: connection reset by peer",
+      bogus: 42, // non-string values are dropped
+    },
+  });
+  const s = decodeClusterState(raw)!;
+  expect(s.autoSilencedReasons).toEqual({
+    "loggedError|default|api|sig": "fatal: connection reset by peer",
+  });
+});
+
+test("parseIncidentFingerprint splits kind|ns|name|reason", () => {
+  expect(parseIncidentFingerprint("loggedError|default|api-r6xz5|ConnectionReset")).toEqual({
+    incidentKind: "loggedError",
+    namespace: "default",
+    name: "api-r6xz5",
+    reason: "ConnectionReset",
+  });
+  // reason is optional (fingerprints may carry only kind|ns|name)
+  expect(parseIncidentFingerprint("degradedDeployment|prod|api")).toEqual({
+    incidentKind: "degradedDeployment",
+    namespace: "prod",
+    name: "api",
+    reason: "",
+  });
+  // malformed → null (no namespace/name to route to)
+  expect(parseIncidentFingerprint("chat|someone")).toBeNull();
+  expect(parseIncidentFingerprint("nonsense")).toBeNull();
 });
 
 test("decodeClusterState parses the agent's fix-PR history", () => {
