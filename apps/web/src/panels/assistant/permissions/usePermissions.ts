@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   DEFAULT_POLICY,
   diffPolicies,
+  liveMatchesPolicy,
   parsePolicy,
   serializePolicy,
   setCapability,
@@ -14,8 +15,6 @@ import {
   type RbacPolicy,
 } from "@rigel/k8s";
 import { postAssistant, useAssistantAction } from "@/lib/api";
-
-export type RbacTarget = "active" | "all";
 
 /** Pure: pending-change summary between the applied and staged policy. */
 export function stagedDiff(applied: RbacPolicy, staged: RbacPolicy) {
@@ -41,8 +40,8 @@ export function usePermissions(namespace: string) {
   const action = useAssistantAction();
 
   const applied = query.data?.policy ?? DEFAULT_POLICY;
+  const appliedRules = query.data?.appliedRules ?? null;
   const [staged, setStaged] = useState<RbacPolicy>(applied);
-  const [target, setTarget] = useState<RbacTarget>("active");
 
   // Seed `staged` from the fetched policy exactly once, so a background
   // refetch never clobbers an operator's in-progress edit.
@@ -54,6 +53,10 @@ export function usePermissions(namespace: string) {
     }
   }, [query.data]);
 
+  // The live ClusterRole differs from what the stored policy renders. Null live
+  // rules (best-effort read failed) is never reported as drift.
+  const drift = Array.isArray(appliedRules) && !liveMatchesPolicy(appliedRules, applied);
+
   function toggleCapability(id: string, on: boolean) {
     setStaged((p) => setCapability(p, id, on));
   }
@@ -62,9 +65,9 @@ export function usePermissions(namespace: string) {
     setStaged((p) => toggleCellInPolicy(p, cell, on));
   }
 
-  function apply(onDone?: () => void) {
+  function push(policy: RbacPolicy, contexts: string[], onDone?: () => void) {
     action.mutate(
-      { action: "setRbac", namespace, policy: serializePolicy(staged), rbacTarget: target },
+      { action: "setRbac", namespace, policy: serializePolicy(policy), contexts },
       {
         onSuccess: () => {
           void qc.invalidateQueries({ queryKey });
@@ -74,15 +77,23 @@ export function usePermissions(namespace: string) {
     );
   }
 
+  function apply(contexts: string[], onDone?: () => void) {
+    push(staged, contexts, onDone);
+  }
+
+  function reapply(contexts: string[], onDone?: () => void) {
+    push(applied, contexts, onDone);
+  }
+
   return {
     applied,
     staged,
     diff: stagedDiff(applied, staged),
-    target,
-    setTarget,
+    drift,
     toggleCapability,
     toggleCell,
     apply,
+    reapply,
     applying: action.isPending,
     applyError: action.error,
     loading: query.isLoading,
