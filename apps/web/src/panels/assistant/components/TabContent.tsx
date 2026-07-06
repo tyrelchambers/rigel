@@ -12,6 +12,7 @@ import { AutoFixTab } from "../tabs/AutoFixTab";
 import { ActivityTab } from "../tabs/ActivityTab";
 import { SettingsTab } from "../tabs/SettingsTab";
 import { AgentsTab } from "../tabs/AgentsTab";
+import { PermissionsTab } from "../tabs/PermissionsTab";
 import { ReportsTab } from "../tabs/ReportsTab";
 import { AuditSkillsTab } from "../tabs/AuditSkillsTab";
 
@@ -57,6 +58,8 @@ export function TabContent() {
       return <AutoFixTab />;
     case "agents":
       return <AgentsTab />;
+    case "permissions":
+      return <PermissionsTab />;
     case "activity":
       return <ActivityTab />;
     case "reports":
