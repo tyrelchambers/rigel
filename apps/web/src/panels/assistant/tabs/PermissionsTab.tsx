@@ -13,6 +13,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useContexts, useInstalledContexts } from "@/lib/api";
 import { useAssistantCtx } from "../AssistantContext";
 import { usePermissions } from "../permissions/usePermissions";
@@ -89,31 +90,49 @@ export function PermissionsTab() {
             >
               {perms.applying ? "Applying…" : "Apply"}
             </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                aria-label="More apply options"
-                disabled={perms.applying || !hasOthers}
-                className="ml-1 inline-flex items-center rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-1.5 py-2 text-[var(--fg-secondary)] outline-none disabled:opacity-40"
-              >
-                <ChevronDown className="size-4" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  disabled={noChanges}
-                  onClick={() =>
-                    setPending({
-                      contexts: installedNames,
-                      label: `All installed clusters (${installedNames.length})`,
-                    })
-                  }
+            {hasOthers ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  aria-label="More apply options"
+                  disabled={perms.applying}
+                  className="ml-1 inline-flex items-center rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-1.5 py-2 text-[var(--fg-secondary)] outline-none disabled:opacity-40"
                 >
-                  Save to all clusters ({installedNames.length})
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setCopyOpen(true)}>
-                  Copy to clusters…
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <ChevronDown className="size-4" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    disabled={noChanges}
+                    onClick={() =>
+                      setPending({
+                        contexts: installedNames,
+                        label: `All installed clusters (${installedNames.length})`,
+                      })
+                    }
+                  >
+                    Save to all clusters ({installedNames.length})
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setCopyOpen(true)}>
+                    Copy to clusters…
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <TooltipProvider delay={200}>
+                <Tooltip>
+                  <TooltipTrigger
+                    type="button"
+                    aria-label="More apply options"
+                    aria-disabled
+                    className="ml-1 inline-flex cursor-not-allowed items-center rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-1.5 py-2 text-[var(--fg-secondary)] opacity-40 outline-none"
+                  >
+                    <ChevronDown className="size-4" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Save to all / copy needs another cluster with the assistant installed.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </div>
         </div>
       </div>

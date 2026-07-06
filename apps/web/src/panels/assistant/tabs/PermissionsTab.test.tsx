@@ -197,6 +197,16 @@ describe("PermissionsTab", () => {
     unmount();
   });
 
+  it("greys out the fan-out caret (aria-disabled, no menu) when no other cluster has the assistant", async () => {
+    // Default fixture: only the active kind-dev cluster is installed.
+    wrap();
+    await screen.findByText("Read everything");
+    const caret = screen.getByRole("button", { name: /more apply options/i });
+    expect(caret).toHaveAttribute("aria-disabled", "true");
+    await userEvent.click(caret);
+    expect(screen.queryByRole("menuitem", { name: /save to all clusters/i })).not.toBeInTheDocument();
+  });
+
   it("shows a drift banner with Re-apply when the live ClusterRole diverges from the saved policy", async () => {
     appliedRules = clusterRoleRules(setCapability(DEFAULT_POLICY, "deleteWorkloads", true));
     const { unmount } = wrap();
