@@ -912,3 +912,156 @@ describe("mutateAlerts", () => {
     expect(rules[0].condition.type).toBe("crashLoop");
   });
 });
+
+// ---------------------------------------------------------------------------
+// getRbac / setRbac (in-app RBAC editor, Phase 2)
+// ---------------------------------------------------------------------------
+
+import { rbacConfigUpdate, getRbac, setRbac, discoverInstalledContexts, handleAssistant } from "./assistant";
+import { DEFAULT_POLICY, setCapability, serializePolicy, parsePolicy } from "@rigel/k8s";
+
+test("rbacConfigUpdate serializes the policy under rbacPolicy", () => {
+  const p = setCapability(DEFAULT_POLICY, "drain", true);
+  const upd = rbacConfigUpdate(p);
+  expect(parsePolicy(upd.rbacPolicy).cells).toEqual(p.cells);
+});
+
+describe("discoverInstalledContexts", () => {
+  test("keeps only contexts holding an assistant-managed Deployment", async () => {
+    const run = async (ctx: string | null, args: string[]) => {
+      if (args[0] === "config") {
+        return {
+          code: 0,
+          stdout: JSON.stringify({
+            "current-context": "ctx-a",
+            contexts: [{ name: "ctx-a", context: { cluster: "a" } }, { name: "ctx-b", context: { cluster: "b" } }],
+            clusters: [{ name: "a", cluster: { server: "https://a" } }, { name: "b", cluster: { server: "https://b" } }],
+          }),
+          stderr: "",
+        };
+      }
+      if (ctx === "ctx-a") {
+        return {
+          code: 0,
+          stdout: JSON.stringify({ metadata: { labels: { "app.kubernetes.io/managed-by": "rigel-assistant" } } }),
+          stderr: "",
+        };
+      }
+      return { code: 1, stdout: "", stderr: "not found" };
+    };
+    const installed = await discoverInstalledContexts("default", run);
+    expect(installed).toEqual(["ctx-a"]);
+  });
+});
+
+describe("getRbac", () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  test("returns DEFAULT_POLICY when assistant-config has no rbacPolicy key", async () => {
+    vi.spyOn(runMod, "kubectl").mockImplementation(async (_ctx, args) => {
+      if (args[0] === "get" && args[1] === "cm") {
+        return { code: 0, stdout: JSON.stringify({ data: {} }), stderr: "" };
+      }
+      return { code: 1, stdout: "", stderr: "not found" };
+    });
+    const res = await getRbac(null, "default");
+    const parsed = JSON.parse(res.stdout) as { policy: string; appliedRules: unknown };
+    expect(parsePolicy(parsed.policy).cells).toEqual(DEFAULT_POLICY.cells);
+    expect(parsed.appliedRules).toBeNull();
+  });
+
+  test("returns the stored policy when rbacPolicy is present", async () => {
+    const stored = setCapability(DEFAULT_POLICY, "drain", true);
+    vi.spyOn(runMod, "kubectl").mockImplementation(async (_ctx, args) => {
+      if (args[0] === "get" && args[1] === "cm") {
+        return { code: 0, stdout: JSON.stringify({ data: { rbacPolicy: serializePolicy(stored) } }), stderr: "" };
+      }
+      return { code: 1, stdout: "", stderr: "not found" };
+    });
+    const res = await getRbac(null, "default");
+    const parsed = JSON.parse(res.stdout) as { policy: string };
+    expect(parsePolicy(parsed.policy).cells).toEqual(stored.cells);
+  });
+});
+
+describe("setRbac", () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  test("active target: persists the policy and applies the ClusterRole to just the active context", async () => {
+    const applied: { ctx: string | null; args: string[]; stdin: unknown }[] = [];
+    vi.spyOn(runMod, "kubectl").mockResolvedValue({ code: 0, stdout: JSON.stringify({ data: {} }), stderr: "" });
+    vi.spyOn(runMod, "runProcessWithStdin").mockImplementation(async (_prog, args, stdin) => {
+      applied.push({ ctx: null, args, stdin });
+      return { code: 0, stdout: "", stderr: "" };
+    });
+    const policy = setCapability(DEFAULT_POLICY, "drain", true);
+    const res = await setRbac("active-ctx", "default", {
+      action: "setRbac", policy: serializePolicy(policy), rbacTarget: "active",
+    });
+    const result = JSON.parse(res.stdout) as { applied: string[]; failures: unknown[] };
+    expect(result.applied).toEqual(["active-ctx"]);
+    expect(result.failures).toEqual([]);
+    // First stdin write is the assistant-config ConfigMap; the second is the
+    // ClusterRole-only document (never the SA/Role/binding).
+    expect(applied[0]!.stdin).toContain("rbacPolicy");
+    expect(applied[1]!.stdin).toMatch(/kind: ClusterRole\b/);
+    expect(applied[1]!.stdin).not.toMatch(/kind: ClusterRoleBinding/);
+    expect(applied[1]!.stdin).toMatch(/pods\/eviction/);
+  });
+
+  test("all target: applies to every discovered installed context", async () => {
+    vi.spyOn(runMod, "kubectl").mockImplementation(async (ctx, args) => {
+      if (args[0] === "get" && args[1] === "cm") {
+        return { code: 0, stdout: JSON.stringify({ data: {} }), stderr: "" };
+      }
+      if (args[0] === "config") {
+        return {
+          code: 0,
+          stdout: JSON.stringify({
+            "current-context": "ctx-a",
+            contexts: [{ name: "ctx-a", context: { cluster: "a" } }, { name: "ctx-b", context: { cluster: "b" } }],
+            clusters: [{ name: "a", cluster: {} }, { name: "b", cluster: {} }],
+          }),
+          stderr: "",
+        };
+      }
+      if (args[0] === "get" && args[1] === "deployment") {
+        return {
+          code: 0,
+          stdout: JSON.stringify({ metadata: { labels: { "app.kubernetes.io/managed-by": "rigel-assistant" } } }),
+          stderr: "",
+        };
+      }
+      return { code: 1, stdout: "", stderr: "unexpected call" };
+    });
+    const applyCalls: string[] = [];
+    vi.spyOn(runMod, "runProcessWithStdin").mockImplementation(async (_prog, fullArgs, stdin) => {
+      if (fullArgs.includes("apply")) applyCalls.push(String(stdin));
+      return { code: 0, stdout: "", stderr: "" };
+    });
+    const policy = setCapability(DEFAULT_POLICY, "drain", true);
+    const res = await setRbac("ctx-a", "default", {
+      action: "setRbac", policy: serializePolicy(policy), rbacTarget: "all",
+    });
+    const result = JSON.parse(res.stdout) as { applied: string[]; failures: unknown[] };
+    expect(result.applied.sort()).toEqual(["ctx-a", "ctx-b"]);
+    // Config write + one ClusterRole apply per discovered context.
+    const clusterRoleApplies = applyCalls.filter((s) => /kind: ClusterRole\b/.test(s) && !/ClusterRoleBinding/.test(s));
+    expect(clusterRoleApplies).toHaveLength(2);
+  });
+});
+
+test("handleAssistant routes getRbac/setRbac", async () => {
+  vi.spyOn(runMod, "kubectl").mockResolvedValue({ code: 0, stdout: JSON.stringify({ data: {} }), stderr: "" });
+  const getRes = await handleAssistant(null, { action: "getRbac", namespace: "default" });
+  expect(JSON.parse(getRes.stdout)).toHaveProperty("policy");
+  vi.restoreAllMocks();
+
+  vi.spyOn(runMod, "kubectl").mockResolvedValue({ code: 0, stdout: JSON.stringify({ data: {} }), stderr: "" });
+  vi.spyOn(runMod, "runProcessWithStdin").mockResolvedValue({ code: 0, stdout: "", stderr: "" });
+  const setRes = await handleAssistant(null, {
+    action: "setRbac", namespace: "default", policy: serializePolicy(DEFAULT_POLICY), rbacTarget: "active",
+  });
+  expect(JSON.parse(setRes.stdout)).toHaveProperty("applied");
+  vi.restoreAllMocks();
+});

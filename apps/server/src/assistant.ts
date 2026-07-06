@@ -43,8 +43,25 @@ import {
 } from "@rigel/k8s/src/assistant";
 import { signalConfigUpdates } from "@rigel/k8s/src/signal";
 import { matrixConfigUpdates, matrixSecretYAML } from "@rigel/k8s/src/matrix";
-import { normalizeAlertRule, parseAlertRules, serializeAlertRules, nextAlertRules, type SuggestedAlert, parseDigests, serializeDigests, normalizeDigest, nextDigests, type DigestInput } from "@rigel/k8s";
+import {
+  normalizeAlertRule,
+  parseAlertRules,
+  serializeAlertRules,
+  nextAlertRules,
+  type SuggestedAlert,
+  parseDigests,
+  serializeDigests,
+  normalizeDigest,
+  nextDigests,
+  type DigestInput,
+  parsePolicy,
+  serializePolicy,
+  DEFAULT_POLICY,
+  type RbacPolicy,
+} from "@rigel/k8s";
 import { effectiveClaudeToken } from "./chatConfig";
+import { applyPolicy } from "./rbacApply";
+import { listContexts } from "./contexts";
 
 // ---------------------------------------------------------------------------
 // kubectl plumbing
@@ -122,7 +139,9 @@ export type AssistantAction =
   | "setCredentialSource"
   | "clearCredentialSource"
   | "listCredentialSecrets"
-  | "reconcileCredentialAnnotations";
+  | "reconcileCredentialAnnotations"
+  | "getRbac"
+  | "setRbac";
 
 export interface AssistantRequest {
   action: AssistantAction;
@@ -177,6 +196,11 @@ export interface AssistantRequest {
   credentialId?: keyof AssistantCredentials;
   secretName?: string;
   dataKey?: string;
+  // getRbac/setRbac — the operator-editable RBAC policy (docs/superpowers/specs/
+  // 2026-07-05-in-app-rbac-editor-design.md). `policy` is a serializePolicy()
+  // JSON string; `rbacTarget` picks the active context or every installed one.
+  policy?: string;
+  rbacTarget?: "active" | "all";
 }
 
 // ---------------------------------------------------------------------------
@@ -518,6 +542,90 @@ async function setAutofix(
     throw new Error("setAutofix requires at least one of autofixEnabled, autofixMaxPerDay, or autofixScope.");
   }
   return patchConfig(context, namespace, updates);
+}
+
+/** Pure: the assistant-config update a setRbac request writes — the policy,
+ *  serialized under the `rbacPolicy` key. */
+export function rbacConfigUpdate(policy: RbacPolicy): Record<string, string> {
+  return { rbacPolicy: serializePolicy(policy) };
+}
+
+/** Best-effort read of the live ClusterRole's rules, for the Permissions tab's
+ *  drift indicator. Returns null on any failure (missing/forbidden/unparseable)
+ *  rather than surfacing a read error over the stored policy. */
+async function readAppliedClusterRoleRules(
+  context: string | null,
+  run: (ctx: string | null, args: string[]) => Promise<RunResult> = kubectl,
+): Promise<unknown[] | null> {
+  const res = await run(context, ["get", "clusterrole", DEPLOYMENT_NAME, "-o", "json"]);
+  if (res.code !== 0) return null;
+  try {
+    return (JSON.parse(res.stdout) as { rules?: unknown[] }).rules ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Read the stored RBAC policy (assistant-config's `rbacPolicy` key), or
+ *  DEFAULT_POLICY when the key is absent (never installed / pre-editor
+ *  install). Includes a best-effort read of the live ClusterRole's rules for
+ *  drift — omitted (null) when that read fails. */
+export async function getRbac(context: string | null, namespace: string): Promise<RunResult> {
+  const data = await readConfigMapData(context, namespace, "assistant-config");
+  const policy = data.rbacPolicy ? parsePolicy(data.rbacPolicy) : DEFAULT_POLICY;
+  const appliedRules = await readAppliedClusterRoleRules(context);
+  return {
+    code: 0,
+    stdout: JSON.stringify({ policy: serializePolicy(policy), appliedRules }),
+    stderr: "",
+  };
+}
+
+/**
+ * Contexts (by kubeconfig name) that have the assistant installed: every known
+ * context whose `namespace` holds a rigel-assistant Deployment we manage
+ * (mirrors the `assertNoForeignDeployment` ownership check). A context that
+ * errors or holds a foreign Deployment is excluded rather than guessed at.
+ * `run` is injectable for cluster-free assertions.
+ */
+export async function discoverInstalledContexts(
+  namespace: string,
+  run: (ctx: string | null, args: string[]) => Promise<RunResult> = kubectl,
+): Promise<string[]> {
+  const contexts = await listContexts((args) => run(null, args));
+  const checks = await Promise.all(
+    contexts.map(async (c) => {
+      const res = await run(c.name, ["get", "deployment", DEPLOYMENT_NAME, "-n", namespace, "-o", "json"]);
+      if (res.code !== 0) return null;
+      try {
+        const labels = (JSON.parse(res.stdout) as { metadata?: { labels?: Record<string, string> } }).metadata?.labels;
+        return isAssistantManaged(labels) ? c.name : null;
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return checks.filter((name): name is string => name !== null);
+}
+
+/**
+ * Persist the operator's chosen RBAC policy (read-modify-write `assistant-config`,
+ * exactly like every other live setting) and apply it as a ClusterRole to the
+ * target context(s): the active context alone, or — for `rbacTarget: "all"` —
+ * every context with the assistant installed (`discoverInstalledContexts`).
+ * Never re-applies the namespaced SA/Role/binding (install-time only).
+ */
+export async function setRbac(
+  context: string | null,
+  namespace: string,
+  req: AssistantRequest,
+): Promise<RunResult> {
+  const policy = parsePolicy(req.policy);
+  await patchConfig(context, namespace, rbacConfigUpdate(policy));
+  const contexts =
+    req.rbacTarget === "all" ? await discoverInstalledContexts(namespace) : [context ?? ""];
+  const result = await applyPolicy({ policy, contexts }, { apply: (ctx, yaml) => applyStdin(ctx, yaml) });
+  return { code: 0, stdout: JSON.stringify(result), stderr: "" };
 }
 
 /** Live role switch: read-modify-write the role keys in assistant-config. No
@@ -949,6 +1057,10 @@ export async function handleAssistant(
       return clearCredentialSource(context, namespace, req);
     case "reconcileCredentialAnnotations":
       return reconcileCredentialAnnotations(context, namespace);
+    case "getRbac":
+      return getRbac(context, namespace);
+    case "setRbac":
+      return setRbac(context, namespace, req);
     default:
       throw new Error(`unknown action: ${String(req.action)}`);
   }
