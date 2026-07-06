@@ -64,7 +64,8 @@ Change exactly ONE file, make the MINIMAL edit that fixes the root cause, and NE
 Guidance:
 - Prefer the least invasive fix that addresses root cause. A pod stuck in CrashLoopBackOff after a recent rollout usually wants "rollback"; a transient crash wants "restart"; a wedged single pod managed by a controller wants "deletePod".
 - Only propose kubectl actions whose kind is in the list above. Anything destructive (deleting namespaces/PVCs/volumes, draining nodes, editing secrets/RBAC) is NOT available to you — if that is what's truly needed, do NOT emit an action; set the verdict to "uncertain" and explain in prose so it can be queued for the human.
-- Always include the namespace. Be concise.`;
+- Always include the namespace.
+- Write the "label" the way a helpful assistant would tell the operator what you're doing: start with the plain base verb for the kind (Restart / Scale / Roll back / Update / Delete / Cordon / Uncordon; for openFixPR use "Open a fix PR"), name the target, then say why in natural language. Example: "Restart backend-worker so Celery's heartbeat comes back and the readiness probes stop failing." One sentence, plain English, no jargon dumps and no trailing period.`;
 
 export interface WorkerOutput {
   /** Triage verdict — defaults SAFELY to "uncertain" when absent/garbled. */

@@ -35,6 +35,7 @@ import {
 } from "./detector.js";
 import { kubectl, kubectlApply } from "./kubectl.js";
 import { isRepoFixAction, toKubectlInvocations, type SuggestedAction } from "./action.js";
+import { conjugateDone, couldntPhrase, greeting } from "./notifyVoice.js";
 import type { RepoFixDeps } from "./repoFixDispatch.js";
 import { runThreadedDiagnosis } from "./threadedDiagnosis.js";
 import { runChatTurn } from "./chatTurn.js";
@@ -578,7 +579,7 @@ export async function tick(
             tier: "medium", verdict: "escalated", outcome: "queued",
             detail: `Opus escalated the fix (conf ${sup.verdict.confidence.toFixed(2)}): ${sup.verdict.reason}`, analysis: truncate(analysis),
           });
-          notifications.push(`▸ Needs approval (Opus escalated fix PR): ${action.label} — ${describe(incident)}`);
+          notifications.push(`▸ I'd like your OK to open a fix PR: ${action.label} — ${describe(incident)}`);
           continue;
         }
         // approve → create the fix ConfigMap + Job via the seam (dispatchRepoFix
@@ -608,7 +609,7 @@ export async function tick(
           at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
           tier: "blocked", outcome: "queued", detail: "queued for human (destructive)", analysis: truncate(analysis),
         });
-        notifications.push(`▸ Needs approval (destructive): ${action.label} — ${describe(incident)}`);
+        notifications.push(`▸ This one's destructive, so I'll wait for your OK: ${action.label} — ${describe(incident)}`);
         continue;
       }
 
@@ -644,7 +645,7 @@ export async function tick(
             tier: "medium", verdict: "escalated", outcome: "queued",
             detail: `Opus escalated (conf ${sup.verdict.confidence.toFixed(2)}): ${sup.verdict.reason}`, analysis: truncate(analysis),
           });
-          notifications.push(`▸ Needs approval (Opus escalated): ${action.label} — ${describe(incident)}`);
+          notifications.push(`▸ I'd like your OK on this one: ${action.label} — ${describe(incident)}`);
           continue;
         }
         execVerdict = "approved";
@@ -661,7 +662,7 @@ export async function tick(
           at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
           command: previewCommand(action), tier: tierStr, outcome: "queued", detail: why, analysis: truncate(analysis),
         });
-        notifications.push(`▸ Needs approval: ${action.label} — ${describe(incident)} (${why})`);
+        notifications.push(`▸ Waiting on your OK: ${action.label} — ${describe(incident)} (${why})`);
         continue;
       }
 
@@ -689,7 +690,11 @@ export async function tick(
           outcome: result.success ? "success" : "failure", detail: truncate(result.output), backupRef, analysis: truncate(analysis),
         });
         log(`${result.success ? "✓" : "✗"} ${action.label} — ${result.commands.join(" && ")}`);
-        notifications.push(`${result.success ? "✓" : "✗"} ${action.label} — ${describe(incident)}`);
+        notifications.push(
+          result.success
+            ? `✓ ${conjugateDone(action.kind, action.label)} — ${describe(incident)}`
+            : `✗ ${couldntPhrase(action.label)} — ${describe(incident)}`,
+        );
       } catch (e) {
         state = record(state, cfg, {
           at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
@@ -1024,7 +1029,7 @@ function truncate(s: string, max = 2000): string {
 /** Best-effort flush of this tick's notifications to the configured channels. */
 function flushNotifications(rc: RuntimeConfig, notifications: string[]): void {
   if (notifications.length === 0) return;
-  const text = `Rigel assistant:\n${notifications.join("\n")}`;
+  const text = `${greeting(notifications)}\n${notifications.join("\n")}`;
   if (rc.webhookUrl) void notifyWebhook(rc.webhookUrl, text);
   if (rc.signalApiUrl && rc.signalNumber) {
     void notifySignal(rc.signalApiUrl, rc.signalNumber, rc.signalRecipients, text);
