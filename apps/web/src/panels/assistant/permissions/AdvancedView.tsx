@@ -2,7 +2,7 @@
 import { Fragment } from "react";
 import { Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { cell, hasCell, MATRIX_RESOURCES, VERBS, type RbacPolicy } from "@rigel/k8s";
+import { cell, hasCell, isBaselineReadCell, MATRIX_RESOURCES, VERBS, type RbacPolicy } from "@rigel/k8s";
 
 /** Display label for an apiGroup's group-header row ("" -> "core"). */
 function groupLabel(apiGroup: string): string {
@@ -77,13 +77,14 @@ export function AdvancedView({
                       {VERBS.map((v) => {
                         const allowed = (allowedVerbs as readonly string[]).includes(v);
                         const c = cell(r.apiGroup, r.resource, v);
+                        const baseline = isBaselineReadCell(c);
                         return (
                           <td key={v} className="px-2 py-2 text-center">
                             <input
                               type="checkbox"
                               aria-label={`${r.resource} ${v}`}
-                              checked={hasCell(staged, c)}
-                              disabled={disabled || !allowed}
+                              checked={baseline || hasCell(staged, c)}
+                              disabled={disabled || !allowed || baseline}
                               onChange={(e) => onToggleCell(c, e.target.checked)}
                               className="size-[15px] accent-[var(--accent-primary)] disabled:opacity-20"
                             />
@@ -103,7 +104,7 @@ export function AdvancedView({
         <Lock className="mt-px size-3.5 shrink-0" aria-hidden />
         <span>
           Secrets and roles / rolebindings aren&apos;t editable here — the assistant can never read
-          secrets or escalate itself.
+          secrets or escalate itself. Reads are always on (a non-editable baseline).
         </span>
       </div>
     </div>

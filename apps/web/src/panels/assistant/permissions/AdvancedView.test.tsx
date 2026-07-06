@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, test, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { cell, DEFAULT_POLICY, VERBS } from "@rigel/k8s";
@@ -59,5 +59,12 @@ describe("AdvancedView", () => {
   it("respects disabled on every cell", () => {
     render(<AdvancedView staged={DEFAULT_POLICY} onToggleCell={vi.fn()} disabled />);
     expect(screen.getByLabelText("pods get")).toBeDisabled();
+  });
+
+  test("baseline read cells render checked and disabled even when absent from the policy", () => {
+    render(<AdvancedView staged={{ cells: [] }} onToggleCell={() => {}} />);
+    const podsGet = screen.getByRole("checkbox", { name: "pods get" });
+    expect(podsGet).toBeChecked();
+    expect(podsGet).toBeDisabled();
   });
 });
