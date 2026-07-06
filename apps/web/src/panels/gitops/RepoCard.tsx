@@ -55,7 +55,7 @@ export function RepoCard({
       {/* One row per deployment — each independently syncable. */}
       <div className="mt-3 flex flex-col gap-2 border-t pt-2.5" style={{ borderColor: "var(--border-subtle)" }}>
         {source.deployments.length === 0 && (
-          <span className="text-[11px]" style={{ color: "var(--fg-tertiary)" }}>No deployments yet — add a manifest folder.</span>
+          <span className="text-2xs" style={{ color: "var(--fg-tertiary)" }}>No deployments yet — add a manifest folder.</span>
         )}
         {source.deployments.map((dep) => (
           <DeploymentRow

@@ -30,7 +30,7 @@ function SummaryItem({
   return (
     <div className="flex items-center gap-2">
       <Icon className={`size-[15px] ${color}`} />
-      <span className={`text-[13px] font-semibold ${color}`}>{text}</span>
+      <span className={`text-xs font-semibold ${color}`}>{text}</span>
     </div>
   );
 }
@@ -39,7 +39,7 @@ function LegendDot({ color, label }: { color: string; label: string }) {
   return (
     <div className="flex items-center gap-[5px]">
       <span className="size-[7px] rounded-full" style={{ background: color }} />
-      <span className="text-[11.5px] text-[var(--fg-tertiary)]">{label}</span>
+      <span className="text-2xs text-[var(--fg-tertiary)]">{label}</span>
     </div>
   );
 }
@@ -69,17 +69,17 @@ export function SubjectDetail({
     <div className="flex min-w-0 flex-1 flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-[14px] gap-y-1">
-          <span className="break-all font-[var(--font-mono)] text-[18px] font-semibold text-[var(--fg-primary)]">
+          <span className="break-all font-[var(--font-mono)] text-lg font-semibold text-[var(--fg-primary)]">
             {subject.name}
           </span>
-          <span className="text-[13px] text-[var(--fg-tertiary)]">
+          <span className="text-xs text-[var(--fg-tertiary)]">
             {subject.namespace ? `${subject.kind} · ${subject.namespace}` : subject.kind}
           </span>
         </div>
         <button
           type="button"
           onClick={() => onAsk(subject)}
-          className="flex shrink-0 items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-strong)] px-[15px] py-[9px] text-[13px] text-[var(--fg-primary)] hover:bg-white/[0.04]"
+          className="flex shrink-0 items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-strong)] px-[15px] py-[9px] text-xs text-[var(--fg-primary)] hover:bg-white/[0.04]"
         >
           <MessageSquare className="size-[14px]" />
           Ask Rigel about access
@@ -100,10 +100,10 @@ export function SubjectDetail({
 
       <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-2">
         <div className="flex flex-col gap-[3px]">
-          <span className="font-[var(--font-mono)] text-[11px] font-semibold tracking-[1px] text-[var(--fg-secondary)]">
+          <span className="font-[var(--font-mono)] text-2xs font-semibold tracking-[1px] text-[var(--fg-secondary)]">
             ACCESS
           </span>
-          <span className="text-[12.5px] text-[var(--fg-tertiary)]">
+          <span className="text-xs text-[var(--fg-tertiary)]">
             Roles bound to this subject, and the rules they grant
           </span>
         </div>

@@ -118,13 +118,14 @@ export function GlobalHeader({
           style={{ color: "var(--fg-tertiary)", flexShrink: 0 }}
         />
         <span
-          style={{ fontSize: 12, color: "var(--fg-tertiary)", fontWeight: 500 }}
+          className="text-xs"
+          style={{ color: "var(--fg-tertiary)", fontWeight: 500 }}
         >
           Search…
         </span>
         <span
+          className="text-3xs"
           style={{
-            fontSize: 10,
             fontWeight: 600,
             color: "var(--fg-tertiary)",
             background: "var(--surface-elevated)",

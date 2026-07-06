@@ -88,7 +88,7 @@ function QuestionForm({
     >
       {fields.map((field) => (
         <label key={field.name} style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-          <span style={{ fontSize: "11px", fontWeight: 600, color: COLOR }}>
+          <span className="text-2xs" style={{ fontWeight: 600, color: COLOR }}>
             {field.label ?? field.name}
             {field.required === false ? null : <span style={{ opacity: 0.6 }}> *</span>}
           </span>
@@ -106,8 +106,8 @@ function QuestionForm({
                 submit();
               }
             }}
+            className="text-xs"
             style={{
-              fontSize: "12px",
               padding: "5px 8px",
               borderRadius: "4px",
               color: "inherit",
@@ -129,6 +129,7 @@ function QuestionForm({
         disabled={!canSubmit}
         onClick={submit}
         aria-label="Submit"
+        className="text-xs"
         style={{
           alignSelf: "flex-start",
           color: COLOR,
@@ -136,7 +137,6 @@ function QuestionForm({
           border: `1px solid ${BORDER}`,
           borderRadius: "4px",
           padding: "4px 8px",
-          fontSize: "12px",
           fontWeight: 600,
           cursor: canSubmit ? "pointer" : "not-allowed",
           opacity: canSubmit ? 1 : 0.4,
@@ -188,7 +188,7 @@ export function SuggestedQuestionList({ questions, onAnswer }: Props) {
 
         return (
           <div key={qi} className="flex flex-col gap-1.5">
-            <div className="text-[12px] font-medium text-foreground">{q.question}</div>
+            <div className="text-xs font-medium text-foreground">{q.question}</div>
             {q.options.map((opt, oi) => {
               const hasFields = (opt.fields?.length ?? 0) > 0;
 

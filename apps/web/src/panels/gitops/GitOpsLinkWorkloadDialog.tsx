@@ -67,17 +67,17 @@ export function LinkWorkloadDialog({
             </div>
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
-                <DialogTitle className="text-[19px] font-bold text-[var(--fg-primary)]">
+                <DialogTitle className="text-lg font-bold text-[var(--fg-primary)]">
                   Link a workload to
                 </DialogTitle>
                 <span className="inline-flex items-center gap-1.5 rounded bg-[var(--accent-primary)]/[0.12] px-2 py-0.5">
                   <Box className="size-3 text-[var(--accent-soft)]" />
-                  <span className="font-mono text-[13px] font-medium text-[var(--accent-soft)]">
+                  <span className="font-mono text-xs font-medium text-[var(--accent-soft)]">
                     {target.dep.name}
                   </span>
                 </span>
               </div>
-              <DialogDescription className="max-w-[430px] text-[13px] leading-[1.45] text-[var(--fg-tertiary)]">
+              <DialogDescription className="max-w-[430px] text-xs leading-[1.45] text-[var(--fg-tertiary)]">
                 The workload is tagged with this deployment so the AI has context and can open
                 fix-PRs.
               </DialogDescription>
@@ -110,10 +110,10 @@ export function LinkWorkloadDialog({
           {/* List panel */}
           <div className="flex flex-col overflow-hidden rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)]">
             <div className="flex items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3.5 py-2">
-              <span className="font-mono text-[10.5px] tracking-[0.08em] text-[var(--fg-tertiary)] uppercase">
+              <span className="font-mono text-3xs tracking-[0.08em] text-[var(--fg-tertiary)] uppercase">
                 Workloads
               </span>
-              <span className="font-mono text-[10.5px] text-[var(--fg-tertiary)]">
+              <span className="font-mono text-3xs text-[var(--fg-tertiary)]">
                 {candidates.length} total
               </span>
             </div>
@@ -157,7 +157,7 @@ export function LinkWorkloadDialog({
                       </span>
                       <div className="ml-auto flex shrink-0 items-center gap-2">
                         {already && (
-                          <span className="font-mono text-[10px] text-[var(--fg-tertiary)]">
+                          <span className="font-mono text-3xs text-[var(--fg-tertiary)]">
                             re-point from {already}
                           </span>
                         )}
@@ -170,11 +170,11 @@ export function LinkWorkloadDialog({
             </div>
 
             <div className="flex items-center justify-between border-t border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3.5 py-2">
-              <span className="font-mono text-[11px] text-[var(--fg-tertiary)]">
+              <span className="font-mono text-2xs text-[var(--fg-tertiary)]">
                 Showing {filtered.length} of {candidates.length}
               </span>
               {filtered.length > 8 && (
-                <span className="flex items-center gap-1.5 text-[11.5px] text-[var(--fg-tertiary)]">
+                <span className="flex items-center gap-1.5 text-2xs text-[var(--fg-tertiary)]">
                   Scroll for more
                   <ChevronDown className="size-3" />
                 </span>
@@ -188,12 +188,12 @@ export function LinkWorkloadDialog({
           {selected ? (
             <div className="flex items-center gap-1.5">
               <Check className="size-3.5 text-[var(--accent-primary)]" />
-              <span className="text-[12.5px] text-[var(--fg-secondary)]">
+              <span className="text-xs text-[var(--fg-secondary)]">
                 {selected.metadata.name} selected
               </span>
             </div>
           ) : (
-            <span className="text-[12.5px] text-[var(--fg-tertiary)]">
+            <span className="text-xs text-[var(--fg-tertiary)]">
               Select a workload to link
             </span>
           )}

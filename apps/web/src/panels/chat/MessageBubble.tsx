@@ -93,7 +93,7 @@ export function MessageBubble({ message, onAction, onRunBatch, onAnswer, agentNa
           {isAssistant ? <RigelMark size={20} /> : <Icon className="size-4" style={{ color }} />}
         </div>
         <div
-          className="text-[10px] font-semibold uppercase tracking-[0.5px]"
+          className="text-3xs font-semibold uppercase tracking-[0.5px]"
           style={{ color }}
         >
           {label}
@@ -112,7 +112,7 @@ export function MessageBubble({ message, onAction, onRunBatch, onAnswer, agentNa
           <p
             className={cn(
               "whitespace-pre-wrap select-text",
-              isSystem ? "text-xs text-muted-foreground" : "text-[13px] text-foreground",
+              isSystem ? "text-xs text-muted-foreground" : "text-xs text-foreground",
             )}
           >
             {display}

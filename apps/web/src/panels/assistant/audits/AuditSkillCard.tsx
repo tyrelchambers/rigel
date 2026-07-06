@@ -27,7 +27,7 @@ export function AuditSkillCard({ title, description, Icon, counts, onRun, locked
           </div>
         </div>
         {locked ? (
-          <span className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[10px] font-medium text-[var(--fg-tertiary)] ring-1 ring-[var(--border-subtle)]">
+          <span className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 font-mono text-3xs font-medium text-[var(--fg-tertiary)] ring-1 ring-[var(--border-subtle)]">
             <Lock className="size-3" />
             Upgrade
           </span>

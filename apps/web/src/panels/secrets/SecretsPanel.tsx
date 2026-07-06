@@ -11,6 +11,7 @@ import { StatusBadge } from "@/panels/components/StatusBadge";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { PanelHeader } from "@/panels/components/PanelHeader";
+import { PanelSearch } from "@/panels/components/PanelSearch";
 import { viewYaml, editYaml } from "@/store/yamlViewer";
 import { SecretEditor } from "./SecretEditor";
 import {
@@ -138,12 +139,11 @@ export default function SecretsPanel() {
         count={shown}
         loading={isLoading}
       >
-        <input
-          type="text"
+        <PanelSearch
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onValueChange={setSearch}
           placeholder="Search secrets…"
-          className="w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="w-56"
         />
         <Button size="sm" onClick={openCreate}>
           <Plus className="size-4" aria-hidden /> New Secret
@@ -202,9 +202,9 @@ export default function SecretsPanel() {
 
               {/* Namespace chip */}
               <span
+                className="text-3xs"
                 style={{
                   fontFamily: "ui-monospace, monospace",
-                  fontSize: 10,
                   color: "var(--fg-tertiary)",
                   background: "var(--surface-sunken)",
                   padding: "1px 5px",
@@ -227,9 +227,9 @@ export default function SecretsPanel() {
 
               {/* Age — dim */}
               <span
+                className="text-3xs"
                 style={{
                   fontFamily: "ui-monospace, monospace",
-                  fontSize: 10,
                   color: "var(--fg-tertiary)",
                   whiteSpace: "nowrap",
                 }}
@@ -287,7 +287,7 @@ function SecretDetail({ secret, onEdit }: { secret: Secret; onEdit: () => void }
     <div className="space-y-3">
       {/* STATUS */}
       <div className="space-y-1">
-        <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+        <h3 className="text-3xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">
           Status
         </h3>
         <dl className="grid grid-cols-[6rem_1fr] gap-x-3 gap-y-0.5 text-xs font-mono">
@@ -312,7 +312,7 @@ function SecretDetail({ secret, onEdit }: { secret: Secret; onEdit: () => void }
 
       {/* KEYS */}
       <div className="space-y-1">
-        <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+        <h3 className="text-3xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">
           Keys ({total})
         </h3>
         {keys.length === 0 ? (
@@ -372,7 +372,7 @@ function SecretDetail({ secret, onEdit }: { secret: Secret; onEdit: () => void }
         className="flex items-center gap-2 border-t pt-3"
         style={{ borderColor: "var(--border-subtle)" }}
       >
-        <span className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground mr-2">
+        <span className="text-3xs font-semibold uppercase tracking-[0.05em] text-muted-foreground mr-2">
           Manage
         </span>
         <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={onEdit}>

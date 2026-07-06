@@ -54,10 +54,10 @@ function Row({
     >
       <Icon className="size-[15px] shrink-0 text-[var(--fg-tertiary)]" />
       <div className="flex min-w-0 flex-col">
-        <span className="truncate font-[var(--font-mono)] text-[13px] font-medium text-[var(--fg-primary)]">
+        <span className="truncate font-[var(--font-mono)] text-xs font-medium text-[var(--fg-primary)]">
           {name}
         </span>
-        {sub && <span className="truncate text-[11px] text-[var(--fg-tertiary)]">{sub}</span>}
+        {sub && <span className="truncate text-2xs text-[var(--fg-tertiary)]">{sub}</span>}
       </div>
       <span className="flex-1" />
       {dangerous && <span className="size-[7px] shrink-0 rounded-full bg-[var(--status-failed)]" />}
@@ -78,10 +78,10 @@ export function RbacList({
     <div className="flex w-[452px] shrink-0 flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border-subtle)] bg-[var(--surface-elevated)]">
       <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-[14px] py-[13px]">
         <div className="flex items-center gap-2">
-          <span className="font-[var(--font-mono)] text-[11px] font-semibold tracking-[1px] text-[var(--fg-secondary)]">
+          <span className="font-[var(--font-mono)] text-2xs font-semibold tracking-[1px] text-[var(--fg-secondary)]">
             {view === "subjects" ? "SUBJECTS" : "ROLES"}
           </span>
-          <span className="font-[var(--font-mono)] text-[11px] text-[var(--fg-tertiary)]">
+          <span className="font-[var(--font-mono)] text-2xs text-[var(--fg-tertiary)]">
             {view === "subjects" ? subjects.length : roleItems.length}
           </span>
         </div>

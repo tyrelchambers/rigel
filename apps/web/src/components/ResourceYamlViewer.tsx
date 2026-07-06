@@ -64,7 +64,7 @@ export function ResourceYamlViewer() {
         <DialogContent className="max-w-4xl">
           <DialogHeader>
             <FileCode className="size-5 shrink-0" style={{ color: "var(--accent-primary)" }} />
-            <DialogTitle className="min-w-0 flex-1 truncate font-mono text-[15px]">{title}</DialogTitle>
+            <DialogTitle className="min-w-0 flex-1 truncate font-mono text-base">{title}</DialogTitle>
             {target.editable && !editing && data && (
               <Button variant="outline" size="sm" className="gap-1.5" onClick={startEdit}>
                 <Pencil className="size-3.5" /> Edit

@@ -8,7 +8,7 @@ import type { ReactNode } from "react";
 /** Small uppercase mono section label (also used standalone for section headers). */
 export function SectionLabel({ children }: { children: ReactNode }) {
   return (
-    <span className="font-mono text-[10.5px] uppercase tracking-[1px] text-[var(--fg-tertiary)]">
+    <span className="font-mono text-3xs uppercase tracking-[1px] text-[var(--fg-tertiary)]">
       {children}
     </span>
   );

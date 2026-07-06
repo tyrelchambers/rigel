@@ -328,26 +328,26 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
               >
                 <AlertTriangle size={16} style={{ color: WARN_RED }} />
               </span>
-              <span style={{ fontSize: 16, fontWeight: 700, color: "#FFFFFF" }}>Recent warnings</span>
+              <span className="text-base" style={{ fontWeight: 700, color: "#FFFFFF" }}>Recent warnings</span>
               {warnings.length > 0 && (
                 <span
-                  className="inline-flex items-center justify-center"
-                  style={{ borderRadius: 999, background: WARN_TINT, padding: "3px 10px", fontSize: 12, fontWeight: 600, color: WARN_RED }}
+                  className="inline-flex items-center justify-center text-xs"
+                  style={{ borderRadius: 999, background: WARN_TINT, padding: "3px 10px", fontWeight: 600, color: WARN_RED }}
                 >
                   {warnings.length}
                 </span>
               )}
             </div>
             <span
-              className="inline-flex items-center"
-              style={{ gap: 6, borderRadius: 8, border: "1px solid rgba(255,255,255,0.07)", padding: "6px 11px", fontSize: 12, fontWeight: 500, color: WARN_MUTED }}
+              className="inline-flex items-center text-xs"
+              style={{ gap: 6, borderRadius: 8, border: "1px solid rgba(255,255,255,0.07)", padding: "6px 11px", fontWeight: 500, color: WARN_MUTED }}
             >
               <History size={13} /> Last hour
             </span>
           </div>
 
           {recentWarnings.length === 0 ? (
-            <p style={{ fontSize: 13, color: WARN_MUTED }}>No warning events.</p>
+            <p className="text-xs" style={{ color: WARN_MUTED }}>No warning events.</p>
           ) : (
             <>
               <div className="flex flex-col" style={{ gap: 8 }}>
@@ -359,7 +359,7 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
                   />
                 ))}
               </div>
-              <div style={{ fontSize: 13, color: WARN_MUTED, paddingTop: 2 }}>
+              <div className="text-xs" style={{ color: WARN_MUTED, paddingTop: 2 }}>
                 Showing {recentWarnings.length} of {warnings.length} {plural(warnings.length, "warning")}
               </div>
             </>
@@ -553,12 +553,12 @@ export function WarningRow({
         >
           <span style={{ width: 6, height: 6, borderRadius: "50%", background: WARN_RED, flexShrink: 0 }} />
           <span
+            className="text-xs"
             style={{
               minWidth: 0,
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
-              fontSize: 12.5,
               fontWeight: 600,
               color: WARN_RED,
             }}
@@ -569,7 +569,7 @@ export function WarningRow({
         {kind && (
           <span className="inline-flex items-center" style={{ gap: 6 }}>
             <Box size={13} style={{ color: WARN_MUTED }} />
-            <span style={{ fontSize: 12, fontWeight: 500, color: WARN_MUTED }}>{kind}</span>
+            <span className="text-xs" style={{ fontWeight: 500, color: WARN_MUTED }}>{kind}</span>
           </span>
         )}
       </div>
@@ -580,13 +580,13 @@ export function WarningRow({
         <div className="flex min-w-0 items-center" style={{ gap: 9 }}>
           <span
             title={resource}
+            className="text-xs"
             style={{
               minWidth: 0,
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
               fontFamily: "ui-monospace, monospace",
-              fontSize: 13,
               fontWeight: 500,
               color: "#A6A6AE",
             }}
@@ -595,17 +595,17 @@ export function WarningRow({
           </span>
           {ns && (
             <span
-              className="shrink-0"
-              style={{ borderRadius: 6, background: "rgba(255,255,255,0.05)", padding: "3px 9px", fontFamily: "ui-monospace, monospace", fontSize: 11, color: WARN_MUTED }}
+              className="shrink-0 text-2xs"
+              style={{ borderRadius: 6, background: "rgba(255,255,255,0.05)", padding: "3px 9px", fontFamily: "ui-monospace, monospace", color: WARN_MUTED }}
             >
               {ns}
             </span>
           )}
-          <span className="shrink-0" style={{ fontSize: 12.5, fontWeight: 500, color: WARN_MUTED }} title={tooltip}>
+          <span className="shrink-0 text-xs" style={{ fontWeight: 500, color: WARN_MUTED }} title={tooltip}>
             {age}
           </span>
         </div>
-        <span style={{ fontSize: 13, lineHeight: 1.5, color: "#B9B9C1" }}>{event.message ?? "—"}</span>
+        <span className="text-xs" style={{ lineHeight: 1.5, color: "#B9B9C1" }}>{event.message ?? "—"}</span>
       </div>
 
       {/* Investigate (AI) — trailing, vertically centered */}
@@ -614,7 +614,7 @@ export function WarningRow({
           type="button"
           onClick={onInvestigate}
           title="Investigate this warning with AI"
-          className="shrink-0"
+          className="shrink-0 text-xs"
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -622,7 +622,6 @@ export function WarningRow({
             border: "1px solid rgba(255,255,255,0.08)",
             borderRadius: 7,
             padding: "5px 11px",
-            fontSize: 12,
             fontWeight: 600,
             color: "#D8D8DE",
             cursor: "pointer",

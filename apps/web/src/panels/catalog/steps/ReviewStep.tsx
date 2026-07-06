@@ -66,7 +66,7 @@ export function ReviewStep({
           <h3 className="wiz-section-label" style={{ marginBottom: 0 }}>
             {isHelm ? "values.yaml" : "Manifest"}
           </h3>
-          <span style={{ fontFamily: "var(--font-mono, ui-monospace)", fontSize: 10, color: "var(--fg-tertiary)" }}>
+          <span className="text-3xs" style={{ fontFamily: "var(--font-mono, ui-monospace)", color: "var(--fg-tertiary)" }}>
             {lineCount} lines
           </span>
         </div>

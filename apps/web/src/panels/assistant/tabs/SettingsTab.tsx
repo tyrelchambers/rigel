@@ -32,7 +32,7 @@ export function SettingsTab() {
               </p>
               <div className="mt-1 flex items-center gap-2">
                 <span
-                  className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-medium ${
+                  className={`rounded px-1.5 py-0.5 font-mono text-3xs font-medium ${
                     d.agentPodReason
                       ? "bg-red-500/15 text-red-600 dark:text-red-400"
                       : d.agentPod.status?.phase === "Running"
@@ -42,7 +42,7 @@ export function SettingsTab() {
                 >
                   {d.agentPodReason ?? d.agentPod.status?.phase ?? "Unknown"}
                 </span>
-                <span className="font-mono text-[10px] text-muted-foreground">
+                <span className="font-mono text-3xs text-muted-foreground">
                   {d.agentPodRestarts} restart{d.agentPodRestarts === 1 ? "" : "s"}
                 </span>
               </div>

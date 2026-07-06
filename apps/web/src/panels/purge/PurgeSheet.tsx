@@ -212,7 +212,7 @@ export function PurgeSheet({ target, open, onClose }: PurgeSheetProps) {
                     >
                       {r.selected && <CheckCircle2 className="size-3" />}
                     </span>
-                    <span className="shrink-0 rounded bg-accent/40 px-1.5 py-0.5 font-mono text-[10px] text-accent-foreground">
+                    <span className="shrink-0 rounded bg-accent/40 px-1.5 py-0.5 font-mono text-3xs text-accent-foreground">
                       {r.kind}
                     </span>
                     <span className="min-w-0 flex-1 truncate font-mono text-xs">{r.name}</span>
@@ -223,7 +223,7 @@ export function PurgeSheet({ target, open, onClose }: PurgeSheetProps) {
 
             {/* Selection summary */}
             {plan.resources.length > 0 && (
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-2xs text-muted-foreground">
                 {selectedCount} of {plan.resources.length} selected
               </p>
             )}
@@ -251,7 +251,7 @@ export function PurgeSheet({ target, open, onClose }: PurgeSheetProps) {
                   <span className="block text-xs font-semibold text-destructive">
                     Also drop database {plan.databaseHint} — irreversible
                   </span>
-                  <span className="block text-[11px] text-muted-foreground">
+                  <span className="block text-2xs text-muted-foreground">
                     Deletes the app's logical database inside the shared server. Off by default.
                   </span>
                 </span>
@@ -260,7 +260,7 @@ export function PurgeSheet({ target, open, onClose }: PurgeSheetProps) {
 
             {/* Confirm input */}
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              <label className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
                 Confirm
               </label>
               <input

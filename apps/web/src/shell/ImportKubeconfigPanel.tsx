@@ -36,7 +36,7 @@ export function ImportKubeconfigPanel({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <label htmlFor="kubeconfig-text" style={{ fontSize: 13, color: "var(--fg-secondary)" }}>
+      <label htmlFor="kubeconfig-text" className="text-xs" style={{ color: "var(--fg-secondary)" }}>
         Paste a kubeconfig
       </label>
       <textarea
@@ -45,13 +45,14 @@ export function ImportKubeconfigPanel({
         onChange={(e) => setText(e.target.value)}
         spellCheck={false}
         rows={10}
+        className="text-xs"
         style={{
-          fontFamily: "var(--font-mono, monospace)", fontSize: 12, padding: 8, borderRadius: 8,
+          fontFamily: "var(--font-mono, monospace)", padding: 8, borderRadius: 8,
           background: "var(--surface-primary)", color: "var(--fg-primary)",
           border: "1px solid var(--border-strong)", resize: "vertical",
         }}
       />
-      {error ? <div style={{ color: "var(--destructive)", fontSize: 12 }}>{error}</div> : null}
+      {error ? <div className="text-xs" style={{ color: "var(--destructive)" }}>{error}</div> : null}
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <Button disabled={!text.trim() || busy} onClick={submit}>
           {busy ? "Importing…" : "Import"}

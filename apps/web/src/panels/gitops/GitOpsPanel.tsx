@@ -61,7 +61,7 @@ export default function GitOpsPanel() {
 
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
         {sources && sources.length === 0 && (
-          <div style={{ textAlign: "center", color: "var(--fg-tertiary)", padding: "48px 0", fontSize: 13 }}>
+          <div className="text-xs" style={{ textAlign: "center", color: "var(--fg-tertiary)", padding: "48px 0" }}>
             <FolderGit2 className="mx-auto mb-3 size-8 opacity-50" />
             No Git repos yet. Add a repo to deploy its manifests.
           </div>

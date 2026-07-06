@@ -26,8 +26,8 @@ export function ImagePullSecretsField({ value, secrets, onChange }: ImagePullSec
 
   return (
     <div className="space-y-2 rounded-md border p-3">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Image pull secrets</div>
-      <p className="text-[11px] text-muted-foreground">Authenticate to private registries (e.g. GHCR) when pulling images.</p>
+      <div className="text-3xs font-semibold uppercase tracking-wide text-muted-foreground">Image pull secrets</div>
+      <p className="text-2xs text-muted-foreground">Authenticate to private registries (e.g. GHCR) when pulling images.</p>
       <div className="flex flex-wrap items-center gap-2">
         {value.length === 0 && <span className="text-xs text-muted-foreground">None</span>}
         {value.map((n) => (

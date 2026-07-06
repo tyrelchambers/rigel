@@ -75,7 +75,7 @@ export function Tab({
       disabled={disabled}
       onClick={() => ctx.onValueChange(value)}
       className={cn(
-        "flex items-center gap-[7px] rounded-[4px] px-3.5 py-[7px] text-[13px] transition-colors",
+        "flex items-center gap-[7px] rounded-[4px] px-3.5 py-[7px] text-xs transition-colors",
         "disabled:pointer-events-none disabled:opacity-50",
         isActive
           ? "bg-white/[0.08] font-semibold text-[var(--fg-primary)]"
@@ -92,7 +92,7 @@ export function Tab({
       {badge != null && badge > 0 && (
         <span
           className={cn(
-            "rounded-full bg-white/[0.08] px-[7px] py-px font-mono text-[11px] font-semibold tabular-nums",
+            "rounded-full bg-white/[0.08] px-[7px] py-px font-mono text-2xs font-semibold tabular-nums",
             isActive ? "text-[var(--fg-primary)]" : "text-[var(--fg-secondary)]",
           )}
         >

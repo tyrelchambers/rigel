@@ -356,9 +356,9 @@ export default function LogsPanel() {
                   >
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-mono text-xs font-medium">{it.name}</div>
-                      <div className="truncate font-mono text-[10px] text-muted-foreground">{it.namespace}</div>
+                      <div className="truncate font-mono text-3xs text-muted-foreground">{it.namespace}</div>
                     </div>
-                    <span className={`font-mono text-[10px] ${it.unhealthy ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}>
+                    <span className={`font-mono text-3xs ${it.unhealthy ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}>
                       {it.statusText}
                     </span>
                   </button>
@@ -391,7 +391,7 @@ export default function LogsPanel() {
                 style={{ backgroundColor: podColor(selectedItem.name) }}
               />
               <span className="font-mono text-sm font-semibold">{selectedItem.name}</span>
-              <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+              <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-3xs text-muted-foreground">
                 {selectedItem.namespace}
               </span>
               <Button
@@ -463,9 +463,9 @@ export default function LogsPanel() {
                 {/* Stats — fixed, never wraps. One always-mounted status region
                     announces regex errors; the line count is ambient (not aria-live). */}
                 {query.error ? (
-                  <span className="ml-1 font-mono text-[10px] text-destructive" role="status">invalid pattern</span>
+                  <span className="ml-1 font-mono text-3xs text-destructive" role="status">invalid pattern</span>
                 ) : (
-                  <span className="ml-1 flex items-center gap-2 whitespace-nowrap font-mono text-[10px] tabular-nums text-muted-foreground" role="status">
+                  <span className="ml-1 flex items-center gap-2 whitespace-nowrap font-mono text-3xs tabular-nums text-muted-foreground" role="status">
                     <span>{filtered.length.toLocaleString()} / {stats.total.toLocaleString()} lines</span>
                     {stats.errors > 0 && <span className="text-red-600 dark:text-red-400">{stats.errors.toLocaleString()} err</span>}
                     {stats.total >= MAX_LINES && <span className="rounded bg-amber-500/15 px-1 text-amber-700 dark:text-amber-400">buffer full</span>}
@@ -519,7 +519,7 @@ export default function LogsPanel() {
               </div>
 
               {/* Row 2 — source scope (container / pod isolation) · stream options. */}
-              <div className="flex items-center gap-3 text-[10px]">
+              <div className="flex items-center gap-3 text-3xs">
                 {containers.length > 1 && (
                   <label className="flex items-center gap-1.5">
                     <span className="uppercase tracking-wide text-muted-foreground">Container</span>
@@ -615,7 +615,7 @@ export default function LogsPanel() {
               </pre>
             )}
             {previous && (
-              <div className="border-b bg-amber-500/10 px-3 py-1.5 font-mono text-[11px] text-amber-700 dark:text-amber-400" role="status">
+              <div className="border-b bg-amber-500/10 px-3 py-1.5 font-mono text-2xs text-amber-700 dark:text-amber-400" role="status">
                 previous instance · not live — showing the crashed container's last logs
               </div>
             )}
@@ -628,7 +628,7 @@ export default function LogsPanel() {
               <div
                 ref={scrollRef}
                 onScroll={onScroll}
-                className="absolute inset-0 overflow-auto font-mono text-[11px]"
+                className="absolute inset-0 overflow-auto font-mono text-2xs"
                 style={{ overflowAnchor: "none" }}
               >
                 {/* Connecting / waiting state — selected but no lines yet */}

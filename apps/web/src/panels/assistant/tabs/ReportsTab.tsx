@@ -43,7 +43,7 @@ import { relativeTime } from "../display";
 // ---------------------------------------------------------------------------
 
 const FIELD =
-  "w-full rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3 py-2.5 text-[13px] text-[var(--fg-primary)] outline-none transition-colors placeholder:text-[var(--fg-tertiary)] focus:border-[var(--accent-primary)]";
+  "w-full rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3 py-2.5 text-xs text-[var(--fg-primary)] outline-none transition-colors placeholder:text-[var(--fg-tertiary)] focus:border-[var(--accent-primary)]";
 
 const CHANNEL_META: Record<DigestChannel, { label: string; Icon: LucideIcon }> = {
   signal: { label: "Signal", Icon: MessageCircle },
@@ -79,7 +79,7 @@ function lastSentLabel(iso?: string): string {
 /** Mono field caption sitting above an input (Pencil: 11px, tertiary, tracked). */
 function Caption({ children }: { children: ReactNode }) {
   return (
-    <span className="font-mono text-[11px] tracking-[0.5px] text-[var(--fg-tertiary)]">
+    <span className="font-mono text-2xs tracking-[0.5px] text-[var(--fg-tertiary)]">
       {children}
     </span>
   );
@@ -105,7 +105,7 @@ function Segmented<T extends string>({
             type="button"
             aria-pressed={active}
             onClick={() => onChange(o.value)}
-            className={`flex-1 rounded-sm py-1.5 text-[13px] transition-colors ${
+            className={`flex-1 rounded-sm py-1.5 text-xs transition-colors ${
               active
                 ? "border border-[var(--border-subtle)] bg-white/[0.08] font-semibold text-[var(--fg-primary)]"
                 : "text-[var(--fg-tertiary)] hover:text-[var(--fg-primary)]"
@@ -428,7 +428,7 @@ export function ReportsTab() {
           </DialogHeader>
           <DialogBody>
           <div className="flex flex-col gap-4">
-            <p className="text-[13px] leading-[1.5] text-[var(--fg-tertiary)]">
+            <p className="text-xs leading-[1.5] text-[var(--fg-tertiary)]">
               A short synopsis of overnight incidents, fixes, and current health, delivered on your
               schedule.
             </p>
@@ -466,7 +466,7 @@ export function ReportsTab() {
                   </>
                 )}
               </select>
-              <span className="text-[11.5px] text-[var(--fg-tertiary)]">
+              <span className="text-2xs text-[var(--fg-tertiary)]">
                 {channelOptions.length === 0
                   ? "Connect Signal, Matrix, or a webhook in Settings first."
                   : "Only your connected channels appear here."}
@@ -495,7 +495,7 @@ export function ReportsTab() {
                       aria-pressed={on}
                       aria-label={day.name}
                       onClick={() => toggleDay(day.idx)}
-                      className={`h-8 flex-1 rounded-sm border text-[12.5px] font-semibold transition-colors ${
+                      className={`h-8 flex-1 rounded-sm border text-xs font-semibold transition-colors ${
                         on
                           ? "border-[var(--accent-primary)] bg-[var(--accent-dim)] text-[var(--accent-primary)]"
                           : "border-[var(--border-subtle)] bg-[var(--surface-sunken)] text-[var(--fg-tertiary)] hover:text-[var(--fg-primary)]"
@@ -584,7 +584,7 @@ export function ReportsTab() {
                     Generating… the agent renders this within ~30s.
                   </p>
                 ) : editPreview ? (
-                  <pre className="max-h-56 overflow-auto font-mono text-[11px] whitespace-pre-wrap text-[var(--fg-secondary)] select-text">
+                  <pre className="max-h-56 overflow-auto font-mono text-2xs whitespace-pre-wrap text-[var(--fg-secondary)] select-text">
                     {editPreview.text}
                   </pre>
                 ) : (
@@ -599,7 +599,7 @@ export function ReportsTab() {
             <div className="flex items-center justify-between pt-1">
               <div className="flex items-center gap-2.5">
                 <Switch checked={enabled} onCheckedChange={setEnabled} aria-label="Enabled" />
-                <span className="text-[13px] text-[var(--fg-secondary)]">Enabled</span>
+                <span className="text-xs text-[var(--fg-secondary)]">Enabled</span>
               </div>
               <div className="flex items-center gap-2.5">
                 <Button variant="outline" onClick={() => setOpen(false)}>

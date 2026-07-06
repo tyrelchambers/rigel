@@ -47,7 +47,7 @@ export function NamespaceSelector() {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <SquareDashed size={11} style={{ color: "var(--fg-tertiary)", flexShrink: 0 }} />
-      <span style={{ fontSize: 11, color: "var(--fg-tertiary)", fontWeight: 500 }}>Namespace</span>
+      <span className="text-2xs" style={{ color: "var(--fg-tertiary)", fontWeight: 500 }}>Namespace</span>
 
       {/* Trigger + popover (popover anchored to this relative wrapper) */}
       <div style={{ position: "relative" }}>
@@ -66,9 +66,9 @@ export function NamespaceSelector() {
           title="Select namespace filter"
         >
           <span
+            className="text-xs"
             style={{
               fontFamily: "'Geist Variable', ui-monospace, monospace",
-              fontSize: 12,
               fontWeight: 500,
               color: "var(--fg-primary)",
               whiteSpace: "nowrap",
@@ -114,13 +114,13 @@ export function NamespaceSelector() {
                   placeholder="Filter namespaces…"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
+                  className="text-xs"
                   style={{
                     width: "100%",
                     background: "transparent",
                     border: "none",
                     outline: "none",
                     color: "var(--fg-primary)",
-                    fontSize: 12,
                     fontFamily: "'Manrope Variable', sans-serif",
                   }}
                 />
@@ -143,9 +143,9 @@ export function NamespaceSelector() {
                 ))}
                 {filtered.length === 0 && allNamespaces.length > 0 && (
                   <div
+                    className="text-xs"
                     style={{
                       padding: "8px 10px",
-                      fontSize: 12,
                       color: "var(--fg-tertiary)",
                       fontStyle: "italic",
                     }}
@@ -191,9 +191,9 @@ function NamespaceRow({ label, active, onSelect }: NamespaceRowProps) {
         style={{ color: active ? "var(--accent-primary)" : "transparent", flexShrink: 0, width: 12 }}
       />
       <span
+        className="text-xs"
         style={{
           fontFamily: "'Geist Variable', ui-monospace, monospace",
-          fontSize: 12,
           fontWeight: active ? 600 : 400,
           color: "var(--fg-primary)",
           whiteSpace: "nowrap",

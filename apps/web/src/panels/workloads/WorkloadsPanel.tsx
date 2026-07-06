@@ -293,9 +293,9 @@ export default function WorkloadsPanel() {
             >
               {PILL_LABEL[k]}
               <span
+                className="text-3xs"
                 style={{
                   fontFamily: "ui-monospace, monospace",
-                  fontSize: 10,
                   color: isActive ? "rgba(10,10,10,0.7)" : "var(--fg-tertiary)",
                   background: isActive ? "rgba(255,255,255,0.15)" : "var(--surface-sunken)",
                   padding: "0 4px",

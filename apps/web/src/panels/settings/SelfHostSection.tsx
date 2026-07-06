@@ -51,8 +51,8 @@ export function SelfHostSection() {
   return (
     <div className="flex flex-col gap-4 rounded-[14px] border border-[var(--border-subtle)] bg-card p-[18px]">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-[15px] font-semibold text-foreground">Self-hosted app defaults</h2>
-        <span className="rounded border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-2 py-1 font-mono text-[11px] text-[var(--fg-tertiary)]">
+        <h2 className="text-base font-semibold text-foreground">Self-hosted app defaults</h2>
+        <span className="rounded border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-2 py-1 font-mono text-2xs text-[var(--fg-tertiary)]">
           context: {context}
         </span>
       </div>

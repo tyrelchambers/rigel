@@ -156,7 +156,7 @@ export function ConfigMapEditor({ target, open, onClose, onApplied }: ConfigMapE
             {isEdit ? (
               <>
                 <span>Edit</span>
-                <span className="font-mono text-[15px] font-semibold">{name}</span>
+                <span className="font-mono text-base font-semibold">{name}</span>
               </>
             ) : (
               "New ConfigMap"
@@ -165,7 +165,7 @@ export function ConfigMapEditor({ target, open, onClose, onApplied }: ConfigMapE
         </DialogHeader>
 
         <DialogBody className="flex flex-col gap-5">
-          <DialogDescription className="text-[13px] text-[var(--fg-tertiary)]">
+          <DialogDescription className="text-xs text-[var(--fg-tertiary)]">
             {isEdit
               ? "Modify plaintext data. Name, namespace, and binary data are preserved."
               : "Create a ConfigMap with plaintext key/value data. Multi-line values are supported."}
@@ -178,7 +178,7 @@ export function ConfigMapEditor({ target, open, onClose, onApplied }: ConfigMapE
                 key={m}
                 type="button"
                 onClick={() => setMode(m)}
-                className={`rounded px-[18px] py-[7px] text-[13px] transition-colors ${
+                className={`rounded px-[18px] py-[7px] text-xs transition-colors ${
                   mode === m
                     ? "bg-[var(--accent-primary)] font-semibold text-[var(--fg-inverse)]"
                     : "font-medium text-[var(--fg-secondary)] hover:text-foreground"
@@ -212,8 +212,8 @@ export function ConfigMapEditor({ target, open, onClose, onApplied }: ConfigMapE
               {/* Data */}
               <div className="flex flex-col gap-[9px]">
                 <div className="flex items-center justify-between">
-                  <span className="text-[13px] font-medium text-[var(--fg-secondary)]">Data</span>
-                  <span className="font-mono text-[11px] text-[var(--fg-tertiary)]">
+                  <span className="text-xs font-medium text-[var(--fg-secondary)]">Data</span>
+                  <span className="font-mono text-2xs text-[var(--fg-tertiary)]">
                     {rows.length} {rows.length === 1 ? "key" : "keys"} · plaintext
                   </span>
                 </div>
@@ -231,13 +231,13 @@ export function ConfigMapEditor({ target, open, onClose, onApplied }: ConfigMapE
                 <button
                   type="button"
                   onClick={addRow}
-                  className="flex w-full items-center justify-center gap-[7px] rounded-md border border-[var(--border-subtle)] bg-white/[0.02] px-[14px] py-[11px] text-[13px] font-semibold text-[var(--fg-secondary)] transition-colors hover:bg-white/[0.04] hover:text-foreground"
+                  className="flex w-full items-center justify-center gap-[7px] rounded-md border border-[var(--border-subtle)] bg-white/[0.02] px-[14px] py-[11px] text-xs font-semibold text-[var(--fg-secondary)] transition-colors hover:bg-white/[0.04] hover:text-foreground"
                 >
                   <Plus className="size-[15px]" aria-hidden /> Add key
                 </button>
 
                 {isEdit && binaryCount > 0 && (
-                  <p className="font-mono text-[11px] text-[var(--fg-tertiary)]">
+                  <p className="font-mono text-2xs text-[var(--fg-tertiary)]">
                     {binaryCount} binary key{binaryCount === 1 ? "" : "s"} preserved unchanged.
                   </p>
                 )}
@@ -245,7 +245,7 @@ export function ConfigMapEditor({ target, open, onClose, onApplied }: ConfigMapE
             </>
           ) : (
             <div className="flex flex-col gap-2">
-              <p className="text-[12px] text-[var(--fg-tertiary)]">
+              <p className="text-xs text-[var(--fg-tertiary)]">
                 Live preview of the manifest applied with{" "}
                 <code className="font-mono">kubectl apply -f -</code>.
               </p>
@@ -291,11 +291,11 @@ function IdentityField({
   return (
     <div className="flex flex-1 flex-col gap-[7px]">
       <div className="flex items-center gap-[7px]">
-        <span className="text-[13px] font-medium text-[var(--fg-secondary)]">{label}</span>
+        <span className="text-xs font-medium text-[var(--fg-secondary)]">{label}</span>
         {locked && (
           <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.04] px-[7px] py-px">
             <Lock className="size-[10px] text-[var(--fg-tertiary)]" aria-hidden />
-            <span className="font-mono text-[10px] tracking-[0.3px] text-[var(--fg-tertiary)]">Preserved</span>
+            <span className="font-mono text-3xs tracking-[0.3px] text-[var(--fg-tertiary)]">Preserved</span>
           </span>
         )}
       </div>
@@ -319,7 +319,7 @@ function TextField({
       value={value}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[14px] py-[12px] font-mono text-[14px] text-[var(--fg-primary)] outline-none transition-colors placeholder:text-[var(--fg-tertiary)] focus:border-[var(--accent-primary)]"
+      className="w-full rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[14px] py-[12px] font-mono text-sm text-[var(--fg-primary)] outline-none transition-colors placeholder:text-[var(--fg-tertiary)] focus:border-[var(--accent-primary)]"
     />
   );
 }
@@ -327,7 +327,7 @@ function TextField({
 function LockedValue({ value }: { value: string }) {
   return (
     <div className="flex items-center gap-2 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[14px] py-[12px]">
-      <span className="truncate font-mono text-[14px] font-medium text-[var(--fg-secondary)]">{value}</span>
+      <span className="truncate font-mono text-sm font-medium text-[var(--fg-secondary)]">{value}</span>
       <span className="flex-1" />
       <Lock className="size-[14px] shrink-0 text-[var(--fg-tertiary)]" aria-hidden />
     </div>
@@ -376,10 +376,10 @@ function DataKeyCard({
           placeholder="key"
           aria-label="key"
           onChange={(e) => onChange({ key: e.target.value })}
-          className="w-[180px] rounded-sm border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[10px] py-[5px] font-mono text-[13px] font-medium text-foreground outline-none transition-colors focus:border-[var(--accent-primary)]"
+          className="w-[180px] rounded-sm border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[10px] py-[5px] font-mono text-xs font-medium text-foreground outline-none transition-colors focus:border-[var(--accent-primary)]"
         />
         <KindBadge kind={kind} />
-        <span className="rounded-sm bg-white/[0.05] px-[7px] py-[2px] font-mono text-[11px] text-[var(--fg-tertiary)]">
+        <span className="rounded-sm bg-white/[0.05] px-[7px] py-[2px] font-mono text-2xs text-[var(--fg-tertiary)]">
           {humanBytes(bytes)}
         </span>
         <span className="flex-1" />
@@ -421,9 +421,9 @@ function DataKeyCard({
       <div className="flex items-center justify-between border-t border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3 py-[7px]">
         <span className="flex items-center gap-[7px]">
           <Info className="size-[12px] text-[var(--fg-tertiary)]" aria-hidden />
-          <span className="text-[12px] text-[var(--fg-tertiary)]">{detected}</span>
+          <span className="text-xs text-[var(--fg-tertiary)]">{detected}</span>
         </span>
-        <span className="font-mono text-[11px] text-[var(--fg-tertiary)]">{humanBytes(bytes)}</span>
+        <span className="font-mono text-2xs text-[var(--fg-tertiary)]">{humanBytes(bytes)}</span>
       </div>
     </div>
   );

@@ -101,9 +101,9 @@ export function BatchConfirmSheet({ actions, open, onClose, onConfirm }: Props) 
                 >
                   <div className="flex items-center gap-2 border-b border-border/60 bg-muted/30 px-3 py-1.5">
                     <Terminal className="size-3.5 text-muted-foreground" />
-                    <span className="text-[11px] font-semibold text-foreground">{action.label ?? action.kind}</span>
+                    <span className="text-2xs font-semibold text-foreground">{action.label ?? action.kind}</span>
                     {isDestructiveAction(action) && (
-                      <span className="ml-auto text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--status-failed)" }}>
+                      <span className="ml-auto text-3xs font-semibold uppercase tracking-wider" style={{ color: "var(--status-failed)" }}>
                         destructive
                       </span>
                     )}

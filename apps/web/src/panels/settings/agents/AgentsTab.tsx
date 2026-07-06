@@ -8,7 +8,7 @@ export function AgentsTab() {
   const [selected, setSelected] = useState<AgentId | null>(null);
 
   if (isLoading || !data) {
-    return <p style={{ fontSize: 13, color: "#8C8C95" }}>Loading agents…</p>;
+    return <p className="text-xs" style={{ color: "#8C8C95" }}>Loading agents…</p>;
   }
 
   const current = selected ? data.agents.find((a) => a.id === selected) : null;
@@ -25,8 +25,8 @@ export function AgentsTab() {
   return (
     <div className="flex flex-col" style={{ gap: 16 }}>
       <div className="flex flex-col" style={{ gap: 5 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, color: "#FFFFFF" }}>Connect your AI agent</h2>
-        <p style={{ fontSize: 13, lineHeight: 1.4, color: "#8C8C95" }}>
+        <h2 className="text-base" style={{ fontWeight: 600, color: "#FFFFFF" }}>Connect your AI agent</h2>
+        <p className="text-xs" style={{ lineHeight: 1.4, color: "#8C8C95" }}>
           Use an existing subscription or an API key. Your credentials never leave your machine.
         </p>
       </div>

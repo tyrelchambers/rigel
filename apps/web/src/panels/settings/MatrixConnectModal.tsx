@@ -275,14 +275,14 @@ export function MatrixConnectModal({
         }
       >
         <WizardBody gap={13}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: "#FFFFFF" }}>{info.lead}</span>
-          <span style={{ fontSize: 13, color: SUB, lineHeight: 1.5 }}>{info.cause}</span>
+          <span className="text-sm" style={{ fontWeight: 600, color: "#FFFFFF" }}>{info.lead}</span>
+          <span className="text-xs" style={{ color: SUB, lineHeight: 1.5 }}>{info.cause}</span>
           <div
             className="flex items-start gap-2.5 rounded-lg"
             style={{ background: "var(--surface-sunken)", border: "1px solid rgba(255,255,255,0.07)", padding: "10px 12px" }}
           >
             <Terminal className="mt-0.5 size-[13px] shrink-0" style={{ color: CAPTION }} />
-            <span className="select-text font-mono" style={{ fontSize: 11.5, color: "#B6B6BE", lineHeight: 1.4 }}>
+            <span className="select-text font-mono text-2xs" style={{ color: "#B6B6BE", lineHeight: 1.4 }}>
               {info.detail}
             </span>
           </div>
@@ -306,8 +306,8 @@ export function MatrixConnectModal({
           <div className="flex flex-col items-center justify-center gap-4 py-10">
             <Loader2 className="size-7 animate-spin" style={{ color: "var(--accent-primary)" }} />
             <div className="flex flex-col items-center gap-1">
-              <span style={{ fontSize: 14, fontWeight: 600, color: "#FFFFFF" }}>Connecting…</span>
-              <span className="font-mono" style={{ fontSize: 12.5, color: SUB }}>
+              <span className="text-sm" style={{ fontWeight: 600, color: "#FFFFFF" }}>Connecting…</span>
+              <span className="font-mono text-xs" style={{ color: SUB }}>
                 {homeserver}
               </span>
             </div>
@@ -373,7 +373,7 @@ export function MatrixConnectModal({
               icon={<Boxes className="size-5" />}
               disabled
               badge={
-                <span className="self-start font-mono" style={{ fontSize: 10.5, letterSpacing: 0.6, color: CAPTION }}>
+                <span className="self-start font-mono text-3xs" style={{ letterSpacing: 0.6, color: CAPTION }}>
                   Coming soon
                 </span>
               }
@@ -433,7 +433,7 @@ export function MatrixConnectModal({
 
           {!isPublic && (
             <div className="flex flex-col gap-2">
-              <span style={{ fontSize: 12.5, fontWeight: 500, color: LABEL }}>Bot sign-in</span>
+              <span className="text-xs" style={{ fontWeight: 500, color: LABEL }}>Bot sign-in</span>
               <SegmentedToggle<AuthMode>
                 value={authMode}
                 onChange={setAuthMode}
@@ -442,7 +442,7 @@ export function MatrixConnectModal({
                   { id: "login", label: "Log in", icon: <LogIn className="size-3.5" /> },
                 ]}
               />
-              <span style={{ fontSize: 11.5, color: CAPTION, lineHeight: 1.4 }}>
+              <span className="text-2xs" style={{ color: CAPTION, lineHeight: 1.4 }}>
                 {authMode === "token"
                   ? "Use a token you already created — best for SSO accounts or a scoped, dedicated bot token. Rigel never sees your password."
                   : "Rigel signs in with these once, stores the access token, and forgets the password."}
@@ -493,8 +493,8 @@ export function MatrixConnectModal({
             >
               <ShieldAlert className="size-[18px] shrink-0" style={{ color: "var(--status-pending)" }} />
               <div className="flex flex-col gap-[3px]">
-                <span style={{ fontSize: 12.5, fontWeight: 600, color: "#F4C77A" }}>This server isn't yours</span>
-                <span style={{ fontSize: 12.5, color: "#C9A56A", lineHeight: 1.45 }}>
+                <span className="text-xs" style={{ fontWeight: 600, color: "#F4C77A" }}>This server isn't yours</span>
+                <span className="text-xs" style={{ color: "#C9A56A", lineHeight: 1.45 }}>
                   On a homeserver you don't run, your cluster chatter isn't private to you. Use your own or an
                   in-cluster homeserver for sensitive clusters.
                 </span>
@@ -504,13 +504,13 @@ export function MatrixConnectModal({
 
           <div className="flex items-center gap-1.5">
             <BookOpen className="size-[13px] shrink-0" style={{ color: CAPTION }} />
-            <span style={{ fontSize: 11.5, color: LABEL }}>New to access tokens?</span>
+            <span className="text-2xs" style={{ color: LABEL }}>New to access tokens?</span>
             <a
               href="https://outline.tybit.luxe/doc/matrix-access-tokens-bot-accounts-for-the-rigel-assistant-UKyuTZRbBw"
               target="_blank"
               rel="noreferrer"
-              className="hover:underline"
-              style={{ fontSize: 11.5, color: "var(--accent-primary)" }}
+              className="hover:underline text-2xs"
+              style={{ color: "var(--accent-primary)" }}
             >
               Read the guide
             </a>
@@ -560,10 +560,10 @@ export function MatrixConnectModal({
             style={{ background: "var(--surface-sunken)", border: "1px solid rgba(255,255,255,0.07)", padding: "12px 14px" }}
           >
             <div className="flex flex-col gap-[5px]">
-              <span className="font-mono" style={{ fontSize: 10.5, letterSpacing: 0.8, color: CAPTION }}>
+              <span className="font-mono text-3xs" style={{ letterSpacing: 0.8, color: CAPTION }}>
                 MESSAGE THIS BOT
               </span>
-              <span className="select-text font-mono" style={{ fontSize: 13.5, color: "#FFFFFF" }}>
+              <span className="select-text font-mono text-sm" style={{ color: "#FFFFFF" }}>
                 {botHandle}
               </span>
             </div>
@@ -583,12 +583,12 @@ export function MatrixConnectModal({
             {steps.map((s, i) => (
               <div key={i} className="flex items-center gap-[11px]">
                 <span
-                  className="flex size-[22px] shrink-0 items-center justify-center rounded-full font-mono"
-                  style={{ background: "rgba(255,255,255,0.06)", fontSize: 11, color: STEP_TXT }}
+                  className="flex size-[22px] shrink-0 items-center justify-center rounded-full font-mono text-2xs"
+                  style={{ background: "rgba(255,255,255,0.06)", color: STEP_TXT }}
                 >
                   {i + 1}
                 </span>
-                <span style={{ fontSize: 13, color: STEP_TXT }}>{s}</span>
+                <span className="text-xs" style={{ color: STEP_TXT }}>{s}</span>
               </div>
             ))}
           </div>
@@ -604,7 +604,7 @@ export function MatrixConnectModal({
               sub="Listening in the matrix room"
               right={
                 pollResult.userMessaged ? undefined : (
-                  <span className="font-mono" style={{ fontSize: 11, color: "var(--accent-primary)" }}>Live</span>
+                  <span className="font-mono text-2xs" style={{ color: "var(--accent-primary)" }}>Live</span>
                 )
               }
             />
@@ -632,7 +632,7 @@ export function MatrixConnectModal({
             ) : (
               <Send className="size-[15px]" style={{ color: STEP_TXT }} />
             )}
-            <span style={{ fontSize: 13, fontWeight: 500, color: "#FFFFFF" }}>Send a test message from Rigel</span>
+            <span className="text-xs" style={{ fontWeight: 500, color: "#FFFFFF" }}>Send a test message from Rigel</span>
           </button>
         </WizardBody>
       </WizardShell>
@@ -668,7 +668,7 @@ export function MatrixConnectModal({
       }
     >
       <WizardBody gap={16}>
-        <span style={{ fontSize: 13, color: SUB, lineHeight: 1.5 }}>
+        <span className="text-xs" style={{ color: SUB, lineHeight: 1.5 }}>
           Rigel is reachable over Matrix. Message the bot from Element any time to query or act on your cluster.
         </span>
 
@@ -680,8 +680,8 @@ export function MatrixConnectModal({
             <div key={r.k}>
               {i > 0 && <div style={{ height: 1, background: "rgba(255,255,255,0.05)" }} />}
               <div className="flex items-center justify-between gap-4" style={{ padding: "12px 0" }}>
-                <span style={{ fontSize: 13, color: SUB }}>{r.k}</span>
-                <span className="select-text font-mono" style={{ fontSize: 12.5, color: "#FFFFFF" }}>
+                <span className="text-xs" style={{ color: SUB }}>{r.k}</span>
+                <span className="select-text font-mono text-xs" style={{ color: "#FFFFFF" }}>
                   {r.v}
                 </span>
               </div>
@@ -690,8 +690,8 @@ export function MatrixConnectModal({
           <div style={{ height: 1, background: "rgba(255,255,255,0.05)" }} />
           <div className="flex items-center justify-between gap-4" style={{ padding: "12px 0" }}>
             <div className="flex flex-col gap-0.5">
-              <span style={{ fontSize: 13, fontWeight: 500, color: "#FFFFFF" }}>Channel</span>
-              <span style={{ fontSize: 11.5, color: SUB }}>Enabled and listening</span>
+              <span className="text-xs" style={{ fontWeight: 500, color: "#FFFFFF" }}>Channel</span>
+              <span className="text-2xs" style={{ color: SUB }}>Enabled and listening</span>
             </div>
             <GreenToggle on label="Channel enabled" />
           </div>
@@ -699,7 +699,7 @@ export function MatrixConnectModal({
 
         <div className="flex items-center gap-2.5">
           <MessageSquare className="size-[15px] shrink-0" style={{ color: "var(--accent-primary)" }} />
-          <span style={{ fontSize: 13, color: STEP_TXT }}>
+          <span className="text-xs" style={{ color: STEP_TXT }}>
             Message @rigel from Element to query your cluster.
           </span>
         </div>
@@ -733,11 +733,11 @@ function TrackerRow({
           )}
         </span>
         <div className="flex flex-col gap-0.5">
-          <span style={{ fontSize: 13.5, fontWeight: 500, color: "#FFFFFF" }}>{title}</span>
-          <span style={{ fontSize: 12, color: SUB }}>{sub}</span>
+          <span className="text-sm" style={{ fontWeight: 500, color: "#FFFFFF" }}>{title}</span>
+          <span className="text-xs" style={{ color: SUB }}>{sub}</span>
         </div>
       </div>
-      {right ?? <span className="font-mono" style={{ fontSize: 11, color: CAPTION }}>—</span>}
+      {right ?? <span className="font-mono text-2xs" style={{ color: CAPTION }}>—</span>}
     </div>
   );
 }

@@ -36,9 +36,9 @@ export function AdvancedView({
   return (
     <div className="flex flex-col gap-3">
       <div className="overflow-x-auto rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)]">
-        <table className="w-full min-w-[560px] border-collapse text-left text-[13px]">
+        <table className="w-full min-w-[560px] border-collapse text-left text-xs">
           <thead>
-            <tr className="border-b border-[var(--border-subtle)] text-[11px] tracking-wide text-[var(--fg-tertiary)] uppercase">
+            <tr className="border-b border-[var(--border-subtle)] text-2xs tracking-wide text-[var(--fg-tertiary)] uppercase">
               <th className="px-4 py-2.5 font-medium">Resource</th>
               {VERBS.map((v) => (
                 <th key={v} className="px-2 py-2.5 text-center font-medium">
@@ -53,7 +53,7 @@ export function AdvancedView({
                 <tr>
                   <td
                     colSpan={VERBS.length + 1}
-                    className="bg-white/[0.03] px-4 py-1.5 font-mono text-[11px] font-semibold text-[var(--fg-tertiary)]"
+                    className="bg-white/[0.03] px-4 py-1.5 font-mono text-2xs font-semibold text-[var(--fg-tertiary)]"
                   >
                     {groupLabel(g.apiGroup)}
                   </td>
@@ -68,7 +68,7 @@ export function AdvancedView({
                         r.secret && "bg-red-500/[0.04]",
                       )}
                     >
-                      <td className="px-4 py-2 font-mono text-[12.5px] text-[var(--fg-primary)]">
+                      <td className="px-4 py-2 font-mono text-xs text-[var(--fg-primary)]">
                         <span className="inline-flex items-center gap-1.5">
                           {r.resource}
                           {r.secret && <Lock className="size-3 shrink-0 text-red-400" aria-hidden />}
@@ -100,7 +100,7 @@ export function AdvancedView({
         </table>
       </div>
 
-      <div className="flex items-start gap-1.5 text-[13px] text-[var(--fg-tertiary)]">
+      <div className="flex items-start gap-1.5 text-xs text-[var(--fg-tertiary)]">
         <Lock className="mt-px size-3.5 shrink-0" aria-hidden />
         <span>
           Secrets and roles / rolebindings aren&apos;t editable here — the assistant can never read

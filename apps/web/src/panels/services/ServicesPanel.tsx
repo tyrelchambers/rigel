@@ -26,6 +26,7 @@ import { getForwardingServices } from "./portForward";
 import { ActiveForwardsList } from "./ActiveForwardsList";
 import { PortForwardDialog, type PortForwardTarget } from "./PortForwardDialog";
 import { PanelHeader } from "@/panels/components/PanelHeader";
+import { PanelSearch } from "@/panels/components/PanelSearch";
 import { ServiceDetail } from "./ServiceDetail";
 
 // ---------------------------------------------------------------------------
@@ -107,12 +108,11 @@ export default function ServicesPanel() {
         count={shown}
         loading={isLoading}
       >
-        <input
-          type="text"
+        <PanelSearch
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onValueChange={setSearch}
           placeholder="Search services…"
-          className="w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="w-56"
         />
       </PanelHeader>
 
@@ -181,9 +181,9 @@ export default function ServicesPanel() {
 
               {/* Namespace chip */}
               <span
+                className="text-3xs"
                 style={{
                   fontFamily: "ui-monospace, monospace",
-                  fontSize: 10,
                   color: "var(--fg-tertiary)",
                   background: "var(--surface-sunken)",
                   padding: "1px 5px",
@@ -201,9 +201,9 @@ export default function ServicesPanel() {
               {/* Cluster IP — dim */}
               {showClusterIP && (
                 <span
+                  className="text-3xs"
                   style={{
                     fontFamily: "ui-monospace, monospace",
-                    fontSize: 10,
                     color: "var(--fg-secondary)",
                     whiteSpace: "nowrap",
                     flexShrink: 1,
@@ -219,9 +219,9 @@ export default function ServicesPanel() {
               {/* Ports — dim */}
               {summaries.length > 0 && (
                 <span
+                  className="text-3xs"
                   style={{
                     fontFamily: "ui-monospace, monospace",
-                    fontSize: 10,
                     color: "var(--fg-tertiary)",
                     whiteSpace: "nowrap",
                     flexShrink: 1,
@@ -241,10 +241,9 @@ export default function ServicesPanel() {
               {/* Forwarding badge */}
               {isForwarding && (
                 <span
-                  className="inline-flex items-center gap-1 shrink-0"
+                  className="inline-flex items-center gap-1 shrink-0 text-3xs"
                   style={{
                     fontFamily: "ui-monospace, monospace",
-                    fontSize: 10,
                     fontWeight: 500,
                     color: "var(--status-running)",
                     background: "rgba(16,185,129,0.12)",
@@ -270,9 +269,9 @@ export default function ServicesPanel() {
               {/* External address — dim */}
               {external && (
                 <span
+                  className="text-3xs"
                   style={{
                     fontFamily: "ui-monospace, monospace",
-                    fontSize: 10,
                     color: "var(--fg-secondary)",
                     whiteSpace: "nowrap",
                     flexShrink: 1,

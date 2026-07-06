@@ -10,6 +10,7 @@ import { ListRow } from "@/panels/components/ListRow";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { PanelHeader } from "@/panels/components/PanelHeader";
+import { PanelSearch } from "@/panels/components/PanelSearch";
 import { LoadingState } from "@/panels/components/LoadingState";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { RelatedResources } from "@/panels/components/RelatedResources";
@@ -91,12 +92,11 @@ export default function PodsPanel() {
         count={shown}
         loading={isLoading}
       >
-        <input
-          type="text"
+        <PanelSearch
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onValueChange={setSearch}
           placeholder="Search pods…"
-          className="w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="w-56"
         />
       </PanelHeader>
 
@@ -155,9 +155,9 @@ export default function PodsPanel() {
 
               {/* Namespace chip — dim tertiary */}
               <span
+                className="text-3xs"
                 style={{
                   fontFamily: "ui-monospace, monospace",
-                  fontSize: 10,
                   color: "var(--fg-tertiary)",
                   background: "var(--surface-sunken)",
                   padding: "1px 5px",
@@ -172,9 +172,9 @@ export default function PodsPanel() {
               {/* Node — dim */}
               {pod.spec?.nodeName && (
                 <span
+                  className="text-3xs"
                   style={{
                     fontFamily: "ui-monospace, monospace",
-                    fontSize: 10,
                     color: "var(--fg-tertiary)",
                     whiteSpace: "nowrap",
                     flexShrink: 1,
@@ -196,9 +196,9 @@ export default function PodsPanel() {
                 <span className="inline-flex items-center gap-1 shrink-0">
                   <Sparkline values={podMetrics.cpuSeries} color="#60A5FA" width={40} height={14} />
                   <span
+                    className="text-3xs"
                     style={{
                       fontFamily: "ui-monospace, monospace",
-                      fontSize: 10,
                       color: "var(--fg-secondary)",
                     }}
                   >
@@ -212,9 +212,9 @@ export default function PodsPanel() {
                 <span className="inline-flex items-center gap-1 shrink-0">
                   <Sparkline values={podMetrics.memSeries} color="#34D399" width={40} height={14} />
                   <span
+                    className="text-3xs"
                     style={{
                       fontFamily: "ui-monospace, monospace",
-                      fontSize: 10,
                       color: "var(--fg-secondary)",
                     }}
                   >
@@ -242,9 +242,9 @@ export default function PodsPanel() {
               {/* Restart count — amber/red when > 0 */}
               {restarts > 0 && (
                 <span
+                  className="text-3xs"
                   style={{
                     fontFamily: "ui-monospace, monospace",
-                    fontSize: 10,
                     fontWeight: 500,
                     color: restarts >= 5 ? "var(--status-failed)" : "var(--status-pending)",
                     background: restarts >= 5 ? "rgba(239,68,68,0.12)" : "rgba(245,158,11,0.12)",
@@ -315,7 +315,7 @@ function PodDetail({ pod }: PodDetailProps) {
       {/* Containers */}
       {containers.length > 0 && (
         <div className="space-y-1">
-          <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+          <h3 className="text-3xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">
             Containers ({containers.length})
           </h3>
           <ul className="space-y-1">
@@ -345,7 +345,7 @@ function PodDetail({ pod }: PodDetailProps) {
                   <span className="font-mono text-muted-foreground truncate min-w-0 flex-1">{c.image ?? "—"}</span>
                   {cRestarts > 0 && (
                     <span
-                      className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px]"
+                      className="shrink-0 rounded px-1.5 py-0.5 font-mono text-3xs"
                       style={{ color: "var(--status-pending)", background: "rgba(245,158,11,0.15)" }}
                       title={`${cRestarts} restart${cRestarts === 1 ? "" : "s"}`}
                     >
@@ -353,7 +353,7 @@ function PodDetail({ pod }: PodDetailProps) {
                     </span>
                   )}
                   <span
-                    className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+                    className="shrink-0 rounded px-1.5 py-0.5 font-mono text-3xs text-muted-foreground"
                     style={{ background: "var(--surface-elevated)", border: "1px solid #26272B" }}
                   >
                     {phase}

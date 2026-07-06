@@ -38,7 +38,7 @@ const BACKENDS: Array<{ id: MetricsInstallBackend; title: string; note: string }
 /** Small uppercase section label, shared by every block in the dialog. */
 function SectionLabel({ children }: { children: ReactNode }) {
   return (
-    <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+    <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
       {children}
     </span>
   );
@@ -102,7 +102,7 @@ export function MetricsInstallDialog({ open, onOpenChange, onInstall }: Props) {
               </button>
             ))}
           </div>
-          <span className="font-mono text-[11px] text-muted-foreground">{note}</span>
+          <span className="font-mono text-2xs text-muted-foreground">{note}</span>
         </div>
 
         {/* Config cards: namespace + storage */}
@@ -126,11 +126,11 @@ export function MetricsInstallDialog({ open, onOpenChange, onInstall }: Props) {
               ))}
             </datalist>
             {valid ? (
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-2xs text-muted-foreground">
                 Pick an existing namespace or type a new one to create.
               </span>
             ) : (
-              <span className="text-[11px] text-destructive">Invalid namespace.</span>
+              <span className="text-2xs text-destructive">Invalid namespace.</span>
             )}
           </Card>
 
@@ -155,7 +155,7 @@ export function MetricsInstallDialog({ open, onOpenChange, onInstall }: Props) {
                 Gi
               </label>
             ) : (
-              <span className="font-mono text-[11px] text-amber-500">
+              <span className="font-mono text-2xs text-amber-500">
                 Ephemeral storage: history resets if the backend pod restarts.
               </span>
             )}

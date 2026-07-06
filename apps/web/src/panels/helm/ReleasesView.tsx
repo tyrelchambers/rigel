@@ -133,7 +133,7 @@ function StatusBadge({ status, className, filled }: { status: string; className?
   const color = TONE[releaseStatusTone(status)];
   return (
     <span
-      className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium", className)}
+      className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-2xs font-medium", className)}
       style={{ background: filled ? `${color}1F` : "rgba(255,255,255,0.05)", color }}
     >
       <span className="size-1.5 rounded-full" style={{ background: color }} />
@@ -146,8 +146,8 @@ function StatusBadge({ status, className, filled }: { status: string; className?
 function CardStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-1">
-      <span className="font-mono text-[9.5px] uppercase tracking-[0.6px] text-[var(--fg-tertiary)]">{label}</span>
-      <span className="truncate font-mono text-[12.5px] font-medium text-[var(--fg-primary)]">{value}</span>
+      <span className="font-mono text-3xs uppercase tracking-[0.6px] text-[var(--fg-tertiary)]">{label}</span>
+      <span className="truncate font-mono text-xs font-medium text-[var(--fg-primary)]">{value}</span>
     </div>
   );
 }
@@ -166,7 +166,7 @@ function ReleaseCard({ release, onClick }: { release: HelmRelease; onClick: () =
           <Package className="size-[17px] text-[var(--fg-secondary)]" aria-hidden />
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="truncate text-[15px] font-semibold text-[var(--fg-primary)]">{release.name}</span>
+          <span className="truncate text-base font-semibold text-[var(--fg-primary)]">{release.name}</span>
           <span className="truncate font-mono text-xs text-[var(--fg-tertiary)]">{release.chartName}</span>
         </div>
         <StatusBadge status={release.status} filled className="shrink-0" />
@@ -182,12 +182,12 @@ function ReleaseCard({ release, onClick }: { release: HelmRelease; onClick: () =
 
       <div className="flex w-full items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate rounded border px-[7px] py-0.5 font-mono text-[11px] border-[var(--border-subtle)] bg-white/[0.04] text-[var(--fg-tertiary)]">
+          <span className="truncate rounded border px-[7px] py-0.5 font-mono text-2xs border-[var(--border-subtle)] bg-white/[0.04] text-[var(--fg-tertiary)]">
             {release.namespace}
           </span>
-          <span className="shrink-0 text-[11.5px] text-[var(--fg-tertiary)]">· {compactAge(release.updated, { suffix: true })}</span>
+          <span className="shrink-0 text-2xs text-[var(--fg-tertiary)]">· {compactAge(release.updated, { suffix: true })}</span>
         </div>
-        <span className="flex shrink-0 items-center gap-1 text-[12.5px] font-medium text-[var(--accent-primary)]">
+        <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-[var(--accent-primary)]">
           Details
           <ChevronRight className="size-3.5" aria-hidden />
         </span>
@@ -201,8 +201,8 @@ function ReleaseCard({ release, onClick }: { release: HelmRelease; onClick: () =
 function MetaField({ label, mono = true, children }: { label: string; mono?: boolean; children: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5 rounded-md border px-3.5 py-2.5 border-[var(--border-subtle)] bg-[var(--surface-sunken)]">
-      <span className="font-mono text-[10px] uppercase tracking-[0.6px] text-[var(--fg-tertiary)]">{label}</span>
-      <span className={cn("truncate text-[13px] text-[var(--fg-primary)]", mono && "font-mono")}>{children}</span>
+      <span className="font-mono text-3xs uppercase tracking-[0.6px] text-[var(--fg-tertiary)]">{label}</span>
+      <span className={cn("truncate text-xs text-[var(--fg-primary)]", mono && "font-mono")}>{children}</span>
     </div>
   );
 }
@@ -330,7 +330,7 @@ function ReleaseDetail({
       <section className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-2">
           <SectionLabel>Current values</SectionLabel>
-          <span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--fg-tertiary)]">
+          <span className="inline-flex items-center gap-1.5 text-2xs text-[var(--fg-tertiary)]">
             <Lock className="size-3" />read-only
           </span>
         </div>

@@ -13,7 +13,7 @@ export function Stepper({ labels, current }: { labels: string[]; current: number
           {i < labels.length - 1 && <span style={{ width: 14, height: 1, background: "var(--border)" }} />}
         </div>
       ))}
-      <span style={{ marginLeft: 8, fontSize: 11.5, color: "var(--fg-secondary)" }}>
+      <span className="text-2xs" style={{ marginLeft: 8, color: "var(--fg-secondary)" }}>
         Step {current + 1} of {labels.length} · {labels[current]}
       </span>
     </div>

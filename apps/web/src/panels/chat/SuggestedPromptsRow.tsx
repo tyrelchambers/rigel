@@ -46,6 +46,7 @@ export function SuggestedPromptsRow({
             type="button"
             onClick={() => onTap(p)}
             title={p.prompt.slice(0, 200)}
+            className="text-2xs"
             style={{
               display: "flex",
               alignItems: "center",
@@ -56,7 +57,6 @@ export function SuggestedPromptsRow({
               color,
               background: rgba(color, 0.12),
               border: `1px solid ${rgba(color, 0.3)}`,
-              fontSize: 11,
               fontWeight: 500,
               whiteSpace: "nowrap",
               cursor: "pointer",

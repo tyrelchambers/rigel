@@ -48,7 +48,7 @@ export function ReviewDialog({
         <DialogBody>
           <DialogDescription>Applying to {targetLabel}.</DialogDescription>
           {hasChanges ? (
-            <ul className="mt-3 space-y-1 font-mono text-[12.5px]">
+            <ul className="mt-3 space-y-1 font-mono text-xs">
               {diff.added.map((c) => (
                 <li key={`added-${c}`} className="text-green-500">
                   + {humanizeCell(c)}
@@ -63,7 +63,7 @@ export function ReviewDialog({
           ) : (
             <p className="mt-3 text-sm text-muted-foreground">No pending changes.</p>
           )}
-          {error && <p className="mt-3 font-mono text-[11px] text-[var(--status-failed)]">{error}</p>}
+          {error && <p className="mt-3 font-mono text-2xs text-[var(--status-failed)]">{error}</p>}
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" disabled={confirming} onClick={() => onOpenChange(false)}>

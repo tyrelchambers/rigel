@@ -61,8 +61,8 @@ export function AgentSetup({
       <button
         type="button"
         onClick={onBack}
-        className="inline-flex items-center self-start transition-opacity hover:opacity-80"
-        style={{ gap: 6, fontSize: 13, fontWeight: 500, color: MUTED }}
+        className="inline-flex items-center self-start transition-opacity hover:opacity-80 text-xs"
+        style={{ gap: 6, fontWeight: 500, color: MUTED }}
       >
         <ChevronLeft size={15} /> Back
       </button>
@@ -75,7 +75,7 @@ export function AgentSetup({
             style={{ gap: 10, color: "#FFFFFF" }}
           >
             <AgentGlyph id={agent.id} size={20} />
-            <span style={{ fontSize: 18, fontWeight: 700, color: "#FFFFFF" }}>
+            <span className="text-lg" style={{ fontWeight: 700, color: "#FFFFFF" }}>
               {agent.label}
             </span>
           </div>
@@ -93,11 +93,10 @@ export function AgentSetup({
           href={agent.installUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center self-start rounded-lg border border-white/[0.08] transition-colors hover:bg-white/[0.04]"
+          className="inline-flex items-center self-start rounded-lg border border-white/[0.08] transition-colors hover:bg-white/[0.04] text-xs"
           style={{
             gap: 7,
             padding: "8px 14px",
-            fontSize: 13,
             fontWeight: 600,
             color: "#4FB0F2",
           }}
@@ -137,15 +136,15 @@ export function AgentSetup({
                   <Radio selected={selected} />
                   <span className="flex flex-col" style={{ gap: 2 }}>
                     <span
+                      className="text-xs"
                       style={{
-                        fontSize: 13,
                         fontWeight: 600,
                         color: "#FFFFFF",
                       }}
                     >
                       {copy.title}
                     </span>
-                    <span style={{ fontSize: 12, color: MUTED }}>
+                    <span className="text-xs" style={{ color: MUTED }}>
                       {copy.sub(agent.vendor)}
                     </span>
                   </span>
@@ -158,10 +157,9 @@ export function AgentSetup({
                     disabled={comingSoon}
                     onChange={(e) => setSecret(e.target.value)}
                     placeholder={agent.id === "claude" ? "sk-ant-…" : "API key"}
-                    className="mt-2 w-full rounded-lg border border-white/[0.08] bg-black/20 font-mono outline-none focus:border-[#3B9BE8]"
+                    className="mt-2 w-full rounded-lg border border-white/[0.08] bg-black/20 font-mono outline-none focus:border-[#3B9BE8] text-xs"
                     style={{
                       padding: "9px 12px",
-                      fontSize: 12,
                       color: "#FFFFFF",
                     }}
                   />
@@ -173,19 +171,19 @@ export function AgentSetup({
       </StepCard>
 
       {comingSoon && (
-        <p style={{ fontSize: 12, color: MUTED }}>
+        <p className="text-xs" style={{ color: MUTED }}>
           This agent isn't connectable yet. We're building its runner. For now,
           use a connected agent.
         </p>
       )}
 
       {save.isError && (
-        <p style={{ fontSize: 12, color: "var(--destructive)" }}>
+        <p className="text-xs" style={{ color: "var(--destructive)" }}>
           {save.error.message}
         </p>
       )}
       {setActive.isError && (
-        <p style={{ fontSize: 12, color: "var(--destructive)" }}>
+        <p className="text-xs" style={{ color: "var(--destructive)" }}>
           {setActive.error.message}
         </p>
       )}
@@ -195,10 +193,9 @@ export function AgentSetup({
         <button
           type="button"
           onClick={onBack}
-          className="rounded-lg transition-colors hover:bg-white/[0.04]"
+          className="rounded-lg transition-colors hover:bg-white/[0.04] text-xs"
           style={{
             padding: "9px 16px",
-            fontSize: 13,
             fontWeight: 600,
             color: MUTED,
           }}
@@ -211,11 +208,10 @@ export function AgentSetup({
         {connected &&
           (isActive ? (
             <span
-              className="inline-flex items-center"
+              className="inline-flex items-center text-xs"
               style={{
                 gap: 7,
                 padding: "13px 20px",
-                fontSize: 13,
                 fontWeight: 700,
                 color: ACTIVE,
               }}
@@ -227,11 +223,10 @@ export function AgentSetup({
               type="button"
               disabled={setActive.isPending}
               onClick={() => setActive.mutate(agent.id)}
-              className="inline-flex items-center rounded-[10px] transition-colors hover:bg-[rgba(95,201,236,0.08)] disabled:opacity-40"
+              className="inline-flex items-center rounded-[10px] transition-colors hover:bg-[rgba(95,201,236,0.08)] disabled:opacity-40 text-xs"
               style={{
                 gap: 7,
                 padding: "13px 20px",
-                fontSize: 13,
                 fontWeight: 700,
                 color: ACTIVE,
                 border: `1px solid ${ACTIVE}`,
@@ -246,10 +241,9 @@ export function AgentSetup({
           type="button"
           disabled={saveDisabled}
           onClick={onSave}
-          className="rounded-lg transition-opacity disabled:opacity-40"
+          className="rounded-lg transition-opacity disabled:opacity-40 text-xs"
           style={{
             padding: "9px 22px",
-            fontSize: 13,
             fontWeight: 700,
             color: "#06151C",
             background: "#5FC9EC",
@@ -288,7 +282,7 @@ function StatusPill({
             background: "#34D07F",
           }}
         />
-        <span style={{ fontSize: 12, fontWeight: 600, color: "#34D07F" }}>
+        <span className="text-xs" style={{ fontWeight: 600, color: "#34D07F" }}>
           Connected
         </span>
       </span>
@@ -297,10 +291,9 @@ function StatusPill({
   if (comingSoon) {
     return (
       <span
-        className="inline-flex shrink-0 items-center rounded-full"
+        className="inline-flex shrink-0 items-center rounded-full text-xs"
         style={{
           padding: "5px 11px",
-          fontSize: 12,
           fontWeight: 600,
           color: MUTED,
           background: "rgba(255,255,255,0.06)",
@@ -332,11 +325,10 @@ function StepCard({
     >
       <div className="flex items-center" style={{ gap: 10 }}>
         <span
-          className="inline-flex items-center justify-center rounded-full"
+          className="inline-flex items-center justify-center rounded-full text-xs"
           style={{
             width: 22,
             height: 22,
-            fontSize: 12,
             fontWeight: 700,
             color: "#FFFFFF",
             background: "rgba(255,255,255,0.08)",
@@ -344,11 +336,11 @@ function StepCard({
         >
           {n}
         </span>
-        <span style={{ fontSize: 14, fontWeight: 700, color: "#FFFFFF" }}>
+        <span className="text-sm" style={{ fontWeight: 700, color: "#FFFFFF" }}>
           {heading}
         </span>
       </div>
-      <p style={{ fontSize: 13, lineHeight: 1.5, color: MUTED }}>{desc}</p>
+      <p className="text-xs" style={{ lineHeight: 1.5, color: MUTED }}>{desc}</p>
       {children}
     </div>
   );

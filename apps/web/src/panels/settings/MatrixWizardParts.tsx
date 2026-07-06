@@ -69,8 +69,8 @@ export function Stepper({ step, total = 3 }: { step: number; total?: number }) {
         ))}
       </div>
       <span
-        className="font-mono"
-        style={{ fontSize: 10.5, letterSpacing: 0.8, color: CAPTION }}
+        className="font-mono text-3xs"
+        style={{ letterSpacing: 0.8, color: CAPTION }}
       >
         {step === 1 ? "Step 1" : `Step ${step} of ${total}`}
       </span>
@@ -127,7 +127,7 @@ export function WizardShell({
           <div className="flex items-center gap-3">
             <IconTile tone={iconTone}>{icon}</IconTile>
             <div className="flex flex-col gap-[5px]">
-              <h2 style={{ fontSize: 18, fontWeight: 700, color: "#FFFFFF", lineHeight: 1.1 }}>{title}</h2>
+              <h2 className="text-lg" style={{ fontWeight: 700, color: "#FFFFFF", lineHeight: 1.1 }}>{title}</h2>
               {step != null && <Stepper step={step} />}
             </div>
           </div>
@@ -161,8 +161,8 @@ export function WizardBody({ gap = 18, children }: { gap?: number; children: Rea
 export function WizardIntro({ lead, sub }: { lead: string; sub: string }) {
   return (
     <div className="flex flex-col gap-[5px]">
-      <span style={{ fontSize: 15, fontWeight: 600, color: "#FFFFFF" }}>{lead}</span>
-      <span style={{ fontSize: 13, color: SUB, lineHeight: 1.5 }}>{sub}</span>
+      <span className="text-base" style={{ fontWeight: 600, color: "#FFFFFF" }}>{lead}</span>
+      <span className="text-xs" style={{ color: SUB, lineHeight: 1.5 }}>{sub}</span>
     </div>
   );
 }
@@ -190,7 +190,7 @@ export function WizardInput({
   const id = useId();
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor={id} style={{ fontSize: 12.5, fontWeight: 500, color: LABEL }}>
+      <label htmlFor={id} className="text-xs" style={{ fontWeight: 500, color: LABEL }}>
         {label}
       </label>
       <div
@@ -204,14 +204,14 @@ export function WizardInput({
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           className={cn(
-            "min-w-0 flex-1 bg-transparent outline-none placeholder:text-[#6E6E77]",
+            "min-w-0 flex-1 bg-transparent outline-none placeholder:text-[#6E6E77] text-xs",
             mono && "font-mono",
           )}
-          style={{ fontSize: 12.5, color: "#FFFFFF" }}
+          style={{ color: "#FFFFFF" }}
         />
         {trailing && <span className="shrink-0" style={{ color: CAPTION }}>{trailing}</span>}
       </div>
-      {hint && <span style={{ fontSize: 11.5, color: CAPTION }}>{hint}</span>}
+      {hint && <span className="text-2xs" style={{ color: CAPTION }}>{hint}</span>}
     </div>
   );
 }
@@ -273,9 +273,8 @@ export function OptionCard({
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <span
-          className="self-start rounded-full font-mono"
+          className="self-start rounded-full font-mono text-3xs"
           style={{
-            fontSize: 9.5,
             letterSpacing: 0.6,
             color: OPTION_TONE[tone],
             background: OPTION_TINT[tone],
@@ -284,8 +283,8 @@ export function OptionCard({
         >
           {tag}
         </span>
-        <span style={{ fontSize: 15, fontWeight: 600, color: "#FFFFFF" }}>{title}</span>
-        <span style={{ fontSize: 12.5, color: SUB, lineHeight: 1.4 }}>{desc}</span>
+        <span className="text-base" style={{ fontWeight: 600, color: "#FFFFFF" }}>{title}</span>
+        <span className="text-xs" style={{ color: SUB, lineHeight: 1.4 }}>{desc}</span>
         {badge}
       </div>
       <ChevronRight className="size-[18px] shrink-0" style={{ color: CAPTION }} />
@@ -315,12 +314,11 @@ export function SegmentedToggle<T extends string>({
             key={o.id}
             type="button"
             onClick={() => onChange(o.id)}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-[7px] transition-colors"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-[7px] transition-colors text-xs"
             style={{
               padding: "8px 0",
               background: active ? "rgba(255,255,255,0.07)" : "transparent",
               color: active ? "#FFFFFF" : SUB,
-              fontSize: 12.5,
               fontWeight: 500,
             }}
           >
@@ -388,8 +386,8 @@ export function BackButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex items-center gap-1.5 rounded-[9px] transition-colors hover:bg-white/[0.04] disabled:opacity-50"
-      style={{ padding: "10px 12px", color: SUB, fontSize: 13.5, fontWeight: 500 }}
+      className="flex items-center gap-1.5 rounded-[9px] transition-colors hover:bg-white/[0.04] disabled:opacity-50 text-sm"
+      style={{ padding: "10px 12px", color: SUB, fontWeight: 500 }}
     >
       {icon ?? (chevron && <ChevronLeft className="size-[15px]" />)}
       {label}
@@ -419,8 +417,8 @@ export function PrimaryButton({
       onClick={onClick}
       disabled={disabled || busy}
       aria-disabled={disabled || busy}
-      className="flex items-center justify-center gap-2 rounded-[9px] transition-opacity disabled:opacity-50"
-      style={{ background: "var(--accent-primary)", color: "#0A0A0A", padding: "11px 18px", fontSize: 14, fontWeight: 600 }}
+      className="flex items-center justify-center gap-2 rounded-[9px] transition-opacity disabled:opacity-50 text-sm"
+      style={{ background: "var(--accent-primary)", color: "#0A0A0A", padding: "11px 18px", fontWeight: 600 }}
     >
       {busy ? (
         <>

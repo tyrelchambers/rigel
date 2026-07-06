@@ -87,7 +87,7 @@ export function GrantRoleButton({ namespace }: Props) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="ml-auto flex items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface-sunken)] px-3 py-1.5 text-[13px] font-medium text-[var(--fg-primary)] transition-colors hover:bg-white/[0.08]"
+        className="ml-auto flex items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface-sunken)] px-3 py-1.5 text-xs font-medium text-[var(--fg-primary)] transition-colors hover:bg-white/[0.08]"
       >
         <ShieldPlus className="size-[14px]" /> Grant a role
       </button>

@@ -57,9 +57,9 @@ export function StatefulSetRow({ s, k, isOpen, toggleExpand, askClaude, restartS
 
       {/* Namespace chip */}
       <span
+        className="text-3xs"
         style={{
           fontFamily: "ui-monospace, monospace",
-          fontSize: 10,
           color: "var(--fg-tertiary)",
           background: "var(--surface-sunken)",
           padding: "1px 5px",
@@ -76,9 +76,9 @@ export function StatefulSetRow({ s, k, isOpen, toggleExpand, askClaude, restartS
 
       {/* Age */}
       <span
+        className="text-3xs"
         style={{
           fontFamily: "ui-monospace, monospace",
-          fontSize: 10,
           color: "var(--fg-tertiary)",
           whiteSpace: "nowrap",
           flexShrink: 0,

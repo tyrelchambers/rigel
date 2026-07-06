@@ -33,16 +33,16 @@ export function ServiceDetail({ service }: { service: Service }) {
                     key={`${p.port}-${i}`}
                     className="inline-flex items-center gap-[7px] rounded-sm bg-white/[0.05] px-2.5 py-[5px]"
                   >
-                    <span className="font-mono text-[13px] font-semibold text-foreground">{head}</span>
+                    <span className="font-mono text-xs font-semibold text-foreground">{head}</span>
                     {accent && (
                       <>
                         <ArrowRight className="size-3 text-[var(--fg-tertiary)]" />
-                        <span className="font-mono text-[13px] text-[var(--accent-primary)]">
+                        <span className="font-mono text-xs text-[var(--accent-primary)]">
                           {accent}
                         </span>
                       </>
                     )}
-                    <span className="font-mono text-[11px] text-[var(--fg-tertiary)]">
+                    <span className="font-mono text-2xs text-[var(--fg-tertiary)]">
                       {p.protocol ?? "TCP"}
                     </span>
                   </div>
@@ -59,7 +59,7 @@ export function ServiceDetail({ service }: { service: Service }) {
         <MetaCard label="AGE">
           <div className="flex items-center gap-[7px]">
             <Calendar className="size-[13px] text-[var(--fg-tertiary)]" />
-            <span className="text-[14px] text-[var(--fg-secondary)]">
+            <span className="text-sm text-[var(--fg-secondary)]">
               {humanAge(service.metadata.creationTimestamp)}
             </span>
           </div>
@@ -76,8 +76,8 @@ export function ServiceDetail({ service }: { service: Service }) {
                 key={k}
                 className="inline-flex items-center rounded-sm border bg-[var(--surface-elevated)] border-[var(--border-subtle)] px-[11px] py-1.5"
               >
-                <span className="font-mono text-[12.5px] text-[var(--fg-tertiary)]">{k}=</span>
-                <span className="font-mono text-[12.5px] font-medium text-foreground">{v}</span>
+                <span className="font-mono text-xs text-[var(--fg-tertiary)]">{k}=</span>
+                <span className="font-mono text-xs font-medium text-foreground">{v}</span>
               </div>
             ))}
           </div>
@@ -96,7 +96,7 @@ function ClusterIpValue({ clusterIP }: { clusterIP: string | undefined }) {
 
   return (
     <div className="flex items-center gap-[9px]">
-      <span className="font-mono text-[14px] font-medium text-foreground">{clusterIP || "—"}</span>
+      <span className="font-mono text-sm font-medium text-foreground">{clusterIP || "—"}</span>
       {hasIp && (
         <button
           type="button"

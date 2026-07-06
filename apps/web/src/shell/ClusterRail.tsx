@@ -148,9 +148,9 @@ export function ClusterRail() {
                         so without this column the lines squish side-by-side. */}
                     <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-start", textAlign: "left", lineHeight: 1.35 }}>
                       <div style={{ fontWeight: 600, color: "var(--fg-primary)" }}>{c.name}</div>
-                      <div style={{ color: "var(--accent-soft)", fontSize: 11 }}>{providerLabel(provider)}</div>
-                      {c.server ? <div style={{ color: "var(--fg-secondary)", fontSize: 11 }}>{c.server}</div> : null}
-                      <div style={{ color: "var(--fg-tertiary)", fontSize: 10, marginTop: 2 }}>Right-click to change icon</div>
+                      <div className="text-2xs" style={{ color: "var(--accent-soft)" }}>{providerLabel(provider)}</div>
+                      {c.server ? <div className="text-2xs" style={{ color: "var(--fg-secondary)" }}>{c.server}</div> : null}
+                      <div className="text-3xs" style={{ color: "var(--fg-tertiary)", marginTop: 2 }}>Right-click to change icon</div>
                     </div>
                   </TooltipContent>
                 </Tooltip>

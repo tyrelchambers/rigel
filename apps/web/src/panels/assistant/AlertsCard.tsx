@@ -65,7 +65,7 @@ function AlertField({
   return (
     <div className={cn("flex flex-col gap-[7px]", className)}>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[13px] font-medium text-[var(--fg-secondary)]">{label}</span>
+        <span className="text-xs font-medium text-[var(--fg-secondary)]">{label}</span>
         {right}
       </div>
       {children}
@@ -100,7 +100,7 @@ function AlertSelect({
 /** Uppercase mono section caption (TARGET / CONDITION). */
 function Caption({ children }: { children: React.ReactNode }) {
   return (
-    <span className="font-mono text-[10.5px] tracking-[0.08em] text-[var(--fg-tertiary)] uppercase">
+    <span className="font-mono text-3xs tracking-[0.08em] text-[var(--fg-tertiary)] uppercase">
       {children}
     </span>
   );
@@ -111,7 +111,7 @@ function SeverityChip({ critical }: { critical: boolean }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-mono text-[10.5px]",
+        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-mono text-3xs",
         critical ? "bg-red-500/10 text-red-500" : "bg-amber-400/10 text-amber-400",
       )}
     >
@@ -227,7 +227,7 @@ function MetaChip({ Icon, children }: { Icon: LucideIcon; children: React.ReactN
   return (
     <span className="inline-flex items-center gap-[5px] rounded border border-[var(--border-subtle)] bg-white/[0.04] px-2 py-0.5">
       <Icon className="size-[11px] shrink-0 text-[var(--fg-tertiary)]" />
-      <span className="font-mono text-[11px] text-[var(--fg-tertiary)]">{children}</span>
+      <span className="font-mono text-2xs text-[var(--fg-tertiary)]">{children}</span>
     </span>
   );
 }
@@ -442,14 +442,14 @@ export function AlertsCard() {
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-0.5">
           <p className="text-base font-semibold text-[var(--fg-primary)]">Alerts</p>
-          <p className="text-[13px] text-[var(--fg-tertiary)]">
+          <p className="text-xs text-[var(--fg-tertiary)]">
             Get notified when the cluster does something you care about.
           </p>
         </div>
         <button
           type="button"
           onClick={startCreate}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--accent-primary)] bg-[var(--accent-dim)] px-3.5 py-2 text-[13px] font-semibold text-[var(--accent-primary)] transition-colors hover:border-[var(--accent-hover)] hover:text-[var(--accent-hover)]"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--accent-primary)] bg-[var(--accent-dim)] px-3.5 py-2 text-xs font-semibold text-[var(--accent-primary)] transition-colors hover:border-[var(--accent-hover)] hover:text-[var(--accent-hover)]"
         >
           <Plus className="size-[15px]" />
           New alert
@@ -464,13 +464,13 @@ export function AlertsCard() {
             </div>
             <div className="flex flex-col gap-0.5">
               <p className="text-sm font-semibold text-[var(--fg-primary)]">No alerts yet</p>
-              <p className="text-[13px] text-[var(--fg-secondary)]">
+              <p className="text-xs text-[var(--fg-secondary)]">
                 Add one below, or just ask in chat and the agent will wire it up.
               </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--fg-tertiary)]">
+            <span className="font-mono text-2xs uppercase tracking-[0.08em] text-[var(--fg-tertiary)]">
               Try
             </span>
             {ALERT_SUGGESTIONS.map((s) => (
@@ -491,7 +491,7 @@ export function AlertsCard() {
                     handoffToChat(s.prompt, { newThread: true });
                   }
                 }}
-                className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3 py-1.5 text-[13px] text-[var(--fg-secondary)] transition-colors hover:border-[var(--accent-primary)] hover:text-[var(--fg-primary)]"
+                className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3 py-1.5 text-xs text-[var(--fg-secondary)] transition-colors hover:border-[var(--accent-primary)] hover:text-[var(--fg-primary)]"
               >
                 <s.icon className="size-3.5 text-[var(--accent-primary)]" />
                 {s.label}
@@ -527,11 +527,11 @@ export function AlertsCard() {
 
                 {/* Title + meta */}
                 <div className="flex min-w-0 flex-1 flex-col gap-[7px]">
-                  <p className="truncate text-[14.5px] font-semibold text-[var(--fg-primary)]">{rule.text}</p>
+                  <p className="truncate text-sm font-semibold text-[var(--fg-primary)]">{rule.text}</p>
                   <div className="flex flex-wrap items-center gap-2">
                     <span
                       className={cn(
-                        "rounded px-2 py-0.5 font-mono text-[11px] font-semibold",
+                        "rounded px-2 py-0.5 font-mono text-2xs font-semibold",
                         critical ? "bg-red-500/10 text-red-500" : "bg-amber-400/10 text-amber-400",
                       )}
                     >
@@ -541,12 +541,12 @@ export function AlertsCard() {
                     {hasWebhook && <MetaChip Icon={Bell}>Webhook</MetaChip>}
                     <span className="inline-flex items-center gap-[5px]">
                       <History className="size-[11px] shrink-0 text-[var(--fg-tertiary)]" />
-                      <span className="text-[11.5px] text-[var(--fg-tertiary)]">
+                      <span className="text-2xs text-[var(--fg-tertiary)]">
                         {fired ? `${relativeTime(fired)} ago` : "never"}
                       </span>
                     </span>
                     {!rule.enabled && (
-                      <span className="rounded bg-white/5 px-2 py-0.5 font-mono text-[10.5px] tracking-[0.03em] text-[var(--fg-tertiary)]">
+                      <span className="rounded bg-white/5 px-2 py-0.5 font-mono text-3xs tracking-[0.03em] text-[var(--fg-tertiary)]">
                         Disabled
                       </span>
                     )}
@@ -625,7 +625,7 @@ export function AlertsCard() {
                 <DialogTitle className="text-xl font-bold text-[var(--fg-primary)]">
                   {editingId ? "Edit alert" : "New alert"}
                 </DialogTitle>
-                <DialogDescription className="text-[13px] text-[var(--fg-tertiary)]">
+                <DialogDescription className="text-xs text-[var(--fg-tertiary)]">
                   Get notified when a resource hits a condition.
                 </DialogDescription>
               </div>
@@ -651,7 +651,7 @@ export function AlertsCard() {
               className="flex w-full items-center gap-2.5 rounded-md border border-[var(--accent-primary)]/25 bg-[var(--accent-primary)]/[0.08] px-3.5 py-2.5 text-left transition-colors hover:bg-[var(--accent-primary)]/[0.12]"
             >
               <Sparkles className="size-[15px] shrink-0 text-[var(--accent-primary)]" />
-              <span className="text-[13px] text-[var(--fg-secondary)]">
+              <span className="text-xs text-[var(--fg-secondary)]">
                 Prefer chat? Try{" "}
                 <span className="text-[var(--accent-primary)] italic">
                   "text me if a pod in default restarts &gt; 3× in 5 min"
@@ -842,7 +842,7 @@ export function AlertsCard() {
                       />
                       <span className="font-mono text-xs text-[var(--fg-tertiary)]">min</span>
                     </div>
-                    <span className="text-[12.5px] whitespace-nowrap text-[var(--fg-tertiary)]">
+                    <span className="text-xs whitespace-nowrap text-[var(--fg-tertiary)]">
                       0 = default
                     </span>
                   </div>
@@ -851,7 +851,7 @@ export function AlertsCard() {
                   label="Label"
                   className="flex-1"
                   right={
-                    <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.04] px-2 py-0.5 font-mono text-[10px] text-[var(--fg-tertiary)]">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.04] px-2 py-0.5 font-mono text-3xs text-[var(--fg-tertiary)]">
                       <WandSparkles className="size-2.5" />
                       auto
                     </span>
@@ -870,7 +870,7 @@ export function AlertsCard() {
             {/* Live preview */}
             <div className="flex items-center gap-2.5 rounded-md border border-[var(--accent-primary)]/30 bg-[var(--accent-primary)]/[0.08] px-3.5 py-3">
               <BellRing className="size-4 shrink-0 text-[var(--accent-primary)]" />
-              <p className="text-[13px] leading-snug text-[var(--fg-secondary)]">
+              <p className="text-xs leading-snug text-[var(--fg-secondary)]">
                 Alert me when {scope === "cluster" ? "the " : "a "}
                 <span className="font-semibold text-[var(--fg-primary)]">{subjectLabel}</span>
                 {needsName && name.trim() !== "" ? (
@@ -896,7 +896,7 @@ export function AlertsCard() {
 
           {/* Footer */}
           <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--border-subtle)] px-6 pt-4 pb-5">
-            <div className="flex items-center gap-2 text-[12.5px] text-[var(--fg-tertiary)]">
+            <div className="flex items-center gap-2 text-xs text-[var(--fg-tertiary)]">
               <Send className="size-[13px]" />
               Delivered to your notification channels.
             </div>

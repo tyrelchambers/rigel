@@ -26,21 +26,21 @@ export function RemoveClusterDialog({
         </DialogHeader>
         <DialogBody>
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <div style={{ fontSize: 15, fontWeight: 600, color: "var(--fg-primary)" }}>Remove this cluster from Rigel?</div>
+        <div className="text-base" style={{ fontWeight: 600, color: "var(--fg-primary)" }}>Remove this cluster from Rigel?</div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 12px", borderRadius: 10, background: "var(--surface-elevated)", border: "1px solid var(--border-subtle)" }}>
           <div style={{ width: 28, height: 28, borderRadius: 8, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--accent-dim)", color: "var(--accent-primary)" }}>
             <Icon size={15} />
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 500, color: "var(--fg-primary)", wordBreak: "break-all" }}>{cluster?.name}</span>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--fg-tertiary)" }}>{providerLabel(provider)}</span>
+            <span className="text-xs" style={{ fontFamily: "var(--font-mono)", fontWeight: 500, color: "var(--fg-primary)", wordBreak: "break-all" }}>{cluster?.name}</span>
+            <span className="text-3xs" style={{ fontFamily: "var(--font-mono)", color: "var(--fg-tertiary)" }}>{providerLabel(provider)}</span>
           </div>
         </div>
 
         <div style={{ display: "flex", alignItems: "flex-start", gap: 9, padding: "11px 12px", borderRadius: 8, background: "var(--surface-elevated)", border: "1px solid var(--border-subtle)" }}>
           <ShieldCheck size={16} color="var(--status-running)" style={{ flexShrink: 0, marginTop: 1 }} />
-          <span style={{ fontSize: 13, color: "var(--fg-secondary)", lineHeight: 1.5 }}>This only disconnects it from Rigel. The cluster keeps running on its provider, and you can reconnect anytime.</span>
+          <span className="text-xs" style={{ color: "var(--fg-secondary)", lineHeight: 1.5 }}>This only disconnects it from Rigel. The cluster keeps running on its provider, and you can reconnect anytime.</span>
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>

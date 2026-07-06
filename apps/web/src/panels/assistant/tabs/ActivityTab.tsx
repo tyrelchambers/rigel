@@ -50,14 +50,14 @@ export function ActivityTab() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-base font-semibold text-[var(--fg-primary)]">Activity</span>
-          <span className="font-mono text-[13px] text-[var(--fg-tertiary)]">{audit.length}</span>
+          <span className="font-mono text-xs text-[var(--fg-tertiary)]">{audit.length}</span>
         </div>
         <div className="flex items-center gap-4">
           {audit.length > 10 && (
             <button
               type="button"
               onClick={openAllActivity}
-              className="text-[13px] font-medium text-[var(--accent-primary)] hover:underline"
+              className="text-xs font-medium text-[var(--accent-primary)] hover:underline"
             >
               See all
             </button>
@@ -67,7 +67,7 @@ export function ActivityTab() {
             disabled={working || audit.length === 0}
             onClick={onClear}
             className={cn(
-              "text-[13px] transition-colors disabled:opacity-40",
+              "text-xs transition-colors disabled:opacity-40",
               confirming
                 ? "font-semibold text-red-500"
                 : "text-[var(--fg-tertiary)] hover:text-[var(--fg-secondary)]",

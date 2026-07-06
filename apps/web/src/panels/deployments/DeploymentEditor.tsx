@@ -191,13 +191,13 @@ export function DeploymentEditor({ target, open, onClose, onApplied }: Deploymen
                     </div>
   
                     <div className="space-y-1.5">
-                      <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Environment</div>
+                      <div className="text-3xs font-semibold uppercase tracking-wide text-muted-foreground">Environment</div>
                       <KeyValueEditor
                         rows={c.env}
                         onRowsChange={(rows: KVRow[]) => updateContainer(ci, { env: rows })}
                         keyPlaceholder="ENV_NAME"
                       />
-                      <div className="pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">From Secret / ConfigMap</div>
+                      <div className="pt-1 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">From Secret / ConfigMap</div>
                       <EnvRefEditor
                         rows={c.envRefs}
                         secrets={secrets}
@@ -207,9 +207,9 @@ export function DeploymentEditor({ target, open, onClose, onApplied }: Deploymen
                       {c.otherRefKeys.length > 0 && (
                         <div className="space-y-1 pt-1">
                           {c.otherRefKeys.map((k) => (
-                            <div key={k} className="flex items-center gap-2 rounded border border-dashed px-2 py-1 text-[11px] font-mono text-muted-foreground">
+                            <div key={k} className="flex items-center gap-2 rounded border border-dashed px-2 py-1 text-2xs font-mono text-muted-foreground">
                               <span>{k}</span>
-                              <span className="ml-1 text-[10px] uppercase tracking-wide">from ref · read-only</span>
+                              <span className="ml-1 text-3xs uppercase tracking-wide">from ref · read-only</span>
                               <button
                                 type="button"
                                 className="ml-auto text-destructive hover:underline"

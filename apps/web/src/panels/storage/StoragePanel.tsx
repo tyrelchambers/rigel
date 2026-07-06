@@ -8,6 +8,7 @@ import { ListRow } from "@/panels/components/ListRow";
 import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { PanelHeader } from "@/panels/components/PanelHeader";
+import { PanelSearch } from "@/panels/components/PanelSearch";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { useFocusRow } from "@/panels/components/useFocusRow";
 import type {
@@ -147,12 +148,11 @@ export default function StoragePanel() {
         subtitle="Claims · Volumes · Classes"
         loading={isLoading}
       >
-        <input
-          type="text"
+        <PanelSearch
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onValueChange={setSearch}
           placeholder="Search…"
-          className="w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="w-56"
         />
       </PanelHeader>
 
@@ -223,9 +223,9 @@ export default function StoragePanel() {
 
                 {/* Namespace chip */}
                 <span
+                  className="text-3xs"
                   style={{
                     fontFamily: "ui-monospace, monospace",
-                    fontSize: 10,
                     color: "var(--fg-tertiary)",
                     background: "var(--surface-sunken)",
                     padding: "1px 5px",
@@ -242,9 +242,9 @@ export default function StoragePanel() {
 
                 {/* Capacity — dim */}
                 <span
+                  className="text-3xs"
                   style={{
                     fontFamily: "ui-monospace, monospace",
-                    fontSize: 10,
                     color: "var(--fg-secondary)",
                     whiteSpace: "nowrap",
                   }}
@@ -255,9 +255,9 @@ export default function StoragePanel() {
                 {/* Access modes — dim */}
                 {modes.length > 0 && (
                   <span
+                    className="text-3xs"
                     style={{
                       fontFamily: "ui-monospace, monospace",
-                      fontSize: 10,
                       color: "var(--fg-tertiary)",
                       whiteSpace: "nowrap",
                     }}
@@ -317,9 +317,9 @@ export default function StoragePanel() {
 
                 {/* Capacity — dim */}
                 <span
+                  className="text-3xs"
                   style={{
                     fontFamily: "ui-monospace, monospace",
-                    fontSize: 10,
                     color: "var(--fg-secondary)",
                     whiteSpace: "nowrap",
                   }}
@@ -330,9 +330,9 @@ export default function StoragePanel() {
                 {/* Reclaim policy — dim */}
                 {reclaim && (
                   <span
+                    className="text-3xs"
                     style={{
                       fontFamily: "ui-monospace, monospace",
-                      fontSize: 10,
                       color: "var(--fg-tertiary)",
                       whiteSpace: "nowrap",
                     }}
@@ -347,9 +347,9 @@ export default function StoragePanel() {
                 {/* ClaimRef — dim */}
                 {claim && (
                   <span
+                    className="text-3xs"
                     style={{
                       fontFamily: "ui-monospace, monospace",
-                      fontSize: 10,
                       color: "var(--fg-tertiary)",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -411,9 +411,9 @@ export default function StoragePanel() {
                 {/* Provisioner — dim, truncated */}
                 {provisioner && (
                   <span
+                    className="text-3xs"
                     style={{
                       fontFamily: "ui-monospace, monospace",
-                      fontSize: 10,
                       color: "var(--fg-secondary)",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -430,9 +430,9 @@ export default function StoragePanel() {
                 {/* Reclaim policy — dim */}
                 {reclaim && (
                   <span
+                    className="text-3xs"
                     style={{
                       fontFamily: "ui-monospace, monospace",
-                      fontSize: 10,
                       color: "var(--fg-tertiary)",
                       whiteSpace: "nowrap",
                     }}
@@ -444,9 +444,9 @@ export default function StoragePanel() {
                 {/* Volume binding mode — dim */}
                 {bindingMode && (
                   <span
+                    className="text-3xs"
                     style={{
                       fontFamily: "ui-monospace, monospace",
-                      fontSize: 10,
                       color: "var(--fg-tertiary)",
                       whiteSpace: "nowrap",
                     }}
@@ -484,7 +484,7 @@ export default function StoragePanel() {
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex gap-3">
-      <span className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground w-20 shrink-0">
+      <span className="text-3xs font-semibold uppercase tracking-[0.05em] text-muted-foreground w-20 shrink-0">
         {label}
       </span>
       <div className="min-w-0 flex-1 font-mono text-xs text-muted-foreground">{children}</div>

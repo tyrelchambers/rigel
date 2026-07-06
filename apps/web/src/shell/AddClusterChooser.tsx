@@ -16,8 +16,8 @@ function ChoiceRow({
     >
       <span style={{ color: "var(--accent-soft)" }}>{icon}</span>
       <span style={{ display: "flex", flexDirection: "column" }}>
-        <span style={{ fontWeight: 600, fontSize: 14 }}>{title}</span>
-        <span style={{ fontSize: 12, color: "var(--fg-secondary)" }}>{subtitle}</span>
+        <span className="text-sm" style={{ fontWeight: 600 }}>{title}</span>
+        <span className="text-xs" style={{ color: "var(--fg-secondary)" }}>{subtitle}</span>
       </span>
     </button>
   );

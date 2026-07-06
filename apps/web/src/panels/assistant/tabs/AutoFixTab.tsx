@@ -94,7 +94,7 @@ function OptInCard() {
       {/* Header — title/sub + Off/On toggle */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex flex-col gap-0.5">
-          <p className="text-[15px] font-semibold text-[var(--fg-primary)]">Auto-fix</p>
+          <p className="text-base font-semibold text-[var(--fg-primary)]">Auto-fix</p>
           <p className="text-xs text-[var(--fg-secondary)]">
             Open a pull request when Rigel finds a fixable error
           </p>
@@ -106,7 +106,7 @@ function OptInCard() {
         />
       </div>
 
-      <p className="text-[13px] leading-[1.5] text-[var(--fg-secondary)]">
+      <p className="text-xs leading-[1.5] text-[var(--fg-secondary)]">
         When Rigel diagnoses an error it can fix, it opens a pull request with the change and an
         explanation. You review and merge. Rigel only pushes a branch; it never merges or deploys.
       </p>
@@ -141,7 +141,7 @@ function OptInCard() {
           onRemoveProject={removeProject}
           onLink={setLinkTarget}
         />
-        <p className="text-[11px] leading-[1.45] text-[var(--fg-tertiary)]">
+        <p className="text-2xs leading-[1.45] text-[var(--fg-tertiary)]">
           Add each project (deployment) Rigel may open fixes for. Adding an unlinked project lets
           you create its GitOps source on the spot; once linked, Rigel can open fixes against it.
         </p>
@@ -150,13 +150,13 @@ function OptInCard() {
       {/* Notification note */}
       <div className="flex items-center gap-2">
         <Bell className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />
-        <span className="text-[11px] text-[var(--fg-tertiary)]">
+        <span className="text-2xs text-[var(--fg-tertiary)]">
           Notifications use your configured channel (Matrix, Signal, or webhook).
         </span>
       </div>
 
       {setAutofix.error && (
-        <p className="font-mono text-[11px] text-[var(--status-failed)]">{setAutofix.error.message}</p>
+        <p className="font-mono text-2xs text-[var(--status-failed)]">{setAutofix.error.message}</p>
       )}
 
       <LinkRepoModal
@@ -230,7 +230,7 @@ function ScopeList({
   return (
     <div className="divide-y divide-[var(--border-subtle)] overflow-visible rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-sunken)]">
       {empty && (
-        <p className="px-3 py-2.5 text-[11px] italic text-[var(--fg-tertiary)]">
+        <p className="px-3 py-2.5 text-2xs italic text-[var(--fg-tertiary)]">
           Nothing opted in yet. Add a project below.
         </p>
       )}
@@ -296,8 +296,8 @@ function ProjectScopeRow({
       <div className="flex min-w-0 items-center gap-2.5">
         <Box className="size-[15px] shrink-0 text-[var(--fg-tertiary)]" />
         <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="truncate text-[13px] font-medium text-[var(--fg-primary)]">{deployment}</span>
-          <span className="text-[11px] text-[var(--fg-tertiary)]">
+          <span className="truncate text-xs font-medium text-[var(--fg-primary)]">{deployment}</span>
+          <span className="text-2xs text-[var(--fg-tertiary)]">
             {linked ? "project" : "project · not linked"}
           </span>
         </div>
@@ -313,7 +313,7 @@ function ProjectScopeRow({
             type="button"
             disabled={working}
             onClick={() => onLink({ namespace, deployment })}
-            className="inline-flex items-center gap-1.5 rounded-md border border-[var(--status-pending)] px-2.5 py-1 font-mono text-[11px] text-[var(--status-pending)] transition-colors hover:bg-[var(--status-pending)]/10 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-md border border-[var(--status-pending)] px-2.5 py-1 font-mono text-2xs text-[var(--status-pending)] transition-colors hover:bg-[var(--status-pending)]/10 disabled:opacity-50"
           >
             <LinkIcon className="size-3" />
             Link to repo
@@ -442,13 +442,13 @@ function AddProjectControl({
       {resolution?.status === "error" && (
         <div className="flex items-center gap-2 border-t border-[var(--border-subtle)] px-3 py-2.5">
           <TriangleAlert className="size-3.5 shrink-0 text-[var(--status-failed)]" />
-          <span className="min-w-0 flex-1 text-[11px] text-[var(--status-failed)]">
+          <span className="min-w-0 flex-1 text-2xs text-[var(--status-failed)]">
             Couldn't check {resolution.target.deployment}. {linkQuery.error?.message ?? "Link check failed."}
           </span>
           <button
             type="button"
             onClick={retry}
-            className="shrink-0 rounded-md border border-[var(--border-subtle)] px-2 py-0.5 text-[11px] text-[var(--fg-secondary)] transition-colors hover:text-[var(--fg-primary)]"
+            className="shrink-0 rounded-md border border-[var(--border-subtle)] px-2 py-0.5 text-2xs text-[var(--fg-secondary)] transition-colors hover:text-[var(--fg-primary)]"
           >
             Retry
           </button>
@@ -486,7 +486,7 @@ function AddProjectControl({
                     <Box className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />
                     <span className="flex min-w-0 flex-col gap-0.5">
                       <span className="truncate text-[var(--fg-primary)]">{o.deployment}</span>
-                      <span className="truncate font-mono text-[10px] text-[var(--fg-tertiary)]">
+                      <span className="truncate font-mono text-3xs text-[var(--fg-tertiary)]">
                         {o.namespace}
                       </span>
                     </span>
@@ -495,7 +495,7 @@ function AddProjectControl({
                 );
               })}
               {filtered.length === 0 && (
-                <p className="px-3 py-2 text-[11px] italic text-[var(--fg-tertiary)]">
+                <p className="px-3 py-2 text-2xs italic text-[var(--fg-tertiary)]">
                   {options.length === 0 ? "No deployments found" : "No matching deployments"}
                 </p>
               )}
@@ -531,7 +531,7 @@ function RecentPrCard({ prs }: { prs: AssistantPullRequest[] }) {
     <div className="overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)]">
       <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] px-3.5 py-3">
         <p className="text-sm font-semibold text-[var(--fg-primary)]">Recent pull requests</p>
-        {summary && <p className="font-mono text-[11px] text-[var(--fg-tertiary)]">{summary}</p>}
+        {summary && <p className="font-mono text-2xs text-[var(--fg-tertiary)]">{summary}</p>}
       </div>
       {prs.length === 0 ? (
         <p className="px-3.5 py-6 text-center text-xs text-[var(--fg-tertiary)]">
@@ -579,14 +579,14 @@ function PrRow({ pr }: { pr: AssistantPullRequest }) {
       <div className="flex min-w-0 items-center gap-2.5">
         <meta.Icon className={cn("size-4 shrink-0", meta.icon)} />
         <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="truncate text-[13px] font-medium text-[var(--fg-primary)]">{pr.title}</span>
-          <span className="truncate font-mono text-[11px] text-[var(--fg-tertiary)]">{subtitle}</span>
+          <span className="truncate text-xs font-medium text-[var(--fg-primary)]">{pr.title}</span>
+          <span className="truncate font-mono text-2xs text-[var(--fg-tertiary)]">{subtitle}</span>
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2.5">
         <span className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-2.5 py-1">
           <span className={cn("size-[7px] rounded-full", meta.dot)} />
-          <span className="text-[11px] text-[var(--fg-secondary)]">{meta.label}</span>
+          <span className="text-2xs text-[var(--fg-secondary)]">{meta.label}</span>
         </span>
         {pr.prUrl && (
           <a

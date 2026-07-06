@@ -62,9 +62,9 @@ export function CronJobRow({ c, k, isOpen, toggleExpand, askClaude, triggerCronJ
 
       {/* Namespace chip */}
       <span
+        className="text-3xs"
         style={{
           fontFamily: "ui-monospace, monospace",
-          fontSize: 10,
           color: "var(--fg-tertiary)",
           background: "var(--surface-sunken)",
           padding: "1px 5px",
@@ -85,9 +85,9 @@ export function CronJobRow({ c, k, isOpen, toggleExpand, askClaude, triggerCronJ
       {/* Last schedule */}
       {lastSched && (
         <span
+          className="text-3xs"
           style={{
             fontFamily: "ui-monospace, monospace",
-            fontSize: 10,
             color: "var(--fg-tertiary)",
             whiteSpace: "nowrap",
             flexShrink: 0,

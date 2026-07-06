@@ -31,7 +31,7 @@ export function AiAgentsTab() {
       <section className="space-y-4">
         <div className="space-y-1">
           <h2 className="text-base font-semibold text-foreground">Configure the assistant</h2>
-          <p className="text-[13px] leading-snug text-muted-foreground">
+          <p className="text-xs leading-snug text-muted-foreground">
             Pick which AI runs each role, manage credentials, and set operational limits.
           </p>
         </div>

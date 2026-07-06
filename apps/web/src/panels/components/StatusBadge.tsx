@@ -35,9 +35,9 @@ export function StatusBadge({ label, variant = "neutral", title, wrap = false }:
   return (
     <span
       title={title}
+      className="text-2xs"
       style={{
         fontFamily: "ui-monospace, monospace",
-        fontSize: 11,
         fontWeight: 500,
         color: text,
         background: bg,

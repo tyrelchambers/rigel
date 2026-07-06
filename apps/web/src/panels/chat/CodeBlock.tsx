@@ -25,7 +25,7 @@ export function CodeBlock({ children }: { children?: ReactNode }) {
         onClick={() => copy(text)}
         className={cn(
           "absolute top-2 right-2 inline-flex items-center gap-[5px] px-2 py-1",
-          "rounded-md text-[12px] leading-none cursor-pointer",
+          "rounded-md text-xs leading-none cursor-pointer",
           "bg-[var(--surface-elevated)] border border-[var(--border-subtle)]",
           copied ? "text-[var(--status-running)]" : "text-[var(--fg-secondary)]",
         )}

@@ -53,7 +53,7 @@ export function ConnectivityDetail({ flow }: { flow: Flow }) {
             ) : (
               <Lock className="size-[13px] text-[var(--fg-tertiary)]" />
             )}
-            <span className="font-mono text-[13px] text-[var(--fg-secondary)]">
+            <span className="font-mono text-xs text-[var(--fg-secondary)]">
               {flow.isExternal
                 ? flow.hosts.length > 0
                   ? flow.hosts.join(", ")
@@ -70,7 +70,7 @@ export function ConnectivityDetail({ flow }: { flow: Flow }) {
               style={{ color: flow.serviceExists ? "var(--fg-tertiary)" : "var(--status-failed)" }}
             />
             <span
-              className="font-mono text-[13px]"
+              className="font-mono text-xs"
               style={{ color: flow.serviceExists ? "var(--fg-secondary)" : "var(--status-failed)" }}
             >
               {flow.serviceExists ? `svc/${flow.serviceName} · ${flow.serviceType}` : "missing"}
@@ -81,12 +81,12 @@ export function ConnectivityDetail({ flow }: { flow: Flow }) {
         <MetaCard label="ENDPOINTS">
           <div className="flex items-baseline gap-1.5">
             <span
-              className="text-[18px] font-bold leading-none"
+              className="text-lg font-bold leading-none"
               style={{ color: healthColor(flow.health) }}
             >
               {flow.readyPods}/{flow.totalPods}
             </span>
-            <span className="text-[13px] text-[var(--fg-tertiary)]">ready</span>
+            <span className="text-xs text-[var(--fg-tertiary)]">ready</span>
           </div>
         </MetaCard>
       </div>
@@ -104,7 +104,7 @@ export function ConnectivityDetail({ flow }: { flow: Flow }) {
                 className="flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[13px] py-[10px] text-left transition-colors hover:bg-[var(--surface-elevated)] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Signpost className="size-3.5 text-[var(--fg-tertiary)]" aria-hidden />
-                <span className="font-mono text-[13px] text-[var(--fg-secondary)]">{ing}</span>
+                <span className="font-mono text-xs text-[var(--fg-secondary)]">{ing}</span>
               </button>
             ))}
           </div>
@@ -132,9 +132,9 @@ export function ConnectivityDetail({ flow }: { flow: Flow }) {
                   style={{ background: podDotColor(p) }}
                   aria-hidden
                 />
-                <span className="font-mono text-[13px] text-[var(--fg-secondary)]">{p.name}</span>
+                <span className="font-mono text-xs text-[var(--fg-secondary)]">{p.name}</span>
                 <span className="flex-1" />
-                <span className="font-mono text-[11px] text-[var(--fg-tertiary)]">{p.phase}</span>
+                <span className="font-mono text-2xs text-[var(--fg-tertiary)]">{p.phase}</span>
               </button>
             ))}
           </div>

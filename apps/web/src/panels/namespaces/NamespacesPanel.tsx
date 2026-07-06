@@ -19,6 +19,7 @@ import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-m
 import { ListRow } from "@/panels/components/ListRow";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { PanelHeader } from "@/panels/components/PanelHeader";
+import { PanelSearch } from "@/panels/components/PanelSearch";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import type { ActionBlock } from "@/lib/api";
 import type { Namespace } from "./types";
@@ -156,12 +157,11 @@ export default function NamespacesPanel() {
         count={shown !== total && search.trim() ? shown : total}
         loading={isLoading}
       >
-        <input
-          type="text"
+        <PanelSearch
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onValueChange={setSearch}
           placeholder="Search namespaces…"
-          className="w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="w-56"
         />
         <Button size="sm" onClick={openCreate}>
           <Plus className="size-3" />
@@ -211,7 +211,7 @@ export default function NamespacesPanel() {
               contextMenu={rowMenu}
               expandedContent={
                 <div className="space-y-2">
-                  <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+                  <h3 className="text-3xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">
                     Pods ({nsPods.length})
                   </h3>
                   {nsPods.length === 0 ? (
@@ -237,7 +237,7 @@ export default function NamespacesPanel() {
                             </span>
                             {restarts > 0 && (
                               <span
-                                className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px]"
+                                className="shrink-0 rounded px-1.5 py-0.5 font-mono text-3xs"
                                 style={{ background: "rgba(245,158,11,0.15)", color: "var(--status-pending)" }}
                                 title={`${restarts} restart${restarts === 1 ? "" : "s"}`}
                               >
@@ -245,7 +245,7 @@ export default function NamespacesPanel() {
                               </span>
                             )}
                             <span
-                              className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+                              className="shrink-0 rounded px-1.5 py-0.5 font-mono text-3xs text-muted-foreground"
                               style={{ background: "var(--surface-elevated)", border: "1px solid #26272B" }}
                             >
                               {readyText(p)}
@@ -272,9 +272,9 @@ export default function NamespacesPanel() {
 
               {/* Pod count — dim */}
               <span
+                className="text-3xs"
                 style={{
                   fontFamily: "ui-monospace, monospace",
-                  fontSize: 10,
                   color: "var(--fg-tertiary)",
                   whiteSpace: "nowrap",
                 }}
@@ -287,9 +287,9 @@ export default function NamespacesPanel() {
 
               {/* Age — dim */}
               <span
+                className="text-3xs"
                 style={{
                   fontFamily: "ui-monospace, monospace",
-                  fontSize: 10,
                   color: "var(--fg-tertiary)",
                   whiteSpace: "nowrap",
                 }}

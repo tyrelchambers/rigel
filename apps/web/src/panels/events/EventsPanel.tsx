@@ -8,6 +8,7 @@ import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-m
 import { viewYaml } from "@/store/yamlViewer";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { PanelHeader } from "@/panels/components/PanelHeader";
+import { PanelSearch } from "@/panels/components/PanelSearch";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -164,12 +165,11 @@ export default function EventsPanel() {
         count={filtered.length}
         loading={isLoading}
       >
-        <input
-          type="text"
+        <PanelSearch
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onValueChange={setSearch}
           placeholder="Search events…"
-          className="w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="w-56"
         />
         {/*
           Clears the LOCAL view only. Kubernetes events are ephemeral and
@@ -199,7 +199,7 @@ export default function EventsPanel() {
             type="button"
             onClick={() => setTypeFilter(f)}
             className={cn(
-              "rounded px-2 py-[3px] font-mono text-[10px] font-medium",
+              "rounded px-2 py-[3px] font-mono text-3xs font-medium",
               filterPillClass(f, typeFilter === f),
             )}
           >
@@ -279,9 +279,9 @@ export default function EventsPanel() {
 
               {/* Involved object — dim */}
               <span
+                className="text-3xs"
                 style={{
                   fontFamily: "ui-monospace, monospace",
-                  fontSize: 10,
                   color: "var(--fg-tertiary)",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
@@ -297,9 +297,9 @@ export default function EventsPanel() {
               {/* Message — truncated in collapsed state */}
               {!isOpen && (
                 <span
+                  className="text-3xs"
                   style={{
                     fontFamily: "ui-monospace, monospace",
-                    fontSize: 10,
                     color: "var(--fg-secondary)",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -318,9 +318,9 @@ export default function EventsPanel() {
               {/* Count "×N" when > 1 — right-aligned */}
               {count > 1 && (
                 <span
+                  className="text-3xs"
                   style={{
                     fontFamily: "ui-monospace, monospace",
-                    fontSize: 10,
                     color: "var(--status-pending)",
                     whiteSpace: "nowrap",
                     flexShrink: 0,
@@ -333,9 +333,9 @@ export default function EventsPanel() {
               {/* Age — right-aligned */}
               <span
                 title={tooltip}
+                className="text-3xs"
                 style={{
                   fontFamily: "ui-monospace, monospace",
-                  fontSize: 10,
                   color: "var(--fg-tertiary)",
                   whiteSpace: "nowrap",
                   flexShrink: 0,
@@ -412,11 +412,11 @@ function TimelineBar({ bucket, max }: { bucket: EventBucket; max: number }) {
       <PopoverContent side="top" className="w-auto min-w-44 gap-1.5 p-2.5">
         <PopoverHeader>
           <PopoverTitle className="text-xs">{bucketTimeRange(bucket.start)}</PopoverTitle>
-          <PopoverDescription className="text-[11px]">
+          <PopoverDescription className="text-2xs">
             {total} event{total === 1 ? "" : "s"} this minute
           </PopoverDescription>
         </PopoverHeader>
-        <div className="flex flex-col gap-0.5 font-mono text-[11px]">
+        <div className="flex flex-col gap-0.5 font-mono text-2xs">
           <span className="text-red-600">{bucket.warnings} warning{bucket.warnings === 1 ? "" : "s"}</span>
           <span className="text-green-600">{bucket.normal} normal</span>
         </div>

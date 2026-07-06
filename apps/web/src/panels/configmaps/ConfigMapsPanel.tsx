@@ -10,6 +10,7 @@ import { ListRow } from "@/panels/components/ListRow";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { PanelHeader } from "@/panels/components/PanelHeader";
+import { PanelSearch } from "@/panels/components/PanelSearch";
 import { useFocusRow } from "@/panels/components/useFocusRow";
 import type { ConfigMap } from "./types";
 import { ConfigMapEditor } from "./ConfigMapEditor";
@@ -93,12 +94,11 @@ export default function ConfigMapsPanel() {
         count={shown}
         loading={isLoading}
       >
-        <input
-          type="text"
+        <PanelSearch
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onValueChange={setSearch}
           placeholder="Search configmaps…"
-          className="w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="w-56"
         />
         <Button size="sm" onClick={openCreate}>
           <Plus className="size-4" aria-hidden /> New ConfigMap
@@ -156,9 +156,9 @@ export default function ConfigMapsPanel() {
 
               {/* Namespace chip */}
               <span
+                className="text-3xs"
                 style={{
                   fontFamily: "ui-monospace, monospace",
-                  fontSize: 10,
                   color: "var(--fg-tertiary)",
                   background: "var(--surface-sunken)",
                   padding: "1px 5px",
@@ -178,9 +178,9 @@ export default function ConfigMapsPanel() {
 
               {/* Age — dim */}
               <span
+                className="text-3xs"
                 style={{
                   fontFamily: "ui-monospace, monospace",
-                  fontSize: 10,
                   color: "var(--fg-tertiary)",
                   whiteSpace: "nowrap",
                 }}

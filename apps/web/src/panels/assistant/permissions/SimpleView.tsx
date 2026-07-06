@@ -24,10 +24,10 @@ export function SimpleView({
                 <span className="text-sm font-semibold text-[var(--fg-primary)]">{cap.label}</span>
                 <RiskChip risk={cap.risk} />
               </div>
-              <p className="text-[12.5px] text-[var(--fg-tertiary)]">{cap.description}</p>
+              <p className="text-xs text-[var(--fg-tertiary)]">{cap.description}</p>
             </div>
             {cap.baseline ? (
-              <span className="shrink-0 rounded-full bg-[var(--accent-dim)] px-2.5 py-1 text-[11px] font-semibold text-[var(--accent-primary)]">
+              <span className="shrink-0 rounded-full bg-[var(--accent-dim)] px-2.5 py-1 text-2xs font-semibold text-[var(--accent-primary)]">
                 Always on
               </span>
             ) : (
@@ -52,7 +52,7 @@ function RiskChip({ risk }: { risk: Risk }) {
   return (
     <span
       className={cn(
-        "rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase",
+        "rounded-full px-2 py-0.5 text-3xs font-semibold tracking-wide uppercase",
         isSecret ? "bg-red-500/15 text-red-400" : "bg-amber-500/15 text-amber-400",
       )}
     >

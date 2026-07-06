@@ -67,7 +67,7 @@ export function Section({
 export function Stat({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="font-mono text-[9px] font-medium uppercase text-muted-foreground">{label}</span>
+      <span className="font-mono text-3xs font-medium uppercase text-muted-foreground">{label}</span>
       <span className={`text-sm font-semibold ${color}`}>{value}</span>
     </div>
   );
@@ -76,7 +76,7 @@ export function Stat({ label, value, color }: { label: string; value: string; co
 export function StatusPill({ enabled }: { enabled: boolean }) {
   return (
     <span
-      className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-medium ${
+      className={`rounded px-1.5 py-0.5 font-mono text-3xs font-medium ${
         enabled
           ? "bg-green-500/15 text-green-600 dark:text-green-400"
           : "bg-muted text-muted-foreground"

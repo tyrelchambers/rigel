@@ -35,7 +35,7 @@ export function AlertsTab() {
       <div className="flex flex-col gap-[18px] rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-[22px]">
         <div className="flex flex-col gap-0.5">
           <p className="text-base font-semibold text-[var(--fg-primary)]">Autonomy &amp; notifications</p>
-          <p className="text-[13px] text-[var(--fg-tertiary)]">How the agent acts on safe fixes.</p>
+          <p className="text-xs text-[var(--fg-tertiary)]">How the agent acts on safe fixes.</p>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
@@ -59,7 +59,7 @@ export function AlertsTab() {
               value={windowText}
               onChange={(e) => setWindowText(e.target.value)}
               placeholder="22:00-07:00"
-              className="w-40 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-primary)] px-3 py-2 font-mono text-[13px] text-[var(--fg-primary)] outline-none placeholder:text-[var(--fg-tertiary)] focus:border-[var(--accent-primary)]"
+              className="w-40 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-primary)] px-3 py-2 font-mono text-xs text-[var(--fg-primary)] outline-none placeholder:text-[var(--fg-tertiary)] focus:border-[var(--accent-primary)]"
             />
             <Button
               variant="muted"
@@ -89,7 +89,7 @@ export function AlertsTab() {
               value={webhookText}
               onChange={(e) => setWebhookText(e.target.value)}
               placeholder="Paste webhook URL (optional)"
-              className="min-w-0 flex-1 bg-transparent font-mono text-[13px] text-[var(--fg-primary)] outline-none placeholder:text-[var(--fg-tertiary)]"
+              className="min-w-0 flex-1 bg-transparent font-mono text-xs text-[var(--fg-primary)] outline-none placeholder:text-[var(--fg-tertiary)]"
             />
           </div>
           <button
@@ -110,7 +110,7 @@ export function AlertsTab() {
           </button>
         </div>
 
-        <div className="flex items-center gap-1.5 text-[13px] text-[var(--fg-tertiary)]">
+        <div className="flex items-center gap-1.5 text-xs text-[var(--fg-tertiary)]">
           <Info className="size-3.5 shrink-0" />
           <span>Signal (SMS) notifications are set up in the</span>
           <button
@@ -201,7 +201,7 @@ function ModeCard({
         <span className="text-sm font-semibold text-[var(--fg-primary)]">{title}</span>
         {selected && <Check className="ml-auto size-4 text-[var(--accent-primary)]" />}
       </div>
-      <p className="text-[12.5px] leading-[1.4] text-[var(--fg-secondary)]">{desc}</p>
+      <p className="text-xs leading-[1.4] text-[var(--fg-secondary)]">{desc}</p>
     </button>
   );
 }

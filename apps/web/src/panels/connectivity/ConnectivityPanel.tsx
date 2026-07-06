@@ -352,9 +352,9 @@ function FlowRow({
 
           {/* Namespace */}
           <span
+            className="text-3xs"
             style={{
               fontFamily: "ui-monospace, monospace",
-              fontSize: 10,
               color: "var(--fg-tertiary)",
               whiteSpace: "nowrap",
             }}

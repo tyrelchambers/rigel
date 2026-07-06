@@ -51,27 +51,27 @@ export function BindingCard({ grant, onEdit, onAddSubject, onEditYaml, onDelete 
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <div className="flex min-w-0 flex-wrap items-center gap-[10px]">
           <Link2 className="size-[15px] shrink-0 text-[var(--fg-tertiary)]" />
-          <span className="break-all font-[var(--font-mono)] text-[14px] font-semibold text-[var(--fg-primary)]">
+          <span className="break-all font-[var(--font-mono)] text-sm font-semibold text-[var(--fg-primary)]">
             {grant.bindingName}
           </span>
           <span className="flex shrink-0 items-center gap-[5px] rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-white/[0.05] px-2 py-[2px]">
             <Box className="size-[10px] text-[var(--fg-tertiary)]" />
-            <span className="text-[11.5px] font-medium text-[var(--fg-secondary)]">
+            <span className="text-2xs font-medium text-[var(--fg-secondary)]">
               {grant.scope.kind === "Namespaced" ? "Namespaced" : "Cluster"}
             </span>
             {grant.scope.kind === "Namespaced" && (
-              <span className="font-[var(--font-mono)] text-[11px] text-[var(--fg-tertiary)]">
+              <span className="font-[var(--font-mono)] text-2xs text-[var(--fg-tertiary)]">
                 {grant.scope.namespace}
               </span>
             )}
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-[9px]">
-          <span className="text-[12px] text-[var(--fg-tertiary)]">grants</span>
+          <span className="text-xs text-[var(--fg-tertiary)]">grants</span>
           <ArrowRight className="size-[14px] text-[var(--fg-tertiary)]" />
           <span className="flex items-center gap-[6px] rounded-[var(--radius-sm)] border border-[var(--accent-primary)]/25 bg-[var(--accent-dim)] px-[9px] py-[3px]">
             <FileBadge className="size-[12px] text-[var(--accent-primary)]" />
-            <span className="font-[var(--font-mono)] text-[12px] font-semibold text-[var(--accent-primary)]">
+            <span className="font-[var(--font-mono)] text-xs font-semibold text-[var(--accent-primary)]">
               {roleRefLabel(grant)}
             </span>
           </span>
@@ -85,17 +85,17 @@ export function BindingCard({ grant, onEdit, onAddSubject, onEditYaml, onDelete 
       </div>
 
       <div className="flex items-center gap-[7px]">
-        <span className="font-[var(--font-mono)] text-[10px] tracking-[1px] text-[var(--fg-tertiary)]">
+        <span className="font-[var(--font-mono)] text-3xs tracking-[1px] text-[var(--fg-tertiary)]">
           RULES
         </span>
-        <span className="font-[var(--font-mono)] text-[10px] text-[var(--fg-tertiary)]">
+        <span className="font-[var(--font-mono)] text-3xs text-[var(--fg-tertiary)]">
           {rules.length}
         </span>
         <div className="h-px flex-1 bg-[var(--border-subtle)]" />
       </div>
 
       {rules.length === 0 ? (
-        <p className="text-[12px] text-[var(--fg-tertiary)]">
+        <p className="text-xs text-[var(--fg-tertiary)]">
           Role not found in scope (rules unavailable).
         </p>
       ) : (

@@ -175,8 +175,8 @@ export function TerminalDrawer({ open, onClose }: { open: boolean; onClose: () =
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-1.5" style={{ borderBottom: "1px solid #1F1F24", flexShrink: 0 }}>
         <SquareTerminal className="size-3.5" style={{ color: "var(--accent-primary)" }} />
-        <span style={{ fontSize: 12, fontWeight: 600 }}>Terminal</span>
-        <span style={{ fontSize: 10, color: "var(--fg-tertiary)" }}>interactive cluster shell</span>
+        <span className="text-xs" style={{ fontWeight: 600 }}>Terminal</span>
+        <span className="text-3xs" style={{ color: "var(--fg-tertiary)" }}>interactive cluster shell</span>
         <div className="ml-auto flex items-center gap-1">
           <button onClick={restart} title="Restart shell" className="rounded p-1 hover:bg-white/5" aria-label="Restart shell">
             <RotateCw className="size-3.5" style={{ color: "var(--fg-tertiary)" }} />
@@ -202,7 +202,7 @@ export function TerminalDrawer({ open, onClose }: { open: boolean; onClose: () =
               background: "rgba(10,10,12,0.82)",
             }}
           >
-            <span style={{ fontSize: 13, color: "var(--fg-secondary)" }}>{ended}</span>
+            <span className="text-xs" style={{ color: "var(--fg-secondary)" }}>{ended}</span>
             <button onClick={restart} className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium" style={{ background: "var(--accent-primary)", color: "var(--fg-inverse)" }}>
               <RotateCw className="size-3.5" /> Restart shell
             </button>

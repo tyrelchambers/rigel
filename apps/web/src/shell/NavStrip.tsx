@@ -142,8 +142,8 @@ function NavGroupHeader({ title, collapsed, onToggle }: NavGroupHeaderProps) {
       title={collapsed ? `Expand ${title}` : `Collapse ${title}`}
     >
       <span
-        style={{ fontSize: "10px", color: "var(--fg-tertiary)", letterSpacing: "0.06em" }}
-        className="font-semibold uppercase"
+        style={{ color: "var(--fg-tertiary)", letterSpacing: "0.06em" }}
+        className="font-semibold uppercase text-3xs"
       >
         {title}
       </span>
@@ -197,14 +197,13 @@ function NavButton({ panelKey, collapsed = false }: NavButtonProps) {
           {!collapsed && (
             <span
               style={{
-                fontSize: "13px",
                 color: isActive ? "var(--fg-primary)" : "var(--fg-secondary)",
                 fontWeight: isActive ? 600 : 500,
                 whiteSpace: "nowrap",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
               }}
-              className={!isActive ? "group-hover:!text-white" : ""}
+              className={`text-xs ${!isActive ? "group-hover:!text-white" : ""}`}
             >
               {meta.title}
             </span>

@@ -16,9 +16,9 @@ export function TagPill({ label, title }: TagPillProps) {
   return (
     <span
       title={title}
+      className="text-3xs"
       style={{
         fontFamily: "ui-monospace, monospace",
-        fontSize: 10,
         fontWeight: 500,
         color: "var(--accent-primary)",
         background: "var(--accent-dim)",

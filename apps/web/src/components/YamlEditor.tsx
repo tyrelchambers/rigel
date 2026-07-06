@@ -93,7 +93,7 @@ export default function YamlEditor({ value, onChange, readOnly, schema, height =
         scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10, useShadows: false },
         stickyScroll: { enabled: false },
       }}
-      loading={<div style={{ padding: 16, fontSize: 13, color: "var(--fg-tertiary)" }}>Loading editor…</div>}
+      loading={<div className="text-xs" style={{ padding: 16, color: "var(--fg-tertiary)" }}>Loading editor…</div>}
     />
   );
 }

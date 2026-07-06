@@ -34,10 +34,10 @@ export function RoleDetail({
     <div className="flex min-w-0 flex-1 flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-baseline gap-x-[14px] gap-y-1">
-          <span className="break-all font-[var(--font-mono)] text-[18px] font-semibold text-[var(--fg-primary)]">
+          <span className="break-all font-[var(--font-mono)] text-lg font-semibold text-[var(--fg-primary)]">
             {roleName}
           </span>
-          <span className="text-[13px] text-[var(--fg-tertiary)]">
+          <span className="text-xs text-[var(--fg-tertiary)]">
             {roleKind === "Role" ? `Role · ${roleNamespace ?? ""}` : "ClusterRole"}
           </span>
         </div>
@@ -48,7 +48,7 @@ export function RoleDetail({
               aria-label="Edit role"
               title="Edit role"
               onClick={onEdit}
-              className="flex items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface-sunken)] px-3 py-1.5 text-[13px] font-medium text-[var(--fg-primary)] transition-colors hover:bg-white/[0.08]"
+              className="flex items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface-sunken)] px-3 py-1.5 text-xs font-medium text-[var(--fg-primary)] transition-colors hover:bg-white/[0.08]"
             >
               <Pencil className="size-[13px]" /> Edit
             </button>
@@ -79,15 +79,15 @@ export function RoleDetail({
       </div>
 
       <div className="flex flex-col gap-[3px]">
-        <span className="font-[var(--font-mono)] text-[11px] font-semibold tracking-[1px] text-[var(--fg-secondary)]">
+        <span className="font-[var(--font-mono)] text-2xs font-semibold tracking-[1px] text-[var(--fg-secondary)]">
           BOUND TO
         </span>
-        <span className="text-[12.5px] text-[var(--fg-tertiary)]">
+        <span className="text-xs text-[var(--fg-tertiary)]">
           Subjects that receive this role
         </span>
       </div>
       {boundSubjects.length === 0 ? (
-        <p className="text-[12px] text-[var(--fg-tertiary)]">No subjects are bound to this role.</p>
+        <p className="text-xs text-[var(--fg-tertiary)]">No subjects are bound to this role.</p>
       ) : (
         <div className="flex flex-col gap-[3px] rounded-[var(--radius-lg)] border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-2">
           {boundSubjects.map((b, i) => {
@@ -95,10 +95,10 @@ export function RoleDetail({
             return (
               <div key={`${b.bindingName}:${i}`} className="flex flex-wrap items-center gap-x-[11px] gap-y-1 px-[11px] py-[9px]">
                 <Icon className="size-[15px] shrink-0 text-[var(--fg-tertiary)]" />
-                <span className="break-all font-[var(--font-mono)] text-[13px] text-[var(--fg-primary)]">
+                <span className="break-all font-[var(--font-mono)] text-xs text-[var(--fg-primary)]">
                   {b.subject.name}
                 </span>
-                <span className="break-words text-[11px] text-[var(--fg-tertiary)]">
+                <span className="break-words text-2xs text-[var(--fg-tertiary)]">
                   {b.subject.kind}
                   {b.subject.namespace ? ` · ${b.subject.namespace}` : ""} · via {b.bindingName}
                 </span>
@@ -109,10 +109,10 @@ export function RoleDetail({
       )}
 
       <div className="flex items-center gap-[7px]">
-        <span className="font-[var(--font-mono)] text-[10px] tracking-[1px] text-[var(--fg-tertiary)]">
+        <span className="font-[var(--font-mono)] text-3xs tracking-[1px] text-[var(--fg-tertiary)]">
           RULES
         </span>
-        <span className="font-[var(--font-mono)] text-[10px] text-[var(--fg-tertiary)]">
+        <span className="font-[var(--font-mono)] text-3xs text-[var(--fg-tertiary)]">
           {rules.length}
         </span>
         <div className="h-px flex-1 bg-[var(--border-subtle)]" />

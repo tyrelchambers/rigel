@@ -126,14 +126,14 @@ export function CreateClusterModal({ open, onOpenChange }: { open: boolean; onOp
             <div className="flex flex-col gap-2">
               <div className="text-xs font-medium text-muted-foreground">Install a tool (kind is the simplest)</div>
               <div className="flex items-center justify-between overflow-hidden rounded-[10px] border border-white/[0.08] bg-[#161619] pl-4">
-                <code className="flex items-center gap-2.5 py-3.5 font-mono text-[13px]">
+                <code className="flex items-center gap-2.5 py-3.5 font-mono text-xs">
                   <span className="text-[#5E6168]">$</span>
                   <span className="text-[#D6D6DC]">brew install kind</span>
                 </code>
                 <button
                   type="button"
                   onClick={copyInstall}
-                  className="flex items-center gap-1.5 self-stretch border-l border-white/[0.08] px-4 text-[13px] font-semibold text-[#4FB0F2] transition-colors hover:bg-white/[0.03]"
+                  className="flex items-center gap-1.5 self-stretch border-l border-white/[0.08] px-4 text-xs font-semibold text-[#4FB0F2] transition-colors hover:bg-white/[0.03]"
                 >
                   {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
                   {copied ? "Copied" : "Copy"}

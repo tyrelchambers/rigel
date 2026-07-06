@@ -22,7 +22,7 @@ export function RelatedResources({ sourceKind, source }: { sourceKind: string; s
 
   const groups = computeRelated(sourceKind, source, resources as Record<string, Record<string, any>>);
   if (groups.length === 0) {
-    return <div style={{ fontSize: 13, color: "#8C8C95", padding: "8px 0" }}>No related resources.</div>;
+    return <div className="text-xs" style={{ color: "#8C8C95", padding: "8px 0" }}>No related resources.</div>;
   }
 
   // Derive the active kind so a group that disappears (a watch unloads, a group
@@ -32,7 +32,7 @@ export function RelatedResources({ sourceKind, source }: { sourceKind: string; s
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: 1.2, color: "#7E7E87" }}>RELATED</span>
+      <span className="text-xs" style={{ fontWeight: 600, letterSpacing: 1.2, color: "#7E7E87" }}>RELATED</span>
       <div style={{ background: "#141417", borderRadius: 12, border: "1px solid rgba(255,255,255,0.05)", overflow: "hidden" }}>
         {/* Rail: one tab per related kind. Scrolls horizontally if the kind list
             outgrows the panel (a pod has up to ~8 related kinds). */}
@@ -56,16 +56,16 @@ function Row({ item, onGo }: { item: RelatedRef; onGo: () => void }) {
   if (missing) {
     return (
       <div style={{ ...common }}>
-        <span style={{ flex: 1, minWidth: 0, fontFamily: "ui-monospace, monospace", fontSize: 13, color: "#8C8C95", textDecoration: "line-through", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</span>
-        <span style={{ borderRadius: 999, background: "#FF5A5A1A", padding: "3px 10px", fontSize: 11, fontWeight: 600, color: "#FF6B6B" }}>missing</span>
+        <span className="text-xs" style={{ flex: 1, minWidth: 0, fontFamily: "ui-monospace, monospace", color: "#8C8C95", textDecoration: "line-through", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</span>
+        <span className="text-2xs" style={{ borderRadius: 999, background: "#FF5A5A1A", padding: "3px 10px", fontWeight: 600, color: "#FF6B6B" }}>missing</span>
       </div>
     );
   }
   return (
     <button type="button" onClick={onGo} style={{ ...common, border: "none", cursor: "pointer", textAlign: "left" }} className="hover:bg-[#1B1C1F] transition-colors">
-      <span style={{ flex: 1, minWidth: 0, fontFamily: "ui-monospace, monospace", fontSize: 13, fontWeight: 500, color: "#A6A6AE", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</span>
+      <span className="text-xs" style={{ flex: 1, minWidth: 0, fontFamily: "ui-monospace, monospace", fontWeight: 500, color: "#A6A6AE", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</span>
       {item.node && (
-        <span title={`Node: ${item.node}`} style={{ display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0, minWidth: 0, fontFamily: "ui-monospace, monospace", fontSize: 11, color: "#6B6B73" }}>
+        <span title={`Node: ${item.node}`} className="text-2xs" style={{ display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0, minWidth: 0, fontFamily: "ui-monospace, monospace", color: "#6B6B73" }}>
           <Server size={12} style={{ color: "#6B6B73", flexShrink: 0 }} />
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.node}</span>
         </span>

@@ -41,9 +41,9 @@ export function AuditRow({ e }: { e: AssistantAuditEntry }) {
             ) : (
               <ChevronRight className="size-3" />
             ))}
-          <span className="font-mono text-[9px] uppercase text-muted-foreground">{e.tier}</span>
+          <span className="font-mono text-3xs uppercase text-muted-foreground">{e.tier}</span>
           <span
-            className="font-mono text-[10px] text-muted-foreground"
+            className="font-mono text-3xs text-muted-foreground"
             title={e.at}
           >
             {relativeTime(e.at)}
@@ -52,11 +52,11 @@ export function AuditRow({ e }: { e: AssistantAuditEntry }) {
       </button>
       {e.proposal && <p className="mt-1 text-sm text-muted-foreground">{e.proposal}</p>}
       {e.command && (
-        <p className="select-text font-mono text-[10px] text-muted-foreground">{e.command}</p>
+        <p className="select-text font-mono text-3xs text-muted-foreground">{e.command}</p>
       )}
       {e.detail && (
         <p
-          className={`select-text font-mono text-[10px] text-muted-foreground ${
+          className={`select-text font-mono text-3xs text-muted-foreground ${
             isOpen ? "whitespace-pre-wrap" : "line-clamp-3"
           }`}
         >
@@ -65,7 +65,7 @@ export function AuditRow({ e }: { e: AssistantAuditEntry }) {
       )}
       {isOpen && e.analysis && (
         <div className="mt-1 border-t pt-1">
-          <p className="font-mono text-[9px] uppercase text-muted-foreground">
+          <p className="font-mono text-3xs uppercase text-muted-foreground">
             Rigel's analysis
           </p>
           <p className="select-text whitespace-pre-wrap text-xs text-muted-foreground">

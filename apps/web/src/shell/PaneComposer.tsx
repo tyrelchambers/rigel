@@ -333,13 +333,13 @@ export function PaneComposer({
                 onMouseEnter={() => setSel(i)}
                 style={popRowStyle(i === sel)}
               >
-                <span style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 12, fontWeight: 600, color: i === sel ? "var(--fg-inverse)" : "var(--fg-primary)" }}>
+                <span className="text-xs" style={{ fontFamily: "var(--font-mono, monospace)", fontWeight: 600, color: i === sel ? "var(--fg-inverse)" : "var(--fg-primary)" }}>
                   {commandDisplay(c)}
                 </span>
                 <span
+                  className="text-2xs"
                   style={{
                     marginLeft: "auto",
-                    fontSize: 11,
                     color: i === sel ? "rgba(10,10,10,0.8)" : "var(--fg-tertiary)",
                     whiteSpace: "nowrap",
                     overflow: "hidden",
@@ -367,9 +367,9 @@ export function PaneComposer({
                 >
                   <Icon style={{ width: 12, height: 12, color: i === sel ? "var(--fg-inverse)" : "var(--fg-secondary)", flexShrink: 0 }} />
                   <span
+                    className="text-xs"
                     style={{
                       fontFamily: "var(--font-mono, monospace)",
-                      fontSize: 12,
                       fontWeight: 500,
                       color: i === sel ? "var(--fg-inverse)" : "var(--fg-primary)",
                       overflow: "hidden",
@@ -380,11 +380,11 @@ export function PaneComposer({
                     {c.name}
                   </span>
                   {c.namespace && (
-                    <span style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 10, color: i === sel ? "rgba(10,10,10,0.7)" : "var(--fg-tertiary)", whiteSpace: "nowrap" }}>
+                    <span className="text-3xs" style={{ fontFamily: "var(--font-mono, monospace)", color: i === sel ? "rgba(10,10,10,0.7)" : "var(--fg-tertiary)", whiteSpace: "nowrap" }}>
                       {c.namespace}
                     </span>
                   )}
-                  <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono, monospace)", fontSize: 9, fontWeight: 600, letterSpacing: 0.5, color: i === sel ? "rgba(10,10,10,0.7)" : "var(--fg-tertiary)" }}>
+                  <span className="text-3xs" style={{ marginLeft: "auto", fontFamily: "var(--font-mono, monospace)", fontWeight: 600, letterSpacing: 0.5, color: i === sel ? "rgba(10,10,10,0.7)" : "var(--fg-tertiary)" }}>
                     {MENTION_KIND_LABEL[c.kind]}
                   </span>
                 </button>
@@ -408,9 +408,9 @@ export function PaneComposer({
                   >
                     <Icon style={{ width: 12, height: 12, color: i === sel ? "var(--fg-inverse)" : "var(--fg-secondary)", flexShrink: 0 }} />
                     <span
+                      className="text-xs"
                       style={{
                         fontFamily: "var(--font-mono, monospace)",
-                        fontSize: 12,
                         fontWeight: 500,
                         color: i === sel ? "var(--fg-inverse)" : "var(--fg-primary)",
                         overflow: "hidden",
@@ -420,14 +420,14 @@ export function PaneComposer({
                     >
                       {opt.label}
                     </span>
-                    <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono, monospace)", fontSize: 9, fontWeight: 600, letterSpacing: 0.5, color: i === sel ? "rgba(10,10,10,0.7)" : "var(--fg-tertiary)" }}>
+                    <span className="text-3xs" style={{ marginLeft: "auto", fontFamily: "var(--font-mono, monospace)", fontWeight: 600, letterSpacing: 0.5, color: i === sel ? "rgba(10,10,10,0.7)" : "var(--fg-tertiary)" }}>
                       {opt.badge}
                     </span>
                   </button>
                 );
               })
             ) : (
-              <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--fg-tertiary)" }}>
+              <div className="text-2xs" style={{ padding: "8px 10px", color: "var(--fg-tertiary)" }}>
                 {describeEmptyLabel(trigger)}
               </div>
             ))}
@@ -616,7 +616,7 @@ export function PaneComposer({
               setCaretAt(1);
             }}
           >
-            <span style={{ fontFamily: "monospace", fontSize: 9 }}>&lt;/&gt;</span>
+            <span className="text-3xs" style={{ fontFamily: "monospace" }}>&lt;/&gt;</span>
             <span>commands</span>
           </button>
 
@@ -648,7 +648,7 @@ const textareaStyle: React.CSSProperties = {
   outline: "none",
   resize: "none",
   color: "var(--fg-primary)",
-  fontSize: 13,
+  fontSize: 12,
   lineHeight: `${LINE_HEIGHT}px`,
   minHeight: LINE_HEIGHT * MIN_LINES,
   maxHeight: LINE_HEIGHT * MAX_LINES,

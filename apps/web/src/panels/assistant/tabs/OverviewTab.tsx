@@ -109,10 +109,10 @@ function RecentActivityEmpty({ updatedAt }: { updatedAt?: string }) {
         <Radar className="size-[22px] text-[var(--status-running)]" />
       </div>
       <p className="text-base font-semibold text-[var(--fg-primary)]">All quiet</p>
-      <p className="text-[13px] text-[var(--fg-secondary)]">
+      <p className="text-xs text-[var(--fg-secondary)]">
         The agent is watching and hasn't needed to act.
       </p>
-      <p className="font-mono text-[11px] tracking-[0.03em] text-[var(--fg-tertiary)]">
+      <p className="font-mono text-2xs tracking-[0.03em] text-[var(--fg-tertiary)]">
         Checked {checked} · 0 actions today
       </p>
     </div>

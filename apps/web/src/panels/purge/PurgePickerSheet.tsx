@@ -97,7 +97,7 @@ export function PurgePickerSheet({ open, onClose, onPick }: PurgePickerSheetProp
                 .filter((g) => g.deployments.length > 0)
                 .map((g) => (
                   <div key={g.namespace}>
-                    <div className="mb-1 px-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    <div className="mb-1 px-1 text-3xs font-medium uppercase tracking-wide text-muted-foreground">
                       {g.namespace}
                     </div>
                     <div className="overflow-hidden rounded-md border">

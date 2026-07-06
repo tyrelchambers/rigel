@@ -127,9 +127,9 @@ export function DeploymentRow({
 
       {/* Namespace — dim tertiary chip */}
       <span
+        className="text-3xs"
         style={{
           fontFamily: "ui-monospace, monospace",
-          fontSize: 10,
           color: "var(--fg-tertiary)",
           background: "var(--surface-sunken)",
           padding: "1px 5px",
@@ -145,9 +145,9 @@ export function DeploymentRow({
       {image && imageRepo(image) !== "—" && (
         <span
           title={image}
+          className="text-3xs"
           style={{
             fontFamily: "ui-monospace, monospace",
-            fontSize: 10,
             color: "var(--fg-secondary)",
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -167,12 +167,12 @@ export function DeploymentRow({
       {linkedSrc && (
         <span
           title={`Linked to GitOps source: ${linkedSrc}`}
+          className="text-3xs"
           style={{
             display: "inline-flex",
             alignItems: "center",
             gap: 3,
             fontFamily: "ui-monospace, monospace",
-            fontSize: 10,
             color: "var(--accent-primary)",
             background: "var(--surface-sunken)",
             padding: "1px 5px",
@@ -194,7 +194,7 @@ export function DeploymentRow({
 
       {/* Rollout churn chips — only while live */}
       {redeploying && (
-        <span className="inline-flex items-center gap-1.5 text-[10px]">
+        <span className="inline-flex items-center gap-1.5 text-3xs">
           {updated > 0 && (
             <span
               className="inline-flex items-center gap-0.5"

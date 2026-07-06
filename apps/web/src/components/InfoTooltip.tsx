@@ -1,4 +1,4 @@
-import { HelpCircle } from "lucide-react";
+import { Info } from "lucide-react";
 import type { ReactNode } from "react";
 
 import {
@@ -35,9 +35,9 @@ export function InfoTooltip({
             <button
               type="button"
               aria-label={ariaLabel}
-              className="inline-flex shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+              className="inline-flex shrink-0 items-center justify-center rounded-full text-[color:var(--fg-tertiary)] transition-colors outline-none hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
             >
-              <HelpCircle aria-hidden className="size-3.5" />
+              <Info aria-hidden className="size-[17px]" />
             </button>
           }
         />

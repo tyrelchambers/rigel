@@ -57,7 +57,7 @@ export function PermissionsTab() {
 
       {perms.drift && (
         <div className="flex items-center justify-between gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2">
-          <span className="text-[12.5px] text-amber-300">
+          <span className="text-xs text-amber-300">
             This cluster&apos;s live permissions differ from your saved policy.
           </span>
           <Button
@@ -138,7 +138,7 @@ export function PermissionsTab() {
       </div>
 
       {perms.applyError && pending === null && !copyOpen && (
-        <p className="font-mono text-[11px] text-[var(--status-failed)]">{perms.applyError.message}</p>
+        <p className="font-mono text-2xs text-[var(--status-failed)]">{perms.applyError.message}</p>
       )}
 
       <ReviewDialog

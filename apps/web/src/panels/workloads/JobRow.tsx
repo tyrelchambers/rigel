@@ -50,9 +50,9 @@ export function JobRow({ j, k, isOpen, toggleExpand, askClaude, deleteJob }: Job
 
       {/* Namespace chip */}
       <span
+        className="text-3xs"
         style={{
           fontFamily: "ui-monospace, monospace",
-          fontSize: 10,
           color: "var(--fg-tertiary)",
           background: "var(--surface-sunken)",
           padding: "1px 5px",
@@ -69,9 +69,9 @@ export function JobRow({ j, k, isOpen, toggleExpand, askClaude, deleteJob }: Job
 
       {/* Age */}
       <span
+        className="text-3xs"
         style={{
           fontFamily: "ui-monospace, monospace",
-          fontSize: 10,
           color: "var(--fg-tertiary)",
           whiteSpace: "nowrap",
           flexShrink: 0,

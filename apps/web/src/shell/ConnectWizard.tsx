@@ -88,8 +88,8 @@ function CommandField({ command }: { command: string }) {
         borderRadius: 8, overflow: "hidden",
       }}>
         <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", minWidth: 0 }}>
-          <span style={{ color: "var(--fg-tertiary)", fontFamily: "var(--font-mono)", fontSize: 12, flexShrink: 0 }}>$</span>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--fg-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span className="text-xs" style={{ color: "var(--fg-tertiary)", fontFamily: "var(--font-mono)", flexShrink: 0 }}>$</span>
+          <span className="text-xs" style={{ fontFamily: "var(--font-mono)", color: "var(--fg-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {primary}
           </span>
         </div>
@@ -97,12 +97,13 @@ function CommandField({ command }: { command: string }) {
         <button
           type="button"
           aria-label="Copy"
+          className="text-xs"
           onClick={handleCopy}
           style={{
             display: "flex", alignItems: "center", gap: 4, padding: "7px 10px",
             background: "transparent", border: "none", cursor: "pointer",
             color: copied ? "var(--fg-secondary)" : "var(--accent-primary)",
-            fontFamily: "var(--font-mono)", fontSize: 12, whiteSpace: "nowrap", flexShrink: 0,
+            fontFamily: "var(--font-mono)", whiteSpace: "nowrap", flexShrink: 0,
           }}
         >
           {copied
@@ -112,7 +113,7 @@ function CommandField({ command }: { command: string }) {
         </button>
       </div>
       {alt && (
-        <div style={{ marginTop: 4, fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--fg-tertiary)" }}>
+        <div className="text-2xs" style={{ marginTop: 4, fontFamily: "var(--font-mono)", color: "var(--fg-tertiary)" }}>
           or &nbsp;{alt}
         </div>
       )}
@@ -142,9 +143,9 @@ function CopyChip({ command }: { command: string }) {
       background: "var(--surface-sunken)", border: "1px solid var(--border-subtle)",
       borderRadius: 7, overflow: "hidden",
     }}>
-      <span style={{
+      <span className="text-xs" style={{
         padding: "6px 10px",
-        fontFamily: "var(--font-mono)", fontSize: 12,
+        fontFamily: "var(--font-mono)",
         color: "var(--fg-primary)", whiteSpace: "nowrap",
       }}>
         {command}
@@ -202,10 +203,10 @@ function PlatformCard({
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
           <Icon size={14} />
-          <span style={{ fontSize: 14, fontWeight: 600, color: "var(--fg-primary)" }}>{entry.name}</span>
+          <span className="text-sm" style={{ fontWeight: 600, color: "var(--fg-primary)" }}>{entry.name}</span>
           {detected && (
-            <span style={{
-              fontSize: 10, borderRadius: 6, padding: "1px 6px",
+            <span className="text-3xs" style={{
+              borderRadius: 6, padding: "1px 6px",
               background: "var(--accent-dim)", color: "var(--accent-primary)",
               fontWeight: 500,
             }}>
@@ -213,7 +214,7 @@ function PlatformCard({
             </span>
           )}
         </div>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--fg-tertiary)" }}>
+        <span className="text-2xs" style={{ fontFamily: "var(--font-mono)", color: "var(--fg-tertiary)" }}>
           {label}
         </span>
       </div>
@@ -230,9 +231,9 @@ function Step({ n, text }: { n: number; text: string }) {
         width: 18, height: 18, borderRadius: "50%", flexShrink: 0,
         background: "var(--accent-dim)", display: "flex", alignItems: "center", justifyContent: "center",
       }}>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600, color: "var(--accent-primary)" }}>{n}</span>
+        <span className="text-2xs" style={{ fontFamily: "var(--font-mono)", fontWeight: 600, color: "var(--accent-primary)" }}>{n}</span>
       </div>
-      <span style={{ fontSize: 13, color: "var(--fg-secondary)", lineHeight: 1.5 }}>{text}</span>
+      <span className="text-xs" style={{ color: "var(--fg-secondary)", lineHeight: 1.5 }}>{text}</span>
     </div>
   );
 }
@@ -265,10 +266,10 @@ function ErrorPanel({ descriptor, error, account, onRetry }: { descriptor: Provi
           <ShieldAlert size={19} color="var(--status-failed)" />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: "var(--fg-primary)" }}>
+          <div className="text-base" style={{ fontWeight: 600, color: "var(--fg-primary)" }}>
             {hint ? hint.title : `Couldn't reach ${descriptor.displayName}`}
           </div>
-          <div style={{ fontSize: 13, color: "var(--fg-secondary)", lineHeight: 1.5 }}>
+          <div className="text-xs" style={{ color: "var(--fg-secondary)", lineHeight: 1.5 }}>
             {hint
               ? "Grant the access below, then try again."
               : `This is usually a permissions or configuration issue on the ${descriptor.displayName} side.`}
@@ -276,8 +277,8 @@ function ErrorPanel({ descriptor, error, account, onRetry }: { descriptor: Provi
           {account ? (
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
               <UserRound size={13} color="var(--fg-tertiary)" style={{ flexShrink: 0 }} />
-              <span style={{ fontSize: 12, color: "var(--fg-tertiary)", flexShrink: 0 }}>Signed in as</span>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--fg-secondary)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{account}</span>
+              <span className="text-xs" style={{ color: "var(--fg-tertiary)", flexShrink: 0 }}>Signed in as</span>
+              <span className="text-xs" style={{ fontFamily: "var(--font-mono)", color: "var(--fg-secondary)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{account}</span>
             </div>
           ) : null}
         </div>
@@ -289,7 +290,7 @@ function ErrorPanel({ descriptor, error, account, onRetry }: { descriptor: Provi
           display: "flex", flexDirection: "column", gap: 11, padding: 14, borderRadius: 12,
           background: "var(--surface-elevated)", border: "1px solid var(--border-subtle)",
         }}>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.04em", color: "var(--fg-tertiary)" }}>HOW TO FIX</span>
+          <span className="text-2xs" style={{ fontFamily: "var(--font-mono)", letterSpacing: "0.04em", color: "var(--fg-tertiary)" }}>HOW TO FIX</span>
           <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
             {hint.steps.map((s, i) => <Step key={s} n={i + 1} text={s} />)}
           </div>
@@ -299,16 +300,16 @@ function ErrorPanel({ descriptor, error, account, onRetry }: { descriptor: Provi
       {/* Error details */}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <button type="button" onClick={() => setShowDetails((v) => !v)} style={{
+          <button type="button" onClick={() => setShowDetails((v) => !v)} className="text-xs" style={{
             display: "flex", alignItems: "center", gap: 6, background: "transparent", border: "none",
-            cursor: "pointer", color: "var(--fg-secondary)", fontSize: 12, padding: 0,
+            cursor: "pointer", color: "var(--fg-secondary)", padding: 0,
           }}>
             <ChevronDown size={15} style={{ transform: showDetails ? "rotate(180deg)" : "rotate(0deg)" }} />
             Error details
           </button>
-          <button type="button" aria-label={copied ? "Copied" : "Copy error"} onClick={copyError} style={{
+          <button type="button" aria-label={copied ? "Copied" : "Copy error"} onClick={copyError} className="text-xs" style={{
             display: "flex", alignItems: "center", gap: 5, background: "transparent", border: "none",
-            cursor: "pointer", color: copied ? "var(--fg-secondary)" : "var(--accent-primary)", fontSize: 12,
+            cursor: "pointer", color: copied ? "var(--fg-secondary)" : "var(--accent-primary)",
           }}>
             {copied ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}
           </button>
@@ -318,7 +319,7 @@ function ErrorPanel({ descriptor, error, account, onRetry }: { descriptor: Provi
             padding: "10px 12px", borderRadius: 8,
             background: "var(--surface-sunken)", border: "1px solid var(--border-subtle)",
           }}>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--fg-secondary)", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+            <span className="text-2xs" style={{ fontFamily: "var(--font-mono)", color: "var(--fg-secondary)", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
               {error}
             </span>
           </div>
@@ -328,8 +329,8 @@ function ErrorPanel({ descriptor, error, account, onRetry }: { descriptor: Provi
       {/* Footer */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 6 }}>
         {hint?.docsUrl ? (
-          <a href={hint.docsUrl} target="_blank" rel="noreferrer" style={{
-            display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--accent-primary)", textDecoration: "none",
+          <a href={hint.docsUrl} target="_blank" rel="noreferrer" className="text-xs" style={{
+            display: "flex", alignItems: "center", gap: 4, color: "var(--accent-primary)", textDecoration: "none",
           }}>
             {hint.docsLabel ?? "Docs"} <ExternalLink size={11} />
           </a>
@@ -426,7 +427,7 @@ export function ConnectWizard({
       phase === "connecting" ? "Connecting…"
       : phase === "listing" ? "Loading clusters…"
       : "Checking your setup…";
-    return <div style={{ fontSize: 13, color: "var(--fg-secondary)" }}>{msg}</div>;
+    return <div className="text-xs" style={{ color: "var(--fg-secondary)" }}>{msg}</div>;
   }
 
   if (phase === "needs-cli") {
@@ -434,10 +435,10 @@ export function ConnectWizard({
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {/* Heading */}
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--fg-primary)" }}>
+          <div className="text-sm" style={{ fontWeight: 600, color: "var(--fg-primary)" }}>
             Install the {descriptor.displayName} CLI
           </div>
-          <div style={{ fontSize: 13, color: "var(--fg-secondary)", lineHeight: 1.5 }}>
+          <div className="text-xs" style={{ color: "var(--fg-secondary)", lineHeight: 1.5 }}>
             Pick your platform, run the command in your terminal, then re-check.
           </div>
         </div>
@@ -460,7 +461,8 @@ export function ConnectWizard({
             href={descriptor.installHelp.docsUrl}
             target="_blank"
             rel="noreferrer"
-            style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--accent-primary)", textDecoration: "none" }}
+            className="text-xs"
+            style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--accent-primary)", textDecoration: "none" }}
           >
             Install docs <ExternalLink size={11} />
           </a>
@@ -475,14 +477,14 @@ export function ConnectWizard({
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--fg-primary)" }}>Install {x.binary}</div>
-          <div style={{ fontSize: 13, color: "var(--fg-secondary)", lineHeight: 1.5 }}>
+          <div className="text-sm" style={{ fontWeight: 600, color: "var(--fg-primary)" }}>Install {x.binary}</div>
+          <div className="text-xs" style={{ color: "var(--fg-secondary)", lineHeight: 1.5 }}>
             kubectl needs {x.binary} to reach {descriptor.displayName} clusters. Install it, then re-check.
           </div>
         </div>
         <CommandField command={x.command} />
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <a href={x.docsUrl} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--accent-primary)", textDecoration: "none" }}>
+          <a href={x.docsUrl} target="_blank" rel="noreferrer" className="text-xs" style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--accent-primary)", textDecoration: "none" }}>
             Plugin docs <ExternalLink size={11} />
           </a>
           <Button onClick={() => void runCheck()}>Re-check</Button>
@@ -494,7 +496,7 @@ export function ConnectWizard({
   if (phase === "needs-extra") {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ fontSize: 13, color: "var(--fg-secondary)", lineHeight: 1.5 }}>
+        <div className="text-xs" style={{ color: "var(--fg-secondary)", lineHeight: 1.5 }}>
           kubectl needs an extra command-line tool to reach {descriptor.displayName} clusters. Install it from the {descriptor.displayName} docs, then re-check.
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
@@ -510,7 +512,7 @@ export function ConnectWizard({
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {paramFields.map((f, i) => (
           <div key={f.spec.key} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <label htmlFor={`param-${f.spec.key}`} style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--fg-tertiary)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+            <label htmlFor={`param-${f.spec.key}`} className="text-2xs" style={{ fontFamily: "var(--font-mono)", color: "var(--fg-tertiary)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
               {f.spec.label}
             </label>
             <select
@@ -520,17 +522,18 @@ export function ConnectWizard({
                 const v = e.target.value;
                 setParamFields((prev) => prev.map((p, j) => (j === i ? { ...p, value: v } : p)));
               }}
+              className="text-xs"
               style={{
                 width: "100%", appearance: "none", cursor: "pointer",
                 background: "var(--surface-sunken)", color: "var(--fg-primary)",
                 border: "1px solid var(--border-strong)", borderRadius: 8,
-                padding: "10px 12px", fontFamily: "var(--font-mono)", fontSize: 13,
+                padding: "10px 12px", fontFamily: "var(--font-mono)",
               }}
             >
               {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
             {f.fromDefault ? (
-              <span style={{ fontSize: 11.5, color: "var(--fg-tertiary)", lineHeight: 1.4 }}>
+              <span className="text-2xs" style={{ color: "var(--fg-tertiary)", lineHeight: 1.4 }}>
                 Pre-selected from your {descriptor.displayName} CLI config.
               </span>
             ) : null}
@@ -546,7 +549,7 @@ export function ConnectWizard({
   if (phase === "needs-login") {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ fontSize: 13, color: "var(--fg-secondary)" }}>{descriptor.loginHelp.explanation}</div>
+        <div className="text-xs" style={{ color: "var(--fg-secondary)" }}>{descriptor.loginHelp.explanation}</div>
         <CommandField command={descriptor.loginHelp.command} />
         <div><Button onClick={() => void runCheck()}>Re-check</Button></div>
       </div>
@@ -578,13 +581,13 @@ export function ConnectWizard({
                   <UserRound size={14} color="var(--accent-primary)" />
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <span style={{
-                    fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--fg-tertiary)",
+                  <span className="text-3xs" style={{
+                    fontFamily: "var(--font-mono)", color: "var(--fg-tertiary)",
                     letterSpacing: "0.06em", textTransform: "uppercase",
                   }}>
                     Connected Account
                   </span>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: "var(--fg-primary)" }}>
+                  <span className="text-xs" style={{ fontWeight: 500, color: "var(--fg-primary)" }}>
                     {account}
                   </span>
                 </div>
@@ -594,8 +597,8 @@ export function ConnectWizard({
                   width: 7, height: 7, borderRadius: "50%",
                   background: "var(--status-running)", flexShrink: 0,
                 }} />
-                <span style={{
-                  fontFamily: "var(--font-mono)", fontSize: 11,
+                <span className="text-2xs" style={{
+                  fontFamily: "var(--font-mono)",
                   color: "var(--status-running)",
                 }}>
                   Authenticated
@@ -616,11 +619,11 @@ export function ConnectWizard({
             }}>
               <CloudOff size={24} color="var(--fg-secondary)" />
             </div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: "var(--fg-primary)" }}>
+            <div className="text-lg" style={{ fontWeight: 700, color: "var(--fg-primary)" }}>
               No clusters in this account
             </div>
-            <div style={{
-              fontSize: 13, color: "var(--fg-secondary)", lineHeight: 1.5,
+            <div className="text-xs" style={{
+              color: "var(--fg-secondary)", lineHeight: 1.5,
               maxWidth: 380, textAlign: "center",
             }}>
               This {descriptor.displayName} account doesn't have any Kubernetes clusters yet. Create one, then re-check.
@@ -634,11 +637,12 @@ export function ConnectWizard({
                 href={descriptor.consoleUrl}
                 target="_blank"
                 rel="noreferrer"
+                className="text-xs"
                 style={{
                   display: "inline-flex", alignItems: "center", gap: 6,
                   background: "var(--accent-primary)", color: "var(--fg-inverse)",
                   borderRadius: 9, padding: "11px 18px",
-                  fontSize: 13, fontWeight: 600, textDecoration: "none",
+                  fontWeight: 600, textDecoration: "none",
                 }}
               >
                 <ExternalLink size={14} />
@@ -648,11 +652,12 @@ export function ConnectWizard({
             <button
               type="button"
               onClick={() => void runCheck()}
+              className="text-xs"
               style={{
                 display: "inline-flex", alignItems: "center", gap: 6,
                 background: "var(--surface-elevated)", color: "var(--fg-primary)",
                 border: "1px solid var(--border-subtle)", borderRadius: 9,
-                padding: "11px 18px", fontSize: 13, fontWeight: 500, cursor: "pointer",
+                padding: "11px 18px", fontWeight: 500, cursor: "pointer",
               }}
             >
               <RefreshCw size={14} />
@@ -662,14 +667,14 @@ export function ConnectWizard({
 
           {/* Switch line */}
           <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 12, color: "var(--fg-tertiary)" }}>Wrong account?</span>
+            <span className="text-xs" style={{ color: "var(--fg-tertiary)" }}>Wrong account?</span>
             <CopyChip command={descriptor.loginHelp.command} />
           </div>
         </div>
       ) : (
         <>
           {account && (
-            <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--fg-tertiary)", marginBottom: 2 }}>
+            <div className="text-xs" style={{ display: "flex", alignItems: "center", gap: 5, color: "var(--fg-tertiary)", marginBottom: 2 }}>
               <UserRound size={12} />
               <span>Connected as {account}</span>
             </div>
@@ -687,7 +692,7 @@ export function ConnectWizard({
               }}
             >
               <span style={{ fontWeight: 600 }}>{c.name}</span>
-              <span style={{ fontSize: 11, color: "var(--fg-tertiary)" }}>{c.region}</span>
+              <span className="text-2xs" style={{ color: "var(--fg-tertiary)" }}>{c.region}</span>
             </button>
           ))}
         </>

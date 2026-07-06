@@ -87,13 +87,13 @@ export function SuggestedActionList({ actions, onAction, onRunBatch }: Props) {
             <button
               type="button"
               onClick={() => onAction(action)}
+              className="text-xs"
               style={{
                 color,
                 background: bgColor,
                 border: `1px solid ${borderColor}`,
                 borderRadius: "4px",
                 padding: "7px 10px",
-                fontSize: "12px",
                 fontWeight: 600,
                 cursor: "pointer",
                 flex: 1,
@@ -148,13 +148,13 @@ export function SuggestedActionList({ actions, onAction, onRunBatch }: Props) {
             type="button"
             onClick={runSelected}
             disabled={selectedIdx.length === 0}
+            className="text-xs"
             style={{
               color: "var(--accent-primary)",
               background: "var(--accent-dim)",
               border: "1px solid rgba(56, 189, 248,0.4)",
               borderRadius: "4px",
               padding: "5px 10px",
-              fontSize: "12px",
               fontWeight: 600,
               cursor: selectedIdx.length === 0 ? "not-allowed" : "pointer",
               opacity: selectedIdx.length === 0 ? 0.4 : 1,

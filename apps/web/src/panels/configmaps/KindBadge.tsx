@@ -15,7 +15,7 @@ export function KindBadge({ kind }: { kind: ValueKind | "binary" }) {
         : "bg-white/[0.05] text-[var(--fg-tertiary)]";
   return (
     <span
-      className={`inline-flex items-center gap-[5px] rounded-sm px-[8px] py-[2px] font-mono text-[10.5px] tracking-[0.5px] ${toneClass}`}
+      className={`inline-flex items-center gap-[5px] rounded-sm px-[8px] py-[2px] font-mono text-3xs tracking-[0.5px] ${toneClass}`}
     >
       {kind === "certificate" && <ShieldCheck className="size-[11px]" />}
       {label}

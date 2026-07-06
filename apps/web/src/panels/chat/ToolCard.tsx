@@ -25,23 +25,23 @@ export function ToolCard({ tool }: { tool: ToolActivity }) {
         />
       </div>
       {tool.command && (
-        <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all rounded bg-[#0C0D0F] px-2 py-1 font-mono text-[11px] text-foreground/90">
+        <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all rounded bg-[#0C0D0F] px-2 py-1 font-mono text-2xs text-foreground/90">
           <span className="select-none text-muted-foreground">$ </span>{tool.command}
         </pre>
       )}
       {tool.status === "error" && tool.output && (
-        <pre className="mt-1 whitespace-pre-wrap break-all rounded bg-destructive/10 px-2 py-1 font-mono text-[11px] text-destructive">{tool.output}</pre>
+        <pre className="mt-1 whitespace-pre-wrap break-all rounded bg-destructive/10 px-2 py-1 font-mono text-2xs text-destructive">{tool.output}</pre>
       )}
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
+        className="mt-1 flex items-center gap-1 text-3xs text-muted-foreground hover:text-foreground"
       >
         <ChevronRight className={cn("size-3 transition-transform", open && "rotate-90")} />
         {open ? "hide input" : "show input"}
       </button>
       {open && (
-        <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded bg-muted px-2 py-1 font-mono text-[10px] text-muted-foreground">{tool.inputJSON}</pre>
+        <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded bg-muted px-2 py-1 font-mono text-3xs text-muted-foreground">{tool.inputJSON}</pre>
       )}
     </div>
   );

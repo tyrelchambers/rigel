@@ -54,6 +54,7 @@ export function ClusterIconPicker({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search icons…"
+        className="text-xs"
         style={{
           width: "100%",
           marginBottom: 14,
@@ -62,7 +63,6 @@ export function ClusterIconPicker({
           background: "var(--surface-primary)",
           border: "1px solid var(--border-subtle)",
           color: "var(--fg-primary)",
-          fontSize: 13,
           outline: "none",
         }}
       />
@@ -98,7 +98,7 @@ export function ClusterIconPicker({
         })}
       </div>
       {ids.length === 0 && (
-        <div style={{ color: "var(--fg-tertiary)", fontSize: 13, padding: "10px 2px" }}>
+        <div className="text-xs" style={{ color: "var(--fg-tertiary)", padding: "10px 2px" }}>
           No icons match "{query}".
         </div>
       )}
@@ -108,7 +108,8 @@ export function ClusterIconPicker({
             <button
               type="button"
               onClick={onDelete}
-              style={{ fontSize: 13, color: "var(--status-failed)", background: "transparent",
+              className="text-xs"
+              style={{ color: "var(--status-failed)", background: "transparent",
                 border: "1px solid var(--border-subtle)", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}
             >
               Delete cluster
@@ -118,7 +119,8 @@ export function ClusterIconPicker({
             <button
               type="button"
               onClick={onRemove}
-              style={{ fontSize: 13, color: "var(--fg-secondary)", background: "transparent",
+              className="text-xs"
+              style={{ color: "var(--fg-secondary)", background: "transparent",
                 border: "1px solid var(--border-subtle)", borderRadius: 8, padding: "6px 12px", cursor: "pointer",
                 display: "flex", alignItems: "center", gap: 6 }}
             >

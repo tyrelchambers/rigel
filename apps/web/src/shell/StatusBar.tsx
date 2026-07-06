@@ -131,7 +131,7 @@ export default function StatusBar({ chatHidden, onToggleChat }: StatusBarProps =
 
 function Sep() {
   return (
-    <span style={{ color: "var(--border-strong)", fontSize: 10, userSelect: "none" }}>·</span>
+    <span className="text-3xs" style={{ color: "var(--border-strong)", userSelect: "none" }}>·</span>
   );
 }
 
@@ -142,9 +142,9 @@ interface MonoChipProps extends React.HTMLAttributes<HTMLSpanElement> {
 function MonoChip({ children, style, ...rest }: MonoChipProps) {
   return (
     <span
+      className="text-2xs"
       style={{
         fontFamily: "'Geist Variable', ui-monospace, monospace",
-        fontSize: 11,
         color: "var(--fg-secondary)",
         ...style,
       }}
@@ -170,9 +170,9 @@ function HintChip({ kbd, children, onClick }: HintChipProps) {
       style={{ display: "flex", alignItems: "center", gap: 3, cursor: onClick ? "pointer" : undefined }}
     >
       <span
+        className="text-3xs"
         style={{
           fontFamily: "'Geist Variable', ui-monospace, monospace",
-          fontSize: 10,
           color: "var(--fg-tertiary)",
           background: "var(--surface-elevated)",
           padding: "1px 4px",
@@ -184,9 +184,9 @@ function HintChip({ kbd, children, onClick }: HintChipProps) {
         {kbd}
       </span>
       <span
+        className="text-2xs"
         style={{
           fontFamily: "'Geist Variable', ui-monospace, monospace",
-          fontSize: 11,
           color: "var(--fg-secondary)",
         }}
       >

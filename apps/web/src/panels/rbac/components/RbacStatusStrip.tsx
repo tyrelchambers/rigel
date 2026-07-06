@@ -16,11 +16,11 @@ const SCOPES: { value: ScopeFilter; label: string }[] = [
 function Stat({ label, value, danger }: { label: string; value: number; danger?: boolean }) {
   return (
     <div className="flex items-center gap-[7px]">
-      <span className="font-[var(--font-mono)] text-[11px] tracking-[0.8px] text-[var(--fg-tertiary)]">
+      <span className="font-[var(--font-mono)] text-2xs tracking-[0.8px] text-[var(--fg-tertiary)]">
         {label}
       </span>
       <span
-        className={`font-[var(--font-mono)] text-[15px] font-semibold ${
+        className={`font-[var(--font-mono)] text-base font-semibold ${
           danger ? "text-[var(--status-failed)]" : "text-[var(--fg-primary)]"
         }`}
       >

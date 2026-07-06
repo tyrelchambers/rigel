@@ -106,7 +106,7 @@ export function MetricsRemoveDialog({ open, onOpenChange, backend, onRemoved }: 
         </p>
 
         <div className="flex flex-col gap-2">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
             Delete {selected.length} of {docs.length} resources
           </span>
           <ul
@@ -127,7 +127,7 @@ export function MetricsRemoveDialog({ open, onOpenChange, backend, onRemoved }: 
                   </span>
                   <span className="truncate text-foreground/90">{r.name || "—"}</span>
                   {r.namespace && (
-                    <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">{r.namespace}</span>
+                    <span className="ml-auto shrink-0 text-3xs text-muted-foreground">{r.namespace}</span>
                   )}
                 </li>
               );

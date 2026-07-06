@@ -5,6 +5,7 @@ import { useFocusRow } from "@/panels/components/useFocusRow";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { PanelHeader } from "@/panels/components/PanelHeader";
+import { PanelSearch } from "@/panels/components/PanelSearch";
 import { LoadingState } from "@/panels/components/LoadingState";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import type { ActionBlock } from "@/lib/api";
@@ -170,12 +171,11 @@ export default function DeploymentsPanel() {
         count={filtered.length}
         loading={isLoading}
       >
-        <input
-          type="text"
+        <PanelSearch
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onValueChange={setSearch}
           placeholder="Search deployments…"
-          className="w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="w-56"
         />
       </PanelHeader>
 

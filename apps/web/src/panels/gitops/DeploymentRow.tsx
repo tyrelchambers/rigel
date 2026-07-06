@@ -31,8 +31,8 @@ export function DeploymentRow({
       <div className="flex items-center gap-3">
         <Boxes className="size-3.5 shrink-0" style={{ color: "var(--accent-primary)" }} />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="truncate text-[13px] font-medium">{dep.name}</span>
-          <span className="truncate font-mono text-[11px]" style={{ color: "var(--fg-tertiary)" }}>{dep.path}</span>
+          <span className="truncate text-xs font-medium">{dep.name}</span>
+          <span className="truncate font-mono text-2xs" style={{ color: "var(--fg-tertiary)" }}>{dep.path}</span>
           <SyncStatus dep={dep} />
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -50,10 +50,10 @@ export function DeploymentRow({
 
       {/* Linked workloads — the AI uses these links for context + fix-PRs. */}
       <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t pt-2" style={{ borderColor: "var(--border-subtle)" }}>
-        <span className="text-[11px]" style={{ color: "var(--fg-tertiary)" }}>Linked:</span>
-        {linked.length === 0 && <span className="text-[11px]" style={{ color: "var(--fg-tertiary)" }}>none yet</span>}
+        <span className="text-2xs" style={{ color: "var(--fg-tertiary)" }}>Linked:</span>
+        {linked.length === 0 && <span className="text-2xs" style={{ color: "var(--fg-tertiary)" }}>none yet</span>}
         {linked.map((w) => (
-          <span key={`${w.metadata.namespace}/${w.metadata.name}`} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-mono" style={{ background: "var(--surface-elevated)", border: "1px solid #26272B" }}>
+          <span key={`${w.metadata.namespace}/${w.metadata.name}`} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-mono" style={{ background: "var(--surface-elevated)", border: "1px solid #26272B" }}>
             {w.metadata.name}
             <button
               type="button"
@@ -65,7 +65,7 @@ export function DeploymentRow({
             </button>
           </span>
         ))}
-        <Button size="sm" variant="ghost" className="ml-auto h-6 gap-1 text-[11px]" onClick={onLink}>
+        <Button size="sm" variant="ghost" className="ml-auto h-6 gap-1 text-2xs" onClick={onLink}>
           <Plus className="size-3" /> Link workload
         </Button>
       </div>
@@ -75,7 +75,7 @@ export function DeploymentRow({
 
 function SyncStatus({ dep }: { dep: GitDeployment }) {
   if (!dep.lastSyncedAt) {
-    return <span className="text-[11px]" style={{ color: "var(--fg-tertiary)" }}>Never synced</span>;
+    return <span className="text-2xs" style={{ color: "var(--fg-tertiary)" }}>Never synced</span>;
   }
   // en-US output is intentional and consistent with the rest of the app (no i18n).
   const syncedAt = new Date(dep.lastSyncedAt);
@@ -85,13 +85,13 @@ function SyncStatus({ dep }: { dep: GitDeployment }) {
   const sha = dep.lastSyncedSha?.slice(0, 7);
   if (dep.lastStatus === "error") {
     return (
-      <span className="flex items-center gap-1 text-[11px]" style={{ color: "var(--status-failed)" }}>
+      <span className="flex items-center gap-1 text-2xs" style={{ color: "var(--status-failed)" }}>
         <AlertTriangle className="size-3" /> Last sync failed · {when}
       </span>
     );
   }
   return (
-    <span className="flex items-center gap-1 text-[11px] text-emerald-400">
+    <span className="flex items-center gap-1 text-2xs text-emerald-400">
       <CheckCircle2 className="size-3" /> Synced {sha ? `@ ${sha}` : ""} · {when}
     </span>
   );

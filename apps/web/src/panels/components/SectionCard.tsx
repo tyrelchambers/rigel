@@ -9,7 +9,7 @@ import type { ReactNode } from "react";
 export function SectionCard({ title, count, children }: { title: string; count?: number; children: ReactNode }) {
   return (
     <div className="space-y-2">
-      <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+      <h3 className="text-3xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">
         {title}
         {count != null && <span className="ml-1 text-foreground/50">{count}</span>}
       </h3>

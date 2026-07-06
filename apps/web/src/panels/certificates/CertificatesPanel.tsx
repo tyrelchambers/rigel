@@ -5,6 +5,7 @@ import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { ListRow } from "@/panels/components/ListRow";
 import { PanelHeader } from "@/panels/components/PanelHeader";
+import { PanelSearch } from "@/panels/components/PanelSearch";
 import { viewYaml } from "@/store/yamlViewer";
 import type { ActionBlock } from "@/lib/api";
 import { fetchCertManagerPlugin } from "@/lib/api";
@@ -114,12 +115,11 @@ export default function CertificatesPanel() {
         count={filtered.length}
         loading={isLoading}
       >
-        <input
-          type="text"
+        <PanelSearch
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onValueChange={setSearch}
           placeholder="Search certificates…"
-          className="w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="w-56"
         />
       </PanelHeader>
 
@@ -165,9 +165,9 @@ export default function CertificatesPanel() {
 
                 {/* Namespace pill */}
                 <span
+                  className="text-3xs"
                   style={{
                     fontFamily: "ui-monospace, monospace",
-                    fontSize: 10,
                     color: "var(--fg-tertiary)",
                     background: "var(--surface-sunken)",
                     padding: "1px 5px",
@@ -188,9 +188,9 @@ export default function CertificatesPanel() {
                 {/* Expiry — dim, only when notAfter is set */}
                 {v.notAfter && (
                   <span
+                    className="text-3xs"
                     style={{
                       fontFamily: "ui-monospace, monospace",
-                      fontSize: 10,
                       color: "var(--fg-tertiary)",
                       whiteSpace: "nowrap",
                     }}
@@ -249,8 +249,8 @@ function StatusPill({ view }: { view: CertView }) {
 
   return (
     <span
+      className="text-3xs"
       style={{
-        fontSize: 10,
         fontWeight: 600,
         color,
         background,
@@ -439,7 +439,7 @@ function CertBody({
               className={`flex items-center gap-3 px-3 py-2 ${i < detailRows.length - 1 ? "border-b border-white/5" : ""}`}
             >
               {/* Key */}
-              <span className="w-28 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-[var(--fg-tertiary)]">
+              <span className="w-28 shrink-0 text-3xs font-semibold uppercase tracking-wide text-[var(--fg-tertiary)]">
                 {row.key}
               </span>
 
@@ -450,7 +450,7 @@ function CertBody({
                   {row.value}
                 </span>
                 {"secondary" in row && row.secondary && (
-                  <span className="shrink-0 text-[11px] text-[var(--fg-tertiary)]">
+                  <span className="shrink-0 text-2xs text-[var(--fg-tertiary)]">
                     {row.secondary}
                   </span>
                 )}
@@ -511,7 +511,7 @@ function CertBody({
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--fg-tertiary)]">
+    <span className="text-3xs font-semibold uppercase tracking-wider text-[var(--fg-tertiary)]">
       {children}
     </span>
   );
@@ -543,7 +543,7 @@ function stateChipClass(state: string): string {
 function StateChip({ state, label }: { state: string; label: string }) {
   return (
     <span
-      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-px text-[10px] font-semibold ${stateChipClass(state)}`}
+      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-px text-3xs font-semibold ${stateChipClass(state)}`}
     >
       <span className="size-1 rounded-full bg-current" />
       {label}
@@ -584,7 +584,7 @@ function ChainActionButton({
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[#26272B] px-2 py-1 text-[11px] font-medium text-[var(--fg-secondary)] hover:bg-white/5"
+      className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[#26272B] px-2 py-1 text-2xs font-medium text-[var(--fg-secondary)] hover:bg-white/5"
     >
       <X className="size-3" />
       {label}

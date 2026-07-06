@@ -31,17 +31,18 @@ export function ChatPaneEmptyState({ show }: ChatPaneEmptyStateProps) {
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <Sparkles size={15} style={{ color: "var(--accent-primary)" }} />
-        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-primary)" }}>
+        <span className="text-xs" style={{ fontWeight: 600, color: "var(--fg-primary)" }}>
           The Rigel copilot isn't set up yet
         </span>
       </div>
-      <span style={{ fontSize: 12, color: "var(--fg-secondary)", lineHeight: 1.5 }}>
+      <span className="text-xs" style={{ color: "var(--fg-secondary)", lineHeight: 1.5 }}>
         Chat needs an AI agent. Open Settings, then Agents, to connect one. The rest of the app works
         without it.
       </span>
       <button
         type="button"
         onClick={() => navigate("/settings")}
+        className="text-xs"
         style={{
           alignSelf: "flex-start",
           marginTop: 2,
@@ -49,7 +50,6 @@ export function ChatPaneEmptyState({ show }: ChatPaneEmptyStateProps) {
           borderRadius: 6,
           background: "var(--accent-primary)",
           color: "var(--fg-inverse)",
-          fontSize: 12,
           fontWeight: 500,
           border: "none",
           cursor: "pointer",

@@ -174,19 +174,19 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Search panels & resources…"
+            className="text-sm"
             style={{
               flex: 1,
               background: "transparent",
               border: "none",
               outline: "none",
               color: "var(--fg-primary)",
-              fontSize: 14,
               fontFamily: "var(--font-geist, system-ui, sans-serif)",
             }}
           />
           <span
+            className="text-3xs"
             style={{
-              fontSize: 10,
               fontFamily: "monospace",
               color: "var(--fg-tertiary)",
               background: "var(--surface-sunken)",
@@ -207,10 +207,10 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         >
           {filtered.length === 0 ? (
             <div
+              className="text-xs"
               style={{
                 textAlign: "center",
                 padding: 20,
-                fontSize: 12,
                 color: "var(--fg-tertiary)",
                 fontFamily: "monospace",
               }}
@@ -252,8 +252,8 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                   )}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div
+                      className="text-xs"
                       style={{
-                        fontSize: 13,
                         fontWeight: 500,
                         color: isActive ? "var(--fg-inverse)" : "#E4E4E7",
                         overflow: "hidden",
@@ -265,8 +265,8 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                     </div>
                     {entry.subtitle && (
                       <div
+                        className="text-3xs"
                         style={{
-                          fontSize: 10,
                           fontFamily: "monospace",
                           color: isActive ? "rgba(10,10,10,0.65)" : "var(--fg-tertiary)",
                           overflow: "hidden",
@@ -280,8 +280,8 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                     )}
                   </div>
                   <span
+                    className="text-3xs"
                     style={{
-                      fontSize: 9,
                       fontFamily: "monospace",
                       textTransform: "uppercase",
                       letterSpacing: "0.05em",

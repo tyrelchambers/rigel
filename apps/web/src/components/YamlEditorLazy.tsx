@@ -9,7 +9,7 @@ const Inner = lazy(() => import("./YamlEditor"));
 export function YamlEditor(props: YamlEditorProps) {
   return (
     <Suspense
-      fallback={<div style={{ padding: 16, fontSize: 13, color: "var(--fg-tertiary)" }}>Loading editor…</div>}
+      fallback={<div className="text-xs" style={{ padding: 16, color: "var(--fg-tertiary)" }}>Loading editor…</div>}
     >
       <Inner {...props} />
     </Suspense>

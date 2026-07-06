@@ -65,7 +65,7 @@ function ContextMenuLabel({ className, ...props }: ContextMenuPrimitive.GroupLab
   return (
     <ContextMenuPrimitive.GroupLabel
       data-slot="context-menu-label"
-      className={cn("px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground", className)}
+      className={cn("px-2 py-1 text-3xs font-semibold uppercase tracking-wide text-muted-foreground", className)}
       {...props}
     />
   )

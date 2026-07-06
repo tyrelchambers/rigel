@@ -25,7 +25,7 @@ export default function HealthPanel() {
   return (
     <div className="inline-flex items-center gap-2 rounded border px-3 py-2" title={tooltip}>
       <span style={{ width: 5, height: 5, borderRadius: 9999, backgroundColor: dotColor }} />
-      <span className="font-mono text-[10px]">cluster: {label}</span>
+      <span className="font-mono text-3xs">cluster: {label}</span>
     </div>
   );
 }

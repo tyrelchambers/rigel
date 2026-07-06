@@ -52,7 +52,7 @@ interface Props {
 const SUBJECT_KINDS = ["ServiceAccount", "User", "Group"] as const;
 
 function selectClass(w: string) {
-  return `${w} appearance-none rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[11px] py-[9px] text-[12.5px] text-[var(--fg-primary)] outline-none`;
+  return `${w} appearance-none rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[11px] py-[9px] text-xs text-[var(--fg-primary)] outline-none`;
 }
 
 export function BindingEditor({
@@ -129,7 +129,7 @@ export function BindingEditor({
         </DialogHeader>
         <DialogBody className="flex flex-col gap-4">
           {isEdit ? (
-            <p className="text-[12px] text-[var(--fg-secondary)]">
+            <p className="text-xs text-[var(--fg-secondary)]">
               {kind === "ClusterRoleBinding" ? "ClusterRoleBinding · cluster-scoped" : `RoleBinding · namespace ${namespace}`}
             </p>
           ) : (
@@ -142,7 +142,7 @@ export function BindingEditor({
                 }}
                 placeholder="name"
                 aria-label="Binding name"
-                className="min-w-[160px] flex-1 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[11px] py-[9px] font-[var(--font-mono)] text-[12.5px] text-[var(--fg-primary)] outline-none"
+                className="min-w-[160px] flex-1 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[11px] py-[9px] font-[var(--font-mono)] text-xs text-[var(--fg-primary)] outline-none"
               />
               <div className="flex overflow-hidden rounded-[var(--radius-md)] border border-[var(--border-subtle)]">
                 {(["RoleBinding", "ClusterRoleBinding"] as const).map((k) => (
@@ -150,7 +150,7 @@ export function BindingEditor({
                     key={k}
                     type="button"
                     onClick={() => selectKind(k)}
-                    className={`px-3 py-[9px] text-[12px] ${kind === k ? "bg-white/[0.08] text-[var(--fg-primary)]" : "text-[var(--fg-tertiary)]"}`}
+                    className={`px-3 py-[9px] text-xs ${kind === k ? "bg-white/[0.08] text-[var(--fg-primary)]" : "text-[var(--fg-tertiary)]"}`}
                   >
                     {k}
                   </button>
@@ -163,7 +163,7 @@ export function BindingEditor({
           )}
 
           <div className="flex flex-col gap-2">
-            <span className="font-[var(--font-mono)] text-[11px] font-semibold tracking-[1px] text-[var(--fg-secondary)]">
+            <span className="font-[var(--font-mono)] text-2xs font-semibold tracking-[1px] text-[var(--fg-secondary)]">
               GRANTS ROLE
             </span>
             <div className="flex items-center gap-2">
@@ -199,17 +199,17 @@ export function BindingEditor({
                   value={roleRef.name ?? ""}
                   onChange={(e) => setRoleRef({ ...roleRef, name: e.target.value })}
                   placeholder="role name"
-                  className="flex-1 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[11px] py-[9px] font-[var(--font-mono)] text-[12.5px] text-[var(--fg-primary)] outline-none"
+                  className="flex-1 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[11px] py-[9px] font-[var(--font-mono)] text-xs text-[var(--fg-primary)] outline-none"
                 />
               )}
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="font-[var(--font-mono)] text-[11px] font-semibold tracking-[1px] text-[var(--fg-secondary)]">
+            <span className="font-[var(--font-mono)] text-2xs font-semibold tracking-[1px] text-[var(--fg-secondary)]">
               SUBJECTS
             </span>
-            <span className="font-[var(--font-mono)] text-[11px] text-[var(--fg-tertiary)]">{subjects.length}</span>
+            <span className="font-[var(--font-mono)] text-2xs text-[var(--fg-tertiary)]">{subjects.length}</span>
             <div className="h-px flex-1 bg-[var(--border-subtle)]" />
           </div>
 
@@ -232,7 +232,7 @@ export function BindingEditor({
                   value={s.name ?? ""}
                   onChange={(e) => setSubject(i, { name: e.target.value })}
                   placeholder="name"
-                  className="min-w-[120px] flex-1 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[11px] py-[9px] font-[var(--font-mono)] text-[12.5px] text-[var(--fg-primary)] outline-none"
+                  className="min-w-[120px] flex-1 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[11px] py-[9px] font-[var(--font-mono)] text-xs text-[var(--fg-primary)] outline-none"
                 />
                 <NamespaceField
                   value={s.namespace ?? "default"}
@@ -256,7 +256,7 @@ export function BindingEditor({
           <button
             type="button"
             onClick={() => setSubjects((ss) => [...ss, { kind: "ServiceAccount", name: "", namespace: "default" }])}
-            className="flex items-center justify-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border-strong)] py-[10px] text-[12px] font-medium text-[var(--fg-secondary)] hover:bg-white/[0.04]"
+            className="flex items-center justify-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border-strong)] py-[10px] text-xs font-medium text-[var(--fg-secondary)] hover:bg-white/[0.04]"
           >
             <Plus className="size-[13px]" /> Add subject
           </button>

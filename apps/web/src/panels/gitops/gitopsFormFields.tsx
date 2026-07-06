@@ -24,13 +24,13 @@ export function Field({
         spellCheck={false}
         autoCapitalize="off"
         autoCorrect="off"
+        className="text-xs"
         style={{
           padding: "8px 10px",
           borderRadius: 8,
           background: "#08080A",
           border: "1px solid #26272B",
           color: "var(--fg-primary)",
-          fontSize: 13,
           fontFamily: type === "password" || label.includes("URL") || label.includes("path") ? "ui-monospace, monospace" : undefined,
           outline: "none",
         }}

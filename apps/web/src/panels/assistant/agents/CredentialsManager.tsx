@@ -187,7 +187,7 @@ function CredentialRow({
           </span>
         )}
         <span
-          className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-medium ${
+          className={`rounded px-1.5 py-0.5 font-mono text-3xs font-medium ${
             ready
               ? "bg-green-500/15 text-green-600 dark:text-green-400"
               : "bg-muted text-muted-foreground"
@@ -280,7 +280,7 @@ function MethodCard({ method }: { method: AuthMethodHelp }) {
       <div className="flex items-center gap-2">
         <p className="text-sm font-semibold">{method.title}</p>
         {method.recommended && (
-          <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
+          <span className="rounded-full bg-primary/15 px-2 py-0.5 text-3xs font-semibold text-primary">
             Recommended
           </span>
         )}

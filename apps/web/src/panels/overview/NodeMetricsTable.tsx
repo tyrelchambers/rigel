@@ -44,8 +44,8 @@ function MetricCell({ fraction, raw }: { fraction: number; raw: string }) {
           style={{ width: `${percent}%` }}
         />
       </div>
-      <span className="shrink-0 font-mono text-[13px] font-semibold text-[var(--fg-primary)]">{percent}%</span>
-      <span className="shrink-0 font-mono text-[11px] text-[var(--fg-tertiary)]">{raw}</span>
+      <span className="shrink-0 font-mono text-xs font-semibold text-[var(--fg-primary)]">{percent}%</span>
+      <span className="shrink-0 font-mono text-2xs text-[var(--fg-tertiary)]">{raw}</span>
     </div>
   );
 }
@@ -64,7 +64,7 @@ export function NodeMetricsTable({ rows, readyByName, hasMetrics, reclaimable }:
             <Recycle className="size-[13px] shrink-0 text-[var(--status-running)]" />
             <span className="text-xs text-[var(--fg-secondary)]">Reclaimable</span>
             <span className="font-mono text-xs font-semibold text-[var(--status-running)]">{pct(reclaimable.fraction)}</span>
-            <span className="font-mono text-[11px] text-[var(--fg-tertiary)]">{reclaimable.detail}</span>
+            <span className="font-mono text-2xs text-[var(--fg-tertiary)]">{reclaimable.detail}</span>
           </div>
         )}
       </div>
@@ -72,11 +72,11 @@ export function NodeMetricsTable({ rows, readyByName, hasMetrics, reclaimable }:
       {hasMetrics && rows.length > 0 ? (
         <div className="flex flex-col overflow-hidden rounded-lg border border-[var(--border-subtle)]">
           <div className={cn(COLS, "border-b border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-4 py-2.5")}>
-            <span className="font-mono text-[11px] tracking-[1px] text-[var(--fg-tertiary)]">NODE</span>
-            <span className="font-mono text-[11px] tracking-[1px] text-[var(--fg-tertiary)]">
+            <span className="font-mono text-2xs tracking-[1px] text-[var(--fg-tertiary)]">NODE</span>
+            <span className="font-mono text-2xs tracking-[1px] text-[var(--fg-tertiary)]">
               CPU <span className="font-normal normal-case tracking-normal opacity-80">(used / allocatable)</span>
             </span>
-            <span className="font-mono text-[11px] tracking-[1px] text-[var(--fg-tertiary)]">
+            <span className="font-mono text-2xs tracking-[1px] text-[var(--fg-tertiary)]">
               MEMORY <span className="font-normal normal-case tracking-normal opacity-80">(used / allocatable)</span>
             </span>
           </div>
@@ -92,7 +92,7 @@ export function NodeMetricsTable({ rows, readyByName, hasMetrics, reclaimable }:
                     readyByName[n.name] ? "bg-[var(--status-running)]" : "bg-[var(--status-failed)]",
                   )}
                 />
-                <span className="truncate text-[13px] font-medium text-[var(--fg-primary)]" title={n.name}>
+                <span className="truncate text-xs font-medium text-[var(--fg-primary)]" title={n.name}>
                   {n.name}
                 </span>
               </div>

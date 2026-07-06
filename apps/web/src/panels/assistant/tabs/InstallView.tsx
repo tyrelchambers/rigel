@@ -261,7 +261,7 @@ export function InstallView() {
           Install. The token Secret is not shown here.
         </p>
         {showManifest && (
-          <pre className="mt-2 max-h-56 select-text overflow-auto rounded-md bg-muted p-2 font-mono text-[11px] whitespace-pre">
+          <pre className="mt-2 max-h-56 select-text overflow-auto rounded-md bg-muted p-2 font-mono text-2xs whitespace-pre">
             {manifestYAML(config)}
           </pre>
         )}

@@ -9,14 +9,14 @@ function apiGroupLabel(groups: string[] | undefined): string {
 function Cell({ label, items, width }: { label: string; items: string[]; width: string }) {
   return (
     <div className={`flex min-w-0 flex-col gap-[6px] ${width}`}>
-      <span className="font-[var(--font-mono)] text-[9.5px] tracking-[0.6px] text-[var(--fg-tertiary)]">
+      <span className="font-[var(--font-mono)] text-3xs tracking-[0.6px] text-[var(--fg-tertiary)]">
         {label}
       </span>
       <div className="flex flex-wrap items-center gap-[6px]">
         {items.map((it, i) => (
           <span
             key={i}
-            className="break-words font-[var(--font-mono)] text-[11px] text-[var(--fg-secondary)]"
+            className="break-words font-[var(--font-mono)] text-2xs text-[var(--fg-secondary)]"
           >
             {it}
           </span>

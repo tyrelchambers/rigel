@@ -284,7 +284,7 @@ export function SignalSection({
             Show manifest
           </button>
           {showManifest && (
-            <pre className="max-h-72 select-text overflow-auto rounded-md bg-[var(--surface-sunken)] p-2 font-mono text-[11px] whitespace-pre">
+            <pre className="max-h-72 select-text overflow-auto rounded-md bg-[var(--surface-sunken)] p-2 font-mono text-2xs whitespace-pre">
               {signalBridgeManifest(namespace)}
             </pre>
           )}
@@ -307,7 +307,7 @@ export function SignalSection({
           <div className="h-px w-full bg-[var(--border-subtle)]" />
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
-              <span className="text-[10px] uppercase tracking-wide text-[var(--fg-tertiary)]">Sender</span>
+              <span className="text-3xs uppercase tracking-wide text-[var(--fg-tertiary)]">Sender</span>
               <span className="font-mono text-xs text-foreground">{signalNumber}</span>
             </div>
 

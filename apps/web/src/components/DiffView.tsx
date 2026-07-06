@@ -80,7 +80,7 @@ function DiffRow({ row }: { row: Row }) {
     return (
       <div className="flex w-max min-w-full select-none" style={{ background: "#0E0F13", borderTop: "1px solid #1B1C1F", borderBottom: "1px solid #1B1C1F" }}>
         <span className="sticky left-0 w-[4.5rem] shrink-0" style={{ background: "#0E0F13" }} />
-        <span className="px-2 py-0.5 text-[11px]" style={{ color: "var(--accent-soft)" }}>
+        <span className="px-2 py-0.5 text-2xs" style={{ color: "var(--accent-soft)" }}>
           @@{row.text ? <span className="ml-2 text-[var(--fg-tertiary)]">{row.text}</span> : null}
         </span>
       </div>
@@ -90,7 +90,7 @@ function DiffRow({ row }: { row: Row }) {
     return (
       <div className="flex w-max min-w-full select-none">
         <span className="sticky left-0 w-[4.5rem] shrink-0" style={{ background: "#08080A" }} />
-        <span className="px-2 py-0.5 text-[11px] italic text-[var(--fg-tertiary)]">{row.text}</span>
+        <span className="px-2 py-0.5 text-2xs italic text-[var(--fg-tertiary)]">{row.text}</span>
       </div>
     );
   }
@@ -127,8 +127,8 @@ export function DiffView({ diff }: { diff: string }) {
     <div className="overflow-hidden rounded-lg" style={{ background: "#08080A", border: "1px solid #26272B" }}>
       {/* Summary bar: change magnitude + copy */}
       <div className="flex items-center gap-3 px-3 py-1.5" style={{ borderBottom: "1px solid #1B1C1F", background: "#0B0B0E" }}>
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--fg-tertiary)]">Diff</span>
-        <span className="ml-auto flex items-center gap-2.5 font-mono text-[11px] tabular-nums">
+        <span className="text-3xs font-semibold uppercase tracking-wider text-[var(--fg-tertiary)]">Diff</span>
+        <span className="ml-auto flex items-center gap-2.5 font-mono text-2xs tabular-nums">
           <span style={{ color: "#34D399" }}>+{adds}</span>
           <span style={{ color: "#F87171" }}>−{dels}</span>
         </span>
@@ -136,7 +136,7 @@ export function DiffView({ diff }: { diff: string }) {
           type="button"
           onClick={handleCopy}
           aria-label={copied ? "Copied" : "Copy diff"}
-          className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+          className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-3xs font-medium text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
         >
           {copied ? <Check className="size-3" style={{ color: "#34D399" }} /> : <Copy className="size-3" />}
           {copied ? "Copied" : "Copy"}
@@ -144,7 +144,7 @@ export function DiffView({ diff }: { diff: string }) {
       </div>
 
       {/* Lines */}
-      <div className="max-h-72 overflow-auto font-mono text-[12px] leading-[1.65]">
+      <div className="max-h-72 overflow-auto font-mono text-xs leading-[1.65]">
         {rows.map((r, i) => (
           <DiffRow key={i} row={r} />
         ))}

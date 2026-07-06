@@ -105,13 +105,13 @@ function AuditRowSummary({ e }: { e: AssistantAuditEntry }) {
       <div className="flex items-center gap-2">
         <span className={outcomeColorClass(e.outcome)}>{outcomeGlyph(e.outcome)}</span>
         <span className="truncate font-mono text-sm font-medium">{e.incident}</span>
-        <span className="ml-auto font-mono text-[10px] text-muted-foreground" title={e.at}>
+        <span className="ml-auto font-mono text-3xs text-muted-foreground" title={e.at}>
           {relativeTime(e.at)}
         </span>
       </div>
       {e.proposal && <p className="mt-1 text-sm text-muted-foreground">{e.proposal}</p>}
       {e.command && (
-        <p className="select-text font-mono text-[10px] text-muted-foreground">{e.command}</p>
+        <p className="select-text font-mono text-3xs text-muted-foreground">{e.command}</p>
       )}
       {backup && (
         <Button
@@ -197,7 +197,7 @@ function AssistantDialogs(p: DialogsProps) {
               Re-applies the pre-mutation snapshot the agent captured. Review the exact YAML before
               it runs.
             </DialogDescription>
-            <pre className="mt-3 max-h-72 select-text overflow-auto rounded-md bg-muted p-2 font-mono text-[11px] whitespace-pre">
+            <pre className="mt-3 max-h-72 select-text overflow-auto rounded-md bg-muted p-2 font-mono text-2xs whitespace-pre">
               {p.pendingRevert?.yaml}
             </pre>
           </DialogBody>

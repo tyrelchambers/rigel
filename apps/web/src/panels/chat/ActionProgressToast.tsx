@@ -86,19 +86,19 @@ export function ActionProgressToast({ id, label, toastId }: Props) {
 
         {/* Label + status subline */}
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="text-[13px] font-semibold leading-snug text-[var(--fg-primary)]">
+          <span className="text-xs font-semibold leading-snug text-[var(--fg-primary)]">
             {label}
           </span>
           {status === "running" && (
-            <span className="text-[11px] text-[var(--fg-tertiary)]">Running…</span>
+            <span className="text-2xs text-[var(--fg-tertiary)]">Running…</span>
           )}
           {status === "done" && (
-            <span className="text-[11px] text-[var(--fg-tertiary)]">
+            <span className="text-2xs text-[var(--fg-tertiary)]">
               Done · {lines.length} line{lines.length !== 1 ? "s" : ""}
             </span>
           )}
           {status === "error" && errorMsg && (
-            <span className="break-words font-[var(--font-mono)] text-[11px] leading-snug text-red-300">
+            <span className="break-words font-[var(--font-mono)] text-2xs leading-snug text-red-300">
               {errorMsg}
             </span>
           )}
@@ -135,7 +135,7 @@ export function ActionProgressToast({ id, label, toastId }: Props) {
           ref={outputRef}
           className="mt-2.5 max-h-48 overflow-y-auto rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-2.5 py-2"
         >
-          <pre className="whitespace-pre-wrap break-all font-[var(--font-mono)] text-[11px] leading-relaxed text-[var(--fg-secondary)]">
+          <pre className="whitespace-pre-wrap break-all font-[var(--font-mono)] text-2xs leading-relaxed text-[var(--fg-secondary)]">
             {lines.map((line, i) => (
               <span key={i} className="block">
                 {line}

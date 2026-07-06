@@ -22,7 +22,8 @@ export function RepoCombobox({ repos, value, onChange, error }: { repos: GithubR
         onChange={(e) => setQ(e.target.value)}
         autoFocus
         spellCheck={false}
-        style={{ padding: "8px 10px", borderRadius: 8, background: "#08080A", border: "1px solid #26272B", color: "var(--fg-primary)", fontSize: 13, outline: "none" }}
+        className="text-xs"
+        style={{ padding: "8px 10px", borderRadius: 8, background: "#08080A", border: "1px solid #26272B", color: "var(--fg-primary)", outline: "none" }}
       />
       {error ? (
         <span className="text-xs text-destructive">{error}</span>
@@ -36,12 +37,12 @@ export function RepoCombobox({ repos, value, onChange, error }: { repos: GithubR
                 <button
                   type="button"
                   onClick={() => onChange(r.fullName)}
-                  className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left font-mono text-[13px] hover:bg-white/[0.04]"
+                  className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left font-mono text-xs hover:bg-white/[0.04]"
                   style={sel ? { background: "var(--accent-primary)22" } : undefined}
                 >
                   {sel ? <Check className="size-3.5 shrink-0" style={{ color: "var(--accent-primary)" }} /> : <span className="w-3.5 shrink-0" />}
                   <span className="truncate">{r.fullName}</span>
-                  {r.private && <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">private</span>}
+                  {r.private && <span className="ml-auto shrink-0 text-3xs text-muted-foreground">private</span>}
                 </button>
               </li>
             );

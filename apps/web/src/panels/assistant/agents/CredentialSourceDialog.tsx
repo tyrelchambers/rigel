@@ -213,7 +213,7 @@ export function CredentialSourceDialog({
 
           {/* Transparency: the currently-resolved backing Secret (dialog-only). */}
           {byoEnabled && currentSecretName && (
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-2xs text-muted-foreground">
               Currently backed by{" "}
               <span className="font-mono text-foreground">{currentSecretName}</span>.{" "}
               <button

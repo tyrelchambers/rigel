@@ -46,10 +46,10 @@ function Head({ tone, status }: { tone: "neutral" | "accent" | "red"; status: Ma
         <MessageSquare className={tone === "neutral" ? "size-[18px] text-muted-foreground" : "size-[18px]"} />
       </IconTile>
       <div className="flex flex-col gap-[3px]">
-        <span className="text-foreground" style={{ fontSize: 15, fontWeight: 600 }}>Matrix</span>
+        <span className="text-foreground text-base" style={{ fontWeight: 600 }}>Matrix</span>
         <div className="flex items-center gap-[7px]">
           <span className="inline-block size-[7px] rounded-full" style={{ background: dot }} />
-          <span className={statusClass} style={{ fontSize: 12 }}>{STATUS_TEXT[status] ?? status}</span>
+          <span className={`${statusClass} text-xs`}>{STATUS_TEXT[status] ?? status}</span>
         </div>
       </div>
     </div>
@@ -139,7 +139,7 @@ export function MatrixSection({ derived }: { derived: SettingsDerived }) {
         <div className="grid grid-cols-3 gap-8">
           {rows.map((r) => (
             <div key={r.k} className="flex flex-col gap-1">
-              <span className="font-mono text-[10px] uppercase tracking-wide text-[var(--fg-tertiary)]">
+              <span className="font-mono text-3xs uppercase tracking-wide text-[var(--fg-tertiary)]">
                 {r.k}
               </span>
               <span className="select-text font-mono text-xs text-foreground break-all">
@@ -167,7 +167,7 @@ export function MatrixSection({ derived }: { derived: SettingsDerived }) {
     return (
       <Card>
         <Head tone="red" status="error" />
-        <span className="text-destructive" style={{ fontSize: 12.5, lineHeight: 1.45 }}>
+        <span className="text-destructive text-xs" style={{ lineHeight: 1.45 }}>
           {matrixHomeserverUrl
             ? `${matrixHomeserverUrl.replace(/^https?:\/\//, "")} didn't respond to Rigel.`
             : "The homeserver didn't respond to Rigel."}
@@ -190,7 +190,7 @@ export function MatrixSection({ derived }: { derived: SettingsDerived }) {
   return (
     <Card>
       <Head tone="neutral" status="notConnected" />
-      <span className="text-muted-foreground" style={{ fontSize: 12.5, lineHeight: 1.45 }}>
+      <span className="text-muted-foreground text-xs" style={{ lineHeight: 1.45 }}>
         Message Rigel from Element. Runs alongside Signal.
       </span>
       <button
@@ -200,7 +200,7 @@ export function MatrixSection({ derived }: { derived: SettingsDerived }) {
         style={{ background: "var(--accent-primary)", padding: "10px 0" }}
       >
         <Plus className="size-[15px]" style={{ color: "var(--fg-inverse)" }} />
-        <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--fg-inverse)" }}>Connect Matrix</span>
+        <span className="text-sm" style={{ fontWeight: 600, color: "var(--fg-inverse)" }}>Connect Matrix</span>
       </button>
       {modal}
     </Card>

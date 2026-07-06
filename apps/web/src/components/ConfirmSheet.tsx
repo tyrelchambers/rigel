@@ -355,11 +355,11 @@ export function ConfirmSheet({
               strokeWidth={2}
             />
           </div>
-          <DialogTitle className="min-w-0 flex-1 text-[15px] leading-snug line-clamp-2 break-words">
+          <DialogTitle className="min-w-0 flex-1 text-base leading-snug line-clamp-2 break-words">
             {title}
           </DialogTitle>
           <span
-            className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
+            className="shrink-0 rounded-full px-2 py-0.5 text-3xs font-semibold uppercase tracking-wider"
             style={{
               background: `${accentColor}1F`,
               color: accentColor,
@@ -372,7 +372,7 @@ export function ConfirmSheet({
 
         {/* Body */}
         <DialogBody className="flex flex-col gap-4">
-          <DialogDescription className="text-[13px] leading-relaxed">
+          <DialogDescription className="text-xs leading-relaxed">
             {description}
           </DialogDescription>
 
@@ -412,7 +412,7 @@ export function ConfirmSheet({
                           {r.name || "—"}
                         </span>
                         {r.namespace && (
-                          <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
+                          <span className="ml-auto shrink-0 text-3xs text-muted-foreground">
                             {r.namespace}
                           </span>
                         )}
@@ -496,7 +496,7 @@ export function ConfirmSheet({
                   type="button"
                   onClick={handleCopy}
                   aria-label={copied ? "Copied" : "Copy command"}
-                  className="absolute right-2.5 top-2.5 flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                  className="absolute right-2.5 top-2.5 flex items-center gap-1 rounded-md px-2 py-1 text-3xs font-medium text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
                 >
                   {copied ? (
                     <Check className="size-3" style={{ color: "#28C840" }} />
@@ -505,7 +505,7 @@ export function ConfirmSheet({
                   )}
                   {copied ? "Copied" : "Copy"}
                 </button>
-                <pre className="overflow-x-auto px-4 py-3.5 pr-16 font-mono text-[12.5px] leading-6 whitespace-pre-wrap break-all">
+                <pre className="overflow-x-auto px-4 py-3.5 pr-16 font-mono text-xs leading-6 whitespace-pre-wrap break-all">
                   <span
                     className="select-none font-semibold"
                     style={{ color: accentColor }}

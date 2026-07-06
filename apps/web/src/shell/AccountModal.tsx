@@ -44,7 +44,7 @@ export function AccountModal({ open, onOpenChange, name, email, plan = "Free" }:
         <div className="flex items-center justify-between">
           <span className="text-xs font-medium" style={{ color: "var(--fg-secondary)" }}>Plan</span>
           <span
-            className="rounded-full px-2.5 py-1 text-[11px] font-medium"
+            className="rounded-full px-2.5 py-1 text-2xs font-medium"
             style={{ color: "var(--fg-primary)", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
           >
             {plan}

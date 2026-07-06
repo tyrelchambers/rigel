@@ -85,7 +85,7 @@ export function KeyValueEditor({
               <p className="mt-1.5 flex items-center gap-1.5 rounded-md border border-dashed px-2 py-1.5 text-xs font-mono text-muted-foreground/70">
                 <FileLock2 className="size-3.5" aria-hidden />
                 {`<binary, ${r.binary!.bytes} bytes>`}
-                <span className="ml-auto text-[10px] uppercase tracking-wide">read-only</span>
+                <span className="ml-auto text-3xs uppercase tracking-wide">read-only</span>
               </p>
             ) : maskValues ? (
               <input

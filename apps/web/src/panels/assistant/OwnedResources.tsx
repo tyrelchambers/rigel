@@ -151,7 +151,7 @@ export function OwnedResources() {
   function renderGroup(g: ResourceGroup) {
     return (
       <div key={g.title} className="flex flex-col gap-2.5">
-        <div className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider text-[var(--fg-tertiary)]">
+        <div className="flex items-center gap-1.5 font-mono text-2xs uppercase tracking-wider text-[var(--fg-tertiary)]">
           <span>{g.title}</span>
           <span>· {g.items.length}</span>
         </div>
@@ -166,11 +166,11 @@ export function OwnedResources() {
             >
               <PresenceDot state={presenceOf(r)} />
               <span
-                className={`shrink-0 rounded-sm px-2 py-[3px] font-mono text-[11px] font-medium ${kindBadgeClass(r.kind)}`}
+                className={`shrink-0 rounded-sm px-2 py-[3px] font-mono text-2xs font-medium ${kindBadgeClass(r.kind)}`}
               >
                 {r.kind}
               </span>
-              <span className="truncate font-mono text-[13px] text-[var(--fg-primary)]">{r.name}</span>
+              <span className="truncate font-mono text-xs text-[var(--fg-primary)]">{r.name}</span>
               <ArrowUpRight className="ml-auto size-[15px] shrink-0 text-[var(--fg-tertiary)]" />
             </button>
           ))}
@@ -188,7 +188,7 @@ export function OwnedResources() {
         </span>
         <GrantRoleButton namespace={ns} />
       </div>
-      <p className="text-[13px] text-[var(--fg-tertiary)]">
+      <p className="text-xs text-[var(--fg-tertiary)]">
         Kubernetes objects this assistant owns in <span className="font-mono">{ns}</span>. Open one to
         view it in its panel.
       </p>

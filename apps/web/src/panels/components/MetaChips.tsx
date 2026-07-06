@@ -22,7 +22,7 @@ export function MetaChips({ title, entries }: MetaChipsProps) {
             <span
               key={k}
               title={text}
-              className="max-w-full truncate rounded px-2 py-1 font-mono text-[11px] text-muted-foreground"
+              className="max-w-full truncate rounded px-2 py-1 font-mono text-2xs text-muted-foreground"
               style={{ background: "var(--surface-sunken)", border: "1px solid #26272B" }}
             >
               {text}

@@ -18,7 +18,7 @@ const primaryBtnStyle: React.CSSProperties = {
   borderRadius: 8,
   background: "var(--accent-primary)",
   color: "var(--fg-inverse)",
-  fontSize: 12.5,
+  fontSize: 12,
   fontWeight: 500,
   border: "none",
   cursor: "pointer",
@@ -50,14 +50,14 @@ export function AboutYouStep({
 
   return (
     <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <span style={{ fontSize: 12.5, color: "var(--fg-secondary)", lineHeight: 1.5 }}>
+      <span className="text-xs" style={{ color: "var(--fg-secondary)", lineHeight: 1.5 }}>
         Tell us who you are to get started — so we know who's using Rigel.
       </span>
-      <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5 }}>
+      <label className="text-xs" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         Name
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" style={inputStyle} autoFocus />
       </label>
-      <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5 }}>
+      <label className="text-xs" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         Email
         <input
           value={email}

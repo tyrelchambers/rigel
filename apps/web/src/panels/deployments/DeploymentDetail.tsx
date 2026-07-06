@@ -68,7 +68,7 @@ export function DeploymentDetail({
     <div className="space-y-4">
       {/* SPEC block */}
       <div className="space-y-2">
-        <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+        <h3 className="text-3xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">
           Spec
         </h3>
         <dl className="grid max-w-3xl grid-cols-2 gap-x-6 gap-y-1.5 text-xs">

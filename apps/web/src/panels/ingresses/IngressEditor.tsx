@@ -51,7 +51,7 @@ const boxInput =
   "w-full rounded-md border px-3.5 py-[11px] text-sm font-mono outline-none transition-colors border-[var(--border-subtle)] bg-[var(--surface-sunken)] text-[var(--fg-primary)] placeholder:text-[var(--fg-tertiary)] focus:border-[var(--accent-primary)] disabled:cursor-not-allowed disabled:text-[var(--fg-secondary)]";
 // Compact cell used inside path / TLS rows.
 const cellInput =
-  "rounded border px-2.5 py-2 text-[13px] font-mono outline-none transition-colors border-[var(--border-subtle)] bg-[var(--surface-sunken)] text-[var(--fg-primary)] placeholder:text-[var(--fg-tertiary)] focus:border-[var(--accent-primary)]";
+  "rounded border px-2.5 py-2 text-xs font-mono outline-none transition-colors border-[var(--border-subtle)] bg-[var(--surface-sunken)] text-[var(--fg-primary)] placeholder:text-[var(--fg-tertiary)] focus:border-[var(--accent-primary)]";
 
 const PATH_TYPES = ["Prefix", "Exact", "ImplementationSpecific"];
 
@@ -176,7 +176,7 @@ export function IngressEditor({ target, open, onClose, onApplied }: IngressEdito
           </DialogIcon>
           <div className="flex min-w-0 flex-col gap-1">
             <div className="flex min-w-0 items-center gap-2">
-              <DialogTitle className="shrink-0 text-[17px] font-bold text-[var(--fg-primary)]">Edit Ingress</DialogTitle>
+              <DialogTitle className="shrink-0 text-lg font-bold text-[var(--fg-primary)]">Edit Ingress</DialogTitle>
               {name && (
                 <span className="flex min-w-0 items-center gap-1.5 rounded bg-[var(--accent-dim)] px-2 py-0.5">
                   <Globe className="size-3 shrink-0 text-[var(--accent-primary)]" aria-hidden />
@@ -239,7 +239,7 @@ export function IngressEditor({ target, open, onClose, onApplied }: IngressEdito
                   <div key={ri} className="flex flex-col gap-3 rounded-lg border p-3.5 border-[var(--border-subtle)] bg-[var(--surface-sunken)]">
                     <div className="flex items-center gap-2.5">
                       <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md border px-3 py-2 border-[var(--border-subtle)] bg-[var(--surface-elevated)] focus-within:border-[var(--accent-primary)]">
-                        <span className="shrink-0 rounded bg-white/[0.04] px-[7px] py-0.5 font-mono text-[9.5px] uppercase tracking-[1px] text-[var(--fg-tertiary)]">Host</span>
+                        <span className="shrink-0 rounded bg-white/[0.04] px-[7px] py-0.5 font-mono text-3xs uppercase tracking-[1px] text-[var(--fg-tertiary)]">Host</span>
                         <input
                           value={rule.host}
                           placeholder="all hosts"
@@ -266,7 +266,7 @@ export function IngressEditor({ target, open, onClose, onApplied }: IngressEdito
                           <span className="font-mono text-sm text-[var(--fg-tertiary)]">→</span>
                           <div className="flex min-w-[120px] flex-1 items-center gap-1.5 rounded border border-[var(--border-subtle)] bg-[var(--surface-sunken)] focus-within:border-[var(--accent-primary)]">
                             <Server className="ml-2.5 size-3.5 shrink-0 text-[var(--fg-tertiary)]" aria-hidden />
-                            <input value={p.serviceName} placeholder="service" onChange={(e) => updatePath(ri, pi, { serviceName: e.target.value })} aria-label="service name" className="min-w-0 flex-1 bg-transparent py-2 pr-2.5 font-mono text-[13px] text-[var(--fg-primary)] outline-none placeholder:text-[var(--fg-tertiary)]" />
+                            <input value={p.serviceName} placeholder="service" onChange={(e) => updatePath(ri, pi, { serviceName: e.target.value })} aria-label="service name" className="min-w-0 flex-1 bg-transparent py-2 pr-2.5 font-mono text-xs text-[var(--fg-primary)] outline-none placeholder:text-[var(--fg-tertiary)]" />
                           </div>
                           <span className="font-mono text-sm text-[var(--fg-tertiary)]">:</span>
                           <input value={p.servicePort} placeholder="80" onChange={(e) => updatePath(ri, pi, { servicePort: e.target.value })} aria-label="service port" className={cn(cellInput, "w-[56px]")} />
@@ -349,8 +349,8 @@ export function IngressEditor({ target, open, onClose, onApplied }: IngressEdito
 function SectionCap({ children, aside }: { children: ReactNode; aside?: ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-2">
-      <span className="font-mono text-[10.5px] uppercase tracking-[1px] text-[var(--fg-tertiary)]">{children}</span>
-      {aside && <span className="font-mono text-[10.5px] text-[var(--fg-tertiary)]">{aside}</span>}
+      <span className="font-mono text-3xs uppercase tracking-[1px] text-[var(--fg-tertiary)]">{children}</span>
+      {aside && <span className="font-mono text-3xs text-[var(--fg-tertiary)]">{aside}</span>}
     </div>
   );
 }
@@ -359,7 +359,7 @@ function SectionCap({ children, aside }: { children: ReactNode; aside?: ReactNod
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex flex-1 flex-col gap-[7px]">
-      <span className="text-[13px] font-medium text-[var(--fg-secondary)]">{label}</span>
+      <span className="text-xs font-medium text-[var(--fg-secondary)]">{label}</span>
       {children}
     </div>
   );

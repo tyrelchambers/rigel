@@ -66,10 +66,10 @@ export function OnboardingWizard({ onClose }: { onClose: () => void }) {
       <div style={card} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
           <Sparkles size={18} style={{ color: "var(--accent-primary)" }} />
-          <span style={{ fontSize: 17, fontWeight: 600, color: "var(--fg-primary)" }}>Welcome to Rigel</span>
+          <span className="text-lg" style={{ fontWeight: 600, color: "var(--fg-primary)" }}>Welcome to Rigel</span>
         </div>
 
-        <span style={{ fontSize: 12.5, color: "var(--fg-secondary)", lineHeight: 1.5 }}>
+        <span className="text-xs" style={{ color: "var(--fg-secondary)", lineHeight: 1.5 }}>
           A minute of optional setup. Everything here can also be changed later in Settings. Skip
           anything you don't need.
         </span>
@@ -121,11 +121,11 @@ function ToolCard({
     <div style={tool}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         {icon}
-        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-primary)" }}>{title}</span>
+        <span className="text-xs" style={{ fontWeight: 600, color: "var(--fg-primary)" }}>{title}</span>
         <div style={{ flex: 1 }} />
         {action}
       </div>
-      <span style={{ fontSize: 12, color: "var(--fg-secondary)", lineHeight: 1.5 }}>{desc}</span>
+      <span className="text-xs" style={{ color: "var(--fg-secondary)", lineHeight: 1.5 }}>{desc}</span>
       {children}
     </div>
   );
@@ -133,7 +133,7 @@ function ToolCard({
 
 function Done() {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--status-running)" }}>
+    <span className="text-xs" style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "var(--status-running)" }}>
       <Check size={13} /> Done
     </span>
   );
@@ -155,7 +155,7 @@ function AgentStep() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 12.5, color: "var(--fg-secondary)", lineHeight: 1.5, flex: 1 }}>
+        <span className="text-xs" style={{ color: "var(--fg-secondary)", lineHeight: 1.5, flex: 1 }}>
           Pick the AI agent Rigel should use and connect it. You can change this any time in Settings, then Agents.
         </span>
         {connected && <Done />}
@@ -260,7 +260,7 @@ const primaryBtn: React.CSSProperties = {
   borderRadius: 8,
   background: "var(--accent-primary)",
   color: "var(--fg-inverse)",
-  fontSize: 12.5,
+  fontSize: 12,
   fontWeight: 500,
   border: "none",
   cursor: "pointer",

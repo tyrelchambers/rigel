@@ -78,7 +78,7 @@ export function RoleEditor({ target, open, onClose, onApply, onEditYaml }: Props
         </DialogHeader>
         <DialogBody className="flex flex-col gap-4">
           {isEdit ? (
-            <p className="text-[12px] text-[var(--fg-secondary)]">
+            <p className="text-xs text-[var(--fg-secondary)]">
               {kind === "ClusterRole" ? "ClusterRole · cluster-scoped" : `Role · namespace ${namespace}`}
             </p>
           ) : (
@@ -88,7 +88,7 @@ export function RoleEditor({ target, open, onClose, onApply, onEditYaml }: Props
                 onChange={(e) => setName(e.target.value)}
                 placeholder="name"
                 aria-label="Role name"
-                className="min-w-[160px] flex-1 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[11px] py-[9px] font-[var(--font-mono)] text-[12.5px] text-[var(--fg-primary)] outline-none"
+                className="min-w-[160px] flex-1 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[11px] py-[9px] font-[var(--font-mono)] text-xs text-[var(--fg-primary)] outline-none"
               />
               <div className="flex overflow-hidden rounded-[var(--radius-md)] border border-[var(--border-subtle)]">
                 {(["Role", "ClusterRole"] as const).map((k) => (
@@ -96,7 +96,7 @@ export function RoleEditor({ target, open, onClose, onApply, onEditYaml }: Props
                     key={k}
                     type="button"
                     onClick={() => setKind(k)}
-                    className={`px-3 py-[9px] text-[12px] ${kind === k ? "bg-white/[0.08] text-[var(--fg-primary)]" : "text-[var(--fg-tertiary)]"}`}
+                    className={`px-3 py-[9px] text-xs ${kind === k ? "bg-white/[0.08] text-[var(--fg-primary)]" : "text-[var(--fg-tertiary)]"}`}
                   >
                     {k}
                   </button>
@@ -109,10 +109,10 @@ export function RoleEditor({ target, open, onClose, onApply, onEditYaml }: Props
           )}
 
           <div className="flex items-center gap-2">
-            <span className="font-[var(--font-mono)] text-[11px] font-semibold tracking-[1px] text-[var(--fg-secondary)]">
+            <span className="font-[var(--font-mono)] text-2xs font-semibold tracking-[1px] text-[var(--fg-secondary)]">
               RULES
             </span>
-            <span className="font-[var(--font-mono)] text-[11px] text-[var(--fg-tertiary)]">{rules.length}</span>
+            <span className="font-[var(--font-mono)] text-2xs text-[var(--fg-tertiary)]">{rules.length}</span>
             <div className="h-px flex-1 bg-[var(--border-subtle)]" />
           </div>
 
@@ -126,7 +126,7 @@ export function RoleEditor({ target, open, onClose, onApply, onEditYaml }: Props
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-[var(--font-mono)] text-[11px] font-semibold text-[var(--fg-secondary)]">
+                  <span className="font-[var(--font-mono)] text-2xs font-semibold text-[var(--fg-secondary)]">
                     Rule {i + 1}
                   </span>
                   <button
@@ -153,7 +153,7 @@ export function RoleEditor({ target, open, onClose, onApply, onEditYaml }: Props
           <button
             type="button"
             onClick={() => setRules((rs) => [...rs, blankRule()])}
-            className="flex items-center justify-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border-strong)] py-[10px] text-[12px] font-medium text-[var(--fg-secondary)] hover:bg-white/[0.04]"
+            className="flex items-center justify-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border-strong)] py-[10px] text-xs font-medium text-[var(--fg-secondary)] hover:bg-white/[0.04]"
           >
             <Plus className="size-[13px]" /> Add rule
           </button>

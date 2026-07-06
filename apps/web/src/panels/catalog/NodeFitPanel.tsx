@@ -45,9 +45,9 @@ export function NodeFitPanel({
       {/* Header + summary dot */}
       <div className="flex items-center" style={{ gap: 6 }}>
         <span
+          className="text-3xs"
           style={{
             fontFamily: "ui-monospace, monospace",
-            fontSize: 9,
             fontWeight: 600,
             letterSpacing: 0.5,
             color: FG_TERTIARY,
@@ -61,7 +61,7 @@ export function NodeFitPanel({
       </div>
 
       {fit.perNode.length === 0 ? (
-        <p style={{ fontSize: 11, color: FG_TERTIARY }}>
+        <p className="text-2xs" style={{ color: FG_TERTIARY }}>
           No nodes visible. Is the cluster reachable?
         </p>
       ) : (
@@ -100,9 +100,9 @@ function FitSummary({ fit }: { fit: FitResult }) {
         style={{ width: 6, height: 6, borderRadius: "50%", background: color }}
       />
       <span
+        className="text-3xs"
         style={{
           fontFamily: "ui-monospace, monospace",
-          fontSize: 10,
           fontWeight: 500,
           color,
         }}
@@ -143,9 +143,9 @@ function AnyNodeRow({
       )}
       <span className="flex flex-col" style={{ gap: 1 }}>
         <span
+          className="text-2xs"
           style={{
             fontFamily: "ui-monospace, monospace",
-            fontSize: 11,
             fontWeight: 600,
             color: FG_PRIMARY,
           }}
@@ -153,9 +153,9 @@ function AnyNodeRow({
           Any node
         </span>
         <span
+          className="text-3xs"
           style={{
             fontFamily: "ui-monospace, monospace",
-            fontSize: 9,
             color: FG_TERTIARY,
           }}
         >
@@ -223,9 +223,9 @@ function NodeFitCard({
           <Circle size={11} style={{ color: FG_TERTIARY, flexShrink: 0 }} aria-hidden />
         )}
         <span
+          className="text-2xs"
           style={{
             fontFamily: "ui-monospace, monospace",
-            fontSize: 11,
             fontWeight: 600,
             color: FG_PRIMARY,
           }}
@@ -235,9 +235,9 @@ function NodeFitCard({
         <span className="flex-1" />
         {isRecommended ? (
           <span
+            className="text-3xs"
             style={{
               fontFamily: "ui-monospace, monospace",
-              fontSize: 9,
               fontWeight: 600,
               color: ACCENT,
               background: ACCENT_DIM,
@@ -249,9 +249,9 @@ function NodeFitCard({
           </span>
         ) : reason ? (
           <span
+            className="text-3xs"
             style={{
               fontFamily: "ui-monospace, monospace",
-              fontSize: 9,
               color: FG_TERTIARY,
             }}
           >
@@ -323,9 +323,9 @@ function ResourceBar({
     <div className="flex flex-col" style={{ gap: 3 }}>
       <div className="flex items-center">
         <span
+          className="text-3xs"
           style={{
             fontFamily: "ui-monospace, monospace",
-            fontSize: 9,
             fontWeight: 600,
             color: FG_TERTIARY,
             width: 30,
@@ -335,9 +335,9 @@ function ResourceBar({
           {label}
         </span>
         <span
+          className="text-3xs"
           style={{
             fontFamily: "ui-monospace, monospace",
-            fontSize: 9,
             color: FG_SECONDARY,
           }}
         >
@@ -345,9 +345,9 @@ function ResourceBar({
         </span>
         <span className="flex-1" />
         <span
+          className="text-3xs"
           style={{
             fontFamily: "ui-monospace, monospace",
-            fontSize: 9,
             color: requestFits ? GREEN : RED,
           }}
         >

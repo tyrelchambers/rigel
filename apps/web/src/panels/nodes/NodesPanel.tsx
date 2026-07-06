@@ -6,6 +6,7 @@ import { handoffToChat } from "@/lib/chatHandoff";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { PanelHeader } from "@/panels/components/PanelHeader";
+import { PanelSearch } from "@/panels/components/PanelSearch";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { viewYaml } from "@/store/yamlViewer";
 import { useNodeMetrics, useNodeDisk, type ActionBlock, type NodeDiskItem } from "@/lib/api";
@@ -132,12 +133,11 @@ export default function NodesPanel() {
         count={shown !== total && search.trim() ? shown : total}
         loading={isLoading}
       >
-        <input
-          type="text"
+        <PanelSearch
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onValueChange={setSearch}
           placeholder="Search nodes…"
-          className="w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="w-56"
         />
       </PanelHeader>
 
@@ -268,15 +268,15 @@ function NodeCard({
           ) : (
             <ChevronRight className="size-3 shrink-0 text-muted-foreground" />
           )}
-          <span className="font-mono text-[13px] font-medium leading-none text-foreground">
+          <span className="font-mono text-xs font-medium leading-none text-foreground">
             {node.metadata.name}
           </span>
           <RoleChip role={nodeRole} />
           {cordoned && (
             <span
+              className="text-3xs"
               style={{
                 fontFamily: "ui-monospace, monospace",
-                fontSize: 9,
                 fontWeight: 600,
                 letterSpacing: 0.5,
                 textTransform: "uppercase",
@@ -291,11 +291,11 @@ function NodeCard({
           )}
           <span className="flex-1" />
           <span
+            className="text-2xs"
             style={{
               display: "inline-flex",
               alignItems: "center",
               gap: 5,
-              fontSize: 11,
               fontWeight: 600,
               color: ready ? "var(--status-running)" : "var(--status-failed)",
               background: ready ? "rgba(16, 185, 129, 0.12)" : "rgba(239, 68, 68, 0.12)",
@@ -371,9 +371,9 @@ function RoleChip({ role: r }: { role: "control-plane" | "worker" }) {
   const color = r === "control-plane" ? "var(--accent-primary)" : "var(--fg-secondary)";
   return (
     <span
+      className="text-3xs"
       style={{
         fontFamily: "ui-monospace, monospace",
-        fontSize: 9,
         fontWeight: 600,
         letterSpacing: 0.5,
         textTransform: "uppercase",
@@ -410,8 +410,8 @@ function NodeUsageBar({
     <div className="min-w-0 flex-1">
       <div className="flex items-center gap-1">
         <span
+          className="text-3xs"
           style={{
-            fontSize: 10,
             fontWeight: 600,
             letterSpacing: 0.5,
             textTransform: "uppercase",
@@ -422,9 +422,9 @@ function NodeUsageBar({
         </span>
         <span className="flex-1" />
         <span
+          className="text-3xs"
           style={{
             fontFamily: "ui-monospace, monospace",
-            fontSize: 10,
             fontWeight: 500,
             color: hasMetrics ? color : "var(--fg-tertiary)",
           }}
@@ -436,10 +436,10 @@ function NodeUsageBar({
         <div style={{ height: "100%", width: `${width}%`, background: color, borderRadius: 3, transition: "width 0.4s ease" }} />
       </div>
       <div className="flex items-center gap-1" style={{ marginTop: 4 }}>
-        <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, fontWeight: 500, color: "var(--fg-primary)" }}>
+        <span className="text-2xs" style={{ fontFamily: "ui-monospace, monospace", fontWeight: 500, color: "var(--fg-primary)" }}>
           {primaryText}
         </span>
-        <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, color: "var(--fg-tertiary)" }}>
+        <span className="text-2xs" style={{ fontFamily: "ui-monospace, monospace", color: "var(--fg-tertiary)" }}>
           {secondaryText}
         </span>
       </div>
@@ -470,7 +470,7 @@ function NodeDetail({
       <div className="grid gap-4 md:grid-cols-2">
         {/* System Info */}
         <div className="space-y-2">
-          <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+          <h3 className="text-3xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">
             System Info
           </h3>
           <dl className="space-y-1 text-xs">
@@ -484,7 +484,7 @@ function NodeDetail({
 
         {/* Network & Storage */}
         <div className="space-y-2">
-          <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+          <h3 className="text-3xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">
             Network &amp; Storage
           </h3>
           <dl className="space-y-1 text-xs">
@@ -501,7 +501,7 @@ function NodeDetail({
       {/* Live usage from metrics-server / kubelet (optional) */}
       {(cpuUsedCores !== undefined || memUsedBytes !== undefined || disk !== undefined) && (
         <div className="space-y-2">
-          <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+          <h3 className="text-3xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">
             Live Usage
           </h3>
           <dl className="space-y-1 text-xs">
@@ -522,7 +522,7 @@ function NodeDetail({
       {pressure.length > 0 && (
         <div className="space-y-2">
           <h3
-            className="text-[9px] font-semibold uppercase tracking-[0.05em]"
+            className="text-3xs font-semibold uppercase tracking-[0.05em]"
             style={{ color: "var(--status-pending)" }}
           >
             Pressure

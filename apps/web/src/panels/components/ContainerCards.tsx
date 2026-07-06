@@ -55,14 +55,14 @@ export function ContainerCards({ containers }: { containers: ContainerSummary[] 
             <Box className="size-3 shrink-0 text-muted-foreground" />
             <span className="font-mono font-medium text-primary">{c.name}</span>
             {c.ports.length > 0 && (
-              <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+              <span className="ml-auto font-mono text-3xs text-muted-foreground">
                 {c.ports.map((p) => `:${p}`).join(" ")}
               </span>
             )}
           </div>
           {/* Body: image + resource cells */}
           <div className="space-y-2 px-2.5 py-2">
-            <div className="font-mono text-[11px] text-muted-foreground break-all">{c.image}</div>
+            <div className="font-mono text-2xs text-muted-foreground break-all">{c.image}</div>
             <div className="grid grid-cols-2 gap-1.5">
               <ResourceCell icon={<Cpu className="size-3 shrink-0 text-muted-foreground" />} label="CPU" req={c.cpuReq} lim={c.cpuLim} />
               <ResourceCell icon={<MemoryStick className="size-3 shrink-0 text-muted-foreground" />} label="MEM" req={c.memReq} lim={c.memLim} />
@@ -92,8 +92,8 @@ function ResourceCell({
       style={{ background: "var(--surface-sunken)", border: "1px solid #26272B" }}
     >
       {icon}
-      <span className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{label}</span>
-      <span className="ml-auto font-mono text-[11px] text-foreground/90 tabular-nums">
+      <span className="text-3xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">{label}</span>
+      <span className="ml-auto font-mono text-2xs text-foreground/90 tabular-nums">
         {req ?? "—"} <span className="text-muted-foreground">→</span> {lim ?? "—"}
       </span>
     </div>

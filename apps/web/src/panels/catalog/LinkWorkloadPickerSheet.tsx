@@ -157,7 +157,7 @@ export function LinkWorkloadPickerSheet({
                   >
                     <span className="font-mono text-xs">{c.name}</span>
                     {c.image && (
-                      <span className="font-mono text-[10px] text-muted-foreground">{c.image}</span>
+                      <span className="font-mono text-3xs text-muted-foreground">{c.image}</span>
                     )}
                   </button>
                 ))}
@@ -187,7 +187,7 @@ export function LinkWorkloadPickerSheet({
                   <div className="space-y-3">
                     {groups.map((g) => (
                       <div key={g.namespace}>
-                        <div className="mb-1 px-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <div className="mb-1 px-1 text-3xs font-medium uppercase tracking-wide text-muted-foreground">
                           {g.namespace}
                         </div>
                         <div className="overflow-hidden rounded-md border">
@@ -198,12 +198,12 @@ export function LinkWorkloadPickerSheet({
                               onClick={() => selectWorkload(w)}
                               className="flex w-full items-center gap-2 border-b px-2.5 py-1.5 text-left last:border-b-0 hover:bg-muted/50"
                             >
-                              <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                              <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-3xs text-muted-foreground">
                                 {KIND_BADGE[w.kind]}
                               </span>
                               <span className="font-mono text-xs">{w.name}</span>
                               {w.boundTo && w.boundTo !== app.id && (
-                                <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+                                <span className="ml-auto font-mono text-3xs text-muted-foreground">
                                   bound to {w.boundTo}
                                 </span>
                               )}

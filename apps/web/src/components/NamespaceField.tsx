@@ -27,7 +27,7 @@ export function NamespaceField({ value, onChange, disabled, className, ariaLabel
         disabled={disabled}
         aria-label={ariaLabel}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full appearance-none rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] py-[9px] pl-[11px] pr-8 text-[12.5px] text-[var(--fg-primary)] outline-none"
+        className="w-full appearance-none rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] py-[9px] pl-[11px] pr-8 text-xs text-[var(--fg-primary)] outline-none"
       >
         {options.map((ns) => (
           <option key={ns} value={ns}>

@@ -17,6 +17,7 @@ import { viewYaml } from "@/store/yamlViewer";
 import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { PanelHeader } from "@/panels/components/PanelHeader";
+import { PanelSearch } from "@/panels/components/PanelSearch";
 import type { StatusBadgeVariant } from "@/panels/components/StatusBadge";
 import type { ActionBlock } from "@/lib/api";
 import {
@@ -232,12 +233,11 @@ export default function RightSizingPanel() {
         count={filtered.length}
         loading={loading}
       >
-        <input
-          type="text"
+        <PanelSearch
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onValueChange={setSearch}
           placeholder="Search name or namespace…"
-          className="w-64 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="w-64"
         />
       </PanelHeader>
 
@@ -283,7 +283,7 @@ export default function RightSizingPanel() {
         <span className="flex-1" />
         {sourceOptions.length > 0 && (
           <>
-            <span className="whitespace-nowrap" style={{ fontFamily: "ui-monospace, monospace", fontSize: 10, color: "var(--fg-tertiary)" }}>
+            <span className="whitespace-nowrap text-3xs" style={{ fontFamily: "ui-monospace, monospace", color: "var(--fg-tertiary)" }}>
               Source
             </span>
             <select
@@ -341,7 +341,7 @@ export default function RightSizingPanel() {
               <p className="text-sm font-medium" style={{ color: "var(--fg-secondary)" }}>
                 No metrics backend connected
               </p>
-              <p className="mx-auto mt-1 max-w-md" style={{ fontSize: 11 }}>
+              <p className="mx-auto mt-1 max-w-md text-2xs">
                 Right-sizing reads 30 days of usage from a Prometheus or VictoriaMetrics store.
                 Install a lightweight one in a click — it scrapes container usage and keeps the history.
               </p>
@@ -361,10 +361,10 @@ export default function RightSizingPanel() {
           >
             <Hourglass className="mt-0.5 size-4 shrink-0" style={{ color: "var(--accent-primary)" }} />
             <div>
-              <div className="font-medium" style={{ color: "#d4b8f0", fontSize: 12 }}>
+              <div className="font-medium text-xs" style={{ color: "#d4b8f0" }}>
                 Collecting usage history — recommendations need ~{MIN_HOURS}h of data
               </div>
-              <div style={{ fontSize: 11, color: "var(--fg-tertiary)", marginTop: 1 }}>
+              <div className="text-2xs" style={{ color: "var(--fg-tertiary)", marginTop: 1 }}>
                 Reading from {sourceLabel}, which scrapes continuously. So far: {maxHours}h of{" "}
                 {MIN_HOURS}h. Verdicts appear automatically once there's enough.
               </div>
@@ -377,7 +377,7 @@ export default function RightSizingPanel() {
           <div className="flex flex-col items-center gap-2 py-12 text-center" style={{ color: "var(--fg-tertiary)" }}>
             <Gauge className="size-8" />
             <p className="text-sm font-medium">No workloads to analyze</p>
-            <p style={{ fontSize: 11 }}>Nothing matches the current namespace or search.</p>
+            <p className="text-2xs">Nothing matches the current namespace or search.</p>
           </div>
         )}
 
@@ -440,9 +440,9 @@ export default function RightSizingPanel() {
 
               {/* Namespace chip */}
               <span
+                className="text-3xs"
                 style={{
                   fontFamily: "ui-monospace, monospace",
-                  fontSize: 10,
                   color: "var(--fg-tertiary)",
                   background: "var(--surface-sunken)",
                   padding: "1px 5px",
@@ -463,9 +463,9 @@ export default function RightSizingPanel() {
               {/* Reclaim hint */}
               {w.reclaimableMemBytes > 0 && (
                 <span
+                  className="text-3xs"
                   style={{
                     fontFamily: "ui-monospace, monospace",
-                    fontSize: 10,
                     color: "var(--status-pending)",
                     whiteSpace: "nowrap",
                   }}
@@ -547,8 +547,8 @@ function ContainerDetail({
           variant={verdictBadgeVariant(result.verdict)}
         />
         <span
-          className="ml-auto font-mono"
-          style={{ fontSize: 10, color: "var(--fg-tertiary)", whiteSpace: "nowrap" }}
+          className="ml-auto font-mono text-3xs"
+          style={{ color: "var(--fg-tertiary)", whiteSpace: "nowrap" }}
         >
           {insufficient
             ? `${result.hoursCovered}h/${MIN_HOURS}h`
@@ -557,34 +557,33 @@ function ContainerDetail({
       </div>
 
       {/* Rationale */}
-      <p className="mt-1" style={{ fontSize: 11, color: "var(--fg-tertiary)" }}>
+      <p className="mt-1 text-2xs" style={{ color: "var(--fg-tertiary)" }}>
         {result.rationale}
       </p>
 
       {/* Resource table: current → recommended, observed */}
       {hasSuggestion && (
         <div
-          className="mt-2 grid items-center gap-x-3 gap-y-1"
+          className="mt-2 grid items-center gap-x-3 gap-y-1 text-2xs"
           style={{
             gridTemplateColumns: "auto 1fr auto 1fr 1.4fr",
-            fontSize: 11,
           }}
         >
           {/* Column headers */}
           <span />
-          <span style={{ color: "var(--fg-tertiary)", fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          <span className="text-3xs" style={{ color: "var(--fg-tertiary)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
             req / limit
           </span>
           <span />
-          <span style={{ color: "var(--fg-tertiary)", fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          <span className="text-3xs" style={{ color: "var(--fg-tertiary)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
             recommended
           </span>
-          <span style={{ color: "var(--fg-tertiary)", fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          <span className="text-3xs" style={{ color: "var(--fg-tertiary)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
             observed
           </span>
 
           {/* CPU row */}
-          <span style={{ fontWeight: 600, color: "var(--fg-tertiary)", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.05em" }}>CPU</span>
+          <span className="text-3xs" style={{ fontWeight: 600, color: "var(--fg-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>CPU</span>
           <span className="font-mono" style={{ color: "var(--fg-secondary)" }}>
             {fmtCpu(result.cpuRequest)} / {fmtCpu(result.cpuLimit)}
           </span>
@@ -597,7 +596,7 @@ function ContainerDetail({
           </span>
 
           {/* MEM row */}
-          <span style={{ fontWeight: 600, color: "var(--fg-tertiary)", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.05em" }}>MEM</span>
+          <span className="text-3xs" style={{ fontWeight: 600, color: "var(--fg-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>MEM</span>
           <span className="font-mono" style={{ color: "var(--fg-secondary)" }}>
             {fmtMem(result.memRequest)} / {fmtMem(result.memLimit)}
           </span>

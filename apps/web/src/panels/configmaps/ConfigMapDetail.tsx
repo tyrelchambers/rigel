@@ -75,15 +75,15 @@ export function ConfigMapDetail({
       <div className="flex gap-3">
         <MetaCard label="KEYS">
           <div className="flex items-baseline gap-1.5">
-            <span className="text-[18px] font-bold leading-none text-foreground">{total}</span>
-            <span className="text-[13px] text-[var(--fg-tertiary)]">{total === 1 ? "key" : "keys"}</span>
+            <span className="text-lg font-bold leading-none text-foreground">{total}</span>
+            <span className="text-xs text-[var(--fg-tertiary)]">{total === 1 ? "key" : "keys"}</span>
           </div>
         </MetaCard>
 
         <MetaCard label="AGE">
           <div className="flex items-center gap-[7px]">
             <Calendar className="size-[13px] text-[var(--fg-tertiary)]" />
-            <span className="text-[14px] text-[var(--fg-secondary)]">
+            <span className="text-sm text-[var(--fg-secondary)]">
               {humanAge(configMap.metadata.creationTimestamp)}
             </span>
           </div>
@@ -96,7 +96,7 @@ export function ConfigMapDetail({
               style={{ background: namespaceDotColor(namespace ?? "—") }}
               aria-hidden
             />
-            <span className="font-mono text-[13px] text-[var(--fg-secondary)]">{namespace ?? "—"}</span>
+            <span className="font-mono text-xs text-[var(--fg-secondary)]">{namespace ?? "—"}</span>
           </div>
         </MetaCard>
       </div>
@@ -149,7 +149,7 @@ export function ConfigMapDetail({
           Delete
         </ManageButton>
       </div>
-      {err && <p className="font-mono text-[11px] text-[var(--status-failed)]">{err}</p>}
+      {err && <p className="font-mono text-2xs text-[var(--status-failed)]">{err}</p>}
 
       <ConfirmSheet action={pendingAction} open={!!pendingAction} onClose={() => setPendingAction(null)} />
     </div>
@@ -177,7 +177,7 @@ function KeyCard({ configMap, keyName }: { configMap: ConfigMap; keyName: string
       <div className="overflow-hidden rounded-md border bg-[var(--surface-elevated)] border-[var(--border-subtle)]">
         <KeyHeader icon={FileArchive} name={keyName} bytes={bytes} badge={<KindBadge kind="binary" />} />
         <div className="bg-[var(--surface-sunken)] px-[16px] py-[14px]">
-          <span className="font-mono text-[12.5px] text-[var(--fg-tertiary)]">{`<binary data · ${humanBytes(bytes)}>`}</span>
+          <span className="font-mono text-xs text-[var(--fg-tertiary)]">{`<binary data · ${humanBytes(bytes)}>`}</span>
         </div>
         <KeyFooter left={`BINARY · ${humanBytes(bytes)}`} />
       </div>
@@ -207,7 +207,7 @@ function KeyCard({ configMap, keyName }: { configMap: ConfigMap; keyName: string
             ) : (
               <Copy className="size-[13px]" />
             )}
-            <span className="text-[12px]">{copied ? "Copied" : "Copy"}</span>
+            <span className="text-xs">{copied ? "Copied" : "Copy"}</span>
           </button>
         }
       />
@@ -219,11 +219,11 @@ function KeyCard({ configMap, keyName }: { configMap: ConfigMap; keyName: string
             const pem = line.includes("-----BEGIN") || line.includes("-----END");
             return (
               <div key={i} className="flex items-center gap-[14px]">
-                <span className="w-[22px] shrink-0 text-right font-mono text-[11.5px] text-[var(--fg-tertiary)]">
+                <span className="w-[22px] shrink-0 text-right font-mono text-2xs text-[var(--fg-tertiary)]">
                   {i + 1}
                 </span>
                 <span
-                  className={`select-text whitespace-pre font-mono text-[12.5px] ${
+                  className={`select-text whitespace-pre font-mono text-xs ${
                     pem ? "font-semibold text-[var(--accent-primary)]" : "text-[var(--fg-secondary)]"
                   }`}
                 >
@@ -256,8 +256,8 @@ function KeyHeader({
   return (
     <div className="flex items-center gap-[9px] border-b px-[14px] py-[10px] bg-[var(--surface-elevated)] border-[var(--border-subtle)]">
       <Icon className="size-[15px] text-[var(--fg-secondary)]" />
-      <span className="select-text font-mono text-[13.5px] font-semibold text-foreground">{name}</span>
-      <span className="rounded-sm bg-white/[0.05] px-[7px] py-[2px] font-mono text-[11px] text-[var(--fg-tertiary)]">
+      <span className="select-text font-mono text-sm font-semibold text-foreground">{name}</span>
+      <span className="rounded-sm bg-white/[0.05] px-[7px] py-[2px] font-mono text-2xs text-[var(--fg-tertiary)]">
         {humanBytes(bytes)}
       </span>
       {badge}
@@ -270,8 +270,8 @@ function KeyHeader({
 function KeyFooter({ left, right }: { left: string; right?: string }) {
   return (
     <div className="flex items-center justify-between border-t px-[14px] py-[8px] bg-[var(--surface-elevated)] border-[var(--border-subtle)]">
-      <span className="font-mono text-[11px] text-[var(--fg-tertiary)]">{left}</span>
-      {right && <span className="font-mono text-[11px] text-[var(--fg-tertiary)]">{right}</span>}
+      <span className="font-mono text-2xs text-[var(--fg-tertiary)]">{left}</span>
+      {right && <span className="font-mono text-2xs text-[var(--fg-tertiary)]">{right}</span>}
     </div>
   );
 }
@@ -300,7 +300,7 @@ function ManageButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center gap-[7px] rounded-md border px-[14px] py-[8px] text-[13px] font-semibold transition-colors disabled:opacity-60 ${toneClass}`}
+      className={`inline-flex items-center gap-[7px] rounded-md border px-[14px] py-[8px] text-xs font-semibold transition-colors disabled:opacity-60 ${toneClass}`}
     >
       <Icon className="size-[14px]" aria-hidden />
       {children}

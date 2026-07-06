@@ -63,13 +63,13 @@ export function SuggestedAlertList({ alerts, namespace }: Props) {
               type="button"
               disabled={saved || action.isPending}
               onClick={() => handleSave(alert, i)}
+              className="text-xs"
               style={{
                 color,
                 background: bg,
                 border: `1px solid ${border}`,
                 borderRadius: "4px",
                 padding: "7px 10px",
-                fontSize: "12px",
                 fontWeight: 600,
                 cursor: saved || action.isPending ? "default" : "pointer",
                 width: "100%",
@@ -107,9 +107,9 @@ export function SuggestedAlertList({ alerts, namespace }: Props) {
             </button>
             {err && (
               <p
+                className="text-2xs"
                 style={{
                   marginTop: "2px",
-                  fontSize: "11px",
                   color: "var(--status-failed)",
                   paddingLeft: "4px",
                 }}

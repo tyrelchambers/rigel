@@ -27,7 +27,7 @@ function Divider() {
 function InlineStat({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <span className="flex items-center gap-1.5 whitespace-nowrap">
-      <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--fg-tertiary)]">
+      <span className="font-mono text-2xs uppercase tracking-[0.05em] text-[var(--fg-tertiary)]">
         {label}
       </span>
       {children}
@@ -37,7 +37,7 @@ function InlineStat({ label, children }: { label: string; children: React.ReactN
 
 // A settled stat value (mono, colour-coded).
 function StatValue({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <span className={`font-mono text-[15px] font-semibold ${className}`}>{children}</span>;
+  return <span className={`font-mono text-base font-semibold ${className}`}>{children}</span>;
 }
 
 /** Timer-icon token group, right-aligned. */
@@ -45,7 +45,7 @@ function TokenGroup({ children }: { children: React.ReactNode }) {
   return (
     <span className="flex items-center gap-2 whitespace-nowrap">
       <Timer className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />
-      <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--fg-tertiary)]">
+      <span className="font-mono text-2xs uppercase tracking-[0.05em] text-[var(--fg-tertiary)]">
         Token
       </span>
       {children}
@@ -92,7 +92,7 @@ export function StatusStrip() {
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
           <span className="flex items-center gap-2">
             <span className="size-2 shrink-0 rounded-full bg-[var(--fg-tertiary)]" />
-            <span className="text-[15px] font-semibold text-[var(--fg-tertiary)]">Not installed</span>
+            <span className="text-base font-semibold text-[var(--fg-tertiary)]">Not installed</span>
           </span>
           <Divider />
           {stats.map((label) => (
@@ -118,7 +118,7 @@ export function StatusStrip() {
             }`}
           />
           <span
-            className={`text-[15px] font-semibold ${
+            className={`text-base font-semibold ${
               d.enabled ? "text-[var(--status-running)]" : "text-[var(--fg-tertiary)]"
             }`}
           >

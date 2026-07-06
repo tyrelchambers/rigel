@@ -169,7 +169,7 @@ function ValidationResult({ state, yaml }: { state: { pending: boolean; result?:
               <Layers className="size-3 shrink-0" style={{ color: "var(--accent-primary)" }} />
               <span className="shrink-0 font-semibold" style={{ color: "var(--accent-primary)" }}>{r.kind}</span>
               <span className="truncate text-foreground/90">{r.name || "—"}</span>
-              {r.namespace && <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">{r.namespace}</span>}
+              {r.namespace && <span className="ml-auto shrink-0 text-3xs text-muted-foreground">{r.namespace}</span>}
             </li>
           ))}
         </ul>

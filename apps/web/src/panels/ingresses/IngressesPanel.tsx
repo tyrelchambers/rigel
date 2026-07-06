@@ -12,6 +12,7 @@ import type { ActionBlock } from "@/lib/api";
 import { TagPill } from "@/panels/components/TagPill";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { PanelHeader } from "@/panels/components/PanelHeader";
+import { PanelSearch } from "@/panels/components/PanelSearch";
 import { RelatedResources } from "@/panels/components/RelatedResources";
 import { useFocusRow } from "@/panels/components/useFocusRow";
 import type { Ingress } from "./types";
@@ -96,12 +97,11 @@ export default function IngressesPanel() {
         count={shown}
         loading={isLoading}
       >
-        <input
-          type="text"
+        <PanelSearch
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onValueChange={setSearch}
           placeholder="Search ingresses…"
-          className="w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="w-56"
         />
       </PanelHeader>
 
@@ -159,9 +159,9 @@ export default function IngressesPanel() {
                   </button>
 
                   <span
+                    className="text-3xs"
                     style={{
                       fontFamily: "ui-monospace, monospace",
-                      fontSize: 10,
                       color: "var(--fg-tertiary)",
                       background: "var(--surface-sunken)",
                       padding: "1px 5px",
@@ -177,11 +177,11 @@ export default function IngressesPanel() {
 
                   {tls && (
                     <span
+                      className="text-3xs"
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
                         gap: 3,
-                        fontSize: 10,
                         fontWeight: 600,
                         color: "var(--status-running)",
                         background: "rgba(16, 185, 129, 0.13)",
@@ -271,7 +271,7 @@ function IngressDetail({ ingress, onEdit }: { ingress: Ingress; onEdit: () => vo
 
       {/* ROUTES */}
       <div className="space-y-1">
-        <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+        <h3 className="text-3xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">
           Routes ({routes.length})
         </h3>
         {routes.length === 0 ? (
@@ -298,7 +298,7 @@ function IngressDetail({ ingress, onEdit }: { ingress: Ingress; onEdit: () => vo
       {/* TLS (only when present) */}
       {tlsEntries.length > 0 && (
         <div className="space-y-1">
-          <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+          <h3 className="text-3xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">
             TLS
           </h3>
           <ul className="space-y-0.5 text-xs font-mono" style={{ color: "var(--fg-secondary)" }}>
@@ -316,7 +316,7 @@ function IngressDetail({ ingress, onEdit }: { ingress: Ingress; onEdit: () => vo
 
       {/* DETAILS: class + external address */}
       <div className="space-y-1">
-        <h3 className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+        <h3 className="text-3xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">
           Details
         </h3>
         <dl

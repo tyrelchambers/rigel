@@ -1,13 +1,10 @@
 /**
  * PanelHeader — the unified header used by every list panel.
  *
- * A single full-bleed band, left-aligned, with one bottom border: the panel
- * title, an optional "?" tooltip describing the panel, the item-count chip,
- * a loading spinner, and right-aligned actions. Namespace selection lives in
- * the global header now, so this header no longer carries a namespace row.
- *
- * Panels render this as the fixed top of a full-height column, with the list
- * scrolling underneath, so the header stays put.
+ * Reproduces the "Subpanel Header" design: a bold title, an optional help
+ * tooltip, a mono count pill, a loading spinner, and a right-aligned slot for
+ * search + actions. Rendered as a full-bleed band (one bottom border) that
+ * anchors the fixed top of a panel while its list scrolls underneath.
  */
 import { Loader } from "@/components/Loader";
 import { InfoTooltip } from "@/components/InfoTooltip";
@@ -25,30 +22,17 @@ interface PanelHeaderProps {
 
 export function PanelHeader({ title, subtitle, count, loading, children }: PanelHeaderProps) {
   return (
-    <div
-      style={{ background: "var(--surface-elevated)", borderBottom: "1px solid #26272B", flexShrink: 0 }}
-    >
-      <div className="flex items-center gap-2 px-4 py-2">
-        <span className="text-sm font-semibold leading-tight">{title}</span>
+    <div className="flex-shrink-0 border-b border-[var(--border-subtle)] bg-card">
+      <div className="flex items-center gap-[9px] px-5 py-3">
+        <h1 className="font-heading text-lg leading-[1.1] font-semibold tracking-[-0.3px] text-foreground">{title}</h1>
         {subtitle && <InfoTooltip label={subtitle} />}
         {count != null && (
-          <span
-            style={{
-              fontFamily: "ui-monospace, monospace",
-              fontSize: 11,
-              color: "var(--fg-tertiary)",
-              background: "var(--border-subtle)",
-              padding: "2px 6px",
-              borderRadius: 4,
-            }}
-          >
+          <span className="rounded-[4px] border border-[var(--border-subtle)] bg-white/5 px-[9px] py-[2px] font-mono text-xs font-semibold text-muted-foreground">
             {count}
           </span>
         )}
-        {loading && (
-          <Loader size={16} className="text-muted-foreground" label="loading" />
-        )}
-        {children && <div className="ml-auto flex items-center gap-2">{children}</div>}
+        {loading && <Loader size={16} className="text-muted-foreground" label="loading" />}
+        {children && <div className="ml-auto flex items-center gap-2.5">{children}</div>}
       </div>
     </div>
   );

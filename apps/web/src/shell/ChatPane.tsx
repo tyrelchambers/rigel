@@ -656,8 +656,8 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
             <RigelMark size={18} />
           </span>
           <span
+            className="text-xs"
             style={{
-              fontSize: 13,
               fontWeight: 600,
               color: "var(--fg-primary)",
               whiteSpace: "nowrap",
@@ -701,10 +701,10 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
 
           {shortId && (
             <span
+              className="text-3xs"
               style={{
                 marginLeft: 4,
                 fontFamily: "ui-monospace, monospace",
-                fontSize: 10,
                 color: "var(--fg-tertiary)",
                 background: "var(--surface-sunken)",
                 padding: "2px 6px",
@@ -782,12 +782,12 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
         {/* ── "connect an agent" hint (above the composer) ─────────────────── */}
         {notConfigured && (
           <div
+            className="text-xs"
             style={{
               display: "flex",
               alignItems: "center",
               gap: 8,
               padding: "8px 14px 0",
-              fontSize: 12,
               color: "var(--fg-secondary)",
               flexShrink: 0,
             }}

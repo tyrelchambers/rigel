@@ -80,7 +80,7 @@ export function ActivityCard({ e }: { e: AssistantAuditEntry }) {
         </div>
         <div className="flex shrink-0 items-center gap-3">
           {e.tier && (
-            <span className="inline-flex items-center gap-1.5 rounded bg-white/[0.05] px-2 py-0.5 font-mono text-[10.5px] tracking-[0.03em] text-[var(--fg-tertiary)] uppercase">
+            <span className="inline-flex items-center gap-1.5 rounded bg-white/[0.05] px-2 py-0.5 font-mono text-3xs tracking-[0.03em] text-[var(--fg-tertiary)] uppercase">
               <span className="size-1.5 rounded-full bg-[var(--fg-tertiary)]" />
               {e.tier}
             </span>
@@ -110,10 +110,10 @@ export function ActivityCard({ e }: { e: AssistantAuditEntry }) {
 
           {e.command && (
             <div className="flex items-center gap-2.5 rounded border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3 py-2">
-              <span className="shrink-0 font-mono text-[12.5px] font-semibold text-[var(--accent-primary)]">
+              <span className="shrink-0 font-mono text-xs font-semibold text-[var(--accent-primary)]">
                 $
               </span>
-              <code className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-[var(--fg-secondary)]">
+              <code className="min-w-0 flex-1 truncate font-mono text-xs text-[var(--fg-secondary)]">
                 {e.command}
               </code>
               <CopyButton text={e.command} />
@@ -123,7 +123,7 @@ export function ActivityCard({ e }: { e: AssistantAuditEntry }) {
           {e.detail && (
             <p
               className={cn(
-                "font-mono text-[12.5px] text-[var(--fg-secondary)]",
+                "font-mono text-xs text-[var(--fg-secondary)]",
                 isOpen ? "whitespace-pre-wrap" : "line-clamp-2",
               )}
             >
@@ -133,13 +133,13 @@ export function ActivityCard({ e }: { e: AssistantAuditEntry }) {
 
           {e.analysis && (
             <div className="flex flex-col gap-2">
-              <span className="inline-flex w-fit items-center gap-1.5 rounded bg-[var(--accent-primary)]/[0.08] px-2 py-0.5 font-mono text-[10px] tracking-[0.05em] text-[var(--accent-primary)] uppercase">
+              <span className="inline-flex w-fit items-center gap-1.5 rounded bg-[var(--accent-primary)]/[0.08] px-2 py-0.5 font-mono text-3xs tracking-[0.05em] text-[var(--accent-primary)] uppercase">
                 <Sparkles className="size-2.5" />
                 AI analysis
               </span>
               <p
                 className={cn(
-                  "text-[13px] leading-[1.55] text-[var(--fg-secondary)]",
+                  "text-xs leading-[1.55] text-[var(--fg-secondary)]",
                   !isOpen && "line-clamp-3",
                 )}
               >
@@ -152,7 +152,7 @@ export function ActivityCard({ e }: { e: AssistantAuditEntry }) {
             <button
               type="button"
               onClick={() => toggleExpanded(id)}
-              className="w-fit text-[12.5px] font-medium text-[var(--accent-primary)] hover:underline"
+              className="w-fit text-xs font-medium text-[var(--accent-primary)] hover:underline"
             >
               Show more
             </button>
@@ -163,7 +163,7 @@ export function ActivityCard({ e }: { e: AssistantAuditEntry }) {
               type="button"
               disabled={working}
               onClick={() => openRevert(backup, e.proposal ?? e.incident)}
-              className="inline-flex w-fit items-center gap-1.5 rounded-md border border-[var(--border-strong)] px-3 py-1.5 text-[13px] font-semibold text-[var(--fg-secondary)] transition-colors hover:text-[var(--fg-primary)] disabled:opacity-50"
+              className="inline-flex w-fit items-center gap-1.5 rounded-md border border-[var(--border-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--fg-secondary)] transition-colors hover:text-[var(--fg-primary)] disabled:opacity-50"
             >
               <Undo2 className="size-3.5" />
               Revert

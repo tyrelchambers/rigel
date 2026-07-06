@@ -71,8 +71,8 @@ export function ChatHistorySheet({ open, entries, onResume, onDelete, onClose }:
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderBottom: "1px solid #26272B" }}>
           <Clock size={14} style={{ color: "var(--accent-primary)" }} />
-          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-primary)" }}>Chat history</span>
-          <span style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 10, color: "var(--fg-tertiary)" }}>{entries.length}</span>
+          <span className="text-xs" style={{ fontWeight: 600, color: "var(--fg-primary)" }}>Chat history</span>
+          <span className="text-3xs" style={{ fontFamily: "var(--font-mono, monospace)", color: "var(--fg-tertiary)" }}>{entries.length}</span>
           <div style={{ flex: 1 }} />
           <button
             onClick={onClose}
@@ -91,7 +91,8 @@ export function ChatHistorySheet({ open, entries, onResume, onDelete, onClose }:
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search title or messages…"
-            style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "var(--fg-primary)", fontSize: 12, fontFamily: "var(--font-mono, monospace)" }}
+            className="text-xs"
+            style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "var(--fg-primary)", fontFamily: "var(--font-mono, monospace)" }}
           />
         </div>
 
@@ -99,10 +100,10 @@ export function ChatHistorySheet({ open, entries, onResume, onDelete, onClose }:
         {filtered.length === 0 ? (
           <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, color: "var(--fg-tertiary)" }}>
             <MessagesSquare size={30} style={{ color: "#3F4046" }} />
-            <div style={{ fontSize: 13, fontWeight: 500, color: "var(--fg-secondary)" }}>
+            <div className="text-xs" style={{ fontWeight: 500, color: "var(--fg-secondary)" }}>
               {entries.length === 0 ? "No saved chats yet" : "No matches"}
             </div>
-            <div style={{ fontSize: 12 }}>
+            <div className="text-xs">
               {entries.length === 0 ? "Conversations are saved once you send a message." : "Try a different search."}
             </div>
           </div>
@@ -126,12 +127,12 @@ export function ChatHistorySheet({ open, entries, onResume, onDelete, onClose }:
                 onMouseLeave={(ev) => (ev.currentTarget.style.borderColor = "#26272B")}
               >
                 <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 500, color: "var(--fg-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <div className="text-xs" style={{ fontWeight: 500, color: "var(--fg-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {e.title}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3 }}>
-                    <span style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 10, color: "var(--fg-tertiary)" }}>{ageDescription(e.updatedAt)}</span>
-                    <span style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 10, color: "var(--fg-tertiary)" }}>
+                    <span className="text-3xs" style={{ fontFamily: "var(--font-mono, monospace)", color: "var(--fg-tertiary)" }}>{ageDescription(e.updatedAt)}</span>
+                    <span className="text-3xs" style={{ fontFamily: "var(--font-mono, monospace)", color: "var(--fg-tertiary)" }}>
                       {e.messages.length} msg{e.messages.length === 1 ? "" : "s"}
                     </span>
                   </div>

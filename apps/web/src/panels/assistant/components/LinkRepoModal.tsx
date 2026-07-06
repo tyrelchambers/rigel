@@ -116,7 +116,7 @@ export function LinkRepoModal({
 
         <DialogBody>
           <div className="flex flex-col gap-4">
-            <p className="text-[13px] leading-[1.5] text-[var(--fg-secondary)]">
+            <p className="text-xs leading-[1.5] text-[var(--fg-secondary)]">
               Point Rigel at this project's GitHub repo. It creates a GitOps source (the repo mapping)
               and stamps the deployment so it can open fix PRs. It won't deploy from the repo unless
               you set that up separately.
@@ -141,13 +141,13 @@ export function LinkRepoModal({
 
             <div className="flex items-center gap-2 rounded-lg bg-[var(--accent-dim)] px-3 py-2.5">
               <Info className="size-3.5 shrink-0 text-[var(--accent-primary)]" />
-              <span className="text-[11px] text-[var(--fg-secondary)]">
+              <span className="text-2xs text-[var(--fg-secondary)]">
                 Writes a rigel-git-sources entry and annotates the live deployment. No redeploy.
               </span>
             </div>
 
             {link.error && (
-              <p className="font-mono text-[11px] text-[var(--status-failed)]">
+              <p className="font-mono text-2xs text-[var(--status-failed)]">
                 {link.error.message}
               </p>
             )}

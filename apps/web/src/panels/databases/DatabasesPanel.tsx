@@ -8,6 +8,7 @@ import { ListRow } from "@/panels/components/ListRow";
 import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { PanelHeader } from "@/panels/components/PanelHeader";
+import { PanelSearch } from "@/panels/components/PanelSearch";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
@@ -201,12 +202,11 @@ export default function DatabasesPanel() {
         count={filtered.length}
         loading={isLoading}
       >
-        <input
-          type="text"
+        <PanelSearch
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onValueChange={setSearch}
           placeholder="Search databases…"
-          className="w-56 rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+          className="w-56"
         />
       </PanelHeader>
 
@@ -304,9 +304,9 @@ export default function DatabasesPanel() {
 
               {/* Namespace chip */}
               <span
+                className="text-3xs"
                 style={{
                   fontFamily: "ui-monospace, monospace",
-                  fontSize: 10,
                   color: "var(--fg-tertiary)",
                   background: "var(--surface-sunken)",
                   padding: "1px 5px",
@@ -326,9 +326,9 @@ export default function DatabasesPanel() {
 
               {/* Phase text — dim */}
               <span
+                className="text-3xs"
                 style={{
                   fontFamily: "ui-monospace, monospace",
-                  fontSize: 10,
                   color: "var(--fg-tertiary)",
                   whiteSpace: "nowrap",
                   overflow: "hidden",
@@ -344,9 +344,9 @@ export default function DatabasesPanel() {
               {inst.image && (
                 <span
                   title={inst.image}
+                  className="text-3xs"
                   style={{
                     fontFamily: "ui-monospace, monospace",
-                    fontSize: 10,
                     color: "var(--fg-tertiary)",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -398,7 +398,7 @@ export default function DatabasesPanel() {
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex gap-3">
-      <span className="text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground w-28 shrink-0">
+      <span className="text-3xs font-semibold uppercase tracking-[0.05em] text-muted-foreground w-28 shrink-0">
         {label}
       </span>
       <div className="min-w-0 flex-1">{children}</div>
@@ -454,7 +454,7 @@ export function DatabaseDetail({
               onClick={item.enabled ? () => handleClick(item.action) : undefined}
               title={item.disabledReason ?? actionLabel(item.action)}
               className={
-                "rounded-sm border px-2 py-1 font-mono text-[11px] font-medium transition-colors " +
+                "rounded-sm border px-2 py-1 font-mono text-2xs font-medium transition-colors " +
                 (item.enabled
                   ? "border-border bg-muted/40 text-foreground hover:bg-muted"
                   : "cursor-not-allowed border-border/50 bg-muted/20 text-muted-foreground/50")
@@ -524,7 +524,7 @@ export function DatabaseDetail({
                 <span className="font-mono text-muted-foreground">{p.name}</span>
                 <StatusBadge label={p.phase} variant={phaseBadgeVariant(p.phase)} />
                 {p.isPrimary && (
-                  <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                  <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-3xs font-medium text-primary">
                     primary
                   </span>
                 )}

@@ -24,8 +24,8 @@ function ProviderTile({
       }}
     >
       {icon}
-      <span style={{ fontSize: 12, fontWeight: 600 }}>{label}</span>
-      {disabled ? <span style={{ fontSize: 10, color: "var(--fg-tertiary)" }}>Coming soon</span> : null}
+      <span className="text-xs" style={{ fontWeight: 600 }}>{label}</span>
+      {disabled ? <span className="text-3xs" style={{ color: "var(--fg-tertiary)" }}>Coming soon</span> : null}
     </button>
   );
 }

@@ -37,14 +37,14 @@ export function AgentCard({
     >
       <div className="flex flex-col" style={{ gap: 12 }}>
         <div className="flex items-start justify-between">
-          <span className="text-muted-foreground" style={{ fontSize: 12, fontWeight: 500 }}>
+          <span className="text-muted-foreground text-xs" style={{ fontWeight: 500 }}>
             {agent.vendor}
           </span>
           <span className="text-muted-foreground">
             <AgentGlyph id={agent.id} size={18} />
           </span>
         </div>
-        <span className="text-foreground" style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.15 }}>
+        <span className="text-foreground text-base" style={{ fontWeight: 700, lineHeight: 1.15 }}>
           {agent.label}
         </span>
       </div>
@@ -55,10 +55,10 @@ export function AgentCard({
             style={{ width: 7, height: 7, borderRadius: "50%", background: isActive ? ACTIVE : DOT[agent.connection] }}
           />
           <span
-            className={
-              isActive ? undefined : agent.connection === "comingSoon" ? "text-muted-foreground" : "text-foreground"
-            }
-            style={{ fontSize: 12, fontWeight: 500, ...(isActive ? { color: ACTIVE } : {}) }}
+            className={`text-xs ${
+              isActive ? "" : agent.connection === "comingSoon" ? "text-muted-foreground" : "text-foreground"
+            }`}
+            style={{ fontWeight: 500, ...(isActive ? { color: ACTIVE } : {}) }}
           >
             {isActive ? "Active" : connectionLabel(agent.connection)}
           </span>
