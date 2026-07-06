@@ -370,7 +370,8 @@ export type AssistantAction =
   | "clearCredentialSource"
   | "reconcileCredentialAnnotations"
   | "getRbac"
-  | "setRbac";
+  | "setRbac"
+  | "installedContexts";
 
 export interface AssistantRoleSelection {
   provider: string;
@@ -494,7 +495,7 @@ export interface AssistantRequest {
   // @rigel/k8s serializePolicy), and which context(s) setRbac applies the
   // rendered ClusterRole to.
   policy?: string;
-  rbacTarget?: "active" | "all";
+  contexts?: string[];
 }
 
 /** Shape returned by the assistant route on success (stdout is present for read
@@ -1151,6 +1152,27 @@ export function useContexts() {
   return useQuery({
     queryKey: ["contexts"] as const,
     queryFn: fetchContexts,
+    staleTime: 30_000,
+  });
+}
+
+export interface InstalledContext {
+  name: string;
+  active: boolean;
+}
+
+async function fetchInstalledContexts(namespace: string): Promise<InstalledContext[]> {
+  const res = await postAssistant({ action: "installedContexts", namespace });
+  const parsed = JSON.parse(res.stdout || "{}") as { contexts?: InstalledContext[] };
+  return parsed.contexts ?? [];
+}
+
+/** Contexts with the assistant installed — for the Permissions editor's
+ *  "Save to all clusters" / "Copy to clusters" scopes. */
+export function useInstalledContexts(namespace: string) {
+  return useQuery({
+    queryKey: ["assistant-installed-contexts", namespace] as const,
+    queryFn: () => fetchInstalledContexts(namespace),
     staleTime: 30_000,
   });
 }
