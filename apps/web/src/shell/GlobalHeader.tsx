@@ -22,9 +22,16 @@ interface GlobalHeaderProps {
 }
 
 const DRAG = { WebkitAppRegion: "drag" } as unknown as React.CSSProperties;
-const NO_DRAG = { WebkitAppRegion: "no-drag" } as unknown as React.CSSProperties;
+const NO_DRAG = {
+  WebkitAppRegion: "no-drag",
+} as unknown as React.CSSProperties;
 
-export function GlobalHeader({ sidebarCollapsed, onToggleSidebar, onOpenSearch, onOpenAccount }: GlobalHeaderProps) {
+export function GlobalHeader({
+  sidebarCollapsed,
+  onToggleSidebar,
+  onOpenSearch,
+  onOpenAccount,
+}: GlobalHeaderProps) {
   return (
     <header
       style={{
@@ -34,7 +41,7 @@ export function GlobalHeader({ sidebarCollapsed, onToggleSidebar, onOpenSearch, 
         display: "flex",
         alignItems: "center",
         gap: 12,
-        paddingLeft: isMacDesktop ? 38 : 14,
+        paddingLeft: isMacDesktop ? 102 : 14,
         paddingRight: 14,
         background: "var(--surface-primary)",
         borderBottom: "1px solid var(--border-subtle)",
@@ -42,7 +49,12 @@ export function GlobalHeader({ sidebarCollapsed, onToggleSidebar, onOpenSearch, 
     >
       {/* Rigel brand mark */}
       <div
-        style={{ display: "flex", alignItems: "center", flexShrink: 0, color: "var(--fg-primary)" }}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          flexShrink: 0,
+          color: "var(--fg-primary)",
+        }}
       >
         <RigelMark size={22} />
       </div>
@@ -101,8 +113,15 @@ export function GlobalHeader({ sidebarCollapsed, onToggleSidebar, onOpenSearch, 
         }}
         className="hover:opacity-90 transition-opacity"
       >
-        <Search size={13} style={{ color: "var(--fg-tertiary)", flexShrink: 0 }} />
-        <span style={{ fontSize: 12, color: "var(--fg-tertiary)", fontWeight: 500 }}>Search…</span>
+        <Search
+          size={13}
+          style={{ color: "var(--fg-tertiary)", flexShrink: 0 }}
+        />
+        <span
+          style={{ fontSize: 12, color: "var(--fg-tertiary)", fontWeight: 500 }}
+        >
+          Search…
+        </span>
         <span
           style={{
             fontSize: 10,

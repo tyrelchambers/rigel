@@ -227,7 +227,7 @@ export default function App() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "row", height: "100vh", background: "var(--surface-primary)" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--surface-primary)" }}>
       {showOnboarding && <OnboardingWizard onClose={closeOnboarding} />}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <AccountModal
@@ -237,26 +237,23 @@ export default function App() {
         email={account?.email}
       />
 
-      {/* ── Cluster rail — far left, FULL window height (top of the window to
-          the bottom), Discord-style: the whole app lives to the right of it. ─ */}
-      <ClusterRail />
+      {/* ── Global header — full-width bar across the top of the window. ─────── */}
+      <GlobalHeader
+        sidebarCollapsed={sidebarCollapsed}
+        onToggleSidebar={toggleSidebar}
+        onOpenSearch={() => setPaletteOpen(true)}
+        onOpenAccount={() => setAccountOpen(true)}
+      />
 
-      {/* Everything right of the rail — header, main row, status bar — stacked. */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%" }}>
+      {/* ── Body row (below the header): cluster rail + nav + content + chat. ── */}
+      <div style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
 
-        {/* ── Global header — slim bar above the content (right of the rail) ── */}
-        <GlobalHeader
-          sidebarCollapsed={sidebarCollapsed}
-          onToggleSidebar={toggleSidebar}
-          onOpenSearch={() => setPaletteOpen(true)}
-          onOpenAccount={() => setAccountOpen(true)}
-        />
+        {/* ── Cluster rail — far left, Discord-style. Both navs sit under the
+            full-width header now. ──────────────────────────────────────────── */}
+        <ClusterRail />
 
-        {/* ── Main row: NavStrip + content column + ChatPane ─────────────────── */}
-        <div style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
-
-          {/* ── Sidebar ──────────────────────────────────────────────────────── */}
-          <NavStrip collapsed={sidebarCollapsed} />
+        {/* ── Sidebar ──────────────────────────────────────────────────────── */}
+        <NavStrip collapsed={sidebarCollapsed} />
 
         {/* ── Content column ───────────────────────────────────────────────── */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, background: "var(--surface-primary)" }}>
@@ -320,11 +317,10 @@ export default function App() {
           <ChatPane handleRef={chatHandleRef} />
         </div>
 
-      </div>
+      </div>{/* end body row */}
 
-        {/* ── StatusBar — bottom of the content column (right of the rail) ──── */}
-        <StatusBar chatHidden={chatHidden} onToggleChat={toggleChat} />
-      </div>{/* end content column — everything to the right of the cluster rail */}
+      {/* ── StatusBar — full-width footer across the bottom of the window. ──── */}
+      <StatusBar chatHidden={chatHidden} onToggleChat={toggleChat} />
 
       {/* Global read-only YAML viewer (opened from any context menu). */}
       <ResourceYamlViewer />
