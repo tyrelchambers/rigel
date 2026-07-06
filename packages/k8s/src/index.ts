@@ -174,6 +174,7 @@ export {
   secretYAML,
   rbac,
   clusterRoleRules,
+  liveMatchesPolicy,
   configMaps,
   deployment,
   manifestYAML,

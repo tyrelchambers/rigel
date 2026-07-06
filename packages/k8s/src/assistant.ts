@@ -456,6 +456,32 @@ export function clusterRoleRules(policy: RbacPolicy = DEFAULT_POLICY): PolicyRul
   return [...BASELINE_RULES, ...policyToClusterRoleRules(subtractBaseline(policy))];
 }
 
+/** Expand rule objects into a set of `${apiGroup}|${resource}|${verb}` tuples,
+ *  defensively (live rules come straight from `kubectl get clusterrole -o json`). */
+function ruleTuples(rules: unknown[]): Set<string> {
+  const set = new Set<string>();
+  for (const r of rules) {
+    const rule = r as { apiGroups?: unknown; resources?: unknown; verbs?: unknown };
+    const groups = Array.isArray(rule.apiGroups) ? rule.apiGroups : [];
+    const resources = Array.isArray(rule.resources) ? rule.resources : [];
+    const verbs = Array.isArray(rule.verbs) ? rule.verbs : [];
+    for (const g of groups) for (const res of resources) for (const v of verbs) set.add(`${String(g)}|${String(res)}|${String(v)}`);
+  }
+  return set;
+}
+
+/** True when the live ClusterRole rules grant exactly what the stored policy
+ *  renders (baseline + policy). Order/grouping independent. The caller only
+ *  calls this with a non-null live rules array — a failed live read is never
+ *  reported as drift. */
+export function liveMatchesPolicy(appliedRules: unknown[], policy: RbacPolicy): boolean {
+  const live = ruleTuples(appliedRules);
+  const expected = ruleTuples(clusterRoleRules(policy));
+  if (live.size !== expected.size) return false;
+  for (const t of expected) if (!live.has(t)) return false;
+  return true;
+}
+
 /** ServiceAccount + ClusterRole + ClusterRoleBinding + namespaced Role/RoleBinding.
  *  Keep in sync with agent/manifests/rbac.yaml. The ClusterRole's rules are the
  *  non-editable BASELINE_RULES plus whatever `policy` grants (default

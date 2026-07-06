@@ -25,7 +25,7 @@ import {
   type RoleSelectionInput,
   type LimitsInput,
 } from "./assistant";
-import { rbac, clusterRoleRules, cell, CAPABILITIES, DEFAULT_POLICY, setCapability } from "./index";
+import { rbac, clusterRoleRules, liveMatchesPolicy, cell, CAPABILITIES, DEFAULT_POLICY, setCapability } from "./index";
 
 function config(overrides: Partial<AssistantInstallConfig> = {}): AssistantInstallConfig {
   return {
@@ -113,6 +113,24 @@ test("every baseline read cell is actually granted by clusterRoleRules(DEFAULT_P
   }
   const readCells = CAPABILITIES.find((c) => c.id === "read")!.cells;
   for (const c of readCells) expect(granted.has(c)).toBe(true);
+});
+
+describe("liveMatchesPolicy", () => {
+  test("true when live rules equal what the stored policy renders", () => {
+    const live = clusterRoleRules(DEFAULT_POLICY); // PolicyRule[] shape matches a live ClusterRole's rules
+    expect(liveMatchesPolicy(live, DEFAULT_POLICY)).toBe(true);
+  });
+
+  test("false when the live cluster grants something the policy does not", () => {
+    const drifted = setCapability(DEFAULT_POLICY, "deleteWorkloads", true);
+    const live = clusterRoleRules(drifted);
+    expect(liveMatchesPolicy(live, DEFAULT_POLICY)).toBe(false);
+  });
+
+  test("order and grouping independent", () => {
+    const live = [...clusterRoleRules(DEFAULT_POLICY)].reverse();
+    expect(liveMatchesPolicy(live, DEFAULT_POLICY)).toBe(true);
+  });
 });
 
 test("install namespace applied to namespaced objects and subjects", () => {
