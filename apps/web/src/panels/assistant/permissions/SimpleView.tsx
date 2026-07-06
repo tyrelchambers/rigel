@@ -26,12 +26,18 @@ export function SimpleView({
               </div>
               <p className="text-[12.5px] text-[var(--fg-tertiary)]">{cap.description}</p>
             </div>
-            <CapabilityToggle
-              state={state}
-              disabled={disabled}
-              label={cap.label}
-              onChange={(on) => onToggleCapability(cap.id, on)}
-            />
+            {cap.baseline ? (
+              <span className="shrink-0 rounded-full bg-[var(--accent-dim)] px-2.5 py-1 text-[11px] font-semibold text-[var(--accent-primary)]">
+                Always on
+              </span>
+            ) : (
+              <CapabilityToggle
+                state={state}
+                disabled={disabled}
+                label={cap.label}
+                onChange={(on) => onToggleCapability(cap.id, on)}
+              />
+            )}
           </div>
         );
       })}
@@ -57,7 +63,7 @@ function RiskChip({ risk }: { risk: Risk }) {
 
 /** The row's toggle. On/off render the shared Switch (green when on, gray when
  *  off); "partial" (some but not all of the capability's cells granted) renders
- *  a dash-marked indeterminate pill — clicking it grants the rest. */
+ *  a dash-marked indeterminate pill — clicking it clears the capability. */
 function CapabilityToggle({
   state,
   label,
@@ -77,7 +83,7 @@ function CapabilityToggle({
         aria-checked="mixed"
         aria-label={label}
         disabled={disabled}
-        onClick={() => onChange(true)}
+        onClick={() => onChange(false)}
         className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full bg-[var(--accent-dim)] p-0.5 outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-50"
       >
         <Minus className="mx-auto size-3 text-[var(--accent-primary)]" />
