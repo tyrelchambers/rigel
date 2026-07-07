@@ -1,0 +1,58 @@
+export interface ComposePort {
+  containerPort: number;
+  publishedPort?: number;
+}
+
+export interface ComposeVolume {
+  name: string;
+  mountPath: string;
+  kind: "named" | "bind";
+  source: string;
+}
+
+export interface ComposeService {
+  name: string;
+  image?: string;
+  ports: ComposePort[];
+  environment: Record<string, string>;
+  volumes: ComposeVolume[];
+  command?: string[];
+  replicas: number;
+  unsupported: string[];
+}
+
+export interface ComposeModel {
+  services: ComposeService[];
+  ignoredTopLevel: string[];
+}
+
+export type Severity = "info" | "warning";
+
+export interface Warning {
+  severity: Severity;
+  service?: string;
+  directive?: string;
+  message: string;
+}
+
+export interface CatalogHint {
+  service: string;
+  appId: string;
+  appName: string;
+}
+
+export interface ManifestDoc {
+  kind: string;
+  name: string;
+  yaml: string;
+}
+
+export interface ConversionResult {
+  manifests: ManifestDoc[];
+  warnings: Warning[];
+  catalogHints: CatalogHint[];
+}
+
+export interface ConvertOptions {
+  namespace: string;
+}
