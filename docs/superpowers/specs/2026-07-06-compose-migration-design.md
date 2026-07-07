@@ -108,6 +108,42 @@ Web panel: a light test that the panel wires input to the engine and hands the r
 
 Gate: typecheck + tests + build green.
 
+## Autofixes (v1, folded into this branch)
+
+Warnings become actionable. Fixes are deterministic and modeled as options on `convert()`, so applying a fix means re-running the conversion with an option flipped (idempotent, no in-place mutation). Nothing applies until the same ConfirmSheet.
+
+`ConvertOptions` gains a `fixes` object (all default off / `"none"`):
+
+```
+ConvertOptions {
+  namespace: string
+  fixes?: {
+    emitSecrets?: boolean                          // Secret manifests for secret-env
+    bindMountsToPvc?: boolean                       // host bind mounts -> PVCs
+    expose?: "none" | "loadbalancer" | "ingress"    // published ports
+    ingressHost?: string                            // required when expose === "ingress"
+    addWaitInit?: boolean                           // depends_on -> wait-for init containers
+  }
+}
+```
+
+Each fixable `Warning` gains an optional `fix`:
+
+```
+WarningFix { label: string, option: "emitSecrets" | "bindMountsToPvc" | "expose" | "addWaitInit" }
+```
+
+The four fixes:
+
+1. **Generate Secret** (`emitSecrets`) — for each service with secret-looking env, emit an Opaque `Secret` named `sanitizeName(service)` whose `stringData` carries those env keys with the values from the compose file (the container already references them via `secretKeyRef`). Suppresses that service's secret-env warnings.
+2. **Convert bind mount → PVC** (`bindMountsToPvc`) — for each host bind mount, emit an RWO 1Gi PVC named `<service>-<sanitize(mountPath)>` and add the matching `volumeMount` + `persistentVolumeClaim` volume to the Deployment. Suppresses the bind-mount warnings.
+3. **Expose** (`expose`) — `"loadbalancer"`: Services with published ports become `type: LoadBalancer`. `"ingress"` (with `ingressHost`): Services stay ClusterIP and one `Ingress` is emitted (host `ingressHost`, one Prefix rule per exposed service — path `/` when a single service is exposed, else `/<service>` — backed by that service's first published port). Either value suppresses the published-port warnings; `"ingress"` with no host is a no-op that keeps the warnings.
+4. **Add wait-for init containers** (`addWaitInit`) — for each service with `depends_on`, add one `busybox:1.36` initContainer per dependency that blocks until the dependency is reachable (`nc -z <dep> <port>` using the dependency's first container port, or `nslookup <dep>` when it exposes no port). Suppresses the depends_on warning.
+
+Manifest emission order stays deterministic: Deployments, Services, PVCs, Secrets, Ingress.
+
+**Panel UI:** the warnings/hints strip gains fix controls. A "Fix all safe" button enables the three zero-input fixes (`emitSecrets`, `bindMountsToPvc`, `expose: "loadbalancer"`, `addWaitInit`). Each fixable warning row has a "Fix" button that flips its option; the published-port fix offers LoadBalancer (one click) or Ingress (opens a hostname input, per the no-free-text-traps rule). Enabled fixes are reflected as lit toggles the user can turn back off; the manifests and remaining warnings re-render live. All fix state feeds the single `convert(compose, { namespace, fixes })` call.
+
 ## Open follow-ups (not this ticket)
 
 - Suggest-and-swap: replace a matched service with the curated catalog install (helm/manifest + secrets fields) reconciled into the same review flow.
