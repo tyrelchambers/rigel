@@ -309,6 +309,19 @@ export {
   type ApplySource,
 } from "./applyBatch";
 
+export {
+  parseAppliedResources,
+  parseCreatedResources,
+  resolveCreatedResources,
+  ledgerNamespaceFor,
+  buildLedgerManifest,
+  type AppliedResource,
+  type CreatedResource,
+  type LedgerResource,
+  type LedgerMeta,
+  type LedgerConfigMap,
+} from "./applyLedger";
+
 /** Kubernetes ObjectMeta (subset used by the web panels). */
 export interface ObjectMeta {
   name: string;
