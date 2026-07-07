@@ -28,8 +28,14 @@ export interface RecentBatch {
 
 /** A ledger ConfigMap item from `kubectl get configmap … -o json` `.items`. */
 export interface LedgerItem {
-  metadata?: { namespace?: string };
+  metadata?: { name?: string; namespace?: string };
   data?: Record<string, string>;
+}
+
+/** A ledger ConfigMap to delete, by name + its own namespace. */
+export interface LedgerRef {
+  name: string;
+  namespace: string;
 }
 
 /** Build the kubectl argv (verb onward) selecting ledger ConfigMaps everywhere. */
@@ -72,4 +78,34 @@ export function parseLedgerBatches(
     });
   }
   return batches.sort((a, b) => Date.parse(b.appliedAt) - Date.parse(a.appliedAt));
+}
+
+/**
+ * Ledger ConfigMaps whose batch is OLDER than `windowMs` — eligible for GC so
+ * the "Undo available for 14 days" retention holds even when a batch is never
+ * undone. Items without a name or a parseable appliedAt are skipped (we don't
+ * delete what we can't confidently date).
+ */
+export function expiredLedgers(
+  items: LedgerItem[],
+  nowMs: number,
+  windowMs: number = RECENT_WINDOW_MS,
+): LedgerRef[] {
+  const refs: LedgerRef[] = [];
+  for (const it of items) {
+    const name = it.metadata?.name;
+    if (!name) continue;
+    const raw = it.data?.[LEDGER_DATA_KEY];
+    if (!raw) continue;
+    let batch: { appliedAt?: string };
+    try {
+      batch = JSON.parse(raw) as { appliedAt?: string };
+    } catch {
+      continue;
+    }
+    const ts = batch.appliedAt ? Date.parse(batch.appliedAt) : NaN;
+    if (Number.isNaN(ts) || nowMs - ts <= windowMs) continue;
+    refs.push({ name, namespace: it.metadata?.namespace ?? "default" });
+  }
+  return refs;
 }

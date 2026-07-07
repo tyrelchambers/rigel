@@ -326,9 +326,11 @@ export {
   RECENT_WINDOW_MS,
   ledgerDiscoveryArgs,
   parseLedgerBatches,
+  expiredLedgers,
   type RecentBatch,
   type RecentResource,
   type LedgerItem,
+  type LedgerRef,
 } from "./recentDeploys";
 
 /** Kubernetes ObjectMeta (subset used by the web panels). */

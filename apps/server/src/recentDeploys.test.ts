@@ -20,6 +20,21 @@ describe("discoverRecent", () => {
     const kubectlRun = vi.fn().mockResolvedValue({ code: 1, stdout: "", stderr: "boom" });
     expect((await discoverRecent(null, Date.now(), { kubectlRun })).batches).toEqual([]);
   });
+
+  test("GCs ledgers older than the 14-day window and omits them from the result", async () => {
+    const items = {
+      items: [
+        { metadata: { name: "rigel-apply-old", namespace: "shop" }, data: { "batch.json": JSON.stringify({ batchId: "old", appliedAt: "2026-06-01T10:00:00.000Z", source: "apply-yaml", resources: [] }) } },
+        { metadata: { name: "rigel-apply-new", namespace: "shop" }, data: { "batch.json": JSON.stringify({ batchId: "new", appliedAt: "2026-07-07T10:00:00.000Z", source: "apply-yaml", resources: [] }) } },
+      ],
+    };
+    const kubectlRun = vi.fn().mockResolvedValue({ code: 0, stdout: JSON.stringify(items), stderr: "" });
+    const res = await discoverRecent(null, Date.parse("2026-07-07T12:00:00.000Z"), { kubectlRun });
+
+    expect(kubectlRun.mock.calls[1]![1]).toEqual(["delete", "configmap", "rigel-apply-old", "-n", "shop", "--ignore-not-found"]);
+    expect(kubectlRun).toHaveBeenCalledTimes(2); // list + one GC delete; the in-window ledger is untouched
+    expect(res.batches.map((b) => b.batchId)).toEqual(["new"]);
+  });
 });
 
 describe("undoBatch", () => {

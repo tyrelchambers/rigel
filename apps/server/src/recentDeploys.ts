@@ -7,6 +7,7 @@
 import { kubectl, type RunResult } from "@rigel/k8s/src/run";
 import {
   LEDGER_DATA_KEY,
+  expiredLedgers,
   ledgerDiscoveryArgs,
   ledgerName,
   parseLedgerBatches,
@@ -49,6 +50,14 @@ export async function discoverRecent(
     items = Array.isArray(parsed.items) ? parsed.items : [];
   } catch {
     return { batches: [] };
+  }
+  // GC: delete ledgers older than the 14-day window (best-effort) so the "Undo
+  // available for 14 days" retention holds even for batches that are never
+  // undone. Runs whenever Recent is fetched.
+  for (const ref of expiredLedgers(items, nowMs)) {
+    await runners.kubectlRun(context, [
+      "delete", "configmap", ref.name, "-n", ref.namespace, "--ignore-not-found",
+    ]);
   }
   return { batches: parseLedgerBatches(items, nowMs) };
 }
