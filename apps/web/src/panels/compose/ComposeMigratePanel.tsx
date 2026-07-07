@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle,
   Box,
-  CheckCircle2,
   ChevronDown,
   ChevronUp,
   Database,
@@ -22,6 +20,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Loader } from "@/components/Loader";
+import { ManifestValidationResult } from "@/components/ManifestValidationResult";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,7 +33,6 @@ import { YamlEditor } from "@/components/YamlEditorLazy";
 import { NamespaceField } from "@/components/NamespaceField";
 import { useClusterYamlSchema } from "@/lib/useClusterYamlSchema";
 import { applyManifestYaml, type ActionBlock, type ActionResult } from "@/lib/api";
-import { listResources } from "@rigel/catalog";
 import {
   convert,
   combineManifests,
@@ -373,7 +371,7 @@ export default function ComposeMigratePanel() {
               ))}
               {warnings.map((w, i) => (
                 <div key={`w${i}`} className="flex items-start gap-2.5">
-                  <AlertTriangle
+                  <TriangleAlert
                     className={`mt-px size-3.5 shrink-0 ${w.severity === "warning" ? "text-amber-500" : "text-[var(--fg-tertiary)]"}`}
                   />
                   <span className="flex-1 text-xs leading-[1.45] text-muted-foreground">
@@ -416,7 +414,15 @@ export default function ComposeMigratePanel() {
         )
       )}
 
-      <DryRunResult state={dryRun} yaml={manifestYaml} onDismiss={() => setDryRun({ pending: false })} />
+      {!dryRun.pending && (dryRun.result || dryRun.error) && (
+        <div className="flex-shrink-0 border-t border-[var(--border-subtle)] bg-[var(--surface-primary)] px-[18px] py-2.5">
+          <ManifestValidationResult
+            state={dryRun}
+            yaml={manifestYaml}
+            onDismiss={() => setDryRun({ pending: false })}
+          />
+        </div>
+      )}
 
       <footer className="flex flex-shrink-0 items-center justify-between gap-4 border-t border-[var(--border-subtle)] bg-[var(--surface-primary)] px-[18px] py-2.5">
         <span className="font-mono text-2xs text-[var(--fg-tertiary)]">{resourceTally(result)}</span>
@@ -424,50 +430,6 @@ export default function ComposeMigratePanel() {
       </footer>
 
       <ConfirmSheet action={pendingAction} open={!!pendingAction} onClose={() => setPendingAction(null)} />
-    </div>
-  );
-}
-
-function DryRunResult({
-  state,
-  yaml,
-  onDismiss,
-}: {
-  state: { pending: boolean; result?: ActionResult; error?: string };
-  yaml: string;
-  onDismiss: () => void;
-}) {
-  if (state.pending) return null;
-  const failMessage = state.error
-    ? state.error
-    : state.result && state.result.code !== 0
-      ? state.result.stderr || state.result.stdout || "Validation failed."
-      : null;
-  const ok = !failMessage && !!state.result;
-  if (!failMessage && !ok) return null;
-
-  const count = listResources(yaml).length;
-
-  return (
-    <div className="flex flex-shrink-0 items-start gap-2 border-t border-[var(--border-subtle)] bg-[var(--surface-primary)] px-[18px] py-2.5">
-      {ok ? (
-        <p className="flex flex-1 items-center gap-1.5 text-xs font-medium text-emerald-400">
-          <CheckCircle2 className="size-3.5 shrink-0" />
-          Valid — {count} resource{count === 1 ? "" : "s"} would be created (dry run, nothing applied).
-        </p>
-      ) : (
-        <pre className="max-h-40 flex-1 overflow-auto whitespace-pre-wrap rounded-md bg-destructive/10 px-3 py-2 font-mono text-xs text-destructive">
-          {failMessage}
-        </pre>
-      )}
-      <button
-        type="button"
-        aria-label="Dismiss dry-run result"
-        onClick={onDismiss}
-        className="flex size-5 shrink-0 items-center justify-center rounded-sm text-[var(--fg-tertiary)] outline-none hover:bg-white/[0.06] hover:text-[var(--fg-primary)]"
-      >
-        <X className="size-3" />
-      </button>
     </div>
   );
 }
