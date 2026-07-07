@@ -33,30 +33,41 @@ function dedupeBy<T>(items: T[], key: (item: T) => string): T[] {
   return out;
 }
 
-function waitInitContainers(service: ComposeService, firstPorts: Record<string, number>): Obj[] {
-  return service.dependsOn.map((dep) => {
-    const d = sanitizeName(dep);
-    const port = firstPorts[dep];
-    const cmd =
-      port != null
-        ? `until nc -z ${d} ${port}; do echo waiting for ${d}; sleep 2; done`
-        : `until nslookup ${d}; do sleep 2; done`;
-    return { name: `wait-for-${d}`, image: "busybox:1.36", command: ["sh", "-c", cmd] };
-  });
+export function resolveVolumes(
+  service: ComposeService,
+  fixes: ConvertFixes = {},
+): { volumes: Obj[]; mounts: Obj[]; pvcs: ComposeVolume[] } {
+  const selected = service.volumes.filter((v) => v.kind === "named" || (v.kind === "bind" && fixes.bindMountsToPvc));
+  const pvcs = dedupeBy(selected, volName);
+  return {
+    volumes: pvcs.map((v) => ({ name: volName(v), persistentVolumeClaim: { claimName: pvcName(service, v) } })),
+    mounts: pvcs.map((v) => ({ name: volName(v), mountPath: v.mountPath })),
+    pvcs,
+  };
+}
+
+function waitInitContainers(service: ComposeService, firstPorts: Record<string, number | undefined>): Obj[] {
+  return service.dependsOn
+    .filter((dep) => Object.prototype.hasOwnProperty.call(firstPorts, dep))
+    .map((dep) => {
+      const d = sanitizeName(dep);
+      const port = firstPorts[dep];
+      const cmd =
+        port != null
+          ? `until nc -z ${d} ${port}; do echo waiting for ${d}; sleep 2; done`
+          : `until nslookup ${d}; do sleep 2; done`;
+      return { name: `wait-for-${d}`, image: "busybox:1.36", command: ["sh", "-c", cmd] };
+    });
 }
 
 export function buildDeployment(
   service: ComposeService,
   namespace: string,
   fixes: ConvertFixes = {},
-  firstPorts: Record<string, number> = {},
+  firstPorts: Record<string, number | undefined> = {},
 ): Obj {
   const name = sanitizeName(service.name);
-  const named = dedupeBy(service.volumes.filter((v) => v.kind === "named"), (v) => v.name);
-  const binds = fixes.bindMountsToPvc
-    ? dedupeBy(service.volumes.filter((v) => v.kind === "bind"), (v) => sanitizeName(v.mountPath))
-    : [];
-  const mounted = [...named, ...binds];
+  const { volumes, mounts } = resolveVolumes(service, fixes);
   const initContainers = fixes.addWaitInit ? waitInitContainers(service, firstPorts) : [];
   const container: Obj = {
     name,
@@ -64,7 +75,7 @@ export function buildDeployment(
     ...(service.command ? { args: service.command } : {}),
     ...(Object.keys(service.environment).length ? { env: envEntries(service) } : {}),
     ...(service.ports.length ? { ports: service.ports.map((p) => ({ containerPort: p.containerPort })) } : {}),
-    ...(mounted.length ? { volumeMounts: mounted.map((v) => ({ name: volName(v), mountPath: v.mountPath })) } : {}),
+    ...(mounts.length ? { volumeMounts: mounts } : {}),
   };
   return {
     apiVersion: "apps/v1",
@@ -78,9 +89,7 @@ export function buildDeployment(
         spec: {
           ...(initContainers.length ? { initContainers } : {}),
           containers: [container],
-          ...(mounted.length
-            ? { volumes: mounted.map((v) => ({ name: volName(v), persistentVolumeClaim: { claimName: pvcName(service, v) } })) }
-            : {}),
+          ...(volumes.length ? { volumes } : {}),
         },
       },
     },

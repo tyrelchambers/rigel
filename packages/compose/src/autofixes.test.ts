@@ -152,6 +152,62 @@ describe("addWaitInit fix", () => {
   });
 });
 
+function count(hay: string, needle: string): number {
+  return hay.split(needle).length - 1;
+}
+
+describe("volume dedup keeps PVCs and mounts in lockstep", () => {
+  it("two bind mounts that sanitize to the same name produce one PVC and one mount", () => {
+    const compose = `
+services:
+  app:
+    image: nginx:1.27
+    volumes:
+      - ./data/x:/data/x
+      - ./data-x:/data-x
+`;
+    const r = convert(compose, { namespace: "apps", fixes: { bindMountsToPvc: true } });
+    expect(r.manifests.filter((m) => m.kind === "PersistentVolumeClaim").length).toBe(1);
+    const dep = r.manifests.find((m) => m.kind === "Deployment")!;
+    expect(count(dep.yaml, "mountPath:")).toBe(1);
+    expect(count(dep.yaml, "persistentVolumeClaim:")).toBe(1);
+  });
+
+  it("two named volumes with the same name produce one PVC and one mount (no dropped mount)", () => {
+    const compose = `
+services:
+  app:
+    image: nginx:1.27
+    volumes:
+      - data:/a
+      - data:/b
+`;
+    const r = convert(compose, { namespace: "apps" });
+    expect(r.manifests.filter((m) => m.kind === "PersistentVolumeClaim").length).toBe(1);
+    const dep = r.manifests.find((m) => m.kind === "Deployment")!;
+    expect(count(dep.yaml, "mountPath:")).toBe(1);
+    expect(count(dep.yaml, "persistentVolumeClaim:")).toBe(1);
+  });
+});
+
+describe("addWaitInit skips unknown dependencies", () => {
+  it("does not emit a wait-for init container for a depends_on that names no known service", () => {
+    const compose = `
+services:
+  web:
+    image: nginx:1.27
+    depends_on: [db, ghost]
+  db:
+    image: nextcloud:29
+`;
+    const r = convert(compose, { namespace: "apps", fixes: { addWaitInit: true } });
+    const web = r.manifests.find((m) => m.name === "web")!;
+    expect(web.yaml).toContain("name: wait-for-db");
+    expect(web.yaml).toContain("nslookup db");
+    expect(web.yaml).not.toContain("wait-for-ghost");
+  });
+});
+
 describe("all fixes at once", () => {
   const STACK = `
 services:

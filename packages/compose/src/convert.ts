@@ -1,6 +1,6 @@
 import { stringify as stringifyYaml } from "yaml";
 import { parseCompose } from "./parse";
-import { buildDeployment, buildPvc, buildService, buildSecret, buildIngress } from "./resources";
+import { buildDeployment, buildPvc, buildService, buildSecret, buildIngress, resolveVolumes } from "./resources";
 import { catalogHints } from "./hints";
 import { isSecretEnvKey } from "./env";
 import type { ConversionResult, ConvertFixes, ConvertOptions, ManifestDoc, Warning } from "./types";
@@ -13,8 +13,8 @@ export function convert(composeText: string, opts: ConvertOptions): ConversionRe
   const model = parseCompose(composeText);
   const fixes: ConvertFixes = opts.fixes ?? {};
   const exposeActive = fixes.expose === "loadbalancer" || (fixes.expose === "ingress" && !!fixes.ingressHost);
-  const firstPorts: Record<string, number> = {};
-  for (const s of model.services) if (s.ports.length) firstPorts[s.name] = s.ports[0]!.containerPort;
+  const firstPorts: Record<string, number | undefined> = {};
+  for (const s of model.services) firstPorts[s.name] = s.ports.length ? s.ports[0]!.containerPort : undefined;
 
   const manifests: ManifestDoc[] = [];
   const warnings: Warning[] = [];
@@ -34,12 +34,13 @@ export function convert(composeText: string, opts: ConvertOptions): ConversionRe
     const svcObj = buildService(service, opts.namespace, fixes.expose);
     if (svcObj) manifests.push(doc(svcObj));
 
-    for (const vol of service.volumes) {
-      if (vol.kind === "named") {
-        manifests.push(doc(buildPvc(vol, service, opts.namespace)));
-      } else if (fixes.bindMountsToPvc) {
-        manifests.push(doc(buildPvc(vol, service, opts.namespace)));
-      } else {
+    for (const vol of resolveVolumes(service, fixes).pvcs) {
+      manifests.push(doc(buildPvc(vol, service, opts.namespace)));
+    }
+
+    if (!fixes.bindMountsToPvc) {
+      for (const vol of service.volumes) {
+        if (vol.kind !== "bind") continue;
         warnings.push({
           severity: "warning",
           service: service.name,
