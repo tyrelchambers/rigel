@@ -22,9 +22,14 @@ function toEnvRecord(env: unknown): Record<string, string> {
   return out;
 }
 
-function toPorts(ports: unknown): ComposePort[] {
-  if (!Array.isArray(ports)) return [];
+function validHost(host: number): boolean {
+  return Number.isFinite(host) && host > 0;
+}
+
+function toPorts(ports: unknown): { ports: ComposePort[]; dropped: boolean } {
+  if (!Array.isArray(ports)) return { ports: [], dropped: false };
   const out: ComposePort[] = [];
+  let dropped = false;
   for (const p of ports) {
     if (typeof p === "number") {
       out.push({ containerPort: p });
@@ -34,20 +39,29 @@ function toPorts(ports: unknown): ComposePort[] {
       const bare = p.split("/")[0]!;
       const parts = bare.split(":");
       const container = Number(parts[parts.length - 1]);
-      if (!Number.isFinite(container)) continue;
+      if (!Number.isFinite(container)) {
+        dropped = true;
+        continue;
+      }
       const host = parts.length > 1 ? Number(parts[parts.length - 2]) : NaN;
-      out.push(Number.isFinite(host) ? { containerPort: container, publishedPort: host } : { containerPort: container });
+      out.push(validHost(host) ? { containerPort: container, publishedPort: host } : { containerPort: container });
       continue;
     }
     if (p && typeof p === "object") {
       const obj = p as { target?: number; published?: number | string };
       if (typeof obj.target === "number") {
         const host = obj.published != null ? Number(obj.published) : NaN;
-        out.push(Number.isFinite(host) ? { containerPort: obj.target, publishedPort: host } : { containerPort: obj.target });
+        out.push(validHost(host) ? { containerPort: obj.target, publishedPort: host } : { containerPort: obj.target });
       }
     }
   }
-  return out;
+  return { ports: out, dropped };
+}
+
+function toDependsOn(dep: unknown): string[] {
+  if (Array.isArray(dep)) return dep.map(String);
+  if (dep && typeof dep === "object") return Object.keys(dep as Record<string, unknown>);
+  return [];
 }
 
 function isBindSource(src: string): boolean {
@@ -93,20 +107,25 @@ export function parseCompose(text: string): ComposeModel {
   const doc = parseYaml(text) as Record<string, unknown> | null;
   const root = doc && typeof doc === "object" ? doc : {};
 
-  const servicesRaw = (root.services as Record<string, unknown> | undefined) ?? {};
+  const servicesRoot = root.services;
+  const servicesRaw = servicesRoot && typeof servicesRoot === "object" ? (servicesRoot as Record<string, unknown>) : {};
   const services: ComposeService[] = [];
   for (const [name, raw] of Object.entries(servicesRaw)) {
-    const svc = (raw ?? {}) as Record<string, unknown>;
+    const svc = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
     const deploy = (svc.deploy as { replicas?: number } | undefined) ?? {};
+    const { ports, dropped } = toPorts(svc.ports);
+    const unsupported = UNSUPPORTED_KEYS.filter((k) => k in svc);
+    if (dropped) unsupported.push("ports");
     services.push({
       name,
       image: typeof svc.image === "string" ? svc.image : undefined,
-      ports: toPorts(svc.ports),
+      ports,
       environment: toEnvRecord(svc.environment),
       volumes: toVolumes(svc.volumes),
       command: toCommand(svc.command),
       replicas: typeof deploy.replicas === "number" ? deploy.replicas : 1,
-      unsupported: UNSUPPORTED_KEYS.filter((k) => k in svc),
+      dependsOn: toDependsOn(svc.depends_on),
+      unsupported,
     });
   }
 

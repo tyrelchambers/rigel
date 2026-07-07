@@ -18,6 +18,7 @@ export interface ComposeService {
   volumes: ComposeVolume[];
   command?: string[];
   replicas: number;
+  dependsOn: string[];
   unsupported: string[];
 }
 

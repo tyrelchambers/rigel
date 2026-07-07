@@ -3,7 +3,7 @@ import { buildDeployment, buildPvc, buildService } from "./resources";
 import type { ComposeService } from "./types";
 
 function svc(over: Partial<ComposeService>): ComposeService {
-  return { name: "web", image: "nginx:1.27", ports: [], environment: {}, volumes: [], replicas: 1, unsupported: [], ...over };
+  return { name: "web", image: "nginx:1.27", ports: [], environment: {}, volumes: [], replicas: 1, dependsOn: [], unsupported: [], ...over };
 }
 
 describe("buildDeployment", () => {
@@ -54,5 +54,25 @@ describe("buildService", () => {
   });
   it("returns null when the service has no ports", () => {
     expect(buildService(svc({ ports: [] }), "apps")).toBeNull();
+  });
+  it("dedupes ports mapping to the same container port", () => {
+    const s = buildService(svc({ ports: [{ containerPort: 80, publishedPort: 8080 }, { containerPort: 80, publishedPort: 443 }] }), "apps");
+    expect(s!.spec.ports).toEqual([{ name: "p80", port: 80, targetPort: 80 }]);
+  });
+});
+
+describe("buildDeployment named-volume dedupe", () => {
+  it("dedupes named volumes that sanitize to the same name", () => {
+    const d = buildDeployment(
+      svc({
+        volumes: [
+          { name: "data", mountPath: "/data", kind: "named", source: "data" },
+          { name: "data", mountPath: "/data", kind: "named", source: "Data" },
+        ],
+      }),
+      "apps",
+    );
+    expect(d.spec.template.spec.containers[0].volumeMounts).toEqual([{ name: "data", mountPath: "/data" }]);
+    expect(d.spec.template.spec.volumes).toEqual([{ name: "data", persistentVolumeClaim: { claimName: "web-data" } }]);
   });
 });

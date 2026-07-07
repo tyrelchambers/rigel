@@ -3,7 +3,7 @@ import { catalogHints } from "./hints";
 import type { ComposeService } from "./types";
 
 function svc(name: string, image: string): ComposeService {
-  return { name, image, ports: [], environment: {}, volumes: [], replicas: 1, unsupported: [] };
+  return { name, image, ports: [], environment: {}, volumes: [], replicas: 1, dependsOn: [], unsupported: [] };
 }
 
 describe("catalogHints", () => {

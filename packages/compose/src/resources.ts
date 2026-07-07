@@ -17,9 +17,21 @@ function envEntries(service: ComposeService): Obj[] {
   );
 }
 
+function dedupeBy<T>(items: T[], key: (item: T) => string): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const item of items) {
+    const k = key(item);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(item);
+  }
+  return out;
+}
+
 export function buildDeployment(service: ComposeService, namespace: string): Obj {
   const name = sanitizeName(service.name);
-  const named = service.volumes.filter((v) => v.kind === "named");
+  const named = dedupeBy(service.volumes.filter((v) => v.kind === "named"), (v) => v.name);
   const container: Obj = {
     name,
     image: service.image ?? "",
@@ -60,6 +72,7 @@ export function buildPvc(vol: ComposeVolume, service: ComposeService, namespace:
 export function buildService(service: ComposeService, namespace: string): Obj | null {
   if (!service.ports.length) return null;
   const name = sanitizeName(service.name);
+  const ports = dedupeBy(service.ports, (p) => String(p.containerPort));
   return {
     apiVersion: "v1",
     kind: "Service",
@@ -67,7 +80,7 @@ export function buildService(service: ComposeService, namespace: string): Obj | 
     spec: {
       type: "ClusterIP",
       selector: { app: name },
-      ports: service.ports.map((p) => ({ name: `p${p.containerPort}`, port: p.containerPort, targetPort: p.containerPort })),
+      ports: ports.map((p) => ({ name: `p${p.containerPort}`, port: p.containerPort, targetPort: p.containerPort })),
     },
   };
 }

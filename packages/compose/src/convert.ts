@@ -82,7 +82,7 @@ export function convert(composeText: string, opts: ConvertOptions): ConversionRe
     }
   }
 
-  if (/\bdepends_on\b/.test(composeText)) {
+  if (model.services.some((s) => s.dependsOn.length)) {
     warnings.push({
       severity: "info",
       directive: "depends_on",

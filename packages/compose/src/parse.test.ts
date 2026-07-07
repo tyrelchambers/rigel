@@ -51,4 +51,37 @@ describe("parseCompose", () => {
   it("returns no services for empty input", () => {
     expect(parseCompose("services: {}").services).toEqual([]);
   });
+
+  it("does not throw on a scalar service value and yields a service with no image", () => {
+    const m = parseCompose("services:\n  web: nginx\n");
+    const web = m.services.find((s) => s.name === "web")!;
+    expect(web.image).toBeUndefined();
+    expect(web.ports).toEqual([]);
+    expect(web.environment).toEqual({});
+    expect(web.volumes).toEqual([]);
+    expect(web.dependsOn).toEqual([]);
+  });
+
+  it("returns no services when the services root is not a map", () => {
+    expect(parseCompose("services: foo").services).toEqual([]);
+  });
+
+  it("normalizes depends_on as array or map to string[]", () => {
+    const arr = parseCompose("services:\n  web:\n    image: nginx\n    depends_on: [db, cache]\n");
+    expect(arr.services[0]!.dependsOn).toEqual(["db", "cache"]);
+    const map = parseCompose("services:\n  web:\n    image: nginx\n    depends_on:\n      db:\n        condition: service_started\n");
+    expect(map.services[0]!.dependsOn).toEqual(["db"]);
+  });
+
+  it("flags an unparseable port range as unsupported", () => {
+    const m = parseCompose('services:\n  web:\n    image: nginx\n    ports:\n      - "3000-3005:3000-3005"\n');
+    const web = m.services[0]!;
+    expect(web.ports).toEqual([]);
+    expect(web.unsupported).toContain("ports");
+  });
+
+  it("does not set publishedPort when the host side is missing", () => {
+    const m = parseCompose('services:\n  web:\n    image: nginx\n    ports:\n      - ":80"\n');
+    expect(m.services[0]!.ports).toEqual([{ containerPort: 80 }]);
+  });
 });

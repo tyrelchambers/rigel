@@ -48,3 +48,32 @@ describe("convert", () => {
     expect(combineManifests(r.manifests)).toContain("\n---\n");
   });
 });
+
+describe("convert depends_on warning", () => {
+  it("does not warn when depends_on only appears in a comment or an env value", () => {
+    const compose = `
+services:
+  web:
+    image: nginx:1.27
+    # depends_on: [db]
+    environment:
+      NOTE: "depends_on is not set here"
+`;
+    const r = convert(compose, { namespace: "apps" });
+    expect(r.warnings.some((w) => w.directive === "depends_on")).toBe(false);
+  });
+
+  it("warns when a service really declares depends_on", () => {
+    const compose = `
+services:
+  web:
+    image: nginx:1.27
+    depends_on: [db]
+  db:
+    image: nginx:1.27
+`;
+    const r = convert(compose, { namespace: "apps" });
+    const w = r.warnings.find((w) => w.directive === "depends_on");
+    expect(w?.message).toMatch(/depends_on/);
+  });
+});
