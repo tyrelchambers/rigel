@@ -4,6 +4,7 @@ import type { ActionBlock } from "@/lib/api";
 import {
   LINGER_MS,
   finishLinger,
+  hasLiveWildcard,
   planSubscribe,
   planSwitch,
   planUnsubscribe,
@@ -316,7 +317,11 @@ export function connectCluster(): void {
       store.setError(null);
       const items: Record<string, unknown> = {};
       for (const o of m.items) items[resourceKey(o)] = o;
-      const coexistWildcard = m.namespace !== "*" && activeSubs.has(subKey(m.kind, "*"));
+      // Only a LIVE ("*") watch protects other-namespace items; a merely
+      // lingering wildcard (refs 0, inside its grace window) must not force a
+      // merge, or switching from "All namespaces" to one namespace would keep
+      // every namespace's items. See hasLiveWildcard.
+      const coexistWildcard = m.namespace !== "*" && hasLiveWildcard(activeSubs, m.kind);
       store.replaceKind(m.kind, items, m.namespace, coexistWildcard);
     } else if (m.type === "delta") {
       if (m.event === "DELETED") store.remove(m.kind, resourceKey(m.object));

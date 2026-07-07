@@ -114,6 +114,18 @@ export function planSwitch(
 }
 
 /**
+ * Whether a LIVE cluster-wide ("*") watch for `kind` is currently held — i.e. an
+ * entry exists with refs > 0. A lingering entry (refs 0, inside its grace window)
+ * is on its way out and does NOT count: a fresh namespace-scoped snapshot must be
+ * free to replace the slice, otherwise switching from "All namespaces" to one
+ * namespace would keep every namespace's items.
+ */
+export function hasLiveWildcard(registry: SubRegistry, kind: string): boolean {
+  const entry = registry.get(subKey(kind, "*"));
+  return !!entry && entry.refs > 0;
+}
+
+/**
  * Run when a linger timer fires. If the entry is still at refs 0 (no revive
  * happened during the grace period) delete it and report that the unsubscribe
  * frame should be sent. If it was revived, leave it and send nothing.
