@@ -322,6 +322,15 @@ export {
   type LedgerConfigMap,
 } from "./applyLedger";
 
+export {
+  RECENT_WINDOW_MS,
+  ledgerDiscoveryArgs,
+  parseLedgerBatches,
+  type RecentBatch,
+  type RecentResource,
+  type LedgerItem,
+} from "./recentDeploys";
+
 /** Kubernetes ObjectMeta (subset used by the web panels). */
 export interface ObjectMeta {
   name: string;
