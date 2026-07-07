@@ -24,6 +24,7 @@ import AssistantPanel from "./panels/assistant/AssistantPanel";
 import SettingsPanel from "./panels/settings/SettingsPanel";
 import AccountsPanel from "./panels/accounts/AccountsPanel";
 import ApplyYamlPanel from "./panels/apply/ApplyYamlPanel";
+import ComposeMigratePanel from "./panels/compose/ComposeMigratePanel";
 import GitOpsPanel from "./panels/gitops/GitOpsPanel";
 import HelmPanel from "./panels/helm/HelmPanel";
 import { TerminalDrawer, TOGGLE_TERMINAL_EVENT } from "@/shell/TerminalDrawer";
@@ -298,6 +299,7 @@ export default function App() {
               <Route path="/catalog" element={<PaddedX><CatalogPanel /></PaddedX>} />
               <Route path="/helm" element={<HelmPanel />} />
               <Route path="/apply" element={<ApplyYamlPanel />} />
+              <Route path="/compose" element={<ComposeMigratePanel />} />
               <Route path="/gitops" element={<GitOpsPanel />} />
               <Route path="/accounts" element={<Padded><AccountsPanel /></Padded>} />
               <Route path="/settings" element={<Padded><SettingsPanel /></Padded>} />

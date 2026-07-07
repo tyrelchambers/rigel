@@ -33,6 +33,7 @@ import {
   ChevronDown,
   AppWindow,
   FilePlus2,
+  FileInput,
   Package,
 } from "lucide-react";
 // Note: MessageSquare (chat) and Activity (health) are intentionally absent —
@@ -91,6 +92,7 @@ export const PANEL_META: Record<string, PanelMeta> = {
   catalog:      { route: "/catalog",      title: "Apps",         subtitle: "Install apps",          icon: AppWindow },
   helm:         { route: "/helm",         title: "Helm",         subtitle: "Releases & charts",     icon: Package },
   apply:        { route: "/apply",        title: "Apply YAML",   subtitle: "Create from manifest",  icon: FilePlus2 },
+  compose:      { route: "/compose",      title: "Migrate from Compose", subtitle: "Convert a docker-compose.yml to Kubernetes manifests", icon: FileInput },
   gitops:       { route: "/gitops",       title: "GitOps",       subtitle: "Deploy from Git",       icon: GitBranch },
   accounts:     { route: "/accounts",     title: "Accounts",     subtitle: "Registry credentials",  icon: UserRoundKey },
   settings:     { route: "/settings",     title: "Settings",     subtitle: "Preferences",           icon: Settings },
@@ -115,7 +117,7 @@ export const NAV_GROUPS: NavGroup[] = [
   { title: "Security & Certs", panels: ["certificates"] },
   { title: "Observability", panels: ["events", "logs"] },
   { title: "Self-host", panels: ["catalog", "helm"] },
-  { title: "Tools", panels: ["apply", "gitops"] },
+  { title: "Tools", panels: ["apply", "compose", "gitops"] },
   { title: "System", panels: ["accounts", "settings"] },
 ];
 
