@@ -182,6 +182,9 @@ importers:
       '@rigel/cloud-connect':
         specifier: workspace:*
         version: link:../../packages/cloud-connect
+      '@rigel/compose':
+        specifier: workspace:*
+        version: link:../../packages/compose
       '@rigel/k8s':
         specifier: workspace:*
         version: link:../../packages/k8s
