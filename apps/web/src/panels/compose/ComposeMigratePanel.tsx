@@ -236,7 +236,6 @@ export default function ComposeMigratePanel() {
           </p>
         </div>
         <div className="flex items-center gap-2.5">
-          <NamespaceField value={namespace} onChange={setNamespace} ariaLabel="Target namespace" className="w-40" />
           <input
             ref={fileInput}
             type="file"
@@ -337,7 +336,30 @@ export default function ComposeMigratePanel() {
           {parseError}
         </p>
       ) : (
-        showStrip && (
+        <>
+          <div className="flex flex-shrink-0 flex-wrap items-center gap-x-5 gap-y-2 border-t border-[var(--border-subtle)] bg-[var(--surface-primary)] px-[18px] py-2.5">
+            <div className="flex items-center gap-2">
+              <label className="text-2xs text-[var(--fg-tertiary)]">Namespace</label>
+              <NamespaceField value={namespace} onChange={setNamespace} ariaLabel="Target namespace" className="w-40" />
+            </div>
+            {fixes.expose === "ingress" && hasIngress && (
+              <div className="flex items-center gap-2">
+                <label htmlFor="compose-ingress-host" className="text-2xs text-[var(--fg-tertiary)]">
+                  Ingress host
+                </label>
+                <input
+                  id="compose-ingress-host"
+                  type="text"
+                  placeholder="app.example.com"
+                  value={fixes.ingressHost ?? ""}
+                  onChange={(e) => setFixes((f) => ({ ...f, ingressHost: e.target.value }))}
+                  className="w-56 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-2 py-1 text-xs text-[var(--fg-primary)] outline-none placeholder:text-[var(--fg-tertiary)]"
+                />
+                <span className="text-2xs text-[var(--fg-tertiary)]">Set your real domain</span>
+              </div>
+            )}
+          </div>
+          {showStrip && (
           <div className="flex max-h-[200px] flex-shrink-0 flex-col gap-2.5 overflow-auto border-t border-[var(--border-subtle)] bg-[var(--surface-primary)] px-[18px] py-3.5">
             {(warnings.length > 0 || hints.length > 0) && (
               <div className="flex items-center justify-between gap-3">
@@ -368,23 +390,6 @@ export default function ComposeMigratePanel() {
                     </span>
                   ))}
                 </div>
-              </div>
-            )}
-
-            {fixes.expose === "ingress" && hasIngress && (
-              <div className="flex items-center gap-2">
-                <label htmlFor="compose-ingress-host" className="text-2xs text-[var(--fg-tertiary)]">
-                  Ingress host
-                </label>
-                <input
-                  id="compose-ingress-host"
-                  type="text"
-                  placeholder="app.example.com"
-                  value={fixes.ingressHost ?? ""}
-                  onChange={(e) => setFixes((f) => ({ ...f, ingressHost: e.target.value }))}
-                  className="w-56 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-2 py-1 text-xs text-[var(--fg-primary)] outline-none placeholder:text-[var(--fg-tertiary)]"
-                />
-                <span className="text-2xs text-[var(--fg-tertiary)]">Set your real domain</span>
               </div>
             )}
 
@@ -442,7 +447,8 @@ export default function ComposeMigratePanel() {
               ))}
             </div>
           </div>
-        )
+          )}
+        </>
       )}
 
       {!dryRun.pending && (dryRun.result || dryRun.error) && (
