@@ -226,21 +226,20 @@ export default function ComposeMigratePanel() {
       </header>
 
       {showExplainer && explanation && (
-        <div className="flex-shrink-0 px-4 pt-3">
-          <div className="flex flex-col gap-[11px] rounded-xl border border-[var(--border-subtle)] p-4">
+        <div className="flex flex-shrink-0 flex-col gap-[11px] px-5 py-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Sparkles className="size-3.5 text-[var(--accent-primary)]" />
               <h2 className="font-heading text-sm font-semibold text-[var(--fg-primary)]">What this will create</h2>
             </div>
-            <button
-              type="button"
+            <Button
+              variant="outline"
+              size="icon"
               aria-label={explainerCollapsed ? "Expand explainer" : "Collapse explainer"}
               onClick={() => setExplainerCollapsed((c) => !c)}
-              className="flex size-6 items-center justify-center rounded-sm text-[var(--fg-tertiary)] outline-none hover:bg-white/[0.06] hover:text-[var(--fg-primary)]"
             >
               {explainerCollapsed ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
-            </button>
+            </Button>
           </div>
 
           {!explainerCollapsed && (
@@ -264,7 +263,6 @@ export default function ComposeMigratePanel() {
             </>
           )}
           </div>
-        </div>
       )}
 
       <div className="flex min-h-0 flex-1">
