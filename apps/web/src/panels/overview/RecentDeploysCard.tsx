@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { useRecentDeploys, useUndoDeploy } from "@/lib/api";
 import type { RecentBatch } from "@rigel/k8s";
-import { spelledAge } from "@/lib/time";
+import { formatDistanceToNow } from "date-fns";
 import {
   Dialog,
   DialogContent,
@@ -108,7 +108,7 @@ function DeployRow({
   const meta = sourceMeta(batch.source);
   const Icon = meta.icon;
   const ns = batchNamespaces(batch);
-  const age = spelledAge(batch.appliedAt);
+  const age = formatDistanceToNow(new Date(batch.appliedAt), { addSuffix: true });
   return (
     <div
       className="flex items-center justify-between"
@@ -132,7 +132,7 @@ function DeployRow({
               whiteSpace: "nowrap",
             }}
           >
-            {batch.resources.length} resources · namespace {ns} · {age} ago
+            {batch.resources.length} resources · namespace {ns} · {age}
           </span>
         </div>
       </div>
@@ -195,7 +195,7 @@ function UndoConfirm({
   if (!batch) return null;
   const meta = sourceMeta(batch.source);
   const count = batch.resources.length;
-  const age = spelledAge(batch.appliedAt);
+  const age = formatDistanceToNow(new Date(batch.appliedAt), { addSuffix: true });
 
   function handleDelete() {
     if (!batch) return;
@@ -218,7 +218,7 @@ function UndoConfirm({
           <div className="flex min-w-0 flex-1 flex-col" style={{ gap: 3 }}>
             <DialogTitle>Undo this deployment?</DialogTitle>
             <span className="font-mono text-2xs" style={{ color: "var(--fg-tertiary)" }}>
-              {meta.label} · {age} ago
+              {meta.label} · {age}
             </span>
           </div>
         </DialogHeader>
