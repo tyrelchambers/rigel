@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ActiveForward } from "@/panels/services/portForward";
-import type { SuggestedAlert, DigestInput } from "@rigel/k8s";
+import type { SuggestedAlert, DigestInput, ApplySource } from "@rigel/k8s";
 import type { CheckResult, CloudProvider, CloudCluster } from "@rigel/cloud-connect/src/index";
 
 /**
@@ -30,6 +30,8 @@ export interface ActionBlock {
   destructive?: boolean;
   /** applyManifest only — manifest YAML applied via /api/apply. */
   manifest?: string;
+  /** applyManifest only — which Rigel surface triggered the apply (ledger recording). */
+  applySource?: ApplySource;
   /** proposeRepoFix only — git source, repo file path, PR title/body, new content. */
   source?: string;
   filePath?: string;
@@ -46,6 +48,8 @@ export interface ActionResult {
   code: number;
   stdout: string;
   stderr: string;
+  /** applyManifest only — set when the apply created resources and recorded a batch. */
+  batchId?: string;
 }
 
 export interface PurgeResult {
@@ -90,11 +94,15 @@ export async function executeAction(action: ActionBlock): Promise<ActionResponse
  * `dryRun`, the apiserver validates the manifest (--dry-run=server) without
  * persisting it — used by the Apply YAML panel's Validate button.
  */
-export async function applyManifestYaml(yaml: string, dryRun = false): Promise<ActionResult> {
+export async function applyManifestYaml(
+  yaml: string,
+  dryRun = false,
+  source?: ApplySource,
+): Promise<ActionResult> {
   const res = await fetch("/api/apply", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ yaml, dryRun }),
+    body: JSON.stringify({ yaml, dryRun, ...(source ? { source } : {}) }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));

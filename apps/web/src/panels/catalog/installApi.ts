@@ -2,6 +2,7 @@
 // POST /api/helm (helm mode). Both return { code, stdout, stderr }, mirroring
 // the server's install executors (docs/parity/catalog.md §"Execution").
 import { useMutation } from "@tanstack/react-query";
+import type { ApplySource } from "@rigel/k8s";
 
 export interface InstallResult {
   code: number;
@@ -33,8 +34,8 @@ async function postJSON<T>(path: string, body: unknown): Promise<T> {
 }
 
 /** POST the final, substituted multi-doc YAML to `kubectl apply -f -` (via stdin). */
-export function applyManifest(yaml: string): Promise<InstallResult> {
-  return postJSON<InstallResult>("/api/apply", { yaml });
+export function applyManifest(yaml: string, source?: ApplySource): Promise<InstallResult> {
+  return postJSON<InstallResult>("/api/apply", { yaml, ...(source ? { source } : {}) });
 }
 
 /** POST the helm descriptor + values to run `helm upgrade --install`. */
@@ -44,7 +45,9 @@ export function installHelm(params: HelmInstallParams): Promise<InstallResult> {
 
 /** TanStack mutation for the manifest-mode apply. */
 export function useApplyManifest() {
-  return useMutation<InstallResult, Error, string>({ mutationFn: applyManifest });
+  return useMutation<InstallResult, Error, { yaml: string; source?: ApplySource }>({
+    mutationFn: ({ yaml, source }) => applyManifest(yaml, source),
+  });
 }
 
 /** TanStack mutation for the helm-mode install. */

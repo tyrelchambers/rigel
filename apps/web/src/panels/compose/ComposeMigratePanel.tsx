@@ -128,7 +128,7 @@ export default function ComposeMigratePanel() {
 
   function handleApply() {
     if (!manifestYaml.trim()) return;
-    setPendingAction({ kind: "applyManifest", label: "Apply migrated manifests", manifest: manifestYaml });
+    setPendingAction({ kind: "applyManifest", label: "Apply migrated manifests", manifest: manifestYaml, applySource: "compose-migration" });
   }
 
   async function handleDryRun() {
