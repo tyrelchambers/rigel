@@ -1312,7 +1312,7 @@ git commit -m "feat(web): recent-deploys + undo api helpers and hooks (HELM-60)"
 **Not a code task.** Per the standing "Pencil design first" rule (🔥), the card's visual spec must exist in Pencil before implementation. This is done interactively (author + user), not by a subagent.
 
 - [ ] **Step 1:** In Pencil, design the Overview "Recent" card: the card container/header, a row (`<relative time> · <source label> · <N> resources · namespace <ns>` + an **Undo** button), the empty state, and the destructive Undo confirmation (listing the resources to delete). Capture the frame id(s).
-- [ ] **Step 2:** Record the frame id(s) here for Task 9 to reference: `__________`.
+- [ ] **Step 2:** Frame ids (in `/Users/tyrelchambers/Desktop/clankerlocal.pen`, board `Y5n1S` "Recent deployments — Undo (design)", theme `palette:midnight`): populated card `q1ARs`, empty-state card `x6FpLj`, Undo confirmation modal `R2nds`. DRAFT pending user review/refinement. Design mirrors the existing "Recent PRs" card (`ItIiJ`) token-for-token: card `$surface.elevated` / `cornerRadius 8` / `$border.subtle`; header 13.5/600 `$font.heading` title + mono `$font.tertiary` count; rows `[13,14]` padding, bottom `$border.subtle` (last row none), left icon+title/sub (sub = `N resources · namespace <ns> · <age>` in `$font.mono`), right subtle "Undo" button (`rotate-ccw`). Confirm modal: red `$status.failed` header icon, resource list, `Cancel` + destructive `Delete N resources` footer.
 - [ ] **Step 3:** No commit (design lives in the `.pen` file).
 
 Source label mapping to use in the design + implementation:
