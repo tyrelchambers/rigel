@@ -28,26 +28,30 @@ function resourceTally(result: ConversionResult | null): string {
 }
 
 export default function ComposeMigratePanel() {
-  const [compose, setCompose] = useState(PLACEHOLDER);
+  const [compose, setComposeText] = useState(PLACEHOLDER);
   const [namespace, setNamespace] = useState("default");
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
-  const [parseError, setParseError] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const { data: schema } = useClusterYamlSchema();
 
-  const result = useMemo<ConversionResult | null>(() => {
-    if (!compose.trim()) {
-      setParseError(null);
-      return null;
-    }
+  const { result, parseError: convertError } = useMemo<{
+    result: ConversionResult | null;
+    parseError: string | null;
+  }>(() => {
+    if (!compose.trim()) return { result: null, parseError: null };
     try {
-      setParseError(null);
-      return convert(compose, { namespace });
+      return { result: convert(compose, { namespace }), parseError: null };
     } catch (e) {
-      setParseError(e instanceof Error ? e.message : String(e));
-      return null;
+      return { result: null, parseError: e instanceof Error ? e.message : String(e) };
     }
   }, [compose, namespace]);
+  const parseError = fileError ?? convertError;
+
+  function setCompose(next: string) {
+    setFileError(null);
+    setComposeText(next);
+  }
 
   const manifestYaml = result ? combineManifests(result.manifests) : "";
   const resourceCount = result?.manifests.length ?? 0;
@@ -60,9 +64,11 @@ export default function ComposeMigratePanel() {
   async function loadFile(file: File | undefined) {
     if (!file) return;
     try {
-      setCompose(await readYamlFile(file));
+      const text = await readYamlFile(file);
+      setFileError(null);
+      setComposeText(text);
     } catch (e) {
-      setParseError(e instanceof Error ? e.message : String(e));
+      setFileError(e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -118,11 +124,11 @@ export default function ComposeMigratePanel() {
               <span className="font-mono text-2xs text-[var(--fg-tertiary)]">Generated manifests</span>
             </div>
             <span className="rounded-[4px] border border-[var(--border-subtle)] bg-white/5 px-[9px] py-0.5 font-mono text-2xs text-muted-foreground">
-              {resourceCount} resources
+              {resourceCount} resource{resourceCount === 1 ? "" : "s"}
             </span>
           </div>
           <div className="min-h-0 flex-1">
-            <YamlEditor value={manifestYaml} onChange={() => {}} readOnly schema={schema ?? null} />
+            <YamlEditor value={manifestYaml} readOnly schema={schema ?? null} />
           </div>
         </div>
       </div>
