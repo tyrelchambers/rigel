@@ -76,10 +76,10 @@ describe("OnboardingWizard AI-agent step", () => {
     renderWizard({ activeAgentId: "claude", agents: [claude, codex] });
 
     // AI step (label in the stepper) is the active step.
-    expect(screen.getByText(/Step 1 of 4 · AI agent/i)).toBeInTheDocument();
+    expect(screen.getByText(/Step 1 of 5 · AI agent/i)).toBeInTheDocument();
 
     // Skip moves on without requiring a connected agent.
     fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
-    expect(screen.getByText(/Step 2 of 4 · Assistant/i)).toBeInTheDocument();
+    expect(screen.getByText(/Step 2 of 5 · Assistant/i)).toBeInTheDocument();
   });
 });
