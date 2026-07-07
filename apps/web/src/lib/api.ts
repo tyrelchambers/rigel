@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import * as self from "./api";
 import type { ActiveForward } from "@/panels/services/portForward";
 import type { SuggestedAlert, DigestInput, ApplySource, RecentBatch } from "@rigel/k8s";
 import type { CheckResult, CloudProvider, CloudCluster } from "@rigel/cloud-connect/src/index";
@@ -646,7 +645,7 @@ export async function undoDeploy(batchId: string, namespace: string): Promise<Un
 export function useRecentDeploys() {
   return useQuery<RecentDeploysResponse, Error>({
     queryKey: ["recent-deploys"],
-    queryFn: () => self.fetchRecentDeploys(),
+    queryFn: fetchRecentDeploys,
     staleTime: 30_000,
   });
 }
@@ -655,7 +654,7 @@ export function useRecentDeploys() {
 export function useUndoDeploy() {
   const qc = useQueryClient();
   return useMutation<UndoDeployResponse, Error, { batchId: string; namespace: string }>({
-    mutationFn: ({ batchId, namespace }) => self.undoDeploy(batchId, namespace),
+    mutationFn: ({ batchId, namespace }) => undoDeploy(batchId, namespace),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["recent-deploys"] }),
   });
 }
