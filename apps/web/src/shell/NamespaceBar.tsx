@@ -58,6 +58,7 @@ export function NamespaceSelector() {
             alignItems: "center",
             gap: 6,
             padding: "5px 10px",
+            width: 180,
             background: "var(--surface-sunken)",
             border: "1px solid #34353A",
             borderRadius: 4,
@@ -68,11 +69,13 @@ export function NamespaceSelector() {
           <span
             className="text-xs"
             style={{
+              flexGrow: 1,
+              minWidth: 0,
+              textAlign: "left",
               fontFamily: "'Geist Variable', ui-monospace, monospace",
               fontWeight: 500,
               color: "var(--fg-primary)",
               whiteSpace: "nowrap",
-              maxWidth: 200,
               overflow: "hidden",
               textOverflow: "ellipsis",
             }}
