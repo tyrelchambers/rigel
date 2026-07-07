@@ -241,32 +241,20 @@ export default function ComposeMigratePanel() {
             <>
               <p className="text-xs leading-[1.5] text-[var(--fg-secondary)]">{explanation.summary}</p>
 
-              <div className="flex flex-col gap-2.5">
+              <div className="flex flex-col gap-3">
                 {explanation.resources.map((r) => {
                   const Icon = EXPLAIN_ICON[r.kind] ?? Box;
                   return (
                     <div key={r.kind} className="flex items-start gap-2.5">
-                      <Icon className="mt-px size-3.5 shrink-0 text-[var(--accent-primary)]" />
-                      <span className="text-xs leading-[1.45]">
-                        <span className="font-semibold text-[var(--fg-primary)]">{explainLabel(r.kind, r.count)}</span>{" "}
-                        <span className="text-[var(--fg-tertiary)]">{r.text}</span>
+                      <Icon className="mt-0.5 size-4 shrink-0 text-[var(--accent-primary)]" />
+                      <span className="text-xs leading-[1.5]">
+                        <span className="font-semibold text-[var(--fg-primary)]">{explainLabel(r.kind, r.count)}</span>
+                        <span className="ml-2.5 text-[var(--fg-secondary)]">{r.text}</span>
                       </span>
                     </div>
                   );
                 })}
               </div>
-
-              {explanation.attention.length > 0 && (
-                <div className="flex flex-col gap-2.5">
-                  <span className="font-mono text-2xs text-[var(--fg-tertiary)]">Heads up</span>
-                  {explanation.attention.map((a, i) => (
-                    <div key={`a${i}`} className="flex items-start gap-2.5">
-                      <TriangleAlert className="mt-px size-3.5 shrink-0 text-amber-500" />
-                      <span className="text-xs leading-[1.45] text-[var(--fg-secondary)]">{a}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
             </>
           )}
           </div>

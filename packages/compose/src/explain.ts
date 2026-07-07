@@ -1,4 +1,4 @@
-import type { ConversionResult, WarningFix } from "./types";
+import type { ConversionResult } from "./types";
 
 export interface ExplainedResource {
   kind: string;
@@ -9,7 +9,6 @@ export interface ExplainedResource {
 export interface Explanation {
   summary: string;
   resources: ExplainedResource[];
-  attention: string[];
 }
 
 const RESOURCE_TEXT: Record<string, string> = {
@@ -21,18 +20,6 @@ const RESOURCE_TEXT: Record<string, string> = {
 };
 
 const RESOURCE_ORDER = ["Deployment", "Service", "PersistentVolumeClaim", "Secret", "Ingress"];
-
-const ATTENTION_TEXT: Record<WarningFix["option"], string> = {
-  expose:
-    "Your apps' ports are internal-only right now. Use a port's Fix (LoadBalancer or Ingress) to reach them from outside the cluster.",
-  emitSecrets:
-    "Some values look like passwords. Use Fix to have Rigel create a Secret to hold them, or create it yourself before applying.",
-  bindMountsToPvc:
-    "A folder from your machine (a bind mount) can't move to Kubernetes as-is. Use Fix to turn it into cluster storage.",
-  addWaitInit: "Kubernetes starts everything at once. Use Fix to make dependents wait for what they need.",
-};
-
-const ATTENTION_ORDER: WarningFix["option"][] = ["expose", "emitSecrets", "bindMountsToPvc", "addWaitInit"];
 
 export function explainConversion(result: ConversionResult): Explanation {
   const total = result.manifests.length;
@@ -54,10 +41,5 @@ export function explainConversion(result: ConversionResult): Explanation {
     text: RESOURCE_TEXT[kind]!,
   }));
 
-  const fixOptions = new Set(
-    result.warnings.map((w) => w.fix?.option).filter((o): o is WarningFix["option"] => !!o),
-  );
-  const attention = ATTENTION_ORDER.filter((option) => fixOptions.has(option)).map((option) => ATTENTION_TEXT[option]);
-
-  return { summary, resources, attention };
+  return { summary, resources };
 }

@@ -37,21 +37,12 @@ describe("explainConversion", () => {
     ]);
   });
 
-  it("flags expose, emitSecrets, and addWaitInit attention lines", () => {
-    expect(explanation.attention).toEqual([
-      "Your apps' ports are internal-only right now. Use a port's Fix (LoadBalancer or Ingress) to reach them from outside the cluster.",
-      "Some values look like passwords. Use Fix to have Rigel create a Secret to hold them, or create it yourself before applying.",
-      "Kubernetes starts everything at once. Use Fix to make dependents wait for what they need.",
-    ]);
-  });
-
-  it("drops attention lines and adds the Secret resource once fixes are applied", () => {
+  it("adds the Secret resource once fixes are applied", () => {
     const fixed = convert(COMPOSE, {
       namespace: "apps",
       fixes: { expose: "loadbalancer", emitSecrets: true, addWaitInit: true },
     });
     const explanation2 = explainConversion(fixed);
-    expect(explanation2.attention).toEqual([]);
     expect(explanation2.resources.map((r) => r.kind)).toContain("Secret");
     const secretEntry = explanation2.resources.find((r) => r.kind === "Secret");
     expect(secretEntry).toEqual({
@@ -76,6 +67,5 @@ describe("explainConversion", () => {
     const e = explainConversion(empty);
     expect(e.summary).toBe("");
     expect(e.resources).toEqual([]);
-    expect(e.attention).toEqual([]);
   });
 });
