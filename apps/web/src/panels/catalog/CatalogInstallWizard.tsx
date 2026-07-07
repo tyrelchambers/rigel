@@ -196,7 +196,7 @@ export function CatalogInstallWizard({
             namespace: config.namespace,
             values: artifact,
           })
-        : await applyManifest(artifact);
+        : await applyManifest(artifact, "catalog-install");
 
       setApplyLog([result.stdout, result.stderr].filter(Boolean).join("\n"));
       if (result.code === 0) {

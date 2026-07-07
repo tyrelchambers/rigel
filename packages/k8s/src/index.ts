@@ -298,6 +298,39 @@ export {
   buildIngressYAML,
 } from "./ingressEditor";
 
+export {
+  LEDGER_LABEL_KEY,
+  LEDGER_LABEL_VALUE,
+  LEDGER_NAME_PREFIX,
+  LEDGER_DATA_KEY,
+  LEDGER_NAMESPACE,
+  ledgerName,
+  asApplySource,
+  type ApplySource,
+} from "./applyBatch";
+
+export {
+  parseAppliedResources,
+  parseCreatedResources,
+  resolveCreatedResources,
+  ledgerNamespaceFor,
+  buildLedgerManifest,
+  type AppliedResource,
+  type CreatedResource,
+  type LedgerResource,
+  type LedgerMeta,
+  type LedgerConfigMap,
+} from "./applyLedger";
+
+export {
+  RECENT_WINDOW_MS,
+  ledgerDiscoveryArgs,
+  parseLedgerBatches,
+  type RecentBatch,
+  type RecentResource,
+  type LedgerItem,
+} from "./recentDeploys";
+
 /** Kubernetes ObjectMeta (subset used by the web panels). */
 export interface ObjectMeta {
   name: string;

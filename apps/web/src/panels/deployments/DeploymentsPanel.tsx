@@ -70,9 +70,16 @@ export default function DeploymentsPanel() {
     () => namespaceOptions(allDeployments, resources["namespaces"] ?? {}),
     [allDeployments, resources],
   );
+  // Filter by the selected namespace client-side too: the `deployments` kind has
+  // a persistent cluster-wide watch (the chat rail reads the assistant's install
+  // namespace), so the store holds all namespaces even when this panel is scoped.
   const filtered = useMemo(
-    () => allDeployments.filter((d) => matchesSearch(d, search)),
-    [allDeployments, search],
+    () =>
+      allDeployments.filter(
+        (d) =>
+          (!namespaceFilter || d.metadata.namespace === namespaceFilter) && matchesSearch(d, search),
+      ),
+    [allDeployments, search, namespaceFilter],
   );
 
   // Cmd-K / related-resources focus: expand + scroll to a deployment.

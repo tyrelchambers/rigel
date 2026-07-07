@@ -141,7 +141,7 @@ export function ConfirmSheet({
     const cmd = act.label ?? "kubectl apply -f -";
     setApplyState({ pending: true });
     try {
-      const result = await applyManifestYaml(act.manifest);
+      const result = await applyManifestYaml(act.manifest, false, act.applySource);
       setApplyState({ pending: false, result });
       if (fromChat) onResult?.({ action: act, result, commandString: cmd });
       if (result.code === 0) setTimeout(() => handleClose(), 1200);

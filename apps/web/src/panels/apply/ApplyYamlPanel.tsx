@@ -52,7 +52,7 @@ export default function ApplyYamlPanel() {
 
   function handleApply() {
     if (!hasContent) return;
-    setPendingAction({ kind: "applyManifest", label: "Apply YAML", manifest: yaml });
+    setPendingAction({ kind: "applyManifest", label: "Apply YAML", manifest: yaml, applySource: "apply-yaml" });
   }
 
   // Reset stale validation feedback whenever the manifest changes.
