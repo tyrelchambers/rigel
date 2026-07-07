@@ -220,11 +220,11 @@ export default function ComposeMigratePanel() {
             size="sm"
             className="gap-1.5"
             onClick={handleDryRun}
-            disabled={!manifestYaml.trim() || dryRun.pending}
+            disabled={!effectiveManifest.trim() || dryRun.pending}
           >
             {dryRun.pending ? <><Loader size={14} /> Validating…</> : <><FlaskConical className="size-3.5" /> Dry run</>}
           </Button>
-          <Button size="sm" className="gap-1.5" onClick={handleApply} disabled={!manifestYaml.trim()}>
+          <Button size="sm" className="gap-1.5" onClick={handleApply} disabled={!effectiveManifest.trim()}>
             <Play className="size-3.5 fill-current" /> Apply…
           </Button>
         </div>
@@ -414,7 +414,7 @@ export default function ComposeMigratePanel() {
         <div className="flex-shrink-0 border-t border-[var(--border-subtle)] bg-[var(--surface-primary)] px-[18px] py-2.5">
           <ManifestValidationResult
             state={dryRun}
-            yaml={manifestYaml}
+            yaml={effectiveManifest}
             onDismiss={() => setDryRun({ pending: false })}
           />
         </div>
