@@ -144,6 +144,38 @@ Manifest emission order stays deterministic: Deployments, Services, PVCs, Secret
 
 **Panel UI:** the warnings/hints strip gains fix controls. A "Fix all" button enables the three zero-input fixes (`emitSecrets`, `bindMountsToPvc`, `expose: "loadbalancer"`, `addWaitInit`). Each fixable warning row has a "Fix" button that flips its option; the published-port fix offers LoadBalancer (one click) or Ingress (opens a hostname input, per the no-free-text-traps rule). Enabled fixes are reflected as lit toggles the user can turn back off; the manifests and remaining warnings re-render live. All fix state feeds the single `convert(compose, { namespace, fixes })` call.
 
+## "What this will create" explainer (deterministic, folded into this branch)
+
+Beginner hand-holding. A plain-language explanation of what the conversion produces, generated deterministically from the `ConversionResult` (no AI, no network — works during cold-start onboarding, and can never describe a resource that wasn't emitted). It re-derives live as the user edits or applies fixes.
+
+Engine adds a pure function:
+
+```
+explainConversion(result: ConversionResult): Explanation
+Explanation {
+  summary: string                                     // one friendly lead sentence
+  resources: { kind: string, count: number, text: string }[]  // one entry per emitted kind, plain-language
+  attention: string[]                                 // plain-language notes derived from the warning TYPES present
+}
+```
+
+- `summary` — e.g. "Your Compose file becomes 10 Kubernetes resources: 4 apps plus the pieces that keep them running, networked, and stored."
+- `resources` — one entry per distinct emitted kind, counts from the manifests, each with a beginner-friendly gloss:
+  - Deployment: "Runs your app containers and keeps them alive, restarting any that crash."
+  - Service: "Gives each app a stable in-cluster address so your apps can reach each other by name."
+  - PersistentVolumeClaim: "Reserves durable storage so your data survives restarts and updates."
+  - Secret: "Holds sensitive values like passwords and tokens, separate from your app config."
+  - Ingress: "Routes traffic from outside the cluster to your app at the hostname you set."
+- `attention` — a plain-language line per warning TYPE currently present (so lines disappear as fixes are applied), each nudging toward the matching Fix:
+  - published-port: "Your apps' ports are internal-only right now. Use a port's Fix (LoadBalancer or Ingress) to reach them from outside the cluster."
+  - secret-env: "Some values look like passwords. Use Fix to have Rigel create a Secret to hold them, or create it yourself before applying."
+  - bind mount: "A folder from your machine (a bind mount) can't move to Kubernetes as-is. Use Fix to turn it into cluster storage."
+  - depends_on: "Kubernetes starts everything at once. Use Fix to make dependents wait for what they need."
+
+Pure and unit-tested (counts, per-kind text present only for emitted kinds, attention lines gated on warning presence). Exported from `@rigel/compose`.
+
+**Panel UI:** a collapsible "What this will create" card sits above the two-pane body, expanded by default (this is onboarding hand-holding), with a chevron to collapse for power users. It renders `summary` as a lead line, `resources` as a friendly icon list, and `attention` as a short "Heads up" list. It reads the same live conversion result, so it updates as the user edits the compose or toggles fixes. Tailwind + tokens, matches the panel's visual system.
+
 ## Open follow-ups (not this ticket)
 
 - Suggest-and-swap: replace a matched service with the curated catalog install (helm/manifest + secrets fields) reconciled into the same review flow.
