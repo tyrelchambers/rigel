@@ -221,7 +221,7 @@ export default function ComposeMigratePanel() {
 
       {showExplainer && explanation && (
         <div className="flex-shrink-0 px-4 pt-3">
-          <div className="flex flex-col gap-[11px] rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-4">
+          <div className="flex flex-col gap-[11px] rounded-xl border border-[var(--border-subtle)] p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Sparkles className="size-3.5 text-[var(--accent-primary)]" />
