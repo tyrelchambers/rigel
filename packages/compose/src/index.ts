@@ -5,8 +5,10 @@ export type {
   ComposeService,
   ConversionResult,
   ConvertOptions,
+  ConvertFixes,
   ManifestDoc,
   Warning,
+  WarningFix,
   CatalogHint,
   Severity,
 } from "./types";

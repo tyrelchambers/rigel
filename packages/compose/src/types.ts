@@ -29,11 +29,17 @@ export interface ComposeModel {
 
 export type Severity = "info" | "warning";
 
+export interface WarningFix {
+  label: string;
+  option: "emitSecrets" | "bindMountsToPvc" | "expose" | "addWaitInit";
+}
+
 export interface Warning {
   severity: Severity;
   service?: string;
   directive?: string;
   message: string;
+  fix?: WarningFix;
 }
 
 export interface CatalogHint {
@@ -54,6 +60,15 @@ export interface ConversionResult {
   catalogHints: CatalogHint[];
 }
 
+export interface ConvertFixes {
+  emitSecrets?: boolean;
+  bindMountsToPvc?: boolean;
+  expose?: "none" | "loadbalancer" | "ingress";
+  ingressHost?: string;
+  addWaitInit?: boolean;
+}
+
 export interface ConvertOptions {
   namespace: string;
+  fixes?: ConvertFixes;
 }

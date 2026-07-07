@@ -1,9 +1,9 @@
 import { stringify as stringifyYaml } from "yaml";
 import { parseCompose } from "./parse";
-import { buildDeployment, buildPvc, buildService } from "./resources";
+import { buildDeployment, buildPvc, buildService, buildSecret, buildIngress } from "./resources";
 import { catalogHints } from "./hints";
 import { isSecretEnvKey } from "./env";
-import type { ConversionResult, ConvertOptions, ManifestDoc, Warning } from "./types";
+import type { ConversionResult, ConvertFixes, ConvertOptions, ManifestDoc, Warning } from "./types";
 
 function doc(obj: Record<string, any>): ManifestDoc {
   return { kind: obj.kind, name: obj.metadata?.name ?? "", yaml: stringifyYaml(obj) };
@@ -11,6 +11,11 @@ function doc(obj: Record<string, any>): ManifestDoc {
 
 export function convert(composeText: string, opts: ConvertOptions): ConversionResult {
   const model = parseCompose(composeText);
+  const fixes: ConvertFixes = opts.fixes ?? {};
+  const exposeActive = fixes.expose === "loadbalancer" || (fixes.expose === "ingress" && !!fixes.ingressHost);
+  const firstPorts: Record<string, number> = {};
+  for (const s of model.services) if (s.ports.length) firstPorts[s.name] = s.ports[0]!.containerPort;
+
   const manifests: ManifestDoc[] = [];
   const warnings: Warning[] = [];
 
@@ -24,13 +29,15 @@ export function convert(composeText: string, opts: ConvertOptions): ConversionRe
       continue;
     }
 
-    manifests.push(doc(buildDeployment(service, opts.namespace)));
+    manifests.push(doc(buildDeployment(service, opts.namespace, fixes, firstPorts)));
 
-    const svcObj = buildService(service, opts.namespace);
+    const svcObj = buildService(service, opts.namespace, fixes.expose);
     if (svcObj) manifests.push(doc(svcObj));
 
     for (const vol of service.volumes) {
       if (vol.kind === "named") {
+        manifests.push(doc(buildPvc(vol, service, opts.namespace)));
+      } else if (fixes.bindMountsToPvc) {
         manifests.push(doc(buildPvc(vol, service, opts.namespace)));
       } else {
         warnings.push({
@@ -38,29 +45,39 @@ export function convert(composeText: string, opts: ConvertOptions): ConversionRe
           service: service.name,
           directive: "volumes",
           message: `Host bind mount "${vol.source}:${vol.mountPath}" is not translated. Use a PVC or configure storage manually.`,
+          fix: { label: "Convert to PVC", option: "bindMountsToPvc" },
         });
       }
     }
 
-    for (const p of service.ports) {
-      if (p.publishedPort != null) {
-        warnings.push({
-          severity: "info",
-          service: service.name,
-          directive: "ports",
-          message: `Published port ${p.publishedPort}:${p.containerPort} became a ClusterIP Service. To expose it outside the cluster, add an Ingress.`,
-        });
+    const secretObj = fixes.emitSecrets ? buildSecret(service, opts.namespace) : null;
+    if (secretObj) manifests.push(doc(secretObj));
+
+    if (!exposeActive) {
+      for (const p of service.ports) {
+        if (p.publishedPort != null) {
+          warnings.push({
+            severity: "info",
+            service: service.name,
+            directive: "ports",
+            message: `Published port ${p.publishedPort}:${p.containerPort} became a ClusterIP Service. To expose it outside the cluster, add an Ingress.`,
+            fix: { label: "Expose", option: "expose" },
+          });
+        }
       }
     }
 
-    for (const name of Object.keys(service.environment)) {
-      if (isSecretEnvKey(name)) {
-        warnings.push({
-          severity: "warning",
-          service: service.name,
-          directive: name,
-          message: `Env "${name}" looks like a secret and now references Secret "${service.name}". Create that Secret before applying.`,
-        });
+    if (!fixes.emitSecrets) {
+      for (const name of Object.keys(service.environment)) {
+        if (isSecretEnvKey(name)) {
+          warnings.push({
+            severity: "warning",
+            service: service.name,
+            directive: name,
+            message: `Env "${name}" looks like a secret and now references Secret "${service.name}". Create that Secret before applying.`,
+            fix: { label: "Generate Secret", option: "emitSecrets" },
+          });
+        }
       }
     }
 
@@ -82,12 +99,18 @@ export function convert(composeText: string, opts: ConvertOptions): ConversionRe
     }
   }
 
-  if (model.services.some((s) => s.dependsOn.length)) {
+  if (!fixes.addWaitInit && model.services.some((s) => s.dependsOn.length)) {
     warnings.push({
       severity: "info",
       directive: "depends_on",
       message: `depends_on ordering has no Kubernetes equivalent. Pods start in parallel; make services resilient to startup order.`,
+      fix: { label: "Add wait-for init containers", option: "addWaitInit" },
     });
+  }
+
+  if (fixes.expose === "ingress" && fixes.ingressHost) {
+    const ingress = buildIngress(model.services, opts.namespace, fixes.ingressHost);
+    if (ingress) manifests.push(doc(ingress));
   }
 
   return { manifests, warnings, catalogHints: catalogHints(model.services) };
