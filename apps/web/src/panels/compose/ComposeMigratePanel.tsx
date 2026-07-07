@@ -249,7 +249,7 @@ export default function ComposeMigratePanel() {
                   {w.fix ? (
                     w.fix.option === "expose" ? (
                       <DropdownMenu>
-                        <DropdownMenuTrigger className={fixBtnClass}>
+                        <DropdownMenuTrigger aria-label={`Fix: ${w.message}`} className={fixBtnClass}>
                           Fix <ChevronDown className="size-3" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
@@ -265,7 +265,12 @@ export default function ComposeMigratePanel() {
                         </DropdownMenuContent>
                       </DropdownMenu>
                     ) : (
-                      <button type="button" className={fixBtnClass} onClick={() => applyFix(w)}>
+                      <button
+                        type="button"
+                        aria-label={`Fix: ${w.message}`}
+                        className={fixBtnClass}
+                        onClick={() => applyFix(w)}
+                      >
                         Fix
                       </button>
                     )
