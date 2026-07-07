@@ -1,5 +1,6 @@
 export { convert, combineManifests } from "./convert";
 export { parseCompose } from "./parse";
+export { explainConversion } from "./explain";
 export type {
   ComposeModel,
   ComposeService,
@@ -12,3 +13,4 @@ export type {
   CatalogHint,
   Severity,
 } from "./types";
+export type { Explanation, ExplainedResource } from "./explain";
