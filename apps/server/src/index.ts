@@ -20,6 +20,7 @@ import {
 } from "@rigel/k8s/src/helm";
 import { browseArtifactHub } from "./artifactHub";
 import { handlePurge, type PurgeRequest } from "./purge";
+import { discoverRecent, undoBatch } from "./recentDeploys";
 import {
   loadSources, saveSources, diffSource, applySource, previewRepoFix, proposeRepoFix,
   loadGithubToken, githubAccountStatus, connectGithub, disconnectGithub, listGithubRepos, listRepoTree, readRepoFile,
@@ -936,6 +937,26 @@ async function handler(req: Request): Promise<Response> {
       }
       const result = await handlePurge(context, body);
       return Response.json(result);
+    }
+
+    // GET /api/deployments/recent — apply batches within the 14-day window.
+    if (url.pathname === "/api/deployments/recent" && req.method === "GET") {
+      return Response.json(await discoverRecent(context, Date.now()));
+    }
+
+    // POST /api/deployments/undo — delete every resource a batch created. Body:
+    // { batchId, namespace } (namespace = the ledger ConfigMap's own namespace).
+    if (url.pathname === "/api/deployments/undo" && req.method === "POST") {
+      let body: { batchId?: string; namespace?: string };
+      try {
+        body = (await req.json()) as { batchId?: string; namespace?: string };
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      if (typeof body.batchId !== "string" || body.batchId === "" || typeof body.namespace !== "string" || body.namespace === "") {
+        return Response.json({ error: "missing batchId or namespace" }, { status: 422 });
+      }
+      return Response.json(await undoBatch(context, body.batchId, body.namespace));
     }
 
     // POST /api/updates — check running images for newer stable releases.
