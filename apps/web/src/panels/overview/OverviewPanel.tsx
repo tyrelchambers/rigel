@@ -247,11 +247,6 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
       <div className="ov-content">
         {error && <pre className="ov-error">{error}</pre>}
 
-        {/* Recent deployments — batches Rigel applied, with per-batch undo */}
-        <div className="ov-row">
-          <RecentDeploysCard />
-        </div>
-
         {/* Row 1 — Dense per-node metrics table (Layout C) + reclaimable badge */}
         <div className="ov-row">
           <NodeMetricsTable
@@ -308,6 +303,11 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
             statCount={events.length}
             statTone="neutral"
           />
+        </div>
+
+        {/* Recent deployments — batches Rigel applied, with per-batch undo */}
+        <div className="ov-row">
+          <RecentDeploysCard />
         </div>
 
         {/* Event activity — 1h span, 60 stacked warning/normal buckets, display-only */}
