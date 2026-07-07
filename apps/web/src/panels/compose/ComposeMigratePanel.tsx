@@ -41,6 +41,7 @@ import {
   type Explanation,
   type Warning,
 } from "@rigel/compose";
+import { parseExistingResources, dropManifestDocs } from "@rigel/k8s";
 import { readYamlFile } from "@/panels/apply/readYamlFile";
 
 const PLACEHOLDER = `# Paste your docker-compose.yml here, or upload a file.
@@ -97,6 +98,8 @@ export default function ComposeMigratePanel() {
   const [dryRun, setDryRun] = useState<{ pending: boolean; result?: ActionResult; error?: string }>({ pending: false });
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
   const [editedManifest, setEditedManifest] = useState<string | null>(null);
+  const [applyPrep, setApplyPrep] = useState<{ pending: boolean; note?: string }>({ pending: false });
+  const [skipped, setSkipped] = useState<{ kind: string; name: string }[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const { data: schema } = useClusterYamlSchema();
@@ -129,11 +132,43 @@ export default function ComposeMigratePanel() {
   const effectiveManifest = editedManifest ?? manifestYaml;
 
   useEffect(() => setEditedManifest(null), [manifestYaml]);
-  useEffect(() => setDryRun({ pending: false }), [effectiveManifest]);
+  useEffect(() => {
+    setDryRun({ pending: false });
+    setSkipped([]);
+    setApplyPrep({ pending: false });
+  }, [effectiveManifest]);
 
-  function handleApply() {
+  // Apply always dry-runs first: validate, and never overwrite a resource that
+  // already exists — conflicting resources are dropped and only the new ones
+  // are rolled out (through the confirm sheet).
+  async function handleApply() {
     if (!effectiveManifest.trim()) return;
-    setPendingAction({ kind: "applyManifest", label: "Apply migrated manifests", manifest: effectiveManifest, applySource: "compose-migration" });
+    setApplyPrep({ pending: true });
+    setSkipped([]);
+    try {
+      const dry = await applyManifestYaml(effectiveManifest, true);
+      setDryRun({ pending: false, result: dry });
+      if (dry.code !== 0) {
+        setApplyPrep({ pending: false });
+        return; // validation failed — surfaced by ManifestValidationResult
+      }
+      const existing = parseExistingResources(dry.stdout);
+      const toApply = existing.length ? dropManifestDocs(effectiveManifest, existing) : effectiveManifest;
+      setSkipped(existing);
+      if (!toApply.trim()) {
+        setApplyPrep({ pending: false, note: "Every resource already exists — nothing new to apply." });
+        return;
+      }
+      setApplyPrep({ pending: false });
+      setPendingAction({
+        kind: "applyManifest",
+        label: existing.length ? `Apply new resources (skip ${existing.length} existing)` : "Apply migrated manifests",
+        manifest: toApply,
+        applySource: "compose-migration",
+      });
+    } catch (e) {
+      setApplyPrep({ pending: false, note: e instanceof Error ? e.message : String(e) });
+    }
   }
 
   async function handleDryRun() {
@@ -224,8 +259,8 @@ export default function ComposeMigratePanel() {
           >
             {dryRun.pending ? <><Loader size={14} /> Validating…</> : <><FlaskConical className="size-3.5" /> Dry run</>}
           </Button>
-          <Button size="sm" className="gap-1.5" onClick={handleApply} disabled={!effectiveManifest.trim()}>
-            <Play className="size-3.5 fill-current" /> Apply…
+          <Button size="sm" className="gap-1.5" onClick={handleApply} disabled={!effectiveManifest.trim() || applyPrep.pending || dryRun.pending}>
+            {applyPrep.pending ? <><Loader size={14} /> Checking…</> : <><Play className="size-3.5 fill-current" /> Apply…</>}
           </Button>
         </div>
       </header>
@@ -417,6 +452,25 @@ export default function ComposeMigratePanel() {
             yaml={effectiveManifest}
             onDismiss={() => setDryRun({ pending: false })}
           />
+        </div>
+      )}
+
+      {(skipped.length > 0 || applyPrep.note) && (
+        <div className="flex flex-shrink-0 flex-col gap-1.5 border-t border-[var(--border-subtle)] bg-[var(--surface-primary)] px-[18px] py-2.5">
+          {skipped.length > 0 && (
+            <p className="flex items-center gap-1.5 text-xs text-amber-400">
+              <TriangleAlert className="size-3.5 shrink-0" /> {skipped.length} resource{skipped.length === 1 ? "" : "s"} already exist and won&apos;t be modified
+              {applyPrep.note ? "." : " — only new resources are applied."}
+            </p>
+          )}
+          {skipped.length > 0 && (
+            <ul className="max-h-24 space-y-0.5 overflow-auto rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-sunken)] p-1.5 font-mono text-2xs text-[var(--fg-tertiary)]">
+              {skipped.map((r, i) => (
+                <li key={i} className="px-2 py-0.5">{r.kind}/{r.name}</li>
+              ))}
+            </ul>
+          )}
+          {applyPrep.note && <p className="text-xs text-[var(--fg-secondary)]">{applyPrep.note}</p>}
         </div>
       )}
 

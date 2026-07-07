@@ -74,6 +74,22 @@ export function parseCreatedResources(stdout: string): CreatedResource[] {
 }
 
 /**
+ * Parse `kubectl apply --dry-run=server` stdout for resources that ALREADY
+ * exist — reported `configured` or `unchanged` (a `created` line is new).
+ * Tolerates the ` (server dry run)` suffix kubectl appends. Used to detect
+ * conflicts so the Compose migration never overwrites an existing resource.
+ */
+export function parseExistingResources(stdout: string): CreatedResource[] {
+  const out: CreatedResource[] = [];
+  for (const raw of stdout.split("\n")) {
+    const m = /^(\S+?)\/(\S+)\s+(?:configured|unchanged)\b/.exec(raw.trim());
+    if (!m) continue;
+    out.push({ kind: m[1]!.split(".")[0]!.toLowerCase(), name: m[2]! });
+  }
+  return out;
+}
+
+/**
  * Join created resources to their manifest entries: keep the manifest kind
  * (e.g. "Deployment") and resolve namespace to the manifest's, or "default" when
  * omitted (the namespace kubectl applied into). Created resources with no

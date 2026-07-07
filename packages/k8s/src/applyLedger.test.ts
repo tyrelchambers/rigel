@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   parseAppliedResources,
   parseCreatedResources,
+  parseExistingResources,
   resolveCreatedResources,
   ledgerNamespaceFor,
   buildLedgerManifest,
@@ -52,6 +53,21 @@ describe("parseCreatedResources", () => {
   test("keeps only 'created' lines, splitting the type token to a kind", () => {
     expect(parseCreatedResources(STDOUT)).toEqual([
       { kind: "deployment", name: "web" },
+      { kind: "service", name: "web" },
+      { kind: "persistentvolumeclaim", name: "web-data" },
+    ]);
+  });
+});
+
+describe("parseExistingResources", () => {
+  test("keeps configured/unchanged (existing) lines, tolerating the dry-run suffix", () => {
+    const stdout = [
+      "deployment.apps/web created (server dry run)",
+      "service/web configured (server dry run)",
+      "persistentvolumeclaim/web-data unchanged",
+      "configmap/web-config created",
+    ].join("\n");
+    expect(parseExistingResources(stdout)).toEqual([
       { kind: "service", name: "web" },
       { kind: "persistentvolumeclaim", name: "web-data" },
     ]);

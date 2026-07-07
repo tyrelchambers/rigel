@@ -309,9 +309,11 @@ export {
   type ApplySource,
 } from "./applyBatch";
 
+export { dropManifestDocs, type ResourceRef } from "./manifestFilter";
 export {
   parseAppliedResources,
   parseCreatedResources,
+  parseExistingResources,
   resolveCreatedResources,
   ledgerNamespaceFor,
   buildLedgerManifest,
