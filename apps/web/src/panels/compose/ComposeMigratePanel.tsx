@@ -1,5 +1,24 @@
 import { useMemo, useRef, useState } from "react";
-import { AlertTriangle, ChevronDown, FileCode, Info, Layers, Play, Upload, WandSparkles, X } from "lucide-react";
+import {
+  AlertTriangle,
+  Box,
+  ChevronDown,
+  ChevronUp,
+  Database,
+  FileCode,
+  Globe,
+  Info,
+  KeyRound,
+  Layers,
+  Play,
+  Share2,
+  Sparkles,
+  TriangleAlert,
+  Upload,
+  WandSparkles,
+  X,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,7 +31,15 @@ import { YamlEditor } from "@/components/YamlEditorLazy";
 import { NamespaceField } from "@/components/NamespaceField";
 import { useClusterYamlSchema } from "@/lib/useClusterYamlSchema";
 import type { ActionBlock } from "@/lib/api";
-import { convert, combineManifests, type ConversionResult, type ConvertFixes, type Warning } from "@rigel/compose";
+import {
+  convert,
+  combineManifests,
+  explainConversion,
+  type ConversionResult,
+  type ConvertFixes,
+  type Explanation,
+  type Warning,
+} from "@rigel/compose";
 import { readYamlFile } from "@/panels/apply/readYamlFile";
 
 const PLACEHOLDER = `# Paste your docker-compose.yml here, or upload a file.
@@ -33,10 +60,33 @@ function resourceTally(result: ConversionResult | null): string {
     .join("   ");
 }
 
+const EXPLAIN_ICON: Record<string, LucideIcon> = {
+  Deployment: Box,
+  Service: Share2,
+  PersistentVolumeClaim: Database,
+  Secret: KeyRound,
+  Ingress: Globe,
+};
+
+const EXPLAIN_LABEL: Record<string, [string, string]> = {
+  Deployment: ["Deployment", "Deployments"],
+  Service: ["Service", "Services"],
+  PersistentVolumeClaim: ["Volume claim", "Volume claims"],
+  Secret: ["Secret", "Secrets"],
+  Ingress: ["Ingress", "Ingresses"],
+};
+
+function explainLabel(kind: string, count: number): string {
+  const pair = EXPLAIN_LABEL[kind];
+  const label = pair ? (count === 1 ? pair[0] : pair[1]) : kind;
+  return `${count} ${label}`;
+}
+
 export default function ComposeMigratePanel() {
   const [compose, setComposeText] = useState(PLACEHOLDER);
   const [namespace, setNamespace] = useState("default");
   const [fixes, setFixes] = useState<ConvertFixes>({});
+  const [explainerCollapsed, setExplainerCollapsed] = useState(false);
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -59,6 +109,9 @@ export default function ComposeMigratePanel() {
     setFileError(null);
     setComposeText(next);
   }
+
+  const explanation: Explanation | null = result ? explainConversion(result) : null;
+  const showExplainer = !!explanation && explanation.summary.length > 0;
 
   const manifestYaml = result ? combineManifests(result.manifests) : "";
   const resourceCount = result?.manifests.length ?? 0;
@@ -140,6 +193,58 @@ export default function ComposeMigratePanel() {
           </Button>
         </div>
       </header>
+
+      {showExplainer && explanation && (
+        <div className="flex flex-shrink-0 flex-col gap-[11px] border-b border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-5 py-3.5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="size-3.5 text-[var(--accent-primary)]" />
+              <h2 className="font-heading text-sm font-semibold text-[var(--fg-primary)]">What this will create</h2>
+            </div>
+            <button
+              type="button"
+              aria-label={explainerCollapsed ? "Expand explainer" : "Collapse explainer"}
+              onClick={() => setExplainerCollapsed((c) => !c)}
+              className="flex size-6 items-center justify-center rounded-sm text-[var(--fg-tertiary)] outline-none hover:bg-white/[0.06] hover:text-[var(--fg-primary)]"
+            >
+              {explainerCollapsed ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
+            </button>
+          </div>
+
+          {!explainerCollapsed && (
+            <>
+              <p className="text-xs leading-[1.5] text-[var(--fg-secondary)]">{explanation.summary}</p>
+
+              <div className="flex flex-col gap-2.5">
+                {explanation.resources.map((r) => {
+                  const Icon = EXPLAIN_ICON[r.kind] ?? Box;
+                  return (
+                    <div key={r.kind} className="flex items-start gap-2.5">
+                      <Icon className="mt-px size-3.5 shrink-0 text-[var(--accent-primary)]" />
+                      <span className="text-xs leading-[1.45]">
+                        <span className="font-semibold text-[var(--fg-primary)]">{explainLabel(r.kind, r.count)}</span>{" "}
+                        <span className="text-[var(--fg-tertiary)]">{r.text}</span>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {explanation.attention.length > 0 && (
+                <div className="flex flex-col gap-2.5">
+                  <span className="font-mono text-2xs text-[var(--fg-tertiary)]">Heads up</span>
+                  {explanation.attention.map((a, i) => (
+                    <div key={`a${i}`} className="flex items-start gap-2.5">
+                      <TriangleAlert className="mt-px size-3.5 shrink-0 text-amber-500" />
+                      <span className="text-xs leading-[1.45] text-[var(--fg-secondary)]">{a}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col border-r border-[var(--border-subtle)]">
