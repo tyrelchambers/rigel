@@ -41,8 +41,9 @@ and the API server records no apply batches. Rigel must record it itself.
 ## Architecture
 
 Structurally this is "Purge, but the resource list comes from a ledger object
-instead of a label query, and it is written at apply time." It reuses purge's
-per-resource delete machinery (`deleteArgs`, `canonicalKind`).
+instead of a label query, and it is written at apply time." Undo deletes each
+recorded resource by its own kind via `kubectl delete`, independent of purge's
+fixed kind list.
 
 ### 1. The ledger object
 
@@ -129,11 +130,15 @@ namespace, carried from discovery):
 1. Re-read the ledger ConfigMap `rigel-apply-<batchId>` in `namespace` (the ledger
    is the authoritative resource list — the client's copy could be stale).
 2. Delete each recorded resource with `kubectl delete <kind> <name> -n <ns>
-   --ignore-not-found` (reusing purge's `deleteArgs` + `canonicalKind`;
-   `--ignore-not-found` makes a since-deleted or mis-resolved resource a safe
-   no-op). Deleting an owning resource cascades its pods; separately-created
-   PVCs/Secrets are in the same recorded list and deleted in the same pass.
-3. Delete the ledger ConfigMap itself, so the batch disappears from Recent.
+   --ignore-not-found`, using the recorded kind directly (any kind, including
+   CRDs — not gated to a fixed kind list). `--ignore-not-found` makes a
+   since-deleted resource a safe no-op. Deleting an owning resource cascades its
+   pods; separately-created PVCs/Secrets are in the same recorded list and deleted
+   in the same pass.
+3. Delete the ledger ConfigMap **only when every resource delete succeeded** — on
+   a partial failure the ledger is kept so the batch stays in Recent for a safe
+   retry (retry re-attempts deletes; `--ignore-not-found` no-ops the already-gone).
+   On full success the ledger is removed so the batch disappears from Recent.
 4. Return per-resource results.
 
 The flow is routed through the existing red destructive confirmation, consistent

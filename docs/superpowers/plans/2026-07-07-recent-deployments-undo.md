@@ -11,7 +11,7 @@
 **Design notes:**
 - Ledger constants live in `packages/k8s` (not `packages/catalog`): they are not catalog-specific and neither `packages/k8s` nor `apps/server` depends on `@rigel/catalog`. The one-constant-plus-single-reader convention from `CATALOG_APP_ANNOTATION`/`boundAppID` is preserved.
 - `ActionBlock.source` already exists (it's `proposeRepoFix`'s git source), so the apply-source is threaded on a new distinct field `applySource`.
-- Reuses purge's `deleteArgs`, `canonicalKind`, and `DISCOVERY_KINDS` from `packages/k8s/src/purge.ts`.
+- Undo deletes each recorded resource by its own kind (`kubectl delete <kind> <name> -n <ns> --ignore-not-found`), not gated to a fixed kind list — so CRDs and any other kinds undo cleanly. Discovery is ledger-label based, independent of purge.
 
 ---
 
@@ -991,7 +991,7 @@ describe("undoBatch", () => {
     ] }) },
   };
 
-  test("reads the ledger (in its namespace), deletes each resource (ignore-not-found), then deletes the ledger", async () => {
+  test("reads the ledger (in its namespace), deletes each resource by its own kind, then deletes the ledger", async () => {
     const kubectlRun = vi
       .fn()
       .mockResolvedValueOnce({ code: 0, stdout: JSON.stringify(ledger), stderr: "" }) // get ledger
@@ -1002,13 +1002,30 @@ describe("undoBatch", () => {
     const res = await undoBatch(null, "b1", "shop", { kubectlRun });
 
     expect(kubectlRun.mock.calls[0]![1]).toEqual(["get", "configmap", "rigel-apply-b1", "-n", "shop", "-o", "json"]);
-    expect(kubectlRun.mock.calls[1]![1]).toEqual(["delete", "deployment", "web", "-n", "shop", "--ignore-not-found"]);
-    expect(kubectlRun.mock.calls[2]![1]).toEqual(["delete", "service", "web", "-n", "shop", "--ignore-not-found"]);
+    expect(kubectlRun.mock.calls[1]![1]).toEqual(["delete", "Deployment", "web", "-n", "shop", "--ignore-not-found"]);
+    expect(kubectlRun.mock.calls[2]![1]).toEqual(["delete", "Service", "web", "-n", "shop", "--ignore-not-found"]);
     expect(kubectlRun.mock.calls[3]![1]).toEqual(["delete", "configmap", "rigel-apply-b1", "-n", "shop", "--ignore-not-found"]);
     expect(res.ok).toBe(true);
     expect(res.results).toEqual([
       { resource: "Deployment/web", ok: true, detail: "deleted" },
       { resource: "Service/web", ok: true, detail: "deleted" },
+    ]);
+  });
+
+  test("on a partial failure, keeps the ledger (no ledger delete) and reports not-ok", async () => {
+    const kubectlRun = vi
+      .fn()
+      .mockResolvedValueOnce({ code: 0, stdout: JSON.stringify(ledger), stderr: "" }) // get ledger
+      .mockResolvedValueOnce({ code: 0, stdout: "", stderr: "" }) // delete deployment ok
+      .mockResolvedValueOnce({ code: 1, stdout: "", stderr: "forbidden" }); // delete service fails
+
+    const res = await undoBatch(null, "b1", "shop", { kubectlRun });
+
+    expect(kubectlRun).toHaveBeenCalledTimes(3); // get + 2 deletes; NO ledger delete
+    expect(res.ok).toBe(false);
+    expect(res.results).toEqual([
+      { resource: "Deployment/web", ok: true, detail: "deleted" },
+      { resource: "Service/web", ok: false, detail: "forbidden" },
     ]);
   });
 
@@ -1039,8 +1056,6 @@ Expected: FAIL — module not found.
 import { kubectl, type RunResult } from "@rigel/k8s/src/run";
 import {
   LEDGER_DATA_KEY,
-  canonicalKind,
-  deleteArgs,
   ledgerDiscoveryArgs,
   ledgerName,
   parseLedgerBatches,
@@ -1112,24 +1127,24 @@ export async function undoBatch(
     return { ok: false, results: [{ resource: `batch/${batchId}`, ok: false, detail: "ledger unreadable" }] };
   }
 
-  // 2. Delete each recorded resource (ignore-not-found → safe no-op).
+  // 2. Delete each recorded resource by its own kind (works for any kind, incl.
+  //    CRDs — not gated to a fixed kind list). `--ignore-not-found` → safe no-op
+  //    for a resource deleted since the batch was recorded.
   const results: UndoResultEntry[] = [];
   for (const r of resources) {
-    const resource = `${r.kind}/${r.name}`;
-    const kind = canonicalKind(r.kind);
-    if (!kind) {
-      results.push({ resource, ok: false, detail: "skipped — unsupported kind" });
-      continue;
-    }
-    const del = await runners.kubectlRun(context, [...deleteArgs(kind, r.name, r.namespace), "--ignore-not-found"]);
+    const del = await runners.kubectlRun(context, ["delete", r.kind, r.name, "-n", r.namespace, "--ignore-not-found"]);
     const ok = del.code === 0;
-    results.push({ resource, ok, detail: ok ? "deleted" : (del.stderr.trim() || `exit ${del.code}`) });
+    results.push({ resource: `${r.kind}/${r.name}`, ok, detail: ok ? "deleted" : (del.stderr.trim() || `exit ${del.code}`) });
   }
 
-  // 3. Delete the ledger itself so the batch leaves Recent.
-  await runners.kubectlRun(context, ["delete", "configmap", cmName, "-n", namespace, "--ignore-not-found"]);
-
-  return { ok: results.every((r) => r.ok), results };
+  // 3. Only remove the ledger when EVERY resource was deleted. On a partial
+  //    failure, keep it so the batch stays in Recent and the user can retry
+  //    (retry is safe: --ignore-not-found no-ops the already-deleted ones).
+  const allOk = results.every((r) => r.ok);
+  if (allOk) {
+    await runners.kubectlRun(context, ["delete", "configmap", cmName, "-n", namespace, "--ignore-not-found"]);
+  }
+  return { ok: allOk, results };
 }
 ```
 
@@ -1534,6 +1549,7 @@ Per the "no web dev server" rule, do NOT start Vite. If the user wants a live ch
 
 - **Spec coverage:** ledger constants (T1) ✓; parse-created + build-ledger (T2) ✓; record-on-apply best-effort + `source` passthrough (T3) ✓; all three web apply callers tagged (T4) ✓; ledger discovery within 14-day window (T5, T6) ✓; undo re-reads ledger, deletes resources with `--ignore-not-found`, deletes ledger (T6) ✓; Overview card only (T9) ✓; Pencil-first UI (T8) ✓; deferred items tracked (T11) ✓.
 - **Field-name collision:** apply-source uses `applySource`, not the pre-existing `ActionBlock.source`. ✓
-- **Type consistency:** `ApplySource`, `LedgerResource`/`RecentResource`, `RecentBatch` (incl. `ledgerNamespace`), `LedgerItem`, `LedgerConfigMap` defined in `packages/k8s` and consumed unchanged by server (T3/T6) and web (T4/T7/T9). `canonicalKind`/`deleteArgs` reused from purge. `ledgerName`/`LEDGER_DATA_KEY` used consistently; `LEDGER_NAMESPACE` is the fallback inside `ledgerNamespaceFor`. ✓
+- **Type consistency:** `ApplySource`, `LedgerResource`/`RecentResource`, `RecentBatch` (incl. `ledgerNamespace`), `LedgerItem`, `LedgerConfigMap` defined in `packages/k8s` and consumed unchanged by server (T3/T6) and web (T4/T7/T9). `ledgerName`/`LEDGER_DATA_KEY` used consistently; `LEDGER_NAMESPACE` is the fallback inside `ledgerNamespaceFor`. ✓
+- **Undo robustness (folded in):** deletes by raw recorded kind (any kind, incl. CRDs), and removes the ledger ONLY when every resource delete succeeds — a partial failure keeps the batch in Recent for a safe retry. ✓
 - **Namespace co-location:** the ledger lives in the batch's single target namespace (else `default` fallback); its own namespace is read back in discovery (`metadata.namespace` → `ledgerNamespace`) and threaded through Undo (route body, `undoBatch`, client helper, card). No hard-coded ledger namespace on the read/undo path. ✓
 - **Robustness vs annotations:** one ledger write per apply (not N); discovery is a single label-selected list across namespaces (no cluster-wide scan of workload kinds); undo re-reads the authoritative ledger and tolerates not-found; GitOps drift on workload resources does not touch the ledger object; deleting a namespace also removes its co-located ledgers. ✓
