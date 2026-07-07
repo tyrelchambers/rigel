@@ -4,23 +4,24 @@
 
 **Goal:** Give users a one-click "undo" for anything they applied through Rigel (Compose migration, catalog manifest install, Apply YAML), surfaced as a "Recent" card on Overview.
 
-**Architecture:** At apply time the server annotates only the resources a `kubectl apply` newly *created* with `rigel.dev/apply-batch` + `applied-at` + `apply-source` (parsing apply stdout for `created` lines, resolving each namespace from the applied YAML). "Recent deployments" queries the cluster for those annotations (purge-style discovery) within a 14-day window, grouped by batch. Undo deletes every resource carrying a batch id, through the existing red destructive confirm. This is structurally "Purge, but discovered by an apply-batch annotation instead of an instance label," so it reuses purge's discovery/delete machinery.
+**Architecture:** An in-cluster batch ledger, Helm-style. At apply time the server writes ONE ConfigMap (`rigel-apply-<batchId>`, in `default`, labelled `rigel.dev/ledger=apply-batch`) recording the batch and the exact list of resources the `kubectl apply` newly *created* (parsed from apply stdout, namespaces resolved from the applied YAML). "Recent" lists ledger ConfigMaps by label within a 14-day window. Undo re-reads the ledger, deletes each recorded resource (`--ignore-not-found`) through the red destructive confirm, then deletes the ledger. Recording is best-effort (a failed ledger write never fails the apply).
 
 **Tech Stack:** TypeScript monorepo. Pure logic + constants in `packages/k8s`; server routes in `apps/server`; React 19 + TanStack Query + Zustand in `apps/web`. Tests: vitest. YAML parsing via the `yaml` package.
 
-**Spec deviation note:** The spec placed the annotation constants in `packages/catalog/src/types.ts`. This plan places them in `packages/k8s` instead: the apply-batch annotations are not catalog-specific, both consumers (server stamping, k8s discovery) live at or below the k8s layer, and neither `packages/k8s` nor `apps/server` currently depends on `@rigel/catalog`. The one-constant-plus-single-reader *convention* from `CATALOG_APP_ANNOTATION`/`boundAppID` is preserved.
-
-**Field-name note:** `ActionBlock.source` already exists (it's `proposeRepoFix`'s git source). The apply-source is threaded on a new distinct field `applySource`.
+**Design notes:**
+- Ledger constants live in `packages/k8s` (not `packages/catalog`): they are not catalog-specific and neither `packages/k8s` nor `apps/server` depends on `@rigel/catalog`. The one-constant-plus-single-reader convention from `CATALOG_APP_ANNOTATION`/`boundAppID` is preserved.
+- `ActionBlock.source` already exists (it's `proposeRepoFix`'s git source), so the apply-source is threaded on a new distinct field `applySource`.
+- Reuses purge's `deleteArgs`, `canonicalKind`, and `DISCOVERY_KINDS` from `packages/k8s/src/purge.ts`.
 
 ---
 
 ## File Structure
 
 **Created:**
-- `packages/k8s/src/applyBatch.ts` — the 3 annotation constants, `ApplySource` type, single reader `applyBatchOf`.
-- `packages/k8s/src/applyStamp.ts` — pure helpers: parse applied YAML → resources, parse apply stdout → created, build `kubectl annotate` argv (grouped by namespace).
-- `packages/k8s/src/applyStamp.test.ts`, `packages/k8s/src/applyBatch.test.ts`
-- `packages/k8s/src/recentDeploys.ts` — pure discovery: query argv, group items into batches within the window.
+- `packages/k8s/src/applyBatch.ts` — ledger constants (label key/value, name prefix, data key), `ApplySource` type + `asApplySource`, `ledgerName(batchId)`.
+- `packages/k8s/src/applyLedger.ts` — pure: parse applied YAML → resources, parse apply stdout → created, resolve created→resources, build the ledger ConfigMap manifest.
+- `packages/k8s/src/applyLedger.test.ts`, `packages/k8s/src/applyBatch.test.ts`
+- `packages/k8s/src/recentDeploys.ts` — pure: ledger query argv, parse ledger ConfigMaps → windowed batches.
 - `packages/k8s/src/recentDeploys.test.ts`
 - `apps/server/src/recentDeploys.ts` — `discoverRecent` + `undoBatch` (injectable runners).
 - `apps/server/src/recentDeploys.test.ts`
@@ -30,8 +31,8 @@
 **Modified:**
 - `packages/k8s/src/index.ts` — re-export the new modules.
 - `packages/k8s/package.json` — add `yaml` dep.
-- `apps/server/src/install.ts` — thread `source` into `applyManifest`, stamp after a successful apply.
-- `apps/server/src/install.test.ts` — stamping tests.
+- `apps/server/src/install.ts` — thread `source` into `applyManifest`, write the ledger after a successful apply.
+- `apps/server/src/install.test.ts` — recording tests.
 - `apps/server/src/index.ts` — pass `body.source` to `applyManifest`; add `GET /api/deployments/recent` + `POST /api/deployments/undo`.
 - `apps/web/src/lib/api.ts` — `applyManifestYaml(yaml, dryRun, source?)`; `applySource` on `ActionBlock`; `fetchRecentDeploys`/`undoDeploy` + hooks.
 - `apps/web/src/components/ConfirmSheet.tsx` — pass `act.applySource` to `applyManifestYaml`.
@@ -42,7 +43,7 @@
 
 ---
 
-## Task 1: Apply-batch annotation constants + reader
+## Task 1: Ledger constants + ApplySource
 
 **Files:**
 - Create: `packages/k8s/src/applyBatch.ts`
@@ -55,25 +56,34 @@
 // packages/k8s/src/applyBatch.test.ts
 import { describe, expect, test } from "vitest";
 import {
-  APPLY_BATCH_ANNOTATION,
-  APPLIED_AT_ANNOTATION,
-  APPLY_SOURCE_ANNOTATION,
-  applyBatchOf,
+  LEDGER_LABEL_KEY,
+  LEDGER_LABEL_VALUE,
+  LEDGER_NAME_PREFIX,
+  LEDGER_DATA_KEY,
+  LEDGER_NAMESPACE,
+  ledgerName,
+  asApplySource,
 } from "./applyBatch";
 
-describe("applyBatch constants", () => {
-  test("keys are the frozen rigel.dev contract strings", () => {
-    expect(APPLY_BATCH_ANNOTATION).toBe("rigel.dev/apply-batch");
-    expect(APPLIED_AT_ANNOTATION).toBe("rigel.dev/applied-at");
-    expect(APPLY_SOURCE_ANNOTATION).toBe("rigel.dev/apply-source");
+describe("ledger constants", () => {
+  test("frozen rigel.dev ledger contract", () => {
+    expect(LEDGER_LABEL_KEY).toBe("rigel.dev/ledger");
+    expect(LEDGER_LABEL_VALUE).toBe("apply-batch");
+    expect(LEDGER_NAME_PREFIX).toBe("rigel-apply-");
+    expect(LEDGER_DATA_KEY).toBe("batch.json");
+    expect(LEDGER_NAMESPACE).toBe("default");
   });
 
-  test("applyBatchOf reads the batch id or returns null", () => {
-    expect(applyBatchOf({ annotations: { "rigel.dev/apply-batch": "b1" } })).toBe("b1");
-    expect(applyBatchOf({ annotations: {} })).toBeNull();
-    expect(applyBatchOf({})).toBeNull();
-    expect(applyBatchOf(undefined)).toBeNull();
-    expect(applyBatchOf({ annotations: { "rigel.dev/apply-batch": "" } })).toBeNull();
+  test("ledgerName prefixes the batch id", () => {
+    expect(ledgerName("abc-123")).toBe("rigel-apply-abc-123");
+  });
+
+  test("asApplySource narrows valid values only", () => {
+    expect(asApplySource("compose-migration")).toBe("compose-migration");
+    expect(asApplySource("catalog-install")).toBe("catalog-install");
+    expect(asApplySource("apply-yaml")).toBe("apply-yaml");
+    expect(asApplySource("bogus")).toBeNull();
+    expect(asApplySource(undefined)).toBeNull();
   });
 });
 ```
@@ -87,19 +97,23 @@ Expected: FAIL — `Cannot find module './applyBatch'`.
 
 ```ts
 // packages/k8s/src/applyBatch.ts
-// Annotations Rigel stamps on resources it CREATES via an apply, so "Recent
-// deployments" can find them and Undo can delete exactly what a batch created.
-// One constant per key + one reader, mirroring catalog's CATALOG_APP_ANNOTATION
-// / boundAppID convention. Neither the app nor any tooling may re-derive these.
+// The apply-batch ledger: Rigel records each manifest apply as ONE ConfigMap so
+// "Recent deployments" can list it and Undo can delete exactly what the apply
+// created. Constants centralized here (one place per contract string), mirroring
+// catalog's CATALOG_APP_ANNOTATION convention. Placed in @rigel/k8s (not catalog)
+// because they are not catalog-specific.
 
-/** The apply batch a resource was created by (crypto.randomUUID). */
-export const APPLY_BATCH_ANNOTATION = "rigel.dev/apply-batch";
-/** ISO 8601 timestamp of the apply that created the resource. */
-export const APPLIED_AT_ANNOTATION = "rigel.dev/applied-at";
-/** Which Rigel surface performed the apply. */
-export const APPLY_SOURCE_ANNOTATION = "rigel.dev/apply-source";
+/** Label selecting ledger ConfigMaps. */
+export const LEDGER_LABEL_KEY = "rigel.dev/ledger";
+export const LEDGER_LABEL_VALUE = "apply-batch";
+/** Ledger ConfigMap name = prefix + batchId. */
+export const LEDGER_NAME_PREFIX = "rigel-apply-";
+/** The ConfigMap data key holding the batch JSON. */
+export const LEDGER_DATA_KEY = "batch.json";
+/** Rigel's standard state namespace; all ledgers live here. */
+export const LEDGER_NAMESPACE = "default";
 
-/** The Rigel apply surfaces that stamp a batch. */
+/** The Rigel apply surfaces that record a batch. */
 export type ApplySource = "compose-migration" | "catalog-install" | "apply-yaml";
 
 const APPLY_SOURCES: readonly ApplySource[] = [
@@ -108,32 +122,28 @@ const APPLY_SOURCES: readonly ApplySource[] = [
   "apply-yaml",
 ];
 
+/** Ledger ConfigMap name for a batch id. */
+export function ledgerName(batchId: string): string {
+  return `${LEDGER_NAME_PREFIX}${batchId}`;
+}
+
 /** Narrow an arbitrary string to a valid ApplySource, or null. */
 export function asApplySource(v: string | undefined | null): ApplySource | null {
   return v != null && (APPLY_SOURCES as readonly string[]).includes(v) ? (v as ApplySource) : null;
 }
-
-/**
- * The apply batch id a resource carries, or null. The ONLY reader of
- * APPLY_BATCH_ANNOTATION.
- */
-export function applyBatchOf(meta?: { annotations?: Record<string, string> }): string | null {
-  const v = meta?.annotations?.[APPLY_BATCH_ANNOTATION];
-  return v && v.length > 0 ? v : null;
-}
 ```
 
-- [ ] **Step 4: Add the re-export to the package index**
-
-In `packages/k8s/src/index.ts`, add near the other `export {` groups:
+- [ ] **Step 4: Add re-exports in `packages/k8s/src/index.ts`**
 
 ```ts
 export {
-  APPLY_BATCH_ANNOTATION,
-  APPLIED_AT_ANNOTATION,
-  APPLY_SOURCE_ANNOTATION,
+  LEDGER_LABEL_KEY,
+  LEDGER_LABEL_VALUE,
+  LEDGER_NAME_PREFIX,
+  LEDGER_DATA_KEY,
+  LEDGER_NAMESPACE,
+  ledgerName,
   asApplySource,
-  applyBatchOf,
   type ApplySource,
 } from "./applyBatch";
 ```
@@ -141,44 +151,45 @@ export {
 - [ ] **Step 5: Run test to verify it passes**
 
 Run: `pnpm --filter @rigel/k8s test -- applyBatch`
-Expected: PASS (both tests).
+Expected: PASS.
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add packages/k8s/src/applyBatch.ts packages/k8s/src/applyBatch.test.ts packages/k8s/src/index.ts
-git commit -m "feat(k8s): apply-batch annotation constants + reader (HELM-60)"
+git commit -m "feat(k8s): apply-batch ledger constants (HELM-60)"
 ```
 
 ---
 
-## Task 2: Stamp-command builder (parse applied YAML + apply stdout)
+## Task 2: Ledger builder (parse applied YAML + apply stdout, build the ConfigMap)
 
 **Files:**
-- Create: `packages/k8s/src/applyStamp.ts`
-- Test: `packages/k8s/src/applyStamp.test.ts`
+- Create: `packages/k8s/src/applyLedger.ts`
+- Test: `packages/k8s/src/applyLedger.test.ts`
 - Modify: `packages/k8s/package.json` (add `yaml`), `packages/k8s/src/index.ts`
 
 - [ ] **Step 1: Add the `yaml` dependency**
 
-In `packages/k8s/package.json`, add to `dependencies` (match the version string used in `packages/compose/package.json`):
+In `packages/k8s/package.json`, add to `dependencies` (match `packages/compose/package.json`):
 
 ```json
 "yaml": "latest"
 ```
 
-Then install: `pnpm install`
+Then: `pnpm install`
 
 - [ ] **Step 2: Write the failing test**
 
 ```ts
-// packages/k8s/src/applyStamp.test.ts
+// packages/k8s/src/applyLedger.test.ts
 import { describe, expect, test } from "vitest";
 import {
   parseAppliedResources,
   parseCreatedResources,
-  buildStampCommands,
-} from "./applyStamp";
+  resolveCreatedResources,
+  buildLedgerManifest,
+} from "./applyLedger";
 
 const YAML = `
 apiVersion: apps/v1
@@ -216,7 +227,7 @@ describe("parseAppliedResources", () => {
     ]);
   });
 
-  test("ignores empty / null docs and docs without kind or name", () => {
+  test("ignores empty/null docs and docs missing kind or name", () => {
     expect(parseAppliedResources("---\n---\nfoo: bar\n")).toEqual([]);
   });
 });
@@ -231,60 +242,61 @@ describe("parseCreatedResources", () => {
   });
 });
 
-describe("buildStampCommands", () => {
-  const meta = { batchId: "b1", appliedAt: "2026-07-07T10:00:00.000Z", source: "compose-migration" as const };
-
-  test("annotates only created resources, grouped by namespace", () => {
-    const created = parseCreatedResources(STDOUT);
-    const parsed = parseAppliedResources(YAML);
-    const cmds = buildStampCommands(created, parsed, meta);
-    expect(cmds).toEqual([
-      [
-        "annotate",
-        "deployment/web",
-        "service/web",
-        "rigel.dev/apply-batch=b1",
-        "rigel.dev/applied-at=2026-07-07T10:00:00.000Z",
-        "rigel.dev/apply-source=compose-migration",
-        "--overwrite",
-        "-n",
-        "shop",
-      ],
-      [
-        "annotate",
-        "persistentvolumeclaim/web-data",
-        "rigel.dev/apply-batch=b1",
-        "rigel.dev/applied-at=2026-07-07T10:00:00.000Z",
-        "rigel.dev/apply-source=compose-migration",
-        "--overwrite",
-      ],
+describe("resolveCreatedResources", () => {
+  test("maps created (kind,name) to manifest kind + resolved namespace (default when omitted)", () => {
+    const resources = resolveCreatedResources(parseCreatedResources(STDOUT), parseAppliedResources(YAML));
+    expect(resources).toEqual([
+      { kind: "Deployment", name: "web", namespace: "shop" },
+      { kind: "Service", name: "web", namespace: "shop" },
+      { kind: "PersistentVolumeClaim", name: "web-data", namespace: "default" },
     ]);
   });
+});
 
-  test("returns [] when nothing was created", () => {
-    expect(buildStampCommands([], parseAppliedResources(YAML), meta)).toEqual([]);
+describe("buildLedgerManifest", () => {
+  test("builds the ledger ConfigMap object with batch.json payload", () => {
+    const resources = [{ kind: "Deployment", name: "web", namespace: "shop" }];
+    const cm = buildLedgerManifest(
+      { batchId: "b1", appliedAt: "2026-07-07T10:00:00.000Z", source: "compose-migration" },
+      resources,
+    );
+    expect(cm.apiVersion).toBe("v1");
+    expect(cm.kind).toBe("ConfigMap");
+    expect(cm.metadata).toEqual({
+      name: "rigel-apply-b1",
+      namespace: "default",
+      labels: { "rigel.dev/ledger": "apply-batch" },
+    });
+    expect(JSON.parse(cm.data["batch.json"])).toEqual({
+      batchId: "b1",
+      appliedAt: "2026-07-07T10:00:00.000Z",
+      source: "compose-migration",
+      resources,
+    });
   });
 });
 ```
 
 - [ ] **Step 3: Run test to verify it fails**
 
-Run: `pnpm --filter @rigel/k8s test -- applyStamp`
-Expected: FAIL — `Cannot find module './applyStamp'`.
+Run: `pnpm --filter @rigel/k8s test -- applyLedger`
+Expected: FAIL — module not found.
 
 - [ ] **Step 4: Write minimal implementation**
 
 ```ts
-// packages/k8s/src/applyStamp.ts
-// Pure helpers for stamping apply-batch annotations onto the resources a
-// `kubectl apply` newly CREATED. Kept pure (no process spawning) so the argv is
-// fully unit-testable; the server side (install.ts) runs the returned commands.
+// packages/k8s/src/applyLedger.ts
+// Pure helpers for building an apply-batch ledger from a `kubectl apply`. Kept
+// pure (no process spawning) so the ConfigMap manifest + argv are unit-testable;
+// the server (install.ts) writes the returned manifest via `kubectl apply -f -`.
 
 import { parseAllDocuments } from "yaml";
 import {
-  APPLY_BATCH_ANNOTATION,
-  APPLIED_AT_ANNOTATION,
-  APPLY_SOURCE_ANNOTATION,
+  LEDGER_DATA_KEY,
+  LEDGER_LABEL_KEY,
+  LEDGER_LABEL_VALUE,
+  LEDGER_NAMESPACE,
+  ledgerName,
   type ApplySource,
 } from "./applyBatch";
 
@@ -299,10 +311,23 @@ export interface CreatedResource {
   name: string;
 }
 
-export interface StampMeta {
+export interface LedgerResource {
+  kind: string; // manifest kind, e.g. "Deployment"
+  name: string;
+  namespace: string; // resolved ("default" when the manifest omitted it)
+}
+
+export interface LedgerMeta {
   batchId: string;
   appliedAt: string;
   source: ApplySource;
+}
+
+export interface LedgerConfigMap {
+  apiVersion: "v1";
+  kind: "ConfigMap";
+  metadata: { name: string; namespace: string; labels: Record<string, string> };
+  data: Record<string, string>;
 }
 
 /** Parse a multi-doc manifest string into {kind,name,namespace} descriptors. */
@@ -322,92 +347,95 @@ export function parseAppliedResources(yaml: string): AppliedResource[] {
 }
 
 /**
- * Parse `kubectl apply` stdout, keeping only the resources it reported as
- * `created`. Lines look like `deployment.apps/web created` or `service/web
- * created`; the kind is the token before the first `.` or `/`.
+ * Parse `kubectl apply` stdout, keeping only resources it reported as `created`.
+ * Lines look like `deployment.apps/web created` or `service/web created`; the
+ * kind is the token before the first `.` or `/`.
  */
 export function parseCreatedResources(stdout: string): CreatedResource[] {
   const out: CreatedResource[] = [];
   for (const raw of stdout.split("\n")) {
     const m = /^(\S+?)\/(\S+)\s+created$/.exec(raw.trim());
     if (!m) continue;
-    const kind = m[1]!.split(".")[0]!.toLowerCase();
-    out.push({ kind, name: m[2]! });
+    out.push({ kind: m[1]!.split(".")[0]!.toLowerCase(), name: m[2]! });
   }
   return out;
 }
 
 /**
- * Build `kubectl annotate` argv (verb onward) for exactly the created
- * resources, grouped by namespace. Namespace comes from the applied manifest;
- * resources whose manifest omitted a namespace are annotated without `-n` (so
- * kubectl uses the same default the apply used). Returns [] if nothing created.
+ * Join created resources to their manifest entries: keep the manifest kind
+ * (e.g. "Deployment") and resolve namespace to the manifest's, or "default" when
+ * omitted (the namespace kubectl applied into). Created resources with no
+ * matching manifest entry are skipped.
  */
-export function buildStampCommands(
+export function resolveCreatedResources(
   created: CreatedResource[],
   applied: AppliedResource[],
-  meta: StampMeta,
-): string[][] {
-  if (created.length === 0) return [];
+): LedgerResource[] {
+  const byKey = new Map<string, AppliedResource>();
+  for (const r of applied) byKey.set(`${r.kind.toLowerCase()}/${r.name}`, r);
 
-  const nsByKey = new Map<string, string | undefined>();
-  for (const r of applied) nsByKey.set(`${r.kind.toLowerCase()}/${r.name}`, r.namespace);
-
-  // Group the created resources' `kind/name` tokens by resolved namespace.
-  // Map key "" == cluster-default (no -n); preserves first-seen order.
-  const groups = new Map<string, string[]>();
+  const out: LedgerResource[] = [];
   for (const c of created) {
-    const token = `${c.kind}/${c.name}`;
-    const ns = nsByKey.get(token) ?? "";
-    const bucket = groups.get(ns);
-    if (bucket) bucket.push(token);
-    else groups.set(ns, [token]);
+    const match = byKey.get(`${c.kind}/${c.name}`);
+    if (!match) continue;
+    out.push({ kind: match.kind, name: match.name, namespace: match.namespace ?? "default" });
   }
+  return out;
+}
 
-  const annotations = [
-    `${APPLY_BATCH_ANNOTATION}=${meta.batchId}`,
-    `${APPLIED_AT_ANNOTATION}=${meta.appliedAt}`,
-    `${APPLY_SOURCE_ANNOTATION}=${meta.source}`,
-  ];
-
-  const cmds: string[][] = [];
-  for (const [ns, tokens] of groups) {
-    cmds.push(["annotate", ...tokens, ...annotations, "--overwrite", ...(ns ? ["-n", ns] : [])]);
-  }
-  return cmds;
+/** Build the ledger ConfigMap manifest for a batch. */
+export function buildLedgerManifest(meta: LedgerMeta, resources: LedgerResource[]): LedgerConfigMap {
+  return {
+    apiVersion: "v1",
+    kind: "ConfigMap",
+    metadata: {
+      name: ledgerName(meta.batchId),
+      namespace: LEDGER_NAMESPACE,
+      labels: { [LEDGER_LABEL_KEY]: LEDGER_LABEL_VALUE },
+    },
+    data: {
+      [LEDGER_DATA_KEY]: JSON.stringify({
+        batchId: meta.batchId,
+        appliedAt: meta.appliedAt,
+        source: meta.source,
+        resources,
+      }),
+    },
+  };
 }
 ```
 
-- [ ] **Step 5: Add re-exports**
-
-In `packages/k8s/src/index.ts`:
+- [ ] **Step 5: Add re-exports in `packages/k8s/src/index.ts`**
 
 ```ts
 export {
   parseAppliedResources,
   parseCreatedResources,
-  buildStampCommands,
+  resolveCreatedResources,
+  buildLedgerManifest,
   type AppliedResource,
   type CreatedResource,
-  type StampMeta,
-} from "./applyStamp";
+  type LedgerResource,
+  type LedgerMeta,
+  type LedgerConfigMap,
+} from "./applyLedger";
 ```
 
 - [ ] **Step 6: Run test to verify it passes**
 
-Run: `pnpm --filter @rigel/k8s test -- applyStamp`
-Expected: PASS (all cases).
+Run: `pnpm --filter @rigel/k8s test -- applyLedger`
+Expected: PASS.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add packages/k8s/src/applyStamp.ts packages/k8s/src/applyStamp.test.ts packages/k8s/src/index.ts packages/k8s/package.json
-git commit -m "feat(k8s): stamp-command builder for created resources (HELM-60)"
+git add packages/k8s/src/applyLedger.ts packages/k8s/src/applyLedger.test.ts packages/k8s/src/index.ts packages/k8s/package.json
+git commit -m "feat(k8s): apply-batch ledger builder (HELM-60)"
 ```
 
 ---
 
-## Task 3: Wire stamping into `applyManifest`
+## Task 3: Write the ledger from `applyManifest`
 
 **Files:**
 - Modify: `apps/server/src/install.ts`
@@ -416,60 +444,53 @@ git commit -m "feat(k8s): stamp-command builder for created resources (HELM-60)"
 
 - [ ] **Step 1: Write the failing test**
 
-Add to `apps/server/src/install.test.ts` (import additions at top: `import { applyManifest } from "./install";`):
+Add to `apps/server/src/install.test.ts` (top import: `import { applyManifest } from "./install";` plus vitest helpers):
 
 ```ts
 import { describe, expect, test, vi } from "vitest";
 
-describe("applyManifest stamping", () => {
-  const yaml = [
-    "apiVersion: apps/v1",
-    "kind: Deployment",
-    "metadata:",
-    "  name: web",
-    "  namespace: shop",
-  ].join("\n");
+describe("applyManifest ledger recording", () => {
+  const yaml = ["apiVersion: apps/v1", "kind: Deployment", "metadata:", "  name: web", "  namespace: shop"].join("\n");
 
-  test("annotates created resources with a batch when source is given", async () => {
+  test("writes a ledger ConfigMap for created resources when source is given", async () => {
     const applyRun = vi.fn().mockResolvedValue({ code: 0, stdout: "deployment.apps/web created", stderr: "" });
-    const annotateRun = vi.fn().mockResolvedValue({ code: 0, stdout: "", stderr: "" });
+    const ledgerRun = vi.fn().mockResolvedValue({ code: 0, stdout: "", stderr: "" });
 
     const res = await applyManifest(null, yaml, false, "compose-migration", {
       applyRun,
-      annotateRun,
+      ledgerRun,
       idGen: () => "batch-1",
       clock: () => new Date("2026-07-07T10:00:00.000Z"),
     });
 
     expect(res.code).toBe(0);
     expect(res.batchId).toBe("batch-1");
-    expect(annotateRun).toHaveBeenCalledTimes(1);
-    expect(annotateRun).toHaveBeenCalledWith(null, [
-      "annotate",
-      "deployment/web",
-      "rigel.dev/apply-batch=batch-1",
-      "rigel.dev/applied-at=2026-07-07T10:00:00.000Z",
-      "rigel.dev/apply-source=compose-migration",
-      "--overwrite",
-      "-n",
-      "shop",
-    ]);
+    expect(ledgerRun).toHaveBeenCalledTimes(1);
+    const [ctx, manifestJson] = ledgerRun.mock.calls[0]!;
+    expect(ctx).toBeNull();
+    const cm = JSON.parse(manifestJson as string);
+    expect(cm.metadata.name).toBe("rigel-apply-batch-1");
+    expect(cm.metadata.labels).toEqual({ "rigel.dev/ledger": "apply-batch" });
+    expect(JSON.parse(cm.data["batch.json"])).toEqual({
+      batchId: "batch-1",
+      appliedAt: "2026-07-07T10:00:00.000Z",
+      source: "compose-migration",
+      resources: [{ kind: "Deployment", name: "web", namespace: "shop" }],
+    });
   });
 
-  test("does not annotate on dryRun, missing source, invalid source, or apply failure", async () => {
-    const annotateRun = vi.fn();
-    const ok = { code: 0, stdout: "deployment.apps/web created", stderr: "" };
-    const base = { annotateRun, idGen: () => "b", clock: () => new Date(0) };
+  test("does not write a ledger on dryRun / missing source / invalid source / apply failure / nothing created", async () => {
+    const ledgerRun = vi.fn();
+    const created = { code: 0, stdout: "deployment.apps/web created", stderr: "" };
+    const base = { ledgerRun, idGen: () => "b", clock: () => new Date(0) };
 
-    await applyManifest(null, yaml, true, "compose-migration", { applyRun: vi.fn().mockResolvedValue(ok), ...base });
-    await applyManifest(null, yaml, false, undefined, { applyRun: vi.fn().mockResolvedValue(ok), ...base });
-    await applyManifest(null, yaml, false, "bogus", { applyRun: vi.fn().mockResolvedValue(ok), ...base });
-    await applyManifest(null, yaml, false, "compose-migration", {
-      applyRun: vi.fn().mockResolvedValue({ code: 1, stdout: "", stderr: "boom" }),
-      ...base,
-    });
+    await applyManifest(null, yaml, true, "compose-migration", { applyRun: vi.fn().mockResolvedValue(created), ...base });
+    await applyManifest(null, yaml, false, undefined, { applyRun: vi.fn().mockResolvedValue(created), ...base });
+    await applyManifest(null, yaml, false, "bogus", { applyRun: vi.fn().mockResolvedValue(created), ...base });
+    await applyManifest(null, yaml, false, "compose-migration", { applyRun: vi.fn().mockResolvedValue({ code: 1, stdout: "", stderr: "boom" }), ...base });
+    await applyManifest(null, yaml, false, "compose-migration", { applyRun: vi.fn().mockResolvedValue({ code: 0, stdout: "deployment.apps/web configured", stderr: "" }), ...base });
 
-    expect(annotateRun).not.toHaveBeenCalled();
+    expect(ledgerRun).not.toHaveBeenCalled();
   });
 });
 ```
@@ -477,43 +498,44 @@ describe("applyManifest stamping", () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @rigel/server test -- install`
-Expected: FAIL — `applyManifest` does not accept a source/deps arg; `res.batchId` undefined; annotate never called.
+Expected: FAIL — `applyManifest` doesn't accept source/deps, `res.batchId` undefined, ledger never written.
 
 - [ ] **Step 3: Rewrite `applyManifest` in `apps/server/src/install.ts`**
 
-Replace the existing `applyManifest` function (lines 31-38) and add imports. At the top of the file, extend the `@rigel/k8s/src/run` import and add:
+Extend the imports at the top:
 
 ```ts
-import { buildKubectlArgs, kubectl, runProcess, runProcessWithStdin, type RunResult } from "@rigel/k8s/src/run";
+import { buildKubectlArgs, runProcess, runProcessWithStdin, type RunResult } from "@rigel/k8s/src/run";
 import {
   asApplySource,
-  buildStampCommands,
+  buildLedgerManifest,
   parseAppliedResources,
   parseCreatedResources,
-  type ApplySource,
+  resolveCreatedResources,
 } from "@rigel/k8s";
 import { randomUUID } from "node:crypto";
 ```
 
-Then:
+Replace `applyManifest` (lines 31-38) with:
 
 ```ts
 export interface ApplyResult extends RunResult {
-  /** Set when this apply created resources and stamped a batch. */
+  /** Set when this apply created resources and recorded a ledger batch. */
   batchId?: string;
 }
 
-/** Injectable runners/clock so stamping is testable without spawning kubectl. */
+/** Injectable runners/clock so ledger recording is testable without kubectl. */
 export interface ApplyDeps {
   applyRun: (context: string | null, argv: string[], stdin: string) => Promise<RunResult>;
-  annotateRun: (context: string | null, argv: string[]) => Promise<RunResult>;
+  ledgerRun: (context: string | null, manifestJson: string) => Promise<RunResult>;
   idGen: () => string;
   clock: () => Date;
 }
 
 const defaultApplyDeps: ApplyDeps = {
   applyRun: (context, argv, stdin) => runProcessWithStdin("kubectl", buildKubectlArgs(context, argv), stdin),
-  annotateRun: (context, argv) => kubectl(context, argv),
+  ledgerRun: (context, manifestJson) =>
+    runProcessWithStdin("kubectl", buildKubectlArgs(context, ["apply", "-f", "-"]), manifestJson),
   idGen: () => randomUUID(),
   clock: () => new Date(),
 };
@@ -521,8 +543,8 @@ const defaultApplyDeps: ApplyDeps = {
 /**
  * Run `kubectl apply -f -` feeding `yaml` on STDIN. When `source` is a valid
  * ApplySource and this is not a dryRun, the resources the apply reported as
- * `created` are annotated with a fresh apply-batch (best-effort: annotate
- * failures do not fail the apply). Returns the apply result plus `batchId`.
+ * `created` are recorded in a ledger ConfigMap (best-effort: a ledger-write
+ * failure does not fail the apply). Returns the apply result plus `batchId`.
  */
 export async function applyManifest(
   context: string | null,
@@ -538,26 +560,21 @@ export async function applyManifest(
   const applySource = asApplySource(source);
   if (!applySource) return result;
 
-  const created = parseCreatedResources(result.stdout);
-  const applied = parseAppliedResources(yaml);
-  const batchId = deps.idGen();
-  const cmds = buildStampCommands(created, applied, {
-    batchId,
-    appliedAt: deps.clock().toISOString(),
-    source: applySource,
-  });
-  if (cmds.length === 0) return result;
+  const resources = resolveCreatedResources(parseCreatedResources(result.stdout), parseAppliedResources(yaml));
+  if (resources.length === 0) return result;
 
-  for (const cmd of cmds) await deps.annotateRun(context, cmd); // best-effort
+  const batchId = deps.idGen();
+  const cm = buildLedgerManifest({ batchId, appliedAt: deps.clock().toISOString(), source: applySource }, resources);
+  await deps.ledgerRun(context, JSON.stringify(cm)); // best-effort
   return { ...result, batchId };
 }
 ```
 
-Note: `buildApplyArgs` (lines 21-23) is now unused by `applyManifest` but is still exported and used by tests — leave it in place.
+Note: `buildApplyArgs` (lines 21-23) is still exported/used by other tests — leave it.
 
-- [ ] **Step 4: Pass `source` through the `/api/apply` route**
+- [ ] **Step 4: Pass `source` through the `/api/apply` route in `apps/server/src/index.ts`**
 
-In `apps/server/src/index.ts`, update the `/api/apply` handler body type and call (around line 448-457):
+Update the `/api/apply` handler (around line 448-457):
 
 ```ts
 let body: { yaml?: string; dryRun?: boolean; source?: string };
@@ -573,16 +590,16 @@ const result = await applyManifest(context, body.yaml, body.dryRun === true, bod
 return Response.json(result);
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [ ] **Step 5: Run tests + typecheck**
 
-Run: `pnpm --filter @rigel/server test -- install`
-Expected: PASS. Then `pnpm --filter @rigel/server typecheck` — expected: clean (pre-existing assistant.ts webhook errors, if any, are unrelated — confirm no NEW errors in install.ts/index.ts).
+Run: `pnpm --filter @rigel/server test -- install` — Expected: PASS.
+Run: `pnpm --filter @rigel/server typecheck` — Expected: no NEW errors in install.ts/index.ts (pre-existing assistant.ts noise, if any, is unrelated).
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add apps/server/src/install.ts apps/server/src/install.test.ts apps/server/src/index.ts
-git commit -m "feat(server): stamp apply-batch annotations on created resources (HELM-60)"
+git commit -m "feat(server): record an apply-batch ledger on manifest apply (HELM-60)"
 ```
 
 ---
@@ -607,24 +624,16 @@ describe("applyManifestYaml", () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response(JSON.stringify({ code: 0, stdout: "", stderr: "" }), { status: 200 }));
-
     await applyManifestYaml("kind: X", false, "compose-migration");
-
     const [, init] = fetchMock.mock.calls[0]!;
-    expect(JSON.parse(init!.body as string)).toEqual({
-      yaml: "kind: X",
-      dryRun: false,
-      source: "compose-migration",
-    });
+    expect(JSON.parse(init!.body as string)).toEqual({ yaml: "kind: X", dryRun: false, source: "compose-migration" });
   });
 
   test("omits source when not provided", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response(JSON.stringify({ code: 0, stdout: "", stderr: "" }), { status: 200 }));
-
     await applyManifestYaml("kind: X", true);
-
     const [, init] = fetchMock.mock.calls[0]!;
     expect(JSON.parse(init!.body as string)).toEqual({ yaml: "kind: X", dryRun: true });
   });
@@ -634,15 +643,16 @@ describe("applyManifestYaml", () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter web test -- api`
-Expected: FAIL — `applyManifestYaml` ignores the third arg / body has no `source`.
+Expected: FAIL — `source` not in body.
 
-- [ ] **Step 3: Update `applyManifestYaml` + `ActionBlock` + `ActionResult` in `apps/web/src/lib/api.ts`**
+- [ ] **Step 3: Update `applyManifestYaml` + `ActionBlock` in `apps/web/src/lib/api.ts`**
 
-Replace `applyManifestYaml` (lines 93-104):
-
+Add the type import near the top:
 ```ts
 import type { ApplySource } from "@rigel/k8s";
-
+```
+Replace `applyManifestYaml` (lines 93-104):
+```ts
 export async function applyManifestYaml(
   yaml: string,
   dryRun = false,
@@ -660,25 +670,20 @@ export async function applyManifestYaml(
   return res.json() as Promise<ActionResult>;
 }
 ```
-
 Add `applySource` to the `ActionBlock` interface (after the `manifest?` field, line 32):
-
 ```ts
-  /** applyManifest only — which Rigel surface triggered the apply (batch stamping). */
+  /** applyManifest only — which Rigel surface triggered the apply (ledger recording). */
   applySource?: ApplySource;
 ```
-
 Add optional `batchId` to `ActionResult` (after line 48):
-
 ```ts
-  /** applyManifest only — set when the apply created resources and stamped a batch. */
+  /** applyManifest only — set when the apply created resources and recorded a batch. */
   batchId?: string;
 ```
 
 - [ ] **Step 4: Pass `applySource` from `ConfirmSheet.handleApply`**
 
-In `apps/web/src/components/ConfirmSheet.tsx`, in `handleApply()` (line ~142), change:
-
+In `apps/web/src/components/ConfirmSheet.tsx`, in `handleApply()` (line ~142) change:
 ```ts
       const result = await applyManifestYaml(act.manifest);
 ```
@@ -699,27 +704,28 @@ to:
     });
 ```
 
-`apps/web/src/panels/apply/ApplyYamlPanel.tsx`, where it builds the `applyManifest` action block (around line 55), add `applySource: "apply-yaml"` to that object.
+`apps/web/src/panels/apply/ApplyYamlPanel.tsx` line 55, add `applySource: "apply-yaml"`:
+```ts
+    setPendingAction({ kind: "applyManifest", label: "Apply YAML", manifest: yaml, applySource: "apply-yaml" });
+```
 
 - [ ] **Step 6: Pass source through the catalog manifest install**
 
-`apps/web/src/panels/catalog/installApi.ts`, replace `applyManifest`:
+`apps/web/src/panels/catalog/installApi.ts`, replace `applyManifest` + `useApplyManifest`:
 ```ts
 import type { ApplySource } from "@rigel/k8s";
 
 export function applyManifest(yaml: string, source?: ApplySource): Promise<InstallResult> {
   return postJSON<InstallResult>("/api/apply", { yaml, ...(source ? { source } : {}) });
 }
-```
-Update `useApplyManifest` to forward the source (change the mutation variable to an object):
-```ts
+
 export function useApplyManifest() {
   return useMutation<InstallResult, Error, { yaml: string; source?: ApplySource }>({
     mutationFn: ({ yaml, source }) => applyManifest(yaml, source),
   });
 }
 ```
-In `apps/web/src/panels/catalog/CatalogInstallWizard.tsx` (line ~199) change `await applyManifest(artifact)` to `await applyManifest(artifact, "catalog-install")`. If it uses the `useApplyManifest` mutation instead, call `.mutateAsync({ yaml: artifact, source: "catalog-install" })`. Match whichever the wizard actually uses.
+In `apps/web/src/panels/catalog/CatalogInstallWizard.tsx` (line ~199): if it calls `applyManifest(artifact)` directly, change to `applyManifest(artifact, "catalog-install")`; if it uses the `useApplyManifest` mutation, call `.mutateAsync({ yaml: artifact, source: "catalog-install" })`. Match the wizard's actual usage.
 
 - [ ] **Step 7: Run tests + typecheck**
 
@@ -730,12 +736,12 @@ Run: `pnpm --filter web typecheck` — Expected: clean.
 
 ```bash
 git add apps/web/src/lib/api.ts apps/web/src/lib/api.test.ts apps/web/src/components/ConfirmSheet.tsx apps/web/src/panels/compose/ComposeMigratePanel.tsx apps/web/src/panels/apply/ApplyYamlPanel.tsx apps/web/src/panels/catalog/installApi.ts apps/web/src/panels/catalog/CatalogInstallWizard.tsx
-git commit -m "feat(web): tag Rigel applies with their source for batch stamping (HELM-60)"
+git commit -m "feat(web): tag Rigel applies with their source for ledger recording (HELM-60)"
 ```
 
 ---
 
-## Task 5: Recent-deploys discovery (pure logic)
+## Task 5: Recent-deploys discovery (pure ledger parsing)
 
 **Files:**
 - Create: `packages/k8s/src/recentDeploys.ts`
@@ -747,49 +753,43 @@ git commit -m "feat(web): tag Rigel applies with their source for batch stamping
 ```ts
 // packages/k8s/src/recentDeploys.test.ts
 import { describe, expect, test } from "vitest";
-import { RECENT_WINDOW_MS, recentDiscoveryArgs, groupRecentBatches } from "./recentDeploys";
+import { RECENT_WINDOW_MS, ledgerDiscoveryArgs, parseLedgerBatches } from "./recentDeploys";
 
 const now = Date.parse("2026-07-07T12:00:00.000Z");
-
-function item(kind: string, name: string, ns: string, ann: Record<string, string>) {
-  return { kind, metadata: { name, namespace: ns, annotations: ann } };
-}
-
 const recent = "2026-07-07T10:00:00.000Z";
 const old = "2026-06-01T10:00:00.000Z"; // > 14 days ago
 
-describe("recentDiscoveryArgs", () => {
-  test("queries all discovery kinds across all namespaces as json", () => {
-    const args = recentDiscoveryArgs();
-    expect(args[0]).toBe("get");
-    expect(args).toContain("--all-namespaces");
-    expect(args).toEqual(["get", args[1], "--all-namespaces", "-o", "json"]);
+function cm(batch: object) {
+  return { data: { "batch.json": JSON.stringify(batch) } };
+}
+
+describe("ledgerDiscoveryArgs", () => {
+  test("selects ledger ConfigMaps by label in the ledger namespace as json", () => {
+    expect(ledgerDiscoveryArgs()).toEqual([
+      "get", "configmap", "-n", "default", "-l", "rigel.dev/ledger=apply-batch", "-o", "json",
+    ]);
   });
 });
 
-describe("groupRecentBatches", () => {
-  test("groups in-window items by batch id, newest batch first", () => {
+describe("parseLedgerBatches", () => {
+  test("parses in-window ledgers, newest first", () => {
     const items = [
-      item("Deployment", "web", "shop", { "rigel.dev/apply-batch": "b1", "rigel.dev/applied-at": recent, "rigel.dev/apply-source": "compose-migration" }),
-      item("Service", "web", "shop", { "rigel.dev/apply-batch": "b1", "rigel.dev/applied-at": recent, "rigel.dev/apply-source": "compose-migration" }),
-      item("Deployment", "api", "shop", { "rigel.dev/apply-batch": "b2", "rigel.dev/applied-at": "2026-07-07T11:00:00.000Z", "rigel.dev/apply-source": "apply-yaml" }),
+      cm({ batchId: "b1", appliedAt: recent, source: "compose-migration", resources: [{ kind: "Deployment", name: "web", namespace: "shop" }] }),
+      cm({ batchId: "b2", appliedAt: "2026-07-07T11:00:00.000Z", source: "apply-yaml", resources: [{ kind: "Service", name: "api", namespace: "shop" }] }),
     ];
-    const batches = groupRecentBatches(items, now, RECENT_WINDOW_MS);
-    expect(batches).toEqual([
-      { batchId: "b2", source: "apply-yaml", appliedAt: "2026-07-07T11:00:00.000Z", resources: [{ kind: "Deployment", name: "api", namespace: "shop" }] },
-      { batchId: "b1", source: "compose-migration", appliedAt: recent, resources: [
-        { kind: "Deployment", name: "web", namespace: "shop" },
-        { kind: "Service", name: "web", namespace: "shop" },
-      ] },
+    expect(parseLedgerBatches(items, now, RECENT_WINDOW_MS)).toEqual([
+      { batchId: "b2", source: "apply-yaml", appliedAt: "2026-07-07T11:00:00.000Z", resources: [{ kind: "Service", name: "api", namespace: "shop" }] },
+      { batchId: "b1", source: "compose-migration", appliedAt: recent, resources: [{ kind: "Deployment", name: "web", namespace: "shop" }] },
     ]);
   });
 
-  test("drops items outside the window and items without a batch annotation", () => {
+  test("drops out-of-window ledgers and unparseable payloads", () => {
     const items = [
-      item("Deployment", "old", "shop", { "rigel.dev/apply-batch": "b0", "rigel.dev/applied-at": old, "rigel.dev/apply-source": "apply-yaml" }),
-      item("Deployment", "plain", "shop", {}),
+      cm({ batchId: "b0", appliedAt: old, source: "apply-yaml", resources: [] }),
+      { data: { "batch.json": "not json" } },
+      { data: {} },
     ];
-    expect(groupRecentBatches(items, now, RECENT_WINDOW_MS)).toEqual([]);
+    expect(parseLedgerBatches(items, now, RECENT_WINDOW_MS)).toEqual([]);
   });
 });
 ```
@@ -803,13 +803,16 @@ Expected: FAIL — module not found.
 
 ```ts
 // packages/k8s/src/recentDeploys.ts
-// Pure discovery for "Recent deployments": query the cluster for resources
-// carrying an apply-batch annotation and group them into batches within a
-// recent window. No process spawning — the server (recentDeploys.ts) runs the
-// query and calls groupRecentBatches on the parsed items.
+// Pure discovery for "Recent deployments": list ledger ConfigMaps and parse their
+// batch.json payloads into windowed, newest-first batches. No process spawning —
+// the server (recentDeploys.ts) runs the query and calls parseLedgerBatches.
 
-import { DISCOVERY_KINDS } from "./purge";
-import { APPLY_BATCH_ANNOTATION, APPLIED_AT_ANNOTATION, APPLY_SOURCE_ANNOTATION } from "./applyBatch";
+import {
+  LEDGER_DATA_KEY,
+  LEDGER_LABEL_KEY,
+  LEDGER_LABEL_VALUE,
+  LEDGER_NAMESPACE,
+} from "./applyBatch";
 
 /** Recent window: 14 days (spec §Recent deployments query). */
 export const RECENT_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
@@ -827,60 +830,63 @@ export interface RecentBatch {
   resources: RecentResource[];
 }
 
-/** A raw item from `kubectl get … -o json` `.items`. */
-export interface RawRecentItem {
-  kind?: string;
-  metadata?: { name?: string; namespace?: string; annotations?: Record<string, string> };
+/** A ledger ConfigMap item from `kubectl get configmap … -o json` `.items`. */
+export interface LedgerItem {
+  data?: Record<string, string>;
 }
 
-/** Build the kubectl argv (verb onward) for the recent-deploys query. */
-export function recentDiscoveryArgs(): string[] {
-  return ["get", DISCOVERY_KINDS.join(","), "--all-namespaces", "-o", "json"];
+/** Build the kubectl argv (verb onward) selecting ledger ConfigMaps. */
+export function ledgerDiscoveryArgs(): string[] {
+  return [
+    "get", "configmap", "-n", LEDGER_NAMESPACE,
+    "-l", `${LEDGER_LABEL_KEY}=${LEDGER_LABEL_VALUE}`, "-o", "json",
+  ];
 }
 
 /**
- * Group in-window, batch-annotated items into batches, newest batch first.
- * `nowMs` is injected for testability; `windowMs` defaults to RECENT_WINDOW_MS.
+ * Parse ledger ConfigMaps into batches within `windowMs` of `nowMs`, newest
+ * first. Unparseable or out-of-window ledgers are dropped. `nowMs` is injected
+ * for testability.
  */
-export function groupRecentBatches(
-  items: RawRecentItem[],
+export function parseLedgerBatches(
+  items: LedgerItem[],
   nowMs: number,
   windowMs: number = RECENT_WINDOW_MS,
 ): RecentBatch[] {
-  const byBatch = new Map<string, RecentBatch>();
+  const batches: RecentBatch[] = [];
   for (const it of items) {
-    const ann = it.metadata?.annotations ?? {};
-    const batchId = ann[APPLY_BATCH_ANNOTATION];
-    const appliedAt = ann[APPLIED_AT_ANNOTATION];
-    const kind = it.kind;
-    const name = it.metadata?.name;
-    if (!batchId || !appliedAt || !kind || !name) continue;
-    const ts = Date.parse(appliedAt);
-    if (Number.isNaN(ts) || nowMs - ts > windowMs) continue;
-
-    let batch = byBatch.get(batchId);
-    if (!batch) {
-      batch = { batchId, source: ann[APPLY_SOURCE_ANNOTATION] ?? "", appliedAt, resources: [] };
-      byBatch.set(batchId, batch);
+    const raw = it.data?.[LEDGER_DATA_KEY];
+    if (!raw) continue;
+    let batch: RecentBatch;
+    try {
+      batch = JSON.parse(raw) as RecentBatch;
+    } catch {
+      continue;
     }
-    batch.resources.push({ kind, name, namespace: it.metadata?.namespace ?? "" });
+    if (!batch?.batchId || !batch.appliedAt) continue;
+    const ts = Date.parse(batch.appliedAt);
+    if (Number.isNaN(ts) || nowMs - ts > windowMs) continue;
+    batches.push({
+      batchId: batch.batchId,
+      source: batch.source ?? "",
+      appliedAt: batch.appliedAt,
+      resources: Array.isArray(batch.resources) ? batch.resources : [],
+    });
   }
-  return [...byBatch.values()].sort((a, b) => Date.parse(b.appliedAt) - Date.parse(a.appliedAt));
+  return batches.sort((a, b) => Date.parse(b.appliedAt) - Date.parse(a.appliedAt));
 }
 ```
 
-- [ ] **Step 4: Add re-exports**
-
-In `packages/k8s/src/index.ts`:
+- [ ] **Step 4: Add re-exports in `packages/k8s/src/index.ts`**
 
 ```ts
 export {
   RECENT_WINDOW_MS,
-  recentDiscoveryArgs,
-  groupRecentBatches,
+  ledgerDiscoveryArgs,
+  parseLedgerBatches,
   type RecentBatch,
   type RecentResource,
-  type RawRecentItem,
+  type LedgerItem,
 } from "./recentDeploys";
 ```
 
@@ -893,7 +899,7 @@ Expected: PASS.
 
 ```bash
 git add packages/k8s/src/recentDeploys.ts packages/k8s/src/recentDeploys.test.ts packages/k8s/src/index.ts
-git commit -m "feat(k8s): recent-deploys discovery + batch grouping (HELM-60)"
+git commit -m "feat(k8s): recent-deploys ledger discovery (HELM-60)"
 ```
 
 ---
@@ -913,57 +919,60 @@ import { describe, expect, test, vi } from "vitest";
 import { discoverRecent, undoBatch } from "./recentDeploys";
 
 describe("discoverRecent", () => {
-  test("runs the query and returns grouped batches", async () => {
+  test("lists ledger ConfigMaps and returns windowed batches", async () => {
     const items = {
       items: [
-        { kind: "Deployment", metadata: { name: "web", namespace: "shop", annotations: { "rigel.dev/apply-batch": "b1", "rigel.dev/applied-at": "2026-07-07T10:00:00.000Z", "rigel.dev/apply-source": "compose-migration" } } },
+        { data: { "batch.json": JSON.stringify({ batchId: "b1", appliedAt: "2026-07-07T10:00:00.000Z", source: "compose-migration", resources: [{ kind: "Deployment", name: "web", namespace: "shop" }] }) } },
       ],
     };
     const kubectlRun = vi.fn().mockResolvedValue({ code: 0, stdout: JSON.stringify(items), stderr: "" });
-    const now = Date.parse("2026-07-07T12:00:00.000Z");
-
-    const res = await discoverRecent(null, now, { kubectlRun });
-    expect(kubectlRun.mock.calls[0]![1]).toEqual(["get", expect.any(String), "--all-namespaces", "-o", "json"]);
+    const res = await discoverRecent(null, Date.parse("2026-07-07T12:00:00.000Z"), { kubectlRun });
+    expect(kubectlRun.mock.calls[0]![1]).toEqual(["get", "configmap", "-n", "default", "-l", "rigel.dev/ledger=apply-batch", "-o", "json"]);
     expect(res.batches).toHaveLength(1);
     expect(res.batches[0]!.batchId).toBe("b1");
   });
 
   test("returns empty on query failure", async () => {
     const kubectlRun = vi.fn().mockResolvedValue({ code: 1, stdout: "", stderr: "boom" });
-    const res = await discoverRecent(null, Date.now(), { kubectlRun });
-    expect(res.batches).toEqual([]);
+    expect((await discoverRecent(null, Date.now(), { kubectlRun })).batches).toEqual([]);
   });
 });
 
 describe("undoBatch", () => {
-  test("deletes each resource and reports per-resource results", async () => {
+  const ledger = {
+    items: undefined,
+    data: { "batch.json": JSON.stringify({ batchId: "b1", appliedAt: "2026-07-07T10:00:00.000Z", source: "apply-yaml", resources: [
+      { kind: "Deployment", name: "web", namespace: "shop" },
+      { kind: "Service", name: "web", namespace: "shop" },
+    ] }) },
+  };
+
+  test("reads the ledger, deletes each resource (ignore-not-found), then deletes the ledger", async () => {
     const kubectlRun = vi
       .fn()
-      .mockResolvedValueOnce({ code: 0, stdout: "", stderr: "" })
-      .mockResolvedValueOnce({ code: 1, stdout: "", stderr: "not found" });
+      .mockResolvedValueOnce({ code: 0, stdout: JSON.stringify(ledger), stderr: "" }) // get ledger
+      .mockResolvedValueOnce({ code: 0, stdout: "", stderr: "" }) // delete deployment
+      .mockResolvedValueOnce({ code: 0, stdout: "", stderr: "" }) // delete service
+      .mockResolvedValueOnce({ code: 0, stdout: "", stderr: "" }); // delete ledger cm
 
-    const res = await undoBatch(
-      null,
-      [
-        { kind: "Deployment", name: "web", namespace: "shop" },
-        { kind: "Service", name: "web", namespace: "shop" },
-      ],
-      { kubectlRun },
-    );
+    const res = await undoBatch(null, "b1", { kubectlRun });
 
-    expect(kubectlRun.mock.calls[0]![1]).toEqual(["delete", "deployment", "web", "-n", "shop"]);
+    expect(kubectlRun.mock.calls[0]![1]).toEqual(["get", "configmap", "rigel-apply-b1", "-n", "default", "-o", "json"]);
+    expect(kubectlRun.mock.calls[1]![1]).toEqual(["delete", "deployment", "web", "-n", "shop", "--ignore-not-found"]);
+    expect(kubectlRun.mock.calls[2]![1]).toEqual(["delete", "service", "web", "-n", "shop", "--ignore-not-found"]);
+    expect(kubectlRun.mock.calls[3]![1]).toEqual(["delete", "configmap", "rigel-apply-b1", "-n", "default", "--ignore-not-found"]);
+    expect(res.ok).toBe(true);
     expect(res.results).toEqual([
       { resource: "Deployment/web", ok: true, detail: "deleted" },
-      { resource: "Service/web", ok: false, detail: "not found" },
+      { resource: "Service/web", ok: true, detail: "deleted" },
     ]);
-    expect(res.ok).toBe(false);
   });
 
-  test("skips resources with an unknown kind", async () => {
-    const kubectlRun = vi.fn();
-    const res = await undoBatch(null, [{ kind: "CustomThing", name: "x", namespace: "shop" }], { kubectlRun });
-    expect(kubectlRun).not.toHaveBeenCalled();
-    expect(res.results).toEqual([{ resource: "CustomThing/x", ok: false, detail: "skipped — unsupported kind" }]);
+  test("errors when the ledger is missing", async () => {
+    const kubectlRun = vi.fn().mockResolvedValue({ code: 1, stdout: "", stderr: "NotFound" });
+    const res = await undoBatch(null, "gone", { kubectlRun });
+    expect(res.ok).toBe(false);
+    expect(res.results).toEqual([{ resource: "batch/gone", ok: false, detail: "ledger not found" }]);
   });
 });
 ```
@@ -978,23 +987,22 @@ Expected: FAIL — module not found.
 ```ts
 // apps/server/src/recentDeploys.ts
 // Recent deployments / Undo — server route logic.
-//   GET  /api/deployments/recent → discover: query batch-annotated resources,
-//        group into batches within the recent window.
-//   POST /api/deployments/undo   → delete every resource in a batch (kubectl
-//        delete per resource), routed through the client's red confirm.
-//
-// Pure discovery/grouping + delete-argv building live in @rigel/k8s. All
-// binaries spawn via argv arrays (no shell); --context is prepended by kubectl.
+//   GET  /api/deployments/recent → list ledger ConfigMaps, parse into batches.
+//   POST /api/deployments/undo   → re-read a batch's ledger, delete each
+//        recorded resource (ignore-not-found), then delete the ledger.
+// Binaries spawn via argv arrays (no shell); --context is prepended by kubectl.
 
 import { kubectl, type RunResult } from "@rigel/k8s/src/run";
 import {
+  LEDGER_DATA_KEY,
+  LEDGER_NAMESPACE,
   canonicalKind,
   deleteArgs,
-  groupRecentBatches,
-  recentDiscoveryArgs,
-  type RawRecentItem,
+  ledgerDiscoveryArgs,
+  ledgerName,
+  parseLedgerBatches,
+  type LedgerItem,
   type RecentBatch,
-  type RecentResource,
 } from "@rigel/k8s";
 
 export interface RecentRunners {
@@ -1018,30 +1026,46 @@ export interface UndoResponse {
   results: UndoResultEntry[];
 }
 
-/** Query the cluster and group recent batch-annotated resources. */
+/** List ledger ConfigMaps and return windowed, newest-first batches. */
 export async function discoverRecent(
   context: string | null,
   nowMs: number,
   runners: RecentRunners = defaultRunners,
 ): Promise<DiscoverRecentResponse> {
-  const res = await runners.kubectlRun(context, recentDiscoveryArgs());
+  const res = await runners.kubectlRun(context, ledgerDiscoveryArgs());
   if (res.code !== 0) return { batches: [] };
-  let items: RawRecentItem[] = [];
+  let items: LedgerItem[] = [];
   try {
-    const parsed = JSON.parse(res.stdout) as { items?: RawRecentItem[] };
+    const parsed = JSON.parse(res.stdout) as { items?: LedgerItem[] };
     items = Array.isArray(parsed.items) ? parsed.items : [];
   } catch {
     return { batches: [] };
   }
-  return { batches: groupRecentBatches(items, nowMs) };
+  return { batches: parseLedgerBatches(items, nowMs) };
 }
 
-/** Delete each resource in a batch; report per-resource outcomes. */
+/** Delete every resource recorded in a batch's ledger, then delete the ledger. */
 export async function undoBatch(
   context: string | null,
-  resources: RecentResource[],
+  batchId: string,
   runners: RecentRunners = defaultRunners,
 ): Promise<UndoResponse> {
+  // 1. Re-read the ledger (authoritative resource list).
+  const cmName = ledgerName(batchId);
+  const get = await runners.kubectlRun(context, ["get", "configmap", cmName, "-n", LEDGER_NAMESPACE, "-o", "json"]);
+  if (get.code !== 0) {
+    return { ok: false, results: [{ resource: `batch/${batchId}`, ok: false, detail: "ledger not found" }] };
+  }
+  let resources: RecentBatch["resources"] = [];
+  try {
+    const cm = JSON.parse(get.stdout) as { data?: Record<string, string> };
+    const batch = JSON.parse(cm.data?.[LEDGER_DATA_KEY] ?? "{}") as RecentBatch;
+    resources = Array.isArray(batch.resources) ? batch.resources : [];
+  } catch {
+    return { ok: false, results: [{ resource: `batch/${batchId}`, ok: false, detail: "ledger unreadable" }] };
+  }
+
+  // 2. Delete each recorded resource (ignore-not-found → safe no-op).
   const results: UndoResultEntry[] = [];
   for (const r of resources) {
     const resource = `${r.kind}/${r.name}`;
@@ -1050,45 +1074,43 @@ export async function undoBatch(
       results.push({ resource, ok: false, detail: "skipped — unsupported kind" });
       continue;
     }
-    const del = await runners.kubectlRun(context, deleteArgs(kind, r.name, r.namespace));
+    const del = await runners.kubectlRun(context, [...deleteArgs(kind, r.name, r.namespace), "--ignore-not-found"]);
     const ok = del.code === 0;
     results.push({ resource, ok, detail: ok ? "deleted" : (del.stderr.trim() || `exit ${del.code}`) });
   }
+
+  // 3. Delete the ledger itself so the batch leaves Recent.
+  await runners.kubectlRun(context, ["delete", "configmap", cmName, "-n", LEDGER_NAMESPACE, "--ignore-not-found"]);
+
   return { ok: results.every((r) => r.ok), results };
 }
 ```
 
 - [ ] **Step 4: Register the routes in `apps/server/src/index.ts`**
 
-Add imports near the `handlePurge` import:
+Add near the other route imports:
 ```ts
-import { discoverRecent, undoBatch, type RecentRunners } from "./recentDeploys";
-import type { RecentResource } from "@rigel/k8s";
+import { discoverRecent, undoBatch } from "./recentDeploys";
 ```
-
-Add the two handlers (place them alongside the other `/api/*` routes, e.g. after the `/api/purge` block):
+Add the handlers (alongside the other `/api/*` routes, e.g. after `/api/purge`):
 ```ts
-    // GET /api/deployments/recent — batches Rigel applied within the 14-day
-    // window (resources carrying rigel.dev/apply-batch), newest first.
+    // GET /api/deployments/recent — apply batches within the 14-day window.
     if (url.pathname === "/api/deployments/recent" && req.method === "GET") {
-      const result = await discoverRecent(context, Date.now());
-      return Response.json(result);
+      return Response.json(await discoverRecent(context, Date.now()));
     }
 
-    // POST /api/deployments/undo — delete every resource in a batch. Body:
-    // { resources: [{ kind, name, namespace }] }. kubectl delete per resource.
+    // POST /api/deployments/undo — delete every resource a batch created. Body: { batchId }.
     if (url.pathname === "/api/deployments/undo" && req.method === "POST") {
-      let body: { resources?: RecentResource[] };
+      let body: { batchId?: string };
       try {
-        body = (await req.json()) as { resources?: RecentResource[] };
+        body = (await req.json()) as { batchId?: string };
       } catch {
         return Response.json({ error: "invalid JSON body" }, { status: 400 });
       }
-      if (!Array.isArray(body.resources) || body.resources.length === 0) {
-        return Response.json({ error: "missing resources" }, { status: 422 });
+      if (typeof body.batchId !== "string" || body.batchId === "") {
+        return Response.json({ error: "missing batchId" }, { status: 422 });
       }
-      const result = await undoBatch(context, body.resources);
-      return Response.json(result);
+      return Response.json(await undoBatch(context, body.batchId));
     }
 ```
 
@@ -1124,20 +1146,18 @@ describe("recent deploys api", () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response(JSON.stringify({ batches: [] }), { status: 200 }));
-    const res = await fetchRecentDeploys();
+    expect(await fetchRecentDeploys()).toEqual({ batches: [] });
     expect(fetchMock.mock.calls[0]![0]).toBe("/api/deployments/recent");
-    expect(res).toEqual({ batches: [] });
   });
 
-  test("undoDeploy POSTs the resource list", async () => {
+  test("undoDeploy POSTs the batchId", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response(JSON.stringify({ ok: true, results: [] }), { status: 200 }));
-    const resources = [{ kind: "Deployment", name: "web", namespace: "shop" }];
-    await undoDeploy(resources);
+    await undoDeploy("b1");
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe("/api/deployments/undo");
-    expect(JSON.parse(init!.body as string)).toEqual({ resources });
+    expect(JSON.parse(init!.body as string)).toEqual({ batchId: "b1" });
   });
 });
 ```
@@ -1145,12 +1165,12 @@ describe("recent deploys api", () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter web test -- api`
-Expected: FAIL — `fetchRecentDeploys`/`undoDeploy` not exported.
+Expected: FAIL — helpers not exported.
 
 - [ ] **Step 3: Add helpers + hooks to `apps/web/src/lib/api.ts`**
 
 ```ts
-import type { RecentBatch, RecentResource } from "@rigel/k8s";
+import type { RecentBatch } from "@rigel/k8s";
 
 export interface RecentDeploysResponse {
   batches: RecentBatch[];
@@ -1177,12 +1197,12 @@ export async function fetchRecentDeploys(): Promise<RecentDeploysResponse> {
   return res.json() as Promise<RecentDeploysResponse>;
 }
 
-/** Undo a batch: delete every resource it created. */
-export async function undoDeploy(resources: RecentResource[]): Promise<UndoDeployResponse> {
+/** Undo a batch by id: delete every resource it created. */
+export async function undoDeploy(batchId: string): Promise<UndoDeployResponse> {
   const res = await fetch("/api/deployments/undo", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ resources }),
+    body: JSON.stringify({ batchId }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -1203,7 +1223,7 @@ export function useRecentDeploys() {
 /** Undo mutation; invalidates the recent-deploys query on success. */
 export function useUndoDeploy() {
   const qc = useQueryClient();
-  return useMutation<UndoDeployResponse, Error, RecentResource[]>({
+  return useMutation<UndoDeployResponse, Error, string>({
     mutationFn: undoDeploy,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["recent-deploys"] }),
   });
@@ -1286,16 +1306,13 @@ describe("RecentDeploysCard", () => {
     expect(await screen.findByText(/Nothing applied recently/i)).toBeInTheDocument();
   });
 
-  test("Undo opens a confirm then calls undoDeploy with the batch resources", async () => {
+  test("Undo opens a confirm then calls undoDeploy with the batch id", async () => {
     vi.spyOn(api, "fetchRecentDeploys").mockResolvedValue({ batches: [batch] });
     const undo = vi.spyOn(api, "undoDeploy").mockResolvedValue({ ok: true, results: [] });
     wrap(<RecentDeploysCard />);
-
     fireEvent.click(await screen.findByRole("button", { name: /undo/i }));
-    // Confirmation appears; confirm it.
     fireEvent.click(await screen.findByRole("button", { name: /delete|confirm|undo/i }));
-
-    await waitFor(() => expect(undo).toHaveBeenCalledWith(batch.resources));
+    await waitFor(() => expect(undo).toHaveBeenCalledWith("b1"));
   });
 });
 ```
@@ -1307,7 +1324,7 @@ Expected: FAIL — component does not exist.
 
 - [ ] **Step 3: Implement `RecentDeploysCard.tsx`**
 
-Implement to match the Pencil frame. Structural requirements the test locks in (keep these regardless of styling): read data via `useRecentDeploys()`; map each batch to a row showing the source label, `${resources.length} resources`, the namespace(s), and a relative-time string; an **Undo** button per row; an empty state with copy matching `Nothing applied recently`; Undo opens a destructive confirmation that, on confirm, calls `useUndoDeploy().mutate(batch.resources)`.
+Implement to match the Pencil frame. Structural requirements the test locks in (keep regardless of styling): read via `useRecentDeploys()`; one row per batch showing the source label, `${resources.length} resources`, the namespace(s), and a relative time; an **Undo** button per row; an empty state with copy matching `Nothing applied recently`; Undo opens a destructive confirmation that on confirm calls `useUndoDeploy().mutate(batch.batchId)`.
 
 Reference implementation (adapt styling to the frame):
 
@@ -1358,17 +1375,15 @@ export function RecentDeploysCard() {
           batch={confirming}
           pending={undo.isPending}
           onCancel={() => setConfirming(null)}
-          onConfirm={() => {
-            undo.mutate(confirming.resources, { onSuccess: () => setConfirming(null) });
-          }}
+          onConfirm={() => undo.mutate(confirming.batchId, { onSuccess: () => setConfirming(null) })}
         />
       )}
     </section>
   );
 }
 
-// Destructive confirmation — style to the Pencil frame; use the project's
-// Dialog primitives (ui/dialog.tsx) with a red/destructive confirm button.
+// Destructive confirmation — style to the Pencil frame; use the project's Dialog
+// primitives (ui/dialog.tsx) with a red/destructive confirm button.
 function ConfirmUndo(props: {
   batch: RecentBatch;
   pending: boolean;
@@ -1399,7 +1414,7 @@ Add the import:
 ```ts
 import { RecentDeploysCard } from "./RecentDeploysCard";
 ```
-Render it inside the `ov-content` scroll area in its own `ov-row` (place per the Pencil frame — e.g. directly under the header actions row):
+Render it inside the `ov-content` scroll area in its own `ov-row` (place per the Pencil frame):
 ```tsx
         <div className="ov-row">
           <RecentDeploysCard />
@@ -1432,7 +1447,7 @@ pnpm --filter @rigel/k8s test
 pnpm --filter @rigel/server test
 pnpm --filter web test
 ```
-Expected: all green (note any PRE-EXISTING failures unrelated to this change — e.g. assistant.ts webhook typecheck noise — and confirm they predate the branch).
+Expected: all green (note any PRE-EXISTING failures unrelated to this change and confirm they predate the branch).
 
 - [ ] **Step 2: Typecheck + build the web app**
 
@@ -1446,7 +1461,7 @@ Expected: no NEW type errors; build succeeds.
 
 - [ ] **Step 3: Manual smoke (desktop), only if requested**
 
-Per the "no web dev server" rule, do NOT start Vite. If the user wants a live check, run `pnpm --filter desktop dev`, apply a small manifest via Apply YAML, confirm a "Recent" row appears, click Undo, confirm the resource is deleted. Do NOT curl the mutation routes to "verify wiring."
+Per the "no web dev server" rule, do NOT start Vite. If the user wants a live check, run `pnpm --filter desktop dev`, apply a small manifest via Apply YAML, confirm a "Recent" row appears, verify a `rigel-apply-*` ConfigMap exists in `default`, click Undo, confirm the resource AND the ledger ConfigMap are gone. Do NOT curl the mutation routes to "verify wiring."
 
 - [ ] **Step 4: Commit any fixups**, then the branch is ready for review/merge.
 
@@ -1456,14 +1471,14 @@ Per the "no web dev server" rule, do NOT start Vite. If the user wants a live ch
 
 **Files:** none in-repo (external systems).
 
-- [ ] **Step 1:** Update the app's Outline doc (Rigel collection) with the "Recent deployments / Undo" feature: what it does, the `rigel.dev/apply-batch` / `applied-at` / `apply-source` annotation contract, the 14-day window, and the v1 scope (creations only; helm/edits out).
-- [ ] **Step 2:** From that doc, update HELM-60 in Plane (link the Outline doc) and create follow-up tickets for the deferred items: reverting in-place edits, Helm-install undo, a dedicated Recent/Activity panel.
+- [ ] **Step 1:** Update the app's Outline doc (Rigel collection) with "Recent deployments / Undo": what it does, the in-cluster ledger model (`rigel-apply-*` ConfigMaps in `default`, labelled `rigel.dev/ledger=apply-batch`, `batch.json` payload), the 14-day window, and the v1 scope (creations only; helm/edits out).
+- [ ] **Step 2:** From that doc, update HELM-60 in Plane (link the Outline doc) and create follow-up tickets: reverting in-place edits (store prior manifest in the ledger), Helm-install undo, a dedicated Recent/Activity panel, GC of expired ledger ConfigMaps.
 
 ---
 
 ## Self-Review Notes
 
-- **Spec coverage:** annotation constants (T1) ✓; apply-then-annotate-created-only stamping (T2, T3) ✓; `source` on `/api/apply` + all three callers (T3, T4) ✓; 14-day discovery grouped by batch (T5, T6) ✓; undo via per-resource delete (T6) ✓; Overview card only (T9) ✓; Pencil-first UI (T8) ✓; out-of-scope items tracked as follow-ups (T11) ✓; docs/tickets workflow (T11) ✓.
+- **Spec coverage:** ledger constants (T1) ✓; parse-created + build-ledger (T2) ✓; record-on-apply best-effort + `source` passthrough (T3) ✓; all three web apply callers tagged (T4) ✓; ledger discovery within 14-day window (T5, T6) ✓; undo re-reads ledger, deletes resources with `--ignore-not-found`, deletes ledger (T6) ✓; Overview card only (T9) ✓; Pencil-first UI (T8) ✓; deferred items tracked (T11) ✓.
 - **Field-name collision:** apply-source uses `applySource`, not the pre-existing `ActionBlock.source`. ✓
-- **Type consistency:** `ApplySource`, `RecentBatch`, `RecentResource`, `RawRecentItem` defined in `packages/k8s` (T1/T5) and consumed unchanged by server (T3/T6) and web (T4/T7/T9). `canonicalKind`/`deleteArgs`/`DISCOVERY_KINDS` reused from `packages/k8s/src/purge.ts`. ✓
-- **Spec deviation (constants location):** documented in the header; convention preserved.
+- **Type consistency:** `ApplySource`, `LedgerResource`/`RecentResource`, `RecentBatch`, `LedgerItem`, `LedgerConfigMap` defined in `packages/k8s` and consumed unchanged by server (T3/T6) and web (T4/T7/T9). `canonicalKind`/`deleteArgs` reused from purge. `LEDGER_NAMESPACE`/`ledgerName`/`LEDGER_DATA_KEY` used consistently across builder, discovery, and undo. ✓
+- **Robustness vs annotations:** one ledger write per apply (not N); discovery is a single label-selected list (no cluster-wide scan); undo re-reads the authoritative ledger and tolerates not-found; GitOps drift on workload resources does not touch the ledger object. ✓
