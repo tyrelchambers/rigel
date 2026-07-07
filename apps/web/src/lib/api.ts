@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ActiveForward } from "@/panels/services/portForward";
-import type { SuggestedAlert, DigestInput, ApplySource } from "@rigel/k8s";
+import type { SuggestedAlert, DigestInput, ApplySource, RecentBatch } from "@rigel/k8s";
 import type { CheckResult, CloudProvider, CloudCluster } from "@rigel/cloud-connect/src/index";
 
 /**
@@ -595,6 +595,67 @@ export function usePurgeDiscovery() {
 export function usePurgeExecute() {
   return useMutation<PurgeExecuteResponse, Error, PurgeExecuteRequest>({
     mutationFn: executePurge,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Recent deploys + undo — GET /api/deployments/recent, POST /api/deployments/undo
+// ---------------------------------------------------------------------------
+
+export interface RecentDeploysResponse {
+  batches: RecentBatch[];
+}
+
+export interface UndoDeployResultEntry {
+  resource: string;
+  ok: boolean;
+  detail: string;
+}
+
+export interface UndoDeployResponse {
+  ok: boolean;
+  results: UndoDeployResultEntry[];
+}
+
+/** Batches Rigel applied within the recent window (Overview "Recent" card). */
+export async function fetchRecentDeploys(): Promise<RecentDeploysResponse> {
+  const res = await fetch("/api/deployments/recent");
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? res.statusText);
+  }
+  return res.json() as Promise<RecentDeploysResponse>;
+}
+
+/** Undo a batch: delete every resource it created. `namespace` = the ledger's own namespace. */
+export async function undoDeploy(batchId: string, namespace: string): Promise<UndoDeployResponse> {
+  const res = await fetch("/api/deployments/undo", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ batchId, namespace }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? res.statusText);
+  }
+  return res.json() as Promise<UndoDeployResponse>;
+}
+
+/** Query hook for the Overview "Recent" card. */
+export function useRecentDeploys() {
+  return useQuery<RecentDeploysResponse, Error>({
+    queryKey: ["recent-deploys"],
+    queryFn: fetchRecentDeploys,
+    staleTime: 30_000,
+  });
+}
+
+/** Undo mutation; invalidates the recent-deploys query on success. */
+export function useUndoDeploy() {
+  const qc = useQueryClient();
+  return useMutation<UndoDeployResponse, Error, { batchId: string; namespace: string }>({
+    mutationFn: ({ batchId, namespace }) => undoDeploy(batchId, namespace),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["recent-deploys"] }),
   });
 }
 
