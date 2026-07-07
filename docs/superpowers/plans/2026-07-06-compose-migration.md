@@ -12,7 +12,7 @@
 
 **Open decisions carried in from brainstorming (confirm before or during execution):**
 1. YAML library: this plan uses the `yaml` package. (Chosen autonomously; user was away when asked. Swap to js-yaml or hand-rolled only if the user prefers.)
-2. Panel visual design: per the user's Pencil-design-first rule, the `ComposeMigratePanel` UI (Tasks 13-15) should ideally come from a Pencil frame. None exists yet. In its absence this plan mirrors the sibling `ApplyYamlPanel` (a tool panel, not a bespoke screen) and uses Tailwind utilities/tokens for the new warnings/hints UI. If the user wants a Pencil design first, pause before Task 13 and design it.
+2. Panel visual design: DONE. Designed in Pencil as frame `mPsEp` ("Migrate from Compose — main") in `clankerlocal.pen`, midnight palette, using the shared Button component and surface/border/accent tokens. Task 11 reproduces that frame screen-for-screen with Tailwind utilities/tokens (no inline hex).
 
 ---
 
@@ -1054,7 +1054,7 @@ git commit -m "chore(web): depend on @rigel/compose"
 
 ## Task 11: ComposeMigratePanel
 
-> Per the user's Pencil-design-first rule, if a Pencil frame for this panel is desired, create it before this task. Absent one, this mirrors the sibling `ApplyYamlPanel` (a tool panel) and uses Tailwind utilities/tokens for the new warnings/hints UI (no new inline hex).
+> Reproduce Pencil frame `mPsEp` ("Migrate from Compose — main", `clankerlocal.pen`) screen-for-screen: header (title + subtitle, Namespace pill, outline Upload button, accent Apply button), two-pane body (compose left, generated manifests right with a resource-count pill), a warnings/hints strip (accent info hints, amber warnings), and a footer (resource tally). Use Tailwind utilities and the design tokens (surface/border/accent/foreground, Geist + Geist Mono), no inline hex. The code below is the functional skeleton; match it to the frame's spacing and colors.
 
 **Files:**
 - Create: `apps/web/src/panels/compose/ComposeMigratePanel.tsx`
