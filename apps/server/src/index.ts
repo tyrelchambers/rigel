@@ -445,16 +445,16 @@ async function handler(req: Request): Promise<Response> {
     // STDIN (never shell-interpolated). `dryRun` runs --dry-run=server so the
     // apiserver validates without persisting. Returns { code, stdout, stderr }.
     if (url.pathname === "/api/apply" && req.method === "POST") {
-      let body: { yaml?: string; dryRun?: boolean };
+      let body: { yaml?: string; dryRun?: boolean; source?: string };
       try {
-        body = (await req.json()) as { yaml?: string; dryRun?: boolean };
+        body = (await req.json()) as { yaml?: string; dryRun?: boolean; source?: string };
       } catch {
         return Response.json({ error: "invalid JSON body" }, { status: 400 });
       }
       if (typeof body.yaml !== "string" || body.yaml.trim() === "") {
         return Response.json({ error: "missing yaml" }, { status: 422 });
       }
-      const result = await applyManifest(context, body.yaml, body.dryRun === true);
+      const result = await applyManifest(context, body.yaml, body.dryRun === true, body.source);
       return Response.json(result);
     }
 

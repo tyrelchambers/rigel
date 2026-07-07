@@ -11,6 +11,15 @@
 
 import { buildKubectlArgs, runProcess, runProcessWithStdin, type RunResult } from "@rigel/k8s/src/run";
 import { buildHelmInstallCommands, type HelmChartSource } from "@rigel/k8s/src/helm";
+import {
+  asApplySource,
+  buildLedgerManifest,
+  ledgerNamespaceFor,
+  parseAppliedResources,
+  parseCreatedResources,
+  resolveCreatedResources,
+} from "@rigel/k8s";
+import { randomUUID } from "node:crypto";
 import { unlink, writeFile } from "node:fs/promises";
 
 /**
@@ -22,19 +31,58 @@ export function buildApplyArgs(context: string | null, dryRun = false): string[]
   return buildKubectlArgs(context, ["apply", "-f", "-", ...(dryRun ? ["--dry-run=server"] : [])]);
 }
 
+export interface ApplyResult extends RunResult {
+  /** Set when this apply created resources and recorded a ledger batch. */
+  batchId?: string;
+}
+
+/** Injectable runners/clock so ledger recording is testable without kubectl. */
+export interface ApplyDeps {
+  applyRun: (context: string | null, argv: string[], stdin: string) => Promise<RunResult>;
+  ledgerRun: (context: string | null, manifestJson: string) => Promise<RunResult>;
+  idGen: () => string;
+  clock: () => Date;
+}
+
+const defaultApplyDeps: ApplyDeps = {
+  applyRun: (context, argv, stdin) => runProcessWithStdin("kubectl", buildKubectlArgs(context, argv), stdin),
+  ledgerRun: (context, manifestJson) =>
+    runProcessWithStdin("kubectl", buildKubectlArgs(context, ["apply", "-f", "-"]), manifestJson),
+  idGen: () => randomUUID(),
+  clock: () => new Date(),
+};
+
 /**
- * Run `kubectl [--context ctx] apply -f - [--dry-run=server]`, feeding `yaml` on
- * STDIN. The YAML is NEVER interpolated into a shell — it is written to the
- * process's stdin pipe. With `dryRun`, the apiserver validates without applying.
- * Returns { code, stdout, stderr }; code -1 when the kubectl binary is missing.
+ * Run `kubectl apply -f -` feeding `yaml` on STDIN. When `source` is a valid
+ * ApplySource and this is not a dryRun, the resources the apply reported as
+ * `created` are recorded in a ledger ConfigMap (best-effort: a ledger-write
+ * failure does not fail the apply). Returns the apply result plus `batchId`.
  */
 export async function applyManifest(
   context: string | null,
   yaml: string,
   dryRun = false,
-): Promise<RunResult> {
-  const args = buildApplyArgs(context, dryRun);
-  return runProcessWithStdin("kubectl", args, yaml);
+  source?: string,
+  deps: ApplyDeps = defaultApplyDeps,
+): Promise<ApplyResult> {
+  const applyArgv = ["apply", "-f", "-", ...(dryRun ? ["--dry-run=server"] : [])];
+  const result = await deps.applyRun(context, applyArgv, yaml);
+  if (result.code !== 0 || dryRun) return result;
+
+  const applySource = asApplySource(source);
+  if (!applySource) return result;
+
+  const resources = resolveCreatedResources(parseCreatedResources(result.stdout), parseAppliedResources(yaml));
+  if (resources.length === 0) return result;
+
+  const batchId = deps.idGen();
+  const cm = buildLedgerManifest(
+    { batchId, appliedAt: deps.clock().toISOString(), source: applySource },
+    resources,
+    ledgerNamespaceFor(resources),
+  );
+  await deps.ledgerRun(context, JSON.stringify(cm)); // best-effort
+  return { ...result, batchId };
 }
 
 /** Build the kubectl argv for a stdin delete. Exported for tests. */
