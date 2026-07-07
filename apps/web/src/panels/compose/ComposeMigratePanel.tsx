@@ -15,7 +15,6 @@ import {
   Sparkles,
   TriangleAlert,
   Upload,
-  WandSparkles,
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -87,7 +86,7 @@ function explainLabel(kind: string, count: number): string {
 export default function ComposeMigratePanel() {
   const [compose, setComposeText] = useState(PLACEHOLDER);
   const [namespace, setNamespace] = useState("default");
-  const [fixes, setFixes] = useState<ConvertFixes>({});
+  const [fixes, setFixes] = useState<ConvertFixes>({ emitSecrets: true, bindMountsToPvc: true, addWaitInit: true });
   const [explainerCollapsed, setExplainerCollapsed] = useState(false);
   const [dryRun, setDryRun] = useState<{ pending: boolean; result?: ActionResult; error?: string }>({ pending: false });
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
@@ -297,38 +296,33 @@ export default function ComposeMigratePanel() {
           <div className="flex max-h-[200px] flex-shrink-0 flex-col gap-2.5 overflow-auto border-t border-[var(--border-subtle)] bg-[var(--surface-primary)] px-[18px] py-3.5">
             <div className="flex items-center justify-between gap-3">
               <span className="font-mono text-2xs text-[var(--fg-tertiary)]">
-                {warnings.length} warning{warnings.length === 1 ? "" : "s"} · {hints.length} hint{hints.length === 1 ? "" : "s"}
+                {warnings.length > 0 || hints.length > 0
+                  ? `${warnings.length} warning${warnings.length === 1 ? "" : "s"} · ${hints.length} hint${hints.length === 1 ? "" : "s"}`
+                  : "Nothing left to review"}
               </span>
-              <Button
-                variant="subtle"
-                size="xs"
-                className="rounded-sm"
-                onClick={() =>
-                  setFixes((f) => ({ ...f, emitSecrets: true, bindMountsToPvc: true, expose: "loadbalancer", addWaitInit: true }))
-                }
-              >
-                <WandSparkles className="size-3" /> Fix all
-              </Button>
             </div>
 
             {activeChips.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1.5">
-                {activeChips.map((c) => (
-                  <span
-                    key={c.key}
-                    className="flex items-center gap-1 rounded-full border border-[var(--border-subtle)] bg-white/[0.03] py-0.5 pl-2 pr-1 text-2xs text-[var(--fg-secondary)]"
-                  >
-                    {c.label}
-                    <button
-                      type="button"
-                      aria-label={`Undo ${c.label}`}
-                      onClick={c.clear}
-                      className="flex size-3.5 items-center justify-center rounded-full text-[var(--fg-tertiary)] outline-none hover:bg-white/[0.06] hover:text-[var(--fg-primary)]"
+              <div className="flex flex-col gap-1.5">
+                <span className="font-mono text-2xs text-[var(--fg-tertiary)]">Auto-fixed for you</span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {activeChips.map((c) => (
+                    <span
+                      key={c.key}
+                      className="flex items-center gap-1 rounded-full border border-[var(--border-subtle)] bg-white/[0.03] py-0.5 pl-2 pr-1 text-2xs text-[var(--fg-secondary)]"
                     >
-                      <X className="size-2.5" />
-                    </button>
-                  </span>
-                ))}
+                      {c.label}
+                      <button
+                        type="button"
+                        aria-label={`Undo ${c.label}`}
+                        onClick={c.clear}
+                        className="flex size-3.5 items-center justify-center rounded-full text-[var(--fg-tertiary)] outline-none hover:bg-white/[0.06] hover:text-[var(--fg-primary)]"
+                      >
+                        <X className="size-2.5" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
 

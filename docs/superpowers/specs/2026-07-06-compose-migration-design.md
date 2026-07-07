@@ -142,7 +142,9 @@ The four fixes:
 
 Manifest emission order stays deterministic: Deployments, Services, PVCs, Secrets, Ingress.
 
-**Panel UI:** the warnings/hints strip gains fix controls. A "Fix all" button enables the three zero-input fixes (`emitSecrets`, `bindMountsToPvc`, `expose: "loadbalancer"`, `addWaitInit`). Each fixable warning row has a "Fix" button that flips its option; the published-port fix offers LoadBalancer (one click) or Ingress (opens a hostname input, per the no-free-text-traps rule). Enabled fixes are reflected as lit toggles the user can turn back off; the manifests and remaining warnings re-render live. All fix state feeds the single `convert(compose, { namespace, fixes })` call.
+**Panel UI (auto-apply by default):** the three safe fixes (`emitSecrets`, `bindMountsToPvc`, `addWaitInit`) are applied by default — the panel seeds `fixes` with them on, so the generated manifests already include the Secrets, PVCs, and wait-for-init containers, and the strip shows them as "Auto-fixed for you" chips with a per-item ✕ to revert (undoing a chip re-surfaces that warning with its own Fix button to re-enable). This is safe because nothing touches the cluster until Apply → ConfirmSheet; auto-fixes only shape the preview.
+
+`expose` is deliberately NOT auto-applied. Exposing published ports is a cost + intent decision (LoadBalancer bills per-hour on cloud and usually sits `Pending` on bare-metal/homelab), so published-port warnings remain and carry a "Fix" that offers LoadBalancer (one click) or Ingress (opens a hostname input, per the no-free-text-traps rule). All fix state feeds the single `convert(compose, { namespace, fixes })` call; the manifests, explainer, and remaining warnings re-render live.
 
 ## "What this will create" explainer (deterministic, folded into this branch)
 
