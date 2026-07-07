@@ -7,7 +7,7 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { Sparkles, Check, Bot, Activity, Bell } from "lucide-react";
+import { Sparkles, Check, Bot, Activity, Bell, FileInput } from "lucide-react";
 import {
   useAgents,
   useAssistantAction,
@@ -25,6 +25,21 @@ export function OnboardingWizard({ onClose }: { onClose: () => void }) {
     { label: "AI agent", node: <AgentStep /> },
     { label: "Assistant", node: <AssistantCard /> },
     { label: "Metrics", node: <MetricsCard /> },
+    {
+      label: "Compose",
+      node: (
+        <ToolCard
+          icon={<FileInput size={15} style={{ color: "var(--accent-primary)" }} />}
+          title="Coming from Docker Compose?"
+          desc="Import your stack. Convert a docker-compose.yml into Kubernetes manifests you can review and apply."
+          action={
+            <button type="button" onClick={() => { onClose(); navigate("/compose"); }} style={ghostBtn}>
+              Import your stack
+            </button>
+          }
+        />
+      ),
+    },
     {
       label: "Notifications",
       node: (

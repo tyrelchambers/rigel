@@ -10,10 +10,10 @@ import { Button } from "@/components/ui/button";
 import { YamlEditor } from "@/components/YamlEditorLazy";
 import { useClusterYamlSchema } from "@/lib/useClusterYamlSchema";
 import { applyManifestYaml, type ActionBlock, type ActionResult } from "@/lib/api";
-import { listResources } from "@rigel/catalog";
 import { isYamlFilename, readYamlFile } from "./readYamlFile";
-import { CheckCircle2, Layers, Play, Upload } from "lucide-react";
+import { Play, Upload } from "lucide-react";
 import { Loader } from "@/components/Loader";
+import { ManifestValidationResult } from "@/components/ManifestValidationResult";
 
 // Seeded into the editor as a starting template — real, editable content the
 // user can overwrite or clear (not a fake overlay). Multi-doc YAML is supported.
@@ -140,51 +140,10 @@ export default function ApplyYamlPanel() {
             {uploadError}
           </p>
         )}
-        <ValidationResult state={validate} yaml={yaml} />
+        <ManifestValidationResult state={validate} yaml={yaml} />
       </div>
 
       <ConfirmSheet action={pendingAction} open={!!pendingAction} onClose={() => setPendingAction(null)} />
     </div>
-  );
-}
-
-/** Renders the dry-run outcome: a green resource summary on success, the
- *  apiserver's error on failure, or a transport error. */
-function ValidationResult({ state, yaml }: { state: { pending: boolean; result?: ActionResult; error?: string }; yaml: string }) {
-  if (state.error) return <ResultBox tone="error">{state.error}</ResultBox>;
-  if (!state.result) return null;
-  if (state.result.code !== 0) {
-    return <ResultBox tone="error">{state.result.stderr || state.result.stdout || "Validation failed."}</ResultBox>;
-  }
-  const resources = listResources(yaml);
-  return (
-    <div className="flex flex-col gap-1.5" style={{ flexShrink: 0 }}>
-      <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-400">
-        <CheckCircle2 className="size-3.5" /> Valid — {resources.length} resource{resources.length === 1 ? "" : "s"} (dry run, nothing applied).
-      </p>
-      {resources.length > 0 && (
-        <ul className="max-h-32 space-y-0.5 overflow-auto rounded-lg p-1.5 text-xs" style={{ background: "#08080A", border: "1px solid #26272B" }}>
-          {resources.map((r, i) => (
-            <li key={i} className="flex items-center gap-2 rounded-md px-2 py-1 font-mono">
-              <Layers className="size-3 shrink-0" style={{ color: "var(--accent-primary)" }} />
-              <span className="shrink-0 font-semibold" style={{ color: "var(--accent-primary)" }}>{r.kind}</span>
-              <span className="truncate text-foreground/90">{r.name || "—"}</span>
-              {r.namespace && <span className="ml-auto shrink-0 text-3xs text-muted-foreground">{r.namespace}</span>}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function ResultBox({ tone, children }: { tone: "error"; children: React.ReactNode }) {
-  return (
-    <pre
-      className="max-h-40 overflow-auto whitespace-pre-wrap rounded-lg px-3 py-2.5 text-xs font-mono"
-      style={{ flexShrink: 0, background: tone === "error" ? "rgba(248,113,113,0.10)" : "#08080A", color: "var(--status-failed)", border: "1px solid rgba(248,113,113,0.25)" }}
-    >
-      {children}
-    </pre>
   );
 }
