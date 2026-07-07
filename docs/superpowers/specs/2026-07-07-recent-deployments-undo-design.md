@@ -46,14 +46,24 @@ per-resource delete machinery (`deleteArgs`, `canonicalKind`).
 
 ### 1. The ledger object
 
-One ConfigMap per apply batch, stored in the `default` namespace (Rigel's standard
-state namespace), regardless of where the batch's resources live.
+One ConfigMap per apply batch, **co-located with the batch's resources**: stored
+in the batch's target namespace when the created resources all share one namespace
+(the common case — compose migration, catalog install, single-namespace apply),
+and in `default` only as a fallback when a batch spans multiple namespaces (or
+none). Co-location means deleting a namespace also cleans up its ledgers (no
+orphan records). The ConfigMap is a data record, not a native reference, so undo
+reading a ledger in one namespace and deleting resources in another is fine —
+`kubectl get`/`delete` are not namespace-bound; the co-location is for lifecycle,
+not for reference validity.
 
 - **Name:** `rigel-apply-<batchId>` where `batchId` is a `crypto.randomUUID()`
   (a valid DNS-1123 subdomain, so a valid ConfigMap name).
 - **Label:** `rigel.dev/ledger: apply-batch` — the only thing discovery selects on.
 - **Data:** a single key `batch.json` holding
   `{ batchId, appliedAt (ISO 8601), source, resources: [{ kind, name, namespace }] }`.
+- The ledger's own namespace is read back during discovery (from the ConfigMap's
+  `metadata.namespace`) and carried on each batch, so Undo targets the right
+  namespace unambiguously.
 
 Constants (`rigel.dev/ledger` key + `apply-batch` value, the name prefix, the data
 key) and the `ApplySource` type live in `packages/k8s/src/applyBatch.ts`, following
@@ -77,10 +87,12 @@ Lives inside `applyManifest()` in `apps/server/src/install.ts`, gated off when
    `.`/`/`. Resolve each created resource's namespace from the applied manifest
    (parsed from the same YAML); a resource whose manifest omitted a namespace is
    recorded as `default`.
-3. If anything was created, generate a batch id + ISO timestamp and write the
-   ledger ConfigMap with `kubectl apply -f -` (idempotent). Recording is
-   **best-effort**: a failed ledger write does not fail the apply (the resources
-   still exist; the batch is simply not in Recent).
+3. If anything was created, choose the ledger namespace — the single distinct
+   namespace of the created resources, or `default` when they span multiple (or
+   none) — generate a batch id + ISO timestamp, and write the ledger ConfigMap
+   with `kubectl apply -f -` (idempotent). Recording is **best-effort**: a failed
+   ledger write does not fail the apply (the resources still exist; the batch is
+   simply not in Recent).
 
 Because only `created` resources are recorded, Undo can never delete a resource
 the apply merely patched. Resources that were `configured`/`unchanged`
@@ -99,20 +111,23 @@ added.
 ### 3. Recent deployments query
 
 - New server route `GET /api/deployments/recent` runs
-  `kubectl get configmap -n default -l rigel.dev/ledger=apply-batch -o json`,
-  which returns ONLY ledger objects (no cluster-wide scan).
-- Pure logic (`packages/k8s`) parses each ledger's `batch.json`, keeps batches
-  whose `appliedAt` is within a **14-day window**, and returns them newest-first.
+  `kubectl get configmap --all-namespaces -l rigel.dev/ledger=apply-batch -o json`,
+  which returns ONLY ledger objects across all namespaces (still cheap — label
+  selected, no cluster-wide scan of workload kinds).
+- Pure logic (`packages/k8s`) parses each ledger's `batch.json`, records the
+  ledger's own `metadata.namespace`, keeps batches whose `appliedAt` is within a
+  **14-day window**, and returns them newest-first.
 - Old batches fall out of the window in the list. Their ledger ConfigMaps are
   pruned lazily on Undo (below); an occasional GC of expired ledgers is a possible
   follow-up but not required for v1.
 
 ### 4. Undo (delete)
 
-`POST /api/deployments/undo` with body `{ batchId }`:
+`POST /api/deployments/undo` with body `{ batchId, namespace }` (the ledger's own
+namespace, carried from discovery):
 
-1. Re-read the ledger ConfigMap `rigel-apply-<batchId>` (the ledger is the
-   authoritative resource list — the client's copy could be stale).
+1. Re-read the ledger ConfigMap `rigel-apply-<batchId>` in `namespace` (the ledger
+   is the authoritative resource list — the client's copy could be stale).
 2. Delete each recorded resource with `kubectl delete <kind> <name> -n <ns>
    --ignore-not-found` (reusing purge's `deleteArgs` + `canonicalKind`;
    `--ignore-not-found` makes a since-deleted or mis-resolved resource a safe

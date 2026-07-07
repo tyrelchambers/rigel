@@ -188,6 +188,7 @@ import {
   parseAppliedResources,
   parseCreatedResources,
   resolveCreatedResources,
+  ledgerNamespaceFor,
   buildLedgerManifest,
 } from "./applyLedger";
 
@@ -253,18 +254,36 @@ describe("resolveCreatedResources", () => {
   });
 });
 
+describe("ledgerNamespaceFor", () => {
+  test("returns the single shared namespace when all resources agree", () => {
+    expect(ledgerNamespaceFor([
+      { kind: "Deployment", name: "web", namespace: "shop" },
+      { kind: "Service", name: "web", namespace: "shop" },
+    ])).toBe("shop");
+  });
+
+  test("falls back to default for multi-namespace or empty batches", () => {
+    expect(ledgerNamespaceFor([
+      { kind: "Deployment", name: "web", namespace: "shop" },
+      { kind: "Deployment", name: "api", namespace: "billing" },
+    ])).toBe("default");
+    expect(ledgerNamespaceFor([])).toBe("default");
+  });
+});
+
 describe("buildLedgerManifest", () => {
-  test("builds the ledger ConfigMap object with batch.json payload", () => {
+  test("builds the ledger ConfigMap object in the given namespace with batch.json payload", () => {
     const resources = [{ kind: "Deployment", name: "web", namespace: "shop" }];
     const cm = buildLedgerManifest(
       { batchId: "b1", appliedAt: "2026-07-07T10:00:00.000Z", source: "compose-migration" },
       resources,
+      "shop",
     );
     expect(cm.apiVersion).toBe("v1");
     expect(cm.kind).toBe("ConfigMap");
     expect(cm.metadata).toEqual({
       name: "rigel-apply-b1",
-      namespace: "default",
+      namespace: "shop",
       labels: { "rigel.dev/ledger": "apply-batch" },
     });
     expect(JSON.parse(cm.data["batch.json"])).toEqual({
@@ -383,14 +402,28 @@ export function resolveCreatedResources(
   return out;
 }
 
-/** Build the ledger ConfigMap manifest for a batch. */
-export function buildLedgerManifest(meta: LedgerMeta, resources: LedgerResource[]): LedgerConfigMap {
+/**
+ * The namespace to co-locate the ledger in: the single namespace shared by all
+ * created resources, or LEDGER_NAMESPACE ("default") when a batch spans multiple
+ * namespaces or is empty.
+ */
+export function ledgerNamespaceFor(resources: LedgerResource[]): string {
+  const namespaces = new Set(resources.map((r) => r.namespace));
+  return namespaces.size === 1 ? [...namespaces][0]! : LEDGER_NAMESPACE;
+}
+
+/** Build the ledger ConfigMap manifest for a batch, in the given namespace. */
+export function buildLedgerManifest(
+  meta: LedgerMeta,
+  resources: LedgerResource[],
+  namespace: string,
+): LedgerConfigMap {
   return {
     apiVersion: "v1",
     kind: "ConfigMap",
     metadata: {
       name: ledgerName(meta.batchId),
-      namespace: LEDGER_NAMESPACE,
+      namespace,
       labels: { [LEDGER_LABEL_KEY]: LEDGER_LABEL_VALUE },
     },
     data: {
@@ -412,6 +445,7 @@ export {
   parseAppliedResources,
   parseCreatedResources,
   resolveCreatedResources,
+  ledgerNamespaceFor,
   buildLedgerManifest,
   type AppliedResource,
   type CreatedResource,
@@ -470,6 +504,7 @@ describe("applyManifest ledger recording", () => {
     expect(ctx).toBeNull();
     const cm = JSON.parse(manifestJson as string);
     expect(cm.metadata.name).toBe("rigel-apply-batch-1");
+    expect(cm.metadata.namespace).toBe("shop"); // co-located with the single-ns batch
     expect(cm.metadata.labels).toEqual({ "rigel.dev/ledger": "apply-batch" });
     expect(JSON.parse(cm.data["batch.json"])).toEqual({
       batchId: "batch-1",
@@ -509,6 +544,7 @@ import { buildKubectlArgs, runProcess, runProcessWithStdin, type RunResult } fro
 import {
   asApplySource,
   buildLedgerManifest,
+  ledgerNamespaceFor,
   parseAppliedResources,
   parseCreatedResources,
   resolveCreatedResources,
@@ -564,7 +600,11 @@ export async function applyManifest(
   if (resources.length === 0) return result;
 
   const batchId = deps.idGen();
-  const cm = buildLedgerManifest({ batchId, appliedAt: deps.clock().toISOString(), source: applySource }, resources);
+  const cm = buildLedgerManifest(
+    { batchId, appliedAt: deps.clock().toISOString(), source: applySource },
+    resources,
+    ledgerNamespaceFor(resources),
+  );
   await deps.ledgerRun(context, JSON.stringify(cm)); // best-effort
   return { ...result, batchId };
 }
@@ -759,35 +799,35 @@ const now = Date.parse("2026-07-07T12:00:00.000Z");
 const recent = "2026-07-07T10:00:00.000Z";
 const old = "2026-06-01T10:00:00.000Z"; // > 14 days ago
 
-function cm(batch: object) {
-  return { data: { "batch.json": JSON.stringify(batch) } };
+function cm(namespace: string, batch: object) {
+  return { metadata: { namespace }, data: { "batch.json": JSON.stringify(batch) } };
 }
 
 describe("ledgerDiscoveryArgs", () => {
-  test("selects ledger ConfigMaps by label in the ledger namespace as json", () => {
+  test("selects ledger ConfigMaps by label across all namespaces as json", () => {
     expect(ledgerDiscoveryArgs()).toEqual([
-      "get", "configmap", "-n", "default", "-l", "rigel.dev/ledger=apply-batch", "-o", "json",
+      "get", "configmap", "--all-namespaces", "-l", "rigel.dev/ledger=apply-batch", "-o", "json",
     ]);
   });
 });
 
 describe("parseLedgerBatches", () => {
-  test("parses in-window ledgers, newest first", () => {
+  test("parses in-window ledgers, newest first, carrying the ledger's own namespace", () => {
     const items = [
-      cm({ batchId: "b1", appliedAt: recent, source: "compose-migration", resources: [{ kind: "Deployment", name: "web", namespace: "shop" }] }),
-      cm({ batchId: "b2", appliedAt: "2026-07-07T11:00:00.000Z", source: "apply-yaml", resources: [{ kind: "Service", name: "api", namespace: "shop" }] }),
+      cm("shop", { batchId: "b1", appliedAt: recent, source: "compose-migration", resources: [{ kind: "Deployment", name: "web", namespace: "shop" }] }),
+      cm("default", { batchId: "b2", appliedAt: "2026-07-07T11:00:00.000Z", source: "apply-yaml", resources: [{ kind: "Service", name: "api", namespace: "billing" }] }),
     ];
     expect(parseLedgerBatches(items, now, RECENT_WINDOW_MS)).toEqual([
-      { batchId: "b2", source: "apply-yaml", appliedAt: "2026-07-07T11:00:00.000Z", resources: [{ kind: "Service", name: "api", namespace: "shop" }] },
-      { batchId: "b1", source: "compose-migration", appliedAt: recent, resources: [{ kind: "Deployment", name: "web", namespace: "shop" }] },
+      { batchId: "b2", source: "apply-yaml", appliedAt: "2026-07-07T11:00:00.000Z", ledgerNamespace: "default", resources: [{ kind: "Service", name: "api", namespace: "billing" }] },
+      { batchId: "b1", source: "compose-migration", appliedAt: recent, ledgerNamespace: "shop", resources: [{ kind: "Deployment", name: "web", namespace: "shop" }] },
     ]);
   });
 
   test("drops out-of-window ledgers and unparseable payloads", () => {
     const items = [
-      cm({ batchId: "b0", appliedAt: old, source: "apply-yaml", resources: [] }),
-      { data: { "batch.json": "not json" } },
-      { data: {} },
+      cm("shop", { batchId: "b0", appliedAt: old, source: "apply-yaml", resources: [] }),
+      { metadata: { namespace: "shop" }, data: { "batch.json": "not json" } },
+      { metadata: { namespace: "shop" }, data: {} },
     ];
     expect(parseLedgerBatches(items, now, RECENT_WINDOW_MS)).toEqual([]);
   });
@@ -811,7 +851,6 @@ import {
   LEDGER_DATA_KEY,
   LEDGER_LABEL_KEY,
   LEDGER_LABEL_VALUE,
-  LEDGER_NAMESPACE,
 } from "./applyBatch";
 
 /** Recent window: 14 days (spec §Recent deployments query). */
@@ -827,26 +866,29 @@ export interface RecentBatch {
   batchId: string;
   source: string;
   appliedAt: string;
+  /** The namespace the ledger ConfigMap itself lives in (for Undo). */
+  ledgerNamespace: string;
   resources: RecentResource[];
 }
 
 /** A ledger ConfigMap item from `kubectl get configmap … -o json` `.items`. */
 export interface LedgerItem {
+  metadata?: { namespace?: string };
   data?: Record<string, string>;
 }
 
-/** Build the kubectl argv (verb onward) selecting ledger ConfigMaps. */
+/** Build the kubectl argv (verb onward) selecting ledger ConfigMaps everywhere. */
 export function ledgerDiscoveryArgs(): string[] {
   return [
-    "get", "configmap", "-n", LEDGER_NAMESPACE,
+    "get", "configmap", "--all-namespaces",
     "-l", `${LEDGER_LABEL_KEY}=${LEDGER_LABEL_VALUE}`, "-o", "json",
   ];
 }
 
 /**
  * Parse ledger ConfigMaps into batches within `windowMs` of `nowMs`, newest
- * first. Unparseable or out-of-window ledgers are dropped. `nowMs` is injected
- * for testability.
+ * first, carrying each ledger's own namespace. Unparseable or out-of-window
+ * ledgers are dropped. `nowMs` is injected for testability.
  */
 export function parseLedgerBatches(
   items: LedgerItem[],
@@ -857,7 +899,7 @@ export function parseLedgerBatches(
   for (const it of items) {
     const raw = it.data?.[LEDGER_DATA_KEY];
     if (!raw) continue;
-    let batch: RecentBatch;
+    let batch: Omit<RecentBatch, "ledgerNamespace">;
     try {
       batch = JSON.parse(raw) as RecentBatch;
     } catch {
@@ -870,6 +912,7 @@ export function parseLedgerBatches(
       batchId: batch.batchId,
       source: batch.source ?? "",
       appliedAt: batch.appliedAt,
+      ledgerNamespace: it.metadata?.namespace ?? "default",
       resources: Array.isArray(batch.resources) ? batch.resources : [],
     });
   }
@@ -919,17 +962,18 @@ import { describe, expect, test, vi } from "vitest";
 import { discoverRecent, undoBatch } from "./recentDeploys";
 
 describe("discoverRecent", () => {
-  test("lists ledger ConfigMaps and returns windowed batches", async () => {
+  test("lists ledger ConfigMaps across namespaces and returns windowed batches", async () => {
     const items = {
       items: [
-        { data: { "batch.json": JSON.stringify({ batchId: "b1", appliedAt: "2026-07-07T10:00:00.000Z", source: "compose-migration", resources: [{ kind: "Deployment", name: "web", namespace: "shop" }] }) } },
+        { metadata: { namespace: "shop" }, data: { "batch.json": JSON.stringify({ batchId: "b1", appliedAt: "2026-07-07T10:00:00.000Z", source: "compose-migration", resources: [{ kind: "Deployment", name: "web", namespace: "shop" }] }) } },
       ],
     };
     const kubectlRun = vi.fn().mockResolvedValue({ code: 0, stdout: JSON.stringify(items), stderr: "" });
     const res = await discoverRecent(null, Date.parse("2026-07-07T12:00:00.000Z"), { kubectlRun });
-    expect(kubectlRun.mock.calls[0]![1]).toEqual(["get", "configmap", "-n", "default", "-l", "rigel.dev/ledger=apply-batch", "-o", "json"]);
+    expect(kubectlRun.mock.calls[0]![1]).toEqual(["get", "configmap", "--all-namespaces", "-l", "rigel.dev/ledger=apply-batch", "-o", "json"]);
     expect(res.batches).toHaveLength(1);
     expect(res.batches[0]!.batchId).toBe("b1");
+    expect(res.batches[0]!.ledgerNamespace).toBe("shop");
   });
 
   test("returns empty on query failure", async () => {
@@ -940,14 +984,14 @@ describe("discoverRecent", () => {
 
 describe("undoBatch", () => {
   const ledger = {
-    items: undefined,
+    metadata: { namespace: "shop" },
     data: { "batch.json": JSON.stringify({ batchId: "b1", appliedAt: "2026-07-07T10:00:00.000Z", source: "apply-yaml", resources: [
       { kind: "Deployment", name: "web", namespace: "shop" },
       { kind: "Service", name: "web", namespace: "shop" },
     ] }) },
   };
 
-  test("reads the ledger, deletes each resource (ignore-not-found), then deletes the ledger", async () => {
+  test("reads the ledger (in its namespace), deletes each resource (ignore-not-found), then deletes the ledger", async () => {
     const kubectlRun = vi
       .fn()
       .mockResolvedValueOnce({ code: 0, stdout: JSON.stringify(ledger), stderr: "" }) // get ledger
@@ -955,12 +999,12 @@ describe("undoBatch", () => {
       .mockResolvedValueOnce({ code: 0, stdout: "", stderr: "" }) // delete service
       .mockResolvedValueOnce({ code: 0, stdout: "", stderr: "" }); // delete ledger cm
 
-    const res = await undoBatch(null, "b1", { kubectlRun });
+    const res = await undoBatch(null, "b1", "shop", { kubectlRun });
 
-    expect(kubectlRun.mock.calls[0]![1]).toEqual(["get", "configmap", "rigel-apply-b1", "-n", "default", "-o", "json"]);
+    expect(kubectlRun.mock.calls[0]![1]).toEqual(["get", "configmap", "rigel-apply-b1", "-n", "shop", "-o", "json"]);
     expect(kubectlRun.mock.calls[1]![1]).toEqual(["delete", "deployment", "web", "-n", "shop", "--ignore-not-found"]);
     expect(kubectlRun.mock.calls[2]![1]).toEqual(["delete", "service", "web", "-n", "shop", "--ignore-not-found"]);
-    expect(kubectlRun.mock.calls[3]![1]).toEqual(["delete", "configmap", "rigel-apply-b1", "-n", "default", "--ignore-not-found"]);
+    expect(kubectlRun.mock.calls[3]![1]).toEqual(["delete", "configmap", "rigel-apply-b1", "-n", "shop", "--ignore-not-found"]);
     expect(res.ok).toBe(true);
     expect(res.results).toEqual([
       { resource: "Deployment/web", ok: true, detail: "deleted" },
@@ -970,7 +1014,7 @@ describe("undoBatch", () => {
 
   test("errors when the ledger is missing", async () => {
     const kubectlRun = vi.fn().mockResolvedValue({ code: 1, stdout: "", stderr: "NotFound" });
-    const res = await undoBatch(null, "gone", { kubectlRun });
+    const res = await undoBatch(null, "gone", "shop", { kubectlRun });
     expect(res.ok).toBe(false);
     expect(res.results).toEqual([{ resource: "batch/gone", ok: false, detail: "ledger not found" }]);
   });
@@ -995,7 +1039,6 @@ Expected: FAIL — module not found.
 import { kubectl, type RunResult } from "@rigel/k8s/src/run";
 import {
   LEDGER_DATA_KEY,
-  LEDGER_NAMESPACE,
   canonicalKind,
   deleteArgs,
   ledgerDiscoveryArgs,
@@ -1044,15 +1087,19 @@ export async function discoverRecent(
   return { batches: parseLedgerBatches(items, nowMs) };
 }
 
-/** Delete every resource recorded in a batch's ledger, then delete the ledger. */
+/**
+ * Delete every resource recorded in a batch's ledger, then delete the ledger.
+ * `namespace` is the ledger ConfigMap's own namespace (carried from discovery).
+ */
 export async function undoBatch(
   context: string | null,
   batchId: string,
+  namespace: string,
   runners: RecentRunners = defaultRunners,
 ): Promise<UndoResponse> {
   // 1. Re-read the ledger (authoritative resource list).
   const cmName = ledgerName(batchId);
-  const get = await runners.kubectlRun(context, ["get", "configmap", cmName, "-n", LEDGER_NAMESPACE, "-o", "json"]);
+  const get = await runners.kubectlRun(context, ["get", "configmap", cmName, "-n", namespace, "-o", "json"]);
   if (get.code !== 0) {
     return { ok: false, results: [{ resource: `batch/${batchId}`, ok: false, detail: "ledger not found" }] };
   }
@@ -1080,7 +1127,7 @@ export async function undoBatch(
   }
 
   // 3. Delete the ledger itself so the batch leaves Recent.
-  await runners.kubectlRun(context, ["delete", "configmap", cmName, "-n", LEDGER_NAMESPACE, "--ignore-not-found"]);
+  await runners.kubectlRun(context, ["delete", "configmap", cmName, "-n", namespace, "--ignore-not-found"]);
 
   return { ok: results.every((r) => r.ok), results };
 }
@@ -1099,18 +1146,19 @@ Add the handlers (alongside the other `/api/*` routes, e.g. after `/api/purge`):
       return Response.json(await discoverRecent(context, Date.now()));
     }
 
-    // POST /api/deployments/undo — delete every resource a batch created. Body: { batchId }.
+    // POST /api/deployments/undo — delete every resource a batch created. Body:
+    // { batchId, namespace } (namespace = the ledger ConfigMap's own namespace).
     if (url.pathname === "/api/deployments/undo" && req.method === "POST") {
-      let body: { batchId?: string };
+      let body: { batchId?: string; namespace?: string };
       try {
-        body = (await req.json()) as { batchId?: string };
+        body = (await req.json()) as { batchId?: string; namespace?: string };
       } catch {
         return Response.json({ error: "invalid JSON body" }, { status: 400 });
       }
-      if (typeof body.batchId !== "string" || body.batchId === "") {
-        return Response.json({ error: "missing batchId" }, { status: 422 });
+      if (typeof body.batchId !== "string" || body.batchId === "" || typeof body.namespace !== "string" || body.namespace === "") {
+        return Response.json({ error: "missing batchId or namespace" }, { status: 422 });
       }
-      return Response.json(await undoBatch(context, body.batchId));
+      return Response.json(await undoBatch(context, body.batchId, body.namespace));
     }
 ```
 
@@ -1150,14 +1198,14 @@ describe("recent deploys api", () => {
     expect(fetchMock.mock.calls[0]![0]).toBe("/api/deployments/recent");
   });
 
-  test("undoDeploy POSTs the batchId", async () => {
+  test("undoDeploy POSTs the batchId + ledger namespace", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response(JSON.stringify({ ok: true, results: [] }), { status: 200 }));
-    await undoDeploy("b1");
+    await undoDeploy("b1", "shop");
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe("/api/deployments/undo");
-    expect(JSON.parse(init!.body as string)).toEqual({ batchId: "b1" });
+    expect(JSON.parse(init!.body as string)).toEqual({ batchId: "b1", namespace: "shop" });
   });
 });
 ```
@@ -1197,12 +1245,12 @@ export async function fetchRecentDeploys(): Promise<RecentDeploysResponse> {
   return res.json() as Promise<RecentDeploysResponse>;
 }
 
-/** Undo a batch by id: delete every resource it created. */
-export async function undoDeploy(batchId: string): Promise<UndoDeployResponse> {
+/** Undo a batch: delete every resource it created. `namespace` = the ledger's own namespace. */
+export async function undoDeploy(batchId: string, namespace: string): Promise<UndoDeployResponse> {
   const res = await fetch("/api/deployments/undo", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ batchId }),
+    body: JSON.stringify({ batchId, namespace }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -1223,8 +1271,8 @@ export function useRecentDeploys() {
 /** Undo mutation; invalidates the recent-deploys query on success. */
 export function useUndoDeploy() {
   const qc = useQueryClient();
-  return useMutation<UndoDeployResponse, Error, string>({
-    mutationFn: undoDeploy,
+  return useMutation<UndoDeployResponse, Error, { batchId: string; namespace: string }>({
+    mutationFn: ({ batchId, namespace }) => undoDeploy(batchId, namespace),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["recent-deploys"] }),
   });
 }
@@ -1285,6 +1333,7 @@ const batch = {
   batchId: "b1",
   source: "compose-migration",
   appliedAt: new Date().toISOString(),
+  ledgerNamespace: "shop",
   resources: [
     { kind: "Deployment", name: "web", namespace: "shop" },
     { kind: "Service", name: "web", namespace: "shop" },
@@ -1312,7 +1361,7 @@ describe("RecentDeploysCard", () => {
     wrap(<RecentDeploysCard />);
     fireEvent.click(await screen.findByRole("button", { name: /undo/i }));
     fireEvent.click(await screen.findByRole("button", { name: /delete|confirm|undo/i }));
-    await waitFor(() => expect(undo).toHaveBeenCalledWith("b1"));
+    await waitFor(() => expect(undo).toHaveBeenCalledWith("b1", "shop"));
   });
 });
 ```
@@ -1324,7 +1373,7 @@ Expected: FAIL — component does not exist.
 
 - [ ] **Step 3: Implement `RecentDeploysCard.tsx`**
 
-Implement to match the Pencil frame. Structural requirements the test locks in (keep regardless of styling): read via `useRecentDeploys()`; one row per batch showing the source label, `${resources.length} resources`, the namespace(s), and a relative time; an **Undo** button per row; an empty state with copy matching `Nothing applied recently`; Undo opens a destructive confirmation that on confirm calls `useUndoDeploy().mutate(batch.batchId)`.
+Implement to match the Pencil frame. Structural requirements the test locks in (keep regardless of styling): read via `useRecentDeploys()`; one row per batch showing the source label, `${resources.length} resources`, the namespace(s), and a relative time; an **Undo** button per row; an empty state with copy matching `Nothing applied recently`; Undo opens a destructive confirmation that on confirm calls `useUndoDeploy().mutate({ batchId, namespace: batch.ledgerNamespace })`.
 
 Reference implementation (adapt styling to the frame):
 
@@ -1375,7 +1424,12 @@ export function RecentDeploysCard() {
           batch={confirming}
           pending={undo.isPending}
           onCancel={() => setConfirming(null)}
-          onConfirm={() => undo.mutate(confirming.batchId, { onSuccess: () => setConfirming(null) })}
+          onConfirm={() =>
+            undo.mutate(
+              { batchId: confirming.batchId, namespace: confirming.ledgerNamespace },
+              { onSuccess: () => setConfirming(null) },
+            )
+          }
         />
       )}
     </section>
@@ -1480,5 +1534,6 @@ Per the "no web dev server" rule, do NOT start Vite. If the user wants a live ch
 
 - **Spec coverage:** ledger constants (T1) ✓; parse-created + build-ledger (T2) ✓; record-on-apply best-effort + `source` passthrough (T3) ✓; all three web apply callers tagged (T4) ✓; ledger discovery within 14-day window (T5, T6) ✓; undo re-reads ledger, deletes resources with `--ignore-not-found`, deletes ledger (T6) ✓; Overview card only (T9) ✓; Pencil-first UI (T8) ✓; deferred items tracked (T11) ✓.
 - **Field-name collision:** apply-source uses `applySource`, not the pre-existing `ActionBlock.source`. ✓
-- **Type consistency:** `ApplySource`, `LedgerResource`/`RecentResource`, `RecentBatch`, `LedgerItem`, `LedgerConfigMap` defined in `packages/k8s` and consumed unchanged by server (T3/T6) and web (T4/T7/T9). `canonicalKind`/`deleteArgs` reused from purge. `LEDGER_NAMESPACE`/`ledgerName`/`LEDGER_DATA_KEY` used consistently across builder, discovery, and undo. ✓
-- **Robustness vs annotations:** one ledger write per apply (not N); discovery is a single label-selected list (no cluster-wide scan); undo re-reads the authoritative ledger and tolerates not-found; GitOps drift on workload resources does not touch the ledger object. ✓
+- **Type consistency:** `ApplySource`, `LedgerResource`/`RecentResource`, `RecentBatch` (incl. `ledgerNamespace`), `LedgerItem`, `LedgerConfigMap` defined in `packages/k8s` and consumed unchanged by server (T3/T6) and web (T4/T7/T9). `canonicalKind`/`deleteArgs` reused from purge. `ledgerName`/`LEDGER_DATA_KEY` used consistently; `LEDGER_NAMESPACE` is the fallback inside `ledgerNamespaceFor`. ✓
+- **Namespace co-location:** the ledger lives in the batch's single target namespace (else `default` fallback); its own namespace is read back in discovery (`metadata.namespace` → `ledgerNamespace`) and threaded through Undo (route body, `undoBatch`, client helper, card). No hard-coded ledger namespace on the read/undo path. ✓
+- **Robustness vs annotations:** one ledger write per apply (not N); discovery is a single label-selected list across namespaces (no cluster-wide scan of workload kinds); undo re-reads the authoritative ledger and tolerates not-found; GitOps drift on workload resources does not touch the ledger object; deleting a namespace also removes its co-located ledgers. ✓
