@@ -89,14 +89,24 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
   const resources = useCluster((s) => s.resources);
   const isLoading = useCluster((s) => s.isLoading);
   const error = useCluster((s) => s.error);
+  const namespaceFilter = useCluster((s) => s.namespaceFilter);
+
+  // Scope namespaced lists to the selected namespace (null = All namespaces).
+  // Cluster-scoped kinds (nodes) are never filtered — a namespace doesn't apply.
+  const inNamespace = useMemo(
+    () =>
+      <T extends { metadata?: { namespace?: string } }>(list: T[]): T[] =>
+        namespaceFilter ? list.filter((o) => o.metadata?.namespace === namespaceFilter) : list,
+    [namespaceFilter],
+  );
 
   // Purge flow: picker → typed-name confirm sheet.
   const [pickerOpen, setPickerOpen] = useState(false);
   const [purgeTarget, setPurgeTarget] = useState<{ name: string; namespace: string } | null>(null);
 
-  // Subscribe to the five cluster-wide watches on mount; unsubscribe on unmount.
-  // All cluster-scoped: namespace "*" (Overview never applies the namespace
-  // filter — aggregates are always cluster-wide).
+  // Subscribe to the cluster-wide watches on mount; unsubscribe on unmount. Data
+  // is always fetched at "*" so the namespaced cards can be scoped client-side
+  // (via inNamespace) and "All namespaces" still shows the full cluster.
   useEffect(() => {
     const kinds = [
       "nodes",
@@ -119,16 +129,16 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
     [resources],
   );
   const pods = useMemo(
-    () => Object.values((resources["pods"] ?? {}) as Record<string, Pod>),
-    [resources],
+    () => inNamespace(Object.values((resources["pods"] ?? {}) as Record<string, Pod>)),
+    [resources, inNamespace],
   );
   const deployments = useMemo(
-    () => Object.values((resources["deployments"] ?? {}) as Record<string, Deployment>),
-    [resources],
+    () => inNamespace(Object.values((resources["deployments"] ?? {}) as Record<string, Deployment>)),
+    [resources, inNamespace],
   );
   const events = useMemo(
-    () => sortEvents(Object.values((resources["events"] ?? {}) as Record<string, K8sEvent>)),
-    [resources],
+    () => sortEvents(inNamespace(Object.values((resources["events"] ?? {}) as Record<string, K8sEvent>))),
+    [resources, inNamespace],
   );
   // Fetch live node metrics from the metrics-server REST API.
   const { data: nodeMetricsData } = useNodeMetrics();
@@ -191,21 +201,20 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
   const databases = useMemo(
     () =>
       buildInstances({
-        cnpgClusters: Object.values(
-          (resources["clusters.postgresql.cnpg.io"] ?? {}) as Record<string, CNPGCluster>,
+        cnpgClusters: inNamespace(
+          Object.values((resources["clusters.postgresql.cnpg.io"] ?? {}) as Record<string, CNPGCluster>),
         ),
-        scheduledBackups: Object.values(
-          (resources["scheduledbackups.postgresql.cnpg.io"] ?? {}) as Record<
-            string,
-            CNPGScheduledBackup
-          >,
+        scheduledBackups: inNamespace(
+          Object.values(
+            (resources["scheduledbackups.postgresql.cnpg.io"] ?? {}) as Record<string, CNPGScheduledBackup>,
+          ),
         ),
         deployments: deployments as unknown as WorkloadDB[],
-        statefulSets: Object.values(
-          (resources["statefulsets"] ?? {}) as Record<string, WorkloadDB>,
+        statefulSets: inNamespace(
+          Object.values((resources["statefulsets"] ?? {}) as Record<string, WorkloadDB>),
         ),
       }),
-    [resources, deployments],
+    [resources, deployments, inNamespace],
   );
   const dbUnhealthy = databases.filter((d) => !d.isHealthy).length;
 
