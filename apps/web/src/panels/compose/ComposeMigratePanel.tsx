@@ -96,6 +96,7 @@ export default function ComposeMigratePanel() {
   const [explainerCollapsed, setExplainerCollapsed] = useState(false);
   const [dryRun, setDryRun] = useState<{ pending: boolean; result?: ActionResult; error?: string }>({ pending: false });
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
+  const [editedManifest, setEditedManifest] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const { data: schema } = useClusterYamlSchema();
@@ -123,19 +124,23 @@ export default function ComposeMigratePanel() {
 
   const manifestYaml = result ? combineManifests(result.manifests) : "";
   const resourceCount = result?.manifests.length ?? 0;
+  // The generated YAML is editable; edits ride on top until the manifest is
+  // regenerated (compose/namespace/fixes change), which discards them.
+  const effectiveManifest = editedManifest ?? manifestYaml;
 
-  useEffect(() => setDryRun({ pending: false }), [manifestYaml]);
+  useEffect(() => setEditedManifest(null), [manifestYaml]);
+  useEffect(() => setDryRun({ pending: false }), [effectiveManifest]);
 
   function handleApply() {
-    if (!manifestYaml.trim()) return;
-    setPendingAction({ kind: "applyManifest", label: "Apply migrated manifests", manifest: manifestYaml, applySource: "compose-migration" });
+    if (!effectiveManifest.trim()) return;
+    setPendingAction({ kind: "applyManifest", label: "Apply migrated manifests", manifest: effectiveManifest, applySource: "compose-migration" });
   }
 
   async function handleDryRun() {
-    if (!manifestYaml.trim()) return;
+    if (!effectiveManifest.trim()) return;
     setDryRun({ pending: true });
     try {
-      const result = await applyManifestYaml(manifestYaml, true);
+      const result = await applyManifestYaml(effectiveManifest, true);
       setDryRun({ pending: false, result });
     } catch (e) {
       setDryRun({ pending: false, error: e instanceof Error ? e.message : String(e) });
@@ -287,7 +292,7 @@ export default function ComposeMigratePanel() {
             </span>
           </div>
           <div className="min-h-0 flex-1">
-            <YamlEditor value={manifestYaml} readOnly schema={schema ?? null} />
+            <YamlEditor value={effectiveManifest} onChange={setEditedManifest} schema={schema ?? null} />
           </div>
         </div>
       </div>
