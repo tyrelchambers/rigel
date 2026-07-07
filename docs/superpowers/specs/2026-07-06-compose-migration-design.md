@@ -142,7 +142,7 @@ The four fixes:
 
 Manifest emission order stays deterministic: Deployments, Services, PVCs, Secrets, Ingress.
 
-**Panel UI:** the warnings/hints strip gains fix controls. A "Fix all safe" button enables the three zero-input fixes (`emitSecrets`, `bindMountsToPvc`, `expose: "loadbalancer"`, `addWaitInit`). Each fixable warning row has a "Fix" button that flips its option; the published-port fix offers LoadBalancer (one click) or Ingress (opens a hostname input, per the no-free-text-traps rule). Enabled fixes are reflected as lit toggles the user can turn back off; the manifests and remaining warnings re-render live. All fix state feeds the single `convert(compose, { namespace, fixes })` call.
+**Panel UI:** the warnings/hints strip gains fix controls. A "Fix all" button enables the three zero-input fixes (`emitSecrets`, `bindMountsToPvc`, `expose: "loadbalancer"`, `addWaitInit`). Each fixable warning row has a "Fix" button that flips its option; the published-port fix offers LoadBalancer (one click) or Ingress (opens a hostname input, per the no-free-text-traps rule). Enabled fixes are reflected as lit toggles the user can turn back off; the manifests and remaining warnings re-render live. All fix state feeds the single `convert(compose, { namespace, fixes })` call.
 
 ## Open follow-ups (not this ticket)
 

@@ -187,7 +187,7 @@ export default function ComposeMigratePanel() {
                   setFixes((f) => ({ ...f, emitSecrets: true, bindMountsToPvc: true, expose: "loadbalancer", addWaitInit: true }))
                 }
               >
-                <WandSparkles className="size-3" /> Fix all safe
+                <WandSparkles className="size-3" /> Fix all
               </Button>
             </div>
 
