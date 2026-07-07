@@ -86,7 +86,13 @@ function explainLabel(kind: string, count: number): string {
 export default function ComposeMigratePanel() {
   const [compose, setComposeText] = useState(PLACEHOLDER);
   const [namespace, setNamespace] = useState("default");
-  const [fixes, setFixes] = useState<ConvertFixes>({ emitSecrets: true, bindMountsToPvc: true, addWaitInit: true });
+  const [fixes, setFixes] = useState<ConvertFixes>({
+    emitSecrets: true,
+    bindMountsToPvc: true,
+    addWaitInit: true,
+    expose: "ingress",
+    ingressHost: "example.com",
+  });
   const [explainerCollapsed, setExplainerCollapsed] = useState(false);
   const [dryRun, setDryRun] = useState<{ pending: boolean; result?: ActionResult; error?: string }>({ pending: false });
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
@@ -165,7 +171,8 @@ export default function ComposeMigratePanel() {
       label: "Bind mounts → PVC",
       clear: () => setFixes((f) => ({ ...f, bindMountsToPvc: false })),
     });
-  if (fixes.expose && fixes.expose !== "none")
+  const hasIngress = result?.manifests.some((m) => m.kind === "Ingress") ?? false;
+  if (fixes.expose === "loadbalancer" || (fixes.expose === "ingress" && hasIngress))
     activeChips.push({
       key: "expose",
       label: `Expose: ${fixes.expose === "loadbalancer" ? "LoadBalancer" : "Ingress"}`,
@@ -326,10 +333,10 @@ export default function ComposeMigratePanel() {
               </div>
             )}
 
-            {fixes.expose === "ingress" && (
+            {fixes.expose === "ingress" && hasIngress && (
               <div className="flex items-center gap-2">
                 <label htmlFor="compose-ingress-host" className="text-2xs text-[var(--fg-tertiary)]">
-                  Host
+                  Ingress host
                 </label>
                 <input
                   id="compose-ingress-host"
@@ -339,6 +346,7 @@ export default function ComposeMigratePanel() {
                   onChange={(e) => setFixes((f) => ({ ...f, ingressHost: e.target.value }))}
                   className="w-56 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-2 py-1 text-xs text-[var(--fg-primary)] outline-none placeholder:text-[var(--fg-tertiary)]"
                 />
+                <span className="text-2xs text-[var(--fg-tertiary)]">Set your real domain</span>
               </div>
             )}
 
@@ -373,7 +381,10 @@ export default function ComposeMigratePanel() {
                           >
                             Expose via LoadBalancer
                           </DropdownMenuItem>
-                          <DropdownMenuItem className="text-xs" onClick={() => setFixes((f) => ({ ...f, expose: "ingress" }))}>
+                          <DropdownMenuItem
+                            className="text-xs"
+                            onClick={() => setFixes((f) => ({ ...f, expose: "ingress", ingressHost: f.ingressHost || "example.com" }))}
+                          >
                             Add Ingress…
                           </DropdownMenuItem>
                         </DropdownMenuContent>
