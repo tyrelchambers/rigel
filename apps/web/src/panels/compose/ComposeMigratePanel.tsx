@@ -1,12 +1,18 @@
 import { useMemo, useRef, useState } from "react";
-import { AlertTriangle, FileCode, Info, Layers, Play, Upload } from "lucide-react";
+import { AlertTriangle, ChevronDown, FileCode, Info, Layers, Play, Upload, WandSparkles, X } from "lucide-react";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { YamlEditor } from "@/components/YamlEditorLazy";
 import { NamespaceField } from "@/components/NamespaceField";
 import { useClusterYamlSchema } from "@/lib/useClusterYamlSchema";
 import type { ActionBlock } from "@/lib/api";
-import { convert, combineManifests, type ConversionResult } from "@rigel/compose";
+import { convert, combineManifests, type ConversionResult, type ConvertFixes, type Warning } from "@rigel/compose";
 import { readYamlFile } from "@/panels/apply/readYamlFile";
 
 const PLACEHOLDER = `# Paste your docker-compose.yml here, or upload a file.
@@ -30,6 +36,7 @@ function resourceTally(result: ConversionResult | null): string {
 export default function ComposeMigratePanel() {
   const [compose, setComposeText] = useState(PLACEHOLDER);
   const [namespace, setNamespace] = useState("default");
+  const [fixes, setFixes] = useState<ConvertFixes>({});
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -41,11 +48,11 @@ export default function ComposeMigratePanel() {
   }>(() => {
     if (!compose.trim()) return { result: null, parseError: null };
     try {
-      return { result: convert(compose, { namespace }), parseError: null };
+      return { result: convert(compose, { namespace, fixes }), parseError: null };
     } catch (e) {
       return { result: null, parseError: e instanceof Error ? e.message : String(e) };
     }
-  }, [compose, namespace]);
+  }, [compose, namespace, fixes]);
   const parseError = fileError ?? convertError;
 
   function setCompose(next: string) {
@@ -74,7 +81,35 @@ export default function ComposeMigratePanel() {
 
   const hints = result?.catalogHints ?? [];
   const warnings = result?.warnings ?? [];
+
+  function applyFix(w: Warning) {
+    const opt = w.fix?.option;
+    if (!opt || opt === "expose") return;
+    setFixes((f) => ({ ...f, [opt]: true }));
+  }
+
+  const activeChips: { key: string; label: string; clear: () => void }[] = [];
+  if (fixes.emitSecrets)
+    activeChips.push({ key: "secrets", label: "Secrets", clear: () => setFixes((f) => ({ ...f, emitSecrets: false })) });
+  if (fixes.bindMountsToPvc)
+    activeChips.push({
+      key: "pvc",
+      label: "Bind mounts → PVC",
+      clear: () => setFixes((f) => ({ ...f, bindMountsToPvc: false })),
+    });
+  if (fixes.expose && fixes.expose !== "none")
+    activeChips.push({
+      key: "expose",
+      label: `Expose: ${fixes.expose === "loadbalancer" ? "LoadBalancer" : "Ingress"}`,
+      clear: () => setFixes((f) => ({ ...f, expose: "none" })),
+    });
+  if (fixes.addWaitInit)
+    activeChips.push({ key: "wait", label: "Wait-for init", clear: () => setFixes((f) => ({ ...f, addWaitInit: false })) });
+
+  const fixBtnClass =
+    "flex shrink-0 items-center gap-1 rounded-sm border border-[var(--border-strong)] px-1.5 py-0.5 text-2xs text-[var(--fg-secondary)] outline-none hover:bg-white/[0.04]";
   const hasNotes = hints.length > 0 || warnings.length > 0;
+  const showStrip = hasNotes || activeChips.length > 0;
 
   return (
     <div className="flex h-full flex-col bg-[var(--surface-sunken)]">
@@ -138,11 +173,61 @@ export default function ComposeMigratePanel() {
           {parseError}
         </p>
       ) : (
-        hasNotes && (
+        showStrip && (
           <div className="flex max-h-[200px] flex-shrink-0 flex-col gap-2.5 overflow-auto border-t border-[var(--border-subtle)] bg-[var(--surface-primary)] px-[18px] py-3.5">
-            <span className="font-mono text-2xs text-[var(--fg-tertiary)]">
-              {warnings.length} warning{warnings.length === 1 ? "" : "s"} · {hints.length} hint{hints.length === 1 ? "" : "s"}
-            </span>
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-mono text-2xs text-[var(--fg-tertiary)]">
+                {warnings.length} warning{warnings.length === 1 ? "" : "s"} · {hints.length} hint{hints.length === 1 ? "" : "s"}
+              </span>
+              <Button
+                variant="subtle"
+                size="xs"
+                className="rounded-sm"
+                onClick={() =>
+                  setFixes((f) => ({ ...f, emitSecrets: true, bindMountsToPvc: true, expose: "loadbalancer", addWaitInit: true }))
+                }
+              >
+                <WandSparkles className="size-3" /> Fix all safe
+              </Button>
+            </div>
+
+            {activeChips.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {activeChips.map((c) => (
+                  <span
+                    key={c.key}
+                    className="flex items-center gap-1 rounded-full border border-[var(--border-subtle)] bg-white/[0.03] py-0.5 pl-2 pr-1 text-2xs text-[var(--fg-secondary)]"
+                  >
+                    {c.label}
+                    <button
+                      type="button"
+                      aria-label={`Undo ${c.label}`}
+                      onClick={c.clear}
+                      className="flex size-3.5 items-center justify-center rounded-full text-[var(--fg-tertiary)] outline-none hover:bg-white/[0.06] hover:text-[var(--fg-primary)]"
+                    >
+                      <X className="size-2.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {fixes.expose === "ingress" && (
+              <div className="flex items-center gap-2">
+                <label htmlFor="compose-ingress-host" className="text-2xs text-[var(--fg-tertiary)]">
+                  Host
+                </label>
+                <input
+                  id="compose-ingress-host"
+                  type="text"
+                  placeholder="app.example.com"
+                  value={fixes.ingressHost ?? ""}
+                  onChange={(e) => setFixes((f) => ({ ...f, ingressHost: e.target.value }))}
+                  className="w-56 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-2 py-1 text-xs text-[var(--fg-primary)] outline-none placeholder:text-[var(--fg-tertiary)]"
+                />
+              </div>
+            )}
+
             <div className="flex flex-col gap-2.5">
               {hints.map((h, i) => (
                 <div key={`h${i}`} className="flex items-start gap-2.5">
@@ -157,10 +242,34 @@ export default function ComposeMigratePanel() {
                   <AlertTriangle
                     className={`mt-px size-3.5 shrink-0 ${w.severity === "warning" ? "text-amber-500" : "text-[var(--fg-tertiary)]"}`}
                   />
-                  <span className="text-xs leading-[1.45] text-muted-foreground">
+                  <span className="flex-1 text-xs leading-[1.45] text-muted-foreground">
                     {w.service ? <span className="font-mono">{w.service} </span> : null}
                     {w.message}
                   </span>
+                  {w.fix ? (
+                    w.fix.option === "expose" ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger className={fixBtnClass}>
+                          Fix <ChevronDown className="size-3" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            className="text-xs"
+                            onClick={() => setFixes((f) => ({ ...f, expose: "loadbalancer" }))}
+                          >
+                            Expose via LoadBalancer
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="text-xs" onClick={() => setFixes((f) => ({ ...f, expose: "ingress" }))}>
+                            Add Ingress…
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : (
+                      <button type="button" className={fixBtnClass} onClick={() => applyFix(w)}>
+                        Fix
+                      </button>
+                    )
+                  ) : null}
                 </div>
               ))}
             </div>
