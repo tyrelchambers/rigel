@@ -299,13 +299,13 @@ export default function ComposeMigratePanel() {
       ) : (
         showStrip && (
           <div className="flex max-h-[200px] flex-shrink-0 flex-col gap-2.5 overflow-auto border-t border-[var(--border-subtle)] bg-[var(--surface-primary)] px-[18px] py-3.5">
-            <div className="flex items-center justify-between gap-3">
-              <span className="font-mono text-2xs text-[var(--fg-tertiary)]">
-                {warnings.length > 0 || hints.length > 0
-                  ? `${warnings.length} warning${warnings.length === 1 ? "" : "s"} · ${hints.length} hint${hints.length === 1 ? "" : "s"}`
-                  : "Nothing left to review"}
-              </span>
-            </div>
+            {(warnings.length > 0 || hints.length > 0) && (
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-mono text-2xs text-[var(--fg-tertiary)]">
+                  {warnings.length} warning{warnings.length === 1 ? "" : "s"} · {hints.length} hint{hints.length === 1 ? "" : "s"}
+                </span>
+              </div>
+            )}
 
             {activeChips.length > 0 && (
               <div className="flex flex-col gap-1.5">
