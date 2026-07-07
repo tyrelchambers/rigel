@@ -1055,6 +1055,8 @@ git commit -m "chore(web): depend on @rigel/compose"
 ## Task 11: ComposeMigratePanel
 
 > Reproduce Pencil frame `mPsEp` ("Migrate from Compose — main", `clankerlocal.pen`) screen-for-screen: header (title + subtitle, Namespace pill, outline Upload button, accent Apply button), two-pane body (compose left, generated manifests right with a resource-count pill), a warnings/hints strip (accent info hints, amber warnings), and a footer (resource tally). Use Tailwind utilities and the design tokens (surface/border/accent/foreground, Geist + Geist Mono), no inline hex. The code below is the functional skeleton; match it to the frame's spacing and colors.
+>
+> **REQUIRED — Monaco for both panes:** both the compose input (left) and the generated-manifest output (right) MUST render in the project's Monaco editor, `YamlEditor` from `@/components/YamlEditorLazy` (the same editor Apply YAML uses). Do NOT substitute a `<textarea>`, a `<pre>`, or any custom syntax renderer for either pane. The generated pane is read-only: pass a `readOnly` option if `YamlEditor` supports one (check its props); otherwise use a no-op `onChange`. This gives real Monaco highlighting/folding and the schema-aware YAML support on both sides of the comparison.
 
 **Files:**
 - Create: `apps/web/src/panels/compose/ComposeMigratePanel.tsx`

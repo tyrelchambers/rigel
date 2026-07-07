@@ -38,8 +38,8 @@ Pure functions, zero cluster or network calls, fully unit-testable in isolation.
     catalogHints: CatalogHint[]   // { service, appId, appName }
   }
   ```
-- Internally: parse compose with `js-yaml` into a typed model, build a JS object per Kubernetes resource, then serialize each with `js-yaml` at the end. Objects (not hand-written template strings) because compose structure varies widely. This diverges from the string-template builders elsewhere in `packages/k8s` on purpose; it is the right tool for variable-shaped output.
-- Depends on: `js-yaml` (already in the monorepo), and `packages/catalog` for image matching (see Catalog hints).
+- Internally: parse compose with the `yaml` package into a typed model, build a JS object per Kubernetes resource, then serialize each with `yaml` at the end. Objects (not hand-written template strings) because compose structure varies widely. This diverges from the string-template builders elsewhere in `packages/k8s` on purpose; it is the right tool for variable-shaped output.
+- Depends on: the `yaml` package (eemeli/yaml). Note: this is the monorepo's first YAML-library dependency; the rest of the repo hand-rolls simple line-based YAML handling (e.g. `listResources`), but real compose parsing (anchors, nesting, quoting) warrants a real parser. Also depends on `packages/catalog` for image matching (see Catalog hints).
 
 ### 2. `apps/web/src/panels/compose/ComposeMigratePanel.tsx` (new) — Tools panel
 
