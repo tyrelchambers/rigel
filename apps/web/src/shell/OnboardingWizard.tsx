@@ -23,8 +23,15 @@ export function OnboardingWizard({ onClose }: { onClose: () => void }) {
 
   const steps: { label: string; node: ReactNode }[] = [
     { label: "AI agent", node: <AgentStep /> },
-    { label: "Assistant", node: <AssistantCard /> },
-    { label: "Metrics", node: <MetricsCard /> },
+    {
+      label: "Assistant",
+      node: (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <AssistantCard />
+          <MetricsNudge />
+        </div>
+      ),
+    },
     {
       label: "Compose",
       node: (
@@ -45,8 +52,8 @@ export function OnboardingWizard({ onClose }: { onClose: () => void }) {
       node: (
         <ToolCard
           icon={<Bell size={15} style={{ color: "var(--accent-primary)" }} />}
-          title="Signal notifications"
-          desc="Get cluster alerts on your phone. The linking flow (QR scan) lives in Settings."
+          title="Notifications"
+          desc="Get cluster alerts where you already are. Connect a channel (Signal today, more coming) from Settings."
           action={
             <button type="button" onClick={() => { onClose(); navigate("/settings"); }} style={ghostBtn}>
               Set up in Settings
@@ -171,7 +178,7 @@ function AgentStep() {
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <span className="text-xs" style={{ color: "var(--fg-secondary)", lineHeight: 1.5, flex: 1 }}>
-          Pick the AI agent Rigel should use and connect it. You can change this any time in Settings, then Agents.
+          Set up your AI provider. Pick which one Rigel should use and connect it — you can change this any time in Settings, then Agents.
         </span>
         {connected && <Done />}
       </div>
@@ -207,6 +214,13 @@ function AssistantCard() {
       {install.isError && <span style={errText}>{install.error.message}</span>}
     </ToolCard>
   );
+}
+
+// Assistant-step nudge: only when metrics-server is known missing (available === false).
+function MetricsNudge() {
+  const metrics = useNodeMetrics();
+  if (metrics.data?.available !== false) return null;
+  return <MetricsCard />;
 }
 
 function MetricsCard() {

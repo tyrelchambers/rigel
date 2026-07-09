@@ -27,9 +27,12 @@ const codex: AgentView = {
 
 /** Render the wizard (optional onboarding, no About-you gate) with the agents
  *  query pre-seeded so the AI step's pick-and-connect grid has data. */
-function renderWizard(agents?: AgentsResponse) {
+function renderWizard(agents?: AgentsResponse, metricsAvailable?: boolean) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   if (agents) qc.setQueryData(["agents"], agents);
+  if (metricsAvailable !== undefined) {
+    qc.setQueryData(["metrics", "nodes"], { available: metricsAvailable, items: [] });
+  }
   const onClose = vi.fn();
   render(
     <QueryClientProvider client={qc}>
@@ -76,10 +79,39 @@ describe("OnboardingWizard AI-agent step", () => {
     renderWizard({ activeAgentId: "claude", agents: [claude, codex] });
 
     // AI step (label in the stepper) is the active step.
-    expect(screen.getByText(/Step 1 of 5 · AI agent/i)).toBeInTheDocument();
+    expect(screen.getByText(/Step 1 of 4 · AI agent/i)).toBeInTheDocument();
 
     // Skip moves on without requiring a connected agent.
     fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
-    expect(screen.getByText(/Step 2 of 5 · Assistant/i)).toBeInTheDocument();
+    expect(screen.getByText(/Step 2 of 4 · Assistant/i)).toBeInTheDocument();
+  });
+});
+
+describe("OnboardingWizard streamlined steps", () => {
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it("has four steps and no standalone Metrics step", () => {
+    renderWizard({ activeAgentId: "claude", agents: [claude, codex] }, false);
+    expect(screen.getByText(/Step 1 of 4 · AI agent/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^next →$/i }));
+    expect(screen.getByText(/Step 2 of 4 · Assistant/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^next →$/i }));
+    expect(screen.getByText(/Step 3 of 4 · Compose/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^next →$/i }));
+    expect(screen.getByText(/Step 4 of 4 · Notifications/i)).toBeInTheDocument();
+  });
+
+  it("nudges to install metrics-server on the Assistant step when it's unavailable", () => {
+    renderWizard({ activeAgentId: "claude", agents: [claude, codex] }, false);
+    fireEvent.click(screen.getByRole("button", { name: /^next →$/i })); // → Assistant
+    expect(screen.getByText(/metrics-server/i)).toBeInTheDocument();
+  });
+
+  it("hides the metrics nudge when metrics-server is already available", () => {
+    renderWizard({ activeAgentId: "claude", agents: [claude, codex] }, true);
+    fireEvent.click(screen.getByRole("button", { name: /^next →$/i })); // → Assistant
+    expect(screen.queryByText(/metrics-server/i)).not.toBeInTheDocument();
   });
 });
