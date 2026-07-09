@@ -80,7 +80,7 @@ describe("OnboardingWizard AI-agent step", () => {
     renderWizard({ activeAgentId: "claude", agents: [claude, codex] });
 
     // AI step (label in the stepper) is the active step.
-    expect(screen.getByText("Step 1 of 4")).toBeInTheDocument();
+    expect(screen.getByText("Step 1 of 3")).toBeInTheDocument();
     expect(screen.getByText("· AI agent")).toBeInTheDocument();
 
     // Skip moves on without requiring a connected agent.
@@ -94,17 +94,15 @@ describe("OnboardingWizard streamlined steps", () => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
-  it("has four steps and no standalone Metrics step", () => {
+  it("has three steps ending in a Next steps panel", () => {
     renderWizard({ activeAgentId: "claude", agents: [claude, codex] }, false);
-    expect(screen.getByText("Step 1 of 4")).toBeInTheDocument();
+    expect(screen.getByText("Step 1 of 3")).toBeInTheDocument();
     expect(screen.getByText("· AI agent")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^next →$/i }));
     expect(screen.getByText("· Assistant")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^next →$/i }));
-    expect(screen.getByText("· Compose")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /^next →$/i }));
-    expect(screen.getByText("Step 4 of 4")).toBeInTheDocument();
-    expect(screen.getByText("· Notifications")).toBeInTheDocument();
+    expect(screen.getByText("Step 3 of 3")).toBeInTheDocument();
+    expect(screen.getByText("· Next steps")).toBeInTheDocument();
   });
 
   it("nudges to install metrics-server on the Assistant step when it's unavailable", () => {
@@ -125,21 +123,20 @@ describe("OnboardingWizard leaving to a real feature", () => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
-  it("Import your stack leaves without marking onboarding complete", () => {
+  it("the Compose next-step leaves without marking onboarding complete", () => {
     const { onClose, onLeave } = renderWizard({ activeAgentId: "claude", agents: [claude, codex] }, false);
     fireEvent.click(screen.getByRole("button", { name: /^next →$/i })); // → Assistant
-    fireEvent.click(screen.getByRole("button", { name: /^next →$/i })); // → Compose
-    fireEvent.click(screen.getByRole("button", { name: /import your stack/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^next →$/i })); // → Next steps
+    fireEvent.click(screen.getByRole("button", { name: /^import$/i }));
     expect(onLeave).toHaveBeenCalledTimes(1);
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("Set up in Settings leaves without marking onboarding complete", () => {
+  it("the notifications next-step leaves without marking onboarding complete", () => {
     const { onClose, onLeave } = renderWizard({ activeAgentId: "claude", agents: [claude, codex] }, false);
     fireEvent.click(screen.getByRole("button", { name: /^next →$/i })); // → Assistant
-    fireEvent.click(screen.getByRole("button", { name: /^next →$/i })); // → Compose
-    fireEvent.click(screen.getByRole("button", { name: /^next →$/i })); // → Notifications
-    fireEvent.click(screen.getByRole("button", { name: /set up in settings/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^next →$/i })); // → Next steps
+    fireEvent.click(screen.getByRole("button", { name: /open settings/i }));
     expect(onLeave).toHaveBeenCalledTimes(1);
     expect(onClose).not.toHaveBeenCalled();
   });

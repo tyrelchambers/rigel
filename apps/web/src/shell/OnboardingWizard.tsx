@@ -2,9 +2,9 @@
  * First-run setup. Auto-shown after login when no AI agent is connected
  * (dismissible; re-openable from Settings via the "rigel:open-setup" event). A
  * guided front-end over existing flows: connect an AI agent through the real
- * Agents picker, install the Assistant (with a metrics-server nudge when it's
- * missing), import from Docker Compose, and set up notifications. Every step is
- * skippable.
+ * Agents picker and install the Assistant (with a metrics-server nudge when it's
+ * missing), then a final Next-steps panel pointing at the heavier do-it-in-the-
+ * real-panel actions (Compose import, notifications). Every step is skippable.
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
@@ -44,33 +44,32 @@ export function OnboardingWizard({ onClose, onLeave }: { onClose: () => void; on
       ),
     },
     {
-      label: "Compose",
+      label: "Next steps",
+      title: "You're all set",
+      description: "Here are the bigger things to set up whenever you're ready. They live in the app, so you can come back anytime.",
       node: (
-        <ToolCard
-          icon={<FileInput size={15} style={{ color: "var(--accent-primary)" }} />}
-          title="Coming from Docker Compose?"
-          desc="Import your stack. Convert a docker-compose.yml into Kubernetes manifests you can review and apply."
-          action={
-            <button type="button" onClick={() => { onLeave(); navigate("/compose"); }} style={ghostBtn}>
-              Import your stack
-            </button>
-          }
-        />
-      ),
-    },
-    {
-      label: "Notifications",
-      node: (
-        <ToolCard
-          icon={<Bell size={15} style={{ color: "var(--accent-primary)" }} />}
-          title="Notifications"
-          desc="Get cluster alerts where you already are. Connect a channel (Signal today, more coming) from Settings."
-          action={
-            <button type="button" onClick={() => { onLeave(); navigate("/settings"); }} style={ghostBtn}>
-              Set up in Settings
-            </button>
-          }
-        />
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <ToolCard
+            icon={<FileInput size={15} style={{ color: "var(--accent-primary)" }} />}
+            title="Import a Compose stack"
+            desc="Convert a docker-compose.yml into Kubernetes manifests you can review and apply in the Compose panel."
+            action={
+              <button type="button" onClick={() => { onLeave(); navigate("/compose"); }} style={ghostBtn}>
+                Import
+              </button>
+            }
+          />
+          <ToolCard
+            icon={<Bell size={15} style={{ color: "var(--accent-primary)" }} />}
+            title="Set up notifications"
+            desc="Get cluster alerts where you already are. Connect a channel (Signal today, more coming)."
+            action={
+              <button type="button" onClick={() => { onLeave(); navigate("/settings"); }} style={ghostBtn}>
+                Open Settings
+              </button>
+            }
+          />
+        </div>
       ),
     },
   ];
