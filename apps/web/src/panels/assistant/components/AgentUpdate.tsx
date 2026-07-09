@@ -22,20 +22,20 @@ export function AgentUpdateView({
     const latest = result.latest;
     return (
       <>
-        <span className="flex items-center gap-2 whitespace-nowrap rounded-md bg-[var(--accent-dim)] px-2.5 py-1">
-          <CircleArrowUp className="size-3.5 shrink-0 text-[var(--accent-primary)]" />
+        <span className="flex items-center gap-2 whitespace-nowrap rounded-md border border-[rgba(245,158,11,0.3)] bg-[rgba(245,158,11,0.1)] px-2.5 py-1">
+          <CircleArrowUp className="size-3.5 shrink-0 text-[var(--status-pending)]" />
           {result.currentTag && (
             <>
               <span className="font-mono text-xs text-[var(--fg-tertiary)]">{result.currentTag}</span>
               <span aria-hidden className="font-mono text-xs text-[var(--fg-tertiary)]">→</span>
             </>
           )}
-          <span className="font-mono text-xs font-semibold text-[var(--accent-primary)]">{latest}</span>
+          <span className="font-mono text-xs font-semibold text-[var(--status-pending)]">{latest}</span>
         </span>
         <button
           type="button"
           onClick={() => onUpdate(latest)}
-          className="rounded-md bg-[var(--accent-primary)] px-2.5 py-1 text-xs font-semibold text-[var(--fg-inverse)]"
+          className="rounded-md border border-[rgba(245,158,11,0.3)] bg-[rgba(245,158,11,0.06)] px-2.5 py-1 text-xs font-semibold text-[var(--status-pending)] hover:border-[rgba(245,158,11,0.5)] hover:bg-[rgba(245,158,11,0.12)]"
         >
           Update
         </button>
