@@ -148,6 +148,11 @@ export default function App() {
     setShowOnboarding(false);
     localStorage.setItem("rigel_onboarded", "1");
   }
+  // Leaving onboarding to go use a real feature (Compose, Settings) closes the
+  // wizard but does NOT mark setup complete, so it stays reopenable from Settings.
+  function leaveOnboarding() {
+    setShowOnboarding(false);
+  }
 
   // The ChatPane exposes a send() handle so OverviewPanel's
   // "Investigate cluster" button can inject a message.
@@ -235,7 +240,7 @@ export default function App() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--surface-primary)" }}>
-      {showOnboarding && <OnboardingWizard onClose={closeOnboarding} />}
+      {showOnboarding && <OnboardingWizard onClose={closeOnboarding} onLeave={leaveOnboarding} />}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <AccountModal
         open={accountOpen}

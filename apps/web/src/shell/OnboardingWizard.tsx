@@ -8,7 +8,7 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { Sparkles, Check, Bot, Activity, Bell, FileInput } from "lucide-react";
+import { Check, Bot, Activity, Bell, FileInput } from "lucide-react";
 import {
   useAgents,
   useAssistantAction,
@@ -18,7 +18,7 @@ import {
 import { Stepper } from "./onboarding/Stepper";
 import { AgentsTab } from "@/panels/settings/agents/AgentsTab";
 
-export function OnboardingWizard({ onClose }: { onClose: () => void }) {
+export function OnboardingWizard({ onClose, onLeave }: { onClose: () => void; onLeave: () => void }) {
   const navigate = useNavigate();
   const [i, setI] = useState(0);
 
@@ -41,7 +41,7 @@ export function OnboardingWizard({ onClose }: { onClose: () => void }) {
           title="Coming from Docker Compose?"
           desc="Import your stack. Convert a docker-compose.yml into Kubernetes manifests you can review and apply."
           action={
-            <button type="button" onClick={() => { onClose(); navigate("/compose"); }} style={ghostBtn}>
+            <button type="button" onClick={() => { onLeave(); navigate("/compose"); }} style={ghostBtn}>
               Import your stack
             </button>
           }
@@ -56,7 +56,7 @@ export function OnboardingWizard({ onClose }: { onClose: () => void }) {
           title="Notifications"
           desc="Get cluster alerts where you already are. Connect a channel (Signal today, more coming) from Settings."
           action={
-            <button type="button" onClick={() => { onClose(); navigate("/settings"); }} style={ghostBtn}>
+            <button type="button" onClick={() => { onLeave(); navigate("/settings"); }} style={ghostBtn}>
               Set up in Settings
             </button>
           }
@@ -87,10 +87,7 @@ export function OnboardingWizard({ onClose }: { onClose: () => void }) {
   return (
     <div style={overlay} onClick={onClose}>
       <div style={card} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-          <Sparkles size={18} style={{ color: "var(--accent-primary)" }} />
-          <span className="text-lg" style={{ fontWeight: 600, color: "var(--fg-primary)" }}>Welcome to Rigel</span>
-        </div>
+        <span className="text-lg" style={{ fontWeight: 600, color: "var(--fg-primary)" }}>Welcome to Rigel</span>
 
         <span className="text-xs" style={{ color: "var(--fg-secondary)", lineHeight: 1.5 }}>
           A minute of optional setup. Everything here can also be changed later in Settings. Skip
@@ -156,8 +153,21 @@ function ToolCard({
 
 function Done() {
   return (
-    <span className="text-xs" style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "var(--status-running)" }}>
-      <Check size={13} /> Done
+    <span
+      className="text-2xs"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        fontWeight: 600,
+        padding: "3px 9px",
+        borderRadius: 999,
+        color: "var(--status-running)",
+        background: "color-mix(in oklab, var(--status-running) 14%, transparent)",
+        border: "1px solid color-mix(in oklab, var(--status-running) 32%, transparent)",
+      }}
+    >
+      <Check size={12} /> Done
     </span>
   );
 }

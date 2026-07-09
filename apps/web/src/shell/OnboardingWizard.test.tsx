@@ -34,14 +34,15 @@ function renderWizard(agents?: AgentsResponse, metricsAvailable?: boolean) {
     qc.setQueryData(["metrics", "nodes"], { available: metricsAvailable, items: [] });
   }
   const onClose = vi.fn();
+  const onLeave = vi.fn();
   render(
     <QueryClientProvider client={qc}>
       <MemoryRouter>
-        <OnboardingWizard onClose={onClose} />
+        <OnboardingWizard onClose={onClose} onLeave={onLeave} />
       </MemoryRouter>
     </QueryClientProvider>,
   );
-  return { onClose };
+  return { onClose, onLeave };
 }
 
 describe("OnboardingWizard AI-agent step", () => {
@@ -113,5 +114,30 @@ describe("OnboardingWizard streamlined steps", () => {
     renderWizard({ activeAgentId: "claude", agents: [claude, codex] }, true);
     fireEvent.click(screen.getByRole("button", { name: /^next →$/i })); // → Assistant
     expect(screen.queryByText(/metrics-server/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("OnboardingWizard leaving to a real feature", () => {
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it("Import your stack leaves without marking onboarding complete", () => {
+    const { onClose, onLeave } = renderWizard({ activeAgentId: "claude", agents: [claude, codex] }, false);
+    fireEvent.click(screen.getByRole("button", { name: /^next →$/i })); // → Assistant
+    fireEvent.click(screen.getByRole("button", { name: /^next →$/i })); // → Compose
+    fireEvent.click(screen.getByRole("button", { name: /import your stack/i }));
+    expect(onLeave).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("Set up in Settings leaves without marking onboarding complete", () => {
+    const { onClose, onLeave } = renderWizard({ activeAgentId: "claude", agents: [claude, codex] }, false);
+    fireEvent.click(screen.getByRole("button", { name: /^next →$/i })); // → Assistant
+    fireEvent.click(screen.getByRole("button", { name: /^next →$/i })); // → Compose
+    fireEvent.click(screen.getByRole("button", { name: /^next →$/i })); // → Notifications
+    fireEvent.click(screen.getByRole("button", { name: /set up in settings/i }));
+    expect(onLeave).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
   });
 });
