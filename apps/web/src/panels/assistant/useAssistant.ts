@@ -53,7 +53,10 @@ interface SecretLike {
 }
 interface DeploymentLike {
   metadata: Meta;
-  spec?: { replicas?: number };
+  spec?: {
+    replicas?: number;
+    template?: { spec?: { containers?: Array<{ name?: string; image?: string }> } };
+  };
   status?: { replicas?: number; readyReplicas?: number };
 }
 interface PodLike {
@@ -85,6 +88,10 @@ export interface AssistantDerived {
   ready: AssistantReady;
   isInstalled: boolean;
   installedNamespace: string | null;
+  /** The running agent container's image ref (e.g. ".../rigel-assistant:0.1.412"), or null. */
+  agentImage: string | null;
+  /** The agent container's name (for the setImage update action), or null. */
+  agentContainer: string | null;
   /** Namespace to read the agent's own resources from (install ns fallback). */
   stateNamespace: string;
   enabled: boolean;
@@ -224,6 +231,7 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
     const isInstalled = agentDeployment != null;
     const installedNamespace = agentDeployment ? agentDeployment.metadata.namespace ?? "default" : null;
     const stateNamespace = installedNamespace ?? installNamespaceHint;
+    const agentRef = pickAgentContainer(agentDeployment?.spec?.template?.spec?.containers);
 
     const configMap = (name: string): ConfigMapLike | undefined =>
       configMaps.find(
@@ -273,6 +281,8 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
       },
       isInstalled,
       installedNamespace,
+      agentImage: agentRef?.image ?? null,
+      agentContainer: agentRef?.container ?? null,
       stateNamespace,
       enabled: deriveEnabled(configData),
       autonomyMode: deriveMode(configData),
@@ -321,6 +331,18 @@ export function credsFromSources(
     if (src?.ready) (out as Record<string, string>)[id] = "set";
   }
   return out;
+}
+
+/** The agent container's image + name from a Deployment's pod template. Prefers
+ *  the container named "agent" (what CI's `set image` targets); else the first
+ *  container. null when there is no container with both a name and an image. */
+export function pickAgentContainer(
+  containers: Array<{ name?: string; image?: string }> | undefined,
+): { image: string; container: string } | null {
+  const list = containers ?? [];
+  const picked = list.find((c) => c.name === "agent") ?? list[0];
+  if (!picked?.image || !picked?.name) return null;
+  return { image: picked.image, container: picked.name };
 }
 
 /** Parse the per-role selections from the assistant-config data map, defaulting
