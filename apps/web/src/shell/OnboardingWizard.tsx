@@ -2,12 +2,13 @@
  * First-run setup. Auto-shown after login when no AI agent is connected
  * (dismissible; re-openable from Settings via the "rigel:open-setup" event). A
  * guided front-end over existing flows: connect an AI agent through the real
- * Agents picker, and offer one-click installs of the Assistant, metrics-server,
- * and Signal. Every step is skippable.
+ * Agents picker and install the Assistant (with a metrics-server nudge when it's
+ * missing), then a final Next-steps panel pointing at the heavier do-it-in-the-
+ * real-panel actions (Compose import, notifications). Every step is skippable.
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { Sparkles, Check, Bot, Activity, Bell, FileInput } from "lucide-react";
+import { Check, Bot, Activity, Bell, FileInput, X } from "lucide-react";
 import {
   useAgents,
   useAssistantAction,
@@ -17,42 +18,58 @@ import {
 import { Stepper } from "./onboarding/Stepper";
 import { AgentsTab } from "@/panels/settings/agents/AgentsTab";
 
-export function OnboardingWizard({ onClose }: { onClose: () => void }) {
+export function OnboardingWizard({ onClose, onLeave }: { onClose: () => void; onLeave: () => void }) {
   const navigate = useNavigate();
   const [i, setI] = useState(0);
+  const { data: agentsData } = useAgents();
+  const activeAgent = agentsData?.agents.find((a) => a.id === agentsData?.activeAgentId);
+  const agentConnected = activeAgent?.connection === "connected";
 
-  const steps: { label: string; node: ReactNode }[] = [
-    { label: "AI agent", node: <AgentStep /> },
-    { label: "Assistant", node: <AssistantCard /> },
-    { label: "Metrics", node: <MetricsCard /> },
+  const steps: { label: string; title?: string; description?: string; status?: ReactNode; node: ReactNode }[] = [
     {
-      label: "Compose",
+      label: "AI agent",
+      title: "Connect your AI agent",
+      description:
+        "Pick which provider Rigel uses and connect it with an existing subscription or an API key. Your credentials never leave your machine.",
+      status: agentConnected ? <StatusPill label="Provider connected" /> : undefined,
+      node: <AgentStep />,
+    },
+    {
+      label: "Assistant",
       node: (
-        <ToolCard
-          icon={<FileInput size={15} style={{ color: "var(--accent-primary)" }} />}
-          title="Coming from Docker Compose?"
-          desc="Import your stack. Convert a docker-compose.yml into Kubernetes manifests you can review and apply."
-          action={
-            <button type="button" onClick={() => { onClose(); navigate("/compose"); }} style={ghostBtn}>
-              Import your stack
-            </button>
-          }
-        />
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <AssistantCard />
+          <MetricsNudge />
+        </div>
       ),
     },
     {
-      label: "Notifications",
+      label: "Next steps",
+      title: "You're all set",
+      description: "Here are the bigger things to set up whenever you're ready. They live in the app, so you can come back anytime.",
       node: (
-        <ToolCard
-          icon={<Bell size={15} style={{ color: "var(--accent-primary)" }} />}
-          title="Signal notifications"
-          desc="Get cluster alerts on your phone. The linking flow (QR scan) lives in Settings."
-          action={
-            <button type="button" onClick={() => { onClose(); navigate("/settings"); }} style={ghostBtn}>
-              Set up in Settings
-            </button>
-          }
-        />
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <ToolCard
+            icon={<FileInput size={15} style={{ color: "var(--accent-primary)" }} />}
+            title="Import a Compose stack"
+            desc="Convert a docker-compose.yml into Kubernetes manifests you can review and apply in the Compose panel."
+            action={
+              <button type="button" onClick={() => { onLeave(); navigate("/compose"); }} style={ghostBtn}>
+                Import
+              </button>
+            }
+          />
+          <ToolCard
+            icon={<Bell size={15} style={{ color: "var(--accent-primary)" }} />}
+            title="Set up notifications"
+            desc="Get cluster alerts where you already are. Connect a channel (Signal today, more coming)."
+            action={
+              <button type="button" onClick={() => { onLeave(); navigate("/settings"); }} style={ghostBtn}>
+                Open Settings
+              </button>
+            }
+          />
+        </div>
       ),
     },
   ];
@@ -76,24 +93,43 @@ export function OnboardingWizard({ onClose }: { onClose: () => void }) {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [isLast, onClose]);
 
+  const step = steps[i];
+
   return (
     <div style={overlay} onClick={onClose}>
       <div style={card} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-          <Sparkles size={18} style={{ color: "var(--accent-primary)" }} />
-          <span className="text-lg" style={{ fontWeight: 600, color: "var(--fg-primary)" }}>Welcome to Rigel</span>
+        <div style={header}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5, flex: 1 }}>
+            <span className="text-xl" style={{ fontWeight: 700, color: "var(--fg-primary)" }}>Welcome to Rigel</span>
+            <span className="text-sm" style={{ color: "var(--fg-tertiary)", lineHeight: 1.45 }}>
+              A minute of optional setup. Skip anything you don't need. Everything here can be changed later in Settings.
+            </span>
+          </div>
+          <button type="button" aria-label="Close" onClick={onClose} style={closeBtn}>
+            <X size={16} />
+          </button>
         </div>
 
-        <span className="text-xs" style={{ color: "var(--fg-secondary)", lineHeight: 1.5 }}>
-          A minute of optional setup. Everything here can also be changed later in Settings. Skip
-          anything you don't need.
-        </span>
+        <div style={divider} />
 
-        <Stepper labels={steps.map((s) => s.label)} current={i} />
+        <div style={stepSection}>
+          <Stepper labels={steps.map((s) => s.label)} current={i} />
+          {step.title && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <span className="text-lg" style={{ fontWeight: 700, color: "var(--fg-primary)" }}>{step.title}</span>
+                {step.status}
+              </div>
+              <span className="text-sm" style={{ color: "var(--fg-secondary)", lineHeight: 1.45 }}>{step.description}</span>
+            </div>
+          )}
+        </div>
 
-        {steps[i].node}
+        <div style={body}>{step.node}</div>
 
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+        <div style={divider} />
+
+        <div style={footer}>
           <div>
             {!isFirst && (
               <button type="button" onClick={() => setI((n) => n - 1)} style={ghostBtn}>
@@ -116,6 +152,25 @@ export function OnboardingWizard({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function StatusPill({ label }: { label: string }) {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "4px 11px",
+        borderRadius: 999,
+        background: "#10B9811A",
+        border: "1px solid #10B98140",
+      }}
+    >
+      <Check size={13} style={{ color: "var(--status-running)" }} />
+      <span className="text-xs" style={{ fontWeight: 600, color: "var(--status-running)" }}>{label}</span>
+    </span>
   );
 }
 
@@ -148,38 +203,29 @@ function ToolCard({
 
 function Done() {
   return (
-    <span className="text-xs" style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "var(--status-running)" }}>
-      <Check size={13} /> Done
+    <span
+      className="text-2xs"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        fontWeight: 600,
+        padding: "3px 9px",
+        borderRadius: 999,
+        color: "var(--status-running)",
+        background: "color-mix(in oklab, var(--status-running) 14%, transparent)",
+        border: "1px solid color-mix(in oklab, var(--status-running) 32%, transparent)",
+      }}
+    >
+      <Check size={12} /> Done
     </span>
   );
 }
 
-/**
- * AI-agent setup step. Renders the real pick-and-connect flow (AgentsTab: the
- * same grid of agents + per-agent auth used in Settings, then Agents) so
- * onboarding connects an agent through the proper multi-agent path instead of
- * saving a single Claude token. Completion mirrors ChatPane: the step is "Done"
- * once the ACTIVE agent reports connected. The step is skippable — chat's
- * empty-state guides anyone who continues without connecting.
- */
+// AI-agent step body: the real pick-and-connect grid, headingless (the step
+// title and connection status live in the wizard chrome above the cards).
 function AgentStep() {
-  const { data } = useAgents();
-  const activeAgent = data?.agents.find((a) => a.id === data?.activeAgentId);
-  const connected = activeAgent?.connection === "connected";
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span className="text-xs" style={{ color: "var(--fg-secondary)", lineHeight: 1.5, flex: 1 }}>
-          Pick the AI agent Rigel should use and connect it. You can change this any time in Settings, then Agents.
-        </span>
-        {connected && <Done />}
-      </div>
-      {/* The real Agents flow: grid → per-agent auth, with its own "Connect your
-          AI agent" heading. No settings chrome, so it embeds directly. */}
-      <AgentsTab />
-    </div>
-  );
+  return <AgentsTab hideHeading />;
 }
 
 function AssistantCard() {
@@ -209,6 +255,13 @@ function AssistantCard() {
   );
 }
 
+// Assistant-step nudge: only when metrics-server is known missing (available === false).
+function MetricsNudge() {
+  const metrics = useNodeMetrics();
+  if (metrics.data?.available !== false) return null;
+  return <MetricsCard />;
+}
+
 function MetricsCard() {
   const metrics = useNodeMetrics();
   const install = useInstallMetricsServer();
@@ -217,7 +270,7 @@ function MetricsCard() {
     <ToolCard
       icon={<Activity size={15} style={{ color: "var(--accent-primary)" }} />}
       title="metrics-server"
-      desc="Enables live CPU/memory and Right-sizing. On homelab clusters the install also adds --kubelet-insecure-tls."
+      desc="Enables live node CPU/memory. On homelab clusters the install also adds --kubelet-insecure-tls."
       action={
         available || install.isSuccess ? (
           <Done />
@@ -249,17 +302,52 @@ const overlay: React.CSSProperties = {
   padding: 16,
 };
 const card: React.CSSProperties = {
-  width: "min(560px, 96vw)",
+  width: "min(720px, 94vw)",
   maxHeight: "88vh",
   overflowY: "auto",
   background: "var(--surface-elevated)",
-  border: "1px solid #34353A",
-  borderRadius: 14,
+  border: "1px solid var(--border-strong)",
+  borderRadius: 16,
   boxShadow: "0 24px 64px rgba(0,0,0,0.7)",
-  padding: 22,
   display: "flex",
   flexDirection: "column",
-  gap: 14,
+};
+const header: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  padding: "22px 26px 18px 26px",
+  width: "100%",
+};
+const closeBtn: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexShrink: 0,
+  width: 30,
+  height: 30,
+  borderRadius: 8,
+  background: "#FFFFFF0D",
+  border: "none",
+  cursor: "pointer",
+  color: "var(--fg-secondary)",
+};
+const divider: React.CSSProperties = { flexShrink: 0, height: 1, width: "100%", background: "var(--border-subtle)" };
+const stepSection: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 16,
+  padding: "18px 26px 4px 26px",
+  width: "100%",
+};
+const body: React.CSSProperties = { padding: "16px 26px", width: "100%" };
+const footer: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  padding: "16px 26px 20px 26px",
+  width: "100%",
 };
 const tool: React.CSSProperties = {
   display: "flex",

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, expect, test } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NodeMetricsTable } from "./NodeMetricsTable";
 import type { NodeResourceTotals } from "./overviewDisplay";
 
@@ -30,9 +31,15 @@ test("flags >=80% utilization with an amber fill, lower usage with the default f
   expect(container.querySelectorAll('[data-warn="false"]').length).toBeGreaterThan(0);
 });
 
-test("shows the metrics-server empty state when unavailable", () => {
-  render(<NodeMetricsTable rows={[]} readyByName={{}} hasMetrics={false} reclaimable={null} />);
-  expect(screen.getByText(/metrics-server unavailable/i)).toBeTruthy();
+test("shows the metrics-server empty state with an install action when unavailable", () => {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  render(
+    <QueryClientProvider client={qc}>
+      <NodeMetricsTable rows={[]} readyByName={{}} hasMetrics={false} reclaimable={null} />
+    </QueryClientProvider>,
+  );
+  expect(screen.getByText(/live node metrics aren't available/i)).toBeTruthy();
+  expect(screen.getByRole("button", { name: /install metrics-server/i })).toBeTruthy();
 });
 
 test("renders the reclaimable badge when provided", () => {

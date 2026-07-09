@@ -31,7 +31,8 @@ import { TerminalDrawer, TOGGLE_TERMINAL_EVENT } from "@/shell/TerminalDrawer";
 import { ResourceYamlViewer } from "@/components/ResourceYamlViewer";
 import { Toaster } from "@/components/ui/sonner";
 import { connectCluster } from "@/lib/ws";
-import { useChatConfig } from "@/lib/api";
+import { useAgents } from "@/lib/api";
+import { shouldAutoOpenOnboarding } from "@/shell/onboarding/shouldAutoOpen";
 import { rigel } from "@/lib/desktop";
 import { OnboardingWizard } from "@/shell/OnboardingWizard";
 import { AccountGate } from "@/shell/AccountGate";
@@ -92,10 +93,10 @@ export default function App() {
     });
   }, []);
 
-  // First-run onboarding: auto-show once when set up is incomplete (no Claude
-  // token) and not previously dismissed; re-openable from Settings via an event.
+  // First-run onboarding: auto-show once when no AI agent is connected (any
+  // backend) and not previously dismissed; re-openable from Settings via an event.
   // Name/email capture is handled earlier by the full-screen AccountGate below.
-  const { data: chatConfig } = useChatConfig();
+  const { data: agentsData } = useAgents();
   const [showOnboarding, setShowOnboarding] = useState(false);
   // First-run gate: the app does not render until name+email exist. `null` =
   // still checking (desktop); off-desktop there's no bridge, so no gate.
@@ -132,15 +133,31 @@ export default function App() {
     return () => { cancelled = true; };
   }, []);
 
+  // Suppresses auto-open once onboarding has been closed or left this session, so
+  // an agents refetch can't pop the wizard back over a panel the user navigated to.
+  const onboardingHandledRef = useRef(false);
   useEffect(() => {
-    if (accountMissing !== false) return; // hold optional onboarding until the gate clears
-    if (chatConfig && !chatConfig.configured && !localStorage.getItem("rigel_onboarded")) {
+    if (onboardingHandledRef.current) return;
+    if (
+      shouldAutoOpenOnboarding({
+        accountMissing,
+        agents: agentsData,
+        onboarded: localStorage.getItem("rigel_onboarded") !== null,
+      })
+    ) {
       setShowOnboarding(true);
     }
-  }, [chatConfig, accountMissing]);
+  }, [agentsData, accountMissing]);
   function closeOnboarding() {
+    onboardingHandledRef.current = true;
     setShowOnboarding(false);
     localStorage.setItem("rigel_onboarded", "1");
+  }
+  // Leaving onboarding to go use a real feature (Compose, Settings) closes the
+  // wizard but does NOT mark setup complete, so it stays reopenable from Settings.
+  function leaveOnboarding() {
+    onboardingHandledRef.current = true;
+    setShowOnboarding(false);
   }
 
   // The ChatPane exposes a send() handle so OverviewPanel's
@@ -229,7 +246,7 @@ export default function App() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--surface-primary)" }}>
-      {showOnboarding && <OnboardingWizard onClose={closeOnboarding} />}
+      {showOnboarding && <OnboardingWizard onClose={closeOnboarding} onLeave={leaveOnboarding} />}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <AccountModal
         open={accountOpen}

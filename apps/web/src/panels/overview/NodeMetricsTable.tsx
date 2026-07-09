@@ -1,5 +1,6 @@
 import { Recycle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { MetricsServerEmptyState } from "./MetricsServerEmptyState";
 import { formatCpu, formatBytes, type NodeResourceTotals } from "./overviewDisplay";
 
 const WARN_PERCENT = 80;
@@ -106,12 +107,7 @@ export function NodeMetricsTable({ rows, readyByName, hasMetrics, reclaimable }:
           ))}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center gap-3.5 px-[18px] py-8 text-center">
-          <div className="h-0.5 w-7 rounded-[1px] bg-[var(--border-strong)]" />
-          <span className="text-xs leading-relaxed text-[var(--fg-tertiary)]">
-            metrics-server unavailable — install it to see live node usage.
-          </span>
-        </div>
+        <MetricsServerEmptyState />
       )}
     </section>
   );

@@ -4,7 +4,8 @@
 //   3. App defaults — per-cluster self-host install defaults.
 
 import { useState } from "react";
-import { Bot, Radio, SlidersHorizontal } from "lucide-react";
+import { Bot, Radio, SlidersHorizontal, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { TabBar, Tab } from "@/components/ui/Tabs";
 import { AiAgentsTab } from "./tabs/AiAgentsTab";
 import { ChannelsTab } from "./tabs/ChannelsTab";
@@ -28,11 +29,20 @@ export default function SettingsPanel() {
             Connect agents, wire up channels, and set self-host defaults.
           </p>
         </div>
-        <TabBar value={tab} onValueChange={(id) => setTab(id as SettingsTab)} className="shrink-0">
-          {TABS.map((t) => (
-            <Tab key={t.id} value={t.id} icon={t.icon}>{t.label}</Tab>
-          ))}
-        </TabBar>
+        <div className="flex flex-wrap items-center gap-3 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.dispatchEvent(new Event("rigel:open-setup"))}
+          >
+            <Sparkles /> Setup guide
+          </Button>
+          <TabBar value={tab} onValueChange={(id) => setTab(id as SettingsTab)}>
+            {TABS.map((t) => (
+              <Tab key={t.id} value={t.id} icon={t.icon}>{t.label}</Tab>
+            ))}
+          </TabBar>
+        </div>
       </div>
       {tab === "agents" && <AiAgentsTab />}
       {tab === "channels" && <ChannelsTab />}

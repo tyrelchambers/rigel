@@ -504,7 +504,8 @@ async function handler(req: Request): Promise<Response> {
     }
 
     // POST /api/install/metrics-server — one-click upstream metrics-server for
-    // the onboarding wizard (enables `kubectl top` → live metrics + right-sizing).
+    // onboarding and the Overview empty state (enables `kubectl top` → live node
+    // CPU/memory; right-sizing history is a separate Prometheus/VM backend).
     // Applies the official components.yaml, then best-effort adds
     // --kubelet-insecure-tls (the common homelab/k3s/kind fix for self-signed
     // kubelet certs). Always 200 with { code, stdout, stderr } from the apply.

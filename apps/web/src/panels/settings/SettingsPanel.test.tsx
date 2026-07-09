@@ -54,4 +54,14 @@ describe("SettingsPanel", () => {
     wrap(<SettingsPanel />);
     expect(screen.getByText(/connect an agent to configure the assistant/i)).toBeInTheDocument();
   });
+
+  it("reopens onboarding via the rigel:open-setup event when Setup guide is clicked", async () => {
+    const { default: SettingsPanel } = await import("./SettingsPanel");
+    const spy = vi.fn();
+    window.addEventListener("rigel:open-setup", spy);
+    wrap(<SettingsPanel />);
+    fireEvent.click(screen.getByRole("button", { name: /setup guide/i }));
+    expect(spy).toHaveBeenCalledTimes(1);
+    window.removeEventListener("rigel:open-setup", spy);
+  });
 });
