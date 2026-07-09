@@ -1,5 +1,7 @@
 import { CircleArrowUp, Check, CloudOff, Info } from "lucide-react";
-import type { UpdateResult } from "@/lib/api";
+import { useUpdates, type UpdateResult } from "@/lib/api";
+import { useAssistantCtx } from "../AssistantContext";
+import { withTag } from "@/panels/catalog/updateTargets";
 
 function Divider() {
   return <span aria-hidden className="h-[22px] w-px shrink-0 bg-[var(--border-strong)]" />;
@@ -68,4 +70,29 @@ export function AgentUpdateView({
       <Divider />
     </>
   );
+}
+
+/** Reads the running agent image, checks it against the registry, and renders the
+ *  indicator. The Update button opens the standard setImage ConfirmSheet. */
+export function AgentUpdate() {
+  const { d, runSuggestion } = useAssistantCtx();
+  const image = d.agentImage;
+  const updates = useUpdates(image ? [image] : []);
+  const result = updates.data?.results.find((r) => r.image === image);
+
+  if (!image) return null;
+
+  const onUpdate = (latest: string) => {
+    runSuggestion({
+      kind: "setImage",
+      label: `Update agent to ${latest}`,
+      name: "rigel-assistant",
+      namespace: d.installedNamespace ?? d.stateNamespace,
+      resourceKind: "deployment",
+      container: d.agentContainer ?? "agent",
+      image: withTag(image, latest),
+    });
+  };
+
+  return <AgentUpdateView result={result} onUpdate={onUpdate} />;
 }
