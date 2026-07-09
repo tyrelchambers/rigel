@@ -232,7 +232,7 @@ function MetricsCard() {
     <ToolCard
       icon={<Activity size={15} style={{ color: "var(--accent-primary)" }} />}
       title="metrics-server"
-      desc="Enables live CPU/memory and Right-sizing. On homelab clusters the install also adds --kubelet-insecure-tls."
+      desc="Enables live node CPU/memory. On homelab clusters the install also adds --kubelet-insecure-tls."
       action={
         available || install.isSuccess ? (
           <Done />
