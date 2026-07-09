@@ -28,8 +28,11 @@ jobs:
       - name: Compute continuous version
         id: ver
         run: |
-          MINOR=$(node -p "require('./agent/package.json').version.split('.')[1]")
-          echo "version=0.${MINOR}.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          MAJOR_MINOR=$(node -p "require('./agent/package.json').version.split('.').slice(0,2).join('.')")
+          if ! printf '%s' "$MAJOR_MINOR" | grep -Eq '^[0-9]+\.[0-9]+$'; then
+            echo "::error::agent/package.json version is not X.Y.Z"; exit 1
+          fi
+          echo "version=${MAJOR_MINOR}.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
 
       # No QEMU: build natively for amd64 so claude-code's installer detects the
       # runner's AVX2 CPU and bakes the AVX2 Bun build. Under QEMU emulation it

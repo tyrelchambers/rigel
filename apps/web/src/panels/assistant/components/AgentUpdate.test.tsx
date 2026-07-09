@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { AgentUpdateView } from "./AgentUpdate";
+import { AgentUpdate, AgentUpdateView } from "./AgentUpdate";
 import type { UpdateResult } from "@/lib/api";
 
 const base: UpdateResult = {
@@ -62,5 +62,66 @@ describe("AgentUpdateView", () => {
     const el = screen.getByText(/couldn't check/i);
     expect(el).toBeInTheDocument();
     expect(el.closest("[title]")?.getAttribute("title")).toBe("registry returned HTTP 503");
+  });
+});
+
+const runSuggestion = vi.fn();
+let ctxValue: {
+  d: { agentImage: string | null; agentContainer: string | null; installedNamespace: string | null; stateNamespace: string };
+  runSuggestion: typeof runSuggestion;
+};
+let updatesValue: { data?: { results: UpdateResult[] } };
+
+vi.mock("../AssistantContext", () => ({ useAssistantCtx: () => ctxValue }));
+vi.mock("@/lib/api", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api")>()),
+  useUpdates: () => updatesValue,
+}));
+
+describe("AgentUpdate (smart wrapper)", () => {
+  beforeEach(() => {
+    runSuggestion.mockReset();
+    ctxValue = {
+      d: {
+        agentImage: "ghcr.io/x/rigel-assistant:0.1.412",
+        agentContainer: "agent",
+        installedNamespace: "team-a",
+        stateNamespace: "team-a",
+      },
+      runSuggestion,
+    };
+    updatesValue = {
+      data: {
+        results: [
+          {
+            image: "ghcr.io/x/rigel-assistant:0.1.412",
+            currentTag: "0.1.412",
+            latest: "0.1.415",
+            updateAvailable: true,
+            kind: "version",
+          },
+        ],
+      },
+    };
+  });
+
+  it("fires a setImage ConfirmSheet with the resolved latest tag", () => {
+    render(<AgentUpdate />);
+    fireEvent.click(screen.getByRole("button", { name: /update/i }));
+    expect(runSuggestion).toHaveBeenCalledWith({
+      kind: "setImage",
+      label: "Update agent to 0.1.415",
+      name: "rigel-assistant",
+      namespace: "team-a",
+      resourceKind: "deployment",
+      container: "agent",
+      image: "ghcr.io/x/rigel-assistant:0.1.415",
+    });
+  });
+
+  it("renders nothing when there is no agent image", () => {
+    ctxValue.d.agentImage = null;
+    const { container } = render(<AgentUpdate />);
+    expect(container).toBeEmptyDOMElement();
   });
 });
