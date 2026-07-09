@@ -20,7 +20,7 @@ function renderEmptyState() {
 
 test("renders the explanation and an enabled Install button", () => {
   renderEmptyState();
-  expect(screen.getByText(/metrics-server isn't installed/i)).toBeTruthy();
+  expect(screen.getByText(/live node metrics aren't available/i)).toBeTruthy();
   const btn = screen.getByRole("button", { name: /install metrics-server/i });
   expect((btn as HTMLButtonElement).disabled).toBe(false);
 });

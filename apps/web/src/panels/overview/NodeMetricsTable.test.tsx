@@ -38,7 +38,7 @@ test("shows the metrics-server empty state with an install action when unavailab
       <NodeMetricsTable rows={[]} readyByName={{}} hasMetrics={false} reclaimable={null} />
     </QueryClientProvider>,
   );
-  expect(screen.getByText(/metrics-server isn't installed/i)).toBeTruthy();
+  expect(screen.getByText(/live node metrics aren't available/i)).toBeTruthy();
   expect(screen.getByRole("button", { name: /install metrics-server/i })).toBeTruthy();
 });
 
