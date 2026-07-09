@@ -2,8 +2,9 @@
  * First-run setup. Auto-shown after login when no AI agent is connected
  * (dismissible; re-openable from Settings via the "rigel:open-setup" event). A
  * guided front-end over existing flows: connect an AI agent through the real
- * Agents picker, and offer one-click installs of the Assistant, metrics-server,
- * and Signal. Every step is skippable.
+ * Agents picker, install the Assistant (with a metrics-server nudge when it's
+ * missing), import from Docker Compose, and set up notifications. Every step is
+ * skippable.
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
