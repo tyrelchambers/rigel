@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { remarkAlerts } from "@/lib/remarkAlerts";
 import { User, Sparkles, Settings, ChevronRight } from "lucide-react";
 import { parseSuggestedActions, type SuggestedAction, type SuggestedQuestion, type SuggestedAlert } from "@/lib/actionBlocks";
 import { cn } from "@/lib/utils";
@@ -11,6 +12,7 @@ import { ToolCard } from "./ToolCard";
 import { RigelMark } from "@/components/RigelMark";
 import type { ChatMessage } from "./types";
 import { CodeBlock } from "./CodeBlock";
+import { ChatBlockquote } from "./Callout";
 
 interface Props {
   message: ChatMessage;
@@ -106,7 +108,7 @@ export function MessageBubble({ message, onAction, onRunBatch, onAnswer, agentNa
           <ToolCard tool={message.tool} />
         ) : isAssistant ? (
           <div className="chat-md select-text">
-            <Markdown remarkPlugins={[remarkGfm]} components={{ pre: CodeBlock }}>{display}</Markdown>
+            <Markdown remarkPlugins={[remarkGfm, remarkAlerts]} components={{ pre: CodeBlock, blockquote: ChatBlockquote }}>{display}</Markdown>
           </div>
         ) : display ? (
           <p
