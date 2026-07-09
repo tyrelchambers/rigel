@@ -15,7 +15,7 @@ import { SectionLabel } from "@/panels/components/MetaCard";
 import { ChevronRight, CircleArrowUp, FileCode, Lock, Package, Trash2, Undo2 } from "lucide-react";
 import { compactAge } from "@/lib/time";
 import { buildHelmRollbackArgs, buildHelmUninstallArgs, type HelmRelease, type HelmRevision } from "@rigel/k8s/src/helm";
-import { releasesFromSecretsMap, releaseStatusTone, formatTimestamp, type StatusTone } from "./releases";
+import { releasesFromSecrets, releaseStatusTone, formatTimestamp, type StatusTone } from "./releases";
 import { useHelmRollback, useHelmUninstall } from "./helmApi";
 import { HelmConfirmModal } from "./HelmConfirmModal";
 
@@ -40,7 +40,7 @@ export function ReleasesView({ onUpgrade }: { onUpgrade: (r: HelmRelease) => voi
   }, []);
 
   const releases = useMemo(
-    () => releasesFromSecretsMap(Object.fromEntries(filterByNamespace(secrets, namespaceFilter).entries())).sort((a, b) => a.name.localeCompare(b.name)),
+    () => releasesFromSecrets(filterByNamespace(secrets, namespaceFilter)).sort((a, b) => a.name.localeCompare(b.name)),
     [secrets, namespaceFilter],
   );
   const current = releases.find((r) => `${r.namespace}/${r.name}` === selected) ?? null;

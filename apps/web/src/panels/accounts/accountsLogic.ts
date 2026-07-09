@@ -79,11 +79,11 @@ export function emptyForm(): AccountForm {
  * default. Sorted by namespace then secret name for stable display.
  */
 export function accountsFromSecrets(
-  secretsByName: Record<string, Secret>,
+  secrets: Secret[],
   defaultId: string | null,
 ): RegistryAccount[] {
   const accounts: RegistryAccount[] = [];
-  for (const secret of Object.values(secretsByName)) {
+  for (const secret of secrets) {
     if (secret.type !== DOCKERCONFIGJSON_TYPE) continue;
     const extracted = extractRegistryFromSecret(secret);
     if (!extracted) continue;

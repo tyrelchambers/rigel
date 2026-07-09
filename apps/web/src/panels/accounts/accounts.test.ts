@@ -49,7 +49,7 @@ describe("accountsFromSecrets", () => {
     const map: Record<string, Secret> = {
       "rigel-dockerhub": dockerSecret("rigel-dockerhub", "default", "docker.io", "alice", "tok"),
     };
-    const accounts = accountsFromSecrets(map, null);
+    const accounts = accountsFromSecrets(Object.values(map), null);
     expect(accounts).toHaveLength(1);
     expect(accounts[0]).toMatchObject({
       registry: "docker.io",
@@ -72,7 +72,7 @@ describe("accountsFromSecrets", () => {
       },
       good: dockerSecret("good", "default", "ghcr.io", "bob", "pw"),
     };
-    const accounts = accountsFromSecrets(map, null);
+    const accounts = accountsFromSecrets(Object.values(map), null);
     expect(accounts.map((a) => a.secretName)).toEqual(["good"]);
   });
 
@@ -80,7 +80,7 @@ describe("accountsFromSecrets", () => {
     const map: Record<string, Secret> = {
       ref: dockerSecret("ref", "default", "quay.io", "carol", "pw", false),
     };
-    expect(accountsFromSecrets(map, null)[0]!.managed).toBe(false);
+    expect(accountsFromSecrets(Object.values(map), null)[0]!.managed).toBe(false);
   });
 
   test("marks the row whose id matches defaultId", () => {
@@ -89,7 +89,7 @@ describe("accountsFromSecrets", () => {
       b: dockerSecret("b", "default", "ghcr.io", "u", "p"),
     };
     const id = accountId("b", "default");
-    const accounts = accountsFromSecrets(map, id);
+    const accounts = accountsFromSecrets(Object.values(map), id);
     expect(accounts.find((x) => x.secretName === "b")!.isDefault).toBe(true);
     expect(accounts.find((x) => x.secretName === "a")!.isDefault).toBe(false);
   });
@@ -98,7 +98,7 @@ describe("accountsFromSecrets", () => {
     const map: Record<string, Secret> = {
       s: dockerSecret("s", "default", "ghcr.io", "alice", "topsecret"),
     };
-    expect(JSON.stringify(accountsFromSecrets(map, null))).not.toContain("topsecret");
+    expect(JSON.stringify(accountsFromSecrets(Object.values(map), null))).not.toContain("topsecret");
   });
 
   test("sorts by namespace then secret name", () => {
@@ -107,7 +107,7 @@ describe("accountsFromSecrets", () => {
       a: dockerSecret("a", "beta", "docker.io", "u", "p"),
       m: dockerSecret("m", "alpha", "docker.io", "u", "p"),
     };
-    expect(accountsFromSecrets(map, null).map((x) => `${x.sourceNamespace}/${x.secretName}`)).toEqual([
+    expect(accountsFromSecrets(Object.values(map), null).map((x) => `${x.sourceNamespace}/${x.secretName}`)).toEqual([
       "alpha/m",
       "alpha/z",
       "beta/a",

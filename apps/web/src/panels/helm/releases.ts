@@ -1,9 +1,9 @@
 import { groupReleases, type HelmRelease, type ReleaseSecret } from "@rigel/k8s/src/helm";
 import { format } from "date-fns";
 
-/** Derive Helm releases from the store's `resources["secrets"]` map. */
-export function releasesFromSecretsMap(secrets: Record<string, unknown>): HelmRelease[] {
-  return groupReleases(Object.values(secrets) as ReleaseSecret[]);
+/** Derive Helm releases from a list of the store's secret objects. */
+export function releasesFromSecrets(secrets: unknown[]): HelmRelease[] {
+  return groupReleases(secrets as ReleaseSecret[]);
 }
 
 export type StatusTone = "green" | "yellow" | "red" | "neutral";

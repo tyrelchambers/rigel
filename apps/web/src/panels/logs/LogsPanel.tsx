@@ -35,7 +35,7 @@ import { TabBar, Tab } from "@/components/ui/Tabs";
 import { PanelSearch } from "@/panels/components/PanelSearch";
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem } from "@/components/ui/context-menu";
 import { LoadingState } from "@/panels/components/LoadingState";
-import { type LogKind, type HealthState, LOG_KINDS, type SidebarItem, buildSidebarItems } from "./logTargets";
+import { type LogKind, type HealthState, type RawObj, LOG_KINDS, type SidebarItem, buildSidebarItems } from "./logTargets";
 import {
   type LogLine,
   type LogLevel,
@@ -134,14 +134,15 @@ export default function LogsPanel() {
     return () => unsubscribe(logKind, "*");
   }, [logKind]);
 
-  const items = useMemo(() => {
-    const scoped = Object.fromEntries(filterByNamespace(resources[logKind], namespaceFilter).entries());
-    return buildSidebarItems({ [logKind]: scoped }, logKind, sidebarSearch);
-  }, [resources, namespaceFilter, logKind, sidebarSearch]);
-  const total = useMemo(
-    () => filterByNamespace(resources[logKind], namespaceFilter).length,
+  const scopedItems = useMemo(
+    () => filterByNamespace<RawObj>(resources[logKind] as Record<string, RawObj> | undefined, namespaceFilter),
     [resources, namespaceFilter, logKind],
   );
+  const items = useMemo(
+    () => buildSidebarItems(scopedItems, logKind, sidebarSearch),
+    [scopedItems, logKind, sidebarSearch],
+  );
+  const total = scopedItems.length;
   const selectedKey = selectedItem?.key ?? null;
   const KindIcon = logKind === "pods" ? Box : Boxes;
 

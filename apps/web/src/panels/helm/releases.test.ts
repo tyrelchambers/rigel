@@ -1,6 +1,6 @@
 import { test, expect } from "vitest";
 import { gzipSync, strToU8 } from "fflate";
-import { releasesFromSecretsMap, releaseStatusTone, formatTimestamp } from "./releases";
+import { releasesFromSecrets, releaseStatusTone, formatTimestamp } from "./releases";
 
 function encode(payload: unknown): string {
   let bin = "";
@@ -14,13 +14,13 @@ function sec(name: string, namespace: string, version: number, status: string) {
   };
 }
 
-test("releasesFromSecretsMap derives releases from a store secrets map, ignoring non-helm secrets", () => {
+test("releasesFromSecrets derives releases from store secrets, ignoring non-helm secrets", () => {
   const map = {
     "apps/sh.helm.release.v1.web.v1": sec("sh.helm.release.v1.web.v1", "apps", 1, "superseded"),
     "apps/sh.helm.release.v1.web.v2": sec("sh.helm.release.v1.web.v2", "apps", 2, "deployed"),
     "apps/regular-secret": { metadata: { name: "regular-secret", namespace: "apps" }, data: { foo: btoa("bar") } },
   };
-  const releases = releasesFromSecretsMap(map);
+  const releases = releasesFromSecrets(Object.values(map));
   expect(releases).toHaveLength(1);
   expect(releases[0].name).toBe("web");
   expect(releases[0].currentRevision).toBe(2);

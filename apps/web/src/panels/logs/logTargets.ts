@@ -33,7 +33,7 @@ export interface SidebarItem {
   pod: string | null;
 }
 
-interface RawObj {
+export interface RawObj {
   metadata?: { name?: string; namespace?: string };
   spec?: { selector?: { matchLabels?: Record<string, string> } };
   status?: {
@@ -64,14 +64,13 @@ function statusFor(kind: LogKind, o: RawObj): { statusText: string; unhealthy: b
 
 /** Build the sorted, search-filtered sidebar list for one kind. */
 export function buildSidebarItems(
-  resources: Record<string, Record<string, unknown>>,
+  source: readonly RawObj[],
   kind: LogKind,
   search: string,
 ): SidebarItem[] {
   const q = search.trim().toLowerCase();
-  const raw = (resources[kind] ?? {}) as Record<string, RawObj>;
   const items: SidebarItem[] = [];
-  for (const o of Object.values(raw)) {
+  for (const o of source) {
     const name = o.metadata?.name ?? "";
     const namespace = o.metadata?.namespace ?? "default";
     if (q && !name.toLowerCase().includes(q) && !namespace.toLowerCase().includes(q)) continue;

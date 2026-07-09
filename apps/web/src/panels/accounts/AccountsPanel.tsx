@@ -77,12 +77,7 @@ export default function AccountsPanel() {
   const accounts = useMemo(
     () =>
       accountsFromSecrets(
-        Object.fromEntries(
-          filterByNamespace<Secret>(
-            resources["secrets"] as Record<string, Secret> | undefined,
-            namespaceFilter,
-          ).entries(),
-        ),
+        filterByNamespace<Secret>(resources["secrets"] as Record<string, Secret> | undefined, namespaceFilter),
         defaultIdState,
       ),
     [resources, namespaceFilter, defaultIdState],
