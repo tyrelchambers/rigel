@@ -133,7 +133,11 @@ export default function App() {
     return () => { cancelled = true; };
   }, []);
 
+  // Suppresses auto-open once onboarding has been closed or left this session, so
+  // an agents refetch can't pop the wizard back over a panel the user navigated to.
+  const onboardingHandledRef = useRef(false);
   useEffect(() => {
+    if (onboardingHandledRef.current) return;
     if (
       shouldAutoOpenOnboarding({
         accountMissing,
@@ -145,12 +149,14 @@ export default function App() {
     }
   }, [agentsData, accountMissing]);
   function closeOnboarding() {
+    onboardingHandledRef.current = true;
     setShowOnboarding(false);
     localStorage.setItem("rigel_onboarded", "1");
   }
   // Leaving onboarding to go use a real feature (Compose, Settings) closes the
   // wizard but does NOT mark setup complete, so it stays reopenable from Settings.
   function leaveOnboarding() {
+    onboardingHandledRef.current = true;
     setShowOnboarding(false);
   }
 
