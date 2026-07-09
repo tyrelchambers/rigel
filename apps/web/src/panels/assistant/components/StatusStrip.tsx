@@ -8,6 +8,7 @@ import { Timer } from "lucide-react";
 import { useAssistantCtx } from "../AssistantContext";
 import { Bar } from "./primitives";
 import { tokenLabel, tokenColorClass, auditCount } from "../display";
+import { AgentUpdate } from "./AgentUpdate";
 
 // Card shell shared across every phase so the strip keeps a stable shape.
 function Strip({ children }: { children: React.ReactNode }) {
@@ -181,16 +182,18 @@ export function StatusStrip() {
         </InlineStat>
       </div>
 
-      {/* Token — ready.secrets */}
-      <TokenGroup>
-        {ready.secrets && d.tokenExpiry ? (
-          <span className={`font-mono text-sm font-semibold ${tokenColorClass(d.tokenExpiry.level)}`}>
-            {tokenLabel(d.tokenExpiry)}
-          </span>
-        ) : (
-          skelVal
-        )}
-      </TokenGroup>
+      <div className="flex flex-wrap items-center gap-3">
+        <AgentUpdate />
+        <TokenGroup>
+          {ready.secrets && d.tokenExpiry ? (
+            <span className={`font-mono text-sm font-semibold ${tokenColorClass(d.tokenExpiry.level)}`}>
+              {tokenLabel(d.tokenExpiry)}
+            </span>
+          ) : (
+            skelVal
+          )}
+        </TokenGroup>
+      </div>
     </Strip>
   );
 }
