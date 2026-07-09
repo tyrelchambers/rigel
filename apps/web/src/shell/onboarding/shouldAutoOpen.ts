@@ -7,12 +7,7 @@ export function activeAgentConnected(agents: AgentsResponse | undefined): boolea
   return active?.connection === "connected";
 }
 
-/**
- * Decide whether first-run onboarding should auto-open. Keyed off the ACTIVE
- * AGENT, not the Claude token: a connected Codex-only user must not trip it
- * (HELM-12). Opens once when the account gate has cleared, agents have loaded,
- * no agent is connected, and the user hasn't already been onboarded.
- */
+/** Auto-open onboarding when no active agent is connected — keyed off the active agent, not the Claude token (HELM-12). */
 export function shouldAutoOpenOnboarding(opts: {
   accountMissing: boolean | null;
   agents: AgentsResponse | undefined;

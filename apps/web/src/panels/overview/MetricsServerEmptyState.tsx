@@ -1,13 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { useInstallMetricsServer } from "@/lib/api";
 
-/**
- * Empty state for the Node overview when metrics-server isn't installed. Live
- * node CPU/memory comes from `kubectl top` (the metrics.k8s.io API), which
- * returns nothing until metrics-server is deployed — so offer the one-click
- * install right here instead of only describing the problem. On success the
- * metrics query is invalidated and the table replaces this on its next refetch.
- */
+/** Node-overview empty state: one-click metrics-server install (live CPU/mem needs it). */
 export function MetricsServerEmptyState() {
   const install = useInstallMetricsServer();
   return (
