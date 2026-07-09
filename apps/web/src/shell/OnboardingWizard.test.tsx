@@ -53,38 +53,39 @@ describe("OnboardingWizard AI-agent step", () => {
   it("renders the real Agents picker on the AI step, not a Claude-token field", () => {
     renderWizard({ activeAgentId: "claude", agents: [claude, codex] });
 
-    // The wizard opens on the AI step (first optional step). It shows the
-    // AgentsTab heading + agent cards, and onboarding framing pointing to Settings.
+    // The wizard opens on the AI step (first optional step). It shows the step
+    // title + description in the chrome, and the agent cards below.
     expect(screen.getByText(/connect your ai agent/i)).toBeInTheDocument();
     expect(screen.getByText("Claude Code")).toBeInTheDocument();
     expect(screen.getByText("Codex")).toBeInTheDocument();
-    expect(screen.getByText(/settings, then agents/i)).toBeInTheDocument();
+    expect(screen.getByText(/credentials never leave your machine/i)).toBeInTheDocument();
 
     // No leftover Claude-token field.
     expect(screen.queryByPlaceholderText(/token/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
   });
 
-  it("shows Done on the AI step when the active agent is connected", () => {
-    // Codex is active + connected → the step reports Done.
+  it("shows the Provider connected pill when the active agent is connected", () => {
+    // Codex is active + connected → the stepper shows the status pill.
     renderWizard({ activeAgentId: "codex", agents: [claude, codex] });
-    expect(screen.getByText(/^done$/i)).toBeInTheDocument();
+    expect(screen.getByText(/provider connected/i)).toBeInTheDocument();
   });
 
-  it("does NOT show Done when the active agent is not connected", () => {
+  it("does NOT show the Provider connected pill when the active agent is not connected", () => {
     renderWizard({ activeAgentId: "claude", agents: [claude, codex] });
-    expect(screen.queryByText(/^done$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/provider connected/i)).not.toBeInTheDocument();
   });
 
   it("keeps the AI step skippable (Skip advances past it without connecting)", () => {
     renderWizard({ activeAgentId: "claude", agents: [claude, codex] });
 
     // AI step (label in the stepper) is the active step.
-    expect(screen.getByText(/Step 1 of 4 · AI agent/i)).toBeInTheDocument();
+    expect(screen.getByText("Step 1 of 4")).toBeInTheDocument();
+    expect(screen.getByText("· AI agent")).toBeInTheDocument();
 
     // Skip moves on without requiring a connected agent.
     fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
-    expect(screen.getByText(/Step 2 of 4 · Assistant/i)).toBeInTheDocument();
+    expect(screen.getByText("· Assistant")).toBeInTheDocument();
   });
 });
 
@@ -95,13 +96,15 @@ describe("OnboardingWizard streamlined steps", () => {
 
   it("has four steps and no standalone Metrics step", () => {
     renderWizard({ activeAgentId: "claude", agents: [claude, codex] }, false);
-    expect(screen.getByText(/Step 1 of 4 · AI agent/i)).toBeInTheDocument();
+    expect(screen.getByText("Step 1 of 4")).toBeInTheDocument();
+    expect(screen.getByText("· AI agent")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^next →$/i }));
-    expect(screen.getByText(/Step 2 of 4 · Assistant/i)).toBeInTheDocument();
+    expect(screen.getByText("· Assistant")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^next →$/i }));
-    expect(screen.getByText(/Step 3 of 4 · Compose/i)).toBeInTheDocument();
+    expect(screen.getByText("· Compose")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^next →$/i }));
-    expect(screen.getByText(/Step 4 of 4 · Notifications/i)).toBeInTheDocument();
+    expect(screen.getByText("Step 4 of 4")).toBeInTheDocument();
+    expect(screen.getByText("· Notifications")).toBeInTheDocument();
   });
 
   it("nudges to install metrics-server on the Assistant step when it's unavailable", () => {

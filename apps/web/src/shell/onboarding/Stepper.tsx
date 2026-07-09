@@ -1,21 +1,26 @@
-export function Stepper({ labels, current }: { labels: string[]; current: number }) {
+import type { ReactNode } from "react";
+
+export function Stepper({ labels, current, status }: { labels: string[]; current: number; status?: ReactNode }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-      {labels.map((label, i) => (
-        <div key={label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span
-            aria-current={i === current ? "step" : undefined}
-            style={{
-              width: 8, height: 8, borderRadius: 8,
-              background: i <= current ? "var(--accent-primary)" : "var(--border)",
-            }}
-          />
-          {i < labels.length - 1 && <span style={{ width: 14, height: 1, background: "var(--border)" }} />}
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 13 }}>
+        <div style={{ display: "flex", alignItems: "center" }}>
+          {labels.map((label, i) => (
+            <div key={label} style={{ display: "flex", alignItems: "center" }}>
+              <span
+                aria-current={i === current ? "step" : undefined}
+                style={{ width: 9, height: 9, borderRadius: 999, background: i <= current ? "var(--accent-primary)" : "#FFFFFF26" }}
+              />
+              {i < labels.length - 1 && <span style={{ width: 22, height: 2, background: "#FFFFFF14" }} />}
+            </div>
+          ))}
         </div>
-      ))}
-      <span className="text-2xs" style={{ marginLeft: 8, color: "var(--fg-secondary)" }}>
-        Step {current + 1} of {labels.length} · {labels[current]}
-      </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span className="text-sm" style={{ fontWeight: 600, color: "var(--fg-secondary)" }}>Step {current + 1} of {labels.length}</span>
+          <span className="text-sm" style={{ color: "var(--fg-tertiary)" }}>· {labels[current]}</span>
+        </div>
+      </div>
+      {status}
     </div>
   );
 }
