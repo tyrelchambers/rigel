@@ -114,10 +114,13 @@ export function OnboardingWizard({ onClose, onLeave }: { onClose: () => void; on
         <div style={divider} />
 
         <div style={stepSection}>
-          <Stepper labels={steps.map((s) => s.label)} current={i} status={step.status} />
+          <Stepper labels={steps.map((s) => s.label)} current={i} />
           {step.title && (
             <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-              <span className="text-lg" style={{ fontWeight: 700, color: "var(--fg-primary)" }}>{step.title}</span>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <span className="text-lg" style={{ fontWeight: 700, color: "var(--fg-primary)" }}>{step.title}</span>
+                {step.status}
+              </div>
               <span className="text-sm" style={{ color: "var(--fg-secondary)", lineHeight: 1.45 }}>{step.description}</span>
             </div>
           )}
