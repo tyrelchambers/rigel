@@ -20,6 +20,14 @@ const state: {
 
 vi.mock("@/store/cluster", () => ({
   useCluster: (sel: (s: typeof state) => unknown) => sel(state),
+  filterByNamespace: (slice: Record<string, unknown> | undefined, ns: string | null) => {
+    const all = Object.values(slice ?? {});
+    if (ns == null) return all;
+    return all.filter((o) => {
+      const n = (o as { metadata?: { namespace?: string } })?.metadata?.namespace;
+      return n === undefined || n === ns;
+    });
+  },
 }));
 
 import RbacPanel from "./RbacPanel";

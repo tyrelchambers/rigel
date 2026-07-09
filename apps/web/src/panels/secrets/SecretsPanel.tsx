@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Eye, EyeOff, Plus, Pencil } from "lucide-react";
 import type { Secret } from "@rigel/k8s";
-import { useCluster } from "@/store/cluster";
+import { useCluster, filterByNamespace } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { Button } from "@/components/ui/button";
@@ -74,19 +74,21 @@ export default function SecretsPanel() {
     setEditorOpen(true);
   }
 
-  // Subscribe to the secrets watch for the active namespace (or all).
+  // Watch secrets cluster-wide; namespace scoping is a client-side view filter.
   useEffect(() => {
-    const ns = namespaceFilter ?? "*";
-    subscribe("secrets", ns);
-    return () => unsubscribe("secrets", ns);
-  }, [namespaceFilter]);
+    subscribe("secrets", "*");
+    return () => unsubscribe("secrets", "*");
+  }, []);
 
   const allSecrets = useMemo(
     () =>
       sortSecrets(
-        Object.values((resources["secrets"] ?? {}) as Record<string, Secret>),
+        filterByNamespace<Secret>(
+          resources["secrets"] as Record<string, Secret> | undefined,
+          namespaceFilter,
+        ),
       ),
-    [resources],
+    [resources, namespaceFilter],
   );
   const filtered = useMemo(
     () => allSecrets.filter((s) => matchesSearch(s, search)),

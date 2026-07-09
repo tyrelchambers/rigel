@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
-import { useCluster } from "@/store/cluster";
+import { filterByNamespace, useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { PanelHeader } from "@/panels/components/PanelHeader";
@@ -62,30 +62,29 @@ export default function RbacPanel() {
   useEffect(() => {
     // Subjects are derived from bindings, so ServiceAccounts aren't watched here
     // (an unbound SA has no access to analyze).
-    const ns = namespaceFilter ?? "*";
-    subscribe("roles", ns);
-    subscribe("rolebindings", ns);
+    subscribe("roles", "*");
+    subscribe("rolebindings", "*");
     subscribe("clusterroles", "*");
     subscribe("clusterrolebindings", "*");
     return () => {
-      unsubscribe("roles", ns);
-      unsubscribe("rolebindings", ns);
+      unsubscribe("roles", "*");
+      unsubscribe("rolebindings", "*");
       unsubscribe("clusterroles", "*");
       unsubscribe("clusterrolebindings", "*");
     };
-  }, [namespaceFilter]);
+  }, []);
 
   const roles = useMemo(
-    () => sortByNamespaceName(values<Role>(resources["roles"] as Record<string, Role>)),
-    [resources],
+    () => sortByNamespaceName(filterByNamespace(resources["roles"] as Record<string, Role>, namespaceFilter)),
+    [resources, namespaceFilter],
   );
   const clusterRoles = useMemo(
     () => sortByName(values<ClusterRole>(resources["clusterroles"] as Record<string, ClusterRole>)),
     [resources],
   );
   const roleBindings = useMemo(
-    () => values<RoleBinding>(resources["rolebindings"] as Record<string, RoleBinding>),
-    [resources],
+    () => filterByNamespace(resources["rolebindings"] as Record<string, RoleBinding>, namespaceFilter),
+    [resources, namespaceFilter],
   );
   const clusterRoleBindings = useMemo(
     () => values<ClusterRoleBinding>(resources["clusterrolebindings"] as Record<string, ClusterRoleBinding>),

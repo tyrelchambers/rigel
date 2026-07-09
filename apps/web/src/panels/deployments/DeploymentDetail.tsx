@@ -9,7 +9,7 @@ import { MetaChips } from "@/panels/components/MetaChips";
 import { SectionCard } from "@/panels/components/SectionCard";
 import { ContainerCards } from "@/panels/components/ContainerCards";
 import { Field } from "@/panels/components/Field";
-import { useCluster } from "@/store/cluster";
+import { useCluster, filterByNamespace } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import type { Deployment } from "./types";
 import type { Pod } from "../pods/types";
@@ -50,13 +50,13 @@ export function DeploymentDetail({
   const resources = useCluster((s) => s.resources);
   useEffect(() => {
     const kinds = ["pods", "services", "ingresses"];
-    for (const k of kinds) subscribe(k, ns);
-    return () => { for (const k of kinds) unsubscribe(k, ns); };
-  }, [ns]);
+    for (const k of kinds) subscribe(k, "*");
+    return () => { for (const k of kinds) unsubscribe(k, "*"); };
+  }, []);
 
   const restarts = useMemo(
-    () => totalRestarts(deployment, Object.values((resources["pods"] ?? {}) as Record<string, Pod>)),
-    [deployment, resources],
+    () => totalRestarts(deployment, filterByNamespace(resources["pods"] as Record<string, Pod>, ns)),
+    [deployment, resources, ns],
   );
   const revision = deploymentRevision(deployment);
   const endpoints = useMemo(

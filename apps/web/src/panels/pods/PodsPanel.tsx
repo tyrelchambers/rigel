@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useCluster } from "@/store/cluster";
+import { useCluster, filterByNamespace } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { viewYaml } from "@/store/yamlViewer";
@@ -39,16 +39,14 @@ export default function PodsPanel() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const { available: metricsAvailable, history: metricsHistory } = useMetricsHistory();
 
-  // Subscribe to the pods watch for the active namespace (or all namespaces).
   useEffect(() => {
-    const ns = namespaceFilter ?? "*";
-    subscribe("pods", ns);
-    return () => unsubscribe("pods", ns);
-  }, [namespaceFilter]);
+    subscribe("pods", "*");
+    return () => unsubscribe("pods", "*");
+  }, []);
 
   const allPods = useMemo(
-    () => sortPods(Object.values((resources["pods"] ?? {}) as Record<string, Pod>)),
-    [resources],
+    () => sortPods(filterByNamespace(resources["pods"], namespaceFilter) as Pod[]),
+    [resources, namespaceFilter],
   );
   const filtered = useMemo(
     () => allPods.filter((p) => matchesSearch(p, search)),

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useCluster } from "@/store/cluster";
+import { useCluster, filterByNamespace } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
@@ -45,34 +45,33 @@ export default function WorkloadsPanel() {
   const [scaleValue, setScaleValue] = useState("1");
 
   useEffect(() => {
-    const ns = namespaceFilter ?? "*";
-    subscribe("statefulsets", ns);
-    subscribe("daemonsets", ns);
-    subscribe("jobs", ns);
-    subscribe("cronjobs", ns);
+    subscribe("statefulsets", "*");
+    subscribe("daemonsets", "*");
+    subscribe("jobs", "*");
+    subscribe("cronjobs", "*");
     return () => {
-      unsubscribe("statefulsets", ns);
-      unsubscribe("daemonsets", ns);
-      unsubscribe("jobs", ns);
-      unsubscribe("cronjobs", ns);
+      unsubscribe("statefulsets", "*");
+      unsubscribe("daemonsets", "*");
+      unsubscribe("jobs", "*");
+      unsubscribe("cronjobs", "*");
     };
-  }, [namespaceFilter]);
+  }, []);
 
   const statefulSets = useMemo(
-    () => sortWorkloads(Object.values((resources["statefulsets"] ?? {}) as Record<string, StatefulSet>)),
-    [resources],
+    () => sortWorkloads(filterByNamespace(resources["statefulsets"], namespaceFilter) as StatefulSet[]),
+    [resources, namespaceFilter],
   );
   const daemonSets = useMemo(
-    () => sortWorkloads(Object.values((resources["daemonsets"] ?? {}) as Record<string, DaemonSet>)),
-    [resources],
+    () => sortWorkloads(filterByNamespace(resources["daemonsets"], namespaceFilter) as DaemonSet[]),
+    [resources, namespaceFilter],
   );
   const jobs = useMemo(
-    () => sortWorkloads(Object.values((resources["jobs"] ?? {}) as Record<string, Job>)),
-    [resources],
+    () => sortWorkloads(filterByNamespace(resources["jobs"], namespaceFilter) as Job[]),
+    [resources, namespaceFilter],
   );
   const cronJobs = useMemo(
-    () => sortWorkloads(Object.values((resources["cronjobs"] ?? {}) as Record<string, CronJob>)),
-    [resources],
+    () => sortWorkloads(filterByNamespace(resources["cronjobs"], namespaceFilter) as CronJob[]),
+    [resources, namespaceFilter],
   );
 
   const counts: Record<WorkloadKind, number> = {

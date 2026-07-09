@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { KVRow, Secret, ConfigMap } from "@rigel/k8s";
-import { useCluster } from "@/store/cluster";
+import { useCluster, filterByNamespace } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { EnvRefEditor } from "./EnvRefEditor";
 import { ImagePullSecretsField } from "./ImagePullSecretsField";
@@ -59,25 +59,20 @@ export function DeploymentEditor({ target, open, onClose, onApplied }: Deploymen
   const ns = target?.metadata.namespace ?? "default";
   const resources = useCluster((s) => s.resources);
 
-  // While open, watch secrets + configmaps in the deployment's namespace so the
-  // ref pickers list real resources. Unsubscribed on close.
-  // `ns` already captures everything we need from `target` (its namespace), so
-  // keying on `ns` (a string) avoids a re-subscribe whenever `target`'s identity
-  // changes for the same deployment. `open` gates whether a target exists.
+  // While open, watch secrets + configmaps cluster-wide so the ref pickers list
+  // real resources; the pickers scope to the deployment's namespace on read.
   useEffect(() => {
     if (!open) return;
-    subscribe("secrets", ns);
-    subscribe("configmaps", ns);
+    subscribe("secrets", "*");
+    subscribe("configmaps", "*");
     return () => {
-      unsubscribe("secrets", ns);
-      unsubscribe("configmaps", ns);
+      unsubscribe("secrets", "*");
+      unsubscribe("configmaps", "*");
     };
-  }, [open, ns]);
+  }, [open]);
 
-  const secrets = (Object.values((resources["secrets"] ?? {}) as Record<string, Secret>))
-    .filter((s) => (s.metadata.namespace ?? "default") === ns);
-  const configMaps = (Object.values((resources["configmaps"] ?? {}) as Record<string, ConfigMap>))
-    .filter((c) => (c.metadata.namespace ?? "default") === ns);
+  const secrets = filterByNamespace(resources["secrets"] as Record<string, Secret> | undefined, ns);
+  const configMaps = filterByNamespace(resources["configmaps"] as Record<string, ConfigMap> | undefined, ns);
 
   // (Re)seed the form each time the sheet opens on a target.
   useEffect(() => {

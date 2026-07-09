@@ -111,13 +111,12 @@ export default function EventsPanel() {
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  // Subscribe to the events watch for the active namespace (or all). `null`
-  // namespace → "*" (all namespaces).
+  // Subscribe to the cluster-wide events watch; namespace scoping is applied on
+  // read below.
   useEffect(() => {
-    const ns = namespaceFilter ?? "*";
-    subscribe("events", ns);
-    return () => unsubscribe("events", ns);
-  }, [namespaceFilter]);
+    subscribe("events", "*");
+    return () => unsubscribe("events", "*");
+  }, []);
 
   // All events from the store, sorted newest-first.
   const allEvents = useMemo(

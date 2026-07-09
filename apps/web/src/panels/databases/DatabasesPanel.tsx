@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Database } from "lucide-react";
-import { useCluster } from "@/store/cluster";
+import { filterByNamespace, useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { viewYaml } from "@/store/yamlViewer";
@@ -72,30 +72,30 @@ export default function DatabasesPanel() {
 
   // Watch CNPG CRDs + image-detected workloads + pods + secrets.
   useEffect(() => {
-    const ns = namespaceFilter ?? "*";
-    subscribe("clusters.postgresql.cnpg.io", ns);
-    subscribe("scheduledbackups.postgresql.cnpg.io", ns);
-    subscribe("backups.postgresql.cnpg.io", ns);
-    subscribe("deployments", ns);
-    subscribe("statefulsets", ns);
-    subscribe("pods", ns);
-    subscribe("secrets", ns);
+    subscribe("clusters.postgresql.cnpg.io", "*");
+    subscribe("scheduledbackups.postgresql.cnpg.io", "*");
+    subscribe("backups.postgresql.cnpg.io", "*");
+    subscribe("deployments", "*");
+    subscribe("statefulsets", "*");
+    subscribe("pods", "*");
+    subscribe("secrets", "*");
     return () => {
-      unsubscribe("clusters.postgresql.cnpg.io", ns);
-      unsubscribe("scheduledbackups.postgresql.cnpg.io", ns);
-      unsubscribe("backups.postgresql.cnpg.io", ns);
-      unsubscribe("deployments", ns);
-      unsubscribe("statefulsets", ns);
-      unsubscribe("pods", ns);
-      unsubscribe("secrets", ns);
+      unsubscribe("clusters.postgresql.cnpg.io", "*");
+      unsubscribe("scheduledbackups.postgresql.cnpg.io", "*");
+      unsubscribe("backups.postgresql.cnpg.io", "*");
+      unsubscribe("deployments", "*");
+      unsubscribe("statefulsets", "*");
+      unsubscribe("pods", "*");
+      unsubscribe("secrets", "*");
     };
-  }, [namespaceFilter]);
+  }, []);
 
   const instances = useMemo(
     () =>
       buildInstances({
-        cnpgClusters: Object.values(
-          (resources["clusters.postgresql.cnpg.io"] ?? {}) as Record<string, CNPGCluster>,
+        cnpgClusters: filterByNamespace(
+          resources["clusters.postgresql.cnpg.io"] as Record<string, CNPGCluster> | undefined,
+          namespaceFilter,
         ),
         scheduledBackups: Object.values(
           (resources["scheduledbackups.postgresql.cnpg.io"] ?? {}) as Record<
@@ -106,26 +106,35 @@ export default function DatabasesPanel() {
         backups: Object.values(
           (resources["backups.postgresql.cnpg.io"] ?? {}) as Record<string, CNPGBackup>,
         ),
-        deployments: Object.values((resources["deployments"] ?? {}) as Record<string, WorkloadDB>),
-        statefulSets: Object.values(
-          (resources["statefulsets"] ?? {}) as Record<string, WorkloadDB>,
+        deployments: filterByNamespace(
+          resources["deployments"] as Record<string, WorkloadDB> | undefined,
+          namespaceFilter,
+        ),
+        statefulSets: filterByNamespace(
+          resources["statefulsets"] as Record<string, WorkloadDB> | undefined,
+          namespaceFilter,
         ),
       }),
-    [resources],
+    [resources, namespaceFilter],
   );
 
   const pods = useMemo(
-    () => Object.values((resources["pods"] ?? {}) as Record<string, DatabasePodRaw>),
-    [resources],
+    () =>
+      filterByNamespace(
+        resources["pods"] as Record<string, DatabasePodRaw> | undefined,
+        namespaceFilter,
+      ),
+    [resources, namespaceFilter],
   );
 
   // Raw resources needed for per-instance capability computation.
   const cnpgClusters = useMemo(
     () =>
-      Object.values(
-        (resources["clusters.postgresql.cnpg.io"] ?? {}) as Record<string, CNPGCluster>,
+      filterByNamespace(
+        resources["clusters.postgresql.cnpg.io"] as Record<string, CNPGCluster> | undefined,
+        namespaceFilter,
       ),
-    [resources],
+    [resources, namespaceFilter],
   );
   const scheduledBackups = useMemo(
     () =>

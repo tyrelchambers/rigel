@@ -4,7 +4,6 @@ import type { ActionBlock } from "@/lib/api";
 import {
   LINGER_MS,
   finishLinger,
-  hasLiveWildcard,
   planSubscribe,
   planSwitch,
   planUnsubscribe,
@@ -307,22 +306,14 @@ export function connectCluster(): void {
       const listeners = actionListeners.get(m.id);
       if (listeners) listeners.forEach((cb) => cb(m as ActionEvent));
     } else if (m.type === "snapshot") {
-      // Authoritative full set for this subscription: REPLACE the kind's items
-      // (not merge) so switching namespace swaps the data instead of piling the
-      // new namespace on top of the old one. EXCEPTION: when a cluster-wide ("*")
-      // watch for this kind is also active (e.g. the Assistant panel), a
-      // namespace-scoped snapshot must not clobber the wildcard's other-namespace
-      // items — the store merges it by namespace instead.
+      // Authoritative full set for this (cluster-wide) subscription: REPLACE the
+      // kind's items. Namespace scoping is a client-side view filter, so there's
+      // never a second scope to merge against.
       store.setLoading(false);
       store.setError(null);
       const items: Record<string, unknown> = {};
       for (const o of m.items) items[resourceKey(o)] = o;
-      // Only a LIVE ("*") watch protects other-namespace items; a merely
-      // lingering wildcard (refs 0, inside its grace window) must not force a
-      // merge, or switching from "All namespaces" to one namespace would keep
-      // every namespace's items. See hasLiveWildcard.
-      const coexistWildcard = m.namespace !== "*" && hasLiveWildcard(activeSubs, m.kind);
-      store.replaceKind(m.kind, items, m.namespace, coexistWildcard);
+      store.replaceKind(m.kind, items);
     } else if (m.type === "delta") {
       if (m.event === "DELETED") store.remove(m.kind, resourceKey(m.object));
       else store.upsert(m.kind, resourceKey(m.object), m.object);

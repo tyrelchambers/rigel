@@ -44,14 +44,13 @@ export default function DeploymentsPanel() {
   const [scaleValue, setScaleValue] = useState("1");
 
   useEffect(() => {
-    const ns = namespaceFilter ?? "*";
-    subscribe("deployments", ns);
-    subscribe("pods", ns);
+    subscribe("deployments", "*");
+    subscribe("pods", "*");
     return () => {
-      unsubscribe("deployments", ns);
-      unsubscribe("pods", ns);
+      unsubscribe("deployments", "*");
+      unsubscribe("pods", "*");
     };
-  }, [namespaceFilter]);
+  }, []);
 
   const allDeployments = useMemo(
     () =>
@@ -70,9 +69,8 @@ export default function DeploymentsPanel() {
     () => namespaceOptions(allDeployments, resources["namespaces"] ?? {}),
     [allDeployments, resources],
   );
-  // Filter by the selected namespace client-side too: the `deployments` kind has
-  // a persistent cluster-wide watch (the chat rail reads the assistant's install
-  // namespace), so the store holds all namespaces even when this panel is scoped.
+  // Namespace is a client-side view filter: the watch is cluster-wide, so the
+  // store holds all namespaces and we scope to the selected one here.
   const filtered = useMemo(
     () =>
       allDeployments.filter(

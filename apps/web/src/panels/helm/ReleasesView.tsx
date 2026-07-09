@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useCluster } from "@/store/cluster";
+import { useCluster, filterByNamespace } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -35,14 +35,13 @@ export function ReleasesView({ onUpgrade }: { onUpgrade: (r: HelmRelease) => voi
   const uninstall = useHelmUninstall();
 
   useEffect(() => {
-    const ns = namespaceFilter ?? "*";
-    subscribe("secrets", ns);
-    return () => unsubscribe("secrets", ns);
-  }, [namespaceFilter]);
+    subscribe("secrets", "*");
+    return () => unsubscribe("secrets", "*");
+  }, []);
 
   const releases = useMemo(
-    () => releasesFromSecretsMap(secrets ?? {}).sort((a, b) => a.name.localeCompare(b.name)),
-    [secrets],
+    () => releasesFromSecretsMap(Object.fromEntries(filterByNamespace(secrets, namespaceFilter).entries())).sort((a, b) => a.name.localeCompare(b.name)),
+    [secrets, namespaceFilter],
   );
   const current = releases.find((r) => `${r.namespace}/${r.name}` === selected) ?? null;
   const shownRev = rev ?? current?.revisions[0] ?? null;

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useCluster } from "@/store/cluster";
+import { useCluster, filterByNamespace } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { viewYaml } from "@/store/yamlViewer";
@@ -72,12 +72,10 @@ export default function StoragePanel() {
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  // PVCs are namespace-scoped: re-subscribe when the namespace filter changes.
   useEffect(() => {
-    const ns = namespaceFilter ?? "*";
-    subscribe("persistentvolumeclaims", ns);
-    return () => unsubscribe("persistentvolumeclaims", ns);
-  }, [namespaceFilter]);
+    subscribe("persistentvolumeclaims", "*");
+    return () => unsubscribe("persistentvolumeclaims", "*");
+  }, []);
 
   // PVs and StorageClasses are cluster-scoped: subscribe once with "*".
   useEffect(() => {
@@ -92,11 +90,12 @@ export default function StoragePanel() {
   const allPVCs = useMemo(
     () =>
       sortPVCs(
-        Object.values(
-          (resources["persistentvolumeclaims"] ?? {}) as Record<string, PersistentVolumeClaim>,
+        filterByNamespace(
+          resources["persistentvolumeclaims"] as Record<string, PersistentVolumeClaim> | undefined,
+          namespaceFilter,
         ),
       ),
-    [resources],
+    [resources, namespaceFilter],
   );
   const allPVs = useMemo(
     () =>

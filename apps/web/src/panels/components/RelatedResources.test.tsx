@@ -30,10 +30,10 @@ function renderWith() {
 }
 
 describe("RelatedResources", () => {
-  it("subscribes related kinds for the namespace on mount", () => {
+  it("subscribes related kinds cluster-wide on mount (namespace is a read-side filter)", () => {
     renderWith();
-    expect(subscribe).toHaveBeenCalledWith("services", "prod");
-    expect(subscribe).toHaveBeenCalledWith("pods", "prod");
+    expect(subscribe).toHaveBeenCalledWith("services", "*");
+    expect(subscribe).toHaveBeenCalledWith("pods", "*");
   });
 
   it("renders a tab per related kind with counts, defaulting to the first", () => {

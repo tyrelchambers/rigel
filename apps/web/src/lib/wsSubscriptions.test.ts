@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
   finishLinger,
-  hasLiveWildcard,
   planSubscribe,
   planSwitch,
   planUnsubscribe,
@@ -125,31 +124,6 @@ describe("planSwitch", () => {
       { kind: "pods", namespace: "default", context: "ctx-b" },
       { kind: "nodes", namespace: "*", context: "ctx-b" },
     ]);
-  });
-});
-
-describe("hasLiveWildcard", () => {
-  test("false when there is no wildcard entry for the kind", () => {
-    const reg = registry();
-    planSubscribe(reg, "deployments", "test");
-    expect(hasLiveWildcard(reg, "deployments")).toBe(false);
-  });
-
-  test("true while a wildcard watch is live (refs > 0)", () => {
-    const reg = registry();
-    planSubscribe(reg, "deployments", "*");
-    expect(hasLiveWildcard(reg, "deployments")).toBe(true);
-  });
-
-  test("false once the wildcard is only lingering (refs 0, not yet torn down)", () => {
-    const reg = registry();
-    planSubscribe(reg, "deployments", "*");
-    // Panel switches away from "All namespaces": the wildcard drops to refs 0 and
-    // lingers, but the entry is still in the registry during the grace window.
-    expect(planUnsubscribe(reg, "deployments", "*").startLinger).toBe(true);
-    expect(reg.has(subKey("deployments", "*"))).toBe(true);
-    // A namespaced snapshot arriving now must be free to replace, not merge.
-    expect(hasLiveWildcard(reg, "deployments")).toBe(false);
   });
 });
 

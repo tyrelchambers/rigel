@@ -9,30 +9,26 @@ function resourceVersionOf(o: unknown): string | undefined {
 }
 
 /** Safely read `metadata.namespace` off an unknown object. */
-function namespaceOf(o: unknown): string | undefined {
+export function namespaceOf(o: unknown): string | undefined {
   return (o as { metadata?: { namespace?: string } } | null | undefined)?.metadata?.namespace;
 }
 
 /**
- * Merge a namespace-scoped snapshot into the previous slice: the snapshot is
- * authoritative ONLY for its own namespace, so keep every prior item from a
- * DIFFERENT namespace and swap in the incoming items for `scope`. Used when a
- * cluster-wide ("*") watch and a namespace-scoped watch on the SAME kind are live
- * at once (the Assistant panel): without this, the scoped snapshot's full-replace
- * would wipe the wildcard's other-namespace items (e.g. an agent Deployment in a
- * non-selected namespace), making a running assistant read as "Not installed".
+ * Filter a kind's slice to a namespace for display. `null` = all namespaces.
+ * Cluster-scoped objects (no `metadata.namespace`) always pass, matching kubectl
+ * (which ignores `-n` for them) and the store's bare-name keying. Every watch is
+ * cluster-wide, so this is the single place namespace scoping is applied.
  */
-export function mergeScopedSnapshot(
-  prev: Record<string, unknown> | undefined,
-  items: Record<string, unknown>,
-  scope: string,
-): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(prev ?? {})) {
-    if (namespaceOf(value) !== scope) out[key] = value; // keep other namespaces
-  }
-  for (const [key, value] of Object.entries(items)) out[key] = value; // this ns is authoritative
-  return out;
+export function filterByNamespace<T>(
+  slice: Record<string, T> | undefined,
+  namespaceFilter: string | null,
+): T[] {
+  const all = Object.values(slice ?? {}) as T[];
+  if (namespaceFilter == null) return all;
+  return all.filter((o) => {
+    const ns = namespaceOf(o);
+    return ns === undefined || ns === namespaceFilter;
+  });
 }
 
 /**
@@ -149,19 +145,11 @@ interface ClusterState {
   upsert: (kind: string, name: string, obj: unknown) => void;
   remove: (kind: string, name: string) => void;
   /**
-   * Replace the items for a kind from a watch snapshot. A snapshot is the
-   * authoritative full set for its subscription, so by default it swaps the whole
-   * slice (switching namespace replaces the data, not merges it). When `scope` is
-   * a specific namespace AND `coexistWildcard` is true (a cluster-wide "*" watch
-   * for the same kind is also live), the snapshot is authoritative ONLY for its
-   * namespace and is merged so the wildcard's other-namespace items survive.
+   * Replace the items for a kind from a watch snapshot. Every watch is
+   * cluster-wide, so a snapshot is always the authoritative full set → full
+   * replace. Namespace scoping is a client-side view filter (filterByNamespace).
    */
-  replaceKind: (
-    kind: string,
-    items: Record<string, unknown>,
-    scope?: string,
-    coexistWildcard?: boolean,
-  ) => void;
+  replaceKind: (kind: string, items: Record<string, unknown>) => void;
   /**
    * Empty the local view for a kind (set `resources[kind]` to `{}`). This only
    * clears the client-side cache; it does not delete server-side objects. For
@@ -215,19 +203,10 @@ export const useCluster = create<ClusterState>((set) => ({
       delete next[name];
       return { resources: { ...s.resources, [kind]: next } };
     }),
-  replaceKind: (kind, items, scope, coexistWildcard) =>
+  replaceKind: (kind, items) =>
     set((s) => {
-      const prev = s.resources[kind];
-      // A namespace-scoped snapshot that coexists with a cluster-wide ("*") watch
-      // for the same kind must not wipe the wildcard's other-namespace items —
-      // merge by namespace. Every other case (a "*" snapshot, or a scoped snapshot
-      // with no competing wildcard) is an authoritative full set → full replace,
-      // which preserves namespace-switch semantics.
-      const target =
-        scope && scope !== "*" && coexistWildcard ? mergeScopedSnapshot(prev, items, scope) : items;
-      const reconciled = reconcileSlice(prev, target);
-      // Identical to the previous slice → no-op so subscribers don't re-render.
-      if (reconciled === prev) return {};
+      const reconciled = reconcileSlice(s.resources[kind], items);
+      if (reconciled === s.resources[kind]) return {};
       return { resources: { ...s.resources, [kind]: reconciled } };
     }),
   clearKind: (kind) =>

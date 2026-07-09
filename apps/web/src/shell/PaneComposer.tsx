@@ -199,21 +199,14 @@ export function PaneComposer({
 
   // On-demand watch for the /describe instance stage so its list is populated.
   // Subscriptions are ref-counted + linger on the ws layer, so this is safe
-  // alongside other consumers. Cluster-scoped kinds watch all namespaces.
+  // alongside other consumers. All kinds are watched cluster-wide.
   const describeWatchKind =
     trigger?.kind === "describe" && trigger.stage === "instance" ? trigger.resourceKind?.kind : undefined;
-  const describeWatchNs =
-    trigger?.kind === "describe" && trigger.stage === "instance"
-      ? trigger.resourceKind?.scope === "cluster"
-        ? "*"
-        : (trigger.namespace ?? "*")
-      : undefined;
   useEffect(() => {
     if (!describeWatchKind) return;
-    const ns = describeWatchNs ?? "*";
-    subscribe(describeWatchKind, ns);
-    return () => unsubscribe(describeWatchKind, ns);
-  }, [describeWatchKind, describeWatchNs]);
+    subscribe(describeWatchKind, "*");
+    return () => unsubscribe(describeWatchKind, "*");
+  }, [describeWatchKind]);
 
   function syncCaret() {
     const el = textareaRef.current;

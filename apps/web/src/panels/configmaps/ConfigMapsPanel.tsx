@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
-import { useCluster } from "@/store/cluster";
+import { useCluster, filterByNamespace } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { viewYaml, editYaml } from "@/store/yamlViewer";
@@ -50,19 +50,17 @@ export default function ConfigMapsPanel() {
     setEditorOpen(true);
   }
 
-  // Subscribe to the configmaps watch for the active namespace (or all).
   useEffect(() => {
-    const ns = namespaceFilter ?? "*";
-    subscribe("configmaps", ns);
-    return () => unsubscribe("configmaps", ns);
-  }, [namespaceFilter]);
+    subscribe("configmaps", "*");
+    return () => unsubscribe("configmaps", "*");
+  }, []);
 
   const allConfigMaps = useMemo(
     () =>
       sortConfigMaps(
-        Object.values((resources["configmaps"] ?? {}) as Record<string, ConfigMap>),
+        filterByNamespace(resources["configmaps"], namespaceFilter) as ConfigMap[],
       ),
-    [resources],
+    [resources, namespaceFilter],
   );
   const filtered = useMemo(
     () => allConfigMaps.filter((c) => matchesSearch(c, search)),

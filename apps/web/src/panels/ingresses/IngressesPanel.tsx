@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Lock, Pencil } from "lucide-react";
-import { useCluster } from "@/store/cluster";
+import { useCluster, filterByNamespace } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { viewYaml } from "@/store/yamlViewer";
@@ -58,14 +58,13 @@ export default function IngressesPanel() {
   }
 
   useEffect(() => {
-    const ns = namespaceFilter ?? "*";
-    subscribe("ingresses", ns);
-    return () => unsubscribe("ingresses", ns);
-  }, [namespaceFilter]);
+    subscribe("ingresses", "*");
+    return () => unsubscribe("ingresses", "*");
+  }, []);
 
   const allIngresses = useMemo(
-    () => sortIngresses(Object.values((resources["ingresses"] ?? {}) as Record<string, Ingress>)),
-    [resources],
+    () => sortIngresses(filterByNamespace(resources["ingresses"], namespaceFilter) as Ingress[]),
+    [resources, namespaceFilter],
   );
   const filtered = useMemo(
     () => allIngresses.filter((i) => matchesSearch(i, search)),

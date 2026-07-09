@@ -10,7 +10,7 @@ import {
   Split,
 } from "lucide-react";
 import { useNavigate } from "react-router";
-import { useCluster } from "@/store/cluster";
+import { useCluster, filterByNamespace } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { goToResource } from "@/lib/resourceNav";
 import { ListRow } from "@/panels/components/ListRow";
@@ -70,31 +70,28 @@ export default function ConnectivityPanel() {
     });
   }
 
-  // Subscribe to all three watches for the active namespace (or all). Clean up
-  // on unmount / namespace change.
   useEffect(() => {
-    const ns = namespaceFilter ?? "*";
-    subscribe("ingresses", ns);
-    subscribe("services", ns);
-    subscribe("pods", ns);
+    subscribe("ingresses", "*");
+    subscribe("services", "*");
+    subscribe("pods", "*");
     return () => {
-      unsubscribe("ingresses", ns);
-      unsubscribe("services", ns);
-      unsubscribe("pods", ns);
+      unsubscribe("ingresses", "*");
+      unsubscribe("services", "*");
+      unsubscribe("pods", "*");
     };
-  }, [namespaceFilter]);
+  }, []);
 
   const ingresses = useMemo(
-    () => Object.values((resources["ingresses"] ?? {}) as Record<string, Ingress>),
-    [resources],
+    () => filterByNamespace(resources["ingresses"], namespaceFilter) as Ingress[],
+    [resources, namespaceFilter],
   );
   const services = useMemo(
-    () => Object.values((resources["services"] ?? {}) as Record<string, Service>),
-    [resources],
+    () => filterByNamespace(resources["services"], namespaceFilter) as Service[],
+    [resources, namespaceFilter],
   );
   const pods = useMemo(
-    () => Object.values((resources["pods"] ?? {}) as Record<string, Pod>),
-    [resources],
+    () => filterByNamespace(resources["pods"], namespaceFilter) as Pod[],
+    [resources, namespaceFilter],
   );
 
   const flows = useMemo(

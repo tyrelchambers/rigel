@@ -106,15 +106,15 @@ export function OwnedResources() {
   // kinds (only while this card is shown) so every row gets a live presence dot.
   useEffect(() => {
     if (!installed) return;
-    subscribe("serviceaccounts", ns);
+    subscribe("serviceaccounts", "*");
     subscribe("clusterroles", "*");
     subscribe("clusterrolebindings", "*");
     return () => {
-      unsubscribe("serviceaccounts", ns);
+      unsubscribe("serviceaccounts", "*");
       unsubscribe("clusterroles", "*");
       unsubscribe("clusterrolebindings", "*");
     };
-  }, [installed, ns]);
+  }, [installed]);
 
   if (!installed) return null;
 

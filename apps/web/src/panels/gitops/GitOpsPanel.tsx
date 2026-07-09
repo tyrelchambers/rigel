@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { Plus, FolderGit2 } from "lucide-react";
-import { useCluster } from "@/store/cluster";
+import { useCluster, filterByNamespace } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import type { ActionBlock } from "@/lib/api";
@@ -38,13 +38,12 @@ export default function GitOpsPanel() {
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
   const resources = useCluster((s) => s.resources);
   useEffect(() => {
-    const ns = namespaceFilter ?? "*";
-    subscribe("deployments", ns);
-    return () => unsubscribe("deployments", ns);
-  }, [namespaceFilter]);
+    subscribe("deployments", "*");
+    return () => unsubscribe("deployments", "*");
+  }, []);
   const workloads = useMemo(
-    () => Object.values((resources["deployments"] ?? {}) as Record<string, Deployment>),
-    [resources],
+    () => filterByNamespace(resources["deployments"], namespaceFilter) as Deployment[],
+    [resources, namespaceFilter],
   );
   /** deploymentName → linked workloads (provenance annotation = deployment name). */
   const linkedByDeployment = useMemo(() => groupLinkedByDeployment(workloads), [workloads]);

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, test } from "vitest";
-import { useCluster } from "./cluster";
+import { filterByNamespace, useCluster } from "./cluster";
 
 // Build a minimal k8s-ish object with a resourceVersion. Each call returns a
 // fresh reference so tests can assert reference reuse vs. replacement.
@@ -166,77 +166,68 @@ describe("replaceKind — identity reconciliation", () => {
   });
 });
 
-describe("replaceKind — scoped snapshot (cluster-wide + namespaced watches coexist)", () => {
+describe("replaceKind — full replace (every watch is cluster-wide)", () => {
   const K = "deployments";
-  // Namespaced object: metadata.namespace drives the scoped-merge logic.
   function nsObj(namespace: string, name: string, rv?: string): Record<string, unknown> {
     return { metadata: { name, namespace, ...(rv != null ? { resourceVersion: rv } : {}) } };
   }
   beforeEach(() => useCluster.getState().clearKind(K));
 
-  it("a namespace-scoped snapshot preserves other namespaces when a wildcard watch coexists", () => {
-    // Cluster-wide ("*") snapshot: the app in default + the agent in rigel-assistant.
-    useCluster.getState().replaceKind(
-      K,
-      {
-        "default/web": nsObj("default", "web", "1"),
-        "rigel-assistant/rigel-assistant": nsObj("rigel-assistant", "rigel-assistant", "1"),
-      },
-      "*",
-      false,
-    );
-    // A default-scoped snapshot lands while the "*" watch is still active.
-    useCluster.getState().replaceKind(K, { "default/web": nsObj("default", "web", "2") }, "default", true);
+  it("a snapshot swaps the whole slice (namespace switch replaces, never merges)", () => {
+    useCluster.getState().replaceKind(K, { "default/web": nsObj("default", "web", "1") });
+    useCluster.getState().replaceKind(K, { "kube-system/dns": nsObj("kube-system", "dns", "1") });
     const slice = useCluster.getState().resources[K];
-    // The agent (other namespace) MUST survive — this is the bug being fixed.
-    expect(slice["rigel-assistant/rigel-assistant"]).toBeDefined();
-    expect((slice["default/web"] as { metadata: { resourceVersion: string } }).metadata.resourceVersion).toBe("2");
-  });
-
-  it("a namespace-scoped snapshot with NO coexisting wildcard fully replaces (namespace switch)", () => {
-    useCluster.getState().replaceKind(K, { "default/web": nsObj("default", "web", "1") }, "default", false);
-    useCluster.getState().replaceKind(K, { "kube-system/dns": nsObj("kube-system", "dns", "1") }, "kube-system", false);
-    const slice = useCluster.getState().resources[K];
-    expect(slice["default/web"]).toBeUndefined(); // old namespace swapped out
+    expect(slice["default/web"]).toBeUndefined();
     expect(slice["kube-system/dns"]).toBeDefined();
   });
 
-  it("a wildcard snapshot is authoritative and fully replaces", () => {
-    useCluster.getState().replaceKind(
-      K,
-      { "default/web": nsObj("default", "web", "1"), "kube-system/dns": nsObj("kube-system", "dns", "1") },
-      "default",
-      true,
-    );
-    useCluster.getState().replaceKind(K, { "default/web": nsObj("default", "web", "2") }, "*", false);
-    const slice = useCluster.getState().resources[K];
-    expect(slice["kube-system/dns"]).toBeUndefined();
-    expect((slice["default/web"] as { metadata: { resourceVersion: string } }).metadata.resourceVersion).toBe("2");
-  });
-
-  it("scoped merge still removes a deleted item within its own namespace", () => {
-    useCluster.getState().replaceKind(
-      K,
-      {
-        "default/web": nsObj("default", "web", "1"),
-        "default/api": nsObj("default", "api", "1"),
-        "rigel-assistant/rigel-assistant": nsObj("rigel-assistant", "rigel-assistant", "1"),
-      },
-      "*",
-      false,
-    );
-    // default snapshot no longer carries "api" → removed; agent (other ns) kept.
-    useCluster.getState().replaceKind(K, { "default/web": nsObj("default", "web", "1") }, "default", true);
+  it("drops items absent from the new snapshot", () => {
+    useCluster.getState().replaceKind(K, {
+      "default/web": nsObj("default", "web", "1"),
+      "default/api": nsObj("default", "api", "1"),
+    });
+    useCluster.getState().replaceKind(K, { "default/web": nsObj("default", "web", "1") });
     const slice = useCluster.getState().resources[K];
     expect(slice["default/api"]).toBeUndefined();
-    expect(slice["rigel-assistant/rigel-assistant"]).toBeDefined();
+    expect(slice["default/web"]).toBeDefined();
+  });
+});
+
+describe("filterByNamespace", () => {
+  function nsObj(namespace: string, name: string): { metadata: { namespace?: string; name: string } } {
+    return { metadata: { name, namespace } };
+  }
+  function clusterObj(name: string): { metadata: { namespace?: string; name: string } } {
+    return { metadata: { name } };
+  }
+
+  it("null filter returns all items (All namespaces)", () => {
+    const slice = { "default/a": nsObj("default", "a"), "kube-system/b": nsObj("kube-system", "b") };
+    expect(filterByNamespace(slice, null)).toHaveLength(2);
   });
 
-  it("backward compatible: replaceKind without scope args still full-replaces", () => {
-    useCluster.getState().replaceKind(K, { "default/a": nsObj("default", "a", "1") });
-    useCluster.getState().replaceKind(K, { "default/b": nsObj("default", "b", "1") });
-    const slice = useCluster.getState().resources[K];
-    expect(slice["default/a"]).toBeUndefined();
-    expect(slice["default/b"]).toBeDefined();
+  it("a specific namespace returns only its items", () => {
+    const slice = {
+      "default/a": nsObj("default", "a"),
+      "default/b": nsObj("default", "b"),
+      "kube-system/c": nsObj("kube-system", "c"),
+    };
+    const got = filterByNamespace(slice, "default");
+    expect(got.map((o) => o.metadata.name).sort()).toEqual(["a", "b"]);
+  });
+
+  it("cluster-scoped items (no namespace) always pass under a specific filter", () => {
+    const slice = {
+      "pv-1": clusterObj("pv-1"),
+      "default/a": nsObj("default", "a"),
+      "kube-system/b": nsObj("kube-system", "b"),
+    };
+    const got = filterByNamespace(slice, "default");
+    expect(got.map((o) => o.metadata.name).sort()).toEqual(["a", "pv-1"]);
+  });
+
+  it("an empty or undefined slice returns []", () => {
+    expect(filterByNamespace(undefined, "default")).toEqual([]);
+    expect(filterByNamespace({}, null)).toEqual([]);
   });
 });

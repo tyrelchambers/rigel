@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useCluster } from "@/store/cluster";
+import { useCluster, filterByNamespace } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
@@ -68,10 +68,9 @@ export default function CertificatesPanel() {
   const [cmctlAvailable, setCmctlAvailable] = useState(false);
 
   useEffect(() => {
-    const ns = namespaceFilter ?? "*";
-    KINDS.forEach((k) => subscribe(k, ns));
-    return () => KINDS.forEach((k) => unsubscribe(k, ns));
-  }, [namespaceFilter]);
+    KINDS.forEach((k) => subscribe(k, "*"));
+    return () => KINDS.forEach((k) => unsubscribe(k, "*"));
+  }, []);
 
   // Probe cmctl once on mount to gate Force-renew.
   useEffect(() => {
@@ -81,20 +80,24 @@ export default function CertificatesPanel() {
   }, []);
 
   const views = useMemo(() => {
-    const certs = Object.values(
-      (resources["certificates.cert-manager.io"] ?? {}) as Record<string, Certificate>,
+    const certs = filterByNamespace(
+      resources["certificates.cert-manager.io"] as Record<string, Certificate> | undefined,
+      namespaceFilter,
     );
-    const reqs = Object.values(
-      (resources["certificaterequests.cert-manager.io"] ?? {}) as Record<string, CertificateRequest>,
+    const reqs = filterByNamespace(
+      resources["certificaterequests.cert-manager.io"] as Record<string, CertificateRequest> | undefined,
+      namespaceFilter,
     );
-    const orders = Object.values(
-      (resources["orders.acme.cert-manager.io"] ?? {}) as Record<string, Order>,
+    const orders = filterByNamespace(
+      resources["orders.acme.cert-manager.io"] as Record<string, Order> | undefined,
+      namespaceFilter,
     );
-    const challenges = Object.values(
-      (resources["challenges.acme.cert-manager.io"] ?? {}) as Record<string, Challenge>,
+    const challenges = filterByNamespace(
+      resources["challenges.acme.cert-manager.io"] as Record<string, Challenge> | undefined,
+      namespaceFilter,
     );
     return sortCertViews(buildCertViews(certs, reqs, orders, challenges));
-  }, [resources]);
+  }, [resources, namespaceFilter]);
 
   const filtered = useMemo(() => views.filter((v) => matchesSearch(v, search)), [views, search]);
 

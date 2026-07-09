@@ -6,7 +6,7 @@
  *             ⌘K Commands · / Search · ⌘L Chat
  */
 import { useEffect, useState } from "react";
-import { useCluster } from "@/store/cluster";
+import { useCluster, filterByNamespace } from "@/store/cluster";
 import { TOGGLE_TERMINAL_EVENT } from "@/shell/TerminalDrawer";
 import { connectionStatus, type ConnectionTone } from "@/shell/connectionStatus";
 
@@ -42,7 +42,7 @@ export default function StatusBar({ chatHidden, onToggleChat }: StatusBarProps =
       .catch(() => {/* ignore — optional */});
   }, []);
 
-  const podCount = Object.keys(resources["pods"] ?? {}).length;
+  const podCount = filterByNamespace(resources["pods"], namespaceFilter).length;
   const nodeCount = Object.keys(resources["nodes"] ?? {}).length;
 
   const { label: statusLabel, tone: statusTone } = connectionStatus(connected, error);

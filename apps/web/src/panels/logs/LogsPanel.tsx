@@ -19,7 +19,7 @@ import {
   Box,
   RefreshCw,
 } from "lucide-react";
-import { useCluster } from "@/store/cluster";
+import { useCluster, filterByNamespace } from "@/store/cluster";
 import {
   subscribe,
   unsubscribe,
@@ -130,16 +130,18 @@ export default function LogsPanel() {
 
   // Subscribe to the active kind watch for the sidebar list.
   useEffect(() => {
-    const ns = namespaceFilter ?? "*";
-    subscribe(logKind, ns);
-    return () => unsubscribe(logKind, ns);
-  }, [namespaceFilter, logKind]);
+    subscribe(logKind, "*");
+    return () => unsubscribe(logKind, "*");
+  }, [logKind]);
 
-  const items = useMemo(
-    () => buildSidebarItems(resources, logKind, sidebarSearch),
-    [resources, logKind, sidebarSearch],
+  const items = useMemo(() => {
+    const scoped = Object.fromEntries(filterByNamespace(resources[logKind], namespaceFilter).entries());
+    return buildSidebarItems({ [logKind]: scoped }, logKind, sidebarSearch);
+  }, [resources, namespaceFilter, logKind, sidebarSearch]);
+  const total = useMemo(
+    () => filterByNamespace(resources[logKind], namespaceFilter).length,
+    [resources, namespaceFilter, logKind],
   );
-  const total = useMemo(() => Object.keys(resources[logKind] ?? {}).length, [resources, logKind]);
   const selectedKey = selectedItem?.key ?? null;
   const KindIcon = logKind === "pods" ? Box : Boxes;
 
@@ -254,10 +256,9 @@ export default function LogsPanel() {
 
   // Force a fresh snapshot of the source list (re-subscribe the active watch).
   const refreshSources = useCallback(() => {
-    const ns = namespaceFilter ?? "*";
-    unsubscribe(logKind, ns);
-    subscribe(logKind, ns);
-  }, [namespaceFilter, logKind]);
+    unsubscribe(logKind, "*");
+    subscribe(logKind, "*");
+  }, [logKind]);
 
   const togglePause = useCallback(() => {
     setIsPaused((p) => { if (p) setDroppedWhilePaused(0); return !p; });

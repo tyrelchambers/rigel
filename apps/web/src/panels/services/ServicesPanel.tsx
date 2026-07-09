@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRightLeft } from "lucide-react";
-import { useCluster } from "@/store/cluster";
+import { useCluster, filterByNamespace } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { viewYaml } from "@/store/yamlViewer";
@@ -49,14 +49,13 @@ export default function ServicesPanel() {
   const { data: forwards = [] } = useForwards();
 
   useEffect(() => {
-    const ns = namespaceFilter ?? "*";
-    subscribe("services", ns);
-    return () => unsubscribe("services", ns);
-  }, [namespaceFilter]);
+    subscribe("services", "*");
+    return () => unsubscribe("services", "*");
+  }, []);
 
   const allServices = useMemo(
-    () => sortServices(Object.values((resources["services"] ?? {}) as Record<string, Service>)),
-    [resources],
+    () => sortServices(filterByNamespace(resources["services"] as Record<string, Service>, namespaceFilter)),
+    [resources, namespaceFilter],
   );
   const filtered = useMemo(
     () => allServices.filter((s) => matchesSearch(s, search)),

@@ -5,7 +5,7 @@ import { Loader } from "@/components/Loader";
 import { TabBar, Tab } from "@/components/ui/Tabs";
 import { YamlEditor } from "@/components/YamlEditorLazy";
 import { NamespaceField } from "@/components/NamespaceField";
-import { useCluster } from "@/store/cluster";
+import { useCluster, filterByNamespace } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import {
   Dialog,
@@ -70,18 +70,22 @@ export default function AccountsPanel() {
   const [pendingDelete, setPendingDelete] = useState<RegistryAccount | null>(null);
 
   useEffect(() => {
-    const ns = namespaceFilter ?? "*";
-    subscribe("secrets", ns);
-    return () => unsubscribe("secrets", ns);
-  }, [namespaceFilter]);
+    subscribe("secrets", "*");
+    return () => unsubscribe("secrets", "*");
+  }, []);
 
   const accounts = useMemo(
     () =>
       accountsFromSecrets(
-        (resources["secrets"] ?? {}) as Record<string, Secret>,
+        Object.fromEntries(
+          filterByNamespace<Secret>(
+            resources["secrets"] as Record<string, Secret> | undefined,
+            namespaceFilter,
+          ).entries(),
+        ),
         defaultIdState,
       ),
-    [resources, defaultIdState],
+    [resources, namespaceFilter, defaultIdState],
   );
 
   function handleSetDefault(account: RegistryAccount) {

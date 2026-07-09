@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { ChevronRight, Server } from "lucide-react";
 import { TabBar, Tab } from "@/components/ui/Tabs";
-import { useCluster } from "@/store/cluster";
+import { useCluster, filterByNamespace } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { goToResource } from "@/lib/resourceNav";
 import { computeRelated, relatedKindsFor, type RelatedRef } from "@/lib/relatedResources";
@@ -15,12 +15,20 @@ export function RelatedResources({ sourceKind, source }: { sourceKind: string; s
   const [active, setActive] = useState("");
 
   useEffect(() => {
-    for (const k of kinds) subscribe(k, k === "nodes" ? "*" : namespace);
-    return () => { for (const k of kinds) unsubscribe(k, k === "nodes" ? "*" : namespace); };
+    for (const k of kinds) subscribe(k, "*");
+    return () => { for (const k of kinds) unsubscribe(k, "*"); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceKind, namespace]);
+  }, [sourceKind]);
 
-  const groups = computeRelated(sourceKind, source, resources as Record<string, Record<string, any>>);
+  const scoped: Record<string, Record<string, any>> = {};
+  for (const k of kinds)
+    scoped[k] = Object.fromEntries(
+      filterByNamespace<any>(resources[k], namespace).map((o) => [
+        o.metadata.namespace ? `${o.metadata.namespace}/${o.metadata.name}` : o.metadata.name,
+        o,
+      ]),
+    );
+  const groups = computeRelated(sourceKind, source, scoped);
   if (groups.length === 0) {
     return <div className="text-xs" style={{ color: "#8C8C95", padding: "8px 0" }}>No related resources.</div>;
   }
