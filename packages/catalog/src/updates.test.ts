@@ -1,4 +1,4 @@
-import { test, expect, describe } from "vitest";
+import { test, expect, describe, it } from "vitest";
 import {
   parseImageRef,
   parseReleaseVersion,
@@ -738,5 +738,31 @@ describe("installedImages", () => {
         runningDigest: undefined,
       },
     ]);
+  });
+});
+
+describe("agent continuous semver scheme (HELM-56)", () => {
+  // The agent's pinned running tag (0.1.<run>) routes through the version tier
+  // (statusFromTags), which filters by flavor — so a realistic digit-leading git
+  // sha tag in the registry list must be ignored, not ranked as a version.
+  const tags = ["0.1.0", "0.1", "stable", "latest", "0.1.410", "0.1.412", "0.1.415", "3f2a1c9"];
+
+  it("flags an update when the running patch is behind", () => {
+    expect(statusFromTags("0.1.412", tags)).toEqual({
+      kind: "updateAvailable",
+      current: "0.1.412",
+      latest: "0.1.415",
+    });
+  });
+
+  it("reports up to date on the newest patch", () => {
+    expect(statusFromTags("0.1.415", tags)).toEqual({
+      kind: "upToDate",
+      current: "0.1.415",
+    });
+  });
+
+  it("picks the newest continuous patch from a clean version list", () => {
+    expect(newestStableTag(["0.1.0", "0.1.410", "0.1.412", "0.1.415"])).toBe("0.1.415");
   });
 });
