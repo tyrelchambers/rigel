@@ -40,13 +40,14 @@ type FakeProc = ChildProcess & {
   killed: boolean;
   // LIST helper: push a `{items:[...]}` body and finish the process.
   emitList(items: any[]): void;
-  // LIST failure helper: empty stderr + non-zero exit (e.g. NotFound).
-  emitListError(code?: number): void;
+  // LIST failure helper: optional stderr + non-zero exit (e.g. NotFound/Forbidden).
+  emitListError(code?: number, stderr?: string): void;
 };
 
 function makeFakeProc(args: string[]): FakeProc {
   const proc = new EventEmitter() as unknown as FakeProc;
   (proc as any).stdout = new PassThrough();
+  (proc as any).stderr = new PassThrough();
   proc.args = args;
   proc.isWatch = args.includes("--watch-only");
   // A LIST is a `get ... -o json` that is NOT the watch stream.
@@ -61,7 +62,8 @@ function makeFakeProc(args: string[]): FakeProc {
     proc.emit("exit", 0, null);
     proc.emit("close", 0, null);
   };
-  proc.emitListError = (code = 1) => {
+  proc.emitListError = (code = 1, stderr = "") => {
+    if (stderr) (proc as any).stderr.write(stderr);
     proc.emit("exit", code, null);
     proc.emit("close", code, null);
   };
@@ -345,9 +347,10 @@ test("a prewarmed watch is never idle-stopped", async () => {
 
 // (f) Existing contract: a spawn "error" does not throw / crash the server.
 test("spawn 'error' event tears down watch without throwing", async () => {
-  // Build a fake ChildProcess: EventEmitter + stdout PassThrough + kill()
+  // Build a fake ChildProcess: EventEmitter + stdout/stderr PassThrough + kill()
   const fakeProc = new EventEmitter() as unknown as ChildProcess;
   (fakeProc as any).stdout = new PassThrough();
+  (fakeProc as any).stderr = new PassThrough();
   (fakeProc as any).kill = () => {};
 
   const fakeSpawn = (_cmd: string, _args: string[], _opts: SpawnOptions) =>
@@ -394,4 +397,33 @@ test("spawn 'error' event tears down watch without throwing", async () => {
     threw2 = true;
   }
   expect(threw2).toBe(false);
+});
+
+// (g) A Forbidden LIST failure (RBAC denial) is reported via onError and does
+//     NOT schedule a restart — retrying a 403 forever is pointless.
+test("reports a Forbidden LIST failure to onError and does not schedule a restart", async () => {
+  vi.useFakeTimers();
+  try {
+    const rec = makeRecorder();
+    const mgr = new WatchManager(null, rec.spawnFn as any, { restartBaseMs: 10, restartMaxMs: 10 });
+
+    const onError = vi.fn();
+    mgr.subscribe(
+      { kind: "secrets", namespace: "team-a" },
+      () => {},
+      () => {},
+      onError,
+    );
+
+    rec.lastList().emitListError(1, "Error from server (Forbidden): secrets is forbidden");
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ reason: "forbidden" }));
+
+    // No restart scheduled: waiting past the backoff spawns nothing new.
+    await vi.advanceTimersByTimeAsync(100);
+    expect(rec.lists().length).toBe(1);
+  } finally {
+    vi.useRealTimers();
+  }
 });

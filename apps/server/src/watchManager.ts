@@ -19,6 +19,16 @@ export function applyEvent(cache: Map<string, any>, e: WatchEvent): void {
   else cache.set(key, e.object);
 }
 
+export type WatchError = { reason: "forbidden" | "notfound" | "error"; message: string };
+
+export function classifyWatchError(stderr: string): WatchError["reason"] {
+  const s = stderr.toLowerCase();
+  if (s.includes("forbidden")) return "forbidden";
+  if (s.includes("notfound") || s.includes("could not find") || s.includes("the server doesn't have a resource type"))
+    return "notfound";
+  return "error";
+}
+
 type Sub = { context?: string | null; kind: string; namespace: string };
 
 // How long a warm watch with zero listeners lives before teardown. Keeps the
@@ -46,6 +56,7 @@ export type WatchManagerOptions = {
 type Listener = {
   onSnapshot: (items: any[]) => void;
   onDelta: (e: WatchEvent) => void;
+  onError?: (err: WatchError) => void;
 };
 
 type Watch = {
@@ -93,6 +104,7 @@ export class WatchManager {
     sub: Sub,
     onSnapshot: (items: any[]) => void,
     onDelta: (e: WatchEvent) => void,
+    onError?: (err: WatchError) => void,
   ): () => void {
     const key = this.subKey(sub);
     let w = this.watches.get(key);
@@ -103,7 +115,7 @@ export class WatchManager {
       clearTimeout(w.idleTimer);
       w.idleTimer = null;
     }
-    const listener: Listener = { onSnapshot, onDelta };
+    const listener: Listener = { onSnapshot, onDelta, onError };
     w.listeners.add(listener);
 
     // Warm hit: a ready watch serves its cache immediately. A not-yet-ready
@@ -180,13 +192,17 @@ export class WatchManager {
     if (!w) return;
     const argv = this.buildArgs(w.sub, false);
     const proc = this.spawnFn(argv[0], argv.slice(1), {
-      stdio: ["ignore", "pipe", "ignore"],
+      stdio: ["ignore", "pipe", "pipe"],
     });
     w.listProc = proc;
 
     let out = "";
+    let err = "";
     proc.stdout!.on("data", (buf: Buffer) => {
       out += buf.toString("utf8");
+    });
+    proc.stderr!.on("data", (buf: Buffer) => {
+      err += buf.toString("utf8");
     });
 
     let settled = false;
@@ -215,7 +231,15 @@ export class WatchManager {
         this.emitSnapshot(w);
         this.startWatchStream(key);
       } else {
-        // The LIST failed (NotFound for a missing kind, or a transient error).
+        // The LIST failed: RBAC denial (Forbidden), NotFound for a missing kind,
+        // or a transient error. A Forbidden watch never self-heals by retrying,
+        // so report it and stop instead of burning kubectl spawns forever.
+        const reason = classifyWatchError(err);
+        if (reason === "forbidden") {
+          for (const l of w.listeners) l.onError?.({ reason, message: err.trim() });
+          w.ready = true;
+          return;
+        }
         // On the FIRST failure (never been ready) emit one empty snapshot so the
         // client renders empty instead of a forever spinner, and mark ready so
         // warm subscribers don't hang. On a later failure keep the last-known
@@ -242,7 +266,7 @@ export class WatchManager {
     if (!w) return;
     const argv = this.buildArgs(w.sub, true);
     const proc = this.spawnFn(argv[0], argv.slice(1), {
-      stdio: ["ignore", "pipe", "ignore"],
+      stdio: ["ignore", "pipe", "pipe"],
     });
     w.watchProc = proc;
     const parser = new WatchEventParser();
