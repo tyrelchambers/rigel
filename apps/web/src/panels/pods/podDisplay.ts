@@ -118,6 +118,12 @@ export function matchesSearch(pod: Pod, query: string): boolean {
   return false;
 }
 
+/** Node filter: empty string matches all pods; otherwise the pod must be scheduled on `node`. */
+export function matchesNode(pod: Pod, node: string): boolean {
+  if (node === "") return true;
+  return pod.spec?.nodeName === node;
+}
+
 /**
  * Long, humanized age from an ISO timestamp: "165 days", "1 hour", "3 minutes",
  * "just now". `—` when missing/invalid. Pass `now` for test determinism.

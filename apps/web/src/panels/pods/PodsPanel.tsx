@@ -25,6 +25,7 @@ import {
   readyText,
   restartCount,
   matchesSearch,
+  matchesNode,
   sortPods,
 } from "./podDisplay";
 
@@ -35,6 +36,7 @@ export default function PodsPanel() {
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
 
   const [search, setSearch] = useState("");
+  const [nodeFilter, setNodeFilter] = useState("");
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const { available: metricsAvailable, history: metricsHistory } = useMetricsHistory();
@@ -48,10 +50,20 @@ export default function PodsPanel() {
     () => sortPods(filterByNamespace(resources["pods"], namespaceFilter) as Pod[]),
     [resources, namespaceFilter],
   );
-  const filtered = useMemo(
-    () => allPods.filter((p) => matchesSearch(p, search)),
-    [allPods, search],
+  // Nodes that the in-scope pods are actually scheduled on — the dropdown options.
+  const nodeNames = useMemo(
+    () => [...new Set(allPods.map((p) => p.spec?.nodeName).filter((n): n is string => !!n))].sort(),
+    [allPods],
   );
+  const filtered = useMemo(
+    () => allPods.filter((p) => matchesSearch(p, search) && matchesNode(p, nodeFilter)),
+    [allPods, search, nodeFilter],
+  );
+
+  // Drop a node selection that no longer has pods in scope (e.g. after a namespace change).
+  useEffect(() => {
+    if (nodeFilter && !nodeNames.includes(nodeFilter)) setNodeFilter("");
+  }, [nodeNames, nodeFilter]);
 
   const shown = filtered.length;
 
@@ -96,6 +108,19 @@ export default function PodsPanel() {
           placeholder="Search pods…"
           className="w-56"
         />
+        {nodeNames.length > 0 && (
+          <select
+            value={nodeFilter}
+            onChange={(e) => setNodeFilter(e.target.value)}
+            aria-label="Filter by node"
+            className="h-8 max-w-44 rounded-[6px] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-2 text-xs text-foreground outline-none focus:ring-2 focus:ring-ring/50"
+          >
+            <option value="">All nodes</option>
+            {nodeNames.map((n) => (
+              <option key={n} value={n}>{n}</option>
+            ))}
+          </select>
+        )}
       </PanelHeader>
 
       <div className="flex-1 overflow-auto">
@@ -267,7 +292,7 @@ export default function PodsPanel() {
         <p className="px-4 py-4 text-sm text-muted-foreground">No pods found</p>
       )}
       {!isLoading && allPods.length > 0 && filtered.length === 0 && (
-        <p className="px-4 py-4 text-sm text-muted-foreground">No pods match search</p>
+        <p className="px-4 py-4 text-sm text-muted-foreground">No pods match your filters</p>
       )}
       </div>
 

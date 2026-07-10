@@ -7,6 +7,7 @@ import {
   readyText,
   restartCount,
   matchesSearch,
+  matchesNode,
   sortPods,
 } from "./podDisplay";
 
@@ -118,6 +119,20 @@ describe("matchesSearch", () => {
   });
   test("no match returns false", () => {
     expect(matchesSearch(p, "nginx")).toBe(false);
+  });
+});
+
+describe("matchesNode", () => {
+  const onA = pod({ spec: { containers: [{ name: "web" }], nodeName: "node-a" } });
+  const unscheduled = pod({ spec: { containers: [{ name: "web" }] } });
+  test("empty filter matches every pod", () => {
+    expect(matchesNode(onA, "")).toBe(true);
+    expect(matchesNode(unscheduled, "")).toBe(true);
+  });
+  test("matches only pods scheduled on the given node", () => {
+    expect(matchesNode(onA, "node-a")).toBe(true);
+    expect(matchesNode(onA, "node-b")).toBe(false);
+    expect(matchesNode(unscheduled, "node-a")).toBe(false);
   });
 });
 
