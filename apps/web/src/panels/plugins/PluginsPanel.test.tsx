@@ -39,6 +39,8 @@ describe("PluginsPanel", () => {
       } as never,
     });
     renderPanel();
-    expect(screen.getAllByText(/installed/i).length).toBeGreaterThan(0);
+    // The namespace chip + "Installed" badge only render for a detected install.
+    expect(screen.getByText("kube-system")).toBeTruthy();
+    expect(screen.getByLabelText("Installed")).toBeTruthy();
   });
 });
