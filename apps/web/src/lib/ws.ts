@@ -319,7 +319,14 @@ export function connectCluster(): void {
       else store.upsert(m.kind, resourceKey(m.object), m.object);
     } else if (m.type === "error") {
       store.setLoading(false);
-      store.setError(typeof m.message === "string" ? m.message : "watch failed");
+      if (typeof m.kind === "string") {
+        store.setAccess(m.kind, {
+          status: m.reason === "forbidden" ? "forbidden" : "error",
+          message: typeof m.message === "string" ? m.message : undefined,
+        });
+      } else {
+        store.setError(typeof m.message === "string" ? m.message : "watch failed");
+      }
     }
   };
 }
