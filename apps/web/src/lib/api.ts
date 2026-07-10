@@ -721,13 +721,30 @@ export function useNodeMetrics() {
 /** Onboarding: one-click install of the upstream metrics-server. */
 export function useInstallMetricsServer() {
   const qc = useQueryClient();
-  return useMutation<ActionResponse, Error, void>({
-    mutationFn: async () => {
-      const res = await fetch("/api/install/metrics-server", { method: "POST" });
+  return useMutation<ActionResponse, Error, { kubeletInsecureTls?: boolean } | void>({
+    mutationFn: async (vars) => {
+      const res = await fetch("/api/install/metrics-server", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(vars ?? {}),
+      });
       if (!res.ok) throw new Error((await res.text()) || "install failed");
       return (await res.json()) as ActionResponse;
     },
     // metrics take a moment to flow; nudge the metrics queries after install.
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["metrics"] }),
+  });
+}
+
+/** Uninstall the upstream metrics-server (POST /api/uninstall/metrics-server). */
+export function useUninstallMetricsServer() {
+  const qc = useQueryClient();
+  return useMutation<ActionResponse, Error, void>({
+    mutationFn: async () => {
+      const res = await fetch("/api/uninstall/metrics-server", { method: "POST" });
+      if (!res.ok) throw new Error((await res.text()) || "uninstall failed");
+      return (await res.json()) as ActionResponse;
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["metrics"] }),
   });
 }

@@ -27,6 +27,7 @@ import ApplyYamlPanel from "./panels/apply/ApplyYamlPanel";
 import ComposeMigratePanel from "./panels/compose/ComposeMigratePanel";
 import GitOpsPanel from "./panels/gitops/GitOpsPanel";
 import HelmPanel from "./panels/helm/HelmPanel";
+import PluginsPanel from "./panels/plugins/PluginsPanel";
 import { TerminalDrawer, TOGGLE_TERMINAL_EVENT } from "@/shell/TerminalDrawer";
 import { ResourceYamlViewer } from "@/components/ResourceYamlViewer";
 import { Toaster } from "@/components/ui/sonner";
@@ -315,6 +316,7 @@ export default function App() {
               <Route path="/certificates" element={<CertificatesPanel />} />
               <Route path="/catalog" element={<PaddedX><CatalogPanel /></PaddedX>} />
               <Route path="/helm" element={<HelmPanel />} />
+              <Route path="/plugins" element={<PluginsPanel />} />
               <Route path="/apply" element={<ApplyYamlPanel />} />
               <Route path="/compose" element={<ComposeMigratePanel />} />
               <Route path="/gitops" element={<GitOpsPanel />} />

@@ -510,8 +510,15 @@ async function handler(req: Request): Promise<Response> {
     // --kubelet-insecure-tls (the common homelab/k3s/kind fix for self-signed
     // kubelet certs). Always 200 with { code, stdout, stderr } from the apply.
     if (url.pathname === "/api/install/metrics-server" && req.method === "POST") {
+      let kubeletInsecureTls = true;
+      try {
+        const body = (await req.json()) as { kubeletInsecureTls?: boolean };
+        if (typeof body?.kubeletInsecureTls === "boolean") kubeletInsecureTls = body.kubeletInsecureTls;
+      } catch {
+        // no body → keep the default (true)
+      }
       const apply = await kubectl(context, ["apply", "-f", METRICS_SERVER_URL]);
-      if (apply.code === 0) {
+      if (apply.code === 0 && kubeletInsecureTls) {
         // Tolerate failure: not every cluster needs/accepts the flag.
         await kubectl(context, [
           "patch", "deployment", "metrics-server", "-n", "kube-system", "--type=json",
@@ -519,6 +526,12 @@ async function handler(req: Request): Promise<Response> {
         ]);
       }
       return Response.json(apply);
+    }
+
+    // POST /api/uninstall/metrics-server — delete the upstream metrics-server manifest.
+    if (url.pathname === "/api/uninstall/metrics-server" && req.method === "POST") {
+      const del = await kubectl(context, ["delete", "-f", METRICS_SERVER_URL, "--ignore-not-found"]);
+      return Response.json(del);
     }
 
     // POST /api/helm — catalog wizard HELM install. Runs repo add (idempotent)
