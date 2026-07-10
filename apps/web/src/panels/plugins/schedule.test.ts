@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { intervalToCron, cronToInterval, clampInterval } from "./schedule";
+import { intervalToCron, cronToInterval, clampInterval, humanEvery, SCHEDULE_PRESETS } from "./schedule";
 
 describe("intervalToCron", () => {
   it("maps each unit to the right cron", () => {
@@ -32,5 +32,24 @@ describe("clampInterval", () => {
     expect(clampInterval(70, "minutes")).toBe(59);
     expect(clampInterval(0, "hours")).toBe(1);
     expect(clampInterval(5, "days")).toBe(5);
+  });
+});
+
+describe("humanEvery", () => {
+  it("pluralizes the unit except when the amount is 1", () => {
+    expect(humanEvery(30, "minutes")).toBe("every 30 minutes");
+    expect(humanEvery(1, "hours")).toBe("every 1 hour");
+    expect(humanEvery(2, "days")).toBe("every 2 days");
+    expect(humanEvery(1, "minutes")).toBe("every 1 minute");
+  });
+});
+
+describe("SCHEDULE_PRESETS", () => {
+  it("are the design's six presets, each a cron intervalToCron round-trips", () => {
+    expect(SCHEDULE_PRESETS.map((p) => p.label)).toEqual(["5m", "15m", "30m", "1h", "6h", "12h"]);
+    for (const p of SCHEDULE_PRESETS) {
+      const { amount, unit } = cronToInterval(p.cron);
+      expect(intervalToCron(amount, unit)).toBe(p.cron);
+    }
   });
 });
