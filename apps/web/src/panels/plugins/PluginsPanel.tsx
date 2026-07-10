@@ -89,7 +89,7 @@ export default function PluginsPanel() {
   }, [search, group, scope, installedIds]);
 
   return (
-    <div className="catalog-root h-full overflow-auto px-4">
+    <div className="relative h-full overflow-auto px-4 pb-12">
       <div className="catalog-atmosphere" aria-hidden />
 
       <div className="catalog-header">
