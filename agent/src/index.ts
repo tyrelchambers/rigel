@@ -39,6 +39,7 @@ import type { RepoFixDeps } from "./repoFixDispatch.js";
 import { runThreadedDiagnosis } from "./threadedDiagnosis.js";
 import { runChatTurn } from "./chatTurn.js";
 import { routeChatReply } from "./chatHandler.js";
+import { pendingFixesContext, sameInvocations } from "./chatQueue.js";
 import { runWorker } from "./worker.js";
 import { diagnoseConfirmed } from "./diagnosePool.js";
 import { runSupervisor, type SupervisorOutput } from "./supervisor.js";
@@ -788,6 +789,12 @@ function buildMessageHandler(
 ): MessageHandler {
   return {
     respond: async (message, source, timestamp) => {
+      // Show the agent the fixes the autonomous loop has queued for approval, so
+      // "yes, do the flagged fix" can run a loop-surfaced item — not just what
+      // the agent proposes itself. Empty when nothing is queued.
+      const state = await readState(cfg.stateConfigMap, cfg.stateNamespace);
+      const ctx = pendingFixesContext(state.queue);
+      const framed = ctx ? `${ctx}\n\n${message}` : message;
       const reply = await runThreadedDiagnosis(
         {
           sessions: loop.sessions,
@@ -796,7 +803,7 @@ function buildMessageHandler(
         },
         source,
         timestamp,
-        message,
+        framed,
       );
       return routeChatReply(reply, (action) => executeChatAction(cfg, cb, source, action));
     },
@@ -804,11 +811,13 @@ function buildMessageHandler(
   };
 }
 
-/** Run a destructive action the operator just confirmed over chat. The human is
- * the approver, so — like the queue-approve path — a MEDIUM-tier fix runs without
- * the unattended Opus supervisor, but every other guardrail still applies:
- * BLOCKED/destructive-typed items are refused, the circuit breaker can veto, and
- * a backup is snapshotted before mutating. Mirrors the executor path in `tick`. */
+/** Run an action the operator confirmed over chat. The human is the approver, so
+ * — like the queue-approve path — a MEDIUM-tier fix runs without the unattended
+ * Opus supervisor, but every other guardrail still applies: BLOCKED/repo-fix
+ * items are refused, the circuit breaker can veto, and a backup is snapshotted
+ * before mutating. When the action matches a fix the loop had queued (correlated
+ * by its kubectl invocation), it inherits that item's fingerprint and is dropped
+ * from the queue on run so the desktop UI stops showing it as pending. */
 async function executeChatAction(
   cfg: Config,
   cb: CircuitBreaker,
@@ -820,7 +829,10 @@ async function executeChatAction(
   const targetName = action.deployment ?? action.pod ?? action.node
     ?? (action.args ? action.args.slice(0, 3).join("-") : action.label);
   const resourceKey = `${ns}/${targetName}`;
-  const fp = `chat|${source}`;
+  const pre = await readState(cfg.stateConfigMap, cfg.stateNamespace);
+  const matched = pre.queue.find((q) => q.action && sameInvocations(q.action, action));
+  const fp = matched?.fingerprint || matched?.incident || `chat|${source}`;
+  const incident = matched?.incident || "chat request";
 
   return executeActionGuarded(cb, { action, fingerprint: fp, resourceKey }, {
     now: () => Date.now(),
@@ -829,10 +841,15 @@ async function executeChatAction(
     audit: async ({ command, success, output, backupRef }) => {
       let s = await readState(cfg.stateConfigMap, cfg.stateNamespace);
       s = appendAudit(s, {
-        at: new Date().toISOString(), fingerprint: fp, incident: "chat request", proposal: action.label,
+        at: new Date().toISOString(), fingerprint: fp, incident, proposal: action.label,
         command, tier: tier === RiskTier.Medium ? "medium" : "low",
-        verdict: "approved", outcome: success ? "success" : "failure", detail: truncate(`confirmed via chat — ${output}`), backupRef,
+        verdict: "approved", outcome: success ? "success" : "failure",
+        detail: truncate(`${matched ? "flagged fix approved" : "confirmed"} via chat — ${output}`), backupRef,
       }, cfg.auditMaxEntries);
+      // Running a queued fix clears it (whether it succeeded or not — a failure is
+      // in the audit log and re-detection re-queues); re-filter the fresh state by
+      // value since `matched` came from an earlier read.
+      if (matched) s = { ...s, queue: s.queue.filter((q) => !(q.action && sameInvocations(q.action, action))) };
       await writeState(cfg.stateConfigMap, cfg.stateNamespace, s);
     },
     log,
