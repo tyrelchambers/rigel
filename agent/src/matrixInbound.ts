@@ -1,16 +1,17 @@
 // agent/src/matrixInbound.ts
-import { parseCommand, dispatchCommand, chunkText, type CommandHandlers } from "./signalInbound.js";
+import { respondSafely, chunkText, type MessageHandler } from "./signalInbound.js";
 /**
- * Inbound Matrix: the operator texts the assistant over a Matrix room to diagnose
- * the cluster and approve queued fixes. This module is the pure, testable core —
- * parsing the client-server `/sync` payload, authenticating the sender against an
- * allowlist of Matrix IDs, routing a message to a command, de-duplicating by
- * `event_id`, and chunking replies. All IO (the actual sync/send HTTP, model
- * calls, executor) is injected via handlers, mirroring signalInbound.ts.
+ * Inbound Matrix: the operator texts the assistant over a Matrix room to run the
+ * cluster. This module is the pure, testable core — parsing the client-server
+ * `/sync` payload, authenticating the sender against an allowlist of Matrix IDs,
+ * de-duplicating by `event_id`, and chunking replies. All IO (the actual
+ * sync/send HTTP, the agent turn) is injected via handlers, mirroring
+ * signalInbound.ts.
  *
- * Security model: only senders on the allowlist are ever acted on; everything
- * else is dropped silently. Free text is a READ-ONLY diagnosis question; the only
- * mutation path is `approve` of an already-vetted, queued suggestion.
+ * There is NO deterministic command parsing: every authorized message is one
+ * conversational, act-capable agent turn (see signalInbound.ts). Security model:
+ * only senders on the allowlist are ever acted on; everything else is dropped
+ * silently.
  */
 export interface MatrixEvent {
   /** Matrix event id — the natural de-dupe key. */
@@ -103,7 +104,7 @@ export interface MatrixInboundContext {
   since?: string;
 }
 
-export interface MatrixInboundHandlers extends CommandHandlers {
+export interface MatrixInboundHandlers extends MessageHandler {
   /** GET /_matrix/client/v3/sync with the stored cursor; returns the parsed body. */
   sync(since: string | undefined): Promise<unknown>;
   /** PUT a reply into the configured room. */
@@ -145,9 +146,8 @@ export async function handleMatrixInbound(
     }
     await h.markRead(ev.eventId);
     await h.setTyping(true);
-    const cmd = parseCommand(ev.body);
-    h.log?.(`matrix: ${cmd.kind} from ${ev.sender}`);
-    const reply = await dispatchCommand(cmd, h, ev.sender, ev.timestamp);
+    h.log?.(`matrix: message from ${ev.sender}`);
+    const reply = await respondSafely(h, ev.body, ev.sender, ev.timestamp);
     for (const chunk of chunkText(reply)) {
       await h.reply(chunk);
     }

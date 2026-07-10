@@ -69,11 +69,7 @@ function fakeHandlers(over: Partial<MatrixInboundHandlers> = {}): MatrixInboundH
     reply: vi.fn(async (text: string) => { replies.push(text); }),
     markRead: vi.fn(async () => {}),
     setTyping: vi.fn(async () => {}),
-    help: () => "HELP",
-    status: vi.fn(async () => "STATUS"),
-    queue: vi.fn(async () => "QUEUE"),
-    approve: vi.fn(async (i: number) => `APPROVED ${i}`),
-    diagnose: vi.fn(async (q: string) => `DIAGNOSED: ${q}`),
+    respond: vi.fn(async (text: string) => `HANDLED: ${text}`),
     ...over,
   };
 }
@@ -99,14 +95,14 @@ describe("handleMatrixInbound", () => {
     expect(h.sync).not.toHaveBeenCalled();
   });
 
-  test("routes a diagnosis question from an allowed sender and returns next_batch", async () => {
+  test("runs a message from an allowed sender through the agent and returns next_batch", async () => {
     const raw = syncWith([
       { type: "m.room.message", event_id: "$1", sender: "@me:hs", origin_server_ts: 5, content: { msgtype: "m.text", body: "why down?" } },
     ]);
     const h = fakeHandlers({ sync: vi.fn(async () => raw) });
     const next = await handleMatrixInbound(CTX, h, new SeenEventIds());
-    expect(h.diagnose).toHaveBeenCalledWith("why down?", "@me:hs", 5);
-    expect(h.replies).toEqual(["DIAGNOSED: why down?"]);
+    expect(h.respond).toHaveBeenCalledWith("why down?", "@me:hs", 5);
+    expect(h.replies).toEqual(["HANDLED: why down?"]);
     expect(next).toBe("s2");
   });
 
@@ -116,7 +112,7 @@ describe("handleMatrixInbound", () => {
     ]);
     const h = fakeHandlers({ sync: vi.fn(async () => raw) });
     await handleMatrixInbound(CTX, h, new SeenEventIds());
-    expect(h.status).not.toHaveBeenCalled();
+    expect(h.respond).not.toHaveBeenCalled();
     expect(h.replies).toEqual([]);
   });
 
@@ -128,7 +124,7 @@ describe("handleMatrixInbound", () => {
     const seen = new SeenEventIds();
     await handleMatrixInbound(CTX, h, seen);
     await handleMatrixInbound(CTX, h, seen);
-    expect(h.status).toHaveBeenCalledTimes(1);
+    expect(h.respond).toHaveBeenCalledTimes(1);
   });
 
   test("a sync failure is swallowed and keeps the prior cursor", async () => {
@@ -145,8 +141,7 @@ describe("handleMatrixInbound", () => {
     const h = fakeHandlers({ sync: vi.fn(async () => raw) });
     // Include the bot id in allow to prove the self-skip wins over the allowlist.
     await handleMatrixInbound({ ...CTX, allow: [...CTX.allow, botId], botUserId: botId }, h, new SeenEventIds());
-    expect(h.status).not.toHaveBeenCalled();
-    expect(h.diagnose).not.toHaveBeenCalled();
+    expect(h.respond).not.toHaveBeenCalled();
     expect(h.replies).toEqual([]);
   });
 
@@ -154,7 +149,7 @@ describe("handleMatrixInbound", () => {
     const raw = syncWith([
       { type: "m.room.message", event_id: "$1", sender: "@me:hs", origin_server_ts: 5, content: { msgtype: "m.text", body: "explain" } },
     ]);
-    const h = fakeHandlers({ sync: vi.fn(async () => raw), diagnose: vi.fn(async () => "x".repeat(3000)) });
+    const h = fakeHandlers({ sync: vi.fn(async () => raw), respond: vi.fn(async () => "x".repeat(3000)) });
     await handleMatrixInbound(CTX, h, new SeenEventIds());
     expect(h.replies.length).toBeGreaterThan(1);
   });

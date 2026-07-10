@@ -1,18 +1,20 @@
 /**
- * Inbound Signal: lets the operator text the assistant to diagnose the cluster
- * and approve queued fixes. This module is the pure, testable core — parsing the
- * signal-cli-rest-api receive payload, authenticating the sender against an
- * allowlist, routing a message to a command, de-duplicating already-seen
- * messages, and chunking replies for the phone. All IO (the actual receive/send
- * HTTP, model calls, executor) is injected via handlers so the routing logic is
+ * Inbound Signal: lets the operator text the assistant to run the cluster. This
+ * module is the pure, testable core — parsing the signal-cli-rest-api receive
+ * payload, authenticating the sender against an allowlist, de-duplicating
+ * already-seen messages, and chunking replies for the phone. All IO (the actual
+ * receive/send HTTP, the agent turn) is injected via handlers so the loop is
  * deterministic and unit-tested.
+ *
+ * There is NO deterministic command parsing: every authorized message is one
+ * conversational, act-capable agent turn. The model reads intent — "why is x
+ * down?", "restart the api", "yes go ahead" all just flow to the agent, which
+ * investigates and makes reversible changes directly. A destructive change is
+ * proposed in prose first and only runs once the operator confirms in their own
+ * words. In every case the agent's RBAC is the hard ceiling on what it can touch.
  *
  * Security model: only senders on the allowlist (the operator's own linked
  * number by default) are ever acted on; everything else is dropped silently.
- * Free text runs an act-capable agent turn: the agent investigates and makes
- * reversible cluster changes directly, while destructive changes are only
- * proposed and require a "yes"/"approve" reply to run. In every case the
- * agent's RBAC is the hard ceiling on what it can touch.
  */
 
 export interface IncomingMessage {
@@ -22,20 +24,6 @@ export interface IncomingMessage {
   timestamp: number;
   text: string;
 }
-
-export type Command =
-  | { kind: "help" }
-  | { kind: "status" }
-  | { kind: "queue" }
-  | { kind: "approve"; index: number }
-  | { kind: "diagnose"; text: string };
-
-export const HELP_TEXT = [
-  "Rigel assistant — text me like an engineer:",
-  "• ask or tell me anything (\"why is payments down?\", \"restart the api\", \"scale web to 3\").",
-  "• I investigate and make reversible changes directly; destructive ones I'll propose — reply \"yes\" to run.",
-  "• status — health, spend, queued items.  •  help — this message.",
-].join("\n");
 
 /** Strip spacing/formatting so "+1 (555) 010-1234" matches "+15550101234". */
 export function normalizeNumber(s: string): string {
@@ -86,22 +74,6 @@ export function parseReceived(raw: unknown): IncomingMessage[] {
     out.push({ source, timestamp, text: text.trim() });
   }
   return out;
-}
-
-/** Route a message body to a command. Free text → a diagnosis question. */
-export function parseCommand(raw: string): Command {
-  const text = raw.trim();
-  const lower = text.toLowerCase();
-  if (lower === "help" || lower === "?" || lower === "commands") return { kind: "help" };
-  if (lower === "status") return { kind: "status" };
-  if (lower === "queue" || lower === "suggestions" || lower === "fixes") return { kind: "queue" };
-  const approve = /^(?:approve|yes|do it|run it|go ahead)\b\.?\s*#?(\d+)?/i.exec(text);
-  if (approve) {
-    const n = approve[1] ? Number.parseInt(approve[1], 10) : 1;
-    const index = Number.isFinite(n) && n >= 1 ? n - 1 : 0;
-    return { kind: "approve", index };
-  }
-  return { kind: "diagnose", text };
 }
 
 /**
@@ -159,44 +131,31 @@ export interface InboundContext {
   allow: string[];
 }
 
-/** The transport-agnostic command surface: the five things any inbound channel
- *  routes to. Shared verbatim by the Signal and Matrix inbound loops. */
-export interface CommandHandlers {
-  help(): string;
-  status(): Promise<string>;
-  queue(): Promise<string>;
-  approve(index: number): Promise<string>;
-  diagnose(question: string, source: string, timestamp: number): Promise<string>;
+/** The transport-agnostic message surface: one conversational, act-capable agent
+ *  turn. Shared verbatim by the Signal and Matrix inbound loops — the model reads
+ *  intent, so there are no separate command handlers. */
+export interface MessageHandler {
+  /** Handle one inbound message (threaded per `source`): investigate, make
+   *  reversible changes, run a confirmed destructive action through the guard,
+   *  and return the reply text. */
+  respond(text: string, source: string, timestamp: number): Promise<string>;
   log?(msg: string): void;
 }
 
-export interface InboundHandlers extends CommandHandlers {
+export interface InboundHandlers extends MessageHandler {
   receive(apiUrl: string, number: string): Promise<unknown>;
   reply(recipient: string, text: string): Promise<void>;
 }
 
-/** Route a parsed command to the matching handler, turning a handler throw into
- *  an error reply string. `source`/`timestamp` thread into diagnosis (the
- *  channel's sender id + message time). Shared by Signal and Matrix inbound. */
-export async function dispatchCommand(
-  cmd: Command,
-  h: CommandHandlers,
+/** Run one message through the agent, turning a throw into an error reply. */
+export async function respondSafely(
+  h: MessageHandler,
+  text: string,
   source: string,
   timestamp: number,
 ): Promise<string> {
   try {
-    switch (cmd.kind) {
-      case "help":
-        return h.help();
-      case "status":
-        return await h.status();
-      case "queue":
-        return await h.queue();
-      case "approve":
-        return await h.approve(cmd.index);
-      case "diagnose":
-        return await h.diagnose(cmd.text, source, timestamp);
-    }
+    return await h.respond(text, source, timestamp);
   } catch (e) {
     return `Sorry — that failed: ${String(e)}`;
   }
@@ -204,7 +163,7 @@ export async function dispatchCommand(
 
 /**
  * One inbound poll: fetch pending messages, drop anything unauthorized or
- * already handled, route each to its command, and reply (chunked). Never
+ * already handled, run each through the agent, and reply (chunked). Never
  * throws — a failure handling one message becomes an error reply, and a receive
  * failure is logged and skipped, so inbound never disturbs the remediation loop.
  */
@@ -228,9 +187,8 @@ export async function handleInbound(
       h.log?.(`signal: ignoring message from unauthorized sender ${msg.source}`);
       continue;
     }
-    const cmd = parseCommand(msg.text);
-    h.log?.(`signal: ${cmd.kind} from ${msg.source}`);
-    const reply = await dispatchCommand(cmd, h, msg.source, msg.timestamp);
+    h.log?.(`signal: message from ${msg.source}`);
+    const reply = await respondSafely(h, msg.text, msg.source, msg.timestamp);
     for (const chunk of chunkText(reply)) {
       await h.reply(msg.source, chunk);
     }

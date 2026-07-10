@@ -1,16 +1,14 @@
 import { describe, expect, test, vi } from "vitest";
 import {
   chunkText,
-  dispatchCommand,
   handleInbound,
-  HELP_TEXT,
   isAuthorized,
   normalizeNumber,
-  parseCommand,
   parseReceived,
+  respondSafely,
   SeenTimestamps,
-  type CommandHandlers,
   type InboundHandlers,
+  type MessageHandler,
 } from "./signalInbound.js";
 
 describe("normalizeNumber / isAuthorized", () => {
@@ -66,28 +64,6 @@ describe("parseReceived", () => {
   });
 });
 
-describe("parseCommand", () => {
-  test("recognizes keyword commands case-insensitively", () => {
-    expect(parseCommand("help")).toEqual({ kind: "help" });
-    expect(parseCommand("  STATUS ")).toEqual({ kind: "status" });
-    expect(parseCommand("queue")).toEqual({ kind: "queue" });
-    expect(parseCommand("?")).toEqual({ kind: "help" });
-  });
-  test("parses approve with and without an index (1-based → 0-based)", () => {
-    expect(parseCommand("approve")).toEqual({ kind: "approve", index: 0 });
-    expect(parseCommand("approve 3")).toEqual({ kind: "approve", index: 2 });
-    expect(parseCommand("approve #2")).toEqual({ kind: "approve", index: 1 });
-    expect(parseCommand("yes")).toEqual({ kind: "approve", index: 0 });
-    expect(parseCommand("do it")).toEqual({ kind: "approve", index: 0 });
-  });
-  test("treats free text as a diagnosis question", () => {
-    expect(parseCommand("why is payments crashlooping?")).toEqual({
-      kind: "diagnose",
-      text: "why is payments crashlooping?",
-    });
-  });
-});
-
 describe("chunkText", () => {
   test("returns a single chunk when short", () => {
     expect(chunkText("hello")).toEqual(["hello"]);
@@ -127,11 +103,7 @@ function fakeHandlers(over: Partial<InboundHandlers> = {}): InboundHandlers & {
     reply: vi.fn(async (to: string, text: string) => {
       replies.push({ to, text });
     }),
-    help: () => HELP_TEXT,
-    status: vi.fn(async () => "STATUS"),
-    queue: vi.fn(async () => "QUEUE"),
-    approve: vi.fn(async (i: number) => `APPROVED ${i}`),
-    diagnose: vi.fn(async (q: string, _source: string, _ts: number) => `DIAGNOSED: ${q}`),
+    respond: vi.fn(async (text: string, _source: string, _ts: number) => `HANDLED: ${text}`),
     ...over,
   };
 }
@@ -146,32 +118,28 @@ describe("handleInbound", () => {
     expect(h.receive).not.toHaveBeenCalled();
   });
 
-  test("routes a diagnosis question from an authorized sender", async () => {
+  test("runs an inbound message from an authorized sender through the agent", async () => {
     const raw = [{ envelope: { sourceNumber: "+15550101234", dataMessage: { timestamp: 1, message: "why down?" } } }];
     const h = fakeHandlers({ receive: vi.fn(async () => raw) });
     await handleInbound(CTX, h, new SeenTimestamps());
-    expect(h.diagnose).toHaveBeenCalledWith("why down?", "+15550101234", 1);
-    expect(h.replies).toEqual([{ to: "+15550101234", text: "DIAGNOSED: why down?" }]);
+    expect(h.respond).toHaveBeenCalledWith("why down?", "+15550101234", 1);
+    expect(h.replies).toEqual([{ to: "+15550101234", text: "HANDLED: why down?" }]);
   });
 
   test("ignores messages from unauthorized senders", async () => {
     const raw = [{ envelope: { sourceNumber: "+15559999999", dataMessage: { timestamp: 1, message: "status" } } }];
     const h = fakeHandlers({ receive: vi.fn(async () => raw) });
     await handleInbound(CTX, h, new SeenTimestamps());
-    expect(h.status).not.toHaveBeenCalled();
+    expect(h.respond).not.toHaveBeenCalled();
     expect(h.replies).toEqual([]);
   });
 
-  test("routes status/queue/approve commands", async () => {
-    const raw = [
-      { envelope: { sourceNumber: "+15550101234", dataMessage: { timestamp: 1, message: "status" } } },
-      { envelope: { sourceNumber: "+15550101234", dataMessage: { timestamp: 2, message: "queue" } } },
-      { envelope: { sourceNumber: "+15550101234", dataMessage: { timestamp: 3, message: "approve 2" } } },
-    ];
+  test("an affirmative is just another message — no keyword routing", async () => {
+    const raw = [{ envelope: { sourceNumber: "+15550101234", dataMessage: { timestamp: 3, message: "Yes let's fix it" } } }];
     const h = fakeHandlers({ receive: vi.fn(async () => raw) });
     await handleInbound(CTX, h, new SeenTimestamps());
-    expect(h.approve).toHaveBeenCalledWith(1);
-    expect(h.replies.map((r) => r.text)).toEqual(["STATUS", "QUEUE", "APPROVED 1"]);
+    expect(h.respond).toHaveBeenCalledWith("Yes let's fix it", "+15550101234", 3);
+    expect(h.replies.map((r) => r.text)).toEqual(["HANDLED: Yes let's fix it"]);
   });
 
   test("does not re-process a message already seen", async () => {
@@ -180,14 +148,14 @@ describe("handleInbound", () => {
     const seen = new SeenTimestamps();
     await handleInbound(CTX, h, seen);
     await handleInbound(CTX, h, seen); // same message redelivered
-    expect(h.status).toHaveBeenCalledTimes(1);
+    expect(h.respond).toHaveBeenCalledTimes(1);
   });
 
   test("a handler error becomes an error reply, not a throw", async () => {
     const raw = [{ envelope: { sourceNumber: "+15550101234", dataMessage: { timestamp: 1, message: "boom?" } } }];
     const h = fakeHandlers({
       receive: vi.fn(async () => raw),
-      diagnose: vi.fn(async () => {
+      respond: vi.fn(async () => {
         throw new Error("model down");
       }),
     });
@@ -209,30 +177,24 @@ describe("handleInbound", () => {
     const raw = [{ envelope: { sourceNumber: "+15550101234", dataMessage: { timestamp: 1, message: "explain" } } }];
     const h = fakeHandlers({
       receive: vi.fn(async () => raw),
-      diagnose: vi.fn(async () => "x".repeat(3000)),
+      respond: vi.fn(async () => "x".repeat(3000)),
     });
     await handleInbound(CTX, h, new SeenTimestamps());
     expect(h.replies.length).toBeGreaterThan(1);
   });
 });
 
-describe("dispatchCommand", () => {
-  const handlers: CommandHandlers = {
-    help: () => "HELP",
-    status: async () => "STATUS",
-    queue: async () => "QUEUE",
-    approve: async (i: number) => `APPROVED ${i}`,
-    diagnose: async (q: string, source: string, ts: number) => `DX ${q} ${source} ${ts}`,
+describe("respondSafely", () => {
+  const handler: MessageHandler = {
+    respond: async (text: string, source: string, ts: number) => `DX ${text} ${source} ${ts}`,
   };
 
-  test("routes each command kind and threads source/timestamp into diagnose", async () => {
-    expect(await dispatchCommand({ kind: "help" }, handlers, "+1", 9)).toBe("HELP");
-    expect(await dispatchCommand({ kind: "approve", index: 2 }, handlers, "+1", 9)).toBe("APPROVED 2");
-    expect(await dispatchCommand({ kind: "diagnose", text: "why?" }, handlers, "@me:hs", 42)).toBe("DX why? @me:hs 42");
+  test("passes the message + sender + timestamp straight to the agent", async () => {
+    expect(await respondSafely(handler, "why?", "@me:hs", 42)).toBe("DX why? @me:hs 42");
   });
 
   test("turns a handler throw into an error reply string", async () => {
-    const boom: CommandHandlers = { ...handlers, status: async () => { throw new Error("down"); } };
-    expect(await dispatchCommand({ kind: "status" }, boom, "+1", 0)).toContain("down");
+    const boom: MessageHandler = { respond: async () => { throw new Error("down"); } };
+    expect(await respondSafely(boom, "why?", "+1", 0)).toContain("down");
   });
 });

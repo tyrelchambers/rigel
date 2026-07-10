@@ -16,9 +16,8 @@ import { notifyWebhook, notifySignal, receiveSignal, notifyMatrix, receiveMatrix
 import { SessionStore } from "./sessionStore.js";
 import {
   handleInbound,
-  HELP_TEXT,
   SeenTimestamps,
-  type CommandHandlers,
+  type MessageHandler,
   type InboundHandlers,
 } from "./signalInbound.js";
 import {
@@ -781,29 +780,14 @@ export async function tick(
 /** The transport-agnostic command handlers (help/status/queue/approve/diagnose),
  *  shared by the Signal and Matrix inbound loops. `approve` runs a queued,
  *  supervised fix through the same circuit breaker + backup path as the loop. */
-function buildCommandHandlers(
+function buildMessageHandler(
   cfg: Config,
   rc: RuntimeConfig,
   cb: CircuitBreaker,
   loop: LoopState,
-): CommandHandlers {
+): MessageHandler {
   return {
-    help: () => HELP_TEXT,
-    status: async () => {
-      const s = await readState(cfg.stateConfigMap, cfg.stateNamespace);
-      const enabled = s.status?.enabled ? "active" : "disabled";
-      return `Rigel assistant is ${enabled}. ${s.queue.length} fix(es) queued. Updated ${s.updatedAt || "—"}.`;
-    },
-    queue: async () => {
-      const s = await readState(cfg.stateConfigMap, cfg.stateNamespace);
-      if (s.queue.length === 0) return "No fixes are queued.";
-      const lines = s.queue
-        .slice(0, 10)
-        .map((q, i) => `${i + 1}. ${q.suggestion} — ${q.incident}${q.action ? "" : " (manual; run in Rigel)"}`);
-      return `${lines.join("\n")}\n\nReply "approve N" to run one.`;
-    },
-    approve: (index) => approveQueued(cfg, cb, index),
-    diagnose: async (message, source, timestamp) => {
+    respond: async (message, source, timestamp) => {
       const reply = await runThreadedDiagnosis(
         {
           sessions: loop.sessions,
@@ -814,16 +798,45 @@ function buildCommandHandlers(
         timestamp,
         message,
       );
-      return routeChatReply(reply, async (action) => {
-        let state = await readState(cfg.stateConfigMap, cfg.stateNamespace);
-        const label = action.label || "proposed change";
-        state = queue(state, cfg, new Date().toISOString(), `chat|${source}`, "chat request", label, "destructive — reply yes to run", action);
-        await writeState(cfg.stateConfigMap, cfg.stateNamespace, state);
-        return 1; // newest item is prepended at index 0 → 1-based #1
-      });
+      return routeChatReply(reply, (action) => executeChatAction(cfg, cb, source, action));
     },
     log,
   };
+}
+
+/** Run a destructive action the operator just confirmed over chat. The human is
+ * the approver, so — like the queue-approve path — a MEDIUM-tier fix runs without
+ * the unattended Opus supervisor, but every other guardrail still applies:
+ * BLOCKED/destructive-typed items are refused, the circuit breaker can veto, and
+ * a backup is snapshotted before mutating. Mirrors the executor path in `tick`. */
+async function executeChatAction(
+  cfg: Config,
+  cb: CircuitBreaker,
+  source: string,
+  action: SuggestedAction,
+): Promise<string> {
+  const tier = classifyRisk(action.kind);
+  const ns = action.namespace ?? "default";
+  const targetName = action.deployment ?? action.pod ?? action.node
+    ?? (action.args ? action.args.slice(0, 3).join("-") : action.label);
+  const resourceKey = `${ns}/${targetName}`;
+  const fp = `chat|${source}`;
+
+  return executeActionGuarded(cb, { action, fingerprint: fp, resourceKey }, {
+    now: () => Date.now(),
+    execute: (a) => executeAction(a),
+    storeBackup: async (key, yaml) => storeBackup(cfg.backupsConfigMap, cfg.stateNamespace, key, yaml, cfg.maxBackups),
+    audit: async ({ command, success, output, backupRef }) => {
+      let s = await readState(cfg.stateConfigMap, cfg.stateNamespace);
+      s = appendAudit(s, {
+        at: new Date().toISOString(), fingerprint: fp, incident: "chat request", proposal: action.label,
+        command, tier: tier === RiskTier.Medium ? "medium" : "low",
+        verdict: "approved", outcome: success ? "success" : "failure", detail: truncate(`confirmed via chat — ${output}`), backupRef,
+      }, cfg.auditMaxEntries);
+      await writeState(cfg.stateConfigMap, cfg.stateNamespace, s);
+    },
+    log,
+  });
 }
 
 /** Wire the real IO handlers and run one inbound poll. `approve` runs a
@@ -845,7 +858,7 @@ async function handleSignalInbound(
   const handlers: InboundHandlers = {
     receive: (apiUrl, number) => receiveSignal(apiUrl, number),
     reply: (to, text) => notifySignal(rc.signalApiUrl!, rc.signalNumber!, [to], text),
-    ...buildCommandHandlers(cfg, rc, cb, loop),
+    ...buildMessageHandler(cfg, rc, cb, loop),
   };
 
   await handleInbound({ enabled: true, apiUrl: rc.signalApiUrl, number: rc.signalNumber, allow }, handlers, loop.seen);
@@ -875,7 +888,7 @@ async function handleMatrixInboundIO(
     reply: (text) => notifyMatrix(m.homeserverUrl!, m.accessToken!, m.roomId!, text),
     markRead: (eventId) => markMatrixRead(m.homeserverUrl!, m.accessToken!, m.roomId!, eventId),
     setTyping: (typing) => setMatrixTyping(m.homeserverUrl!, m.accessToken!, m.roomId!, m.userId ?? "", typing),
-    ...buildCommandHandlers(cfg, rc, cb, loop),
+    ...buildMessageHandler(cfg, rc, cb, loop),
   };
   const next = await handleMatrixInbound(
     { enabled: true, homeserverUrl: m.homeserverUrl, accessToken: m.accessToken, roomId: m.roomId, allow, botUserId: m.userId, since: loop.matrixSince },
@@ -887,58 +900,6 @@ async function handleMatrixInboundIO(
     const s = await readState(cfg.stateConfigMap, cfg.stateNamespace);
     await writeState(cfg.stateConfigMap, cfg.stateNamespace, { ...s, matrixSince: next });
   }
-}
-
-/** Execute a queued suggestion the operator approved over Signal. The human is
- * the approver here, so a MEDIUM-tier fix runs without the unattended Opus
- * supervisor — but every other guardrail still applies: BLOCKED/destructive
- * items are refused, the circuit breaker can veto, and we snapshot a backup
- * before mutating. Mirrors the executor path in `tick`. */
-async function approveQueued(cfg: Config, cb: CircuitBreaker, index: number): Promise<string> {
-  const state = await readState(cfg.stateConfigMap, cfg.stateNamespace);
-  const item = state.queue[index];
-  if (!item) return `There's no queued fix #${index + 1}. Reply "queue" to see the list.`;
-  if (!item.action) {
-    return `"${item.suggestion}" can't be run automatically (destructive / RBAC-blocked). Run it from Rigel.`;
-  }
-  const action = item.action;
-  if (isRepoFixAction(action.kind)) {
-    // Repo-fix items open a PR via the fix-runner — they are NOT kubectl commands
-    // and must never reach executeAction (which throws for them).
-    return `"${item.suggestion}" opens a fix PR and is handled automatically by the fix-runner — it isn't a command to run from here.`;
-  }
-  const tier = classifyRisk(action.kind);
-  if (tier === RiskTier.Blocked && action.kind !== "command") {
-    return `"${item.suggestion}" is blocked from automatic execution. Run it from Rigel.`;
-  }
-
-  const ns = action.namespace ?? "default";
-  const targetName = action.deployment ?? action.pod ?? action.node
-    ?? (action.args ? action.args.slice(0, 3).join("-") : action.label);
-  const resourceKey = `${ns}/${targetName}`;
-  // Queued items now carry a real fingerprint (chat items = `chat|<sender>`,
-  // loop items = the incident fingerprint) — use it for correct per-incident
-  // circuit-breaker buckets instead of lumping all chat commands into one.
-  const fp = item.fingerprint || item.incident;
-
-  return executeActionGuarded(cb, { action, fingerprint: fp, resourceKey }, {
-    now: () => Date.now(),
-    execute: (a) => executeAction(a),
-    storeBackup: async (key, yaml) => storeBackup(cfg.backupsConfigMap, cfg.stateNamespace, key, yaml, cfg.maxBackups),
-    audit: async ({ command, success, output, backupRef }) => {
-      let s = await readState(cfg.stateConfigMap, cfg.stateNamespace);
-      s = appendAudit(s, {
-        at: new Date().toISOString(), fingerprint: fp, incident: item.incident, proposal: action.label,
-        command, tier: tier === RiskTier.Medium ? "medium" : "low",
-        verdict: "approved", outcome: success ? "success" : "failure", detail: truncate(`approved via Signal — ${output}`), backupRef,
-      }, cfg.auditMaxEntries);
-      // Drop the item from the queue whether or not the command succeeded — a
-      // failed run is recorded in the audit log; re-queuing happens on re-detect.
-      s = { ...s, queue: s.queue.filter((q) => q !== item) };
-      await writeState(cfg.stateConfigMap, cfg.stateNamespace, s);
-    },
-    log,
-  });
 }
 
 /** Local minutes-of-day (respects the container TZ env) for the quiet-hours window. */

@@ -5,17 +5,17 @@ export function stripActionFences(text: string): string {
   return text.replace(/```action[\s\S]*?```/g, "").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-/** Route an act-capable chat reply: if it proposes a (destructive) command
- *  action, queue it via `enqueue` (returns the 1-based queue index) and append a
- *  confirm line. Otherwise return the prose reply unchanged. */
+/** Route an act-capable chat reply. The agent emits an ```action block only once
+ *  the operator has confirmed a destructive change (reversible ones it just runs
+ *  inline), so a block here means "run it now": execute it through the guard and
+ *  append the outcome. A reply with no block is prose the operator sees as-is. */
 export async function routeChatReply(
   text: string,
-  enqueue: (action: SuggestedAction) => Promise<number>,
+  execute: (action: SuggestedAction) => Promise<string>,
 ): Promise<string> {
   const actions = parseActions(text);
-  const prose = stripActionFences(text) || "Done.";
-  if (actions.length === 0) return prose;
-  const first = actions[0]!;
-  const index = await enqueue(first);
-  return `${prose}\n\nReply "yes" to run it (or "approve ${index}").`;
+  const prose = stripActionFences(text);
+  if (actions.length === 0) return prose || "Done.";
+  const outcome = await execute(actions[0]!);
+  return prose ? `${prose}\n\n${outcome}` : outcome;
 }
