@@ -120,13 +120,25 @@ describe("buildHelmValues", () => {
   it("ingress-nginx maps the service type", () => {
     expect(buildHelmValues(byId("ingress-nginx"), { serviceType: "NodePort" })).toContain("type: NodePort");
   });
-  it("descheduler runs as a CronJob on the chosen schedule", () => {
-    const v = buildHelmValues(byId("descheduler"), { schedule: "0 * * * *" });
-    expect(v).toContain("kind: CronJob");
-    expect(v).toContain('schedule: "0 * * * *"');
+  it("descheduler runs as a CronJob with the schedule and only the enabled strategies", () => {
+    const v = buildHelmValues(byId("descheduler"), {
+      schedule: "0 * * * *", lowNodeUtilization: true, removeDuplicates: true, topologySpread: false,
+    });
+    const parsed = JSON.parse(v);
+    expect(parsed.kind).toBe("CronJob");
+    expect(parsed.schedule).toBe("0 * * * *");
+    const balance = parsed.deschedulerPolicy.profiles[0].plugins.balance.enabled as string[];
+    expect(balance).toContain("LowNodeUtilization");
+    expect(balance).toContain("RemoveDuplicates");
+    expect(balance).not.toContain("RemovePodsViolatingTopologySpreadConstraint");
+    // LowNodeUtilization is invalid without threshold args — they must be present when it's enabled.
+    const lnu = (parsed.deschedulerPolicy.profiles[0].pluginConfig as { name: string; args?: { targetThresholds?: unknown } }[])
+      .find((p) => p.name === "LowNodeUtilization");
+    expect(lnu?.args?.targetThresholds).toBeTruthy();
   });
-  it("cert-manager enables CRDs", () => {
-    expect(buildHelmValues(byId("cert-manager"), {})).toContain("enabled: true");
+  it("cert-manager CRDs follow the installCRDs toggle", () => {
+    expect(buildHelmValues(byId("cert-manager"), { installCRDs: true })).toContain("enabled: true");
+    expect(buildHelmValues(byId("cert-manager"), { installCRDs: false })).toContain("enabled: false");
   });
 });
 ```
@@ -163,9 +175,33 @@ export type AddonInstall =
       version?: string;
       releaseName: string;
       namespace: string;
-      /** Baked helm values; `{{field}}` tokens substituted from field values at install. */
-      valuesTemplate: string;
+      /** Baked helm values with `{{field}}` tokens (used when buildValues is absent). */
+      valuesTemplate?: string;
+      /** Programmatic values, for policy shapes a flat template can't express. */
+      buildValues?: (fields: Record<string, string | boolean>) => Record<string, unknown>;
     };
+
+/** Descheduler v1alpha2 policy: CronJob + only the toggled-on balance strategies. */
+function deschedulerValues(f: Record<string, string | boolean>): Record<string, unknown> {
+  const enabled: string[] = [];
+  if (f.lowNodeUtilization !== false) enabled.push("LowNodeUtilization");
+  if (f.removeDuplicates !== false) enabled.push("RemoveDuplicates");
+  if (f.topologySpread !== false) enabled.push("RemovePodsViolatingTopologySpreadConstraint");
+  const pluginConfig: Record<string, unknown>[] = [
+    { name: "DefaultEvictor", args: { evictSystemCriticalPods: false, evictLocalStoragePods: false } },
+  ];
+  if (enabled.includes("LowNodeUtilization")) {
+    pluginConfig.push({
+      name: "LowNodeUtilization",
+      args: { thresholds: { cpu: 20, memory: 20, pods: 20 }, targetThresholds: { cpu: 50, memory: 50, pods: 50 } },
+    });
+  }
+  return {
+    kind: "CronJob",
+    schedule: String(f.schedule ?? "*/30 * * * *"),
+    deschedulerPolicy: { profiles: [{ name: "default", plugins: { balance: { enabled } }, pluginConfig }] },
+  };
+}
 
 export interface AddonDetect {
   kind: AddonWorkloadKind;
@@ -227,16 +263,13 @@ export const CLUSTER_ADDONS: ClusterAddon[] = [
       chart: "descheduler",
       releaseName: "descheduler",
       namespace: "kube-system",
-      valuesTemplate: 'kind: CronJob\nschedule: "{{schedule}}"\n',
+      buildValues: deschedulerValues,
     },
     fields: [
-      {
-        key: "schedule",
-        label: "Run schedule (cron)",
-        type: "text",
-        default: "*/30 * * * *",
-        help: "How often to rebalance. Uses the chart's default balancing policy.",
-      },
+      { key: "schedule", label: "Run schedule (cron)", type: "text", default: "*/30 * * * *", help: "How often to rebalance." },
+      { key: "lowNodeUtilization", label: "Low-node utilization (move pods off busy nodes)", type: "toggle", default: true },
+      { key: "removeDuplicates", label: "Spread duplicate replicas off the same node", type: "toggle", default: true },
+      { key: "topologySpread", label: "Enforce topology spread constraints", type: "toggle", default: true },
     ],
     detect: { kind: "cronjobs", namespace: "kube-system", name: "descheduler" },
   },
@@ -257,10 +290,11 @@ export const CLUSTER_ADDONS: ClusterAddon[] = [
       chart: "cert-manager",
       releaseName: "cert-manager",
       namespace: "cert-manager",
-      valuesTemplate: "crds:\n  enabled: true\n",
+      valuesTemplate: "crds:\n  enabled: {{installCRDs}}\n",
     },
     fields: [
       { key: "namespace", label: "Namespace", type: "namespace", default: "cert-manager" },
+      { key: "installCRDs", label: "Install CRDs", type: "toggle", default: true, help: "Turn off only if the cert-manager CRDs are already installed separately." },
     ],
     detect: { kind: "deployments", namespace: "cert-manager", name: "cert-manager" },
   },
@@ -308,12 +342,13 @@ export function detectInstalled(addon: ClusterAddon, workloads: InstalledWorkloa
   return workloads.some((w) => w.kind === d.kind && w.namespace === d.namespace && w.name === d.name);
 }
 
-/** Build the helm values YAML by substituting field values into the add-on's template. */
+/** Build the helm values (YAML, or JSON — valid YAML for helm) for an add-on's fields. */
 export function buildHelmValues(addon: ClusterAddon, fields: Record<string, string | boolean>): string {
   if (addon.install.mode !== "helm") return "";
+  if (addon.install.buildValues) return JSON.stringify(addon.install.buildValues(fields));
   const vars: Record<string, string> = {};
   for (const [k, v] of Object.entries(fields)) vars[k] = String(v);
-  return substitute(addon.install.valuesTemplate, vars);
+  return substitute(addon.install.valuesTemplate ?? "", vars);
 }
 ```
 
@@ -325,6 +360,8 @@ Expected: PASS.
 - [ ] **Step 5: Re-export from the barrel (`packages/catalog/src/index.ts`)**
 
 Add: `export * from "./addons";`
+
+Note on the descheduler values: `deschedulerValues` targets the descheduler chart's `descheduler/v1alpha2` policy schema (`deschedulerPolicy.profiles[].plugins.balance.enabled` + `pluginConfig`, with `LowNodeUtilization` requiring `thresholds`/`targetThresholds`). If `helm` is available, sanity-check once with `helm repo add descheduler https://kubernetes-sigs.github.io/descheduler/ && helm template descheduler descheduler/descheduler -f <(node -e '…print buildHelmValues output…')` — it should render without a policy error. If helm/network is unavailable in this environment, note that this render check is pending; the unit test already pins the value shape.
 
 - [ ] **Step 6: Commit**
 
@@ -370,6 +407,16 @@ if (url.pathname === "/api/install/metrics-server" && req.method === "POST") {
 }
 ```
 
+Then add the uninstall counterpart right after that handler:
+
+```ts
+// POST /api/uninstall/metrics-server — delete the upstream metrics-server manifest.
+if (url.pathname === "/api/uninstall/metrics-server" && req.method === "POST") {
+  const del = await kubectl(context, ["delete", "-f", METRICS_SERVER_URL, "--ignore-not-found"]);
+  return Response.json(del);
+}
+```
+
 - [ ] **Step 2: Make the hook accept the optional flag (`apps/web/src/lib/api.ts`)**
 
 Change `useInstallMetricsServer` to take an optional variable (existing `.mutate()` callers still work — the variable is optional):
@@ -390,6 +437,19 @@ export function useInstallMetricsServer() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["metrics"] }),
   });
 }
+
+/** Uninstall the upstream metrics-server (POST /api/uninstall/metrics-server). */
+export function useUninstallMetricsServer() {
+  const qc = useQueryClient();
+  return useMutation<ActionResponse, Error, void>({
+    mutationFn: async () => {
+      const res = await fetch("/api/uninstall/metrics-server", { method: "POST" });
+      if (!res.ok) throw new Error((await res.text()) || "uninstall failed");
+      return (await res.json()) as ActionResponse;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["metrics"] }),
+  });
+}
 ```
 
 - [ ] **Step 3: Verify existing callers still typecheck**
@@ -403,7 +463,7 @@ Expected: clean (server has 4 pre-existing `assistant.ts` webhook errors unrelat
 
 ```bash
 git add apps/server/src/index.ts apps/web/src/lib/api.ts
-git commit -m "feat: metrics-server install accepts an optional kubelet-insecure-TLS flag"
+git commit -m "feat: metrics-server install (kubelet-TLS flag) + uninstall route/hook"
 ```
 
 End the commit body with:
@@ -584,9 +644,38 @@ import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { Button } from "@/components/ui/button";
-import { HelmConfirmModal } from "@/panels/helm/HelmConfirmModal";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from "@/components/ui/dialog";
 import { useHelmUninstall } from "@/panels/helm/helmApi";
+import { useUninstallMetricsServer } from "@/lib/api";
 import { PluginInstallSheet } from "./PluginInstallSheet";
+
+function uninstallCommand(addon: ClusterAddon): string {
+  return addon.install.mode === "helm"
+    ? `helm uninstall ${addon.install.releaseName} -n ${addon.install.namespace}`
+    : "kubectl delete -f <metrics-server upstream manifest>";
+}
+
+/** Destructive confirm shown before an add-on is removed (helm or metrics-server). */
+function UninstallConfirm({ addon, running, error, onCancel, onConfirm }: {
+  addon: ClusterAddon; running: boolean; error: string | null; onCancel: () => void; onConfirm: () => void;
+}) {
+  return (
+    <Dialog open onOpenChange={(o) => !o && onCancel()}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>{`Uninstall ${addon.name}`}</DialogTitle></DialogHeader>
+        <DialogBody>
+          <p className="mb-2 text-sm text-muted-foreground">This will run:</p>
+          <pre className="overflow-x-auto rounded-md bg-black/30 p-3 text-xs">{uninstallCommand(addon)}</pre>
+          {error && <p className="mt-3 text-2xs text-[var(--status-failed)]">{error}</p>}
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onCancel} disabled={running}>Cancel</Button>
+          <Button variant="destructive" onClick={onConfirm} disabled={running}>{running ? "Removing…" : "Uninstall"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 interface RawObj { metadata?: { name?: string; namespace?: string } }
 
@@ -603,7 +692,8 @@ export default function PluginsPanel() {
   const resources = useCluster((s) => s.resources) as Record<string, Record<string, RawObj>>;
   const [installing, setInstalling] = useState<ClusterAddon | null>(null);
   const [uninstalling, setUninstalling] = useState<ClusterAddon | null>(null);
-  const uninstall = useHelmUninstall();
+  const helmUninstall = useHelmUninstall();
+  const metricsUninstall = useUninstallMetricsServer();
 
   useEffect(() => {
     subscribe("deployments", "*");
@@ -636,11 +726,11 @@ export default function PluginsPanel() {
                   <span className={installed ? "text-2xs text-[var(--status-running)]" : "text-2xs text-[var(--fg-tertiary)]"}>
                     {installed ? `Installed · ${addon.detect.namespace}` : "Available"}
                   </span>
-                  {installed && addon.install.mode === "helm" ? (
+                  {installed ? (
                     <Button variant="ghost" size="sm" onClick={() => setUninstalling(addon)}>Uninstall</Button>
-                  ) : !installed ? (
+                  ) : (
                     <Button size="sm" onClick={() => setInstalling(addon)}>Install</Button>
-                  ) : null}
+                  )}
                 </div>
               </div>
             );
@@ -652,21 +742,23 @@ export default function PluginsPanel() {
         <PluginInstallSheet addon={installing} open onClose={() => setInstalling(null)} onDone={() => setInstalling(null)} />
       )}
 
-      {uninstalling && uninstalling.install.mode === "helm" && (
-        <HelmConfirmModal
-          open
-          onOpenChange={(o) => !o && setUninstalling(null)}
-          title={`Uninstall ${uninstalling.name}`}
-          command={["uninstall", uninstalling.install.releaseName, "-n", uninstalling.install.namespace]}
-          running={uninstall.isPending}
-          error={uninstall.error?.message ?? null}
-          destructive
-          onConfirm={() =>
-            uninstall.mutate(
-              { release: uninstalling.install.releaseName, namespace: uninstalling.install.namespace },
-              { onSuccess: () => setUninstalling(null) },
-            )
-          }
+      {uninstalling && (
+        <UninstallConfirm
+          addon={uninstalling}
+          running={helmUninstall.isPending || metricsUninstall.isPending}
+          error={(helmUninstall.error ?? metricsUninstall.error)?.message ?? null}
+          onCancel={() => setUninstalling(null)}
+          onConfirm={() => {
+            const a = uninstalling;
+            if (a.install.mode === "helm") {
+              helmUninstall.mutate(
+                { release: a.install.releaseName, namespace: a.install.namespace },
+                { onSuccess: () => setUninstalling(null) },
+              );
+            } else {
+              metricsUninstall.mutate(undefined, { onSuccess: () => setUninstalling(null) });
+            }
+          }}
         />
       )}
     </div>
@@ -674,7 +766,7 @@ export default function PluginsPanel() {
 }
 ```
 
-`HelmConfirmModal` (`apps/web/src/panels/helm/HelmConfirmModal.tsx`) is the verified helm-confirm dialog: props `{ open, onOpenChange, title, command: string[], running, error?, destructive?, onConfirm }`. It renders `helm <command>` and calls `onConfirm`. This reuses the exact confirm the Helm panel uses for release uninstall.
+Uninstall is unified: every installed add-on shows an Uninstall button; the local `UninstallConfirm` shows the exact command and calls `useHelmUninstall` (helm add-ons) or `useUninstallMetricsServer` (metrics-server). The Dialog primitives are verified against `apps/web/src/components/ui/dialog.tsx`.
 
 - [ ] **Step 5: Run test to verify it passes**
 
@@ -770,5 +862,5 @@ Per project convention, do NOT start a web dev server. If the user wants a live 
 
 **Files:** none (Outline + Plane)
 
-- [ ] **Step 1:** Create an Outline doc in the Rigel/Helmsman collection ("Plugins — cluster add-ons"): what it is, the seed four, how install/detect/uninstall reuse the helm + metrics-server executors, and the follow-ups (broader add-on set, per-strategy descheduler config, node-imbalance nudge).
+- [ ] **Step 1:** Create an Outline doc in the Rigel/Helmsman collection ("Plugins — cluster add-ons"): what it is, the seed four (with their fields), how install/detect/uninstall reuse the helm + metrics-server executors, and the follow-ups (broader add-on set, node-imbalance nudge).
 - [ ] **Step 2:** Create a Plane issue in the HELM project recording the feature as shipped, linked to the Outline doc and this plan.
