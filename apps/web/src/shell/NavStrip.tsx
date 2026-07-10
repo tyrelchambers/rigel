@@ -35,6 +35,7 @@ import {
   FilePlus2,
   FileInput,
   Package,
+  Puzzle,
 } from "lucide-react";
 // Note: MessageSquare (chat) and Activity (health) are intentionally absent —
 // chat is the always-visible right pane (not a route), and health is nav-hidden.
@@ -91,6 +92,7 @@ export const PANEL_META: Record<string, PanelMeta> = {
   logs:         { route: "/logs",         title: "Logs",         subtitle: "Container output",      icon: ScrollText },
   catalog:      { route: "/catalog",      title: "Apps",         subtitle: "Install apps",          icon: AppWindow },
   helm:         { route: "/helm",         title: "Helm",         subtitle: "Releases & charts",     icon: Package },
+  plugins:      { route: "/plugins",      title: "Plugins",      subtitle: "Cluster add-ons",       icon: Puzzle },
   apply:        { route: "/apply",        title: "Apply YAML",   subtitle: "Create from manifest",  icon: FilePlus2 },
   compose:      { route: "/compose",      title: "Migrate from Compose", subtitle: "Convert a docker-compose.yml to Kubernetes manifests", icon: FileInput },
   gitops:       { route: "/gitops",       title: "GitOps",       subtitle: "Deploy from Git",       icon: GitBranch },
@@ -116,7 +118,7 @@ export const NAV_GROUPS: NavGroup[] = [
   { title: "Cluster", panels: ["namespaces", "nodes", "connectivity", "rbac"] },
   { title: "Security & Certs", panels: ["certificates"] },
   { title: "Observability", panels: ["events", "logs"] },
-  { title: "Self-host", panels: ["catalog", "helm"] },
+  { title: "Self-host", panels: ["catalog", "helm", "plugins"] },
   { title: "Tools", panels: ["apply", "compose", "gitops"] },
   { title: "System", panels: ["accounts", "settings"] },
 ];
