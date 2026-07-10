@@ -96,8 +96,8 @@ export function normalizeAlertRule(block: SuggestedAlert, id: string, nowMs: num
   if (block.condition.type === "metricThreshold" && block.target.scope !== "node") {
     throw new Error("metricThreshold alerts require a node target");
   }
-  if (block.target.scope === "node" && block.condition.type !== "metricThreshold") {
-    throw new Error("node-scoped alerts require a metric-threshold condition");
+  if (block.target.scope === "node" && block.condition.type !== "metricThreshold" && block.condition.type !== "notReady") {
+    throw new Error("node-scoped alerts support only a not-ready or metric-threshold condition");
   }
   const windowMins = conditionWindowMinutes(block.condition);
   const cooldown = block.cooldownMinutes && block.cooldownMinutes > 0

@@ -2,7 +2,7 @@ import { fileURLToPath } from "node:url";
 import { realpathSync } from "node:fs";
 import { getHours, getMinutes } from "date-fns";
 import { classifyRisk, RiskTier } from "./classifier.js";
-import { evaluateAlertRules, emptyAlertState } from "./alerts.js";
+import { evaluateAlertRules, emptyAlertState, type AlertRule } from "./alerts.js";
 import { collectMetricSnapshot } from "./metrics.js";
 import { loadConfig, resolveFixRunnerImage, type Config } from "./config.js";
 import { readRuntimeConfig, decideAutonomy, type RuntimeConfig, type AutofixConfig } from "./runtimeConfig.js";
@@ -197,6 +197,15 @@ async function detectAll(cfg: Config, autofix: AutofixConfig): Promise<{ inciden
   return { incidents, pods, deps, podsOk: podsRes.code === 0, depsOk: depsRes.code === 0, logScanned };
 }
 
+/** Node objects for node-scoped notReady alerts — a no-op (no cluster call)
+ *  unless an enabled node/notReady rule exists, mirroring collectMetricSnapshot. */
+async function collectAlertNodes(rules: AlertRule[]): Promise<Record<string, unknown>[]> {
+  const need = rules.some((r) => r.enabled && r.target.scope === "node" && r.condition.type === "notReady");
+  if (!need) return [];
+  const res = await kubectl(["get", "nodes", "-o", "json"]);
+  return res.code === 0 ? itemsOf(safeParse(res.stdout)) : [];
+}
+
 export interface LoopState {
   streaks: Map<string, number>;
   handled: Set<string>;
@@ -322,6 +331,7 @@ export async function tick(
     // metrics backend; collectMetricSnapshot is a no-op (no cluster calls) unless
     // an enabled metricThreshold rule exists and a backend is detected.
     const metricSnapshot = await collectMetricSnapshot(rc.alertRules, now);
+    const alertNodes = await collectAlertNodes(rc.alertRules);
     const alertResult = evaluateAlertRules(
       rc.alertRules,
       detection.pods,
@@ -329,6 +339,7 @@ export async function tick(
       state.alertState ?? emptyAlertState(),
       now,
       metricSnapshot,
+      alertNodes,
     );
     state = { ...state, alertState: alertResult.alertState };
     for (const ev of alertResult.events) notifications.push(ev.message);

@@ -151,20 +151,29 @@ CREATE ALERTS AS BUTTONS — when the user asks to be notified/alerted/"text me 
 The block is JSON:
 - \`label\`: short button text, e.g. "Create alert: postgres down"
 - \`text\`: the user's intent in plain English (shown in the panel + the notification)
-- \`target\`: { "scope": "cluster" | "namespace" | "workload" | "pod" | "database", "namespace"?, "kind"?: "Deployment"|"StatefulSet"|"DaemonSet", "name"?, "labelSelector"? }
-    - cluster = everything; namespace = a whole namespace (needs namespace); workload = a named deployment/statefulset/daemonset (needs name+namespace); pod = an exact pod (needs name+namespace); database = a CNPG cluster by name (needs name+namespace; matches its cnpg.io/cluster pods)
+- \`target\`: { "scope": "cluster" | "namespace" | "workload" | "pod" | "database" | "node", "namespace"?, "kind"?: "Deployment"|"StatefulSet"|"DaemonSet", "name"?, "labelSelector"? }
+    - cluster = everything; namespace = a whole namespace (needs namespace); workload = a named deployment/statefulset/daemonset (needs name+namespace); pod = an exact pod (needs name+namespace); database = a CNPG cluster by name (needs name+namespace; matches its cnpg.io/cluster pods); node = a cluster node by name (name = the node's name, e.g. "k3s-slave"; omit name for all nodes). A NODE is NOT a pod — when the user names a node, use scope "node", never "pod".
 - \`condition\`: ONE of
     - {"type":"podRestarts","threshold":N,"windowMinutes":M}
     - {"type":"crashLoop"}            (CrashLoopBackOff / ImagePullBackOff)
     - {"type":"oomKilled"}
     - {"type":"pendingTooLong","minutes":M}
-    - {"type":"notReady","minutes":M}
+    - {"type":"notReady","minutes":M}             (a pod/database going not-ready, OR a node going NotReady/unreachable with scope "node")
     - {"type":"deploymentDegraded","minutes":M}   (workload/namespace/cluster targets only)
+    - {"type":"metricThreshold","metric":"cpuPercent"|"memoryPercent","comparator":"above"|"below","threshold":N,"minutes":M}   (node CPU/memory %, threshold 1-100; scope MUST be "node" — a named node or all nodes)
 - \`cooldownMinutes\` (optional): minimum gap between repeat notifications; defaults sensibly.
-NOTE: CPU/memory/disk thresholds are NOT supported yet — if the user asks for those, say so and offer a health/restart-based alert instead.
-Example:
+NOTE: metricThreshold needs a metrics backend (Prometheus/VictoriaMetrics) in the cluster; if none is installed the rule saves but never evaluates, so tell the user to install one first. DISK thresholds are NOT supported — offer CPU/memory or a health-based alert instead.
+Example (database):
 \`\`\`alert
 {"label":"Create alert: postgres down","text":"text me if the postgres database in prod goes down","target":{"scope":"database","namespace":"prod","name":"postgres"},"condition":{"type":"notReady","minutes":2}}
+\`\`\`
+Example (node going NotReady):
+\`\`\`alert
+{"label":"Create alert: k3s-slave NotReady","text":"notify me if the k3s-slave node goes NotReady","target":{"scope":"node","name":"k3s-slave"},"condition":{"type":"notReady","minutes":2}}
+\`\`\`
+Example (node memory over a threshold):
+\`\`\`alert
+{"label":"Create alert: node memory high","text":"alert me when a node's memory usage goes above 90%","target":{"scope":"node"},"condition":{"type":"metricThreshold","metric":"memoryPercent","comparator":"above","threshold":90,"minutes":10}}
 \`\`\`
 
 Prefer \`-o json\` and pipe through \`jq\` when you need structured fields. Keep answers grounded in real command output, not assumptions.

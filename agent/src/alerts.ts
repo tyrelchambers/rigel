@@ -96,6 +96,7 @@ export function parseAlertRules(json: string | undefined | null): AlertRule[] {
 
 type Pod = Record<string, unknown>;
 type Dep = Record<string, unknown>;
+type Node = Record<string, unknown>;
 
 function labelsMatch(labels: Record<string, string> | undefined, selector: string): boolean {
   const want = selector.split(",").map((s) => s.trim()).filter(Boolean);
@@ -120,8 +121,19 @@ export function podMatchesTarget(pod: Pod, t: AlertTarget): boolean {
     case "pod": return name === t.name;
     case "database": return labels?.["cnpg.io/cluster"] === t.name;
     case "workload": return !!t.name && (name === t.name || name.startsWith(`${t.name}-`));
-    case "node": return false; // node-scoped alerts match nodes via MetricSnapshot, not pods
+    case "node": return false; // node-scoped alerts match Node objects (see nodeMatchesTarget), not pods
   }
+}
+
+/** Does this Node fall under a node-scoped target? No name = all nodes; a name
+ *  matches the node's metadata.name or its kubernetes.io/hostname label. */
+export function nodeMatchesTarget(node: Record<string, unknown>, t: AlertTarget): boolean {
+  if (t.scope !== "node") return false;
+  if (!t.name) return true;
+  const meta = node.metadata as Record<string, unknown> | undefined;
+  const name = (meta?.["name"] as string | undefined) ?? "";
+  const labels = meta?.["labels"] as Record<string, string> | undefined;
+  return name === t.name || labels?.["kubernetes.io/hostname"] === t.name;
 }
 
 /** Does this deployment fall under the rule's target? (only namespace/workload/cluster apply) */
@@ -213,6 +225,7 @@ export function evaluateAlertRules(
   prev: AlertState,
   now: number,
   metrics: MetricSnapshot = { cpuPercentByNode: {}, memoryPercentByNode: {} },
+  nodes: Node[] = [],
 ): { events: AlertEvent[]; alertState: AlertState } {
   const events: AlertEvent[] = [];
   const next: AlertState = { lastFiredAt: {}, restartBaselines: {}, metricBreaches: {} };
@@ -223,7 +236,7 @@ export function evaluateAlertRules(
 
   for (const rule of rules) {
     if (!rule.enabled) continue;
-    const detail = evaluateCondition(rule, pods, deps, prev, next, now, metrics);
+    const detail = evaluateCondition(rule, pods, deps, prev, next, now, metrics, nodes);
     if (!detail) continue;
     const last = prev.lastFiredAt[rule.id];
     const elapsed = last ? now - Date.parse(last) : Infinity;
@@ -238,9 +251,20 @@ export function evaluateAlertRules(
 /** Returns a non-empty detail string when the rule's condition is met, else "".
  * For podRestarts, also updates next.restartBaselines as a side effect (avoids a second pod scan). */
 function evaluateCondition(
-  rule: AlertRule, pods: Pod[], deps: Dep[], prev: AlertState, next: AlertState, now: number, metrics: MetricSnapshot,
+  rule: AlertRule, pods: Pod[], deps: Dep[], prev: AlertState, next: AlertState, now: number, metrics: MetricSnapshot, nodes: Node[],
 ): string {
   const c = rule.condition;
+  if (c.type === "notReady" && rule.target.scope === "node") {
+    for (const n of nodes) {
+      if (!nodeMatchesTarget(n, rule.target)) continue;
+      const ms = notReadyForMs(n, now);
+      if (ms >= c.minutes * 60_000) {
+        const meta = n.metadata as Record<string, unknown> | undefined;
+        return `node ${meta?.["name"]} has been NotReady for >${c.minutes}m`;
+      }
+    }
+    return "";
+  }
   if (c.type === "metricThreshold") {
     const byNode = c.metric === "cpuPercent" ? metrics.cpuPercentByNode : metrics.memoryPercentByNode;
     const prevBreaches = prev.metricBreaches ?? {};

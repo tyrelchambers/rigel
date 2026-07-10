@@ -117,3 +117,33 @@ describe("metricThreshold condition", () => {
     expect(alertRuleSummary(r2)).toBe("node node-a — CPU above 80% for 5m");
   });
 });
+
+describe("node notReady condition", () => {
+  const nodeBlock = (over: Partial<SuggestedAlert> = {}): SuggestedAlert => ({
+    label: "Alert: node down",
+    text: "notify me if the k3s-slave node goes NotReady",
+    target: { scope: "node", name: "k3s-slave" },
+    condition: { type: "notReady", minutes: 2 },
+    ...over,
+  });
+
+  it("accepts a node-scoped notReady rule for a named node", () => {
+    const r = normalizeAlertRule(nodeBlock(), "id-n", 0);
+    expect(r.target.scope).toBe("node");
+    expect(r.target.name).toBe("k3s-slave");
+    expect(r.condition.type).toBe("notReady");
+  });
+
+  it("accepts an all-nodes notReady rule (no name)", () => {
+    const r = normalizeAlertRule(nodeBlock({ target: { scope: "node" } }), "id-n2", 0);
+    expect(r.target.name).toBeUndefined();
+  });
+
+  it("still rejects other node-scoped conditions", () => {
+    expect(() => normalizeAlertRule(nodeBlock({ condition: { type: "crashLoop" } }), "x", 0)).toThrow(/node-scoped/);
+  });
+
+  it("summarizes a node notReady rule", () => {
+    expect(alertRuleSummary(normalizeAlertRule(nodeBlock(), "id-n", 0))).toBe("node k3s-slave — not ready 2m");
+  });
+});

@@ -36,6 +36,19 @@ function deployment(ns: string, name: string, desired: number, ready: number, de
   };
 }
 
+function node(name: string, opts: { readyFalseMinAgo?: number; readyUnknownMinAgo?: number } = {}) {
+  const ready =
+    opts.readyFalseMinAgo != null ? { status: "False", ago: opts.readyFalseMinAgo }
+    : opts.readyUnknownMinAgo != null ? { status: "Unknown", ago: opts.readyUnknownMinAgo }
+    : { status: "True", ago: 0 };
+  return {
+    metadata: { name, labels: { "kubernetes.io/hostname": name } },
+    status: {
+      conditions: [{ type: "Ready", status: ready.status, lastTransitionTime: new Date(T0 - min(ready.ago)).toISOString() }],
+    },
+  };
+}
+
 const rule = (over: Partial<AlertRule>): AlertRule => ({
   id: "r1", enabled: true, text: "t", cooldownMinutes: 5,
   target: { scope: "namespace", namespace: "prod" },
@@ -123,6 +136,33 @@ describe("target matching", () => {
   it("cluster scope matches across namespaces", () => {
     const r = rule({ target: { scope: "cluster" }, condition: { type: "crashLoop" } });
     expect(evaluateAlertRules([r], [pod("dev", "a", { waiting: "CrashLoopBackOff" })], [], emptyAlertState(), T0).events).toHaveLength(1);
+  });
+});
+
+describe("node notReady", () => {
+  const nodeRule = (over: Partial<AlertRule> = {}): AlertRule =>
+    rule({ id: "n1", target: { scope: "node", name: "k3s-slave" }, condition: { type: "notReady", minutes: 2 }, ...over });
+
+  it("fires when a matching node has been NotReady past the threshold", () => {
+    const res = evaluateAlertRules([nodeRule()], [], [], emptyAlertState(), T0, undefined, [node("k3s-slave", { readyFalseMinAgo: 5 })]);
+    expect(res.events).toHaveLength(1);
+    expect(res.events[0]!.message).toContain("k3s-slave");
+  });
+  it("does not fire before the for-duration elapses", () => {
+    expect(evaluateAlertRules([nodeRule()], [], [], emptyAlertState(), T0, undefined, [node("k3s-slave", { readyFalseMinAgo: 1 })]).events).toHaveLength(0);
+  });
+  it("does not fire for a Ready node", () => {
+    expect(evaluateAlertRules([nodeRule()], [], [], emptyAlertState(), T0, undefined, [node("k3s-slave")]).events).toHaveLength(0);
+  });
+  it("treats Ready=Unknown (unreachable) as not-ready", () => {
+    expect(evaluateAlertRules([nodeRule()], [], [], emptyAlertState(), T0, undefined, [node("k3s-slave", { readyUnknownMinAgo: 5 })]).events).toHaveLength(1);
+  });
+  it("does not fire for a node whose name does not match", () => {
+    expect(evaluateAlertRules([nodeRule()], [], [], emptyAlertState(), T0, undefined, [node("k3s-master", { readyFalseMinAgo: 9 })]).events).toHaveLength(0);
+  });
+  it("all-nodes rule (no name) fires for any not-ready node", () => {
+    const res = evaluateAlertRules([nodeRule({ target: { scope: "node" } })], [], [], emptyAlertState(), T0, undefined, [node("k3s-master"), node("k3s-slave", { readyFalseMinAgo: 9 })]);
+    expect(res.events).toHaveLength(1);
   });
 });
 

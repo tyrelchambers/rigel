@@ -256,7 +256,8 @@ export function AlertsCard() {
   const [metricPct, setMetricPct] = useState(90);
   const [nodeName, setNodeName] = useState(""); // "" = all nodes
 
-  const needsNamespace = scope !== "cluster";
+  const needsNamespace =
+    scope === "namespace" || scope === "workload" || scope === "pod" || scope === "database";
   const needsName = scope === "workload" || scope === "pod" || scope === "database";
   const allowsDegraded = DEGRADED_SCOPES.includes(scope);
 
@@ -313,12 +314,16 @@ export function AlertsCard() {
     if (condType === "deploymentDegraded" && !DEGRADED_SCOPES.includes(newScope)) {
       setCondType("crashLoop");
     }
+    // A node target only supports not-ready (or metric-threshold) — snap to it.
+    if (newScope === "node" && condType !== "notReady" && condType !== "metricThreshold") {
+      setCondType("notReady");
+    }
   }
 
   function handleCondChange(next: AlertCondType) {
     setCondType(next);
     if (next === "metricThreshold") setScope("node");
-    else if (scope === "node") setScope("workload");
+    else if (scope === "node" && next !== "notReady") setScope("workload");
   }
 
   function defaultLabel() {
@@ -388,6 +393,7 @@ export function AlertsCard() {
     const target: AlertTarget = { scope };
     if (needsNamespace) target.namespace = namespace.trim();
     if (needsName) target.name = name.trim();
+    if (scope === "node" && name.trim()) target.name = name.trim();
     if (scope === "workload") target.kind = kind;
 
     let condition: AlertCondition;
@@ -683,6 +689,7 @@ export function AlertsCard() {
                       <option value="workload">Workload</option>
                       <option value="pod">Pod</option>
                       <option value="database">Database</option>
+                      <option value="node">Node</option>
                     </AlertSelect>
                   )}
                 </AlertField>
@@ -697,7 +704,20 @@ export function AlertsCard() {
                 )}
               </div>
 
-              {condType !== "metricThreshold" && (needsNamespace || needsName) && (
+              {condType !== "metricThreshold" && scope === "node" && (
+                <AlertField label="Node" className="flex-1">
+                  <AlertSelect value={name} onChange={(e) => setName(e.target.value)}>
+                    <option value="">All nodes</option>
+                    {d.allNodes.map((n) => (
+                      <option key={n.name} value={n.name}>
+                        {n.name}
+                      </option>
+                    ))}
+                  </AlertSelect>
+                </AlertField>
+              )}
+
+              {condType !== "metricThreshold" && scope !== "node" && (needsNamespace || needsName) && (
                 <div className="flex gap-4">
                   {needsNamespace && (
                     <AlertField label="Namespace" className="flex-1">
@@ -739,6 +759,7 @@ export function AlertsCard() {
                   {(Object.keys(COND_LABELS) as AlertCondType[])
                     .filter((c) => c !== "deploymentDegraded" || allowsDegraded)
                     .filter((c) => c !== "metricThreshold" || hasBackend)
+                    .filter((c) => scope !== "node" || c === "notReady" || c === "metricThreshold")
                     .map((c) => (
                       <option key={c} value={c}>
                         {COND_LABELS[c]}
@@ -873,13 +894,13 @@ export function AlertsCard() {
               <p className="text-xs leading-snug text-[var(--fg-secondary)]">
                 Alert me when {scope === "cluster" ? "the " : "a "}
                 <span className="font-semibold text-[var(--fg-primary)]">{subjectLabel}</span>
-                {needsName && name.trim() !== "" ? (
+                {(needsName || scope === "node") && name.trim() !== "" ? (
                   <>
                     {" "}
                     named <span className="font-semibold text-[var(--fg-primary)]">{name}</span>
                   </>
                 ) : null}
-                {needsNamespace && scope !== "node" ? (
+                {needsNamespace ? (
                   <>
                     {" "}
                     in <span className="font-semibold text-[var(--fg-primary)]">{namespace}</span>
