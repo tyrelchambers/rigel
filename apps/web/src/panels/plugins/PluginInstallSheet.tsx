@@ -1,11 +1,14 @@
 import { useState } from "react";
+import { Download } from "lucide-react";
 import type { ClusterAddon, AddonField } from "@rigel/catalog";
 import { buildHelmValues } from "@rigel/catalog";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogIcon, DialogTitle, DialogBody, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { NamespaceField } from "@/components/NamespaceField";
 import { useInstallHelm } from "@/panels/catalog/installApi";
 import { useInstallMetricsServer } from "@/lib/api";
+import { pluginIcon } from "./pluginIcon";
 
 function defaults(addon: ClusterAddon): Record<string, string | boolean> {
   const out: Record<string, string | boolean> = {};
@@ -25,6 +28,7 @@ export function PluginInstallSheet({ addon, open, onClose, onDone }: {
   const metrics = useInstallMetricsServer();
   const pending = helm.isPending || metrics.isPending;
   const error = (helm.error ?? metrics.error)?.message ?? null;
+  const Icon = pluginIcon(addon);
 
   function set(key: string, v: string | boolean) {
     setValues((prev) => ({ ...prev, [key]: v }));
@@ -55,19 +59,34 @@ export function PluginInstallSheet({ addon, open, onClose, onDone }: {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-[460px]">
         <DialogHeader>
-          <DialogTitle>{`Install ${addon.name}`}</DialogTitle>
+          <DialogIcon
+            background={false}
+            className="size-[34px] rounded-lg bg-[var(--accent-dim)] text-[var(--accent-primary)] ring-1 ring-[color-mix(in_srgb,var(--accent-primary)_40%,transparent)]"
+          >
+            <Icon className="size-[18px]" />
+          </DialogIcon>
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <DialogTitle>{`Install ${addon.name}`}</DialogTitle>
+            <span className="font-mono text-2xs tracking-[0.5px] text-[var(--fg-tertiary)]">
+              {addon.group} · cluster add-on
+            </span>
+          </div>
         </DialogHeader>
-        <DialogBody className="flex flex-col gap-3">
+
+        <DialogBody className="flex flex-col gap-[18px]">
           {addon.fields.map((f) => (
             <Field key={f.key} field={f} value={values[f.key]} onChange={(v) => set(f.key, v)} />
           ))}
           {error && <p role="alert" className="text-2xs text-[var(--status-failed)]">{error}</p>}
         </DialogBody>
+
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={pending}>Cancel</Button>
-          <Button onClick={install} disabled={pending}>{pending ? "Installing…" : "Install"}</Button>
+          <Button onClick={install} disabled={pending}>
+            {pending ? "Installing…" : <><Download className="size-4" /> Install</>}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -75,13 +94,22 @@ export function PluginInstallSheet({ addon, open, onClose, onDone }: {
 }
 
 function Field({ field, value, onChange }: { field: AddonField; value: string | boolean; onChange: (v: string | boolean) => void }) {
+  if (field.type === "toggle") {
+    return (
+      <div className="flex items-center justify-between gap-3.5">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="text-xs font-medium text-[var(--fg-primary)]">{field.label}</span>
+          {field.help && <span className="text-2xs text-[var(--fg-tertiary)]">{field.help}</span>}
+        </div>
+        <Switch checked={value === true} onCheckedChange={onChange} />
+      </div>
+    );
+  }
   const cls = "h-8 rounded-[6px] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-2 text-xs text-foreground outline-none focus:ring-2 focus:ring-ring/50";
   return (
     <label className="flex flex-col gap-1 text-xs">
       <span className="text-[var(--fg-secondary)]">{field.label}</span>
-      {field.type === "toggle" ? (
-        <input type="checkbox" checked={value === true} onChange={(e) => onChange(e.target.checked)} className="size-4" />
-      ) : field.type === "select" ? (
+      {field.type === "select" ? (
         <select value={String(value)} onChange={(e) => onChange(e.target.value)} className={cls}>
           {(field.options ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
         </select>
