@@ -471,6 +471,29 @@ test("a late subscriber to an already-forbidden watch receives onError", async (
   }
 });
 
+// (g5) A Forbidden LIST failure on a PREWARMED (pinned, zero-listener) watch
+//      also stops after one attempt — the retry-burn fix applies to prewarm,
+//      not just subscribed watches.
+test("a forbidden prewarmed watch stops after one attempt", async () => {
+  vi.useFakeTimers();
+  try {
+    const rec = makeRecorder();
+    const mgr = new WatchManager(null, rec.spawnFn as any, { restartBaseMs: 10, restartMaxMs: 10 });
+
+    mgr.prewarm(["nodes"], "*");
+    expect(rec.lists().length).toBe(1);
+
+    rec.lastList().emitListError(1, "Error from server (Forbidden): nodes is forbidden");
+    await vi.advanceTimersByTimeAsync(0);
+
+    // No restart scheduled: waiting past the backoff spawns nothing new.
+    await vi.advanceTimersByTimeAsync(100);
+    expect(rec.lists().length).toBe(1);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 // (g4) classifyWatchError maps kubectl stderr to a reason, case-insensitively.
 test("classifyWatchError maps stderr to a reason", () => {
   expect(classifyWatchError("Error from server (Forbidden): secrets is forbidden")).toBe("forbidden");
