@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, Scale, BadgeCheck, Signpost, Puzzle, Search, type LucideIcon } from "lucide-react";
+import { Search } from "lucide-react";
 import { CLUSTER_ADDONS, detectInstalled, type ClusterAddon, type AddonGroup, type InstalledWorkload } from "@rigel/catalog";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
@@ -10,8 +10,8 @@ import { TabBar, Tab } from "@/components/ui/Tabs";
 import { useHelmUninstall } from "@/panels/helm/helmApi";
 import { useUninstallMetricsServer } from "@/lib/api";
 import { PluginInstallSheet } from "./PluginInstallSheet";
+import { pluginIcon } from "./pluginIcon";
 
-const ICONS: Record<string, LucideIcon> = { Activity, Scale, BadgeCheck, Signpost };
 const GROUPS: AddonGroup[] = [...new Set(CLUSTER_ADDONS.map((a) => a.group))];
 
 interface RawObj { metadata?: { name?: string; namespace?: string } }
@@ -146,7 +146,7 @@ export default function PluginsPanel() {
         <div className="catalog-grid">
           {filtered.map((addon) => {
             const installed = installedIds.has(addon.id);
-            const Icon = ICONS[addon.icon] ?? Puzzle;
+            const Icon = pluginIcon(addon);
             return (
               <article key={addon.id} className="catalog-card" aria-label={`${addon.name} — ${addon.tagline}`}>
                 <div className="catalog-card-top">
