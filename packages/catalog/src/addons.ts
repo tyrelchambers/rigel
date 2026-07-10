@@ -6,7 +6,7 @@ export type AddonWorkloadKind = "deployments" | "cronjobs";
 export interface AddonField {
   key: string;
   label: string;
-  type: "toggle" | "text" | "select" | "namespace";
+  type: "toggle" | "text" | "select" | "namespace" | "interval";
   default: string | boolean;
   options?: string[];
   help?: string;
@@ -111,7 +111,7 @@ export const CLUSTER_ADDONS: ClusterAddon[] = [
       buildValues: deschedulerValues,
     },
     fields: [
-      { key: "schedule", label: "Run schedule (cron)", type: "text", default: "*/30 * * * *", help: "How often to rebalance." },
+      { key: "schedule", label: "Run schedule", type: "interval", default: "*/30 * * * *", help: "How often to rebalance." },
       { key: "lowNodeUtilization", label: "Low-node utilization (move pods off busy nodes)", type: "toggle", default: true },
       { key: "removeDuplicates", label: "Spread duplicate replicas off the same node", type: "toggle", default: true },
       { key: "topologySpread", label: "Enforce topology spread constraints", type: "toggle", default: true },
