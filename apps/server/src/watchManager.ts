@@ -73,6 +73,7 @@ type Watch = {
   idleTimer: ReturnType<typeof setTimeout> | null;
   restartTimer: ReturnType<typeof setTimeout> | null;
   restarts: number; // consecutive restart attempts (reset on a good LIST)
+  lastError: WatchError | null; // last classified failure, replayed to new subscribers
 };
 
 export class WatchManager {
@@ -122,6 +123,7 @@ export class WatchManager {
     // watch (LIST in flight) snapshots this listener when the LIST completes,
     // because emitSnapshot iterates the current listener set at that moment.
     if (w.ready) onSnapshot([...w.cache.values()]);
+    if (w.lastError) onError?.(w.lastError);
 
     return () => {
       const cur = this.watches.get(key);
@@ -161,6 +163,7 @@ export class WatchManager {
       idleTimer: null,
       restartTimer: null,
       restarts: 0,
+      lastError: null,
     };
     this.watches.set(key, w);
     this.startList(key);
@@ -227,16 +230,16 @@ export class WatchManager {
         }
         w.cache = next;
         w.ready = true;
+        w.lastError = null;
         w.restarts = 0; // a good LIST clears the backoff
         this.emitSnapshot(w);
         this.startWatchStream(key);
       } else {
-        // The LIST failed: RBAC denial (Forbidden), NotFound for a missing kind,
-        // or a transient error. A Forbidden watch never self-heals by retrying,
-        // so report it and stop instead of burning kubectl spawns forever.
         const reason = classifyWatchError(err);
         if (reason === "forbidden") {
-          for (const l of w.listeners) l.onError?.({ reason, message: err.trim() });
+          w.lastError = { reason, message: err.trim() };
+          w.cache = new Map<string, any>();
+          for (const l of w.listeners) l.onError?.(w.lastError);
           w.ready = true;
           return;
         }
@@ -254,7 +257,6 @@ export class WatchManager {
       }
     };
 
-    proc.on("exit", (code) => onEnd(code));
     proc.on("close", (code) => onEnd(code));
     proc.on("error", () => onEnd(1)); // ENOENT etc: do not crash the server
   }
@@ -266,7 +268,7 @@ export class WatchManager {
     if (!w) return;
     const argv = this.buildArgs(w.sub, true);
     const proc = this.spawnFn(argv[0], argv.slice(1), {
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["ignore", "pipe", "ignore"],
     });
     w.watchProc = proc;
     const parser = new WatchEventParser();
