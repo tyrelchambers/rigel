@@ -1,4 +1,5 @@
 import { substitute } from "./substitute";
+import { DESCHEDULER_NODE_WATCHER_MANIFEST } from "./deschedulerWatcher";
 
 export type AddonGroup = "Scheduling" | "Metrics" | "Certificates" | "Ingress";
 export type AddonWorkloadKind = "deployments" | "cronjobs";
@@ -26,6 +27,7 @@ export type AddonInstall =
       namespace: string;
       valuesTemplate?: string;
       buildValues?: (fields: Record<string, string | boolean>) => Record<string, unknown>;
+      extraManifest?: { gatedBy: string; manifest: string };
     };
 
 export interface AddonDetect {
@@ -111,12 +113,14 @@ export const CLUSTER_ADDONS: ClusterAddon[] = [
       releaseName: "descheduler",
       namespace: "kube-system",
       buildValues: deschedulerValues,
+      extraManifest: { gatedBy: "nodeWatcher", manifest: DESCHEDULER_NODE_WATCHER_MANIFEST },
     },
     fields: [
       { key: "schedule", label: "Run schedule", type: "interval", default: "*/30 * * * *", summaryVerb: "Rebalances" },
       { key: "lowNodeUtilization", label: "Low-node utilization", type: "toggle", default: true, help: "Move pods off overloaded nodes onto underused ones." },
       { key: "removeDuplicates", label: "Spread duplicate replicas", type: "toggle", default: true, help: "Avoid stacking replicas of a workload on one node." },
       { key: "topologySpread", label: "Enforce topology spread constraints", type: "toggle", default: true, help: "Rebalance to satisfy topology spread rules." },
+      { key: "nodeWatcher", label: "Rebalance when a node comes online", type: "toggle", default: false, help: "Also deploys a small watcher (Deployment + RBAC in kube-system) that triggers a rebalance whenever a node joins. Removed when you uninstall." },
     ],
     detect: { kind: "cronjobs", namespace: "kube-system", name: "descheduler" },
   },
@@ -195,4 +199,18 @@ export function buildHelmValues(addon: ClusterAddon, fields: Record<string, stri
   const vars: Record<string, string> = {};
   for (const [k, v] of Object.entries(fields)) vars[k] = String(v);
   return substitute(addon.install.valuesTemplate ?? "", vars);
+}
+
+/** The add-on's extra manifest (namespace + cronjob substituted), or null if it has none. */
+export function extraManifestYaml(addon: ClusterAddon): string | null {
+  if (addon.install.mode !== "helm" || !addon.install.extraManifest) return null;
+  return substitute(addon.install.extraManifest.manifest, {
+    namespace: addon.install.namespace,
+    cronjob: addon.install.releaseName,
+  });
+}
+
+/** Whether the extra manifest's gate field is on in the current field values. */
+export function extraManifestEnabled(addon: ClusterAddon, fields: Record<string, string | boolean>): boolean {
+  return addon.install.mode === "helm" && !!addon.install.extraManifest && fields[addon.install.extraManifest.gatedBy] === true;
 }

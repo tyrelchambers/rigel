@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
-import { CLUSTER_ADDONS, detectInstalled, type ClusterAddon, type AddonGroup, type InstalledWorkload } from "@rigel/catalog";
+import { CLUSTER_ADDONS, detectInstalled, extraManifestYaml, type ClusterAddon, type AddonGroup, type InstalledWorkload } from "@rigel/catalog";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFoo
 import { InfoTooltip } from "@/components/InfoTooltip";
 import { TabBar, Tab } from "@/components/ui/Tabs";
 import { useHelmUninstall } from "@/panels/helm/helmApi";
-import { useUninstallMetricsServer } from "@/lib/api";
+import { useUninstallMetricsServer, deleteManifestYaml } from "@/lib/api";
 import { PluginInstallSheet } from "./PluginInstallSheet";
 import { pluginIcon } from "./pluginIcon";
 
@@ -206,9 +206,16 @@ export default function PluginsPanel() {
           onConfirm={() => {
             const a = uninstalling;
             if (a.install.mode === "helm") {
+              const extra = extraManifestYaml(a);
               helmUninstall.mutate(
                 { release: a.install.releaseName, namespace: a.install.namespace },
-                { onSuccess: () => setUninstalling(null) },
+                {
+                  onSuccess: () => {
+                    // Best-effort removal of any gated extra manifest (idempotent, --ignore-not-found).
+                    if (extra) void deleteManifestYaml(extra).catch(() => {}).finally(() => setUninstalling(null));
+                    else setUninstalling(null);
+                  },
+                },
               );
             } else {
               metricsUninstall.mutate(undefined, { onSuccess: () => setUninstalling(null) });
