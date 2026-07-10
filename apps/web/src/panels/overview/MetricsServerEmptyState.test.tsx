@@ -42,7 +42,11 @@ test("clicking Install POSTs to the install endpoint and shows success", async (
   fireEvent.click(screen.getByRole("button", { name: /install metrics-server/i }));
 
   await waitFor(() =>
-    expect(fetchMock).toHaveBeenCalledWith("/api/install/metrics-server", { method: "POST" }),
+    expect(fetchMock).toHaveBeenCalledWith("/api/install/metrics-server", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    }),
   );
   await waitFor(() => expect(screen.getByRole("button", { name: /installed/i })).toBeTruthy());
 });
