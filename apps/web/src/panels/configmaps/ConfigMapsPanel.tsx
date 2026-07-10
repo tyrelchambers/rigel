@@ -4,6 +4,7 @@ import { useCluster, filterByNamespace } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { viewYaml, editYaml } from "@/store/yamlViewer";
+import { KindAccessNotice } from "@/components/KindAccessNotice";
 import { Button } from "@/components/ui/button";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { ListRow } from "@/panels/components/ListRow";
@@ -33,6 +34,7 @@ export default function ConfigMapsPanel() {
   const isLoading = useCluster((s) => s.isLoading);
   const error = useCluster((s) => s.error);
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
+  const access = useCluster((s) => s.accessByKind["configmaps"]);
 
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -191,7 +193,8 @@ export default function ConfigMapsPanel() {
       </div>
 
         {/* Empty / filtered-to-zero states */}
-        {!isLoading && allConfigMaps.length === 0 && (
+        <KindAccessNotice kind="configmaps" access={access} />
+        {!isLoading && (!access || access.status === "ok") && allConfigMaps.length === 0 && (
           <p className="px-4 py-4 text-sm text-muted-foreground">No configmaps found</p>
         )}
         {!isLoading && allConfigMaps.length > 0 && filtered.length === 0 && (

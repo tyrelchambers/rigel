@@ -3,6 +3,7 @@ import { useCluster, filterByNamespace } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
+import { KindAccessNotice } from "@/components/KindAccessNotice";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { useFocusRow } from "@/panels/components/useFocusRow";
@@ -36,6 +37,7 @@ export default function WorkloadsPanel() {
   const isLoading = useCluster((s) => s.isLoading);
   const error = useCluster((s) => s.error);
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
+  const accessByKind = useCluster((s) => s.accessByKind);
 
   const [search, setSearch] = useState("");
   const [activeKind, setActiveKind] = useState<WorkloadKind>("statefulsets");
@@ -393,7 +395,8 @@ export default function WorkloadsPanel() {
       </div>
 
       {/* Empty / filtered-to-zero states */}
-      {!isLoading && totalForActive === 0 && (
+      <KindAccessNotice kind={activeKind} access={accessByKind[activeKind]} />
+      {!isLoading && (!accessByKind[activeKind] || accessByKind[activeKind].status === "ok") && totalForActive === 0 && (
         <p className="px-4 py-4 text-sm text-muted-foreground">No {label} found</p>
       )}
       {!isLoading && totalForActive > 0 && filteredCount === 0 && (

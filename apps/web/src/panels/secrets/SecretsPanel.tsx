@@ -5,6 +5,7 @@ import { useCluster, filterByNamespace } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { Button } from "@/components/ui/button";
+import { KindAccessNotice } from "@/components/KindAccessNotice";
 import { ListRow } from "@/panels/components/ListRow";
 import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
@@ -46,6 +47,7 @@ export default function SecretsPanel() {
   const setNamespaceFilter = useCluster((s) => s.setNamespaceFilter);
   const focusRequest = useCluster((s) => s.focusRequest);
   const setFocusRequest = useCluster((s) => s.setFocusRequest);
+  const access = useCluster((s) => s.accessByKind["secrets"]);
 
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -244,7 +246,8 @@ export default function SecretsPanel() {
       </div>
 
         {/* Empty / filtered-to-zero states */}
-        {!isLoading && allSecrets.length === 0 && (
+        <KindAccessNotice kind="secrets" access={access} />
+        {!isLoading && (!access || access.status === "ok") && allSecrets.length === 0 && (
           <p className="px-4 py-4 text-sm text-muted-foreground">No secrets found</p>
         )}
         {!isLoading && allSecrets.length > 0 && filtered.length === 0 && (

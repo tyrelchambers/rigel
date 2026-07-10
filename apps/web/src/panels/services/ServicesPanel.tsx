@@ -4,6 +4,7 @@ import { useCluster, filterByNamespace } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { viewYaml } from "@/store/yamlViewer";
+import { KindAccessNotice } from "@/components/KindAccessNotice";
 import { ListRow } from "@/panels/components/ListRow";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
 import { TagPill } from "@/panels/components/TagPill";
@@ -40,6 +41,7 @@ export default function ServicesPanel() {
   const isLoading = useCluster((s) => s.isLoading);
   const error = useCluster((s) => s.error);
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
+  const access = useCluster((s) => s.accessByKind["services"]);
 
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -290,7 +292,8 @@ export default function ServicesPanel() {
       </div>
 
         {/* Empty / filtered-to-zero states */}
-        {!isLoading && allServices.length === 0 && (
+        <KindAccessNotice kind="services" access={access} />
+        {!isLoading && (!access || access.status === "ok") && allServices.length === 0 && (
           <p className="px-4 py-4 text-sm text-muted-foreground">No services found</p>
         )}
         {!isLoading && allServices.length > 0 && filtered.length === 0 && (
