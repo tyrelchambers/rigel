@@ -28,6 +28,8 @@ export { loadCatalog, CATALOG } from "./loader";
 
 export { substitute } from "./substitute";
 
+export * from "./addons";
+
 export {
   imageRepoPath,
   repoPathsMatch,
