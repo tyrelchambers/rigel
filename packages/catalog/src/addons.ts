@@ -114,9 +114,9 @@ export const CLUSTER_ADDONS: ClusterAddon[] = [
     },
     fields: [
       { key: "schedule", label: "Run schedule", type: "interval", default: "*/30 * * * *", summaryVerb: "Rebalances" },
-      { key: "lowNodeUtilization", label: "Low-node utilization (move pods off busy nodes)", type: "toggle", default: true },
-      { key: "removeDuplicates", label: "Spread duplicate replicas off the same node", type: "toggle", default: true },
-      { key: "topologySpread", label: "Enforce topology spread constraints", type: "toggle", default: true },
+      { key: "lowNodeUtilization", label: "Low-node utilization", type: "toggle", default: true, help: "Move pods off overloaded nodes onto underused ones." },
+      { key: "removeDuplicates", label: "Spread duplicate replicas", type: "toggle", default: true, help: "Avoid stacking replicas of a workload on one node." },
+      { key: "topologySpread", label: "Enforce topology spread constraints", type: "toggle", default: true, help: "Rebalance to satisfy topology spread rules." },
     ],
     detect: { kind: "cronjobs", namespace: "kube-system", name: "descheduler" },
   },

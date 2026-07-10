@@ -103,9 +103,9 @@ function Field({ field, value, onChange }: { field: AddonField; value: string | 
       <div className="flex items-center justify-between gap-3.5">
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="text-xs font-medium text-[var(--fg-primary)]">{field.label}</span>
-          {field.help && <span className="text-2xs text-[var(--fg-tertiary)]">{field.help}</span>}
+          {field.help && <span className="text-2xs leading-snug text-[var(--fg-tertiary)]">{field.help}</span>}
         </div>
-        <Switch checked={value === true} onCheckedChange={onChange} />
+        <Switch checked={value === true} onCheckedChange={onChange} className="shrink-0" />
       </div>
     );
   }
