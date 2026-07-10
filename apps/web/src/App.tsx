@@ -316,7 +316,7 @@ export default function App() {
               <Route path="/certificates" element={<CertificatesPanel />} />
               <Route path="/catalog" element={<PaddedX><CatalogPanel /></PaddedX>} />
               <Route path="/helm" element={<HelmPanel />} />
-              <Route path="/plugins" element={<PaddedX><PluginsPanel /></PaddedX>} />
+              <Route path="/plugins" element={<PluginsPanel />} />
               <Route path="/apply" element={<ApplyYamlPanel />} />
               <Route path="/compose" element={<ComposeMigratePanel />} />
               <Route path="/gitops" element={<GitOpsPanel />} />
