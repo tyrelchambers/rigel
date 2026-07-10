@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CLUSTER_ADDONS, detectInstalled, buildHelmValues, type ClusterAddon } from "./addons";
+import { CLUSTER_ADDONS, detectInstalled, buildHelmValues, extraManifestYaml, extraManifestEnabled, type ClusterAddon } from "./addons";
 
 const byId = (id: string): ClusterAddon => {
   const a = CLUSTER_ADDONS.find((x) => x.id === id);
@@ -69,5 +69,26 @@ describe("buildHelmValues", () => {
   it("cert-manager CRDs follow the installCRDs toggle", () => {
     expect(buildHelmValues(byId("cert-manager"), { installCRDs: true })).toContain("enabled: true");
     expect(buildHelmValues(byId("cert-manager"), { installCRDs: false })).toContain("enabled: false");
+  });
+});
+
+describe("extra manifest (descheduler node-watcher)", () => {
+  it("descheduler carries a node-watcher manifest gated by nodeWatcher; other add-ons have none", () => {
+    const yaml = extraManifestYaml(byId("descheduler"));
+    expect(yaml).toBeTruthy();
+    // substituted with the install namespace + CronJob name, and the watch trigger
+    expect(yaml).toContain("namespace: kube-system");
+    expect(yaml).toContain("cronjob/descheduler");
+    expect(yaml).toContain("kubectl get nodes --watch-only");
+    expect(yaml).toContain("kind: ClusterRole");
+    expect(yaml).not.toContain("{{");
+    expect(extraManifestYaml(byId("metrics-server"))).toBeNull();
+    expect(extraManifestYaml(byId("cert-manager"))).toBeNull();
+  });
+  it("is enabled only when the gate field is on", () => {
+    expect(extraManifestEnabled(byId("descheduler"), { nodeWatcher: true })).toBe(true);
+    expect(extraManifestEnabled(byId("descheduler"), { nodeWatcher: false })).toBe(false);
+    expect(extraManifestEnabled(byId("descheduler"), {})).toBe(false);
+    expect(extraManifestEnabled(byId("cert-manager"), { nodeWatcher: true })).toBe(false);
   });
 });

@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { Download, ChevronUp, ChevronDown, Timer, Code } from "lucide-react";
 import type { ClusterAddon, AddonField } from "@rigel/catalog";
-import { buildHelmValues } from "@rigel/catalog";
+import { buildHelmValues, extraManifestYaml, extraManifestEnabled } from "@rigel/catalog";
 import { Dialog, DialogContent, DialogHeader, DialogIcon, DialogTitle, DialogBody, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { NamespaceField } from "@/components/NamespaceField";
 import { cn } from "@/lib/utils";
-import { useInstallHelm } from "@/panels/catalog/installApi";
+import { useInstallHelm, useApplyManifest } from "@/panels/catalog/installApi";
 import { useInstallMetricsServer } from "@/lib/api";
 import { pluginIcon } from "./pluginIcon";
 import { intervalToCron, cronToInterval, humanEvery, SCHEDULE_PRESETS, INTERVAL_MAX, type IntervalUnit } from "./schedule";
@@ -30,8 +30,9 @@ export function PluginInstallSheet({ addon, open, onClose, onDone }: {
   const [values, setValues] = useState<Record<string, string | boolean>>(() => defaults(addon));
   const helm = useInstallHelm();
   const metrics = useInstallMetricsServer();
-  const pending = helm.isPending || metrics.isPending;
-  const error = (helm.error ?? metrics.error)?.message ?? null;
+  const apply = useApplyManifest();
+  const pending = helm.isPending || metrics.isPending || apply.isPending;
+  const error = (helm.error ?? metrics.error ?? apply.error)?.message ?? null;
   const Icon = pluginIcon(addon);
 
   function set(key: string, v: string | boolean) {
@@ -47,6 +48,7 @@ export function PluginInstallSheet({ addon, open, onClose, onDone }: {
       return;
     }
     const namespace = typeof values.namespace === "string" && values.namespace ? values.namespace : addon.install.namespace;
+    const finish = () => { onDone(); onClose(); };
     helm.mutate(
       {
         repoName: addon.install.repoName,
@@ -57,7 +59,16 @@ export function PluginInstallSheet({ addon, open, onClose, onDone }: {
         namespace,
         values: buildHelmValues(addon, values),
       },
-      { onSuccess: () => { onDone(); onClose(); } },
+      {
+        onSuccess: () => {
+          const extra = extraManifestYaml(addon);
+          if (extra && extraManifestEnabled(addon, values)) {
+            apply.mutate({ yaml: extra }, { onSuccess: finish });
+          } else {
+            finish();
+          }
+        },
+      },
     );
   }
 
