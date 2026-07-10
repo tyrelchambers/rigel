@@ -94,6 +94,7 @@ export default function LogsPanel() {
 
   const [logKind, setLogKind] = useState<LogKind>("deployments");
   const [sidebarSearch, setSidebarSearch] = useState("");
+  const [nodeFilter, setNodeFilter] = useState("");
   const [selectedItem, setSelectedItem] = useState<SidebarItem | null>(null);
   const [isolatedPod, setIsolatedPod] = useState("");
   const [lines, setLines] = useState<LogLine[]>([]);
@@ -134,13 +135,24 @@ export default function LogsPanel() {
     return () => unsubscribe(logKind, "*");
   }, [logKind]);
 
+  // Nodes feed the Pods-tab "filter by node" dropdown.
+  useEffect(() => {
+    subscribe("nodes", "*");
+    return () => unsubscribe("nodes", "*");
+  }, []);
+
+  const nodeNames = useMemo(() => {
+    const ns = (resources["nodes"] ?? {}) as Record<string, RawObj>;
+    return Object.values(ns).map((n) => n.metadata?.name ?? "").filter(Boolean).sort();
+  }, [resources]);
+
   const scopedItems = useMemo(
     () => filterByNamespace<RawObj>(resources[logKind] as Record<string, RawObj> | undefined, namespaceFilter),
     [resources, namespaceFilter, logKind],
   );
   const items = useMemo(
-    () => buildSidebarItems(scopedItems, logKind, sidebarSearch),
-    [scopedItems, logKind, sidebarSearch],
+    () => buildSidebarItems(scopedItems, logKind, { search: sidebarSearch, nodeName: nodeFilter }),
+    [scopedItems, logKind, sidebarSearch, nodeFilter],
   );
   const total = scopedItems.length;
   const selectedKey = selectedItem?.key ?? null;
@@ -397,6 +409,19 @@ export default function LogsPanel() {
             className="w-full"
             ariaLabel="Search sources"
           />
+          {logKind === "pods" && (
+            <select
+              value={nodeFilter}
+              onChange={(e) => setNodeFilter(e.target.value)}
+              aria-label="Filter pods by node"
+              className="h-8 w-full rounded-[6px] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-2 text-xs text-foreground outline-none focus:ring-2 focus:ring-ring/50"
+            >
+              <option value="">All nodes</option>
+              {nodeNames.map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+          )}
         </div>
 
         <div className="min-h-0 flex-1 overflow-auto px-2 py-1.5">

@@ -35,7 +35,7 @@ export interface SidebarItem {
 
 export interface RawObj {
   metadata?: { name?: string; namespace?: string };
-  spec?: { selector?: { matchLabels?: Record<string, string> } };
+  spec?: { selector?: { matchLabels?: Record<string, string> }; nodeName?: string };
   status?: {
     readyReplicas?: number; replicas?: number;
     numberReady?: number; desiredNumberScheduled?: number;
@@ -62,18 +62,26 @@ function statusFor(kind: LogKind, o: RawObj): { statusText: string; unhealthy: b
   return { statusText: `${ready}/${total}`, unhealthy: ready < total, healthState };
 }
 
-/** Build the sorted, search-filtered sidebar list for one kind. */
+/** Filters applied to the sidebar list. `nodeName` only narrows the `pods` kind. */
+export interface SidebarFilter {
+  search?: string;
+  nodeName?: string | null;
+}
+
+/** Build the sorted, filtered sidebar list for one kind. */
 export function buildSidebarItems(
   source: readonly RawObj[],
   kind: LogKind,
-  search: string,
+  filter: SidebarFilter,
 ): SidebarItem[] {
-  const q = search.trim().toLowerCase();
+  const q = (filter.search ?? "").trim().toLowerCase();
+  const node = kind === "pods" ? (filter.nodeName ?? null) : null;
   const items: SidebarItem[] = [];
   for (const o of source) {
     const name = o.metadata?.name ?? "";
     const namespace = o.metadata?.namespace ?? "default";
     if (q && !name.toLowerCase().includes(q) && !namespace.toLowerCase().includes(q)) continue;
+    if (node && o.spec?.nodeName !== node) continue;
     const { statusText, unhealthy, healthState } = statusFor(kind, o);
     items.push({
       key: `${namespace}/${name}`,
