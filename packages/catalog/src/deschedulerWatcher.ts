@@ -119,12 +119,15 @@ spec:
         - name: watcher
           image: bitnami/kubectl:latest
           command: ["/bin/sh", "/scripts/watch.sh"]
+          env:
+            - name: HOME
+              value: /state
           resources:
             requests:
               cpu: "10m"
-              memory: "32Mi"
-            limits:
               memory: "64Mi"
+            limits:
+              memory: "192Mi"
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
