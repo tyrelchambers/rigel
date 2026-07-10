@@ -113,6 +113,8 @@ function writeNamespaceByContext(map: Record<string, string | null>): void {
   }
 }
 
+export type KindAccess = { status: "ok" | "forbidden" | "error"; message?: string };
+
 interface ClusterState {
   connected: boolean;
   resources: ResourceMap;
@@ -120,6 +122,9 @@ interface ClusterState {
   isLoading: boolean;
   /** Last watch/connection error message, or null. */
   error: string | null;
+  /** Per-kind access state (e.g. a denied watch), keyed by kind. Separate from
+   *  the global `error` so one forbidden kind doesn't paint the whole app red. */
+  accessByKind: Record<string, KindAccess>;
   /**
    * Current namespace scope shared across panels. `null` means "all
    * namespaces". Set by the namespace selector elsewhere in the app.
@@ -141,6 +146,7 @@ interface ClusterState {
   setConnected: (c: boolean) => void;
   setLoading: (l: boolean) => void;
   setError: (e: string | null) => void;
+  setAccess: (kind: string, access: KindAccess) => void;
   setNamespaceFilter: (ns: string | null) => void;
   upsert: (kind: string, name: string, obj: unknown) => void;
   remove: (kind: string, name: string) => void;
@@ -168,6 +174,7 @@ export const useCluster = create<ClusterState>((set) => ({
   resources: {},
   isLoading: false,
   error: null,
+  accessByKind: {},
   namespaceFilter: readNamespaceFilter(), // null = All namespaces; restored from localStorage
   activeContext: null,
   namespaceByContext: readNamespaceByContext(),
@@ -185,6 +192,8 @@ export const useCluster = create<ClusterState>((set) => ({
   setConnected: (connected) => set({ connected }),
   setLoading: (isLoading) => set({ isLoading }),
   setError: (error) => set({ error }),
+  setAccess: (kind, access) =>
+    set((s) => ({ accessByKind: { ...s.accessByKind, [kind]: access } })),
   setNamespaceFilter: (namespaceFilter) => {
     writeNamespaceFilter(namespaceFilter);
     set((s) => {

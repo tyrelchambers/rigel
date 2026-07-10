@@ -193,6 +193,13 @@ describe("replaceKind — full replace (every watch is cluster-wide)", () => {
   });
 });
 
+it("records per-kind access without touching the global error", () => {
+  useCluster.setState({ error: null });
+  useCluster.getState().setAccess("secrets", { status: "forbidden", message: "denied" });
+  expect(useCluster.getState().accessByKind["secrets"].status).toBe("forbidden");
+  expect(useCluster.getState().error).toBeNull();
+});
+
 describe("filterByNamespace", () => {
   function nsObj(namespace: string, name: string): { metadata: { namespace?: string; name: string } } {
     return { metadata: { name, namespace } };
