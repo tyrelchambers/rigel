@@ -66,6 +66,18 @@ describe("buildHelmValues", () => {
       .find((p) => p.name === "LowNodeUtilization");
     expect(lnu?.args?.targetThresholds).toBeTruthy();
   });
+  it("gives every enabled balance plugin a matching pluginConfig entry (descheduler >=0.36 refuses to start otherwise)", () => {
+    const parsed = JSON.parse(buildHelmValues(byId("descheduler"), {
+      lowNodeUtilization: true, removeDuplicates: true, topologySpread: true,
+    }));
+    const profile = parsed.deschedulerPolicy.profiles[0];
+    const enabled = profile.plugins.balance.enabled as string[];
+    const configured = new Set((profile.pluginConfig as { name: string }[]).map((p) => p.name));
+    expect(enabled).toContain("RemovePodsViolatingTopologySpreadConstraint");
+    for (const plugin of enabled) {
+      expect(configured.has(plugin)).toBe(true);
+    }
+  });
   it("suspends the CronJob when the schedule trigger is off (node-online only)", () => {
     expect(JSON.parse(buildHelmValues(byId("descheduler"), { scheduleEnabled: false })).suspend).toBe(true);
     expect(JSON.parse(buildHelmValues(byId("descheduler"), { scheduleEnabled: true })).suspend).toBe(false);

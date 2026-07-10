@@ -50,20 +50,34 @@ export interface ClusterAddon {
   detect: AddonDetect;
 }
 
+// Each toggleable balance plugin, paired with the pluginConfig args it needs.
+// Descheduler >=0.36 refuses to start a profile when an enabled balance plugin
+// has no matching pluginConfig entry, so enable + config are defined together
+// here — you cannot turn a plugin on without also emitting its config.
+const DESCHEDULER_BALANCE_PLUGINS: { name: string; field: string; args: Record<string, unknown> }[] = [
+  {
+    name: "LowNodeUtilization",
+    field: "lowNodeUtilization",
+    args: { thresholds: { cpu: 20, memory: 20, pods: 20 }, targetThresholds: { cpu: 50, memory: 50, pods: 50 } },
+  },
+  { name: "RemoveDuplicates", field: "removeDuplicates", args: {} },
+  {
+    name: "RemovePodsViolatingTopologySpreadConstraint",
+    field: "topologySpread",
+    args: { constraints: ["DoNotSchedule"] },
+  },
+];
+
 /** Descheduler v1alpha2 policy: CronJob + only the toggled-on balance strategies. */
 function deschedulerValues(f: Record<string, string | boolean>): Record<string, unknown> {
   const enabled: string[] = [];
-  if (f.lowNodeUtilization !== false) enabled.push("LowNodeUtilization");
-  if (f.removeDuplicates !== false) enabled.push("RemoveDuplicates");
-  if (f.topologySpread !== false) enabled.push("RemovePodsViolatingTopologySpreadConstraint");
   const pluginConfig: Record<string, unknown>[] = [
     { name: "DefaultEvictor", args: { evictSystemCriticalPods: false, evictLocalStoragePods: false } },
   ];
-  if (enabled.includes("LowNodeUtilization")) {
-    pluginConfig.push({
-      name: "LowNodeUtilization",
-      args: { thresholds: { cpu: 20, memory: 20, pods: 20 }, targetThresholds: { cpu: 50, memory: 50, pods: 50 } },
-    });
+  for (const p of DESCHEDULER_BALANCE_PLUGINS) {
+    if (f[p.field] === false) continue;
+    enabled.push(p.name);
+    pluginConfig.push({ name: p.name, args: p.args });
   }
   return {
     kind: "CronJob",
