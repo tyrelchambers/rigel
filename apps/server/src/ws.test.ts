@@ -9,8 +9,8 @@ function fakeMgr() {
   return {
     subs,
     unsub,
-    subscribe(sub: any, onSnapshot: (i: any[]) => void, onDelta: (e: any) => void) {
-      subs.push({ sub, onSnapshot, onDelta });
+    subscribe(sub: any, onSnapshot: (i: any[]) => void, onDelta: (e: any) => void, onError?: (e: any) => void) {
+      subs.push({ sub, onSnapshot, onDelta, onError });
       return unsub;
     },
   };
@@ -83,4 +83,18 @@ test("unsubscribe with a context tears down that subscription and frees the key"
   // (not skipped by the `if (map.has(key)) return` dedupe guard).
   handlers.message(ws, JSON.stringify({ type: "subscribe", context: "ctx-a", kind: "pods", namespace: "default" }));
   expect(mgr.subs.length).toBe(2);
+});
+
+test("forwards a watch onError to the client as a kind-scoped error frame", () => {
+  const mgr = fakeMgr();
+  const handlers = makeWsHandlers(mgr as any, "boot-ctx");
+  const ws = fakeWs();
+  handlers.open(ws);
+
+  handlers.message(ws, JSON.stringify({ type: "subscribe", kind: "secrets", namespace: "*" }));
+
+  mgr.subs[0].onError({ reason: "forbidden", message: "secrets is forbidden" });
+  expect(ws.sent).toContainEqual(
+    expect.objectContaining({ type: "error", kind: "secrets", reason: "forbidden" }),
+  );
 });

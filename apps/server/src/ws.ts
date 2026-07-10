@@ -75,6 +75,17 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null,
                 object: e.object,
               }),
             ),
+          (err) =>
+            ws.send(
+              JSON.stringify({
+                type: "error",
+                context: subCtx,
+                kind: m.kind,
+                namespace: m.namespace,
+                reason: err.reason,
+                message: err.message,
+              }),
+            ),
         );
         map.set(key, un);
       } else if (m.type === "unsubscribe") {
