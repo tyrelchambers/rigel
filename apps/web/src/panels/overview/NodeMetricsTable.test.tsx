@@ -13,7 +13,7 @@ const rows: NodeResourceTotals[] = [
 ];
 
 test("renders a row per node with name, percentages, and column heads", () => {
-  render(<NodeMetricsTable rows={rows} readyByName={{ "k3s-slave": true, "k8s-truenas": true }} hasMetrics reclaimable={null} />);
+  render(<NodeMetricsTable rows={rows} readyByName={{ "k3s-slave": true, "k8s-truenas": true }} hasMetrics metricsAvailable reclaimable={null} />);
   expect(screen.getByText("k3s-slave")).toBeTruthy();
   expect(screen.getByText("k8s-truenas")).toBeTruthy();
   expect(screen.getByText("12%")).toBeTruthy();
@@ -26,7 +26,7 @@ test("renders a row per node with name, percentages, and column heads", () => {
 });
 
 test("flags >=80% utilization with an amber fill, lower usage with the default fill", () => {
-  const { container } = render(<NodeMetricsTable rows={rows} readyByName={{}} hasMetrics reclaimable={null} />);
+  const { container } = render(<NodeMetricsTable rows={rows} readyByName={{}} hasMetrics metricsAvailable reclaimable={null} />);
   expect(container.querySelector('[data-warn="true"]')).toBeTruthy(); // 82% memory
   expect(container.querySelectorAll('[data-warn="false"]').length).toBeGreaterThan(0);
 });
@@ -35,15 +35,26 @@ test("shows the metrics-server empty state with an install action when unavailab
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   render(
     <QueryClientProvider client={qc}>
-      <NodeMetricsTable rows={[]} readyByName={{}} hasMetrics={false} reclaimable={null} />
+      <NodeMetricsTable rows={[]} readyByName={{}} hasMetrics={false} metricsAvailable={false} reclaimable={null} />
     </QueryClientProvider>,
   );
   expect(screen.getByText(/live node metrics aren't available/i)).toBeTruthy();
   expect(screen.getByRole("button", { name: /install metrics-server/i })).toBeTruthy();
 });
 
+test("shows a neutral waiting note (no install) when metrics-server is available but has no rows yet", () => {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  render(
+    <QueryClientProvider client={qc}>
+      <NodeMetricsTable rows={[]} readyByName={{}} hasMetrics={false} metricsAvailable reclaimable={null} />
+    </QueryClientProvider>,
+  );
+  expect(screen.getByText(/hasn't reported node data yet/i)).toBeTruthy();
+  expect(screen.queryByRole("button")).toBeNull();
+});
+
 test("renders the reclaimable badge when provided", () => {
-  render(<NodeMetricsTable rows={rows} readyByName={{}} hasMetrics reclaimable={{ fraction: 0.06, detail: "3.5Gi of 60.4Gi" }} />);
+  render(<NodeMetricsTable rows={rows} readyByName={{}} hasMetrics metricsAvailable reclaimable={{ fraction: 0.06, detail: "3.5Gi of 60.4Gi" }} />);
   expect(screen.getByText("Reclaimable")).toBeTruthy();
   expect(screen.getByText("6%")).toBeTruthy();
   expect(screen.getByText("3.5Gi of 60.4Gi")).toBeTruthy();

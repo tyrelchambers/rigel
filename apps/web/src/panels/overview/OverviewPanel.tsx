@@ -262,6 +262,7 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
             rows={perNode}
             readyByName={readyByName}
             hasMetrics={hasMetrics}
+            metricsAvailable={nodeMetricsData?.available === true}
             reclaimable={reclaimable}
           />
         </div>

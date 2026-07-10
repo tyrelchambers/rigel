@@ -20,6 +20,8 @@ interface NodeMetricsTableProps {
   rows: NodeResourceTotals[];
   readyByName: Record<string, boolean>;
   hasMetrics: boolean;
+  /** Whether metrics-server is installed and reporting (drives the empty-state copy). */
+  metricsAvailable: boolean;
   reclaimable: ReclaimableSummary | null;
 }
 
@@ -56,7 +58,7 @@ function MetricCell({ fraction, raw }: { fraction: number; raw: string }) {
 }
 
 /** Layout C — dense per-node CPU/memory table with a reclaimable header badge. */
-export function NodeMetricsTable({ rows, readyByName, hasMetrics, reclaimable }: NodeMetricsTableProps) {
+export function NodeMetricsTable({ rows, readyByName, hasMetrics, metricsAvailable, reclaimable }: NodeMetricsTableProps) {
   return (
     <section className="flex flex-col gap-3.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-[18px]">
       <div className="flex items-center justify-between gap-3">
@@ -107,7 +109,7 @@ export function NodeMetricsTable({ rows, readyByName, hasMetrics, reclaimable }:
           ))}
         </div>
       ) : (
-        <MetricsServerEmptyState />
+        <MetricsServerEmptyState available={metricsAvailable} />
       )}
     </section>
   );
