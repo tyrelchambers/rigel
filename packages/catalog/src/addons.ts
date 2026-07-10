@@ -138,7 +138,6 @@ export const CLUSTER_ADDONS: ClusterAddon[] = [
       valuesTemplate: "crds:\n  enabled: {{installCRDs}}\n",
     },
     fields: [
-      { key: "namespace", label: "Namespace", type: "namespace", default: "cert-manager" },
       { key: "installCRDs", label: "Install CRDs", type: "toggle", default: true, help: "Turn off only if the cert-manager CRDs are already installed separately." },
     ],
     detect: { kind: "deployments", namespace: "cert-manager", name: "cert-manager" },

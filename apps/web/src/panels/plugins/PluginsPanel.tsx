@@ -26,7 +26,7 @@ function workloadsFrom(resources: Record<string, Record<string, RawObj>>, kind: 
 function uninstallCommand(addon: ClusterAddon): string {
   return addon.install.mode === "helm"
     ? `helm uninstall ${addon.install.releaseName} -n ${addon.install.namespace}`
-    : "kubectl delete -f <metrics-server upstream manifest>";
+    : "kubectl delete -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml";
 }
 
 /** Destructive confirm shown before an add-on is removed (helm or metrics-server). */
