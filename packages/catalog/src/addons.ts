@@ -68,6 +68,9 @@ function deschedulerValues(f: Record<string, string | boolean>): Record<string, 
   return {
     kind: "CronJob",
     schedule: String(f.schedule ?? "*/30 * * * *"),
+    // Schedule off (node-online-only): install the CronJob suspended so it never
+    // fires on a timer; the node-watcher still triggers it via `create job --from`.
+    suspend: f.scheduleEnabled === false,
     deschedulerPolicy: { profiles: [{ name: "default", plugins: { balance: { enabled } }, pluginConfig }] },
   };
 }
@@ -116,11 +119,12 @@ export const CLUSTER_ADDONS: ClusterAddon[] = [
       extraManifest: { gatedBy: "nodeWatcher", manifest: DESCHEDULER_NODE_WATCHER_MANIFEST },
     },
     fields: [
+      { key: "scheduleEnabled", label: "On a schedule", type: "toggle", default: true },
       { key: "schedule", label: "Run schedule", type: "interval", default: "*/30 * * * *", summaryVerb: "Rebalances" },
+      { key: "nodeWatcher", label: "When a node comes online", type: "toggle", default: false, help: "Runs a rebalance the moment a node joins. Deploys a small watcher (Deployment + RBAC in kube-system); removed when you uninstall." },
       { key: "lowNodeUtilization", label: "Low-node utilization", type: "toggle", default: true, help: "Move pods off overloaded nodes onto underused ones." },
       { key: "removeDuplicates", label: "Spread duplicate replicas", type: "toggle", default: true, help: "Avoid stacking replicas of a workload on one node." },
       { key: "topologySpread", label: "Enforce topology spread constraints", type: "toggle", default: true, help: "Rebalance to satisfy topology spread rules." },
-      { key: "nodeWatcher", label: "Rebalance when a node comes online", type: "toggle", default: false, help: "Also deploys a small watcher (Deployment + RBAC in kube-system) that triggers a rebalance whenever a node joins. Removed when you uninstall." },
     ],
     detect: { kind: "cronjobs", namespace: "kube-system", name: "descheduler" },
   },

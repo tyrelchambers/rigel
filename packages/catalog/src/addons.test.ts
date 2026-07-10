@@ -66,6 +66,12 @@ describe("buildHelmValues", () => {
       .find((p) => p.name === "LowNodeUtilization");
     expect(lnu?.args?.targetThresholds).toBeTruthy();
   });
+  it("suspends the CronJob when the schedule trigger is off (node-online only)", () => {
+    expect(JSON.parse(buildHelmValues(byId("descheduler"), { scheduleEnabled: false })).suspend).toBe(true);
+    expect(JSON.parse(buildHelmValues(byId("descheduler"), { scheduleEnabled: true })).suspend).toBe(false);
+    // default (field absent) is not suspended
+    expect(JSON.parse(buildHelmValues(byId("descheduler"), {})).suspend).toBe(false);
+  });
   it("cert-manager CRDs follow the installCRDs toggle", () => {
     expect(buildHelmValues(byId("cert-manager"), { installCRDs: true })).toContain("enabled: true");
     expect(buildHelmValues(byId("cert-manager"), { installCRDs: false })).toContain("enabled: false");

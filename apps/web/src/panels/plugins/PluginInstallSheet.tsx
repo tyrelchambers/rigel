@@ -14,6 +14,9 @@ import { intervalToCron, cronToInterval, humanEvery, SCHEDULE_PRESETS, INTERVAL_
 
 const INPUT_CLS = "h-8 rounded-[6px] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-2 text-xs text-foreground outline-none focus:ring-2 focus:ring-ring/50";
 
+// Fields the "When to run" section owns; excluded from the generic field list.
+const TRIGGER_KEYS = new Set(["scheduleEnabled", "schedule", "nodeWatcher"]);
+
 function defaults(addon: ClusterAddon): Record<string, string | boolean> {
   const out: Record<string, string | boolean> = {};
   for (const f of addon.fields) out[f.key] = f.default;
@@ -38,6 +41,9 @@ export function PluginInstallSheet({ addon, open, onClose, onDone }: {
   function set(key: string, v: string | boolean) {
     setValues((prev) => ({ ...prev, [key]: v }));
   }
+
+  const hasTriggers = addon.fields.some((f) => f.key === "scheduleEnabled");
+  const noTrigger = hasTriggers && values.scheduleEnabled !== true && values.nodeWatcher !== true;
 
   function install() {
     if (addon.install.mode === "metricsServer") {
@@ -91,15 +97,19 @@ export function PluginInstallSheet({ addon, open, onClose, onDone }: {
         </DialogHeader>
 
         <DialogBody className="flex flex-col gap-[18px]">
-          {addon.fields.map((f) => (
-            <Field key={f.key} field={f} value={values[f.key]} onChange={(v) => set(f.key, v)} />
-          ))}
+          {hasTriggers && <TriggerSection addon={addon} values={values} set={set} />}
+          {addon.fields
+            .filter((f) => !(hasTriggers && TRIGGER_KEYS.has(f.key)))
+            .map((f) => (
+              <Field key={f.key} field={f} value={values[f.key]} onChange={(v) => set(f.key, v)} />
+            ))}
+          {noTrigger && <p className="text-2xs text-[var(--status-pending)]">Pick at least one trigger to install.</p>}
           {error && <p role="alert" className="text-2xs text-[var(--status-failed)]">{error}</p>}
         </DialogBody>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={pending}>Cancel</Button>
-          <Button onClick={install} disabled={pending}>
+          <Button onClick={install} disabled={pending || noTrigger}>
             {pending ? "Installing…" : <><Download className="size-4" /> Install</>}
           </Button>
         </DialogFooter>
@@ -121,7 +131,12 @@ function Field({ field, value, onChange }: { field: AddonField; value: string | 
     );
   }
   if (field.type === "interval") {
-    return <IntervalField label={field.label} verb={field.summaryVerb ?? "Runs"} value={String(value)} onChange={onChange} />;
+    return (
+      <label className="flex flex-col gap-2 text-xs">
+        <span className="text-[var(--fg-secondary)]">{field.label}</span>
+        <IntervalControl verb={field.summaryVerb ?? "Runs"} value={String(value)} onChange={onChange} />
+      </label>
+    );
   }
   return (
     <label className="flex flex-col gap-1 text-xs">
@@ -141,20 +156,65 @@ function Field({ field, value, onChange }: { field: AddonField; value: string | 
 }
 
 /**
- * Cron-free schedule picker: an "Every N minutes/hours/days" control (number
- * with steppers + unit select), quick-pick preset pills, and a helper line
- * summarizing the cadence with a mono cron readout. Value is a cron string.
+ * Two co-equal run triggers ("On a schedule" + "When a node comes online") as
+ * peer cards, each with its own enable Switch. Reads/writes scheduleEnabled,
+ * schedule, and nodeWatcher on the shared field values.
  */
-function IntervalField({ label, verb, value, onChange }: {
-  label: string; verb: string; value: string; onChange: (cron: string) => void;
+function TriggerSection({ addon, values, set }: {
+  addon: ClusterAddon;
+  values: Record<string, string | boolean>;
+  set: (key: string, v: string | boolean) => void;
+}) {
+  const scheduleEnabled = values.scheduleEnabled === true;
+  const nodeWatcher = values.nodeWatcher === true;
+  const scheduleField = addon.fields.find((f) => f.key === "schedule");
+  const scheduleLabel = addon.fields.find((f) => f.key === "scheduleEnabled")?.label ?? "On a schedule";
+  const nodeField = addon.fields.find((f) => f.key === "nodeWatcher");
+
+  return (
+    <div className="flex flex-col gap-3">
+      <span className="font-mono text-3xs tracking-[1px] text-[var(--fg-tertiary)] uppercase">When to run</span>
+
+      <div className="rounded-lg border border-[var(--border-subtle)] p-3.5">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs font-semibold text-[var(--fg-primary)]">{scheduleLabel}</span>
+          <Switch checked={scheduleEnabled} onCheckedChange={(v) => set("scheduleEnabled", v)} className="shrink-0" />
+        </div>
+        {scheduleEnabled && scheduleField && (
+          <div className="mt-3">
+            <IntervalControl
+              verb={scheduleField.summaryVerb ?? "Runs"}
+              value={String(values.schedule)}
+              onChange={(cron) => set("schedule", cron)}
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-lg border border-[var(--border-subtle)] p-3.5">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs font-semibold text-[var(--fg-primary)]">{nodeField?.label ?? "When a node comes online"}</span>
+          <Switch checked={nodeWatcher} onCheckedChange={(v) => set("nodeWatcher", v)} className="shrink-0" />
+        </div>
+        {nodeField?.help && <p className="mt-2 text-2xs leading-snug text-[var(--fg-tertiary)]">{nodeField.help}</p>}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Cron-free schedule picker (no label): an "Every N minutes/hours/days" control
+ * (number with steppers + unit select), quick-pick preset pills, and a helper
+ * line summarizing the cadence with a mono cron readout. Value is a cron string.
+ */
+function IntervalControl({ verb, value, onChange }: {
+  verb: string; value: string; onChange: (cron: string) => void;
 }) {
   const { amount, unit } = cronToInterval(value);
   const setAmount = (n: number) => onChange(intervalToCron(n, unit));
 
   return (
     <div className="flex flex-col gap-3">
-      <span className="text-xs font-semibold text-[var(--fg-primary)]">{label}</span>
-
       <div className="flex items-center gap-2.5">
         <span className="text-sm text-[var(--fg-secondary)]">Every</span>
 
