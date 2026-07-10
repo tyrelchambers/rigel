@@ -104,17 +104,6 @@ export function ClusterIconPicker({
       )}
       {(deletable && onDelete) || (removable && onRemove) ? (
         <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--border-subtle)", display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {deletable && onDelete && (
-            <button
-              type="button"
-              onClick={onDelete}
-              className="text-xs"
-              style={{ color: "var(--status-failed)", background: "transparent",
-                border: "1px solid var(--border-subtle)", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}
-            >
-              Delete cluster
-            </button>
-          )}
           {removable && onRemove && (
             <button
               type="button"
@@ -126,6 +115,17 @@ export function ClusterIconPicker({
             >
               <Unplug size={13} />
               Remove from Rigel
+            </button>
+          )}
+          {deletable && onDelete && (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="text-xs"
+              style={{ color: "var(--status-failed)", background: "transparent",
+                border: "1px solid var(--border-subtle)", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}
+            >
+              Delete cluster
             </button>
           )}
         </div>

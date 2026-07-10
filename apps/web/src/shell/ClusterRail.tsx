@@ -203,10 +203,7 @@ export function ClusterRail() {
             setPickerFor(null); // close the tile modal
           }
         }}
-        removable={(() => {
-          const pickerCtx = contexts?.find((c) => c.name === pickerFor);
-          return !!pickerCtx && classifyProvider(pickerCtx) !== "local";
-        })()}
+        removable={!!contexts?.find((c) => c.name === pickerFor)}
         onRemove={() => { setRemoveFor(pickerFor); setPickerFor(null); }}
       />
       <RemoveClusterDialog

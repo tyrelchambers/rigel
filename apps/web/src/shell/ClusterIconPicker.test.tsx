@@ -36,3 +36,15 @@ test("still renders Delete cluster button when deletable and onDelete are provid
   render(<ClusterIconPicker {...baseProps} deletable onDelete={vi.fn()} />);
   expect(screen.getByRole("button", { name: /delete cluster/i })).toBeInTheDocument();
 });
+
+test("a local cluster shows BOTH actions, with Disconnect before the destructive Delete", () => {
+  // A local (kind/k3d) cluster is both deletable and removable; the operator must
+  // be able to disconnect without destroying the container, and Disconnect leads.
+  render(<ClusterIconPicker {...baseProps} deletable onDelete={vi.fn()} removable onRemove={vi.fn()} />);
+  const remove = screen.getByRole("button", { name: /remove from rigel/i });
+  const del = screen.getByRole("button", { name: /delete cluster/i });
+  expect(remove).toBeInTheDocument();
+  expect(del).toBeInTheDocument();
+  // Disconnect renders first (primary); the destructive Delete follows it in the DOM.
+  expect(remove.compareDocumentPosition(del) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
