@@ -266,28 +266,61 @@
 .chat-md em {
     font-style: italic;
 }
-/* Lists render as a distinct padded, rounded callout so they read as grouped. */
+/* Lists — accent bullet dots (ul) and circular number badges (ol), hanging indent. */
 .chat-md ul,
 .chat-md ol {
-    margin: 8px 0;
-    padding: 8px 14px 8px 30px;
-    background: var(--surface-sunken);
-    border: 1px solid var(--border-subtle);
-    border-radius: 8px;
+    margin: 6px 0;
+    padding: 0;
+    list-style: none;
 }
-/* Nested lists stay plain (no nested box). */
+.chat-md ul > li,
+.chat-md ol > li {
+    position: relative;
+    margin: 3px 0;
+    padding-left: 22px;
+}
+.chat-md ul > li::before {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: 8px;
+    width: 5px;
+    height: 5px;
+    border-radius: 999px;
+    background: var(--accent-primary);
+}
+.chat-md ol {
+    counter-reset: step;
+}
+.chat-md ol > li {
+    counter-increment: step;
+    padding-left: 28px;
+}
+.chat-md ol > li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 20px;
+    height: 20px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--fg-secondary);
+    font-size: 11px;
+    font-family: var(--font-mono, ui-monospace);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
 .chat-md li ul,
 .chat-md li ol {
-    margin: 4px 0 0;
-    padding: 0 0 0 18px;
-    background: transparent;
-    border: 0;
+    margin: 3px 0 0;
 }
-.chat-md li {
-    margin: 2px 0;
+.chat-md li.task-list-item {
+    padding-left: 0;
 }
-.chat-md li::marker {
-    color: var(--fg-secondary);
+.chat-md li.task-list-item::before {
+    display: none;
 }
 /* Inline code */
 .chat-md code {
@@ -298,13 +331,13 @@
     padding: 1px 5px;
     border-radius: 4px;
 }
-/* Code block */
+/* Code block — framed by CodeBlock.tsx; the <pre> is just the sunken body. */
 .chat-md pre {
-    margin: 6px 0;
+    margin: 0;
     background: var(--surface-sunken);
-    border: 1px solid var(--border-subtle);
-    border-radius: 6px;
-    padding: 10px;
+    border: 0;
+    border-radius: 0;
+    padding: 10px 12px;
     overflow-x: auto;
 }
 .chat-md pre code {
@@ -314,13 +347,7 @@
     padding: 0;
     border-radius: 0;
 }
-.chat-md blockquote {
-    margin: 6px 0;
-    padding-left: 12px;
-    border-left: 3px solid var(--accent-primary);
-    color: var(--fg-secondary);
-    font-style: italic;
-}
+/* blockquotes are rendered by Callout.tsx (ChatBlockquote) — no element styling here. */
 .chat-md table {
     margin: 6px 0;
     border-collapse: collapse;

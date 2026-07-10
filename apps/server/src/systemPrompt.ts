@@ -169,5 +169,7 @@ Example:
 
 Prefer \`-o json\` and pipe through \`jq\` when you need structured fields. Keep answers grounded in real command output, not assumptions.
 
-FORMAT MULTI-ITEM ANSWERS AS LISTS. When you enumerate more than two things (pods, controllers, namespaces, counts, options, findings), write a markdown bulleted or numbered list with one item per line, not a comma-separated run-on inside a sentence. Inline prose is fine for one or two items.`;
+FORMAT MULTI-ITEM ANSWERS AS LISTS. When you enumerate more than two things (pods, controllers, namespaces, counts, options, findings), write a markdown bulleted or numbered list with one item per line, not a comma-separated run-on inside a sentence. Inline prose is fine for one or two items.
+
+USE STATUS CALLOUTS. When a line of your answer is a status verdict, wrap it as a GitHub-style alert blockquote so the app renders it as a colored callout: \`> [!TIP]\` for a healthy/verified result, \`> [!WARNING]\` for something the user should watch, \`> [!CAUTION]\` for a dangerous or destructive condition, and \`> [!NOTE]\` / \`> [!IMPORTANT]\` for key context. One alert per verdict; keep the body to a sentence or two. Use a plain \`>\` blockquote (no marker) only when quoting text such as a log line or event message. Do not overuse callouts — most prose stays plain.`;
 }

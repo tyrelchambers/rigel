@@ -1,4 +1,4 @@
-import { test, expect } from "vitest";
+import { test, expect, describe, it } from "vitest";
 import { systemPrompt } from "./systemPrompt";
 
 test("single-context prompt has no fan-out section", () => {
@@ -18,4 +18,12 @@ test("prompt with extra read contexts appends a fan-out section naming the OTHER
 
 test("readContexts equal to just the active context produces NO fan-out section", () => {
   expect(systemPrompt("dev", ["dev"])).not.toContain("READ-ONLY FAN-OUT");
+});
+
+describe("systemPrompt status callouts", () => {
+  it("instructs the model to use GitHub-style alert syntax", () => {
+    const prompt = systemPrompt("prod");
+    expect(prompt).toContain("[!WARNING]");
+    expect(prompt).toContain("[!TIP]");
+  });
 });

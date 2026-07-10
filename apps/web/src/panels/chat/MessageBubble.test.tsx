@@ -91,3 +91,18 @@ describe("MessageBubble code block copy button", () => {
     expect(screen.queryByRole("button", { name: /copy/i })).toBeNull();
   });
 });
+
+describe("MessageBubble content blocks", () => {
+  test("renders a [!WARNING] alert as a WARNING callout", () => {
+    const msg = makeMessage({ text: "> [!WARNING]\n> Disk almost full" });
+    render(<MessageBubble message={msg} onAction={noop} />);
+    expect(screen.getByText("WARNING")).toBeInTheDocument();
+    expect(screen.getByText(/Disk almost full/)).toBeInTheDocument();
+  });
+
+  test("renders a fenced code block with its language header", () => {
+    const msg = makeMessage({ text: "```yaml\nfoo: bar\n```" });
+    render(<MessageBubble message={msg} onAction={noop} />);
+    expect(screen.getByText("yaml")).toBeInTheDocument();
+  });
+});
