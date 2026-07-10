@@ -9,6 +9,9 @@ import { NamespaceField } from "@/components/NamespaceField";
 import { useInstallHelm } from "@/panels/catalog/installApi";
 import { useInstallMetricsServer } from "@/lib/api";
 import { pluginIcon } from "./pluginIcon";
+import { intervalToCron, cronToInterval, INTERVAL_MAX, type IntervalUnit } from "./schedule";
+
+const INPUT_CLS = "h-8 rounded-[6px] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-2 text-xs text-foreground outline-none focus:ring-2 focus:ring-ring/50";
 
 function defaults(addon: ClusterAddon): Record<string, string | boolean> {
   const out: Record<string, string | boolean> = {};
@@ -105,20 +108,50 @@ function Field({ field, value, onChange }: { field: AddonField; value: string | 
       </div>
     );
   }
-  const cls = "h-8 rounded-[6px] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-2 text-xs text-foreground outline-none focus:ring-2 focus:ring-ring/50";
   return (
     <label className="flex flex-col gap-1 text-xs">
       <span className="text-[var(--fg-secondary)]">{field.label}</span>
       {field.type === "select" ? (
-        <select value={String(value)} onChange={(e) => onChange(e.target.value)} className={cls}>
+        <select value={String(value)} onChange={(e) => onChange(e.target.value)} className={INPUT_CLS}>
           {(field.options ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
         </select>
       ) : field.type === "namespace" ? (
         <NamespaceField value={String(value)} onChange={onChange} />
+      ) : field.type === "interval" ? (
+        <IntervalField value={String(value)} onChange={onChange} />
       ) : (
-        <input type="text" value={String(value)} onChange={(e) => onChange(e.target.value)} className={cls} />
+        <input type="text" value={String(value)} onChange={(e) => onChange(e.target.value)} className={INPUT_CLS} />
       )}
       {field.help && <span className="text-2xs text-[var(--fg-tertiary)]">{field.help}</span>}
     </label>
+  );
+}
+
+/** "Every [N] [minutes/hours/days]" — edits a cron string without exposing cron. */
+function IntervalField({ value, onChange }: { value: string; onChange: (cron: string) => void }) {
+  const { amount, unit } = cronToInterval(value);
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[var(--fg-tertiary)]">Every</span>
+      <input
+        type="number"
+        min={1}
+        max={INTERVAL_MAX[unit]}
+        value={amount}
+        onChange={(e) => onChange(intervalToCron(Number(e.target.value), unit))}
+        className={`${INPUT_CLS} w-16 text-center`}
+        aria-label="Schedule interval amount"
+      />
+      <select
+        value={unit}
+        onChange={(e) => onChange(intervalToCron(amount, e.target.value as IntervalUnit))}
+        className={INPUT_CLS}
+        aria-label="Schedule interval unit"
+      >
+        <option value="minutes">minutes</option>
+        <option value="hours">hours</option>
+        <option value="days">days</option>
+      </select>
+    </div>
   );
 }
