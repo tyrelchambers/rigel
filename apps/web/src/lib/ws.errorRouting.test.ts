@@ -13,6 +13,7 @@ const store = vi.hoisted(() => ({
   setError: vi.fn(),
   setLoading: vi.fn(),
   setAccess: vi.fn(),
+  clearKind: vi.fn(),
 }));
 
 vi.mock("@/store/cluster", () => ({
@@ -22,6 +23,7 @@ vi.mock("@/store/cluster", () => ({
       setError: store.setError,
       setLoading: store.setLoading,
       setAccess: store.setAccess,
+      clearKind: store.clearKind,
       setActiveContextInitial: vi.fn(),
       applySwitch: vi.fn(),
       namespaceByContext: {},
@@ -60,6 +62,7 @@ beforeEach(() => {
   store.setError.mockClear();
   store.setLoading.mockClear();
   store.setAccess.mockClear();
+  store.clearKind.mockClear();
   connectCluster();
 });
 
@@ -70,15 +73,17 @@ describe("error frame routing", () => {
     });
 
     expect(store.setAccess).toHaveBeenCalledWith("secrets", { status: "forbidden", message: "denied" });
+    expect(store.clearKind).toHaveBeenCalledWith("secrets");
     expect(store.setError).not.toHaveBeenCalled();
   });
 
-  it("routes a kind-scoped non-forbidden error into store.setAccess with status error", () => {
+  it("routes a kind-scoped non-forbidden error into store.setAccess with status error and does not clear the slice", () => {
     mockWs.onmessage!({
       data: JSON.stringify({ type: "error", kind: "pods", reason: "timeout", message: "watch failed" }),
     });
 
     expect(store.setAccess).toHaveBeenCalledWith("pods", { status: "error", message: "watch failed" });
+    expect(store.clearKind).not.toHaveBeenCalled();
     expect(store.setError).not.toHaveBeenCalled();
   });
 
@@ -87,5 +92,6 @@ describe("error frame routing", () => {
 
     expect(store.setError).toHaveBeenCalledWith("chat failed");
     expect(store.setAccess).not.toHaveBeenCalled();
+    expect(store.clearKind).not.toHaveBeenCalled();
   });
 });
