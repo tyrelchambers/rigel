@@ -24,3 +24,20 @@ export function cronToInterval(cron: string): { amount: number; unit: IntervalUn
   if ((m = /^0 0 \*\/(\d+) \* \*$/.exec(cron))) return { amount: Number(m[1]), unit: "days" };
   return { amount: 30, unit: "minutes" };
 }
+
+/** Human summary of an interval, e.g. "every 30 minutes" / "every 1 hour". */
+export function humanEvery(amount: number, unit: IntervalUnit): string {
+  const n = clampInterval(amount, unit);
+  const word = n === 1 ? unit.slice(0, -1) : unit;
+  return `every ${n} ${word}`;
+}
+
+/** Quick-pick cadences shown as pills above the interval control. */
+export const SCHEDULE_PRESETS: { label: string; cron: string }[] = [
+  { label: "5m", cron: intervalToCron(5, "minutes") },
+  { label: "15m", cron: intervalToCron(15, "minutes") },
+  { label: "30m", cron: intervalToCron(30, "minutes") },
+  { label: "1h", cron: intervalToCron(1, "hours") },
+  { label: "6h", cron: intervalToCron(6, "hours") },
+  { label: "12h", cron: intervalToCron(12, "hours") },
+];

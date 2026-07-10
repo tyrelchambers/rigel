@@ -10,6 +10,8 @@ export interface AddonField {
   default: string | boolean;
   options?: string[];
   help?: string;
+  /** Verb for an interval field's summary line, e.g. "Rebalances" → "Rebalances every 30 minutes." */
+  summaryVerb?: string;
 }
 
 export type AddonInstall =
@@ -111,7 +113,7 @@ export const CLUSTER_ADDONS: ClusterAddon[] = [
       buildValues: deschedulerValues,
     },
     fields: [
-      { key: "schedule", label: "Run schedule", type: "interval", default: "*/30 * * * *", help: "How often to rebalance." },
+      { key: "schedule", label: "Run schedule", type: "interval", default: "*/30 * * * *", summaryVerb: "Rebalances" },
       { key: "lowNodeUtilization", label: "Low-node utilization (move pods off busy nodes)", type: "toggle", default: true },
       { key: "removeDuplicates", label: "Spread duplicate replicas off the same node", type: "toggle", default: true },
       { key: "topologySpread", label: "Enforce topology spread constraints", type: "toggle", default: true },
