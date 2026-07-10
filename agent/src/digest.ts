@@ -117,7 +117,9 @@ function pluralize(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-/** The always-sent deterministic body. Plain text suitable for a phone. */
+/** Fallback body, sent ONLY when the model is unavailable (see composeDigestMessage).
+ *  Deliberately dumb: raw counts and a pointer to Rigel, no per-incident list — the
+ *  AI owns presentation, so this just guarantees the scheduled digest still lands. */
 export function renderDigestText(data: DigestData): string {
   const { sub, incidents, pullRequests, queueCount, health } = data;
   const byDisp = (d: IncidentRecord["disposition"]) => incidents.filter((i) => i.disposition === d).length;
@@ -132,17 +134,8 @@ export function renderDigestText(data: DigestData): string {
     lines.push(`${pluralize(incidents.length, "incident")}: ` +
       `${byDisp("autoFixed")} auto-fixed, ${byDisp("queued")} awaiting you, ` +
       `${byDisp("resolved")} resolved, ${byDisp("flagged")} flagged.`);
-    if (pullRequests.length > 0) {
-      lines.push(`${pluralize(pullRequests.length, "fix PR")} opened.`);
-    }
-    lines.push("");
-    for (const i of incidents.slice(0, 10)) {
-      const tail = i.disposition === "resolved" ? "resolved" : i.disposition;
-      lines.push(`• ${i.location} — ${i.reason} (${tail})`);
-    }
-    for (const p of pullRequests.slice(0, 10)) {
-      lines.push(`• PR: ${p.app} — ${p.title}${p.prUrl ? ` (${p.prUrl})` : ""}`);
-    }
+    if (pullRequests.length > 0) lines.push(`${pluralize(pullRequests.length, "fix PR")} opened.`);
+    lines.push("Open Rigel for the full breakdown.");
   }
   lines.push("");
   lines.push(`Now: ${health.totalPods} pods, ${health.totalDeployments} deployments, ` +
@@ -154,45 +147,64 @@ export function renderDigestText(data: DigestData): string {
 // ---- Task 10: AI headline + composeDigestMessage ----
 import { runModel } from "./runModel.js";
 
-const DIGEST_SYSTEM_PROMPT = `You are Rigel's cluster assistant writing the one-line opening of a scheduled digest an operator reads on their phone in the morning.
+const DIGEST_SYSTEM_PROMPT = `You are Rigel's cluster assistant writing a scheduled digest an operator reads on their phone. You are given a structured JSON summary of what happened to their Kubernetes cluster during a time window.
 
-You are given a structured summary of what happened to their Kubernetes cluster during a time window. Reply with a SINGLE plain-text sentence (no markdown, no greeting, under ~140 characters) that captures the headline: was it a quiet night, were there issues, did anything still need them. Do not restate every detail — the structured body follows your sentence. If nothing happened, say so plainly.`;
+Write the whole digest as plain text (no markdown tables or headers), tuned for a small screen:
+- Open with ONE honest headline sentence: was it a quiet night, or does something still need them.
+- Then summarize what happened. GROUP repetitive or ephemeral items — many pods of the same Job/CronJob/Deployment, or the same error across replicas — into a SINGLE line with a count (e.g. "descheduler-nodejoin: 38 failed job pods, 7 still flagged"). NEVER list ephemeral pods one by one; that is the whole point.
+- Lead with anything still needing them (flagged, or awaiting their approval); de-emphasize what already resolved itself.
+- Mention opened fix PRs and current health briefly if relevant.
+- Use the counts you are given; do not recount or invent numbers. Keep it short — a handful of lines, well under a screen. If nothing happened, say so in one line.`;
+
+function dispositionTotals(incidents: IncidentRecord[]): Record<string, number> {
+  const t: Record<string, number> = {};
+  for (const i of incidents) t[i.disposition] = (t[i.disposition] ?? 0) + 1;
+  return t;
+}
+
+const MAX_PROMPT_INCIDENTS = 200;
 
 function renderDigestPrompt(data: DigestData): string {
+  const shown = data.incidents.slice(0, MAX_PROMPT_INCIDENTS);
   return [
     `Cluster digest data (JSON):`,
     JSON.stringify({
+      title: data.sub.label,
       window_hours: Math.round((data.windowEndMs - data.windowStartMs) / 3_600_000),
-      incidents: data.incidents.map((i) => ({ location: i.location, reason: i.reason, disposition: i.disposition })),
+      totals: { incidents: data.incidents.length, ...dispositionTotals(data.incidents) },
+      incidents: shown.map((i) => ({ location: i.location, reason: i.reason, disposition: i.disposition })),
+      incidents_omitted: data.incidents.length - shown.length,
       fix_prs: data.pullRequests.map((p) => ({ app: p.app, title: p.title, status: p.status })),
       awaiting_approval: data.queueCount,
       now: data.health,
     }),
     ``,
-    `Write the one-line headline.`,
+    `Write the digest.`,
   ].join("\n");
 }
 
-/** The AI headline, or null on any model error (caller sends the body alone). */
-export async function generateDigestHeadline(rc: RuntimeConfig, data: DigestData): Promise<string | null> {
+/** Let the model write and lay out the whole digest from the structured data —
+ *  it decides how to group and prioritize. Null on any model error, so the caller
+ *  falls back to the deterministic body (so a scheduled digest never silently
+ *  fails to send when the model/credential is down). */
+export async function generateDigestBody(rc: RuntimeConfig, data: DigestData): Promise<string | null> {
   try {
     const result = await runModel({
       role: "worker", config: rc, prompt: renderDigestPrompt(data),
-      systemPrompt: DIGEST_SYSTEM_PROMPT, timeoutMs: 60_000,
+      systemPrompt: DIGEST_SYSTEM_PROMPT, timeoutMs: 90_000,
     });
     if (result.isError) return null;
-    const line = result.text.trim().split("\n")[0]?.trim();
-    return line && line.length > 0 ? line : null;
+    const text = result.text.trim();
+    return text.length > 0 ? text : null;
   } catch {
     return null;
   }
 }
 
-/** The full message: deterministic body, with an AI headline prepended when available. */
+/** The digest to send: the AI-composed body, or the deterministic grouped body
+ *  when the model is unavailable. */
 export async function composeDigestMessage(rc: RuntimeConfig, data: DigestData): Promise<string> {
-  const body = renderDigestText(data);
-  const headline = await generateDigestHeadline(rc, data);
-  return headline ? `${headline}\n\n${body}` : body;
+  return (await generateDigestBody(rc, data)) ?? renderDigestText(data);
 }
 
 // ---- Task 11: evaluateDigests orchestrator + sendToChannel ----

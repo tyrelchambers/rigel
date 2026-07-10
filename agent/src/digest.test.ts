@@ -4,7 +4,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 afterEach(() => vi.clearAllMocks());
 import { isDigestDue, assembleDigestData, renderDigestText } from "./digest.js";
 import type { DigestSubscription } from "@rigel/k8s/src/digest.js";
-import type { AssistantState } from "./state.js";
+import type { AssistantState, IncidentRecord } from "./state.js";
 
 const sub = (over: Partial<DigestSubscription> = {}): DigestSubscription => ({
   id: "a", enabled: true, label: "M", channel: "signal",
@@ -78,15 +78,32 @@ describe("assembleDigestData", () => {
   });
 });
 
-describe("renderDigestText", () => {
-  it("produces a deterministic body mentioning the counts", () => {
+describe("renderDigestText (model-down fallback)", () => {
+  it("gives counts and a pointer to Rigel, without naming any incident", () => {
     const now = Date.parse("2026-06-30T07:00:00.000Z");
     const s = { id: "a", enabled: true, label: "Morning digest", channel: "signal" as const, days: [2], time: "07:00", timezone: "UTC", lookback: { mode: "fixed" as const, hours: 8 }, createdAt: "" };
     const text = renderDigestText(assembleDigestData(state(), detection, s, now, undefined));
     expect(text).toContain("Morning digest");
     expect(text).toContain("1 incident");
     expect(text).toContain("1 fix PR");
-    expect(text).toContain("api");
+    expect(text).toContain("Open Rigel");
+    expect(text).not.toContain("api"); // the dumb fallback names no resources
+  });
+
+  it("stays compact for a burst of ephemeral pods — no per-pod lines", () => {
+    const pods: IncidentRecord[] = Array.from({ length: 38 }, (_, n) => ({
+      at: "2026-06-30T02:00:00.000Z", lastSeenAt: "2026-06-30T02:00:00.000Z",
+      fingerprint: `k|kube-system|descheduler-nodejoin-17836570${10 + n}-p${n}|Failed`,
+      location: `kube-system/descheduler-nodejoin-17836570${10 + n}-p${n}`, reason: "Failed",
+      disposition: n < 7 ? "flagged" : "resolved",
+    }));
+    const s = { id: "a", enabled: true, label: "Morning digest", channel: "signal" as const, days: [1], time: "07:00", timezone: "UTC", lookback: { mode: "fixed" as const, hours: 8 }, createdAt: "" };
+    const st = { ...state(), incidents: pods, queue: [], pullRequests: [] } as AssistantState;
+    const now = Date.parse("2026-06-30T07:00:00.000Z");
+    const text = renderDigestText(assembleDigestData(st, detection, s, now, undefined));
+    expect(text).toContain("38 incidents");
+    expect(text).not.toContain("descheduler-nodejoin"); // no owner/pod names in the fallback
+    expect(text.match(/^• /gm) ?? []).toHaveLength(0);   // no bullets at all
   });
 });
 
@@ -103,17 +120,24 @@ const dataFixture = () => {
 };
 
 describe("composeDigestMessage", () => {
-  it("prepends the AI headline on success", async () => {
-    vi.spyOn(runModelMod, "runModel").mockResolvedValue({ isError: false, text: "A quiet night, one fix landed.", costUsd: 0, sessionId: "" } as any);
+  it("sends the AI-composed digest verbatim on success (the model owns presentation)", async () => {
+    vi.spyOn(runModelMod, "runModel").mockResolvedValue({ isError: false, text: "Quiet night. One fix PR landed for prod/api; nothing needs you.", costUsd: 0, sessionId: "" } as any);
     const text = await composeDigestMessage(rc, dataFixture());
-    expect(text.startsWith("A quiet night, one fix landed.")).toBe(true);
-    expect(text).toContain("Morning digest"); // body still present
+    expect(text).toBe("Quiet night. One fix PR landed for prod/api; nothing needs you.");
   });
-  it("falls back to the body alone on model error", async () => {
+  it("falls back to the deterministic compact body on model error", async () => {
     vi.spyOn(runModelMod, "runModel").mockResolvedValue({ isError: true, errorMessage: "no credential", text: "", costUsd: 0 } as any);
     const text = await composeDigestMessage(rc, dataFixture());
     expect(text).toContain("Morning digest");
     expect(text).not.toContain("undefined");
+  });
+  it("feeds the model raw incidents + exact totals so it can group them itself", async () => {
+    const spy = vi.spyOn(runModelMod, "runModel").mockResolvedValue({ isError: false, text: "ok", costUsd: 0, sessionId: "" } as any);
+    await composeDigestMessage(rc, dataFixture());
+    const prompt = (spy.mock.calls[0]![0] as any).prompt as string;
+    expect(prompt).toContain('"totals"');
+    expect(prompt).toContain('"incidents"');
+    expect(prompt).toContain("prod/api"); // the raw location, ungrouped, for the model to collapse
   });
 });
 
@@ -156,7 +180,7 @@ describe("evaluateDigests", () => {
     const rc = rcWith({ digests: [dueSub], digestRunNow: { id: "a", mode: "preview", token: "tok-1" } });
     const s = await evaluateDigests(rc, st, detection, now);
     expect(sig).not.toHaveBeenCalled();
-    expect(s.digestState?.lastPreview?.text).toContain("M");
+    expect(s.digestState?.lastPreview?.text).toBe("head"); // the AI-composed digest, verbatim
     expect(s.digestState?.lastRunNowToken).toBe("tok-1");
     expect(s.digestState?.lastSentAt.a).toBe("2026-06-30T11:00:00.000Z"); // unchanged
   });
