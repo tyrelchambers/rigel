@@ -6,13 +6,26 @@ import type { ReactNode } from "react";
  * a resource detail view (endpoints, labels, annotations, …). Matches the
  * RelatedResources card so the stacked sections read as one family.
  */
-export function SectionCard({ title, count, children }: { title: string; count?: number; children: ReactNode }) {
+export function SectionCard({
+  title,
+  count,
+  action,
+  children,
+}: {
+  title: string;
+  count?: number;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <div className="space-y-2">
-      <h3 className="text-3xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-        {title}
-        {count != null && <span className="ml-1 text-foreground/50">{count}</span>}
-      </h3>
+      <div className="flex items-center">
+        <h3 className="text-3xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+          {title}
+          {count != null && <span className="ml-1 text-foreground/50">{count}</span>}
+        </h3>
+        {action && <div className="ml-auto">{action}</div>}
+      </div>
       <div className="rounded-lg p-3" style={{ background: "#141417", border: "1px solid rgba(255,255,255,0.05)" }}>
         {children}
       </div>
