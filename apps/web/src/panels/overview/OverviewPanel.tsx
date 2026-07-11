@@ -5,7 +5,6 @@ import {
   Server,
   Database,
   CalendarClock,
-  Activity,
   AlertTriangle,
   History,
   Trash2,
@@ -26,7 +25,6 @@ import { handoffToChat } from "@/lib/chatHandoff";
 import { buildWarningInvestigationPrompt } from "@/panels/components/chatHandoffPrompts";
 import type {
   Deployment,
-  EventBucket,
   K8sEvent,
   Node,
   NodeMetrics,
@@ -47,7 +45,6 @@ import { RecentDeploysCard } from "./RecentDeploysCard";
 import {
   sortEvents,
   isWarning,
-  eventBuckets,
   relativeAge,
   absoluteWhen,
   when,
@@ -70,8 +67,6 @@ import type {
 //   - Namespace-scoped aggregation — Overview is always cluster-wide.
 // ---------------------------------------------------------------------------
 
-const TIMELINE_SPAN_SECONDS = 3600;
-const TIMELINE_BUCKETS = 60;
 const MAX_RECENT_WARNINGS = 10;
 
 // Recent-warnings palette (Pencil redesign).
@@ -221,11 +216,6 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
   const warnings = useMemo(() => events.filter(isWarning), [events]);
   const recentWarnings = warnings.slice(0, MAX_RECENT_WARNINGS);
 
-  const buckets = useMemo(
-    () => eventBuckets(events, Date.now(), TIMELINE_SPAN_SECONDS, TIMELINE_BUCKETS),
-    [events],
-  );
-
   return (
     <div className="ov-root">
       {/* Top bar — full-bleed header (Pencil "Top bar") */}
@@ -315,14 +305,6 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
           />
         </div>
 
-        {/* Recent deployments — batches Rigel applied, with per-batch undo */}
-        <div className="ov-row">
-          <RecentDeploysCard />
-        </div>
-
-        {/* Event activity — 1h span, 60 stacked warning/normal buckets, display-only */}
-        <EventActivityCard buckets={buckets} />
-
         {/* Recent warnings — up to 10, newest first (Pencil redesign) */}
         <div
           style={{
@@ -380,6 +362,11 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
               </div>
             </>
           )}
+        </div>
+
+        {/* Recent deployments — batches Rigel applied, with per-batch undo */}
+        <div className="ov-row">
+          <RecentDeploysCard />
         </div>
       </div>
 
@@ -497,38 +484,6 @@ function SummaryCard({
         }
       />
       <div className="ov-sum-n">{value}</div>
-    </div>
-  );
-}
-
-/** Event-activity card: stacked warning(red)/normal(green) histogram over the 1h window. */
-function EventActivityCard({ buckets }: { buckets: EventBucket[] }) {
-  const hasActivity = buckets.some((b) => b.warnings + b.normal > 0);
-  const max = Math.max(1, ...buckets.map((b) => b.warnings + b.normal));
-  return (
-    <div className="ov-card">
-      <CardHeader icon={Activity} title="Event activity — last 1h" />
-      {hasActivity ? (
-        <div className="ov-chart">
-          {buckets.map((b) => {
-            const total = b.warnings + b.normal;
-            const warnPct = (b.warnings / max) * 100;
-            const normPct = (b.normal / max) * 100;
-            return (
-              <div
-                key={b.index}
-                className="ov-bar-col"
-                title={total > 0 ? `${b.warnings} warning, ${b.normal} normal` : undefined}
-              >
-                <div style={{ height: `${normPct}%`, background: "var(--status-running)" }} />
-                <div style={{ height: `${warnPct}%`, background: "var(--status-failed)" }} />
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="ov-chart-empty">No event activity in the last hour</div>
-      )}
     </div>
   );
 }
