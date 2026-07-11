@@ -18,28 +18,34 @@ export function TokenInput({ label, tokens, onChange, danger, placeholder }: Pro
     setDraft("");
   }
   return (
-    <div className="flex w-full items-start gap-[10px]">
-      <span className="w-[78px] shrink-0 pt-1.5 font-[var(--font-mono)] text-3xs tracking-[0.6px] text-[var(--fg-tertiary)]">
+    <div className="flex w-full items-start gap-[7px]">
+      <span
+        className="w-[96px] shrink-0 pt-[5px] font-[var(--font-mono)] text-[10.5px] tracking-[0.8px] uppercase"
+        style={{ color: "#6B6B73" }}
+      >
         {label}
       </span>
-      <div className="flex flex-1 flex-wrap items-center gap-[6px]">
-        {tokens.map((t) => (
-          <span
-            key={t}
-            className={`flex items-center gap-[5px] rounded-[var(--radius-sm)] border bg-[var(--surface-elevated)] px-[7px] py-[3px] font-[var(--font-mono)] text-2xs ${
-              danger?.(t)
-                ? "border-[var(--status-failed)]/25 text-[var(--status-failed)]"
-                : "border-[var(--border-subtle)] text-[var(--fg-secondary)]"
-            }`}
-          >
-            {t}
-            <button type="button" aria-label={`Remove ${t}`} onClick={() => onChange(tokens.filter((x) => x !== t))}>
-              <X className="size-[10px] text-[var(--fg-tertiary)]" />
-            </button>
-          </span>
-        ))}
-        <span className="flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--border-strong)] px-[7px] py-[3px]">
-          <Plus className="size-[10px] text-[var(--fg-tertiary)]" />
+      <div className="flex flex-1 flex-wrap items-center gap-[7px]">
+        {tokens.map((t) => {
+          const isDanger = danger?.(t) ?? false;
+          return (
+            <span
+              key={t}
+              className="flex items-center gap-[5px] rounded-[5px] px-[8px] py-[3px] font-[var(--font-mono)] text-[12px]"
+              style={isDanger ? { background: "#F871711A", color: "#F87171" } : { background: "#FFFFFF0D", color: "#D4D4D8" }}
+            >
+              {t}
+              <button type="button" aria-label={`Remove ${t}`} onClick={() => onChange(tokens.filter((x) => x !== t))}>
+                <X className="size-[11px]" style={{ color: isDanger ? "#F87171" : "#6B6B73" }} />
+              </button>
+            </span>
+          );
+        })}
+        <span
+          className="flex items-center gap-[4px] rounded-[5px] border px-[8px] py-[3px]"
+          style={{ borderColor: "#26272B" }}
+        >
+          <Plus className="size-[11px]" style={{ color: "#6B6B73" }} />
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -52,7 +58,7 @@ export function TokenInput({ label, tokens, onChange, danger, placeholder }: Pro
             onBlur={add}
             placeholder={placeholder ?? "add"}
             aria-label={`Add ${label}`}
-            className="w-16 bg-transparent font-[var(--font-mono)] text-2xs text-[var(--fg-primary)] outline-none placeholder:text-[var(--fg-tertiary)]"
+            className="w-14 bg-transparent font-[var(--font-mono)] text-[12px] text-white outline-none placeholder:text-[#6B6B73]"
           />
         </span>
       </div>

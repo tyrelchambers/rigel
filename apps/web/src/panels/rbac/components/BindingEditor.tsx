@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link2, Plus, X, Code } from "lucide-react";
+import { Link2, Plus, Trash2, Code, ChevronDown, User } from "lucide-react";
 import {
   Dialog,
   DialogBody,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogIcon,
@@ -13,6 +14,9 @@ import { Button } from "@/components/ui/button";
 import type { RoleRef, Subject } from "../types";
 import { buildBindingYaml } from "../manifest";
 import { NamespaceField } from "@/components/NamespaceField";
+import { Segmented } from "./Segmented";
+import { SectionHeader } from "./SectionHeader";
+import { LabeledField, fieldInputClass, fieldSurface } from "./LabeledField";
 
 export interface BindingTarget {
   kind: "RoleBinding" | "ClusterRoleBinding";
@@ -50,10 +54,6 @@ interface Props {
 }
 
 const SUBJECT_KINDS = ["ServiceAccount", "User", "Group"] as const;
-
-function selectClass(w: string) {
-  return `${w} appearance-none rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[11px] py-[9px] text-xs text-[var(--fg-primary)] outline-none`;
-}
 
 export function BindingEditor({
   target,
@@ -120,69 +120,71 @@ export function BindingEditor({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-h-[86vh] w-[calc(100%-2rem)] max-w-[560px]">
-        <DialogHeader>
-          <DialogIcon>
-            <Link2 className="size-[15px] text-[var(--accent-primary)]" />
+      <DialogContent className="max-h-[86vh] w-[calc(100%-2rem)] max-w-[720px]">
+        <DialogHeader className="border-[#26272B]">
+          <DialogIcon background={false} className="size-9 rounded-[9px]" style={{ background: "#38BDF826" }}>
+            <Link2 className="size-[18px]" style={{ color: "#38BDF8" }} />
           </DialogIcon>
-          <DialogTitle>{isEdit ? `Edit binding · ${target!.name}` : "New binding"}</DialogTitle>
+          <div className="flex min-w-0 flex-col gap-[3px]">
+            <DialogTitle className="text-[20px] font-bold text-white">
+              {isEdit ? `Edit binding · ${target!.name}` : "New binding"}
+            </DialogTitle>
+            <DialogDescription className="text-[13px]" style={{ color: "#6B6B73" }}>
+              {isEdit
+                ? kind === "ClusterRoleBinding"
+                  ? "ClusterRoleBinding · cluster-scoped"
+                  : `RoleBinding · namespace ${namespace}`
+                : "Grant a role to users, groups, or service accounts."}
+            </DialogDescription>
+          </div>
         </DialogHeader>
-        <DialogBody className="flex flex-col gap-4">
-          {isEdit ? (
-            <p className="text-xs text-[var(--fg-secondary)]">
-              {kind === "ClusterRoleBinding" ? "ClusterRoleBinding · cluster-scoped" : `RoleBinding · namespace ${namespace}`}
-            </p>
-          ) : (
-            <div className="flex flex-wrap items-center gap-3">
-              <input
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  setNameTouched(true);
-                }}
-                placeholder="name"
-                aria-label="Binding name"
-                className="min-w-[160px] flex-1 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[11px] py-[9px] font-[var(--font-mono)] text-xs text-[var(--fg-primary)] outline-none"
-              />
-              <div className="flex overflow-hidden rounded-[var(--radius-md)] border border-[var(--border-subtle)]">
-                {(["RoleBinding", "ClusterRoleBinding"] as const).map((k) => (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => selectKind(k)}
-                    className={`px-3 py-[9px] text-xs ${kind === k ? "bg-white/[0.08] text-[var(--fg-primary)]" : "text-[var(--fg-tertiary)]"}`}
-                  >
-                    {k}
-                  </button>
-                ))}
+        <DialogBody className="flex flex-col gap-[18px] p-6">
+          {!isEdit && (
+            <>
+              <div className="flex items-end gap-[14px]">
+                <LabeledField label="Name" className="flex-1">
+                  <input
+                    value={name}
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      setNameTouched(true);
+                    }}
+                    placeholder="e.g. read-pods"
+                    aria-label="Binding name"
+                    className={fieldInputClass}
+                    style={fieldSurface}
+                  />
+                </LabeledField>
+                <Segmented
+                  options={["RoleBinding", "ClusterRoleBinding"] as const}
+                  value={kind}
+                  onChange={selectKind}
+                  ariaLabel="Binding kind"
+                />
               </div>
               {kind === "RoleBinding" && (
-                <NamespaceField value={namespace} onChange={setNamespace} className="w-[160px]" />
+                <NamespaceField value={namespace} onChange={setNamespace} className="w-full" />
               )}
-            </div>
+            </>
           )}
 
-          <div className="flex flex-col gap-2">
-            <span className="font-[var(--font-mono)] text-2xs font-semibold tracking-[1px] text-[var(--fg-secondary)]">
-              GRANTS ROLE
-            </span>
-            <div className="flex items-center gap-2">
-              <select
-                aria-label="Role ref kind"
-                value={roleRef.kind ?? "Role"}
-                disabled={kind === "ClusterRoleBinding"}
-                onChange={(e) => setRoleRef({ ...roleRef, kind: e.target.value, name: "" })}
-                className={selectClass("w-[160px]") + (kind === "ClusterRoleBinding" ? " opacity-60" : "")}
-              >
-                <option value="Role">Role</option>
-                <option value="ClusterRole">ClusterRole</option>
-              </select>
-              {roleNameOptions.length > 0 ? (
+          <SectionHeader label="GRANTS ROLE" />
+          <div className="flex items-center gap-[14px]">
+            <Segmented
+              options={["Role", "ClusterRole"] as const}
+              value={(roleRef.kind as "Role" | "ClusterRole") ?? "Role"}
+              onChange={(k) => setRoleRef({ ...roleRef, kind: k, name: "" })}
+              disabled={kind === "ClusterRoleBinding"}
+              ariaLabel="Role ref kind"
+            />
+            {roleNameOptions.length > 0 ? (
+              <div className="relative flex-1">
                 <select
                   aria-label="Role ref name"
                   value={roleRef.name ?? ""}
                   onChange={(e) => setRoleRef({ ...roleRef, name: e.target.value })}
-                  className={selectClass("flex-1")}
+                  className={`${fieldInputClass} appearance-none pr-9`}
+                  style={fieldSurface}
                 >
                   <option value="" disabled>
                     Select role…
@@ -193,61 +195,64 @@ export function BindingEditor({
                     </option>
                   ))}
                 </select>
-              ) : (
-                <input
-                  aria-label="Role ref name"
-                  value={roleRef.name ?? ""}
-                  onChange={(e) => setRoleRef({ ...roleRef, name: e.target.value })}
-                  placeholder="role name"
-                  className="flex-1 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[11px] py-[9px] font-[var(--font-mono)] text-xs text-[var(--fg-primary)] outline-none"
-                />
-              )}
-            </div>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-[14px] -translate-y-1/2" style={{ color: "#6B6B73" }} />
+              </div>
+            ) : (
+              <input
+                aria-label="Role ref name"
+                value={roleRef.name ?? ""}
+                onChange={(e) => setRoleRef({ ...roleRef, name: e.target.value })}
+                placeholder="role name"
+                className={`${fieldInputClass} flex-1`}
+                style={fieldSurface}
+              />
+            )}
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="font-[var(--font-mono)] text-2xs font-semibold tracking-[1px] text-[var(--fg-secondary)]">
-              SUBJECTS
-            </span>
-            <span className="font-[var(--font-mono)] text-2xs text-[var(--fg-tertiary)]">{subjects.length}</span>
-            <div className="h-px flex-1 bg-[var(--border-subtle)]" />
-          </div>
+          <SectionHeader label="SUBJECTS" count={subjects.length} />
 
           {subjects.map((s, i) => {
             const isSa = (s.kind ?? "ServiceAccount") === "ServiceAccount";
             return (
-              <div key={i} className="flex flex-wrap items-center gap-2">
-                <select
-                  aria-label="Subject kind"
-                  value={s.kind ?? "ServiceAccount"}
-                  onChange={(e) => setSubject(i, { kind: e.target.value })}
-                  className={selectClass("w-[150px]")}
-                >
-                  {SUBJECT_KINDS.map((k) => (
-                    <option key={k} value={k}>{k}</option>
-                  ))}
-                </select>
+              <div key={i} className="flex flex-wrap items-center gap-[10px]">
+                <div className="relative w-[170px]">
+                  <User className="pointer-events-none absolute left-3 top-1/2 size-[14px] -translate-y-1/2" style={{ color: "#6B6B73" }} />
+                  <select
+                    aria-label="Subject kind"
+                    value={s.kind ?? "ServiceAccount"}
+                    onChange={(e) => setSubject(i, { kind: e.target.value })}
+                    className={`${fieldInputClass} appearance-none pl-[34px] pr-9`}
+                    style={fieldSurface}
+                  >
+                    {SUBJECT_KINDS.map((k) => (
+                      <option key={k} value={k}>{k}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-[14px] -translate-y-1/2" style={{ color: "#6B6B73" }} />
+                </div>
                 <input
                   aria-label="Subject name"
                   value={s.name ?? ""}
                   onChange={(e) => setSubject(i, { name: e.target.value })}
                   placeholder="name"
-                  className="min-w-[120px] flex-1 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[11px] py-[9px] font-[var(--font-mono)] text-xs text-[var(--fg-primary)] outline-none"
+                  className={`${fieldInputClass} min-w-[120px] flex-1`}
+                  style={fieldSurface}
                 />
                 <NamespaceField
                   value={s.namespace ?? "default"}
                   onChange={(ns) => setSubject(i, { namespace: ns })}
                   disabled={!isSa}
                   ariaLabel="Subject namespace"
-                  className="w-[130px]"
+                  className="w-[150px]"
                 />
                 <button
                   type="button"
                   aria-label={`Remove subject ${s.name ?? ""}`}
                   onClick={() => setSubjects((ss) => ss.filter((_, j) => j !== i))}
-                  className="flex size-[30px] items-center justify-center rounded-[var(--radius-md)] border border-[var(--border-subtle)] text-[var(--fg-tertiary)] hover:bg-white/[0.05]"
+                  className="flex size-9 items-center justify-center rounded-[6px] border hover:bg-white/[0.05]"
+                  style={{ borderColor: "#26272B", color: "#6B6B73" }}
                 >
-                  <X className="size-[13px]" />
+                  <Trash2 className="size-[14px]" />
                 </button>
               </div>
             );
@@ -256,19 +261,20 @@ export function BindingEditor({
           <button
             type="button"
             onClick={() => setSubjects((ss) => [...ss, { kind: "ServiceAccount", name: "", namespace: "default" }])}
-            className="flex items-center justify-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border-strong)] py-[10px] text-xs font-medium text-[var(--fg-secondary)] hover:bg-white/[0.04]"
+            className="flex w-full items-center justify-center gap-[7px] rounded-[6px] border px-[14px] py-[12px] text-[13px] font-semibold"
+            style={{ background: "#FFFFFF05", borderColor: "#26272B", color: "#A1A1AA" }}
           >
-            <Plus className="size-[13px]" /> Add subject
+            <Plus className="size-[15px]" /> Add subject
           </button>
         </DialogBody>
-        <DialogFooter showCloseButton={false}>
+        <DialogFooter showCloseButton={false} className="border-[#26272B]">
           {isEdit && onEditYaml && (
             <Button variant="outline" onClick={onEditYaml} className="mr-auto">
               <Code className="size-[13px]" /> Edit YAML
             </Button>
           )}
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button disabled={!valid} onClick={apply}>Apply</Button>
+          <Button disabled={!valid} onClick={apply} className="h-auto px-6 py-[11px]">Apply</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

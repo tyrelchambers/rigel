@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { FileBadge, Plus, Trash2, Code } from "lucide-react";
+import { ShieldCheck, Plus, Trash2, Code } from "lucide-react";
 import {
   Dialog,
   DialogBody,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogIcon,
@@ -15,6 +16,9 @@ import { ruleRisk } from "../risk";
 import { buildRoleYaml } from "../manifest";
 import { NamespaceField } from "@/components/NamespaceField";
 import { TokenInput } from "./TokenInput";
+import { Segmented } from "./Segmented";
+import { SectionHeader } from "./SectionHeader";
+import { LabeledField, fieldInputClass, fieldSurface } from "./LabeledField";
 
 export interface RoleTarget {
   kind: "Role" | "ClusterRole";
@@ -69,73 +73,71 @@ export function RoleEditor({ target, open, onClose, onApply, onEditYaml }: Props
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-h-[86vh] w-[calc(100%-2rem)] max-w-[560px]">
-        <DialogHeader>
-          <DialogIcon>
-            <FileBadge className="size-[15px] text-[var(--accent-primary)]" />
+      <DialogContent className="max-h-[86vh] w-[calc(100%-2rem)] max-w-[720px]">
+        <DialogHeader className="border-[#26272B]">
+          <DialogIcon background={false} className="size-9 rounded-[9px]" style={{ background: "#38BDF826" }}>
+            <ShieldCheck className="size-[18px]" style={{ color: "#38BDF8" }} />
           </DialogIcon>
-          <DialogTitle>{isEdit ? `Edit role · ${target!.name}` : "New role"}</DialogTitle>
+          <div className="flex min-w-0 flex-col gap-[3px]">
+            <DialogTitle className="text-[20px] font-bold text-white">
+              {isEdit ? `Edit role · ${target!.name}` : "New role"}
+            </DialogTitle>
+            <DialogDescription className="text-[13px]" style={{ color: "#6B6B73" }}>
+              {isEdit
+                ? kind === "ClusterRole"
+                  ? "ClusterRole · cluster-scoped"
+                  : `Role · namespace ${namespace}`
+                : "Define what this role can do."}
+            </DialogDescription>
+          </div>
         </DialogHeader>
-        <DialogBody className="flex flex-col gap-4">
-          {isEdit ? (
-            <p className="text-xs text-[var(--fg-secondary)]">
-              {kind === "ClusterRole" ? "ClusterRole · cluster-scoped" : `Role · namespace ${namespace}`}
-            </p>
-          ) : (
-            <div className="flex flex-wrap items-center gap-3">
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="name"
-                aria-label="Role name"
-                className="min-w-[160px] flex-1 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[11px] py-[9px] font-[var(--font-mono)] text-xs text-[var(--fg-primary)] outline-none"
-              />
-              <div className="flex overflow-hidden rounded-[var(--radius-md)] border border-[var(--border-subtle)]">
-                {(["Role", "ClusterRole"] as const).map((k) => (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => setKind(k)}
-                    className={`px-3 py-[9px] text-xs ${kind === k ? "bg-white/[0.08] text-[var(--fg-primary)]" : "text-[var(--fg-tertiary)]"}`}
-                  >
-                    {k}
-                  </button>
-                ))}
+        <DialogBody className="flex flex-col gap-[18px] p-6">
+          {!isEdit && (
+            <>
+              <LabeledField label="Name">
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. pod-reader"
+                  aria-label="Role name"
+                  className={fieldInputClass}
+                  style={fieldSurface}
+                />
+              </LabeledField>
+              <div className="flex items-center gap-[14px]">
+                <Segmented
+                  options={["Role", "ClusterRole"] as const}
+                  value={kind}
+                  onChange={setKind}
+                  ariaLabel="Role kind"
+                />
+                {kind === "Role" && (
+                  <NamespaceField value={namespace} onChange={setNamespace} className="flex-1" />
+                )}
               </div>
-              {kind === "Role" && (
-                <NamespaceField value={namespace} onChange={setNamespace} className="w-[160px]" />
-              )}
-            </div>
+            </>
           )}
 
-          <div className="flex items-center gap-2">
-            <span className="font-[var(--font-mono)] text-2xs font-semibold tracking-[1px] text-[var(--fg-secondary)]">
-              RULES
-            </span>
-            <span className="font-[var(--font-mono)] text-2xs text-[var(--fg-tertiary)]">{rules.length}</span>
-            <div className="h-px flex-1 bg-[var(--border-subtle)]" />
-          </div>
+          <SectionHeader label="RULES" count={rules.length} />
 
           {rules.map((r, i) => {
             const dangerous = ruleRisk(r) === "dangerous";
             return (
               <div
                 key={i}
-                className={`flex flex-col gap-[10px] rounded-[var(--radius-md)] border bg-[var(--surface-sunken)] p-[13px] ${
-                  dangerous ? "border-[var(--status-failed)]/25" : "border-[var(--border-subtle)]"
-                }`}
+                className="flex flex-col gap-[14px] rounded-[8px] border p-4"
+                style={{ background: "#0C0D0F", borderColor: dangerous ? "color-mix(in srgb, var(--status-failed) 25%, transparent)" : "#26272B" }}
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-[var(--font-mono)] text-2xs font-semibold text-[var(--fg-secondary)]">
-                    Rule {i + 1}
-                  </span>
+                  <span className="text-[14px] font-semibold text-white">Rule {i + 1}</span>
                   <button
                     type="button"
                     aria-label="Remove rule"
                     onClick={() => setRules((rs) => rs.filter((_, j) => j !== i))}
-                    className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-[var(--fg-tertiary)] hover:bg-white/[0.05]"
+                    className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] hover:bg-white/[0.05]"
+                    style={{ color: "#6B6B73" }}
                   >
-                    <Trash2 className="size-[13px]" />
+                    <Trash2 className="size-[14px]" />
                   </button>
                 </div>
                 <TokenInput
@@ -153,12 +155,13 @@ export function RoleEditor({ target, open, onClose, onApply, onEditYaml }: Props
           <button
             type="button"
             onClick={() => setRules((rs) => [...rs, blankRule()])}
-            className="flex items-center justify-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border-strong)] py-[10px] text-xs font-medium text-[var(--fg-secondary)] hover:bg-white/[0.04]"
+            className="flex w-full items-center justify-center gap-[7px] rounded-[6px] border px-[14px] py-[12px] text-[13px] font-semibold"
+            style={{ background: "#FFFFFF05", borderColor: "#26272B", color: "#A1A1AA" }}
           >
-            <Plus className="size-[13px]" /> Add rule
+            <Plus className="size-[15px]" /> Add rule
           </button>
         </DialogBody>
-        <DialogFooter showCloseButton={false}>
+        <DialogFooter showCloseButton={false} className="border-[#26272B]">
           {isEdit && onEditYaml && (
             <Button variant="outline" onClick={onEditYaml} className="mr-auto">
               <Code className="size-[13px]" /> Edit YAML
@@ -167,7 +170,7 @@ export function RoleEditor({ target, open, onClose, onApply, onEditYaml }: Props
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button disabled={!valid} onClick={apply}>
+          <Button disabled={!valid} onClick={apply} className="h-auto px-6 py-[11px]">
             Apply
           </Button>
         </DialogFooter>
