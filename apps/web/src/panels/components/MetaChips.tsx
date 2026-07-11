@@ -51,7 +51,7 @@ export function MetaChips({ title, entries }: MetaChipsProps) {
         )
       }
     >
-      <div className="flex flex-col gap-[9px]">
+      <div className="flex flex-wrap gap-[9px]">
         {items.map(([k, v]) => (
           <MetaChip
             key={k}
@@ -102,7 +102,7 @@ function MetaChip({
 
   return (
     <div
-      className="flex w-fit flex-col"
+      className={`flex flex-col ${isExpanded ? "w-full" : "w-fit"}`}
       style={{ borderRadius: 6, border: "1px solid #26272B", overflow: "hidden" }}
     >
       <div className="flex items-stretch" style={isExpanded ? { borderBottom: "1px solid #26272B" } : undefined}>
