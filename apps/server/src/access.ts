@@ -11,11 +11,12 @@ export async function discoverAccess(opts: {
 }): Promise<Access> {
   const ctx = opts.context ? ["--context", opts.context] : [];
   const canListNs = await opts.run([...ctx, "auth", "can-i", "list", "namespaces"]);
-  if (canListNs.code === 0 && canListNs.stdout.trim() === "yes") {
-    return { mode: "cluster-wide", namespaces: [] };
+  const out = canListNs.stdout.trim();
+  if (out === "no") {
+    const cap = opts.maxNamespaces ?? 10;
+    return { mode: "scoped", namespaces: opts.seedNamespaces.slice(0, cap) };
   }
-  const cap = opts.maxNamespaces ?? 10;
-  return { mode: "scoped", namespaces: opts.seedNamespaces.slice(0, cap) };
+  return { mode: "cluster-wide", namespaces: [] };
 }
 
 export async function seedFromKubeconfig(

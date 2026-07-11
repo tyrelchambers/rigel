@@ -22,6 +22,17 @@ describe("discoverAccess", () => {
     expect(a.namespaces).toEqual(["team-a"]);
   });
 
+  it("returns cluster-wide when the probe is ambiguous (error/empty, not a clean denial)", async () => {
+    const run = vi.fn(async () => ({
+      code: 1,
+      stdout: "",
+      stderr: "the server could not find the requested resource / connection refused",
+    }));
+    const a = await discoverAccess({ context: "ctx", seedNamespaces: ["team-a", "team-b"], run });
+    expect(a.mode).toBe("cluster-wide");
+    expect(a.namespaces).toEqual([]);
+  });
+
   it("caps the scoped namespace set at maxNamespaces", async () => {
     const run = vi.fn(async () => ({ code: 1, stdout: "no\n", stderr: "forbidden" }));
     const a = await discoverAccess({
