@@ -1343,7 +1343,7 @@ export type { CloudProvider, CloudCluster };
 export type CloudCheckResult = CheckResult;
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(path, {
+  const res = await apiFetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
