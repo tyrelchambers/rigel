@@ -17,6 +17,16 @@ vi.mock("@/lib/actionRunner", () => ({
   runActionInBackground: (...a: unknown[]) => runActionInBackground(...a),
 }));
 
+let mockActiveContext: string | null = null;
+vi.mock("@/store/cluster", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/store/cluster")>();
+  return {
+    ...actual,
+    useCluster: (selector: (s: { activeContext: string | null }) => unknown) =>
+      selector({ activeContext: mockActiveContext }),
+  };
+});
+
 import { ConfirmSheet } from "./ConfirmSheet";
 import type { ActionBlock } from "@/lib/api";
 
@@ -27,6 +37,7 @@ function wrap(ui: React.ReactElement) {
 
 beforeEach(() => {
   runActionInBackground.mockClear();
+  mockActiveContext = null;
   vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ purge: true, name: null, namespace: "default" }) })));
 });
 
@@ -64,5 +75,27 @@ describe("ConfirmSheet — non-blocking execute", () => {
     await userEvent.click(cont);
 
     expect(runActionInBackground).not.toHaveBeenCalled();
+  });
+});
+
+describe("ConfirmSheet — target cluster indicator", () => {
+  it("shows the active context above the command preview", async () => {
+    mockActiveContext = "k8s-truenas";
+    const purge: ActionBlock = { kind: "purge", name: "affine", namespace: "default", label: "Remove affine" };
+
+    wrap(<ConfirmSheet action={purge} open={true} onClose={vi.fn()} onPurge={vi.fn()} />);
+
+    expect(await screen.findByText("Runs on")).toBeInTheDocument();
+    expect(await screen.findByText("k8s-truenas")).toBeInTheDocument();
+  });
+
+  it("renders no target cluster row when there is no active context", async () => {
+    mockActiveContext = null;
+    const purge: ActionBlock = { kind: "purge", name: "affine", namespace: "default", label: "Remove affine" };
+
+    wrap(<ConfirmSheet action={purge} open={true} onClose={vi.fn()} onPurge={vi.fn()} />);
+
+    await screen.findByRole("button", { name: /continue to removal/i });
+    expect(screen.queryByText("Runs on")).not.toBeInTheDocument();
   });
 });
