@@ -13,6 +13,7 @@ import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-m
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { PanelSearch } from "@/panels/components/PanelSearch";
+import { MetaChips } from "@/panels/components/MetaChips";
 import { viewYaml, editYaml } from "@/store/yamlViewer";
 import { SecretEditor } from "./SecretEditor";
 import {
@@ -277,7 +278,6 @@ function SecretDetail({ secret, onEdit }: { secret: Secret; onEdit: () => void }
   const total = keyCount(secret);
   const displayType = secretTypeDisplayName(secret.type);
   const rawType = secret.type ?? "Opaque";
-  const labelEntries = Object.entries(secret.metadata.labels ?? {});
 
   // Per-key reveal state (Set of revealed key names). Local, not persisted.
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
@@ -306,16 +306,11 @@ function SecretDetail({ secret, onEdit }: { secret: Secret; onEdit: () => void }
           <dd>{total}</dd>
           <dt className="text-muted-foreground">AGE</dt>
           <dd>{relativeAge(secret.metadata.creationTimestamp)}</dd>
-          {labelEntries.length > 0 && (
-            <>
-              <dt className="text-muted-foreground">LABELS</dt>
-              <dd className="break-all">
-                {labelEntries.map(([k, v]) => `${k}=${v}`).join(", ")}
-              </dd>
-            </>
-          )}
         </dl>
       </div>
+
+      <MetaChips title="Labels" entries={secret.metadata.labels} />
+      <MetaChips title="Annotations" entries={secret.metadata.annotations} />
 
       {/* KEYS */}
       <div className="space-y-1">

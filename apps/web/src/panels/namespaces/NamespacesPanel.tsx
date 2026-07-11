@@ -20,6 +20,7 @@ import { ListRow } from "@/panels/components/ListRow";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { PanelSearch } from "@/panels/components/PanelSearch";
+import { MetaChips } from "@/panels/components/MetaChips";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import type { ActionBlock } from "@/lib/api";
 import type { Namespace } from "./types";
@@ -255,6 +256,8 @@ export default function NamespacesPanel() {
                       })}
                     </ul>
                   )}
+                  <MetaChips title="Labels" entries={ns.metadata.labels} />
+                  <MetaChips title="Annotations" entries={ns.metadata.annotations} />
                 </div>
               }
             >

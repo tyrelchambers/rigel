@@ -15,6 +15,7 @@ import { PanelHeader } from "@/panels/components/PanelHeader";
 import { PanelSearch } from "@/panels/components/PanelSearch";
 import { RelatedResources } from "@/panels/components/RelatedResources";
 import { useFocusRow } from "@/panels/components/useFocusRow";
+import { MetaChips } from "@/panels/components/MetaChips";
 import type { Ingress } from "./types";
 import { IngressEditor } from "./IngressEditor";
 import {
@@ -330,6 +331,9 @@ function IngressDetail({ ingress, onEdit }: { ingress: Ingress; onEdit: () => vo
           <dd style={{ color: "var(--fg-secondary)" }}>{relativeAge(ingress.metadata.creationTimestamp)} ago</dd>
         </dl>
       </div>
+
+      <MetaChips title="Labels" entries={ingress.metadata.labels} />
+      <MetaChips title="Annotations" entries={ingress.metadata.annotations} />
 
       {/* Related resources */}
       <RelatedResources sourceKind="ingress" source={ingress} />

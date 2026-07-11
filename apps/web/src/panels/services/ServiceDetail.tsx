@@ -1,6 +1,7 @@
 import { ArrowRight, Copy, Check, Calendar } from "lucide-react";
 import { RelatedResources } from "@/panels/components/RelatedResources";
 import { MetaCard, SectionLabel } from "@/panels/components/MetaCard";
+import { MetaChips } from "@/panels/components/MetaChips";
 import { useCopyToClipboard } from "@/lib/useCopyToClipboard";
 import { humanAge } from "./servicesDisplay";
 import type { Service } from "./types";
@@ -83,6 +84,9 @@ export function ServiceDetail({ service }: { service: Service }) {
           </div>
         </div>
       )}
+
+      <MetaChips title="Labels" entries={service.metadata.labels} />
+      <MetaChips title="Annotations" entries={service.metadata.annotations} />
 
       {/* Related resources */}
       <RelatedResources sourceKind="service" source={service} />
