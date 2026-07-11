@@ -2,6 +2,8 @@ import { Server, User, Users, Pencil, Code, Trash2 } from "lucide-react";
 import type { PolicyRule, Subject } from "../types";
 import type { Grant } from "../types";
 import { RuleRow } from "./RuleRow";
+import { AccessTest } from "./AccessTest";
+import { rulesToChecks } from "../canI";
 
 interface Props {
   roleName: string;
@@ -102,6 +104,12 @@ export function RoleDetail({
                   {b.subject.kind}
                   {b.subject.namespace ? ` · ${b.subject.namespace}` : ""} · via {b.bindingName}
                 </span>
+                <div className="w-full">
+                  <AccessTest
+                    subject={b.subject}
+                    checks={rulesToChecks(rules, b.scope.kind === "Namespaced" ? b.scope.namespace : undefined)}
+                  />
+                </div>
               </div>
             );
           })}
