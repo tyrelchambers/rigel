@@ -1,7 +1,8 @@
 /**
- * Tests for error-frame routing in the WS message handler: a `kind`-scoped
- * error (watch access failure) goes to store.setAccess; a kind-less error
- * (e.g. a chat failure) goes to store.setError.
+ * Tests for error-frame routing in the WS message handler: an error carrying a
+ * `kind` (watch access failure) goes to store.setAccess; a kind-less error
+ * (e.g. a chat failure) goes to store.setError. A forbidden error clears only
+ * its own namespace's slice, unless it's the cluster-wide ("*") watch.
  *
  * Harness matches ws.actionEvents.test.ts: mock the Zustand store + a minimal
  * MockWebSocket, then drive onmessage directly.
@@ -14,6 +15,7 @@ const store = vi.hoisted(() => ({
   setLoading: vi.fn(),
   setAccess: vi.fn(),
   clearKind: vi.fn(),
+  replaceKind: vi.fn(),
 }));
 
 vi.mock("@/store/cluster", () => ({
@@ -24,10 +26,10 @@ vi.mock("@/store/cluster", () => ({
       setLoading: store.setLoading,
       setAccess: store.setAccess,
       clearKind: store.clearKind,
+      replaceKind: store.replaceKind,
       setActiveContextInitial: vi.fn(),
       applySwitch: vi.fn(),
       namespaceByContext: {},
-      replaceKind: vi.fn(),
       upsert: vi.fn(),
       remove: vi.fn(),
     }),
@@ -63,17 +65,30 @@ beforeEach(() => {
   store.setLoading.mockClear();
   store.setAccess.mockClear();
   store.clearKind.mockClear();
+  store.replaceKind.mockClear();
   connectCluster();
 });
 
 describe("error frame routing", () => {
-  it("routes a kind-scoped forbidden error into store.setAccess", () => {
+  it("routes a namespace-scoped forbidden error into setAccess and clears only that namespace's slice", () => {
     mockWs.onmessage!({
-      data: JSON.stringify({ type: "error", kind: "secrets", namespace: "default", reason: "forbidden", message: "denied" }),
+      data: JSON.stringify({ type: "error", kind: "secrets", namespace: "team-a", reason: "forbidden", message: "denied" }),
+    });
+
+    expect(store.setAccess).toHaveBeenCalledWith("secrets", { status: "forbidden", message: "denied" });
+    expect(store.replaceKind).toHaveBeenCalledWith("secrets", {}, "team-a");
+    expect(store.clearKind).not.toHaveBeenCalled();
+    expect(store.setError).not.toHaveBeenCalled();
+  });
+
+  it("clears the whole kind slice for a cluster-wide (namespace '*') forbidden error", () => {
+    mockWs.onmessage!({
+      data: JSON.stringify({ type: "error", kind: "secrets", namespace: "*", reason: "forbidden", message: "denied" }),
     });
 
     expect(store.setAccess).toHaveBeenCalledWith("secrets", { status: "forbidden", message: "denied" });
     expect(store.clearKind).toHaveBeenCalledWith("secrets");
+    expect(store.replaceKind).not.toHaveBeenCalled();
     expect(store.setError).not.toHaveBeenCalled();
   });
 

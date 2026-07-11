@@ -322,7 +322,13 @@ export function connectCluster(): void {
           status: m.reason === "forbidden" ? "forbidden" : "error",
           message: typeof m.message === "string" ? m.message : undefined,
         });
-        if (m.reason === "forbidden") store.clearKind(m.kind);
+        if (m.reason === "forbidden") {
+          if (typeof m.namespace === "string" && m.namespace !== "*") {
+            store.replaceKind(m.kind, {}, m.namespace);
+          } else {
+            store.clearKind(m.kind);
+          }
+        }
       } else {
         store.setError(typeof m.message === "string" ? m.message : "watch failed");
       }
