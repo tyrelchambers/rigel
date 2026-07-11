@@ -58,6 +58,11 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null,
         const access = accessByWs.get(ws) ?? { mode: "cluster-wide" as const, namespaces: [] };
         const targets =
           m.namespace === "*" && access.mode === "scoped" ? access.namespaces : [m.namespace];
+        if (targets.length === 0) {
+          ws.send(
+            JSON.stringify({ type: "snapshot", context: subCtx, kind: m.kind, namespace: "*", items: [] }),
+          );
+        }
         const uns = targets.map((ns) =>
           mgr.subscribe(
             { context: subCtx, kind: m.kind, namespace: ns },

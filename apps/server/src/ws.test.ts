@@ -121,6 +121,20 @@ test("keeps a single cluster-wide watch in cluster-wide mode (default)", () => {
   expect(mgr.subs.map((s) => s.sub.namespace)).toEqual(["*"]);
 });
 
+test("settles a zero-target scoped subscribe with a single empty snapshot and spawns no watches", () => {
+  const mgr = fakeMgr();
+  const handlers = makeWsHandlers(mgr as any, "ctx");
+  const ws = fakeWs();
+  handlers.open(ws, { mode: "scoped", namespaces: [] });
+
+  handlers.message(ws, JSON.stringify({ type: "subscribe", kind: "pods", namespace: "*" }));
+
+  expect(mgr.subs.length).toBe(0);
+  const snapshots = ws.sent.filter((f: any) => f.type === "snapshot");
+  expect(snapshots).toHaveLength(1);
+  expect(snapshots[0]).toMatchObject({ type: "snapshot", kind: "pods", namespace: "*", items: [] });
+});
+
 test("tears down all fanned-out watches on unsubscribe", () => {
   const mgr = fakeMgr();
   const handlers = makeWsHandlers(mgr as any, "ctx");
