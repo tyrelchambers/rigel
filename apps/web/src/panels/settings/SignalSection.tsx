@@ -16,7 +16,7 @@ import {
   parseRecipients,
 } from "@rigel/k8s";
 import { useAssistantAction } from "@/lib/api";
-import { fetchSignalQR, fetchSignalAccounts, sendSignalTest } from "@/lib/api";
+import { apiFetch, fetchSignalQR, fetchSignalAccounts, sendSignalTest } from "@/lib/api";
 import { useSettings } from "./useSettings";
 import { ChannelDisconnectDialog } from "./ChannelDisconnectDialog";
 
@@ -81,7 +81,7 @@ export function SignalSection({
     setError(null);
     setApplying(true);
     try {
-      const res = await fetch("/api/apply", {
+      const res = await apiFetch("/api/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ yaml: signalBridgeManifest(namespace) }),

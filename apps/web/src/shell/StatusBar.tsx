@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import { useCluster, filterByNamespace } from "@/store/cluster";
 import { TOGGLE_TERMINAL_EVENT } from "@/shell/TerminalDrawer";
 import { connectionStatus, type ConnectionTone } from "@/shell/connectionStatus";
+import { apiFetch } from "@/lib/api";
 
 const TONE_COLOR: Record<ConnectionTone, string> = {
   ok: "var(--status-running)",
@@ -36,7 +37,7 @@ export default function StatusBar({ chatHidden, onToggleChat }: StatusBarProps =
   const [health, setHealth] = useState<HealthData>({});
 
   useEffect(() => {
-    fetch("/api/health")
+    apiFetch("/api/health")
       .then((r) => r.json())
       .then((d) => setHealth(d as HealthData))
       .catch(() => {/* ignore — optional */});

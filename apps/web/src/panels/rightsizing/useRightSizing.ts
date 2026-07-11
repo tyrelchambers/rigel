@@ -5,6 +5,7 @@
 // Overview "Reclaimable" card so there is ONE fetch/compute path, not two.
 import { useEffect, useMemo, useState } from "react";
 import { useCluster } from "@/store/cluster";
+import { apiFetch } from "@/lib/api";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { buildRightSizing, windowStatsFromUsage, type UsageRow, type WorkloadObject } from "./aggregate";
 import type { WorkloadRightSizing } from "./types";
@@ -33,14 +34,14 @@ export async function fetchUsageHistory(namespace: string, backend?: UsageBacken
     params.set("svc", backend.service);
     params.set("port", String(backend.port));
   }
-  const res = await fetch(`/api/metrics/usage?${params.toString()}`);
+  const res = await apiFetch(`/api/metrics/usage?${params.toString()}`);
   if (!res.ok) throw new Error(`usage fetch failed: ${res.status}`);
   return res.json();
 }
 
 export async function fetchBackends(): Promise<UsageBackend[]> {
   try {
-    const res = await fetch("/api/metrics/backends");
+    const res = await apiFetch("/api/metrics/backends");
     if (!res.ok) return [];
     const j = (await res.json()) as { backends?: UsageBackend[] };
     return Array.isArray(j.backends) ? j.backends : [];

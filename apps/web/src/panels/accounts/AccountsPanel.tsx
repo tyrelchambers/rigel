@@ -6,6 +6,7 @@ import { TabBar, Tab } from "@/components/ui/Tabs";
 import { YamlEditor } from "@/components/YamlEditorLazy";
 import { NamespaceField } from "@/components/NamespaceField";
 import { useCluster, filterByNamespace } from "@/store/cluster";
+import { apiFetch } from "@/lib/api";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import {
   Dialog,
@@ -245,7 +246,7 @@ function AddAccountSheet({
     setBusy(true);
     try {
       if (form.mode === "create") {
-        const res = await fetch("/api/apply", {
+        const res = await apiFetch("/api/apply", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ yaml: applyYAML(form) }),
@@ -259,7 +260,7 @@ function AddAccountSheet({
       } else {
         // Reference mode: read-only verify the Secret exists via the guarded
         // command action (kubectl get secret <name> -n <ns>).
-        const res = await fetch("/api/action", {
+        const res = await apiFetch("/api/action", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
