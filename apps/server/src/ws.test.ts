@@ -1,5 +1,12 @@
 import { test, expect, vi } from "vitest";
 import { makeWsHandlers } from "./ws";
+import { LogStreamManager } from "./logStream";
+import { ActionRunManager } from "./actionRunManager";
+
+const runAgentMock = vi.fn(async function* (..._args: unknown[]) {
+  yield { type: "done" } as any;
+});
+vi.mock("./runAgent", () => ({ runAgent: (...args: unknown[]) => runAgentMock(...args) }));
 
 // A minimal fake WatchManager that records the Sub it was asked to subscribe and
 // lets the test drive the snapshot callback. unsubscribe is a spy.
@@ -168,4 +175,92 @@ test("sends a cluster-wide access frame on open when no access is passed", () =>
   handlers.open(ws);
 
   expect(ws.sent).toContainEqual({ type: "access", mode: "cluster-wide", namespaces: [] });
+});
+
+test("logs.start with an explicit context calls the log manager's start with it, not the boot context", () => {
+  const startSpy = vi.spyOn(LogStreamManager.prototype, "start").mockImplementation(() => {});
+  const mgr = fakeMgr();
+  const handlers = makeWsHandlers(mgr as any, "boot-ctx");
+  const ws = fakeWs();
+  handlers.open(ws);
+
+  const targets = [{ namespace: "default", labelSelector: "app=web" }];
+  handlers.message(
+    ws,
+    JSON.stringify({ type: "logs.start", targets, tailLines: 50, context: "ctx-b" }),
+  );
+
+  expect(startSpy).toHaveBeenCalledWith(targets, 50, "ctx-b");
+  startSpy.mockRestore();
+});
+
+test("logs.start without a context falls back to the connection's boot context", () => {
+  const startSpy = vi.spyOn(LogStreamManager.prototype, "start").mockImplementation(() => {});
+  const mgr = fakeMgr();
+  const handlers = makeWsHandlers(mgr as any, "boot-ctx");
+  const ws = fakeWs();
+  handlers.open(ws);
+
+  const targets = [{ namespace: "default", labelSelector: "app=web" }];
+  handlers.message(ws, JSON.stringify({ type: "logs.start", targets, tailLines: 50 }));
+
+  expect(startSpy).toHaveBeenCalledWith(targets, 50, "boot-ctx");
+  startSpy.mockRestore();
+});
+
+test("action.run with an explicit context passes it through to the action manager", () => {
+  const runSpy = vi.spyOn(ActionRunManager.prototype, "run").mockImplementation(() => {});
+  const mgr = fakeMgr();
+  const handlers = makeWsHandlers(mgr as any, "boot-ctx");
+  const ws = fakeWs();
+  handlers.open(ws);
+
+  const action = { kind: "restart", name: "my-app", namespace: "default" };
+  handlers.message(ws, JSON.stringify({ type: "action.run", id: "r1", action, context: "ctx-b" }));
+
+  expect(runSpy).toHaveBeenCalledWith({ id: "r1", action, context: "ctx-b" });
+  runSpy.mockRestore();
+});
+
+test("action.run without a context falls back to the connection's boot context", () => {
+  const runSpy = vi.spyOn(ActionRunManager.prototype, "run").mockImplementation(() => {});
+  const mgr = fakeMgr();
+  const handlers = makeWsHandlers(mgr as any, "boot-ctx");
+  const ws = fakeWs();
+  handlers.open(ws);
+
+  const action = { kind: "restart", name: "my-app", namespace: "default" };
+  handlers.message(ws, JSON.stringify({ type: "action.run", id: "r1", action }));
+
+  expect(runSpy).toHaveBeenCalledWith({ id: "r1", action, context: "boot-ctx" });
+  runSpy.mockRestore();
+});
+
+test("chat with an explicit context feeds it to runAgent instead of the boot context", () => {
+  runAgentMock.mockClear();
+  const mgr = fakeMgr();
+  const handlers = makeWsHandlers(mgr as any, "boot-ctx");
+  const ws = fakeWs();
+  handlers.open(ws);
+
+  handlers.message(ws, JSON.stringify({ type: "chat", prompt: "hi", context: "ctx-b" }));
+
+  expect(runAgentMock).toHaveBeenCalledTimes(1);
+  const [prompt, ctxArg] = runAgentMock.mock.calls[0]!;
+  expect(prompt).toBe("hi");
+  expect(ctxArg).toBe("ctx-b");
+});
+
+test("chat without a context falls back to the connection's boot context", () => {
+  runAgentMock.mockClear();
+  const mgr = fakeMgr();
+  const handlers = makeWsHandlers(mgr as any, "boot-ctx");
+  const ws = fakeWs();
+  handlers.open(ws);
+
+  handlers.message(ws, JSON.stringify({ type: "chat", prompt: "hi" }));
+
+  expect(runAgentMock).toHaveBeenCalledTimes(1);
+  const [, ctxArg] = runAgentMock.mock.calls[0]!;
+  expect(ctxArg).toBe("boot-ctx");
 });

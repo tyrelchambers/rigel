@@ -9,6 +9,8 @@ export interface ActionRunRequest {
   /** Caller-supplied opaque correlation id — echoed in every frame. */
   id: string;
   action: ActionBlock;
+  /** Per-request context override; falls back to the connection's boot context. */
+  context?: string | null;
 }
 
 /**
@@ -73,7 +75,7 @@ export class ActionRunManager {
     }
 
     // Prepend --context exactly as the REST route does (via buildKubectlArgs).
-    const fullArgv = buildKubectlArgs(this.context, argv);
+    const fullArgv = buildKubectlArgs(req.context ?? this.context, argv);
 
     let proc: ChildProcess;
     try {

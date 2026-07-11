@@ -114,7 +114,8 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null,
       } else if (m.type === "logs.start" && Array.isArray(m.targets)) {
         const targets = m.targets as LogTarget[];
         const tail = typeof m.tailLines === "number" ? m.tailLines : 200;
-        logStreams.get(ws)?.start(targets, tail);
+        const logsCtx = typeof m.context === "string" && m.context !== "" ? m.context : context;
+        logStreams.get(ws)?.start(targets, tail, logsCtx);
       } else if (m.type === "logs.stop") {
         logStreams.get(ws)?.stop();
       } else if (m.type === "chat" && typeof m.prompt === "string") {
@@ -128,16 +129,17 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null,
         // client owns the id (from the `session` event); the server stays stateless.
         const sessionId = typeof m.sessionId === "string" ? m.sessionId : undefined;
         const scope = parseChatScope(m.scope);
+        const chatCtx = typeof m.context === "string" && m.context !== "" ? m.context : context;
         (async () => {
           try {
             // Only enumerate contexts when the turn fans out beyond the active one.
             const readContexts =
               scope === "active"
-                ? context
-                  ? [context]
+                ? chatCtx
+                  ? [chatCtx]
                   : []
-                : resolveReadContexts(scope, context, (await listContexts()).map((c) => c.name));
-            for await (const event of runAgent(m.prompt, context, ac.signal, {
+                : resolveReadContexts(scope, chatCtx, (await listContexts()).map((c) => c.name));
+            for await (const event of runAgent(m.prompt, chatCtx, ac.signal, {
               model,
               effort,
               sessionId,
@@ -180,7 +182,8 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null,
       } else if (m.type === "cluster.stop") {
         creates.get(ws)?.stop();
       } else if (m.type === "action.run" && typeof m.id === "string" && m.action != null) {
-        actionRunners.get(ws)?.run({ id: m.id, action: m.action });
+        const actionCtx = typeof m.context === "string" && m.context !== "" ? m.context : context;
+        actionRunners.get(ws)?.run({ id: m.id, action: m.action, context: actionCtx });
       }
     },
   };
