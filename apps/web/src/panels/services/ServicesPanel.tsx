@@ -292,10 +292,12 @@ export default function ServicesPanel() {
       </div>
 
         {/* Empty / filtered-to-zero states */}
-        <KindAccessNotice kind="services" access={access} />
-        {!isLoading && (!access || access.status === "ok") && allServices.length === 0 && (
-          <p className="px-4 py-4 text-sm text-muted-foreground">No services found</p>
-        )}
+        {allServices.length === 0 &&
+          (access && access.status !== "ok" ? (
+            <KindAccessNotice kind="services" access={access} />
+          ) : (
+            !isLoading && <p className="px-4 py-4 text-sm text-muted-foreground">No services found</p>
+          ))}
         {!isLoading && allServices.length > 0 && filtered.length === 0 && (
           <p className="px-4 py-4 text-sm text-muted-foreground">No services match search</p>
         )}

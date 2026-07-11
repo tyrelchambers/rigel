@@ -290,10 +290,12 @@ export default function PodsPanel() {
       </div>
 
       {/* Empty / filtered-to-zero states */}
-      <KindAccessNotice kind="pods" access={access} />
-      {!isLoading && (!access || access.status === "ok") && allPods.length === 0 && (
-        <p className="px-4 py-4 text-sm text-muted-foreground">No pods found</p>
-      )}
+      {allPods.length === 0 &&
+        (access && access.status !== "ok" ? (
+          <KindAccessNotice kind="pods" access={access} />
+        ) : (
+          !isLoading && <p className="px-4 py-4 text-sm text-muted-foreground">No pods found</p>
+        ))}
       {!isLoading && allPods.length > 0 && filtered.length === 0 && (
         <p className="px-4 py-4 text-sm text-muted-foreground">No pods match your filters</p>
       )}

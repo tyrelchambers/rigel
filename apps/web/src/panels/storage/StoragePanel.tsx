@@ -464,13 +464,15 @@ export default function StoragePanel() {
       </div>
 
       {/* Empty states */}
-      {activeKind === "pvcs" && <KindAccessNotice kind="persistentvolumeclaims" access={pvcAccess} />}
-      {!isLoading &&
-        activeKind === "pvcs" &&
-        (!pvcAccess || pvcAccess.status === "ok") &&
-        allPVCs.length === 0 && (
-          <p className="px-4 py-4 text-sm text-muted-foreground">No persistent volume claims found</p>
-        )}
+      {activeKind === "pvcs" &&
+        allPVCs.length === 0 &&
+        (pvcAccess && pvcAccess.status !== "ok" ? (
+          <KindAccessNotice kind="persistentvolumeclaims" access={pvcAccess} />
+        ) : (
+          !isLoading && (
+            <p className="px-4 py-4 text-sm text-muted-foreground">No persistent volume claims found</p>
+          )
+        ))}
       {!isLoading && activeKind === "pvs" && allPVs.length === 0 && (
         <p className="px-4 py-4 text-sm text-muted-foreground">No persistent volumes found</p>
       )}

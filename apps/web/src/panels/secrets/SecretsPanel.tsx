@@ -246,10 +246,12 @@ export default function SecretsPanel() {
       </div>
 
         {/* Empty / filtered-to-zero states */}
-        <KindAccessNotice kind="secrets" access={access} />
-        {!isLoading && (!access || access.status === "ok") && allSecrets.length === 0 && (
-          <p className="px-4 py-4 text-sm text-muted-foreground">No secrets found</p>
-        )}
+        {allSecrets.length === 0 &&
+          (access && access.status !== "ok" ? (
+            <KindAccessNotice kind="secrets" access={access} />
+          ) : (
+            !isLoading && <p className="px-4 py-4 text-sm text-muted-foreground">No secrets found</p>
+          ))}
         {!isLoading && allSecrets.length > 0 && filtered.length === 0 && (
           <p className="px-4 py-4 text-sm text-muted-foreground">No secrets match search</p>
         )}

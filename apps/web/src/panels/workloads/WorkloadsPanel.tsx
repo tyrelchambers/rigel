@@ -395,10 +395,12 @@ export default function WorkloadsPanel() {
       </div>
 
       {/* Empty / filtered-to-zero states */}
-      <KindAccessNotice kind={activeKind} access={accessByKind[activeKind]} />
-      {!isLoading && (!accessByKind[activeKind] || accessByKind[activeKind].status === "ok") && totalForActive === 0 && (
-        <p className="px-4 py-4 text-sm text-muted-foreground">No {label} found</p>
-      )}
+      {totalForActive === 0 &&
+        (accessByKind[activeKind] && accessByKind[activeKind].status !== "ok" ? (
+          <KindAccessNotice kind={activeKind} access={accessByKind[activeKind]} />
+        ) : (
+          !isLoading && <p className="px-4 py-4 text-sm text-muted-foreground">No {label} found</p>
+        ))}
       {!isLoading && totalForActive > 0 && filteredCount === 0 && (
         <p className="px-4 py-4 text-sm text-muted-foreground">No {label} match search</p>
       )}

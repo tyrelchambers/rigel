@@ -4,7 +4,7 @@ export function KindAccessNotice({ kind, access }: { kind: string; access?: Kind
   if (!access || access.status === "ok") return null;
   return (
     <p className="px-4 py-4 text-sm text-muted-foreground">
-      {access.status === "forbidden" ? `No access to ${kind} in this namespace.` : `Couldn't load ${kind}.`}
+      {access.status === "forbidden" ? `No access to ${kind}.` : `Couldn't load ${kind}.`}
     </p>
   );
 }

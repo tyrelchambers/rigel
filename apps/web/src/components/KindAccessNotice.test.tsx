@@ -8,7 +8,12 @@ afterEach(cleanup);
 
 it("shows a no-access message for a forbidden kind", () => {
   render(<KindAccessNotice kind="secrets" access={{ status: "forbidden" }} />);
-  expect(screen.getByText(/no access to secrets/i)).toBeInTheDocument();
+  expect(screen.getByText("No access to secrets.")).toBeInTheDocument();
+});
+
+it("does not mention namespace scoping in the message", () => {
+  render(<KindAccessNotice kind="secrets" access={{ status: "forbidden" }} />);
+  expect(screen.queryByText(/in this namespace/i)).not.toBeInTheDocument();
 });
 
 it("renders nothing when access is ok or undefined", () => {
