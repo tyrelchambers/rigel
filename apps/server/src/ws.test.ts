@@ -29,6 +29,9 @@ function fakeWs() {
   return { sent, readyState: 1, OPEN: 1, send: (raw: string) => sent.push(JSON.parse(raw)) } as any;
 }
 
+// Flush the microtask queue so the async (lazy per-context discovery) path settles.
+const flush = () => new Promise((r) => setTimeout(r, 0));
+
 test("subscribe defaults the context to the connection context and echoes it in the snapshot", () => {
   const mgr = fakeMgr();
   const handlers = makeWsHandlers(mgr as any, "boot-ctx");
@@ -49,7 +52,7 @@ test("subscribe defaults the context to the connection context and echoes it in 
   });
 });
 
-test("subscribe uses an explicit context when provided, and keys by it (no dedupe across contexts)", () => {
+test("subscribe uses an explicit context when provided, and keys by it (no dedupe across contexts)", async () => {
   const mgr = fakeMgr();
   const handlers = makeWsHandlers(mgr as any, "boot-ctx");
   const ws = fakeWs();
@@ -57,17 +60,19 @@ test("subscribe uses an explicit context when provided, and keys by it (no dedup
 
   handlers.message(ws, JSON.stringify({ type: "subscribe", context: "ctx-a", kind: "pods", namespace: "default" }));
   handlers.message(ws, JSON.stringify({ type: "subscribe", context: "ctx-b", kind: "pods", namespace: "default" }));
+  await flush();
 
   expect(mgr.subs.map((s) => s.sub.context)).toEqual(["ctx-a", "ctx-b"]);
 });
 
-test("delta frames echo the context, event, and object", () => {
+test("delta frames echo the context, event, and object", async () => {
   const mgr = fakeMgr();
   const handlers = makeWsHandlers(mgr as any, "boot-ctx");
   const ws = fakeWs();
   handlers.open(ws);
 
   handlers.message(ws, JSON.stringify({ type: "subscribe", context: "ctx-a", kind: "pods", namespace: "default" }));
+  await flush();
 
   // Drive a delta through the captured callback — the frame must echo the context.
   mgr.subs[0].onDelta({ type: "ADDED", object: { metadata: { name: "p1" } } });
@@ -81,19 +86,21 @@ test("delta frames echo the context, event, and object", () => {
   });
 });
 
-test("unsubscribe with a context tears down that subscription and frees the key", () => {
+test("unsubscribe with a context tears down that subscription and frees the key", async () => {
   const mgr = fakeMgr();
   const handlers = makeWsHandlers(mgr as any, "boot-ctx");
   const ws = fakeWs();
   handlers.open(ws);
 
   handlers.message(ws, JSON.stringify({ type: "subscribe", context: "ctx-a", kind: "pods", namespace: "default" }));
+  await flush();
   handlers.message(ws, JSON.stringify({ type: "unsubscribe", context: "ctx-a", kind: "pods", namespace: "default" }));
   expect(mgr.unsub).toHaveBeenCalledTimes(1);
 
   // The key was freed: re-subscribing the same key registers a NEW subscription
   // (not skipped by the `if (map.has(key)) return` dedupe guard).
   handlers.message(ws, JSON.stringify({ type: "subscribe", context: "ctx-a", kind: "pods", namespace: "default" }));
+  await flush();
   expect(mgr.subs.length).toBe(2);
 });
 
@@ -165,7 +172,7 @@ test("sends an access frame on open reflecting the passed access", () => {
   const ws = fakeWs();
   handlers.open(ws, { mode: "scoped", namespaces: ["team-a"] });
 
-  expect(ws.sent).toContainEqual({ type: "access", mode: "scoped", namespaces: ["team-a"] });
+  expect(ws.sent).toContainEqual({ type: "access", context: "ctx", mode: "scoped", namespaces: ["team-a"] });
 });
 
 test("sends a cluster-wide access frame on open when no access is passed", () => {
@@ -174,7 +181,63 @@ test("sends a cluster-wide access frame on open when no access is passed", () =>
   const ws = fakeWs();
   handlers.open(ws);
 
-  expect(ws.sent).toContainEqual({ type: "access", mode: "cluster-wide", namespaces: [] });
+  expect(ws.sent).toContainEqual({ type: "access", context: "ctx", mode: "cluster-wide", namespaces: [] });
+});
+
+test("subscribing to a new context lazily discovers its access and fans out over that scope", async () => {
+  const mgr = fakeMgr();
+  const accessFor = vi.fn(async (ctx: string | null) =>
+    ctx === "other-ctx"
+      ? ({ mode: "scoped", namespaces: ["team-x"] } as const)
+      : ({ mode: "cluster-wide", namespaces: [] } as const),
+  );
+  const handlers = makeWsHandlers(mgr as any, "boot-ctx", "", accessFor as any);
+  const ws = fakeWs();
+  handlers.open(ws, { mode: "cluster-wide", namespaces: [] });
+
+  handlers.message(ws, JSON.stringify({ type: "subscribe", context: "other-ctx", kind: "pods", namespace: "*" }));
+
+  // The boot context is cached, so this new context goes through the async path.
+  expect(mgr.subs.length).toBe(0);
+  await flush();
+
+  expect(accessFor).toHaveBeenCalledWith("other-ctx");
+  expect(mgr.subs.map((s) => s.sub).sort((a, b) => a.namespace.localeCompare(b.namespace))).toEqual([
+    { context: "other-ctx", kind: "pods", namespace: "team-x" },
+  ]);
+  expect(ws.sent).toContainEqual({ type: "access", context: "other-ctx", mode: "scoped", namespaces: ["team-x"] });
+});
+
+test("a subscribe/unsubscribe/subscribe race on an undiscovered context fans out exactly once", async () => {
+  const mgr = fakeMgr();
+  const accessFor = vi.fn(async () => ({ mode: "cluster-wide", namespaces: [] } as const));
+  const handlers = makeWsHandlers(mgr as any, "boot-ctx", "", accessFor as any);
+  const ws = fakeWs();
+  handlers.open(ws, { mode: "cluster-wide", namespaces: [] });
+
+  const sub = JSON.stringify({ type: "subscribe", context: "ctx-b", kind: "pods", namespace: "default" });
+  const unsub = JSON.stringify({ type: "unsubscribe", context: "ctx-b", kind: "pods", namespace: "default" });
+  handlers.message(ws, sub);
+  handlers.message(ws, unsub);
+  handlers.message(ws, sub);
+  await flush();
+
+  // Both pending discoveries resolve, but only the current placeholder's proceeds.
+  expect(mgr.subs.length).toBe(1);
+});
+
+test("closing during discovery bails the pending fan-out instead of watching a dead socket", async () => {
+  const mgr = fakeMgr();
+  const accessFor = vi.fn(async () => ({ mode: "cluster-wide", namespaces: [] } as const));
+  const handlers = makeWsHandlers(mgr as any, "boot-ctx", "", accessFor as any);
+  const ws = fakeWs();
+  handlers.open(ws, { mode: "cluster-wide", namespaces: [] });
+
+  handlers.message(ws, JSON.stringify({ type: "subscribe", context: "ctx-b", kind: "pods", namespace: "default" }));
+  handlers.close(ws);
+  await flush();
+
+  expect(mgr.subs.length).toBe(0);
 });
 
 test("logs.start with an explicit context calls the log manager's start with it, not the boot context", () => {

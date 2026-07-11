@@ -317,7 +317,8 @@ export function connectCluster(): void {
       const listeners = actionListeners.get(m.id);
       if (listeners) listeners.forEach((cb) => cb(m as ActionEvent));
     } else if (m.type === "access") {
-      store.setAccessMode(
+      store.setContextAccess(
+        typeof m.context === "string" ? m.context : null,
         m.mode === "scoped" ? "scoped" : "cluster-wide",
         Array.isArray(m.namespaces) ? m.namespaces : [],
       );

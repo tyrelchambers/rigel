@@ -161,13 +161,16 @@ interface ClusterState {
   /** The active kubeconfig context (cluster) the whole app is pointed at. null
    *  until the rail resolves it from /api/contexts. */
   activeContext: string | null;
-  /** Whether this connection can list/watch cluster-wide, or is scoped to a
-   *  fixed set of namespaces (RBAC-limited). Set from the server's `access`
-   *  frame sent on connect. */
+  /** Whether the ACTIVE context's connection can list/watch cluster-wide, or
+   *  is scoped to a fixed set of namespaces (RBAC-limited). Derived from
+   *  `accessByContext[activeContext]`. */
   accessMode: "cluster-wide" | "scoped";
-  /** The namespaces this connection can access, when `accessMode` is
-   *  "scoped". Empty (and unused) in cluster-wide mode. */
+  /** The namespaces the ACTIVE context's connection can access, when
+   *  `accessMode` is "scoped". Empty (and unused) in cluster-wide mode. */
   accessNamespaces: string[];
+  /** Each context's access state, keyed by context name (empty string for
+   *  `null`/no-context). Set from the server's per-context `access` frames. */
+  accessByContext: Record<string, { mode: "cluster-wide" | "scoped"; namespaces: string[] }>;
   /** Each context's last-selected namespace (null = all). Drives per-cluster
    *  namespace memory across switches. */
   namespaceByContext: Record<string, string | null>;
@@ -182,7 +185,13 @@ interface ClusterState {
   setLoading: (l: boolean) => void;
   setError: (e: string | null) => void;
   setAccess: (kind: string, access: KindAccess) => void;
-  setAccessMode: (mode: "cluster-wide" | "scoped", namespaces: string[]) => void;
+  /** Record a context's access state. When the context is the active one,
+   *  also surfaces it into `accessMode`/`accessNamespaces`. */
+  setContextAccess: (
+    context: string | null,
+    mode: "cluster-wide" | "scoped",
+    namespaces: string[],
+  ) => void;
   setNamespaceFilter: (ns: string | null) => void;
   upsert: (kind: string, name: string, obj: unknown) => void;
   remove: (kind: string, name: string) => void;
@@ -217,25 +226,48 @@ export const useCluster = create<ClusterState>((set) => ({
   activeContext: null,
   accessMode: "cluster-wide",
   accessNamespaces: [],
+  accessByContext: {},
   namespaceByContext: readNamespaceByContext(),
   setActiveContextInitial: (context) =>
     set((s) => {
       const remembered = s.namespaceByContext[context];
-      return remembered !== undefined
-        ? { activeContext: context, namespaceFilter: remembered }
-        : { activeContext: context };
+      const a = s.accessByContext[context ?? ""] ?? { mode: "cluster-wide" as const, namespaces: [] };
+      const namespacePatch = remembered !== undefined ? { namespaceFilter: remembered } : {};
+      return {
+        activeContext: context,
+        accessMode: a.mode,
+        accessNamespaces: a.namespaces,
+        ...namespacePatch,
+      };
     }),
   applySwitch: (context, namespace) => {
     writeNamespaceFilter(namespace);
     writeActiveContext(context);
-    set({ activeContext: context, namespaceFilter: namespace, resources: {} });
+    set((s) => {
+      const a = s.accessByContext[context ?? ""] ?? { mode: "cluster-wide" as const, namespaces: [] };
+      return {
+        activeContext: context,
+        namespaceFilter: namespace,
+        resources: {},
+        accessMode: a.mode,
+        accessNamespaces: a.namespaces,
+      };
+    });
   },
   setConnected: (connected) => set({ connected }),
   setLoading: (isLoading) => set({ isLoading }),
   setError: (error) => set({ error }),
   setAccess: (kind, access) =>
     set((s) => ({ accessByKind: { ...s.accessByKind, [kind]: access } })),
-  setAccessMode: (accessMode, accessNamespaces) => set({ accessMode, accessNamespaces }),
+  setContextAccess: (context, mode, namespaces) =>
+    set((s) => {
+      const key = context ?? "";
+      const accessByContext = { ...s.accessByContext, [key]: { mode, namespaces } };
+      const isActive = key === (s.activeContext ?? "");
+      return isActive
+        ? { accessByContext, accessMode: mode, accessNamespaces: namespaces }
+        : { accessByContext };
+    }),
   setNamespaceFilter: (namespaceFilter) => {
     writeNamespaceFilter(namespaceFilter);
     set((s) => {
