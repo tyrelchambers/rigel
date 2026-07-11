@@ -161,7 +161,7 @@ export function RoleEditor({ target, open, onClose, onApply, onEditYaml }: Props
             <Plus className="size-[15px]" /> Add rule
           </button>
         </DialogBody>
-        <DialogFooter showCloseButton={false} className="border-[#26272B]">
+        <DialogFooter>
           {isEdit && onEditYaml && (
             <Button variant="outline" onClick={onEditYaml} className="mr-auto">
               <Code className="size-[13px]" /> Edit YAML
@@ -170,7 +170,7 @@ export function RoleEditor({ target, open, onClose, onApply, onEditYaml }: Props
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button disabled={!valid} onClick={apply} className="h-auto px-6 py-[11px]">
+          <Button disabled={!valid} onClick={apply}>
             Apply
           </Button>
         </DialogFooter>
