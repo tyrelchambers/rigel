@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ShieldCheck, Plus, Trash2, Code } from "lucide-react";
 import {
   Dialog,
@@ -19,6 +19,9 @@ import { TokenInput } from "./TokenInput";
 import { Segmented } from "./Segmented";
 import { SectionHeader } from "./SectionHeader";
 import { LabeledField, fieldInputClass, fieldSurface } from "./LabeledField";
+import { useApiResources } from "@/lib/api";
+
+const RBAC_VERBS = ["get", "list", "watch", "create", "update", "patch", "delete", "deletecollection", "bind", "escalate", "impersonate", "use", "*"];
 
 export interface RoleTarget {
   kind: "Role" | "ClusterRole";
@@ -49,6 +52,15 @@ export function RoleEditor({ target, open, onClose, onApply, onEditYaml }: Props
   const [namespace, setNamespace] = useState(target?.namespace ?? "default");
   const [rules, setRules] = useState<PolicyRule[]>(
     target?.rules?.length ? target.rules.map((r) => ({ ...r })) : [blankRule()],
+  );
+  const { data: apiResources } = useApiResources();
+  const groupSuggestions = useMemo(
+    () => Array.from(new Set([...(apiResources?.groups ?? []), "*"])),
+    [apiResources],
+  );
+  const resourceSuggestions = useMemo(
+    () => Array.from(new Set([...(apiResources?.resources ?? []), "*"])),
+    [apiResources],
   );
 
   function setRule(i: number, patch: Partial<PolicyRule>) {
@@ -145,9 +157,22 @@ export function RoleEditor({ target, open, onClose, onApply, onEditYaml }: Props
                   tokens={(r.apiGroups ?? []).map((g) => (g === "" ? "core" : g))}
                   onChange={(t) => setRule(i, { apiGroups: t.map((g) => (g === "core" ? "" : g)) })}
                   placeholder="core"
+                  suggestions={groupSuggestions}
                 />
-                <TokenInput label="RESOURCES" tokens={r.resources ?? []} onChange={(t) => setRule(i, { resources: t })} danger={(t) => t === "secrets" || t === "*"} />
-                <TokenInput label="VERBS" tokens={r.verbs ?? []} onChange={(t) => setRule(i, { verbs: t })} danger={(t) => ["*", "escalate", "bind", "impersonate"].includes(t)} />
+                <TokenInput
+                  label="RESOURCES"
+                  tokens={r.resources ?? []}
+                  onChange={(t) => setRule(i, { resources: t })}
+                  danger={(t) => t === "secrets" || t === "*"}
+                  suggestions={resourceSuggestions}
+                />
+                <TokenInput
+                  label="VERBS"
+                  tokens={r.verbs ?? []}
+                  onChange={(t) => setRule(i, { verbs: t })}
+                  danger={(t) => ["*", "escalate", "bind", "impersonate"].includes(t)}
+                  suggestions={RBAC_VERBS}
+                />
               </div>
             );
           })}

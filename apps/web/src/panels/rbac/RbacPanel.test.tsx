@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 vi.mock("@/lib/ws", () => ({ subscribe: vi.fn(), unsubscribe: vi.fn() }));
 vi.mock("@/lib/chatHandoff", () => ({ handoffToChat: vi.fn() }));
@@ -32,7 +33,23 @@ vi.mock("@/store/cluster", () => ({
 
 import RbacPanel from "./RbacPanel";
 
-afterEach(cleanup);
+beforeEach(() => {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ resources: [], groups: [] }))));
+});
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+function renderPanel() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <RbacPanel />
+    </QueryClientProvider>,
+  );
+}
 
 function setResources(r: Record<string, Record<string, unknown>>) {
   state.resources = {
@@ -60,7 +77,7 @@ test("renders the subject derived from a binding", () => {
       },
     },
   });
-  render(<RbacPanel />);
+  renderPanel();
   expect(screen.getByText("RBAC")).toBeTruthy();
   expect(screen.getAllByText("rigel-agent").length).toBeGreaterThan(0);
 });
@@ -85,7 +102,7 @@ test("Namespaced scope resolves a RoleBinding→ClusterRole grant and keeps it d
       },
     },
   });
-  render(<RbacPanel />);
+  renderPanel();
 
   fireEvent.click(screen.getByRole("tab", { name: "Namespaced" }));
 
@@ -113,7 +130,7 @@ test("deleting a role opens the confirm sheet", () => {
       },
     },
   });
-  render(<RbacPanel />);
+  renderPanel();
   fireEvent.click(screen.getByRole("tab", { name: "Roles" }));
   fireEvent.click(screen.getByRole("button", { name: "Delete role" }));
   expect(screen.getByTestId("confirm").textContent).toContain("Delete clusterrole admin");
@@ -125,7 +142,7 @@ test("editing a role opens the RoleEditor and applying opens the confirm sheet",
       "2": { metadata: { name: "admin", uid: "2" }, rules: [{ apiGroups: ["*"], resources: ["*"], verbs: ["*"] }] },
     },
   });
-  render(<RbacPanel />);
+  renderPanel();
   fireEvent.click(screen.getByRole("tab", { name: "Roles" }));
   fireEvent.click(screen.getByRole("button", { name: "Edit role" }));
   // RoleEditor mounted
@@ -145,7 +162,7 @@ test("editing a binding opens the BindingEditor and applies", () => {
     },
     clusterroles: { "2": { metadata: { name: "admin", uid: "2" }, rules: [{ verbs: ["*"], resources: ["*"] }] } },
   });
-  render(<RbacPanel />);
+  renderPanel();
   fireEvent.click(screen.getByRole("button", { name: "Edit binding" }));
   expect(screen.getByText(/Edit binding · b1/)).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: /^Apply$/ }));
@@ -154,7 +171,7 @@ test("editing a binding opens the BindingEditor and applies", () => {
 
 test("New menu creates a role", () => {
   setResources({});
-  render(<RbacPanel />);
+  renderPanel();
   fireEvent.click(screen.getByRole("button", { name: "New RBAC object" }));
   fireEvent.click(screen.getByRole("menuitem", { name: "ClusterRole" }));
   expect(screen.getByText("New role")).toBeTruthy();
