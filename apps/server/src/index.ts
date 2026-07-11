@@ -101,17 +101,27 @@ const CORE_KINDS = [
 ];
 const runKubectl = (args: string[]) => runProcess("kubectl", args);
 
-const accessReady: Promise<Access> = (async () => {
-  try {
-    const seed = await seedFromKubeconfig(bootContext, runKubectl);
-    const access = await discoverAccess({ context: bootContext, seedNamespaces: seed, run: runKubectl });
-    if (access.mode === "cluster-wide") mgr.prewarm(CORE_KINDS, "*");
-    return access;
-  } catch {
-    mgr.prewarm(CORE_KINDS, "*");
-    return { mode: "cluster-wide", namespaces: [] };
+const accessCache = new Map<string, Promise<Access>>();
+function accessFor(ctx: string | null): Promise<Access> {
+  const key = ctx ?? "";
+  let p = accessCache.get(key);
+  if (!p) {
+    p = (async () => {
+      try {
+        const seed = await seedFromKubeconfig(ctx, runKubectl);
+        return await discoverAccess({ context: ctx, seedNamespaces: seed, run: runKubectl });
+      } catch {
+        return { mode: "cluster-wide", namespaces: [] } as Access;
+      }
+    })();
+    accessCache.set(key, p);
   }
-})();
+  return p;
+}
+const bootAccessReady = accessFor(bootContext).then((a) => {
+  if (a.mode === "cluster-wide") mgr.prewarm(CORE_KINDS, "*");
+  return a;
+});
 
 // Port-forward subprocess registry (docs/parity/portforward.md). One instance
 // for the server's lifetime; killed wholesale on shutdown so no zombie kubectl
@@ -1183,7 +1193,7 @@ const httpServer = serve({ fetch: handler, port: PORT, hostname: HOST }, (info) 
 // WebSocket upgrade wiring. node-server hands us the underlying Node http.Server,
 // so we intercept the HTTP `upgrade` event ourselves and drive the `ws` server.
 const wss = new WebSocketServer({ noServer: true });
-const wsHandlers = makeWsHandlers(mgr, bootContext, KUBECONFIG);
+const wsHandlers = makeWsHandlers(mgr, bootContext, KUBECONFIG, accessFor);
 httpServer.on("upgrade", (req: IncomingMessage, socket, head) => {
   try {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
@@ -1207,7 +1217,7 @@ wss.on("connection", (client) => {
     wsHandlers.message(client, data as any);
   });
   client.on("close", () => { closed = true; wsHandlers.close(client); });
-  void accessReady.then((access) => {
+  void bootAccessReady.then((access) => {
     if (closed) return;
     wsHandlers.open(client, access);
     ready = true;
