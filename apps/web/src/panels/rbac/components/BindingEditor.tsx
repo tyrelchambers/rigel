@@ -261,7 +261,7 @@ export function BindingEditor({
           <button
             type="button"
             onClick={() => setSubjects((ss) => [...ss, { kind: "ServiceAccount", name: "", namespace: "default" }])}
-            className="flex w-full items-center justify-center gap-[7px] rounded-[6px] border py-[12px] text-[13px] font-semibold"
+            className="flex w-full items-center justify-center gap-[7px] rounded-[6px] border px-[14px] py-[12px] text-[13px] font-semibold"
             style={{ background: "#FFFFFF05", borderColor: "#26272B", color: "#A1A1AA" }}
           >
             <Plus className="size-[15px]" /> Add subject

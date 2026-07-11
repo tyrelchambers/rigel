@@ -126,7 +126,7 @@ export function RoleEditor({ target, open, onClose, onApply, onEditYaml }: Props
               <div
                 key={i}
                 className="flex flex-col gap-[14px] rounded-[8px] border p-4"
-                style={{ background: "#0C0D0F", borderColor: dangerous ? "var(--status-failed)" : "#26272B" }}
+                style={{ background: "#0C0D0F", borderColor: dangerous ? "color-mix(in srgb, var(--status-failed) 25%, transparent)" : "#26272B" }}
               >
                 <div className="flex items-center justify-between">
                   <span className="text-[14px] font-semibold text-white">Rule {i + 1}</span>
@@ -155,7 +155,7 @@ export function RoleEditor({ target, open, onClose, onApply, onEditYaml }: Props
           <button
             type="button"
             onClick={() => setRules((rs) => [...rs, blankRule()])}
-            className="flex w-full items-center justify-center gap-[7px] rounded-[6px] border py-[12px] text-[13px] font-semibold"
+            className="flex w-full items-center justify-center gap-[7px] rounded-[6px] border px-[14px] py-[12px] text-[13px] font-semibold"
             style={{ background: "#FFFFFF05", borderColor: "#26272B", color: "#A1A1AA" }}
           >
             <Plus className="size-[15px]" /> Add rule

@@ -42,7 +42,7 @@ export function TokenInput({ label, tokens, onChange, danger, placeholder }: Pro
           );
         })}
         <span
-          className="flex items-center gap-[4px] rounded-[5px] border border-dashed px-[8px] py-[3px]"
+          className="flex items-center gap-[4px] rounded-[5px] border px-[8px] py-[3px]"
           style={{ borderColor: "#26272B" }}
         >
           <Plus className="size-[11px]" style={{ color: "#6B6B73" }} />
