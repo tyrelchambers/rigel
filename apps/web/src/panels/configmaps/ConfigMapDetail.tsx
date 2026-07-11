@@ -12,6 +12,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { MetaCard, SectionLabel } from "@/panels/components/MetaCard";
+import { MetaChips } from "@/panels/components/MetaChips";
 import { KindBadge } from "./KindBadge";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { useCopyToClipboard } from "@/lib/useCopyToClipboard";
@@ -110,6 +111,9 @@ export function ConfigMapDetail({
           keys.map((key) => <KeyCard key={key} configMap={configMap} keyName={key} />)
         )}
       </div>
+
+      <MetaChips title="Labels" entries={configMap.metadata.labels} />
+      <MetaChips title="Annotations" entries={configMap.metadata.annotations} />
 
       {/* Manage */}
       <div className="flex items-center gap-3 border-t pt-4 border-[var(--border-subtle)]">

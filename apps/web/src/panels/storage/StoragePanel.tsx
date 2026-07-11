@@ -12,6 +12,7 @@ import { PanelHeader } from "@/panels/components/PanelHeader";
 import { PanelSearch } from "@/panels/components/PanelSearch";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { useFocusRow } from "@/panels/components/useFocusRow";
+import { MetaChips } from "@/panels/components/MetaChips";
 import type {
   PersistentVolumeClaim,
   PersistentVolume,
@@ -507,14 +508,18 @@ function PVCDetail({ pvc }: { pvc: PersistentVolumeClaim }) {
   const volumeName = pvc.spec?.volumeName;
 
   return (
-    <div className="space-y-1.5">
-      <DetailRow label="PHASE">{phase}</DetailRow>
-      <DetailRow label="CAPACITY">{capacity}</DetailRow>
-      {modes.length > 0 && (
-        <DetailRow label="ACCESS">{modes.join(", ")}</DetailRow>
-      )}
-      {storageClass && <DetailRow label="CLASS">{storageClass}</DetailRow>}
-      {volumeName && <DetailRow label="VOLUME">{volumeName}</DetailRow>}
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        <DetailRow label="PHASE">{phase}</DetailRow>
+        <DetailRow label="CAPACITY">{capacity}</DetailRow>
+        {modes.length > 0 && (
+          <DetailRow label="ACCESS">{modes.join(", ")}</DetailRow>
+        )}
+        {storageClass && <DetailRow label="CLASS">{storageClass}</DetailRow>}
+        {volumeName && <DetailRow label="VOLUME">{volumeName}</DetailRow>}
+      </div>
+      <MetaChips title="Labels" entries={pvc.metadata.labels} />
+      <MetaChips title="Annotations" entries={pvc.metadata.annotations} />
     </div>
   );
 }
@@ -528,15 +533,19 @@ function PVDetail({ pv }: { pv: PersistentVolume }) {
   const modes = pv.spec?.accessModes ?? [];
 
   return (
-    <div className="space-y-1.5">
-      <DetailRow label="PHASE">{phase}</DetailRow>
-      <DetailRow label="CAPACITY">{capacity}</DetailRow>
-      {modes.length > 0 && (
-        <DetailRow label="ACCESS">{modes.join(", ")}</DetailRow>
-      )}
-      {reclaim && <DetailRow label="RECLAIM">{reclaim}</DetailRow>}
-      {storageClass && <DetailRow label="CLASS">{storageClass}</DetailRow>}
-      {claim && <DetailRow label="CLAIM">{claim}</DetailRow>}
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        <DetailRow label="PHASE">{phase}</DetailRow>
+        <DetailRow label="CAPACITY">{capacity}</DetailRow>
+        {modes.length > 0 && (
+          <DetailRow label="ACCESS">{modes.join(", ")}</DetailRow>
+        )}
+        {reclaim && <DetailRow label="RECLAIM">{reclaim}</DetailRow>}
+        {storageClass && <DetailRow label="CLASS">{storageClass}</DetailRow>}
+        {claim && <DetailRow label="CLAIM">{claim}</DetailRow>}
+      </div>
+      <MetaChips title="Labels" entries={pv.metadata.labels} />
+      <MetaChips title="Annotations" entries={pv.metadata.annotations} />
     </div>
   );
 }
@@ -549,14 +558,18 @@ function SCDetail({ sc }: { sc: StorageClass }) {
   const allowExpansion = sc.allowVolumeExpansion;
 
   return (
-    <div className="space-y-1.5">
-      {provisioner && <DetailRow label="PROVISIONER">{provisioner}</DetailRow>}
-      {reclaim && <DetailRow label="RECLAIM">{reclaim}</DetailRow>}
-      {bindingMode && <DetailRow label="BINDING">{bindingMode}</DetailRow>}
-      <DetailRow label="DEFAULT">{isDefault ? "yes" : "no"}</DetailRow>
-      {allowExpansion !== undefined && (
-        <DetailRow label="EXPANDABLE">{allowExpansion ? "yes" : "no"}</DetailRow>
-      )}
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        {provisioner && <DetailRow label="PROVISIONER">{provisioner}</DetailRow>}
+        {reclaim && <DetailRow label="RECLAIM">{reclaim}</DetailRow>}
+        {bindingMode && <DetailRow label="BINDING">{bindingMode}</DetailRow>}
+        <DetailRow label="DEFAULT">{isDefault ? "yes" : "no"}</DetailRow>
+        {allowExpansion !== undefined && (
+          <DetailRow label="EXPANDABLE">{allowExpansion ? "yes" : "no"}</DetailRow>
+        )}
+      </div>
+      <MetaChips title="Labels" entries={sc.metadata.labels} />
+      <MetaChips title="Annotations" entries={sc.metadata.annotations} />
     </div>
   );
 }

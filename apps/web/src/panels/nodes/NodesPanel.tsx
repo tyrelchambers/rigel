@@ -8,6 +8,7 @@ import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, C
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { PanelSearch } from "@/panels/components/PanelSearch";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
+import { MetaChips } from "@/panels/components/MetaChips";
 import { viewYaml } from "@/store/yamlViewer";
 import { useNodeMetrics, useNodeDisk, type ActionBlock, type NodeDiskItem } from "@/lib/api";
 import type { Node } from "./types";
@@ -541,6 +542,9 @@ function NodeDetail({
           </ul>
         </div>
       )}
+
+      <MetaChips title="Labels" entries={node.metadata.labels} />
+      <MetaChips title="Annotations" entries={node.metadata.annotations} />
     </div>
   );
 }

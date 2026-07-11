@@ -16,6 +16,7 @@ import { LoadingState } from "@/panels/components/LoadingState";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { RelatedResources } from "@/panels/components/RelatedResources";
 import { useFocusRow } from "@/panels/components/useFocusRow";
+import { MetaChips } from "@/panels/components/MetaChips";
 import type { ActionBlock } from "@/lib/api";
 import type { Pod } from "./types";
 import {
@@ -392,6 +393,9 @@ function PodDetail({ pod }: PodDetailProps) {
           </ul>
         </div>
       )}
+
+      <MetaChips title="Labels" entries={pod.metadata.labels} />
+      <MetaChips title="Annotations" entries={pod.metadata.annotations} />
 
       {/* Related resources */}
       <RelatedResources sourceKind="pod" source={pod} />
