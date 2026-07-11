@@ -56,6 +56,7 @@ import { agentModels } from "./agentModels";
 import { getAgent, type AgentAuthMethod } from "./agentRegistry";
 import { buildSuggestions } from "./suggestions";
 import { getClusterYamlSchema } from "./clusterSchema";
+import { getApiResources } from "./apiResources";
 import { stripStatusBlock } from "@rigel/k8s/src/manifestClean";
 import { handleAssistant, type AssistantRequest } from "./assistant";
 import { handleSignal, type SignalRequest } from "./signal";
@@ -529,6 +530,12 @@ async function handler(req: Request): Promise<Response> {
     // when unavailable; the client then edits lint-only (no static fallback).
     if (url.pathname === "/api/openapi-schema" && req.method === "GET") {
       return Response.json({ schema: await getClusterYamlSchema(context) });
+    }
+
+    // GET /api/api-resources — distinct resource names + API groups for the
+    // active context, for the RBAC role editor's rule autocompletion.
+    if (url.pathname === "/api/api-resources" && req.method === "GET") {
+      return Response.json(await getApiResources(context));
     }
 
     // POST /api/install/metrics-server — one-click upstream metrics-server for
