@@ -109,8 +109,11 @@ function accessFor(ctx: string | null): Promise<Access> {
     p = (async () => {
       try {
         const seed = await seedFromKubeconfig(ctx, runKubectl);
-        return await discoverAccess({ context: ctx, seedNamespaces: seed, run: runKubectl });
+        const a = await discoverAccess({ context: ctx, seedNamespaces: seed, run: runKubectl });
+        if (a.indeterminate) accessCache.delete(key);
+        return a;
       } catch {
+        accessCache.delete(key);
         return { mode: "cluster-wide", namespaces: [] } as Access;
       }
     })();

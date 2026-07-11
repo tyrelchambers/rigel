@@ -31,6 +31,7 @@ describe("discoverAccess", () => {
     const a = await discoverAccess({ context: "ctx", seedNamespaces: ["team-a", "team-b"], run });
     expect(a.mode).toBe("cluster-wide");
     expect(a.namespaces).toEqual([]);
+    expect(a.indeterminate).toBe(true);
   });
 
   it("caps the scoped namespace set at maxNamespaces", async () => {

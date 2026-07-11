@@ -208,6 +208,38 @@ test("subscribing to a new context lazily discovers its access and fans out over
   expect(ws.sent).toContainEqual({ type: "access", context: "other-ctx", mode: "scoped", namespaces: ["team-x"] });
 });
 
+test("a subscribe/unsubscribe/subscribe race on an undiscovered context fans out exactly once", async () => {
+  const mgr = fakeMgr();
+  const accessFor = vi.fn(async () => ({ mode: "cluster-wide", namespaces: [] } as const));
+  const handlers = makeWsHandlers(mgr as any, "boot-ctx", "", accessFor as any);
+  const ws = fakeWs();
+  handlers.open(ws, { mode: "cluster-wide", namespaces: [] });
+
+  const sub = JSON.stringify({ type: "subscribe", context: "ctx-b", kind: "pods", namespace: "default" });
+  const unsub = JSON.stringify({ type: "unsubscribe", context: "ctx-b", kind: "pods", namespace: "default" });
+  handlers.message(ws, sub);
+  handlers.message(ws, unsub);
+  handlers.message(ws, sub);
+  await flush();
+
+  // Both pending discoveries resolve, but only the current placeholder's proceeds.
+  expect(mgr.subs.length).toBe(1);
+});
+
+test("closing during discovery bails the pending fan-out instead of watching a dead socket", async () => {
+  const mgr = fakeMgr();
+  const accessFor = vi.fn(async () => ({ mode: "cluster-wide", namespaces: [] } as const));
+  const handlers = makeWsHandlers(mgr as any, "boot-ctx", "", accessFor as any);
+  const ws = fakeWs();
+  handlers.open(ws, { mode: "cluster-wide", namespaces: [] });
+
+  handlers.message(ws, JSON.stringify({ type: "subscribe", context: "ctx-b", kind: "pods", namespace: "default" }));
+  handlers.close(ws);
+  await flush();
+
+  expect(mgr.subs.length).toBe(0);
+});
+
 test("logs.start with an explicit context calls the log manager's start with it, not the boot context", () => {
   const startSpy = vi.spyOn(LogStreamManager.prototype, "start").mockImplementation(() => {});
   const mgr = fakeMgr();

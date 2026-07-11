@@ -126,6 +126,7 @@ export function makeWsHandlers(
     },
     close(ws: WebSocket) {
       unsubs.get(ws)?.forEach((u) => u());
+      unsubs.get(ws)?.clear();
       logStreams.get(ws)?.stop();
       chatAborts.get(ws)?.abort();
       terminals.get(ws)?.stop();
@@ -143,11 +144,12 @@ export function makeWsHandlers(
         if (cached) {
           fanOut(ws, map, subCtx, key, m, cached);
         } else {
-          map.set(key, () => {});
+          const token = () => {};
+          map.set(key, token);
           void accessFor(subCtx).then((access) => {
             ctxAccessByWs.get(ws)?.set(ctxKey, access);
             announceAccess(ws, ctxKey, access);
-            if (!map.has(key)) return;
+            if (map.get(key) !== token) return;
             fanOut(ws, map, subCtx, key, m, access);
           });
         }

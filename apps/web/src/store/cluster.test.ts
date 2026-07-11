@@ -221,10 +221,53 @@ describe("replaceKind — namespace-scoped merge", () => {
   });
 });
 
-test("setAccessMode sets both the mode and the accessible namespaces", () => {
-  useCluster.getState().setAccessMode("scoped", ["team-a", "team-b"]);
-  expect(useCluster.getState().accessMode).toBe("scoped");
-  expect(useCluster.getState().accessNamespaces).toEqual(["team-a", "team-b"]);
+describe("setContextAccess", () => {
+  beforeEach(() => {
+    useCluster.setState({
+      activeContext: null,
+      accessByContext: {},
+      accessMode: "cluster-wide",
+      accessNamespaces: [],
+    });
+  });
+
+  it("surfaces the active context's access into accessMode/accessNamespaces", () => {
+    useCluster.getState().setActiveContextInitial("ctx-a");
+    useCluster.getState().setContextAccess("ctx-a", "scoped", ["team-a"]);
+    const s = useCluster.getState();
+    expect(s.accessMode).toBe("scoped");
+    expect(s.accessNamespaces).toEqual(["team-a"]);
+    expect(s.accessByContext["ctx-a"]).toEqual({ mode: "scoped", namespaces: ["team-a"] });
+  });
+
+  it("records a non-active context's access without touching the active context's surfaced values", () => {
+    useCluster.getState().setActiveContextInitial("ctx-a");
+    useCluster.getState().setContextAccess("ctx-a", "scoped", ["team-a"]);
+    useCluster.getState().setContextAccess("ctx-b", "scoped", ["team-b"]);
+    const s = useCluster.getState();
+    expect(s.accessMode).toBe("scoped");
+    expect(s.accessNamespaces).toEqual(["team-a"]);
+    expect(s.accessByContext["ctx-b"]).toEqual({ mode: "scoped", namespaces: ["team-b"] });
+  });
+
+  it("applySwitch surfaces the target context's stored access", () => {
+    useCluster.getState().setActiveContextInitial("ctx-a");
+    useCluster.getState().setContextAccess("ctx-a", "scoped", ["team-a"]);
+    useCluster.getState().setContextAccess("ctx-b", "scoped", ["team-b"]);
+    useCluster.getState().applySwitch("ctx-b", null);
+    const s = useCluster.getState();
+    expect(s.accessMode).toBe("scoped");
+    expect(s.accessNamespaces).toEqual(["team-b"]);
+  });
+
+  it("applySwitch to an unknown context resets to cluster-wide", () => {
+    useCluster.getState().setActiveContextInitial("ctx-a");
+    useCluster.getState().setContextAccess("ctx-a", "scoped", ["team-a"]);
+    useCluster.getState().applySwitch("ctx-unknown", null);
+    const s = useCluster.getState();
+    expect(s.accessMode).toBe("cluster-wide");
+    expect(s.accessNamespaces).toEqual([]);
+  });
 });
 
 it("records per-kind access without touching the global error", () => {

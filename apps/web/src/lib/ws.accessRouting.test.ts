@@ -13,7 +13,7 @@ const store = vi.hoisted(() => ({
   setError: vi.fn(),
   setLoading: vi.fn(),
   setAccess: vi.fn(),
-  setAccessMode: vi.fn(),
+  setContextAccess: vi.fn(),
   clearKind: vi.fn(),
   replaceKind: vi.fn(),
 }));
@@ -25,7 +25,7 @@ vi.mock("@/store/cluster", () => ({
       setError: store.setError,
       setLoading: store.setLoading,
       setAccess: store.setAccess,
-      setAccessMode: store.setAccessMode,
+      setContextAccess: store.setContextAccess,
       clearKind: store.clearKind,
       replaceKind: store.replaceKind,
       setActiveContextInitial: vi.fn(),
@@ -65,34 +65,47 @@ beforeEach(() => {
   store.setError.mockClear();
   store.setLoading.mockClear();
   store.setAccess.mockClear();
-  store.setAccessMode.mockClear();
+  store.setContextAccess.mockClear();
   store.clearKind.mockClear();
   store.replaceKind.mockClear();
   connectCluster();
 });
 
 describe("access frame routing", () => {
-  it("routes a scoped access frame into store.setAccessMode with its namespaces", () => {
+  it("routes a scoped access frame into store.setContextAccess with its context and namespaces", () => {
     mockWs.onmessage!({
-      data: JSON.stringify({ type: "access", mode: "scoped", namespaces: ["team-a", "team-b"] }),
+      data: JSON.stringify({
+        type: "access",
+        context: "prod",
+        mode: "scoped",
+        namespaces: ["team-a", "team-b"],
+      }),
     });
 
-    expect(store.setAccessMode).toHaveBeenCalledWith("scoped", ["team-a", "team-b"]);
+    expect(store.setContextAccess).toHaveBeenCalledWith("prod", "scoped", ["team-a", "team-b"]);
   });
 
-  it("routes a cluster-wide access frame into store.setAccessMode with an empty namespace list", () => {
+  it("routes a cluster-wide access frame into store.setContextAccess with an empty namespace list", () => {
     mockWs.onmessage!({
-      data: JSON.stringify({ type: "access", mode: "cluster-wide", namespaces: [] }),
+      data: JSON.stringify({ type: "access", context: "prod", mode: "cluster-wide", namespaces: [] }),
     });
 
-    expect(store.setAccessMode).toHaveBeenCalledWith("cluster-wide", []);
+    expect(store.setContextAccess).toHaveBeenCalledWith("prod", "cluster-wide", []);
   });
 
   it("defaults to an empty namespace list when the frame omits it", () => {
     mockWs.onmessage!({
-      data: JSON.stringify({ type: "access", mode: "cluster-wide" }),
+      data: JSON.stringify({ type: "access", context: "prod", mode: "cluster-wide" }),
     });
 
-    expect(store.setAccessMode).toHaveBeenCalledWith("cluster-wide", []);
+    expect(store.setContextAccess).toHaveBeenCalledWith("prod", "cluster-wide", []);
+  });
+
+  it("passes null context through when the frame omits it", () => {
+    mockWs.onmessage!({
+      data: JSON.stringify({ type: "access", mode: "cluster-wide", namespaces: [] }),
+    });
+
+    expect(store.setContextAccess).toHaveBeenCalledWith(null, "cluster-wide", []);
   });
 });
