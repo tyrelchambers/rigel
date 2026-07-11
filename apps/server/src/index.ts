@@ -7,6 +7,7 @@ import { resolveKubeconfigPath } from "./kubeconfig";
 import { kubectl, runProcess } from "@rigel/k8s/src/run";
 import { WatchManager } from "./watchManager";
 import { makeWsHandlers } from "./ws";
+import { resolveRequestContext } from "./requestContext";
 import { discoverAccess, seedFromKubeconfig, type Access } from "./access";
 import { buildCommand, PurgeActionError, type ActionBlock } from "./actions";
 import { applyManifest, deleteManifest, installHelm } from "./install";
@@ -77,9 +78,9 @@ const METRICS_SERVER_URL =
 const WEB_DIST = process.env.WEB_DIST ?? new URL("../../web/dist", import.meta.url).pathname;
 
 const ctxRes = await kubectl(null, ["config", "current-context"]);
-const context = ctxRes.code === 0 ? ctxRes.stdout.trim() : null;
+const bootContext = ctxRes.code === 0 ? ctxRes.stdout.trim() : null;
 
-const mgr = new WatchManager(context);
+const mgr = new WatchManager(bootContext);
 
 // Pre-warm the always-present built-in kinds so the first client subscribe is an
 // instant warm hit (cache already populated, no LIST/spawn on the critical path).
@@ -102,8 +103,8 @@ const runKubectl = (args: string[]) => runProcess("kubectl", args);
 
 const accessReady: Promise<Access> = (async () => {
   try {
-    const seed = await seedFromKubeconfig(context, runKubectl);
-    const access = await discoverAccess({ context, seedNamespaces: seed, run: runKubectl });
+    const seed = await seedFromKubeconfig(bootContext, runKubectl);
+    const access = await discoverAccess({ context: bootContext, seedNamespaces: seed, run: runKubectl });
     if (access.mode === "cluster-wide") mgr.prewarm(CORE_KINDS, "*");
     return access;
   } catch {
@@ -115,11 +116,12 @@ const accessReady: Promise<Access> = (async () => {
 // Port-forward subprocess registry (docs/parity/portforward.md). One instance
 // for the server's lifetime; killed wholesale on shutdown so no zombie kubectl
 // survives. The forwards bind the SERVER's 127.0.0.1 — see the module caveat.
-const portForwards = new PortForwardManager(context);
+const portForwards = new PortForwardManager(bootContext);
 
 async function handler(req: Request): Promise<Response> {
   {
     const url = new URL(req.url);
+    const context = resolveRequestContext(req.headers.get("x-rigel-context"), bootContext);
 
     if (url.pathname === "/api/health") {
       return Response.json({ ok: true, kubeconfig: KUBECONFIG });
@@ -1152,7 +1154,7 @@ async function handler(req: Request): Promise<Response> {
           service: body.service,
           remotePort: body.remotePort,
           localPort: body.localPort,
-          context: body.context,
+          context: body.context ?? context ?? undefined,
           targetKind: body.targetKind,
         });
         if (result.kind === "error") {
@@ -1181,7 +1183,7 @@ const httpServer = serve({ fetch: handler, port: PORT, hostname: HOST }, (info) 
 // WebSocket upgrade wiring. node-server hands us the underlying Node http.Server,
 // so we intercept the HTTP `upgrade` event ourselves and drive the `ws` server.
 const wss = new WebSocketServer({ noServer: true });
-const wsHandlers = makeWsHandlers(mgr, context, KUBECONFIG);
+const wsHandlers = makeWsHandlers(mgr, bootContext, KUBECONFIG);
 httpServer.on("upgrade", (req: IncomingMessage, socket, head) => {
   try {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
