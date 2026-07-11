@@ -7,6 +7,7 @@ import { resolveKubeconfigPath } from "./kubeconfig";
 import { kubectl, runProcess } from "@rigel/k8s/src/run";
 import { WatchManager } from "./watchManager";
 import { makeWsHandlers } from "./ws";
+import { discoverAccess, seedFromKubeconfig, type Access } from "./access";
 import { buildCommand, PurgeActionError, type ActionBlock } from "./actions";
 import { applyManifest, deleteManifest, installHelm } from "./install";
 import {
@@ -97,7 +98,19 @@ const CORE_KINDS = [
   "namespaces",
   "nodes",
 ];
-mgr.prewarm(CORE_KINDS, "*");
+const runKubectl = (args: string[]) => runProcess("kubectl", args);
+
+const accessReady: Promise<Access> = (async () => {
+  try {
+    const seed = await seedFromKubeconfig(context, runKubectl);
+    const access = await discoverAccess({ context, seedNamespaces: seed, run: runKubectl });
+    if (access.mode === "cluster-wide") mgr.prewarm(CORE_KINDS, "*");
+    return access;
+  } catch {
+    mgr.prewarm(CORE_KINDS, "*");
+    return { mode: "cluster-wide", namespaces: [] };
+  }
+})();
 
 // Port-forward subprocess registry (docs/parity/portforward.md). One instance
 // for the server's lifetime; killed wholesale on shutdown so no zombie kubectl
@@ -1184,9 +1197,20 @@ httpServer.on("upgrade", (req: IncomingMessage, socket, head) => {
 wss.on("error", (err) => console.error("websocket server error:", err));
 wss.on("connection", (client) => {
   client.on("error", () => { try { client.close(); } catch { /* already gone */ } });
-  wsHandlers.open(client);
-  client.on("message", (data) => wsHandlers.message(client, data as any));
-  client.on("close", () => wsHandlers.close(client));
+  const pending: any[] = [];
+  let ready = false;
+  let closed = false;
+  client.on("message", (data) => {
+    if (!ready) { pending.push(data); return; }
+    wsHandlers.message(client, data as any);
+  });
+  client.on("close", () => { closed = true; wsHandlers.close(client); });
+  void accessReady.then((access) => {
+    if (closed) return;
+    wsHandlers.open(client, access);
+    ready = true;
+    for (const d of pending) wsHandlers.message(client, d as any);
+  });
 });
 
 // Shutdown hook: kill every port-forward child so no zombie kubectl survives the

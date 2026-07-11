@@ -34,7 +34,9 @@ export function filterByNamespace<T>(
 /**
  * Reconcile an incoming snapshot against the previous slice by resourceVersion,
  * reusing existing object references for unchanged items so derived memos stay
- * valid across watch restarts/resyncs/reconnects.
+ * valid across watch restarts/resyncs/reconnects. `inScope` limits which prior
+ * keys this snapshot is authoritative for (e.g. one namespace's watch) — keys
+ * outside scope are carried over untouched and never counted as removals.
  *
  * Returns the previous slice unchanged (same reference) when nothing was added,
  * removed, or changed — letting the caller skip the `set` entirely.
@@ -42,10 +44,15 @@ export function filterByNamespace<T>(
 function reconcileSlice(
   prev: Record<string, unknown> | undefined,
   items: Record<string, unknown>,
+  inScope: (key: string) => boolean,
 ): Record<string, unknown> {
   const prevSlice = prev ?? {};
   const next: Record<string, unknown> = {};
   let changed = false;
+
+  for (const key of Object.keys(prevSlice)) {
+    if (!inScope(key)) next[key] = prevSlice[key];
+  }
 
   for (const key of Object.keys(items)) {
     const incoming = items[key];
@@ -62,9 +69,11 @@ function reconcileSlice(
     }
   }
 
-  // Any removed key (present before, absent now) is also a change.
-  if (!changed && Object.keys(prevSlice).length !== Object.keys(items).length) {
-    changed = true;
+  // Any in-scope key removed (present before, absent now) is also a change.
+  if (!changed) {
+    const prevInScope = Object.keys(prevSlice).filter(inScope).length;
+    const nextInScope = Object.keys(items).filter(inScope).length;
+    if (prevInScope !== nextInScope) changed = true;
   }
 
   return changed ? next : prevSlice;
@@ -113,6 +122,8 @@ function writeNamespaceByContext(map: Record<string, string | null>): void {
   }
 }
 
+export type KindAccess = { status: "ok" | "forbidden" | "error"; message?: string };
+
 interface ClusterState {
   connected: boolean;
   resources: ResourceMap;
@@ -120,6 +131,9 @@ interface ClusterState {
   isLoading: boolean;
   /** Last watch/connection error message, or null. */
   error: string | null;
+  /** Per-kind access state (e.g. a denied watch), keyed by kind. Separate from
+   *  the global `error` so one forbidden kind doesn't paint the whole app red. */
+  accessByKind: Record<string, KindAccess>;
   /**
    * Current namespace scope shared across panels. `null` means "all
    * namespaces". Set by the namespace selector elsewhere in the app.
@@ -128,6 +142,13 @@ interface ClusterState {
   /** The active kubeconfig context (cluster) the whole app is pointed at. null
    *  until the rail resolves it from /api/contexts. */
   activeContext: string | null;
+  /** Whether this connection can list/watch cluster-wide, or is scoped to a
+   *  fixed set of namespaces (RBAC-limited). Set from the server's `access`
+   *  frame sent on connect. */
+  accessMode: "cluster-wide" | "scoped";
+  /** The namespaces this connection can access, when `accessMode` is
+   *  "scoped". Empty (and unused) in cluster-wide mode. */
+  accessNamespaces: string[];
   /** Each context's last-selected namespace (null = all). Drives per-cluster
    *  namespace memory across switches. */
   namespaceByContext: Record<string, string | null>;
@@ -141,15 +162,19 @@ interface ClusterState {
   setConnected: (c: boolean) => void;
   setLoading: (l: boolean) => void;
   setError: (e: string | null) => void;
+  setAccess: (kind: string, access: KindAccess) => void;
+  setAccessMode: (mode: "cluster-wide" | "scoped", namespaces: string[]) => void;
   setNamespaceFilter: (ns: string | null) => void;
   upsert: (kind: string, name: string, obj: unknown) => void;
   remove: (kind: string, name: string) => void;
   /**
-   * Replace the items for a kind from a watch snapshot. Every watch is
-   * cluster-wide, so a snapshot is always the authoritative full set → full
-   * replace. Namespace scoping is a client-side view filter (filterByNamespace).
+   * Replace the items for a kind from a watch snapshot. `namespace` (default
+   * `"*"`) scopes which prior keys this snapshot is authoritative for — a
+   * per-namespace watch's snapshot merges into the kind's slice instead of
+   * wiping other namespaces' entries. `"*"` (the cluster-wide case) is a full
+   * replace, as before.
    */
-  replaceKind: (kind: string, items: Record<string, unknown>) => void;
+  replaceKind: (kind: string, items: Record<string, unknown>, namespace?: string) => void;
   /**
    * Empty the local view for a kind (set `resources[kind]` to `{}`). This only
    * clears the client-side cache; it does not delete server-side objects. For
@@ -168,8 +193,11 @@ export const useCluster = create<ClusterState>((set) => ({
   resources: {},
   isLoading: false,
   error: null,
+  accessByKind: {},
   namespaceFilter: readNamespaceFilter(), // null = All namespaces; restored from localStorage
   activeContext: null,
+  accessMode: "cluster-wide",
+  accessNamespaces: [],
   namespaceByContext: readNamespaceByContext(),
   setActiveContextInitial: (context) =>
     set((s) => {
@@ -185,6 +213,9 @@ export const useCluster = create<ClusterState>((set) => ({
   setConnected: (connected) => set({ connected }),
   setLoading: (isLoading) => set({ isLoading }),
   setError: (error) => set({ error }),
+  setAccess: (kind, access) =>
+    set((s) => ({ accessByKind: { ...s.accessByKind, [kind]: access } })),
+  setAccessMode: (accessMode, accessNamespaces) => set({ accessMode, accessNamespaces }),
   setNamespaceFilter: (namespaceFilter) => {
     writeNamespaceFilter(namespaceFilter);
     set((s) => {
@@ -203,9 +234,11 @@ export const useCluster = create<ClusterState>((set) => ({
       delete next[name];
       return { resources: { ...s.resources, [kind]: next } };
     }),
-  replaceKind: (kind, items) =>
+  replaceKind: (kind, items, namespace = "*") =>
     set((s) => {
-      const reconciled = reconcileSlice(s.resources[kind], items);
+      const inScope =
+        namespace === "*" ? () => true : (key: string) => key.startsWith(`${namespace}/`);
+      const reconciled = reconcileSlice(s.resources[kind], items, inScope);
       if (reconciled === s.resources[kind]) return {};
       return { resources: { ...s.resources, [kind]: reconciled } };
     }),

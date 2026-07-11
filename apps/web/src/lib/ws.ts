@@ -305,21 +305,38 @@ export function connectCluster(): void {
     ) {
       const listeners = actionListeners.get(m.id);
       if (listeners) listeners.forEach((cb) => cb(m as ActionEvent));
+    } else if (m.type === "access") {
+      store.setAccessMode(
+        m.mode === "scoped" ? "scoped" : "cluster-wide",
+        Array.isArray(m.namespaces) ? m.namespaces : [],
+      );
     } else if (m.type === "snapshot") {
-      // Authoritative full set for this (cluster-wide) subscription: REPLACE the
-      // kind's items. Namespace scoping is a client-side view filter, so there's
-      // never a second scope to merge against.
       store.setLoading(false);
       store.setError(null);
+      store.setAccess(m.kind, { status: "ok" });
       const items: Record<string, unknown> = {};
       for (const o of m.items) items[resourceKey(o)] = o;
-      store.replaceKind(m.kind, items);
+      store.replaceKind(m.kind, items, typeof m.namespace === "string" ? m.namespace : "*");
     } else if (m.type === "delta") {
       if (m.event === "DELETED") store.remove(m.kind, resourceKey(m.object));
       else store.upsert(m.kind, resourceKey(m.object), m.object);
     } else if (m.type === "error") {
       store.setLoading(false);
-      store.setError(typeof m.message === "string" ? m.message : "watch failed");
+      if (typeof m.kind === "string") {
+        store.setAccess(m.kind, {
+          status: m.reason === "forbidden" ? "forbidden" : "error",
+          message: typeof m.message === "string" ? m.message : undefined,
+        });
+        if (m.reason === "forbidden") {
+          if (typeof m.namespace === "string" && m.namespace !== "*") {
+            store.replaceKind(m.kind, {}, m.namespace);
+          } else {
+            store.clearKind(m.kind);
+          }
+        }
+      } else {
+        store.setError(typeof m.message === "string" ? m.message : "watch failed");
+      }
     }
   };
 }

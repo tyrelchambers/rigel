@@ -19,6 +19,16 @@ export function applyEvent(cache: Map<string, any>, e: WatchEvent): void {
   else cache.set(key, e.object);
 }
 
+export type WatchError = { reason: "forbidden" | "notfound" | "error"; message: string };
+
+export function classifyWatchError(stderr: string): WatchError["reason"] {
+  const s = stderr.toLowerCase();
+  if (s.includes("forbidden")) return "forbidden";
+  if (s.includes("notfound") || s.includes("could not find") || s.includes("the server doesn't have a resource type"))
+    return "notfound";
+  return "error";
+}
+
 type Sub = { context?: string | null; kind: string; namespace: string };
 
 // How long a warm watch with zero listeners lives before teardown. Keeps the
@@ -46,6 +56,7 @@ export type WatchManagerOptions = {
 type Listener = {
   onSnapshot: (items: any[]) => void;
   onDelta: (e: WatchEvent) => void;
+  onError?: (err: WatchError) => void;
 };
 
 type Watch = {
@@ -62,6 +73,7 @@ type Watch = {
   idleTimer: ReturnType<typeof setTimeout> | null;
   restartTimer: ReturnType<typeof setTimeout> | null;
   restarts: number; // consecutive restart attempts (reset on a good LIST)
+  lastError: WatchError | null; // last classified failure, replayed to new subscribers
 };
 
 export class WatchManager {
@@ -93,6 +105,7 @@ export class WatchManager {
     sub: Sub,
     onSnapshot: (items: any[]) => void,
     onDelta: (e: WatchEvent) => void,
+    onError?: (err: WatchError) => void,
   ): () => void {
     const key = this.subKey(sub);
     let w = this.watches.get(key);
@@ -103,13 +116,14 @@ export class WatchManager {
       clearTimeout(w.idleTimer);
       w.idleTimer = null;
     }
-    const listener: Listener = { onSnapshot, onDelta };
+    const listener: Listener = { onSnapshot, onDelta, onError };
     w.listeners.add(listener);
 
     // Warm hit: a ready watch serves its cache immediately. A not-yet-ready
     // watch (LIST in flight) snapshots this listener when the LIST completes,
     // because emitSnapshot iterates the current listener set at that moment.
     if (w.ready) onSnapshot([...w.cache.values()]);
+    if (w.lastError) onError?.(w.lastError);
 
     return () => {
       const cur = this.watches.get(key);
@@ -149,6 +163,7 @@ export class WatchManager {
       idleTimer: null,
       restartTimer: null,
       restarts: 0,
+      lastError: null,
     };
     this.watches.set(key, w);
     this.startList(key);
@@ -180,13 +195,17 @@ export class WatchManager {
     if (!w) return;
     const argv = this.buildArgs(w.sub, false);
     const proc = this.spawnFn(argv[0], argv.slice(1), {
-      stdio: ["ignore", "pipe", "ignore"],
+      stdio: ["ignore", "pipe", "pipe"],
     });
     w.listProc = proc;
 
     let out = "";
+    let err = "";
     proc.stdout!.on("data", (buf: Buffer) => {
       out += buf.toString("utf8");
+    });
+    proc.stderr!.on("data", (buf: Buffer) => {
+      err += buf.toString("utf8");
     });
 
     let settled = false;
@@ -211,11 +230,19 @@ export class WatchManager {
         }
         w.cache = next;
         w.ready = true;
+        w.lastError = null;
         w.restarts = 0; // a good LIST clears the backoff
         this.emitSnapshot(w);
         this.startWatchStream(key);
       } else {
-        // The LIST failed (NotFound for a missing kind, or a transient error).
+        const reason = classifyWatchError(err);
+        if (reason === "forbidden") {
+          w.lastError = { reason, message: err.trim() };
+          w.cache = new Map<string, any>();
+          for (const l of w.listeners) l.onError?.(w.lastError);
+          w.ready = true;
+          return;
+        }
         // On the FIRST failure (never been ready) emit one empty snapshot so the
         // client renders empty instead of a forever spinner, and mark ready so
         // warm subscribers don't hang. On a later failure keep the last-known
@@ -230,7 +257,6 @@ export class WatchManager {
       }
     };
 
-    proc.on("exit", (code) => onEnd(code));
     proc.on("close", (code) => onEnd(code));
     proc.on("error", () => onEnd(1)); // ENOENT etc: do not crash the server
   }

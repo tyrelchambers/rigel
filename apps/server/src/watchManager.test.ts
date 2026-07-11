@@ -2,7 +2,7 @@ import { test, expect, vi } from "vitest";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import type { SpawnOptions, ChildProcess } from "node:child_process";
-import { applyEvent, WatchManager } from "./watchManager";
+import { applyEvent, classifyWatchError, WatchManager } from "./watchManager";
 
 test("ADDED then MODIFIED upserts; DELETED removes", () => {
   const cache = new Map<string, any>();
@@ -40,13 +40,14 @@ type FakeProc = ChildProcess & {
   killed: boolean;
   // LIST helper: push a `{items:[...]}` body and finish the process.
   emitList(items: any[]): void;
-  // LIST failure helper: empty stderr + non-zero exit (e.g. NotFound).
-  emitListError(code?: number): void;
+  // LIST failure helper: optional stderr + non-zero exit (e.g. NotFound/Forbidden).
+  emitListError(code?: number, stderr?: string): void;
 };
 
 function makeFakeProc(args: string[]): FakeProc {
   const proc = new EventEmitter() as unknown as FakeProc;
   (proc as any).stdout = new PassThrough();
+  (proc as any).stderr = new PassThrough();
   proc.args = args;
   proc.isWatch = args.includes("--watch-only");
   // A LIST is a `get ... -o json` that is NOT the watch stream.
@@ -58,11 +59,10 @@ function makeFakeProc(args: string[]): FakeProc {
   };
   proc.emitList = (items: any[]) => {
     (proc as any).stdout.write(JSON.stringify({ items }));
-    proc.emit("exit", 0, null);
     proc.emit("close", 0, null);
   };
-  proc.emitListError = (code = 1) => {
-    proc.emit("exit", code, null);
+  proc.emitListError = (code = 1, stderr = "") => {
+    if (stderr) (proc as any).stderr.write(stderr);
     proc.emit("close", code, null);
   };
   return proc;
@@ -345,9 +345,10 @@ test("a prewarmed watch is never idle-stopped", async () => {
 
 // (f) Existing contract: a spawn "error" does not throw / crash the server.
 test("spawn 'error' event tears down watch without throwing", async () => {
-  // Build a fake ChildProcess: EventEmitter + stdout PassThrough + kill()
+  // Build a fake ChildProcess: EventEmitter + stdout/stderr PassThrough + kill()
   const fakeProc = new EventEmitter() as unknown as ChildProcess;
   (fakeProc as any).stdout = new PassThrough();
+  (fakeProc as any).stderr = new PassThrough();
   (fakeProc as any).kill = () => {};
 
   const fakeSpawn = (_cmd: string, _args: string[], _opts: SpawnOptions) =>
@@ -394,4 +395,110 @@ test("spawn 'error' event tears down watch without throwing", async () => {
     threw2 = true;
   }
   expect(threw2).toBe(false);
+});
+
+// (g) A Forbidden LIST failure (RBAC denial) is reported via onError and does
+//     NOT schedule a restart — retrying a 403 forever is pointless.
+test("reports a Forbidden LIST failure to onError and does not schedule a restart", async () => {
+  vi.useFakeTimers();
+  try {
+    const rec = makeRecorder();
+    const mgr = new WatchManager(null, rec.spawnFn as any, { restartBaseMs: 10, restartMaxMs: 10 });
+
+    const onError = vi.fn();
+    mgr.subscribe(
+      { kind: "secrets", namespace: "team-a" },
+      () => {},
+      () => {},
+      onError,
+    );
+
+    rec.lastList().emitListError(1, "Error from server (Forbidden): secrets is forbidden");
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ reason: "forbidden" }));
+
+    // No restart scheduled: waiting past the backoff spawns nothing new.
+    await vi.advanceTimersByTimeAsync(100);
+    expect(rec.lists().length).toBe(1);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+// (g2) A NotFound / generic non-zero LIST failure STILL retries (a 2nd LIST
+//      spawns after backoff) and does NOT call onError — only forbidden is
+//      suppressed.
+test("a non-forbidden LIST failure keeps retrying and does not call onError", async () => {
+  vi.useFakeTimers();
+  try {
+    const rec = makeRecorder();
+    const mgr = new WatchManager(null, rec.spawnFn as any, { restartBaseMs: 100 });
+
+    const onError = vi.fn();
+    mgr.subscribe({ kind: "widgets", namespace: "default" }, () => {}, () => {}, onError);
+
+    rec.lastList().emitListError(1, "Error from server (NotFound): the server could not find the requested resource");
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(onError).not.toHaveBeenCalled();
+
+    // After the backoff a retry LIST is spawned.
+    await vi.advanceTimersByTimeAsync(100);
+    expect(rec.lists().length).toBe(2);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+// (g3) A subscriber that joins AFTER a watch is already forbidden still learns
+//      it's forbidden (the error is persisted and replayed).
+test("a late subscriber to an already-forbidden watch receives onError", async () => {
+  vi.useFakeTimers();
+  try {
+    const rec = makeRecorder();
+    const mgr = new WatchManager(null, rec.spawnFn as any);
+
+    mgr.subscribe({ kind: "secrets", namespace: "team-a" }, () => {}, () => {});
+    rec.lastList().emitListError(1, "Error from server (Forbidden): secrets is forbidden");
+    await vi.advanceTimersByTimeAsync(0);
+
+    const onError = vi.fn();
+    mgr.subscribe({ kind: "secrets", namespace: "team-a" }, () => {}, () => {}, onError);
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ reason: "forbidden" }));
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+// (g5) A Forbidden LIST failure on a PREWARMED (pinned, zero-listener) watch
+//      also stops after one attempt — the retry-burn fix applies to prewarm,
+//      not just subscribed watches.
+test("a forbidden prewarmed watch stops after one attempt", async () => {
+  vi.useFakeTimers();
+  try {
+    const rec = makeRecorder();
+    const mgr = new WatchManager(null, rec.spawnFn as any, { restartBaseMs: 10, restartMaxMs: 10 });
+
+    mgr.prewarm(["nodes"], "*");
+    expect(rec.lists().length).toBe(1);
+
+    rec.lastList().emitListError(1, "Error from server (Forbidden): nodes is forbidden");
+    await vi.advanceTimersByTimeAsync(0);
+
+    // No restart scheduled: waiting past the backoff spawns nothing new.
+    await vi.advanceTimersByTimeAsync(100);
+    expect(rec.lists().length).toBe(1);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+// (g4) classifyWatchError maps kubectl stderr to a reason, case-insensitively.
+test("classifyWatchError maps stderr to a reason", () => {
+  expect(classifyWatchError("Error from server (Forbidden): secrets is forbidden")).toBe("forbidden");
+  expect(classifyWatchError("Error from server (NotFound): ...")).toBe("notfound");
+  expect(classifyWatchError("the server doesn't have a resource type \"widgets\"")).toBe("notfound");
+  expect(classifyWatchError("ERROR FROM SERVER (FORBIDDEN)")).toBe("forbidden");
+  expect(classifyWatchError("connection refused")).toBe("error");
 });

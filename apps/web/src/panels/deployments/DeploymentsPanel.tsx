@@ -4,6 +4,7 @@ import { subscribe, unsubscribe } from "@/lib/ws";
 import { useFocusRow } from "@/panels/components/useFocusRow";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
+import { KindAccessNotice } from "@/components/KindAccessNotice";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { PanelSearch } from "@/panels/components/PanelSearch";
 import { LoadingState } from "@/panels/components/LoadingState";
@@ -28,6 +29,7 @@ export default function DeploymentsPanel() {
   const isLoading = useCluster((s) => s.isLoading);
   const error = useCluster((s) => s.error);
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
+  const access = useCluster((s) => s.accessByKind["deployments"]);
   const [search, setSearch] = useState("");
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -222,9 +224,12 @@ export default function DeploymentsPanel() {
       </div>
 
       {/* Empty / filtered-to-zero states */}
-      {!isLoading && allDeployments.length === 0 && (
-        <p className="px-4 py-4 text-sm text-muted-foreground">No deployments found</p>
-      )}
+      {allDeployments.length === 0 &&
+        (access && access.status !== "ok" ? (
+          <KindAccessNotice kind="deployments" access={access} />
+        ) : (
+          !isLoading && <p className="px-4 py-4 text-sm text-muted-foreground">No deployments found</p>
+        ))}
       {!isLoading && allDeployments.length > 0 && filtered.length === 0 && (
         <p className="px-4 py-4 text-sm text-muted-foreground">No deployments match search</p>
       )}
