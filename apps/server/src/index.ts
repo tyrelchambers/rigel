@@ -1199,12 +1199,14 @@ wss.on("connection", (client) => {
   client.on("error", () => { try { client.close(); } catch { /* already gone */ } });
   const pending: any[] = [];
   let ready = false;
+  let closed = false;
   client.on("message", (data) => {
     if (!ready) { pending.push(data); return; }
     wsHandlers.message(client, data as any);
   });
-  client.on("close", () => wsHandlers.close(client));
+  client.on("close", () => { closed = true; wsHandlers.close(client); });
   void accessReady.then((access) => {
+    if (closed) return;
     wsHandlers.open(client, access);
     ready = true;
     for (const d of pending) wsHandlers.message(client, d as any);

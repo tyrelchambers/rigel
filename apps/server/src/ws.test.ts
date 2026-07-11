@@ -19,7 +19,7 @@ function fakeMgr() {
 // A fake ws that records every JSON message sent.
 function fakeWs() {
   const sent: any[] = [];
-  return { sent, send: (raw: string) => sent.push(JSON.parse(raw)) } as any;
+  return { sent, readyState: 1, OPEN: 1, send: (raw: string) => sent.push(JSON.parse(raw)) } as any;
 }
 
 test("subscribe defaults the context to the connection context and echoes it in the snapshot", () => {

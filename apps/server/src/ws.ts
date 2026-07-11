@@ -41,9 +41,11 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null,
       terminals.set(ws, new TerminalSession(ws));
       creates.set(ws, new ClusterCreateManager(ws, kubeconfigPath));
       actionRunners.set(ws, new ActionRunManager(ws, context));
-      ws.send(
-        JSON.stringify({ type: "access", mode: resolvedAccess.mode, namespaces: resolvedAccess.namespaces }),
-      );
+      if (ws.readyState === ws.OPEN) {
+        ws.send(
+          JSON.stringify({ type: "access", mode: resolvedAccess.mode, namespaces: resolvedAccess.namespaces }),
+        );
+      }
     },
     close(ws: WebSocket) {
       unsubs.get(ws)?.forEach((u) => u());
