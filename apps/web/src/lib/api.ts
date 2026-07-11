@@ -1055,6 +1055,34 @@ export async function fetchCertManagerPlugin(): Promise<boolean> {
 }
 
 // ---------------------------------------------------------------------------
+// API resources — GET /api/api-resources. Drives the RBAC rule editor's
+// API-groups/resources combobox suggestions ("groups" includes the literal
+// "core").
+// ---------------------------------------------------------------------------
+
+export interface ApiResourcesResponse {
+  resources: string[];
+  groups: string[];
+}
+
+async function fetchApiResources(): Promise<ApiResourcesResponse> {
+  const res = await apiFetch("/api/api-resources");
+  if (!res.ok) return { resources: [], groups: [] };
+  const data = (await res.json()) as Partial<ApiResourcesResponse>;
+  return { resources: data.resources ?? [], groups: data.groups ?? [] };
+}
+
+/** Cluster API resources/groups, cached per-context (rarely changes). */
+export function useApiResources() {
+  const activeContext = useCluster((s) => s.activeContext);
+  return useQuery<ApiResourcesResponse, Error>({
+    queryKey: [activeContext, "api-resources"] as const,
+    queryFn: fetchApiResources,
+    staleTime: 5 * 60_000,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Chat suggestion chips — GET /api/suggestions (computed server-side from
 // one-shot cluster reads). Mirrors the Swift SuggestedPromptsBuilder.
 // ---------------------------------------------------------------------------
