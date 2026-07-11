@@ -98,3 +98,37 @@ test("forwards a watch onError to the client as a kind-scoped error frame", () =
     expect.objectContaining({ type: "error", kind: "secrets", reason: "forbidden" }),
   );
 });
+
+test("fans out a wildcard subscribe to one watch per accessible namespace in scoped mode", () => {
+  const mgr = fakeMgr();
+  const handlers = makeWsHandlers(mgr as any, "ctx");
+  const ws = fakeWs();
+  handlers.open(ws, { mode: "scoped", namespaces: ["team-a", "team-b"] });
+
+  handlers.message(ws, JSON.stringify({ type: "subscribe", kind: "pods", namespace: "*" }));
+
+  expect(mgr.subs.map((s) => s.sub.namespace).sort()).toEqual(["team-a", "team-b"]);
+});
+
+test("keeps a single cluster-wide watch in cluster-wide mode (default)", () => {
+  const mgr = fakeMgr();
+  const handlers = makeWsHandlers(mgr as any, "ctx");
+  const ws = fakeWs();
+  handlers.open(ws);
+
+  handlers.message(ws, JSON.stringify({ type: "subscribe", kind: "pods", namespace: "*" }));
+
+  expect(mgr.subs.map((s) => s.sub.namespace)).toEqual(["*"]);
+});
+
+test("tears down all fanned-out watches on unsubscribe", () => {
+  const mgr = fakeMgr();
+  const handlers = makeWsHandlers(mgr as any, "ctx");
+  const ws = fakeWs();
+  handlers.open(ws, { mode: "scoped", namespaces: ["team-a", "team-b"] });
+
+  handlers.message(ws, JSON.stringify({ type: "subscribe", kind: "pods", namespace: "*" }));
+  handlers.message(ws, JSON.stringify({ type: "unsubscribe", kind: "pods", namespace: "*" }));
+
+  expect(mgr.unsub).toHaveBeenCalledTimes(2);
+});

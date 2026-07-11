@@ -8,9 +8,11 @@ import { ClusterCreateManager } from "./clusterCreateManager";
 import { ActionRunManager } from "./actionRunManager";
 import { parseChatScope, resolveReadContexts } from "./chatScope";
 import { listContexts } from "./contexts";
+import type { Access } from "./access";
 
 export function makeWsHandlers(mgr: WatchManager, context: string | null = null, kubeconfigPath = "") {
   const unsubs = new WeakMap<WebSocket, Map<string, () => void>>();
+  const accessByWs = new WeakMap<WebSocket, Access>();
   // One kubectl-logs stream manager per connection — killed on logs.stop/close.
   const logStreams = new WeakMap<WebSocket, LogStreamManager>();
   // Abort handle for the in-flight chat turn — aborted on Stop/new-turn/close.
@@ -31,8 +33,9 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null,
   };
 
   return {
-    open(ws: WebSocket) {
+    open(ws: WebSocket, access?: Access) {
       unsubs.set(ws, new Map());
+      accessByWs.set(ws, access ?? { mode: "cluster-wide", namespaces: [] });
       logStreams.set(ws, new LogStreamManager(ws, context));
       terminals.set(ws, new TerminalSession(ws));
       creates.set(ws, new ClusterCreateManager(ws, kubeconfigPath));
@@ -52,42 +55,47 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null,
       if (m.type === "subscribe") {
         const { subCtx, key } = resolveSub(m);
         if (map.has(key)) return;
-        const un = mgr.subscribe(
-          { context: subCtx, kind: m.kind, namespace: m.namespace },
-          (items) =>
-            ws.send(
-              JSON.stringify({
-                type: "snapshot",
-                context: subCtx,
-                kind: m.kind,
-                namespace: m.namespace,
-                items,
-              }),
-            ),
-          (e: WatchEvent) =>
-            ws.send(
-              JSON.stringify({
-                type: "delta",
-                context: subCtx,
-                kind: m.kind,
-                namespace: m.namespace,
-                event: e.type,
-                object: e.object,
-              }),
-            ),
-          (err) =>
-            ws.send(
-              JSON.stringify({
-                type: "error",
-                context: subCtx,
-                kind: m.kind,
-                namespace: m.namespace,
-                reason: err.reason,
-                message: err.message,
-              }),
-            ),
+        const access = accessByWs.get(ws) ?? { mode: "cluster-wide" as const, namespaces: [] };
+        const targets =
+          m.namespace === "*" && access.mode === "scoped" ? access.namespaces : [m.namespace];
+        const uns = targets.map((ns) =>
+          mgr.subscribe(
+            { context: subCtx, kind: m.kind, namespace: ns },
+            (items) =>
+              ws.send(
+                JSON.stringify({
+                  type: "snapshot",
+                  context: subCtx,
+                  kind: m.kind,
+                  namespace: ns,
+                  items,
+                }),
+              ),
+            (e: WatchEvent) =>
+              ws.send(
+                JSON.stringify({
+                  type: "delta",
+                  context: subCtx,
+                  kind: m.kind,
+                  namespace: ns,
+                  event: e.type,
+                  object: e.object,
+                }),
+              ),
+            (err) =>
+              ws.send(
+                JSON.stringify({
+                  type: "error",
+                  context: subCtx,
+                  kind: m.kind,
+                  namespace: ns,
+                  reason: err.reason,
+                  message: err.message,
+                }),
+              ),
+          ),
         );
-        map.set(key, un);
+        map.set(key, () => uns.forEach((u) => u()));
       } else if (m.type === "unsubscribe") {
         const { key } = resolveSub(m);
         map.get(key)?.();
