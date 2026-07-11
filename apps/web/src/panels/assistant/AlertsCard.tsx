@@ -41,6 +41,7 @@ import { handoffToChat } from "@/lib/chatHandoff";
 import { useAssistantCtx } from "./AssistantContext";
 import { relativeTime } from "./display";
 import { fetchBackends } from "@/panels/rightsizing/useRightSizing";
+import { useCluster } from "@/store/cluster";
 import type { SuggestedAlert, AlertRule, AlertTarget, AlertCondition } from "@/lib/alerts";
 import type { AlertScope } from "@rigel/k8s";
 
@@ -234,8 +235,9 @@ function MetaChip({ Icon, children }: { Icon: LucideIcon; children: React.ReactN
 
 export function AlertsCard() {
   const { d, ns, working, run } = useAssistantCtx();
+  const activeContext = useCluster((s) => s.activeContext);
 
-  const backendsQuery = useQuery({ queryKey: ["metrics-backends"], queryFn: fetchBackends });
+  const backendsQuery = useQuery({ queryKey: [activeContext, "metrics-backends"], queryFn: fetchBackends });
   const hasBackend = (backendsQuery.data?.length ?? 0) > 0;
 
   const [open, setOpen] = useState(false);

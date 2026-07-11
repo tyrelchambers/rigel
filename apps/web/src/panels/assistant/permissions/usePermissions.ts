@@ -15,6 +15,7 @@ import {
   type RbacPolicy,
 } from "@rigel/k8s";
 import { postAssistant, useAssistantAction } from "@/lib/api";
+import { useCluster } from "@/store/cluster";
 
 /** Pure: pending-change summary between the applied and staged policy. */
 export function stagedDiff(applied: RbacPolicy, staged: RbacPolicy) {
@@ -34,7 +35,8 @@ async function fetchRbac(namespace: string): Promise<RbacQueryData> {
 }
 
 export function usePermissions(namespace: string) {
-  const queryKey = ["assistant-rbac", namespace] as const;
+  const activeContext = useCluster((s) => s.activeContext);
+  const queryKey = [activeContext, "assistant-rbac", namespace] as const;
   const query = useQuery({ queryKey, queryFn: () => fetchRbac(namespace) });
   const qc = useQueryClient();
   const action = useAssistantAction();

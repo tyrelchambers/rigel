@@ -2,6 +2,8 @@
 // the PAT back to the browser; the token is write-only (sent on save, stored in
 // a cluster Secret server-side).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api";
+import { useCluster } from "@/store/cluster";
 
 /** One independently-syncable manifest dir within a repo. */
 export interface GitDeployment {
@@ -59,7 +61,7 @@ export interface SyncResult {
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, init);
+  const res = await apiFetch(path, init);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((err as { error?: string }).error ?? res.statusText);
@@ -76,38 +78,42 @@ const json = (body: unknown): RequestInit => ({
 // ── GitHub account (single PAT) ───────────────────────────────────────────────
 
 export function useGitHubAccount() {
+  const activeContext = useCluster((s) => s.activeContext);
   return useQuery({
-    queryKey: ["github-account"],
+    queryKey: [activeContext, "github-account"],
     queryFn: () => req<GithubAccount>("/api/git/account"),
   });
 }
 
 export function useConnectGitHub() {
   const qc = useQueryClient();
+  const activeContext = useCluster((s) => s.activeContext);
   return useMutation({
     mutationFn: (token: string) => req<GithubAccount>("/api/git/account", json({ token })),
     onSuccess: (acct) => {
-      qc.setQueryData(["github-account"], acct);
-      qc.invalidateQueries({ queryKey: ["github-repos"] });
+      qc.setQueryData([activeContext, "github-account"], acct);
+      qc.invalidateQueries({ queryKey: [activeContext, "github-repos"] });
     },
   });
 }
 
 export function useDisconnectGitHub() {
   const qc = useQueryClient();
+  const activeContext = useCluster((s) => s.activeContext);
   return useMutation({
     mutationFn: () => req<GithubAccount>("/api/git/account", { method: "DELETE" }),
     onSuccess: (acct) => {
-      qc.setQueryData(["github-account"], acct);
-      qc.removeQueries({ queryKey: ["github-repos"] });
+      qc.setQueryData([activeContext, "github-account"], acct);
+      qc.removeQueries({ queryKey: [activeContext, "github-repos"] });
     },
   });
 }
 
 /** The connected account's repos — only fetched once connected. */
 export function useGitHubRepos(enabled: boolean) {
+  const activeContext = useCluster((s) => s.activeContext);
   return useQuery({
-    queryKey: ["github-repos"],
+    queryKey: [activeContext, "github-repos"],
     queryFn: () => req<{ repos: GithubRepo[] }>("/api/git/repos").then((r) => r.repos),
     enabled,
   });
@@ -115,8 +121,9 @@ export function useGitHubRepos(enabled: boolean) {
 
 /** One directory level of a repo (the folder browser). Cached per (repo, branch, path). */
 export function useRepoTree(repo: string, branch: string, path: string, enabled: boolean) {
+  const activeContext = useCluster((s) => s.activeContext);
   return useQuery({
-    queryKey: ["repo-tree", repo, branch, path],
+    queryKey: [activeContext, "repo-tree", repo, branch, path],
     queryFn: () =>
       req<{ entries: RepoEntry[] }>(
         `/api/git/repo-tree?repo=${encodeURIComponent(repo)}&branch=${encodeURIComponent(branch)}&path=${encodeURIComponent(path)}`,
@@ -127,8 +134,9 @@ export function useRepoTree(repo: string, branch: string, path: string, enabled:
 
 /** Read one repo file's text (null path = disabled). Server holds the token. */
 export function useRepoFile(repo: string, branch: string, path: string | null) {
+  const activeContext = useCluster((s) => s.activeContext);
   return useQuery({
-    queryKey: ["repo-file", repo, branch, path],
+    queryKey: [activeContext, "repo-file", repo, branch, path],
     queryFn: () =>
       req<{ content: string }>(
         `/api/git/repo-file?repo=${encodeURIComponent(repo)}&branch=${encodeURIComponent(branch)}&path=${encodeURIComponent(path!)}`,
@@ -140,48 +148,53 @@ export function useRepoFile(repo: string, branch: string, path: string | null) {
 // ── Sources ───────────────────────────────────────────────────────────────────
 
 export function useGitSources() {
+  const activeContext = useCluster((s) => s.activeContext);
   return useQuery({
-    queryKey: ["git-sources"],
+    queryKey: [activeContext, "git-sources"],
     queryFn: () => req<{ sources: GitSource[] }>("/api/git/sources").then((r) => r.sources),
   });
 }
 
 export function useSaveSource() {
   const qc = useQueryClient();
+  const activeContext = useCluster((s) => s.activeContext);
   return useMutation({
     mutationFn: (input: SaveSourceInput) => req<{ sources: GitSource[] }>("/api/git/sources", json(input)),
-    onSuccess: (r) => qc.setQueryData(["git-sources"], r.sources),
+    onSuccess: (r) => qc.setQueryData([activeContext, "git-sources"], r.sources),
   });
 }
 
 export function useDeleteSource() {
   const qc = useQueryClient();
+  const activeContext = useCluster((s) => s.activeContext);
   return useMutation({
     mutationFn: (name: string) =>
       req<{ sources: GitSource[] }>(`/api/git/sources?name=${encodeURIComponent(name)}`, { method: "DELETE" }),
-    onSuccess: (r) => qc.setQueryData(["git-sources"], r.sources),
+    onSuccess: (r) => qc.setQueryData([activeContext, "git-sources"], r.sources),
   });
 }
 
 /** Add or update one deployment under an existing repo. */
 export function useSaveDeployment() {
   const qc = useQueryClient();
+  const activeContext = useCluster((s) => s.activeContext);
   return useMutation({
     mutationFn: (input: SaveDeploymentInput) =>
       req<{ sources: GitSource[] }>("/api/git/sources/deployment", json(input)),
-    onSuccess: (r) => qc.setQueryData(["git-sources"], r.sources),
+    onSuccess: (r) => qc.setQueryData([activeContext, "git-sources"], r.sources),
   });
 }
 
 export function useDeleteDeployment() {
   const qc = useQueryClient();
+  const activeContext = useCluster((s) => s.activeContext);
   return useMutation({
     mutationFn: ({ repo, name }: { repo: string; name: string }) =>
       req<{ sources: GitSource[] }>(
         `/api/git/sources/deployment?repo=${encodeURIComponent(repo)}&name=${encodeURIComponent(name)}`,
         { method: "DELETE" },
       ),
-    onSuccess: (r) => qc.setQueryData(["git-sources"], r.sources),
+    onSuccess: (r) => qc.setQueryData([activeContext, "git-sources"], r.sources),
   });
 }
 
@@ -234,8 +247,9 @@ export interface LinkRepoResult {
  * link control to show "Linked to owner/name" vs "Not linked".
  */
 export function useRepoLink(namespace: string | null | undefined, deployment: string | null | undefined) {
+  const activeContext = useCluster((s) => s.activeContext);
   return useQuery({
-    queryKey: ["repo-link", namespace, deployment],
+    queryKey: [activeContext, "repo-link", namespace, deployment],
     queryFn: () =>
       req<LinkStatus>(
         `/api/git/link?namespace=${encodeURIComponent(namespace!)}&deployment=${encodeURIComponent(deployment!)}`,
@@ -251,11 +265,12 @@ export function useRepoLink(namespace: string | null | undefined, deployment: st
  */
 export function useLinkRepo() {
   const qc = useQueryClient();
+  const activeContext = useCluster((s) => s.activeContext);
   return useMutation({
     mutationFn: (input: LinkRepoInput) => req<LinkRepoResult>("/api/git/link", json(input)),
     onSuccess: (_r, input) => {
-      qc.invalidateQueries({ queryKey: ["git-sources"] });
-      qc.invalidateQueries({ queryKey: ["repo-link", input.namespace, input.deployment] });
+      qc.invalidateQueries({ queryKey: [activeContext, "git-sources"] });
+      qc.invalidateQueries({ queryKey: [activeContext, "repo-link", input.namespace, input.deployment] });
     },
   });
 }

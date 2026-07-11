@@ -85,6 +85,7 @@ export function useRightSizing(opts?: { clusterWide?: boolean }): RightSizingDat
   const clusterWide = opts?.clusterWide ?? false;
   const resources = useCluster((s) => s.resources);
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
+  const activeContext = useCluster((s) => s.activeContext);
 
   const [choice, setChoiceState] = useState<BackendChoice>(() => loadBackendChoice(CHOICE_CONTEXT));
   const [backends, setBackends] = useState<UsageBackend[]>([]);
@@ -117,7 +118,7 @@ export function useRightSizing(opts?: { clusterWide?: boolean }): RightSizingDat
     return () => {
       cancelled = true;
     };
-  }, [reloadKey]);
+  }, [reloadKey, activeContext]);
 
   // Usage history from the chosen (or auto-detected) backend — the ONLY data
   // source. `usage === null` means "still resolving"; refreshed every 2 min.
@@ -143,7 +144,7 @@ export function useRightSizing(opts?: { clusterWide?: boolean }): RightSizingDat
       cancelled = true;
       clearInterval(id);
     };
-  }, [namespaceFilter, clusterWide, choice, reloadKey]);
+  }, [namespaceFilter, clusterWide, choice, reloadKey, activeContext]);
 
   const usingBackend = usage?.available === true;
   const noBackend = usage !== null && usage.available === false;

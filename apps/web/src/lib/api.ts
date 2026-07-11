@@ -581,8 +581,9 @@ export function useSetAutofix() {
  * once a namespace is known; refetched lazily (Secrets don't churn fast).
  */
 export function useCredentialSecrets(namespace: string | undefined) {
+  const activeContext = useCluster((s) => s.activeContext);
   return useQuery<CredentialSecret[], Error>({
-    queryKey: ["assistant-credentialSecrets", namespace] as const,
+    queryKey: [activeContext, "assistant-credentialSecrets", namespace] as const,
     queryFn: async () => {
       const res = await postAssistant({ action: "listCredentialSecrets", namespace });
       const parsed = JSON.parse(res.stdout || "{}") as { secrets?: CredentialSecret[] };
@@ -652,8 +653,9 @@ export async function undoDeploy(batchId: string, namespace: string): Promise<Un
 
 /** Query hook for the Overview "Recent" card. */
 export function useRecentDeploys() {
+  const activeContext = useCluster((s) => s.activeContext);
   return useQuery<RecentDeploysResponse, Error>({
-    queryKey: ["recent-deploys"],
+    queryKey: [activeContext, "recent-deploys"],
     queryFn: fetchRecentDeploys,
     staleTime: 30_000,
   });
@@ -662,9 +664,10 @@ export function useRecentDeploys() {
 /** Undo mutation; invalidates the recent-deploys query on success. */
 export function useUndoDeploy() {
   const qc = useQueryClient();
+  const activeContext = useCluster((s) => s.activeContext);
   return useMutation<UndoDeployResponse, Error, { batchId: string; namespace: string }>({
     mutationFn: ({ batchId, namespace }) => undoDeploy(batchId, namespace),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["recent-deploys"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [activeContext, "recent-deploys"] }),
   });
 }
 
@@ -707,8 +710,9 @@ export async function fetchNodeMetrics(): Promise<MetricsResponse> {
 
 /** TanStack Query hook: polls pod metrics for the given namespace every 5s. */
 export function usePodMetrics(namespace: string) {
+  const activeContext = useCluster((s) => s.activeContext);
   return useQuery<MetricsResponse, Error>({
-    queryKey: ["metrics", "pods", namespace],
+    queryKey: [activeContext, "metrics", "pods", namespace],
     queryFn: () => fetchPodMetrics(namespace),
     refetchInterval: 5_000,
     staleTime: 5_000,
@@ -718,8 +722,9 @@ export function usePodMetrics(namespace: string) {
 
 /** TanStack Query hook: polls node metrics every 5s. */
 export function useNodeMetrics() {
+  const activeContext = useCluster((s) => s.activeContext);
   return useQuery<MetricsResponse, Error>({
-    queryKey: ["metrics", "nodes"],
+    queryKey: [activeContext, "metrics", "nodes"],
     queryFn: fetchNodeMetrics,
     refetchInterval: 5_000,
     staleTime: 5_000,
@@ -730,6 +735,7 @@ export function useNodeMetrics() {
 /** Onboarding: one-click install of the upstream metrics-server. */
 export function useInstallMetricsServer() {
   const qc = useQueryClient();
+  const activeContext = useCluster((s) => s.activeContext);
   return useMutation<ActionResponse, Error, { kubeletInsecureTls?: boolean } | void>({
     mutationFn: async (vars) => {
       const res = await apiFetch("/api/install/metrics-server", {
@@ -741,20 +747,21 @@ export function useInstallMetricsServer() {
       return (await res.json()) as ActionResponse;
     },
     // metrics take a moment to flow; nudge the metrics queries after install.
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["metrics"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [activeContext, "metrics"] }),
   });
 }
 
 /** Uninstall the upstream metrics-server (POST /api/uninstall/metrics-server). */
 export function useUninstallMetricsServer() {
   const qc = useQueryClient();
+  const activeContext = useCluster((s) => s.activeContext);
   return useMutation<ActionResponse, Error, void>({
     mutationFn: async () => {
       const res = await apiFetch("/api/uninstall/metrics-server", { method: "POST" });
       if (!res.ok) throw new Error((await res.text()) || "uninstall failed");
       return (await res.json()) as ActionResponse;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["metrics"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [activeContext, "metrics"] }),
   });
 }
 
@@ -784,8 +791,9 @@ export async function fetchNodeDisk(): Promise<NodeDiskResponse> {
 
 /** TanStack Query hook: polls per-node disk usage every 30s (changes slowly). */
 export function useNodeDisk() {
+  const activeContext = useCluster((s) => s.activeContext);
   return useQuery<NodeDiskResponse, Error>({
-    queryKey: ["metrics", "node-disk"],
+    queryKey: [activeContext, "metrics", "node-disk"],
     queryFn: fetchNodeDisk,
     refetchInterval: 30_000,
     staleTime: 30_000,
@@ -945,7 +953,9 @@ export interface StartForwardParams {
   localPort?: number;
 }
 
-const PORT_FORWARD_KEY = ["portforward"] as const;
+function portForwardKey(activeContext: string | null) {
+  return [activeContext, "portforward"] as const;
+}
 
 async function listForwards(): Promise<ActiveForward[]> {
   const res = await apiFetch("/api/portforward", {
@@ -980,8 +990,9 @@ async function stopForward(id: string): Promise<void> {
 
 /** Poll the active port-forwards every 3s (docs/parity/portforward.md). */
 export function useForwards() {
+  const activeContext = useCluster((s) => s.activeContext);
   return useQuery({
-    queryKey: PORT_FORWARD_KEY,
+    queryKey: portForwardKey(activeContext),
     queryFn: listForwards,
     refetchInterval: 3000,
   });
@@ -990,18 +1001,20 @@ export function useForwards() {
 /** Start a forward, then refresh the active list. */
 export function useStartForward() {
   const qc = useQueryClient();
+  const activeContext = useCluster((s) => s.activeContext);
   return useMutation<ActiveForward, Error, StartForwardParams>({
     mutationFn: startForward,
-    onSettled: () => qc.invalidateQueries({ queryKey: PORT_FORWARD_KEY }),
+    onSettled: () => qc.invalidateQueries({ queryKey: portForwardKey(activeContext) }),
   });
 }
 
 /** Stop a forward by id, then refresh the active list. */
 export function useStopForward() {
   const qc = useQueryClient();
+  const activeContext = useCluster((s) => s.activeContext);
   return useMutation<void, Error, string>({
     mutationFn: stopForward,
-    onSettled: () => qc.invalidateQueries({ queryKey: PORT_FORWARD_KEY }),
+    onSettled: () => qc.invalidateQueries({ queryKey: portForwardKey(activeContext) }),
   });
 }
 
@@ -1024,8 +1037,9 @@ async function fetchCnpgPluginAvailable(): Promise<boolean> {
  * cached for the session (the plugin does not appear/disappear at runtime).
  */
 export function useCnpgPluginAvailable() {
+  const activeContext = useCluster((s) => s.activeContext);
   return useQuery({
-    queryKey: ["cnpg-plugin"] as const,
+    queryKey: [activeContext, "cnpg-plugin"] as const,
     queryFn: fetchCnpgPluginAvailable,
     staleTime: Infinity,
     gcTime: Infinity,
@@ -1056,8 +1070,9 @@ export interface SuggestedPrompt {
 
 /** Cluster-aware chat suggestions, refreshed periodically. */
 export function useSuggestions() {
+  const activeContext = useCluster((s) => s.activeContext);
   return useQuery<SuggestedPrompt[], Error>({
-    queryKey: ["suggestions"] as const,
+    queryKey: [activeContext, "suggestions"] as const,
     queryFn: async () => {
       const res = await apiFetch("/api/suggestions");
       if (!res.ok) return [];

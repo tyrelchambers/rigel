@@ -31,7 +31,7 @@ function renderWizard(agents?: AgentsResponse, metricsAvailable?: boolean) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   if (agents) qc.setQueryData(["agents"], agents);
   if (metricsAvailable !== undefined) {
-    qc.setQueryData(["metrics", "nodes"], { available: metricsAvailable, items: [] });
+    qc.setQueryData([null, "metrics", "nodes"], { available: metricsAvailable, items: [] });
   }
   const onClose = vi.fn();
   const onLeave = vi.fn();

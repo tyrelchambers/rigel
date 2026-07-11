@@ -61,6 +61,7 @@ export default function CertificatesPanel() {
   const isLoading = useCluster((s) => s.isLoading);
   const error = useCluster((s) => s.error);
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
+  const activeContext = useCluster((s) => s.activeContext);
 
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -72,12 +73,12 @@ export default function CertificatesPanel() {
     return () => KINDS.forEach((k) => unsubscribe(k, "*"));
   }, []);
 
-  // Probe cmctl once on mount to gate Force-renew.
+  // Probe cmctl to gate Force-renew.
   useEffect(() => {
     fetchCertManagerPlugin()
       .then(setCmctlAvailable)
       .catch(() => setCmctlAvailable(false));
-  }, []);
+  }, [activeContext]);
 
   const views = useMemo(() => {
     const certs = filterByNamespace(

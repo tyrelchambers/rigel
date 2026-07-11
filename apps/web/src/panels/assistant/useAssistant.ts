@@ -151,6 +151,7 @@ export interface AssistantDerived {
  */
 export function useAssistant(installNamespaceHint: string): AssistantDerived {
   const resources = useCluster((s) => s.resources);
+  const activeContext = useCluster((s) => s.activeContext);
 
   // The panel needs cluster-wide visibility (the agent can live anywhere, and
   // live issues span every namespace). These watches are keyed by name in the
@@ -176,7 +177,7 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
   }, [resources, installNamespaceHint]);
 
   const credStatus = useQuery({
-    queryKey: ["assistant-credentialStatus", credentialNamespace],
+    queryKey: [activeContext, "assistant-credentialStatus", credentialNamespace],
     queryFn: async () => {
       const res = await postAssistant({ action: "credentialStatus", namespace: credentialNamespace });
       const parsed = JSON.parse(res.stdout || "{}") as {

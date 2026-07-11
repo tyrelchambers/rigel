@@ -1,6 +1,7 @@
 import { useCluster } from "@/store/cluster";
 import type { ChatEvent } from "@/panels/chat/types";
 import type { ActionBlock } from "@/lib/api";
+import { queryClient } from "@/lib/queryClient";
 import {
   LINGER_MS,
   finishLinger,
@@ -407,6 +408,7 @@ export function switchCluster(context: string): void {
   // Clear stale data + adopt the per-context namespace; one snapshot per kind repopulates.
   store.applySwitch(context, store.namespaceByContext[context] ?? null);
   store.setLoading(true);
+  void queryClient.cancelQueries();
   // Re-establish the live watches under the new context.
   if (plan) {
     for (const f of plan.subscribes) sendSubFrame("subscribe", f.kind, f.namespace, f.context);

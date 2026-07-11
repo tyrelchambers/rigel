@@ -1,6 +1,7 @@
 // Two-step guarded sync: load the kubectl diff preview, then apply on confirm.
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useCluster } from "@/store/cluster";
 import {
   Dialog,
   DialogBody,
@@ -18,6 +19,7 @@ import type { DeploymentRef } from "./gitopsLogic";
 export function SyncDialog({ target, onClose }: { target: DeploymentRef; onClose: () => void }) {
   const { repo, dep } = target;
   const qc = useQueryClient();
+  const activeContext = useCluster((s) => s.activeContext);
   const [phase, setPhase] = useState<"diffing" | "preview" | "applying" | "done">("diffing");
   const [diff, setDiff] = useState<SyncResult | null>(null);
   const [result, setResult] = useState<SyncResult | null>(null);
@@ -38,7 +40,7 @@ export function SyncDialog({ target, onClose }: { target: DeploymentRef; onClose
       const r = await syncDeployment(repo.name, dep.name, false);
       setResult(r);
       setPhase("done");
-      qc.invalidateQueries({ queryKey: ["git-sources"] });
+      qc.invalidateQueries({ queryKey: [activeContext, "git-sources"] });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setPhase("done");
