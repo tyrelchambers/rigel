@@ -26,6 +26,7 @@ import {
   useAction,
   applyManifestYaml,
   proposeRepoFix,
+  useContexts,
   type ActionBlock,
   type ActionResult,
   type PurgeResult,
@@ -35,6 +36,10 @@ import { listResources } from "@rigel/catalog";
 import { isDestructiveAction } from "@/lib/actionBlocks";
 import { runActionInBackground } from "@/lib/actionRunner";
 import { DiffView } from "@/components/DiffView";
+import { useCluster } from "@/store/cluster";
+import { classifyProvider } from "@/shell/clusterTile";
+import { resolveIconId, loadIconOverrides } from "@/shell/clusterIconStore";
+import { CLUSTER_ICONS } from "@/shell/clusterIcons";
 
 interface ConfirmSheetProps {
   /** The action to confirm and optionally execute. */
@@ -98,6 +103,22 @@ export function ConfirmSheet({
 
   const { mutate, isPending, isSuccess, isError, error, data, reset } =
     useAction();
+
+  // The active cluster context is the real execution target now that REST
+  // follows the rail (X-Rigel-Context) — shown so the user knows exactly
+  // where this action will run.
+  const activeContext = useCluster((s) => s.activeContext);
+  const { data: contexts } = useContexts();
+  const activeContextObj = contexts?.find((c) => c.name === activeContext);
+  const clusterProvider = classifyProvider(
+    activeContextObj ?? { name: activeContext ?? "", server: "" },
+  );
+  const clusterIconId = resolveIconId(
+    activeContext ?? "",
+    clusterProvider,
+    loadIconOverrides(),
+  );
+  const ClusterIcon = CLUSTER_ICONS[clusterIconId].Component;
 
   // Fetch the preview command whenever the action changes
   useEffect(() => {
@@ -375,6 +396,21 @@ export function ConfirmSheet({
           <DialogDescription className="text-xs leading-relaxed">
             {description}
           </DialogDescription>
+
+          {/* Target cluster — the active rail context, which REST actually
+              executes against via X-Rigel-Context. */}
+          {activeContext && (
+            <div className="flex items-center gap-2">
+              <span className="text-2xs text-muted-foreground">Runs on</span>
+              <span
+                className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-foreground/90"
+                style={{ background: "#08080A", border: "1px solid #26272B" }}
+              >
+                <ClusterIcon size={13} />
+                {activeContext}
+              </span>
+            </div>
+          )}
 
           {/* Apply manifest resource summary */}
           {isApply &&
