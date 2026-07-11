@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
-import { useAssistantAction, type ActionBlock, type AssistantRequest } from "@/lib/api";
+import { apiFetch, useAssistantAction, type ActionBlock, type AssistantRequest } from "@/lib/api";
 import { useAssistant, type AssistantDerived } from "./useAssistant";
 import type { AssistantAuditEntry } from "@rigel/k8s";
 import { outcomeGlyph, outcomeColorClass, relativeTime } from "./display";
@@ -216,7 +216,7 @@ function AssistantDialogs(p: DialogsProps) {
                 p.setReverting(true);
                 p.setActionError(null);
                 try {
-                  const res = await fetch("/api/apply", {
+                  const res = await apiFetch("/api/apply", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ yaml: p.pendingRevert.yaml }),

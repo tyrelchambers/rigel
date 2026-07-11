@@ -29,6 +29,7 @@ import { KeyValueEditor } from "../components/KeyValueEditor";
 import { YamlEditor } from "@/components/YamlEditorLazy";
 import { useClusterYamlSchema } from "@/lib/useClusterYamlSchema";
 import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/api";
 import { Box, Globe, Lock, Network, Plus, Server, Trash2, X } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -143,7 +144,7 @@ export function IngressEditor({ target, open, onClose, onApplied }: IngressEdito
     if (!valid) return;
     setBusy(true);
     try {
-      const res = await fetch("/api/apply", {
+      const res = await apiFetch("/api/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ yaml: yamlToApply }),

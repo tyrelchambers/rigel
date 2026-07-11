@@ -3,6 +3,7 @@
 // the server's install executors (docs/parity/catalog.md §"Execution").
 import { useMutation } from "@tanstack/react-query";
 import type { ApplySource } from "@rigel/k8s";
+import { apiFetch } from "@/lib/api";
 
 export interface InstallResult {
   code: number;
@@ -21,7 +22,7 @@ export interface HelmInstallParams {
 }
 
 async function postJSON<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(path, {
+  const res = await apiFetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

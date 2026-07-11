@@ -2,6 +2,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ActiveForward } from "@/panels/services/portForward";
 import type { SuggestedAlert, DigestInput, ApplySource, RecentBatch } from "@rigel/k8s";
 import type { CheckResult, CloudProvider, CloudCluster } from "@rigel/cloud-connect/src/index";
+import { useCluster } from "@/store/cluster";
+
+export function apiFetch(input: string, init?: RequestInit): Promise<Response> {
+  const ctx = useCluster.getState().activeContext;
+  if (!ctx) return fetch(input, init);
+  const headers = new Headers(init?.headers);
+  headers.set("X-Rigel-Context", ctx);
+  return fetch(input, { ...init, headers });
+}
 
 /**
  * ActionBlock mirrors the server-side ActionBlock interface and
@@ -62,7 +71,7 @@ export type ActionResponse = ActionResult | PurgeResult;
 
 /** Fetch the preview command string for an action without executing it. */
 export async function fetchPreviewCommand(action: ActionBlock): Promise<string[]> {
-  const res = await fetch("/api/action?preview=1", {
+  const res = await apiFetch("/api/action?preview=1", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(action),
@@ -77,7 +86,7 @@ export async function fetchPreviewCommand(action: ActionBlock): Promise<string[]
 
 /** Execute a chat action-block mutation via the server's guarded route. */
 export async function executeAction(action: ActionBlock): Promise<ActionResponse> {
-  const res = await fetch("/api/action", {
+  const res = await apiFetch("/api/action", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(action),
@@ -99,7 +108,7 @@ export async function applyManifestYaml(
   dryRun = false,
   source?: ApplySource,
 ): Promise<ActionResult> {
-  const res = await fetch("/api/apply", {
+  const res = await apiFetch("/api/apply", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ yaml, dryRun, ...(source ? { source } : {}) }),
@@ -116,7 +125,7 @@ export async function applyManifestYaml(
  * --ignore-not-found` (the uninstall counterpart of applyManifestYaml).
  */
 export async function deleteManifestYaml(yaml: string): Promise<ActionResult> {
-  const res = await fetch("/api/delete", {
+  const res = await apiFetch("/api/delete", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ yaml }),
@@ -143,7 +152,7 @@ export async function fetchResourceYaml(
   const params = new URLSearchParams({ kind, name });
   if (namespace) params.set("namespace", namespace);
   if (clean) params.set("clean", "1");
-  const res = await fetch(`/api/resource?${params.toString()}`);
+  const res = await apiFetch(`/api/resource?${params.toString()}`);
   const data = (await res.json().catch(() => ({}))) as {
     code?: number;
     yaml?: string;
@@ -169,7 +178,7 @@ export interface RepoFixResponse {
  * opens a pull request, returning its URL.
  */
 export async function proposeRepoFix(action: ActionBlock, dryRun: boolean): Promise<RepoFixResponse> {
-  const res = await fetch("/api/git/propose-fix", {
+  const res = await apiFetch("/api/git/propose-fix", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -224,7 +233,7 @@ export interface UpdatesResponse {
 
 /** POST a batch of image refs to the update checker. */
 async function fetchUpdates(images: string[]): Promise<UpdatesResponse> {
-  const res = await fetch("/api/updates", {
+  const res = await apiFetch("/api/updates", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ images }),
@@ -307,7 +316,7 @@ export async function discoverPurge(
   namespace: string,
   instance: string,
 ): Promise<PurgeDiscoverResponse> {
-  const res = await fetch("/api/purge", {
+  const res = await apiFetch("/api/purge", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ namespace, instance, dryRun: true }),
@@ -332,7 +341,7 @@ export interface PurgeExecuteRequest {
 export async function executePurge(
   req: PurgeExecuteRequest,
 ): Promise<PurgeExecuteResponse> {
-  const res = await fetch("/api/purge", {
+  const res = await apiFetch("/api/purge", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...req, dryRun: false }),
@@ -520,7 +529,7 @@ export interface AssistantRunResult {
  * over the same authenticated channel and is never logged client-side.
  */
 export async function postAssistant(req: AssistantRequest): Promise<AssistantRunResult> {
-  const res = await fetch("/api/assistant", {
+  const res = await apiFetch("/api/assistant", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
@@ -572,8 +581,9 @@ export function useSetAutofix() {
  * once a namespace is known; refetched lazily (Secrets don't churn fast).
  */
 export function useCredentialSecrets(namespace: string | undefined) {
+  const activeContext = useCluster((s) => s.activeContext);
   return useQuery<CredentialSecret[], Error>({
-    queryKey: ["assistant-credentialSecrets", namespace] as const,
+    queryKey: [activeContext, "assistant-credentialSecrets", namespace] as const,
     queryFn: async () => {
       const res = await postAssistant({ action: "listCredentialSecrets", namespace });
       const parsed = JSON.parse(res.stdout || "{}") as { secrets?: CredentialSecret[] };
@@ -619,7 +629,7 @@ export interface UndoDeployResponse {
 
 /** Batches Rigel applied within the recent window (Overview "Recent" card). */
 export async function fetchRecentDeploys(): Promise<RecentDeploysResponse> {
-  const res = await fetch("/api/deployments/recent");
+  const res = await apiFetch("/api/deployments/recent");
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((err as { error?: string }).error ?? res.statusText);
@@ -629,7 +639,7 @@ export async function fetchRecentDeploys(): Promise<RecentDeploysResponse> {
 
 /** Undo a batch: delete every resource it created. `namespace` = the ledger's own namespace. */
 export async function undoDeploy(batchId: string, namespace: string): Promise<UndoDeployResponse> {
-  const res = await fetch("/api/deployments/undo", {
+  const res = await apiFetch("/api/deployments/undo", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ batchId, namespace }),
@@ -643,8 +653,9 @@ export async function undoDeploy(batchId: string, namespace: string): Promise<Un
 
 /** Query hook for the Overview "Recent" card. */
 export function useRecentDeploys() {
+  const activeContext = useCluster((s) => s.activeContext);
   return useQuery<RecentDeploysResponse, Error>({
-    queryKey: ["recent-deploys"],
+    queryKey: [activeContext, "recent-deploys"],
     queryFn: fetchRecentDeploys,
     staleTime: 30_000,
   });
@@ -653,9 +664,10 @@ export function useRecentDeploys() {
 /** Undo mutation; invalidates the recent-deploys query on success. */
 export function useUndoDeploy() {
   const qc = useQueryClient();
+  const activeContext = useCluster((s) => s.activeContext);
   return useMutation<UndoDeployResponse, Error, { batchId: string; namespace: string }>({
     mutationFn: ({ batchId, namespace }) => undoDeploy(batchId, namespace),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["recent-deploys"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [activeContext, "recent-deploys"] }),
   });
 }
 
@@ -678,7 +690,7 @@ export interface MetricsResponse {
 
 /** Fetch pod metrics for a namespace (or "*" for all namespaces). */
 export async function fetchPodMetrics(namespace: string): Promise<MetricsResponse> {
-  const res = await fetch(`/api/metrics/pods?namespace=${encodeURIComponent(namespace)}`);
+  const res = await apiFetch(`/api/metrics/pods?namespace=${encodeURIComponent(namespace)}`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((err as { error?: string }).error ?? res.statusText);
@@ -688,7 +700,7 @@ export async function fetchPodMetrics(namespace: string): Promise<MetricsRespons
 
 /** Fetch node metrics. */
 export async function fetchNodeMetrics(): Promise<MetricsResponse> {
-  const res = await fetch("/api/metrics/nodes");
+  const res = await apiFetch("/api/metrics/nodes");
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((err as { error?: string }).error ?? res.statusText);
@@ -698,8 +710,9 @@ export async function fetchNodeMetrics(): Promise<MetricsResponse> {
 
 /** TanStack Query hook: polls pod metrics for the given namespace every 5s. */
 export function usePodMetrics(namespace: string) {
+  const activeContext = useCluster((s) => s.activeContext);
   return useQuery<MetricsResponse, Error>({
-    queryKey: ["metrics", "pods", namespace],
+    queryKey: [activeContext, "metrics", "pods", namespace],
     queryFn: () => fetchPodMetrics(namespace),
     refetchInterval: 5_000,
     staleTime: 5_000,
@@ -709,8 +722,9 @@ export function usePodMetrics(namespace: string) {
 
 /** TanStack Query hook: polls node metrics every 5s. */
 export function useNodeMetrics() {
+  const activeContext = useCluster((s) => s.activeContext);
   return useQuery<MetricsResponse, Error>({
-    queryKey: ["metrics", "nodes"],
+    queryKey: [activeContext, "metrics", "nodes"],
     queryFn: fetchNodeMetrics,
     refetchInterval: 5_000,
     staleTime: 5_000,
@@ -721,9 +735,10 @@ export function useNodeMetrics() {
 /** Onboarding: one-click install of the upstream metrics-server. */
 export function useInstallMetricsServer() {
   const qc = useQueryClient();
+  const activeContext = useCluster((s) => s.activeContext);
   return useMutation<ActionResponse, Error, { kubeletInsecureTls?: boolean } | void>({
     mutationFn: async (vars) => {
-      const res = await fetch("/api/install/metrics-server", {
+      const res = await apiFetch("/api/install/metrics-server", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(vars ?? {}),
@@ -732,20 +747,21 @@ export function useInstallMetricsServer() {
       return (await res.json()) as ActionResponse;
     },
     // metrics take a moment to flow; nudge the metrics queries after install.
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["metrics"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [activeContext, "metrics"] }),
   });
 }
 
 /** Uninstall the upstream metrics-server (POST /api/uninstall/metrics-server). */
 export function useUninstallMetricsServer() {
   const qc = useQueryClient();
+  const activeContext = useCluster((s) => s.activeContext);
   return useMutation<ActionResponse, Error, void>({
     mutationFn: async () => {
-      const res = await fetch("/api/uninstall/metrics-server", { method: "POST" });
+      const res = await apiFetch("/api/uninstall/metrics-server", { method: "POST" });
       if (!res.ok) throw new Error((await res.text()) || "uninstall failed");
       return (await res.json()) as ActionResponse;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["metrics"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [activeContext, "metrics"] }),
   });
 }
 
@@ -765,7 +781,7 @@ export interface NodeDiskResponse {
 }
 
 export async function fetchNodeDisk(): Promise<NodeDiskResponse> {
-  const res = await fetch("/api/metrics/node-disk");
+  const res = await apiFetch("/api/metrics/node-disk");
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((err as { error?: string }).error ?? res.statusText);
@@ -775,8 +791,9 @@ export async function fetchNodeDisk(): Promise<NodeDiskResponse> {
 
 /** TanStack Query hook: polls per-node disk usage every 30s (changes slowly). */
 export function useNodeDisk() {
+  const activeContext = useCluster((s) => s.activeContext);
   return useQuery<NodeDiskResponse, Error>({
-    queryKey: ["metrics", "node-disk"],
+    queryKey: [activeContext, "metrics", "node-disk"],
     queryFn: fetchNodeDisk,
     refetchInterval: 30_000,
     staleTime: 30_000,
@@ -800,7 +817,7 @@ async function throwApiError(res: Response): Promise<never> {
  * is responsible for `URL.revokeObjectURL` when the QR is dismissed.
  */
 export async function fetchSignalQR(namespace: string): Promise<string> {
-  const res = await fetch("/api/signal", {
+  const res = await apiFetch("/api/signal", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "link", namespace }),
@@ -812,7 +829,7 @@ export async function fetchSignalQR(namespace: string): Promise<string> {
 
 /** Poll the bridge for linked accounts. Returns the registered numbers. */
 export async function fetchSignalAccounts(namespace: string): Promise<string[]> {
-  const res = await fetch("/api/signal", {
+  const res = await apiFetch("/api/signal", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "accounts", namespace }),
@@ -828,7 +845,7 @@ export async function sendSignalTest(args: {
   number: string;
   recipients: string[];
 }): Promise<void> {
-  const res = await fetch("/api/signal", {
+  const res = await apiFetch("/api/signal", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "sendTest", ...args }),
@@ -847,7 +864,7 @@ export interface MatrixLoginResult {
 
 /** Log the bot in (username + password) and return a token + the resolved id. */
 export async function matrixLogin(homeserver: string, user: string, password: string): Promise<MatrixLoginResult> {
-  const res = await fetch("/api/matrix", {
+  const res = await apiFetch("/api/matrix", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "login", homeserver, user, password }),
@@ -858,7 +875,7 @@ export async function matrixLogin(homeserver: string, user: string, password: st
 
 /** Validate a pasted access token against the homeserver (whoami); returns the id. */
 export async function matrixValidate(homeserver: string, accessToken: string): Promise<{ userId: string }> {
-  const res = await fetch("/api/matrix", {
+  const res = await apiFetch("/api/matrix", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "validate", homeserver, accessToken }),
@@ -874,7 +891,7 @@ export async function matrixCreateRoom(
   roomName: string,
   invite: string[],
 ): Promise<{ roomId: string }> {
-  const res = await fetch("/api/matrix", {
+  const res = await apiFetch("/api/matrix", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "createRoom", homeserver, accessToken, roomName, invite }),
@@ -896,7 +913,7 @@ export async function matrixPoll(args: {
   botUserId: string;
   allowedSenders: string[];
 }): Promise<MatrixPollResult> {
-  const res = await fetch("/api/matrix", {
+  const res = await apiFetch("/api/matrix", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "poll", ...args }),
@@ -911,7 +928,7 @@ export async function matrixSendTest(args: {
   accessToken: string;
   roomId: string;
 }): Promise<{ ok: true }> {
-  const res = await fetch("/api/matrix", {
+  const res = await apiFetch("/api/matrix", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "sendTest", ...args }),
@@ -936,10 +953,12 @@ export interface StartForwardParams {
   localPort?: number;
 }
 
-const PORT_FORWARD_KEY = ["portforward"] as const;
+function portForwardKey(activeContext: string | null) {
+  return [activeContext, "portforward"] as const;
+}
 
 async function listForwards(): Promise<ActiveForward[]> {
-  const res = await fetch("/api/portforward", {
+  const res = await apiFetch("/api/portforward", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "list" }),
@@ -950,7 +969,7 @@ async function listForwards(): Promise<ActiveForward[]> {
 }
 
 async function startForward(params: StartForwardParams): Promise<ActiveForward> {
-  const res = await fetch("/api/portforward", {
+  const res = await apiFetch("/api/portforward", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "start", ...params }),
@@ -961,7 +980,7 @@ async function startForward(params: StartForwardParams): Promise<ActiveForward> 
 }
 
 async function stopForward(id: string): Promise<void> {
-  const res = await fetch("/api/portforward", {
+  const res = await apiFetch("/api/portforward", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "stop", id }),
@@ -971,8 +990,9 @@ async function stopForward(id: string): Promise<void> {
 
 /** Poll the active port-forwards every 3s (docs/parity/portforward.md). */
 export function useForwards() {
+  const activeContext = useCluster((s) => s.activeContext);
   return useQuery({
-    queryKey: PORT_FORWARD_KEY,
+    queryKey: portForwardKey(activeContext),
     queryFn: listForwards,
     refetchInterval: 3000,
   });
@@ -981,18 +1001,20 @@ export function useForwards() {
 /** Start a forward, then refresh the active list. */
 export function useStartForward() {
   const qc = useQueryClient();
+  const activeContext = useCluster((s) => s.activeContext);
   return useMutation<ActiveForward, Error, StartForwardParams>({
     mutationFn: startForward,
-    onSettled: () => qc.invalidateQueries({ queryKey: PORT_FORWARD_KEY }),
+    onSettled: () => qc.invalidateQueries({ queryKey: portForwardKey(activeContext) }),
   });
 }
 
 /** Stop a forward by id, then refresh the active list. */
 export function useStopForward() {
   const qc = useQueryClient();
+  const activeContext = useCluster((s) => s.activeContext);
   return useMutation<void, Error, string>({
     mutationFn: stopForward,
-    onSettled: () => qc.invalidateQueries({ queryKey: PORT_FORWARD_KEY }),
+    onSettled: () => qc.invalidateQueries({ queryKey: portForwardKey(activeContext) }),
   });
 }
 
@@ -1004,7 +1026,7 @@ export function useStopForward() {
 // ---------------------------------------------------------------------------
 
 async function fetchCnpgPluginAvailable(): Promise<boolean> {
-  const res = await fetch("/api/cnpg-plugin");
+  const res = await apiFetch("/api/cnpg-plugin");
   if (!res.ok) return false;
   const data = (await res.json()) as { available?: boolean };
   return data.available === true;
@@ -1015,8 +1037,9 @@ async function fetchCnpgPluginAvailable(): Promise<boolean> {
  * cached for the session (the plugin does not appear/disappear at runtime).
  */
 export function useCnpgPluginAvailable() {
+  const activeContext = useCluster((s) => s.activeContext);
   return useQuery({
-    queryKey: ["cnpg-plugin"] as const,
+    queryKey: [activeContext, "cnpg-plugin"] as const,
     queryFn: fetchCnpgPluginAvailable,
     staleTime: Infinity,
     gcTime: Infinity,
@@ -1025,7 +1048,7 @@ export function useCnpgPluginAvailable() {
 
 /** Whether the `kubectl cert-manager` (cmctl) plugin is available on the server. */
 export async function fetchCertManagerPlugin(): Promise<boolean> {
-  const res = await fetch("/api/cert-manager-plugin");
+  const res = await apiFetch("/api/cert-manager-plugin");
   if (!res.ok) return false;
   const data = (await res.json()) as { available: boolean };
   return data.available;
@@ -1047,10 +1070,11 @@ export interface SuggestedPrompt {
 
 /** Cluster-aware chat suggestions, refreshed periodically. */
 export function useSuggestions() {
+  const activeContext = useCluster((s) => s.activeContext);
   return useQuery<SuggestedPrompt[], Error>({
-    queryKey: ["suggestions"] as const,
+    queryKey: [activeContext, "suggestions"] as const,
     queryFn: async () => {
-      const res = await fetch("/api/suggestions");
+      const res = await apiFetch("/api/suggestions");
       if (!res.ok) return [];
       const data = (await res.json()) as { prompts?: SuggestedPrompt[] };
       return data.prompts ?? [];
@@ -1074,7 +1098,7 @@ export interface ChatConfig {
 }
 
 async function fetchChatConfig(): Promise<ChatConfig> {
-  const res = await fetch("/api/chat-config");
+  const res = await apiFetch("/api/chat-config");
   if (!res.ok) return { configured: false, source: null };
   return (await res.json()) as ChatConfig;
 }
@@ -1093,7 +1117,7 @@ export function useSetChatToken() {
   const qc = useQueryClient();
   return useMutation<ChatConfig, Error, string>({
     mutationFn: async (token) => {
-      const res = await fetch("/api/chat-config", {
+      const res = await apiFetch("/api/chat-config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token }),
@@ -1127,7 +1151,7 @@ export interface AgentsResponse {
 }
 
 async function fetchAgents(): Promise<AgentsResponse> {
-  const res = await fetch("/api/agents");
+  const res = await apiFetch("/api/agents");
   if (!res.ok) throw new Error("failed to load agents");
   return (await res.json()) as AgentsResponse;
 }
@@ -1153,7 +1177,7 @@ export interface AgentModels {
 }
 
 async function fetchAgentModels(id: AgentId): Promise<AgentModels> {
-  const res = await fetch(`/api/agents/${id}/models`);
+  const res = await apiFetch(`/api/agents/${id}/models`);
   if (!res.ok) throw new Error("failed to load agent models");
   return (await res.json()) as AgentModels;
 }
@@ -1178,7 +1202,7 @@ export function useSetAgentAuth() {
   const qc = useQueryClient();
   return useMutation<AgentView, Error, SetAgentAuthVars>({
     mutationFn: async ({ id, authMethod, secret }) => {
-      const res = await fetch(`/api/agents/${id}/auth`, {
+      const res = await apiFetch(`/api/agents/${id}/auth`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ authMethod, secret }),
@@ -1195,7 +1219,7 @@ export function useSetActiveAgent() {
   const qc = useQueryClient();
   return useMutation<AgentsResponse, Error, AgentId>({
     mutationFn: async (id) => {
-      const res = await fetch("/api/agents/active", {
+      const res = await apiFetch("/api/agents/active", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
@@ -1227,7 +1251,7 @@ export interface ClusterContext {
 }
 
 async function fetchContexts(): Promise<ClusterContext[]> {
-  const res = await fetch("/api/contexts");
+  const res = await apiFetch("/api/contexts");
   if (!res.ok) throw new Error(`failed to load contexts: ${res.status}`);
   const body = (await res.json()) as { contexts?: ClusterContext[] };
   return body.contexts ?? [];
@@ -1270,7 +1294,7 @@ export function useInstalledContexts(namespace: string) {
 export interface ClusterToolStatus { kind: boolean; k3d: boolean; dockerRunning: boolean }
 
 async function fetchClusterTools(): Promise<ClusterToolStatus> {
-  const res = await fetch("/api/cluster-tools");
+  const res = await apiFetch("/api/cluster-tools");
   if (!res.ok) return { kind: false, k3d: false, dockerRunning: false };
   return (await res.json()) as ClusterToolStatus;
 }
@@ -1282,7 +1306,7 @@ export function useDeleteCluster() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (context: string) => {
-      const res = await fetch("/api/cluster/delete", {
+      const res = await apiFetch("/api/cluster/delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ context }),
@@ -1299,7 +1323,7 @@ export function useDisconnectCluster() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (context: string) => {
-      const res = await fetch("/api/cluster/disconnect", {
+      const res = await apiFetch("/api/cluster/disconnect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ context }),
@@ -1319,7 +1343,7 @@ export type { CloudProvider, CloudCluster };
 export type CloudCheckResult = CheckResult;
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(path, {
+  const res = await apiFetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

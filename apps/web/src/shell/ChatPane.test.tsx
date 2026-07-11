@@ -56,7 +56,7 @@ function renderPane(agents?: AgentsResponse, models?: Partial<Record<string, Age
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   if (agents) qc.setQueryData(["agents"], agents);
   // Pre-seed sibling queries so nothing tries to hit the network.
-  qc.setQueryData(["suggestions"], []);
+  qc.setQueryData([null, "suggestions"], []);
   for (const [id, m] of Object.entries(models ?? {})) {
     qc.setQueryData(["agentModels", id], m);
   }

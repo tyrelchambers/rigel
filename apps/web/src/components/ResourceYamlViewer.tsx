@@ -16,10 +16,12 @@ import { YamlEditor } from "@/components/YamlEditorLazy";
 import { useClusterYamlSchema } from "@/lib/useClusterYamlSchema";
 import { useYamlViewer } from "@/store/yamlViewer";
 import { fetchResourceYaml, type ActionBlock } from "@/lib/api";
+import { useCluster } from "@/store/cluster";
 
 export function ResourceYamlViewer() {
   const target = useYamlViewer((s) => s.target);
   const close = useYamlViewer((s) => s.close);
+  const activeContext = useCluster((s) => s.activeContext);
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -31,7 +33,7 @@ export function ResourceYamlViewer() {
   useEffect(() => { setEditing(false); setDraft(""); setApplyAction(null); }, [target?.kind, target?.name, target?.namespace]);
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["resource-yaml", target?.kind, target?.name, target?.namespace, target?.editable],
+    queryKey: [activeContext, "resource-yaml", target?.kind, target?.name, target?.namespace, target?.editable],
     // Editable targets fetch the CLEANED manifest (ready to re-apply).
     queryFn: () => fetchResourceYaml(target!.kind, target!.name, target!.namespace, target!.editable),
     enabled: !!target,

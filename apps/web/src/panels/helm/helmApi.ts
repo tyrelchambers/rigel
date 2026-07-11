@@ -1,4 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api";
 import type { HelmChartSource } from "@rigel/k8s/src/helm";
 
 export interface RunResult { code: number; stdout: string; stderr: string }
@@ -38,7 +39,7 @@ export function useArtifactHubBrowse(params: BrowseParams) {
     queryKey: ["artifact-hub-browse", params],
     initialPageParam: 0,
     queryFn: async ({ pageParam }) => {
-      const res = await fetch(`/api/helm/browse?${buildBrowseQuery(params, pageParam as number, BROWSE_LIMIT)}`);
+      const res = await apiFetch(`/api/helm/browse?${buildBrowseQuery(params, pageParam as number, BROWSE_LIMIT)}`);
       if (!res.ok) throw new Error(`browse ${res.status}`);
       return res.json() as Promise<BrowsePage>;
     },
@@ -51,7 +52,7 @@ export function useArtifactHubBrowse(params: BrowseParams) {
 }
 
 async function postJSON<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const res = await apiFetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `${res.status}`);
   return res.json() as Promise<T>;
 }
@@ -78,7 +79,7 @@ export function useHelmShowValues(ref: string | null, version?: string | null, r
       const q = new URLSearchParams({ ref: ref! });
       if (version) q.set("version", version);
       if (repo) q.set("repo", repo);
-      const res = await fetch(`/api/helm/show-values?${q.toString()}`);
+      const res = await apiFetch(`/api/helm/show-values?${q.toString()}`);
       if (!res.ok) throw new Error(`show-values ${res.status}`);
       return res.json();
     },

@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { KeyValueEditor } from "../components/KeyValueEditor";
 import { YamlEditor } from "@/components/YamlEditorLazy";
 import { useClusterYamlSchema } from "@/lib/useClusterYamlSchema";
+import { apiFetch } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
 // SecretEditor — create/edit form for a Secret
@@ -174,7 +175,7 @@ export function SecretEditor({ target, open, onClose, onApplied }: SecretEditorP
     if (!valid) return;
     setBusy(true);
     try {
-      const res = await fetch("/api/apply", {
+      const res = await apiFetch("/api/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ yaml }),

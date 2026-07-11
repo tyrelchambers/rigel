@@ -3,6 +3,7 @@
 // reused on the Settings page without requiring an AssistantContext.
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useCluster } from "@/store/cluster";
 import {
   Dialog,
   DialogContent,
@@ -58,6 +59,7 @@ export function AssistantConfigSection({
   disabled,
 }: AssistantConfigSectionProps) {
   const queryClient = useQueryClient();
+  const activeContext = useCluster((s) => s.activeContext);
 
   const [worker, setWorker] = useState<AssistantRoleSelection>(roles.worker);
   const [supervisor, setSupervisor] = useState<AssistantRoleSelection>(roles.supervisor);
@@ -99,7 +101,7 @@ export function AssistantConfigSection({
       req = { action: "clearCredentialSource", namespace, credentialId: pending.credentialId };
     }
     run(req, () => {
-      void queryClient.invalidateQueries({ queryKey: ["assistant-credentialStatus", namespace] });
+      void queryClient.invalidateQueries({ queryKey: [activeContext, "assistant-credentialStatus", namespace] });
     });
     setPending(null);
   }
@@ -109,7 +111,7 @@ export function AssistantConfigSection({
   // runs directly — NOT through the restart-confirm dialog the credential edits use.
   function reconcileLabels() {
     run({ action: "reconcileCredentialAnnotations", namespace }, () => {
-      void queryClient.invalidateQueries({ queryKey: ["assistant-credentialStatus", namespace] });
+      void queryClient.invalidateQueries({ queryKey: [activeContext, "assistant-credentialStatus", namespace] });
     });
   }
 

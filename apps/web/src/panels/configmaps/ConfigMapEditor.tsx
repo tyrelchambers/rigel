@@ -34,6 +34,7 @@ import { YamlEditor } from "@/components/YamlEditorLazy";
 import { NamespaceField } from "@/components/NamespaceField";
 import { useCluster } from "@/store/cluster";
 import { useClusterYamlSchema } from "@/lib/useClusterYamlSchema";
+import { apiFetch } from "@/lib/api";
 import { useCopyToClipboard } from "@/lib/useCopyToClipboard";
 import { KindBadge } from "./KindBadge";
 import { humanBytes, plaintextBytes, valueKind, valueLines } from "./configmapsDisplay";
@@ -121,7 +122,7 @@ export function ConfigMapEditor({ target, open, onClose, onApplied }: ConfigMapE
     if (!valid) return;
     setBusy(true);
     try {
-      const res = await fetch("/api/apply", {
+      const res = await apiFetch("/api/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ yaml }),
