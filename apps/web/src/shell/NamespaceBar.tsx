@@ -25,8 +25,6 @@ export function NamespaceSelector() {
 
   // The selector owns the namespaces watch so the dropdown is populated wherever
   // it's shown (the per-resource panels don't subscribe "namespaces" themselves).
-  // A scoped connection can't list namespaces cluster-wide (it 403s), so it
-  // skips the watch entirely and lists from the server's accessible-namespace set.
   useEffect(() => {
     if (accessMode !== "cluster-wide") return;
     subscribe("namespaces", "*");
