@@ -306,14 +306,12 @@ export function connectCluster(): void {
       const listeners = actionListeners.get(m.id);
       if (listeners) listeners.forEach((cb) => cb(m as ActionEvent));
     } else if (m.type === "snapshot") {
-      // Authoritative full set for this (cluster-wide) subscription: REPLACE the
-      // kind's items. Namespace scoping is a client-side view filter, so there's
-      // never a second scope to merge against.
       store.setLoading(false);
       store.setError(null);
+      store.setAccess(m.kind, { status: "ok" });
       const items: Record<string, unknown> = {};
       for (const o of m.items) items[resourceKey(o)] = o;
-      store.replaceKind(m.kind, items);
+      store.replaceKind(m.kind, items, typeof m.namespace === "string" ? m.namespace : "*");
     } else if (m.type === "delta") {
       if (m.event === "DELETED") store.remove(m.kind, resourceKey(m.object));
       else store.upsert(m.kind, resourceKey(m.object), m.object);
