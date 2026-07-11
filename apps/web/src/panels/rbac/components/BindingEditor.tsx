@@ -267,14 +267,14 @@ export function BindingEditor({
             <Plus className="size-[15px]" /> Add subject
           </button>
         </DialogBody>
-        <DialogFooter showCloseButton={false} className="border-[#26272B]">
+        <DialogFooter>
           {isEdit && onEditYaml && (
             <Button variant="outline" onClick={onEditYaml} className="mr-auto">
               <Code className="size-[13px]" /> Edit YAML
             </Button>
           )}
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button disabled={!valid} onClick={apply} className="h-auto px-6 py-[11px]">Apply</Button>
+          <Button disabled={!valid} onClick={apply}>Apply</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
