@@ -193,6 +193,34 @@ describe("replaceKind — full replace (every watch is cluster-wide)", () => {
   });
 });
 
+describe("replaceKind — namespace-scoped merge", () => {
+  const K = "pods";
+  const mkPod = (ns: string, name: string, rv: string) => ({
+    metadata: { namespace: ns, name, resourceVersion: rv },
+  });
+  beforeEach(() => useCluster.getState().clearKind(K));
+
+  it("a scoped replace only touches its namespace's keys", () => {
+    const store = useCluster.getState();
+    store.replaceKind(K, { "team-a/api": mkPod("team-a", "api", "1") }, "team-a");
+    store.replaceKind(K, { "team-b/web": mkPod("team-b", "web", "1") }, "team-b");
+    expect(Object.keys(useCluster.getState().resources[K]).sort()).toEqual([
+      "team-a/api",
+      "team-b/web",
+    ]);
+    // Re-listing team-a with a removal must not touch team-b.
+    store.replaceKind(K, {}, "team-a");
+    expect(Object.keys(useCluster.getState().resources[K])).toEqual(["team-b/web"]);
+  });
+
+  it("a wildcard replace still full-replaces the kind", () => {
+    const store = useCluster.getState();
+    store.replaceKind(K, { "team-a/api": mkPod("team-a", "api", "1") }, "*");
+    store.replaceKind(K, { "team-b/web": mkPod("team-b", "web", "1") }, "*");
+    expect(Object.keys(useCluster.getState().resources[K])).toEqual(["team-b/web"]);
+  });
+});
+
 it("records per-kind access without touching the global error", () => {
   useCluster.setState({ error: null });
   useCluster.getState().setAccess("secrets", { status: "forbidden", message: "denied" });
