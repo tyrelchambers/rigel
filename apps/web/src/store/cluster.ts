@@ -100,6 +100,25 @@ function writeNamespaceFilter(ns: string | null): void {
   }
 }
 
+const ACTIVE_CTX_KEY = "rigel_active_context";
+
+export function readActiveContext(): string | null {
+  try {
+    return localStorage.getItem(ACTIVE_CTX_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeActiveContext(ctx: string | null): void {
+  try {
+    if (ctx == null) localStorage.removeItem(ACTIVE_CTX_KEY);
+    else localStorage.setItem(ACTIVE_CTX_KEY, ctx);
+  } catch {
+    // non-browser / storage disabled — keep in-memory only
+  }
+}
+
 // Per-context namespace memory: each kubeconfig context remembers its last
 // selected namespace, so switching clusters doesn't carry one cluster's
 // namespace onto another. JSON-persisted; absent/parse-failure = {}.
@@ -208,6 +227,7 @@ export const useCluster = create<ClusterState>((set) => ({
     }),
   applySwitch: (context, namespace) => {
     writeNamespaceFilter(namespace);
+    writeActiveContext(context);
     set({ activeContext: context, namespaceFilter: namespace, resources: {} });
   },
   setConnected: (connected) => set({ connected }),

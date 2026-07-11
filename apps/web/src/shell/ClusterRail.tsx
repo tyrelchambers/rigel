@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
-import { useCluster } from "@/store/cluster";
+import { readActiveContext, useCluster } from "@/store/cluster";
 import { useContexts, useDeleteCluster, useDisconnectCluster, useClusterHealth } from "@/lib/api";
 import { initContext, switchCluster } from "@/lib/ws";
 import { classifyProvider, providerLabel } from "./clusterTile";
@@ -50,7 +50,10 @@ export function ClusterRail() {
     if (!contexts || contexts.length === 0) return;
     const fallback = contexts.find((c) => c.active) ?? contexts[0];
     if (activeContext === null) {
+      const saved = readActiveContext();
+      const target = saved && contexts.some((c) => c.name === saved) ? saved : fallback.name;
       initContext(fallback.name);
+      if (target !== fallback.name) switchCluster(target);
     } else if (!contexts.some((c) => c.name === activeContext)) {
       switchCluster(fallback.name);
     }

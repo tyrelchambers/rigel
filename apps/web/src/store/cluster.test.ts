@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, test } from "vitest";
-import { filterByNamespace, useCluster } from "./cluster";
+import { filterByNamespace, readActiveContext, useCluster } from "./cluster";
 
 // Build a minimal k8s-ish object with a resourceVersion. Each call returns a
 // fresh reference so tests can assert reference reuse vs. replacement.
@@ -270,5 +270,18 @@ describe("filterByNamespace", () => {
   it("an empty or undefined slice returns []", () => {
     expect(filterByNamespace(undefined, "default")).toEqual([]);
     expect(filterByNamespace({}, null)).toEqual([]);
+  });
+});
+
+describe("active context persistence", () => {
+  beforeEach(() => localStorage.removeItem("rigel_active_context"));
+
+  it("persists the active context on switch and reads it back", () => {
+    useCluster.getState().applySwitch("ctx-b", null);
+    expect(readActiveContext()).toBe("ctx-b");
+  });
+
+  it("has no persisted context before any switch", () => {
+    expect(readActiveContext()).toBeNull();
   });
 });
