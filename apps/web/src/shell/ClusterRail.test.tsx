@@ -141,6 +141,30 @@ describe("ClusterRail reconciliation effect", () => {
     await waitFor(() => expect(switchCluster).toHaveBeenCalledWith("cluster-a"));
   });
 
+  it("restores a persisted active context on first load", async () => {
+    localStorage.setItem("rigel_active_context", "staging");
+    mockUseContexts.mockReturnValue({
+      data: [ctx("prod", true), ctx("staging")],
+    });
+
+    renderRail();
+
+    await waitFor(() => expect(switchCluster).toHaveBeenCalledWith("staging"));
+    expect(initContext).toHaveBeenCalledWith("prod");
+  });
+
+  it("ignores a persisted context that no longer exists", async () => {
+    localStorage.setItem("rigel_active_context", "ghost");
+    mockUseContexts.mockReturnValue({
+      data: [ctx("prod", true), ctx("staging")],
+    });
+
+    renderRail();
+
+    await waitFor(() => expect(initContext).toHaveBeenCalledWith("prod"));
+    expect(switchCluster).not.toHaveBeenCalled();
+  });
+
   it("does not render when contexts list is empty", () => {
     useCluster.setState({ activeContext: null });
     mockUseContexts.mockReturnValue({ data: [] });
