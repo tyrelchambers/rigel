@@ -3,14 +3,19 @@ import { afterEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 vi.mock("@/lib/ws", () => ({ subscribe: vi.fn(), unsubscribe: vi.fn() }));
-vi.mock("@/store/cluster", () => ({
-  useCluster: (sel: (s: { resources: Record<string, Record<string, unknown>> }) => unknown) =>
-    sel({ resources: { namespaces: { default: {} } } }),
-}));
+vi.mock("@/store/cluster", () => {
+  const useCluster = (sel: (s: { resources: Record<string, Record<string, unknown>> }) => unknown) =>
+    sel({ resources: { namespaces: { default: {} } } });
+  useCluster.getState = () => ({ activeContext: null });
+  return { useCluster };
+});
 
 import { BindingEditor } from "./BindingEditor";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 const binding = {
   kind: "RoleBinding" as const,
@@ -97,4 +102,38 @@ test("nameSuggestion auto-fills the create-mode name until the user edits it", (
   fireEvent.change(nameInput, { target: { value: "custom-name" } });
   fireEvent.change(roleSelect, { target: { value: "edit" } });
   expect(nameInput.value).toBe("custom-name");
+});
+
+test("renders a per-subject access test when a role and subject are set", async () => {
+  const fetchMock = vi.fn(async (url: string) => {
+    if (url.includes("/api/rbac/can-i")) {
+      return new Response(JSON.stringify({
+        results: [{ subject: { kind: "ServiceAccount", name: "sa", namespace: "default" }, checks: [
+          { verb: "get", resource: "pods", apiGroup: "", allowed: false },
+        ] }],
+        note: undefined,
+      }));
+    }
+    return new Response("{}");
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(
+    <BindingEditor
+      target={{
+        kind: "RoleBinding", name: "rb", namespace: "default",
+        roleRef: { kind: "Role", name: "reader" },
+        subjects: [{ kind: "ServiceAccount", name: "sa", namespace: "default" }],
+      }}
+      open
+      onClose={vi.fn()}
+      onApply={vi.fn()}
+      rulesForRole={() => [{ apiGroups: [""], resources: ["pods"], verbs: ["get"] }]}
+    />,
+  );
+
+  const btn = screen.getAllByRole("button", { name: /Test access/ })[0];
+  fireEvent.click(btn);
+  expect(await screen.findByText(/granted by this binding/)).toBeTruthy();
+  expect(fetchMock).toHaveBeenCalledWith("/api/rbac/can-i", expect.objectContaining({ method: "POST" }));
 });

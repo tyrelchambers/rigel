@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ActiveForward } from "@/panels/services/portForward";
 import type { SuggestedAlert, DigestInput, ApplySource, RecentBatch } from "@rigel/k8s";
 import type { CheckResult, CloudProvider, CloudCluster } from "@rigel/cloud-connect/src/index";
+import type { Subject } from "@/panels/rbac/types";
+import type { CanICheck, CanIResult } from "@/panels/rbac/canI";
 import { useCluster } from "@/store/cluster";
 
 export function apiFetch(input: string, init?: RequestInit): Promise<Response> {
@@ -1063,13 +1065,18 @@ export async function fetchCertManagerPlugin(): Promise<boolean> {
 export interface ApiResourcesResponse {
   resources: string[];
   groups: string[];
+  verbsByResource: Record<string, string[]>;
 }
 
 async function fetchApiResources(): Promise<ApiResourcesResponse> {
   const res = await apiFetch("/api/api-resources");
-  if (!res.ok) return { resources: [], groups: [] };
+  if (!res.ok) return { resources: [], groups: [], verbsByResource: {} };
   const data = (await res.json()) as Partial<ApiResourcesResponse>;
-  return { resources: data.resources ?? [], groups: data.groups ?? [] };
+  return {
+    resources: data.resources ?? [],
+    groups: data.groups ?? [],
+    verbsByResource: data.verbsByResource ?? {},
+  };
 }
 
 /** Cluster API resources/groups, cached per-context (rarely changes). */
@@ -1080,6 +1087,22 @@ export function useApiResources() {
     queryFn: fetchApiResources,
     staleTime: 5 * 60_000,
   });
+}
+
+export interface CanIResponse {
+  results: Array<{ subject: Subject; checks: CanIResult[] }>;
+  note?: string;
+}
+
+/** Impersonated `kubectl auth can-i` for the RBAC access test (read-only). */
+export async function postCanICheck(subjects: Subject[], checks: CanICheck[]): Promise<CanIResponse> {
+  const res = await apiFetch("/api/rbac/can-i", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ subjects, checks }),
+  });
+  if (!res.ok) throw new Error(`Access test failed: ${res.status}`);
+  return (await res.json()) as CanIResponse;
 }
 
 // ---------------------------------------------------------------------------

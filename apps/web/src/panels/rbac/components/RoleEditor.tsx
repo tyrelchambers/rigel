@@ -23,6 +23,41 @@ import { useApiResources } from "@/lib/api";
 
 const RBAC_VERBS = ["get", "list", "watch", "create", "update", "patch", "delete", "deletecollection", "bind", "escalate", "impersonate", "use", "*"];
 
+export function verbSuggestionsForResources(
+  resources: string[],
+  verbsByResource: Record<string, string[]>,
+): string[] {
+  const known = resources
+    .map((r) => verbsByResource[r])
+    .filter((v): v is string[] => Array.isArray(v) && v.length > 0);
+  if (known.length === 0) return RBAC_VERBS;
+  const union = new Set<string>();
+  for (const vs of known) for (const v of vs) union.add(v);
+  union.add("*");
+  return [...union].sort();
+}
+
+export const ROLE_PRESETS: { id: string; label: string; rules: PolicyRule[] }[] = [
+  { id: "read-only", label: "Read-only", rules: [
+    { apiGroups: ["*"], resources: ["*"], verbs: ["get", "list", "watch"] },
+  ] },
+  { id: "namespace-admin", label: "Namespace admin", rules: [
+    { apiGroups: ["*"], resources: ["*"], verbs: ["*"] },
+  ] },
+  { id: "deployer", label: "Deployer", rules: [
+    { apiGroups: ["apps"], resources: ["deployments", "replicasets", "statefulsets", "daemonsets"], verbs: ["get", "list", "watch", "create", "update", "patch", "delete"] },
+    { apiGroups: [""], resources: ["pods", "services", "configmaps", "secrets"], verbs: ["get", "list", "watch", "create", "update", "patch", "delete"] },
+  ] },
+];
+
+function cloneRules(rules: PolicyRule[]): PolicyRule[] {
+  return rules.map((r) => ({
+    apiGroups: [...(r.apiGroups ?? [])],
+    resources: [...(r.resources ?? [])],
+    verbs: [...(r.verbs ?? [])],
+  }));
+}
+
 export interface RoleTarget {
   kind: "Role" | "ClusterRole";
   name: string;
@@ -62,8 +97,11 @@ export function RoleEditor({ target, open, onClose, onApply, onEditYaml }: Props
     () => Array.from(new Set([...(apiResources?.resources ?? []), "*"])),
     [apiResources],
   );
+  const verbsByResource = apiResources?.verbsByResource ?? {};
+  const [preset, setPreset] = useState<string | null>(null);
 
   function setRule(i: number, patch: Partial<PolicyRule>) {
+    setPreset(null);
     setRules((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   }
 
@@ -130,6 +168,37 @@ export function RoleEditor({ target, open, onClose, onApply, onEditYaml }: Props
             </>
           )}
 
+          {!isEdit && (
+            <div className="flex flex-col gap-[8px]">
+              <span
+                className="font-[var(--font-mono)] text-[10.5px] uppercase tracking-[0.8px]"
+                style={{ color: "#6B6B73" }}
+              >
+                Preset
+              </span>
+              <div className="flex flex-wrap gap-[7px]">
+                {ROLE_PRESETS.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => {
+                      setPreset(p.id);
+                      setRules(cloneRules(p.rules));
+                    }}
+                    className="rounded-[6px] border px-[12px] py-[6px] text-[13px] font-semibold"
+                    style={
+                      preset === p.id
+                        ? { borderColor: "#38BDF8", color: "#38BDF8", background: "#38BDF814" }
+                        : { borderColor: "#26272B", color: "#A1A1AA", background: "#FFFFFF05" }
+                    }
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <SectionHeader label="RULES" count={rules.length} />
 
           {rules.map((r, i) => {
@@ -145,7 +214,10 @@ export function RoleEditor({ target, open, onClose, onApply, onEditYaml }: Props
                   <button
                     type="button"
                     aria-label="Remove rule"
-                    onClick={() => setRules((rs) => rs.filter((_, j) => j !== i))}
+                    onClick={() => {
+                      setPreset(null);
+                      setRules((rs) => rs.filter((_, j) => j !== i));
+                    }}
                     className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] hover:bg-white/[0.05]"
                     style={{ color: "#6B6B73" }}
                   >
@@ -171,7 +243,7 @@ export function RoleEditor({ target, open, onClose, onApply, onEditYaml }: Props
                   tokens={r.verbs ?? []}
                   onChange={(t) => setRule(i, { verbs: t })}
                   danger={(t) => ["*", "escalate", "bind", "impersonate"].includes(t)}
-                  suggestions={RBAC_VERBS}
+                  suggestions={verbSuggestionsForResources(r.resources ?? [], verbsByResource)}
                 />
               </div>
             );
@@ -179,7 +251,10 @@ export function RoleEditor({ target, open, onClose, onApply, onEditYaml }: Props
 
           <button
             type="button"
-            onClick={() => setRules((rs) => [...rs, blankRule()])}
+            onClick={() => {
+              setPreset(null);
+              setRules((rs) => [...rs, blankRule()]);
+            }}
             className="flex w-full items-center justify-center gap-[7px] rounded-[6px] border px-[14px] py-[12px] text-[13px] font-semibold"
             style={{ background: "#FFFFFF05", borderColor: "#26272B", color: "#A1A1AA" }}
           >

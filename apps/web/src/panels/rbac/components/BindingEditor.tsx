@@ -11,12 +11,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import type { RoleRef, Subject } from "../types";
+import type { PolicyRule, RoleRef, Subject } from "../types";
 import { buildBindingYaml } from "../manifest";
 import { NamespaceField } from "@/components/NamespaceField";
 import { Segmented } from "./Segmented";
 import { SectionHeader } from "./SectionHeader";
 import { LabeledField, fieldInputClass, fieldSurface } from "./LabeledField";
+import { AccessTest } from "./AccessTest";
+import { rulesToChecks } from "../canI";
 
 export interface BindingTarget {
   kind: "RoleBinding" | "ClusterRoleBinding";
@@ -51,6 +53,8 @@ interface Props {
    * suggestion. Ignored in edit mode.
    */
   nameSuggestion?: (roleRefName: string) => string;
+  /** Resolve the granted role's rules, so the access test knows what to probe. */
+  rulesForRole?: (kind: "Role" | "ClusterRole", name: string, namespace?: string) => PolicyRule[];
 }
 
 const SUBJECT_KINDS = ["ServiceAccount", "User", "Group"] as const;
@@ -63,6 +67,7 @@ export function BindingEditor({
   onEditYaml,
   roleOptions,
   nameSuggestion,
+  rulesForRole,
 }: Props) {
   const isEdit = target != null && target.name.trim() !== "";
   const [kind, setKind] = useState<"RoleBinding" | "ClusterRoleBinding">(target?.kind ?? "RoleBinding");
@@ -266,6 +271,28 @@ export function BindingEditor({
           >
             <Plus className="size-[15px]" /> Add subject
           </button>
+
+          {rulesForRole && (roleRef.name ?? "").trim() && subjects.some((s) => (s.name ?? "").trim()) && (
+            <>
+              <SectionHeader label="TEST ACCESS" />
+              <span className="text-[12px]" style={{ color: "#6B6B73" }}>
+                Impersonates each subject to check what the granted role adds.
+              </span>
+              {subjects
+                .filter((s) => (s.name ?? "").trim())
+                .map((s) => (
+                  <AccessTest
+                    key={`${s.kind ?? "ServiceAccount"}:${s.namespace ?? ""}:${s.name}`}
+                    subject={s}
+                    deniedLabel="→ granted by this binding"
+                    checks={rulesToChecks(
+                      rulesForRole((roleRef.kind as "Role" | "ClusterRole") ?? "Role", roleRef.name ?? "", namespace),
+                      kind === "RoleBinding" ? namespace : undefined,
+                    )}
+                  />
+                ))}
+            </>
+          )}
         </DialogBody>
         <DialogFooter>
           {isEdit && onEditYaml && (

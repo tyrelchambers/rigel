@@ -57,6 +57,7 @@ import { getAgent, type AgentAuthMethod } from "./agentRegistry";
 import { buildSuggestions } from "./suggestions";
 import { getClusterYamlSchema } from "./clusterSchema";
 import { getApiResources } from "./apiResources";
+import { runCanI, type Subject, type CanICheck, type CanIResult } from "./rbacCanI";
 import { stripStatusBlock } from "@rigel/k8s/src/manifestClean";
 import { handleAssistant, type AssistantRequest } from "./assistant";
 import { handleSignal, type SignalRequest } from "./signal";
@@ -536,6 +537,32 @@ async function handler(req: Request): Promise<Response> {
     // active context, for the RBAC role editor's rule autocompletion.
     if (url.pathname === "/api/api-resources" && req.method === "GET") {
       return Response.json(await getApiResources(context));
+    }
+
+    // POST /api/rbac/can-i — impersonated `kubectl auth can-i` for the RBAC
+    // panel's inline access test. Read-only; no confirm gate.
+    if (url.pathname === "/api/rbac/can-i" && req.method === "POST") {
+      let subjects: Subject[] = [];
+      let checks: CanICheck[] = [];
+      try {
+        const body = (await req.json()) as { subjects?: Subject[]; checks?: CanICheck[] };
+        subjects = body.subjects ?? [];
+        checks = body.checks ?? [];
+      } catch {
+        // empty/invalid body → empty result
+      }
+      // Bound the fan-out of sequential kubectl execs (client already caps).
+      subjects = subjects.slice(0, 25);
+      checks = checks.slice(0, 50);
+      const run = (args: string[]) => kubectl(context, args);
+      const results: Array<{ subject: Subject; checks: CanIResult[] }> = [];
+      let note: string | undefined;
+      for (const subject of subjects) {
+        const r = await runCanI(subject, checks, run);
+        if (r.note) note = r.note;
+        results.push({ subject, checks: r.results });
+      }
+      return Response.json({ results, note });
     }
 
     // POST /api/install/metrics-server — one-click upstream metrics-server for

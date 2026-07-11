@@ -10,28 +10,35 @@ beforeEach(() => {
 });
 
 const SAMPLE = `
-bindings                     v1              true    Binding
-configmaps          cm       v1              true    ConfigMap
-deployments         deploy   apps/v1         true    Deployment
-events              ev       events.k8s.io/v1 true   Event
-events              ev       v1              true    Event
+bindings                     v1              true    Binding      create,delete,get
+configmaps          cm       v1              true    ConfigMap    create,delete,deletecollection,get,list,patch,update,watch  all
+deployments         deploy   apps/v1         true    Deployment   create,delete,deletecollection,get,list,patch,update,watch  all
+events              ev       events.k8s.io/v1 true   Event        get,list,watch
+events              ev       v1              true    Event        create,patch,update
 `;
 
-test("parseApiResources: parses the sample columnar output", () => {
-  const { resources, groups } = parseApiResources(SAMPLE);
+test("parseApiResources: parses names, groups, and per-resource verbs", () => {
+  const { resources, groups, verbsByResource } = parseApiResources(SAMPLE);
   expect(resources).toEqual(["bindings", "configmaps", "deployments", "events"]);
   expect(groups).toEqual(["apps", "core", "events.k8s.io"]);
+  expect(verbsByResource["deployments"]).toEqual([
+    "create", "delete", "deletecollection", "get", "list", "patch", "update", "watch",
+  ]);
+  // same resource name under two apiVersions → unioned + sorted
+  expect(verbsByResource["events"]).toEqual(["create", "get", "list", "patch", "update", "watch"]);
 });
 
-test("parseApiResources: resource with no shortname parses correctly", () => {
-  const { resources, groups } = parseApiResources("bindings                     v1              true    Binding");
+test("parseApiResources: resource with no shortname parses verbs", () => {
+  const { resources, verbsByResource } = parseApiResources(
+    "bindings                     v1              true    Binding      create,delete,get",
+  );
   expect(resources).toEqual(["bindings"]);
-  expect(groups).toEqual(["core"]);
+  expect(verbsByResource["bindings"]).toEqual(["create", "delete", "get"]);
 });
 
 test("parseApiResources: skips malformed/blank lines", () => {
   const stdout = `
-configmaps          cm       v1              true    ConfigMap
+configmaps          cm       v1              true    ConfigMap    create,delete,deletecollection,get,list,patch,update,watch  all
 
 garbage line with no namespaced column
 `;
@@ -40,20 +47,18 @@ garbage line with no namespaced column
   expect(groups).toEqual(["core"]);
 });
 
-test("parseApiResources: empty input → empty lists", () => {
-  expect(parseApiResources("")).toEqual({ resources: [], groups: [] });
+test("parseApiResources: empty input → empty result", () => {
+  expect(parseApiResources("")).toEqual({ resources: [], groups: [], verbsByResource: {} });
 });
 
-test("getApiResources: parses stdout on success", async () => {
+test("getApiResources: requests -o wide and parses on success", async () => {
   mockKubectl.mockResolvedValue({ code: 0, stdout: SAMPLE, stderr: "" });
   const result = await getApiResources("my-context");
-  expect(mockKubectl).toHaveBeenCalledWith("my-context", ["api-resources", "--no-headers"]);
-  expect(result.resources).toContain("deployments");
-  expect(result.groups).toContain("apps");
+  expect(mockKubectl).toHaveBeenCalledWith("my-context", ["api-resources", "-o", "wide", "--no-headers"]);
+  expect(result.verbsByResource["deployments"]).toContain("patch");
 });
 
-test("getApiResources: non-zero exit → empty lists, never throws", async () => {
+test("getApiResources: non-zero exit → empty result, never throws", async () => {
   mockKubectl.mockResolvedValue({ code: 1, stdout: "", stderr: "boom" });
-  const result = await getApiResources(null);
-  expect(result).toEqual({ resources: [], groups: [] });
+  expect(await getApiResources(null)).toEqual({ resources: [], groups: [], verbsByResource: {} });
 });
