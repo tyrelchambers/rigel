@@ -305,6 +305,11 @@ export function connectCluster(): void {
     ) {
       const listeners = actionListeners.get(m.id);
       if (listeners) listeners.forEach((cb) => cb(m as ActionEvent));
+    } else if (m.type === "access") {
+      store.setAccessMode(
+        m.mode === "scoped" ? "scoped" : "cluster-wide",
+        Array.isArray(m.namespaces) ? m.namespaces : [],
+      );
     } else if (m.type === "snapshot") {
       store.setLoading(false);
       store.setError(null);

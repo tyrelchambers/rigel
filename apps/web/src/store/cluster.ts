@@ -142,6 +142,13 @@ interface ClusterState {
   /** The active kubeconfig context (cluster) the whole app is pointed at. null
    *  until the rail resolves it from /api/contexts. */
   activeContext: string | null;
+  /** Whether this connection can list/watch cluster-wide, or is scoped to a
+   *  fixed set of namespaces (RBAC-limited). Set from the server's `access`
+   *  frame sent on connect. */
+  accessMode: "cluster-wide" | "scoped";
+  /** The namespaces this connection can access, when `accessMode` is
+   *  "scoped". Empty (and unused) in cluster-wide mode. */
+  accessNamespaces: string[];
   /** Each context's last-selected namespace (null = all). Drives per-cluster
    *  namespace memory across switches. */
   namespaceByContext: Record<string, string | null>;
@@ -156,6 +163,7 @@ interface ClusterState {
   setLoading: (l: boolean) => void;
   setError: (e: string | null) => void;
   setAccess: (kind: string, access: KindAccess) => void;
+  setAccessMode: (mode: "cluster-wide" | "scoped", namespaces: string[]) => void;
   setNamespaceFilter: (ns: string | null) => void;
   upsert: (kind: string, name: string, obj: unknown) => void;
   remove: (kind: string, name: string) => void;
@@ -188,6 +196,8 @@ export const useCluster = create<ClusterState>((set) => ({
   accessByKind: {},
   namespaceFilter: readNamespaceFilter(), // null = All namespaces; restored from localStorage
   activeContext: null,
+  accessMode: "cluster-wide",
+  accessNamespaces: [],
   namespaceByContext: readNamespaceByContext(),
   setActiveContextInitial: (context) =>
     set((s) => {
@@ -205,6 +215,7 @@ export const useCluster = create<ClusterState>((set) => ({
   setError: (error) => set({ error }),
   setAccess: (kind, access) =>
     set((s) => ({ accessByKind: { ...s.accessByKind, [kind]: access } })),
+  setAccessMode: (accessMode, accessNamespaces) => set({ accessMode, accessNamespaces }),
   setNamespaceFilter: (namespaceFilter) => {
     writeNamespaceFilter(namespaceFilter);
     set((s) => {

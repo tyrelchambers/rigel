@@ -17,26 +17,33 @@ export function NamespaceSelector() {
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
   const setNamespaceFilter = useCluster((s) => s.setNamespaceFilter);
   const resources = useCluster((s) => s.resources);
+  const accessMode = useCluster((s) => s.accessMode);
+  const accessNamespaces = useCluster((s) => s.accessNamespaces);
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
 
   // The selector owns the namespaces watch so the dropdown is populated wherever
   // it's shown (the per-resource panels don't subscribe "namespaces" themselves).
+  // A scoped connection can't list namespaces cluster-wide (it 403s), so it
+  // skips the watch entirely and lists from the server's accessible-namespace set.
   useEffect(() => {
+    if (accessMode !== "cluster-wide") return;
     subscribe("namespaces", "*");
     return () => unsubscribe("namespaces", "*");
-  }, []);
+  }, [accessMode]);
 
-  const allNamespaces: string[] = Object.keys(resources["namespaces"] ?? {}).sort((a, b) =>
-    a.localeCompare(b),
-  );
+  const allNamespaces: string[] =
+    accessMode === "scoped"
+      ? [...accessNamespaces].sort((a, b) => a.localeCompare(b))
+      : Object.keys(resources["namespaces"] ?? {}).sort((a, b) => a.localeCompare(b));
 
   const filtered = query
     ? allNamespaces.filter((ns) => ns.toLowerCase().includes(query.toLowerCase()))
     : allNamespaces;
 
-  const currentLabel = namespaceFilter ?? "All namespaces";
+  const allLabel = accessMode === "scoped" ? "Your namespaces" : "All namespaces";
+  const currentLabel = namespaceFilter ?? allLabel;
 
   function handleSelect(value: string | null) {
     setNamespaceFilter(value);
@@ -132,7 +139,7 @@ export function NamespaceSelector() {
               {/* Options list */}
               <div style={{ maxHeight: 320, overflowY: "auto" }}>
                 <NamespaceRow
-                  label="All namespaces"
+                  label={allLabel}
                   active={namespaceFilter === null}
                   onSelect={() => handleSelect(null)}
                 />

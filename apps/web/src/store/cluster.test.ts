@@ -221,6 +221,12 @@ describe("replaceKind — namespace-scoped merge", () => {
   });
 });
 
+test("setAccessMode sets both the mode and the accessible namespaces", () => {
+  useCluster.getState().setAccessMode("scoped", ["team-a", "team-b"]);
+  expect(useCluster.getState().accessMode).toBe("scoped");
+  expect(useCluster.getState().accessNamespaces).toEqual(["team-a", "team-b"]);
+});
+
 it("records per-kind access without touching the global error", () => {
   useCluster.setState({ error: null });
   useCluster.getState().setAccess("secrets", { status: "forbidden", message: "denied" });

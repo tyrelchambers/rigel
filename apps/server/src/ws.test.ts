@@ -34,7 +34,12 @@ test("subscribe defaults the context to the connection context and echoes it in 
 
   // Drive a snapshot — it must echo the context back to the client.
   mgr.subs[0].onSnapshot([{ metadata: { name: "a" } }]);
-  expect(ws.sent[0]).toMatchObject({ type: "snapshot", context: "boot-ctx", kind: "pods", namespace: "default" });
+  expect(ws.sent.find((f: any) => f.type === "snapshot")).toMatchObject({
+    type: "snapshot",
+    context: "boot-ctx",
+    kind: "pods",
+    namespace: "default",
+  });
 });
 
 test("subscribe uses an explicit context when provided, and keys by it (no dedupe across contexts)", () => {
@@ -59,7 +64,7 @@ test("delta frames echo the context, event, and object", () => {
 
   // Drive a delta through the captured callback — the frame must echo the context.
   mgr.subs[0].onDelta({ type: "ADDED", object: { metadata: { name: "p1" } } });
-  expect(ws.sent[0]).toMatchObject({
+  expect(ws.sent.find((f: any) => f.type === "delta")).toMatchObject({
     type: "delta",
     context: "ctx-a",
     kind: "pods",
@@ -145,4 +150,22 @@ test("tears down all fanned-out watches on unsubscribe", () => {
   handlers.message(ws, JSON.stringify({ type: "unsubscribe", kind: "pods", namespace: "*" }));
 
   expect(mgr.unsub).toHaveBeenCalledTimes(2);
+});
+
+test("sends an access frame on open reflecting the passed access", () => {
+  const mgr = fakeMgr();
+  const handlers = makeWsHandlers(mgr as any, "ctx");
+  const ws = fakeWs();
+  handlers.open(ws, { mode: "scoped", namespaces: ["team-a"] });
+
+  expect(ws.sent).toContainEqual({ type: "access", mode: "scoped", namespaces: ["team-a"] });
+});
+
+test("sends a cluster-wide access frame on open when no access is passed", () => {
+  const mgr = fakeMgr();
+  const handlers = makeWsHandlers(mgr as any, "ctx");
+  const ws = fakeWs();
+  handlers.open(ws);
+
+  expect(ws.sent).toContainEqual({ type: "access", mode: "cluster-wide", namespaces: [] });
 });

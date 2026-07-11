@@ -34,12 +34,16 @@ export function makeWsHandlers(mgr: WatchManager, context: string | null = null,
 
   return {
     open(ws: WebSocket, access?: Access) {
+      const resolvedAccess = access ?? { mode: "cluster-wide" as const, namespaces: [] };
       unsubs.set(ws, new Map());
-      accessByWs.set(ws, access ?? { mode: "cluster-wide", namespaces: [] });
+      accessByWs.set(ws, resolvedAccess);
       logStreams.set(ws, new LogStreamManager(ws, context));
       terminals.set(ws, new TerminalSession(ws));
       creates.set(ws, new ClusterCreateManager(ws, kubeconfigPath));
       actionRunners.set(ws, new ActionRunManager(ws, context));
+      ws.send(
+        JSON.stringify({ type: "access", mode: resolvedAccess.mode, namespaces: resolvedAccess.namespaces }),
+      );
     },
     close(ws: WebSocket) {
       unsubs.get(ws)?.forEach((u) => u());
