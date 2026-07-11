@@ -134,7 +134,9 @@ export function onActionEvent(id: string, cb: ActionCallback): () => void {
 
 /** Send an action.run frame to start executing a chat action-block on the server. */
 export function runAction(id: string, action: ActionBlock): void {
-  rawSend(JSON.stringify({ type: "action.run", id, action }));
+  rawSend(
+    JSON.stringify({ type: "action.run", id, action, ...(currentContext ? { context: currentContext } : {}) }),
+  );
 }
 
 /** A line streamed from the server's kubectl-logs process. */
@@ -161,7 +163,14 @@ export interface LogTarget {
 
 /** Start streaming logs for the given targets. {type:"logs.start", targets, tailLines}. */
 export function sendLogsStart(targets: LogTarget[], tailLines = 200): void {
-  rawSend(JSON.stringify({ type: "logs.start", targets, tailLines }));
+  rawSend(
+    JSON.stringify({
+      type: "logs.start",
+      targets,
+      tailLines,
+      ...(currentContext ? { context: currentContext } : {}),
+    }),
+  );
 }
 
 /** Stop all log streams for this connection. {type:"logs.stop"}. */
@@ -196,6 +205,7 @@ export function sendChat(
       effort: opts?.effort,
       sessionId: opts?.sessionId,
       scope: opts?.scope,
+      ...(currentContext ? { context: currentContext } : {}),
     }),
   );
 }

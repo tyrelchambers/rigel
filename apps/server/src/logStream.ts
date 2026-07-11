@@ -83,15 +83,15 @@ export class LogStreamManager {
   ) {}
 
   /** Start one kubectl-logs process per target. Replaces any current streams. */
-  start(targets: LogTarget[], tailLines = 200): void {
+  start(targets: LogTarget[], tailLines = 200, context: string | null = this.context): void {
     this.stop(); // a new start supersedes the previous selection
     for (const target of targets) {
-      this.spawnOne(target, tailLines);
+      this.spawnOne(target, tailLines, context);
     }
   }
 
-  private spawnOne(target: LogTarget, tailLines: number): void {
-    const argv = buildKubectlArgs(this.context, buildLogsArgs(target, tailLines));
+  private spawnOne(target: LogTarget, tailLines: number, context: string | null): void {
+    const argv = buildKubectlArgs(context, buildLogsArgs(target, tailLines));
     let proc: ChildProcess;
     try {
       proc = this.spawnFn("kubectl", argv, { stdio: ["ignore", "pipe", "pipe"] });
