@@ -47,3 +47,31 @@ describe("discoverAccess", () => {
     expect(calls[0]).not.toContain("--context");
   });
 });
+
+describe("seedFromKubeconfig", () => {
+  it("reads the context's default namespace from kubeconfig", async () => {
+    const run = vi.fn(async () => ({ code: 0, stdout: "team-a\n", stderr: "" }));
+    const { seedFromKubeconfig } = await import("./access");
+    expect(await seedFromKubeconfig("ctx", run)).toEqual(["team-a"]);
+  });
+
+  it("returns no seed when the context has no default namespace", async () => {
+    const run = vi.fn(async () => ({ code: 0, stdout: "\n", stderr: "" }));
+    const { seedFromKubeconfig } = await import("./access");
+    expect(await seedFromKubeconfig("ctx", run)).toEqual([]);
+  });
+
+  it("passes --context when given and queries the minified default namespace", async () => {
+    const calls: string[][] = [];
+    const run = vi.fn(async (args: string[]) => {
+      calls.push(args);
+      return { code: 0, stdout: "ns1\n", stderr: "" };
+    });
+    const { seedFromKubeconfig } = await import("./access");
+    await seedFromKubeconfig("kind-x", run);
+    expect(calls[0]).toEqual(
+      expect.arrayContaining(["--context", "kind-x", "config", "view", "--minify"]),
+    );
+    expect(calls[0].join(" ")).toContain("namespace");
+  });
+});

@@ -17,3 +17,20 @@ export async function discoverAccess(opts: {
   const cap = opts.maxNamespaces ?? 10;
   return { mode: "scoped", namespaces: opts.seedNamespaces.slice(0, cap) };
 }
+
+export async function seedFromKubeconfig(
+  context: string | null,
+  run: RunKubectl,
+): Promise<string[]> {
+  const ctx = context ? ["--context", context] : [];
+  const r = await run([
+    ...ctx,
+    "config",
+    "view",
+    "--minify",
+    "-o",
+    "jsonpath={..namespace}",
+  ]);
+  const ns = r.stdout.trim();
+  return ns ? [ns] : [];
+}
