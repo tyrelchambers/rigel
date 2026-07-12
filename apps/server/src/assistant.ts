@@ -172,6 +172,7 @@ export interface AssistantRequest {
   monitorNamespaces?: string;
   mode?: string;
   window?: string;
+  webhook?: string;
   enabled?: boolean;
   fingerprint?: string;
   // setSignal — Signal notifications bridge config (docs/parity/settings.md §2).
