@@ -534,6 +534,7 @@ export function digestRunNowUpdate(req: AssistantRequest): Record<string, string
       id: req.digestId,
       mode: req.digestMode === "preview" ? "preview" : "send",
       token: crypto.randomUUID(),
+      at: Date.now(),
     }),
   };
 }

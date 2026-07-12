@@ -207,19 +207,53 @@ describe("evaluateDigests", () => {
     const now = Date.parse("2026-06-30T11:00:30.000Z");
     let st = state();
     st = { ...st, digestState: { lastSentAt: { a: "2026-06-30T11:00:00.000Z" } } };
-    const rc = rcWith({ digests: [dueSub], digestRunNow: { id: "a", mode: "preview", token: "tok-1" } });
+    const rc = rcWith({ digests: [dueSub], digestRunNow: { id: "a", mode: "preview", token: "tok-1", at: now } });
     const s = await evaluateDigests(rc, st, detection, now);
     expect(send).not.toHaveBeenCalled();
     expect(s.digestState?.lastPreview?.text).toBe("head"); // the AI-composed digest, verbatim
     expect(s.digestState?.lastRunNowToken).toBe("tok-1");
     expect(s.digestState?.lastSentAt.a).toBe("2026-06-30T11:00:00.000Z"); // unchanged
   });
+  it("sends a fresh run-now send token without touching lastSentAt", async () => {
+    vi.spyOn(runModelMod, "runModel").mockResolvedValue({ isError: false, text: "head", costUsd: 0, sessionId: "" } as any);
+    const send = vi.spyOn(notify, "sendToChannel").mockResolvedValue();
+    const now = Date.parse("2026-06-30T11:00:30.000Z");
+    let st = state();
+    st = { ...st, digestState: { lastSentAt: { a: "2026-06-30T11:00:00.000Z" } } };
+    const rc = rcWith({ digests: [dueSub], digestRunNow: { id: "a", mode: "send", token: "tok-1", at: now } });
+    const s = await evaluateDigests(rc, st, detection, now);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith(rc, "signal", "head");
+    expect(s.digestState?.lastRunNowToken).toBe("tok-1");
+    expect(s.digestState?.lastSentAt.a).toBe("2026-06-30T11:00:00.000Z"); // unchanged by run-now
+  });
+  it("does not fire a stale-timestamp run-now token, but consumes it", async () => {
+    const send = vi.spyOn(notify, "sendToChannel").mockResolvedValue();
+    const now = Date.parse("2026-06-30T11:00:30.000Z");
+    let st = state();
+    st = { ...st, digestState: { lastSentAt: { a: new Date(now).toISOString() } } };
+    // token is new (not yet consumed) but was written 10 minutes ago
+    const rc = rcWith({ digests: [dueSub], digestRunNow: { id: "a", mode: "send", token: "tok-old", at: now - 10 * 60_000 } });
+    const s = await evaluateDigests(rc, st, detection, now);
+    expect(send).not.toHaveBeenCalled();
+    expect(s.digestState?.lastRunNowToken).toBe("tok-old"); // retired, won't be re-evaluated
+  });
+  it("does not fire a timestamp-less (legacy) run-now token, but consumes it", async () => {
+    const send = vi.spyOn(notify, "sendToChannel").mockResolvedValue();
+    const now = Date.parse("2026-06-30T11:00:30.000Z");
+    let st = state();
+    st = { ...st, digestState: { lastSentAt: { a: new Date(now).toISOString() } } };
+    const rc = rcWith({ digests: [dueSub], digestRunNow: { id: "a", mode: "send", token: "legacy" } });
+    const s = await evaluateDigests(rc, st, detection, now);
+    expect(send).not.toHaveBeenCalled();
+    expect(s.digestState?.lastRunNowToken).toBe("legacy"); // retired even though it never fires
+  });
   it("ignores a stale run-now token", async () => {
     const send = vi.spyOn(notify, "sendToChannel").mockResolvedValue();
     const now = Date.parse("2026-06-30T11:00:30.000Z");
     let st = state();
     st = { ...st, digestState: { lastSentAt: { a: new Date(now).toISOString() }, lastRunNowToken: "tok-1" } };
-    const rc = rcWith({ digests: [dueSub], digestRunNow: { id: "a", mode: "send", token: "tok-1" } });
+    const rc = rcWith({ digests: [dueSub], digestRunNow: { id: "a", mode: "send", token: "tok-1", at: now } });
     const s = await evaluateDigests(rc, st, detection, now);
     expect(send).not.toHaveBeenCalled();
   });

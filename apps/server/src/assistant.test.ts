@@ -907,11 +907,14 @@ describe("mutateDigests", () => {
   });
 
   test("sendDigestNow writes a fresh digestRunNow token", () => {
+    const before = Date.now();
     const up = digestRunNowUpdate({ action: "sendDigestNow", digestId: "a", digestMode: "preview" });
-    const parsed = JSON.parse(up.digestRunNow) as { id: string; mode: string; token: string };
+    const parsed = JSON.parse(up.digestRunNow) as { id: string; mode: string; token: string; at: number };
     expect(parsed.id).toBe("a");
     expect(parsed.mode).toBe("preview");
     expect(typeof parsed.token).toBe("string");
+    expect(typeof parsed.at).toBe("number");
+    expect(parsed.at).toBeGreaterThanOrEqual(before);
   });
 });
 

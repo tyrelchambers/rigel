@@ -360,7 +360,13 @@ describe("parseDigestRunNow", () => {
   it("parses a run-now token", () => {
     expect(parseDigestRunNow({})).toBeUndefined();
     expect(parseDigestRunNow({ digestRunNow: JSON.stringify({ id: "a", mode: "preview", token: "t" }) }))
-      .toEqual({ id: "a", mode: "preview", token: "t" });
+      .toEqual({ id: "a", mode: "preview", token: "t", at: undefined });
+  });
+  it("round-trips the `at` timestamp and tolerates a non-numeric one", () => {
+    expect(parseDigestRunNow({ digestRunNow: JSON.stringify({ id: "a", mode: "send", token: "t", at: 1700000000000 }) }))
+      .toEqual({ id: "a", mode: "send", token: "t", at: 1700000000000 });
+    expect(parseDigestRunNow({ digestRunNow: JSON.stringify({ id: "a", mode: "send", token: "t", at: "nope" }) }))
+      .toEqual({ id: "a", mode: "send", token: "t", at: undefined });
   });
   it("returns undefined on junk or bad mode", () => {
     expect(parseDigestRunNow({ digestRunNow: "x" })).toBeUndefined();

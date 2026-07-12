@@ -226,6 +226,7 @@ export interface DigestRunNow {
   id: string;
   mode: "send" | "preview";
   token: string;
+  at?: number; // epoch ms when the server wrote the trigger; absent = legacy/stale
 }
 
 /** Parse the server-written `digestRunNow` trigger. Undefined on absence/junk. */
@@ -235,7 +236,8 @@ export function parseDigestRunNow(data: Record<string, string>): DigestRunNow | 
   try {
     const o = JSON.parse(raw) as Partial<DigestRunNow>;
     if (typeof o.id === "string" && typeof o.token === "string" && (o.mode === "send" || o.mode === "preview")) {
-      return { id: o.id, mode: o.mode, token: o.token };
+      const at = typeof o.at === "number" && Number.isFinite(o.at) ? o.at : undefined;
+      return { id: o.id, mode: o.mode, token: o.token, at };
     }
   } catch {
     // fallthrough

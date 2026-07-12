@@ -8,6 +8,13 @@ import { parseHHMM } from "./runtimeConfig.js";
 import type { AssistantState, IncidentRecord, PullRequestRecord } from "./state.js";
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
 
+// A run-now trigger is a one-shot, act-now signal. It lives in assistant-config
+// until the next Send-now overwrites it, so only honor it while it's fresh —
+// otherwise a leftover trigger re-fires whenever lastRunNowToken is lost (e.g. a
+// transient state-read that falls back to emptyState). One 30s tick consumes a
+// real click well inside this window.
+const RUN_NOW_MAX_AGE_MS = 2 * 60_000;
+
 /** The data a single digest summarizes — assembled purely from already-fetched
  * tick state, no new cluster reads. */
 export interface DigestData {
@@ -230,8 +237,9 @@ export async function evaluateDigests(
   // 1) Run-now / preview trigger (idempotent by token).
   const trigger = rc.digestRunNow;
   if (trigger && trigger.token !== ds.lastRunNowToken) {
+    const fresh = typeof trigger.at === "number" && now - trigger.at <= RUN_NOW_MAX_AGE_MS;
     const sub = byId.get(trigger.id);
-    if (sub) {
+    if (fresh && sub) {
       const data = assembleDigestData(next, detection, sub, now, ds.lastSentAt[sub.id]);
       const text = await composeDigestMessage(rc, data);
       if (trigger.mode === "send") {
@@ -240,6 +248,7 @@ export async function evaluateDigests(
         ds = { ...ds, lastPreview: { id: sub.id, at: nowISO, text } };
       }
     }
+    // Consume the token either way so a stale/leftover trigger is retired, not re-evaluated every tick.
     ds = { ...ds, lastRunNowToken: trigger.token };
   }
 
