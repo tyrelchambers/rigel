@@ -4,7 +4,7 @@
 // them). The agent owns a mirror of these shapes in agent/src/digest.ts (wire
 // contract), exactly as agent/src/alerts.ts mirrors packages/k8s/src/alerts.ts.
 
-import { CHANNELS, type ChannelId } from "./channels";
+import { CHANNELS, type ChannelId } from "./channels.js";
 
 export type DigestChannel = ChannelId;
 

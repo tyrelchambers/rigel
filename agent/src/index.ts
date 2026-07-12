@@ -12,7 +12,7 @@ import { resolveAutofixEligibility, type AutofixEligibility } from "./autofixEli
 import { dispatchRepoFix } from "./repoFixDispatch.js";
 import { reconcileFixJobs, type FixReconcileDeps } from "./reconcileFixJobs.js";
 import { FIX_LABEL, FIX_LABEL_VALUE } from "./fixJob.js";
-import { notifyWebhook, notifySignal, receiveSignal, notifyMatrix, receiveMatrix, markMatrixRead, setMatrixTyping } from "./notify.js";
+import { notifySignal, receiveSignal, notifyMatrix, receiveMatrix, markMatrixRead, setMatrixTyping, notifyTargets, sendToChannel } from "./notify.js";
 import { SessionStore } from "./sessionStore.js";
 import {
   handleInbound,
@@ -1015,17 +1015,12 @@ function truncate(s: string, max = 2000): string {
   return s.length > max ? s.slice(0, max) + "…" : s;
 }
 
-/** Best-effort flush of this tick's notifications to the configured channels. */
+/** Best-effort flush of this tick's notifications to every channel that is both
+ *  runtime-complete and allowed by the notify allowlist. */
 function flushNotifications(rc: RuntimeConfig, notifications: string[]): void {
   if (notifications.length === 0) return;
   const text = `${greeting(notifications)}\n${notifications.join("\n")}`;
-  if (rc.webhookUrl) void notifyWebhook(rc.webhookUrl, text);
-  if (rc.signalApiUrl && rc.signalNumber) {
-    void notifySignal(rc.signalApiUrl, rc.signalNumber, rc.signalRecipients, text);
-  }
-  if (rc.matrix.homeserverUrl && rc.matrix.accessToken && rc.matrix.roomId) {
-    void notifyMatrix(rc.matrix.homeserverUrl, rc.matrix.accessToken, rc.matrix.roomId, text);
-  }
+  for (const ch of notifyTargets(rc)) void sendToChannel(rc, ch, text);
 }
 
 /** Fresh in-memory loop state for a run. Exported so tests can drive `tick`. */

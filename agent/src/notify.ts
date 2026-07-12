@@ -1,9 +1,11 @@
 import { chunkText } from "./signalInbound.js";
+import type { ChannelId } from "@rigel/k8s/src/channels.js";
+import type { RuntimeConfig } from "./runtimeConfig.js";
 
 /**
  * Best-effort outbound notification when the agent acts or queues something.
- * Posts a Slack/Discord/Mattermost-compatible {text} JSON body to the
- * configured webhook URL. Never throws — notification failure must not affect
+ * Posts a Slack/Mattermost-compatible {text} JSON body to the configured
+ * webhook URL. Never throws — notification failure must not affect
  * remediation.
  */
 export async function notifyWebhook(url: string, text: string): Promise<void> {
@@ -15,6 +17,26 @@ export async function notifyWebhook(url: string, text: string): Promise<void> {
     });
   } catch {
     // swallow — notifications are best-effort
+  }
+}
+
+/**
+ * Best-effort outbound notification to a native Discord webhook. Discord
+ * rejects the Slack-style {text} body — it wants {content} — and hard-caps
+ * each message at 2000 chars, so chunk there rather than at chunkText's
+ * default. Never throws — notification failure must not affect remediation.
+ */
+export async function notifyDiscord(url: string, text: string): Promise<void> {
+  for (const chunk of chunkText(text, 2000)) {
+    try {
+      await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ content: chunk }),
+      });
+    } catch {
+      // swallow — notifications are best-effort
+    }
   }
 }
 
@@ -157,4 +179,49 @@ export async function receiveMatrix(
   });
   if (!res.ok) throw new Error(`matrix sync returned ${res.status}`);
   return res.json();
+}
+
+/** Dispatch `text` to one channel (best-effort; silently skips when the
+ *  channel isn't configured on this RuntimeConfig). Shared by the broadcast
+ *  path (flushNotifications) and digests (single-channel targeting). */
+export async function sendToChannel(rc: RuntimeConfig, channel: ChannelId, text: string): Promise<void> {
+  if (channel === "webhook" && rc.webhookUrl) {
+    await notifyWebhook(rc.webhookUrl, text);
+  } else if (channel === "signal" && rc.signalApiUrl && rc.signalNumber) {
+    await notifySignal(rc.signalApiUrl, rc.signalNumber, rc.signalRecipients, text);
+  } else if (channel === "matrix" && rc.matrix.homeserverUrl && rc.matrix.accessToken && rc.matrix.roomId) {
+    await notifyMatrix(rc.matrix.homeserverUrl, rc.matrix.accessToken, rc.matrix.roomId, text);
+  } else if (channel === "discord" && rc.discordWebhookUrl) {
+    await notifyDiscord(rc.discordWebhookUrl, text);
+  } else if (channel === "slack" && rc.slackWebhookUrl) {
+    await notifyWebhook(rc.slackWebhookUrl, text);
+  }
+  // channel not configured → silently skip (best-effort)
+}
+
+const CHANNEL_ORDER: ChannelId[] = ["signal", "matrix", "discord", "slack", "webhook"];
+
+/** The channels the agent considers runtime-complete right now (its own
+ *  presence check — it sees the Secret-injected Matrix token the ConfigMap
+ *  can't). Stable CHANNEL_ORDER. */
+function runtimeCompleteChannels(rc: RuntimeConfig): ChannelId[] {
+  return CHANNEL_ORDER.filter((id) => {
+    if (id === "webhook") return !!rc.webhookUrl;
+    if (id === "signal") return !!(rc.signalApiUrl && rc.signalNumber);
+    if (id === "matrix") return !!(rc.matrix.homeserverUrl && rc.matrix.accessToken && rc.matrix.roomId);
+    if (id === "discord") return !!rc.discordWebhookUrl;
+    if (id === "slack") return !!rc.slackWebhookUrl;
+    return false;
+  });
+}
+
+/** The broadcast set for alert/remediation notifications: runtime-complete
+ *  channels, filtered by the notify allowlist. `notifyAllowlist === null`
+ *  means the legacy install with no allowlist set — broadcast to everything
+ *  configured. */
+export function notifyTargets(rc: RuntimeConfig): ChannelId[] {
+  const complete = runtimeCompleteChannels(rc);
+  if (rc.notifyAllowlist === null) return complete;
+  const allowed = new Set(rc.notifyAllowlist);
+  return complete.filter((id) => allowed.has(id));
 }

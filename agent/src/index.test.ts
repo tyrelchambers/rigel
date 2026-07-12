@@ -22,21 +22,51 @@ vi.mock("./supervisor.js", () => ({ runSupervisor: vi.fn() }));
 // The digest path sends to a channel + composes an AI headline; mock both so a
 // scheduled digest can be driven without a real network/provider call. Existing
 // tests configure no channels, so flushNotifications already no-ops past these.
-vi.mock("./notify.js", () => ({
-  notifyWebhook: vi.fn(),
-  notifySignal: vi.fn(),
-  receiveSignal: vi.fn(),
-  notifyMatrix: vi.fn(),
-  markMatrixRead: vi.fn(),
-  setMatrixTyping: vi.fn(),
-  receiveMatrix: vi.fn(),
-}));
+// sendToChannel/notifyTargets are stubbed with the real dispatch/filter logic
+// (mirroring notify.ts) so assertions against the leaf fns (notifySignal, etc.)
+// still hold now that broadcast/digest route through the shared dispatcher.
+vi.mock("./notify.js", () => {
+  const notifyWebhook = vi.fn();
+  const notifySignal = vi.fn();
+  const notifyMatrix = vi.fn();
+  const notifyDiscord = vi.fn();
+  const sendToChannel = vi.fn(async (rc: any, channel: string, text: string) => {
+    if (channel === "webhook" && rc.webhookUrl) return notifyWebhook(rc.webhookUrl, text);
+    if (channel === "signal" && rc.signalApiUrl && rc.signalNumber) {
+      return notifySignal(rc.signalApiUrl, rc.signalNumber, rc.signalRecipients, text);
+    }
+    if (channel === "matrix" && rc.matrix?.homeserverUrl && rc.matrix?.accessToken && rc.matrix?.roomId) {
+      return notifyMatrix(rc.matrix.homeserverUrl, rc.matrix.accessToken, rc.matrix.roomId, text);
+    }
+    if (channel === "discord" && rc.discordWebhookUrl) return notifyDiscord(rc.discordWebhookUrl, text);
+    if (channel === "slack" && rc.slackWebhookUrl) return notifyWebhook(rc.slackWebhookUrl, text);
+  });
+  const notifyTargets = vi.fn((rc: any) => {
+    const order = ["signal", "matrix", "discord", "slack", "webhook"];
+    const complete = order.filter((id) => {
+      if (id === "webhook") return !!rc.webhookUrl;
+      if (id === "signal") return !!(rc.signalApiUrl && rc.signalNumber);
+      if (id === "matrix") return !!(rc.matrix?.homeserverUrl && rc.matrix?.accessToken && rc.matrix?.roomId);
+      if (id === "discord") return !!rc.discordWebhookUrl;
+      if (id === "slack") return !!rc.slackWebhookUrl;
+      return false;
+    });
+    if (rc.notifyAllowlist == null) return complete;
+    const allowed = new Set(rc.notifyAllowlist);
+    return complete.filter((id) => allowed.has(id));
+  });
+  return {
+    notifyWebhook, notifySignal, receiveSignal: vi.fn(), notifyMatrix, notifyDiscord,
+    markMatrixRead: vi.fn(), setMatrixTyping: vi.fn(), receiveMatrix: vi.fn(),
+    sendToChannel, notifyTargets,
+  };
+});
 vi.mock("./runModel.js", () => ({ runModel: vi.fn() }));
 
 import { kubectl } from "./kubectl.js";
 import { runWorker } from "./worker.js";
 import { runSupervisor } from "./supervisor.js";
-import { notifySignal } from "./notify.js";
+import { notifySignal, notifyWebhook } from "./notify.js";
 import { runModel } from "./runModel.js";
 import { tick, createLoopState, queue } from "./index.js";
 import { CircuitBreaker } from "./guardrails.js";
@@ -276,6 +306,23 @@ describe("tick() — openFixPR routing (I1 landmine)", () => {
     const state = captured();
     expect(state!.audit[0]).toMatchObject({ outcome: "queued", tier: "medium" });
     expect(state!.audit[0]?.detail).toContain("github.com/me/infra@main");
+  });
+
+  test("broadcast honors the notify allowlist — only the allowed channel fires", async () => {
+    wireCluster({
+      configData: {
+        enabled: "true", confirmPolls: "1", autofixEnabled: "true",
+        autofixScope: JSON.stringify({ projects: ["default/memos"] }),
+        webhookUrl: "http://hook", signalApiUrl: "http://sig", signalNumber: "+15550001111",
+        notifyChannels: "webhook",
+      },
+      deploymentJSON: DEPLOYMENT_JSON,
+    });
+
+    await tick(makeConfig(), newCb(), createLoopState());
+
+    expect(vi.mocked(notifyWebhook)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(notifySignal)).not.toHaveBeenCalled();
   });
 });
 

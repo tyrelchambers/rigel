@@ -3,6 +3,7 @@ import type { Config } from "./config.js";
 import { parseAlertRules, type AlertRule } from "./alerts.js";
 import type { ProviderId, RoleSelection } from "./providers/types.js";
 import { parseDigests, type DigestSubscription } from "@rigel/k8s/src/digest.js";
+import { parseNotifyAllowlist, type ChannelId } from "@rigel/k8s/src/channels.js";
 
 export interface OperationalLimits {
   pollIntervalMs: number;
@@ -57,6 +58,8 @@ export interface RuntimeConfig {
   window?: TimeWindow;
   silenced: Set<string>;
   webhookUrl?: string;
+  discordWebhookUrl?: string;
+  slackWebhookUrl?: string;
   /** Self-hosted signal-cli-rest-api: base URL, linked sender number, recipients. */
   signalApiUrl?: string;
   signalNumber?: string;
@@ -69,6 +72,10 @@ export interface RuntimeConfig {
   autofix: AutofixConfig;
   digests: DigestSubscription[];
   digestRunNow?: DigestRunNow;
+  /** Broadcast allowlist for alert/remediation notifications (`notifyChannels`).
+   *  null = the key is absent (legacy install) → broadcast to everything
+   *  configured. Does NOT apply to digests, which target one chosen channel. */
+  notifyAllowlist: ChannelId[] | null;
 }
 
 /** Parse the autofix opt-in (`autofixEnabled`, default false) + scope
@@ -262,6 +269,7 @@ function disabledDefaults(cfg: Config): RuntimeConfig {
     limits: parseLimits({}, cfg),
     autofix: parseAutofixConfig({}),
     digests: [],
+    notifyAllowlist: null,
   };
 }
 
@@ -293,6 +301,8 @@ export async function readRuntimeConfig(cfg: Config): Promise<RuntimeConfig> {
     window: data.window ? parseWindow(data.window) ?? undefined : undefined,
     silenced,
     webhookUrl: data.webhookUrl && data.webhookUrl.trim() ? data.webhookUrl.trim() : undefined,
+    discordWebhookUrl: data.discordWebhookUrl && data.discordWebhookUrl.trim() ? data.discordWebhookUrl.trim() : undefined,
+    slackWebhookUrl: data.slackWebhookUrl && data.slackWebhookUrl.trim() ? data.slackWebhookUrl.trim() : undefined,
     signalApiUrl: data.signalApiUrl && data.signalApiUrl.trim() ? data.signalApiUrl.trim() : undefined,
     signalNumber: data.signalNumber && data.signalNumber.trim() ? data.signalNumber.trim() : undefined,
     signalRecipients,
@@ -304,5 +314,6 @@ export async function readRuntimeConfig(cfg: Config): Promise<RuntimeConfig> {
     autofix: parseAutofixConfig(data),
     digests: parseDigestsFromConfig(data),
     digestRunNow: parseDigestRunNow(data),
+    notifyAllowlist: parseNotifyAllowlist(data),
   };
 }

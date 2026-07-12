@@ -142,6 +142,12 @@ describe("composeDigestMessage", () => {
 });
 
 // ---- Task 11: evaluateDigests ----
+// evaluateDigests calls the SHARED sendToChannel (agent/src/notify.ts), which
+// dispatches through its own same-module leaf functions (notifySignal, etc.) —
+// those internal calls aren't visible to a spy on the individual leaf export,
+// so these tests spy on sendToChannel itself (a cross-module call from
+// digest.ts, which live-bindings do intercept) and assert the (rc, channel,
+// text) it was invoked with.
 import * as notify from "./notify.js";
 import { evaluateDigests } from "./digest.js";
 
@@ -155,42 +161,66 @@ const dueSub = { id: "a", enabled: true, label: "M", channel: "signal" as const,
 
 describe("evaluateDigests", () => {
   it("arms a new subscription without sending", async () => {
-    const sig = vi.spyOn(notify, "notifySignal").mockResolvedValue();
+    const send = vi.spyOn(notify, "sendToChannel").mockResolvedValue();
     const now = Date.parse("2026-06-30T07:00:30.000Z");
     const s = await evaluateDigests(rcWith({ digests: [dueSub] }), state(), detection, now);
-    expect(sig).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
     expect(s.digestState?.lastSentAt.a).toBeDefined();
   });
-  it("sends when due (armed) and stamps lastSentAt", async () => {
+  it("sends when due (armed) and stamps lastSentAt, via the shared dispatcher", async () => {
     vi.spyOn(runModelMod, "runModel").mockResolvedValue({ isError: false, text: "head", costUsd: 0, sessionId: "" } as any);
-    const sig = vi.spyOn(notify, "notifySignal").mockResolvedValue();
+    const send = vi.spyOn(notify, "sendToChannel").mockResolvedValue();
     const now = Date.parse("2026-06-30T11:00:30.000Z"); // 07:00 EDT? UTC tz here so 11:00 is past 07:00
     let st = state();
     st = { ...st, digestState: { lastSentAt: { a: "2026-06-29T07:00:00.000Z" } } };
-    const s = await evaluateDigests(rcWith({ digests: [dueSub] }), st, detection, now);
-    expect(sig).toHaveBeenCalledTimes(1);
+    const rc = rcWith({ digests: [dueSub] });
+    const s = await evaluateDigests(rc, st, detection, now);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith(rc, "signal", "head");
     expect(s.digestState?.lastSentAt.a).toBe(new Date(now).toISOString());
+  });
+  it("dispatches a discord digest subscription's channel to sendToChannel", async () => {
+    vi.spyOn(runModelMod, "runModel").mockResolvedValue({ isError: false, text: "head", costUsd: 0, sessionId: "" } as any);
+    const send = vi.spyOn(notify, "sendToChannel").mockResolvedValue();
+    const now = Date.parse("2026-06-30T11:00:30.000Z");
+    let st = state();
+    st = { ...st, digestState: { lastSentAt: { a: "2026-06-29T07:00:00.000Z" } } };
+    const discordSub = { ...dueSub, channel: "discord" as const };
+    const rc = rcWith({ digests: [discordSub], discordWebhookUrl: "https://discord.example" });
+    await evaluateDigests(rc, st, detection, now);
+    expect(send).toHaveBeenCalledWith(rc, "discord", "head");
+  });
+  it("dispatches a slack digest subscription's channel to sendToChannel", async () => {
+    vi.spyOn(runModelMod, "runModel").mockResolvedValue({ isError: false, text: "head", costUsd: 0, sessionId: "" } as any);
+    const send = vi.spyOn(notify, "sendToChannel").mockResolvedValue();
+    const now = Date.parse("2026-06-30T11:00:30.000Z");
+    let st = state();
+    st = { ...st, digestState: { lastSentAt: { a: "2026-06-29T07:00:00.000Z" } } };
+    const slackSub = { ...dueSub, channel: "slack" as const };
+    const rc = rcWith({ digests: [slackSub], slackWebhookUrl: "https://slack.example" });
+    await evaluateDigests(rc, st, detection, now);
+    expect(send).toHaveBeenCalledWith(rc, "slack", "head");
   });
   it("runs a fresh run-now preview token without sending or touching lastSentAt", async () => {
     vi.spyOn(runModelMod, "runModel").mockResolvedValue({ isError: false, text: "head", costUsd: 0, sessionId: "" } as any);
-    const sig = vi.spyOn(notify, "notifySignal").mockResolvedValue();
+    const send = vi.spyOn(notify, "sendToChannel").mockResolvedValue();
     const now = Date.parse("2026-06-30T11:00:30.000Z");
     let st = state();
     st = { ...st, digestState: { lastSentAt: { a: "2026-06-30T11:00:00.000Z" } } };
     const rc = rcWith({ digests: [dueSub], digestRunNow: { id: "a", mode: "preview", token: "tok-1" } });
     const s = await evaluateDigests(rc, st, detection, now);
-    expect(sig).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
     expect(s.digestState?.lastPreview?.text).toBe("head"); // the AI-composed digest, verbatim
     expect(s.digestState?.lastRunNowToken).toBe("tok-1");
     expect(s.digestState?.lastSentAt.a).toBe("2026-06-30T11:00:00.000Z"); // unchanged
   });
   it("ignores a stale run-now token", async () => {
-    const sig = vi.spyOn(notify, "notifySignal").mockResolvedValue();
+    const send = vi.spyOn(notify, "sendToChannel").mockResolvedValue();
     const now = Date.parse("2026-06-30T11:00:30.000Z");
     let st = state();
     st = { ...st, digestState: { lastSentAt: { a: new Date(now).toISOString() }, lastRunNowToken: "tok-1" } };
     const rc = rcWith({ digests: [dueSub], digestRunNow: { id: "a", mode: "send", token: "tok-1" } });
     const s = await evaluateDigests(rc, st, detection, now);
-    expect(sig).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
   });
 });

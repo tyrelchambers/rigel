@@ -4,8 +4,8 @@
 // Signal/Matrix keep their own modules (signal.ts/matrix.ts) for
 // bridge/manifest concerns; this module only reuses their config predicates.
 
-import { hasSavedNumber } from "./signal";
-import { deriveMatrixConnected } from "./matrix";
+import { hasSavedNumber } from "./signal.js";
+import { deriveMatrixConnected } from "./matrix.js";
 
 export type ChannelId = "signal" | "matrix" | "discord" | "slack" | "webhook";
 

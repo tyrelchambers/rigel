@@ -88,6 +88,55 @@ describe("readRuntimeConfig — signal config", () => {
   });
 });
 
+describe("readRuntimeConfig — discord/slack webhooks", () => {
+  test("parses discordWebhookUrl/slackWebhookUrl when present", async () => {
+    mockConfigMap({ enabled: "true", discordWebhookUrl: "https://discord.example/hook", slackWebhookUrl: "https://slack.example/hook" });
+    const rc = await readRuntimeConfig(CFG);
+    expect(rc.discordWebhookUrl).toBe("https://discord.example/hook");
+    expect(rc.slackWebhookUrl).toBe("https://slack.example/hook");
+  });
+
+  test("undefined when absent", async () => {
+    mockConfigMap({ enabled: "true" });
+    const rc = await readRuntimeConfig(CFG);
+    expect(rc.discordWebhookUrl).toBeUndefined();
+    expect(rc.slackWebhookUrl).toBeUndefined();
+  });
+
+  test("blank/whitespace-only values are treated as absent", async () => {
+    mockConfigMap({ enabled: "true", discordWebhookUrl: "   ", slackWebhookUrl: "" });
+    const rc = await readRuntimeConfig(CFG);
+    expect(rc.discordWebhookUrl).toBeUndefined();
+    expect(rc.slackWebhookUrl).toBeUndefined();
+  });
+});
+
+describe("readRuntimeConfig — notifyAllowlist", () => {
+  test("absent notifyChannels key parses to null (legacy: broadcast all)", async () => {
+    mockConfigMap({ enabled: "true" });
+    const rc = await readRuntimeConfig(CFG);
+    expect(rc.notifyAllowlist).toBeNull();
+  });
+
+  test("present notifyChannels key parses to the cleaned allowlist", async () => {
+    mockConfigMap({ enabled: "true", notifyChannels: "webhook,signal" });
+    const rc = await readRuntimeConfig(CFG);
+    expect(rc.notifyAllowlist).toEqual(["signal", "webhook"]);
+  });
+
+  test("empty notifyChannels value parses to an empty allowlist (not null)", async () => {
+    mockConfigMap({ enabled: "true", notifyChannels: "" });
+    const rc = await readRuntimeConfig(CFG);
+    expect(rc.notifyAllowlist).toEqual([]);
+  });
+
+  test("fail-closed default (unreadable config map) is null (legacy broadcast)", async () => {
+    vi.mocked(kubectl).mockResolvedValueOnce({ stdout: "", stderr: "nf", code: 1 });
+    const rc = await readRuntimeConfig(CFG);
+    expect(rc.notifyAllowlist).toBeNull();
+  });
+});
+
 describe("readRuntimeConfig — role selections", () => {
   test("defaults to claude worker=sonnet supervisor=opus when no role keys are set", async () => {
     mockConfigMap({ enabled: "true" });

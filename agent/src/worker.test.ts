@@ -15,6 +15,7 @@ function rc(): RuntimeConfig {
     limits: { pollIntervalMs: 30000, maxPerResourcePerHour: 3, maxPerNight: 20, maxAttemptsPerIncident: 3, confirmPolls: 2, namespaces: [] },
     autofix: { enabled: false, scope: { projects: [] }, maxPerDay: 5 },
     digests: [],
+    notifyAllowlist: null,
   } as RuntimeConfig;
 }
 const INC: Incident = { incidentKind: "unhealthyPod", name: "nginx", namespace: "default", reason: "CrashLoopBackOff" } as Incident;

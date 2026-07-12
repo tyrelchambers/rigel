@@ -207,21 +207,9 @@ export async function composeDigestMessage(rc: RuntimeConfig, data: DigestData):
   return (await generateDigestBody(rc, data)) ?? renderDigestText(data);
 }
 
-// ---- Task 11: evaluateDigests orchestrator + sendToChannel ----
-import { notifyWebhook, notifySignal, notifyMatrix } from "./notify.js";
+// ---- Task 11: evaluateDigests orchestrator ----
+import { sendToChannel } from "./notify.js";
 import type { DigestState } from "./state.js";
-
-/** Dispatch a rendered digest to the subscription's channel (best-effort). */
-async function sendToChannel(rc: RuntimeConfig, channel: DigestSubscription["channel"], text: string): Promise<void> {
-  if (channel === "webhook" && rc.webhookUrl) {
-    await notifyWebhook(rc.webhookUrl, text);
-  } else if (channel === "signal" && rc.signalApiUrl && rc.signalNumber) {
-    await notifySignal(rc.signalApiUrl, rc.signalNumber, rc.signalRecipients, text);
-  } else if (channel === "matrix" && rc.matrix.homeserverUrl && rc.matrix.accessToken && rc.matrix.roomId) {
-    await notifyMatrix(rc.matrix.homeserverUrl, rc.matrix.accessToken, rc.matrix.roomId, text);
-  }
-  // channel not configured → silently skip (best-effort, like flushNotifications)
-}
 
 /**
  * Evaluate every digest subscription this tick: handle a run-now trigger, arm new
