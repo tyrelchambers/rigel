@@ -1,4 +1,5 @@
-import { describe, expect, it, test } from "vitest";
+import { describe, expect, it, test, vi, beforeEach } from "vitest";
+import { kubectl, type KubectlResult } from "./kubectl.js";
 import {
   appendAudit,
   autoSilence,
@@ -6,6 +7,7 @@ import {
   countFixPrBudget,
   dispositionFromAudit,
   emptyState,
+  readState,
   reconcileQueue,
   recordIncident,
   recordPullRequest,
@@ -17,6 +19,8 @@ import {
   type PullRequestRecord,
   type QueuedSuggestion,
 } from "./state.js";
+
+vi.mock("./kubectl.js", () => ({ kubectl: vi.fn(), kubectlApply: vi.fn() }));
 
 function entry(at: string, fingerprint: string): AuditEntry {
   return {
@@ -330,5 +334,37 @@ describe("reconcileQueue", () => {
     expect(r.kept).toEqual([recent]);
     expect(r.cleared).toHaveLength(1);
     expect(r.cleared[0]!.item).toBe(old);
+  });
+});
+
+describe("readState", () => {
+  const res = (over: Partial<KubectlResult>): KubectlResult => ({ stdout: "", stderr: "", code: 0, ...over });
+  const cm = (state: unknown): string => JSON.stringify({ data: { "state.json": JSON.stringify(state) } });
+  beforeEach(() => vi.mocked(kubectl).mockReset());
+
+  it("returns the parsed state on a clean read", async () => {
+    const saved: AssistantState = { ...emptyState(), report: "hi", digestState: { lastSentAt: { a: "t" }, lastRunNowToken: "tok" } };
+    vi.mocked(kubectl).mockResolvedValue(res({ stdout: cm(saved) }));
+    expect(await readState("assistant-state", "ns")).toEqual(saved);
+  });
+
+  it("returns emptyState when the ConfigMap does not exist yet (NotFound)", async () => {
+    vi.mocked(kubectl).mockResolvedValue(res({ code: 1, stderr: 'Error from server (NotFound): configmaps "assistant-state" not found' }));
+    expect(await readState("assistant-state", "ns")).toEqual(emptyState());
+  });
+
+  it("returns emptyState when the ConfigMap exists but has no state.json yet", async () => {
+    vi.mocked(kubectl).mockResolvedValue(res({ stdout: JSON.stringify({ data: {} }) }));
+    expect(await readState("assistant-state", "ns")).toEqual(emptyState());
+  });
+
+  it("THROWS (does not reset to empty) on a transient read failure", async () => {
+    vi.mocked(kubectl).mockResolvedValue(res({ code: 1, stderr: "Unable to connect to the server: dial tcp: i/o timeout" }));
+    await expect(readState("assistant-state", "ns")).rejects.toThrow(/failed \(code 1\)/);
+  });
+
+  it("THROWS (does not reset to empty) when state.json is corrupt", async () => {
+    vi.mocked(kubectl).mockResolvedValue(res({ stdout: JSON.stringify({ data: { "state.json": "{not valid json" } }) }));
+    await expect(readState("assistant-state", "ns")).rejects.toThrow(/parsing/);
   });
 });

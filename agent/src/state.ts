@@ -382,13 +382,25 @@ const STATE_KEY = "state.json";
 
 export async function readState(name: string, namespace: string): Promise<AssistantState> {
   const res = await kubectl(["get", "configmap", name, "-n", namespace, "-o", "json"]);
-  if (res.code !== 0) return emptyState(); // not yet created → start fresh
+  if (res.code !== 0) {
+    // The ConfigMap genuinely not existing yet is the ONLY case where a blank state
+    // is correct (first boot). Any other read failure is transient — throw so the
+    // caller skips this cycle instead of operating on emptyState() and then having
+    // the next writeState overwrite the real persisted state (audit, queue, incident
+    // streaks, digest dedup) with the blank.
+    if (/not\s*found/i.test(res.stderr)) return emptyState();
+    throw new Error(`readState: kubectl get configmap ${name} failed (code ${res.code}): ${res.stderr.trim()}`);
+  }
+  const cm = JSON.parse(res.stdout) as { data?: Record<string, string> };
+  const raw = cm.data?.[STATE_KEY];
+  if (raw === undefined) return emptyState(); // ConfigMap exists but no state yet → start fresh
   try {
-    const cm = JSON.parse(res.stdout) as { data?: Record<string, string> };
-    const raw = cm.data?.[STATE_KEY];
-    return raw ? (JSON.parse(raw) as AssistantState) : emptyState();
-  } catch {
-    return emptyState();
+    return JSON.parse(raw) as AssistantState;
+  } catch (e) {
+    // Corrupt state.json: do NOT reset to empty — that would destroy the real state
+    // on the next write and re-arm/re-fire. Fail loudly so the tick is skipped and
+    // the data is preserved for inspection.
+    throw new Error(`readState: parsing ${name}/${STATE_KEY} failed: ${String(e)}`);
   }
 }
 
