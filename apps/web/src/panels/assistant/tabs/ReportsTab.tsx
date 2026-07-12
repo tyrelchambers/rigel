@@ -145,9 +145,11 @@ export function ReportsTab() {
     const list: DigestChannel[] = [];
     if (settings.status === "linked") list.push("signal");
     if (settings.matrixStatus === "connected") list.push("matrix");
+    if (settings.connectedChannels.includes("discord")) list.push("discord");
+    if (settings.connectedChannels.includes("slack")) list.push("slack");
     if (d.webhookURL.trim() !== "") list.push("webhook");
     return list;
-  }, [settings.status, settings.matrixStatus, d.webhookURL]);
+  }, [settings.status, settings.matrixStatus, settings.connectedChannels, d.webhookURL]);
 
   // --- Editor Modal state ---
   const [open, setOpen] = useState(false);

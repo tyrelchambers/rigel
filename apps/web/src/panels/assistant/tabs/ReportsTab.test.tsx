@@ -3,6 +3,8 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { ReportsTab } from "./ReportsTab";
 import * as ctx from "../AssistantContext";
+import * as settingsHook from "@/panels/settings/useSettings";
+import type { SettingsDerived } from "@/panels/settings/useSettings";
 
 const sub = {
   id: "a",
@@ -62,5 +64,28 @@ describe("ReportsTab", () => {
     expect(run).toHaveBeenCalledWith(
       expect.objectContaining({ action: "sendDigestNow", digestId: "a", digestMode: "send" }),
     );
+  });
+
+  it("offers Discord and Slack as digest channels when they are connected", () => {
+    mockCtx();
+    vi.spyOn(settingsHook, "useSettings").mockReturnValue({
+      namespace: "default",
+      status: "notDeployed",
+      signalNumber: "",
+      recipients: "",
+      hasSavedNumber: false,
+      matrixStatus: "notConnected",
+      matrixHomeserverUrl: "",
+      matrixUserId: "",
+      matrixRoomId: "",
+      matrixAllowedSenders: "",
+      webhookUrls: { discord: "https://discord.com/api/webhooks/x", slack: "https://hooks.slack.com/services/y" },
+      connectedChannels: ["discord", "slack"],
+    } as unknown as SettingsDerived);
+    render(<ReportsTab />);
+    fireEvent.click(screen.getByRole("button", { name: /new digest/i }));
+    const options = screen.getAllByRole("option").map((o) => o.textContent);
+    expect(options).toContain("Discord");
+    expect(options).toContain("Slack");
   });
 });

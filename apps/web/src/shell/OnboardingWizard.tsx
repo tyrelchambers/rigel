@@ -62,7 +62,7 @@ export function OnboardingWizard({ onClose, onLeave }: { onClose: () => void; on
           <ToolCard
             icon={<Bell size={15} style={{ color: "var(--accent-primary)" }} />}
             title="Set up notifications"
-            desc="Get cluster alerts where you already are. Connect a channel (Signal today, more coming)."
+            desc="Get cluster alerts where you already are. Connect a channel: Signal, Discord, Slack, or Matrix."
             action={
               <button type="button" onClick={() => { onLeave(); navigate("/settings"); }} style={ghostBtn}>
                 Open Settings
