@@ -23,11 +23,11 @@ export interface ChannelTestRequest {
 
 const TEST_MESSAGE = (label: string) => `👋 Test from Rigel — your ${label} channel is connected.`;
 
-export function discordTestBody(): unknown {
+function discordTestBody(): unknown {
   return { content: TEST_MESSAGE("Discord") };
 }
 
-export function slackTestBody(): unknown {
+function slackTestBody(): unknown {
   return { text: TEST_MESSAGE("Slack") };
 }
 

@@ -428,12 +428,17 @@ async function setMatrix(
 }
 
 /**
- * Pure: the assistant-config updates for a setChannel request — connect/
- * disconnect the channel's own keys (channelData filtered through
- * channelConfigUpdates; an empty-string value disconnects) plus, when
- * channelNotify is provided, the notifyChannels allowlist patch. Signal/Matrix
- * keep their bespoke setSignal/setMatrix handlers; this only serves the
- * url-backed channels (Discord/Slack).
+ * Pure: the assistant-config updates for a setChannel request. Two independent
+ * purposes:
+ *  - CONFIG (channelData): connect/disconnect a channel's own keys (filtered
+ *    through channelConfigUpdates; an empty-string value disconnects). Only the
+ *    url-backed channels (chat:false — Discord/Slack/webhook) may write config
+ *    here; Signal/Matrix (chat:true) keep their bespoke setSignal/setMatrix
+ *    handlers, so a channelData write for them is rejected to prevent a
+ *    config-write backdoor around those flows.
+ *  - NOTIFY (channelNotify): toggle the channel's membership in the
+ *    notifyChannels broadcast allowlist. Valid for ANY channel (Signal/Matrix
+ *    receive broadcasts too), and never touches config.
  */
 export function setChannelUpdates(
   req: AssistantRequest,
@@ -441,6 +446,10 @@ export function setChannelUpdates(
 ): Record<string, string> {
   if (!req.channel || !(req.channel in CHANNELS)) {
     throw new Error("setChannel requires a valid channel");
+  }
+  const hasConfigData = Object.keys(req.channelData ?? {}).length > 0;
+  if (hasConfigData && CHANNELS[req.channel].chat) {
+    throw new Error("setChannel cannot write config for signal/matrix; use setSignal/setMatrix");
   }
   const config = channelConfigUpdates(req.channel, req.channelData ?? {});
   const notify = req.channelNotify === undefined ? {} : setNotifyAllowlist(existingData, req.channel, req.channelNotify);

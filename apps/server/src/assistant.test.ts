@@ -808,6 +808,22 @@ test("setChannelUpdates throws on a missing or invalid channel", () => {
   ).toThrow("setChannel requires a valid channel");
 });
 
+test("setChannelUpdates rejects a config write for signal/matrix (use setSignal/setMatrix)", () => {
+  expect(() =>
+    setChannelUpdates({ action: "setChannel", channel: "matrix", channelData: { matrixRoomId: "!r:hs" } }, {}),
+  ).toThrow("setChannel cannot write config for signal/matrix");
+  expect(() =>
+    setChannelUpdates({ action: "setChannel", channel: "signal", channelData: { signalNumber: "+1" } }, {}),
+  ).toThrow("setChannel cannot write config for signal/matrix");
+});
+
+test("setChannelUpdates allows the notify toggle for signal/matrix (no config data)", () => {
+  const existingData = { signalNumber: "+1", discordWebhookUrl: "https://discord/x" };
+  expect(
+    setChannelUpdates({ action: "setChannel", channel: "signal", channelNotify: true }, existingData),
+  ).toEqual({ notifyChannels: "signal,discord" });
+});
+
 test("setChannelUpdates omits notifyChannels when channelNotify is undefined", () => {
   expect(
     setChannelUpdates(

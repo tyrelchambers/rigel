@@ -46,6 +46,14 @@ test("handleChannelTest maps a fetch throw to a 502 error", async () => {
   expect(result).toEqual({ kind: "error", status: 502, message: "Send test failed: network down" });
 });
 
+test("handleChannelTest rejects an unexpected action", async () => {
+  const fetchMock = vi.fn();
+  vi.stubGlobal("fetch", fetchMock);
+  const result = await handleChannelTest({ action: "explode", channel: "discord", url: "https://x" } as never);
+  expect(result).toEqual({ kind: "error", status: 422, message: "unknown action: explode" });
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
 test("handleChannelTest rejects an unsupported channel", async () => {
   const fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
