@@ -15,6 +15,7 @@ function derived(over: Partial<SettingsDerived> = {}): SettingsDerived {
     signalNumber: "", recipients: "", hasSavedNumber: false,
     matrixStatus: "notConnected", matrixHomeserverUrl: "", matrixUserId: "",
     matrixRoomId: "", matrixAllowedSenders: "",
+    discordWebhookUrl: "", slackWebhookUrl: "", notifyChannels: [],
     ...over,
   } as SettingsDerived;
 }
@@ -43,7 +44,24 @@ describe("MatrixSection", () => {
   it("renders the connected card without a Two-way control (always-on inbound)", () => {
     render(<MatrixSection derived={derived({ matrixStatus: "connected", matrixHomeserverUrl: "https://hs", matrixUserId: "@rigel:hs", matrixRoomId: "!r:hs" })} />);
     expect(screen.queryByText(/two-way/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+  });
+
+  it("shows a Notifications toggle reflecting the effective notify set", () => {
+    render(<MatrixSection derived={derived({ matrixStatus: "connected", matrixHomeserverUrl: "https://hs", matrixUserId: "@rigel:hs", matrixRoomId: "!r:hs", notifyChannels: ["matrix"] })} />);
+    expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("toggling Notifications calls setChannel with channelNotify", async () => {
+    render(<MatrixSection derived={derived({ matrixStatus: "connected", matrixHomeserverUrl: "https://hs", matrixUserId: "@rigel:hs", matrixRoomId: "!r:hs", notifyChannels: ["matrix"] })} />);
+    fireEvent.click(screen.getByRole("switch"));
+    await waitFor(() =>
+      expect(mutateAsync).toHaveBeenCalledWith({
+        action: "setChannel",
+        namespace: "default",
+        channel: "matrix",
+        channelNotify: false,
+      }),
+    );
   });
 
   const connected = () => derived({ matrixStatus: "connected", matrixHomeserverUrl: "https://hs", matrixUserId: "@rigel:hs", matrixRoomId: "!r:hs" });

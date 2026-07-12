@@ -48,6 +48,8 @@ const FIELD =
 const CHANNEL_META: Record<DigestChannel, { label: string; Icon: LucideIcon }> = {
   signal: { label: "Signal", Icon: MessageCircle },
   matrix: { label: "Matrix", Icon: Hash },
+  discord: { label: "Discord", Icon: Webhook },
+  slack: { label: "Slack", Icon: Webhook },
   webhook: { label: "Webhook", Icon: Webhook },
 };
 

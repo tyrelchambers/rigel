@@ -19,6 +19,7 @@ import { useAssistantAction } from "@/lib/api";
 import { apiFetch, fetchSignalQR, fetchSignalAccounts, sendSignalTest } from "@/lib/api";
 import { useSettings } from "./useSettings";
 import { ChannelDisconnectDialog } from "./ChannelDisconnectDialog";
+import { NotifyToggle } from "./NotifyToggle";
 
 const DOT_CLASS: Record<string, string> = {
   gray: "bg-muted-foreground/50",
@@ -37,7 +38,7 @@ export function SignalSection({
   applying: boolean;
   setApplying: (v: boolean) => void;
 }) {
-  const { status, namespace, signalNumber, recipients } = derived;
+  const { status, namespace, signalNumber, recipients, notifyChannels } = derived;
   const setSignal = useAssistantAction();
 
   const [error, setError] = useState<string | null>(null);
@@ -245,6 +246,7 @@ export function SignalSection({
         )}
         {status === "linked" && (
           <div className="flex items-center gap-4">
+            <NotifyToggle channelId="signal" namespace={namespace} enabled={notifyChannels.includes("signal")} />
             <Button
               size="sm"
               variant="muted"

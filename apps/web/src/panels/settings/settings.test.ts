@@ -89,3 +89,27 @@ describe("shared matrix logic reachable via the web alias", () => {
     expect(parseAllowedSenders("@a:h, @b:h")).toEqual(["@a:h", "@b:h"]);
   });
 });
+
+import { notifyEnabledChannels, DISCORD_WEBHOOK_URL_KEY, SLACK_WEBHOOK_URL_KEY } from "@rigel/k8s";
+
+describe("shared channel logic reachable via the web alias (discord/slack + notify set)", () => {
+  it("reads the discord/slack webhook URL config keys", () => {
+    const config = { [DISCORD_WEBHOOK_URL_KEY]: "https://discord/x", [SLACK_WEBHOOK_URL_KEY]: "https://slack/y" };
+    expect(config[DISCORD_WEBHOOK_URL_KEY]).toBe("https://discord/x");
+    expect(config[SLACK_WEBHOOK_URL_KEY]).toBe("https://slack/y");
+  });
+
+  it("derives the effective notify set from configured channels, minus any opted out", () => {
+    const config = {
+      [DISCORD_WEBHOOK_URL_KEY]: "https://discord/x",
+      matrixHomeserverUrl: "https://hs", matrixUserId: "@r:hs", matrixRoomId: "!x:hs",
+      notifyChannels: "matrix",
+    };
+    expect(notifyEnabledChannels(config)).toEqual(["matrix"]);
+  });
+
+  it("broadcasts to every configured channel when notifyChannels is absent (legacy install)", () => {
+    const config = { [DISCORD_WEBHOOK_URL_KEY]: "https://discord/x", [SLACK_WEBHOOK_URL_KEY]: "https://slack/y" };
+    expect(notifyEnabledChannels(config)).toEqual(["discord", "slack"]);
+  });
+});

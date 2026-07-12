@@ -25,6 +25,9 @@ function derived(over: Partial<SettingsDerived> = {}): SettingsDerived {
     matrixUserId: "",
     matrixRoomId: "",
     matrixAllowedSenders: "",
+    discordWebhookUrl: "",
+    slackWebhookUrl: "",
+    notifyChannels: ["signal"],
     ...over,
   } as SettingsDerived;
 }
@@ -37,6 +40,26 @@ describe("SignalSection — no two-way toggle", () => {
   it("renders linked state without a Two-way control (always-on inbound)", () => {
     render(<SignalSection derived={derived()} applying={false} setApplying={noop} />);
     expect(screen.queryByText(/two-way/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("SignalSection — notify toggle", () => {
+  it("shows a Notifications toggle reflecting the effective notify set", () => {
+    render(<SignalSection derived={derived({ notifyChannels: ["signal"] })} applying={false} setApplying={noop} />);
+    expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("toggling Notifications calls setChannel with channelNotify", async () => {
+    render(<SignalSection derived={derived({ notifyChannels: [] })} applying={false} setApplying={noop} />);
+    fireEvent.click(screen.getByRole("switch"));
+    await waitFor(() =>
+      expect(mutateAsync).toHaveBeenCalledWith({
+        action: "setChannel",
+        namespace: "default",
+        channel: "signal",
+        channelNotify: true,
+      }),
+    );
   });
 });
 

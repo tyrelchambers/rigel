@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useSettings } from "../useSettings";
 import { SignalSection } from "../SignalSection";
 import { MatrixSection } from "../MatrixSection";
+import { WebhookChannelSection } from "../WebhookChannelSection";
 
 export function ChannelsTab() {
   const [applying, setApplying] = useState(false);
@@ -14,6 +15,8 @@ export function ChannelsTab() {
       </div>
       <SignalSection derived={derived} applying={applying} setApplying={setApplying} />
       <MatrixSection derived={derived} />
+      <WebhookChannelSection channelId="discord" label="Discord" derived={derived} />
+      <WebhookChannelSection channelId="slack" label="Slack" derived={derived} />
     </div>
   );
 }

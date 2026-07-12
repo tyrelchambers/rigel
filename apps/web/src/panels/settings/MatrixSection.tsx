@@ -10,6 +10,7 @@ import type { SettingsDerived } from "./useSettings";
 import { MatrixConnectModal } from "./MatrixConnectModal";
 import { IconTile } from "./MatrixWizardParts";
 import { ChannelDisconnectDialog } from "./ChannelDisconnectDialog";
+import { NotifyToggle } from "./NotifyToggle";
 
 const DOT: Record<string, string> = {
   gray: "var(--fg-tertiary)",
@@ -63,6 +64,7 @@ export function MatrixSection({ derived }: { derived: SettingsDerived }) {
     matrixHomeserverUrl,
     matrixUserId,
     matrixAllowedSenders,
+    notifyChannels,
   } = derived;
   const setMatrix = useAssistantAction();
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -121,6 +123,7 @@ export function MatrixSection({ derived }: { derived: SettingsDerived }) {
             </div>
           </div>
           <div className="flex items-center gap-4">
+            <NotifyToggle channelId="matrix" namespace={namespace} enabled={notifyChannels.includes("matrix")} />
             <button
               type="button"
               onClick={() => {

@@ -15,8 +15,12 @@ import {
   matrixUserId as deriveMatrixUserId,
   matrixRoomId as deriveMatrixRoomId,
   matrixAllowedSenders as deriveMatrixAllowed,
+  notifyEnabledChannels,
+  DISCORD_WEBHOOK_URL_KEY,
+  SLACK_WEBHOOK_URL_KEY,
   type SignalBridgeStatus,
   type MatrixStatus,
+  type ChannelId,
 } from "@rigel/k8s";
 
 interface Meta {
@@ -96,6 +100,11 @@ export interface SettingsDerived {
   matrixUserId: string;
   matrixRoomId: string;
   matrixAllowedSenders: string;
+  /** Discord/Slack webhook URLs (empty when not connected). */
+  discordWebhookUrl: string;
+  slackWebhookUrl: string;
+  /** The effective notify-broadcast set (connected channels minus any opted out). */
+  notifyChannels: ChannelId[];
 }
 
 /**
@@ -149,6 +158,9 @@ export function useSettings(applying: boolean): SettingsDerived {
       matrixUserId: deriveMatrixUserId(config),
       matrixRoomId: deriveMatrixRoomId(config),
       matrixAllowedSenders: deriveMatrixAllowed(config),
+      discordWebhookUrl: config[DISCORD_WEBHOOK_URL_KEY] ?? "",
+      slackWebhookUrl: config[SLACK_WEBHOOK_URL_KEY] ?? "",
+      notifyChannels: notifyEnabledChannels(config),
     };
   }, [deployments, configMaps, applying]);
 }

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ActiveForward } from "@/panels/services/portForward";
-import type { SuggestedAlert, DigestInput, ApplySource, RecentBatch } from "@rigel/k8s";
+import type { SuggestedAlert, DigestInput, ApplySource, RecentBatch, ChannelId } from "@rigel/k8s";
 import type { CheckResult, CloudProvider, CloudCluster } from "@rigel/cloud-connect/src/index";
 import type { Subject } from "@/panels/rbac/types";
 import type { CanICheck, CanIResult } from "@/panels/rbac/canI";
@@ -376,6 +376,7 @@ export type AssistantAction =
   | "clearActivity"
   | "setSignal"
   | "setMatrix"
+  | "setChannel"
   | "saveAlert"
   | "deleteAlert"
   | "toggleAlert"
@@ -483,6 +484,14 @@ export interface AssistantRequest {
   matrixAccessToken?: string;
   matrixRoomId?: string;
   matrixAllowedSenders?: string;
+  // setChannel — generic connect/disconnect + notify-toggle writer for the
+  // url-backed channels (Discord/Slack). channelData is filtered server-side to
+  // the target channel's configKeys (packages/k8s/src/channels.ts); channelNotify
+  // toggles that channel's membership in the notifyChannels allowlist. Also used
+  // (channelNotify only, no channelData) to toggle the Signal/Matrix notify flag.
+  channel?: ChannelId;
+  channelData?: Record<string, string>;
+  channelNotify?: boolean;
   // saveAlert payload (model block, validated server-side)
   alert?: SuggestedAlert;
   // toggleAlert / deleteAlert fields
@@ -937,6 +946,29 @@ export async function matrixSendTest(args: {
   });
   if (!res.ok) await throwApiError(res);
   return (await res.json()) as { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Channel test-send — POST /api/channels (Discord/Slack webhook proxy)
+// ---------------------------------------------------------------------------
+
+/** Send a test message through a url-backed channel's webhook (Discord/Slack).
+ *  Filter-driven — `channel` selects the payload shape server-side; no per-channel
+ *  function. */
+export async function sendChannelTest(args: { channel: ChannelId; url: string }): Promise<void> {
+  const res = await apiFetch("/api/channels", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "sendTest", ...args }),
+  });
+  if (!res.ok) await throwApiError(res);
+}
+
+/** Mutation hook for the channel "Send test" button. */
+export function useChannelTest() {
+  return useMutation<void, Error, { channel: ChannelId; url: string }>({
+    mutationFn: sendChannelTest,
+  });
 }
 
 // ---------------------------------------------------------------------------
