@@ -19,7 +19,7 @@ function derived(over: Partial<SettingsDerived> = {}): SettingsDerived {
     signalNumber: "", recipients: "", hasSavedNumber: false,
     matrixStatus: "notConnected", matrixHomeserverUrl: "", matrixUserId: "",
     matrixRoomId: "", matrixAllowedSenders: "",
-    discordWebhookUrl: "", slackWebhookUrl: "",
+    webhookUrls: {}, connectedChannels: [],
     notifyChannels: [],
     ...over,
   } as SettingsDerived;
@@ -80,7 +80,12 @@ describe("WebhookChannelSection — not connected", () => {
 });
 
 describe("WebhookChannelSection — connected", () => {
-  const connected = () => derived({ discordWebhookUrl: "https://discord.com/api/webhooks/saved", notifyChannels: ["discord"] });
+  const connected = () =>
+    derived({
+      webhookUrls: { discord: "https://discord.com/api/webhooks/saved" },
+      connectedChannels: ["discord"],
+      notifyChannels: ["discord"],
+    });
 
   it("shows Connected status, the saved URL, and Disconnect", () => {
     render(<WebhookChannelSection channelId="discord" label="Discord" derived={connected()} />);

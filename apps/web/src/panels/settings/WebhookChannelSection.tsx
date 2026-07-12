@@ -30,9 +30,9 @@ function SlackMark() {
   );
 }
 
-const BRAND: Record<WebhookChannelId, { color: string; icon: React.ReactNode }> = {
-  discord: { color: "#5865F2", icon: <DiscordMark /> },
-  slack: { color: "#36C5F0", icon: <SlackMark /> },
+const BRAND: Record<WebhookChannelId, { color: string; icon: React.ReactNode; placeholder: string }> = {
+  discord: { color: "#5865F2", icon: <DiscordMark />, placeholder: "https://…/webhooks/…" },
+  slack: { color: "#36C5F0", icon: <SlackMark />, placeholder: "https://…/services/…" },
 };
 
 export function WebhookChannelSection({
@@ -45,8 +45,8 @@ export function WebhookChannelSection({
   derived: SettingsDerived;
 }) {
   const { namespace, notifyChannels } = derived;
-  const savedUrl = channelId === "discord" ? derived.discordWebhookUrl : derived.slackWebhookUrl;
-  const connected = savedUrl.trim() !== "";
+  const savedUrl = derived.webhookUrls[channelId] ?? "";
+  const connected = derived.connectedChannels.includes(channelId);
   const brand = BRAND[channelId];
   const configKey = CHANNELS[channelId].configKeys[0];
 
@@ -162,14 +162,14 @@ export function WebhookChannelSection({
 
       <div className="h-px w-full bg-[var(--border-subtle)]" />
 
-      <div className="flex flex-col gap-1.5">
+      <label className="flex flex-col gap-1.5">
         <span className="font-mono text-3xs uppercase tracking-wide text-[var(--fg-tertiary)]">
           Webhook URL
         </span>
         <div className="flex flex-wrap items-center gap-2">
           <input
             className="min-w-0 flex-1 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3 py-2 text-sm text-foreground outline-none placeholder:text-[var(--fg-tertiary)] focus:border-primary"
-            placeholder={`https://…/${channelId === "discord" ? "webhooks" : "services"}/…`}
+            placeholder={brand.placeholder}
             value={urlText}
             onChange={(e) => setUrlText(e.target.value)}
           />
@@ -193,7 +193,7 @@ export function WebhookChannelSection({
             <span className="select-text">{error}</span>
           </div>
         )}
-      </div>
+      </label>
 
       <ChannelDisconnectDialog
         open={disconnectOpen}

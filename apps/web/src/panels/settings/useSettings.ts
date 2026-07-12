@@ -16,12 +16,17 @@ import {
   matrixRoomId as deriveMatrixRoomId,
   matrixAllowedSenders as deriveMatrixAllowed,
   notifyEnabledChannels,
-  DISCORD_WEBHOOK_URL_KEY,
-  SLACK_WEBHOOK_URL_KEY,
+  connectedChannels as deriveConnectedChannels,
+  CHANNELS,
   type SignalBridgeStatus,
   type MatrixStatus,
   type ChannelId,
 } from "@rigel/k8s";
+
+/** Url-backed channels (single config key, outbound-only) → their config key. */
+const WEBHOOK_CHANNEL_KEYS = Object.values(CHANNELS)
+  .filter((c) => !c.chat && c.configKeys.length === 1)
+  .map((c) => [c.id, c.configKeys[0]] as const);
 
 interface Meta {
   name: string;
@@ -100,9 +105,10 @@ export interface SettingsDerived {
   matrixUserId: string;
   matrixRoomId: string;
   matrixAllowedSenders: string;
-  /** Discord/Slack webhook URLs (empty when not connected). */
-  discordWebhookUrl: string;
-  slackWebhookUrl: string;
+  /** Saved webhook URL per url-backed channel (Discord/Slack/…), absent when unset. */
+  webhookUrls: Partial<Record<ChannelId, string>>;
+  /** Every configured channel (descriptor `isConfigured`), in stable order. */
+  connectedChannels: ChannelId[];
   /** The effective notify-broadcast set (connected channels minus any opted out). */
   notifyChannels: ChannelId[];
 }
@@ -158,8 +164,10 @@ export function useSettings(applying: boolean): SettingsDerived {
       matrixUserId: deriveMatrixUserId(config),
       matrixRoomId: deriveMatrixRoomId(config),
       matrixAllowedSenders: deriveMatrixAllowed(config),
-      discordWebhookUrl: config[DISCORD_WEBHOOK_URL_KEY] ?? "",
-      slackWebhookUrl: config[SLACK_WEBHOOK_URL_KEY] ?? "",
+      webhookUrls: Object.fromEntries(
+        WEBHOOK_CHANNEL_KEYS.map(([id, key]) => [id, config[key] ?? ""]),
+      ) as Partial<Record<ChannelId, string>>,
+      connectedChannels: deriveConnectedChannels(config),
       notifyChannels: notifyEnabledChannels(config),
     };
   }, [deployments, configMaps, applying]);

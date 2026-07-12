@@ -5,7 +5,14 @@ import {
   saveSelfHostDefaults,
   EMPTY_SELF_HOST_DEFAULTS,
 } from "./useSettings";
-import { signalBridgeManifest, deriveSignalBridgeStatus, parseRecipients } from "@rigel/k8s";
+import {
+  signalBridgeManifest,
+  deriveSignalBridgeStatus,
+  parseRecipients,
+  notifyEnabledChannels,
+  DISCORD_WEBHOOK_URL_KEY,
+  SLACK_WEBHOOK_URL_KEY,
+} from "@rigel/k8s";
 
 // Minimal in-memory localStorage stub (vitest runs in node by default).
 beforeEach(() => {
@@ -90,15 +97,7 @@ describe("shared matrix logic reachable via the web alias", () => {
   });
 });
 
-import { notifyEnabledChannels, DISCORD_WEBHOOK_URL_KEY, SLACK_WEBHOOK_URL_KEY } from "@rigel/k8s";
-
 describe("shared channel logic reachable via the web alias (discord/slack + notify set)", () => {
-  it("reads the discord/slack webhook URL config keys", () => {
-    const config = { [DISCORD_WEBHOOK_URL_KEY]: "https://discord/x", [SLACK_WEBHOOK_URL_KEY]: "https://slack/y" };
-    expect(config[DISCORD_WEBHOOK_URL_KEY]).toBe("https://discord/x");
-    expect(config[SLACK_WEBHOOK_URL_KEY]).toBe("https://slack/y");
-  });
-
   it("derives the effective notify set from configured channels, minus any opted out", () => {
     const config = {
       [DISCORD_WEBHOOK_URL_KEY]: "https://discord/x",

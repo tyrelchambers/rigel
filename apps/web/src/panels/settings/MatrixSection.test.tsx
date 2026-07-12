@@ -15,7 +15,7 @@ function derived(over: Partial<SettingsDerived> = {}): SettingsDerived {
     signalNumber: "", recipients: "", hasSavedNumber: false,
     matrixStatus: "notConnected", matrixHomeserverUrl: "", matrixUserId: "",
     matrixRoomId: "", matrixAllowedSenders: "",
-    discordWebhookUrl: "", slackWebhookUrl: "", notifyChannels: [],
+    webhookUrls: {}, connectedChannels: [], notifyChannels: [],
     ...over,
   } as SettingsDerived;
 }
