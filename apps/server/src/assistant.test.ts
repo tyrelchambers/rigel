@@ -767,6 +767,57 @@ test("setMatrixSecret returns the token Secret YAML only when a token is supplie
 });
 
 // ---------------------------------------------------------------------------
+// setChannelUpdates (generic Discord/Slack connect/disconnect + notify toggle)
+// ---------------------------------------------------------------------------
+
+import { setChannelUpdates } from "./assistant";
+
+test("setChannelUpdates connect writes only the target channel's keys, dropping foreign keys", () => {
+  expect(
+    setChannelUpdates(
+      {
+        action: "setChannel",
+        channel: "discord",
+        channelData: { discordWebhookUrl: "https://discord/x", slackWebhookUrl: "https://slack/y", foo: "bar" },
+      },
+      {},
+    ),
+  ).toEqual({ discordWebhookUrl: "https://discord/x" });
+});
+
+test("setChannelUpdates disconnect writes the empty value", () => {
+  expect(
+    setChannelUpdates({ action: "setChannel", channel: "discord", channelData: { discordWebhookUrl: "" } }, {}),
+  ).toEqual({ discordWebhookUrl: "" });
+});
+
+test("setChannelUpdates channelNotify toggles the allowlist, materializing on first write", () => {
+  const existingData = { discordWebhookUrl: "https://discord/x", slackWebhookUrl: "https://slack/y" };
+  expect(
+    setChannelUpdates({ action: "setChannel", channel: "slack", channelNotify: false }, existingData),
+  ).toEqual({ notifyChannels: "discord" });
+  expect(
+    setChannelUpdates({ action: "setChannel", channel: "discord", channelNotify: true }, existingData),
+  ).toEqual({ notifyChannels: "discord,slack" });
+});
+
+test("setChannelUpdates throws on a missing or invalid channel", () => {
+  expect(() => setChannelUpdates({ action: "setChannel" }, {})).toThrow("setChannel requires a valid channel");
+  expect(() =>
+    setChannelUpdates({ action: "setChannel", channel: "carrier-pigeon" as never }, {}),
+  ).toThrow("setChannel requires a valid channel");
+});
+
+test("setChannelUpdates omits notifyChannels when channelNotify is undefined", () => {
+  expect(
+    setChannelUpdates(
+      { action: "setChannel", channel: "discord", channelData: { discordWebhookUrl: "https://discord/x" } },
+      {},
+    ),
+  ).toEqual({ discordWebhookUrl: "https://discord/x" });
+});
+
+// ---------------------------------------------------------------------------
 // mutateDigests / digestRunNowUpdate (scheduled digests, Phase 7 / Task 13)
 // ---------------------------------------------------------------------------
 

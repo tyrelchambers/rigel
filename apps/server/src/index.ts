@@ -62,6 +62,7 @@ import { stripStatusBlock } from "@rigel/k8s/src/manifestClean";
 import { handleAssistant, type AssistantRequest } from "./assistant";
 import { handleSignal, type SignalRequest } from "./signal";
 import { handleMatrix, type MatrixRequest } from "./matrix";
+import { handleChannelTest, type ChannelTestRequest } from "./channels";
 import { PortForwardManager, type TargetKind } from "./portForward";
 import { makeFatalHandler } from "./fatalHandler";
 
@@ -1140,6 +1141,26 @@ async function handler(req: Request): Promise<Response> {
         return Response.json({ error: "missing action" }, { status: 422 });
       }
       const result = await handleMatrix(body);
+      if (result.kind === "error") {
+        return Response.json({ error: result.message }, { status: result.status });
+      }
+      return Response.json(result.body);
+    }
+
+    // POST /api/channels — Discord/Slack test-send proxy. Outbound HTTP to the
+    // pasted webhook URL only (no kubectl). Dispatches on `action`:
+    //   sendTest → posts the channel's test payload, returns { ok: true }.
+    if (url.pathname === "/api/channels" && req.method === "POST") {
+      let body: ChannelTestRequest;
+      try {
+        body = (await req.json()) as ChannelTestRequest;
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      if (typeof body.action !== "string") {
+        return Response.json({ error: "missing action" }, { status: 422 });
+      }
+      const result = await handleChannelTest(body);
       if (result.kind === "error") {
         return Response.json({ error: result.message }, { status: result.status });
       }

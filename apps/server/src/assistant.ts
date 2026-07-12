@@ -43,6 +43,7 @@ import {
 } from "@rigel/k8s/src/assistant";
 import { signalConfigUpdates } from "@rigel/k8s/src/signal";
 import { matrixConfigUpdates, matrixSecretYAML } from "@rigel/k8s/src/matrix";
+import { CHANNELS, channelConfigUpdates, setNotifyAllowlist, type ChannelId } from "@rigel/k8s/src/channels";
 import {
   normalizeAlertRule,
   parseAlertRules,
@@ -133,6 +134,7 @@ export type AssistantAction =
   | "clearActivity"
   | "setSignal"
   | "setMatrix"
+  | "setChannel"
   | "saveAlert" | "deleteAlert" | "toggleAlert"
   | "saveDigest" | "deleteDigest" | "toggleDigest" | "sendDigestNow"
   | "credentialStatus"
@@ -183,6 +185,13 @@ export interface AssistantRequest {
   matrixAccessToken?: string;
   matrixRoomId?: string;
   matrixAllowedSenders?: string;
+  // setChannel — generic connect/disconnect + notify-toggle writer for the
+  // url-backed channels (Discord/Slack). channelData is filtered down to the
+  // target channel's configKeys (packages/k8s/src/channels.ts); channelNotify
+  // toggles that channel's membership in the notifyChannels allowlist.
+  channel?: ChannelId;
+  channelData?: Record<string, string>;
+  channelNotify?: boolean;
   // alert rules (saveAlert/deleteAlert/toggleAlert)
   alert?: SuggestedAlert;   // saveAlert payload (model block, validated server-side)
   alertId?: string;          // delete/toggle, or saveAlert edit-in-place (replace by id)
@@ -415,6 +424,40 @@ async function setMatrix(
   }
   if (tokenYaml) return restartAgent(context, namespace);
   return last;
+}
+
+/**
+ * Pure: the assistant-config updates for a setChannel request — connect/
+ * disconnect the channel's own keys (channelData filtered through
+ * channelConfigUpdates; an empty-string value disconnects) plus, when
+ * channelNotify is provided, the notifyChannels allowlist patch. Signal/Matrix
+ * keep their bespoke setSignal/setMatrix handlers; this only serves the
+ * url-backed channels (Discord/Slack).
+ */
+export function setChannelUpdates(
+  req: AssistantRequest,
+  existingData: Record<string, string>,
+): Record<string, string> {
+  if (!req.channel || !(req.channel in CHANNELS)) {
+    throw new Error("setChannel requires a valid channel");
+  }
+  const config = channelConfigUpdates(req.channel, req.channelData ?? {});
+  const notify = req.channelNotify === undefined ? {} : setNotifyAllowlist(existingData, req.channel, req.channelNotify);
+  return { ...config, ...notify };
+}
+
+/** Read-modify-write `assistant-config` with a channel's connect/disconnect
+ *  config and/or notify-toggle. No restart — these keys are read live each
+ *  tick (like webhookUrl/signal). */
+async function setChannel(
+  context: string | null,
+  namespace: string,
+  req: AssistantRequest,
+): Promise<RunResult> {
+  const existing = await readConfigMapData(context, namespace, "assistant-config");
+  const updates = setChannelUpdates(req, existing);
+  if (Object.keys(updates).length === 0) return { code: 0, stdout: "", stderr: "" };
+  return patchConfig(context, namespace, updates);
 }
 
 /** Read-modify-write the `alertRules` key of `assistant-config`. */
@@ -1066,6 +1109,8 @@ export async function handleAssistant(
       return setSignal(context, namespace, req);
     case "setMatrix":
       return setMatrix(context, namespace, req);
+    case "setChannel":
+      return setChannel(context, namespace, req);
     case "saveAlert":
     case "deleteAlert":
     case "toggleAlert":
