@@ -1,8 +1,8 @@
-// AlertsTab — alert rules, autonomy mode, quiet window, and notify webhook.
-// Built to Pencil frame "Assistant — Rules (improved)".
+// AlertsTab — alert rules, autonomy mode, and quiet window. Notification
+// channels (Signal, Matrix, Discord, Slack) live in Settings > Channels.
 
 import { useEffect, useState } from "react";
-import { BellOff, Check, Hand, Info, Link as LinkIcon, Moon, Zap } from "lucide-react";
+import { BellOff, Check, Hand, Info, Moon, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAssistantCtx } from "../AssistantContext";
@@ -20,13 +20,11 @@ export function AlertsTab() {
   const { d, ns, working, run, setTab } = useAssistantCtx();
 
   const [windowText, setWindowText] = useState(d.quietWindow || "22:00-07:00");
-  const [webhookText, setWebhookText] = useState(d.webhookURL);
 
   // Seed from live config when it changes.
   useEffect(() => {
     setWindowText(d.quietWindow || "22:00-07:00");
-    setWebhookText(d.webhookURL);
-  }, [d.quietWindow, d.webhookURL]);
+  }, [d.quietWindow]);
 
   return (
     <div className="space-y-5">
@@ -34,7 +32,7 @@ export function AlertsTab() {
 
       <div className="flex flex-col gap-[18px] rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-[22px]">
         <div className="flex flex-col gap-0.5">
-          <p className="text-base font-semibold text-[var(--fg-primary)]">Autonomy &amp; notifications</p>
+          <p className="text-base font-semibold text-[var(--fg-primary)]">Autonomy</p>
           <p className="text-xs text-[var(--fg-tertiary)]">How the agent acts on safe fixes.</p>
         </div>
 
@@ -78,41 +76,9 @@ export function AlertsTab() {
 
         <div className="h-px w-full bg-[var(--border-subtle)]" />
 
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex w-[170px] shrink-0 flex-col gap-0.5">
-            <span className="text-sm font-medium text-[var(--fg-primary)]">Notify webhook</span>
-            <span className="text-xs text-[var(--fg-tertiary)]">Slack, Discord or ntfy</span>
-          </div>
-          <div className="flex min-w-[200px] flex-1 items-center gap-2.5 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3.5 py-2.5 focus-within:border-[var(--accent-primary)]">
-            <LinkIcon className="size-[15px] shrink-0 text-[var(--fg-tertiary)]" />
-            <input
-              value={webhookText}
-              onChange={(e) => setWebhookText(e.target.value)}
-              placeholder="Paste webhook URL (optional)"
-              className="min-w-0 flex-1 bg-transparent font-mono text-xs text-[var(--fg-primary)] outline-none placeholder:text-[var(--fg-tertiary)]"
-            />
-          </div>
-          <button
-            type="button"
-            disabled={working}
-            onClick={() =>
-              run({
-                action: "setMode",
-                namespace: ns,
-                mode: d.autonomyMode,
-                window: windowText,
-                webhook: webhookText,
-              })
-            }
-            className="shrink-0 rounded-md bg-[var(--accent-primary)] px-5 py-2.5 text-sm font-semibold text-[var(--fg-inverse)] transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-60"
-          >
-            Save
-          </button>
-        </div>
-
         <div className="flex items-center gap-1.5 text-xs text-[var(--fg-tertiary)]">
           <Info className="size-3.5 shrink-0" />
-          <span>Signal (SMS) notifications are set up in the</span>
+          <span>Notification channels are set up in the</span>
           <button
             type="button"
             onClick={() => setTab("settings")}

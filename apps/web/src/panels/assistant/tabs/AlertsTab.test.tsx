@@ -64,7 +64,7 @@ describe("AlertsTab", () => {
     wrap();
     expect(screen.getByText("Alerts")).toBeInTheDocument();
     expect(screen.getByText("No alerts yet")).toBeInTheDocument();
-    expect(screen.getByText("Autonomy & notifications")).toBeInTheDocument();
+    expect(screen.getByText("Autonomy")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Pod restarts/i })).toBeInTheDocument();
   });
 
@@ -82,23 +82,6 @@ describe("AlertsTab", () => {
     );
   });
 
-  it("saving the webhook persists the URL via setMode alongside the current mode", async () => {
-    wrap(derived({ autonomyMode: "advisory" }));
-    await userEvent.type(
-      screen.getByPlaceholderText(/Paste webhook URL/i),
-      "https://hooks.example/x",
-    );
-    await userEvent.click(screen.getByRole("button", { name: /^Save$/ }));
-    expect(run).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "setMode",
-        namespace: "default",
-        mode: "advisory",
-        webhook: "https://hooks.example/x",
-      }),
-    );
-  });
-
   it("shows the quiet-window editor only in Quiet-hours mode", () => {
     const { rerender } = wrap(derived({ autonomyMode: "auto" }));
     expect(screen.queryByText("Quiet window")).not.toBeInTheDocument();
@@ -113,7 +96,7 @@ describe("AlertsTab", () => {
     expect(screen.getByText("Quiet window")).toBeInTheDocument();
   });
 
-  it("links to the Settings tab for Signal setup", async () => {
+  it("links to the Settings tab for notification setup", async () => {
     wrap();
     await userEvent.click(screen.getByRole("button", { name: /Settings tab/i }));
     expect(setTab).toHaveBeenCalledWith("settings");
