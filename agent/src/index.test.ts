@@ -19,46 +19,18 @@ vi.mock("./kubectl.js", () => {
 });
 vi.mock("./worker.js", () => ({ runWorker: vi.fn() }));
 vi.mock("./supervisor.js", () => ({ runSupervisor: vi.fn() }));
-// The digest path sends to a channel + composes an AI headline; mock both so a
-// scheduled digest can be driven without a real network/provider call. Existing
-// tests configure no channels, so flushNotifications already no-ops past these.
-// sendToChannel/notifyTargets are stubbed with the real dispatch/filter logic
-// (mirroring notify.ts) so assertions against the leaf fns (notifySignal, etc.)
-// still hold now that broadcast/digest route through the shared dispatcher.
-vi.mock("./notify.js", () => {
-  const notifyWebhook = vi.fn();
-  const notifySignal = vi.fn();
-  const notifyMatrix = vi.fn();
-  const notifyDiscord = vi.fn();
-  const sendToChannel = vi.fn(async (rc: any, channel: string, text: string) => {
-    if (channel === "webhook" && rc.webhookUrl) return notifyWebhook(rc.webhookUrl, text);
-    if (channel === "signal" && rc.signalApiUrl && rc.signalNumber) {
-      return notifySignal(rc.signalApiUrl, rc.signalNumber, rc.signalRecipients, text);
-    }
-    if (channel === "matrix" && rc.matrix?.homeserverUrl && rc.matrix?.accessToken && rc.matrix?.roomId) {
-      return notifyMatrix(rc.matrix.homeserverUrl, rc.matrix.accessToken, rc.matrix.roomId, text);
-    }
-    if (channel === "discord" && rc.discordWebhookUrl) return notifyDiscord(rc.discordWebhookUrl, text);
-    if (channel === "slack" && rc.slackWebhookUrl) return notifyWebhook(rc.slackWebhookUrl, text);
-  });
-  const notifyTargets = vi.fn((rc: any) => {
-    const order = ["signal", "matrix", "discord", "slack", "webhook"];
-    const complete = order.filter((id) => {
-      if (id === "webhook") return !!rc.webhookUrl;
-      if (id === "signal") return !!(rc.signalApiUrl && rc.signalNumber);
-      if (id === "matrix") return !!(rc.matrix?.homeserverUrl && rc.matrix?.accessToken && rc.matrix?.roomId);
-      if (id === "discord") return !!rc.discordWebhookUrl;
-      if (id === "slack") return !!rc.slackWebhookUrl;
-      return false;
-    });
-    if (rc.notifyAllowlist == null) return complete;
-    const allowed = new Set(rc.notifyAllowlist);
-    return complete.filter((id) => allowed.has(id));
-  });
+// The digest/broadcast paths send to channels + compose an AI headline; stub the
+// leaf send fns + sendToChannel so no real network/provider call is made, but keep
+// the REAL notifyTargets (it's pure — no fetch) so allowlist filtering is exercised
+// through the actual code path in tick(), not a test reimplementation of it.
+vi.mock("./notify.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./notify.js")>();
   return {
-    notifyWebhook, notifySignal, receiveSignal: vi.fn(), notifyMatrix, notifyDiscord,
-    markMatrixRead: vi.fn(), setMatrixTyping: vi.fn(), receiveMatrix: vi.fn(),
-    sendToChannel, notifyTargets,
+    ...actual,
+    notifyWebhook: vi.fn(), notifySignal: vi.fn(), receiveSignal: vi.fn(),
+    notifyMatrix: vi.fn(), notifyDiscord: vi.fn(), markMatrixRead: vi.fn(),
+    setMatrixTyping: vi.fn(), receiveMatrix: vi.fn(),
+    sendToChannel: vi.fn(),
   };
 });
 vi.mock("./runModel.js", () => ({ runModel: vi.fn() }));
@@ -66,7 +38,7 @@ vi.mock("./runModel.js", () => ({ runModel: vi.fn() }));
 import { kubectl } from "./kubectl.js";
 import { runWorker } from "./worker.js";
 import { runSupervisor } from "./supervisor.js";
-import { notifySignal, notifyWebhook } from "./notify.js";
+import { sendToChannel } from "./notify.js";
 import { runModel } from "./runModel.js";
 import { tick, createLoopState, queue } from "./index.js";
 import { CircuitBreaker } from "./guardrails.js";
@@ -321,8 +293,13 @@ describe("tick() — openFixPR routing (I1 landmine)", () => {
 
     await tick(makeConfig(), newCb(), createLoopState());
 
-    expect(vi.mocked(notifyWebhook)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(notifySignal)).not.toHaveBeenCalled();
+    // webhook + signal are both runtime-complete, but notifyChannels allows only
+    // webhook — so the real notifyTargets filters signal out and tick() dispatches
+    // to webhook alone. Asserting on the (stubbed) sendToChannel exercises the real
+    // notifyTargets filtering, not a test reimplementation of it.
+    const rc = expect.objectContaining({ notifyAllowlist: ["webhook"] });
+    expect(vi.mocked(sendToChannel)).toHaveBeenCalledWith(rc, "webhook", expect.any(String));
+    expect(vi.mocked(sendToChannel)).not.toHaveBeenCalledWith(rc, "signal", expect.any(String));
   });
 });
 
@@ -771,7 +748,8 @@ describe("tick() — two-phase split: incident history + scheduled digests", () 
 
     // Went out via the SIGNAL channel exactly once (not flushNotifications — there
     // were no incidents this tick)...
-    expect(vi.mocked(notifySignal)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sendToChannel)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sendToChannel)).toHaveBeenCalledWith(expect.anything(), "signal", expect.any(String));
     // ...and the persisted send-state advanced from the armed-yesterday seed to ~now.
     const stamped = captured()!.digestState!.lastSentAt.a!;
     expect(stamped).not.toBe("2020-01-01T00:00:00.000Z");
@@ -797,7 +775,7 @@ describe("tick() — two-phase split: incident history + scheduled digests", () 
 
     await tick(makeConfig(), newCb(), createLoopState());
 
-    expect(vi.mocked(notifySignal)).not.toHaveBeenCalled();
+    expect(vi.mocked(sendToChannel)).not.toHaveBeenCalled();
     expect(captured()!.digestState!.lastSentAt.a).toBe(future);
   });
 });

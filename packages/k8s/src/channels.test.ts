@@ -5,6 +5,7 @@ import {
   connectedChannels,
   channelConfigUpdates,
   parseNotifyAllowlist,
+  applyNotifyAllowlist,
   notifyEnabledChannels,
   setNotifyAllowlist,
   DISCORD_WEBHOOK_URL_KEY,
@@ -125,6 +126,22 @@ test("parseNotifyAllowlist parses, cleans unknown/empty entries, and dedupes", (
     parseNotifyAllowlist({ [NOTIFY_CHANNELS_KEY]: " slack ,, sms , signal ,signal" }),
   ).toEqual(["signal", "slack"]);
   expect(parseNotifyAllowlist({ [NOTIFY_CHANNELS_KEY]: "" })).toEqual([]);
+});
+
+test("applyNotifyAllowlist: null allowlist returns the complete set unchanged", () => {
+  expect(applyNotifyAllowlist(["signal", "webhook"], null)).toEqual(["signal", "webhook"]);
+});
+
+test("applyNotifyAllowlist: intersects the complete set with the allowlist, preserving complete's order", () => {
+  expect(applyNotifyAllowlist(["signal", "matrix", "webhook"], ["webhook", "signal"])).toEqual(["signal", "webhook"]);
+});
+
+test("applyNotifyAllowlist: an allowlisted channel absent from the complete set is dropped", () => {
+  expect(applyNotifyAllowlist(["signal"], ["signal", "discord"])).toEqual(["signal"]);
+});
+
+test("applyNotifyAllowlist: an empty allowlist yields nothing", () => {
+  expect(applyNotifyAllowlist(["signal", "webhook"], [])).toEqual([]);
 });
 
 test("notifyEnabledChannels: legacy install (key absent) broadcasts to all connected", () => {

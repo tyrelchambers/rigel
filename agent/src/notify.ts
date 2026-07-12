@@ -1,5 +1,5 @@
 import { chunkText } from "./signalInbound.js";
-import type { ChannelId } from "@rigel/k8s/src/channels.js";
+import { applyNotifyAllowlist, type ChannelId } from "@rigel/k8s/src/channels.js";
 import type { RuntimeConfig } from "./runtimeConfig.js";
 
 /**
@@ -181,47 +181,45 @@ export async function receiveMatrix(
   return res.json();
 }
 
-/** Dispatch `text` to one channel (best-effort; silently skips when the
- *  channel isn't configured on this RuntimeConfig). Shared by the broadcast
- *  path (flushNotifications) and digests (single-channel targeting). */
-export async function sendToChannel(rc: RuntimeConfig, channel: ChannelId, text: string): Promise<void> {
-  if (channel === "webhook" && rc.webhookUrl) {
-    await notifyWebhook(rc.webhookUrl, text);
-  } else if (channel === "signal" && rc.signalApiUrl && rc.signalNumber) {
-    await notifySignal(rc.signalApiUrl, rc.signalNumber, rc.signalRecipients, text);
-  } else if (channel === "matrix" && rc.matrix.homeserverUrl && rc.matrix.accessToken && rc.matrix.roomId) {
-    await notifyMatrix(rc.matrix.homeserverUrl, rc.matrix.accessToken, rc.matrix.roomId, text);
-  } else if (channel === "discord" && rc.discordWebhookUrl) {
-    await notifyDiscord(rc.discordWebhookUrl, text);
-  } else if (channel === "slack" && rc.slackWebhookUrl) {
-    await notifyWebhook(rc.slackWebhookUrl, text);
+const CHANNEL_ORDER: ChannelId[] = ["signal", "matrix", "discord", "slack", "webhook"];
+
+/** Whether `channel` has everything it needs to send on this RuntimeConfig.
+ *  The single source for "is X configured" — used by both sendToChannel's
+ *  dispatch guard and runtimeCompleteChannels' filter. Matrix's token comes
+ *  from a Secret (env), which is why this lives here, not in the ConfigMap-only
+ *  packages/k8s domain helper. */
+function isChannelConfigured(rc: RuntimeConfig, channel: ChannelId): boolean {
+  switch (channel) {
+    case "webhook": return !!rc.webhookUrl;
+    case "signal": return !!(rc.signalApiUrl && rc.signalNumber);
+    case "matrix": return !!(rc.matrix.homeserverUrl && rc.matrix.accessToken && rc.matrix.roomId);
+    case "discord": return !!rc.discordWebhookUrl;
+    case "slack": return !!rc.slackWebhookUrl;
   }
-  // channel not configured → silently skip (best-effort)
 }
 
-const CHANNEL_ORDER: ChannelId[] = ["signal", "matrix", "discord", "slack", "webhook"];
+/** Dispatch `text` to one channel (best-effort). Shared by the broadcast path
+ *  (flushNotifications) and digests (single-channel targeting). */
+export async function sendToChannel(rc: RuntimeConfig, channel: ChannelId, text: string): Promise<void> {
+  if (!isChannelConfigured(rc, channel)) return; // not configured → silently skip (best-effort)
+  switch (channel) {
+    case "webhook": return notifyWebhook(rc.webhookUrl!, text);
+    case "signal": return notifySignal(rc.signalApiUrl!, rc.signalNumber!, rc.signalRecipients, text);
+    case "matrix": return notifyMatrix(rc.matrix.homeserverUrl!, rc.matrix.accessToken!, rc.matrix.roomId!, text);
+    case "discord": return notifyDiscord(rc.discordWebhookUrl!, text);
+    case "slack": return notifyWebhook(rc.slackWebhookUrl!, text);
+  }
+}
 
 /** The channels the agent considers runtime-complete right now (its own
  *  presence check — it sees the Secret-injected Matrix token the ConfigMap
  *  can't). Stable CHANNEL_ORDER. */
 function runtimeCompleteChannels(rc: RuntimeConfig): ChannelId[] {
-  return CHANNEL_ORDER.filter((id) => {
-    if (id === "webhook") return !!rc.webhookUrl;
-    if (id === "signal") return !!(rc.signalApiUrl && rc.signalNumber);
-    if (id === "matrix") return !!(rc.matrix.homeserverUrl && rc.matrix.accessToken && rc.matrix.roomId);
-    if (id === "discord") return !!rc.discordWebhookUrl;
-    if (id === "slack") return !!rc.slackWebhookUrl;
-    return false;
-  });
+  return CHANNEL_ORDER.filter((id) => isChannelConfigured(rc, id));
 }
 
 /** The broadcast set for alert/remediation notifications: runtime-complete
- *  channels, filtered by the notify allowlist. `notifyAllowlist === null`
- *  means the legacy install with no allowlist set — broadcast to everything
- *  configured. */
+ *  channels, filtered by the notify allowlist (null = legacy broadcast-all). */
 export function notifyTargets(rc: RuntimeConfig): ChannelId[] {
-  const complete = runtimeCompleteChannels(rc);
-  if (rc.notifyAllowlist === null) return complete;
-  const allowed = new Set(rc.notifyAllowlist);
-  return complete.filter((id) => allowed.has(id));
+  return applyNotifyAllowlist(runtimeCompleteChannels(rc), rc.notifyAllowlist);
 }

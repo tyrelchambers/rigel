@@ -241,6 +241,7 @@ export {
   connectedChannels,
   channelConfigUpdates,
   parseNotifyAllowlist,
+  applyNotifyAllowlist,
   notifyEnabledChannels,
   setNotifyAllowlist,
 } from "./channels";

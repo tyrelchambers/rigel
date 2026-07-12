@@ -112,13 +112,19 @@ export function parseNotifyAllowlist(data: Record<string, string>): ChannelId[] 
   return CHANNEL_ORDER.filter((id) => seen.has(id));
 }
 
+/** Intersect an already-computed configured set with the notify allowlist.
+ *  null allowlist (legacy install, key absent) → broadcast to everything
+ *  configured. Pure; the `complete` set's presence policy is the caller's
+ *  concern (the server reads the ConfigMap; the agent additionally sees the
+ *  Secret-injected Matrix token), so only this trailing intersect is shared. */
+export function applyNotifyAllowlist(complete: ChannelId[], allowlist: ChannelId[] | null): ChannelId[] {
+  if (allowlist === null) return complete;
+  return complete.filter((id) => allowlist.includes(id));
+}
+
 /** The effective set of channels that should receive alert/remediation broadcasts. */
 export function notifyEnabledChannels(data: Record<string, string>): ChannelId[] {
-  const connected = connectedChannels(data);
-  const allowlist = parseNotifyAllowlist(data);
-  if (allowlist === null) return connected;
-  const allowed = new Set(allowlist);
-  return connected.filter((id) => allowed.has(id));
+  return applyNotifyAllowlist(connectedChannels(data), parseNotifyAllowlist(data));
 }
 
 /** Build the `notifyChannels` patch for toggling one channel on/off, materializing
