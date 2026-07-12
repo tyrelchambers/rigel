@@ -4,7 +4,9 @@
 // them). The agent owns a mirror of these shapes in agent/src/digest.ts (wire
 // contract), exactly as agent/src/alerts.ts mirrors packages/k8s/src/alerts.ts.
 
-export type DigestChannel = "webhook" | "signal" | "matrix";
+import { CHANNELS, type ChannelId } from "./channels";
+
+export type DigestChannel = ChannelId;
 
 export type DigestLookback =
   | { mode: "sinceLast" }
@@ -25,7 +27,7 @@ export interface DigestSubscription {
   createdAt: string;
 }
 
-const CHANNELS = new Set<DigestChannel>(["webhook", "signal", "matrix"]);
+const CHANNEL_IDS = new Set(Object.keys(CHANNELS) as ChannelId[]);
 
 /** "HH:MM" 24h, both fields in range. */
 function isValidTime(t: unknown): t is string {
@@ -86,7 +88,7 @@ export function parseDigests(json: string | undefined | null): DigestSubscriptio
     const lookback = cleanLookback(r.lookback);
     if (
       typeof r.id !== "string" || typeof r.label !== "string" ||
-      !CHANNELS.has(r.channel as DigestChannel) || !isValidTime(r.time) ||
+      !CHANNEL_IDS.has(r.channel as DigestChannel) || !isValidTime(r.time) ||
       !isValidTimezone(r.timezone) || !days || !lookback
     ) continue;
     out.push({
@@ -121,7 +123,7 @@ export interface DigestInput {
 /** Validate + stamp a user-submitted subscription. Throws on bad shape (server-side). */
 export function normalizeDigest(input: DigestInput, id: string, nowMs: number): DigestSubscription {
   if (typeof input?.label !== "string" || input.label.trim() === "") throw new Error("digest needs a label");
-  if (!CHANNELS.has(input.channel)) throw new Error(`invalid digest channel: ${String(input.channel)}`);
+  if (!CHANNEL_IDS.has(input.channel)) throw new Error(`invalid digest channel: ${String(input.channel)}`);
   if (!isValidTime(input.time)) throw new Error(`invalid digest time: ${String(input.time)}`);
   if (!isValidTimezone(input.timezone)) throw new Error(`invalid digest timezone: ${String(input.timezone)}`);
   const days = cleanDays(input.days);

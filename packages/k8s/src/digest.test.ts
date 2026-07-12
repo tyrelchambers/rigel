@@ -30,6 +30,14 @@ describe("parseDigests", () => {
   });
 });
 
+describe("parseDigests channel widening", () => {
+  it("accepts discord and slack channels", () => {
+    const discordSub = { ...sub, id: "d", channel: "discord" as const };
+    const slackSub = { ...sub, id: "s", channel: "slack" as const };
+    expect(parseDigests(JSON.stringify([discordSub, slackSub]))).toEqual([discordSub, slackSub]);
+  });
+});
+
 describe("normalizeDigest", () => {
   const base = { label: "Morning", channel: "signal" as const, days: [1, 3], time: "07:00",
     timezone: "America/Toronto", lookback: { mode: "sinceLast" as const } };
@@ -49,6 +57,10 @@ describe("normalizeDigest", () => {
     expect(() => normalizeDigest({ ...base, time: "25:00" }, "i", 0)).toThrow();
     expect(() => normalizeDigest({ ...base, days: [] }, "i", 0)).toThrow();
     expect(() => normalizeDigest({ ...base, channel: "sms" as never }, "i", 0)).toThrow();
+  });
+  it("accepts discord and slack channels", () => {
+    expect(normalizeDigest({ ...base, channel: "discord" }, "i", 0).channel).toBe("discord");
+    expect(normalizeDigest({ ...base, channel: "slack" }, "i", 0).channel).toBe("slack");
   });
 });
 

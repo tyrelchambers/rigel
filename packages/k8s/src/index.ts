@@ -232,6 +232,20 @@ export {
 } from "./matrix";
 
 export {
+  type ChannelId,
+  type ChannelDescriptor,
+  DISCORD_WEBHOOK_URL_KEY,
+  SLACK_WEBHOOK_URL_KEY,
+  NOTIFY_CHANNELS_KEY,
+  CHANNELS,
+  connectedChannels,
+  channelConfigUpdates,
+  parseNotifyAllowlist,
+  notifyEnabledChannels,
+  setNotifyAllowlist,
+} from "./channels";
+
+export {
   type RegistryCredential,
   type DockerConfigJsonAuth,
   type DockerConfigJsonData,
