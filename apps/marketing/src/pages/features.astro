@@ -32,8 +32,8 @@ const rigel = [
     },
     {
         icon: "lucide:cpu",
-        title: "Pick the model",
-        desc: "A fast model for a quick look, a heavier one for something gnarly. You choose per question.",
+        title: "Bring your own model",
+        desc: "Claude, Codex, Gemini, or OpenCode, using your own key. A fast one for a quick look, a heavier one for something gnarly.",
     },
     {
         icon: "lucide:history",
@@ -51,12 +51,17 @@ const nightWatch = [
     {
         icon: "lucide:siren",
         title: "Knows what to look for",
-        desc: "Crash loops, OOM kills, pods stuck pending, rollouts going sideways. It catches them without you watching.",
+        desc: "Crash loops, OOM kills, pods stuck pending, rollouts going sideways, a node gone NotReady. It catches them without you watching.",
     },
     {
         icon: "lucide:hand",
         title: "Asks when it's unsure",
         desc: "Anything it won't decide by itself goes into a Needs You queue for you to weigh in.",
+    },
+    {
+        icon: "lucide:git-pull-request",
+        title: "Opens fix PRs",
+        desc: "When the fix belongs in code, it branches, commits, and opens a pull request on your linked GitHub repo for you to review.",
     },
     {
         icon: "lucide:save",
@@ -73,6 +78,90 @@ const nightWatch = [
         title: "A record of everything",
         desc: "A running log of every move it's made, there whenever you want to check its work.",
     },
+    {
+        icon: "lucide:newspaper",
+        title: "Sends you a digest",
+        desc: "Schedule a plain-English cluster summary and it arrives on your phone on whatever cadence you set.",
+    },
+];
+
+const clusters = [
+    {
+        icon: "lucide:git-branch",
+        title: "One console, every cluster",
+        desc: "A rail of your clusters down the side. Click one and the whole app re-points at it. Give each a name and an icon.",
+    },
+    {
+        icon: "lucide:cloud",
+        title: "Connect what you've got",
+        desc: "Point it at EKS, GKE, AKS, or DigitalOcean, or just import a kubeconfig. It flags expired auth and tells you what permission it's missing.",
+    },
+    {
+        icon: "lucide:box",
+        title: "Spin up a local one",
+        desc: "Stand up a kind or k3d cluster from the app when you want somewhere to test. It cleans up after itself.",
+    },
+    {
+        icon: "lucide:folder-tree",
+        title: "Scope to a namespace",
+        desc: "Narrow the whole app to one namespace, or open it back up. Your cluster's RBAC still applies underneath.",
+    },
+];
+
+const deploy = [
+    {
+        icon: "lucide:ship",
+        title: "Helm releases",
+        desc: "Browse charts, install them, and manage what's already released, without memorizing Helm's flags.",
+    },
+    {
+        icon: "lucide:puzzle",
+        title: "One-click add-ons",
+        desc: "Metrics Server, Descheduler, cert-manager, and ingress-nginx install from a menu, wired up and ready.",
+    },
+    {
+        icon: "lucide:git-merge",
+        title: "GitOps from a repo",
+        desc: "Connect a GitHub repo, point it at your manifests, and sync. Edit files and deploy without leaving the app.",
+    },
+    {
+        icon: "lucide:file-code-2",
+        title: "Apply raw YAML",
+        desc: "Paste or load a manifest and apply it, with the same confirm step as everything else.",
+    },
+    {
+        icon: "lucide:container",
+        title: "Migrate from Compose",
+        desc: "Hand it a docker-compose.yml and it works out the Kubernetes equivalent for you to review.",
+    },
+    {
+        icon: "lucide:undo-2",
+        title: "Undo a deploy",
+        desc: "Every apply lands in a recent-deploys list with a one-click rollback of the whole batch.",
+    },
+];
+
+const govern = [
+    {
+        icon: "lucide:key-round",
+        title: "See who can do what",
+        desc: "Pick a user or service account and Rigel traces it through its bindings and roles to the exact verbs it holds.",
+    },
+    {
+        icon: "lucide:shield-alert",
+        title: "Spot the risky grants",
+        desc: "It scores roles and bindings so wildcards and cluster-admin-shaped access stand out before they bite you.",
+    },
+    {
+        icon: "lucide:user-plus",
+        title: "Grant it in place",
+        desc: "Create roles and bindings from the panel, each shown as the exact command first, and copy access across clusters.",
+    },
+    {
+        icon: "lucide:clipboard-check",
+        title: "Audit skills on tap",
+        desc: "Run a Reliability, Security, or Performance sweep and get findings back with one-click fixes for each.",
+    },
 ];
 
 const lookout = [
@@ -84,7 +173,7 @@ const lookout = [
     {
         icon: "lucide:smartphone",
         title: "Reaches your phone",
-        desc: "Alerts come through Signal when something on your list breaks.",
+        desc: "Alerts come through Signal, Matrix, Discord, Slack, or a plain webhook when something on your list breaks.",
     },
     {
         icon: "lucide:radar",
@@ -234,6 +323,25 @@ const charts = [
             items={harbor}
         />
 
+        <CapabilitySection
+            id="clusters"
+            variant="primary"
+            eyebrow="CLUSTERS & CONNECTIONS"
+            heading="Every cluster in one place."
+            copy="Rigel sits in front of all of them at once. Connect the clusters you already run, or stand up a throwaway one locally, and switch between them without juggling contexts on the command line."
+            items={clusters}
+        />
+
+        <CapabilitySection
+            id="deploy"
+            variant="sunken"
+            reverse
+            eyebrow="DEPLOY & GITOPS"
+            heading="Get things onto the cluster."
+            copy="Helm charts, cluster add-ons, a Git repo, a pasted manifest, or an old Compose file. However you like to ship, it's a few clicks, and every apply is one click away from being undone."
+            items={deploy}
+        />
+
         <ResourceMatrix />
 
         <CapabilitySection
@@ -253,6 +361,16 @@ const charts = [
             heading="See where everything stands."
             copy="One place to read how the cluster's doing. Hand anything that looks wrong straight to the chat to dig into."
             items={charts}
+        />
+
+        <CapabilitySection
+            id="govern"
+            variant="sunken"
+            reverse
+            eyebrow="RBAC & AUDITS"
+            heading="Know who can do what."
+            copy="Trace any account to the permissions it actually holds, catch the grants that are too broad, and run a reliability, security, or performance sweep that hands back fixes instead of a wall of findings."
+            items={govern}
         />
 
         <SecureBand />

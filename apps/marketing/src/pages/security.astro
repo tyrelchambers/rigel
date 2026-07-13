@@ -87,6 +87,11 @@ const agent = [
     desc: "It only acts in the namespaces you've put on its allowlist.",
   },
   {
+    icon: "lucide:key-round",
+    title: "Never reads your Secrets",
+    desc: "The agent runs inside an RBAC cage that leaves Secrets out entirely. It can't read them, so it can't leak them.",
+  },
+  {
     icon: "lucide:save",
     title: "Backs up first",
     desc: "It snapshots a resource's YAML before changing it, so nothing it does is one-way.",

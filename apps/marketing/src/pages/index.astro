@@ -6,6 +6,7 @@ import Hero from "../components/Hero.astro";
 import CrewManifest from "../components/CrewManifest.astro";
 import FeaturePillar from "../components/FeaturePillar.astro";
 import ShowcasePillar from "../components/ShowcasePillar.astro";
+import CapabilitySection from "../components/CapabilitySection.astro";
 import FinalCta from "../components/FinalCta.astro";
 import Footer from "../components/Footer.astro";
 import ChatWindow from "../components/mocks/ChatWindow.astro";
@@ -41,6 +42,39 @@ const harborFeatures = [
     "Quick deploy from a 58-app catalog",
     "No manifests to hand-write",
     "Runs on your hardware, so your data stays yours",
+];
+
+const consoleItems = [
+    {
+        icon: "lucide:git-branch",
+        title: "Every cluster, one window",
+        desc: "Switch between all your clusters from a rail down the side. Connect EKS, GKE, AKS, or DigitalOcean, import a kubeconfig, or spin up a local one.",
+    },
+    {
+        icon: "lucide:layout-grid",
+        title: "25+ live panels",
+        desc: "Deployments, pods, services, ingresses, config, storage, nodes, events, and more, streaming live. No refresh button.",
+    },
+    {
+        icon: "lucide:ship",
+        title: "Deploy how you like",
+        desc: "Helm charts, one-click add-ons, GitOps from a repo, raw YAML, or an old Compose file. Every apply is one click from undo.",
+    },
+    {
+        icon: "lucide:key-round",
+        title: "RBAC & audits",
+        desc: "Trace who can do what, catch grants that are too broad, and run reliability, security, and performance sweeps that hand back fixes.",
+    },
+    {
+        icon: "lucide:mouse-pointer-click",
+        title: "The everyday operations",
+        desc: "Port-forward, tail logs, scale, restart, edit env and images, cordon a node. The buttons you'd otherwise type out as kubectl.",
+    },
+    {
+        icon: "lucide:shield-check",
+        title: "Guarded by default",
+        desc: "Every change shows you the exact command and waits for your click. Nothing touches the cluster on its own.",
+    },
 ];
 ---
 
@@ -120,6 +154,15 @@ const harborFeatures = [
             </div>
             <HarborMock />
         </ShowcasePillar>
+
+        <CapabilitySection
+            id="console"
+            variant="primary"
+            eyebrow="THE FULL CONSOLE"
+            heading="Not just a chat box."
+            copy="The AI is the headline, but underneath it Rigel is a complete Kubernetes console: every cluster, every resource, and the everyday work, all in one window."
+            items={consoleItems}
+        />
 
         <FinalCta />
     </main>
