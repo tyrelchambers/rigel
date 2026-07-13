@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Archive, Camera, ChevronDown, ChevronRight, Database } from "lucide-react";
+import { Archive, Camera, Database } from "lucide-react";
 import { filterByNamespace, useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { viewYaml } from "@/store/yamlViewer";
@@ -165,7 +165,7 @@ export default function BackupsPanel() {
           </pre>
         )}
 
-        {view.kind === "empty" && (
+        {view.kind === "empty" && groups.length === 0 && (
           <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
             <Archive className="size-8 text-muted-foreground" />
             <p className="text-sm font-medium">No backups or snapshots found</p>
@@ -174,6 +174,10 @@ export default function BackupsPanel() {
               VolumeSnapshot has been created.
             </p>
           </div>
+        )}
+
+        {view.kind === "empty" && groups.length > 0 && (
+          <p className="px-4 py-4 text-sm text-muted-foreground">No backups match search</p>
         )}
 
         {view.kind === "forbidden" &&
@@ -270,7 +274,6 @@ function BackupGroupRow({
 }) {
   const isCnpg = group.kind === "cnpg";
   const canBackup = isCnpg && !!group.cluster && cnpgPluginAvailable;
-  const Chevron = isOpen ? ChevronDown : ChevronRight;
   const runs = runCount(group);
 
   return (
@@ -298,7 +301,6 @@ function BackupGroupRow({
         </div>
       }
     >
-      <Chevron className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
       {isCnpg ? (
         <Database className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
       ) : (
@@ -365,7 +367,10 @@ function BackupEventRow({
   isOpen: boolean;
   onToggle: () => void;
 }) {
-  const viewKind = event.kind === "cnpgBackup" ? "backup.postgresql.cnpg.io" : "volumesnapshot";
+  const viewKind =
+    event.kind === "cnpgBackup"
+      ? "backup.postgresql.cnpg.io"
+      : "volumesnapshot.snapshot.storage.k8s.io";
   const age =
     event.kind === "cnpgBackup"
       ? relativeAge(event.finishedAt)
