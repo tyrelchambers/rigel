@@ -14,6 +14,7 @@ import ConfigMapsPanel from "./panels/configmaps/ConfigMapsPanel";
 import SecretsPanel from "./panels/secrets/SecretsPanel";
 import WorkloadsPanel from "./panels/workloads/WorkloadsPanel";
 import DatabasesPanel from "./panels/databases/DatabasesPanel";
+import BackupsPanel from "./panels/backups/BackupsPanel";
 import RightSizingPanel from "./panels/rightsizing/RightSizingPanel";
 import RbacPanel from "./panels/rbac/RbacPanel";
 import CertificatesPanel from "./panels/certificates/CertificatesPanel";
@@ -303,6 +304,7 @@ export default function App() {
               <Route path="/deployments" element={<DeploymentsPanel />} />
               <Route path="/workloads" element={<WorkloadsPanel />} />
               <Route path="/databases" element={<DatabasesPanel />} />
+              <Route path="/backups" element={<BackupsPanel />} />
               <Route path="/rightsizing" element={<RightSizingPanel />} />
               <Route path="/namespaces" element={<NamespacesPanel />} />
               <Route path="/nodes" element={<NodesPanel />} />
