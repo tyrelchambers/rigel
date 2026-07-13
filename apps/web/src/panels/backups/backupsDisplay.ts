@@ -1,5 +1,22 @@
 import type { StatusBadgeVariant } from "@/panels/components/StatusBadge";
-import type { BackupEventStatus, BackupMethod } from "./types";
+import type {
+  CNPGBackup,
+  CNPGCluster,
+  CNPGScheduledBackup,
+} from "@/panels/databases/types";
+import { latestCompletedBackup, walArchivingStatus } from "@/panels/databases/databasesDisplay";
+import type {
+  BackupEvent,
+  BackupEventStatus,
+  BackupGroup,
+  BackupMethod,
+  BackupRow,
+  BackupsView,
+  KindAccess,
+  SnapshotChild,
+  SnapshotRow,
+  VolumeSnapshot,
+} from "./types";
 
 /** Map a raw CNPG Backup phase to a normalized status. */
 export function backupStatus(phase: string | undefined): BackupEventStatus {
@@ -99,23 +116,6 @@ export function formatDuration(sec: number | undefined): string {
   const rm = m % 60;
   return rm ? `${h}h ${rm}m` : `${h}h`;
 }
-
-import type {
-  CNPGBackup,
-  CNPGCluster,
-  CNPGScheduledBackup,
-} from "@/panels/databases/types";
-import { latestCompletedBackup, walArchivingStatus } from "@/panels/databases/databasesDisplay";
-import type {
-  BackupEvent,
-  BackupGroup,
-  BackupRow,
-  BackupsView,
-  KindAccess,
-  SnapshotChild,
-  SnapshotRow,
-  VolumeSnapshot,
-} from "./types";
 
 const CNPG_CLUSTER_LABEL = "cnpg.io/cluster";
 const OTHER_KEY = "__other__";
@@ -337,7 +337,7 @@ export function fleetSummary(groups: BackupGroup[]): FleetSummary {
     const backups = g.events.filter((e) => e.kind === "cnpgBackup");
     runs += backups.length;
     const walFailing = g.wal === "failing";
-    const latestFailed = backups[0]?.kind === "cnpgBackup" && backups[0].status === "failed";
+    const latestFailed = backups[0]?.status === "failed";
     if (walFailing || latestFailed) failing += 1;
   }
   return { databases: dbs.length, runs, failing };

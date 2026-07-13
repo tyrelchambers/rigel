@@ -1,13 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
   backupMethod,
+  backupsView,
   backupStatus,
+  buildBackupGroups,
   durationSeconds,
   eventBadgeVariant,
+  filterGroups,
+  fleetSummary,
   formatDuration,
   methodLabel,
   statusLabel,
 } from "./backupsDisplay";
+import type { CNPGBackup, CNPGCluster, CNPGScheduledBackup } from "@/panels/databases/types";
+import type { VolumeSnapshot } from "./types";
 
 describe("backupStatus", () => {
   it("maps CNPG phases to a normalized status", () => {
@@ -70,15 +76,6 @@ describe("durationSeconds / formatDuration", () => {
     expect(formatDuration(3720)).toBe("1h 2m");
   });
 });
-
-import {
-  backupsView,
-  buildBackupGroups,
-  filterGroups,
-  fleetSummary,
-} from "./backupsDisplay";
-import type { CNPGBackup, CNPGCluster, CNPGScheduledBackup } from "@/panels/databases/types";
-import type { VolumeSnapshot } from "./types";
 
 function cluster(name: string, ns = "default"): CNPGCluster {
   return {
