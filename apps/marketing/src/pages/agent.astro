@@ -1,0 +1,183 @@
+---
+import Base from "../layouts/Base.astro";
+import Nav from "../components/Nav.astro";
+import PageHeader from "../components/PageHeader.astro";
+import CapabilitySection from "../components/CapabilitySection.astro";
+import FinalCta from "../components/FinalCta.astro";
+import Footer from "../components/Footer.astro";
+
+const how = [
+    {
+        icon: "lucide:download",
+        title: "Deploy it in",
+        desc: "A guided install adds its RBAC, config, a token, and a deployment to your cluster.",
+    },
+    {
+        icon: "lucide:eye",
+        title: "It watches",
+        desc: "Around the clock, only in the namespaces you put on its allowlist.",
+    },
+    {
+        icon: "lucide:wrench",
+        title: "It fixes what it can",
+        desc: "Crash loops, OOM kills, pending pods, bad rollouts, a node going NotReady.",
+    },
+    {
+        icon: "lucide:hand",
+        title: "It asks about the rest",
+        desc: "Anything it won't decide on its own goes into a Needs You queue for you.",
+    },
+];
+
+const modes = [
+    {
+        icon: "lucide:zap",
+        title: "Auto",
+        desc: "Fixes what it knows how to handle without asking, within the limits you set.",
+    },
+    {
+        icon: "lucide:message-square",
+        title: "Advisory",
+        desc: "Shows what it would do and waits for you to approve before it touches anything.",
+    },
+    {
+        icon: "lucide:moon",
+        title: "Quiet hours",
+        desc: "Holds off during the hours you pick, so nothing changes overnight unless you allow it.",
+    },
+];
+
+const guardrails = [
+    {
+        icon: "lucide:power",
+        title: "Kill switch",
+        desc: "Turn it off anytime. If it can't read its own config, it stops instead of guessing.",
+    },
+    {
+        icon: "lucide:gauge",
+        title: "Rate limits",
+        desc: "Caps on how often it acts: per resource per hour, per night, and per incident.",
+    },
+    {
+        icon: "lucide:circle-dollar-sign",
+        title: "Spend cap",
+        desc: "A dollar limit on what it can spend on the AI on its own.",
+    },
+    {
+        icon: "lucide:save",
+        title: "Backs up first",
+        desc: "It saves a resource's YAML before it changes anything, so you can put it back.",
+    },
+    {
+        icon: "lucide:key-round",
+        title: "No access to Secrets",
+        desc: "Its RBAC leaves Secrets out, so it can't read them and can't leak them.",
+    },
+    {
+        icon: "lucide:rotate-ccw",
+        title: "Logged, with undo",
+        desc: "Every action is recorded with a before and after, and an undo button next to it.",
+    },
+];
+
+const loop = [
+    {
+        icon: "lucide:inbox",
+        title: "Needs You queue",
+        desc: "Approve or dismiss anything it flagged, in one tap.",
+    },
+    {
+        icon: "lucide:message-circle",
+        title: "Two-way chat",
+        desc: "Message it over Signal or Matrix to ask what happened or approve a flagged fix.",
+    },
+    {
+        icon: "lucide:newspaper",
+        title: "Digests",
+        desc: "A short cluster summary on your phone, on a schedule you set.",
+    },
+];
+
+const prs = [
+    {
+        icon: "lucide:git-branch",
+        title: "It opens a PR",
+        desc: "It clones your linked GitHub repo, makes a branch, and commits the change.",
+    },
+    {
+        icon: "lucide:git-merge",
+        title: "You review it",
+        desc: "It comes in as a normal pull request. Nothing merges without you.",
+    },
+    {
+        icon: "lucide:shield-check",
+        title: "Capped",
+        desc: "A daily limit on how many it opens, plus a list of the recent ones.",
+    },
+];
+---
+
+<Base
+    title="The autonomous agent"
+    description="An optional agent you run inside your own cluster. It fixes common problems in the namespaces you allow, within limits you set, and asks you about anything it's unsure of."
+>
+    <Nav />
+    <main id="main">
+        <PageHeader
+            eyebrowIcon="lucide:shield-check"
+            eyebrow="AUTONOMOUS AGENT"
+            title="An agent that fixes the routine stuff."
+            subtitle="It's optional. You run it inside your own cluster, and it handles common problems in the namespaces you allow, within limits you set. Anything it's unsure about, it leaves for you."
+        />
+
+        <CapabilitySection
+            id="how"
+            variant="sunken"
+            eyebrow="HOW IT WORKS"
+            heading="Install it, then let it run."
+            copy="You deploy it into your cluster as its own service and turn it on. From there it watches the namespaces you allow and fixes what it can, and asks you about the rest."
+            items={how}
+        />
+
+        <CapabilitySection
+            id="autonomy"
+            variant="primary"
+            reverse
+            eyebrow="AUTONOMY"
+            heading="You set how much it does."
+            copy="Start it in advisory mode and watch what it would do. Move it to auto once you trust it. Either way, quiet hours keep it out of your night."
+            items={modes}
+        />
+
+        <CapabilitySection
+            id="guardrails"
+            variant="sunken"
+            eyebrow="GUARDRAILS"
+            heading="The limits it works inside."
+            copy="It can act, but only inside the limits you set, and it keeps a record of everything it does so you can check its work or undo it."
+            items={guardrails}
+        />
+
+        <CapabilitySection
+            id="loop"
+            variant="primary"
+            reverse
+            eyebrow="STAYING IN THE LOOP"
+            heading="It keeps you posted."
+            copy="You don't have to open the app to know what's going on. It comes to you, and hands you the calls it shouldn't make alone."
+            items={loop}
+        />
+
+        <CapabilitySection
+            id="prs"
+            variant="sunken"
+            eyebrow="AUTO-FIX PRS"
+            heading="For fixes that belong in code."
+            copy="Some problems aren't a live change, they're a fix in your repo. Turn it on per project and it opens a pull request for you to review. GitHub only."
+            items={prs}
+        />
+
+        <FinalCta />
+    </main>
+    <Footer />
+</Base>

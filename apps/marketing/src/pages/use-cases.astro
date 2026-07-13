@@ -1,0 +1,109 @@
+---
+import { Icon } from "astro-icon/components";
+import Base from "../layouts/Base.astro";
+import Nav from "../components/Nav.astro";
+import PageHeader from "../components/PageHeader.astro";
+import FinalCta from "../components/FinalCta.astro";
+import Footer from "../components/Footer.astro";
+
+const cases = [
+    {
+        id: "homelab",
+        variant: "sunken",
+        reverse: false,
+        eyebrowIcon: "lucide:server",
+        eyebrow: "HOMELAB",
+        heading: "For a cluster you run yourself.",
+        copy: "Self-host the things you'd otherwise pay for, on your own hardware. Rigel gives you one place to see it all, and tells you when something needs a look.",
+        points: [
+            "58 apps you can install in a few clicks",
+            "Runs on your hardware, so there's no monthly bill",
+            "One place for every node and namespace",
+            "Alerts to your phone when something breaks",
+            "The chat explains problems in plain terms",
+        ],
+    },
+    {
+        id: "team",
+        variant: "primary",
+        reverse: true,
+        eyebrowIcon: "lucide:users-round",
+        eyebrow: "SMALL TEAM",
+        heading: "For a team without a platform team.",
+        copy: "When nobody owns the cluster full-time, Rigel handles the routine parts and keeps changes safe. A couple of people can run what usually needs a dedicated team.",
+        points: [
+            "Switch between clusters from one place",
+            "The agent handles the routine alerts",
+            "See who has access, and what's too broad",
+            "Reliability, security, and performance checks with fixes",
+            "Every change shows the command and gets logged",
+        ],
+    },
+];
+---
+
+<Base
+    title="Who Rigel is for"
+    description="Two kinds of people run Rigel: someone with a homelab they run themselves, and a small team with a cluster they depend on. Either way there's no platform team, and that's the gap it fills."
+>
+    <Nav />
+    <main id="main">
+        <PageHeader
+            eyebrowIcon="lucide:users"
+            eyebrow="WHO IT'S FOR"
+            title="Two kinds of people run Rigel."
+            subtitle="A homelab you run yourself, or a cluster a small team depends on. Either way there's no platform team behind you, and that's the gap Rigel fills."
+        />
+
+        {
+            cases.map((c) => (
+                <section
+                    id={c.id}
+                    class:list={[
+                        "border-t border-line-subtle",
+                        c.variant === "sunken" ? "bg-surface-sunken" : "bg-surface",
+                    ]}
+                >
+                    <div class="mx-auto grid max-w-[1200px] items-start gap-12 px-6 py-20 sm:px-8 lg:grid-cols-2 lg:gap-16 lg:px-12 lg:py-24">
+                        <div data-reveal class:list={[c.reverse ? "lg:order-2" : ""]}>
+                            <div class="flex items-center gap-2.5">
+                                <Icon name={c.eyebrowIcon} class="size-[15px] text-accent" />
+                                <span class="font-mono text-xs tracking-[0.15em] text-fg-tertiary">
+                                    {c.eyebrow}
+                                </span>
+                            </div>
+                            <h2 class="mt-5 text-[clamp(1.85rem,3.6vw,2.5rem)] font-bold leading-[1.12] tracking-[-0.03em] text-fg">
+                                {c.heading}
+                            </h2>
+                            <p class="mt-5 max-w-[460px] text-[15.5px] leading-[1.65] text-fg-secondary">
+                                {c.copy}
+                            </p>
+                        </div>
+
+                        <ul
+                            data-reveal
+                            class:list={[
+                                "flex flex-col gap-1 rounded-xl border border-line-subtle bg-surface-elevated p-2",
+                                c.reverse ? "lg:order-1" : "",
+                            ]}
+                        >
+                            {c.points.map((p) => (
+                                <li class="flex items-center gap-3 rounded-lg px-3.5 py-3">
+                                    <span class="grid size-[22px] shrink-0 place-items-center rounded-full bg-accent/15 text-accent">
+                                        <Icon name="lucide:check" class="size-3" />
+                                    </span>
+                                    <span class="text-[14.5px] leading-snug text-fg">
+                                        {p}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                </section>
+            ))
+        }
+
+        <FinalCta />
+    </main>
+    <Footer />
+</Base>

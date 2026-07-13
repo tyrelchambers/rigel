@@ -1,0 +1,139 @@
+---
+import { Icon } from "astro-icon/components";
+import Base from "../layouts/Base.astro";
+import Nav from "../components/Nav.astro";
+import PageHeader from "../components/PageHeader.astro";
+import FinalCta from "../components/FinalCta.astro";
+import Footer from "../components/Footer.astro";
+
+const groups = [
+    {
+        name: "Manage",
+        icon: "lucide:layers",
+        items: [
+            ["lucide:git-branch", "Multi-cluster switcher"],
+            ["lucide:cloud", "Connect EKS / GKE / AKS / DOKS"],
+            ["lucide:file-input", "Import a kubeconfig"],
+            ["lucide:box", "Local kind / k3d"],
+            ["lucide:layout-grid", "25+ live panels"],
+            ["lucide:folder-tree", "Namespace scoping"],
+            ["lucide:undo-2", "Recent deploys + undo"],
+            ["lucide:shield-check", "Guarded actions"],
+        ],
+    },
+    {
+        name: "Deploy",
+        icon: "lucide:ship",
+        items: [
+            ["lucide:package", "App catalog (58 apps)"],
+            ["lucide:anchor", "Helm releases"],
+            ["lucide:puzzle", "Cluster add-ons"],
+            ["lucide:git-merge", "GitOps from GitHub"],
+            ["lucide:file-code", "Apply raw YAML"],
+            ["lucide:container", "Migrate from Compose"],
+            ["lucide:cable", "Port-forward"],
+            ["lucide:trash-2", "Full-app removal"],
+        ],
+    },
+    {
+        name: "Observe",
+        icon: "lucide:activity",
+        items: [
+            ["lucide:gauge", "Cluster overview"],
+            ["lucide:cpu", "Node & pod metrics"],
+            ["lucide:scroll-text", "Live log tail"],
+            ["lucide:bell", "Events feed"],
+            ["lucide:ruler", "Right-sizing"],
+            ["lucide:database", "Database radar"],
+            ["lucide:newspaper", "Scheduled digests"],
+        ],
+    },
+    {
+        name: "Secure",
+        icon: "lucide:shield",
+        items: [
+            ["lucide:key-round", "RBAC analyzer"],
+            ["lucide:shield-alert", "Risk scoring"],
+            ["lucide:file-check", "Guarded writes"],
+            ["lucide:scan-line", "Security audit"],
+            ["lucide:lock", "cert-manager / TLS"],
+            ["lucide:id-card", "Registry creds"],
+            ["lucide:folder-lock", "Secrets-free agent"],
+        ],
+    },
+    {
+        name: "Automate",
+        icon: "lucide:bot",
+        items: [
+            ["lucide:message-square-text", "AI chat copilot"],
+            ["lucide:boxes", "Claude / Codex / Gemini / OpenCode"],
+            ["lucide:shield-check", "Autonomous agent"],
+            ["lucide:clipboard-check", "Audit skills"],
+            ["lucide:git-pull-request", "Auto-fix PRs"],
+            ["lucide:bell-ring", "Plain-English alerts"],
+            ["lucide:smartphone", "Signal / Matrix / Slack"],
+        ],
+    },
+];
+---
+
+<Base
+    title="Everything Rigel does"
+    description="A single at-a-glance list of what Rigel does, across five areas: manage, deploy, observe, secure, and automate. Everything here ships today."
+>
+    <Nav />
+    <main id="main">
+        <PageHeader
+            eyebrowIcon="lucide:layout-grid"
+            eyebrow="OVERVIEW"
+            title="Everything, in one list."
+            subtitle="Five areas, one app. All of this ships today. The features page has the detail on any of it."
+        />
+
+        <section class="border-t border-line-subtle bg-surface-sunken">
+            <div class="mx-auto max-w-[1200px] px-6 py-16 sm:px-8 lg:px-12 lg:py-20">
+                <div class="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-5">
+                    {
+                        groups.map((g, gi) => (
+                            <div
+                                data-reveal
+                                style={`--reveal-delay:${gi * 60}ms`}
+                                class="flex flex-col gap-3.5 rounded-xl border border-line-subtle bg-surface-elevated p-[18px]"
+                            >
+                                <div class="flex items-center gap-2">
+                                    <Icon name={g.icon} class="size-4 text-accent" />
+                                    <span class="flex-1 text-[15px] font-bold tracking-tight text-fg">
+                                        {g.name}
+                                    </span>
+                                    <span class="font-mono text-[11px] text-fg-tertiary">
+                                        {g.items.length}
+                                    </span>
+                                </div>
+                                <div class="h-px bg-line-subtle"></div>
+                                <ul class="flex flex-col gap-3">
+                                    {g.items.map(([icon, label]) => (
+                                        <li class="flex items-start gap-2.5">
+                                            <Icon
+                                                name={icon}
+                                                class="mt-0.5 size-[14px] shrink-0 text-fg-tertiary"
+                                            />
+                                            <span class="text-[13px] leading-snug text-fg-secondary">
+                                                {label}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        ))
+                    }
+                </div>
+                <p class="mt-8 text-center text-[13.5px] text-fg-tertiary">
+                    Want the detail? The <a href="/features" class="text-accent underline-offset-2 hover:underline">features page</a> walks through all of it.
+                </p>
+            </div>
+        </section>
+
+        <FinalCta />
+    </main>
+    <Footer />
+</Base>
