@@ -404,14 +404,19 @@ function BackupEventRow({
       )}
       <span className="flex-1" />
       {event.kind === "cnpgBackup" && event.durationSec !== undefined && (
-        <span
-          title="Duration"
-          className="flex items-center gap-1 text-3xs"
-          style={{ fontFamily: "ui-monospace, monospace", color: "var(--fg-tertiary)", whiteSpace: "nowrap" }}
-        >
-          <Timer className="size-3 shrink-0" aria-hidden />
-          {formatDuration(event.durationSec)}
-        </span>
+        <>
+          <span
+            title="Duration"
+            className="flex items-center gap-1 text-3xs"
+            style={{ fontFamily: "ui-monospace, monospace", color: "var(--fg-tertiary)", whiteSpace: "nowrap" }}
+          >
+            <Timer className="size-3 shrink-0" aria-hidden />
+            {formatDuration(event.durationSec)}
+          </span>
+          <span className="text-3xs text-muted-foreground/50" aria-hidden>
+            ·
+          </span>
+        </>
       )}
       <span
         title={event.kind === "cnpgBackup" ? "Finished" : "Created"}
