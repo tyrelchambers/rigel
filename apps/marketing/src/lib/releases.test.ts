@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { mapAssets, LATEST_RELEASE_URL, type GitHubRelease } from "./releases";
+import {
+  mapAssets,
+  bodyToNotes,
+  mapReleases,
+  LATEST_RELEASE_URL,
+  RELEASES_URL,
+  type GitHubRelease,
+} from "./releases";
 import fixture from "./__fixtures__/release-latest.json";
 
 describe("mapAssets", () => {
@@ -77,5 +84,58 @@ describe("mapAssets", () => {
     expect(result.version).toBeNull();
     expect(result.url).toBe(LATEST_RELEASE_URL);
     expect(result.assets).toEqual({});
+  });
+});
+
+describe("bodyToNotes", () => {
+  it("strips list/heading markers and drops blank lines", () => {
+    const body = "## What's new\n\n- Fixed a crash\n* Faster logs\n1. Third thing\n\nplain line";
+    expect(bodyToNotes(body)).toEqual([
+      "What's new",
+      "Fixed a crash",
+      "Faster logs",
+      "Third thing",
+      "plain line",
+    ]);
+  });
+
+  it("returns an empty array for an empty or missing body", () => {
+    expect(bodyToNotes(undefined)).toEqual([]);
+    expect(bodyToNotes("")).toEqual([]);
+    expect(bodyToNotes("\n\n  \n")).toEqual([]);
+  });
+});
+
+describe("mapReleases", () => {
+  it("maps releases newest-first with version, date, url and notes", () => {
+    const out = mapReleases([
+      {
+        name: "v0.2.0",
+        tag_name: "v0.2.0",
+        html_url: "https://example.com/0.2.0",
+        published_at: "2026-07-10T12:00:00Z",
+        body: "- Added digests\n- Fixed alerts",
+      },
+    ]);
+    expect(out).toEqual([
+      {
+        version: "0.2.0",
+        date: "2026-07-10",
+        url: "https://example.com/0.2.0",
+        notes: ["Added digests", "Fixed alerts"],
+      },
+    ]);
+  });
+
+  it("skips drafts and falls back for missing fields", () => {
+    const out = mapReleases([
+      { tag_name: "v0.3.0", draft: true, body: "hidden" },
+      { tag_name: "0.1.0" },
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]!.version).toBe("0.1.0");
+    expect(out[0]!.date).toBe("");
+    expect(out[0]!.url).toBe(RELEASES_URL);
+    expect(out[0]!.notes).toEqual([]);
   });
 });

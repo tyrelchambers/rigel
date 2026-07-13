@@ -96,6 +96,74 @@ const FALLBACK: ResolvedRelease = {
   assets: {},
 };
 
+export interface ChangelogEntry {
+  /** Display version, e.g. "0.2.0" (leading "v" stripped). */
+  version: string;
+  /** ISO date the release was published, or "" when absent. */
+  date: string;
+  /** Link to the release's own page. */
+  url: string;
+  /** Release-body lines, bullet/heading markers stripped, blanks dropped. */
+  notes: string[];
+}
+
+interface GitHubReleaseListItem extends GitHubRelease {
+  name?: string;
+  body?: string;
+  draft?: boolean;
+  prerelease?: boolean;
+  published_at?: string;
+}
+
+/** Pure: turn a release's markdown body into flat display lines. Splits on
+ * newlines, strips a leading list/heading marker, and drops blank lines. */
+export function bodyToNotes(body: string | undefined): string[] {
+  if (!body) return [];
+  return body
+    .split(/\r?\n/)
+    .map((l) => l.replace(/^\s*(?:[-*+]|#{1,6}|\d+\.)\s+/, "").trim())
+    .filter((l) => l.length > 0);
+}
+
+/** Pure mapper: GitHub releases-list JSON → changelog entries, newest first,
+ * skipping drafts. Prereleases are kept (labeled by their own tag). */
+export function mapReleases(list: GitHubReleaseListItem[]): ChangelogEntry[] {
+  return list
+    .filter((r) => !r.draft)
+    .map((r) => ({
+      version: (r.name || r.tag_name || "").replace(/^v/, "") || "untagged",
+      date: r.published_at ? r.published_at.slice(0, 10) : "",
+      url: r.html_url ?? RELEASES_URL,
+      notes: bodyToNotes(r.body),
+    }));
+}
+
+/**
+ * Fetch published releases for the changelog. On ANY failure (network, non-200,
+ * no releases yet) returns an empty list so the page renders its graceful
+ * "watch GitHub releases" empty state. Newest first.
+ */
+export async function getReleases(): Promise<ChangelogEntry[]> {
+  const token = import.meta.env.GITHUB_TOKEN;
+  const headers: Record<string, string> = {
+    Accept: "application/vnd.github+json",
+    "User-Agent": "rigel-marketing-build",
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  try {
+    const res = await fetch(
+      `https://api.github.com/repos/${REPO}/releases?per_page=30`,
+      { headers },
+    );
+    if (!res.ok) return [];
+    const json = (await res.json()) as GitHubReleaseListItem[];
+    return Array.isArray(json) ? mapReleases(json) : [];
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Fetch the latest published release and resolve its assets. On ANY failure
  * (network error, non-200, no release yet) returns a safe fallback so the page

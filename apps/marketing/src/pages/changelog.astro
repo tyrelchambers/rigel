@@ -3,10 +3,12 @@ import Base from "../layouts/Base.astro";
 import Nav from "../components/Nav.astro";
 import PageHeader from "../components/PageHeader.astro";
 import Footer from "../components/Footer.astro";
+import { getReleases } from "../lib/releases";
 
-// Stub: hand-maintained for now. Wire to GitHub releases when there's a
-// public release cadence to pull from.
-const releases: { date: string; version: string; notes: string[] }[] = [];
+// Pulled from GitHub releases at build time (marketing-build.yml re-runs on
+// `release: [released]`). Empty on any failure or before the first release,
+// which renders the graceful "watch GitHub releases" state below.
+const releases = await getReleases();
 ---
 
 <Base
@@ -44,9 +46,14 @@ const releases: { date: string; version: string; notes: string[] }[] = [];
             {releases.map((r) => (
               <li class="flex flex-col gap-3">
                 <div class="flex items-baseline gap-3">
-                  <span class="font-mono text-sm font-bold text-fg">
+                  <a
+                    href={r.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="font-mono text-sm font-bold text-fg underline-offset-2 hover:text-accent hover:underline"
+                  >
                     {r.version}
-                  </span>
+                  </a>
                   <span class="text-[12.5px] text-fg-tertiary">{r.date}</span>
                 </div>
                 <ul class="flex flex-col gap-2 text-fg-secondary">

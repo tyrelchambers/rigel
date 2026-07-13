@@ -24,7 +24,7 @@ const groups: Group[] = [
     rows: [
       { label: "Plain-English AI assistant", values: [true, "Paid (Prime)", "Paid (Plus)", "Alpha plugin"] },
       { label: "Autonomous remediation (fixes on its own)", values: [true, false, false, false] },
-      { label: "Natural-language alerts (Signal)", values: [true, false, false, false] },
+      { label: "Natural-language alerts to your phone", values: [true, false, false, false] },
     ],
   },
   {
@@ -35,7 +35,7 @@ const groups: Group[] = [
       { label: "Port-forward from the UI", values: [true, "Via shell", true, true] },
       { label: "Live log streaming", values: [true, true, true, true] },
       { label: "In-browser pod terminal", values: [true, true, true, true] },
-      { label: "Multi-cluster / fleet", values: ["Single cluster", true, true, true] },
+      { label: "Multi-cluster / fleet", values: ["Connect & switch", true, true, true] },
     ],
   },
   {
@@ -43,13 +43,6 @@ const groups: Group[] = [
     rows: [
       { label: "One-click app catalog", values: [true, "Helm only", "Helm only", false] },
       { label: "Clean uninstall", values: [true, "Helm uninstall", "Helm uninstall", false] },
-    ],
-  },
-  {
-    title: "Model & licensing",
-    rows: [
-      { label: "Deployment model", values: ["Desktop app (macOS)", "Self-host web", "Desktop app", "Web + desktop"] },
-      { label: "License", values: ["Source available", "Apache-2.0", "Proprietary", "Apache-2.0"] },
     ],
   },
 ];
