@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Archive, Camera, Database } from "lucide-react";
+import { Archive, Camera, Database, Timer } from "lucide-react";
 import { filterByNamespace, useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { viewYaml } from "@/store/yamlViewer";
@@ -371,10 +371,8 @@ function BackupEventRow({
     event.kind === "cnpgBackup"
       ? "backup.postgresql.cnpg.io"
       : "volumesnapshot.snapshot.storage.k8s.io";
-  const age =
-    event.kind === "cnpgBackup"
-      ? relativeAge(event.finishedAt)
-      : relativeAge(event.createdAt);
+  const finishedIso = event.kind === "cnpgBackup" ? event.finishedAt : event.createdAt;
+  const ageLabel = finishedIso ? `${relativeAge(finishedIso)} ago` : "—";
 
   const rowMenu = (
     <ContextMenuItem onClick={() => viewYaml(viewKind, event.name, event.namespace)}>
@@ -406,12 +404,21 @@ function BackupEventRow({
       )}
       <span className="flex-1" />
       {event.kind === "cnpgBackup" && event.durationSec !== undefined && (
-        <span className="text-3xs" style={{ fontFamily: "ui-monospace, monospace", color: "var(--fg-tertiary)", whiteSpace: "nowrap" }}>
+        <span
+          title="Duration"
+          className="flex items-center gap-1 text-3xs"
+          style={{ fontFamily: "ui-monospace, monospace", color: "var(--fg-tertiary)", whiteSpace: "nowrap" }}
+        >
+          <Timer className="size-3 shrink-0" aria-hidden />
           {formatDuration(event.durationSec)}
         </span>
       )}
-      <span className="text-3xs" style={{ fontFamily: "ui-monospace, monospace", color: "var(--fg-tertiary)", whiteSpace: "nowrap" }}>
-        {age}
+      <span
+        title={event.kind === "cnpgBackup" ? "Finished" : "Created"}
+        className="text-3xs"
+        style={{ fontFamily: "ui-monospace, monospace", color: "var(--fg-tertiary)", whiteSpace: "nowrap" }}
+      >
+        {ageLabel}
       </span>
     </ListRow>
   );
