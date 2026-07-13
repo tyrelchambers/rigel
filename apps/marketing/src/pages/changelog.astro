@@ -29,16 +29,13 @@ const releases = await getReleases();
         releases.length === 0 ? (
           <div class="rounded-xl border border-line-subtle bg-surface-elevated px-6 py-10 text-center">
             <p class="text-[15px] text-fg-secondary">
-              Release notes are on the way. Watch the
+              Release notes are on the way. Watch the{" "}
               <a
                 href="https://github.com/tyrelchambers/rigel/releases"
                 target="_blank"
                 rel="noopener noreferrer"
                 class="text-accent underline-offset-2 hover:underline"
-              >
-                GitHub releases
-              </a>
-              in the meantime.
+              >GitHub releases</a>{" "}in the meantime.
             </p>
           </div>
         ) : (
