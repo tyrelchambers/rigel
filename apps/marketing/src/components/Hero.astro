@@ -1,24 +1,83 @@
 ---
 import { Icon } from "astro-icon/components";
-import RadarCompass from "./RadarCompass.astro";
+
+// Orbital-constellation tiles. Real ecosystem logos (simple-icons), scattered
+// around the headline and given depth for the mouse parallax below.
+const tiles = [
+    { label: "kubectl", icon: "simple-icons:kubernetes", depth: 1.9, pos: "left:23%;top:40px" },
+    { label: "Flux", icon: "simple-icons:flux", depth: 1.9, pos: "right:23%;top:40px" },
+    { label: "Helm", icon: "simple-icons:helm", depth: 1.4, pos: "left:6%;top:128px" },
+    { label: "Prometheus", icon: "simple-icons:prometheus", depth: 1.4, pos: "right:6%;top:128px" },
+    { label: "Argo CD", icon: "simple-icons:argo", depth: 1.0, pos: "left:3.5%;top:346px" },
+    { label: "Grafana", icon: "simple-icons:grafana", depth: 1.0, pos: "right:3.5%;top:346px" },
+];
+
+const navItems = [
+    { icon: "lucide:layout-dashboard", label: "Overview", active: true },
+    { icon: "lucide:box", label: "Workloads" },
+    { icon: "lucide:scroll-text", label: "Logs" },
+    { icon: "lucide:hard-drive", label: "Storage" },
+    { icon: "lucide:key-round", label: "RBAC" },
+    { icon: "lucide:settings", label: "Settings" },
+];
+
+const metrics = [
+    { label: "CPU", value: "42%", delta: "-6% today" },
+    { label: "Memory", value: "61%", delta: "steady" },
+    { label: "Pods ready", value: "8 / 8", delta: "all healthy" },
+];
+
+const rows = [
+    { name: "postgres", ns: "data" },
+    { name: "grafana", ns: "observability" },
+    { name: "vaultwarden", ns: "apps" },
+    { name: "immich-server", ns: "media" },
+    { name: "ingress-nginx", ns: "kube-system" },
+];
 ---
 
-<section id="top" class="chart-grid relative overflow-hidden bg-surface-sunken">
+<section
+    id="top"
+    class="chart-grid relative overflow-hidden border-b border-line-subtle bg-surface-sunken"
+>
     <div
-        class="relative mx-auto grid max-w-[1200px] items-center gap-16 px-6 py-20 sm:px-8 lg:grid-cols-[minmax(0,1fr)_440px] lg:gap-10 lg:py-28 lg:px-12"
+        class="glow absolute left-1/2 top-8 size-[720px] -translate-x-1/2 opacity-[0.10]"
     >
-        <div class="max-w-xl">
+    </div>
+
+    <!-- Orbital tiles (decorative, desktop only) -->
+    <div class="pointer-events-none absolute inset-0 z-0 hidden lg:block" aria-hidden="true">
+        {
+            tiles.map((t) => (
+                <div
+                    data-tile
+                    data-depth={t.depth}
+                    class="absolute flex flex-col items-center gap-2 transition-transform duration-200 ease-out will-change-transform"
+                    style={t.pos}
+                >
+                    <div class="grid size-16 place-items-center rounded-[14px] border border-line-subtle bg-surface-elevated/70 shadow-[0_10px_28px_-10px_rgba(0,0,0,0.7)] backdrop-blur-sm">
+                        <Icon name={t.icon} class="size-[26px] text-accent" />
+                    </div>
+                    <span class="font-mono text-[11px] tracking-tight text-fg-tertiary">
+                        {t.label}
+                    </span>
+                </div>
+            ))
+        }
+    </div>
+
+    <div class="relative z-10 mx-auto max-w-[1200px] px-6 pt-24 pb-16 sm:px-8 lg:px-12 lg:pt-28 lg:pb-20">
+        <div class="mx-auto max-w-[820px] text-center">
             <h1
                 class="rise text-[clamp(2.6rem,7vw,3.875rem)] font-bold leading-[1.02] tracking-[-0.03em]"
                 style="animation-delay:0.05s"
             >
                 <span class="block text-fg">Run your own Kubernetes</span>
-                <span class="block text-fg-secondary">without an ops team.</span
-                >
+                <span class="block text-accent">without an ops team.</span>
             </h1>
 
             <p
-                class="rise mt-7 max-w-[560px] text-[17px] leading-relaxed text-fg-secondary"
+                class="rise mx-auto mt-7 max-w-[600px] text-[17px] leading-relaxed text-fg-secondary"
                 style="animation-delay:0.15s"
             >
                 Rigel is an AI-assisted Kubernetes management tool. It connects
@@ -28,7 +87,7 @@ import RadarCompass from "./RadarCompass.astro";
             </p>
 
             <div
-                class="rise mt-8 flex flex-wrap items-center gap-3.5"
+                class="rise mt-8 flex flex-wrap items-center justify-center gap-3.5"
                 style="animation-delay:0.25s"
             >
                 <a
@@ -51,11 +110,146 @@ import RadarCompass from "./RadarCompass.astro";
             </div>
         </div>
 
+        <!-- Dashboard window preview -->
         <div
-            class="rise mx-auto w-full max-w-[440px]"
-            style="animation-delay:0.2s"
+            class="rise mx-auto mt-16 w-full max-w-[1040px] overflow-hidden rounded-2xl border border-line-subtle bg-surface-elevated shadow-[0_44px_120px_-40px_rgba(0,0,0,0.85)] lg:mt-20"
+            style="animation-delay:0.3s"
         >
-            <RadarCompass />
+            <div
+                class="flex items-center gap-3 border-b border-line-subtle bg-surface-sunken px-4 py-3"
+            >
+                <div class="flex items-center gap-1.5">
+                    <span class="size-3 rounded-full bg-failed/80"></span>
+                    <span class="size-3 rounded-full bg-pending/80"></span>
+                    <span class="size-3 rounded-full bg-running/80"></span>
+                </div>
+                <span
+                    class="mx-auto font-mono text-[11.5px] text-fg-tertiary"
+                    >rigel · cluster-prod</span
+                >
+            </div>
+
+            <div class="flex">
+                <div
+                    class="hidden w-[172px] shrink-0 flex-col gap-0.5 border-r border-line-subtle p-3 sm:flex"
+                >
+                    {
+                        navItems.map((n) => (
+                            <div
+                                class:list={[
+                                    "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px]",
+                                    n.active
+                                        ? "bg-accent/10 text-fg"
+                                        : "text-fg-secondary",
+                                ]}
+                            >
+                                <Icon
+                                    name={n.icon}
+                                    class:list={[
+                                        "size-4",
+                                        n.active ? "text-accent" : "text-fg-tertiary",
+                                    ]}
+                                />
+                                {n.label}
+                            </div>
+                        ))
+                    }
+                </div>
+
+                <div class="flex-1 p-5">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-[15px] font-semibold text-fg">
+                            Cluster Overview
+                        </h3>
+                        <span
+                            class="inline-flex items-center gap-1.5 rounded-md bg-accent px-2.5 py-1.5 text-[12px] font-semibold text-fg-inverse"
+                        >
+                            <Icon name="lucide:plus" class="size-3.5" />
+                            Deploy
+                        </span>
+                    </div>
+
+                    <div class="mt-4 grid grid-cols-3 gap-3">
+                        {
+                            metrics.map((m) => (
+                                <div class="rounded-lg border border-line-subtle bg-surface-sunken p-3.5">
+                                    <div class="font-mono text-[11px] tracking-wide text-fg-tertiary">
+                                        {m.label}
+                                    </div>
+                                    <div class="mt-1.5 text-[26px] font-bold leading-none tracking-tight text-fg">
+                                        {m.value}
+                                    </div>
+                                    <div class="mt-2 text-[11.5px] text-running">
+                                        {m.delta}
+                                    </div>
+                                </div>
+                            ))
+                        }
+                    </div>
+
+                    <div class="mt-3 flex flex-col divide-y divide-line-subtle rounded-lg border border-line-subtle">
+                        {
+                            rows.map((r) => (
+                                <div class="flex items-center gap-3 px-3.5 py-3">
+                                    <Icon
+                                        name="lucide:box"
+                                        class="size-4 shrink-0 text-fg-tertiary"
+                                    />
+                                    <span class="text-[13.5px] text-fg">
+                                        {r.name}
+                                    </span>
+                                    <span class="font-mono text-[11.5px] text-fg-tertiary">
+                                        {r.ns}
+                                    </span>
+                                    <span class="ml-auto inline-flex items-center gap-1.5 rounded-full bg-running/10 px-2.5 py-1 text-[11px] font-medium text-running">
+                                        <span class="size-1.5 rounded-full bg-running"></span>
+                                        Running
+                                    </span>
+                                </div>
+                            ))
+                        }
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </section>
+
+<script>
+    const reduce = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+    ).matches;
+    const hero = document.getElementById("top");
+    const tiles = hero
+        ? Array.from(hero.querySelectorAll<HTMLElement>("[data-tile]"))
+        : [];
+
+    if (hero && tiles.length && !reduce) {
+        let raf = 0;
+        let tx = 0;
+        let ty = 0;
+
+        const apply = () => {
+            raf = 0;
+            for (const t of tiles) {
+                const d = parseFloat(t.dataset.depth || "1");
+                t.style.transform = `translate3d(${tx * d * -24}px, ${ty * d * -24}px, 0)`;
+            }
+        };
+        const schedule = () => {
+            if (!raf) raf = requestAnimationFrame(apply);
+        };
+
+        hero.addEventListener("pointermove", (e) => {
+            const r = hero.getBoundingClientRect();
+            tx = (e.clientX - r.left) / r.width - 0.5;
+            ty = (e.clientY - r.top) / r.height - 0.5;
+            schedule();
+        });
+        hero.addEventListener("pointerleave", () => {
+            tx = 0;
+            ty = 0;
+            schedule();
+        });
+    }
+</script>
