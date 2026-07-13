@@ -65,7 +65,14 @@ export interface CNPGBackup {
   };
   status?: {
     phase?: string; // "completed" | "failed" | "running" | …
+    startedAt?: string; // RFC3339 — when the backup began
     stoppedAt?: string; // RFC3339 — when the backup finished
+    beginWal?: string;
+    endWal?: string;
+    /** volumeSnapshot-method backups: the VolumeSnapshots this run produced. */
+    backupSnapshotStatus?: {
+      elements?: Array<{ name?: string; type?: string; tablespaceName?: string }>;
+    };
   };
 }
 
