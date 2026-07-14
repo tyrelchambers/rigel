@@ -186,7 +186,13 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
             </div>
 
             {step === "email" ? (
-              <>
+              <form
+                className="flex flex-col gap-5"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSendCode();
+                }}
+              >
                 <div className="flex flex-col gap-1">
                   <h2 className="text-base font-semibold text-[var(--fg-primary)]">Sign in to Rigel</h2>
                   <p className="text-sm text-[var(--fg-secondary)]">
@@ -197,6 +203,7 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
                 <input
                   type="email"
                   placeholder="jane@acme.com"
+                  aria-label="Email address"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3 py-2.5 text-sm text-[var(--fg-primary)] outline-none placeholder:text-[var(--fg-tertiary)] focus:border-primary/50"
@@ -206,12 +213,18 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
                   <div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div>
                 )}
 
-                <Button className="w-full" disabled={busy} onClick={handleSendCode}>
+                <Button type="submit" className="w-full" disabled={busy}>
                   Send code
                 </Button>
-              </>
+              </form>
             ) : (
-              <>
+              <form
+                className="flex flex-col gap-5"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleVerify();
+                }}
+              >
                 <div className="flex flex-col gap-1">
                   <h2 className="text-base font-semibold text-[var(--fg-primary)]">Check your email</h2>
                   <p className="text-sm text-[var(--fg-secondary)]">
@@ -235,15 +248,16 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
                   <div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div>
                 )}
 
-                <Button className="w-full" disabled={busy || code.length < 6} onClick={handleVerify}>
+                <Button type="submit" className="w-full" disabled={busy || code.length < 6}>
                   Verify &amp; sign in
                 </Button>
 
                 <div className="flex items-center justify-between">
                   <button
                     type="button"
-                    onClick={() => account.requestCode(email)}
-                    className="text-xs font-medium text-[var(--fg-secondary)] transition-colors hover:text-[var(--fg-primary)]"
+                    onClick={handleSendCode}
+                    disabled={busy}
+                    className="text-xs font-medium text-[var(--fg-secondary)] transition-colors hover:text-[var(--fg-primary)] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Resend code
                   </button>
@@ -259,7 +273,7 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
                     Use a different email
                   </button>
                 </div>
-              </>
+              </form>
             )}
           </div>
         </DialogBody>

@@ -53,6 +53,14 @@ test("code step verifies", async () => {
   await waitFor(() => expect(acc.verifyCode).toHaveBeenCalledWith("a@b.co", "123456"));
 });
 
+test("submitting the email form sends a code", async () => {
+  const acc = fakeAccount();
+  render(<AccountModal open onOpenChange={vi.fn()} account={acc} />);
+  fireEvent.change(screen.getByPlaceholderText("jane@acme.com"), { target: { value: "a@b.co" } });
+  fireEvent.submit(screen.getByPlaceholderText("jane@acme.com").closest("form")!);
+  await waitFor(() => expect(acc.requestCode).toHaveBeenCalledWith("a@b.co"));
+});
+
 test("invalid code shows an error", async () => {
   const acc = fakeAccount({ verifyCode: vi.fn().mockResolvedValue({ ok: false, status: 401 }) });
   render(<AccountModal open onOpenChange={vi.fn()} account={acc} />);
