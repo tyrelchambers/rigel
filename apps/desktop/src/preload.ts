@@ -1,9 +1,13 @@
 import { contextBridge, ipcRenderer } from "electron";
 
+const sessionArg = process.argv.find((a) => a.startsWith("--rigel-session="));
+const sessionSecret = sessionArg ? sessionArg.slice("--rigel-session=".length) : "";
+
 contextBridge.exposeInMainWorld("rigel", {
   desktop: true,
   platform: process.platform,
   electronVersion: process.versions.electron,
+  sessionSecret,
   /** Record + deliver the signup. Resolves once captured locally (delivery retries in the background). */
   submitSignup: (data: { name: string; email: string }): Promise<{ ok: true }> =>
     ipcRenderer.invoke("rigel:submit-signup", data),

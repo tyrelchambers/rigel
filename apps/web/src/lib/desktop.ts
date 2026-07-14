@@ -6,6 +6,7 @@ export interface RigelBridge {
   desktop: true;
   platform: string;
   electronVersion: string;
+  sessionSecret: string;
   submitSignup(data: { name: string; email: string }): Promise<{ ok: true }>;
   getSignupData(): Promise<{ name: string; email: string } | null>;
   openChartFile?(): Promise<{ canceled: boolean; path?: string }>;
