@@ -33,8 +33,9 @@ import { TerminalDrawer, TOGGLE_TERMINAL_EVENT } from "@/shell/TerminalDrawer";
 import { ResourceYamlViewer } from "@/components/ResourceYamlViewer";
 import { Toaster } from "@/components/ui/sonner";
 import { connectCluster } from "@/lib/ws";
-import { useAgents } from "@/lib/api";
+import { useAgents, useContexts } from "@/lib/api";
 import { shouldAutoOpenOnboarding } from "@/shell/onboarding/shouldAutoOpen";
+import { ClusterOnboarding } from "@/shell/onboarding/ClusterOnboarding";
 import { OnboardingWizard } from "@/shell/OnboardingWizard";
 import { LoginGate } from "@/shell/LoginGate";
 import NavStrip from "@/shell/NavStrip";
@@ -96,6 +97,9 @@ function AppContent({ account }: { account: UseAccountResult }) {
     connectCluster();
   }, []);
   const [paletteOpen, setPaletteOpen] = useCommandPalette();
+
+  const { data: contexts } = useContexts();
+  const [clusterSkipped, setClusterSkipped] = useState(false);
 
   // Whole-sidebar collapse (icon-only rail). Owned here, persisted on change,
   // driven by the GlobalHeader toggle. Distinct from the per-group nav collapse.
@@ -225,6 +229,10 @@ function AppContent({ account }: { account: UseAccountResult }) {
       window.removeEventListener(TOGGLE_TERMINAL_EVENT, toggleTerminal);
     };
   }, [toggleTerminal]);
+
+  if (contexts && contexts.length === 0 && !clusterSkipped) {
+    return <ClusterOnboarding onSkip={() => setClusterSkipped(true)} />;
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--surface-primary)" }}>
