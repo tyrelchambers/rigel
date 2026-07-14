@@ -6,7 +6,7 @@
 // an empty efforts list), mirroring the runner wiring in claudeBridge/codexBridge/
 // opencodeBridge.
 import { spawn } from "node:child_process";
-import { ALLOWED_MODELS, ALLOWED_EFFORTS } from "./claudeBridge";
+import { ALLOWED_MODELS } from "./claudeBridge";
 import type { AgentId } from "./agentRegistry";
 
 export interface AgentModels {
@@ -57,60 +57,80 @@ export function parseOpencodeModels(stdout: string): string[] {
 }
 
 /**
- * Run `opencode models` and parse its stdout. Returns [] (never throws) if the
- * spawn fails — e.g. opencode isn't installed. Captures stdout fully (it's a short
- * listing) and kills the process after a modest timeout so a hang can't block.
+ * Parse the reasoning-effort levels out of `claude --help`. The `--effort` line
+ * documents its accepted values as a parenthesised list (e.g. `(low, medium, high,
+ * xhigh, max)`), which may wrap onto the next line; we grab the first parenthesised
+ * group after `--effort` and keep the lowercase tokens, order preserved. Pure +
+ * exported so it's unit-testable without spawning claude. [] if nothing matches.
  */
-async function listOpencodeModels(): Promise<string[]> {
+export function parseClaudeEfforts(helpText: string): string[] {
+  const group = helpText.match(/--effort[\s\S]*?\(([^)]+)\)/);
+  if (!group) return [];
+  const seen = new Set<string>();
+  for (const raw of group[1].split(",")) {
+    const tok = raw.trim();
+    if (/^[a-z]+$/.test(tok)) seen.add(tok);
+  }
+  return [...seen];
+}
+
+/**
+ * Spawn a short-lived listing/help command and return its full stdout. Returns ""
+ * (never throws) if the spawn fails — e.g. the binary isn't installed. Kills the
+ * process after a modest timeout so a hang can't block the picker request.
+ */
+function captureCliStdout(cmd: string, args: string[], timeoutMs = 10_000): Promise<string> {
   return new Promise((resolve) => {
     let settled = false;
-    const done = (out: string) => {
+    const chunks: Buffer[] = [];
+    const done = () => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve(parseOpencodeModels(out));
+      resolve(Buffer.concat(chunks).toString("utf8"));
     };
 
     let proc: ReturnType<typeof spawn>;
     try {
-      proc = spawn("opencode", ["models"], { stdio: ["ignore", "pipe", "ignore"] });
+      proc = spawn(cmd, args, { stdio: ["ignore", "pipe", "ignore"] });
     } catch {
-      resolve([]); // spawn threw synchronously (rare) → no models
+      resolve(""); // spawn threw synchronously (rare)
       return;
     }
 
-    const chunks: Buffer[] = [];
     proc.stdout?.on("data", (b: Buffer) => chunks.push(b));
-    // Missing binary (ENOENT) or any spawn error → no models, don't throw.
+    // Missing binary (ENOENT) or any spawn error → empty output, don't throw.
     proc.on("error", () => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve([]);
+      resolve("");
     });
-    proc.on("close", () => done(Buffer.concat(chunks).toString("utf8")));
+    proc.on("close", done);
 
-    // Guard against a hang: `opencode models` exits on its own, but kill after 10s
-    // and parse whatever we captured so the picker request can't stall forever.
     const timer = setTimeout(() => {
       try {
         proc.kill();
       } catch {
         /* already gone */
       }
-      done(Buffer.concat(chunks).toString("utf8"));
-    }, 10_000);
+      done();
+    }, timeoutMs);
   });
 }
 
+const listOpencodeModels = async () => parseOpencodeModels(await captureCliStdout("opencode", ["models"]));
+const listClaudeEfforts = async () => parseClaudeEfforts(await captureCliStdout("claude", ["--help"]));
+
 /**
- * The models + efforts a given agent can run. claude/codex are static; opencode is
- * discovered live via `opencode models`; an unknown id yields empty lists.
+ * The models + efforts a given agent can run. Effort is a Claude-only concept and
+ * its levels are discovered live from `claude --help`; opencode's models come from
+ * `opencode models`. codex/gemini expose no CLI listing, so their model sets are
+ * curated (ALLOWED_MODELS / CODEX_MODELS / GEMINI_MODELS). Unknown id → empty lists.
  */
 export async function agentModels(id: AgentId): Promise<AgentModels> {
   if (id === "claude") {
-    // Reuse claudeBridge's ALLOWED_* so the picker stays in sync with the runner.
-    return { models: [...ALLOWED_MODELS], efforts: [...ALLOWED_EFFORTS] };
+    return { models: [...ALLOWED_MODELS], efforts: await listClaudeEfforts() };
   }
   if (id === "codex") {
     return { models: [...CODEX_MODELS], efforts: [] };

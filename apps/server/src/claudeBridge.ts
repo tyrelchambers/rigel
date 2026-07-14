@@ -222,8 +222,6 @@ export const ALLOWED_MODELS = new Set([
  */
 const CLAUDE_ALIASES = new Set(["opus", "sonnet", "haiku", "fable"]);
 
-export const ALLOWED_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
-
 /**
  * True when `model` is a Claude model string the `claude` CLI accepts for --model:
  * one of our advertised full ids or a bare latest-alias. Used (a) to gate the
@@ -271,7 +269,7 @@ export function buildClaudeArgs(
   // Apply the composer's model/effort selection as launch flags (validated so a
   // bad value can't inject arbitrary args or break the CLI).
   if (opts?.model && isClaudeModel(opts.model)) argv.push("--model", opts.model);
-  if (opts?.effort && ALLOWED_EFFORTS.has(opts.effort)) argv.push("--effort", opts.effort);
+  if (opts?.effort && /^[a-z]+$/.test(opts.effort)) argv.push("--effort", opts.effort);
   // Resume the prior session so the model keeps conversation + action-result
   // history across turns. Only when we actually have an id (first turn is fresh).
   if (opts?.sessionId) argv.push("--resume", opts.sessionId);

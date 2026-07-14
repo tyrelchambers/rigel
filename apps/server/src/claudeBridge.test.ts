@@ -290,9 +290,16 @@ test("buildClaudeArgs still validates model/effort", () => {
   const ok = buildClaudeArgs("hi", null, { model: "opus", effort: "high" });
   expect(ok).toContain("--model");
   expect(ok[ok.indexOf("--model") + 1]).toBe("opus");
-  const bad = buildClaudeArgs("hi", null, { model: "evil; rm -rf", effort: "nope" });
+  // Injection-shaped values are dropped: the model isn't a known id, and the effort
+  // isn't a bare lowercase token.
+  const bad = buildClaudeArgs("hi", null, { model: "evil; rm -rf", effort: "high; rm -rf" });
   expect(bad).not.toContain("--model");
   expect(bad).not.toContain("--effort");
+  // A well-formed but unrecognised effort still passes through — the `claude` CLI is
+  // the source of truth for valid levels (agentModels reads them from `claude --help`)
+  // and safely ignores an unknown one, so buildClaudeArgs only guards the shape.
+  const passthru = buildClaudeArgs("hi", null, { effort: "turbo" });
+  expect(passthru[passthru.indexOf("--effort") + 1]).toBe("turbo");
 });
 
 test("permissionHookSettings registers a PreToolUse Bash hook run under Node (tsx)", () => {
