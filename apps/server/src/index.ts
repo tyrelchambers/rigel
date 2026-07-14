@@ -65,11 +65,13 @@ import { handleMatrix, type MatrixRequest } from "./matrix";
 import { handleChannelTest, type ChannelTestRequest } from "./channels";
 import { PortForwardManager, type TargetKind } from "./portForward";
 import { makeFatalHandler } from "./fatalHandler";
+import { checkSessionSecret } from "./sessionAuth";
 
 const KUBECONFIG = resolveKubeconfigPath(process.env, homedir());
 const PORT = Number(process.env.PORT ?? 8787);
 // Electron sets 127.0.0.1 (loopback-only); Docker/Helm keep 0.0.0.0.
 const HOST = process.env.HOST ?? "0.0.0.0"; // Electron pins 127.0.0.1; Docker/Helm keep 0.0.0.0
+const SESSION_SECRET = process.env.RIGEL_SESSION_SECRET ?? "";
 
 // Upstream metrics-server manifest (onboarding one-click install).
 const METRICS_SERVER_URL =
@@ -141,6 +143,10 @@ async function handler(req: Request): Promise<Response> {
 
     if (url.pathname === "/api/health") {
       return Response.json({ ok: true, kubeconfig: KUBECONFIG });
+    }
+
+    if (url.pathname.startsWith("/api/") && !checkSessionSecret(req.headers.get("x-rigel-session"), SESSION_SECRET)) {
+      return new Response("unauthorized", { status: 401 });
     }
 
     // GET /api/contexts — all selectable kubeconfig contexts (for the cluster
@@ -1256,6 +1262,10 @@ httpServer.on("upgrade", (req: IncomingMessage, socket, head) => {
   try {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
     if (url.pathname !== "/ws") {
+      socket.destroy();
+      return;
+    }
+    if (!checkSessionSecret(url.searchParams.get("s"), SESSION_SECRET)) {
       socket.destroy();
       return;
     }
