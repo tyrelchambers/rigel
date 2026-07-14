@@ -44,7 +44,7 @@ import ChatPane, { type ChatPaneHandle } from "@/shell/ChatPane";
 import { CommandPalette, useCommandPalette } from "@/shell/CommandPalette";
 import { GlobalHeader } from "@/shell/GlobalHeader";
 import { AccountModal } from "@/shell/AccountModal";
-import { useAccount } from "@/shell/useAccount";
+import { useAccount, type UseAccountResult } from "@/shell/useAccount";
 import { loadSidebarCollapsed, saveSidebarCollapsed } from "@/shell/navCollapse";
 import { registerChatReveal } from "@/lib/chatHandoff";
 
@@ -79,6 +79,19 @@ function PaddedX({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  const account = useAccount();
+
+  if (account.status === "loading") {
+    return <div style={{ height: "100vh", background: "var(--surface-sunken)" }} />;
+  }
+  if (account.status === "signed-out") {
+    return <LoginGate account={account} />;
+  }
+
+  return <AppContent account={account} />;
+}
+
+function AppContent({ account }: { account: UseAccountResult }) {
   useEffect(() => {
     connectCluster();
   }, []);
@@ -100,10 +113,9 @@ export default function App() {
   const { data: agentsData } = useAgents();
   const [showOnboarding, setShowOnboarding] = useState(false);
 
-  // Account modal — session state (sign-in/out) is owned by useAccount. The
-  // app is gated on account.status below: signed-out renders ONLY LoginGate.
+  // Account modal — session state (sign-in/out) is owned by useAccount, gated
+  // in App above (signed-out renders ONLY LoginGate, never this component).
   const [accountOpen, setAccountOpen] = useState(false);
-  const account = useAccount();
 
   useEffect(() => {
     const open = () => setShowOnboarding(true);
@@ -118,7 +130,6 @@ export default function App() {
     if (onboardingHandledRef.current) return;
     if (
       shouldAutoOpenOnboarding({
-        accountMissing: false,
         agents: agentsData,
         onboarded: localStorage.getItem("rigel_onboarded") !== null,
       })
@@ -214,13 +225,6 @@ export default function App() {
       window.removeEventListener(TOGGLE_TERMINAL_EVENT, toggleTerminal);
     };
   }, [toggleTerminal]);
-
-  if (account.status === "loading") {
-    return <div style={{ height: "100vh", background: "var(--surface-sunken)" }} />;
-  }
-  if (account.status === "signed-out") {
-    return <LoginGate account={account} />;
-  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--surface-primary)" }}>

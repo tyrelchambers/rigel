@@ -32,20 +32,16 @@ describe("activeAgentConnected", () => {
 });
 
 describe("shouldAutoOpenOnboarding", () => {
-  it("does NOT open while the account gate is unresolved", () => {
-    expect(shouldAutoOpenOnboarding({ accountMissing: null, agents: notConnected, onboarded: false })).toBe(false);
-    expect(shouldAutoOpenOnboarding({ accountMissing: true, agents: notConnected, onboarded: false })).toBe(false);
-  });
   it("does NOT open while agents are still loading", () => {
-    expect(shouldAutoOpenOnboarding({ accountMissing: false, agents: undefined, onboarded: false })).toBe(false);
+    expect(shouldAutoOpenOnboarding({ agents: undefined, onboarded: false })).toBe(false);
   });
   it("does NOT open once the user has been onboarded", () => {
-    expect(shouldAutoOpenOnboarding({ accountMissing: false, agents: notConnected, onboarded: true })).toBe(false);
+    expect(shouldAutoOpenOnboarding({ agents: notConnected, onboarded: true })).toBe(false);
   });
-  it("opens when the account gate cleared, agents loaded, and no agent is connected", () => {
-    expect(shouldAutoOpenOnboarding({ accountMissing: false, agents: notConnected, onboarded: false })).toBe(true);
+  it("opens when agents loaded and no agent is connected", () => {
+    expect(shouldAutoOpenOnboarding({ agents: notConnected, onboarded: false })).toBe(true);
   });
   it("does NOT open for a connected Codex-only user (the HELM-12 bug)", () => {
-    expect(shouldAutoOpenOnboarding({ accountMissing: false, agents: codexActive, onboarded: false })).toBe(false);
+    expect(shouldAutoOpenOnboarding({ agents: codexActive, onboarded: false })).toBe(false);
   });
 });
