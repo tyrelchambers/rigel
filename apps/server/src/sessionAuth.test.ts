@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { checkSessionSecret } from "./sessionAuth";
+import { checkSessionSecret, accessAllowed } from "./sessionAuth";
 
 describe("checkSessionSecret", () => {
   it("allows everything when no secret is configured (empty expected = disabled)", () => {
@@ -22,5 +22,18 @@ describe("checkSessionSecret", () => {
     // guard let it reach timingSafeEqual, which throws on unequal byte lengths.
     expect(checkSessionSecret("s3cr3é", "s3cr3t")).toBe(false);
     expect(checkSessionSecret("é", "s3cr3t")).toBe(false);
+  });
+});
+
+describe("accessAllowed", () => {
+  it("is fully open when no secret is configured (web-dev/Docker)", () => {
+    expect(accessAllowed(null, "", false)).toBe(true);
+    expect(accessAllowed("whatever", "", false)).toBe(true);
+  });
+  it("requires the session secret AND signed-in when configured", () => {
+    expect(accessAllowed("sekret", "sekret", true)).toBe(true);
+    expect(accessAllowed("sekret", "sekret", false)).toBe(false);
+    expect(accessAllowed("wrong", "sekret", true)).toBe(false);
+    expect(accessAllowed(null, "sekret", true)).toBe(false);
   });
 });
