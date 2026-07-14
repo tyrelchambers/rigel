@@ -9,12 +9,14 @@
 // Trust model: the server has no built-in auth. It's bound to loopback
 // (HOST=127.0.0.1) and is only ever reachable by this desktop app on the same
 // machine.
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell, utilityProcess, type UtilityProcess } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, safeStorage, shell, utilityProcess, type UtilityProcess } from "electron";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { readFileSync, writeFileSync, chmodSync, mkdirSync } from "node:fs";
 import { InstallStore } from "./installStore";
 import { submitSignup, deliver } from "./signup";
+import { AccountStore } from "./accountStore";
+import { createAccountClient } from "./accountClient";
 import { decideRestart } from "./restartPolicy";
 
 const SIGNUP_ENDPOINT = "https://api.rigel.run";
@@ -372,10 +374,18 @@ async function boot(): Promise<void> {
   // Background retry of any undelivered signup (offline on a previous run).
   void deliver(installStore, fetch, SIGNUP_ENDPOINT, SIGNUP_APP_KEY);
 
+  const accountStore = new AccountStore(app.getPath("userData"), safeStorage);
+  const accountClient = createAccountClient({ store: accountStore, fetchFn: fetch, endpoint: SIGNUP_ENDPOINT });
+  void accountClient.me(); // launch refresh: validate/clear a stale token (me() clears on 401)
+
   ipcMain.handle("rigel:submit-signup", (_e, data: { name: string; email: string }) =>
     submitSignup(installStore, fetch, SIGNUP_ENDPOINT, SIGNUP_APP_KEY, data.name, data.email, app.getVersion(), process.platform),
   );
   ipcMain.handle("rigel:get-signup-data", () => installStore.profile);
+  ipcMain.handle("rigel:account:request-code", (_e, email: string) => accountClient.requestCode(email));
+  ipcMain.handle("rigel:account:verify-code", (_e, d: { email: string; code: string }) => accountClient.verifyCode(d.email, d.code));
+  ipcMain.handle("rigel:account:me", () => accountClient.me());
+  ipcMain.handle("rigel:account:sign-out", () => accountClient.signOut());
   ipcMain.handle("rigel:open-chart-file", async () => {
     const res = await dialog.showOpenDialog({
       title: "Select a Helm chart (.tgz) or chart folder",
