@@ -35,9 +35,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { connectCluster } from "@/lib/ws";
 import { useAgents } from "@/lib/api";
 import { shouldAutoOpenOnboarding } from "@/shell/onboarding/shouldAutoOpen";
-import { rigel } from "@/lib/desktop";
 import { OnboardingWizard } from "@/shell/OnboardingWizard";
-import { AccountGate } from "@/shell/AccountGate";
+import { LoginGate } from "@/shell/LoginGate";
 import NavStrip from "@/shell/NavStrip";
 import { ClusterRail } from "@/shell/ClusterRail";
 import StatusBar from "@/shell/StatusBar";
@@ -98,14 +97,11 @@ export default function App() {
 
   // First-run onboarding: auto-show once when no AI agent is connected (any
   // backend) and not previously dismissed; re-openable from Settings via an event.
-  // Name/email capture is handled earlier by the full-screen AccountGate below.
   const { data: agentsData } = useAgents();
   const [showOnboarding, setShowOnboarding] = useState(false);
-  // First-run gate: the app does not render until name+email exist. `null` =
-  // still checking (desktop); off-desktop there's no bridge, so no gate.
-  const [accountMissing, setAccountMissing] = useState<boolean | null>(rigel ? null : false);
 
-  // Account modal — session state (sign-in/out) is owned by useAccount.
+  // Account modal — session state (sign-in/out) is owned by useAccount. The
+  // app is gated on account.status below: signed-out renders ONLY LoginGate.
   const [accountOpen, setAccountOpen] = useState(false);
   const account = useAccount();
 
@@ -113,15 +109,6 @@ export default function App() {
     const open = () => setShowOnboarding(true);
     window.addEventListener("rigel:open-setup", open);
     return () => window.removeEventListener("rigel:open-setup", open);
-  }, []);
-  useEffect(() => {
-    if (!rigel) return; // off-desktop: no gate (accountMissing starts false)
-    let cancelled = false;
-    rigel
-      .getSignupData()
-      .then((p) => { if (!cancelled) setAccountMissing(!p || !p.name || !p.email); })
-      .catch(() => { if (!cancelled) setAccountMissing(true); });
-    return () => { cancelled = true; };
   }, []);
 
   // Suppresses auto-open once onboarding has been closed or left this session, so
@@ -131,14 +118,14 @@ export default function App() {
     if (onboardingHandledRef.current) return;
     if (
       shouldAutoOpenOnboarding({
-        accountMissing,
+        accountMissing: false,
         agents: agentsData,
         onboarded: localStorage.getItem("rigel_onboarded") !== null,
       })
     ) {
       setShowOnboarding(true);
     }
-  }, [agentsData, accountMissing]);
+  }, [agentsData]);
   function closeOnboarding() {
     onboardingHandledRef.current = true;
     setShowOnboarding(false);
@@ -228,11 +215,11 @@ export default function App() {
     };
   }, [toggleTerminal]);
 
-  if (accountMissing === null) {
+  if (account.status === "loading") {
     return <div style={{ height: "100vh", background: "var(--surface-sunken)" }} />;
   }
-  if (accountMissing) {
-    return <AccountGate onDone={() => setAccountMissing(false)} />;
+  if (account.status === "signed-out") {
+    return <LoginGate account={account} />;
   }
 
   return (
