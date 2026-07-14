@@ -64,6 +64,14 @@ export function createAccountClient({ store, fetchFn, endpoint }: AccountClientD
       return { ok: true, account: body.account };
     },
 
+    async verifyLink(token: string): Promise<VerifyResult> {
+      const res = await postJson("/auth/verify-link", { token });
+      if (!res.ok) return { ok: false, status: res.status };
+      const body = (await res.json()) as { token: string; account: Account };
+      store.setToken(body.token);
+      return { ok: true, account: body.account };
+    },
+
     async me(): Promise<MePayload | null> {
       const token = store.getToken();
       if (!token) return null;

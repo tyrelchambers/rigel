@@ -52,6 +52,29 @@ test("verifyCode returns the status and stores no token on failure", async () =>
   expect(store.value).toBeNull();
 });
 
+test("verifyLink stores the token and returns the account on 200", async () => {
+  const store = memStore();
+  const calls: { url: string; init?: RequestInit }[] = [];
+  const fetchFn = (async (url: string, init?: RequestInit) => {
+    calls.push({ url, init });
+    expect(url).toBe(`${ENDPOINT}/auth/verify-link`);
+    return jsonResponse({ token: "tok-link", account: { id: "1", email: "a@b.co", name: "Jane" } });
+  }) as typeof fetch;
+  const client = createAccountClient({ store, fetchFn, endpoint: ENDPOINT });
+  const r = await client.verifyLink("linktoken123");
+  expect(r).toEqual({ ok: true, account: { id: "1", email: "a@b.co", name: "Jane" } });
+  expect(store.value).toBe("tok-link");
+  expect(JSON.parse(calls[0].init!.body as string)).toEqual({ token: "linktoken123" });
+});
+
+test("verifyLink returns the status and stores no token on failure", async () => {
+  const store = memStore();
+  const fetchFn = (async () => jsonResponse({ error: "invalid or expired link" }, 401)) as typeof fetch;
+  const client = createAccountClient({ store, fetchFn, endpoint: ENDPOINT });
+  expect(await client.verifyLink("nope")).toEqual({ ok: false, status: 401 });
+  expect(store.value).toBeNull();
+});
+
 test("me sends the bearer and returns the full payload", async () => {
   const calls: RequestInit[] = [];
   const fetchFn = (async (_u: string, init?: RequestInit) => { calls.push(init!); return jsonResponse({ account: { id: "1", email: "a@b.co", name: "Jane" } }); }) as typeof fetch;
