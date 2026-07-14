@@ -64,13 +64,20 @@ describe("buildCodexArgs", () => {
     }
   });
 
-  test("no -m when opts.model is absent; opts.effort is always ignored", () => {
-    const argv = buildCodexArgs("hi", null, { effort: "high" });
+  test("no -m when opts.model is absent", () => {
+    const argv = buildCodexArgs("hi", null, {});
     expect(argv).not.toContain("-m");
     expect(argv).not.toContain("--model");
-    // Effort is out of scope for Codex.
-    expect(argv).not.toContain("--effort");
-    expect(argv).not.toContain("high");
+  });
+
+  test("applies a valid effort as `-c model_reasoning_effort=<level>`; drops an invalid one", () => {
+    const ok = buildCodexArgs("hi", null, { effort: "high" });
+    expect(ok).toContain("model_reasoning_effort=high");
+    // The value rides on a -c override (resume-accepted), not a bespoke flag.
+    expect(ok[ok.indexOf("model_reasoning_effort=high") - 1]).toBe("-c");
+
+    const bad = buildCodexArgs("hi", null, { effort: "nope" });
+    expect(bad.some((a) => a.startsWith("model_reasoning_effort="))).toBe(false);
   });
 
   test("resume form inserts `resume <sessionId>` right after exec when sessionId is set", () => {

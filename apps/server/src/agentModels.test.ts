@@ -1,5 +1,5 @@
 import { test, expect, describe } from "vitest";
-import { agentModels, parseOpencodeModels, parseClaudeEfforts } from "./agentModels";
+import { agentModels, parseOpencodeModels } from "./agentModels";
 
 // ---------------------------------------------------------------------------
 // parseOpencodeModels — pure parser (no spawn; `opencode models` only lists)
@@ -38,39 +38,12 @@ describe("parseOpencodeModels", () => {
 });
 
 // ---------------------------------------------------------------------------
-// parseClaudeEfforts — pure parser over `claude --help` (no spawn)
-// ---------------------------------------------------------------------------
-describe("parseClaudeEfforts", () => {
-  test("pulls the parenthesised levels off the --effort line, even when wrapped", () => {
-    const help = [
-      "  --effort <level>                      Effort level for the current session",
-      "                                        (low, medium, high, xhigh, max)",
-      "  --exclude-dynamic-system-prompt-sections",
-    ].join("\n");
-    expect(parseClaudeEfforts(help)).toEqual(["low", "medium", "high", "xhigh", "max"]);
-  });
-
-  test("handles the levels on the same line as the flag", () => {
-    expect(parseClaudeEfforts("--effort <level>  Effort (low, medium, high)")).toEqual([
-      "low",
-      "medium",
-      "high",
-    ]);
-  });
-
-  test("no --effort flag (or no parenthesised group) → empty array", () => {
-    expect(parseClaudeEfforts("--model <model>  Model for the session")).toEqual([]);
-    expect(parseClaudeEfforts("")).toEqual([]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// agentModels — curated model sets for claude/codex/gemini; unknown → empty.
-// claude efforts + opencode models go through a live spawn, so we don't assert
-// their exact contents here (the pure parsers above cover the parsing).
+// agentModels — curated model+effort sets for claude/codex/gemini; opencode's
+// models go through a live spawn, so we assert its efforts (static) but not its
+// model list. Effort is wired for every provider except gemini.
 // ---------------------------------------------------------------------------
 describe("agentModels", () => {
-  test("claude → the full Claude model ids; efforts come from a live spawn", async () => {
+  test("claude → the full Claude model ids + the five effort levels", async () => {
     const r = await agentModels("claude");
     expect(r.models).toEqual([
       "claude-opus-4-8",
@@ -78,19 +51,25 @@ describe("agentModels", () => {
       "claude-haiku-4-5-20251001",
       "claude-fable-5",
     ]);
-    expect(Array.isArray(r.efforts)).toBe(true);
+    expect(r.efforts).toEqual(["low", "medium", "high", "xhigh", "max"]);
   });
 
-  test("codex → the curated codex model set, no efforts", async () => {
+  test("codex → the curated codex model set + its effort levels", async () => {
     const r = await agentModels("codex");
     expect(r.models).toEqual(["gpt-5-codex", "gpt-5.4", "gpt-5"]);
-    expect(r.efforts).toEqual([]);
+    expect(r.efforts).toEqual(["minimal", "low", "medium", "high", "xhigh"]);
   });
 
-  test("gemini → the curated gemini model set, no efforts", async () => {
+  test("gemini → the curated gemini model set, no efforts (no CLI lever)", async () => {
     const r = await agentModels("gemini");
     expect(r.models).toEqual(["gemini-3-pro", "gemini-3-flash", "gemini-2.5-pro", "gemini-2.5-flash"]);
     expect(r.efforts).toEqual([]);
+  });
+
+  test("opencode → its effort levels (models are a live spawn)", async () => {
+    const r = await agentModels("opencode");
+    expect(r.efforts).toEqual(["low", "medium", "high"]);
+    expect(Array.isArray(r.models)).toBe(true);
   });
 
   test("unknown id → empty models + efforts", async () => {

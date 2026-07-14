@@ -30,6 +30,15 @@ import { streamAgentProcess, type ChatEvent } from "./agentProcess";
 import { isClaudeModel, type RunClaudeOpts } from "./claudeBridge";
 
 /**
+ * Reasoning-effort levels Codex accepts for `model_reasoning_effort`. Hardcoded —
+ * update when OpenAI ships a new one. `xhigh` only works on the newest codex models
+ * (gpt-5.1-codex-max / gpt-5.2-codex); Codex ignores/rejects a level its model can't
+ * run, so an over-reach degrades gracefully. Feeds the picker (agentModels) and the
+ * buildCodexArgs guard.
+ */
+export const CODEX_EFFORTS = new Set(["minimal", "low", "medium", "high", "xhigh"]);
+
+/**
  * Build the `codex exec` argv for one turn. Pure + exported so it can be unit
  * tested without spawning a subprocess (mirrors buildClaudeArgs).
  *
@@ -80,9 +89,15 @@ export function buildCodexArgs(
   // picker. Skip a stale Claude selection (alias like "opus" or a full id like
   // "claude-opus-4-8") — those aren't Codex models, so passing one would break the
   // CLI. Skipping lets Codex fall back to its configured default instead.
-  // Effort stays Codex-out-of-scope (opts.effort is ignored).
   if (opts?.model && !isClaudeModel(opts.model)) {
     flags.push("-m", opts.model);
+  }
+
+  // Effort: Codex has no `-e` flag on `exec`, so we set it via the same `-c` config
+  // override channel as the sandbox flags (resume-accepted). Validated against
+  // CODEX_EFFORTS so a bad/stale value can't inject a config key or arg.
+  if (opts?.effort && CODEX_EFFORTS.has(opts.effort)) {
+    flags.push("-c", `model_reasoning_effort=${opts.effort}`);
   }
 
   if (opts?.sessionId) {

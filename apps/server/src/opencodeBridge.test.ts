@@ -66,11 +66,18 @@ describe("buildOpencodeArgs", () => {
     }
   });
 
-  test("no -m when opts.model is absent; opts.effort is always ignored", () => {
-    const argv = buildOpencodeArgs("hi", null, { effort: "high" }, RUNDIR);
+  test("no -m when opts.model is absent", () => {
+    const argv = buildOpencodeArgs("hi", null, {}, RUNDIR);
     expect(argv).not.toContain("-m");
     expect(argv).not.toContain("--model");
-    expect(argv).not.toContain("high");
+  });
+
+  test("applies a valid effort as `--variant <level>`; drops an invalid one", () => {
+    const ok = buildOpencodeArgs("hi", null, { effort: "high" }, RUNDIR);
+    expect(ok[ok.indexOf("--variant") + 1]).toBe("high");
+
+    const bad = buildOpencodeArgs("hi", null, { effort: "max" }, RUNDIR);
+    expect(bad).not.toContain("--variant");
   });
 
   test("resume form adds `-s <sessionId>` when sessionId is set", () => {
