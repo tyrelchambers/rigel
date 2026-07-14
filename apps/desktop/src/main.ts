@@ -9,12 +9,15 @@
 // Trust model: the server has no built-in auth. It's bound to loopback
 // (HOST=127.0.0.1) and is only ever reachable by this desktop app on the same
 // machine.
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell, utilityProcess, type UtilityProcess } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, safeStorage, shell, utilityProcess, type UtilityProcess } from "electron";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { readFileSync, writeFileSync, chmodSync, mkdirSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { InstallStore } from "./installStore";
 import { submitSignup, deliver } from "./signup";
+import { AccountStore } from "./accountStore";
+import { createAccountClient } from "./accountClient";
 import { decideRestart } from "./restartPolicy";
 
 const SIGNUP_ENDPOINT = "https://api.rigel.run";
@@ -22,6 +25,9 @@ const SIGNUP_ENDPOINT = "https://api.rigel.run";
 // (obfuscation, NOT real auth; the endpoint is a public signup). Must match the
 // APP_KEY in the `rigel-signups` k8s Secret.
 const SIGNUP_APP_KEY = "3f0be9f2807280c51284681d4424e3883dab9650c1ae081c";
+// Minted once per launch; delivered to the forked server via env and to the
+// renderer via argv (see forkServer + createWindow). Gates /api/* + /ws.
+const SESSION_SECRET = randomBytes(24).toString("hex");
 
 // ── Layout ────────────────────────────────────────────────────────────────
 // In dev, __dirname is apps/desktop/dist. The server source and built web SPA
@@ -43,6 +49,15 @@ const APP_ICON = join(DESKTOP_DIR, "build", "icon.png");
 const SMOKE = process.env.HELMSMAN_SMOKE === "1";
 
 let serverProc: UtilityProcess | null = null;
+// Whether the account is currently signed in. Delivered to the forked server
+// via env at fork time (see forkServer) and pushed live on login/logout via
+// postMessage (see pushServerAuth) so the server's gating stays in sync
+// without a restart.
+let accountSignedIn = false;
+function pushServerAuth(signedIn: boolean): void {
+  accountSignedIn = signedIn;
+  serverProc?.postMessage({ type: "account-auth", signedIn });
+}
 let mainWindow: BrowserWindow | null = null;
 let serverPort = 0;
 // Set true once the user is intentionally quitting, so a server child killed as
@@ -205,6 +220,8 @@ function forkServer(port: number): UtilityProcess {
   if (process.env.PATH) env.PATH = process.env.PATH;
   // Expose the audit skills + rigel-audit CLI to the chat claude (see helper).
   configureAuditSkillsEnv(env);
+  env.RIGEL_SESSION_SECRET = SESSION_SECRET;
+  env.RIGEL_SIGNED_IN = accountSignedIn ? "1" : "0";
 
   let entry: string;
   let cwd: string;
@@ -334,6 +351,7 @@ function createWindow(port: number): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       preload: join(__dirname, "preload.js"),
+      additionalArguments: [`--rigel-session=${SESSION_SECRET}`],
     },
   });
 
@@ -372,10 +390,37 @@ async function boot(): Promise<void> {
   // Background retry of any undelivered signup (offline on a previous run).
   void deliver(installStore, fetch, SIGNUP_ENDPOINT, SIGNUP_APP_KEY);
 
+  const accountStore = new AccountStore(app.getPath("userData"), safeStorage);
+  const accountClient = createAccountClient({ store: accountStore, fetchFn: fetch, endpoint: SIGNUP_ENDPOINT });
+  // Set synchronously (BEFORE forkServer below) so the initial fork's env
+  // reflects reality with no race; refreshAccount() below corrects it async
+  // (e.g. a stale token that 401s) and pushes any change live.
+  accountSignedIn = accountStore.getToken() != null;
+
+  async function refreshAccount(): Promise<{ signedIn: boolean; account: { id: string; email: string; name: string | null } | null }> {
+    const payload = await accountClient.me(); // clears token on 401, keeps it on network-fail
+    const signedIn = accountStore.getToken() != null;
+    pushServerAuth(signedIn);
+    return { signedIn, account: payload?.account ?? null };
+  }
+  void refreshAccount();
+
   ipcMain.handle("rigel:submit-signup", (_e, data: { name: string; email: string }) =>
     submitSignup(installStore, fetch, SIGNUP_ENDPOINT, SIGNUP_APP_KEY, data.name, data.email, app.getVersion(), process.platform),
   );
   ipcMain.handle("rigel:get-signup-data", () => installStore.profile);
+  ipcMain.handle("rigel:account:request-code", (_e, email: string) => accountClient.requestCode(email));
+  ipcMain.handle("rigel:account:verify-code", async (_e, d: { email: string; code: string }) => {
+    const r = await accountClient.verifyCode(d.email, d.code);
+    if (r.ok) pushServerAuth(true);
+    return r;
+  });
+  ipcMain.handle("rigel:account:me", () => accountClient.me());
+  ipcMain.handle("rigel:account:sign-out", async () => {
+    await accountClient.signOut();
+    pushServerAuth(false);
+  });
+  ipcMain.handle("rigel:account:status", () => refreshAccount());
   ipcMain.handle("rigel:open-chart-file", async () => {
     const res = await dialog.showOpenDialog({
       title: "Select a Helm chart (.tgz) or chart folder",
@@ -435,7 +480,7 @@ async function runSmoke(port: number): Promise<void> {
 // (Electron 42's runtime) has a global WebSocket.
 function ptyUnderElectron(port: number): Promise<void> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?s=${SESSION_SECRET}`);
     const timer = setTimeout(() => {
       try { ws.close(); } catch { /* noop */ }
       reject(new Error("timed out waiting for DESKTOP_PTY_OK frame (10s)"));

@@ -1,4 +1,5 @@
 import { useCluster } from "@/store/cluster";
+import { rigel } from "@/lib/desktop";
 import type { ChatEvent } from "@/panels/chat/types";
 import type { ActionBlock } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
@@ -268,7 +269,8 @@ export function connectCluster(): void {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
   }
-  socket = new WebSocket(`ws://${location.host}/ws`);
+  const secret = rigel?.sessionSecret;
+  socket = new WebSocket(`ws://${location.host}/ws${secret ? `?s=${encodeURIComponent(secret)}` : ""}`);
   const store = useCluster.getState();
   socket.onopen = () => {
     reconnectAttempts = 0; // a healthy connection clears the backoff

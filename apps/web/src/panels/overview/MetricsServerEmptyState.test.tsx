@@ -44,7 +44,7 @@ test("clicking Install POSTs to the install endpoint and shows success", async (
   await waitFor(() =>
     expect(fetchMock).toHaveBeenCalledWith("/api/install/metrics-server", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: new Headers({ "Content-Type": "application/json" }),
       body: JSON.stringify({}),
     }),
   );

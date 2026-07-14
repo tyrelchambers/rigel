@@ -9,11 +9,9 @@ export function activeAgentConnected(agents: AgentsResponse | undefined): boolea
 
 /** Auto-open onboarding when no active agent is connected — keyed off the active agent, not the Claude token (HELM-12). */
 export function shouldAutoOpenOnboarding(opts: {
-  accountMissing: boolean | null;
   agents: AgentsResponse | undefined;
   onboarded: boolean;
 }): boolean {
-  if (opts.accountMissing !== false) return false;
   if (!opts.agents) return false;
   if (opts.onboarded) return false;
   return !activeAgentConnected(opts.agents);
