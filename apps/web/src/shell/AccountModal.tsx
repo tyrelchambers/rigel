@@ -87,7 +87,7 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
 
               {account.orgs.length > 0 && (
                 <div className="flex flex-col gap-2">
-                  <span className="text-[10.5px] font-mono tracking-wide text-[var(--fg-tertiary)]">
+                  <span className="text-3xs font-mono tracking-wide text-[var(--fg-tertiary)]">
                     ORGANIZATIONS
                   </span>
                   <div className="flex flex-col gap-1 rounded-lg border border-[var(--border-subtle)] bg-white/[0.02] p-1">
