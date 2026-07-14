@@ -9,10 +9,11 @@ export interface Account {
 /** All account/code/token IO behind one object, so the route handlers take one
  *  dep (matches the repo convention of a small injected IO surface). */
 export interface AuthDb {
-  insertCode(email: string, codeHash: string, ttlSeconds: number): Promise<void>;
+  insertCode(email: string, codeHash: string, linkTokenHash: string, ttlSeconds: number): Promise<void>;
   invalidateCodes(email: string): Promise<void>;
   claimAttempt(email: string): Promise<{ codeHash: string } | null>;
   consumeCode(email: string): Promise<boolean>;
+  consumeLinkToken(linkTokenHash: string): Promise<{ email: string } | null>;
   cleanupExpiredCodes(): Promise<void>;
   upsertAccount(email: string): Promise<Account>;
   insertToken(tokenHash: string, accountId: string): Promise<void>;
@@ -42,6 +43,8 @@ CREATE TABLE IF NOT EXISTS login_codes (
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS login_codes_email_idx ON login_codes (email);
+ALTER TABLE login_codes ADD COLUMN IF NOT EXISTS link_token_hash text;
+CREATE INDEX IF NOT EXISTS login_codes_link_idx ON login_codes (link_token_hash);
 
 CREATE TABLE IF NOT EXISTS auth_tokens (
   token_hash   text PRIMARY KEY,
@@ -58,11 +61,11 @@ export async function ensureAuthSchema(pool: Pool): Promise<void> {
 
 export function createAuthDb(pool: Pool): AuthDb {
   return {
-    async insertCode(email, codeHash, ttlSeconds) {
+    async insertCode(email, codeHash, linkTokenHash, ttlSeconds) {
       await pool.query(
-        `INSERT INTO login_codes (email, code_hash, expires_at)
-         VALUES ($1, $2, now() + ($3 || ' seconds')::interval)`,
-        [email, codeHash, String(ttlSeconds)],
+        `INSERT INTO login_codes (email, code_hash, link_token_hash, expires_at)
+         VALUES ($1, $2, $3, now() + ($4 || ' seconds')::interval)`,
+        [email, codeHash, linkTokenHash, String(ttlSeconds)],
       );
     },
     async invalidateCodes(email) {
@@ -98,6 +101,20 @@ export function createAuthDb(pool: Pool): AuthDb {
         [email],
       );
       return r.rows.length > 0;
+    },
+    async consumeLinkToken(linkTokenHash) {
+      const r = await pool.query(
+        `UPDATE login_codes SET consumed_at = now()
+         WHERE ctid = (
+           SELECT ctid FROM login_codes
+           WHERE link_token_hash = $1 AND consumed_at IS NULL AND expires_at > now()
+           ORDER BY created_at DESC LIMIT 1
+         )
+         RETURNING email`,
+        [linkTokenHash],
+      );
+      const row = r.rows[0] as { email: string } | undefined;
+      return row ? { email: row.email } : null;
     },
     async cleanupExpiredCodes() {
       await pool.query(`DELETE FROM login_codes WHERE expires_at < now() - interval '1 day'`);

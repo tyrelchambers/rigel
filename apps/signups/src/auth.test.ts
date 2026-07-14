@@ -8,13 +8,13 @@ const sha = (v: string) => createHash("sha256").update(v).digest("hex");
 
 /** In-memory AuthDb honoring the same contract the SQL implements. */
 function fakeDb() {
-  const codes: { email: string; codeHash: string; attempts: number; consumed: boolean }[] = [];
+  const codes: { email: string; codeHash: string; linkTokenHash: string; attempts: number; consumed: boolean }[] = [];
   const accounts = new Map<string, Account>();
   const tokens = new Map<string, string>(); // tokenHash -> accountId
   const revoked = new Set<string>();
   let seq = 0;
   const db: AuthDb = {
-    async insertCode(email, codeHash) { codes.push({ email, codeHash, attempts: 0, consumed: false }); },
+    async insertCode(email, codeHash, linkTokenHash) { codes.push({ email, codeHash, linkTokenHash, attempts: 0, consumed: false }); },
     async invalidateCodes(email) { codes.forEach((c) => { if (c.email === email) c.consumed = true; }); },
     async claimAttempt(email) {
       const c = [...codes].reverse().find((c) => c.email === email && !c.consumed && c.attempts < 5);
@@ -27,6 +27,12 @@ function fakeDb() {
       if (!c) return false;
       c.consumed = true;
       return true;
+    },
+    async consumeLinkToken(linkTokenHash) {
+      const c = [...codes].reverse().find((c) => c.linkTokenHash === linkTokenHash && !c.consumed);
+      if (!c) return null;
+      c.consumed = true;
+      return { email: c.email };
     },
     async cleanupExpiredCodes() {},
     async upsertAccount(email) {
@@ -47,10 +53,10 @@ function fakeDb() {
   return { db, codes };
 }
 
-function make(over: { sendCode?: (e: string, c: string) => Promise<void>; allow?: () => boolean } = {}) {
+function make(over: { sendCode?: (e: string, c: string, m: string) => Promise<void>; allow?: () => boolean } = {}) {
   const { db, codes } = fakeDb();
-  const sent: { email: string; code: string }[] = [];
-  const sendCode = over.sendCode ?? (async (email, code) => { sent.push({ email, code }); });
+  const sent: { email: string; code: string; magicUrl: string }[] = [];
+  const sendCode = over.sendCode ?? (async (email, code, magicUrl) => { sent.push({ email, code, magicUrl }); });
   const allow = over.allow ?? (() => true);
   const app = new Hono();
   registerAuthRoutes(app, { db, sendCode, allowRequest: allow, allowVerify: allow });
@@ -133,4 +139,35 @@ test("request rate-limited → 429", async () => {
   const { app, sent } = make({ allow: () => false });
   expect((await json(app, "/auth/request", { email: "a@b.co" })).status).toBe(429);
   expect(sent.length).toBe(0);
+});
+
+test("request emails a code AND a rigel:// magic link", async () => {
+  const { app, sent } = make();
+  await json(app, "/auth/request", { email: "a@b.co" });
+  expect(sent[0].code).toMatch(/^[0-9]{6}$/);
+  expect(sent[0].magicUrl).toMatch(/^rigel:\/\/auth\?token=[A-Za-z0-9_-]+$/);
+});
+
+test("verify-link with the emailed token → bearer + account", async () => {
+  const { app, sent } = make();
+  await json(app, "/auth/request", { email: "a@b.co" });
+  const token = new URL(sent[0].magicUrl).searchParams.get("token");
+  const res = await json(app, "/auth/verify-link", { token });
+  expect(res.status).toBe(200);
+  const body = (await res.json()) as { token: string; account: { id: string; email: string; name: string | null } };
+  expect(body.token.length).toBeGreaterThan(20);
+  expect(body.account.email).toBe("a@b.co");
+});
+
+test("verify-link with an unknown token → 401", async () => {
+  const { app } = make();
+  expect((await json(app, "/auth/verify-link", { token: "nope" })).status).toBe(401);
+});
+
+test("using the code first invalidates the magic link (shared row)", async () => {
+  const { app, sent } = make();
+  await json(app, "/auth/request", { email: "a@b.co" });
+  await json(app, "/auth/verify", { email: "a@b.co", code: sent[0].code });   // consume via code
+  const token = new URL(sent[0].magicUrl).searchParams.get("token");
+  expect((await json(app, "/auth/verify-link", { token })).status).toBe(401);   // link now dead
 });

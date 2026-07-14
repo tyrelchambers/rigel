@@ -98,7 +98,7 @@ test("auth routes are mounted when auth deps are provided", async () => {
     auth: {
       db: {
         insertCode: async () => {}, invalidateCodes: async () => {}, claimAttempt: async () => null,
-        consumeCode: async () => false, cleanupExpiredCodes: async () => {},
+        consumeCode: async () => false, consumeLinkToken: async () => null, cleanupExpiredCodes: async () => {},
         upsertAccount: async () => ({ id: "a", email: "a@b.co", name: null }),
         insertToken: async () => {}, accountByToken: async () => null, touchToken: async () => {}, revokeToken: async () => {},
       },
