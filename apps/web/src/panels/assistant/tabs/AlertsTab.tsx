@@ -19,12 +19,13 @@ const MODES = [
 export function AlertsTab() {
   const { d, ns, working, run, setTab } = useAssistantCtx();
 
-  const [windowText, setWindowText] = useState(d.quietWindow || "22:00-07:00");
+  const savedWindow = d.quietWindow || "22:00-07:00";
+  const [windowText, setWindowText] = useState(savedWindow);
 
   // Seed from live config when it changes.
   useEffect(() => {
-    setWindowText(d.quietWindow || "22:00-07:00");
-  }, [d.quietWindow]);
+    setWindowText(savedWindow);
+  }, [savedWindow]);
 
   return (
     <div className="space-y-5">
@@ -59,6 +60,14 @@ export function AlertsTab() {
               placeholder="22:00-07:00"
               className="w-40 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-primary)] px-3 py-2 font-mono text-xs text-[var(--fg-primary)] outline-none placeholder:text-[var(--fg-tertiary)] focus:border-[var(--accent-primary)]"
             />
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={working || windowText === savedWindow}
+              onClick={() => setWindowText(savedWindow)}
+            >
+              Cancel
+            </Button>
             <Button
               variant="muted"
               size="sm"

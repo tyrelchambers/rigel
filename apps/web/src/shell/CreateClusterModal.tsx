@@ -242,9 +242,14 @@ export function CreateClusterModal({ open, onOpenChange }: { open: boolean; onOp
             <span className="text-xs text-muted-foreground">
               Creates a local cluster with {tools.kind && tools.k3d ? tool : tools.kind ? "kind" : "k3d"}.
             </span>
-            <Button onClick={start} disabled={!canCreate}>
-              {creating ? "Creating…" : "Create cluster"}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={creating}>
+                Cancel
+              </Button>
+              <Button onClick={start} disabled={!canCreate}>
+                {creating ? "Creating…" : "Create cluster"}
+              </Button>
+            </div>
           </div>
         </div>
       )}

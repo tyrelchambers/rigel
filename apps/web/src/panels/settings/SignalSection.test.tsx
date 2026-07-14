@@ -63,6 +63,20 @@ describe("SignalSection — notify toggle", () => {
   });
 });
 
+describe("SignalSection — recipients", () => {
+  it("Cancel reverts edited recipients to the saved value and is disabled when unchanged", () => {
+    render(<SignalSection derived={derived()} applying={false} setApplying={noop} />);
+    const input = screen.getByDisplayValue("+15559998888");
+    const cancel = screen.getByRole("button", { name: /^cancel$/i });
+    expect(cancel).toBeDisabled();
+    fireEvent.change(input, { target: { value: "+15551112222" } });
+    expect(cancel).toBeEnabled();
+    fireEvent.click(cancel);
+    expect(screen.getByDisplayValue("+15559998888")).toBeInTheDocument();
+    expect(mutateAsync).not.toHaveBeenCalled();
+  });
+});
+
 describe("SignalSection — disconnect", () => {
   it("shows a Disconnect trigger when linked", () => {
     render(<SignalSection derived={derived()} applying={false} setApplying={noop} />);

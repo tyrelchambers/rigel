@@ -41,6 +41,13 @@ export function SelfHostSection() {
     setSaved(true);
   }
 
+  function revert() {
+    setFields(loadSelfHostDefaults(context));
+    setSaved(false);
+  }
+
+  const dirty = JSON.stringify(fields) !== JSON.stringify(loadSelfHostDefaults(context));
+
   const rows: Array<{ key: keyof SelfHostDefaults; label: string; placeholder: string }> = [
     { key: "ingressDomain", label: "Ingress domain", placeholder: "apps.example.com" },
     { key: "imagePullSecret", label: "Image pull secret", placeholder: "(none)" },
@@ -83,6 +90,9 @@ export function SelfHostSection() {
               <Check className="h-3.5 w-3.5" /> Saved
             </span>
           )}
+          <Button size="sm" variant="outline" onClick={revert} disabled={!dirty}>
+            Cancel
+          </Button>
           <Button size="sm" onClick={save}>
             Save defaults
           </Button>

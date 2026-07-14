@@ -324,6 +324,14 @@ export function SignalSection({
                   value={recipientText}
                   onChange={(e) => setRecipientText(e.target.value)}
                 />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setRecipientText(recipients)}
+                  disabled={setSignal.isPending || recipientText === recipients}
+                >
+                  Cancel
+                </Button>
                 <Button size="sm" onClick={saveRecipients} disabled={setSignal.isPending}>
                   Save
                 </Button>
