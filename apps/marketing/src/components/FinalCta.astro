@@ -1,5 +1,5 @@
 ---
-import EarlyAccessForm from "./EarlyAccessForm.astro";
+import DownloadCta from "./DownloadCta.astro";
 ---
 
 <section
@@ -21,16 +21,26 @@ import EarlyAccessForm from "./EarlyAccessForm.astro";
             style="--reveal-delay:100ms"
             class="mt-6 max-w-[620px] text-[16.5px] leading-relaxed text-fg-secondary"
         >
-            Leave your email and we'll let you know the moment you can download
-            it.
+            Download Rigel and connect your first cluster in a couple of
+            minutes. Free while in beta.
         </p>
 
         <div
             data-reveal
             style="--reveal-delay:180ms"
-            class="flex w-full justify-center"
+            class="mt-9 flex w-full flex-col items-center gap-4"
         >
-            <EarlyAccessForm />
+            <DownloadCta showChips={false} showMeta={false} />
+            <p class="flex items-center gap-2 text-[13.5px] text-fg-secondary">
+                Windows and Linux
+                <span aria-hidden="true" class="text-fg-tertiary">·</span>
+                <a
+                    href="/download"
+                    class="font-medium text-accent transition-colors hover:text-accent-hover"
+                >
+                    All downloads ↗
+                </a>
+            </p>
         </div>
     </div>
 </section>

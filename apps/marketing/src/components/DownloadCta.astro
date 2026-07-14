@@ -1,0 +1,194 @@
+---
+import { Icon } from "astro-icon/components";
+import { getLatestRelease, RELEASES_URL } from "../lib/releases";
+
+interface Props {
+  // Optional secondary button rendered next to the primary download.
+  secondaryHref?: string;
+  secondaryLabel?: string;
+  secondaryIcon?: string;
+  // Show the version / What's new meta line (default true).
+  showMeta?: boolean;
+  // Show the macOS/Windows/Linux chip row (default true).
+  showChips?: boolean;
+}
+
+const {
+  secondaryHref,
+  secondaryLabel,
+  secondaryIcon,
+  showMeta = true,
+  showChips = true,
+} = Astro.props;
+
+// Resolved at build time. With zero releases this returns a safe fallback
+// (version null, empty assets) so every link points at the releases page and the
+// component still renders. A published release rebuilds the site and bakes in
+// the real asset URLs.
+const { version, url: releaseUrl, assets } = await getLatestRelease();
+
+// The primary button defaults to Apple Silicon; the script below relabels and
+// repoints it (and moves the chip highlight) to the visitor's detected OS.
+const primaryHref = assets.macArm ?? RELEASES_URL;
+const versionLabel = version ? `v${version}` : null;
+
+const chips = [
+  { key: "mac", label: "macOS", icon: "simple-icons:apple", href: assets.macArm },
+  { key: "win", label: "Windows", icon: "simple-icons:windows", href: assets.win },
+  { key: "linux", label: "Linux", icon: "simple-icons:linux", href: assets.linuxAppImage },
+];
+---
+
+<div class="flex flex-col items-center gap-4">
+  <div class="flex flex-wrap items-center justify-center gap-3.5">
+    <a
+      data-download
+      href={primaryHref}
+      download
+      data-mac-arm={assets.macArm ?? RELEASES_URL}
+      data-mac-intel={assets.macIntel ?? RELEASES_URL}
+      data-win={assets.win ?? RELEASES_URL}
+      data-linux={assets.linuxAppImage ?? RELEASES_URL}
+      class="group inline-flex items-center gap-2.5 rounded-[9px] bg-accent px-6 py-3.5 text-[15px] font-bold text-fg-inverse shadow-[0_0_28px_-4px_rgba(56,189,248,0.45)] transition-[background-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:bg-accent-hover hover:shadow-[0_0_34px_-2px_rgba(56,189,248,0.55)] active:translate-y-0"
+    >
+      <Icon name="lucide:download" class="size-[17px]" />
+      <span data-download-label>Download for macOS</span>
+    </a>
+
+    {
+      secondaryHref && (
+        <a
+          href={secondaryHref}
+          class="inline-flex items-center gap-2.5 rounded-[9px] border border-line-strong bg-white/[0.03] px-5 py-3.5 text-[15px] font-semibold text-fg transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-white/[0.07] active:translate-y-0"
+        >
+          {secondaryIcon && <Icon name={secondaryIcon} class="size-[15px]" />}
+          {secondaryLabel}
+        </a>
+      )
+    }
+  </div>
+
+  {
+    showMeta && versionLabel && (
+      <p class="flex items-center gap-2 font-mono text-[12.5px] text-fg-tertiary">
+        <span data-download-meta>Apple Silicon · {versionLabel}</span>
+        <span aria-hidden="true">·</span>
+        <a
+          href={releaseUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="text-accent transition-colors hover:text-accent-hover"
+        >
+          What's new ↗
+        </a>
+      </p>
+    )
+  }
+
+  {
+    showChips && (
+      <div class="mt-1 flex flex-wrap items-center justify-center gap-2.5">
+        {chips.map((c) => (
+          <a
+            href={c.href ?? RELEASES_URL}
+            download
+            data-platform-chip={c.key}
+            class:list={[
+              "group inline-flex items-center gap-2 rounded-lg border px-3.5 py-2 text-[13.5px] transition-colors",
+              c.key === "mac"
+                ? "border-accent/40 bg-accent/[0.08] font-semibold text-fg"
+                : "border-line-subtle bg-surface font-medium text-fg-secondary hover:border-line-strong hover:text-fg",
+            ]}
+          >
+            <Icon
+              name={c.icon}
+              class:list={["size-[15px]", c.key === "mac" ? "text-accent" : "text-fg-tertiary group-hover:text-fg-secondary"]}
+            />
+            {c.label}
+            <span
+              data-detected-tag
+              class:list={[
+                "rounded-full bg-accent/15 px-1.5 py-0.5 font-mono text-[10px] tracking-wide text-accent-soft",
+                c.key === "mac" ? "" : "hidden",
+              ]}
+            >
+              Detected
+            </span>
+          </a>
+        ))}
+      </div>
+    )
+  }
+</div>
+
+<!-- OS auto-detect: progressive enhancement. Astro bundles + dedupes this
+     <script> so it runs once no matter how many <DownloadCta> render on a page.
+     It relabels/repoints every primary button and moves the chip highlight to
+     the visitor's detected platform. No JS => the macOS defaults stand and the
+     platform chips still link to their installers. -->
+<script>
+  type Os = "mac-arm" | "win" | "linux";
+
+  const ua = (navigator.userAgent || "").toLowerCase();
+  const platform = (navigator.platform || "").toLowerCase();
+
+  let os: Os | null = null;
+  let name = "";
+  let chipKey: "mac" | "win" | "linux" | null = null;
+
+  if (/win/.test(ua) || /win/.test(platform)) {
+    os = "win";
+    name = "Windows";
+    chipKey = "win";
+  } else if (/linux|x11/.test(ua) && !/android/.test(ua)) {
+    os = "linux";
+    name = "Linux";
+    chipKey = "linux";
+  } else if (/mac/.test(ua) || /mac/.test(platform)) {
+    // Apple Silicon vs Intel is not reliably exposed; default to Apple Silicon
+    // (the Intel build stays one click away on the download page).
+    os = "mac-arm";
+    name = "Apple Silicon";
+    chipKey = "mac";
+  }
+
+  if (os && chipKey) {
+    const labels: Record<Os, string> = {
+      "mac-arm": "Download for macOS",
+      win: "Download for Windows",
+      linux: "Download for Linux",
+    };
+
+    for (const btn of document.querySelectorAll<HTMLAnchorElement>("[data-download]")) {
+      const href = btn.getAttribute("data-" + os);
+      if (href) btn.setAttribute("href", href);
+      const label = btn.querySelector("[data-download-label]");
+      if (label) label.textContent = labels[os];
+      const meta = btn.parentElement?.parentElement?.querySelector("[data-download-meta]");
+      if (meta) {
+        const rest = meta.textContent || "";
+        const sep = rest.indexOf("·");
+        meta.textContent = sep >= 0 ? name + " " + rest.slice(sep) : rest;
+      }
+    }
+
+    // Move the "Detected" highlight from the macOS default to the real OS.
+    if (chipKey !== "mac") {
+      const macChip = document.querySelectorAll<HTMLAnchorElement>('[data-platform-chip="mac"]');
+      const target = document.querySelectorAll<HTMLAnchorElement>(`[data-platform-chip="${chipKey}"]`);
+
+      for (const chip of macChip) {
+        chip.classList.remove("border-accent/40", "bg-accent/[0.08]", "font-semibold", "text-fg");
+        chip.classList.add("border-line-subtle", "bg-surface", "font-medium", "text-fg-secondary");
+        chip.querySelector("svg")?.classList.remove("text-accent");
+        chip.querySelector("[data-detected-tag]")?.classList.add("hidden");
+      }
+      for (const chip of target) {
+        chip.classList.remove("border-line-subtle", "bg-surface", "font-medium", "text-fg-secondary");
+        chip.classList.add("border-accent/40", "bg-accent/[0.08]", "font-semibold", "text-fg");
+        chip.querySelector("svg")?.classList.add("text-accent");
+        chip.querySelector("[data-detected-tag]")?.classList.remove("hidden");
+      }
+    }
+  }
+</script>
