@@ -72,6 +72,7 @@ const PORT = Number(process.env.PORT ?? 8787);
 // Electron sets 127.0.0.1 (loopback-only); Docker/Helm keep 0.0.0.0.
 const HOST = process.env.HOST ?? "0.0.0.0"; // Electron pins 127.0.0.1; Docker/Helm keep 0.0.0.0
 const SESSION_SECRET = process.env.RIGEL_SESSION_SECRET ?? "";
+if (!SESSION_SECRET) console.warn("RIGEL_SESSION_SECRET not set — local /api/* + /ws access control is DISABLED");
 
 // Upstream metrics-server manifest (onboarding one-click install).
 const METRICS_SERVER_URL =
@@ -142,7 +143,7 @@ async function handler(req: Request): Promise<Response> {
     const context = resolveRequestContext(req.headers.get("x-rigel-context"), bootContext);
 
     if (url.pathname === "/api/health") {
-      return Response.json({ ok: true, kubeconfig: KUBECONFIG });
+      return Response.json({ ok: true });
     }
 
     if (url.pathname.startsWith("/api/") && !checkSessionSecret(req.headers.get("x-rigel-session"), SESSION_SECRET)) {

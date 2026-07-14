@@ -17,4 +17,10 @@ describe("checkSessionSecret", () => {
     expect(checkSessionSecret("", "s3cr3t")).toBe(false);
     expect(checkSessionSecret("s3cr3tX", "s3cr3t")).toBe(false);
   });
+  it("rejects a same-codeunit-length but different-byte-length value without throwing", () => {
+    // "s3cr3é" is 6 UTF-16 code units but 7 UTF-8 bytes — the old char-length
+    // guard let it reach timingSafeEqual, which throws on unequal byte lengths.
+    expect(checkSessionSecret("s3cr3é", "s3cr3t")).toBe(false);
+    expect(checkSessionSecret("é", "s3cr3t")).toBe(false);
+  });
 });

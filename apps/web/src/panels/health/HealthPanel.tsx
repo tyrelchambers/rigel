@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 
-type Health = { ok: boolean; kubeconfig: string };
+type Health = { ok: boolean };
 
 async function fetchHealth(): Promise<Health> {
   const res = await apiFetch("/api/health");
