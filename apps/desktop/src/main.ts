@@ -17,7 +17,7 @@ import { randomBytes } from "node:crypto";
 import { InstallStore } from "./installStore";
 import { submitSignup, deliver } from "./signup";
 import { AccountStore } from "./accountStore";
-import { createAccountClient } from "./accountClient";
+import { createAccountClient, type OrgSummary } from "./accountClient";
 import { decideRestart } from "./restartPolicy";
 
 const SIGNUP_ENDPOINT = "https://api.rigel.run";
@@ -459,11 +459,11 @@ async function boot(): Promise<void> {
     mainWindow?.webContents.send("rigel:account:changed");
   };
 
-  async function refreshAccount(): Promise<{ signedIn: boolean; account: { id: string; email: string; name: string | null } | null }> {
+  async function refreshAccount(): Promise<{ signedIn: boolean; account: { id: string; email: string; name: string | null } | null; orgs: OrgSummary[] }> {
     const payload = await accountClient.me(); // clears token on 401, keeps it on network-fail
     const signedIn = accountStore.getToken() != null;
     pushServerAuth(signedIn);
-    return { signedIn, account: payload?.account ?? null };
+    return { signedIn, account: payload?.account ?? null, orgs: payload?.orgs ?? [] };
   }
   void refreshAccount();
 

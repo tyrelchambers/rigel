@@ -3,11 +3,42 @@ import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from "@/
 import { Button } from "@/components/ui/button";
 import { SignInFlow } from "./SignInFlow";
 import type { UseAccountResult } from "./useAccount";
+import type { Org } from "@/lib/desktop";
 
 interface AccountModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   account: UseAccountResult;
+}
+
+function capitalize(role: string) {
+  return role[0].toUpperCase() + role.slice(1);
+}
+
+function OrgRow({ org }: { org: Org }) {
+  const isPersonal = org.kind === "personal";
+  const name = isPersonal ? "Personal" : org.name;
+  const sublabel = isPersonal ? "Just you" : "Team";
+  const initial = name.charAt(0).toUpperCase();
+
+  return (
+    <div className="flex items-center gap-3 px-3 py-2.5">
+      <div
+        className={`flex size-[34px] shrink-0 items-center justify-center rounded-[9px] text-sm font-semibold ${
+          isPersonal ? "bg-[var(--accent-dim)] text-[var(--accent-primary)]" : "bg-white/[0.06] text-[var(--fg-secondary)]"
+        }`}
+      >
+        {initial}
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="truncate text-sm font-medium text-[var(--fg-primary)]">{name}</span>
+        <span className="truncate text-xs text-[var(--fg-secondary)]">{sublabel}</span>
+      </div>
+      <span className="shrink-0 rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-2xs font-medium text-[var(--fg-secondary)]">
+        {capitalize(org.role)}
+      </span>
+    </div>
+  );
 }
 
 export function AccountModal({ open, onOpenChange, account }: AccountModalProps) {
@@ -54,12 +85,18 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
 
               <div className="h-px w-full bg-[var(--border-subtle)]" />
 
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-[var(--fg-secondary)]">Plan</span>
-                <span className="rounded-full border border-[var(--border-subtle)] bg-white/[0.04] px-2.5 py-1 text-2xs font-medium text-[var(--fg-primary)]">
-                  Free
-                </span>
-              </div>
+              {account.orgs.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  <span className="text-3xs font-mono tracking-wide text-[var(--fg-tertiary)]">
+                    ORGANIZATIONS
+                  </span>
+                  <div className="flex flex-col gap-1 rounded-lg border border-[var(--border-subtle)] bg-white/[0.02] p-1">
+                    {account.orgs.map((org) => (
+                      <OrgRow key={org.id} org={org} />
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="mt-1 flex items-center justify-between">
                 <button

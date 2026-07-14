@@ -21,10 +21,10 @@ contextBridge.exposeInMainWorld("rigel", {
       ipcRenderer.invoke("rigel:account:request-code", email),
     verifyCode: (email: string, code: string): Promise<{ ok: true; account: { id: string; email: string; name: string | null } } | { ok: false; status: number }> =>
       ipcRenderer.invoke("rigel:account:verify-code", { email, code }),
-    me: (): Promise<{ account: { id: string; email: string; name: string | null }; orgs?: unknown[]; invitations?: unknown[] } | null> =>
+    me: (): Promise<{ account: { id: string; email: string; name: string | null }; orgs?: Array<{ id: string; kind: "personal" | "team"; name: string; role: "owner" | "admin" | "member" }>; invitations?: unknown[] } | null> =>
       ipcRenderer.invoke("rigel:account:me"),
     signOut: (): Promise<void> => ipcRenderer.invoke("rigel:account:sign-out"),
-    status: (): Promise<{ signedIn: boolean; account: { id: string; email: string; name: string | null } | null }> =>
+    status: (): Promise<{ signedIn: boolean; account: { id: string; email: string; name: string | null } | null; orgs: Array<{ id: string; kind: "personal" | "team"; name: string; role: "owner" | "admin" | "member" }> }> =>
       ipcRenderer.invoke("rigel:account:status"),
     onChanged: (cb: () => void): (() => void) => {
       const listener = () => cb();

@@ -2,7 +2,7 @@ import { test, expect, vi } from "vitest";
 import { Hono } from "hono";
 import { createHash } from "node:crypto";
 import { registerAuthRoutes } from "./auth";
-import type { AuthDb, Account } from "./authDb";
+import type { AuthDb, Account, OrgMembership } from "./authDb";
 
 const sha = (v: string) => createHash("sha256").update(v).digest("hex");
 
@@ -12,6 +12,7 @@ function fakeDb() {
   const accounts = new Map<string, Account>();
   const tokens = new Map<string, string>(); // tokenHash -> accountId
   const revoked = new Set<string>();
+  const personalOrgs = new Map<string, OrgMembership>();
   let seq = 0;
   const db: AuthDb = {
     async insertCode(email, codeHash, linkTokenHash) { codes.push({ email, codeHash, linkTokenHash, attempts: 0, consumed: false }); },
@@ -36,6 +37,9 @@ function fakeDb() {
     },
     async cleanupExpiredCodes() {},
     async upsertAccount(email) {
+      // Deliberately does NOT create a personal org here — models a "legacy"
+      // account so the /me self-heal (lazy ensurePersonalOrg) is exercised.
+      // The real backend's upsertAccount auto-provisioning is covered in authDb.test.ts.
       let a = accounts.get(email);
       if (!a) { a = { id: `acc-${++seq}`, email, name: "Jane" }; accounts.set(email, a); }
       return a;
@@ -49,6 +53,13 @@ function fakeDb() {
     },
     async touchToken() {},
     async revokeToken(tokenHash) { revoked.add(tokenHash); },
+    async ensurePersonalOrg(accountId, name) {
+      personalOrgs.set(accountId, { id: `org-${accountId}`, kind: "personal", name, role: "owner" });
+    },
+    async getOrgsForAccount(accountId) {
+      const org = personalOrgs.get(accountId);
+      return org ? [org] : [];
+    },
   };
   return { db, codes };
 }
@@ -128,6 +139,18 @@ test("me returns the account for a valid bearer, 401 after logout", async () => 
   expect(me.account).toEqual({ id: "acc-1", email: "a@b.co", name: "Jane" });
   expect((await app.request("/auth/logout", { method: "POST", headers: auth })).status).toBe(200);
   expect((await app.request("/me", { headers: auth })).status).toBe(401);
+});
+
+test("me self-heals a personal org for an account that has none, and returns it", async () => {
+  // The fake upsertAccount creates NO org (legacy account); /me must lazily
+  // create the personal org so every signed-in account always has one.
+  const { app, sent } = make();
+  await json(app, "/auth/request", { email: "a@b.co" });
+  const body = (await (await json(app, "/auth/verify", { email: "a@b.co", code: sent[0].code })).json()) as { token: string };
+  const me = await (await app.request("/me", { headers: { authorization: `Bearer ${body.token}` } })).json() as { account: { email: string }; orgs: Array<{ kind: string; role: string }> };
+  expect(me.account.email).toBe("a@b.co");
+  expect(me.orgs).toHaveLength(1);
+  expect(me.orgs[0]).toMatchObject({ kind: "personal", role: "owner" });
 });
 
 test("me without a token → 401", async () => {
