@@ -12,8 +12,13 @@ test("posts the code to Resend and resolves on 200", async () => {
   const payload = JSON.parse(init.body as string);
   expect(payload.to).toBe("jane@acme.com");
   expect(payload.from).toBe("Rigel <login@rigel.run>");
-  expect(payload.subject).toContain("123456");
+  // Code is NOT in the subject (keeps it off lock-screen/notification previews).
+  expect(payload.subject).toBe("Your Rigel sign-in code");
+  expect(payload.subject).not.toContain("123456");
+  // Both the plaintext fallback and the branded HTML carry the code.
   expect(payload.text).toContain("123456");
+  expect(payload.html).toContain("123456");
+  expect(payload.html).toContain("RIGEL");
 });
 
 test("throws on a non-2xx from Resend", async () => {
