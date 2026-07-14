@@ -1,7 +1,7 @@
 {
   "name": "desktop",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Rigel desktop (Electron) — wraps the Node server + built SPA into a macOS app",
   "homepage": "https://rigel.run",
   "main": "dist/main.js",
