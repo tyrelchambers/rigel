@@ -5,12 +5,14 @@ import type { CheckResult, CloudProvider, CloudCluster } from "@rigel/cloud-conn
 import type { Subject } from "@/panels/rbac/types";
 import type { CanICheck, CanIResult } from "@/panels/rbac/canI";
 import { useCluster } from "@/store/cluster";
+import { rigel } from "@/lib/desktop";
 
 export function apiFetch(input: string, init?: RequestInit): Promise<Response> {
-  const ctx = useCluster.getState().activeContext;
-  if (!ctx) return fetch(input, init);
   const headers = new Headers(init?.headers);
-  headers.set("X-Rigel-Context", ctx);
+  const ctx = useCluster.getState().activeContext;
+  if (ctx) headers.set("X-Rigel-Context", ctx);
+  const secret = rigel?.sessionSecret;
+  if (secret) headers.set("x-rigel-session", secret);
   return fetch(input, { ...init, headers });
 }
 

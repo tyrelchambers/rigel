@@ -17,6 +17,7 @@ export interface RigelBridge {
     signOut(): Promise<void>;
   };
 }
-export const rigel: RigelBridge | undefined = (window as unknown as { rigel?: RigelBridge }).rigel;
+export const rigel: RigelBridge | undefined =
+  typeof window !== "undefined" ? (window as unknown as { rigel?: RigelBridge }).rigel : undefined;
 export const isDesktop = !!rigel;
 export const isMacDesktop = rigel?.platform === "darwin";
