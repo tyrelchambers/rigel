@@ -171,3 +171,16 @@ test("using the code first invalidates the magic link (shared row)", async () =>
   const token = new URL(sent[0].magicUrl).searchParams.get("token");
   expect((await json(app, "/auth/verify-link", { token })).status).toBe(401);   // link now dead
 });
+
+test("using the magic link first invalidates the code (shared row)", async () => {
+  const { app, sent } = make();
+  await json(app, "/auth/request", { email: "a@b.co" });
+  const token = new URL(sent[0].magicUrl).searchParams.get("token");
+  expect((await json(app, "/auth/verify-link", { token })).status).toBe(200);         // link consumed
+  expect((await json(app, "/auth/verify", { email: "a@b.co", code: sent[0].code })).status).toBe(401); // code now dead
+});
+
+test("verify-link is rate-limited → 429", async () => {
+  const { app } = make({ allow: () => false });
+  expect((await json(app, "/auth/verify-link", { token: "anything" })).status).toBe(429);
+});

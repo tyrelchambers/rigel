@@ -63,6 +63,9 @@ let serverPort = 0;
 // Set inside boot() once accountClient exists; invoked by handleAuthUrl to
 // verify a rigel://auth?token=... magic link and open the server gate.
 let signInWithLink: ((token: string) => Promise<void>) | null = null;
+// A rigel:// link that arrived before signInWithLink was set (macOS cold-launch
+// "open-url" race); drained at the end of boot() once it's ready.
+let pendingAuthUrl: string | null = null;
 
 function parseAuthToken(rawUrl: string): string | null {
   try {
@@ -76,7 +79,11 @@ function parseAuthToken(rawUrl: string): string | null {
 
 async function handleAuthUrl(rawUrl: string): Promise<void> {
   const token = parseAuthToken(rawUrl);
-  if (!token || !signInWithLink) return;
+  if (!token) return;
+  if (!signInWithLink) {
+    pendingAuthUrl = rawUrl;
+    return;
+  }
   try {
     await signInWithLink(token);
   } catch (e) {
@@ -427,11 +434,29 @@ async function boot(): Promise<void> {
 
   // rigel://auth?token=... magic-link handler, invoked by handleAuthUrl.
   signInWithLink = async (token: string) => {
-    const r = await accountClient.verifyLink(token);
-    if (r.ok) {
-      pushServerAuth(true);
-      mainWindow?.webContents.send("rigel:account:changed");
+    // Refuse a magic link while already signed in — prevents a hostile
+    // rigel:// link from silently swapping the session to the attacker's account.
+    if (accountStore.getToken() != null) {
+      if (mainWindow) await dialog.showMessageBox(mainWindow, { type: "info", message: "You're already signed in to Rigel.", buttons: ["OK"] });
+      return;
     }
+    const r = await accountClient.verifyLink(token);
+    if (!r.ok) {
+      const opts = { type: "warning" as const, message: "That sign-in link is invalid or expired.", detail: "Request a new code to sign in.", buttons: ["OK"] };
+      if (mainWindow) await dialog.showMessageBox(mainWindow, opts); else await dialog.showMessageBox(opts);
+      return;
+    }
+    // Confirm WHOSE account before committing (defends against login-CSRF: a
+    // link the user didn't request would show an unfamiliar email here).
+    const confirmOpts = { type: "question" as const, buttons: ["Sign in", "Cancel"], defaultId: 0, cancelId: 1, message: "Sign in to Rigel", detail: `Continue as ${r.account.email}?` };
+    const choice = mainWindow ? await dialog.showMessageBox(mainWindow, confirmOpts) : await dialog.showMessageBox(confirmOpts);
+    if (choice.response !== 0) {
+      await accountClient.signOut();
+      pushServerAuth(false);
+      return;
+    }
+    pushServerAuth(true);
+    mainWindow?.webContents.send("rigel:account:changed");
   };
 
   async function refreshAccount(): Promise<{ signedIn: boolean; account: { id: string; email: string; name: string | null } | null }> {
@@ -491,6 +516,14 @@ async function boot(): Promise<void> {
     mainWindow.webContents.once("did-finish-load", () => {
       void runSmoke(serverPort).finally(() => app.quit());
     });
+  }
+
+  // Drain a rigel:// link that arrived via "open-url" before signInWithLink was
+  // set (macOS cold-launch race) — see pendingAuthUrl.
+  if (pendingAuthUrl) {
+    const u = pendingAuthUrl;
+    pendingAuthUrl = null;
+    void handleAuthUrl(u);
   }
 
   // Cold launch via a rigel:// link on Windows/Linux: the URL arrives as an
