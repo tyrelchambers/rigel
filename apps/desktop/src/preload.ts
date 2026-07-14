@@ -24,5 +24,7 @@ contextBridge.exposeInMainWorld("rigel", {
     me: (): Promise<{ account: { id: string; email: string; name: string | null }; orgs?: unknown[]; invitations?: unknown[] } | null> =>
       ipcRenderer.invoke("rigel:account:me"),
     signOut: (): Promise<void> => ipcRenderer.invoke("rigel:account:sign-out"),
+    status: (): Promise<{ signedIn: boolean; account: { id: string; email: string; name: string | null } | null }> =>
+      ipcRenderer.invoke("rigel:account:status"),
   },
 });

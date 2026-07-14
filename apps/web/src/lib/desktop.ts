@@ -15,6 +15,7 @@ export interface RigelBridge {
     verifyCode(email: string, code: string): Promise<VerifyResult>;
     me(): Promise<MePayload | null>;
     signOut(): Promise<void>;
+    status(): Promise<{ signedIn: boolean; account: Account | null }>;
   };
 }
 export const rigel: RigelBridge | undefined =
