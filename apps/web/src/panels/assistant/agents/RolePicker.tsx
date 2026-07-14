@@ -12,15 +12,9 @@ import {
 import { TabBar, Tab } from "@/components/ui/Tabs";
 import { AgentGlyph } from "@/panels/settings/agents/agentGlyphs";
 import { useAgentModels, useAgents, type AgentId, type AssistantRoleSelection } from "@/lib/api";
+import { effortName } from "@/panels/chat/composerModel";
 import { Card, Field } from "../components/primitives";
-import { PROVIDER_IDS, isClaudeFamily } from "./providerMeta";
-
-/** Low/Medium/High only — the three the design exposes. */
-const EFFORTS = [
-  { id: "low", label: "Low" },
-  { id: "medium", label: "Medium" },
-  { id: "high", label: "High" },
-];
+import { PROVIDER_IDS } from "./providerMeta";
 
 export function RolePicker({
   label,
@@ -39,6 +33,7 @@ export function RolePicker({
   const { data: agents } = useAgents();
   const { data: agentModels } = useAgentModels(provider);
   const models = agentModels?.models ?? [];
+  const efforts = agentModels?.efforts ?? [];
 
   // pendingProvider tracks a provider switch in-flight: we fetch its models and
   // once they arrive we call onChange with the first model to complete the reset.
@@ -114,11 +109,11 @@ export function RolePicker({
         </DropdownMenu>
       </Field>
 
-      {isClaudeFamily(provider) && (
+      {efforts.length > 0 && (
         <Field label="Reasoning" labelWidth="w-20">
           <TabBar value={value.effort ?? "high"} onValueChange={(id) => onChange({ ...value, effort: id })}>
-            {EFFORTS.map((e) => (
-              <Tab key={e.id} value={e.id}>{e.label}</Tab>
+            {efforts.map((e) => (
+              <Tab key={e} value={e}>{effortName(e)}</Tab>
             ))}
           </TabBar>
         </Field>

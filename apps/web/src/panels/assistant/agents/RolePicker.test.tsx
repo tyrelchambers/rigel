@@ -15,7 +15,7 @@ beforeEach(() => {
   // useAgentModels(provider) → GET /api/agents/<id>/models ; useAgents() → GET /api/agents
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     if (url.includes("/api/agents/claude/models")) {
-      return new Response(JSON.stringify({ models: ["claude-sonnet-4-6", "claude-opus-4-8"], efforts: ["low", "medium", "high"] }));
+      return new Response(JSON.stringify({ models: ["claude-sonnet-4-6", "claude-opus-4-8"], efforts: ["low", "medium", "high", "xhigh", "max"] }));
     }
     if (url.includes("/api/agents/gemini/models")) {
       return new Response(JSON.stringify({ models: ["gemini-2.5-pro", "gemini-2.5-flash"], efforts: [] }));
@@ -46,11 +46,13 @@ describe("RolePicker", () => {
     expect(await screen.findByText("claude-sonnet-4-6")).toBeInTheDocument();
   });
 
-  it("shows the reasoning-effort segment for Claude", async () => {
+  it("shows every advertised reasoning-effort level for Claude", async () => {
     wrap(<RolePicker label="Worker" description="d" value={claudeValue} onChange={() => {}} />);
-    expect(await screen.findByRole("tab", { name: /low/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /medium/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /high/i })).toBeInTheDocument();
+    expect(await screen.findByRole("tab", { name: "Low" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Medium" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "High" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Extra high" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Max" })).toBeInTheDocument();
   });
 
   it("hides the effort segment for non-Claude providers", async () => {

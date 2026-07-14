@@ -28,9 +28,17 @@ import { systemPrompt } from "./systemPrompt";
 import { provisionGuardBin } from "./guardedKubectl";
 import { streamAgentProcess, type ChatEvent } from "./agentProcess";
 // Reuse Claude's per-turn options shape: the chat composer sends the SAME opts to
-// every runner (model/effort/sessionId). OpenCode now honors model (via -m), but
-// not effort (Claude-only). isClaudeModel guards against a stale Claude selection.
+// every runner (model/effort/sessionId). OpenCode honors model (via -m) and effort
+// (via --variant). isClaudeModel guards against a stale Claude selection.
 import { isClaudeModel, type RunClaudeOpts } from "./claudeBridge";
+
+/**
+ * Reasoning-effort levels exposed for OpenCode via `--variant`. OpenCode variant
+ * values are model-specific, so this is the safe common set — an unsupported level
+ * falls back to the model's default. Hardcoded; feeds the picker (agentModels) and
+ * the buildOpencodeArgs guard.
+ */
+export const OPENCODE_EFFORTS = new Set(["low", "medium", "high"]);
 
 /**
  * Build the `opencode run` argv for one turn. Pure + exported so it can be unit
@@ -43,13 +51,13 @@ import { isClaudeModel, type RunClaudeOpts } from "./claudeBridge";
  *  - `--dir <runDir>`     : run in a throwaway temp dir (also where opencode.json lives)
  *  - `-s <sessionId>`     : resume a prior session (parity with Claude's --resume)
  *  - `-m <provider/model>`: the model from the agent-aware picker (when present)
+ *  - `--variant <level>`  : reasoning effort from the picker (when present)
  * The user message is the trailing positional.
  *
  * Model: OpenCode takes `-m provider/model` (the picker sends an OpenCode id like
  * "anthropic/claude-…"). We SKIP a stale Claude selection (alias like "opus" or a
  * full id like "claude-opus-4-8") — those aren't OpenCode ids, so passing one would
- * break the CLI; skipping lets OpenCode use its configured default. Effort stays
- * Claude-only (opts.effort is ignored here).
+ * break the CLI; skipping lets OpenCode use its configured default.
  */
 export function buildOpencodeArgs(
   prompt: string,
@@ -70,6 +78,12 @@ export function buildOpencodeArgs(
   // selection (see the doc comment) so OpenCode falls back to its own default rather than erroring.
   if (opts?.model && !isClaudeModel(opts.model)) {
     flags.push("-m", opts.model);
+  }
+
+  // Effort: OpenCode maps reasoning effort onto `--variant`. Validated against
+  // OPENCODE_EFFORTS so a bad/stale value can't inject a flag.
+  if (opts?.effort && OPENCODE_EFFORTS.has(opts.effort)) {
+    flags.push("--variant", opts.effort);
   }
 
   if (opts?.sessionId) {

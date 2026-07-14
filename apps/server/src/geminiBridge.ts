@@ -30,8 +30,10 @@ import { systemPrompt } from "./systemPrompt";
 import { provisionGuardBin } from "./guardedKubectl";
 import { streamAgentProcess, type ChatEvent } from "./agentProcess";
 // Reuse Claude's per-turn options shape: the chat composer sends the SAME opts to
-// every runner (model/effort/sessionId). Gemini honors model (via -m) but not
-// effort. isClaudeModel guards against a stale Claude selection.
+// every runner (model/effort/sessionId). Gemini honors model (via -m) but NOT effort:
+// the gemini CLI exposes no reasoning-effort/thinking-level flag (thinking_level is
+// API-only), so opts.effort is dropped and agentModels advertises no gemini efforts.
+// isClaudeModel guards against a stale Claude selection.
 import { isClaudeModel, type RunClaudeOpts } from "./claudeBridge";
 
 /**

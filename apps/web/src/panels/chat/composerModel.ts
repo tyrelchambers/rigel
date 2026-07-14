@@ -27,6 +27,7 @@ export const CLAUDE_MODELS = [
 export type ClaudeModelId = (typeof CLAUDE_MODELS)[number]["id"];
 
 export const CLAUDE_EFFORTS = [
+  { id: "minimal", name: "Minimal" },
   { id: "low", name: "Low" },
   { id: "medium", name: "Medium" },
   { id: "high", name: "High" },
@@ -56,7 +57,7 @@ export function modelName(agentId: AgentId | undefined, model: string): string {
   return model;
 }
 
-/** Pretty label for an effort id (Claude only); falls back to the raw id. */
+/** Pretty label for an effort id (any provider); falls back to the raw id. */
 export function effortName(effort: string): string {
   return CLAUDE_EFFORTS.find((e) => e.id === effort)?.name ?? effort;
 }

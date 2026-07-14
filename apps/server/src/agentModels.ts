@@ -1,18 +1,20 @@
 // Per-agent model + effort lists, for the composer's agent-aware model picker.
 //
-// The web composer asks the server "what models can THIS agent run?" and renders
-// a picker from the result. claude/codex are static sets; opencode is discovered
-// live via `opencode models`. Effort is a Claude-only concept (the others return
-// an empty efforts list), mirroring the runner wiring in claudeBridge/codexBridge/
-// opencodeBridge.
+// The web composer asks the server "what models can THIS agent run?" and renders a
+// picker from the result. Model lists are curated for claude/codex/gemini (their
+// CLIs expose no list-models command) and discovered live for opencode (`opencode
+// models`). Effort lists are curated per provider (see each runner bridge) — every
+// provider except gemini exposes a reasoning-effort lever the runner passes through.
 import { spawn } from "node:child_process";
 import { ALLOWED_MODELS, ALLOWED_EFFORTS } from "./claudeBridge";
+import { CODEX_EFFORTS } from "./codexBridge";
+import { OPENCODE_EFFORTS } from "./opencodeBridge";
 import type { AgentId } from "./agentRegistry";
 
 export interface AgentModels {
   /** Selectable model ids for this agent (may be empty if none are known). */
   models: string[];
-  /** Selectable reasoning-effort levels (Claude-only; empty for the others). */
+  /** Selectable reasoning-effort levels (empty for gemini, which has no CLI lever). */
   efforts: string[];
 }
 
@@ -20,8 +22,7 @@ export interface AgentModels {
  * Codex model list. CURATED: the `codex` CLI has no "list models" command (verified
  * against codex-cli 0.141 — `codex models` is treated as a prompt, not a subcommand;
  * it only takes `-m`/`--model`), so this is a hand-maintained set of the current
- * Codex-runnable models. Update when OpenAI ships new ones. No efforts (Codex doesn't
- * take a reasoning-effort flag).
+ * Codex-runnable models. Update when OpenAI ships new ones.
  */
 const CODEX_MODELS = ["gpt-5-codex", "gpt-5.4", "gpt-5"];
 
@@ -29,7 +30,7 @@ const CODEX_MODELS = ["gpt-5-codex", "gpt-5.4", "gpt-5"];
  * Gemini model list. CURATED: gemini-cli has no "list models" command (verified
  * against gemini 0.27 — only `-m`/`--model`), so this is a hand-maintained set of
  * the current Gemini models (the 3.x line, then the prior 2.5 line). Update when
- * Google ships new ones. Effort is Claude-only, so the efforts list is empty.
+ * Google ships new ones.
  */
 const GEMINI_MODELS = ["gemini-3-pro", "gemini-3-flash", "gemini-2.5-pro", "gemini-2.5-flash"];
 
@@ -57,69 +58,71 @@ export function parseOpencodeModels(stdout: string): string[] {
 }
 
 /**
- * Run `opencode models` and parse its stdout. Returns [] (never throws) if the
- * spawn fails — e.g. opencode isn't installed. Captures stdout fully (it's a short
- * listing) and kills the process after a modest timeout so a hang can't block.
+ * Spawn a short-lived listing/help command and return its full stdout. Returns ""
+ * (never throws) if the spawn fails — e.g. the binary isn't installed. Kills the
+ * process after a modest timeout so a hang can't block the picker request.
  */
-async function listOpencodeModels(): Promise<string[]> {
+function captureCliStdout(cmd: string, args: string[], timeoutMs = 10_000): Promise<string> {
   return new Promise((resolve) => {
     let settled = false;
-    const done = (out: string) => {
+    const chunks: Buffer[] = [];
+    const done = () => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve(parseOpencodeModels(out));
+      resolve(Buffer.concat(chunks).toString("utf8"));
     };
 
     let proc: ReturnType<typeof spawn>;
     try {
-      proc = spawn("opencode", ["models"], { stdio: ["ignore", "pipe", "ignore"] });
+      proc = spawn(cmd, args, { stdio: ["ignore", "pipe", "ignore"] });
     } catch {
-      resolve([]); // spawn threw synchronously (rare) → no models
+      resolve(""); // spawn threw synchronously (rare)
       return;
     }
 
-    const chunks: Buffer[] = [];
     proc.stdout?.on("data", (b: Buffer) => chunks.push(b));
-    // Missing binary (ENOENT) or any spawn error → no models, don't throw.
+    // Missing binary (ENOENT) or any spawn error → empty output, don't throw.
     proc.on("error", () => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve([]);
+      resolve("");
     });
-    proc.on("close", () => done(Buffer.concat(chunks).toString("utf8")));
+    proc.on("close", done);
 
-    // Guard against a hang: `opencode models` exits on its own, but kill after 10s
-    // and parse whatever we captured so the picker request can't stall forever.
     const timer = setTimeout(() => {
       try {
         proc.kill();
       } catch {
         /* already gone */
       }
-      done(Buffer.concat(chunks).toString("utf8"));
-    }, 10_000);
+      done();
+    }, timeoutMs);
   });
 }
 
+const listOpencodeModels = async () => parseOpencodeModels(await captureCliStdout("opencode", ["models"]));
+
 /**
- * The models + efforts a given agent can run. claude/codex are static; opencode is
- * discovered live via `opencode models`; an unknown id yields empty lists.
+ * The models + efforts a given agent can run. Model sets are curated for
+ * claude/codex/gemini and discovered live for opencode (`opencode models`). Effort
+ * sets are curated per runner bridge (ALLOWED_EFFORTS / CODEX_EFFORTS /
+ * OPENCODE_EFFORTS); gemini's is empty because its CLI has no effort lever. Unknown
+ * id → empty lists.
  */
 export async function agentModels(id: AgentId): Promise<AgentModels> {
   if (id === "claude") {
-    // Reuse claudeBridge's ALLOWED_* so the picker stays in sync with the runner.
     return { models: [...ALLOWED_MODELS], efforts: [...ALLOWED_EFFORTS] };
   }
   if (id === "codex") {
-    return { models: [...CODEX_MODELS], efforts: [] };
+    return { models: [...CODEX_MODELS], efforts: [...CODEX_EFFORTS] };
   }
   if (id === "gemini") {
     return { models: [...GEMINI_MODELS], efforts: [] };
   }
   if (id === "opencode") {
-    return { models: await listOpencodeModels(), efforts: [] };
+    return { models: await listOpencodeModels(), efforts: [...OPENCODE_EFFORTS] };
   }
   return { models: [], efforts: [] };
 }

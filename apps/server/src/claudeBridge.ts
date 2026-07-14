@@ -222,6 +222,11 @@ export const ALLOWED_MODELS = new Set([
  */
 const CLAUDE_ALIASES = new Set(["opus", "sonnet", "haiku", "fable"]);
 
+/**
+ * Reasoning-effort levels the `claude` CLI accepts for --effort (verified against
+ * `claude --help`). Hardcoded — update when Anthropic ships a new level. Doubles as
+ * the picker's Claude effort list (agentModels) and the buildClaudeArgs guard.
+ */
 export const ALLOWED_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
 
 /**
