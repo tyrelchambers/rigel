@@ -94,7 +94,8 @@ export function registerAuthRoutes(app: Hono, deps: AuthDeps): void {
     const account = await db.accountByToken(sha(token));
     if (!account) return c.json({ error: "unauthorized" }, 401);
     await db.touchToken(sha(token));
-    return c.json({ account: { id: account.id, email: account.email, name: account.name } });
+    const orgs = await db.getOrgsForAccount(account.id);
+    return c.json({ account: { id: account.id, email: account.email, name: account.name }, orgs });
   });
 
   app.post("/auth/logout", async (c) => {
