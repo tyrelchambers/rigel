@@ -19,9 +19,9 @@ export function useAccount(): UseAccountResult {
 
   const refresh = useCallback(async () => {
     if (!rigel) { setStatus("signed-out"); return; }
-    const payload = await rigel.account.me();
-    setMe(payload);
-    setStatus(payload ? "signed-in" : "signed-out");
+    const s = await rigel.account.status();
+    setMe(s.account ? { account: s.account } : null);
+    setStatus(s.signedIn ? "signed-in" : "signed-out");
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
