@@ -94,7 +94,13 @@ export function registerAuthRoutes(app: Hono, deps: AuthDeps): void {
     const account = await db.accountByToken(sha(token));
     if (!account) return c.json({ error: "unauthorized" }, 401);
     await db.touchToken(sha(token));
-    const orgs = await db.getOrgsForAccount(account.id);
+    let orgs = await db.getOrgsForAccount(account.id);
+    if (orgs.length === 0) {
+      // Self-heal: any signed-in account must have a personal org. Covers an
+      // account that predates orgs and slipped past the boot backfill.
+      await db.ensurePersonalOrg(account.id, account.name ?? account.email);
+      orgs = await db.getOrgsForAccount(account.id);
+    }
     return c.json({ account: { id: account.id, email: account.email, name: account.name }, orgs });
   });
 

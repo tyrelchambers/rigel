@@ -37,12 +37,11 @@ function fakeDb() {
     },
     async cleanupExpiredCodes() {},
     async upsertAccount(email) {
+      // Deliberately does NOT create a personal org here — models a "legacy"
+      // account so the /me self-heal (lazy ensurePersonalOrg) is exercised.
+      // The real backend's upsertAccount auto-provisioning is covered in authDb.test.ts.
       let a = accounts.get(email);
-      if (!a) {
-        a = { id: `acc-${++seq}`, email, name: "Jane" };
-        accounts.set(email, a);
-        await db.ensurePersonalOrg(a.id, a.name ?? a.email);
-      }
+      if (!a) { a = { id: `acc-${++seq}`, email, name: "Jane" }; accounts.set(email, a); }
       return a;
     },
     async insertToken(tokenHash, accountId) { tokens.set(tokenHash, accountId); },
@@ -142,7 +141,9 @@ test("me returns the account for a valid bearer, 401 after logout", async () => 
   expect((await app.request("/me", { headers: auth })).status).toBe(401);
 });
 
-test("me returns the account and its personal org", async () => {
+test("me self-heals a personal org for an account that has none, and returns it", async () => {
+  // The fake upsertAccount creates NO org (legacy account); /me must lazily
+  // create the personal org so every signed-in account always has one.
   const { app, sent } = make();
   await json(app, "/auth/request", { email: "a@b.co" });
   const body = (await (await json(app, "/auth/verify", { email: "a@b.co", code: sent[0].code })).json()) as { token: string };
