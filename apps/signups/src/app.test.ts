@@ -89,3 +89,29 @@ test("CORS does not allow an unknown origin", async () => {
   });
   expect(res.headers.get("access-control-allow-origin")).not.toBe("https://evil.example");
 });
+
+test("auth routes are mounted when auth deps are provided", async () => {
+  const app = createApp({
+    appKey: "secret",
+    upsert: async () => {},
+    allow: () => true,
+    auth: {
+      db: {
+        insertCode: async () => {}, invalidateCodes: async () => {}, claimAttempt: async () => null,
+        consumeCode: async () => false, cleanupExpiredCodes: async () => {},
+        upsertAccount: async () => ({ id: "a", email: "a@b.co", name: null }),
+        insertToken: async () => {}, accountByToken: async () => null, touchToken: async () => {}, revokeToken: async () => {},
+      },
+      sendCode: async () => {},
+      allowRequest: () => true,
+      allowVerify: () => true,
+    },
+  });
+  // /me with no token is a mounted route that returns 401 (not a 404)
+  expect((await app.request("/me")).status).toBe(401);
+});
+
+test("auth routes are absent when no auth deps (waitlist-only build)", async () => {
+  const app = createApp({ appKey: "secret", upsert: async () => {}, allow: () => true });
+  expect((await app.request("/me")).status).toBe(404);
+});

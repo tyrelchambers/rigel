@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { parseSignup, type Signup } from "./validate";
+import { registerAuthRoutes, type AuthDeps } from "./auth";
 
 export interface AppDeps {
   appKey: string;
@@ -8,6 +9,8 @@ export interface AppDeps {
   allow: (key: string) => boolean;
   /** Best-effort side sync (e.g. Kit). Failures are logged, never surfaced. */
   notify?: (s: Signup) => Promise<void>;
+  /** When present, mounts the /auth/* + /me account routes. */
+  auth?: AuthDeps;
 }
 
 // Origins allowed to call /signups from a browser. The marketing site (rigel.run)
@@ -15,7 +18,7 @@ export interface AppDeps {
 // (no Origin header, unaffected by CORS).
 const ALLOWED_ORIGINS = ["https://rigel.run", "https://www.rigel.run"];
 
-export function createApp({ appKey, upsert, allow, notify }: AppDeps): Hono {
+export function createApp({ appKey, upsert, allow, notify, auth }: AppDeps): Hono {
   const app = new Hono();
 
   app.get("/health", (c) => c.json({ ok: true }));
@@ -47,6 +50,8 @@ export function createApp({ appKey, upsert, allow, notify }: AppDeps): Hono {
     }
     return c.json({ ok: true });
   });
+
+  if (auth) registerAuthRoutes(app, auth);
 
   return app;
 }
