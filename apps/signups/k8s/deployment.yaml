@@ -13,6 +13,8 @@ spec:
       labels:
         app: rigel-signups
     spec:
+      imagePullSecrets:
+        - name: ghrc
       containers:
         - name: signups
           image: ghcr.io/tyrelchambers/rigel-signups:latest
