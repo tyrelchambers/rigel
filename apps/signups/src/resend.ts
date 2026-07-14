@@ -6,7 +6,7 @@ export interface ResendConfig {
 
 /** Branded HTML for the sign-in code email. Email-safe: table layout, inline
  *  CSS, system fonts, no external assets. Mirrors the app's login card. */
-export function renderCodeEmailHtml(code: string): string {
+export function renderCodeEmailHtml(code: string, magicUrl: string): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -25,7 +25,13 @@ export function renderCodeEmailHtml(code: string): string {
 <span style="display:inline-block;margin-left:8px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;font-weight:600;letter-spacing:1.5px;color:#38bdf8;vertical-align:middle;">RIGEL</span>
 </div>
 <h1 style="margin:0 0 8px;font-size:20px;line-height:1.3;font-weight:600;color:#ffffff;">Sign in to Rigel</h1>
-<p style="margin:0 0 24px;font-size:14px;line-height:1.5;color:#a1a1aa;">Enter this code to finish signing in.</p>
+<p style="margin:0 0 20px;font-size:14px;line-height:1.5;color:#a1a1aa;">Click the button to sign in, or enter the code below.</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px;">
+<tr><td align="center">
+<a href="${magicUrl}" style="display:inline-block;background:#38bdf8;color:#04232e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;font-weight:600;line-height:1;text-decoration:none;padding:13px 24px;border-radius:8px;">Sign in to Rigel</a>
+</td></tr>
+</table>
+<p style="margin:0 0 8px;font-size:13px;line-height:1.5;color:#8c8c95;">Or enter this code:</p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;background:#0c0d0f;border:1px solid rgba(255,255,255,0.10);border-radius:10px;">
 <tr><td align="center" style="padding:18px 12px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:30px;font-weight:600;letter-spacing:10px;color:#ffffff;">${code}</td></tr>
 </table>
@@ -39,9 +45,9 @@ export function renderCodeEmailHtml(code: string): string {
 </html>`;
 }
 
-/** Returns a sendCode(email, code) that emails the OTP via Resend. */
+/** Returns a sendCode(email, code, magicUrl) that emails the OTP + magic link via Resend. */
 export function createResendSender({ apiKey, from, fetchFn = fetch }: ResendConfig) {
-  return async function sendCode(email: string, code: string): Promise<void> {
+  return async function sendCode(email: string, code: string, magicUrl: string): Promise<void> {
     const res = await fetchFn("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
@@ -49,8 +55,8 @@ export function createResendSender({ apiKey, from, fetchFn = fetch }: ResendConf
         from,
         to: email,
         subject: "Your Rigel sign-in code",
-        text: `Your Rigel sign-in code is ${code}. It expires in 10 minutes. If you did not request this, ignore this email.`,
-        html: renderCodeEmailHtml(code),
+        text: `Your Rigel sign-in code is ${code}. It expires in 10 minutes.\n\nOr open this link to sign in: ${magicUrl}\n\nIf you did not request this, ignore this email.`,
+        html: renderCodeEmailHtml(code, magicUrl),
       }),
     });
     if (!res.ok) throw new Error(`resend failed: ${res.status} ${await res.text().catch(() => "")}`);
