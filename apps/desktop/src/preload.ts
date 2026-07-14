@@ -12,4 +12,13 @@ contextBridge.exposeInMainWorld("rigel", {
     ipcRenderer.invoke("rigel:get-signup-data"),
   openChartFile: (): Promise<{ canceled: boolean; path?: string }> =>
     ipcRenderer.invoke("rigel:open-chart-file"),
+  account: {
+    requestCode: (email: string): Promise<{ ok: boolean; status: number }> =>
+      ipcRenderer.invoke("rigel:account:request-code", email),
+    verifyCode: (email: string, code: string): Promise<{ ok: true; account: { id: string; email: string; name: string | null } } | { ok: false; status: number }> =>
+      ipcRenderer.invoke("rigel:account:verify-code", { email, code }),
+    me: (): Promise<{ account: { id: string; email: string; name: string | null }; orgs?: unknown[]; invitations?: unknown[] } | null> =>
+      ipcRenderer.invoke("rigel:account:me"),
+    signOut: (): Promise<void> => ipcRenderer.invoke("rigel:account:sign-out"),
+  },
 });
