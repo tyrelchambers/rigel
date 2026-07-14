@@ -1,22 +1,28 @@
 # Releasing the Rigel desktop app
 
-This is how a new downloadable build of the Mac app gets made. The short version:
-you bump the version and push a tag; GitHub Actions builds the installers and
-puts them on a draft Release; you look it over and click Publish.
+This is how a new downloadable build of the desktop app gets made. The short
+version: you bump the version and push a tag; GitHub Actions builds the installers
+for **macOS, Windows, and Linux** and puts them on a single draft Release; you
+look it over and click Publish.
 
-Right now this covers **macOS only**, and the builds are **unsigned** (more on
-that below). Windows/Linux and code signing are planned later phases.
+The builds are **unsigned** for now (more on that below). Code signing and
+notarization are planned later phases.
 
 ## The moving parts
 
 Three files make this work:
 
 - **`.github/workflows/desktop-release.yml`** — the GitHub Actions workflow. It
-  runs on a macOS runner whenever you push a tag like `v0.2.0`.
+  runs a **3-OS matrix** (macOS, Windows, Linux — each on its own native runner)
+  whenever you push a tag like `v0.2.0`. Each runner builds only its own platform
+  (node-pty's native addon is packed from that runner's prebuild, no
+  cross-compile) and uploads to the same draft Release.
 - **`apps/desktop/electron-builder.yml`** — how the app is packaged. The
   `publish:` block points at this GitHub repo, so electron-builder knows where to
-  upload. `identity: null` means the build is unsigned for now.
-- **`apps/desktop/package.json`** — the `release` script the workflow runs:
+  upload. The `mac`/`win`/`linux` blocks define the per-platform targets, and
+  `identity: null` (plus no Win/Linux signing) means the build is unsigned for now.
+- **`apps/desktop/package.json`** — the per-platform `release:mac` / `release:win`
+  / `release:linux` scripts the matrix runs, e.g.
   `pnpm build && electron-builder --mac --arm64 --x64 --publish always`.
 
 ## Cutting a release
@@ -45,15 +51,21 @@ That's it. Pushing the tag kicks off the workflow.
 
 ## What happens next
 
-The workflow (watch it under the repo's **Actions** tab) does this on a
-`macos-latest` runner:
+The workflow (watch it under the repo's **Actions** tab) runs the matrix — each
+runner installs the workspace, verifies the tag matches
+`apps/desktop/package.json` (once, on the macOS runner), and runs its
+`release:<platform>` script. `electron-builder` packages, per platform:
 
-1. Installs the workspace and runs the `release` script.
-2. `electron-builder` packages two installers:
-   - `Rigel-<version>-arm64.dmg` — Apple Silicon (M-series)
-   - `Rigel-<version>-x64.dmg` — Intel
-   - plus `latest-mac.yml`, the manifest a future auto-updater will read.
-3. Uploads all of it to a **draft** GitHub Release named for the version.
+- **macOS** — `Rigel-<version>-arm64.dmg` (Apple Silicon) and
+  `Rigel-<version>-x64.dmg` (Intel), plus `latest-mac.yml`.
+- **Windows** — `Rigel-Setup-<version>.exe` (NSIS, x64), plus `latest.yml`.
+- **Linux** — `Rigel-<version>-x86_64.AppImage` and `Rigel-<version>-amd64.deb`
+  (x64), plus `latest-linux.yml`.
+
+The `latest-*.yml` manifests are what a future auto-updater will read. All of it
+uploads to the same **draft** GitHub Release named for the version. A final
+`strip-blockmaps` job then prunes the `.blockmap` delta-update artifacts (unused
+until auto-update is wired; the `latest-*.yml` manifests are kept).
 
 Nothing is public yet. Go to the repo's **Releases** page, find the draft, check
 the files are attached and the notes read the way you want, then click
@@ -84,13 +96,18 @@ To re-push a version without cutting a new release (say a registry hiccup), use
 
 ## Why the builds are unsigned (and what users see)
 
-We haven't set up Apple code signing or notarization yet, so when someone
-downloads the `.dmg` and opens it, macOS will warn that it can't verify the
-developer. The one-time workaround is: **right-click the app → Open**, then
-confirm. After that it launches normally.
+We haven't set up code signing or notarization yet, so on first open users get a
+warning:
+
+- **macOS** can't verify the developer. The one-time workaround is: **right-click
+  the app → Open**, then confirm. After that it launches normally.
+- **Windows** SmartScreen shows "Windows protected your PC." The workaround is:
+  **More info → Run anyway**.
 
 Fixing this properly (so it opens with no warning) needs an Apple Developer
-account and signing credentials. That's a planned follow-up; see below.
+account + Developer ID certificate for macOS and an Authenticode certificate for
+Windows. That's a planned follow-up; see below. Until then, the download page
+should spell out these one-time steps so first-run isn't a dead end.
 
 ## Testing the pipeline without publishing
 
@@ -117,12 +134,11 @@ The output lands in `apps/desktop/release/`. This builds the installers but does
 
 ## Planned follow-ups
 
-- **Signing + notarization (Phase 2):** join the Apple Developer Program, add a
-  Developer ID certificate and notarization credentials as GitHub secrets, and
-  flip `identity` in `electron-builder.yml`. Downloads then open with no warning.
-  This drops into the same workflow; the steps above don't change.
+- **Signing + notarization (Phase 2):** for macOS, join the Apple Developer
+  Program, add a Developer ID certificate and notarization credentials as GitHub
+  secrets, and set `identity` in `electron-builder.yml`; for Windows, add an
+  Authenticode certificate. Downloads then open with no warning. This drops into
+  the same workflow; the steps above don't change.
 - **In-app auto-update (Phase 3):** add `electron-updater` so the app updates
-  itself from the `latest-mac.yml` each release already publishes.
-- **More platforms:** add `win` and `linux` targets to `electron-builder.yml`
-  and matching runners to the workflow matrix when Windows/Linux builds are
-  wanted.
+  itself from the `latest-*.yml` manifests each release already publishes (and
+  stop stripping the `.blockmap` files, which enable delta updates).
