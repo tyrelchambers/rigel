@@ -173,6 +173,18 @@ export function WebhookChannelSection({
             value={urlText}
             onChange={(e) => setUrlText(e.target.value)}
           />
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setUrlText(savedUrl);
+              setError(null);
+              setTestResult(null);
+            }}
+            disabled={setChannel.isPending || urlText === savedUrl}
+          >
+            Cancel
+          </Button>
           <Button size="sm" onClick={save} disabled={setChannel.isPending}>
             {connected ? "Save" : "Connect"}
           </Button>

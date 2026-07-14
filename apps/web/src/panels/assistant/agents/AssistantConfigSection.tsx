@@ -77,9 +77,21 @@ export function AssistantConfigSection({
   }, [roles.worker, roles.supervisor]);
   useEffect(() => setLimits({ ...DEFAULT_LIMITS, ...limitsProp }), [limitsProp]);
 
+  const baselineLimits = { ...DEFAULT_LIMITS, ...limitsProp };
+  const dirty =
+    JSON.stringify(worker) !== JSON.stringify(roles.worker) ||
+    JSON.stringify(supervisor) !== JSON.stringify(roles.supervisor) ||
+    JSON.stringify(limits) !== JSON.stringify(baselineLimits);
+
   function saveRolesAndLimits() {
     run({ action: "setModels", namespace, worker, supervisor });
     run({ action: "setLimits", namespace, limits });
+  }
+
+  function revertRolesAndLimits() {
+    setWorker(roles.worker);
+    setSupervisor(roles.supervisor);
+    setLimits(baselineLimits);
   }
 
   function confirmCredential() {
@@ -161,9 +173,14 @@ export function AssistantConfigSection({
         <p className="text-xs text-muted-foreground">
           Model and limit changes are live (next poll). Credential changes restart the agent.
         </p>
-        <Button disabled={isDisabled} onClick={saveRolesAndLimits}>
-          Save changes
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" disabled={isDisabled || !dirty} onClick={revertRolesAndLimits}>
+            Cancel
+          </Button>
+          <Button disabled={isDisabled} onClick={saveRolesAndLimits}>
+            Save changes
+          </Button>
+        </div>
       </div>
 
       {/* Confirm a credential change (it rollout-restarts the agent). One dialog

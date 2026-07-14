@@ -109,6 +109,18 @@ describe("WebhookChannelSection — connected", () => {
     );
   });
 
+  it("Cancel reverts an edited URL to the saved value and is disabled when unchanged", () => {
+    render(<WebhookChannelSection channelId="discord" label="Discord" derived={connected()} />);
+    const cancel = screen.getByRole("button", { name: /^cancel$/i });
+    expect(cancel).toBeDisabled(); // no unsaved edits yet
+    const input = screen.getByDisplayValue("https://discord.com/api/webhooks/saved");
+    fireEvent.change(input, { target: { value: "https://discord.com/api/webhooks/edited" } });
+    expect(cancel).toBeEnabled();
+    fireEvent.click(cancel);
+    expect(screen.getByDisplayValue("https://discord.com/api/webhooks/saved")).toBeInTheDocument();
+    expect(mutateAsync).not.toHaveBeenCalled();
+  });
+
   it("Send test calls the channels endpoint with the current URL", async () => {
     render(<WebhookChannelSection channelId="discord" label="Discord" derived={connected()} />);
     fireEvent.click(screen.getByRole("button", { name: /send test/i }));

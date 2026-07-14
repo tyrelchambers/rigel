@@ -96,6 +96,19 @@ describe("AlertsTab", () => {
     expect(screen.getByText("Quiet window")).toBeInTheDocument();
   });
 
+  it("Cancel reverts an edited quiet window and is disabled when unchanged", async () => {
+    wrap(derived({ autonomyMode: "window", quietWindow: "22:00-07:00" }));
+    const input = screen.getByDisplayValue("22:00-07:00");
+    const cancel = screen.getByRole("button", { name: /^cancel$/i });
+    expect(cancel).toBeDisabled();
+    await userEvent.clear(input);
+    await userEvent.type(input, "23:00-06:00");
+    expect(cancel).toBeEnabled();
+    await userEvent.click(cancel);
+    expect(screen.getByDisplayValue("22:00-07:00")).toBeInTheDocument();
+    expect(run).not.toHaveBeenCalled();
+  });
+
   it("links to the Settings tab for notification setup", async () => {
     wrap();
     await userEvent.click(screen.getByRole("button", { name: /Settings tab/i }));
