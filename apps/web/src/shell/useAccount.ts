@@ -26,6 +26,11 @@ export function useAccount(): UseAccountResult {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
+  useEffect(() => {
+    if (!rigel) return;
+    return rigel.account.onChanged(() => { void refresh(); });
+  }, [refresh]);
+
   const requestCode = useCallback(
     (email: string) => rigel!.account.requestCode(email),
     [],

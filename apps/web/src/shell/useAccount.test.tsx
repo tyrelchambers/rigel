@@ -7,11 +7,20 @@ const status = vi.fn();
 const requestCode = vi.fn();
 const verifyCode = vi.fn();
 const signOut = vi.fn();
+let changedCb: (() => void) | null = null;
 vi.mock("@/lib/desktop", () => ({
-  rigel: { account: { status: (...a: unknown[]) => status(...a), requestCode: (...a: unknown[]) => requestCode(...a), verifyCode: (...a: unknown[]) => verifyCode(...a), signOut: (...a: unknown[]) => signOut(...a) } },
+  rigel: {
+    account: {
+      status: (...a: unknown[]) => status(...a),
+      requestCode: (...a: unknown[]) => requestCode(...a),
+      verifyCode: (...a: unknown[]) => verifyCode(...a),
+      signOut: (...a: unknown[]) => signOut(...a),
+      onChanged: (cb: () => void) => { changedCb = cb; return () => { changedCb = null; }; },
+    },
+  },
 }));
 
-beforeEach(() => { status.mockReset(); requestCode.mockReset(); verifyCode.mockReset(); signOut.mockReset(); });
+beforeEach(() => { status.mockReset(); requestCode.mockReset(); verifyCode.mockReset(); signOut.mockReset(); changedCb = null; });
 afterEach(() => vi.clearAllMocks());
 
 test("resolves to signed-in when status() reports signedIn", async () => {
@@ -45,6 +54,15 @@ test("verifyCode success refreshes to signed-in", async () => {
   const { result } = renderHook(() => useAccount());
   await waitFor(() => expect(result.current.status).toBe("signed-out"));
   await act(async () => { await result.current.verifyCode("a@b.co", "123456"); });
+  await waitFor(() => expect(result.current.status).toBe("signed-in"));
+});
+
+test("re-checks and flips to signed-in when main signals a change (magic link)", async () => {
+  status.mockResolvedValueOnce({ signedIn: false, account: null }).mockResolvedValue({ signedIn: true, account });
+  const { useAccount } = await import("./useAccount");
+  const { result } = renderHook(() => useAccount());
+  await waitFor(() => expect(result.current.status).toBe("signed-out"));
+  await act(async () => { changedCb?.(); });
   await waitFor(() => expect(result.current.status).toBe("signed-in"));
 });
 
