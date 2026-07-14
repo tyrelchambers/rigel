@@ -24,7 +24,7 @@ beforeEach(() => { status.mockReset(); requestCode.mockReset(); verifyCode.mockR
 afterEach(() => vi.clearAllMocks());
 
 test("resolves to signed-in when status() reports signedIn", async () => {
-  status.mockResolvedValue({ signedIn: true, account });
+  status.mockResolvedValue({ signedIn: true, account, orgs: [] });
   const { useAccount } = await import("./useAccount");
   const { result } = renderHook(() => useAccount());
   expect(result.current.status).toBe("loading");
@@ -33,7 +33,7 @@ test("resolves to signed-in when status() reports signedIn", async () => {
 });
 
 test("signed-in even when account is null (offline, token retained)", async () => {
-  status.mockResolvedValue({ signedIn: true, account: null });
+  status.mockResolvedValue({ signedIn: true, account: null, orgs: [] });
   const { useAccount } = await import("./useAccount");
   const { result } = renderHook(() => useAccount());
   await waitFor(() => expect(result.current.status).toBe("signed-in"));
@@ -41,14 +41,14 @@ test("signed-in even when account is null (offline, token retained)", async () =
 });
 
 test("resolves to signed-out when status() reports not signed in", async () => {
-  status.mockResolvedValue({ signedIn: false, account: null });
+  status.mockResolvedValue({ signedIn: false, account: null, orgs: [] });
   const { useAccount } = await import("./useAccount");
   const { result } = renderHook(() => useAccount());
   await waitFor(() => expect(result.current.status).toBe("signed-out"));
 });
 
 test("verifyCode success refreshes to signed-in", async () => {
-  status.mockResolvedValueOnce({ signedIn: false, account: null }).mockResolvedValue({ signedIn: true, account });
+  status.mockResolvedValueOnce({ signedIn: false, account: null, orgs: [] }).mockResolvedValue({ signedIn: true, account, orgs: [] });
   verifyCode.mockResolvedValue({ ok: true, account });
   const { useAccount } = await import("./useAccount");
   const { result } = renderHook(() => useAccount());
@@ -58,7 +58,7 @@ test("verifyCode success refreshes to signed-in", async () => {
 });
 
 test("re-checks and flips to signed-in when main signals a change (magic link)", async () => {
-  status.mockResolvedValueOnce({ signedIn: false, account: null }).mockResolvedValue({ signedIn: true, account });
+  status.mockResolvedValueOnce({ signedIn: false, account: null, orgs: [] }).mockResolvedValue({ signedIn: true, account, orgs: [] });
   const { useAccount } = await import("./useAccount");
   const { result } = renderHook(() => useAccount());
   await waitFor(() => expect(result.current.status).toBe("signed-out"));
@@ -67,7 +67,7 @@ test("re-checks and flips to signed-in when main signals a change (magic link)",
 });
 
 test("signOut returns to signed-out", async () => {
-  status.mockResolvedValue({ signedIn: true, account });
+  status.mockResolvedValue({ signedIn: true, account, orgs: [] });
   signOut.mockResolvedValue(undefined);
   const { useAccount } = await import("./useAccount");
   const { result } = renderHook(() => useAccount());
@@ -75,4 +75,13 @@ test("signOut returns to signed-out", async () => {
   await act(async () => { await result.current.signOut(); });
   expect(result.current.status).toBe("signed-out");
   expect(signOut).toHaveBeenCalled();
+});
+
+test("exposes orgs from status()", async () => {
+  const org = { id: "o1", kind: "personal" as const, name: "Jane", role: "owner" as const };
+  status.mockResolvedValue({ signedIn: true, account, orgs: [org] });
+  const { useAccount } = await import("./useAccount");
+  const { result } = renderHook(() => useAccount());
+  await waitFor(() => expect(result.current.status).toBe("signed-in"));
+  expect(result.current.orgs).toEqual([org]);
 });

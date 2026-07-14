@@ -11,6 +11,7 @@ function fakeAccount(over: Partial<UseAccountResult> = {}): UseAccountResult {
     status: "signed-out",
     account: null,
     me: null,
+    orgs: [],
     requestCode: vi.fn().mockResolvedValue({ ok: true, status: 200 }),
     verifyCode: vi.fn().mockResolvedValue({ ok: true, account: { id: "1", email: "a@b.co", name: "Jane" } }),
     signOut: vi.fn().mockResolvedValue(undefined),

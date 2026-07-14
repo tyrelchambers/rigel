@@ -1,4 +1,5 @@
 export interface Account { id: string; email: string; name: string | null }
+export interface Org { id: string; kind: "personal" | "team"; name: string; role: "owner" | "admin" | "member" }
 export interface MePayload { account: Account; orgs?: unknown[]; invitations?: unknown[] }
 export type VerifyResult = { ok: true; account: Account } | { ok: false; status: number };
 
@@ -15,7 +16,7 @@ export interface RigelBridge {
     verifyCode(email: string, code: string): Promise<VerifyResult>;
     me(): Promise<MePayload | null>;
     signOut(): Promise<void>;
-    status(): Promise<{ signedIn: boolean; account: Account | null }>;
+    status(): Promise<{ signedIn: boolean; account: Account | null; orgs: Org[] }>;
     onChanged(cb: () => void): () => void;
   };
 }
