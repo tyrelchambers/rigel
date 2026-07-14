@@ -79,6 +79,36 @@ test("consumeLinkToken returns null when no row matches", async () => {
   expect(await createAuthDb(pool).consumeLinkToken("HASH")).toBeNull();
 });
 
+test("ensureAuthSchema creates organizations + memberships and backfills", async () => {
+  const { pool, calls } = recorder();
+  await ensureAuthSchema(pool);
+  const j = calls.map((c) => c.sql.toUpperCase()).join("\n");
+  expect(j).toContain("CREATE TABLE IF NOT EXISTS ORGANIZATIONS");
+  expect(j).toContain("CREATE TABLE IF NOT EXISTS MEMBERSHIPS");
+  expect(j).toContain("INSERT INTO ORGANIZATIONS");
+});
+
+test("getOrgsForAccount joins memberships + organizations", async () => {
+  const { pool, calls, push } = recorder();
+  push({ id: "o1", kind: "personal", name: "Jane", role: "owner" });
+  const db = createAuthDb(pool);
+  expect(await db.getOrgsForAccount("acc-1")).toEqual([{ id: "o1", kind: "personal", name: "Jane", role: "owner" }]);
+  const sql = calls[0].sql.toUpperCase();
+  expect(sql).toContain("FROM MEMBERSHIPS");
+  expect(sql).toContain("JOIN ORGANIZATIONS");
+  expect(sql).toContain("ACCOUNT_ID = $1");
+  expect(calls[0].params).toEqual(["acc-1"]);
+});
+
+test("ensurePersonalOrg upserts org + owner membership idempotently", async () => {
+  const { pool, calls } = recorder();
+  await createAuthDb(pool).ensurePersonalOrg("acc-1", "Jane");
+  const j = calls.map((c) => c.sql.toUpperCase()).join("\n");
+  expect(j).toContain("INSERT INTO ORGANIZATIONS");
+  expect(j).toContain("ON CONFLICT");
+  expect(j).toContain("INSERT INTO MEMBERSHIPS");
+});
+
 test("accountByToken joins accounts and filters revoked/expired", async () => {
   const { pool, calls, push } = recorder();
   push({ id: "acc-1", email: "a@b.co", name: "Jane" });

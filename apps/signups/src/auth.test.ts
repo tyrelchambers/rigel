@@ -49,6 +49,8 @@ function fakeDb() {
     },
     async touchToken() {},
     async revokeToken(tokenHash) { revoked.add(tokenHash); },
+    async ensurePersonalOrg() {},
+    async getOrgsForAccount() { return []; },
   };
   return { db, codes };
 }
