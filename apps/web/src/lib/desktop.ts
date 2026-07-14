@@ -1,6 +1,6 @@
 export interface Account { id: string; email: string; name: string | null }
 export interface Org { id: string; kind: "personal" | "team"; name: string; role: "owner" | "admin" | "member" }
-export interface MePayload { account: Account; orgs?: unknown[]; invitations?: unknown[] }
+export interface MePayload { account: Account; orgs?: Org[]; invitations?: unknown[] }
 export type VerifyResult = { ok: true; account: Account } | { ok: false; status: number };
 
 export interface RigelBridge {

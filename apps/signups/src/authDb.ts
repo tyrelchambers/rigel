@@ -83,11 +83,13 @@ CREATE INDEX IF NOT EXISTS memberships_account_idx ON memberships (account_id);
 CREATE UNIQUE INDEX IF NOT EXISTS memberships_one_owner_idx ON memberships (org_id) WHERE role = 'owner';
 INSERT INTO organizations (kind, name, personal_account_id)
   SELECT 'personal', coalesce(name, email), id FROM accounts a
-  WHERE NOT EXISTS (SELECT 1 FROM organizations o WHERE o.personal_account_id = a.id);
+  WHERE NOT EXISTS (SELECT 1 FROM organizations o WHERE o.personal_account_id = a.id)
+  ON CONFLICT (personal_account_id) DO NOTHING;
 INSERT INTO memberships (org_id, account_id, role)
   SELECT o.id, o.personal_account_id, 'owner' FROM organizations o
   WHERE o.kind = 'personal' AND o.personal_account_id IS NOT NULL
-    AND NOT EXISTS (SELECT 1 FROM memberships m WHERE m.org_id = o.id AND m.account_id = o.personal_account_id);`;
+    AND NOT EXISTS (SELECT 1 FROM memberships m WHERE m.org_id = o.id AND m.account_id = o.personal_account_id)
+  ON CONFLICT (org_id, account_id) DO NOTHING;`;
 
 export async function ensureAuthSchema(pool: Pool): Promise<void> {
   await pool.query(AUTH_SCHEMA);
