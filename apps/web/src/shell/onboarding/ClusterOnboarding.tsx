@@ -69,7 +69,7 @@ export function ClusterOnboarding({ onSkip }: { onSkip: () => void }) {
         </div>
 
         <div className="flex flex-col items-center gap-2 text-center">
-          <h1 className="text-2xl font-semibold text-white">Connect a cluster to get started</h1>
+          <h1 className="text-2xl font-semibold text-[var(--fg-primary)]">Connect a cluster to get started</h1>
           <p className="text-sm text-[var(--fg-secondary)]">
             Rigel works with any Kubernetes cluster. Pick how you&apos;d like to connect — you can add more anytime.
           </p>
