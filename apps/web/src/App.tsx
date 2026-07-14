@@ -45,6 +45,7 @@ import ChatPane, { type ChatPaneHandle } from "@/shell/ChatPane";
 import { CommandPalette, useCommandPalette } from "@/shell/CommandPalette";
 import { GlobalHeader } from "@/shell/GlobalHeader";
 import { AccountModal } from "@/shell/AccountModal";
+import { useAccount } from "@/shell/useAccount";
 import { loadSidebarCollapsed, saveSidebarCollapsed } from "@/shell/navCollapse";
 import { registerChatReveal } from "@/lib/chatHandoff";
 
@@ -104,21 +105,9 @@ export default function App() {
   // still checking (desktop); off-desktop there's no bridge, so no gate.
   const [accountMissing, setAccountMissing] = useState<boolean | null>(rigel ? null : false);
 
-  // Account modal — refetch the captured name/email each time the modal opens,
-  // so it reflects a profile written during this session (e.g. right after the
-  // first-run signup), not just whatever existed at mount. `rigel` is undefined
-  // off-desktop; the method itself is always present on a real bridge.
+  // Account modal — session state (sign-in/out) is owned by useAccount.
   const [accountOpen, setAccountOpen] = useState(false);
-  const [account, setAccount] = useState<{ name: string; email: string } | null>(null);
-  useEffect(() => {
-    if (!accountOpen) return;
-    let cancelled = false;
-    rigel
-      ?.getSignupData()
-      .then((d) => { if (!cancelled) setAccount(d); })
-      .catch(() => { if (!cancelled) setAccount(null); });
-    return () => { cancelled = true; };
-  }, [accountOpen]);
+  const account = useAccount();
 
   useEffect(() => {
     const open = () => setShowOnboarding(true);
@@ -250,12 +239,7 @@ export default function App() {
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--surface-primary)" }}>
       {showOnboarding && <OnboardingWizard onClose={closeOnboarding} onLeave={leaveOnboarding} />}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
-      <AccountModal
-        open={accountOpen}
-        onOpenChange={setAccountOpen}
-        name={account?.name}
-        email={account?.email}
-      />
+      <AccountModal open={accountOpen} onOpenChange={setAccountOpen} account={account} />
 
       {/* ── Global header — full-width bar across the top of the window. ─────── */}
       <GlobalHeader
