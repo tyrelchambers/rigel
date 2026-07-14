@@ -16,6 +16,7 @@ export interface RigelBridge {
     me(): Promise<MePayload | null>;
     signOut(): Promise<void>;
     status(): Promise<{ signedIn: boolean; account: Account | null }>;
+    onChanged(cb: () => void): () => void;
   };
 }
 export const rigel: RigelBridge | undefined =

@@ -5,7 +5,7 @@ import { parseRequestBody, parseVerifyBody } from "./authValidate";
 
 export interface AuthDeps {
   db: AuthDb;
-  sendCode: (email: string, code: string) => Promise<void>;
+  sendCode: (email: string, code: string, magicUrl: string) => Promise<void>;
   allowRequest: (key: string) => boolean;
   allowVerify: (key: string) => boolean;
 }
@@ -42,11 +42,13 @@ export function registerAuthRoutes(app: Hono, deps: AuthDeps): void {
       return c.json({ error: "rate limited" }, 429);
     }
     const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+    const linkToken = randomBytes(32).toString("base64url");
     await db.invalidateCodes(email);
-    await db.insertCode(email, sha(code), CODE_TTL_SECONDS);
+    await db.insertCode(email, sha(code), sha(linkToken), CODE_TTL_SECONDS);
     db.cleanupExpiredCodes().catch(() => {}); // opportunistic, never blocks the response
+    const magicUrl = `rigel://auth?token=${linkToken}`;
     try {
-      await sendCode(email, code);
+      await sendCode(email, code, magicUrl);
     } catch (e) {
       console.error("auth: sendCode failed", e);
       return c.json({ error: "could not send code" }, 502);
@@ -70,6 +72,20 @@ export function registerAuthRoutes(app: Hono, deps: AuthDeps): void {
     const token = randomBytes(32).toString("base64url");
     await db.insertToken(sha(token), account.id);
     return c.json({ token, account: { id: account.id, email: account.email, name: account.name } });
+  });
+
+  app.post("/auth/verify-link", async (c) => {
+    let body: unknown;
+    try { body = await c.req.json(); } catch { return c.json({ error: "invalid json" }, 400); }
+    const token = typeof (body as { token?: unknown })?.token === "string" ? (body as { token: string }).token.trim() : "";
+    if (!token) return c.json({ error: "invalid" }, 400);
+    if (!allowVerify(`auth:vrf:ip:${clientIp(c)}`)) return c.json({ error: "rate limited" }, 429);
+    const claimed = await db.consumeLinkToken(sha(token));
+    if (!claimed) return c.json({ error: "invalid or expired link" }, 401);
+    const account = await db.upsertAccount(claimed.email);
+    const bearer = randomBytes(32).toString("base64url");
+    await db.insertToken(sha(bearer), account.id);
+    return c.json({ token: bearer, account: { id: account.id, email: account.email, name: account.name } });
   });
 
   app.get("/me", async (c) => {

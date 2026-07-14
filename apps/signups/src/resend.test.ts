@@ -4,7 +4,7 @@ import { createResendSender } from "./resend";
 test("posts the code to Resend and resolves on 200", async () => {
   const fetchFn = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ id: "x" }), { status: 200 }));
   const send = createResendSender({ apiKey: "re_test", from: "Rigel <login@rigel.run>", fetchFn });
-  await send("jane@acme.com", "123456");
+  await send("jane@acme.com", "123456", "rigel://auth?token=abc123");
   expect(fetchFn).toHaveBeenCalledTimes(1);
   const [url, init] = fetchFn.mock.calls[0] as [string, RequestInit];
   expect(url).toBe("https://api.resend.com/emails");
@@ -12,12 +12,19 @@ test("posts the code to Resend and resolves on 200", async () => {
   const payload = JSON.parse(init.body as string);
   expect(payload.to).toBe("jane@acme.com");
   expect(payload.from).toBe("Rigel <login@rigel.run>");
-  expect(payload.subject).toContain("123456");
+  // Code is NOT in the subject (keeps it off lock-screen/notification previews).
+  expect(payload.subject).toBe("Your Rigel sign-in code");
+  expect(payload.subject).not.toContain("123456");
+  // Both the plaintext fallback and the branded HTML carry the code and magic link.
   expect(payload.text).toContain("123456");
+  expect(payload.text).toContain("rigel://auth?token=abc123");
+  expect(payload.html).toContain("123456");
+  expect(payload.html).toContain("RIGEL");
+  expect(payload.html).toContain('href="rigel://auth?token=abc123"');
 });
 
 test("throws on a non-2xx from Resend", async () => {
   const fetchFn = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response("nope", { status: 422 }));
   const send = createResendSender({ apiKey: "re_test", from: "x", fetchFn });
-  await expect(send("a@b.co", "000000")).rejects.toThrow();
+  await expect(send("a@b.co", "000000", "rigel://auth?token=xyz")).rejects.toThrow();
 });

@@ -60,6 +60,41 @@ function pushServerAuth(signedIn: boolean): void {
 }
 let mainWindow: BrowserWindow | null = null;
 let serverPort = 0;
+// Set inside boot() once accountClient exists; invoked by handleAuthUrl to
+// verify a rigel://auth?token=... magic link and open the server gate.
+let signInWithLink: ((token: string) => Promise<void>) | null = null;
+// A rigel:// link that arrived before signInWithLink was set (macOS cold-launch
+// "open-url" race); drained at the end of boot() once it's ready.
+let pendingAuthUrl: string | null = null;
+
+function parseAuthToken(rawUrl: string): string | null {
+  try {
+    const u = new URL(rawUrl);
+    if (u.protocol !== "rigel:" || u.hostname !== "auth") return null;
+    return u.searchParams.get("token");
+  } catch {
+    return null;
+  }
+}
+
+async function handleAuthUrl(rawUrl: string): Promise<void> {
+  const token = parseAuthToken(rawUrl);
+  if (!token) return;
+  if (!signInWithLink) {
+    pendingAuthUrl = rawUrl;
+    return;
+  }
+  try {
+    await signInWithLink(token);
+  } catch (e) {
+    console.error("[rigel] magic-link sign-in failed", e);
+  }
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+}
 // Set true once the user is intentionally quitting, so a server child killed as
 // part of shutdown is NOT mistaken for a crash and respawned (see before-quit).
 let quitting = false;
@@ -397,6 +432,33 @@ async function boot(): Promise<void> {
   // (e.g. a stale token that 401s) and pushes any change live.
   accountSignedIn = accountStore.getToken() != null;
 
+  // rigel://auth?token=... magic-link handler, invoked by handleAuthUrl.
+  signInWithLink = async (token: string) => {
+    // Refuse a magic link while already signed in — prevents a hostile
+    // rigel:// link from silently swapping the session to the attacker's account.
+    if (accountStore.getToken() != null) {
+      if (mainWindow) await dialog.showMessageBox(mainWindow, { type: "info", message: "You're already signed in to Rigel.", buttons: ["OK"] });
+      return;
+    }
+    const r = await accountClient.verifyLink(token);
+    if (!r.ok) {
+      const opts = { type: "warning" as const, message: "That sign-in link is invalid or expired.", detail: "Request a new code to sign in.", buttons: ["OK"] };
+      if (mainWindow) await dialog.showMessageBox(mainWindow, opts); else await dialog.showMessageBox(opts);
+      return;
+    }
+    // Confirm WHOSE account before committing (defends against login-CSRF: a
+    // link the user didn't request would show an unfamiliar email here).
+    const confirmOpts = { type: "question" as const, buttons: ["Sign in", "Cancel"], defaultId: 0, cancelId: 1, message: "Sign in to Rigel", detail: `Continue as ${r.account.email}?` };
+    const choice = mainWindow ? await dialog.showMessageBox(mainWindow, confirmOpts) : await dialog.showMessageBox(confirmOpts);
+    if (choice.response !== 0) {
+      await accountClient.signOut();
+      pushServerAuth(false);
+      return;
+    }
+    pushServerAuth(true);
+    mainWindow?.webContents.send("rigel:account:changed");
+  };
+
   async function refreshAccount(): Promise<{ signedIn: boolean; account: { id: string; email: string; name: string | null } | null }> {
     const payload = await accountClient.me(); // clears token on 401, keeps it on network-fail
     const signedIn = accountStore.getToken() != null;
@@ -455,6 +517,19 @@ async function boot(): Promise<void> {
       void runSmoke(serverPort).finally(() => app.quit());
     });
   }
+
+  // Drain a rigel:// link that arrived via "open-url" before signInWithLink was
+  // set (macOS cold-launch race) — see pendingAuthUrl.
+  if (pendingAuthUrl) {
+    const u = pendingAuthUrl;
+    pendingAuthUrl = null;
+    void handleAuthUrl(u);
+  }
+
+  // Cold launch via a rigel:// link on Windows/Linux: the URL arrives as an
+  // argv entry rather than an "open-url" event. No-op on macOS.
+  const initialUrl = process.argv.find((a) => a.startsWith("rigel://"));
+  if (initialUrl) void handleAuthUrl(initialUrl);
 }
 
 // ── Headless smoke self-test ──────────────────────────────────────────────
@@ -516,10 +591,40 @@ function ptyUnderElectron(port: number): Promise<void> {
 }
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────
-app.whenReady().then(boot).catch((err: unknown) => {
-  console.error("[rigel] failed to start:", err instanceof Error ? err.message : err);
-  app.quit();
+// macOS delivers rigel:// links via "open-url" (register early — it can fire
+// before whenReady; Electron queues it). Windows/Linux deliver via argv, on a
+// cold launch (handled at the end of boot()) or, if already running, via the
+// "second-instance" handler below.
+app.on("open-url", (e, url) => {
+  e.preventDefault();
+  void handleAuthUrl(url);
 });
+
+// Single-instance lock: a second launch (e.g. clicking a rigel:// link while
+// the app is already running) should route into this instance rather than
+// fork a rival server. Skipped for the headless smoke run, which never
+// receives links and shouldn't be gated by another running instance.
+let gotLock = true;
+if (!SMOKE) {
+  app.setAsDefaultProtocolClient("rigel");
+  gotLock = app.requestSingleInstanceLock();
+  if (!gotLock) {
+    app.quit();
+  } else {
+    app.on("second-instance", (_e, argv) => {
+      const url = argv.find((a) => a.startsWith("rigel://"));
+      if (url) void handleAuthUrl(url);
+      else if (mainWindow) { mainWindow.show(); mainWindow.focus(); }
+    });
+  }
+}
+
+if (SMOKE || gotLock) {
+  app.whenReady().then(boot).catch((err: unknown) => {
+    console.error("[rigel] failed to start:", err instanceof Error ? err.message : err);
+    app.quit();
+  });
+}
 
 // C2: best-effort sync cleanup for catchable main-process exits (uncaught
 // exceptions, normal exit). Does NOT cover SIGKILL of the Electron main —
