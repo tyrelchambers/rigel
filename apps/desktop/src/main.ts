@@ -13,6 +13,7 @@ import { app, BrowserWindow, dialog, ipcMain, nativeImage, safeStorage, shell, u
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { readFileSync, writeFileSync, chmodSync, mkdirSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { InstallStore } from "./installStore";
 import { submitSignup, deliver } from "./signup";
 import { AccountStore } from "./accountStore";
@@ -24,6 +25,9 @@ const SIGNUP_ENDPOINT = "https://api.rigel.run";
 // (obfuscation, NOT real auth; the endpoint is a public signup). Must match the
 // APP_KEY in the `rigel-signups` k8s Secret.
 const SIGNUP_APP_KEY = "3f0be9f2807280c51284681d4424e3883dab9650c1ae081c";
+// Minted once per launch; delivered to the forked server via env and to the
+// renderer via argv (see forkServer + createWindow). Gates /api/* + /ws.
+const SESSION_SECRET = randomBytes(24).toString("hex");
 
 // ── Layout ────────────────────────────────────────────────────────────────
 // In dev, __dirname is apps/desktop/dist. The server source and built web SPA
@@ -207,6 +211,7 @@ function forkServer(port: number): UtilityProcess {
   if (process.env.PATH) env.PATH = process.env.PATH;
   // Expose the audit skills + rigel-audit CLI to the chat claude (see helper).
   configureAuditSkillsEnv(env);
+  env.RIGEL_SESSION_SECRET = SESSION_SECRET;
 
   let entry: string;
   let cwd: string;
@@ -336,6 +341,7 @@ function createWindow(port: number): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       preload: join(__dirname, "preload.js"),
+      additionalArguments: [`--rigel-session=${SESSION_SECRET}`],
     },
   });
 
@@ -445,7 +451,7 @@ async function runSmoke(port: number): Promise<void> {
 // (Electron 42's runtime) has a global WebSocket.
 function ptyUnderElectron(port: number): Promise<void> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?s=${SESSION_SECRET}`);
     const timer = setTimeout(() => {
       try { ws.close(); } catch { /* noop */ }
       reject(new Error("timed out waiting for DESKTOP_PTY_OK frame (10s)"));
