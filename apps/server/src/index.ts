@@ -65,7 +65,7 @@ import { handleMatrix, type MatrixRequest } from "./matrix";
 import { handleChannelTest, type ChannelTestRequest } from "./channels";
 import { PortForwardManager, type TargetKind } from "./portForward";
 import { makeFatalHandler } from "./fatalHandler";
-import { checkSessionSecret } from "./sessionAuth";
+import { accessAllowed } from "./sessionAuth";
 
 const KUBECONFIG = resolveKubeconfigPath(process.env, homedir());
 const PORT = Number(process.env.PORT ?? 8787);
@@ -73,6 +73,16 @@ const PORT = Number(process.env.PORT ?? 8787);
 const HOST = process.env.HOST ?? "0.0.0.0"; // Electron pins 127.0.0.1; Docker/Helm keep 0.0.0.0
 const SESSION_SECRET = process.env.RIGEL_SESSION_SECRET ?? "";
 if (!SESSION_SECRET) console.warn("RIGEL_SESSION_SECRET not set — local /api/* + /ws access control is DISABLED");
+
+let accountSignedIn = process.env.RIGEL_SIGNED_IN === "1";
+// Electron utilityProcess only; no-op (and inert) elsewhere.
+(process as unknown as { parentPort?: { on(ev: string, cb: (e: { data?: unknown }) => void): void } }).parentPort?.on(
+  "message",
+  (e: { data?: unknown }) => {
+    const m = e?.data as { type?: string; signedIn?: boolean } | undefined;
+    if (m?.type === "account-auth") accountSignedIn = !!m.signedIn;
+  },
+);
 
 // Upstream metrics-server manifest (onboarding one-click install).
 const METRICS_SERVER_URL =
@@ -146,7 +156,7 @@ async function handler(req: Request): Promise<Response> {
       return Response.json({ ok: true });
     }
 
-    if (url.pathname.startsWith("/api/") && !checkSessionSecret(req.headers.get("x-rigel-session"), SESSION_SECRET)) {
+    if (url.pathname.startsWith("/api/") && !accessAllowed(req.headers.get("x-rigel-session"), SESSION_SECRET, accountSignedIn)) {
       return new Response("unauthorized", { status: 401 });
     }
 
@@ -1266,7 +1276,7 @@ httpServer.on("upgrade", (req: IncomingMessage, socket, head) => {
       socket.destroy();
       return;
     }
-    if (!checkSessionSecret(url.searchParams.get("s"), SESSION_SECRET)) {
+    if (!accessAllowed(url.searchParams.get("s"), SESSION_SECRET, accountSignedIn)) {
       socket.destroy();
       return;
     }
