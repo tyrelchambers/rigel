@@ -69,7 +69,7 @@ export function registerAuthRoutes(app: Hono, deps: AuthDeps): void {
     const account = await db.upsertAccount(email);
     const token = randomBytes(32).toString("base64url");
     await db.insertToken(sha(token), account.id);
-    return c.json({ token, account: { email: account.email, name: account.name } });
+    return c.json({ token, account: { id: account.id, email: account.email, name: account.name } });
   });
 
   app.get("/me", async (c) => {
@@ -78,7 +78,7 @@ export function registerAuthRoutes(app: Hono, deps: AuthDeps): void {
     const account = await db.accountByToken(sha(token));
     if (!account) return c.json({ error: "unauthorized" }, 401);
     await db.touchToken(sha(token));
-    return c.json({ account: { email: account.email, name: account.name } });
+    return c.json({ account: { id: account.id, email: account.email, name: account.name } });
   });
 
   app.post("/auth/logout", async (c) => {

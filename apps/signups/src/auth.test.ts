@@ -85,9 +85,9 @@ test("verify with the right code → token + account", async () => {
   await json(app, "/auth/request", { email: "a@b.co" });
   const res = await json(app, "/auth/verify", { email: "a@b.co", code: sent[0].code });
   expect(res.status).toBe(200);
-  const body = (await res.json()) as { token: string; account: { email: string; name: string } };
+  const body = (await res.json()) as { token: string; account: { id: string; email: string; name: string } };
   expect(body.token.length).toBeGreaterThan(20);
-  expect(body.account).toEqual({ email: "a@b.co", name: "Jane" });
+  expect(body.account).toEqual({ id: "acc-1", email: "a@b.co", name: "Jane" });
 });
 
 test("verify with the wrong code → 401", async () => {
@@ -116,7 +116,10 @@ test("me returns the account for a valid bearer, 401 after logout", async () => 
   await json(app, "/auth/request", { email: "a@b.co" });
   const body = (await (await json(app, "/auth/verify", { email: "a@b.co", code: sent[0].code })).json()) as { token: string };
   const auth = { authorization: `Bearer ${body.token}` };
-  expect((await app.request("/me", { headers: auth })).status).toBe(200);
+  const meRes = await app.request("/me", { headers: auth });
+  expect(meRes.status).toBe(200);
+  const me = (await meRes.json()) as { account: { id: string; email: string; name: string } };
+  expect(me.account).toEqual({ id: "acc-1", email: "a@b.co", name: "Jane" });
   expect((await app.request("/auth/logout", { method: "POST", headers: auth })).status).toBe(200);
   expect((await app.request("/me", { headers: auth })).status).toBe(401);
 });
