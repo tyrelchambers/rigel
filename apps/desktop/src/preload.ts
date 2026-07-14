@@ -26,5 +26,10 @@ contextBridge.exposeInMainWorld("rigel", {
     signOut: (): Promise<void> => ipcRenderer.invoke("rigel:account:sign-out"),
     status: (): Promise<{ signedIn: boolean; account: { id: string; email: string; name: string | null } | null }> =>
       ipcRenderer.invoke("rigel:account:status"),
+    onChanged: (cb: () => void): (() => void) => {
+      const listener = () => cb();
+      ipcRenderer.on("rigel:account:changed", listener);
+      return () => ipcRenderer.removeListener("rigel:account:changed", listener);
+    },
   },
 });
