@@ -100,6 +100,20 @@ test("getOrgsForAccount joins memberships + organizations", async () => {
   expect(calls[0].params).toEqual(["acc-1"]);
 });
 
+test("billableOrgs returns each membership org id + its stripe customer", async () => {
+  const { pool, calls, push } = recorder();
+  push({ org_id: "org-1", stripe_customer_id: "cus_1" });
+  push({ org_id: "org-2", stripe_customer_id: null });
+  const db = createAuthDb(pool);
+  const rows = await db.billableOrgs("acc-1");
+  expect(calls[0].params).toEqual(["acc-1"]);
+  expect(calls[0].sql.toUpperCase()).toContain("JOIN ORGANIZATIONS");
+  expect(rows).toEqual([
+    { orgId: "org-1", stripeCustomerId: "cus_1" },
+    { orgId: "org-2", stripeCustomerId: null },
+  ]);
+});
+
 test("ensurePersonalOrg upserts org + owner membership idempotently", async () => {
   const { pool, calls } = recorder();
   await createAuthDb(pool).ensurePersonalOrg("acc-1", "Jane");

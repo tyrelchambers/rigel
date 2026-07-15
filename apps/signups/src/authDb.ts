@@ -29,6 +29,7 @@ export interface AuthDb {
   revokeToken(tokenHash: string): Promise<void>;
   ensurePersonalOrg(accountId: string, name: string): Promise<void>;
   getOrgsForAccount(accountId: string): Promise<OrgMembership[]>;
+  billableOrgs(accountId: string): Promise<{ orgId: string; stripeCustomerId: string | null }[]>;
 }
 
 const TOKEN_MAX_AGE = "1 year";
@@ -72,6 +73,9 @@ CREATE TABLE IF NOT EXISTS organizations (
   created_at          timestamptz NOT NULL DEFAULT now(),
   CHECK ((kind = 'personal') = (personal_account_id IS NOT NULL))
 );
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS stripe_customer_id text;
+CREATE UNIQUE INDEX IF NOT EXISTS organizations_stripe_customer_idx
+  ON organizations (stripe_customer_id) WHERE stripe_customer_id IS NOT NULL;
 CREATE TABLE IF NOT EXISTS memberships (
   org_id     uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   account_id uuid NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
@@ -119,6 +123,18 @@ export function createAuthDb(pool: Pool): AuthDb {
       [accountId],
     );
     return r.rows as OrgMembership[];
+  }
+  async function billableOrgs(accountId: string): Promise<{ orgId: string; stripeCustomerId: string | null }[]> {
+    const r = await pool.query(
+      `SELECT o.id AS org_id, o.stripe_customer_id
+         FROM memberships m JOIN organizations o ON o.id = m.org_id
+        WHERE m.account_id = $1`,
+      [accountId],
+    );
+    return r.rows.map((x: { org_id: string; stripe_customer_id: string | null }) => ({
+      orgId: x.org_id,
+      stripeCustomerId: x.stripe_customer_id,
+    }));
   }
   return {
     async insertCode(email, codeHash, linkTokenHash, ttlSeconds) {
@@ -215,5 +231,6 @@ export function createAuthDb(pool: Pool): AuthDb {
     },
     ensurePersonalOrg,
     getOrgsForAccount,
+    billableOrgs,
   };
 }
