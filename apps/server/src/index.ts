@@ -46,7 +46,7 @@ import {
   cloudCheck, cloudListClusters, cloudConnect, cloudHealth, importKubeconfig, cloudParamOptions,
 } from "./cloudConnect";
 import { disconnectContext } from "./disconnectContext";
-import { canConnect, type ConnectTarget } from "./entitlements";
+import { canConnect, setEntitlement, canBeAutonomous, unlockedAuditsEnv, type ConnectTarget, type EntitlementPayload } from "./entitlements";
 import type { CloudCluster } from "@rigel/cloud-connect/src/index";
 import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusMetrics";
 import { handleUpdates, type UpdatesRequest } from "./updates";
@@ -59,7 +59,7 @@ import { getClusterYamlSchema } from "./clusterSchema";
 import { getApiResources } from "./apiResources";
 import { runCanI, type Subject, type CanICheck, type CanIResult } from "./rbacCanI";
 import { stripStatusBlock } from "@rigel/k8s/src/manifestClean";
-import { handleAssistant, type AssistantRequest } from "./assistant";
+import { handleAssistant, isAutonomyRequest, type AssistantRequest } from "./assistant";
 import { handleSignal, type SignalRequest } from "./signal";
 import { handleMatrix, type MatrixRequest } from "./matrix";
 import { handleChannelTest, type ChannelTestRequest } from "./channels";
@@ -79,8 +79,9 @@ let accountSignedIn = process.env.RIGEL_SIGNED_IN === "1";
 (process as unknown as { parentPort?: { on(ev: string, cb: (e: { data?: unknown }) => void): void } }).parentPort?.on(
   "message",
   (e: { data?: unknown }) => {
-    const m = e?.data as { type?: string; signedIn?: boolean } | undefined;
+    const m = e?.data as { type?: string; signedIn?: boolean; value?: EntitlementPayload | null } | undefined;
     if (m?.type === "account-auth") accountSignedIn = !!m.signedIn;
+    if (m?.type === "entitlement") setEntitlement(m.value ?? null);
   },
 );
 
@@ -1092,6 +1093,11 @@ async function handler(req: Request): Promise<Response> {
         (typeof body.fingerprint !== "string" || body.fingerprint.trim() === "")
       ) {
         return Response.json({ error: "missing fingerprint" }, { status: 422 });
+      }
+      // Monetization (HELM-16): turning the agent autonomous requires Rigel Pro.
+      // Mirrors the cloud-connect 402 { gated: true } shape the client reads.
+      if (isAutonomyRequest(body) && !canBeAutonomous()) {
+        return Response.json({ error: "Autonomous agent actions require Rigel Pro.", gated: true }, { status: 402 });
       }
       try {
         const result = await handleAssistant(context, body);

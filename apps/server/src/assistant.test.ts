@@ -89,7 +89,15 @@ test("buildInstallConfig falls back to legacy model knobs + defaults when no sel
   expect(cfg.supervisor).toBeUndefined();
 });
 
-import { setModelsUpdates, setCredentialsSecrets, setModeUpdates } from "./assistant";
+import { setModelsUpdates, setCredentialsSecrets, setModeUpdates, isAutonomyRequest } from "./assistant";
+
+test("isAutonomyRequest is true only for setMode to an autonomous mode (auto/window), not advisory", () => {
+  expect(isAutonomyRequest({ action: "setMode", mode: "auto" })).toBe(true);
+  expect(isAutonomyRequest({ action: "setMode", mode: "window" })).toBe(true);
+  expect(isAutonomyRequest({ action: "setMode", mode: "advisory" })).toBe(false);
+  // Only setMode can turn the agent autonomous.
+  expect(isAutonomyRequest({ action: "setLimits", mode: "auto" })).toBe(false);
+});
 
 test("setModeUpdates writes only mode + trimmed window when no webhook is supplied", () => {
   const updates = setModeUpdates({ action: "setMode", mode: "window", window: " 22:00-07:00 " });

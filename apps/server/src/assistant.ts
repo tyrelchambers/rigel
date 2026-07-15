@@ -768,6 +768,14 @@ async function setMode(
   return patchConfig(context, namespace, setModeUpdates(req));
 }
 
+/** Whether a request makes the agent act on its own — a setMode to a mode that
+ *  applies fixes autonomously ("auto" always; "window" = auto by day). "advisory"
+ *  waits for approval, so it is never autonomous. Gates on the agentAutonomy
+ *  entitlement (see the /api/assistant route). */
+export function isAutonomyRequest(req: AssistantRequest): boolean {
+  return req.action === "setMode" && (req.mode === "auto" || req.mode === "window");
+}
+
 async function setKillSwitch(
   context: string | null,
   namespace: string,
