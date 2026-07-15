@@ -47,3 +47,14 @@ test("POST /billing/checkout 403 when caller is a plain member", async () => {
   const res = await app.request("/billing/checkout", { method: "POST", headers: { authorization: "Bearer t", "content-type": "application/json" }, body: JSON.stringify({ orgId: "o1" }) });
   expect(res.status).toBe(403);
 });
+
+test("POST /billing/checkout 400 on a missing/invalid orgId (before touching the db)", async () => {
+  const orgBilling = vi.fn();
+  const db = { accountByToken: vi.fn(async () => ({ id: "acc-1" })), touchToken: vi.fn(), orgBilling };
+  const app = new Hono(); registerBillingRoutes(app, { db, resolve: vi.fn(), stripe: {}, priceId: "p", endpoint: "e" } as never);
+  for (const body of ["", "{}", JSON.stringify({ orgId: 123 })]) {
+    const res = await app.request("/billing/checkout", { method: "POST", headers: { authorization: "Bearer t", "content-type": "application/json" }, body });
+    expect(res.status).toBe(400);
+  }
+  expect(orgBilling).not.toHaveBeenCalled();
+});

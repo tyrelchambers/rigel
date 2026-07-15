@@ -28,6 +28,12 @@ export function registerBillingRoutes(app: Hono, deps: BillingDeps): void {
     return acc;
   }
 
+  /** Parse + validate a non-empty string `orgId` from the JSON body. */
+  async function orgIdFromBody(c: Context): Promise<string | null> {
+    const body = (await c.req.json().catch(() => null)) as { orgId?: unknown } | null;
+    return typeof body?.orgId === "string" && body.orgId ? body.orgId : null;
+  }
+
   app.get("/entitlements", async (c) => {
     const acc = await authed(c);
     if (!acc) return c.json({ error: "unauthorized" }, 401);
@@ -37,7 +43,8 @@ export function registerBillingRoutes(app: Hono, deps: BillingDeps): void {
   app.post("/billing/checkout", async (c) => {
     const acc = await authed(c);
     if (!acc) return c.json({ error: "unauthorized" }, 401);
-    const { orgId } = await c.req.json<{ orgId: string }>();
+    const orgId = await orgIdFromBody(c);
+    if (!orgId) return c.json({ error: "orgId required" }, 400);
     const b = await deps.db.orgBilling(orgId, acc.id);
     if (!b) return c.json({ error: "not a member" }, 403);
     if (b.role !== "owner" && b.role !== "admin") return c.json({ error: "owner or admin required" }, 403);
@@ -56,7 +63,8 @@ export function registerBillingRoutes(app: Hono, deps: BillingDeps): void {
   app.post("/billing/portal", async (c) => {
     const acc = await authed(c);
     if (!acc) return c.json({ error: "unauthorized" }, 401);
-    const { orgId } = await c.req.json<{ orgId: string }>();
+    const orgId = await orgIdFromBody(c);
+    if (!orgId) return c.json({ error: "orgId required" }, 400);
     const b = await deps.db.orgBilling(orgId, acc.id);
     if (!b) return c.json({ error: "not a member" }, 403);
     if (b.role !== "owner" && b.role !== "admin") return c.json({ error: "owner or admin required" }, 403);

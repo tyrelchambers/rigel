@@ -79,6 +79,12 @@ function openBillingWindow(url: string): void {
     title: "Rigel billing", autoHideMenuBar: true,
     webPreferences: { contextIsolation: true, nodeIntegration: false },
   });
+  // Any popup Stripe spawns (some 3DS / wallet flows) goes to the system browser,
+  // not an untracked in-app child window — parity with the main window.
+  billingWindow.webContents.setWindowOpenHandler(({ url: u }) => {
+    if (/^https?:\/\//i.test(u)) void shell.openExternal(u);
+    return { action: "deny" };
+  });
   const onNav = (u: string) => {
     if (u.startsWith(`${SIGNUP_ENDPOINT}/billing/complete`) || u.startsWith(`${SIGNUP_ENDPOINT}/billing/cancelled`)) {
       billingWindow?.close();
