@@ -18,16 +18,21 @@ export interface BillingDeps {
   endpoint: string; // e.g. https://api.rigel.run — for success/cancel/return urls
 }
 
-export function registerBillingRoutes(app: Hono, deps: BillingDeps): void {
-  async function authed(c: Context): Promise<{ id: string } | null> {
-    const token = bearer(c);
-    if (!token) return null;
-    const acc = await deps.db.accountByToken(sha(token));
-    if (!acc) return null;
-    await deps.db.touchToken(sha(token));
-    return acc;
-  }
+/** Bearer-token account auth shared by the billing + agent routes:
+ *  bearer → sha → accountByToken → touchToken. Returns the account or null. */
+export async function authed(
+  c: Context,
+  db: { accountByToken(hash: string): Promise<{ id: string } | null>; touchToken(hash: string): Promise<void> },
+): Promise<{ id: string } | null> {
+  const token = bearer(c);
+  if (!token) return null;
+  const acc = await db.accountByToken(sha(token));
+  if (!acc) return null;
+  await db.touchToken(sha(token));
+  return acc;
+}
 
+export function registerBillingRoutes(app: Hono, deps: BillingDeps): void {
   /** Parse + validate a non-empty string `orgId` from the JSON body. */
   async function orgIdFromBody(c: Context): Promise<string | null> {
     const body = (await c.req.json().catch(() => null)) as { orgId?: unknown } | null;
@@ -35,13 +40,13 @@ export function registerBillingRoutes(app: Hono, deps: BillingDeps): void {
   }
 
   app.get("/entitlements", async (c) => {
-    const acc = await authed(c);
+    const acc = await authed(c, deps.db);
     if (!acc) return c.json({ error: "unauthorized" }, 401);
     return c.json(await deps.resolve(acc.id));
   });
 
   app.post("/billing/checkout", async (c) => {
-    const acc = await authed(c);
+    const acc = await authed(c, deps.db);
     if (!acc) return c.json({ error: "unauthorized" }, 401);
     const orgId = await orgIdFromBody(c);
     if (!orgId) return c.json({ error: "orgId required" }, 400);
@@ -61,7 +66,7 @@ export function registerBillingRoutes(app: Hono, deps: BillingDeps): void {
   });
 
   app.post("/billing/portal", async (c) => {
-    const acc = await authed(c);
+    const acc = await authed(c, deps.db);
     if (!acc) return c.json({ error: "unauthorized" }, 401);
     const orgId = await orgIdFromBody(c);
     if (!orgId) return c.json({ error: "orgId required" }, 400);
