@@ -7,6 +7,9 @@ declare module "@fontsource-variable/*";
 // call (dodges the 60/hr unauthenticated rate limit in CI). See releases.ts.
 interface ImportMetaEnv {
   readonly GITHUB_TOKEN?: string;
+  // On a release-triggered build, the just-published tag (e.g. "v0.2.2"); makes
+  // the resolver fetch that exact release instead of the lagged /latest. See releases.ts.
+  readonly RIGEL_RELEASE_TAG?: string;
 }
 interface ImportMeta {
   readonly env: ImportMetaEnv;
