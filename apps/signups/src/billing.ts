@@ -1,12 +1,6 @@
 import type { Hono } from "hono";
-import { createHash } from "node:crypto";
 import type { EntitlementPayload } from "./entitlements";
-
-const sha = (t: string) => createHash("sha256").update(t).digest("hex");
-const bearer = (c: { req: { header(n: string): string | undefined } }) => {
-  const h = c.req.header("authorization") ?? "";
-  return h.startsWith("Bearer ") ? h.slice(7) : null;
-};
+import { sha, bearer } from "./authToken";
 
 export interface BillingDeps {
   db: { accountByToken(hash: string): Promise<{ id: string } | null>; touchToken(hash: string): Promise<void> };

@@ -1,5 +1,6 @@
 import type { Hono } from "hono";
-import { createHash, randomInt, randomBytes, timingSafeEqual } from "node:crypto";
+import { randomInt, randomBytes, timingSafeEqual } from "node:crypto";
+import { sha, bearer } from "./authToken";
 import type { AuthDb } from "./authDb";
 import { parseRequestBody, parseVerifyBody } from "./authValidate";
 
@@ -11,7 +12,6 @@ export interface AuthDeps {
 }
 
 const CODE_TTL_SECONDS = 600; // 10 minutes
-const sha = (v: string) => createHash("sha256").update(v).digest("hex");
 
 function clientIp(c: { req: { header: (k: string) => string | undefined } }): string {
   return c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
@@ -21,12 +21,6 @@ function timingSafeEqualHex(a: string, b: string): boolean {
   const ba = Buffer.from(a, "hex");
   const bb = Buffer.from(b, "hex");
   return ba.length === bb.length && timingSafeEqual(ba, bb);
-}
-
-function bearer(c: { req: { header: (k: string) => string | undefined } }): string | null {
-  const h = c.req.header("authorization") ?? "";
-  const m = /^Bearer\s+(.+)$/i.exec(h);
-  return m ? m[1].trim() : null;
 }
 
 export function registerAuthRoutes(app: Hono, deps: AuthDeps): void {
