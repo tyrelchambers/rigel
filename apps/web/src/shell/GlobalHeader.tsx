@@ -9,6 +9,7 @@
  */
 import { PanelLeftClose, PanelLeftOpen, Search, User } from "lucide-react";
 import { NamespaceSelector } from "./NamespaceBar";
+import { AppUpdateChip } from "./AppUpdateChip";
 import { RigelMark } from "@/components/RigelMark";
 import { isMacDesktop } from "@/lib/desktop";
 
@@ -92,6 +93,9 @@ export function GlobalHeader({
 
       {/* Spacer */}
       <div style={{ marginLeft: "auto" }} />
+
+      {/* Update-available pill — shown only when a newer release exists */}
+      <AppUpdateChip />
 
       {/* Global search — opens the existing ⌘K CommandPalette */}
       <button
