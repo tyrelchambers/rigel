@@ -51,6 +51,17 @@ spec:
             # This value is used only when that self-lookup can't run/fails.
             - name: RIGEL_FIX_RUNNER_IMAGE
               value: ghcr.io/OWNER/rigel-assistant:latest # ← fallback; set by installer (same tag as image)
+            # Entitlement gate: the opaque org token + the backend it checks. The
+            # token is optional — absent ⇒ the agent runs FREE observe-only (its
+            # premium branches stay gated off).
+            - name: RIGEL_AGENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: rigel-assistant-credentials
+                  key: RIGEL_AGENT_TOKEN
+                  optional: true
+            - name: RIGEL_ENTITLEMENT_ENDPOINT
+              value: https://api.rigel.run
             - name: WORKER_MODEL
               value: claude-sonnet-4-6
             - name: SUPERVISOR_MODEL

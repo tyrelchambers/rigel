@@ -69,6 +69,11 @@ export const ISSUED_AT_ANNOTATION = "rigel.assistant/token-issued-at";
  * untouched (the Deployment injects from BOTH, each optional). */
 export const CREDENTIALS_SECRET_NAME = "rigel-assistant-credentials";
 
+/** Data key in the credentials Secret holding the opaque entitlement token
+ *  (env `RIGEL_AGENT_TOKEN`). Not a provider credential — carries no credential
+ *  annotation and never participates in credential resolution. */
+export const AGENT_TOKEN_SECRET_KEY = "RIGEL_AGENT_TOKEN";
+
 /** The agent Deployment's name. Its owned objects all carry the managed-by label
  *  below, so we can tell OUR install apart from a same-named foreign Deployment. */
 export const DEPLOYMENT_NAME = "rigel-assistant";
@@ -97,6 +102,9 @@ export interface AssistantCredentials {
   geminiApiKey?: string;
   opencodeApiKey?: string;
   opencodeAuthContent?: string;
+  /** Opaque entitlement token (env `RIGEL_AGENT_TOKEN`). Written as its own
+   *  Secret key; not a provider credential. */
+  agentToken?: string;
 }
 
 /** Stable ordered list of (key) so YAML output is deterministic. */
@@ -413,6 +421,11 @@ export function credentialsSecretYAML(
       // the data key IS the id, so the annotation value mirrors the key name.
       annotations.push(`    ${CREDENTIAL_ANNOTATION_PREFIX}${key}: "${key}"`);
     }
+  }
+  // The entitlement token rides in the same Secret under its own env-named key, but
+  // is NOT a provider credential (no credential annotation, no resolution).
+  if (typeof creds.agentToken === "string" && creds.agentToken.trim() !== "") {
+    lines.push(`  ${AGENT_TOKEN_SECRET_KEY}: "${escape(creds.agentToken)}"`);
   }
   const stringData = lines.length > 0 ? `stringData:\n${lines.join("\n")}` : "stringData: {}";
   const annotationsBlock = annotations.length > 0 ? `\n  annotations:\n${annotations.join("\n")}` : "";
