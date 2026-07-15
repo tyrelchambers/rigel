@@ -12,7 +12,8 @@
   "dependencies": {
     "hono": "latest",
     "@hono/node-server": "latest",
-    "pg": "latest"
+    "pg": "latest",
+    "stripe": "latest"
   },
   "devDependencies": {
     "@types/node": "latest",

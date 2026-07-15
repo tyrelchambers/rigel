@@ -14,10 +14,12 @@ const KIT_API_KEY = process.env.KIT_API_KEY ?? "";
 const KIT_TAG_ID = process.env.KIT_TAG_ID ? Number(process.env.KIT_TAG_ID) : null;
 const RESEND_API_KEY = process.env.RESEND_API_KEY ?? "";
 const RESEND_FROM = process.env.RESEND_FROM ?? "Rigel <login@rigel.run>";
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY ?? "";
 if (!APP_KEY) { console.error("APP_KEY is required"); process.exit(1); }
 if (!DATABASE_URL) { console.error("DATABASE_URL is required"); process.exit(1); }
 if (!KIT_API_KEY) console.warn("KIT_API_KEY not set — signups will not sync to Kit");
 if (!RESEND_API_KEY) console.warn("RESEND_API_KEY not set — auth code emails will fail");
+if (!STRIPE_SECRET_KEY) console.warn("[signups] STRIPE_SECRET_KEY unset — /entitlements returns free for everyone");
 
 const pool = new pg.Pool({ connectionString: DATABASE_URL });
 await ensureSchema(pool);
