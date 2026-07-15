@@ -12,10 +12,13 @@ function fakeAccount(over: Partial<UseAccountResult> = {}): UseAccountResult {
     account: null,
     me: null,
     orgs: [],
+    entitlement: null,
     requestCode: vi.fn().mockResolvedValue({ ok: true, status: 200 }),
     verifyCode: vi.fn().mockResolvedValue({ ok: true, account: { id: "1", email: "a@b.co", name: "Jane" } }),
     signOut: vi.fn().mockResolvedValue(undefined),
     refresh: vi.fn().mockResolvedValue(undefined),
+    upgrade: vi.fn().mockResolvedValue({ ok: true }),
+    manageBilling: vi.fn().mockResolvedValue({ ok: true }),
     ...over,
   };
 }
@@ -43,4 +46,30 @@ test("signed-in shows profile + actions", () => {
   expect(onOpenChange).toHaveBeenCalledWith(false);
   fireEvent.click(screen.getByText("Sign out"));
   expect(acc.signOut).toHaveBeenCalled();
+});
+
+test("free plan shows Upgrade, calls upgrade(personalOrgId) on click", () => {
+  const acc = fakeAccount({
+    status: "signed-in",
+    account: { id: "1", email: "a@b.co", name: "Jane" },
+    orgs: [{ id: "o1", kind: "personal", name: "Personal", role: "owner" }],
+    entitlement: { plan: "free", audits: [], cloudConnect: false, agentAutonomy: false, fetchedAt: "t" },
+  });
+  render(<AccountModal open onOpenChange={vi.fn()} account={acc} />);
+  const btn = screen.getByRole("button", { name: /upgrade/i });
+  fireEvent.click(btn);
+  expect(acc.upgrade).toHaveBeenCalledWith("o1");
+});
+
+test("pro plan shows Manage billing + the seat count", () => {
+  const acc = fakeAccount({
+    status: "signed-in",
+    account: { id: "1", email: "a@b.co", name: "Jane" },
+    orgs: [{ id: "o1", kind: "personal", name: "Personal", role: "owner" }],
+    entitlement: { plan: "pro", audits: ["security"], cloudConnect: true, agentAutonomy: false, fetchedAt: "t" },
+  });
+  render(<AccountModal open onOpenChange={vi.fn()} account={acc} />);
+  expect(screen.getByText(/rigel pro/i)).toBeTruthy();
+  expect(screen.getByRole("button", { name: /manage billing/i })).toBeTruthy();
+  expect(screen.getByText(/1 seat/i)).toBeTruthy();
 });

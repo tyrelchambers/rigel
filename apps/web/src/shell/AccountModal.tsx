@@ -63,6 +63,8 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
 
   if (status === "signed-in") {
     const name = account.account?.name || (account.account?.email ? account.account.email.split("@")[0] : "Signed in");
+    const personalOrgId = account.orgs.find((o) => o.kind === "personal")?.id;
+    const isPro = account.entitlement?.plan === "pro";
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent>
@@ -97,6 +99,27 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
                   </div>
                 </div>
               )}
+
+              <div className="rounded-lg border border-[var(--border-subtle)] bg-white/[0.02] p-3">
+                <span className="text-3xs font-mono tracking-wide text-[var(--fg-tertiary)]">PLAN</span>
+                <div className="mt-2 flex items-center justify-between">
+                  <span className="text-sm text-[var(--fg-primary)]">{isPro ? "Rigel Pro" : "Free"}</span>
+                  {isPro ? (
+                    <Button size="sm" variant="outline" onClick={() => personalOrgId && account.manageBilling(personalOrgId)}>
+                      Manage billing
+                    </Button>
+                  ) : (
+                    <Button size="sm" onClick={() => personalOrgId && account.upgrade(personalOrgId)}>
+                      Upgrade
+                    </Button>
+                  )}
+                </div>
+                {isPro && (
+                  <span className="mt-1 block text-xs text-[var(--fg-tertiary)]">
+                    {account.orgs.filter((o) => o.role !== undefined).length === 1 ? "1 seat" : `${account.orgs.length} orgs`}
+                  </span>
+                )}
+              </div>
 
               <div className="mt-1 flex items-center justify-between">
                 <button

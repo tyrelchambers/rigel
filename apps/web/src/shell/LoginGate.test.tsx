@@ -12,10 +12,13 @@ function fakeAccount(over: Partial<UseAccountResult> = {}): UseAccountResult {
     account: null,
     me: null,
     orgs: [],
+    entitlement: null,
     requestCode: vi.fn().mockResolvedValue({ ok: true, status: 200 }),
     verifyCode: vi.fn().mockResolvedValue({ ok: true, account: { id: "1", email: "a@b.co", name: "Jane" } }),
     signOut: vi.fn().mockResolvedValue(undefined),
     refresh: vi.fn().mockResolvedValue(undefined),
+    upgrade: vi.fn().mockResolvedValue({ ok: true }),
+    manageBilling: vi.fn().mockResolvedValue({ ok: true }),
     ...over,
   };
 }
