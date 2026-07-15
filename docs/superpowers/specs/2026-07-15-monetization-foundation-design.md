@@ -140,8 +140,10 @@ not here; until teams exist, every subscription is quantity 1 (personal Pro).
   immediately on a manual refresh) — no re-login. Seat removal downgrades on refetch.
 - **Checkout abandoned / card declined:** no customer subscription → resolver keeps
   returning free; nothing to clean up.
-- **Owner cancels:** subscription ends → entitlements drop to free on next refetch
-  (after the grace window on the *client*, so no abrupt mid-session lockout).
+- **Owner cancels:** the resolver returns free on the next successful refetch, so
+  the plan drops to free within ~6h (or immediately on a manual refresh). The
+  14-day client grace applies **only when the resolver is unreachable**
+  (offline/outage) — it never props up a real cancellation.
 
 ## Out of scope (v1)
 

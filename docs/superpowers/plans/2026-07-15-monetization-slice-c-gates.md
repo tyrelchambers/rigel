@@ -127,10 +127,15 @@ entitlements.onChange(pushEntitlement);
 
 - [ ] **Step 2:** Kick the loop: `void entitlements.refresh();` after login/boot, `setInterval(() => void entitlements.refresh(), 6*60*60*1000)`, and refetch on billing changes — change the existing `rigel:billing:changed` producer (Slice B billing window) to instead call `void entitlements.refresh()` (which then emits + pushes). Also refresh on `rigel:account:status`/login so a fresh sign-in resolves entitlements.
 
-- [ ] **Step 3:** Make the entitlements IPC return the provider's current (grace-applied) value, not a raw fetch:
+- [ ] **Step 3:** **Replace** the `rigel:billing:entitlements` handler registered in Slice B Task 5 (Electron throws on a duplicate `ipcMain.handle` for the same channel — edit the existing line, do not add a second) so it returns the provider's current (grace-applied) value instead of a raw fetch:
 ```ts
 ipcMain.handle("rigel:billing:entitlements", () => entitlements.current());
 ```
+Also add a user-triggerable manual refresh (the spec calls for "immediately on a manual refresh"):
+```ts
+ipcMain.handle("rigel:billing:refresh", () => entitlements.refresh());
+```
+Expose it on the preload `billing` bridge (`refresh: () => ipcRenderer.invoke("rigel:billing:refresh")`) + the `RigelBridge.billing` type, and add a small "Refresh" affordance to the Account-panel Plan section (Slice B Task 7).
 - [ ] **Step 4:** `pnpm --filter desktop typecheck && pnpm --filter desktop test`. Commit. `git commit -am "feat(desktop): drive entitlements from the provider; push to renderer + server"`
 
 ---
@@ -161,7 +166,18 @@ test("cloudConnect entitlement → providers allowed", () => {
 import type { CloudProvider } from "@rigel/cloud-connect/src/index";
 export type ConnectTarget = CloudProvider | "import";
 export interface Entitlement { allowed: boolean; reason?: string; }
-export interface EntitlementPayload { plan: "free"|"pro"; audits: string[]; cloudConnect: boolean; agentAutonomy: boolean; fetchedAt: string; }
+// MUST mirror the canonical shape in apps/signups/src/entitlements.ts exactly —
+// same field names + the precise audit union (not string[]). This is one of the
+// four boundary copies of EntitlementPayload (signups → desktop billingClient →
+// web desktop.ts → here); they are duplicated across package boundaries on
+// purpose (like Account/Org), but their shapes must not drift.
+export interface EntitlementPayload {
+  plan: "free" | "pro";
+  audits: ("reliability" | "security" | "performance")[];
+  cloudConnect: boolean;
+  agentAutonomy: boolean;
+  fetchedAt: string;
+}
 
 let current: EntitlementPayload | null = null;
 export function setEntitlement(e: EntitlementPayload | null): void { current = e; }
@@ -176,7 +192,11 @@ export function unlockedAuditsEnv(): string { return (current?.audits ?? []).joi
 ```
 Note: `canConnect` keeps its exact signature + return shape, so its two callers (`index.ts:247,275` → HTTP 402 `{ gated: true }`) are unchanged.
 
-- [ ] **Step 3: Wire the message + env in `index.ts`.** Add a `process.parentPort` message handler (next to the existing `account-auth` one) that calls `setEntitlement(msg.value)`. Wherever the server spawns the audit CLI / chat `claude`, inject `RIGEL_UNLOCKED_AUDITS: unlockedAuditsEnv()` into that subprocess env (currently unset — `configureAuditSkillsEnv` in the desktop main.ts:224-254 does not set it; set it server-side from the live entitlement so upgrades take effect without a restart). Gate the autonomous-agent trigger on `canBeAutonomous()`.
+- [ ] **Step 3a: Receive the entitlement in the server.** In `apps/server/src/index.ts`, find the existing `process.parentPort.on("message", ...)` handler (the one handling `account-auth` — grep `account-auth` and `parentPort`). Add a branch: `if (msg.type === "entitlement") setEntitlement(msg.value);`. Default stays `null` (free) until the first push.
+
+- [ ] **Step 3b: Feed the audit CLI from the live entitlement.** Locate where the audit CLI (`rigel-audit`) is spawned: `grep -rn "RIGEL_UNLOCKED_AUDITS\|rigel-audit\|configureAuditSkillsEnv" apps/server/src apps/desktop/src`. Per the code map the CLI reads `RIGEL_UNLOCKED_AUDITS` (`packages/audit-cli/src/index.ts:87`) and `configureAuditSkillsEnv` (`apps/desktop/src/main.ts:224-254`) assembles audit-skill env but does **not** set it. Set `RIGEL_UNLOCKED_AUDITS = unlockedAuditsEnv()` at the **server-side** spawn site (the process holding the live `current` entitlement), so an upgrade takes effect on the next audit run without a server restart. Add a test asserting the spawn env carries the current audits.
+
+- [ ] **Step 3c: Gate the autonomous-agent trigger.** Find where the in-cluster agent's autonomous action is initiated server-side: `grep -rn "autonom\|auto.?fix\|remediat" apps/server/src`. Guard that entry point with `if (!canBeAutonomous()) return { gated: true }` (or the equivalent refusal the caller already handles). Add a test: autonomy blocked when `current` lacks `agentAutonomy`, allowed when present.
 
 - [ ] **Step 4:** `pnpm --filter @rigel/server test entitlements` green; `pnpm --filter @rigel/server typecheck`. Commit. `git commit -am "feat(server): entitlement-driven canConnect + audit env + agent autonomy"`
 
@@ -221,20 +241,23 @@ export function useAuditEntitlement(): AuditEntitlement {
 
 ---
 
-## Task 5: In-context upgrade prompts
+## Task 5: In-context upgrade prompts (all three gates)
 
-**Files:** Modify `apps/web/src/panels/assistant/tabs/AuditSkillsTab.tsx`; the cloud-connect flow that handles the server's 402.
+**Files:** Modify `apps/web/src/panels/assistant/tabs/AuditSkillsTab.tsx`; the autonomy control in the assistant panel; the cloud-connect 402 handler.
 
-- [ ] **Step 1: Audit tab.** Where a skill is gated (`canRunAudit(...).allowed === false`, `AuditSkillsTab.tsx:60`), render an **"Upgrade to unlock"** button (instead of / beside "Run") that calls `useEntitlement().upgrade(personalOrgId)`. Test: gated skill shows Upgrade, click calls `upgrade`.
-- [ ] **Step 2: Cloud connect.** The connect flow already handles the server's `402 { gated: true }` (`apps/server/src/index.ts:247,275`). In the client connect handler, on a `gated` 402 show an "Upgrade to unlock cloud clusters" prompt → `upgrade(personalOrgId)` (opens the billing window). Test the 402→prompt mapping.
-- [ ] **Step 3:** `pnpm --filter web test` green. Commit. `git commit -am "feat(web): in-context upgrade prompts at the audit + cloud gates"`
+**`personalOrgId` source (all three prompts):** `useEntitlement().upgrade` takes the org id; the id comes from `useAccount()` — `const personalOrgId = useAccount().orgs.find(o => o.kind === "personal")?.id`. Both hooks are called in the component; do not try to source the org id from `useEntitlement` (it doesn't have it). Guard against `undefined` (disable the button until orgs load).
+
+- [ ] **Step 1: Audit tab.** Where a skill is gated (`canRunAudit(...).allowed === false`, `AuditSkillsTab.tsx:60`), render an **"Upgrade to unlock"** button (instead of / beside "Run") that calls `upgrade(personalOrgId)`. Test: gated skill shows Upgrade, click calls `upgrade` with the personal org id.
+- [ ] **Step 2: Autonomy control.** Locate the autonomous-agent toggle/control in the assistant panel: `grep -rn "autonom" apps/web/src/panels/assistant`. When `useEntitlement().payload?.agentAutonomy` is false, render the control disabled with an **"Upgrade to enable autonomy"** affordance → `upgrade(personalOrgId)`. Test: control disabled + Upgrade shown when `agentAutonomy` false.
+- [ ] **Step 3: Cloud connect.** The connect flow already handles the server's `402 { gated: true }` (`apps/server/src/index.ts:247,275`). In the client connect handler (`grep -rn "gated" apps/web/src` to find where the 402 body is read), on a `gated` 402 show an **"Upgrade to unlock cloud clusters"** prompt → `upgrade(personalOrgId)`. Test the 402→prompt mapping.
+- [ ] **Step 4:** `pnpm --filter web test` green. Commit. `git commit -am "feat(web): in-context upgrade prompts at the audit/autonomy/cloud gates"`
 
 ---
 
 ## Verification
 - All packages test + typecheck green.
-- Manual (packaged, live Stripe): a **Free** account sees audits locked, cloud-connect returns "Upgrade", agent autonomy off. **Upgrade → pay** (Slice B window) → provider refetches on window close → within seconds the same surfaces unlock (audits runnable, cloud connect allowed). **Cancel subscription** in the Portal → drops to free on next refetch (after the 14-day client grace, never mid-session).
-- Offline: cached entitlement honored 14 days, then free — never a hard lockout.
+- Manual (packaged, live Stripe): a **Free** account sees audits locked, cloud-connect returns "Upgrade", agent autonomy off. **Upgrade → pay** (Slice B window) → provider refetches on window close → within seconds the same surfaces unlock (audits runnable, cloud connect allowed). **Cancel subscription** in the Portal → the next successful refetch returns free, so the plan drops to free within ~6h (or immediately via manual refresh). The 14-day grace does **not** apply to a real cancellation.
+- Offline / resolver down: the cached entitlement is honored for 14 days (grace), then free — never a hard lockout. Grace covers *unreachable resolver only*, not cancellations.
 
 ## Self-review notes (author)
 - Only the *source* of the entitlement changes; `canRunAudit`, the `canConnect` return shape + its 402 callers, and `parseUnlockedAudits` are all untouched (the spec's "no gate rewrites").

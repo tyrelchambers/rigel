@@ -248,6 +248,7 @@ app.get("/billing/cancelled", (c) => c.html(page("Cancelled")));
 ```
 
 - [ ] **Step 3: Run → PASS.** Add `STRIPE_PRICE_ID` to `index.ts` (env read + soft-warn) and pass `stripe: stripeAdapter, priceId: STRIPE_PRICE_ID, endpoint: "https://api.rigel.run"` into the `billing` deps (and `accountEmail` is on `authDb`). Document `STRIPE_PRICE_ID` in `db-secret.example.yaml`.
+  > **Invariant:** the backend `endpoint` used to build `success_url`/`cancel_url` MUST match the desktop's `SIGNUP_ENDPOINT` base (`apps/desktop/src/main.ts:31`, `https://api.rigel.run`) — the billing window (Task 5) detects completion by prefix-matching `${SIGNUP_ENDPOINT}/billing/complete`. If they ever diverge (staging, trailing slash), the window never detects the redirect and never closes. Keep them the same constant / config source.
 
 - [ ] **Step 4: Commit.** `git commit -am "feat(signups): /billing/checkout + /billing/portal + redirect pages"`
 
@@ -277,7 +278,19 @@ test("entitlements returns the resolved payload", async () => {
 ```
 - [ ] **Step 2: Run → FAIL. Implement:**
 ```ts
-import type { EntitlementPayload } from "@rigel/signups/entitlements"; // or duplicate the type locally if cross-pkg import is awkward
+// EntitlementPayload is DEFINED here (the desktop-package copy). Do NOT cross-import
+// from @rigel/signups — that's a deployed-backend package, not wired for desktop
+// import (package boundary). This is one of the boundary mirrors of the shape
+// canonically defined in apps/signups/src/entitlements.ts; keep the fields +
+// precise audit union identical. desktop.ts (web) and apps/server keep their own
+// mirrors of the same shape (like Account/Org). Canonical = signups.
+export interface EntitlementPayload {
+  plan: "free" | "pro";
+  audits: ("reliability" | "security" | "performance")[];
+  cloudConnect: boolean;
+  agentAutonomy: boolean;
+  fetchedAt: string;
+}
 
 export interface BillingStore { getToken(): string | null; }
 export function createBillingClient({ store, fetchFn, endpoint }: { store: BillingStore; fetchFn: typeof fetch; endpoint: string }) {
@@ -298,7 +311,7 @@ export function createBillingClient({ store, fetchFn, endpoint }: { store: Billi
 }
 export type BillingClient = ReturnType<typeof createBillingClient>;
 ```
-(If the cross-package type import is awkward, define `EntitlementPayload` in `apps/desktop/src/billingClient.ts` and re-export; Slice C's provider will consume the same shape.)
+(Slice C's provider imports `EntitlementPayload` from this file — `billingClient.ts` is the desktop-package home for the shape.)
 - [ ] **Step 3: Run → PASS. Commit.** `git commit -am "feat(desktop): billing client (checkout/portal/entitlements)"`
 
 ---
@@ -384,11 +397,11 @@ billing?: {
 
 - [ ] **Step 1: Extend `useAccount`.** Add `entitlement: EntitlementPayload | null` to `UseAccountResult`; in `refresh` (after `rigel.account.status()`), `setEntitlement(await rigel?.billing?.entitlements() ?? null)`. Subscribe to `rigel.billing?.onChanged(() => void refresh())` in a second effect (mirror `account.onChanged`, `:32-35`). Expose `upgrade(orgId)` → `rigel?.billing?.checkout(orgId)` and `manageBilling(orgId)` → `rigel?.billing?.portal(orgId)`.
 
-- [ ] **Step 2: Failing test** for the modal section:
+- [ ] **Step 2: Failing test** for the modal section. The mocked org MUST carry the real `Org` shape from `apps/web/src/lib/desktop.ts` — `{ id, kind, name, role }` (the code uses `o.kind === "personal"` to find the personal org, so a mock missing `kind` would pass falsely):
 ```ts
-// with useAccount mocked to return status "signed-in", a personal org {id:"o1",role:"owner"}, entitlement {plan:"free"}
+// useAccount mocked → status "signed-in", orgs: [{ id: "o1", kind: "personal", name: "Personal", role: "owner" }], entitlement: { plan: "free", ... }
 it("free plan shows Upgrade, calls upgrade(personalOrgId) on click", () => { /* render, getByRole button /upgrade/i, click, expect upgrade mock called with "o1" */ });
-it("pro plan shows Manage billing", () => { /* entitlement.plan="pro" → getByText(/pro/i) + /manage billing/i */ });
+it("pro plan shows Manage billing + the seat count", () => { /* entitlement.plan="pro" → getByText(/pro/i) + /manage billing/i + the seats line */ });
 ```
 - [ ] **Step 3: Implement the section** in the signed-in body (after the ORGANIZATIONS card `:99`, before sign-out `:101`), mirroring the `OrgRow` card structure (label `text-3xs font-mono tracking-wide text-[var(--fg-tertiary)]` + bordered card):
 ```tsx
@@ -400,9 +413,15 @@ it("pro plan shows Manage billing", () => { /* entitlement.plan="pro" → getByT
       ? <Button size="sm" variant="outline" onClick={() => account.manageBilling(personalOrgId)}>Manage billing</Button>
       : <Button size="sm" onClick={() => account.upgrade(personalOrgId)}>Upgrade</Button>}
   </div>
+  {/* seats: 1 for a personal org; a team org shows its member count (spec item 3a) */}
+  {account.entitlement?.plan === "pro" && (
+    <span className="mt-1 block text-xs text-[var(--fg-tertiary)]">
+      {account.orgs.filter(o => o.role !== undefined).length === 1 ? "1 seat" : `${account.orgs.length} orgs`}
+    </span>
+  )}
 </div>
 ```
-`personalOrgId` = `account.orgs.find(o => o.kind === "personal")?.id`. (Team orgs: a later slice adds a per-team Upgrade in the org row; personal is enough here.)
+`personalOrgId` = `account.orgs.find(o => o.kind === "personal")?.id`. (Team orgs: a later slice adds a per-team Upgrade + real seat count in the org row; personal is enough here — a personal org is always 1 seat.)
 - [ ] **Step 4:** `pnpm --filter web test AccountModal` green. Commit. `git commit -am "feat(web): Plan/Billing section in the account modal"`
 
 ---
