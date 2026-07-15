@@ -53,46 +53,68 @@ Stopping autonomous remediation on downgrade requires something to **write the
 cluster** (the agent will never self-govern on plan state today). Two layers:
 
 ### Layer 1 — immediate revert (desktop app open)
-When the entitlement provider pushes an entitlement with `agentAutonomy: false` to
-the forked server, the server **writes `assistant-config` `mode → advisory`** (reusing
-the existing `patchConfig`/`setMode` path in `apps/server/src/assistant.ts`). The
-agent reverts within one poll (~30s). Covers the common case: the user cancels while
-using the app.
-- **Gap:** the forked server only runs while the desktop app is open. If the
-  subscription lapses while the app is closed, nothing writes the ConfigMap and the
-  agent keeps remediating until the user next opens the app (which then reverts it).
+When the entitlement provider observes a **fresh, successfully-fetched free result**
+(edge-triggered — **not** the null/no-cache default, which would strand a Pro user on a
+glitchy fetch), the forked server writes `assistant-config`: **`mode → advisory` AND
+`autofixEnabled → false`**. Both matter: the autofix-PR branch (`agent/src/index.ts:518`)
+runs *before* the autonomy gate, so flipping mode alone does **not** stop autonomous
+fix-PRs. It writes **every kubeconfig context that has an agent installed** (each with
+its own namespace), with retry — unreachable clusters are picked up on the next push
+(boot + 6h). Reuses `patchConfig`.
+- Layer 1 is **honor-system only** — the user can edit the ConfigMap back (Rigel ships
+  a ConfigMap editor / Apply YAML). Layer 2 is what makes it real.
 
-### Layer 2 — backstop (desktop app closed)
-Make the agent **entitlement-aware**: the desktop deploys it with a **scoped
-credential** (a k8s Secret) so the agent can call `GET /entitlements` on its own
-schedule and **fail-closed to advisory** when `agentAutonomy` is false (or it can't
-confirm entitlement). This closes the "cancelled while the app was closed" leak — the
-agent self-governs with no desktop present. Requires: (a) deploying the agent with the
-credential env (`packages/k8s/src/assistant.ts` + `agent/manifests/deployment.yaml`),
-(b) an entitlement check gating the remediation phase in `agent/src/index.ts` (a new
-gate alongside the kill switch / autonomy-mode / breaker gauntlet).
+### Layer 2 — the signed lease (real enforcement, works offline)
+The agent gates autonomy on a **short-lived signed lease**, not a credential:
+- The **signups backend signs a lease** `{ orgId, agentAutonomy, exp }` with an
+  **Ed25519 private key** (`LEASE_SIGNING_KEY` in the `rigel-signups` Secret). A new
+  authed route `GET /billing/lease` returns it (the resolver already knows the org
+  entitlement).
+- The **desktop**, on each entitlement refresh (boot + 6h), fetches the lease and
+  **writes it into a cluster Secret** (`assistant-lease`) in each agent's namespace.
+- The **agent** reads the lease each tick, **verifies signature + expiry with a public
+  key baked into the agent image**, and permits `auto`/`window` **and** autofix **only**
+  while a valid, unexpired lease grants `agentAutonomy`. Fail-closed: no valid lease →
+  advisory. Grace = the lease TTL (**7–14 days**), mirroring the desktop's grace.
+- **Why a lease beats a credential-in-cluster:** nothing to steal (public-key verify,
+  no account token in the cluster), works on **air-gapped clusters** (no agent egress),
+  can't be forged by editing the ConfigMap, and degrades gracefully (autonomy simply
+  expires if the app isn't opened within the TTL). Trade-off: the user must open the
+  app within the lease window to keep autonomy alive — acceptable for a desktop-first
+  product.
+- **Whose entitlement:** the lease carries `orgId`, so the **org's** plan governs the
+  agent (a Pro team keeps its cluster's agent alive even if the deploying member
+  downgrades personally).
 
 ## Re-upgrade
 
-Because downgrade is non-destructive (agent still deployed, contexts intact),
-re-upgrade just lifts the gates. **Recommendation: require the user to re-enable
-autonomy** (don't silently resume autonomous cluster remediation — that's surprising
-and risky), but remember the pre-downgrade mode and offer a one-click "Resume
-autonomy" in the app.
+Non-destructive downgrade means re-upgrade just re-issues a lease granting autonomy.
+But **the ConfigMap `mode` stays `advisory`** (Layer 1 set it), so autonomy does **not**
+silently resume — the user **re-enables** it (a one-click "Resume autonomy" that
+restores the remembered prior mode). The lease permits it again; the user re-affirms.
 
-## Open decisions (discuss before build)
+## Decisions (resolved via Fable review)
 
-1. **Advisory vs fully silent on downgrade.** Recommend **advisory** — keep
-   observing/notifying/digesting; only stop autonomous actions.
-2. **Layer 2 now, or v1 = Layer 1 only?** Layer 1 alone leaves the "cancelled while
-   the app was closed" leak (a lapsed subscriber's agent keeps acting until they next
-   open the app). Layer 2 is the robust fix but adds a credential-in-cluster + agent
-   code. Recommend **both**, Layer 1 first.
-3. **Re-upgrade:** auto-restore prior autonomy mode vs require re-enable. Recommend
-   **require re-enable** (with a remembered-mode one-click).
-4. **If Layer 2: credential scope.** A dedicated **entitlement-read-only token** (not
-   the full account bearer) in the cluster, so a cluster compromise can't act as the
-   account. Recommend the scoped token.
+1. **Downgrade posture: advisory** — keep observing/notifying/digesting; stop only
+   autonomous actions **and** autofix PRs.
+2. **Backstop: the signed lease** (over a credential-in-cluster).
+3. **Entitlement scope: org** (the lease carries `orgId`).
+4. **Re-upgrade: require re-enable** (remembered-mode one-click). Layer 1 edge-triggers
+   on a genuine free result so a transient fetch glitch can't strand a paying user.
+5. **Install path: already hardened** (seed advisory + agent fail-closes) — shipped as
+   a separate commit before this work.
+
+## Build slices
+
+- **Slice L1 — Layer 1 + edge-trigger:** desktop provider edge-detects a fresh free →
+  server writes `mode: advisory` + `autofixEnabled: false` to every agent-cluster (with
+  retry). No crypto; self-contained.
+- **Slice L2 — the lease:** signups `LEASE_SIGNING_KEY` + `GET /billing/lease`; desktop
+  writes the `assistant-lease` Secret per cluster; agent verifies the lease (baked-in
+  public key) and gates `auto`/`window` + autofix on it. Public key is a build-time
+  constant in the agent image; support a `kid` for rotation.
+- **Slice L3 — re-enable UI:** "Resume autonomy" affordance on re-upgrade (remembered
+  mode).
 
 ## Out of scope (v1)
 
