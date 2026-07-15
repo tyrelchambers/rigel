@@ -34,12 +34,20 @@ vi.mock("./notify.js", async (importOriginal) => {
   };
 });
 vi.mock("./runModel.js", () => ({ runModel: vi.fn() }));
+// Gate the entitlement DECISION at its orchestrator seam so tick() drives
+// deterministically (the fetch/cache IO is unit-tested in entitlement.test.ts).
+// Default = entitled, so every pre-E2 premium test keeps its behavior.
+vi.mock("./entitlement.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./entitlement.js")>();
+  return { ...actual, determineEntitlement: vi.fn() };
+});
 
 import { kubectl } from "./kubectl.js";
 import { runWorker } from "./worker.js";
 import { runSupervisor } from "./supervisor.js";
 import { sendToChannel } from "./notify.js";
 import { runModel } from "./runModel.js";
+import { determineEntitlement } from "./entitlement.js";
 import { tick, createLoopState, queue } from "./index.js";
 import { CircuitBreaker } from "./guardrails.js";
 
@@ -218,6 +226,7 @@ function workerOut(over: Partial<{ actions: unknown[]; analysis: string; verdict
 }
 
 beforeEach(() => {
+  vi.mocked(determineEntitlement).mockResolvedValue(true);
   vi.mocked(runWorker).mockResolvedValue(workerOut());
   // An actionable, dispatchable openFixPR now clears the fix-quality supervisor
   // before dispatch — default it to approve; reject/escalate tests override.
@@ -781,6 +790,85 @@ describe("tick() — two-phase split: incident history + scheduled digests", () 
 
     expect(vi.mocked(sendToChannel)).not.toHaveBeenCalled();
     expect(captured()!.digestState!.lastSentAt.a).toBe(future);
+  });
+});
+
+describe("tick() — entitlement gate (Slice E2)", () => {
+  const DIGEST = {
+    id: "a", enabled: true, label: "Morning", channel: "signal",
+    days: [0, 1, 2, 3, 4, 5, 6], time: "00:00", timezone: "UTC",
+    lookback: { mode: "sinceLast" }, createdAt: "2026-06-30T00:00:00.000Z",
+  };
+
+  test("not entitled → observe still records the incident, but no remediation/notify/digest fires", async () => {
+    vi.mocked(determineEntitlement).mockResolvedValue(false);
+    vi.mocked(runWorker).mockResolvedValue(workerOut({ actions: [RESTART], verdict: "actionable" }));
+    const { captured } = wireCluster({
+      configData: {
+        enabled: "true", confirmPolls: "1", mode: "auto",
+        signalApiUrl: "http://sig", signalNumber: "+15550001111",
+        digests: JSON.stringify([DIGEST]),
+      },
+      stateSeed: { updatedAt: "", audit: [], queue: [], report: "", digestState: { lastSentAt: { a: "2020-01-01T00:00:00.000Z" } } },
+    });
+
+    await tick(makeConfig(), newCb(), createLoopState());
+
+    const state = captured();
+    // Observe ran despite being free — the incident is in the rolling history.
+    expect(state!.incidents?.some((i) => i.fingerprint === CRASH_FP)).toBe(true);
+    // No autonomous remediation executed.
+    const calls = vi.mocked(kubectl).mock.calls.map((c) => c[0]);
+    expect(calls).not.toContainEqual(["rollout", "restart", "deployment/memos", "-n", "default"]);
+    // No outbound notification and no digest send.
+    expect(vi.mocked(sendToChannel)).not.toHaveBeenCalled();
+    // The digest send-state was NOT advanced (evaluateDigests was skipped).
+    expect(state!.digestState!.lastSentAt.a).toBe("2020-01-01T00:00:00.000Z");
+  });
+
+  test("entitled → the premium remediation path executes (regression guard)", async () => {
+    vi.mocked(determineEntitlement).mockResolvedValue(true);
+    vi.mocked(runWorker).mockResolvedValue(workerOut({ actions: [RESTART], verdict: "actionable" }));
+    const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1", mode: "auto" } });
+
+    await tick(makeConfig(), newCb(), createLoopState());
+
+    const calls = vi.mocked(kubectl).mock.calls.map((c) => c[0]);
+    expect(calls).toContainEqual(["rollout", "restart", "deployment/memos", "-n", "default"]);
+    expect(captured()!.audit[0]).toMatchObject({ proposal: "Restart memos", outcome: "success" });
+  });
+
+  test("not entitled → an in-scope, actionable openFixPR is NOT dispatched (no Opus review spent)", async () => {
+    vi.mocked(determineEntitlement).mockResolvedValue(false);
+    const { captured } = wireCluster({
+      configData: { enabled: "true", confirmPolls: "1", autofixEnabled: "true", autofixScope: JSON.stringify({ projects: ["default/memos"] }) },
+      deploymentJSON: DEPLOYMENT_JSON,
+    });
+
+    await tick(makeConfig(), newCb(), createLoopState());
+
+    expect(dispatchedAFix()).toBe(false);
+    expect(vi.mocked(runSupervisor)).not.toHaveBeenCalled();
+    expect(captured()!.audit[0]).toMatchObject({ proposal: OPEN_FIX_PR.label, outcome: "skipped", tier: "medium" });
+    expect(captured()!.audit[0]?.detail).toMatch(/observe-only|premium/i);
+  });
+
+  test("not entitled but a due digest → the digest does NOT send", async () => {
+    vi.mocked(determineEntitlement).mockResolvedValue(false);
+    const { captured } = wireCluster({
+      configData: {
+        enabled: "true", confirmPolls: "1",
+        signalApiUrl: "http://sig", signalNumber: "+15550001111",
+        digests: JSON.stringify([DIGEST]),
+      },
+      pods: [],
+      stateSeed: { updatedAt: "", audit: [], queue: [], report: "", digestState: { lastSentAt: { a: "2020-01-01T00:00:00.000Z" } } },
+    });
+
+    await tick(makeConfig(), newCb(), createLoopState());
+
+    expect(vi.mocked(sendToChannel)).not.toHaveBeenCalled();
+    expect(captured()!.digestState!.lastSentAt.a).toBe("2020-01-01T00:00:00.000Z");
   });
 });
 
