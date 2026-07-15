@@ -128,6 +128,7 @@ export type AssistantAction =
   | "setLimits"
   | "setAutofix"
   | "restart"
+  | "resume"
   | "silence"
   | "unsilence"
   | "clearReport"
@@ -851,6 +852,14 @@ function restartAgent(context: string | null, namespace: string): Promise<RunRes
   );
 }
 
+function resumeAgent(context: string | null, namespace: string): Promise<RunResult> {
+  return runKubectlStdin(
+    context,
+    ["scale", "deployment/rigel-assistant", "--replicas=1", "-n", namespace],
+    null,
+  );
+}
+
 /** Read-modify-write `assistant-state`, clearing only the `report` field. */
 async function clearReport(context: string | null, namespace: string): Promise<RunResult> {
   const data = await readConfigMapData(context, namespace, "assistant-state");
@@ -1147,6 +1156,8 @@ export async function handleAssistant(
       return setAutofix(context, namespace, req);
     case "restart":
       return restartAgent(context, namespace);
+    case "resume":
+      return resumeAgent(context, namespace);
     case "silence":
       return silenceIncident(context, namespace, req.fingerprint ?? "", true);
     case "unsilence":

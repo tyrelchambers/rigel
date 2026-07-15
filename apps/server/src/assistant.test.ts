@@ -1270,6 +1270,21 @@ test("installedContexts returns managed contexts with the active flag", async ()
   vi.restoreAllMocks();
 });
 
+test("handleAssistant resume scales the agent Deployment back to one replica", async () => {
+  let captured: string[] | null = null;
+  vi.spyOn(runMod, "runProcessWithStdin").mockImplementation(async (_prog, fullArgs) => {
+    captured = fullArgs;
+    return { code: 0, stdout: "", stderr: "" };
+  });
+  const res = await handleAssistant("active-ctx", { action: "resume", namespace: "default" });
+  expect(res.code).toBe(0);
+  expect(captured).toEqual([
+    "--context", "active-ctx",
+    "scale", "deployment/rigel-assistant", "--replicas=1", "-n", "default",
+  ]);
+  vi.restoreAllMocks();
+});
+
 test("handleAssistant routes getRbac/setRbac", async () => {
   vi.spyOn(runMod, "kubectl").mockResolvedValue({ code: 0, stdout: JSON.stringify({ data: {} }), stderr: "" });
   const getRes = await handleAssistant(null, { action: "getRbac", namespace: "default" });
