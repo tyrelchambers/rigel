@@ -1,4 +1,4 @@
-import { LogOut, User } from "lucide-react";
+import { LogOut, RefreshCw, User } from "lucide-react";
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { SignInFlow } from "./SignInFlow";
@@ -101,7 +101,18 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
               )}
 
               <div className="rounded-lg border border-[var(--border-subtle)] bg-white/[0.02] p-3">
-                <span className="text-3xs font-mono tracking-wide text-[var(--fg-tertiary)]">PLAN</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-3xs font-mono tracking-wide text-[var(--fg-tertiary)]">PLAN</span>
+                  <button
+                    type="button"
+                    aria-label="Refresh plan"
+                    onClick={() => account.refreshBilling()}
+                    className="flex items-center gap-1 rounded px-1.5 py-0.5 text-3xs text-[var(--fg-tertiary)] transition-colors hover:bg-white/[0.05] hover:text-[var(--fg-secondary)]"
+                  >
+                    <RefreshCw className="size-3" />
+                    Refresh
+                  </button>
+                </div>
                 <div className="mt-2 flex items-center justify-between">
                   <span className="text-sm text-[var(--fg-primary)]">{isPro ? "Rigel Pro" : "Free"}</span>
                   {isPro ? (

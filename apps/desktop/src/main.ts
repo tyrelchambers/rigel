@@ -18,7 +18,8 @@ import { InstallStore } from "./installStore";
 import { submitSignup, deliver } from "./signup";
 import { AccountStore } from "./accountStore";
 import { createAccountClient, type OrgSummary } from "./accountClient";
-import { createBillingClient } from "./billingClient";
+import { createBillingClient, type EntitlementPayload } from "./billingClient";
+import { createEntitlementProvider, type EntitlementProvider } from "./entitlementProvider";
 import { decideRestart } from "./restartPolicy";
 import {
   initAutoUpdater,
@@ -63,10 +64,17 @@ let serverProc: UtilityProcess | null = null;
 // postMessage (see pushServerAuth) so the server's gating stays in sync
 // without a restart.
 let accountSignedIn = false;
+// postMessage to the forked server over the same channel account-auth uses.
+function pushServerMessage(msg: unknown): void {
+  serverProc?.postMessage(msg);
+}
 function pushServerAuth(signedIn: boolean): void {
   accountSignedIn = signedIn;
-  serverProc?.postMessage({ type: "account-auth", signedIn });
+  pushServerMessage({ type: "account-auth", signedIn });
 }
+// The desktop entitlement provider (fetch + cache + 14-day grace → free). Set in
+// boot(); the source of truth for the renderer (IPC) + the server (postMessage).
+let entitlements: EntitlementProvider | null = null;
 let mainWindow: BrowserWindow | null = null;
 // The in-app Stripe billing window (Checkout / Customer Portal). Detects Stripe's
 // redirect to the fixed ${SIGNUP_ENDPOINT}/billing/{complete,cancelled} pages by
@@ -88,7 +96,9 @@ function openBillingWindow(url: string): void {
   const onNav = (u: string) => {
     if (u.startsWith(`${SIGNUP_ENDPOINT}/billing/complete`) || u.startsWith(`${SIGNUP_ENDPOINT}/billing/cancelled`)) {
       billingWindow?.close();
-      mainWindow?.webContents.send("rigel:billing:changed"); // renderer refetches on this
+      // Refetch → the provider emits rigel:billing:changed (renderer refetches)
+      // and pushes the fresh entitlement to the server gate.
+      void entitlements?.refresh();
     }
   };
   billingWindow.webContents.on("will-redirect", (_e, u) => onNav(u));
@@ -346,6 +356,11 @@ function forkServer(port: number): UtilityProcess {
     stdio: "pipe",
   });
 
+  // Re-deliver the current entitlement to the freshly-(re)spawned server so its
+  // gate (canConnect / audit env / autonomy) survives a crash-restart without a
+  // full app relaunch — mirrors how RIGEL_SIGNED_IN reseeds account-auth.
+  if (entitlements) child.postMessage({ type: "entitlement", value: entitlements.current() });
+
   // Surface the server's logs in the main process console so the dev sees the
   // "rigel server on :<port>" ready line, kubectl errors, etc.
   child.stdout?.on("data", (b: Buffer) => process.stdout.write(`[server] ${b}`));
@@ -465,6 +480,26 @@ async function boot(): Promise<void> {
   const accountStore = new AccountStore(app.getPath("userData"), safeStorage);
   const accountClient = createAccountClient({ store: accountStore, fetchFn: fetch, endpoint: SIGNUP_ENDPOINT });
   const billingClient = createBillingClient({ store: accountStore, fetchFn: fetch, endpoint: SIGNUP_ENDPOINT });
+  // Entitlement provider: the single source of truth for gating. Fetches on boot
+  // + every 6h, caches to a plain JSON file (non-secret), applies the 14-day
+  // grace → free fallback. On change it nudges the renderer to refetch (IPC) and
+  // pushes the grace-applied value to the forked server's gate.
+  const entStore = {
+    load: (): EntitlementPayload | null => {
+      try { return JSON.parse(readFileSync(join(app.getPath("userData"), "entitlement.json"), "utf8")) as EntitlementPayload; }
+      catch { return null; }
+    },
+    save: (v: EntitlementPayload) => {
+      try { writeFileSync(join(app.getPath("userData"), "entitlement.json"), JSON.stringify(v)); } catch { /* best-effort cache */ }
+    },
+  };
+  entitlements = createEntitlementProvider({ client: billingClient, store: entStore, now: () => Date.now() });
+  entitlements.onChange((e) => {
+    mainWindow?.webContents.send("rigel:billing:changed"); // renderer refetches via IPC
+    pushServerMessage({ type: "entitlement", value: e });  // server gate (Task 3)
+  });
+  void entitlements.refresh(); // resolve on boot
+  setInterval(() => void entitlements?.refresh(), 6 * 60 * 60 * 1000); // + every 6h
   // Set synchronously (BEFORE forkServer below) so the initial fork's env
   // reflects reality with no race; refreshAccount() below corrects it async
   // (e.g. a stale token that 401s) and pushes any change live.
@@ -494,6 +529,7 @@ async function boot(): Promise<void> {
       return;
     }
     pushServerAuth(true);
+    void entitlements?.refresh(); // fresh sign-in → resolve entitlements
     mainWindow?.webContents.send("rigel:account:changed");
   };
 
@@ -512,7 +548,7 @@ async function boot(): Promise<void> {
   ipcMain.handle("rigel:account:request-code", (_e, email: string) => accountClient.requestCode(email));
   ipcMain.handle("rigel:account:verify-code", async (_e, d: { email: string; code: string }) => {
     const r = await accountClient.verifyCode(d.email, d.code);
-    if (r.ok) pushServerAuth(true);
+    if (r.ok) { pushServerAuth(true); void entitlements?.refresh(); }
     return r;
   });
   ipcMain.handle("rigel:account:me", () => accountClient.me());
@@ -531,7 +567,10 @@ async function boot(): Promise<void> {
     if (url) openBillingWindow(url);
     return { ok: !!url };
   });
-  ipcMain.handle("rigel:billing:entitlements", () => billingClient.entitlements());
+  // Return the provider's current (grace-applied) value, NOT a raw fetch — the
+  // provider is the source of truth (Slice C replaces the Slice B raw-fetch handler).
+  ipcMain.handle("rigel:billing:entitlements", () => entitlements?.current() ?? null);
+  ipcMain.handle("rigel:billing:refresh", () => entitlements?.refresh());
   ipcMain.handle("rigel:app-update:state", () => getUpdateState());
   ipcMain.handle("rigel:app-update:check", () => checkForUpdates());
   ipcMain.handle("rigel:app-update:download", () => downloadUpdate());

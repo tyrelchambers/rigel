@@ -19,6 +19,7 @@ function fakeAccount(over: Partial<UseAccountResult> = {}): UseAccountResult {
     refresh: vi.fn().mockResolvedValue(undefined),
     upgrade: vi.fn().mockResolvedValue({ ok: true }),
     manageBilling: vi.fn().mockResolvedValue({ ok: true }),
+    refreshBilling: vi.fn().mockResolvedValue(undefined),
     ...over,
   };
 }

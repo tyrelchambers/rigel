@@ -46,6 +46,7 @@ export interface RigelBridge {
     checkout(orgId: string): Promise<{ ok: boolean }>;
     portal(orgId: string): Promise<{ ok: boolean }>;
     entitlements(): Promise<EntitlementPayload | null>;
+    refresh(): Promise<void>;
     onChanged(cb: () => void): () => void;
   };
   appUpdate?: {
