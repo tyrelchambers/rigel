@@ -665,36 +665,34 @@ export async function discoverInstalledContexts(
 }
 
 /**
- * Layer-1 downgrade revert (entitlement-lifecycle Slice L1): when the operator's
- * plan genuinely drops to Free, put every installed agent into a safe posture —
- * `mode: advisory` (stops autonomous remediation) AND `autofixEnabled: "false"`
- * (stops the autofix-PR branch, which runs BEFORE the autonomy-mode gate, so mode
- * alone does not stop it). Enumerates every kubeconfig context that has an agent
- * installed and patches each independently; one unreachable cluster does NOT abort
- * the rest (picked up on the next push). `discover`/`patch` are injectable for
- * cluster-free tests.
+ * Layer-1 downgrade courtesy (entitlement-lifecycle Slice L1): when the operator's
+ * plan genuinely drops to Free, scale every installed agent's Deployment to 0
+ * replicas rather than leaving it running unentitled. Enumerates every kubeconfig
+ * context that has an agent installed and scales each independently; one
+ * unreachable cluster does NOT abort the rest (picked up on the next push).
+ * `discover`/`run` are injectable for cluster-free tests.
  */
-export async function revertAgentsToAdvisory(
+export async function scaleAgentsToZero(
   deps: {
     discover?: (namespace: string) => Promise<string[]>;
-    patch?: (context: string | null, namespace: string, updates: Record<string, string>) => Promise<RunResult>;
+    run?: (context: string | null, args: string[]) => Promise<RunResult>;
   } = {},
-): Promise<{ reverted: string[]; failures: { context: string; error: string }[] }> {
+): Promise<{ scaled: string[]; failures: { context: string; error: string }[] }> {
   const namespace = DEFAULT_INSTALL_CONFIG.installNamespace;
   const discover = deps.discover ?? ((ns: string) => discoverInstalledContexts(ns));
-  const patch = deps.patch ?? patchConfig;
+  const run = deps.run ?? ((ctx: string | null, args: string[]) => runKubectlStdin(ctx, args, null));
   const contexts = await discover(namespace);
-  const reverted: string[] = [];
+  const scaled: string[] = [];
   const failures: { context: string; error: string }[] = [];
   for (const ctx of contexts) {
     try {
-      await patch(ctx, namespace, { mode: "advisory", autofixEnabled: "false" });
-      reverted.push(ctx);
+      await run(ctx, ["scale", `deployment/${DEPLOYMENT_NAME}`, "--replicas=0", "-n", namespace]);
+      scaled.push(ctx);
     } catch (e) {
       failures.push({ context: ctx, error: e instanceof Error ? e.message : String(e) });
     }
   }
-  return { reverted, failures };
+  return { scaled, failures };
 }
 
 /**
