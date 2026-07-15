@@ -33,6 +33,16 @@ contextBridge.exposeInMainWorld("rigel", {
       return () => ipcRenderer.removeListener("rigel:account:changed", listener);
     },
   },
+  billing: {
+    checkout: (orgId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke("rigel:billing:checkout", orgId),
+    portal: (orgId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke("rigel:billing:portal", orgId),
+    entitlements: () => ipcRenderer.invoke("rigel:billing:entitlements"),
+    onChanged: (cb: () => void): (() => void) => {
+      const l = () => cb();
+      ipcRenderer.on("rigel:billing:changed", l);
+      return () => ipcRenderer.removeListener("rigel:billing:changed", l);
+    },
+  },
   appUpdate: {
     getState: (): Promise<UpdateState> => ipcRenderer.invoke("rigel:app-update:state"),
     check: (): Promise<void> => ipcRenderer.invoke("rigel:app-update:check"),
