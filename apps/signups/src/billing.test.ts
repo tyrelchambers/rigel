@@ -7,7 +7,7 @@ function appWith(overrides = {}) {
   const app = new Hono();
   const db = { accountByToken: vi.fn(async () => ({ id: "acc-1", email: "a@b.co", name: null })), touchToken: vi.fn(async () => {}) };
   const resolve = vi.fn(async (): Promise<EntitlementPayload> => ({ plan: "pro", audits: ["security"], cloudConnect: false, agentAutonomy: false, fetchedAt: "t" }));
-  registerBillingRoutes(app, { db: db as never, resolve, ...overrides });
+  registerBillingRoutes(app, { db: db as never, resolve, stripe: {} as never, priceId: "price_1", endpoint: "https://api.rigel.run", ...overrides });
   return { app, db, resolve };
 }
 
@@ -23,4 +23,27 @@ test("GET /entitlements 401 without a valid token", async () => {
   const { app } = appWith({ db: { accountByToken: vi.fn(async () => null), touchToken: vi.fn() } });
   const res = await app.request("/entitlements", { headers: { authorization: "Bearer bad" } });
   expect(res.status).toBe(401);
+});
+
+test("POST /billing/checkout creates a customer if none, persists it, returns the url", async () => {
+  const db = { accountByToken: vi.fn(async () => ({ id: "acc-1" })), touchToken: vi.fn(),
+    orgBilling: vi.fn(async () => ({ stripeCustomerId: null, role: "owner" })),
+    orgSeatCount: vi.fn(async () => 1), setOrgStripeCustomer: vi.fn(async () => {}),
+    accountEmail: vi.fn(async () => "a@b.co") };
+  const stripe = { ensureCustomer: vi.fn(async () => ({ customerId: "cus_new", created: true })),
+    createCheckoutSession: vi.fn(async () => "https://checkout/x") };
+  const app = new Hono(); registerBillingRoutes(app, { db, resolve: vi.fn(), stripe, priceId: "price_1", endpoint: "https://api.rigel.run" } as never);
+  const res = await app.request("/billing/checkout", { method: "POST", headers: { authorization: "Bearer t", "content-type": "application/json" }, body: JSON.stringify({ orgId: "o1" }) });
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ url: "https://checkout/x" });
+  expect(db.setOrgStripeCustomer).toHaveBeenCalledWith("o1", "cus_new");
+  expect(stripe.createCheckoutSession).toHaveBeenCalledWith(expect.objectContaining({ customerId: "cus_new", quantity: 1, priceId: "price_1" }));
+});
+
+test("POST /billing/checkout 403 when caller is a plain member", async () => {
+  const db = { accountByToken: vi.fn(async () => ({ id: "acc-1" })), touchToken: vi.fn(),
+    orgBilling: vi.fn(async () => ({ stripeCustomerId: null, role: "member" })) };
+  const app = new Hono(); registerBillingRoutes(app, { db, resolve: vi.fn(), stripe: {}, priceId: "p", endpoint: "e" } as never);
+  const res = await app.request("/billing/checkout", { method: "POST", headers: { authorization: "Bearer t", "content-type": "application/json" }, body: JSON.stringify({ orgId: "o1" }) });
+  expect(res.status).toBe(403);
 });

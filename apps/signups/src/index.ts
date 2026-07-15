@@ -17,11 +17,16 @@ const KIT_TAG_ID = process.env.KIT_TAG_ID ? Number(process.env.KIT_TAG_ID) : nul
 const RESEND_API_KEY = process.env.RESEND_API_KEY ?? "";
 const RESEND_FROM = process.env.RESEND_FROM ?? "Rigel <login@rigel.run>";
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY ?? "";
+const STRIPE_PRICE_ID = process.env.STRIPE_PRICE_ID ?? "";
+// Must match the desktop's SIGNUP_ENDPOINT base (apps/desktop/src/main.ts) — the
+// billing window detects completion by prefix-matching ${endpoint}/billing/complete.
+const BILLING_ENDPOINT = "https://api.rigel.run";
 if (!APP_KEY) { console.error("APP_KEY is required"); process.exit(1); }
 if (!DATABASE_URL) { console.error("DATABASE_URL is required"); process.exit(1); }
 if (!KIT_API_KEY) console.warn("KIT_API_KEY not set — signups will not sync to Kit");
 if (!RESEND_API_KEY) console.warn("RESEND_API_KEY not set — auth code emails will fail");
 if (!STRIPE_SECRET_KEY) console.warn("[signups] STRIPE_SECRET_KEY unset — /entitlements returns free for everyone");
+if (!STRIPE_PRICE_ID) console.warn("[signups] STRIPE_PRICE_ID unset — /billing/checkout will fail to create a session");
 
 const pool = new pg.Pool({ connectionString: DATABASE_URL });
 await ensureSchema(pool);
@@ -44,7 +49,7 @@ const app = createApp({
   allow,
   notify,
   auth: { db: authDb, sendCode, allowRequest, allowVerify },
-  billing: { db: authDb, resolve },
+  billing: { db: authDb, resolve, stripe: stripeAdapter, priceId: STRIPE_PRICE_ID, endpoint: BILLING_ENDPOINT },
 });
 
 serve({ fetch: app.fetch, port: PORT, hostname: "0.0.0.0" }, (info) =>

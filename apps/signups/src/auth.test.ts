@@ -61,6 +61,10 @@ function fakeDb() {
       return org ? [org] : [];
     },
     async billableOrgs() { return []; },
+    async orgBilling() { return null; },
+    async orgSeatCount() { return 0; },
+    async setOrgStripeCustomer() {},
+    async accountEmail() { return "a@b.co"; },
   };
   return { db, codes };
 }

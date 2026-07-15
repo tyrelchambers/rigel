@@ -1,19 +1,71 @@
-import type { Hono } from "hono";
+import type { Context, Hono } from "hono";
 import type { EntitlementPayload } from "./entitlements";
+import type { StripeAdapter } from "./stripeAdapter";
 import { sha, bearer } from "./authToken";
 
 export interface BillingDeps {
-  db: { accountByToken(hash: string): Promise<{ id: string } | null>; touchToken(hash: string): Promise<void> };
+  db: {
+    accountByToken(hash: string): Promise<{ id: string } | null>;
+    touchToken(hash: string): Promise<void>;
+    orgBilling(orgId: string, accountId: string): Promise<{ stripeCustomerId: string | null; role: string } | null>;
+    orgSeatCount(orgId: string): Promise<number>;
+    setOrgStripeCustomer(orgId: string, customerId: string): Promise<void>;
+    accountEmail(accountId: string): Promise<string>;
+  };
   resolve: (accountId: string) => Promise<EntitlementPayload>;
+  stripe: StripeAdapter;
+  priceId: string;
+  endpoint: string; // e.g. https://api.rigel.run — for success/cancel/return urls
 }
 
 export function registerBillingRoutes(app: Hono, deps: BillingDeps): void {
-  app.get("/entitlements", async (c) => {
+  async function authed(c: Context): Promise<{ id: string } | null> {
     const token = bearer(c);
-    if (!token) return c.json({ error: "unauthorized" }, 401);
-    const account = await deps.db.accountByToken(sha(token));
-    if (!account) return c.json({ error: "unauthorized" }, 401);
+    if (!token) return null;
+    const acc = await deps.db.accountByToken(sha(token));
+    if (!acc) return null;
     await deps.db.touchToken(sha(token));
-    return c.json(await deps.resolve(account.id));
+    return acc;
+  }
+
+  app.get("/entitlements", async (c) => {
+    const acc = await authed(c);
+    if (!acc) return c.json({ error: "unauthorized" }, 401);
+    return c.json(await deps.resolve(acc.id));
   });
+
+  app.post("/billing/checkout", async (c) => {
+    const acc = await authed(c);
+    if (!acc) return c.json({ error: "unauthorized" }, 401);
+    const { orgId } = await c.req.json<{ orgId: string }>();
+    const b = await deps.db.orgBilling(orgId, acc.id);
+    if (!b) return c.json({ error: "not a member" }, 403);
+    if (b.role !== "owner" && b.role !== "admin") return c.json({ error: "owner or admin required" }, 403);
+    const email = await deps.db.accountEmail(acc.id);
+    const { customerId, created } = await deps.stripe.ensureCustomer({ existing: b.stripeCustomerId, email, orgId });
+    if (created) await deps.db.setOrgStripeCustomer(orgId, customerId);
+    const quantity = await deps.db.orgSeatCount(orgId);
+    const url = await deps.stripe.createCheckoutSession({
+      customerId, priceId: deps.priceId, quantity,
+      successUrl: `${deps.endpoint}/billing/complete`,
+      cancelUrl: `${deps.endpoint}/billing/cancelled`,
+    });
+    return c.json({ url });
+  });
+
+  app.post("/billing/portal", async (c) => {
+    const acc = await authed(c);
+    if (!acc) return c.json({ error: "unauthorized" }, 401);
+    const { orgId } = await c.req.json<{ orgId: string }>();
+    const b = await deps.db.orgBilling(orgId, acc.id);
+    if (!b) return c.json({ error: "not a member" }, 403);
+    if (b.role !== "owner" && b.role !== "admin") return c.json({ error: "owner or admin required" }, 403);
+    if (!b.stripeCustomerId) return c.json({ error: "no subscription yet" }, 409);
+    const url = await deps.stripe.createPortalSession({ customerId: b.stripeCustomerId, returnUrl: `${deps.endpoint}/billing/complete` });
+    return c.json({ url });
+  });
+
+  const page = (msg: string) => `<!doctype html><meta charset=utf8><body style="font:16px system-ui;background:#0c0d0f;color:#fff;display:grid;place-items:center;height:100vh;margin:0">${msg} — you can close this window.</body>`;
+  app.get("/billing/complete", (c) => c.html(page("Done")));
+  app.get("/billing/cancelled", (c) => c.html(page("Cancelled")));
 }
