@@ -1,9 +1,18 @@
-export interface AppUpdateInfo {
-  updateAvailable: boolean;
-  currentVersion: string;
-  latestVersion: string | null;
-  downloadUrl: string;
-  releaseUrl: string | null;
+export type UpdateStatus =
+  | "idle"
+  | "checking"
+  | "available"
+  | "downloading"
+  | "downloaded"
+  | "error";
+
+export interface UpdateState {
+  status: UpdateStatus;
+  version: string | null;
+  progress: number;
+  /** True when the update can be installed in place; false = download-page only. */
+  canAutoInstall: boolean;
+  error: string | null;
 }
 export interface Account { id: string; email: string; name: string | null }
 export interface Org { id: string; kind: "personal" | "team"; name: string; role: "owner" | "admin" | "member" }
@@ -27,8 +36,12 @@ export interface RigelBridge {
     onChanged(cb: () => void): () => void;
   };
   appUpdate?: {
-    check(): Promise<AppUpdateInfo>;
+    getState(): Promise<UpdateState>;
+    check(): Promise<void>;
+    download(): Promise<void>;
+    install(): Promise<void>;
     open(): Promise<void>;
+    onState(cb: (s: UpdateState) => void): () => void;
   };
 }
 export const rigel: RigelBridge | undefined =
