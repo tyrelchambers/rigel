@@ -88,6 +88,23 @@ describe("readRuntimeConfig — signal config", () => {
   });
 });
 
+describe("readRuntimeConfig — mode is fail-closed", () => {
+  test("a missing mode defaults to advisory, never auto", async () => {
+    mockConfigMap({ enabled: "true" });
+    expect((await readRuntimeConfig(CFG)).mode).toBe("advisory");
+  });
+  test("a garbage mode falls back to advisory", async () => {
+    mockConfigMap({ enabled: "true", mode: "banana" });
+    expect((await readRuntimeConfig(CFG)).mode).toBe("advisory");
+  });
+  test("explicit auto / window are still honored", async () => {
+    mockConfigMap({ enabled: "true", mode: "auto" });
+    expect((await readRuntimeConfig(CFG)).mode).toBe("auto");
+    mockConfigMap({ enabled: "true", mode: "window", window: "09:00-17:00" });
+    expect((await readRuntimeConfig(CFG)).mode).toBe("window");
+  });
+});
+
 describe("readRuntimeConfig — discord/slack webhooks", () => {
   test("parses discordWebhookUrl/slackWebhookUrl when present", async () => {
     mockConfigMap({ enabled: "true", discordWebhookUrl: "https://discord.example/hook", slackWebhookUrl: "https://slack.example/hook" });

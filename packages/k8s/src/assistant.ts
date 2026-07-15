@@ -604,7 +604,10 @@ metadata:
     app.kubernetes.io/managed-by: rigel-assistant
 data:
   enabled: "true"
-  mode: "auto"
+  # Seed advisory (observe + queue + notify, no autonomous action). Turning on
+  # autonomy is only ever reachable through setMode, which is Pro-gated — so a
+  # fresh install never grants autonomous remediation without an entitled opt-in.
+  mode: "advisory"
 ${roleLines}
 ${limitLines}
 ---

@@ -286,7 +286,10 @@ export async function readRuntimeConfig(cfg: Config): Promise<RuntimeConfig> {
   } catch {
     return disabledDefaults(cfg);
   }
-  const mode = (data.mode as AutonomyMode) || "auto";
+  // Fail-closed: only an explicit "auto"/"window" grants autonomy. A missing or
+  // garbage mode (or "advisory") means observe-only, so a broken/absent config
+  // never yields autonomous remediation.
+  const mode: AutonomyMode = data.mode === "auto" ? "auto" : data.mode === "window" ? "window" : "advisory";
   const silenced = new Set(
     (data.silenced ?? "")
       .split(/[\n,]/)
@@ -299,7 +302,7 @@ export async function readRuntimeConfig(cfg: Config): Promise<RuntimeConfig> {
     .filter(Boolean);
   return {
     enabled: data.enabled !== "false",
-    mode: mode === "advisory" || mode === "window" ? mode : "auto",
+    mode,
     window: data.window ? parseWindow(data.window) ?? undefined : undefined,
     silenced,
     webhookUrl: data.webhookUrl && data.webhookUrl.trim() ? data.webhookUrl.trim() : undefined,

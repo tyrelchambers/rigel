@@ -226,7 +226,7 @@ afterEach(() => vi.clearAllMocks());
 
 describe("tick() — openFixPR routing (I1 landmine)", () => {
   test("a stray openFixPR (autofix disabled) is recorded and never throws out of tick()", async () => {
-    const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1" } });
+    const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1", mode: "auto" } });
 
     await expect(tick(makeConfig(), newCb(), createLoopState())).resolves.toBeUndefined();
 
@@ -340,7 +340,7 @@ describe("tick() — triage verdict handling", () => {
     "a status incident with a kubectl action executes regardless of verdict=%s (pre-triage restored)",
     async (verdict) => {
       vi.mocked(runWorker).mockResolvedValue(workerOut({ actions: [RESTART], verdict, verdictReason: "x" }));
-      const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1" } });
+      const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1", mode: "auto" } });
 
       await tick(makeConfig(), newCb(), createLoopState());
 
@@ -361,7 +361,7 @@ describe("tick() — triage verdict handling", () => {
       const cm = args[0] === "get" && args[1] === "configmap" ? args[2] : null;
       // assistant-state already carries the auto-silenced fingerprint from a prior tick.
       if (cm === "assistant-state") return res(JSON.stringify({ data: { "state.json": JSON.stringify({ updatedAt: "", audit: [], queue: [], report: "", autoSilenced: [CRASH_FP] }) } }));
-      if (cm === "assistant-config") return res(JSON.stringify({ data: { enabled: "true", confirmPolls: "1" } }));
+      if (cm === "assistant-config") return res(JSON.stringify({ data: { enabled: "true", confirmPolls: "1", mode: "auto" } }));
       if (args[0] === "get" && args[1] === "pods") return res(JSON.stringify({ items: [CRASH_POD] }));
       if (args[0] === "get" && args[1] === "deployments") return res(JSON.stringify({ items: [] }));
       if (args[0] === "apply") {
@@ -506,7 +506,7 @@ describe("tick() — fix-Job reconcile (Phase 4 loop close)", () => {
     vi.mocked(kubectl).mockImplementation(async (args: string[], stdin?: string) => {
       const cm = args[0] === "get" && args[1] === "configmap" ? args[2] : null;
       if (cm === "assistant-state") return res("{}");
-      if (cm === "assistant-config") return res(JSON.stringify({ data: { enabled: "true", confirmPolls: "1" } }));
+      if (cm === "assistant-config") return res(JSON.stringify({ data: { enabled: "true", confirmPolls: "1", mode: "auto" } }));
       if (args[0] === "get" && args[1] === "pods") return res(JSON.stringify({ items: [] }));
       if (args[0] === "get" && args[1] === "deployments") return res(JSON.stringify({ items: [] }));
       if (args[0] === "get" && args[1] === "jobs") return res(JSON.stringify({ items: [fixJob] }));
@@ -538,7 +538,7 @@ describe("tick() — eligibility hardening", () => {
       const cm = args[0] === "get" && args[1] === "configmap" ? args[2] : null;
       if (cm === "assistant-state") return res("{}");
       if (cm === "assistant-config") {
-        return res(JSON.stringify({ data: { enabled: "true", confirmPolls: "1", autofixEnabled: "true", autofixScope: JSON.stringify({ projects: ["default/memos"] }) } }));
+        return res(JSON.stringify({ data: { enabled: "true", confirmPolls: "1", mode: "auto", autofixEnabled: "true", autofixScope: JSON.stringify({ projects: ["default/memos"] }) } }));
       }
       if (args[0] === "get" && args[1] === "pods") return res(JSON.stringify({ items: [CRASH_POD] }));
       if (args[0] === "get" && args[1] === "deployments") return res(JSON.stringify({ items: [] }));
@@ -695,7 +695,7 @@ describe("tick() — two-phase split: incident history + scheduled digests", () 
 
   test("a confirmed incident the remediate phase fixes is recorded as autoFixed (single record)", async () => {
     vi.mocked(runWorker).mockResolvedValue(workerOut({ actions: [RESTART], verdict: "actionable" }));
-    const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1" } });
+    const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1", mode: "auto" } });
 
     await tick(makeConfig(), newCb(), createLoopState());
 
