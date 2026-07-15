@@ -28,6 +28,12 @@ export function createBillingClient({ store, fetchFn, endpoint }: { store: Billi
       const res = await fetchFn(`${endpoint}/entitlements`, { headers: auth() });
       return res.ok ? ((await res.json()) as EntitlementPayload) : null;
     },
+    async agentToken(orgId: string): Promise<{ token: string; installId: string } | null> {
+      const res = await fetchFn(`${endpoint}/agent/token`, { method: "POST", headers: auth(), body: JSON.stringify({ orgId }) });
+      if (!res.ok) return null;
+      const j = (await res.json()) as { token?: unknown; installId?: unknown };
+      return typeof j.token === "string" && typeof j.installId === "string" ? { token: j.token, installId: j.installId } : null;
+    },
   };
 }
 export type BillingClient = ReturnType<typeof createBillingClient>;

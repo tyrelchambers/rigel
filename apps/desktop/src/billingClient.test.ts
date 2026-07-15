@@ -10,6 +10,23 @@ test("checkout posts orgId with the bearer token and returns the url", async () 
   }));
 });
 
+test("agentToken posts orgId with the bearer token and returns token+installId", async () => {
+  const fetchFn = vi.fn(async () => ({ ok: true, json: async () => ({ token: "rig_agent_x", installId: "id-1" }) }));
+  const client = createBillingClient({ store: { getToken: () => "tok" } as never, fetchFn: fetchFn as never, endpoint: "https://api.rigel.run" });
+  expect(await client.agentToken("o1")).toEqual({ token: "rig_agent_x", installId: "id-1" });
+  expect(fetchFn).toHaveBeenCalledWith("https://api.rigel.run/agent/token", expect.objectContaining({
+    method: "POST",
+    headers: expect.objectContaining({ authorization: "Bearer tok" }),
+    body: JSON.stringify({ orgId: "o1" }),
+  }));
+});
+
+test("agentToken returns null when the mint fails (non-member / backend down)", async () => {
+  const fetchFn = vi.fn(async () => ({ ok: false, json: async () => ({ error: "not a member" }) }));
+  const client = createBillingClient({ store: { getToken: () => "tok" } as never, fetchFn: fetchFn as never, endpoint: "https://api.rigel.run" });
+  expect(await client.agentToken("o1")).toBeNull();
+});
+
 test("entitlements returns the resolved payload", async () => {
   const fetchFn = vi.fn(async () => ({ ok: true, json: async () => ({ plan: "pro", audits: [], cloudConnect: true, agentAutonomy: false, fetchedAt: "t" }) }));
   const client = createBillingClient({ store: { getToken: () => "tok" } as never, fetchFn: fetchFn as never, endpoint: "https://api.rigel.run" });
