@@ -34,6 +34,9 @@ export interface AuthDb {
   orgSeatCount(orgId: string): Promise<number>;
   setOrgStripeCustomer(orgId: string, customerId: string): Promise<void>;
   accountEmail(accountId: string): Promise<string>;
+  createAgentToken(input: { orgId: string; installId: string; tokenHash: string }): Promise<void>;
+  agentTokenByHash(hash: string): Promise<{ orgId: string; installId: string; revoked: boolean } | null>;
+  orgStripeCustomer(orgId: string): Promise<string | null>;
 }
 
 const TOKEN_MAX_AGE = "1 year";
@@ -89,6 +92,15 @@ CREATE TABLE IF NOT EXISTS memberships (
 );
 CREATE INDEX IF NOT EXISTS memberships_account_idx ON memberships (account_id);
 CREATE UNIQUE INDEX IF NOT EXISTS memberships_one_owner_idx ON memberships (org_id) WHERE role = 'owner';
+CREATE TABLE IF NOT EXISTS agent_tokens (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  token_hash text UNIQUE NOT NULL,
+  org_id     uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  install_id text NOT NULL,
+  revoked    boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS agent_tokens_org_idx ON agent_tokens (org_id);
 INSERT INTO organizations (kind, name, personal_account_id)
   SELECT 'personal', coalesce(name, email), id FROM accounts a
   WHERE NOT EXISTS (SELECT 1 FROM organizations o WHERE o.personal_account_id = a.id)
@@ -253,6 +265,24 @@ export function createAuthDb(pool: Pool): AuthDb {
     async accountEmail(accountId) {
       const r = await pool.query(`SELECT email FROM accounts WHERE id = $1`, [accountId]);
       return r.rows[0].email;
+    },
+    async createAgentToken({ orgId, installId, tokenHash }) {
+      await pool.query(
+        `INSERT INTO agent_tokens (token_hash, org_id, install_id) VALUES ($1, $2, $3)`,
+        [tokenHash, orgId, installId],
+      );
+    },
+    async agentTokenByHash(hash) {
+      const r = await pool.query(
+        `SELECT org_id, install_id, revoked FROM agent_tokens WHERE token_hash = $1`,
+        [hash],
+      );
+      const row = r.rows[0] as { org_id: string; install_id: string; revoked: boolean } | undefined;
+      return row ? { orgId: row.org_id, installId: row.install_id, revoked: row.revoked } : null;
+    },
+    async orgStripeCustomer(orgId) {
+      const r = await pool.query(`SELECT stripe_customer_id FROM organizations WHERE id = $1`, [orgId]);
+      return (r.rows[0]?.stripe_customer_id as string | null) ?? null;
     },
     ensurePersonalOrg,
     getOrgsForAccount,

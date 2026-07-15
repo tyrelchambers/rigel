@@ -166,3 +166,42 @@ test("accountByToken joins accounts and filters revoked/expired", async () => {
   expect(sql).toContain("JOIN ACCOUNTS");
   expect(calls[0].params).toEqual(["HASH"]);
 });
+
+test("ensureAuthSchema creates the agent_tokens table", async () => {
+  const { pool, calls } = recorder();
+  await ensureAuthSchema(pool);
+  const j = calls.map((c) => c.sql.toUpperCase()).join("\n");
+  expect(j).toContain("CREATE TABLE IF NOT EXISTS AGENT_TOKENS");
+});
+
+test("createAgentToken inserts the hashed token bound to org + install", async () => {
+  const { pool, calls } = recorder();
+  const db = createAuthDb(pool);
+  await db.createAgentToken({ orgId: "o1", installId: "inst-1", tokenHash: "HASH" });
+  const sql = calls[0].sql.toUpperCase();
+  expect(sql).toContain("INSERT INTO AGENT_TOKENS");
+  expect(calls[0].params).toEqual(["HASH", "o1", "inst-1"]);
+});
+
+test("agentTokenByHash returns org + install + revoked (null when no row)", async () => {
+  const { pool, calls, push } = recorder();
+  push({ org_id: "o1", install_id: "inst-1", revoked: false });
+  const db = createAuthDb(pool);
+  expect(await db.agentTokenByHash("HASH")).toEqual({ orgId: "o1", installId: "inst-1", revoked: false });
+  const sql = calls[0].sql.toUpperCase();
+  expect(sql).toContain("FROM AGENT_TOKENS");
+  expect(sql).toContain("TOKEN_HASH = $1");
+  expect(calls[0].params).toEqual(["HASH"]);
+  expect(await db.agentTokenByHash("MISSING")).toBeNull();
+});
+
+test("orgStripeCustomer selects the customer id (null when none/no row)", async () => {
+  const { pool, calls, push } = recorder();
+  push({ stripe_customer_id: "cus_1" });
+  const db = createAuthDb(pool);
+  expect(await db.orgStripeCustomer("o1")).toBe("cus_1");
+  const sql = calls[0].sql.toUpperCase();
+  expect(sql).toContain("SELECT STRIPE_CUSTOMER_ID FROM ORGANIZATIONS");
+  expect(calls[0].params).toEqual(["o1"]);
+  expect(await db.orgStripeCustomer("missing")).toBeNull();
+});
