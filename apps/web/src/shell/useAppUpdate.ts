@@ -1,50 +1,61 @@
 import { useCallback, useEffect, useState } from "react";
-import { rigel, type AppUpdateInfo } from "@/lib/desktop";
+import { rigel, type UpdateState, type UpdateStatus } from "@/lib/desktop";
 
-const SIX_HOURS = 6 * 60 * 60 * 1000;
+const IDLE: UpdateState = {
+  status: "idle",
+  version: null,
+  progress: 0,
+  canAutoInstall: false,
+  error: null,
+};
 
 export interface UseAppUpdateResult {
-  updateAvailable: boolean;
-  latestVersion: string | null;
-  /** Open the download page (desktop only; no-op in web-dev). */
+  status: UpdateStatus;
+  version: string | null;
+  progress: number;
+  canAutoInstall: boolean;
+  /** Start downloading the update (real in-app update). */
+  download(): void;
+  /** Quit and install the downloaded update, then relaunch. */
+  install(): void;
+  /** Open the download page (fallback when in-app install isn't available). */
   open(): void;
 }
 
 /**
- * Polls the desktop main for a newer published release (on mount, then every
- * six hours). Inert when there's no desktop bridge (web build) or the bridge
- * predates the appUpdate channel. Never throws.
+ * Subscribes to the desktop main's update state (pushed as the updater checks /
+ * downloads / finishes). Reads the current state on mount, then live-updates.
+ * Inert when there's no desktop bridge (web build) or an older bridge without
+ * the update channel.
  */
 export function useAppUpdate(): UseAppUpdateResult {
-  const [info, setInfo] = useState<AppUpdateInfo | null>(null);
+  const [state, setState] = useState<UpdateState>(IDLE);
 
   useEffect(() => {
     const bridge = rigel?.appUpdate;
-    if (!bridge) return;
+    if (!bridge?.onState) return;
     let cancelled = false;
-    const run = () => {
-      bridge
-        .check()
-        .then((i) => {
-          if (!cancelled) setInfo(i);
-        })
-        .catch(() => {});
-    };
-    run();
-    const id = setInterval(run, SIX_HOURS);
+    bridge.getState().then((s) => {
+      if (!cancelled) setState(s);
+    }).catch(() => {});
+    const off = bridge.onState((s) => setState(s));
     return () => {
       cancelled = true;
-      clearInterval(id);
+      off();
     };
   }, []);
 
-  const open = useCallback(() => {
-    void rigel?.appUpdate?.open();
-  }, []);
+  const download = useCallback(() => void rigel?.appUpdate?.download(), []);
+  const install = useCallback(() => void rigel?.appUpdate?.install(), []);
+  const open = useCallback(() => void rigel?.appUpdate?.open(), []);
 
   return {
-    updateAvailable: info?.updateAvailable ?? false,
-    latestVersion: info?.latestVersion ?? null,
+    status: state.status,
+    version: state.version,
+    progress: state.progress,
+    canAutoInstall: state.canAutoInstall,
+    download,
+    install,
     open,
   };
 }

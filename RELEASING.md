@@ -62,10 +62,10 @@ runner installs the workspace, verifies the tag matches
 - **Linux** — `Rigel-<version>-x86_64.AppImage` and `Rigel-<version>-amd64.deb`
   (x64), plus `latest-linux.yml`.
 
-The `latest-*.yml` manifests are what a future auto-updater will read. All of it
-uploads to the same **draft** GitHub Release named for the version. A final
-`strip-blockmaps` job then prunes the `.blockmap` delta-update artifacts (unused
-until auto-update is wired; the `latest-*.yml` manifests are kept).
+The `latest-*.yml` manifests and `.blockmap` files are what the in-app updater
+(`electron-updater`) reads — the manifests to find the new version, the blockmaps
+to download only the changed bytes (delta updates). All of it uploads to the same
+**draft** GitHub Release named for the version.
 
 Nothing is public yet. Go to the repo's **Releases** page, find the draft, check
 the files are attached and the notes read the way you want, then click
@@ -139,6 +139,7 @@ The output lands in `apps/desktop/release/`. This builds the installers but does
   secrets, and set `identity` in `electron-builder.yml`; for Windows, add an
   Authenticode certificate. Downloads then open with no warning. This drops into
   the same workflow; the steps above don't change.
-- **In-app auto-update (Phase 3):** add `electron-updater` so the app updates
-  itself from the `latest-*.yml` manifests each release already publishes (and
-  stop stripping the `.blockmap` files, which enable delta updates).
+- **In-app auto-update (Phase 3 — done):** `electron-updater` is wired; the app
+  checks each release and updates in place. It works on Windows/Linux now; **macOS
+  auto-update needs the Phase-2 signing above** (Squirrel.Mac refuses to install an
+  unsigned build), and falls back to the download page until then.

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { AppUpdateInfo } from "./appUpdate";
+import type { UpdateState } from "./appUpdater";
 
 const sessionArg = process.argv.find((a) => a.startsWith("--rigel-session="));
 const sessionSecret = sessionArg ? sessionArg.slice("--rigel-session=".length) : "";
@@ -34,7 +34,15 @@ contextBridge.exposeInMainWorld("rigel", {
     },
   },
   appUpdate: {
-    check: (): Promise<AppUpdateInfo> => ipcRenderer.invoke("rigel:app-update:check"),
+    getState: (): Promise<UpdateState> => ipcRenderer.invoke("rigel:app-update:state"),
+    check: (): Promise<void> => ipcRenderer.invoke("rigel:app-update:check"),
+    download: (): Promise<void> => ipcRenderer.invoke("rigel:app-update:download"),
+    install: (): Promise<void> => ipcRenderer.invoke("rigel:app-update:install"),
     open: (): Promise<void> => ipcRenderer.invoke("rigel:app-update:open"),
+    onState: (cb: (s: UpdateState) => void): (() => void) => {
+      const listener = (_e: unknown, s: UpdateState) => cb(s);
+      ipcRenderer.on("rigel:app-update:state", listener);
+      return () => ipcRenderer.removeListener("rigel:app-update:state", listener);
+    },
   },
 });

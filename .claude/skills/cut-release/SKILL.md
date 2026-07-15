@@ -28,7 +28,7 @@ Repo is `tyrelchambers/rigel`. Releases cut from `master`. `gh` is authed.
    ```
    The push kicks off **Release Rigel desktop** (`desktop-release.yml`), which fails fast if the tag != desktop version.
 
-4. **Watch the build.** `gh run watch $(gh run list -w "Release Rigel desktop" -L1 --json databaseId --jq '.[0].databaseId')`. A 3-OS matrix builds the macOS DMGs (arm64 + x64), the Windows `.exe`, and the Linux `.AppImage` + `.deb`, all uploaded to one **draft** Release named `vX.Y.Z` (a `strip-blockmaps` job then prunes the `.blockmap` files). Report the artifacts (`gh release view vX.Y.Z`).
+4. **Watch the build.** `gh run watch $(gh run list -w "Release Rigel desktop" -L1 --json databaseId --jq '.[0].databaseId')`. A 3-OS matrix builds the macOS DMGs (arm64 + x64), the Windows `.exe`, and the Linux `.AppImage` + `.deb`, all uploaded to one **draft** Release named `vX.Y.Z` (plus the `latest-*.yml` + `.blockmap` files the in-app updater reads). Report the artifacts (`gh release view vX.Y.Z`).
 
 5. **CONFIRM before publishing.** Publishing makes downloads public and triggers the image build. Show the draft URL and ask the user to confirm. Do not publish without an explicit yes.
 

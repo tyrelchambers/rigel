@@ -19,7 +19,14 @@ import { submitSignup, deliver } from "./signup";
 import { AccountStore } from "./accountStore";
 import { createAccountClient, type OrgSummary } from "./accountClient";
 import { decideRestart } from "./restartPolicy";
-import { checkForUpdate, DOWNLOAD_URL } from "./appUpdate";
+import {
+  initAutoUpdater,
+  getUpdateState,
+  checkForUpdates,
+  downloadUpdate,
+  quitAndInstall,
+  DOWNLOAD_URL,
+} from "./appUpdater";
 
 const SIGNUP_ENDPOINT = "https://api.rigel.run";
 // Shared key for the signups endpoint — deliberately baked into the client
@@ -484,8 +491,14 @@ async function boot(): Promise<void> {
     pushServerAuth(false);
   });
   ipcMain.handle("rigel:account:status", () => refreshAccount());
-  ipcMain.handle("rigel:app-update:check", () => checkForUpdate(app.getVersion()));
+  ipcMain.handle("rigel:app-update:state", () => getUpdateState());
+  ipcMain.handle("rigel:app-update:check", () => checkForUpdates());
+  ipcMain.handle("rigel:app-update:download", () => downloadUpdate());
+  ipcMain.handle("rigel:app-update:install", () => quitAndInstall());
   ipcMain.handle("rigel:app-update:open", () => shell.openExternal(DOWNLOAD_URL));
+  initAutoUpdater({
+    send: (s) => BrowserWindow.getAllWindows()[0]?.webContents.send("rigel:app-update:state", s),
+  });
   ipcMain.handle("rigel:open-chart-file", async () => {
     const res = await dialog.showOpenDialog({
       title: "Select a Helm chart (.tgz) or chart folder",

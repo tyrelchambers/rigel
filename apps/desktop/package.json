@@ -19,6 +19,7 @@
     "release:linux": "pnpm build && electron-builder --linux --x64 --publish always"
   },
   "dependencies": {
+    "electron-updater": "latest",
     "node-pty": "1.1.0"
   },
   "devDependencies": {
