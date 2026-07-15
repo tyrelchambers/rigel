@@ -576,6 +576,19 @@ async function boot(): Promise<void> {
     if (url) openBillingWindow(url);
     return { ok: !!url };
   });
+  // Mint an install-scoped, org-bound agent entitlement token (E3.2). Only main
+  // holds the account bearer, so the renderer asks main to mint at agent-install
+  // time and threads the result into the install request. Best-effort: any failure
+  // (offline / backend down / non-member) resolves null so the install proceeds
+  // token-less (agent stays observe-only until a later setup writes one).
+  ipcMain.handle("rigel:billing:agent-token", async (_e, orgId: string) => {
+    try {
+      return await billingClient.agentToken(orgId);
+    } catch (err) {
+      console.warn("[rigel] agent-token mint failed (install proceeds token-less):", err);
+      return null;
+    }
+  });
   // Return the provider's current (grace-applied) value, NOT a raw fetch — the
   // provider is the source of truth (Slice C replaces the Slice B raw-fetch handler).
   ipcMain.handle("rigel:billing:entitlements", () => entitlements?.current() ?? null);

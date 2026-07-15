@@ -410,6 +410,7 @@ export interface AssistantCredentials {
   geminiApiKey?: string;
   opencodeApiKey?: string;
   opencodeAuthContent?: string;
+  agentToken?: string;
 }
 
 /** Per-credential readiness + backing Secret name from the server's

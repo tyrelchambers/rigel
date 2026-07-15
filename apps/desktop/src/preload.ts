@@ -36,6 +36,8 @@ contextBridge.exposeInMainWorld("rigel", {
   billing: {
     checkout: (orgId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke("rigel:billing:checkout", orgId),
     portal: (orgId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke("rigel:billing:portal", orgId),
+    agentToken: (orgId: string): Promise<{ token: string; installId: string } | null> =>
+      ipcRenderer.invoke("rigel:billing:agent-token", orgId),
     entitlements: () => ipcRenderer.invoke("rigel:billing:entitlements"),
     refresh: (): Promise<void> => ipcRenderer.invoke("rigel:billing:refresh"),
     onChanged: (cb: () => void): (() => void) => {
