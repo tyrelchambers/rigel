@@ -665,6 +665,39 @@ export async function discoverInstalledContexts(
 }
 
 /**
+ * Layer-1 downgrade revert (entitlement-lifecycle Slice L1): when the operator's
+ * plan genuinely drops to Free, put every installed agent into a safe posture —
+ * `mode: advisory` (stops autonomous remediation) AND `autofixEnabled: "false"`
+ * (stops the autofix-PR branch, which runs BEFORE the autonomy-mode gate, so mode
+ * alone does not stop it). Enumerates every kubeconfig context that has an agent
+ * installed and patches each independently; one unreachable cluster does NOT abort
+ * the rest (picked up on the next push). `discover`/`patch` are injectable for
+ * cluster-free tests.
+ */
+export async function revertAgentsToAdvisory(
+  deps: {
+    discover?: (namespace: string) => Promise<string[]>;
+    patch?: (context: string | null, namespace: string, updates: Record<string, string>) => Promise<RunResult>;
+  } = {},
+): Promise<{ reverted: string[]; failures: { context: string; error: string }[] }> {
+  const namespace = DEFAULT_INSTALL_CONFIG.installNamespace;
+  const discover = deps.discover ?? ((ns: string) => discoverInstalledContexts(ns));
+  const patch = deps.patch ?? patchConfig;
+  const contexts = await discover(namespace);
+  const reverted: string[] = [];
+  const failures: { context: string; error: string }[] = [];
+  for (const ctx of contexts) {
+    try {
+      await patch(ctx, namespace, { mode: "advisory", autofixEnabled: "false" });
+      reverted.push(ctx);
+    } catch (e) {
+      failures.push({ context: ctx, error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  return { reverted, failures };
+}
+
+/**
  * Persist the operator's RBAC policy AND apply it as a ClusterRole to each
  * context in `req.contexts` (default: the active context). For every target we
  * read-modify-write `assistant-config` (so stored + live agree per cluster) and

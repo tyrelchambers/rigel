@@ -1032,6 +1032,53 @@ describe("discoverInstalledContexts", () => {
   });
 });
 
+import { revertAgentsToAdvisory } from "./assistant";
+
+describe("revertAgentsToAdvisory (Layer-1 downgrade)", () => {
+  test("patches EVERY installed context with mode:advisory AND autofixEnabled:false", async () => {
+    const patched: { ctx: string | null; ns: string; updates: Record<string, string> }[] = [];
+    const res = await revertAgentsToAdvisory({
+      discover: async () => ["ctx-a", "ctx-b"],
+      patch: async (ctx, ns, updates) => {
+        patched.push({ ctx, ns, updates });
+        return { code: 0, stdout: "", stderr: "" };
+      },
+    });
+    expect(res.reverted).toEqual(["ctx-a", "ctx-b"]);
+    expect(res.failures).toEqual([]);
+    expect(patched.map((p) => p.ctx)).toEqual(["ctx-a", "ctx-b"]);
+    for (const p of patched) {
+      expect(p.updates).toEqual({ mode: "advisory", autofixEnabled: "false" });
+      expect(p.ns).toBe("default");
+    }
+  });
+
+  test("isolates a per-cluster failure so the remaining contexts still revert", async () => {
+    const patched: string[] = [];
+    const res = await revertAgentsToAdvisory({
+      discover: async () => ["ctx-a", "ctx-bad", "ctx-c"],
+      patch: async (ctx) => {
+        if (ctx === "ctx-bad") throw new Error("cluster unreachable");
+        patched.push(ctx as string);
+        return { code: 0, stdout: "", stderr: "" };
+      },
+    });
+    expect(patched).toEqual(["ctx-a", "ctx-c"]);
+    expect(res.reverted).toEqual(["ctx-a", "ctx-c"]);
+    expect(res.failures).toEqual([{ context: "ctx-bad", error: "cluster unreachable" }]);
+  });
+
+  test("no installed contexts → no patches, no failures", async () => {
+    let calls = 0;
+    const res = await revertAgentsToAdvisory({
+      discover: async () => [],
+      patch: async () => { calls++; return { code: 0, stdout: "", stderr: "" }; },
+    });
+    expect(calls).toBe(0);
+    expect(res).toEqual({ reverted: [], failures: [] });
+  });
+});
+
 describe("getRbac", () => {
   afterEach(() => { vi.restoreAllMocks(); });
 

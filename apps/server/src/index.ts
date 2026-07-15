@@ -59,7 +59,7 @@ import { getClusterYamlSchema } from "./clusterSchema";
 import { getApiResources } from "./apiResources";
 import { runCanI, type Subject, type CanICheck, type CanIResult } from "./rbacCanI";
 import { stripStatusBlock } from "@rigel/k8s/src/manifestClean";
-import { handleAssistant, isAutonomyRequest, type AssistantRequest } from "./assistant";
+import { handleAssistant, isAutonomyRequest, revertAgentsToAdvisory, type AssistantRequest } from "./assistant";
 import { handleSignal, type SignalRequest } from "./signal";
 import { handleMatrix, type MatrixRequest } from "./matrix";
 import { handleChannelTest, type ChannelTestRequest } from "./channels";
@@ -82,6 +82,19 @@ let accountSignedIn = process.env.RIGEL_SIGNED_IN === "1";
     const m = e?.data as { type?: string; signedIn?: boolean; value?: EntitlementPayload | null } | undefined;
     if (m?.type === "account-auth") accountSignedIn = !!m.signedIn;
     if (m?.type === "entitlement") setEntitlement(m.value ?? null);
+    // Layer 1 (Slice L1): a genuine downgrade to Free reverts every installed
+    // agent to a safe posture (mode:advisory + autofixEnabled:false). Per-cluster
+    // failures are isolated inside revertAgentsToAdvisory and picked up next push.
+    if (m?.type === "agent-downgrade") {
+      void revertAgentsToAdvisory()
+        .then((r) => {
+          console.log(`[rigel] downgrade → reverted agents to advisory in [${r.reverted.join(", ")}]`);
+          if (r.failures.length > 0) {
+            console.warn(`[rigel] downgrade revert failures: ${r.failures.map((f) => `${f.context}: ${f.error}`).join("; ")}`);
+          }
+        })
+        .catch((err) => console.error("[rigel] agent-downgrade revert failed:", err));
+    }
   },
 );
 
