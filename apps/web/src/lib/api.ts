@@ -1427,6 +1427,13 @@ export type { CloudProvider, CloudCluster };
 /** The provider check shape, shared with @rigel/cloud-connect (one source of truth). */
 export type CloudCheckResult = CheckResult;
 
+/** A 402 { gated: true } response — the server refused because the action needs a
+ *  paid plan. Callers can branch on this to show an in-context upgrade prompt. */
+export class GatedError extends Error {
+  readonly gated = true;
+  constructor(message: string) { super(message); this.name = "GatedError"; }
+}
+
 async function postJson<T>(path: string, body: unknown): Promise<T> {
   const res = await apiFetch(path, {
     method: "POST",
@@ -1434,7 +1441,11 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((data as { error?: string }).error ?? `request failed: ${res.status}`);
+  if (!res.ok) {
+    const msg = (data as { error?: string }).error ?? `request failed: ${res.status}`;
+    if (res.status === 402 && (data as { gated?: boolean }).gated) throw new GatedError(msg);
+    throw new Error(msg);
+  }
   return data as T;
 }
 

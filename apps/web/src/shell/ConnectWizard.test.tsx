@@ -4,6 +4,13 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConnectWizard } from "./ConnectWizard";
 import { descriptorFor } from "@rigel/cloud-connect/src/index";
+import { GatedError } from "@/lib/api";
+
+const { upgradeMock } = vi.hoisted(() => ({ upgradeMock: vi.fn() }));
+vi.mock("./useEntitlement", () => ({ useEntitlement: () => ({ payload: null, upgrade: upgradeMock }) }));
+vi.mock("./useAccount", () => ({
+  useAccount: () => ({ orgs: [{ id: "org-personal", kind: "personal", name: "Me", role: "owner" }] }),
+}));
 
 const doDesc = descriptorFor("digitalocean")!;
 const awsDesc = descriptorFor("aws")!;
@@ -81,6 +88,24 @@ test("lists clusters and connects the chosen one", async () => {
   fireEvent.click(screen.getByRole("button", { name: /connect prod/i }));
   await waitFor(() => expect(actions.connect).toHaveBeenCalledWith("digitalocean", { id: "abc", name: "prod", region: "nyc1" }, {}));
   await waitFor(() => expect(onConnected).toHaveBeenCalledWith("do-nyc1-prod"));
+});
+
+test("a 402 gated connect shows the upgrade prompt and Upgrade calls upgrade(personalOrgId)", async () => {
+  upgradeMock.mockClear();
+  const actions = {
+    check: vi.fn().mockResolvedValue({ cliInstalled: true, extraBinariesInstalled: true, authenticated: true, account: "me@example.com" }),
+    list: vi.fn().mockResolvedValue({ clusters: [{ id: "abc", name: "prod", region: "nyc1" }] }),
+    connect: vi.fn().mockRejectedValue(new GatedError("Connecting a cloud provider requires Rigel Pro.")),
+    paramOptions: vi.fn(),
+  };
+  wrap(<ConnectWizard descriptor={doDesc} actions={actions} onConnected={vi.fn()} />);
+  await waitFor(() => expect(screen.getByText("prod")).toBeInTheDocument());
+  fireEvent.click(screen.getByRole("button", { name: /connect prod/i }));
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: /upgrade to unlock cloud clusters/i })).toBeInTheDocument(),
+  );
+  fireEvent.click(screen.getByRole("button", { name: /upgrade to unlock cloud clusters/i }));
+  expect(upgradeMock).toHaveBeenCalledWith("org-personal");
 });
 
 test("shows self-explaining empty state with account when no clusters", async () => {

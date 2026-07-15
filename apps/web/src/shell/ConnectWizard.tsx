@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Check, ChevronDown, CloudOff, Copy, ExternalLink, RefreshCw, ShieldAlert, UserRound } from "lucide-react";
+import { Check, ChevronDown, Cloud, CloudOff, Copy, ExternalLink, RefreshCw, ShieldAlert, UserRound } from "lucide-react";
 import { FaApple, FaLinux, FaWindows } from "react-icons/fa";
 import {
   type ProviderDescriptor, type CloudCluster, type CheckResult, type ParamSpec, nextStepFromCheck, diagnoseError,
@@ -10,8 +10,11 @@ import {
 import {
   cloudCheck as defaultCheck, cloudListClusters as defaultList, cloudConnect as defaultConnect,
   cloudParamOptions as defaultParamOptions,
+  GatedError,
   type CloudProvider,
 } from "@/lib/api";
+import { useEntitlement } from "./useEntitlement";
+import { useAccount } from "./useAccount";
 
 interface Actions {
   check: (provider: CloudProvider) => Promise<CheckResult>;
@@ -24,7 +27,7 @@ const defaultActions: Actions = {
   check: defaultCheck, list: defaultList, connect: defaultConnect, paramOptions: defaultParamOptions,
 };
 
-type Phase = "checking" | "needs-cli" | "needs-extra" | "needs-login" | "needs-params" | "listing" | "pick" | "connecting" | "error";
+type Phase = "checking" | "needs-cli" | "needs-extra" | "needs-login" | "needs-params" | "listing" | "pick" | "connecting" | "error" | "gated";
 
 type ParamField = { spec: ParamSpec; options: string[]; value: string; fromDefault: boolean };
 
@@ -351,6 +354,9 @@ export function ConnectWizard({
   onConnected: (context?: string) => void;
 }) {
   const qc = useQueryClient();
+  const { upgrade } = useEntitlement();
+  const { orgs } = useAccount();
+  const personalOrgId = orgs.find((o) => o.kind === "personal")?.id;
   const provider = descriptor.id;
   const [phase, setPhase] = useState<Phase>("checking");
   const [clusters, setClusters] = useState<CloudCluster[]>([]);
@@ -417,6 +423,7 @@ export function ConnectWizard({
       });
       onConnected(r.context);
     } catch (e) {
+      if (e instanceof GatedError) { setPhase("gated"); return; }
       setError(e instanceof Error ? e.message : "connect failed");
       setPhase("error");
     }
@@ -552,6 +559,30 @@ export function ConnectWizard({
         <div className="text-xs" style={{ color: "var(--fg-secondary)" }}>{descriptor.loginHelp.explanation}</div>
         <CommandField command={descriptor.loginHelp.command} />
         <div><Button onClick={() => void runCheck()}>Re-check</Button></div>
+      </div>
+    );
+  }
+
+  if (phase === "gated") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, padding: "12px 0", textAlign: "center" }}>
+        <div style={{
+          width: 56, height: 56, borderRadius: "50%",
+          background: "var(--surface-elevated)", border: "1px solid var(--border-subtle)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <Cloud size={24} color="var(--accent-primary)" />
+        </div>
+        <div className="text-lg" style={{ fontWeight: 700, color: "var(--fg-primary)" }}>
+          Cloud clusters are a Rigel Pro feature
+        </div>
+        <div className="text-xs" style={{ color: "var(--fg-secondary)", lineHeight: 1.5, maxWidth: 360 }}>
+          Connecting to {descriptor.displayName} (and other cloud providers) requires Rigel Pro.
+          Importing a kubeconfig and local clusters stay free.
+        </div>
+        <Button disabled={!personalOrgId} onClick={() => personalOrgId && upgrade(personalOrgId)}>
+          Upgrade to unlock cloud clusters
+        </Button>
       </div>
     );
   }

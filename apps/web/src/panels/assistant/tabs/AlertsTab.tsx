@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAssistantCtx } from "../AssistantContext";
 import { AlertsCard } from "../AlertsCard";
+import { useEntitlement } from "@/shell/useEntitlement";
+import { useAccount } from "@/shell/useAccount";
 
 // The three autonomy modes, rendered as selectable cards. `value` is the config
 // mode the agent reads ("window" is the Quiet-hours schedule).
@@ -16,8 +18,16 @@ const MODES = [
   { value: "window", label: "Quiet-hours", icon: Moon, desc: "Auto by day, hold changes overnight." },
 ] as const;
 
+// Modes where the agent acts on its own — gated behind agentAutonomy. "advisory"
+// only suggests, so it stays free.
+const AUTONOMOUS_MODES = new Set<string>(["auto", "window"]);
+
 export function AlertsTab() {
   const { d, ns, working, run, setTab } = useAssistantCtx();
+  const { payload, upgrade } = useEntitlement();
+  const { orgs } = useAccount();
+  const personalOrgId = orgs.find((o) => o.kind === "personal")?.id;
+  const autonomyLocked = !payload?.agentAutonomy;
 
   const savedWindow = d.quietWindow || "22:00-07:00";
   const [windowText, setWindowText] = useState(savedWindow);
@@ -45,11 +55,26 @@ export function AlertsTab() {
               title={m.label}
               desc={m.desc}
               selected={d.autonomyMode === m.value}
-              disabled={working}
+              disabled={working || (autonomyLocked && AUTONOMOUS_MODES.has(m.value))}
               onClick={() => run({ action: "setMode", namespace: ns, mode: m.value, window: windowText })}
             />
           ))}
         </div>
+
+        {autonomyLocked && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] p-3">
+            <p className="text-xs text-[var(--fg-secondary)]">
+              Autonomous fixes (Auto and Quiet-hours) are a Rigel Pro feature.
+            </p>
+            <Button
+              size="sm"
+              disabled={!personalOrgId}
+              onClick={() => personalOrgId && upgrade(personalOrgId)}
+            >
+              Upgrade to enable autonomy
+            </Button>
+          </div>
+        )}
 
         {d.autonomyMode === "window" && (
           <div className="flex flex-wrap items-center gap-3 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] p-3">

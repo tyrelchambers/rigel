@@ -11,8 +11,20 @@ import type { AlertRule } from "@rigel/k8s";
 vi.mock("@/lib/chatHandoff", () => ({ handoffToChat: vi.fn() }));
 import { handoffToChat } from "@/lib/chatHandoff";
 
+vi.mock("@/shell/useEntitlement", () => ({ useEntitlement: vi.fn() }));
+import { useEntitlement } from "@/shell/useEntitlement";
+import type { EntitlementPayload } from "@/lib/desktop";
+
+vi.mock("@/shell/useAccount", () => ({ useAccount: vi.fn() }));
+import { useAccount } from "@/shell/useAccount";
+
 const run = vi.fn();
 const setTab = vi.fn();
+const upgrade = vi.fn();
+
+const entPayload = (agentAutonomy: boolean): EntitlementPayload => ({
+  plan: agentAutonomy ? "pro" : "free", audits: [], cloudConnect: false, agentAutonomy, fetchedAt: "t",
+});
 
 function derived(overrides: Partial<AssistantDerived> = {}): AssistantDerived {
   return {
@@ -56,7 +68,13 @@ function wrap(d = derived()) {
 beforeEach(() => {
   run.mockReset();
   setTab.mockReset();
+  upgrade.mockReset();
   vi.mocked(handoffToChat).mockReset();
+  // Default: autonomy unlocked (Pro) so existing mode tests are unaffected.
+  vi.mocked(useEntitlement).mockReturnValue({ payload: entPayload(true), upgrade });
+  vi.mocked(useAccount).mockReturnValue({
+    orgs: [{ id: "org-personal", kind: "personal", name: "Me", role: "owner" }],
+  } as never);
 });
 
 describe("AlertsTab", () => {
@@ -72,6 +90,19 @@ describe("AlertsTab", () => {
     wrap();
     await userEvent.click(screen.getByRole("button", { name: /Node memory > 90%/i }));
     expect(handoffToChat).toHaveBeenCalledWith(expect.stringContaining("memory"), { newThread: true });
+  });
+
+  it("locks the autonomous modes and offers Upgrade when agentAutonomy is false", async () => {
+    vi.mocked(useEntitlement).mockReturnValue({ payload: entPayload(false), upgrade });
+    wrap();
+    // "Auto" and "Quiet-hours" cards are disabled; "Advisory" stays enabled.
+    expect(screen.getByRole("button", { name: /^Auto/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Quiet-hours/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Advisory/i })).toBeEnabled();
+    const btn = screen.getByRole("button", { name: /upgrade to enable autonomy/i });
+    expect(btn).toBeInTheDocument();
+    await userEvent.click(btn);
+    expect(upgrade).toHaveBeenCalledWith("org-personal");
   });
 
   it("selecting a mode saves it via setMode", async () => {
