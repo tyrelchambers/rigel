@@ -1,4 +1,4 @@
-import { LogOut, RefreshCw, User } from "lucide-react";
+import { LogOut, RefreshCw, Sparkles, User, Zap } from "lucide-react";
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { SignInFlow } from "./SignInFlow";
@@ -113,23 +113,35 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
                     Refresh
                   </button>
                 </div>
-                <div className="mt-2 flex items-center justify-between">
-                  <span className="text-sm text-[var(--fg-primary)]">{isPro ? "Rigel Pro" : "Free"}</span>
+                <div className="mt-2.5 flex items-center gap-3">
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-[color-mix(in_oklab,var(--accent-primary)_18%,transparent)] bg-[color-mix(in_oklab,var(--accent-primary)_8%,transparent)]">
+                    {isPro ? (
+                      <Zap className="size-[18px] text-[var(--accent-primary)]" />
+                    ) : (
+                      <Sparkles className="size-[18px] text-[var(--accent-primary)]" />
+                    )}
+                  </div>
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="text-sm font-semibold text-[var(--fg-primary)]">{isPro ? "Rigel Pro" : "Free"}</span>
+                    <span className="truncate text-xs text-[var(--fg-tertiary)]">
+                      {isPro
+                        ? account.orgs.filter((o) => o.role !== undefined).length === 1
+                          ? "1 seat"
+                          : `${account.orgs.length} orgs`
+                        : "Audits, cloud connect and the agent are Pro."}
+                    </span>
+                  </div>
                   {isPro ? (
-                    <Button size="sm" variant="outline" onClick={() => personalOrgId && account.manageBilling(personalOrgId)}>
+                    <Button size="sm" variant="outline" className="shrink-0" onClick={() => personalOrgId && account.manageBilling(personalOrgId)}>
                       Manage billing
                     </Button>
                   ) : (
-                    <Button size="sm" onClick={() => personalOrgId && account.upgrade(personalOrgId)}>
-                      Upgrade
+                    <Button size="sm" className="shrink-0" onClick={() => personalOrgId && account.upgrade(personalOrgId)}>
+                      <Zap className="size-3.5" />
+                      Upgrade to Pro
                     </Button>
                   )}
                 </div>
-                {isPro && (
-                  <span className="mt-1 block text-xs text-[var(--fg-tertiary)]">
-                    {account.orgs.filter((o) => o.role !== undefined).length === 1 ? "1 seat" : `${account.orgs.length} orgs`}
-                  </span>
-                )}
               </div>
 
               <div className="mt-1 flex items-center justify-between">

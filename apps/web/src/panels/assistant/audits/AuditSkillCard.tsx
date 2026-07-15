@@ -1,6 +1,7 @@
-import { Lock, type LucideIcon } from "lucide-react";
+import { type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { AuditCounts } from "@rigel/k8s";
+import { ProLockRow } from "@/shell/billing/ProLockRow";
 
 export interface AuditSkillCardProps {
   title: string;
@@ -27,17 +28,7 @@ export function AuditSkillCard({ title, description, Icon, counts, onRun, locked
           </div>
         </div>
         {locked ? (
-          locked.onUpgrade ? (
-            <Button size="sm" className="shrink-0" onClick={locked.onUpgrade}>
-              <Lock className="size-3" />
-              Upgrade to unlock
-            </Button>
-          ) : (
-            <span className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 font-mono text-3xs font-medium text-[var(--fg-tertiary)] ring-1 ring-[var(--border-subtle)]">
-              <Lock className="size-3" />
-              Upgrade
-            </span>
-          )
+          <ProLockRow onUpgrade={locked.onUpgrade} />
         ) : (
           <Button size="sm" className="shrink-0" onClick={onRun}>
             Run audit

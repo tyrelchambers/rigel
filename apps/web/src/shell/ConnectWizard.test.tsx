@@ -102,9 +102,9 @@ test("a 402 gated connect shows the upgrade prompt and Upgrade calls upgrade(per
   await waitFor(() => expect(screen.getByText("prod")).toBeInTheDocument());
   fireEvent.click(screen.getByRole("button", { name: /connect prod/i }));
   await waitFor(() =>
-    expect(screen.getByRole("button", { name: /upgrade to unlock cloud clusters/i })).toBeInTheDocument(),
+    expect(screen.getByText(/unlock cloud clusters/i)).toBeInTheDocument(),
   );
-  fireEvent.click(screen.getByRole("button", { name: /upgrade to unlock cloud clusters/i }));
+  fireEvent.click(screen.getByRole("button", { name: /upgrade to pro/i }));
   expect(upgradeMock).toHaveBeenCalledWith("org-personal");
 });
 

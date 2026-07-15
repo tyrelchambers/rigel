@@ -17,6 +17,9 @@ import {
 } from "@/lib/api";
 import { Stepper } from "./onboarding/Stepper";
 import { AgentsTab } from "@/panels/settings/agents/AgentsTab";
+import { UpgradeBanner } from "./billing/UpgradeBanner";
+import { useEntitlement } from "./useEntitlement";
+import { useAccount } from "./useAccount";
 
 export function OnboardingWizard({ onClose, onLeave }: { onClose: () => void; onLeave: () => void }) {
   const navigate = useNavigate();
@@ -24,6 +27,12 @@ export function OnboardingWizard({ onClose, onLeave }: { onClose: () => void; on
   const { data: agentsData } = useAgents();
   const activeAgent = agentsData?.agents.find((a) => a.id === agentsData?.activeAgentId);
   const agentConnected = activeAgent?.connection === "connected";
+
+  const { payload, upgrade } = useEntitlement();
+  const { orgs } = useAccount();
+  const personalOrgId = orgs.find((o) => o.kind === "personal")?.id;
+  const [upsellDismissed, setUpsellDismissed] = useState(false);
+  const showUpsell = payload != null && payload.plan !== "pro" && !upsellDismissed;
 
   const steps: { label: string; title?: string; description?: string; status?: ReactNode; node: ReactNode }[] = [
     {
@@ -69,6 +78,13 @@ export function OnboardingWizard({ onClose, onLeave }: { onClose: () => void; on
               </button>
             }
           />
+          {showUpsell && (
+            <UpgradeBanner
+              upgradeDisabled={!personalOrgId}
+              onUpgrade={() => personalOrgId && upgrade(personalOrgId)}
+              onDismiss={() => setUpsellDismissed(true)}
+            />
+          )}
         </div>
       ),
     },

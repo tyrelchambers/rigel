@@ -2,13 +2,14 @@
 // channels (Signal, Matrix, Discord, Slack) live in Settings > Channels.
 
 import { useEffect, useState } from "react";
-import { BellOff, Check, Hand, Info, Moon, Zap } from "lucide-react";
+import { BellOff, Bot, Check, Hand, Info, Moon, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAssistantCtx } from "../AssistantContext";
 import { AlertsCard } from "../AlertsCard";
 import { useEntitlement } from "@/shell/useEntitlement";
 import { useAccount } from "@/shell/useAccount";
+import { ProGateCard } from "@/shell/billing/ProGateCard";
 
 // The three autonomy modes, rendered as selectable cards. `value` is the config
 // mode the agent reads ("window" is the Quiet-hours schedule).
@@ -62,18 +63,13 @@ export function AlertsTab() {
         </div>
 
         {autonomyLocked && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] p-3">
-            <p className="text-xs text-[var(--fg-secondary)]">
-              Autonomous fixes (Auto and Quiet-hours) are a Rigel Pro feature.
-            </p>
-            <Button
-              size="sm"
-              disabled={!personalOrgId}
-              onClick={() => personalOrgId && upgrade(personalOrgId)}
-            >
-              Upgrade to enable autonomy
-            </Button>
-          </div>
+          <ProGateCard
+            icon={Bot}
+            title="Unlock the in-cluster agent"
+            body="Rigel watches your cluster around the clock and applies the fixes you approve. Autonomous remediation, autofix PRs, and scheduled digests."
+            upgradeDisabled={!personalOrgId}
+            onUpgrade={() => personalOrgId && upgrade(personalOrgId)}
+          />
         )}
 
         {d.autonomyMode === "window" && (

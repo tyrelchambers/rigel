@@ -15,6 +15,7 @@ import {
 } from "@/lib/api";
 import { useEntitlement } from "./useEntitlement";
 import { useAccount } from "./useAccount";
+import { ProGateCard } from "./billing/ProGateCard";
 
 interface Actions {
   check: (provider: CloudProvider) => Promise<CheckResult>;
@@ -565,25 +566,13 @@ export function ConnectWizard({
 
   if (phase === "gated") {
     return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, padding: "12px 0", textAlign: "center" }}>
-        <div style={{
-          width: 56, height: 56, borderRadius: "50%",
-          background: "var(--surface-elevated)", border: "1px solid var(--border-subtle)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <Cloud size={24} color="var(--accent-primary)" />
-        </div>
-        <div className="text-lg" style={{ fontWeight: 700, color: "var(--fg-primary)" }}>
-          Cloud clusters are a Rigel Pro feature
-        </div>
-        <div className="text-xs" style={{ color: "var(--fg-secondary)", lineHeight: 1.5, maxWidth: 360 }}>
-          Connecting to {descriptor.displayName} (and other cloud providers) requires Rigel Pro.
-          Importing a kubeconfig and local clusters stay free.
-        </div>
-        <Button disabled={!personalOrgId} onClick={() => personalOrgId && upgrade(personalOrgId)}>
-          Upgrade to unlock cloud clusters
-        </Button>
-      </div>
+      <ProGateCard
+        icon={Cloud}
+        title="Unlock cloud clusters"
+        body="Connect EKS, GKE, AKS, or DigitalOcean. Importing a kubeconfig and local clusters stay free."
+        upgradeDisabled={!personalOrgId}
+        onUpgrade={() => personalOrgId && upgrade(personalOrgId)}
+      />
     );
   }
 

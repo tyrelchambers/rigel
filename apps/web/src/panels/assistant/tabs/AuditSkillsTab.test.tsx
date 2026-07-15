@@ -70,7 +70,7 @@ describe("AuditSkillsTab", () => {
     vi.mocked(useAuditEntitlement).mockReturnValue({ unlocked: ["reliability", "performance"] });
     render(<AuditSkillsTab />);
     expect(screen.getAllByRole("button", { name: /run audit/i })).toHaveLength(2);
-    expect(screen.getByRole("button", { name: /upgrade to unlock/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^upgrade$/i })).toBeInTheDocument();
     expect(screen.getByText(/security audit is a premium skill/i)).toBeInTheDocument();
     expect(handoffToChat).not.toHaveBeenCalled();
   });
@@ -78,7 +78,7 @@ describe("AuditSkillsTab", () => {
   it("clicking Upgrade on a gated skill calls upgrade with the personal org id", () => {
     vi.mocked(useAuditEntitlement).mockReturnValue({ unlocked: ["reliability", "performance"] });
     render(<AuditSkillsTab />);
-    fireEvent.click(screen.getByRole("button", { name: /upgrade to unlock/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^upgrade$/i }));
     expect(upgrade).toHaveBeenCalledWith("org-personal");
   });
 });
@@ -120,7 +120,7 @@ describe("AuditSkillCard count summary", () => {
         locked={{ reason: "Upgrade to unlock it." }}
       />,
     );
-    expect(screen.getByText("Upgrade")).toBeInTheDocument();
+    expect(screen.getByText("Pro")).toBeInTheDocument();
     expect(screen.getByText("Upgrade to unlock it.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /run audit/i })).not.toBeInTheDocument();
   });

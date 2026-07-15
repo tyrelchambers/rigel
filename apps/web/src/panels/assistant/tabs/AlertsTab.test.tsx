@@ -99,8 +99,8 @@ describe("AlertsTab", () => {
     expect(screen.getByRole("button", { name: /^Auto/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /Quiet-hours/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /Advisory/i })).toBeEnabled();
-    const btn = screen.getByRole("button", { name: /upgrade to enable autonomy/i });
-    expect(btn).toBeInTheDocument();
+    expect(screen.getByText(/unlock the in-cluster agent/i)).toBeInTheDocument();
+    const btn = screen.getByRole("button", { name: /upgrade to pro/i });
     await userEvent.click(btn);
     expect(upgrade).toHaveBeenCalledWith("org-personal");
   });
