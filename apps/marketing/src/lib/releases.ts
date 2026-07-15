@@ -14,6 +14,21 @@ const REPO = "tyrelchambers/rigel";
 export const RELEASES_URL = `https://github.com/${REPO}/releases`;
 export const LATEST_RELEASE_URL = `${RELEASES_URL}/latest`;
 
+/**
+ * The GitHub API URL for the release to resolve at build time.
+ *
+ * When a specific tag is given, fetch that exact release. The `release`
+ * workflow event passes the just-published tag (`RIGEL_RELEASE_TAG`) so a
+ * release-triggered rebuild resolves the version that was just published.
+ * GitHub's `/releases/latest` pointer is CDN-cached and lags a publish by up to
+ * ~a minute, so without this the rebuild races the API and bakes the PREVIOUS
+ * version. With no tag (push / manual dispatch) fall back to `/latest`.
+ */
+export function releaseApiUrl(tag?: string | null): string {
+  const base = `https://api.github.com/repos/${REPO}/releases`;
+  return tag ? `${base}/tags/${encodeURIComponent(tag)}` : `${base}/latest`;
+}
+
 export interface ReleaseAsset {
   name: string;
   browser_download_url: string;
@@ -179,10 +194,9 @@ export async function getLatestRelease(): Promise<ResolvedRelease> {
   if (token) headers.Authorization = `Bearer ${token}`;
 
   try {
-    const res = await fetch(
-      `https://api.github.com/repos/${REPO}/releases/latest`,
-      { headers },
-    );
+    const res = await fetch(releaseApiUrl(import.meta.env.RIGEL_RELEASE_TAG), {
+      headers,
+    });
     if (!res.ok) return FALLBACK;
     const json = (await res.json()) as GitHubRelease;
     return mapAssets(json);

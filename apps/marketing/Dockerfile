@@ -30,6 +30,12 @@ COPY packages/catalog ./packages/catalog
 # the resolver still builds green via its releases-page fallback.
 ARG GITHUB_TOKEN=""
 ENV GITHUB_TOKEN=$GITHUB_TOKEN
+# On a release-triggered build this is the just-published tag (e.g. v0.2.2). The
+# resolver then fetches that exact release instead of the CDN-cached
+# `/releases/latest` pointer, which lags a publish and would bake the previous
+# version. Empty on push/dispatch builds → resolver uses `/latest`.
+ARG RIGEL_RELEASE_TAG=""
+ENV RIGEL_RELEASE_TAG=$RIGEL_RELEASE_TAG
 COPY apps/marketing ./apps/marketing
 RUN pnpm --filter @rigel/marketing build
 

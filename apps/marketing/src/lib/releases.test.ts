@@ -3,11 +3,26 @@ import {
   mapAssets,
   bodyToNotes,
   mapReleases,
+  releaseApiUrl,
   LATEST_RELEASE_URL,
   RELEASES_URL,
   type GitHubRelease,
 } from "./releases";
 import fixture from "./__fixtures__/release-latest.json";
+
+describe("releaseApiUrl", () => {
+  const base = "https://api.github.com/repos/tyrelchambers/rigel/releases";
+
+  it("targets the exact release by tag when one is given", () => {
+    expect(releaseApiUrl("v0.2.2")).toBe(`${base}/tags/v0.2.2`);
+  });
+
+  it("falls back to /latest when no tag is given", () => {
+    expect(releaseApiUrl()).toBe(`${base}/latest`);
+    expect(releaseApiUrl(null)).toBe(`${base}/latest`);
+    expect(releaseApiUrl("")).toBe(`${base}/latest`);
+  });
+});
 
 describe("mapAssets", () => {
   it("maps a full release to all five platform slots + version", () => {

@@ -13,6 +13,11 @@ on:
   release:
     types: [released]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to bake into the download page (e.g. v0.2.2). Blank = latest published."
+        required: false
+        default: ""
 
 env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/rigel-marketing
@@ -42,10 +47,14 @@ jobs:
           context: .
           file: ./apps/marketing/Dockerfile
           push: true
-          # The download page resolves the latest release at build time; pass the
+          # The download page resolves the release at build time; pass the
           # Actions token so that API call is authenticated (60→5000/hr).
+          # On a `release` trigger, also pass the just-published tag so the build
+          # resolves that exact release instead of the CDN-lagged `/releases/latest`
+          # pointer. Empty for push/dispatch → resolver falls back to `/latest`.
           build-args: |
             GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+            RIGEL_RELEASE_TAG=${{ github.event.release.tag_name || inputs.release_tag }}
           tags: |
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ github.sha }}
