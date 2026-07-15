@@ -1,3 +1,10 @@
+export interface AppUpdateInfo {
+  updateAvailable: boolean;
+  currentVersion: string;
+  latestVersion: string | null;
+  downloadUrl: string;
+  releaseUrl: string | null;
+}
 export interface Account { id: string; email: string; name: string | null }
 export interface Org { id: string; kind: "personal" | "team"; name: string; role: "owner" | "admin" | "member" }
 export interface MePayload { account: Account; orgs?: Org[]; invitations?: unknown[] }
@@ -18,6 +25,10 @@ export interface RigelBridge {
     signOut(): Promise<void>;
     status(): Promise<{ signedIn: boolean; account: Account | null; orgs: Org[] }>;
     onChanged(cb: () => void): () => void;
+  };
+  appUpdate?: {
+    check(): Promise<AppUpdateInfo>;
+    open(): Promise<void>;
   };
 }
 export const rigel: RigelBridge | undefined =
