@@ -118,6 +118,10 @@ function makeConfig(): Config {
     maxBackups: 50,
     queueTtlMs: 48 * 3_600_000,
     fixRunnerImage: "ghcr.io/me/rigel-assistant:abc123",
+    agentToken: "agent-tok",
+    entitlementEndpoint: "https://api.rigel.run",
+    entitlementCheckMs: 12 * 60 * 60 * 1000,
+    entitlementGraceMs: 30 * 24 * 60 * 60 * 1000,
   };
 }
 
