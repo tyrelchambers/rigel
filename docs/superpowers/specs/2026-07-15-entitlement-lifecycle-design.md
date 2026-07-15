@@ -44,77 +44,88 @@ Re-upgrade reactivates without re-provisioning.
 |---|---|---|
 | **Audits** | Can't run new (RIGEL_UNLOCKED_AUDITS empties). Stateless — nothing to preserve. | Run again. |
 | **Cloud connect** | Keep existing contexts usable; block *new* connects (already the behavior). Do **not** sever access. | Connect more. |
-| **Autonomous agent** | Flip to **advisory**: stops autonomous remediation, keeps observing + notifying + running digests. Agent stays deployed. | Autonomy can be turned back on. |
-| **Notifications / digests** | **Keep flowing** (advisory alerts + digests are free-tier-appropriate and retention-friendly). Only autonomous *actions* stop. | Unchanged. |
+| **In-cluster agent** | Goes **fully idle**: with no valid lease the agent's whole loop no-ops — no remediation, no observing, no notifying, no digests. The app also scales the Deployment to 0 (courtesy, when it can reach the cluster). | User re-enables (scales it back up / "Resume"); a fresh valid lease lets the loop run again. |
+| **Notifications / digests** | **Stop** — they are the agent's output, and the agent is a Pro feature. (Metric-threshold alerts the desktop app computes itself are unaffected.) | Return when the agent runs again. |
 
-## The enforcement mechanism — the agent (the crux)
+## The enforcement mechanism — the signed lease (the crux)
 
-Stopping autonomous remediation on downgrade requires something to **write the
-cluster** (the agent will never self-govern on plan state today). Two layers:
+The agent is a **Pro-only feature**. On Free it runs **nothing**. Because the cluster is
+the user's, no app-side action (scaling, ConfigMap edits) can be trusted to hold — a
+downgraded user can `kubectl scale --replicas=1` or edit the ConfigMap back. Enforcement
+therefore lives **inside the agent**, gated on a **short-lived signed lease** it cannot
+forge:
 
-### Layer 1 — immediate revert (desktop app open)
-When the entitlement provider observes a **fresh, successfully-fetched free result**
-(edge-triggered — **not** the null/no-cache default, which would strand a Pro user on a
-glitchy fetch), the forked server writes `assistant-config`: **`mode → advisory` AND
-`autofixEnabled → false`**. Both matter: the autofix-PR branch (`agent/src/index.ts:518`)
-runs *before* the autonomy gate, so flipping mode alone does **not** stop autonomous
-fix-PRs. It writes **every kubeconfig context that has an agent installed** (each with
-its own namespace), with retry — unreachable clusters are picked up on the next push
-(boot + 6h). Reuses `patchConfig`.
-- Layer 1 is **honor-system only** — the user can edit the ConfigMap back (Rigel ships
-  a ConfigMap editor / Apply YAML). Layer 2 is what makes it real.
-
-### Layer 2 — the signed lease (real enforcement, works offline)
-The agent gates autonomy on a **short-lived signed lease**, not a credential:
-- The **signups backend signs a lease** `{ orgId, agentAutonomy, exp }` with an
+### The lease (real enforcement, works offline, survives manual scale-up)
+- The **signups backend signs a lease** `{ orgId, agentEntitled, exp, kid }` with an
   **Ed25519 private key** (`LEASE_SIGNING_KEY` in the `rigel-signups` Secret). A new
   authed route `GET /billing/lease` returns it (the resolver already knows the org
-  entitlement).
+  entitlement; `agentEntitled` is true only when the org's plan includes the agent).
 - The **desktop**, on each entitlement refresh (boot + 6h), fetches the lease and
-  **writes it into a cluster Secret** (`assistant-lease`) in each agent's namespace.
-- The **agent** reads the lease each tick, **verifies signature + expiry with a public
-  key baked into the agent image**, and permits `auto`/`window` **and** autofix **only**
-  while a valid, unexpired lease grants `agentAutonomy`. Fail-closed: no valid lease →
-  advisory. Grace = the lease TTL (**7–14 days**), mirroring the desktop's grace.
+  **writes it into a cluster Secret** (`assistant-lease`) in each agent's namespace —
+  via the forked server (postMessage → `kubectl apply`), reusing the existing
+  per-installed-context machinery.
+- The **agent** reads the lease **every tick**, **verifies signature + expiry against a
+  public key baked into the agent image**, and runs its loop **only** while a valid,
+  unexpired lease has `agentEntitled: true`. **No valid lease → the whole loop no-ops**:
+  no observe, no notify, no digest, no remediation, no autofix PR. Fail-closed. Grace =
+  the lease TTL (**7–14 days**), mirroring the desktop's grace.
 - **Why a lease beats a credential-in-cluster:** nothing to steal (public-key verify,
   no account token in the cluster), works on **air-gapped clusters** (no agent egress),
-  can't be forged by editing the ConfigMap, and degrades gracefully (autonomy simply
-  expires if the app isn't opened within the TTL). Trade-off: the user must open the
-  app within the lease window to keep autonomy alive — acceptable for a desktop-first
+  can't be forged by editing the ConfigMap **or by scaling the Deployment back up** —
+  the pod boots, finds no valid lease, and idles. Degrades gracefully (the agent simply
+  goes idle if the app isn't opened within the TTL). Trade-off: the user must open the
+  app within the lease window to keep the agent alive — acceptable for a desktop-first
   product.
 - **Whose entitlement:** the lease carries `orgId`, so the **org's** plan governs the
   agent (a Pro team keeps its cluster's agent alive even if the deploying member
   downgrades personally).
 
+### Scale-to-zero (app-side courtesy, not the wall)
+On a **fresh, successfully-fetched free result** (edge-triggered — **not** the
+null/no-cache default, which would strand a Pro user on a glitchy fetch), the forked
+server **scales the agent Deployment to 0** in every installed context, so an honest
+Free user isn't running an inert pod at all. This is purely resource hygiene; if the
+user scales it back up, the **lease** is what keeps the loop idle. Reuses the
+edge-detection already built in `entitlementProvider.detectAgentDowngrade`.
+
 ## Re-upgrade
 
-Non-destructive downgrade means re-upgrade just re-issues a lease granting autonomy.
-But **the ConfigMap `mode` stays `advisory`** (Layer 1 set it), so autonomy does **not**
-silently resume — the user **re-enables** it (a one-click "Resume autonomy" that
-restores the remembered prior mode). The lease permits it again; the user re-affirms.
+Re-upgrade re-issues a valid lease, so the agent is **permitted** to run again — but it
+does **not** silently reactivate. The Deployment was scaled to 0 on downgrade, so the
+user **re-enables** it explicitly (a one-click "Resume" that scales it back to 1). The
+lease permits the loop; the user re-affirms by turning it on.
 
-## Decisions (resolved via Fable review)
+## Decisions (resolved via Fable review + user)
 
-1. **Downgrade posture: advisory** — keep observing/notifying/digesting; stop only
-   autonomous actions **and** autofix PRs.
-2. **Backstop: the signed lease** (over a credential-in-cluster).
+1. **Downgrade posture: fully idle (off entirely)** — no observe/notify/digest/remediate
+   without a valid lease. NOT advisory. The agent is a Pro-only feature.
+2. **Enforcement: the signed lease inside the agent** — the only mechanism that survives
+   a manual `kubectl scale` / ConfigMap edit and works air-gapped. Scale-to-0 is a
+   courtesy layered on top, not the wall.
 3. **Entitlement scope: org** (the lease carries `orgId`).
-4. **Re-upgrade: require re-enable** (remembered-mode one-click). Layer 1 edge-triggers
-   on a genuine free result so a transient fetch glitch can't strand a paying user.
+4. **Re-upgrade: require explicit re-enable** (user scales it back up / "Resume").
+   Scale-to-0 edge-triggers on a genuine free result so a transient fetch glitch can't
+   strand a paying user.
 5. **Install path: already hardened** (seed advisory + agent fail-closes) — shipped as
-   a separate commit before this work.
+   a separate commit before this work. (The lease supersedes the mode-seed as the real
+   gate, but fail-closed defaults remain correct defense-in-depth.)
 
 ## Build slices
 
-- **Slice L1 — Layer 1 + edge-trigger:** desktop provider edge-detects a fresh free →
-  server writes `mode: advisory` + `autofixEnabled: false` to every agent-cluster (with
-  retry). No crypto; self-contained.
-- **Slice L2 — the lease:** signups `LEASE_SIGNING_KEY` + `GET /billing/lease`; desktop
-  writes the `assistant-lease` Secret per cluster; agent verifies the lease (baked-in
-  public key) and gates `auto`/`window` + autofix on it. Public key is a build-time
-  constant in the agent image; support a `kid` for rotation.
-- **Slice L3 — re-enable UI:** "Resume autonomy" affordance on re-upgrade (remembered
-  mode).
+- **Slice L2a — signups signs the lease:** generate the Ed25519 keypair; `LEASE_SIGNING_KEY`
+  in the signups Secret; authed `GET /billing/lease` resolves the org entitlement and
+  returns a signed `{ orgId, agentEntitled, exp, kid }`. Public key committed for the
+  agent to bake in. Support `kid` for rotation.
+- **Slice L2b — agent verifies + gates its whole loop:** bake the public key into the
+  agent image; each tick read the `assistant-lease` Secret, verify signature + expiry,
+  and **short-circuit the entire loop to a no-op** unless a valid lease grants
+  `agentEntitled`. Fail-closed.
+- **Slice L2c — desktop/server deliver the lease + scale-to-0 courtesy:** desktop fetches
+  the lease on each entitlement refresh and hands it to the server, which writes the
+  `assistant-lease` Secret to every installed context; **replace** L1's advisory-revert
+  with a scale-Deployment-to-0 on edge-detected downgrade (keep `detectAgentDowngrade`).
+- **Slice L3 — re-enable UI:** a one-click "Resume" that scales the Deployment back to 1
+  (the fresh lease already permits the loop).
 
 ## Out of scope (v1)
 
