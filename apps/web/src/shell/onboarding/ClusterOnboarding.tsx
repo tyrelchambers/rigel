@@ -61,7 +61,7 @@ export function ClusterOnboarding({ onSkip }: { onSkip: () => void }) {
   const [open, setOpen] = useState<OpenPath>(null);
 
   return (
-    <div className="flex h-full w-full items-center justify-center bg-[var(--surface-sunken)] px-4">
+    <div className="flex min-h-screen w-full items-center justify-center bg-[var(--surface-sunken)] px-4 py-10">
       <div className="flex w-full max-w-[560px] flex-col items-center gap-8">
         <div className="flex items-center gap-2">
           <span className="size-1.5 rounded-full bg-primary" />
