@@ -30,7 +30,11 @@ import {
   DOWNLOAD_URL,
 } from "./appUpdater";
 
-const SIGNUP_ENDPOINT = "https://api.rigel.run";
+// The accounts + billing backend base. Overridable so a dev/test build can point
+// at a test signups deployment (test Stripe keys) — release builds stay on live
+// at api.rigel.run. Must match that deployment's BILLING_ENDPOINT so the billing
+// window detects the ${SIGNUP_ENDPOINT}/billing/complete redirect.
+const SIGNUP_ENDPOINT = process.env.RIGEL_SIGNUP_ENDPOINT || "https://api.rigel.run";
 // Shared key for the signups endpoint — deliberately baked into the client
 // (obfuscation, NOT real auth; the endpoint is a public signup). Must match the
 // APP_KEY in the `rigel-signups` k8s Secret.

@@ -1,5 +1,21 @@
 import { test, expect, vi } from "vitest";
-import { makeStripeAdapter } from "./stripeAdapter";
+import { makeStripeAdapter, stripeKeyMode } from "./stripeAdapter";
+
+test("stripeKeyMode reads the mode from the key prefix", () => {
+  expect(stripeKeyMode("sk_test_abc")).toBe("test");
+  expect(stripeKeyMode("rk_test_abc")).toBe("test");
+  expect(stripeKeyMode("sk_live_abc")).toBe("live");
+  expect(stripeKeyMode("rk_live_abc")).toBe("live");
+  expect(stripeKeyMode("")).toBe("none");
+  expect(stripeKeyMode("garbage")).toBe("unknown");
+});
+
+test("priceLivemode reports the price's livemode", async () => {
+  const retrieve = vi.fn(async () => ({ livemode: false }));
+  const adapter = makeStripeAdapter({ prices: { retrieve } } as never);
+  expect(await adapter.priceLivemode("price_1")).toBe(false);
+  expect(retrieve).toHaveBeenCalledWith("price_1");
+});
 
 test("activeFeatureKeys returns the entitlements' lookup keys", async () => {
   const list = vi.fn(async () => ({ data: [{ lookup_key: "reliability" }, { lookup_key: "cloudConnect" }] }));

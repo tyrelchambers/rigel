@@ -6,7 +6,7 @@ import { createRateLimiter } from "./rateLimit";
 import { createKitNotifier } from "./kit";
 import { ensureAuthSchema, createAuthDb } from "./authDb";
 import { createResendSender } from "./resend";
-import { createStripeAdapter, makeStripeAdapter } from "./stripeAdapter";
+import { createStripeAdapter, makeStripeAdapter, stripeKeyMode } from "./stripeAdapter";
 import { makeResolver } from "./entitlements";
 
 const PORT = Number(process.env.PORT ?? 8080);
@@ -18,9 +18,10 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY ?? "";
 const RESEND_FROM = process.env.RESEND_FROM ?? "Rigel <login@rigel.run>";
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY ?? "";
 const STRIPE_PRICE_ID = process.env.STRIPE_PRICE_ID ?? "";
-// Must match the desktop's SIGNUP_ENDPOINT base (apps/desktop/src/main.ts) — the
-// billing window detects completion by prefix-matching ${endpoint}/billing/complete.
-const BILLING_ENDPOINT = "https://api.rigel.run";
+// Must match the desktop's SIGNUP_ENDPOINT base (apps/desktop/src/main.ts, itself
+// overridable via RIGEL_SIGNUP_ENDPOINT) — the billing window detects completion
+// by prefix-matching ${endpoint}/billing/complete. Override in a test deployment.
+const BILLING_ENDPOINT = process.env.BILLING_ENDPOINT ?? "https://api.rigel.run";
 if (!APP_KEY) { console.error("APP_KEY is required"); process.exit(1); }
 if (!DATABASE_URL) { console.error("DATABASE_URL is required"); process.exit(1); }
 if (!KIT_API_KEY) console.warn("KIT_API_KEY not set — signups will not sync to Kit");
@@ -42,6 +43,28 @@ const allowVerify = createRateLimiter(10, 10 * 60_000);  // 10 verify attempts /
 const stripeAdapter = STRIPE_SECRET_KEY
   ? createStripeAdapter(STRIPE_SECRET_KEY)
   : makeStripeAdapter({ entitlements: { activeEntitlements: { list: async () => ({ data: [] }) } } } as never); // unset key → everyone free
+
+// Log the mode (from the key prefix) so a glance at the logs says which Stripe
+// account this is talking to. Then fail-fast on a key/price MODE mismatch (e.g. a
+// test key with a live price id) — a confirmed mismatch is fatal (billing would be
+// broken), but a network blip verifying it must NOT gate the auth backend.
+const stripeMode = stripeKeyMode(STRIPE_SECRET_KEY);
+console.log(`[signups] Stripe: ${stripeMode} mode${STRIPE_PRICE_ID ? ` (price ${STRIPE_PRICE_ID})` : ""}`);
+if ((stripeMode === "test" || stripeMode === "live") && STRIPE_PRICE_ID) {
+  void stripeAdapter
+    .priceLivemode(STRIPE_PRICE_ID)
+    .then((live) => {
+      if (live !== (stripeMode === "live")) {
+        console.error(
+          `[signups] FATAL: Stripe key is ${stripeMode} mode but STRIPE_PRICE_ID ${STRIPE_PRICE_ID} is ${live ? "live" : "test"} mode — refusing to run with mismatched billing config.`,
+        );
+        process.exit(1);
+      }
+      console.log(`[signups] Stripe price mode verified (${stripeMode}).`);
+    })
+    .catch((e) => console.warn(`[signups] could not verify Stripe price mode (${e instanceof Error ? e.message : e}) — continuing`));
+}
+
 const resolve = makeResolver({ db: authDb, stripe: stripeAdapter, now: () => new Date().toISOString() });
 const app = createApp({
   appKey: APP_KEY,
