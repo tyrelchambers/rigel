@@ -18,6 +18,7 @@ import { InstallStore } from "./installStore";
 import { submitSignup, deliver } from "./signup";
 import { AccountStore } from "./accountStore";
 import { createAccountClient, type OrgSummary } from "./accountClient";
+import { createBillingClient } from "./billingClient";
 import { decideRestart } from "./restartPolicy";
 import {
   initAutoUpdater,
@@ -67,6 +68,28 @@ function pushServerAuth(signedIn: boolean): void {
   serverProc?.postMessage({ type: "account-auth", signedIn });
 }
 let mainWindow: BrowserWindow | null = null;
+// The in-app Stripe billing window (Checkout / Customer Portal). Detects Stripe's
+// redirect to the fixed ${SIGNUP_ENDPOINT}/billing/{complete,cancelled} pages by
+// navigation, then closes + nudges the renderer to refetch entitlements.
+let billingWindow: BrowserWindow | null = null;
+function openBillingWindow(url: string): void {
+  if (billingWindow) { billingWindow.focus(); void billingWindow.loadURL(url); return; }
+  billingWindow = new BrowserWindow({
+    width: 480, height: 720, parent: mainWindow ?? undefined, modal: false,
+    title: "Rigel billing", autoHideMenuBar: true,
+    webPreferences: { contextIsolation: true, nodeIntegration: false },
+  });
+  const onNav = (u: string) => {
+    if (u.startsWith(`${SIGNUP_ENDPOINT}/billing/complete`) || u.startsWith(`${SIGNUP_ENDPOINT}/billing/cancelled`)) {
+      billingWindow?.close();
+      mainWindow?.webContents.send("rigel:billing:changed"); // renderer refetches on this
+    }
+  };
+  billingWindow.webContents.on("will-redirect", (_e, u) => onNav(u));
+  billingWindow.webContents.on("did-navigate", (_e, u) => onNav(u));
+  billingWindow.on("closed", () => { billingWindow = null; });
+  void billingWindow.loadURL(url);
+}
 let serverPort = 0;
 // Set inside boot() once accountClient exists; invoked by handleAuthUrl to
 // verify a rigel://auth?token=... magic link and open the server gate.
@@ -435,6 +458,7 @@ async function boot(): Promise<void> {
 
   const accountStore = new AccountStore(app.getPath("userData"), safeStorage);
   const accountClient = createAccountClient({ store: accountStore, fetchFn: fetch, endpoint: SIGNUP_ENDPOINT });
+  const billingClient = createBillingClient({ store: accountStore, fetchFn: fetch, endpoint: SIGNUP_ENDPOINT });
   // Set synchronously (BEFORE forkServer below) so the initial fork's env
   // reflects reality with no race; refreshAccount() below corrects it async
   // (e.g. a stale token that 401s) and pushes any change live.
@@ -491,6 +515,17 @@ async function boot(): Promise<void> {
     pushServerAuth(false);
   });
   ipcMain.handle("rigel:account:status", () => refreshAccount());
+  ipcMain.handle("rigel:billing:checkout", async (_e, orgId: string) => {
+    const url = await billingClient.checkout(orgId);
+    if (url) openBillingWindow(url);
+    return { ok: !!url };
+  });
+  ipcMain.handle("rigel:billing:portal", async (_e, orgId: string) => {
+    const url = await billingClient.portal(orgId);
+    if (url) openBillingWindow(url);
+    return { ok: !!url };
+  });
+  ipcMain.handle("rigel:billing:entitlements", () => billingClient.entitlements());
   ipcMain.handle("rigel:app-update:state", () => getUpdateState());
   ipcMain.handle("rigel:app-update:check", () => checkForUpdates());
   ipcMain.handle("rigel:app-update:download", () => downloadUpdate());
