@@ -7,7 +7,7 @@ import { createKitNotifier } from "./kit";
 import { ensureAuthSchema, createAuthDb } from "./authDb";
 import { createResendSender } from "./resend";
 import { createStripeAdapter, makeStripeAdapter, stripeKeyMode } from "./stripeAdapter";
-import { makeResolver } from "./entitlements";
+import { makeResolver, resolveOrgEntitlement } from "./entitlements";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const APP_KEY = process.env.APP_KEY ?? "";
@@ -73,6 +73,10 @@ const app = createApp({
   notify,
   auth: { db: authDb, sendCode, allowRequest, allowVerify },
   billing: { db: authDb, resolve, stripe: stripeAdapter, priceId: STRIPE_PRICE_ID, endpoint: BILLING_ENDPOINT },
+  agent: {
+    db: authDb,
+    resolveOrg: (orgId) => resolveOrgEntitlement(orgId, { db: authDb, stripe: stripeAdapter, now: () => new Date().toISOString() }),
+  },
 });
 
 serve({ fetch: app.fetch, port: PORT, hostname: "0.0.0.0" }, (info) =>

@@ -65,6 +65,9 @@ function fakeDb() {
     async orgSeatCount() { return 0; },
     async setOrgStripeCustomer() {},
     async accountEmail() { return "a@b.co"; },
+    async createAgentToken() {},
+    async agentTokenByHash() { return null; },
+    async orgStripeCustomer() { return null; },
   };
   return { db, codes };
 }

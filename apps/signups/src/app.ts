@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import { parseSignup, type Signup } from "./validate";
 import { registerAuthRoutes, type AuthDeps } from "./auth";
 import { registerBillingRoutes, type BillingDeps } from "./billing";
+import { registerAgentRoutes, type AgentDeps } from "./agent";
 
 export interface AppDeps {
   appKey: string;
@@ -14,6 +15,8 @@ export interface AppDeps {
   auth?: AuthDeps;
   /** When present, mounts the /entitlements billing route. */
   billing?: BillingDeps;
+  /** When present, mounts the /agent/* routes (token mint + entitlement). */
+  agent?: AgentDeps;
 }
 
 // Origins allowed to call /signups from a browser. The marketing site (rigel.run)
@@ -21,7 +24,7 @@ export interface AppDeps {
 // (no Origin header, unaffected by CORS).
 const ALLOWED_ORIGINS = ["https://rigel.run", "https://www.rigel.run"];
 
-export function createApp({ appKey, upsert, allow, notify, auth, billing }: AppDeps): Hono {
+export function createApp({ appKey, upsert, allow, notify, auth, billing, agent }: AppDeps): Hono {
   const app = new Hono();
 
   app.get("/health", (c) => c.json({ ok: true }));
@@ -56,6 +59,7 @@ export function createApp({ appKey, upsert, allow, notify, auth, billing }: AppD
 
   if (auth) registerAuthRoutes(app, auth);
   if (billing) registerBillingRoutes(app, billing);
+  if (agent) registerAgentRoutes(app, agent);
 
   return app;
 }

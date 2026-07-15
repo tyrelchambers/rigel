@@ -103,6 +103,7 @@ test("auth routes are mounted when auth deps are provided", async () => {
         insertToken: async () => {}, accountByToken: async () => null, touchToken: async () => {}, revokeToken: async () => {},
         ensurePersonalOrg: async () => {}, getOrgsForAccount: async () => [], billableOrgs: async () => [],
         orgBilling: async () => null, orgSeatCount: async () => 0, setOrgStripeCustomer: async () => {}, accountEmail: async () => "a@b.co",
+        createAgentToken: async () => {}, agentTokenByHash: async () => null, orgStripeCustomer: async () => null,
       },
       sendCode: async () => {},
       allowRequest: () => true,
