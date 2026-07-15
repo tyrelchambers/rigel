@@ -1,5 +1,28 @@
 import { test, expect, vi } from "vitest";
-import { resolvePayload, makeResolver } from "./entitlements";
+import { resolvePayload, makeResolver, resolveOrgEntitlement } from "./entitlements";
+
+test("resolveOrgEntitlement: agentAutonomy key → entitled + pro", async () => {
+  const orgStripeCustomer = vi.fn(async () => "cus_1");
+  const activeFeatureKeys = vi.fn(async () => new Set(["agentAutonomy"]));
+  const r = await resolveOrgEntitlement("o1", { db: { orgStripeCustomer }, stripe: { activeFeatureKeys }, now: () => "T" });
+  expect(orgStripeCustomer).toHaveBeenCalledWith("o1");
+  expect(r).toMatchObject({ agentEntitled: true, plan: "pro", fetchedAt: "T" });
+});
+
+test("resolveOrgEntitlement: no stripe customer → free + not entitled", async () => {
+  const orgStripeCustomer = vi.fn(async () => null);
+  const activeFeatureKeys = vi.fn(async () => new Set(["agentAutonomy"]));
+  const r = await resolveOrgEntitlement("o1", { db: { orgStripeCustomer }, stripe: { activeFeatureKeys }, now: () => "T" });
+  expect(activeFeatureKeys).not.toHaveBeenCalled();
+  expect(r).toMatchObject({ agentEntitled: false, plan: "free", fetchedAt: "T" });
+});
+
+test("resolveOrgEntitlement: customer without agentAutonomy → not entitled", async () => {
+  const orgStripeCustomer = vi.fn(async () => "cus_1");
+  const activeFeatureKeys = vi.fn(async () => new Set(["security"]));
+  const r = await resolveOrgEntitlement("o1", { db: { orgStripeCustomer }, stripe: { activeFeatureKeys }, now: () => "T" });
+  expect(r.agentEntitled).toBe(false);
+});
 
 test("resolvePayload: no features → free", () => {
   const p = resolvePayload(new Set(), "2026-07-15T00:00:00.000Z");

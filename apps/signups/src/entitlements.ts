@@ -17,6 +17,26 @@ export function resolvePayload(keys: Set<string>, fetchedAt: string): Entitlemen
   return { plan: anyPaid ? "pro" : "free", audits, cloudConnect, agentAutonomy, fetchedAt };
 }
 
+export interface OrgEntitlement {
+  agentEntitled: boolean;
+  plan: "free" | "pro";
+  fetchedAt: string;
+}
+
+export async function resolveOrgEntitlement(
+  orgId: string,
+  deps: {
+    db: { orgStripeCustomer(orgId: string): Promise<string | null> };
+    stripe: { activeFeatureKeys(customerId: string): Promise<Set<string>> };
+    now: () => string;
+  },
+): Promise<OrgEntitlement> {
+  const customerId = await deps.db.orgStripeCustomer(orgId);
+  const keys = customerId ? await deps.stripe.activeFeatureKeys(customerId) : new Set<string>();
+  const payload = resolvePayload(keys, deps.now());
+  return { agentEntitled: payload.agentAutonomy, plan: payload.plan, fetchedAt: payload.fetchedAt };
+}
+
 export interface ResolverDeps {
   db: { billableOrgs(accountId: string): Promise<{ orgId: string; stripeCustomerId: string | null }[]> };
   stripe: { activeFeatureKeys(customerId: string): Promise<Set<string>> };
