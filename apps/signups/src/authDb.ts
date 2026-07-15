@@ -30,6 +30,10 @@ export interface AuthDb {
   ensurePersonalOrg(accountId: string, name: string): Promise<void>;
   getOrgsForAccount(accountId: string): Promise<OrgMembership[]>;
   billableOrgs(accountId: string): Promise<{ orgId: string; stripeCustomerId: string | null }[]>;
+  orgBilling(orgId: string, accountId: string): Promise<{ stripeCustomerId: string | null; role: string } | null>;
+  orgSeatCount(orgId: string): Promise<number>;
+  setOrgStripeCustomer(orgId: string, customerId: string): Promise<void>;
+  accountEmail(accountId: string): Promise<string>;
 }
 
 const TOKEN_MAX_AGE = "1 year";
@@ -228,6 +232,27 @@ export function createAuthDb(pool: Pool): AuthDb {
     },
     async revokeToken(tokenHash) {
       await pool.query(`UPDATE auth_tokens SET revoked_at = now() WHERE token_hash = $1 AND revoked_at IS NULL`, [tokenHash]);
+    },
+    async orgBilling(orgId, accountId) {
+      const r = await pool.query(
+        `SELECT o.stripe_customer_id, m.role
+           FROM organizations o JOIN memberships m ON m.org_id = o.id
+          WHERE o.id = $1 AND m.account_id = $2`,
+        [orgId, accountId],
+      );
+      if (r.rows.length === 0) return null;
+      return { stripeCustomerId: r.rows[0].stripe_customer_id, role: r.rows[0].role };
+    },
+    async orgSeatCount(orgId) {
+      const r = await pool.query(`SELECT count(*)::int AS n FROM memberships WHERE org_id = $1`, [orgId]);
+      return Number(r.rows[0].n);
+    },
+    async setOrgStripeCustomer(orgId, customerId) {
+      await pool.query(`UPDATE organizations SET stripe_customer_id = $1 WHERE id = $2`, [customerId, orgId]);
+    },
+    async accountEmail(accountId) {
+      const r = await pool.query(`SELECT email FROM accounts WHERE id = $1`, [accountId]);
+      return r.rows[0].email;
     },
     ensurePersonalOrg,
     getOrgsForAccount,

@@ -123,6 +123,37 @@ test("ensurePersonalOrg upserts org + owner membership idempotently", async () =
   expect(j).toContain("INSERT INTO MEMBERSHIPS");
 });
 
+test("orgBilling returns customer id + caller role (null when not a member)", async () => {
+  const { pool, push } = recorder();
+  push({ stripe_customer_id: "cus_1", role: "owner" });
+  const db = createAuthDb(pool);
+  expect(await db.orgBilling("o1", "acc-1")).toEqual({ stripeCustomerId: "cus_1", role: "owner" });
+});
+
+test("orgSeatCount counts memberships", async () => {
+  const { pool, push } = recorder();
+  push({ n: "3" });
+  const db = createAuthDb(pool);
+  expect(await db.orgSeatCount("o1")).toBe(3);
+});
+
+test("setOrgStripeCustomer writes the id", async () => {
+  const { pool, calls } = recorder();
+  const db = createAuthDb(pool);
+  await db.setOrgStripeCustomer("o1", "cus_9");
+  expect(calls[0].sql.toUpperCase()).toContain("UPDATE ORGANIZATIONS");
+  expect(calls[0].params).toEqual(["cus_9", "o1"]);
+});
+
+test("accountEmail selects the email for the account id", async () => {
+  const { pool, calls, push } = recorder();
+  push({ email: "a@b.co" });
+  const db = createAuthDb(pool);
+  expect(await db.accountEmail("acc-1")).toBe("a@b.co");
+  expect(calls[0].sql.toUpperCase()).toContain("SELECT EMAIL FROM ACCOUNTS");
+  expect(calls[0].params).toEqual(["acc-1"]);
+});
+
 test("accountByToken joins accounts and filters revoked/expired", async () => {
   const { pool, calls, push } = recorder();
   push({ id: "acc-1", email: "a@b.co", name: "Jane" });
