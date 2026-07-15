@@ -60,6 +60,7 @@ function fakeDb() {
       const org = personalOrgs.get(accountId);
       return org ? [org] : [];
     },
+    async billableOrgs() { return []; },
   };
   return { db, codes };
 }

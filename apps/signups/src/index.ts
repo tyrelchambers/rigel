@@ -6,6 +6,8 @@ import { createRateLimiter } from "./rateLimit";
 import { createKitNotifier } from "./kit";
 import { ensureAuthSchema, createAuthDb } from "./authDb";
 import { createResendSender } from "./resend";
+import { createStripeAdapter, makeStripeAdapter } from "./stripeAdapter";
+import { makeResolver } from "./entitlements";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const APP_KEY = process.env.APP_KEY ?? "";
@@ -32,12 +34,17 @@ const sendCode = createResendSender({ apiKey: RESEND_API_KEY, from: RESEND_FROM 
 // Tighter, separate limiters (namespaced keys prevent collision with /signups).
 const allowRequest = createRateLimiter(5, 10 * 60_000);  // 5 code requests / 10 min per key
 const allowVerify = createRateLimiter(10, 10 * 60_000);  // 10 verify attempts / 10 min per key
+const stripeAdapter = STRIPE_SECRET_KEY
+  ? createStripeAdapter(STRIPE_SECRET_KEY)
+  : makeStripeAdapter({ entitlements: { activeEntitlements: { list: async () => ({ data: [] }) } } } as never); // unset key → everyone free
+const resolve = makeResolver({ db: authDb, stripe: stripeAdapter, now: () => new Date().toISOString() });
 const app = createApp({
   appKey: APP_KEY,
   upsert: (s) => upsertSignup(pool, s),
   allow,
   notify,
   auth: { db: authDb, sendCode, allowRequest, allowVerify },
+  billing: { db: authDb, resolve },
 });
 
 serve({ fetch: app.fetch, port: PORT, hostname: "0.0.0.0" }, (info) =>

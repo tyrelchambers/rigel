@@ -1,11 +1,12 @@
 import { test, expect, vi } from "vitest";
 import { Hono } from "hono";
 import { registerBillingRoutes } from "./billing";
+import type { EntitlementPayload } from "./entitlements";
 
 function appWith(overrides = {}) {
   const app = new Hono();
   const db = { accountByToken: vi.fn(async () => ({ id: "acc-1", email: "a@b.co", name: null })), touchToken: vi.fn(async () => {}) };
-  const resolve = vi.fn(async () => ({ plan: "pro", audits: ["security"], cloudConnect: false, agentAutonomy: false, fetchedAt: "t" }));
+  const resolve = vi.fn(async (): Promise<EntitlementPayload> => ({ plan: "pro", audits: ["security"], cloudConnect: false, agentAutonomy: false, fetchedAt: "t" }));
   registerBillingRoutes(app, { db: db as never, resolve, ...overrides });
   return { app, db, resolve };
 }
