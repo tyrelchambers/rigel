@@ -502,6 +502,11 @@ async function boot(): Promise<void> {
     mainWindow?.webContents.send("rigel:billing:changed"); // renderer refetches via IPC
     pushServerMessage({ type: "entitlement", value: e });  // server gate (Task 3)
   });
+  // Layer 1 (Slice L1): a GENUINE downgrade (autonomy true→false on a successful
+  // fetch, never the no-cache/grace default) actively reverts the in-cluster agent
+  // to a safe posture — the server writes mode:advisory + autofixEnabled:false to
+  // every context that has an agent installed.
+  entitlements.onDowngrade(() => pushServerMessage({ type: "agent-downgrade" }));
   void entitlements.refresh(); // resolve on boot
   setInterval(() => void entitlements?.refresh(), 6 * 60 * 60 * 1000); // + every 6h
   // Set synchronously (BEFORE forkServer below) so the initial fork's env
