@@ -48,6 +48,7 @@ services:
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:?set STRIPE_SECRET_KEY in .env}
       STRIPE_PRICE_ID: ${STRIPE_PRICE_ID:?set STRIPE_PRICE_ID in .env}
       STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:?set STRIPE_PUBLISHABLE_KEY in .env}
+      RIGEL_FREE_BETA: ${RIGEL_FREE_BETA:?set RIGEL_FREE_BETA in .env}
       # Optional — needed for passwordless sign-in codes (reuse your prod Resend key).
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       RESEND_FROM: ${RESEND_FROM:-Rigel <login@rigel.run>}
