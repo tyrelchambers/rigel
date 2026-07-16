@@ -245,8 +245,9 @@ export async function tick(
   // recording below are NEVER gated.
   let entitled = false;
   let entitlementToPersist: Entitlement | undefined;
+  const force = !!rc.entitlementRefreshAt && rc.entitlementRefreshAt !== state.entitlementRefreshAt;
   try {
-    const decision = await determineEntitlement({ cfg, now, cache: parseEntitlement(state.entitlement) });
+    const decision = await determineEntitlement({ cfg, now, cache: parseEntitlement(state.entitlement), force });
     entitled = decision.entitled;
     // A fresh fetch's value rides out on tick's OWN single state write below — the
     // decision never writes itself, so the persisted cache can't be clobbered by the
@@ -797,6 +798,7 @@ export async function tick(
   // Fold a freshly-fetched entitlement into this single durable write so the 12h
   // throttle and the 30-day grace both have a persisted last-known-good to read next tick.
   if (entitlementToPersist) state = { ...state, entitlement: entitlementToPersist };
+  if (state.entitlementRefreshAt !== rc.entitlementRefreshAt) state = { ...state, entitlementRefreshAt: rc.entitlementRefreshAt };
   await writeState(cfg.stateConfigMap, cfg.stateNamespace, state);
 
   if (rc.enabled) {

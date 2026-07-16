@@ -180,4 +180,19 @@ describe("determineEntitlement", () => {
     expect(r).toEqual({ entitled: false });
     expect(vi.mocked(fetchFn)).not.toHaveBeenCalled();
   });
+
+  test("force → fetches even when the cache is fresh (shouldRefetch false)", async () => {
+    const value = { agentEntitled: true, fetchedAt: new Date(NOW).toISOString() };
+    const fetchFn = vi.fn(async () => ({ status: 200, ok: true, json: async () => value })) as unknown as typeof fetch;
+    const r = await determineEntitlement({ cfg: CFG, now: NOW, cache: ent(false, 60_000), fetchFn, force: true });
+    expect(r).toEqual({ entitled: true, cache: value });
+    expect(vi.mocked(fetchFn)).toHaveBeenCalledTimes(1);
+  });
+
+  test("force + empty token → still short-circuits to free with no fetch", async () => {
+    const fetchFn = vi.fn() as unknown as typeof fetch;
+    const r = await determineEntitlement({ cfg: { ...CFG, agentToken: "" } as Config, now: NOW, cache: ent(true, 60_000), fetchFn, force: true });
+    expect(r).toEqual({ entitled: false });
+    expect(vi.mocked(fetchFn)).not.toHaveBeenCalled();
+  });
 });

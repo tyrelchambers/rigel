@@ -76,6 +76,10 @@ export interface RuntimeConfig {
    *  null = the key is absent (legacy install) → broadcast to everything
    *  configured. Does NOT apply to digests, which target one chosen channel. */
   notifyAllowlist: ChannelId[] | null;
+  /** Server-stamped "check your entitlement now" marker (ISO). Changes on the
+   *  free→Pro edge so the agent force-runs its entitlement check next tick,
+   *  bypassing the 12h throttle. Undefined until the first bump. */
+  entitlementRefreshAt?: string;
 }
 
 /** Parse the autofix opt-in (`autofixEnabled`, default false) + scope
@@ -320,5 +324,6 @@ export async function readRuntimeConfig(cfg: Config): Promise<RuntimeConfig> {
     digests: parseDigestsFromConfig(data),
     digestRunNow: parseDigestRunNow(data),
     notifyAllowlist: parseNotifyAllowlist(data),
+    entitlementRefreshAt: data.entitlementRefreshAt && data.entitlementRefreshAt.trim() ? data.entitlementRefreshAt.trim() : undefined,
   };
 }

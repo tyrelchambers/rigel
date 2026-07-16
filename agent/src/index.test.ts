@@ -958,6 +958,41 @@ describe("tick() — entitlement gate (Slice E2)", () => {
   });
 });
 
+describe("tick() — entitlementRefreshAt force-check (Slice U3)", () => {
+  test("a changed refresh marker forces an immediate entitlement check AND records the new marker", async () => {
+    const { captured } = wireCluster({
+      configData: { enabled: "true", confirmPolls: "1", entitlementRefreshAt: "2026-07-16T00:00:00.000Z" },
+      pods: [],
+    });
+
+    await tick(makeConfig(), newCb(), createLoopState());
+
+    expect(vi.mocked(determineEntitlement).mock.calls[0]![0]).toMatchObject({ force: true });
+    expect(captured()!.entitlementRefreshAt).toBe("2026-07-16T00:00:00.000Z");
+  });
+
+  test("an unchanged refresh marker does NOT force (honored last tick)", async () => {
+    const { captured } = wireCluster({
+      configData: { enabled: "true", confirmPolls: "1", entitlementRefreshAt: "2026-07-16T00:00:00.000Z" },
+      pods: [],
+      stateSeed: { updatedAt: "", audit: [], queue: [], report: "", entitlementRefreshAt: "2026-07-16T00:00:00.000Z" },
+    });
+
+    await tick(makeConfig(), newCb(), createLoopState());
+
+    expect(vi.mocked(determineEntitlement).mock.calls[0]![0]).toMatchObject({ force: false });
+    expect(captured()!.entitlementRefreshAt).toBe("2026-07-16T00:00:00.000Z");
+  });
+
+  test("no refresh marker at all → not forced", async () => {
+    wireCluster({ configData: { enabled: "true", confirmPolls: "1" }, pods: [] });
+
+    await tick(makeConfig(), newCb(), createLoopState());
+
+    expect(vi.mocked(determineEntitlement).mock.calls[0]![0]).toMatchObject({ force: false });
+  });
+});
+
 describe("queue — dedup by incident + label + action args", () => {
   const emptyState = (): AssistantState => ({ updatedAt: "", audit: [], queue: [], report: "" });
 

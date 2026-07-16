@@ -113,14 +113,15 @@ export async function determineEntitlement(args: {
   now: number;
   cache: Entitlement | null;
   fetchFn?: typeof fetch;
+  force?: boolean;
 }): Promise<EntitlementDecision> {
-  const { cfg, now, cache } = args;
+  const { cfg, now, cache, force } = args;
   if (cfg.agentToken === "") return { entitled: false };
   // Default to "error" so a tick that does NOT refetch holds the last-known-good
   // cache through the grace window (or falls closed to free when there is none).
   let fetchResult: FetchResult = { status: "error" };
   let toCache: Entitlement | undefined;
-  if (shouldRefetch(cache, now, cfg)) {
+  if (force || shouldRefetch(cache, now, cfg)) {
     fetchResult = await fetchEntitlement(cfg.entitlementEndpoint, cfg.agentToken, args.fetchFn);
     if (fetchResult.status === "ok") toCache = fetchResult.value;
   }

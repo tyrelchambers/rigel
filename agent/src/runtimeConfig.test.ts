@@ -154,6 +154,26 @@ describe("readRuntimeConfig — notifyAllowlist", () => {
   });
 });
 
+describe("readRuntimeConfig — entitlementRefreshAt", () => {
+  test("present key parses to its string", async () => {
+    mockConfigMap({ enabled: "true", entitlementRefreshAt: "2026-07-15T00:00:00.000Z" });
+    const rc = await readRuntimeConfig(CFG);
+    expect(rc.entitlementRefreshAt).toBe("2026-07-15T00:00:00.000Z");
+  });
+
+  test("absent key parses to undefined", async () => {
+    mockConfigMap({ enabled: "true" });
+    const rc = await readRuntimeConfig(CFG);
+    expect(rc.entitlementRefreshAt).toBeUndefined();
+  });
+
+  test("empty value parses to undefined", async () => {
+    mockConfigMap({ enabled: "true", entitlementRefreshAt: "  " });
+    const rc = await readRuntimeConfig(CFG);
+    expect(rc.entitlementRefreshAt).toBeUndefined();
+  });
+});
+
 describe("readRuntimeConfig — role selections", () => {
   test("defaults to claude worker=sonnet supervisor=opus when no role keys are set", async () => {
     mockConfigMap({ enabled: "true" });

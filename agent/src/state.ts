@@ -187,6 +187,9 @@ export interface AssistantState {
   /** Cached entitlement decision (30-day grace) gating the agent's premium
    *  capabilities. Absent until the first entitlement check. */
   entitlement?: Entitlement;
+  /** Last server-stamped entitlementRefreshAt the agent has honored, so a
+   *  changed value force-triggers exactly one immediate entitlement check. */
+  entitlementRefreshAt?: string;
 }
 
 /** Cap on the rolling incident history, and the max age before pruning. */
