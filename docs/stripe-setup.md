@@ -76,6 +76,14 @@ Put it in the `rigel-signups` Secret as `STRIPE_SECRET_KEY`. With the key unset 
 service still runs and `GET /entitlements` returns free for everyone (the stub
 adapter).
 
+Also grab the account's **publishable key** (`pk_live_`/`pk_test_`, Developers →
+API keys) and set it as `STRIPE_PUBLISHABLE_KEY`. It is a public/publishable key —
+safe to expose to the client, which uses it to mount Stripe Embedded Checkout — but
+its mode **must match** the secret key's mode. The service refuses to start on a
+`STRIPE_PUBLISHABLE_KEY` / `STRIPE_SECRET_KEY` mode mismatch, the same as the price
+guard. With it unset, `/billing/checkout` returns no usable key and the client
+cannot mount checkout.
+
 ## 6. Changing the free/paid boundary later
 
 - **Make a feature free:** detach its Feature from the Product. Active subscriptions
@@ -98,6 +106,7 @@ Created and verified via the Stripe CLI/MCP:
 | Features (attached) | `reliability` · `security` · `performance` · `cloudConnect` · `agentAutonomy` |
 | Customer Portal | default config active (cancel + payment-method + invoice history) |
 | `STRIPE_SECRET_KEY` (test) | grab an `sk_test_`/`rk_test_` key from the sandbox's Developers → API keys |
+| `STRIPE_PUBLISHABLE_KEY` (test) | grab the `pk_test_` key from the sandbox's Developers → API keys |
 
 Put these in the `rigel-signups-test` Secret.
 
@@ -110,5 +119,6 @@ Re-run steps 1–5 in the **live** account, then record:
 | Product | `prod_…` |
 | Price | `price_…` → `STRIPE_PRICE_ID` (live) |
 | `STRIPE_SECRET_KEY` (live) | `sk_live_`/`rk_live_` key |
+| `STRIPE_PUBLISHABLE_KEY` (live) | `pk_live_` key |
 
 Put these in the `rigel-signups` Secret (production).
