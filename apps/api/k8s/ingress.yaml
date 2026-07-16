@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: rigel-signups
+  name: rigel-api
   namespace: default
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
@@ -10,7 +10,7 @@ spec:
   tls:
     - hosts:
         - api.rigel.run
-      secretName: rigel-signups-tls
+      secretName: rigel-api-tls
   rules:
     - host: api.rigel.run
       http:
@@ -19,6 +19,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: rigel-signups
+                name: rigel-api
                 port:
                   number: 80

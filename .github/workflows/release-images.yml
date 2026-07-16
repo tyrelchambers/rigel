@@ -6,7 +6,7 @@ name: Release versioned images
 # :X.Y (minor track), and a moving :stable (always the latest published release).
 #
 # This does NOT deploy to any cluster — continuous deploy still runs from master
-# (see agent-build.yml / marketing-build.yml / signups-build.yml, which pin the
+# (see agent-build.yml / marketing-build.yml / api-build.yml, which pin the
 # per-commit :<sha>). Use "Run workflow" with an explicit version to re-push.
 on:
   release:
@@ -35,9 +35,9 @@ jobs:
           - name: rigel-marketing
             context: .
             file: ./apps/marketing/Dockerfile
-          - name: rigel-signups
+          - name: rigel-api
             context: .
-            file: ./apps/signups/Dockerfile
+            file: ./apps/api/Dockerfile
     steps:
       - uses: actions/checkout@v5
 

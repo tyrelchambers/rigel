@@ -1,12 +1,12 @@
 # Local dev backend for testing billing / entitlements end-to-end. NOT for production.
-# Stands up Postgres + the `signups` service, built from THIS working tree (so it
+# Stands up Postgres + the `api` service, built from THIS working tree (so it
 # includes the current branch's routes, not the published :latest image).
 #
 # Usage:
 #   1. Put your Stripe TEST-mode values in .env (STRIPE_SECRET_KEY, STRIPE_PRICE_ID)
 #      plus RESEND_API_KEY for passwordless sign-in codes. See .env.
 #   2. docker compose up --build
-#      -> watch for "[signups] Stripe: test mode (price price_...)" — that confirms your keys.
+#      -> watch for "[api] Stripe: test mode (price price_...)" — that confirms your keys.
 #   3. In another terminal, point the desktop at it:
 #      RIGEL_SIGNUP_ENDPOINT=http://localhost:8080 pnpm --filter desktop dev
 #
@@ -27,10 +27,10 @@ services:
       timeout: 3s
       retries: 20
 
-  signups:
+  api:
     build:
       context: .
-      dockerfile: apps/signups/Dockerfile
+      dockerfile: apps/api/Dockerfile
     depends_on:
       db:
         condition: service_healthy

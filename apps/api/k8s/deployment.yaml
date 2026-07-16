@@ -1,28 +1,28 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: rigel-signups
+  name: rigel-api
   namespace: default
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: rigel-signups
+      app: rigel-api
   template:
     metadata:
       labels:
-        app: rigel-signups
+        app: rigel-api
     spec:
       imagePullSecrets:
         - name: ghrc
       containers:
-        - name: signups
-          image: ghcr.io/tyrelchambers/rigel-signups:latest
+        - name: api
+          image: ghcr.io/tyrelchambers/rigel-api:latest
           ports:
             - containerPort: 8080
           envFrom:
             - secretRef:
-                name: rigel-signups
+                name: rigel-api
           readinessProbe:
             httpGet:
               path: /health
