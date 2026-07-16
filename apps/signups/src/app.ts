@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { logger } from "hono/logger";
 import { parseSignup, type Signup } from "./validate";
 import { registerAuthRoutes, type AuthDeps } from "./auth";
 import { registerBillingRoutes, type BillingDeps } from "./billing";
@@ -28,6 +29,10 @@ export function createApp({ appKey, upsert, allow, notify, auth, billing, agent 
   const app = new Hono();
 
   app.get("/health", (c) => c.json({ ok: true }));
+
+  // Per-request logging (method, path, status, timing) for every route below —
+  // registered after /health so liveness probes don't spam the log.
+  app.use("*", logger());
 
   // Browser CORS for the waitlist form. Reflects an allowed Origin (and handles
   // the OPTIONS preflight, which the custom x-rigel-key header forces).
@@ -60,6 +65,13 @@ export function createApp({ appKey, upsert, allow, notify, auth, billing, agent 
   if (auth) registerAuthRoutes(app, auth);
   if (billing) registerBillingRoutes(app, billing);
   if (agent) registerAgentRoutes(app, agent);
+
+  // Surface any thrown (unhandled) error with its stack — otherwise a Stripe/DB
+  // failure inside a route returns a bare 500 with no trace of the cause.
+  app.onError((err, c) => {
+    console.error(`[signups] unhandled error on ${c.req.method} ${c.req.path}:`, err);
+    return c.json({ error: "internal error" }, 500);
+  });
 
   return app;
 }

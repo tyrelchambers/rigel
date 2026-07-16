@@ -17,9 +17,17 @@ export interface BillingStore { getToken(): string | null; }
 export function createBillingClient({ store, fetchFn, endpoint }: { store: BillingStore; fetchFn: typeof fetch; endpoint: string }) {
   const auth = () => ({ authorization: `Bearer ${store.getToken() ?? ""}`, "content-type": "application/json" });
   const postUrl = async (path: string, orgId: string): Promise<string | null> => {
-    const res = await fetchFn(`${endpoint}${path}`, { method: "POST", headers: auth(), body: JSON.stringify({ orgId }) });
-    if (!res.ok) return null;
-    return (await res.json()).url ?? null;
+    try {
+      const res = await fetchFn(`${endpoint}${path}`, { method: "POST", headers: auth(), body: JSON.stringify({ orgId }) });
+      if (!res.ok) {
+        console.error(`[billing] POST ${endpoint}${path} (org ${orgId}) → ${res.status}: ${await res.text().catch(() => "")}`);
+        return null;
+      }
+      return (await res.json()).url ?? null;
+    } catch (e) {
+      console.error(`[billing] POST ${endpoint}${path} threw: ${String(e)}`);
+      return null;
+    }
   };
   return {
     checkout: (orgId: string) => postUrl("/billing/checkout", orgId),
