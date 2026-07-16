@@ -127,10 +127,22 @@ export function AccountModal({ open, onOpenChange, account, startCheckoutOnOpen 
     }
   }, [open, startCheckoutOnOpen, status, personalOrgId, checkout, startCheckout]);
 
-  function handleComplete() {
-    void account.refreshBilling();
-    setCheckout(null);
-    setTimeout(() => void account.refreshBilling(), 1500);
+  const pollRef = useRef<{ cancelled: boolean } | null>(null);
+  useEffect(() => () => { if (pollRef.current) pollRef.current.cancelled = true; }, []);
+  useEffect(() => { if (!open && pollRef.current) pollRef.current.cancelled = true; }, [open]);
+
+  async function handleComplete() {
+    if (pollRef.current) pollRef.current.cancelled = true;
+    const token = { cancelled: false };
+    pollRef.current = token;
+    for (let i = 0; i < 10; i++) {
+      const e = await account.refreshBilling();
+      if (token.cancelled) return;
+      if (e?.plan === "pro") break;
+      await new Promise((r) => setTimeout(r, 2000));
+      if (token.cancelled) return;
+    }
+    if (!token.cancelled) setCheckout(null);
   }
 
   if (status === "loading") {

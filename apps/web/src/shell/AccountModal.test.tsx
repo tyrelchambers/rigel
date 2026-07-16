@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, expect, test, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { AccountModal } from "./AccountModal";
 import type { UseAccountResult } from "./useAccount";
 
@@ -109,15 +109,32 @@ test("startCheckoutOnOpen auto-enters the embedded checkout view", async () => {
   expect(acc.upgrade).toHaveBeenCalledWith("o1");
 });
 
-test("onComplete refetches billing and returns to the account view", async () => {
-  const acc = freeAccount();
-  render(<AccountModal open onOpenChange={vi.fn()} account={acc} />);
-  fireEvent.click(screen.getByRole("button", { name: /upgrade/i }));
-  await screen.findByTestId("embedded-checkout");
-  act(() => lastOnComplete?.());
-  expect(acc.refreshBilling).toHaveBeenCalled();
-  await waitFor(() => expect(screen.queryByTestId("embedded-checkout")).toBeNull());
-  expect(screen.getByRole("button", { name: /upgrade/i })).toBeTruthy();
+test("onComplete polls refreshBilling until Pro, then returns to the account view", async () => {
+  vi.useFakeTimers();
+  try {
+    const refreshBilling = vi.fn()
+      .mockResolvedValueOnce({ plan: "free", audits: [], cloudConnect: false, agentAutonomy: false, fetchedAt: "t" })
+      .mockResolvedValue({ plan: "pro", audits: ["security"], cloudConnect: true, agentAutonomy: false, fetchedAt: "t" });
+    const acc = freeAccount({ refreshBilling });
+    render(<AccountModal open onOpenChange={vi.fn()} account={acc} />);
+    fireEvent.click(screen.getByRole("button", { name: /upgrade/i }));
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByTestId("embedded-checkout")).toBeTruthy();
+
+    act(() => { void lastOnComplete?.(); });
+    await act(async () => { await Promise.resolve(); });
+    expect(refreshBilling).toHaveBeenCalledTimes(1);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    expect(refreshBilling).toHaveBeenCalledTimes(2);
+    expect(screen.queryByTestId("embedded-checkout")).toBeNull();
+    expect(screen.getByRole("button", { name: /upgrade/i })).toBeTruthy();
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
+    expect(refreshBilling).toHaveBeenCalledTimes(2);
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 test("upgrade returning null shows an inline error, no checkout view", async () => {
