@@ -13,8 +13,8 @@ import {
   GatedError,
   type CloudProvider,
 } from "@/lib/api";
-import { useEntitlement } from "./useEntitlement";
 import { useAccount } from "./useAccount";
+import { useUpgrade } from "./UpgradeContext";
 import { ProGateCard } from "./billing/ProGateCard";
 
 interface Actions {
@@ -355,8 +355,8 @@ export function ConnectWizard({
   onConnected: (context?: string) => void;
 }) {
   const qc = useQueryClient();
-  const { upgrade } = useEntitlement();
   const { orgs } = useAccount();
+  const { openUpgrade } = useUpgrade();
   const personalOrgId = orgs.find((o) => o.kind === "personal")?.id;
   const provider = descriptor.id;
   const [phase, setPhase] = useState<Phase>("checking");
@@ -571,7 +571,7 @@ export function ConnectWizard({
         title="Unlock cloud clusters"
         body="Connect EKS, GKE, AKS, or DigitalOcean. Importing a kubeconfig and local clusters stay free."
         upgradeDisabled={!personalOrgId}
-        onUpgrade={() => personalOrgId && upgrade(personalOrgId)}
+        onUpgrade={openUpgrade}
       />
     );
   }

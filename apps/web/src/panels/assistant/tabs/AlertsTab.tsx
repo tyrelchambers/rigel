@@ -9,6 +9,7 @@ import { useAssistantCtx } from "../AssistantContext";
 import { AlertsCard } from "../AlertsCard";
 import { useEntitlement } from "@/shell/useEntitlement";
 import { useAccount } from "@/shell/useAccount";
+import { useUpgrade } from "@/shell/UpgradeContext";
 import { ProGateCard } from "@/shell/billing/ProGateCard";
 
 // The three autonomy modes, rendered as selectable cards. `value` is the config
@@ -25,8 +26,9 @@ const AUTONOMOUS_MODES = new Set<string>(["auto", "window"]);
 
 export function AlertsTab() {
   const { d, ns, working, run, setTab } = useAssistantCtx();
-  const { payload, upgrade } = useEntitlement();
+  const { payload } = useEntitlement();
   const { orgs } = useAccount();
+  const { openUpgrade } = useUpgrade();
   const personalOrgId = orgs.find((o) => o.kind === "personal")?.id;
   const autonomyLocked = !payload?.agentAutonomy;
 
@@ -68,7 +70,7 @@ export function AlertsTab() {
             title="Unlock the in-cluster agent"
             body="Rigel watches your cluster around the clock and applies the fixes you approve. Autonomous remediation, autofix PRs, and scheduled digests."
             upgradeDisabled={!personalOrgId}
-            onUpgrade={() => personalOrgId && upgrade(personalOrgId)}
+            onUpgrade={openUpgrade}
           />
         )}
 

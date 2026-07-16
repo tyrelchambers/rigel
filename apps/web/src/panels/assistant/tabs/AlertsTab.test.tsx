@@ -18,9 +18,13 @@ import type { EntitlementPayload } from "@/lib/desktop";
 vi.mock("@/shell/useAccount", () => ({ useAccount: vi.fn() }));
 import { useAccount } from "@/shell/useAccount";
 
+vi.mock("@/shell/UpgradeContext", () => ({ useUpgrade: vi.fn() }));
+import { useUpgrade } from "@/shell/UpgradeContext";
+
 const run = vi.fn();
 const setTab = vi.fn();
 const upgrade = vi.fn();
+const openUpgrade = vi.fn();
 
 const entPayload = (agentAutonomy: boolean): EntitlementPayload => ({
   plan: agentAutonomy ? "pro" : "free", audits: [], cloudConnect: false, agentAutonomy, fetchedAt: "t",
@@ -69,9 +73,11 @@ beforeEach(() => {
   run.mockReset();
   setTab.mockReset();
   upgrade.mockReset();
+  openUpgrade.mockReset();
   vi.mocked(handoffToChat).mockReset();
   // Default: autonomy unlocked (Pro) so existing mode tests are unaffected.
   vi.mocked(useEntitlement).mockReturnValue({ payload: entPayload(true), upgrade });
+  vi.mocked(useUpgrade).mockReturnValue({ openUpgrade });
   vi.mocked(useAccount).mockReturnValue({
     orgs: [{ id: "org-personal", kind: "personal", name: "Me", role: "owner" }],
   } as never);
@@ -102,7 +108,7 @@ describe("AlertsTab", () => {
     expect(screen.getByText(/unlock the in-cluster agent/i)).toBeInTheDocument();
     const btn = screen.getByRole("button", { name: /upgrade to pro/i });
     await userEvent.click(btn);
-    expect(upgrade).toHaveBeenCalledWith("org-personal");
+    expect(openUpgrade).toHaveBeenCalled();
   });
 
   it("selecting a mode saves it via setMode", async () => {

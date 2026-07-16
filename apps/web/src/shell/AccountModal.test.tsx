@@ -102,6 +102,13 @@ test("clicking Upgrade enters the embedded checkout view", async () => {
   expect(await screen.findByTestId("embedded-checkout")).toBeTruthy();
 });
 
+test("startCheckoutOnOpen auto-enters the embedded checkout view", async () => {
+  const acc = freeAccount();
+  render(<AccountModal open startCheckoutOnOpen onOpenChange={vi.fn()} account={acc} />);
+  expect(await screen.findByTestId("embedded-checkout")).toBeTruthy();
+  expect(acc.upgrade).toHaveBeenCalledWith("o1");
+});
+
 test("onComplete refetches billing and returns to the account view", async () => {
   const acc = freeAccount();
   render(<AccountModal open onOpenChange={vi.fn()} account={acc} />);

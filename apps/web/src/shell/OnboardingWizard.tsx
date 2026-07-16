@@ -20,6 +20,7 @@ import { AgentsTab } from "@/panels/settings/agents/AgentsTab";
 import { UpgradeBanner } from "./billing/UpgradeBanner";
 import { useEntitlement } from "./useEntitlement";
 import { useAccount } from "./useAccount";
+import { useUpgrade } from "./UpgradeContext";
 
 export function OnboardingWizard({ onClose, onLeave }: { onClose: () => void; onLeave: () => void }) {
   const navigate = useNavigate();
@@ -28,8 +29,9 @@ export function OnboardingWizard({ onClose, onLeave }: { onClose: () => void; on
   const activeAgent = agentsData?.agents.find((a) => a.id === agentsData?.activeAgentId);
   const agentConnected = activeAgent?.connection === "connected";
 
-  const { payload, upgrade } = useEntitlement();
+  const { payload } = useEntitlement();
   const { orgs } = useAccount();
+  const { openUpgrade } = useUpgrade();
   const personalOrgId = orgs.find((o) => o.kind === "personal")?.id;
   const [upsellDismissed, setUpsellDismissed] = useState(false);
   const showUpsell = payload != null && payload.plan !== "pro" && !upsellDismissed;
@@ -81,7 +83,7 @@ export function OnboardingWizard({ onClose, onLeave }: { onClose: () => void; on
           {showUpsell && (
             <UpgradeBanner
               upgradeDisabled={!personalOrgId}
-              onUpgrade={() => personalOrgId && upgrade(personalOrgId)}
+              onUpgrade={openUpgrade}
               onDismiss={() => setUpsellDismissed(true)}
             />
           )}

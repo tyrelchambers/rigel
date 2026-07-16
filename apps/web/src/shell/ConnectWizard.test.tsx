@@ -6,8 +6,8 @@ import { ConnectWizard } from "./ConnectWizard";
 import { descriptorFor } from "@rigel/cloud-connect/src/index";
 import { GatedError } from "@/lib/api";
 
-const { upgradeMock } = vi.hoisted(() => ({ upgradeMock: vi.fn() }));
-vi.mock("./useEntitlement", () => ({ useEntitlement: () => ({ payload: null, upgrade: upgradeMock }) }));
+const { openUpgradeMock } = vi.hoisted(() => ({ openUpgradeMock: vi.fn() }));
+vi.mock("./UpgradeContext", () => ({ useUpgrade: () => ({ openUpgrade: openUpgradeMock }) }));
 vi.mock("./useAccount", () => ({
   useAccount: () => ({ orgs: [{ id: "org-personal", kind: "personal", name: "Me", role: "owner" }] }),
 }));
@@ -90,8 +90,8 @@ test("lists clusters and connects the chosen one", async () => {
   await waitFor(() => expect(onConnected).toHaveBeenCalledWith("do-nyc1-prod"));
 });
 
-test("a 402 gated connect shows the upgrade prompt and Upgrade calls upgrade(personalOrgId)", async () => {
-  upgradeMock.mockClear();
+test("a 402 gated connect shows the upgrade prompt and Upgrade opens the account modal", async () => {
+  openUpgradeMock.mockClear();
   const actions = {
     check: vi.fn().mockResolvedValue({ cliInstalled: true, extraBinariesInstalled: true, authenticated: true, account: "me@example.com" }),
     list: vi.fn().mockResolvedValue({ clusters: [{ id: "abc", name: "prod", region: "nyc1" }] }),
@@ -105,7 +105,7 @@ test("a 402 gated connect shows the upgrade prompt and Upgrade calls upgrade(per
     expect(screen.getByText(/unlock cloud clusters/i)).toBeInTheDocument(),
   );
   fireEvent.click(screen.getByRole("button", { name: /upgrade to pro/i }));
-  expect(upgradeMock).toHaveBeenCalledWith("org-personal");
+  expect(openUpgradeMock).toHaveBeenCalled();
 });
 
 test("shows self-explaining empty state with account when no clusters", async () => {

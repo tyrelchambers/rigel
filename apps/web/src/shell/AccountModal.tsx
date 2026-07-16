@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Lock, LogOut, RefreshCw, Sparkles, Zap } from "lucide-react";
 import { loadStripe } from "@stripe/stripe-js";
 import { EmbeddedCheckout, EmbeddedCheckoutProvider } from "@stripe/react-stripe-js";
@@ -24,6 +24,7 @@ interface AccountModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   account: UseAccountResult;
+  startCheckoutOnOpen?: boolean;
 }
 
 const PRO_FEATURES = ["Audits", "Cloud connect", "Autonomous agent"];
@@ -96,7 +97,7 @@ function CheckoutView({
   );
 }
 
-export function AccountModal({ open, onOpenChange, account }: AccountModalProps) {
+export function AccountModal({ open, onOpenChange, account, startCheckoutOnOpen }: AccountModalProps) {
   const { status } = account;
   const [checkout, setCheckout] = useState<CheckoutSession | null>(null);
   const [busy, setBusy] = useState(false);
@@ -104,7 +105,7 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
 
   const personalOrgId = account.orgs.find((o) => o.kind === "personal")?.id;
 
-  async function startCheckout() {
+  const startCheckout = useCallback(async () => {
     if (!personalOrgId || busy) return;
     setBusy(true);
     setError(null);
@@ -112,7 +113,19 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
     setBusy(false);
     if (r) setCheckout(r);
     else setError("Couldn't start checkout — try again");
-  }
+  }, [personalOrgId, busy, account]);
+
+  const firedRef = useRef(false);
+  useEffect(() => {
+    if (!open) {
+      firedRef.current = false;
+      return;
+    }
+    if (startCheckoutOnOpen && status === "signed-in" && personalOrgId && !checkout && !firedRef.current) {
+      firedRef.current = true;
+      void startCheckout();
+    }
+  }, [open, startCheckoutOnOpen, status, personalOrgId, checkout, startCheckout]);
 
   function handleComplete() {
     void account.refreshBilling();
