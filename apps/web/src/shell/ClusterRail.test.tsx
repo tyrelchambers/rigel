@@ -103,6 +103,14 @@ describe("ClusterRail reconciliation effect", () => {
     expect(container.querySelector(".lucide-lock")).toBeFalsy();
   });
 
+  it("redirects a free user off a locked cloud cluster to a local one", async () => {
+    mockUseEntitlement.mockReturnValue({ payload: { cloudConnect: false }, upgrade: vi.fn() });
+    useCluster.setState({ activeContext: "gke_proj_zone_prod" });
+    mockUseContexts.mockReturnValue({ data: [ctx("kind-dev", false), cloudCtx] });
+    renderRail();
+    await waitFor(() => expect(switchCluster).toHaveBeenCalledWith("kind-dev"));
+  });
+
   it("calls initContext on first load when activeContext is null", async () => {
     mockUseContexts.mockReturnValue({
       data: [ctx("prod", true), ctx("staging")],

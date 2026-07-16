@@ -55,16 +55,29 @@ export function ClusterRail() {
   // re-point at a valid one so panels don't query a context that's gone.
   useEffect(() => {
     if (!contexts || contexts.length === 0) return;
-    const fallback = contexts.find((c) => c.active) ?? contexts[0];
+    const isLocked = (c: { name: string; server: string }) =>
+      !cloudUnlocked && CLOUD_PROVIDERS.includes(classifyProvider(c));
+    const fallback =
+      contexts.find((c) => c.active && !isLocked(c)) ??
+      contexts.find((c) => !isLocked(c)) ??
+      contexts.find((c) => c.active) ??
+      contexts[0];
     if (activeContext === null) {
       const saved = readActiveContext();
-      const target = saved && contexts.some((c) => c.name === saved) ? saved : fallback.name;
+      const savedCtx = saved ? contexts.find((c) => c.name === saved) : undefined;
+      const target = savedCtx && !isLocked(savedCtx) ? savedCtx.name : fallback.name;
       initContext(fallback.name);
       if (target !== fallback.name) switchCluster(target);
-    } else if (!contexts.some((c) => c.name === activeContext)) {
-      switchCluster(fallback.name);
+    } else {
+      const active = contexts.find((c) => c.name === activeContext);
+      if (!active) {
+        switchCluster(fallback.name);
+      } else if (isLocked(active)) {
+        const local = contexts.find((c) => !isLocked(c));
+        if (local && local.name !== activeContext) switchCluster(local.name);
+      }
     }
-  }, [contexts, activeContext]);
+  }, [contexts, activeContext, cloudUnlocked]);
 
   function setIcon(contextName: string, id: IconId) {
     setIconOverrides((prev) => {
