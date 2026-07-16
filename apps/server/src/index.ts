@@ -59,7 +59,7 @@ import { getClusterYamlSchema } from "./clusterSchema";
 import { getApiResources } from "./apiResources";
 import { runCanI, type Subject, type CanICheck, type CanIResult } from "./rbacCanI";
 import { stripStatusBlock } from "@rigel/k8s/src/manifestClean";
-import { handleAssistant, isAutonomyRequest, type AssistantRequest } from "./assistant";
+import { handleAssistant, isAutonomyRequest, bumpAgentEntitlementRefresh, type AssistantRequest } from "./assistant";
 import { handleSignal, type SignalRequest } from "./signal";
 import { handleMatrix, type MatrixRequest } from "./matrix";
 import { handleChannelTest, type ChannelTestRequest } from "./channels";
@@ -81,7 +81,16 @@ let accountSignedIn = process.env.RIGEL_SIGNED_IN === "1";
   (e: { data?: unknown }) => {
     const m = e?.data as { type?: string; signedIn?: boolean; value?: EntitlementPayload | null } | undefined;
     if (m?.type === "account-auth") accountSignedIn = !!m.signedIn;
-    if (m?.type === "entitlement") setEntitlement(m.value ?? null);
+    if (m?.type === "entitlement") {
+      const wasAutonomous = canBeAutonomous();
+      setEntitlement(m.value ?? null);
+      if (!wasAutonomous && canBeAutonomous()) {
+        void bumpAgentEntitlementRefresh().then(
+          (r) => console.log(`entitlement bump: refreshed ${r.bumped.length} agent(s)${r.failures.length ? `, ${r.failures.length} failed` : ""}`),
+          (err) => console.error("entitlement bump failed:", err),
+        );
+      }
+    }
   },
 );
 
