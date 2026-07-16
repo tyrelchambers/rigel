@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Lock, LogOut, RefreshCw, Sparkles, Zap } from "lucide-react";
+import { ArrowLeft, Info, Lock, LogOut, RefreshCw, Sparkles, Zap } from "lucide-react";
 import { loadStripe } from "@stripe/stripe-js";
 import { EmbeddedCheckout, EmbeddedCheckoutProvider } from "@stripe/react-stripe-js";
 import {
@@ -83,6 +83,12 @@ function CheckoutView({
         </Button>
         <span className="font-heading text-base font-semibold text-[var(--fg-primary)]">
           Upgrade to Pro
+        </span>
+      </div>
+      <div className="flex items-start gap-2 rounded-lg bg-[var(--accent-dim)] px-3 py-2 text-xs text-[var(--fg-secondary)]">
+        <Info className="mt-0.5 size-3.5 shrink-0 text-[var(--accent-primary)]" />
+        <span>
+          After you pay, Pro unlocks right away — the in-cluster agent switches on within about 30 seconds.
         </span>
       </div>
       <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-sunken)] p-2">
