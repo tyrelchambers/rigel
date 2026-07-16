@@ -236,12 +236,13 @@ function AppContent({ account }: { account: UseAccountResult }) {
     };
   }, [toggleTerminal]);
 
-  if (contexts && contexts.length === 0 && !clusterSkipped) {
-    return <ClusterOnboarding onSkip={() => setClusterSkipped(true)} />;
-  }
+  const showClusterOnboarding = contexts && contexts.length === 0 && !clusterSkipped;
 
   return (
     <UpgradeProvider onUpgrade={openUpgrade}>
+    {showClusterOnboarding ? (
+      <ClusterOnboarding onSkip={() => setClusterSkipped(true)} />
+    ) : (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--surface-primary)" }}>
       {showOnboarding && <OnboardingWizard onClose={closeOnboarding} onLeave={leaveOnboarding} />}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
@@ -346,6 +347,7 @@ function AppContent({ account }: { account: UseAccountResult }) {
       {/* Toast host — background action progress (see lib/actionRunner). */}
       <Toaster />
     </div>
+    )}
     </UpgradeProvider>
   );
 }
