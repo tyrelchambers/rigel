@@ -1,4 +1,4 @@
-import { test, expect, vi } from "vitest";
+import { test, expect, vi, beforeEach } from "vitest";
 import { makeWsHandlers } from "./ws";
 import { LogStreamManager } from "./logStream";
 import { ActionRunManager } from "./actionRunManager";
@@ -7,6 +7,23 @@ const runAgentMock = vi.fn(async function* (..._args: unknown[]) {
   yield { type: "done" } as any;
 });
 vi.mock("./runAgent", () => ({ runAgent: (...args: unknown[]) => runAgentMock(...args) }));
+
+// The per-frame cloud gate. Default: no context is cloud and the account is Free
+// (both are the safe "everything is local" case) so existing behavior is unchanged.
+const isCloudContextMock = vi.fn(async (_ctx: string) => false);
+const cloudEnabledMock = vi.fn(() => false);
+vi.mock("./cloudGate", () => ({ isCloudContext: (...a: unknown[]) => isCloudContextMock(...(a as [string])) }));
+vi.mock("./entitlements", () => ({ cloudEnabled: () => cloudEnabledMock() }));
+vi.mock("./contexts", () => ({
+  listContexts: async () => [{ name: "local" }, { name: "prod-eks" }, { name: "kind-dev" }],
+}));
+
+beforeEach(() => {
+  isCloudContextMock.mockReset();
+  isCloudContextMock.mockResolvedValue(false);
+  cloudEnabledMock.mockReset();
+  cloudEnabledMock.mockReturnValue(false);
+});
 
 // A minimal fake WatchManager that records the Sub it was asked to subscribe and
 // lets the test drive the snapshot callback. unsubscribe is a spy.
@@ -32,13 +49,14 @@ function fakeWs() {
 // Flush the microtask queue so the async (lazy per-context discovery) path settles.
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
-test("subscribe defaults the context to the connection context and echoes it in the snapshot", () => {
+test("subscribe defaults the context to the connection context and echoes it in the snapshot", async () => {
   const mgr = fakeMgr();
   const handlers = makeWsHandlers(mgr as any, "boot-ctx");
   const ws = fakeWs();
   handlers.open(ws);
 
   handlers.message(ws, JSON.stringify({ type: "subscribe", kind: "pods", namespace: "default" }));
+  await flush();
 
   expect(mgr.subs[0].sub).toEqual({ context: "boot-ctx", kind: "pods", namespace: "default" });
 
@@ -104,13 +122,14 @@ test("unsubscribe with a context tears down that subscription and frees the key"
   expect(mgr.subs.length).toBe(2);
 });
 
-test("forwards a watch onError to the client as a kind-scoped error frame", () => {
+test("forwards a watch onError to the client as a kind-scoped error frame", async () => {
   const mgr = fakeMgr();
   const handlers = makeWsHandlers(mgr as any, "boot-ctx");
   const ws = fakeWs();
   handlers.open(ws);
 
   handlers.message(ws, JSON.stringify({ type: "subscribe", kind: "secrets", namespace: "*" }));
+  await flush();
 
   mgr.subs[0].onError({ reason: "forbidden", message: "secrets is forbidden" });
   expect(ws.sent).toContainEqual(
@@ -118,35 +137,38 @@ test("forwards a watch onError to the client as a kind-scoped error frame", () =
   );
 });
 
-test("fans out a wildcard subscribe to one watch per accessible namespace in scoped mode", () => {
+test("fans out a wildcard subscribe to one watch per accessible namespace in scoped mode", async () => {
   const mgr = fakeMgr();
   const handlers = makeWsHandlers(mgr as any, "ctx");
   const ws = fakeWs();
   handlers.open(ws, { mode: "scoped", namespaces: ["team-a", "team-b"] });
 
   handlers.message(ws, JSON.stringify({ type: "subscribe", kind: "pods", namespace: "*" }));
+  await flush();
 
   expect(mgr.subs.map((s) => s.sub.namespace).sort()).toEqual(["team-a", "team-b"]);
 });
 
-test("keeps a single cluster-wide watch in cluster-wide mode (default)", () => {
+test("keeps a single cluster-wide watch in cluster-wide mode (default)", async () => {
   const mgr = fakeMgr();
   const handlers = makeWsHandlers(mgr as any, "ctx");
   const ws = fakeWs();
   handlers.open(ws);
 
   handlers.message(ws, JSON.stringify({ type: "subscribe", kind: "pods", namespace: "*" }));
+  await flush();
 
   expect(mgr.subs.map((s) => s.sub.namespace)).toEqual(["*"]);
 });
 
-test("settles a zero-target scoped subscribe with a single empty snapshot and spawns no watches", () => {
+test("settles a zero-target scoped subscribe with a single empty snapshot and spawns no watches", async () => {
   const mgr = fakeMgr();
   const handlers = makeWsHandlers(mgr as any, "ctx");
   const ws = fakeWs();
   handlers.open(ws, { mode: "scoped", namespaces: [] });
 
   handlers.message(ws, JSON.stringify({ type: "subscribe", kind: "pods", namespace: "*" }));
+  await flush();
 
   expect(mgr.subs.length).toBe(0);
   const snapshots = ws.sent.filter((f: any) => f.type === "snapshot");
@@ -154,13 +176,14 @@ test("settles a zero-target scoped subscribe with a single empty snapshot and sp
   expect(snapshots[0]).toMatchObject({ type: "snapshot", kind: "pods", namespace: "*", items: [] });
 });
 
-test("tears down all fanned-out watches on unsubscribe", () => {
+test("tears down all fanned-out watches on unsubscribe", async () => {
   const mgr = fakeMgr();
   const handlers = makeWsHandlers(mgr as any, "ctx");
   const ws = fakeWs();
   handlers.open(ws, { mode: "scoped", namespaces: ["team-a", "team-b"] });
 
   handlers.message(ws, JSON.stringify({ type: "subscribe", kind: "pods", namespace: "*" }));
+  await flush();
   handlers.message(ws, JSON.stringify({ type: "unsubscribe", kind: "pods", namespace: "*" }));
 
   expect(mgr.unsub).toHaveBeenCalledTimes(2);
@@ -240,7 +263,7 @@ test("closing during discovery bails the pending fan-out instead of watching a d
   expect(mgr.subs.length).toBe(0);
 });
 
-test("logs.start with an explicit context calls the log manager's start with it, not the boot context", () => {
+test("logs.start with an explicit context calls the log manager's start with it, not the boot context", async () => {
   const startSpy = vi.spyOn(LogStreamManager.prototype, "start").mockImplementation(() => {});
   const mgr = fakeMgr();
   const handlers = makeWsHandlers(mgr as any, "boot-ctx");
@@ -252,12 +275,13 @@ test("logs.start with an explicit context calls the log manager's start with it,
     ws,
     JSON.stringify({ type: "logs.start", targets, tailLines: 50, context: "ctx-b" }),
   );
+  await flush();
 
   expect(startSpy).toHaveBeenCalledWith(targets, 50, "ctx-b");
   startSpy.mockRestore();
 });
 
-test("logs.start without a context falls back to the connection's boot context", () => {
+test("logs.start without a context falls back to the connection's boot context", async () => {
   const startSpy = vi.spyOn(LogStreamManager.prototype, "start").mockImplementation(() => {});
   const mgr = fakeMgr();
   const handlers = makeWsHandlers(mgr as any, "boot-ctx");
@@ -266,12 +290,13 @@ test("logs.start without a context falls back to the connection's boot context",
 
   const targets = [{ namespace: "default", labelSelector: "app=web" }];
   handlers.message(ws, JSON.stringify({ type: "logs.start", targets, tailLines: 50 }));
+  await flush();
 
   expect(startSpy).toHaveBeenCalledWith(targets, 50, "boot-ctx");
   startSpy.mockRestore();
 });
 
-test("action.run with an explicit context passes it through to the action manager", () => {
+test("action.run with an explicit context passes it through to the action manager", async () => {
   const runSpy = vi.spyOn(ActionRunManager.prototype, "run").mockImplementation(() => {});
   const mgr = fakeMgr();
   const handlers = makeWsHandlers(mgr as any, "boot-ctx");
@@ -280,12 +305,13 @@ test("action.run with an explicit context passes it through to the action manage
 
   const action = { kind: "restart", name: "my-app", namespace: "default" };
   handlers.message(ws, JSON.stringify({ type: "action.run", id: "r1", action, context: "ctx-b" }));
+  await flush();
 
   expect(runSpy).toHaveBeenCalledWith({ id: "r1", action, context: "ctx-b" });
   runSpy.mockRestore();
 });
 
-test("action.run without a context falls back to the connection's boot context", () => {
+test("action.run without a context falls back to the connection's boot context", async () => {
   const runSpy = vi.spyOn(ActionRunManager.prototype, "run").mockImplementation(() => {});
   const mgr = fakeMgr();
   const handlers = makeWsHandlers(mgr as any, "boot-ctx");
@@ -294,12 +320,13 @@ test("action.run without a context falls back to the connection's boot context",
 
   const action = { kind: "restart", name: "my-app", namespace: "default" };
   handlers.message(ws, JSON.stringify({ type: "action.run", id: "r1", action }));
+  await flush();
 
   expect(runSpy).toHaveBeenCalledWith({ id: "r1", action, context: "boot-ctx" });
   runSpy.mockRestore();
 });
 
-test("chat with an explicit context feeds it to runAgent instead of the boot context", () => {
+test("chat with an explicit context feeds it to runAgent instead of the boot context", async () => {
   runAgentMock.mockClear();
   const mgr = fakeMgr();
   const handlers = makeWsHandlers(mgr as any, "boot-ctx");
@@ -307,6 +334,7 @@ test("chat with an explicit context feeds it to runAgent instead of the boot con
   handlers.open(ws);
 
   handlers.message(ws, JSON.stringify({ type: "chat", prompt: "hi", context: "ctx-b" }));
+  await flush();
 
   expect(runAgentMock).toHaveBeenCalledTimes(1);
   const [prompt, ctxArg] = runAgentMock.mock.calls[0]!;
@@ -314,7 +342,7 @@ test("chat with an explicit context feeds it to runAgent instead of the boot con
   expect(ctxArg).toBe("ctx-b");
 });
 
-test("chat without a context falls back to the connection's boot context", () => {
+test("chat without a context falls back to the connection's boot context", async () => {
   runAgentMock.mockClear();
   const mgr = fakeMgr();
   const handlers = makeWsHandlers(mgr as any, "boot-ctx");
@@ -322,8 +350,144 @@ test("chat without a context falls back to the connection's boot context", () =>
   handlers.open(ws);
 
   handlers.message(ws, JSON.stringify({ type: "chat", prompt: "hi" }));
+  await flush();
 
   expect(runAgentMock).toHaveBeenCalledTimes(1);
   const [, ctxArg] = runAgentMock.mock.calls[0]!;
   expect(ctxArg).toBe("boot-ctx");
+});
+
+// HELM-16: per-frame cloud gate. On Free, a frame whose resolved context is a
+// cloud provider is dropped with a typed gated error; on Pro it proceeds; a local
+// context always proceeds.
+
+test("subscribe to a cloud context on Free is gated and starts no watch", async () => {
+  isCloudContextMock.mockResolvedValue(true);
+  const mgr = fakeMgr();
+  const handlers = makeWsHandlers(mgr as any, "boot-ctx");
+  const ws = fakeWs();
+  handlers.open(ws);
+
+  handlers.message(ws, JSON.stringify({ type: "subscribe", context: "prod-eks", kind: "pods", namespace: "default" }));
+  await flush();
+
+  expect(mgr.subs.length).toBe(0);
+  expect(ws.sent).toContainEqual(
+    expect.objectContaining({ type: "error", context: "prod-eks", kind: "pods", gated: true }),
+  );
+});
+
+test("subscribe to a cloud context on Pro proceeds", async () => {
+  isCloudContextMock.mockResolvedValue(true);
+  cloudEnabledMock.mockReturnValue(true);
+  const mgr = fakeMgr();
+  const handlers = makeWsHandlers(mgr as any, "boot-ctx");
+  const ws = fakeWs();
+  handlers.open(ws);
+
+  handlers.message(ws, JSON.stringify({ type: "subscribe", context: "prod-eks", kind: "pods", namespace: "default" }));
+  await flush();
+
+  expect(mgr.subs.map((s) => s.sub)).toEqual([{ context: "prod-eks", kind: "pods", namespace: "default" }]);
+  expect(ws.sent.find((f: any) => f.gated)).toBeUndefined();
+});
+
+test("subscribe to a local context on Free is never gated", async () => {
+  isCloudContextMock.mockResolvedValue(false);
+  const mgr = fakeMgr();
+  const handlers = makeWsHandlers(mgr as any, "kind-dev");
+  const ws = fakeWs();
+  handlers.open(ws);
+
+  handlers.message(ws, JSON.stringify({ type: "subscribe", kind: "pods", namespace: "default" }));
+  await flush();
+
+  expect(mgr.subs.length).toBe(1);
+  expect(ws.sent.find((f: any) => f.gated)).toBeUndefined();
+});
+
+test("logs.start on a cloud context on Free is gated and never starts the stream", async () => {
+  isCloudContextMock.mockResolvedValue(true);
+  const startSpy = vi.spyOn(LogStreamManager.prototype, "start").mockImplementation(() => {});
+  const mgr = fakeMgr();
+  const handlers = makeWsHandlers(mgr as any, "boot-ctx");
+  const ws = fakeWs();
+  handlers.open(ws);
+
+  const targets = [{ namespace: "default", labelSelector: "app=web" }];
+  handlers.message(ws, JSON.stringify({ type: "logs.start", targets, tailLines: 50, context: "prod-eks" }));
+  await flush();
+
+  expect(startSpy).not.toHaveBeenCalled();
+  expect(ws.sent).toContainEqual(expect.objectContaining({ type: "logs.error", gated: true }));
+  startSpy.mockRestore();
+});
+
+test("action.run on a cloud context on Free is gated and never runs the action", async () => {
+  isCloudContextMock.mockResolvedValue(true);
+  const runSpy = vi.spyOn(ActionRunManager.prototype, "run").mockImplementation(() => {});
+  const mgr = fakeMgr();
+  const handlers = makeWsHandlers(mgr as any, "boot-ctx");
+  const ws = fakeWs();
+  handlers.open(ws);
+
+  const action = { kind: "restart", name: "my-app", namespace: "default" };
+  handlers.message(ws, JSON.stringify({ type: "action.run", id: "r1", action, context: "prod-eks" }));
+  await flush();
+
+  expect(runSpy).not.toHaveBeenCalled();
+  expect(ws.sent).toContainEqual(expect.objectContaining({ type: "action.error", id: "r1", gated: true }));
+  runSpy.mockRestore();
+});
+
+test("action.run on a cloud context on Pro runs the action", async () => {
+  isCloudContextMock.mockResolvedValue(true);
+  cloudEnabledMock.mockReturnValue(true);
+  const runSpy = vi.spyOn(ActionRunManager.prototype, "run").mockImplementation(() => {});
+  const mgr = fakeMgr();
+  const handlers = makeWsHandlers(mgr as any, "boot-ctx");
+  const ws = fakeWs();
+  handlers.open(ws);
+
+  const action = { kind: "restart", name: "my-app", namespace: "default" };
+  handlers.message(ws, JSON.stringify({ type: "action.run", id: "r1", action, context: "prod-eks" }));
+  await flush();
+
+  expect(runSpy).toHaveBeenCalledWith({ id: "r1", action, context: "prod-eks" });
+  runSpy.mockRestore();
+});
+
+test("chat on a cloud context on Free is gated and never spawns the agent", async () => {
+  runAgentMock.mockClear();
+  isCloudContextMock.mockResolvedValue(true);
+  const mgr = fakeMgr();
+  const handlers = makeWsHandlers(mgr as any, "boot-ctx");
+  const ws = fakeWs();
+  handlers.open(ws);
+
+  handlers.message(ws, JSON.stringify({ type: "chat", prompt: "hi", context: "prod-eks" }));
+  await flush();
+
+  expect(runAgentMock).not.toHaveBeenCalled();
+  expect(ws.sent).toContainEqual(
+    expect.objectContaining({ type: "chat", event: expect.objectContaining({ type: "error", gated: true }) }),
+  );
+});
+
+test("chat fan-out drops cloud contexts from the read set on Free", async () => {
+  runAgentMock.mockClear();
+  // The active context is local; the fan-out set includes one cloud context.
+  isCloudContextMock.mockImplementation(async (ctx: string) => ctx === "prod-eks");
+  const mgr = fakeMgr();
+  const handlers = makeWsHandlers(mgr as any, "local");
+  const ws = fakeWs();
+  handlers.open(ws);
+
+  handlers.message(ws, JSON.stringify({ type: "chat", prompt: "hi", scope: "all" }));
+  await flush();
+
+  expect(runAgentMock).toHaveBeenCalledTimes(1);
+  const opts = runAgentMock.mock.calls[0]![3] as { readContexts: string[] };
+  expect(opts.readContexts).not.toContain("prod-eks");
+  expect(opts.readContexts).toContain("local");
 });

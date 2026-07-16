@@ -45,6 +45,7 @@ import ChatPane, { type ChatPaneHandle } from "@/shell/ChatPane";
 import { CommandPalette, useCommandPalette } from "@/shell/CommandPalette";
 import { GlobalHeader } from "@/shell/GlobalHeader";
 import { AccountModal } from "@/shell/AccountModal";
+import { UpgradeProvider } from "@/shell/UpgradeContext";
 import { useAccount, type UseAccountResult } from "@/shell/useAccount";
 import { loadSidebarCollapsed, saveSidebarCollapsed } from "@/shell/navCollapse";
 import { registerChatReveal } from "@/lib/chatHandoff";
@@ -120,6 +121,11 @@ function AppContent({ account }: { account: UseAccountResult }) {
   // Account modal — session state (sign-in/out) is owned by useAccount, gated
   // in App above (signed-out renders ONLY LoginGate, never this component).
   const [accountOpen, setAccountOpen] = useState(false);
+  const [upgradeIntent, setUpgradeIntent] = useState(false);
+  const openUpgrade = useCallback(() => {
+    setAccountOpen(true);
+    setUpgradeIntent(true);
+  }, []);
 
   useEffect(() => {
     const open = () => setShowOnboarding(true);
@@ -230,15 +236,22 @@ function AppContent({ account }: { account: UseAccountResult }) {
     };
   }, [toggleTerminal]);
 
-  if (contexts && contexts.length === 0 && !clusterSkipped) {
-    return <ClusterOnboarding onSkip={() => setClusterSkipped(true)} />;
-  }
+  const showClusterOnboarding = contexts && contexts.length === 0 && !clusterSkipped;
 
   return (
+    <UpgradeProvider onUpgrade={openUpgrade}>
+    {showClusterOnboarding ? (
+      <ClusterOnboarding onSkip={() => setClusterSkipped(true)} />
+    ) : (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--surface-primary)" }}>
       {showOnboarding && <OnboardingWizard onClose={closeOnboarding} onLeave={leaveOnboarding} />}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
-      <AccountModal open={accountOpen} onOpenChange={setAccountOpen} account={account} />
+      <AccountModal
+        open={accountOpen}
+        onOpenChange={(o) => { setAccountOpen(o); if (!o) setUpgradeIntent(false); }}
+        account={account}
+        startCheckoutOnOpen={upgradeIntent}
+      />
 
       {/* ── Global header — full-width bar across the top of the window. ─────── */}
       <GlobalHeader
@@ -334,5 +347,7 @@ function AppContent({ account }: { account: UseAccountResult }) {
       {/* Toast host — background action progress (see lib/actionRunner). */}
       <Toaster />
     </div>
+    )}
+    </UpgradeProvider>
   );
 }

@@ -665,6 +665,35 @@ export async function discoverInstalledContexts(
 }
 
 /**
+ * Stamp a fresh `entitlementRefreshAt` into every installed context's
+ * assistant-config, telling each agent to force its next entitlement check
+ * immediately (bypassing the 12h throttle) — the free→Pro fast-path. One failing
+ * context is isolated into `failures` and never aborts the rest.
+ */
+export async function bumpAgentEntitlementRefresh(
+  deps: {
+    discover?: (namespace: string) => Promise<string[]>;
+    patch?: (context: string | null, namespace: string, updates: Record<string, string>) => Promise<RunResult>;
+  } = {},
+): Promise<{ bumped: string[]; failures: { context: string; error: string }[] }> {
+  const namespace = DEFAULT_INSTALL_CONFIG.installNamespace;
+  const discover = deps.discover ?? ((ns: string) => discoverInstalledContexts(ns));
+  const patch = deps.patch ?? patchConfig;
+  const contexts = await discover(namespace);
+  const bumped: string[] = [];
+  const failures: { context: string; error: string }[] = [];
+  for (const ctx of contexts) {
+    try {
+      await patch(ctx, namespace, { entitlementRefreshAt: new Date().toISOString() });
+      bumped.push(ctx);
+    } catch (e) {
+      failures.push({ context: ctx, error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  return { bumped, failures };
+}
+
+/**
  * Persist the operator's RBAC policy AND apply it as a ClusterRole to each
  * context in `req.contexts` (default: the active context). For every target we
  * read-modify-write `assistant-config` (so stored + live agree per cluster) and
@@ -766,6 +795,14 @@ async function setMode(
   req: AssistantRequest,
 ): Promise<RunResult> {
   return patchConfig(context, namespace, setModeUpdates(req));
+}
+
+/** Whether a request makes the agent act on its own — a setMode to a mode that
+ *  applies fixes autonomously ("auto" always; "window" = auto by day). "advisory"
+ *  waits for approval, so it is never autonomous. Gates on the agentAutonomy
+ *  entitlement (see the /api/assistant route). */
+export function isAutonomyRequest(req: AssistantRequest): boolean {
+  return req.action === "setMode" && (req.mode === "auto" || req.mode === "window");
 }
 
 async function setKillSwitch(

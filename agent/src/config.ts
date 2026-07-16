@@ -37,6 +37,16 @@ export interface Config {
    *  agent; set by the installer). Empty when unconfigured — dispatch then
    *  records a failure instead of creating a broken Job. */
   fixRunnerImage: string;
+  /** Opaque bearer token identifying this org to the entitlement backend. Empty =
+   *  unconfigured → treated as not entitled (free), no fetch attempted. */
+  agentToken: string;
+  /** Base URL of the entitlement backend (GET {endpoint}/agent/entitlement). */
+  entitlementEndpoint: string;
+  /** How often to re-fetch entitlement (default 12h). */
+  entitlementCheckMs: number;
+  /** Grace period the last-known-good entitlement is honored through a fetch
+   *  outage before failing closed to free (default 30d). */
+  entitlementGraceMs: number;
 }
 
 function num(name: string, fallback: number): number {
@@ -75,6 +85,10 @@ export function loadConfig(): Config {
     maxBackups: num("MAX_BACKUPS", 50),
     queueTtlMs: num("QUEUE_TTL_HOURS", 48) * 3_600_000,
     fixRunnerImage: str("RIGEL_FIX_RUNNER_IMAGE", ""),
+    agentToken: str("RIGEL_AGENT_TOKEN", ""),
+    entitlementEndpoint: str("RIGEL_ENTITLEMENT_ENDPOINT", "https://api.rigel.run"),
+    entitlementCheckMs: num("ENTITLEMENT_CHECK_MS", 12 * 60 * 60 * 1000),
+    entitlementGraceMs: num("ENTITLEMENT_GRACE_MS", 30 * 24 * 60 * 60 * 1000),
   };
 }
 

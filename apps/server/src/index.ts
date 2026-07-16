@@ -46,7 +46,8 @@ import {
   cloudCheck, cloudListClusters, cloudConnect, cloudHealth, importKubeconfig, cloudParamOptions,
 } from "./cloudConnect";
 import { disconnectContext } from "./disconnectContext";
-import { canConnect, type ConnectTarget } from "./entitlements";
+import { canConnect, setEntitlement, canBeAutonomous, unlockedAuditsEnv, type ConnectTarget, type EntitlementPayload } from "./entitlements";
+import { cloudGateResponse } from "./cloudGate";
 import type { CloudCluster } from "@rigel/cloud-connect/src/index";
 import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusMetrics";
 import { handleUpdates, type UpdatesRequest } from "./updates";
@@ -59,7 +60,7 @@ import { getClusterYamlSchema } from "./clusterSchema";
 import { getApiResources } from "./apiResources";
 import { runCanI, type Subject, type CanICheck, type CanIResult } from "./rbacCanI";
 import { stripStatusBlock } from "@rigel/k8s/src/manifestClean";
-import { handleAssistant, type AssistantRequest } from "./assistant";
+import { handleAssistant, isAutonomyRequest, bumpAgentEntitlementRefresh, type AssistantRequest } from "./assistant";
 import { handleSignal, type SignalRequest } from "./signal";
 import { handleMatrix, type MatrixRequest } from "./matrix";
 import { handleChannelTest, type ChannelTestRequest } from "./channels";
@@ -79,8 +80,18 @@ let accountSignedIn = process.env.RIGEL_SIGNED_IN === "1";
 (process as unknown as { parentPort?: { on(ev: string, cb: (e: { data?: unknown }) => void): void } }).parentPort?.on(
   "message",
   (e: { data?: unknown }) => {
-    const m = e?.data as { type?: string; signedIn?: boolean } | undefined;
+    const m = e?.data as { type?: string; signedIn?: boolean; value?: EntitlementPayload | null } | undefined;
     if (m?.type === "account-auth") accountSignedIn = !!m.signedIn;
+    if (m?.type === "entitlement") {
+      const wasAutonomous = canBeAutonomous();
+      setEntitlement(m.value ?? null);
+      if (wasAutonomous !== canBeAutonomous()) {
+        void bumpAgentEntitlementRefresh().then(
+          (r) => console.log(`entitlement bump: refreshed ${r.bumped.length} agent(s)${r.failures.length ? `, ${r.failures.length} failed` : ""}`),
+          (err) => console.error("entitlement bump failed:", err),
+        );
+      }
+    }
   },
 );
 
@@ -278,6 +289,13 @@ async function handler(req: Request): Promise<Response> {
       }
       return Response.json(await importKubeconfig(body.kubeconfig, { kubeconfigPath: KUBECONFIG }));
     }
+
+    // Monetization (HELM-16): on Free, block every context-scoped /api/* call
+    // whose resolved context is a cloud provider — however it entered the
+    // kubeconfig. Exempts health/contexts/cloud-connect/delete/disconnect so a
+    // Free user can still see and remove a locked cloud cluster.
+    const cloudGate = await cloudGateResponse(url.pathname, context);
+    if (cloudGate) return cloudGate;
 
     // Serve the built web UI for everything that isn't an API or WS path.
     if (!url.pathname.startsWith("/api/") && url.pathname !== "/ws") {
@@ -1093,6 +1111,11 @@ async function handler(req: Request): Promise<Response> {
       ) {
         return Response.json({ error: "missing fingerprint" }, { status: 422 });
       }
+      // Monetization (HELM-16): turning the agent autonomous requires Rigel Pro.
+      // Mirrors the cloud-connect 402 { gated: true } shape the client reads.
+      if (isAutonomyRequest(body) && !canBeAutonomous()) {
+        return Response.json({ error: "Autonomous agent actions require Rigel Pro.", gated: true }, { status: 402 });
+      }
       try {
         const result = await handleAssistant(context, body);
         if (result.code !== 0) {
@@ -1270,20 +1293,25 @@ const httpServer = serve({ fetch: handler, port: PORT, hostname: HOST }, (info) 
 const wss = new WebSocketServer({ noServer: true });
 const wsHandlers = makeWsHandlers(mgr, bootContext, KUBECONFIG, accessFor);
 httpServer.on("upgrade", (req: IncomingMessage, socket, head) => {
-  try {
-    const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
-    if (url.pathname !== "/ws") {
-      socket.destroy();
-      return;
+  void (async () => {
+    try {
+      const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+      if (url.pathname !== "/ws") {
+        socket.destroy();
+        return;
+      }
+      if (!accessAllowed(url.searchParams.get("s"), SESSION_SECRET, accountSignedIn)) {
+        socket.destroy();
+        return;
+      }
+      // HELM-16: cloud-cluster gating happens per-frame in the WS handlers, not at
+      // upgrade — the boot context is not the app's active context, so rejecting
+      // the upgrade would brick every cluster for a Free user whose default is cloud.
+      wss.handleUpgrade(req, socket, head, (client) => wss.emit("connection", client));
+    } catch {
+      try { socket.destroy(); } catch { /* already gone */ }
     }
-    if (!accessAllowed(url.searchParams.get("s"), SESSION_SECRET, accountSignedIn)) {
-      socket.destroy();
-      return;
-    }
-    wss.handleUpgrade(req, socket, head, (client) => wss.emit("connection", client));
-  } catch {
-    try { socket.destroy(); } catch { /* already gone */ }
-  }
+  })();
 });
 wss.on("error", (err) => console.error("websocket server error:", err));
 wss.on("connection", (client) => {

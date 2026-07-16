@@ -69,6 +69,11 @@ export const ISSUED_AT_ANNOTATION = "rigel.assistant/token-issued-at";
  * untouched (the Deployment injects from BOTH, each optional). */
 export const CREDENTIALS_SECRET_NAME = "rigel-assistant-credentials";
 
+/** Data key in the credentials Secret holding the opaque entitlement token
+ *  (env `RIGEL_AGENT_TOKEN`). Not a provider credential — carries no credential
+ *  annotation and never participates in credential resolution. */
+export const AGENT_TOKEN_SECRET_KEY = "RIGEL_AGENT_TOKEN";
+
 /** The agent Deployment's name. Its owned objects all carry the managed-by label
  *  below, so we can tell OUR install apart from a same-named foreign Deployment. */
 export const DEPLOYMENT_NAME = "rigel-assistant";
@@ -97,6 +102,9 @@ export interface AssistantCredentials {
   geminiApiKey?: string;
   opencodeApiKey?: string;
   opencodeAuthContent?: string;
+  /** Opaque entitlement token (env `RIGEL_AGENT_TOKEN`). Written as its own
+   *  Secret key; not a provider credential. */
+  agentToken?: string;
 }
 
 /** Stable ordered list of (key) so YAML output is deterministic. */
@@ -414,6 +422,11 @@ export function credentialsSecretYAML(
       annotations.push(`    ${CREDENTIAL_ANNOTATION_PREFIX}${key}: "${key}"`);
     }
   }
+  // The entitlement token rides in the same Secret under its own env-named key, but
+  // is NOT a provider credential (no credential annotation, no resolution).
+  if (typeof creds.agentToken === "string" && creds.agentToken.trim() !== "") {
+    lines.push(`  ${AGENT_TOKEN_SECRET_KEY}: "${escape(creds.agentToken)}"`);
+  }
   const stringData = lines.length > 0 ? `stringData:\n${lines.join("\n")}` : "stringData: {}";
   const annotationsBlock = annotations.length > 0 ? `\n  annotations:\n${annotations.join("\n")}` : "";
   return `apiVersion: v1
@@ -604,7 +617,10 @@ metadata:
     app.kubernetes.io/managed-by: rigel-assistant
 data:
   enabled: "true"
-  mode: "auto"
+  # Seed advisory (observe + queue + notify, no autonomous action). Turning on
+  # autonomy is only ever reachable through setMode, which is Pro-gated — so a
+  # fresh install never grants autonomous remediation without an entitled opt-in.
+  mode: "advisory"
 ${roleLines}
 ${limitLines}
 ---

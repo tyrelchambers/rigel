@@ -150,6 +150,13 @@ export interface AgentStatus {
   version: string;
 }
 
+/** Cached entitlement decision from the backend, with the fetch instant so the
+ *  agent can honor a grace window during a backend outage. Agent-owned. */
+export interface Entitlement {
+  agentEntitled: boolean;
+  fetchedAt: string;
+}
+
 export interface AssistantState {
   updatedAt: string;
   status?: AgentStatus;
@@ -177,6 +184,12 @@ export interface AssistantState {
   incidents?: IncidentRecord[];
   /** Scheduled-digest send-state. */
   digestState?: DigestState;
+  /** Cached entitlement decision (30-day grace) gating the agent's premium
+   *  capabilities. Absent until the first entitlement check. */
+  entitlement?: Entitlement;
+  /** Last server-stamped entitlementRefreshAt the agent has honored, so a
+   *  changed value force-triggers exactly one immediate entitlement check. */
+  entitlementRefreshAt?: string;
 }
 
 /** Cap on the rolling incident history, and the max age before pruning. */

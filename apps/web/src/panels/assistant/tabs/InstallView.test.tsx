@@ -6,6 +6,16 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { InstallView } from "./InstallView";
 import { AssistantContext, type AssistantContextValue } from "../AssistantContext";
 
+const agentToken = vi.fn(async (_orgId: string) => ({ token: "rig_agent_tok", installId: "inst-1" }) as { token: string; installId: string } | null);
+let mockOrgs: Array<{ id: string; kind: "personal" | "team"; name: string; role: string }> = [];
+
+vi.mock("@/lib/desktop", () => ({
+  rigel: { billing: { agentToken: (orgId: string) => agentToken(orgId) } },
+  isDesktop: true,
+  isMacDesktop: false,
+}));
+vi.mock("@/shell/useAccount", () => ({ useAccount: () => ({ orgs: mockOrgs }) }));
+
 const run = vi.fn();
 
 function ctx(): AssistantContextValue {
@@ -33,6 +43,9 @@ function wrap() {
 
 beforeEach(() => {
   run.mockReset();
+  agentToken.mockClear();
+  agentToken.mockResolvedValue({ token: "rig_agent_tok", installId: "inst-1" });
+  mockOrgs = [];
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     if (url.includes("/api/chat-config")) return new Response(JSON.stringify({ configured: false, source: null }));
     if (url.includes("/api/agents/claude/models")) return new Response(JSON.stringify({ models: ["claude-sonnet-4-6", "claude-opus-4-8"], efforts: ["low", "medium", "high"] }));
@@ -69,5 +82,29 @@ describe("InstallView (multi-provider)", () => {
       }),
       expect.any(Function),
     );
+  });
+
+  it("mints an install-scoped agent token for the personal org and threads it into credentials", async () => {
+    mockOrgs = [{ id: "org-personal", kind: "personal", name: "Me", role: "owner" }];
+    wrap();
+    await screen.findAllByText("claude-sonnet-4-6");
+    await userEvent.type(screen.getByPlaceholderText(/CLAUDE_CODE_OAUTH_TOKEN/i), "tok-abc");
+    await userEvent.click(screen.getByRole("button", { name: /^install$/i }));
+    expect(agentToken).toHaveBeenCalledWith("org-personal");
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "install", credentials: expect.objectContaining({ agentToken: "rig_agent_tok" }) }),
+      expect.any(Function),
+    );
+  });
+
+  it("installs token-less when the mint fails (offline / non-member)", async () => {
+    mockOrgs = [{ id: "org-personal", kind: "personal", name: "Me", role: "owner" }];
+    agentToken.mockResolvedValue(null);
+    wrap();
+    await screen.findAllByText("claude-sonnet-4-6");
+    await userEvent.type(screen.getByPlaceholderText(/CLAUDE_CODE_OAUTH_TOKEN/i), "tok-abc");
+    await userEvent.click(screen.getByRole("button", { name: /^install$/i }));
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run.mock.calls[0][0].credentials.agentToken).toBeUndefined();
   });
 });

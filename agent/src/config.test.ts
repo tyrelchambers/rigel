@@ -1,5 +1,5 @@
-import { describe, expect, test, vi } from "vitest";
-import { resolveFixRunnerImage, type Config } from "./config.js";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import { loadConfig, resolveFixRunnerImage, type Config } from "./config.js";
 import type { KubectlResult } from "./kubectl.js";
 
 const ok = (stdout: string): KubectlResult => ({ stdout, stderr: "", code: 0 });
@@ -10,6 +10,28 @@ const fail = (): KubectlResult => ({ stdout: "", stderr: "forbidden", code: 1 })
 function cfg(over: Partial<Config> = {}): Config {
   return { stateNamespace: "default", fixRunnerImage: "ghcr.io/me/rigel-assistant:env-default", ...over } as Config;
 }
+
+describe("loadConfig — entitlement fields", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  test("defaults: empty token, api.rigel.run endpoint, 12h check, 30d grace", () => {
+    vi.stubEnv("RIGEL_AGENT_TOKEN", "");
+    vi.stubEnv("RIGEL_ENTITLEMENT_ENDPOINT", "");
+    const c = loadConfig();
+    expect(c.agentToken).toBe("");
+    expect(c.entitlementEndpoint).toBe("https://api.rigel.run");
+    expect(c.entitlementCheckMs).toBe(12 * 60 * 60 * 1000);
+    expect(c.entitlementGraceMs).toBe(30 * 24 * 60 * 60 * 1000);
+  });
+
+  test("reads RIGEL_AGENT_TOKEN and RIGEL_ENTITLEMENT_ENDPOINT from env", () => {
+    vi.stubEnv("RIGEL_AGENT_TOKEN", "tok-abc");
+    vi.stubEnv("RIGEL_ENTITLEMENT_ENDPOINT", "https://api.example.test");
+    const c = loadConfig();
+    expect(c.agentToken).toBe("tok-abc");
+    expect(c.entitlementEndpoint).toBe("https://api.example.test");
+  });
+});
 
 describe("resolveFixRunnerImage", () => {
   test("returns the agent's OWN running image from the pod self-lookup", async () => {

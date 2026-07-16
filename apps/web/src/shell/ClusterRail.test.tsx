@@ -40,6 +40,12 @@ vi.mock("@/lib/api", async (importOriginal) => {
   };
 });
 
+// ---- Entitlement / upgrade stubs ----------------------------------------------
+const mockUseEntitlement = vi.fn((): { payload: { cloudConnect: boolean } | null; upgrade: () => void } => ({ payload: { cloudConnect: true }, upgrade: vi.fn() }));
+vi.mock("./useEntitlement", () => ({ useEntitlement: () => mockUseEntitlement() }));
+const openUpgrade = vi.fn();
+vi.mock("./UpgradeContext", () => ({ useUpgrade: () => ({ openUpgrade }) }));
+
 // ---- Store stubs ---------------------------------------------------------------
 import { useCluster } from "@/store/cluster";
 
@@ -74,8 +80,55 @@ describe("ClusterRail reconciliation effect", () => {
     mockUseDeleteCluster.mockReturnValue(noopMutation);
     mockUseDisconnectCluster.mockReturnValue(noopMutation);
     mockUseClusterHealth.mockReturnValue({ data: null });
+    mockUseEntitlement.mockReturnValue({ payload: { cloudConnect: true }, upgrade: vi.fn() });
+    openUpgrade.mockClear();
     // clusterIconStore reads localStorage; clear to avoid cross-test bleed.
     localStorage.clear();
+  });
+
+  const cloudCtx = { name: "gke_proj_zone_prod", cluster: "prod", server: "https://1.2.3.4", active: false };
+
+  it("shows a lock on cloud tiles when cloud connect is not entitled", () => {
+    mockUseEntitlement.mockReturnValue({ payload: { cloudConnect: false }, upgrade: vi.fn() });
+    useCluster.setState({ activeContext: "kind-dev" });
+    mockUseContexts.mockReturnValue({ data: [ctx("kind-dev", true), cloudCtx] });
+    const { container } = renderRail();
+    expect(container.querySelector(".lucide-lock")).toBeTruthy();
+  });
+
+  it("does not lock cloud tiles when cloud connect is entitled", () => {
+    useCluster.setState({ activeContext: "kind-dev" });
+    mockUseContexts.mockReturnValue({ data: [ctx("kind-dev", true), cloudCtx] });
+    const { container } = renderRail();
+    expect(container.querySelector(".lucide-lock")).toBeFalsy();
+  });
+
+  it("redirects a free user off a locked cloud cluster to a local one", async () => {
+    mockUseEntitlement.mockReturnValue({ payload: { cloudConnect: false }, upgrade: vi.fn() });
+    useCluster.setState({ activeContext: "gke_proj_zone_prod" });
+    mockUseContexts.mockReturnValue({ data: [ctx("kind-dev", false), cloudCtx] });
+    renderRail();
+    await waitFor(() => expect(switchCluster).toHaveBeenCalledWith("kind-dev"));
+  });
+
+  it("does NOT redirect off a cloud cluster while entitlement is unresolved", async () => {
+    // payload null = entitlement IPC still resolving. Cloud contexts must read as
+    // unknown, not locked, so a Pro user isn't bounced to local on cold start.
+    mockUseEntitlement.mockReturnValue({ payload: null, upgrade: vi.fn() });
+    useCluster.setState({ activeContext: "gke_proj_zone_prod" });
+    mockUseContexts.mockReturnValue({ data: [ctx("kind-dev", false), cloudCtx] });
+    renderRail();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(switchCluster).not.toHaveBeenCalled();
+  });
+
+  it("keeps a Pro user on their cloud cluster once entitlement resolves", async () => {
+    mockUseEntitlement.mockReturnValue({ payload: { cloudConnect: true }, upgrade: vi.fn() });
+    useCluster.setState({ activeContext: "gke_proj_zone_prod" });
+    mockUseContexts.mockReturnValue({ data: [ctx("kind-dev", false), cloudCtx] });
+    renderRail();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(switchCluster).not.toHaveBeenCalled();
   });
 
   it("calls initContext on first load when activeContext is null", async () => {

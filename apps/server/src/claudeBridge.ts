@@ -2,6 +2,7 @@
 // (apps/web) and this bridge decode the fenced ```action JSON identically.
 export { extractActionBlocks } from "@rigel/k8s/src/actionBlocks";
 import { claudeAuthEnv } from "./agentConfig";
+import { unlockedAuditsEnv } from "./entitlements";
 import { systemPrompt } from "./systemPrompt";
 import { streamAgentProcess, type ChatEvent } from "./agentProcess";
 import { fileURLToPath } from "node:url";
@@ -303,6 +304,11 @@ export async function* runClaude(
     ...(process.env as Record<string, string>),
     ...(context ? { KUBECONFIG_CONTEXT: context } : {}),
     ...(await claudeAuthEnv()),
+    // Monetization (HELM-16): the audit CLI reads RIGEL_UNLOCKED_AUDITS to gate
+    // which audit kinds may run. Derived from the LIVE entitlement here (the
+    // server holds it), so an upgrade takes effect on the next audit run with no
+    // restart. Empty string = free (no audits unlocked).
+    RIGEL_UNLOCKED_AUDITS: unlockedAuditsEnv(),
     // Audit skills (HELM-20): when the packaged app ships a `rigel-audit`
     // binary, its dir is prepended to PATH so the CLI resolves without a
     // system-wide install. Optional — unset in dev/Docker, where behavior is

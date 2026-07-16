@@ -1,0 +1,53 @@
+# Local dev backend for testing billing / entitlements end-to-end. NOT for production.
+# Stands up Postgres + the `api` service, built from THIS working tree (so it
+# includes the current branch's routes, not the published :latest image).
+#
+# Usage:
+#   1. Put your Stripe TEST-mode values in .env (STRIPE_SECRET_KEY, STRIPE_PRICE_ID)
+#      plus RESEND_API_KEY for passwordless sign-in codes. See .env.
+#   2. docker compose up --build
+#      -> watch for "[api] Stripe: test mode (price price_...)" — that confirms your keys.
+#   3. In another terminal, point the desktop at it:
+#      RIGEL_SIGNUP_ENDPOINT=http://localhost:8080 pnpm --filter desktop dev
+#
+# The DB is ephemeral (no volume): `docker compose down` wipes it for a clean slate.
+# Add a volume under `db` if you want signups/account data to persist between runs.
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: pw
+      POSTGRES_DB: rigel
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rigel"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      DATABASE_URL: postgres://postgres:pw@db:5432/rigel
+      APP_KEY: devkey
+      # Must equal the desktop's RIGEL_SIGNUP_ENDPOINT so the app recognizes the
+      # post-checkout redirect (Stripe returns to ${BILLING_ENDPOINT}/billing/complete).
+      BILLING_ENDPOINT: http://localhost:8080
+      # Secrets pulled from .env — TEST mode. The service refuses to boot on a
+      # key/price mode mismatch, so a clean boot proves these are valid.
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:?set STRIPE_SECRET_KEY in .env}
+      STRIPE_PRICE_ID: ${STRIPE_PRICE_ID:?set STRIPE_PRICE_ID in .env}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:?set STRIPE_PUBLISHABLE_KEY in .env}
+      # Optional — needed for passwordless sign-in codes (reuse your prod Resend key).
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM: ${RESEND_FROM:-Rigel <login@rigel.run>}

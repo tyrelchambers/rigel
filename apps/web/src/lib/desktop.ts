@@ -14,6 +14,13 @@ export interface UpdateState {
   canAutoInstall: boolean;
   error: string | null;
 }
+export interface EntitlementPayload {
+  plan: "free" | "pro";
+  audits: ("reliability" | "security" | "performance")[];
+  cloudConnect: boolean;
+  agentAutonomy: boolean;
+  fetchedAt: string;
+}
 export interface Account { id: string; email: string; name: string | null }
 export interface Org { id: string; kind: "personal" | "team"; name: string; role: "owner" | "admin" | "member" }
 export interface MePayload { account: Account; orgs?: Org[]; invitations?: unknown[] }
@@ -33,6 +40,14 @@ export interface RigelBridge {
     me(): Promise<MePayload | null>;
     signOut(): Promise<void>;
     status(): Promise<{ signedIn: boolean; account: Account | null; orgs: Org[] }>;
+    onChanged(cb: () => void): () => void;
+  };
+  billing?: {
+    checkout(orgId: string): Promise<{ clientSecret: string; publishableKey: string } | null>;
+    portal(orgId: string): Promise<{ ok: boolean }>;
+    agentToken(orgId: string): Promise<{ token: string; installId: string } | null>;
+    entitlements(): Promise<EntitlementPayload | null>;
+    refresh(): Promise<EntitlementPayload | null>;
     onChanged(cb: () => void): () => void;
   };
   appUpdate?: {

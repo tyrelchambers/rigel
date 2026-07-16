@@ -64,55 +64,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Load kubeconfig from 1Password
-        uses: 1password/load-secrets-action@v3
-        with:
-          export-env: true
-        env:
-          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
-          KUBECONFIG_B64: op://App Secrets/Kubeconfig/notesPlain
-
-      - name: Connect to Tailscale
-        uses: tailscale/github-action@v3
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
-
-      - name: Set up kubeconfig
-        run: |
-          mkdir -p ~/.kube
-          echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
-          chmod 600 ~/.kube/config
-
-      - name: Deploy the pinned image
-        # Pin to the immutable per-build version tag. `rollout restart` reuses the node's
-        # cached :latest (imagePullPolicy IfNotPresent), so it never picks up a new
-        # build; `set image` to a unique tag forces the pull + a rollout. The agent
-        # can be installed in any namespace (not just default), so discover where
-        # rigel-assistant lives; if it isn't installed yet the image is still built
-        # and pushed and we skip the rollout.
-        run: |
-          # Find OUR agent Deployment by its name + managed-by labels (not
-          # `get <name> -A`, which is invalid; not managed-by alone, which catalog
-          # apps like signal-cli-rest also carry). Resolves to the install namespace.
-          NS=$(kubectl get deployments -A \
-                 -l app.kubernetes.io/name=rigel-assistant,app.kubernetes.io/managed-by=rigel-assistant \
-                 -o jsonpath='{.items[0].metadata.namespace}' 2>/dev/null || true)
-          if [ -z "$NS" ]; then
-            echo "::notice::rigel-assistant not found in any namespace; image pushed, skipping rollout."
-            exit 0
-          fi
-          echo "Deploying rigel-assistant in namespace: $NS"
-          kubectl set image deployment/rigel-assistant agent=${{ env.IMAGE }}:${{ needs.build.outputs.version }} -n "$NS"
-          kubectl rollout status deployment/rigel-assistant -n "$NS" --timeout=120s
-
   notify-failure:
-    needs: [build, deploy]
+    needs: [build]
     if: failure()
     uses: ./.github/workflows/ci-failure-issue.yml
     with:

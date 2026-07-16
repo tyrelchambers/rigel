@@ -12,9 +12,21 @@ import { handoffToChat } from "@/lib/chatHandoff";
 vi.mock("../audits/useAuditEntitlement", () => ({ useAuditEntitlement: vi.fn() }));
 import { useAuditEntitlement } from "../audits/useAuditEntitlement";
 
+vi.mock("@/shell/useEntitlement", () => ({ useEntitlement: vi.fn() }));
+import { useEntitlement } from "@/shell/useEntitlement";
+
+vi.mock("@/shell/useAccount", () => ({ useAccount: vi.fn() }));
+import { useAccount } from "@/shell/useAccount";
+
+const upgrade = vi.fn();
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(useAuditEntitlement).mockReturnValue(DEFAULT_AUDIT_ENTITLEMENT);
+  vi.mocked(useEntitlement).mockReturnValue({ payload: null, upgrade });
+  vi.mocked(useAccount).mockReturnValue({
+    orgs: [{ id: "org-personal", kind: "personal", name: "Me", role: "owner" }],
+  } as never);
 });
 
 describe("AuditSkillsTab", () => {
@@ -58,9 +70,16 @@ describe("AuditSkillsTab", () => {
     vi.mocked(useAuditEntitlement).mockReturnValue({ unlocked: ["reliability", "performance"] });
     render(<AuditSkillsTab />);
     expect(screen.getAllByRole("button", { name: /run audit/i })).toHaveLength(2);
-    expect(screen.getByText("Upgrade")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^upgrade$/i })).toBeInTheDocument();
     expect(screen.getByText(/security audit is a premium skill/i)).toBeInTheDocument();
     expect(handoffToChat).not.toHaveBeenCalled();
+  });
+
+  it("clicking Upgrade on a gated skill calls upgrade with the personal org id", () => {
+    vi.mocked(useAuditEntitlement).mockReturnValue({ unlocked: ["reliability", "performance"] });
+    render(<AuditSkillsTab />);
+    fireEvent.click(screen.getByRole("button", { name: /^upgrade$/i }));
+    expect(upgrade).toHaveBeenCalledWith("org-personal");
   });
 });
 
@@ -101,7 +120,7 @@ describe("AuditSkillCard count summary", () => {
         locked={{ reason: "Upgrade to unlock it." }}
       />,
     );
-    expect(screen.getByText("Upgrade")).toBeInTheDocument();
+    expect(screen.getByText("Pro")).toBeInTheDocument();
     expect(screen.getByText("Upgrade to unlock it.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /run audit/i })).not.toBeInTheDocument();
   });

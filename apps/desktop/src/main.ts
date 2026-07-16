@@ -18,6 +18,8 @@ import { InstallStore } from "./installStore";
 import { submitSignup, deliver } from "./signup";
 import { AccountStore } from "./accountStore";
 import { createAccountClient, type OrgSummary } from "./accountClient";
+import { createBillingClient, type EntitlementPayload } from "./billingClient";
+import { createEntitlementProvider, type EntitlementProvider } from "./entitlementProvider";
 import { decideRestart } from "./restartPolicy";
 import {
   initAutoUpdater,
@@ -28,10 +30,14 @@ import {
   DOWNLOAD_URL,
 } from "./appUpdater";
 
-const SIGNUP_ENDPOINT = "https://api.rigel.run";
+// The accounts + billing backend base. Overridable so a dev/test build can point
+// at a test signups deployment (test Stripe keys) — release builds stay on live
+// at api.rigel.run. Must match that deployment's BILLING_ENDPOINT so the billing
+// window detects the ${SIGNUP_ENDPOINT}/billing/complete redirect.
+const SIGNUP_ENDPOINT = process.env.RIGEL_SIGNUP_ENDPOINT || "https://api.rigel.run";
 // Shared key for the signups endpoint — deliberately baked into the client
 // (obfuscation, NOT real auth; the endpoint is a public signup). Must match the
-// APP_KEY in the `rigel-signups` k8s Secret.
+// APP_KEY in the `rigel-api` k8s Secret.
 const SIGNUP_APP_KEY = "3f0be9f2807280c51284681d4424e3883dab9650c1ae081c";
 // Minted once per launch; delivered to the forked server via env and to the
 // renderer via argv (see forkServer + createWindow). Gates /api/* + /ws.
@@ -62,11 +68,48 @@ let serverProc: UtilityProcess | null = null;
 // postMessage (see pushServerAuth) so the server's gating stays in sync
 // without a restart.
 let accountSignedIn = false;
+// postMessage to the forked server over the same channel account-auth uses.
+function pushServerMessage(msg: unknown): void {
+  serverProc?.postMessage(msg);
+}
 function pushServerAuth(signedIn: boolean): void {
   accountSignedIn = signedIn;
-  serverProc?.postMessage({ type: "account-auth", signedIn });
+  pushServerMessage({ type: "account-auth", signedIn });
 }
+// The desktop entitlement provider (fetch + cache + 14-day grace → free). Set in
+// boot(); the source of truth for the renderer (IPC) + the server (postMessage).
+let entitlements: EntitlementProvider | null = null;
 let mainWindow: BrowserWindow | null = null;
+// The in-app Stripe billing window (Checkout / Customer Portal). Detects Stripe's
+// redirect to the fixed ${SIGNUP_ENDPOINT}/billing/{complete,cancelled} pages by
+// navigation, then closes + nudges the renderer to refetch entitlements.
+let billingWindow: BrowserWindow | null = null;
+function openBillingWindow(url: string): void {
+  if (billingWindow) { billingWindow.focus(); void billingWindow.loadURL(url); return; }
+  billingWindow = new BrowserWindow({
+    width: 480, height: 720, parent: mainWindow ?? undefined, modal: false,
+    title: "Rigel billing", autoHideMenuBar: true,
+    webPreferences: { contextIsolation: true, nodeIntegration: false },
+  });
+  // Any popup Stripe spawns (some 3DS / wallet flows) goes to the system browser,
+  // not an untracked in-app child window — parity with the main window.
+  billingWindow.webContents.setWindowOpenHandler(({ url: u }) => {
+    if (/^https?:\/\//i.test(u)) void shell.openExternal(u);
+    return { action: "deny" };
+  });
+  const onNav = (u: string) => {
+    if (u.startsWith(`${SIGNUP_ENDPOINT}/billing/complete`) || u.startsWith(`${SIGNUP_ENDPOINT}/billing/cancelled`)) {
+      billingWindow?.close();
+      // Refetch → the provider emits rigel:billing:changed (renderer refetches)
+      // and pushes the fresh entitlement to the server gate.
+      void entitlements?.refresh(true);
+    }
+  };
+  billingWindow.webContents.on("will-redirect", (_e, u) => onNav(u));
+  billingWindow.webContents.on("did-navigate", (_e, u) => onNav(u));
+  billingWindow.on("closed", () => { billingWindow = null; });
+  void billingWindow.loadURL(url);
+}
 let serverPort = 0;
 // Set inside boot() once accountClient exists; invoked by handleAuthUrl to
 // verify a rigel://auth?token=... magic link and open the server gate.
@@ -317,6 +360,11 @@ function forkServer(port: number): UtilityProcess {
     stdio: "pipe",
   });
 
+  // Re-deliver the current entitlement to the freshly-(re)spawned server so its
+  // gate (canConnect / audit env / autonomy) survives a crash-restart without a
+  // full app relaunch — mirrors how RIGEL_SIGNED_IN reseeds account-auth.
+  if (entitlements) child.postMessage({ type: "entitlement", value: entitlements.current() });
+
   // Surface the server's logs in the main process console so the dev sees the
   // "rigel server on :<port>" ready line, kubectl errors, etc.
   child.stdout?.on("data", (b: Buffer) => process.stdout.write(`[server] ${b}`));
@@ -401,6 +449,8 @@ function createWindow(port: number): BrowserWindow {
   // External links (PR/GitHub target=_blank) → system browser; deny in-app
   // popups so the SPA stays a single trusted window.
   win.webContents.setWindowOpenHandler(({ url }) => {
+    const host = (() => { try { return new URL(url).hostname; } catch { return ""; } })();
+    if (host === "stripe.com" || host.endsWith(".stripe.com")) return { action: "allow" };
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
     return { action: "deny" };
   });
@@ -408,6 +458,8 @@ function createWindow(port: number): BrowserWindow {
   // Null out the mainWindow reference when this window is destroyed so we don't
   // hold a stale BrowserWindow handle after it is closed.
   win.on("closed", () => { if (mainWindow === win) mainWindow = null; });
+
+  win.on("focus", () => void entitlements?.refresh(true));
 
   // Open maximized (fill the screen) on load. Skipped for the headless smoke run.
   if (!SMOKE) win.maximize();
@@ -435,6 +487,27 @@ async function boot(): Promise<void> {
 
   const accountStore = new AccountStore(app.getPath("userData"), safeStorage);
   const accountClient = createAccountClient({ store: accountStore, fetchFn: fetch, endpoint: SIGNUP_ENDPOINT });
+  const billingClient = createBillingClient({ store: accountStore, fetchFn: fetch, endpoint: SIGNUP_ENDPOINT });
+  // Entitlement provider: the single source of truth for gating. Fetches on boot
+  // + every 6h, caches to a plain JSON file (non-secret), applies the 14-day
+  // grace → free fallback. On change it nudges the renderer to refetch (IPC) and
+  // pushes the grace-applied value to the forked server's gate.
+  const entStore = {
+    load: (): EntitlementPayload | null => {
+      try { return JSON.parse(readFileSync(join(app.getPath("userData"), "entitlement.json"), "utf8")) as EntitlementPayload; }
+      catch { return null; }
+    },
+    save: (v: EntitlementPayload) => {
+      try { writeFileSync(join(app.getPath("userData"), "entitlement.json"), JSON.stringify(v)); } catch { /* best-effort cache */ }
+    },
+  };
+  entitlements = createEntitlementProvider({ client: billingClient, store: entStore, now: () => Date.now() });
+  entitlements.onChange((e) => {
+    mainWindow?.webContents.send("rigel:billing:changed"); // renderer refetches via IPC
+    pushServerMessage({ type: "entitlement", value: e });  // server gate (Task 3)
+  });
+  void entitlements.refresh(); // resolve on boot
+  setInterval(() => void entitlements?.refresh(), 30 * 60 * 1000); // + every 30 min
   // Set synchronously (BEFORE forkServer below) so the initial fork's env
   // reflects reality with no race; refreshAccount() below corrects it async
   // (e.g. a stale token that 401s) and pushes any change live.
@@ -464,6 +537,7 @@ async function boot(): Promise<void> {
       return;
     }
     pushServerAuth(true);
+    void entitlements?.refresh(true); // fresh sign-in → resolve entitlements
     mainWindow?.webContents.send("rigel:account:changed");
   };
 
@@ -482,7 +556,7 @@ async function boot(): Promise<void> {
   ipcMain.handle("rigel:account:request-code", (_e, email: string) => accountClient.requestCode(email));
   ipcMain.handle("rigel:account:verify-code", async (_e, d: { email: string; code: string }) => {
     const r = await accountClient.verifyCode(d.email, d.code);
-    if (r.ok) pushServerAuth(true);
+    if (r.ok) { pushServerAuth(true); void entitlements?.refresh(true); }
     return r;
   });
   ipcMain.handle("rigel:account:me", () => accountClient.me());
@@ -491,6 +565,29 @@ async function boot(): Promise<void> {
     pushServerAuth(false);
   });
   ipcMain.handle("rigel:account:status", () => refreshAccount());
+  ipcMain.handle("rigel:billing:checkout", (_e, orgId: string) => billingClient.checkout(orgId));
+  ipcMain.handle("rigel:billing:portal", async (_e, orgId: string) => {
+    const url = await billingClient.portal(orgId);
+    if (url) openBillingWindow(url);
+    return { ok: !!url };
+  });
+  // Mint an install-scoped, org-bound agent entitlement token (E3.2). Only main
+  // holds the account bearer, so the renderer asks main to mint at agent-install
+  // time and threads the result into the install request. Best-effort: any failure
+  // (offline / backend down / non-member) resolves null so the install proceeds
+  // token-less (agent stays observe-only until a later setup writes one).
+  ipcMain.handle("rigel:billing:agent-token", async (_e, orgId: string) => {
+    try {
+      return await billingClient.agentToken(orgId);
+    } catch (err) {
+      console.warn("[rigel] agent-token mint failed (install proceeds token-less):", err);
+      return null;
+    }
+  });
+  // Return the provider's current (grace-applied) value, NOT a raw fetch — the
+  // provider is the source of truth (Slice C replaces the Slice B raw-fetch handler).
+  ipcMain.handle("rigel:billing:entitlements", () => entitlements?.current() ?? null);
+  ipcMain.handle("rigel:billing:refresh", async () => (await entitlements?.refresh(true)) ?? null);
   ipcMain.handle("rigel:app-update:state", () => getUpdateState());
   ipcMain.handle("rigel:app-update:check", () => checkForUpdates());
   ipcMain.handle("rigel:app-update:download", () => downloadUpdate());

@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus } from "lucide-react";
+import { Lock, Plus } from "lucide-react";
 import { readActiveContext, useCluster } from "@/store/cluster";
 import { useContexts, useDeleteCluster, useDisconnectCluster, useClusterHealth } from "@/lib/api";
+import { useEntitlement } from "./useEntitlement";
+import { useUpgrade } from "./UpgradeContext";
 import { initContext, switchCluster } from "@/lib/ws";
-import { classifyProvider, providerLabel } from "./clusterTile";
+import { classifyProvider, isCloudProvider, providerLabel } from "./clusterTile";
 import { CLUSTER_ICONS, type IconId } from "./clusterIcons";
 import { loadIconOverrides, saveIconOverrides, resolveIconId } from "./clusterIconStore";
 import { ClusterIconPicker } from "./ClusterIconPicker";
@@ -26,6 +28,9 @@ import { toast } from "sonner";
 export function ClusterRail() {
   const { data: contexts } = useContexts();
   const activeContext = useCluster((s) => s.activeContext);
+  const { payload } = useEntitlement();
+  const cloudUnlocked = !!payload?.cloudConnect;
+  const { openUpgrade } = useUpgrade();
   const [iconOverrides, setIconOverrides] = useState<Record<string, IconId>>(() => loadIconOverrides());
   // The context whose icon is being edited (null = picker closed).
   const [pickerFor, setPickerFor] = useState<string | null>(null);
@@ -39,7 +44,7 @@ export function ClusterRail() {
   // Probe only the ACTIVE cloud context; the badge surfaces an expired login.
   const active = contexts?.find((c) => c.name === activeContext) ?? null;
   const activeProvider = active ? classifyProvider(active) : "generic";
-  const isCloud = ["digitalocean", "aws", "gcp", "azure"].includes(activeProvider);
+  const isCloud = isCloudProvider(activeProvider);
   const health = useClusterHealth(active?.name ?? null, activeProvider, isCloud);
 
   // Keep the active context valid against the live kubeconfig list. On first load
@@ -48,16 +53,33 @@ export function ClusterRail() {
   // re-point at a valid one so panels don't query a context that's gone.
   useEffect(() => {
     if (!contexts || contexts.length === 0) return;
-    const fallback = contexts.find((c) => c.active) ?? contexts[0];
+    // While entitlement is unresolved (payload null) treat cloud contexts as
+    // unknown, NOT locked — otherwise a Pro user is destructively redirected to
+    // a local cluster in the window before entitlement resolves.
+    const entitlementKnown = payload != null;
+    const isLocked = (c: { name: string; server: string }) =>
+      entitlementKnown && !cloudUnlocked && isCloudProvider(classifyProvider(c));
+    const fallback =
+      contexts.find((c) => c.active && !isLocked(c)) ??
+      contexts.find((c) => !isLocked(c)) ??
+      contexts.find((c) => c.active) ??
+      contexts[0];
     if (activeContext === null) {
       const saved = readActiveContext();
-      const target = saved && contexts.some((c) => c.name === saved) ? saved : fallback.name;
+      const savedCtx = saved ? contexts.find((c) => c.name === saved) : undefined;
+      const target = savedCtx && !isLocked(savedCtx) ? savedCtx.name : fallback.name;
       initContext(fallback.name);
       if (target !== fallback.name) switchCluster(target);
-    } else if (!contexts.some((c) => c.name === activeContext)) {
-      switchCluster(fallback.name);
+    } else {
+      const active = contexts.find((c) => c.name === activeContext);
+      if (!active) {
+        switchCluster(fallback.name);
+      } else if (isLocked(active)) {
+        const local = contexts.find((c) => !isLocked(c));
+        if (local && local.name !== activeContext) switchCluster(local.name);
+      }
     }
-  }, [contexts, activeContext]);
+  }, [contexts, activeContext, cloudUnlocked, payload]);
 
   function setIcon(contextName: string, id: IconId) {
     setIconOverrides((prev) => {
@@ -96,6 +118,7 @@ export function ClusterRail() {
             const provider = classifyProvider(c);
             const iconId = resolveIconId(c.name, provider, iconOverrides);
             const Icon = CLUSTER_ICONS[iconId].Component;
+            const locked = isCloudProvider(provider) && !cloudUnlocked;
             return (
               <div
                 key={c.name}
@@ -115,6 +138,19 @@ export function ClusterRail() {
                     }}
                   />
                 )}
+                {locked && (
+                  <span
+                    aria-hidden
+                    style={{
+                      position: "absolute", top: -2, right: 4, zIndex: 2,
+                      width: 15, height: 15, borderRadius: 999,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      background: "var(--surface-elevated)", border: "1px solid var(--border-strong)",
+                    }}
+                  >
+                    <Lock size={9} style={{ color: "var(--fg-secondary)" }} />
+                  </span>
+                )}
                 {isActive && isCloud && health.data?.authExpired ? (
                   <ClusterHealthBadge onReconnect={() => setConnectOpen(true)} />
                 ) : null}
@@ -124,7 +160,7 @@ export function ClusterRail() {
                       <button
                         type="button"
                         aria-current={isActive ? "true" : undefined}
-                        onClick={() => switchCluster(c.name)}
+                        onClick={() => (locked ? openUpgrade() : switchCluster(c.name))}
                         // Right-click opens the icon-picker modal for this context.
                         onContextMenu={(e) => {
                           e.preventDefault();
@@ -139,7 +175,8 @@ export function ClusterRail() {
                           // moved to the left-edge indicator above.
                           background: isActive ? "var(--surface-elevated)" : "var(--surface-primary)",
                           border: "1px solid var(--border-subtle)",
-                          transition: "background 120ms ease, color 120ms ease",
+                          opacity: locked ? 0.5 : 1,
+                          transition: "background 120ms ease, color 120ms ease, opacity 120ms ease",
                         }}
                       >
                         <Icon size={18} />
@@ -152,6 +189,7 @@ export function ClusterRail() {
                     <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-start", textAlign: "left", lineHeight: 1.35 }}>
                       <div style={{ fontWeight: 600, color: "var(--fg-primary)" }}>{c.name}</div>
                       <div className="text-2xs" style={{ color: "var(--accent-soft)" }}>{providerLabel(provider)}</div>
+                      {locked ? <div className="text-2xs" style={{ color: "var(--accent-primary)" }}>Pro — click to upgrade</div> : null}
                       {c.server ? <div className="text-2xs" style={{ color: "var(--fg-secondary)" }}>{c.server}</div> : null}
                       <div className="text-3xs" style={{ color: "var(--fg-tertiary)", marginTop: 2 }}>Right-click to change icon</div>
                     </div>

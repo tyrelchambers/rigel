@@ -516,6 +516,26 @@ describe("credentialsSecretYAML", () => {
     expect(yaml).toContain(`name: ${CREDENTIALS_SECRET_NAME}`);
     expect(yaml).toContain("stringData:");
   });
+
+  test("writes the RIGEL_AGENT_TOKEN key when an agentToken is provided", () => {
+    const yaml = credentialsSecretYAML({ agentToken: "ent-tok", geminiApiKey: "g" }, "default");
+    expect(yaml).toContain('RIGEL_AGENT_TOKEN: "ent-tok"');
+    expect(yaml).toContain('geminiApiKey: "g"');
+    // It is the entitlement token, not a provider credential — no credential annotation.
+    expect(yaml).not.toContain("rigel.assistant/credential.agentToken");
+    expect(yaml).not.toContain("rigel.assistant/credential.RIGEL_AGENT_TOKEN");
+  });
+
+  test("escapes the agentToken value", () => {
+    const yaml = credentialsSecretYAML({ agentToken: 'a"b\\c' }, "default");
+    expect(yaml).toContain('RIGEL_AGENT_TOKEN: "a\\"b\\\\c"');
+  });
+
+  test("omits RIGEL_AGENT_TOKEN when the agentToken is absent or empty", () => {
+    expect(credentialsSecretYAML({ geminiApiKey: "g" }, "default")).not.toContain("RIGEL_AGENT_TOKEN");
+    expect(credentialsSecretYAML({ agentToken: "" }, "default")).not.toContain("RIGEL_AGENT_TOKEN");
+    expect(credentialsSecretYAML({ agentToken: "   " }, "default")).not.toContain("RIGEL_AGENT_TOKEN");
+  });
 });
 
 import { deployment, CREDENTIALS_SECRET_NAME as CREDS } from "./assistant";

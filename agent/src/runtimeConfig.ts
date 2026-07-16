@@ -76,6 +76,10 @@ export interface RuntimeConfig {
    *  null = the key is absent (legacy install) → broadcast to everything
    *  configured. Does NOT apply to digests, which target one chosen channel. */
   notifyAllowlist: ChannelId[] | null;
+  /** Server-stamped "check your entitlement now" marker (ISO). Changes on the
+   *  free→Pro edge so the agent force-runs its entitlement check next tick,
+   *  bypassing the 12h throttle. Undefined until the first bump. */
+  entitlementRefreshAt?: string;
 }
 
 /** Parse the autofix opt-in (`autofixEnabled`, default false) + scope
@@ -286,7 +290,10 @@ export async function readRuntimeConfig(cfg: Config): Promise<RuntimeConfig> {
   } catch {
     return disabledDefaults(cfg);
   }
-  const mode = (data.mode as AutonomyMode) || "auto";
+  // Fail-closed: only an explicit "auto"/"window" grants autonomy. A missing or
+  // garbage mode (or "advisory") means observe-only, so a broken/absent config
+  // never yields autonomous remediation.
+  const mode: AutonomyMode = data.mode === "auto" ? "auto" : data.mode === "window" ? "window" : "advisory";
   const silenced = new Set(
     (data.silenced ?? "")
       .split(/[\n,]/)
@@ -299,7 +306,7 @@ export async function readRuntimeConfig(cfg: Config): Promise<RuntimeConfig> {
     .filter(Boolean);
   return {
     enabled: data.enabled !== "false",
-    mode: mode === "advisory" || mode === "window" ? mode : "auto",
+    mode,
     window: data.window ? parseWindow(data.window) ?? undefined : undefined,
     silenced,
     webhookUrl: data.webhookUrl && data.webhookUrl.trim() ? data.webhookUrl.trim() : undefined,
@@ -317,5 +324,6 @@ export async function readRuntimeConfig(cfg: Config): Promise<RuntimeConfig> {
     digests: parseDigestsFromConfig(data),
     digestRunNow: parseDigestRunNow(data),
     notifyAllowlist: parseNotifyAllowlist(data),
+    entitlementRefreshAt: data.entitlementRefreshAt && data.entitlementRefreshAt.trim() ? data.entitlementRefreshAt.trim() : undefined,
   };
 }

@@ -12,6 +12,8 @@ import { MemoryRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { AgentsResponse, AgentView } from "@/lib/api";
 
+vi.mock("./UpgradeContext", () => ({ useUpgrade: () => ({ openUpgrade: vi.fn() }) }));
+
 import { OnboardingWizard } from "./OnboardingWizard";
 
 const claude: AgentView = {

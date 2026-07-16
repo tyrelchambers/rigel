@@ -3,6 +3,8 @@ import { canRunAudit, type AuditKind } from "@rigel/k8s";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { AuditSkillCard } from "../audits/AuditSkillCard";
 import { useAuditEntitlement } from "../audits/useAuditEntitlement";
+import { useEntitlement } from "@/shell/useEntitlement";
+import { useAccount } from "@/shell/useAccount";
 
 interface AuditSkill {
   key: AuditKind;
@@ -44,6 +46,9 @@ const AUDIT_SKILLS: AuditSkill[] = [
 
 export function AuditSkillsTab() {
   const entitlement = useAuditEntitlement();
+  const { upgrade } = useEntitlement();
+  const { orgs } = useAccount();
+  const personalOrgId = orgs.find((o) => o.kind === "personal")?.id;
 
   return (
     <div className="space-y-3.5">
@@ -64,7 +69,14 @@ export function AuditSkillsTab() {
               title={skill.title}
               description={skill.description}
               Icon={skill.Icon}
-              locked={gate.allowed ? undefined : { reason: gate.reason ?? "This audit requires an upgrade." }}
+              locked={
+                gate.allowed
+                  ? undefined
+                  : {
+                      reason: gate.reason ?? "This audit requires an upgrade.",
+                      onUpgrade: personalOrgId ? () => upgrade(personalOrgId) : undefined,
+                    }
+              }
               onRun={
                 gate.allowed
                   ? () => handoffToChat(`/rigel-${skill.key}-audit`, { newThread: true, displayText: skill.runLabel })

@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { UpdateState } from "./appUpdater";
+import type { EntitlementPayload } from "./billingClient";
 
 const sessionArg = process.argv.find((a) => a.startsWith("--rigel-session="));
 const sessionSecret = sessionArg ? sessionArg.slice("--rigel-session=".length) : "";
@@ -31,6 +32,20 @@ contextBridge.exposeInMainWorld("rigel", {
       const listener = () => cb();
       ipcRenderer.on("rigel:account:changed", listener);
       return () => ipcRenderer.removeListener("rigel:account:changed", listener);
+    },
+  },
+  billing: {
+    checkout: (orgId: string): Promise<{ clientSecret: string; publishableKey: string } | null> =>
+      ipcRenderer.invoke("rigel:billing:checkout", orgId),
+    portal: (orgId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke("rigel:billing:portal", orgId),
+    agentToken: (orgId: string): Promise<{ token: string; installId: string } | null> =>
+      ipcRenderer.invoke("rigel:billing:agent-token", orgId),
+    entitlements: () => ipcRenderer.invoke("rigel:billing:entitlements"),
+    refresh: (): Promise<EntitlementPayload | null> => ipcRenderer.invoke("rigel:billing:refresh"),
+    onChanged: (cb: () => void): (() => void) => {
+      const l = () => cb();
+      ipcRenderer.on("rigel:billing:changed", l);
+      return () => ipcRenderer.removeListener("rigel:billing:changed", l);
     },
   },
   appUpdate: {

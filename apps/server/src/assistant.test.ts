@@ -89,7 +89,15 @@ test("buildInstallConfig falls back to legacy model knobs + defaults when no sel
   expect(cfg.supervisor).toBeUndefined();
 });
 
-import { setModelsUpdates, setCredentialsSecrets, setModeUpdates } from "./assistant";
+import { setModelsUpdates, setCredentialsSecrets, setModeUpdates, isAutonomyRequest } from "./assistant";
+
+test("isAutonomyRequest is true only for setMode to an autonomous mode (auto/window), not advisory", () => {
+  expect(isAutonomyRequest({ action: "setMode", mode: "auto" })).toBe(true);
+  expect(isAutonomyRequest({ action: "setMode", mode: "window" })).toBe(true);
+  expect(isAutonomyRequest({ action: "setMode", mode: "advisory" })).toBe(false);
+  // Only setMode can turn the agent autonomous.
+  expect(isAutonomyRequest({ action: "setLimits", mode: "auto" })).toBe(false);
+});
 
 test("setModeUpdates writes only mode + trimmed window when no webhook is supplied", () => {
   const updates = setModeUpdates({ action: "setMode", mode: "window", window: " 22:00-07:00 " });
@@ -1241,4 +1249,56 @@ test("handleAssistant routes getRbac/setRbac", async () => {
   expect(failRes.code).not.toBe(0);
   expect(failRes.stderr).toContain("connection refused");
   vi.restoreAllMocks();
+});
+
+// ---------------------------------------------------------------------------
+// bumpAgentEntitlementRefresh (Slice U3 — free→Pro fast-path)
+// ---------------------------------------------------------------------------
+
+import { bumpAgentEntitlementRefresh } from "./assistant";
+
+describe("bumpAgentEntitlementRefresh", () => {
+  test("stamps a fresh entitlementRefreshAt into every installed context", async () => {
+    const patched: { ctx: string | null; ns: string; updates: Record<string, string> }[] = [];
+    const res = await bumpAgentEntitlementRefresh({
+      discover: async () => ["ctx-a", "ctx-b"],
+      patch: async (ctx, ns, updates) => {
+        patched.push({ ctx, ns, updates });
+        return { code: 0, stdout: "", stderr: "" };
+      },
+    });
+    expect(res.bumped).toEqual(["ctx-a", "ctx-b"]);
+    expect(res.failures).toEqual([]);
+    expect(patched).toHaveLength(2);
+    for (const p of patched) {
+      expect(Object.keys(p.updates)).toEqual(["entitlementRefreshAt"]);
+      expect(Number.isFinite(Date.parse(p.updates.entitlementRefreshAt!))).toBe(true);
+    }
+  });
+
+  test("isolates a per-context failure without aborting the rest", async () => {
+    const res = await bumpAgentEntitlementRefresh({
+      discover: async () => ["ctx-a", "ctx-boom", "ctx-c"],
+      patch: async (ctx) => {
+        if (ctx === "ctx-boom") throw new Error("connection refused");
+        return { code: 0, stdout: "", stderr: "" };
+      },
+    });
+    expect(res.bumped).toEqual(["ctx-a", "ctx-c"]);
+    expect(res.failures).toEqual([{ context: "ctx-boom", error: "connection refused" }]);
+  });
+
+  test("no installed contexts → zero patch calls", async () => {
+    let patchCalls = 0;
+    const res = await bumpAgentEntitlementRefresh({
+      discover: async () => [],
+      patch: async () => {
+        patchCalls++;
+        return { code: 0, stdout: "", stderr: "" };
+      },
+    });
+    expect(res.bumped).toEqual([]);
+    expect(res.failures).toEqual([]);
+    expect(patchCalls).toBe(0);
+  });
 });

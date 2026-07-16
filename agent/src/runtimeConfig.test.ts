@@ -88,6 +88,23 @@ describe("readRuntimeConfig — signal config", () => {
   });
 });
 
+describe("readRuntimeConfig — mode is fail-closed", () => {
+  test("a missing mode defaults to advisory, never auto", async () => {
+    mockConfigMap({ enabled: "true" });
+    expect((await readRuntimeConfig(CFG)).mode).toBe("advisory");
+  });
+  test("a garbage mode falls back to advisory", async () => {
+    mockConfigMap({ enabled: "true", mode: "banana" });
+    expect((await readRuntimeConfig(CFG)).mode).toBe("advisory");
+  });
+  test("explicit auto / window are still honored", async () => {
+    mockConfigMap({ enabled: "true", mode: "auto" });
+    expect((await readRuntimeConfig(CFG)).mode).toBe("auto");
+    mockConfigMap({ enabled: "true", mode: "window", window: "09:00-17:00" });
+    expect((await readRuntimeConfig(CFG)).mode).toBe("window");
+  });
+});
+
 describe("readRuntimeConfig — discord/slack webhooks", () => {
   test("parses discordWebhookUrl/slackWebhookUrl when present", async () => {
     mockConfigMap({ enabled: "true", discordWebhookUrl: "https://discord.example/hook", slackWebhookUrl: "https://slack.example/hook" });
@@ -134,6 +151,26 @@ describe("readRuntimeConfig — notifyAllowlist", () => {
     vi.mocked(kubectl).mockResolvedValueOnce({ stdout: "", stderr: "nf", code: 1 });
     const rc = await readRuntimeConfig(CFG);
     expect(rc.notifyAllowlist).toBeNull();
+  });
+});
+
+describe("readRuntimeConfig — entitlementRefreshAt", () => {
+  test("present key parses to its string", async () => {
+    mockConfigMap({ enabled: "true", entitlementRefreshAt: "2026-07-15T00:00:00.000Z" });
+    const rc = await readRuntimeConfig(CFG);
+    expect(rc.entitlementRefreshAt).toBe("2026-07-15T00:00:00.000Z");
+  });
+
+  test("absent key parses to undefined", async () => {
+    mockConfigMap({ enabled: "true" });
+    const rc = await readRuntimeConfig(CFG);
+    expect(rc.entitlementRefreshAt).toBeUndefined();
+  });
+
+  test("empty value parses to undefined", async () => {
+    mockConfigMap({ enabled: "true", entitlementRefreshAt: "  " });
+    const rc = await readRuntimeConfig(CFG);
+    expect(rc.entitlementRefreshAt).toBeUndefined();
   });
 });
 

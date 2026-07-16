@@ -2,11 +2,15 @@
 // channels (Signal, Matrix, Discord, Slack) live in Settings > Channels.
 
 import { useEffect, useState } from "react";
-import { BellOff, Check, Hand, Info, Moon, Zap } from "lucide-react";
+import { BellOff, Bot, Check, Hand, Info, Moon, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAssistantCtx } from "../AssistantContext";
 import { AlertsCard } from "../AlertsCard";
+import { useEntitlement } from "@/shell/useEntitlement";
+import { useAccount } from "@/shell/useAccount";
+import { useUpgrade } from "@/shell/UpgradeContext";
+import { ProGateCard } from "@/shell/billing/ProGateCard";
 
 // The three autonomy modes, rendered as selectable cards. `value` is the config
 // mode the agent reads ("window" is the Quiet-hours schedule).
@@ -16,8 +20,17 @@ const MODES = [
   { value: "window", label: "Quiet-hours", icon: Moon, desc: "Auto by day, hold changes overnight." },
 ] as const;
 
+// Modes where the agent acts on its own — gated behind agentAutonomy. "advisory"
+// only suggests, so it stays free.
+const AUTONOMOUS_MODES = new Set<string>(["auto", "window"]);
+
 export function AlertsTab() {
   const { d, ns, working, run, setTab } = useAssistantCtx();
+  const { payload } = useEntitlement();
+  const { orgs } = useAccount();
+  const { openUpgrade } = useUpgrade();
+  const personalOrgId = orgs.find((o) => o.kind === "personal")?.id;
+  const autonomyLocked = !payload?.agentAutonomy;
 
   const savedWindow = d.quietWindow || "22:00-07:00";
   const [windowText, setWindowText] = useState(savedWindow);
@@ -45,11 +58,21 @@ export function AlertsTab() {
               title={m.label}
               desc={m.desc}
               selected={d.autonomyMode === m.value}
-              disabled={working}
+              disabled={working || (autonomyLocked && AUTONOMOUS_MODES.has(m.value))}
               onClick={() => run({ action: "setMode", namespace: ns, mode: m.value, window: windowText })}
             />
           ))}
         </div>
+
+        {autonomyLocked && (
+          <ProGateCard
+            icon={Bot}
+            title="Unlock the in-cluster agent"
+            body="Rigel watches your cluster around the clock and applies the fixes you approve. Autonomous remediation, autofix PRs, and scheduled digests."
+            upgradeDisabled={!personalOrgId}
+            onUpgrade={openUpgrade}
+          />
+        )}
 
         {d.autonomyMode === "window" && (
           <div className="flex flex-wrap items-center gap-3 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] p-3">

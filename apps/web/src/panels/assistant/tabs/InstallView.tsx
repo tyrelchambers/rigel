@@ -19,6 +19,8 @@ import {
   type AssistantInstallConfig,
 } from "@rigel/k8s";
 import { useChatConfig, type AgentId, type AssistantCredentials, type AssistantRoleSelection } from "@/lib/api";
+import { rigel } from "@/lib/desktop";
+import { useAccount } from "@/shell/useAccount";
 import { useAssistantCtx } from "../AssistantContext";
 import { Card, Field, inputClass } from "../components/primitives";
 import { RolePicker } from "../agents/RolePicker";
@@ -57,6 +59,11 @@ export function InstallView() {
   const { data: chatConfig } = useChatConfig();
   const hasSavedToken = chatConfig?.configured ?? false;
 
+  // Same org source the upgrade/checkout flow bills (personal-as-org model) —
+  // used to mint the install's entitlement token.
+  const { orgs } = useAccount();
+  const personalOrgId = orgs.find((o) => o.kind === "personal")?.id;
+
   // Keep local config.installNamespace in sync with ctx.installNamespace.
   // The user types in the local input → we update both local config and ctx.
   function handleNsChange(ns: string) {
@@ -88,7 +95,7 @@ export function InstallView() {
     setConfig((c) => ({ ...c, namespaces: [...next].sort().join(",") }));
   }
 
-  function doInstall() {
+  async function doInstall() {
     const token = installToken.trim();
     const image = config.image.trim();
     const namespace = config.installNamespace.trim();
@@ -100,6 +107,13 @@ export function InstallView() {
     if (namespace !== namespace.toLowerCase()) return;
     const credentials: AssistantCredentials = { ...stagedCreds };
     if (token !== "") credentials.claudeToken = token;
+    // Mint the install-scoped entitlement token (best-effort). On any failure
+    // (offline / backend down / non-member) install proceeds token-less and the
+    // agent stays observe-only until a later credentials setup writes one.
+    if (personalOrgId && rigel?.billing?.agentToken) {
+      const minted = await rigel.billing.agentToken(personalOrgId).catch(() => null);
+      if (minted?.token) credentials.agentToken = minted.token;
+    }
     run(
       {
         action: "install",
@@ -121,8 +135,8 @@ export function InstallView() {
   function handleInstall() {
     if (installToken.trim() === "" && !hasSavedToken) return; // button is disabled anyway
     if (config.image.trim() === "" || config.installNamespace.trim() === "") return;
-    if (namespaceMissing) openConfirmCreateNs(doInstall);
-    else doInstall();
+    if (namespaceMissing) openConfirmCreateNs(() => void doInstall());
+    else void doInstall();
   }
 
   return (

@@ -3,6 +3,7 @@
 
 import { Button } from "@/components/ui/button";
 import { PanelHeader } from "@/panels/components/PanelHeader";
+import { useEntitlement } from "@/shell/useEntitlement";
 import { AssistantProvider, useAssistantCtx } from "./AssistantContext";
 import { StatusPill } from "./components/primitives";
 import { AssistantBody } from "./AssistantBody";
@@ -13,10 +14,12 @@ import { AssistantBody } from "./AssistantBody";
 
 function AssistantHeader() {
   const { phase, d, ns, working, run } = useAssistantCtx();
+  const { payload } = useEntitlement();
+  const entitled = !!payload?.agentAutonomy;
 
   return (
     <PanelHeader title="Assistant" loading={working || phase === "loading"}>
-      {phase === "ready" && (
+      {phase === "ready" && entitled && (
         <>
           <StatusPill enabled={d.enabled} />
           <Button
