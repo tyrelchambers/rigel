@@ -372,6 +372,7 @@ export type AssistantAction =
   | "setLimits"
   | "setAutofix"
   | "restart"
+  | "resume"
   | "silence"
   | "unsilence"
   | "clearReport"

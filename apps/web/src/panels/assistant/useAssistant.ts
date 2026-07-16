@@ -88,6 +88,10 @@ export interface AssistantDerived {
   ready: AssistantReady;
   isInstalled: boolean;
   installedNamespace: string | null;
+  /** The agent Deployment's desired replica count (spec.replicas, k8s-default 1
+   *  when unset), or null when not installed. 0 ⇒ installed but scaled down
+   *  (e.g. paused on entitlement downgrade). */
+  agentDesiredReplicas: number | null;
   /** The running agent container's image ref (e.g. ".../rigel-assistant:0.1.412"), or null. */
   agentImage: string | null;
   /** The agent container's name (for the setImage update action), or null. */
@@ -282,6 +286,7 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
       },
       isInstalled,
       installedNamespace,
+      agentDesiredReplicas: agentDeployment ? agentDeployment.spec?.replicas ?? 1 : null,
       agentImage: agentRef?.image ?? null,
       agentContainer: agentRef?.container ?? null,
       stateNamespace,
