@@ -53,8 +53,12 @@ export function ClusterRail() {
   // re-point at a valid one so panels don't query a context that's gone.
   useEffect(() => {
     if (!contexts || contexts.length === 0) return;
+    // While entitlement is unresolved (payload null) treat cloud contexts as
+    // unknown, NOT locked — otherwise a Pro user is destructively redirected to
+    // a local cluster in the window before entitlement resolves.
+    const entitlementKnown = payload != null;
     const isLocked = (c: { name: string; server: string }) =>
-      !cloudUnlocked && isCloudProvider(classifyProvider(c));
+      entitlementKnown && !cloudUnlocked && isCloudProvider(classifyProvider(c));
     const fallback =
       contexts.find((c) => c.active && !isLocked(c)) ??
       contexts.find((c) => !isLocked(c)) ??
@@ -75,7 +79,7 @@ export function ClusterRail() {
         if (local && local.name !== activeContext) switchCluster(local.name);
       }
     }
-  }, [contexts, activeContext, cloudUnlocked]);
+  }, [contexts, activeContext, cloudUnlocked, payload]);
 
   function setIcon(contextName: string, id: IconId) {
     setIconOverrides((prev) => {

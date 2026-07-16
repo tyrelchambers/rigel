@@ -111,6 +111,26 @@ describe("ClusterRail reconciliation effect", () => {
     await waitFor(() => expect(switchCluster).toHaveBeenCalledWith("kind-dev"));
   });
 
+  it("does NOT redirect off a cloud cluster while entitlement is unresolved", async () => {
+    // payload null = entitlement IPC still resolving. Cloud contexts must read as
+    // unknown, not locked, so a Pro user isn't bounced to local on cold start.
+    mockUseEntitlement.mockReturnValue({ payload: null, upgrade: vi.fn() });
+    useCluster.setState({ activeContext: "gke_proj_zone_prod" });
+    mockUseContexts.mockReturnValue({ data: [ctx("kind-dev", false), cloudCtx] });
+    renderRail();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(switchCluster).not.toHaveBeenCalled();
+  });
+
+  it("keeps a Pro user on their cloud cluster once entitlement resolves", async () => {
+    mockUseEntitlement.mockReturnValue({ payload: { cloudConnect: true }, upgrade: vi.fn() });
+    useCluster.setState({ activeContext: "gke_proj_zone_prod" });
+    mockUseContexts.mockReturnValue({ data: [ctx("kind-dev", false), cloudCtx] });
+    renderRail();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(switchCluster).not.toHaveBeenCalled();
+  });
+
   it("calls initContext on first load when activeContext is null", async () => {
     mockUseContexts.mockReturnValue({
       data: [ctx("prod", true), ctx("staging")],
