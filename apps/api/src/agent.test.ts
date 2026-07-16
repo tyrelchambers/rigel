@@ -115,6 +115,14 @@ test("GET /agent/entitlement 401 without a bearer token", async () => {
   expect(res.status).toBe(401);
 });
 
+test("GET /agent/entitlement 401s unknown tokens before rate limiting (no map growth)", async () => {
+  const { app } = appWith({ db: { agentTokenByHash: vi.fn(async () => null) } });
+  for (let i = 0; i < 50; i++) {
+    const res = await app.request("/agent/entitlement", { headers: { authorization: "Bearer nope-" + i } });
+    expect(res.status).toBe(401);
+  }
+});
+
 test("GET /agent/entitlement rate limits a token past the hourly cap", async () => {
   const { app } = appWith();
   let last = 200;

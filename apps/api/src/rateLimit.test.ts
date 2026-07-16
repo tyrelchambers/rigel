@@ -17,3 +17,13 @@ test("tracks keys independently", () => {
   expect(allow("b")).toBe(true);
   expect(allow("a")).toBe(false);
 });
+
+test("evicts expired entries so distinct keys don't grow memory without bound", () => {
+  let t = 0;
+  const allow = createRateLimiter(1, 60_000, () => t);
+  for (let i = 0; i < 1000; i++) allow("k" + i);
+  expect(allow.size).toBe(1000);
+  t += 60_000; // every prior window has now expired
+  allow("fresh"); // triggers a sweep on access
+  expect(allow.size).toBe(1);
+});

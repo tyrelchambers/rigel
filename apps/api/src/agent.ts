@@ -37,9 +37,9 @@ export function registerAgentRoutes(app: Hono, deps: AgentDeps): void {
     const token = bearer(c);
     if (!token) return c.json({ error: "unauthorized" }, 401);
     const hash = sha(token);
-    if (!allow(hash)) return c.json({ error: "rate limited" }, 429);
     const row = await deps.db.agentTokenByHash(hash);
     if (!row || row.revoked) return c.json({ error: "unauthorized" }, 401);
+    if (!allow(hash)) return c.json({ error: "rate limited" }, 429);
     return c.json(await deps.resolveOrg(row.orgId));
   });
 }

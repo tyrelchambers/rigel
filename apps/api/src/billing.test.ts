@@ -33,6 +33,16 @@ test("GET /entitlements without fresh does not force a bypass", async () => {
   expect(resolve).toHaveBeenCalledWith("acc-1", { fresh: false });
 });
 
+test("GET /entitlements rate limits an account past its per-minute cap", async () => {
+  const { app } = appWith();
+  let last = 200;
+  for (let i = 0; i < 21; i++) {
+    const res = await app.request("/entitlements", { headers: { authorization: "Bearer tok" } });
+    last = res.status;
+  }
+  expect(last).toBe(429);
+});
+
 test("GET /entitlements 401 without a valid token", async () => {
   const { app } = appWith({ db: { accountByToken: vi.fn(async () => null), touchToken: vi.fn() } });
   const res = await app.request("/entitlements", { headers: { authorization: "Bearer bad" } });

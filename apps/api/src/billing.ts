@@ -2,6 +2,7 @@ import type { Context, Hono } from "hono";
 import type { EntitlementPayload } from "./entitlements";
 import type { StripeAdapter } from "./stripeAdapter";
 import { sha, bearer } from "./authToken";
+import { createRateLimiter } from "./rateLimit";
 
 export interface BillingDeps {
   db: {
@@ -35,6 +36,10 @@ export async function authed(
 }
 
 export function registerBillingRoutes(app: Hono, deps: BillingDeps): void {
+  // Per-account, per-replica: each /entitlements call can fan out to Stripe, so
+  // cap an authed account's polling to keep it off the Stripe quota.
+  const entitlementLimit = createRateLimiter(20, 60_000);
+
   /** Parse + validate a non-empty string `orgId` from the JSON body. */
   async function orgIdFromBody(c: Context): Promise<string | null> {
     const body = (await c.req.json().catch(() => null)) as { orgId?: unknown } | null;
@@ -44,6 +49,7 @@ export function registerBillingRoutes(app: Hono, deps: BillingDeps): void {
   app.get("/entitlements", async (c) => {
     const acc = await authed(c, deps.db);
     if (!acc) return c.json({ error: "unauthorized" }, 401);
+    if (!entitlementLimit(acc.id)) return c.json({ error: "rate limited" }, 429);
     const fresh = c.req.query("fresh") === "1" || c.req.query("fresh") === "true";
     return c.json(await deps.resolve(acc.id, { fresh }));
   });
