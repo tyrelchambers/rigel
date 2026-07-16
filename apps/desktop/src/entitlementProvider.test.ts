@@ -26,11 +26,21 @@ test("provider fetches on start, caches, and serves the cached value; falls back
   const saved: (EntitlementPayload | null)[] = [];
   const store = { load: () => saved.at(-1) ?? null, save: (v: EntitlementPayload) => saved.push(v) };
   const p = createEntitlementProvider({ client, store, now: () => Date.parse("2026-07-05") });
-  await p.refresh();
+  expect((await p.refresh()).plan).toBe("pro");
   expect(p.current().plan).toBe("pro");
   net = null; // simulate resolver down
+  expect((await p.refresh()).plan).toBe("pro"); // still within grace from the cached fetch
+  expect(p.current().plan).toBe("pro");
+});
+
+test("refresh(true) forwards the fresh flag to the client", async () => {
+  const seen: (boolean | undefined)[] = [];
+  const client = { entitlements: async (fresh?: boolean) => { seen.push(fresh); return pro; } };
+  const store = { load: () => null, save: () => {} };
+  const p = createEntitlementProvider({ client, store, now: () => Date.parse("2026-07-05") });
   await p.refresh();
-  expect(p.current().plan).toBe("pro"); // still within grace from the cached fetch
+  await p.refresh(true);
+  expect(seen).toEqual([undefined, true]);
 });
 
 test("a successful fetch that returns free overwrites the cached pro (real cancellation, no grace)", async () => {

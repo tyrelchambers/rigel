@@ -18,7 +18,7 @@ export function applyGrace(cached: EntitlementPayload | null, nowMs: number): En
 }
 
 export interface EntitlementProviderDeps {
-  client: { entitlements(): Promise<EntitlementPayload | null> };
+  client: { entitlements(fresh?: boolean): Promise<EntitlementPayload | null> };
   store: { load(): EntitlementPayload | null; save(v: EntitlementPayload): void };
   now: () => number;
 }
@@ -29,13 +29,14 @@ export function createEntitlementProvider(deps: EntitlementProviderDeps) {
   const emit = () => { const e = applyGrace(cached, deps.now()); for (const l of listeners) l(e); };
   return {
     current: () => applyGrace(cached, deps.now()),
-    async refresh() {
-      const fresh = await deps.client.entitlements().catch(() => null);
-      if (fresh) {
-        cached = fresh;
-        deps.store.save(fresh);
+    async refresh(fresh?: boolean): Promise<EntitlementPayload> {
+      const resolved = await deps.client.entitlements(fresh).catch(() => null);
+      if (resolved) {
+        cached = resolved;
+        deps.store.save(resolved);
       }
       emit();
+      return applyGrace(cached, deps.now());
     },
     onChange(cb: (e: EntitlementPayload) => void) { listeners.add(cb); return () => listeners.delete(cb); },
   };

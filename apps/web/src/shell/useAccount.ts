@@ -15,7 +15,7 @@ export interface UseAccountResult {
   refresh(): Promise<void>;
   upgrade(orgId: string): Promise<{ clientSecret: string; publishableKey: string } | null>;
   manageBilling(orgId: string): Promise<{ ok: boolean } | undefined>;
-  refreshBilling(): Promise<void>;
+  refreshBilling(): Promise<EntitlementPayload | null>;
 }
 
 export function useAccount(): UseAccountResult {
@@ -67,7 +67,7 @@ export function useAccount(): UseAccountResult {
   const upgrade = useCallback((orgId: string) => rigel?.billing?.checkout(orgId) ?? Promise.resolve(null), []);
   const manageBilling = useCallback((orgId: string) => rigel?.billing?.portal(orgId) ?? Promise.resolve(undefined), []);
   // Manual entitlement refetch (the provider re-emits rigel:billing:changed → this hook refetches).
-  const refreshBilling = useCallback(() => rigel?.billing?.refresh() ?? Promise.resolve(), []);
+  const refreshBilling = useCallback(() => rigel?.billing?.refresh() ?? Promise.resolve(null), []);
 
   return { status, account: me?.account ?? null, me, orgs, entitlement, requestCode, verifyCode, signOut, refresh, upgrade, manageBilling, refreshBilling };
 }

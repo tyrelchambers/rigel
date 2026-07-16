@@ -67,4 +67,12 @@ test("entitlements returns the resolved payload", async () => {
   const fetchFn = vi.fn(async () => ({ ok: true, json: async () => ({ plan: "pro", audits: [], cloudConnect: true, agentAutonomy: false, fetchedAt: "t" }) }));
   const client = createBillingClient({ store: { getToken: () => "tok" } as never, fetchFn: fetchFn as never, endpoint: "https://api.rigel.run" });
   expect((await client.entitlements())?.cloudConnect).toBe(true);
+  expect(fetchFn).toHaveBeenCalledWith("https://api.rigel.run/entitlements", expect.objectContaining({ headers: expect.objectContaining({ authorization: "Bearer tok" }) }));
+});
+
+test("entitlements(fresh) requests ?fresh=1 to bypass the server cache", async () => {
+  const fetchFn = vi.fn(async () => ({ ok: true, json: async () => ({ plan: "pro", audits: [], cloudConnect: true, agentAutonomy: false, fetchedAt: "t" }) }));
+  const client = createBillingClient({ store: { getToken: () => "tok" } as never, fetchFn: fetchFn as never, endpoint: "https://api.rigel.run" });
+  await client.entitlements(true);
+  expect(fetchFn).toHaveBeenCalledWith("https://api.rigel.run/entitlements?fresh=1", expect.objectContaining({ headers: expect.objectContaining({ authorization: "Bearer tok" }) }));
 });

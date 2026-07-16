@@ -47,7 +47,7 @@ export interface RigelBridge {
     portal(orgId: string): Promise<{ ok: boolean }>;
     agentToken(orgId: string): Promise<{ token: string; installId: string } | null>;
     entitlements(): Promise<EntitlementPayload | null>;
-    refresh(): Promise<void>;
+    refresh(): Promise<EntitlementPayload | null>;
     onChanged(cb: () => void): () => void;
   };
   appUpdate?: {

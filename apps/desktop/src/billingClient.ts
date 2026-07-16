@@ -51,8 +51,8 @@ export function createBillingClient({ store, fetchFn, endpoint }: { store: Billi
   return {
     checkout,
     portal: (orgId: string) => postUrl("/billing/portal", orgId),
-    async entitlements(): Promise<EntitlementPayload | null> {
-      const res = await fetchFn(`${endpoint}/entitlements`, { headers: auth() });
+    async entitlements(fresh?: boolean): Promise<EntitlementPayload | null> {
+      const res = await fetchFn(`${endpoint}/entitlements${fresh ? "?fresh=1" : ""}`, { headers: auth() });
       return res.ok ? ((await res.json()) as EntitlementPayload) : null;
     },
     async agentToken(orgId: string): Promise<{ token: string; installId: string } | null> {

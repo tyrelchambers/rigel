@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { UpdateState } from "./appUpdater";
+import type { EntitlementPayload } from "./billingClient";
 
 const sessionArg = process.argv.find((a) => a.startsWith("--rigel-session="));
 const sessionSecret = sessionArg ? sessionArg.slice("--rigel-session=".length) : "";
@@ -40,7 +41,7 @@ contextBridge.exposeInMainWorld("rigel", {
     agentToken: (orgId: string): Promise<{ token: string; installId: string } | null> =>
       ipcRenderer.invoke("rigel:billing:agent-token", orgId),
     entitlements: () => ipcRenderer.invoke("rigel:billing:entitlements"),
-    refresh: (): Promise<void> => ipcRenderer.invoke("rigel:billing:refresh"),
+    refresh: (): Promise<EntitlementPayload | null> => ipcRenderer.invoke("rigel:billing:refresh"),
     onChanged: (cb: () => void): (() => void) => {
       const l = () => cb();
       ipcRenderer.on("rigel:billing:changed", l);

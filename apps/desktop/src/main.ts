@@ -102,7 +102,7 @@ function openBillingWindow(url: string): void {
       billingWindow?.close();
       // Refetch → the provider emits rigel:billing:changed (renderer refetches)
       // and pushes the fresh entitlement to the server gate.
-      void entitlements?.refresh();
+      void entitlements?.refresh(true);
     }
   };
   billingWindow.webContents.on("will-redirect", (_e, u) => onNav(u));
@@ -535,7 +535,7 @@ async function boot(): Promise<void> {
       return;
     }
     pushServerAuth(true);
-    void entitlements?.refresh(); // fresh sign-in → resolve entitlements
+    void entitlements?.refresh(true); // fresh sign-in → resolve entitlements
     mainWindow?.webContents.send("rigel:account:changed");
   };
 
@@ -554,7 +554,7 @@ async function boot(): Promise<void> {
   ipcMain.handle("rigel:account:request-code", (_e, email: string) => accountClient.requestCode(email));
   ipcMain.handle("rigel:account:verify-code", async (_e, d: { email: string; code: string }) => {
     const r = await accountClient.verifyCode(d.email, d.code);
-    if (r.ok) { pushServerAuth(true); void entitlements?.refresh(); }
+    if (r.ok) { pushServerAuth(true); void entitlements?.refresh(true); }
     return r;
   });
   ipcMain.handle("rigel:account:me", () => accountClient.me());
@@ -585,7 +585,7 @@ async function boot(): Promise<void> {
   // Return the provider's current (grace-applied) value, NOT a raw fetch — the
   // provider is the source of truth (Slice C replaces the Slice B raw-fetch handler).
   ipcMain.handle("rigel:billing:entitlements", () => entitlements?.current() ?? null);
-  ipcMain.handle("rigel:billing:refresh", () => entitlements?.refresh());
+  ipcMain.handle("rigel:billing:refresh", async () => (await entitlements?.refresh(true)) ?? null);
   ipcMain.handle("rigel:app-update:state", () => getUpdateState());
   ipcMain.handle("rigel:app-update:check", () => checkForUpdates());
   ipcMain.handle("rigel:app-update:download", () => downloadUpdate());
