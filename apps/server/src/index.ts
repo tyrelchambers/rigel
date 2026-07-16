@@ -46,8 +46,8 @@ import {
   cloudCheck, cloudListClusters, cloudConnect, cloudHealth, importKubeconfig, cloudParamOptions,
 } from "./cloudConnect";
 import { disconnectContext } from "./disconnectContext";
-import { canConnect, setEntitlement, canBeAutonomous, cloudEnabled, unlockedAuditsEnv, type ConnectTarget, type EntitlementPayload } from "./entitlements";
-import { cloudGateResponse, isCloudContext } from "./cloudGate";
+import { canConnect, setEntitlement, canBeAutonomous, unlockedAuditsEnv, type ConnectTarget, type EntitlementPayload } from "./entitlements";
+import { cloudGateResponse } from "./cloudGate";
 import type { CloudCluster } from "@rigel/cloud-connect/src/index";
 import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusMetrics";
 import { handleUpdates, type UpdatesRequest } from "./updates";
@@ -1304,12 +1304,9 @@ httpServer.on("upgrade", (req: IncomingMessage, socket, head) => {
         socket.destroy();
         return;
       }
-      // HELM-16: the WS defaults every context-agnostic frame to the boot
-      // context; reject the upgrade outright when that is a cloud context on Free.
-      if (bootContext && !cloudEnabled() && (await isCloudContext(bootContext))) {
-        socket.destroy();
-        return;
-      }
+      // HELM-16: cloud-cluster gating happens per-frame in the WS handlers, not at
+      // upgrade — the boot context is not the app's active context, so rejecting
+      // the upgrade would brick every cluster for a Free user whose default is cloud.
       wss.handleUpgrade(req, socket, head, (client) => wss.emit("connection", client));
     } catch {
       try { socket.destroy(); } catch { /* already gone */ }

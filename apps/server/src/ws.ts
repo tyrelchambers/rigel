@@ -8,7 +8,18 @@ import { ClusterCreateManager } from "./clusterCreateManager";
 import { ActionRunManager } from "./actionRunManager";
 import { parseChatScope, resolveReadContexts } from "./chatScope";
 import { listContexts } from "./contexts";
+import { isCloudContext } from "./cloudGate";
+import { cloudEnabled } from "./entitlements";
 import type { Access } from "./access";
+
+const GATED_MESSAGE = "Cloud clusters are a Pro feature";
+
+// HELM-16: a per-frame gate. A resolved context is blocked when it is a cloud
+// provider and the account is not entitled to cloud clusters. Local/generic
+// contexts (and any context on Pro) always pass.
+async function cloudGated(ctx: string | null): Promise<boolean> {
+  return ctx != null && !cloudEnabled() && (await isCloudContext(ctx));
+}
 
 export function makeWsHandlers(
   mgr: WatchManager,
@@ -140,19 +151,37 @@ export function makeWsHandlers(
         const { subCtx, key } = resolveSub(m);
         if (map.has(key)) return;
         const ctxKey = subCtx ?? "";
-        const cached = ctxAccessByWs.get(ws)?.get(ctxKey);
-        if (cached) {
-          fanOut(ws, map, subCtx, key, m, cached);
-        } else {
-          const token = () => {};
-          map.set(key, token);
-          void accessFor(subCtx).then((access) => {
-            ctxAccessByWs.get(ws)?.set(ctxKey, access);
-            announceAccess(ws, ctxKey, access);
-            if (map.get(key) !== token) return;
-            fanOut(ws, map, subCtx, key, m, access);
-          });
-        }
+        const token = () => {};
+        map.set(key, token);
+        void cloudGated(subCtx).then((gated) => {
+          if (map.get(key) !== token) return;
+          if (gated) {
+            map.delete(key);
+            ws.send(
+              JSON.stringify({
+                type: "error",
+                context: subCtx,
+                kind: m.kind,
+                namespace: m.namespace,
+                reason: "gated",
+                message: GATED_MESSAGE,
+                gated: true,
+              }),
+            );
+            return;
+          }
+          const cached = ctxAccessByWs.get(ws)?.get(ctxKey);
+          if (cached) {
+            fanOut(ws, map, subCtx, key, m, cached);
+          } else {
+            void accessFor(subCtx).then((access) => {
+              ctxAccessByWs.get(ws)?.set(ctxKey, access);
+              announceAccess(ws, ctxKey, access);
+              if (map.get(key) !== token) return;
+              fanOut(ws, map, subCtx, key, m, access);
+            });
+          }
+        });
       } else if (m.type === "unsubscribe") {
         const { key } = resolveSub(m);
         map.get(key)?.();
@@ -161,7 +190,13 @@ export function makeWsHandlers(
         const targets = m.targets as LogTarget[];
         const tail = typeof m.tailLines === "number" ? m.tailLines : 200;
         const logsCtx = typeof m.context === "string" && m.context !== "" ? m.context : context;
-        logStreams.get(ws)?.start(targets, tail, logsCtx);
+        void cloudGated(logsCtx).then((gated) => {
+          if (gated) {
+            ws.send(JSON.stringify({ type: "logs.error", namespace: "", message: GATED_MESSAGE, gated: true }));
+            return;
+          }
+          logStreams.get(ws)?.start(targets, tail, logsCtx);
+        });
       } else if (m.type === "logs.stop") {
         logStreams.get(ws)?.stop();
       } else if (m.type === "chat" && typeof m.prompt === "string") {
@@ -178,13 +213,22 @@ export function makeWsHandlers(
         const chatCtx = typeof m.context === "string" && m.context !== "" ? m.context : context;
         (async () => {
           try {
+            if (await cloudGated(chatCtx)) {
+              ws.send(
+                JSON.stringify({ type: "chat", event: { type: "error", text: GATED_MESSAGE, gated: true } }),
+              );
+              return;
+            }
             // Only enumerate contexts when the turn fans out beyond the active one.
-            const readContexts =
+            const candidates =
               scope === "active"
                 ? chatCtx
                   ? [chatCtx]
                   : []
                 : resolveReadContexts(scope, chatCtx, (await listContexts()).map((c) => c.name));
+            // Drop any cloud context the account is not entitled to from the fan-out.
+            const readContexts: string[] = [];
+            for (const c of candidates) if (!(await cloudGated(c))) readContexts.push(c);
             for await (const event of runAgent(m.prompt, chatCtx, ac.signal, {
               model,
               effort,
@@ -229,7 +273,13 @@ export function makeWsHandlers(
         creates.get(ws)?.stop();
       } else if (m.type === "action.run" && typeof m.id === "string" && m.action != null) {
         const actionCtx = typeof m.context === "string" && m.context !== "" ? m.context : context;
-        actionRunners.get(ws)?.run({ id: m.id, action: m.action, context: actionCtx });
+        void cloudGated(actionCtx).then((gated) => {
+          if (gated) {
+            ws.send(JSON.stringify({ type: "action.error", id: m.id, message: GATED_MESSAGE, gated: true }));
+            return;
+          }
+          actionRunners.get(ws)?.run({ id: m.id, action: m.action, context: actionCtx });
+        });
       }
     },
   };
