@@ -798,7 +798,12 @@ export async function tick(
   // Fold a freshly-fetched entitlement into this single durable write so the 12h
   // throttle and the 30-day grace both have a persisted last-known-good to read next tick.
   if (entitlementToPersist) state = { ...state, entitlement: entitlementToPersist };
-  if (state.entitlementRefreshAt !== rc.entitlementRefreshAt) state = { ...state, entitlementRefreshAt: rc.entitlementRefreshAt };
+  // Ack the force-recheck marker only after a SUCCESSFUL forced fetch (a fresh cache
+  // was produced). A failed forced fetch leaves the marker so the next tick retries —
+  // otherwise "instant upgrade" silently degrades to the 12h throttle.
+  if (state.entitlementRefreshAt !== rc.entitlementRefreshAt && (!force || entitlementToPersist)) {
+    state = { ...state, entitlementRefreshAt: rc.entitlementRefreshAt };
+  }
   await writeState(cfg.stateConfigMap, cfg.stateNamespace, state);
 
   if (rc.enabled) {

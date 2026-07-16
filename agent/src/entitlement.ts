@@ -123,7 +123,8 @@ export async function determineEntitlement(args: {
   let toCache: Entitlement | undefined;
   if (force || shouldRefetch(cache, now, cfg)) {
     fetchResult = await fetchEntitlement(cfg.entitlementEndpoint, cfg.agentToken, args.fetchFn);
-    if (fetchResult.status === "ok") toCache = fetchResult.value;
+    if (fetchResult.status === "ok")
+      toCache = { agentEntitled: fetchResult.value.agentEntitled, fetchedAt: new Date(now).toISOString() };
   }
   return { entitled: resolveEntitlement({ cfg, now, cache, fetchResult }), cache: toCache };
 }

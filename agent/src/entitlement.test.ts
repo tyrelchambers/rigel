@@ -167,6 +167,16 @@ describe("determineEntitlement", () => {
     expect(vi.mocked(kubectl)).not.toHaveBeenCalled();
   });
 
+  test("a successful fetch stamps the cached fetchedAt from the AGENT clock, not the response", async () => {
+    const responseFetchedAt = new Date(NOW + 365 * 24 * 60 * 60 * 1000).toISOString();
+    const value = { agentEntitled: true, fetchedAt: responseFetchedAt };
+    const fetchFn = vi.fn(async () => ({ status: 200, ok: true, json: async () => value })) as unknown as typeof fetch;
+    const r = await determineEntitlement({ cfg: CFG, now: NOW, cache: null, fetchFn });
+    expect(r.entitled).toBe(true);
+    expect(r.cache).toEqual({ agentEntitled: true, fetchedAt: new Date(NOW).toISOString() });
+    expect(r.cache!.fetchedAt).not.toBe(responseFetchedAt);
+  });
+
   test("refetch + error, fresh cache → holds last-known-good, returns NO cache to persist", async () => {
     const fetchFn = vi.fn(async () => { throw new Error("down"); }) as unknown as typeof fetch;
     const r = await determineEntitlement({ cfg: CFG, now: NOW, cache: ent(true, 13 * 60 * 60 * 1000), fetchFn });
