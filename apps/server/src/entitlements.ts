@@ -33,4 +33,6 @@ export function canConnect(target: ConnectTarget): Entitlement {
 
 export function canBeAutonomous(): boolean { return !!current?.agentAutonomy; }
 
+export function cloudEnabled(): boolean { return !!current?.cloudConnect; }
+
 export function unlockedAuditsEnv(): string { return (current?.audits ?? []).join(","); }

@@ -46,7 +46,8 @@ import {
   cloudCheck, cloudListClusters, cloudConnect, cloudHealth, importKubeconfig, cloudParamOptions,
 } from "./cloudConnect";
 import { disconnectContext } from "./disconnectContext";
-import { canConnect, setEntitlement, canBeAutonomous, unlockedAuditsEnv, type ConnectTarget, type EntitlementPayload } from "./entitlements";
+import { canConnect, setEntitlement, canBeAutonomous, cloudEnabled, unlockedAuditsEnv, type ConnectTarget, type EntitlementPayload } from "./entitlements";
+import { cloudGateResponse, isCloudContext } from "./cloudGate";
 import type { CloudCluster } from "@rigel/cloud-connect/src/index";
 import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusMetrics";
 import { handleUpdates, type UpdatesRequest } from "./updates";
@@ -288,6 +289,13 @@ async function handler(req: Request): Promise<Response> {
       }
       return Response.json(await importKubeconfig(body.kubeconfig, { kubeconfigPath: KUBECONFIG }));
     }
+
+    // Monetization (HELM-16): on Free, block every context-scoped /api/* call
+    // whose resolved context is a cloud provider — however it entered the
+    // kubeconfig. Exempts health/contexts/cloud-connect/delete/disconnect so a
+    // Free user can still see and remove a locked cloud cluster.
+    const cloudGate = await cloudGateResponse(url.pathname, context);
+    if (cloudGate) return cloudGate;
 
     // Serve the built web UI for everything that isn't an API or WS path.
     if (!url.pathname.startsWith("/api/") && url.pathname !== "/ws") {
@@ -1285,20 +1293,28 @@ const httpServer = serve({ fetch: handler, port: PORT, hostname: HOST }, (info) 
 const wss = new WebSocketServer({ noServer: true });
 const wsHandlers = makeWsHandlers(mgr, bootContext, KUBECONFIG, accessFor);
 httpServer.on("upgrade", (req: IncomingMessage, socket, head) => {
-  try {
-    const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
-    if (url.pathname !== "/ws") {
-      socket.destroy();
-      return;
+  void (async () => {
+    try {
+      const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+      if (url.pathname !== "/ws") {
+        socket.destroy();
+        return;
+      }
+      if (!accessAllowed(url.searchParams.get("s"), SESSION_SECRET, accountSignedIn)) {
+        socket.destroy();
+        return;
+      }
+      // HELM-16: the WS defaults every context-agnostic frame to the boot
+      // context; reject the upgrade outright when that is a cloud context on Free.
+      if (bootContext && !cloudEnabled() && (await isCloudContext(bootContext))) {
+        socket.destroy();
+        return;
+      }
+      wss.handleUpgrade(req, socket, head, (client) => wss.emit("connection", client));
+    } catch {
+      try { socket.destroy(); } catch { /* already gone */ }
     }
-    if (!accessAllowed(url.searchParams.get("s"), SESSION_SECRET, accountSignedIn)) {
-      socket.destroy();
-      return;
-    }
-    wss.handleUpgrade(req, socket, head, (client) => wss.emit("connection", client));
-  } catch {
-    try { socket.destroy(); } catch { /* already gone */ }
-  }
+  })();
 });
 wss.on("error", (err) => console.error("websocket server error:", err));
 wss.on("connection", (client) => {
