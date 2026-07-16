@@ -89,5 +89,5 @@ const app = createApp({
 });
 
 serve({ fetch: app.fetch, port: PORT, hostname: "0.0.0.0" }, (info) =>
-  console.log(`signups api on :${info.port}`),
+  console.log(`[api] listening on :${info.port}`),
 );

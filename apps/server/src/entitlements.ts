@@ -7,7 +7,7 @@ export interface Entitlement {
   reason?: string;
 }
 
-// MUST mirror the canonical shape in apps/signups/src/entitlements.ts exactly —
+// MUST mirror the canonical shape in apps/api/src/entitlements.ts exactly —
 // same field names + the precise audit union (not string[]). This is one of the
 // four boundary copies of EntitlementPayload (signups → desktop billingClient →
 // web desktop.ts → here); they are duplicated across package boundaries on
