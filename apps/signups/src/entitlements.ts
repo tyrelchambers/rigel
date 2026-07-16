@@ -46,12 +46,14 @@ export interface ResolverDeps {
 
 const CACHE_MS = 60_000;
 
-export function makeResolver(deps: ResolverDeps): (accountId: string) => Promise<EntitlementPayload> {
+export function makeResolver(
+  deps: ResolverDeps,
+): (accountId: string, opts?: { fresh?: boolean }) => Promise<EntitlementPayload> {
   const mono = deps.monoNow ?? (() => Date.now());
   const cache = new Map<string, { at: number; payload: EntitlementPayload }>();
-  return async (accountId) => {
+  return async (accountId, opts) => {
     const hit = cache.get(accountId);
-    if (hit && mono() - hit.at < CACHE_MS) return hit.payload;
+    if (!opts?.fresh && hit && mono() - hit.at < CACHE_MS) return hit.payload;
     const orgs = await deps.db.billableOrgs(accountId);
     const keys = new Set<string>();
     for (const o of orgs) {

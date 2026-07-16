@@ -64,3 +64,23 @@ test("resolveEntitlements caches per account for ~60s", async () => {
   await resolve("acc-1"); // window expired
   expect(billableOrgs).toHaveBeenCalledTimes(2);
 });
+
+test("resolveEntitlements: {fresh:true} bypasses the cache and re-resolves", async () => {
+  const billableOrgs = vi.fn(async () => [{ orgId: "o1", stripeCustomerId: "cus_1" }]);
+  const activeFeatureKeys = vi.fn(async () => new Set(["security"]));
+  const t = 1_000_000;
+  const resolve = makeResolver({ db: { billableOrgs }, stripe: { activeFeatureKeys }, now: () => new Date(t).toISOString(), monoNow: () => t });
+  await resolve("acc-1");
+  await resolve("acc-1", { fresh: true }); // within window, but forced
+  expect(billableOrgs).toHaveBeenCalledTimes(2);
+});
+
+test("resolveEntitlements: a fresh resolve updates the cache for subsequent calls", async () => {
+  const billableOrgs = vi.fn(async () => [{ orgId: "o1", stripeCustomerId: "cus_1" }]);
+  const activeFeatureKeys = vi.fn(async () => new Set(["security"]));
+  const t = 1_000_000;
+  const resolve = makeResolver({ db: { billableOrgs }, stripe: { activeFeatureKeys }, now: () => new Date(t).toISOString(), monoNow: () => t });
+  await resolve("acc-1", { fresh: true });
+  await resolve("acc-1");
+  expect(billableOrgs).toHaveBeenCalledTimes(1);
+});
