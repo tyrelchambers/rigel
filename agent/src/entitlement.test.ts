@@ -7,7 +7,6 @@ import {
   readEntitlementCache,
   resolveEntitlement,
   shouldRefetch,
-  writeEntitlementCache,
   type Entitlement,
 } from "./entitlement.js";
 import { kubectl } from "./kubectl.js";
@@ -120,9 +119,21 @@ describe("fetchEntitlement", () => {
     const fetchFn = vi.fn(async () => okResp({ plan: "pro" })) as unknown as typeof fetch;
     expect(await fetchEntitlement("https://api.rigel.run", "tok", fetchFn)).toEqual({ status: "error" });
   });
+  test("passes a bounded AbortSignal so a hung backend can't stall the tick", async () => {
+    const fetchFn = vi.fn(async () => okResp({ agentEntitled: true, fetchedAt: "2026-07-15T00:00:00.000Z" })) as unknown as typeof fetch;
+    await fetchEntitlement("https://api.rigel.run", "tok", fetchFn);
+    const opts = vi.mocked(fetchFn).mock.calls[0]![1] as RequestInit;
+    expect(opts.signal).toBeInstanceOf(AbortSignal);
+    expect(opts.signal!.aborted).toBe(false);
+  });
+  test("a timed-out (aborted) fetch maps to error → grace/free, never a throw", async () => {
+    // A real timed-out fetch rejects with an AbortError/TimeoutError; the catch maps it.
+    const fetchFn = vi.fn(async () => { throw new DOMException("timed out", "TimeoutError"); }) as unknown as typeof fetch;
+    await expect(fetchEntitlement("https://api.rigel.run", "tok", fetchFn)).resolves.toEqual({ status: "error" });
+  });
 });
 
-describe("readEntitlementCache / writeEntitlementCache", () => {
+describe("readEntitlementCache", () => {
   const stateCm = (data: Record<string, unknown>) => ({ stdout: JSON.stringify({ data: { "state.json": JSON.stringify(data) } }), stderr: "", code: 0 });
 
   test("read returns the cached entitlement stored in state", async () => {
@@ -137,61 +148,36 @@ describe("readEntitlementCache / writeEntitlementCache", () => {
     vi.mocked(kubectl).mockResolvedValue(stateCm({ updatedAt: "", audit: [], queue: [], report: "" }) as never);
     expect(await readEntitlementCache(CFG)).toBeNull();
   });
-
-  test("write persists entitlement WITHOUT clobbering other state keys", async () => {
-    let applied: string | undefined;
-    vi.mocked(kubectl).mockImplementation(async (args: string[], stdin?: string) => {
-      if (args[0] === "get") return stateCm({ updatedAt: "t0", audit: [{ at: "x" }], queue: [], report: "hello" }) as never;
-      if (args[0] === "apply") { applied = stdin; return { stdout: "", stderr: "", code: 0 } as never; }
-      return { stdout: "", stderr: "", code: 1 } as never;
-    });
-    await writeEntitlementCache(CFG, ent(true));
-    const parsed = JSON.parse(applied ?? "{}") as { data?: Record<string, string> };
-    const written = JSON.parse(parsed.data!["state.json"]!) as Record<string, unknown>;
-    expect(written.entitlement).toEqual(ent(true));
-    expect(written.report).toBe("hello");
-    expect(written.audit).toEqual([{ at: "x" }]);
-  });
 });
 
 describe("determineEntitlement", () => {
-  const stateCm = () => ({ stdout: JSON.stringify({ data: { "state.json": JSON.stringify({ updatedAt: "", audit: [], queue: [], report: "" }) } }), stderr: "", code: 0 });
-
-  test("empty token → false, no fetch attempted", async () => {
+  test("empty token → not entitled, no cache, no fetch attempted", async () => {
     const fetchFn = vi.fn() as unknown as typeof fetch;
-    const entitled = await determineEntitlement({ cfg: { ...CFG, agentToken: "" } as Config, now: NOW, cache: null, fetchFn });
-    expect(entitled).toBe(false);
+    const r = await determineEntitlement({ cfg: { ...CFG, agentToken: "" } as Config, now: NOW, cache: null, fetchFn });
+    expect(r).toEqual({ entitled: false });
     expect(vi.mocked(fetchFn)).not.toHaveBeenCalled();
   });
 
-  test("refetch + ok entitled → true and the cache is persisted", async () => {
-    vi.mocked(kubectl).mockResolvedValue(stateCm() as never);
+  test("refetch + ok entitled → entitled + the fetched value to cache (no IO of its own)", async () => {
     const value = { agentEntitled: true, fetchedAt: new Date(NOW).toISOString() };
     const fetchFn = vi.fn(async () => ({ status: 200, ok: true, json: async () => value })) as unknown as typeof fetch;
-    const entitled = await determineEntitlement({ cfg: CFG, now: NOW, cache: null, fetchFn });
-    expect(entitled).toBe(true);
-    // Persisted via a state apply.
-    expect(vi.mocked(kubectl).mock.calls.some((c) => c[0]?.[0] === "apply")).toBe(true);
+    const r = await determineEntitlement({ cfg: CFG, now: NOW, cache: null, fetchFn });
+    expect(r).toEqual({ entitled: true, cache: value });
+    // The decision must NOT write anything itself (the caller owns the single write).
+    expect(vi.mocked(kubectl)).not.toHaveBeenCalled();
   });
 
-  test("refetch + error, fresh cache → holds last-known-good (no persist)", async () => {
+  test("refetch + error, fresh cache → holds last-known-good, returns NO cache to persist", async () => {
     const fetchFn = vi.fn(async () => { throw new Error("down"); }) as unknown as typeof fetch;
-    const entitled = await determineEntitlement({ cfg: CFG, now: NOW, cache: ent(true, 13 * 60 * 60 * 1000), fetchFn });
-    expect(entitled).toBe(true);
-    expect(vi.mocked(kubectl).mock.calls.some((c) => c[0]?.[0] === "apply")).toBe(false);
+    const r = await determineEntitlement({ cfg: CFG, now: NOW, cache: ent(true, 13 * 60 * 60 * 1000), fetchFn });
+    expect(r).toEqual({ entitled: true });
+    expect(r.cache).toBeUndefined();
   });
 
-  test("fresh cache (no refetch) → cache value, no fetch", async () => {
+  test("fresh cache (no refetch) → cache value, no fetch, no cache to persist", async () => {
     const fetchFn = vi.fn() as unknown as typeof fetch;
-    const entitled = await determineEntitlement({ cfg: CFG, now: NOW, cache: ent(false, 60_000), fetchFn });
-    expect(entitled).toBe(false);
+    const r = await determineEntitlement({ cfg: CFG, now: NOW, cache: ent(false, 60_000), fetchFn });
+    expect(r).toEqual({ entitled: false });
     expect(vi.mocked(fetchFn)).not.toHaveBeenCalled();
-  });
-
-  test("a write failure never throws out of the decision", async () => {
-    vi.mocked(kubectl).mockRejectedValue(new Error("apply failed") as never);
-    const value = { agentEntitled: true, fetchedAt: new Date(NOW).toISOString() };
-    const fetchFn = vi.fn(async () => ({ status: 200, ok: true, json: async () => value })) as unknown as typeof fetch;
-    await expect(determineEntitlement({ cfg: CFG, now: NOW, cache: null, fetchFn })).resolves.toBe(true);
   });
 });

@@ -63,7 +63,7 @@ import {
   type AuditEntry,
 } from "./state.js";
 import { evaluateDigests } from "./digest.js";
-import { determineEntitlement, parseEntitlement } from "./entitlement.js";
+import { determineEntitlement, parseEntitlement, type Entitlement } from "./entitlement.js";
 
 const VERSION = "0.1.0";
 
@@ -244,8 +244,14 @@ export async function tick(
   // of the tick — it falls to the grace-held cache (or free). Observe + incident
   // recording below are NEVER gated.
   let entitled = false;
+  let entitlementToPersist: Entitlement | undefined;
   try {
-    entitled = await determineEntitlement({ cfg, now, cache: parseEntitlement(state.entitlement) });
+    const decision = await determineEntitlement({ cfg, now, cache: parseEntitlement(state.entitlement) });
+    entitled = decision.entitled;
+    // A fresh fetch's value rides out on tick's OWN single state write below — the
+    // decision never writes itself, so the persisted cache can't be clobbered by the
+    // end-of-tick writeState (which is what previously kept shouldRefetch always true).
+    entitlementToPersist = decision.cache;
   } catch (e) {
     log(`entitlement check error — observe-only this tick: ${String(e)}`);
   }
@@ -780,6 +786,9 @@ export async function tick(
   // entitled digest still fires on schedule even while remediation is paused; its
   // send-state persists in the SAME durable write below.
   if (entitled) state = await evaluateDigests(rc, state, detection, now);
+  // Fold a freshly-fetched entitlement into this single durable write so the 12h
+  // throttle and the 30-day grace both have a persisted last-known-good to read next tick.
+  if (entitlementToPersist) state = { ...state, entitlement: entitlementToPersist };
   await writeState(cfg.stateConfigMap, cfg.stateNamespace, state);
 
   if (rc.enabled) {
@@ -790,23 +799,29 @@ export async function tick(
     // notifications are a PREMIUM capability — an observe-only org never broadcasts.
     if (entitled) flushNotifications(rc, notifications);
 
-    // Signal: answer any inbound diagnosis questions / approval commands whenever
-    // the channel is configured — no separate opt-in. Gated on the kill-switch
-    // (this whole block). Never throws — failures stay out of the loop.
-    if (rc.signalApiUrl && rc.signalNumber) {
-      try {
-        await handleSignalInbound(cfg, rc, cb, loop);
-      } catch (e) {
-        log(`signal inbound error: ${String(e)}`);
+    // Interactive chat is a PREMIUM surface too: an observe-only (not entitled) org
+    // must neither reply outward nor drive cluster writes via the chat-approve path
+    // (executeChatAction is reachable ONLY through these inbound handlers). Gating both
+    // on `entitled` keeps free installs strictly observe-only.
+    if (entitled) {
+      // Signal: answer any inbound diagnosis questions / approval commands whenever
+      // the channel is configured — no separate opt-in. Never throws — failures stay
+      // out of the loop.
+      if (rc.signalApiUrl && rc.signalNumber) {
+        try {
+          await handleSignalInbound(cfg, rc, cb, loop);
+        } catch (e) {
+          log(`signal inbound error: ${String(e)}`);
+        }
       }
-    }
 
-    // Matrix: independent of Signal — runs whenever configured, never blocks it.
-    if (rc.matrix.homeserverUrl && rc.matrix.accessToken && rc.matrix.roomId) {
-      try {
-        await handleMatrixInboundIO(cfg, rc, cb, loop);
-      } catch (e) {
-        log(`matrix inbound error: ${String(e)}`);
+      // Matrix: independent of Signal — runs whenever configured, never blocks it.
+      if (rc.matrix.homeserverUrl && rc.matrix.accessToken && rc.matrix.roomId) {
+        try {
+          await handleMatrixInboundIO(cfg, rc, cb, loop);
+        } catch (e) {
+          log(`matrix inbound error: ${String(e)}`);
+        }
       }
     }
   }

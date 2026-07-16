@@ -1,5 +1,5 @@
 import type { Config } from "./config.js";
-import { readState, writeState, type Entitlement } from "./state.js";
+import { readState, type Entitlement } from "./state.js";
 
 export type { Entitlement };
 
@@ -7,6 +7,10 @@ export type FetchResult =
   | { status: "ok"; value: Entitlement }
   | { status: "unauth" }
   | { status: "error" };
+
+/** Bound the entitlement fetch so a hung backend can't stall the tick (and thus
+ *  observe) for undici's multi-minute default. The abort maps to `error` → grace. */
+const FETCH_TIMEOUT_MS = 5000;
 
 /** Validate a stored/fetched entitlement's shape. Null on missing/garbage. */
 export function parseEntitlement(raw: unknown): Entitlement | null {
@@ -22,15 +26,8 @@ export async function readEntitlementCache(cfg: Config): Promise<Entitlement | n
   return parseEntitlement(state.entitlement);
 }
 
-/** Persist the cached entitlement into assistant-state, preserving every other
- *  state key (read-modify-write via the agent's own state path). */
-export async function writeEntitlementCache(cfg: Config, e: Entitlement): Promise<void> {
-  const state = await readState(cfg.stateConfigMap, cfg.stateNamespace);
-  await writeState(cfg.stateConfigMap, cfg.stateNamespace, { ...state, entitlement: e });
-}
-
 /** GET {endpoint}/agent/entitlement with a Bearer token. 2xx JSON → ok;
- *  401/403 → unauth; network/5xx/malformed → error. */
+ *  401/403 → unauth; network/5xx/timeout/malformed → error. */
 export async function fetchEntitlement(
   endpoint: string,
   token: string,
@@ -41,6 +38,7 @@ export async function fetchEntitlement(
     res = await fetchFn(`${endpoint.replace(/\/+$/, "")}/agent/entitlement`, {
       method: "GET",
       headers: { authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
   } catch {
     return { status: "error" };
@@ -94,33 +92,37 @@ export function shouldRefetch(cache: Entitlement | null, now: number, cfg: Confi
   return now - t >= cfg.entitlementCheckMs;
 }
 
+export interface EntitlementDecision {
+  entitled: boolean;
+  /** The value the caller should persist as the new cache — set ONLY on a
+   *  successful fresh fetch, so the caller folds it into its own single state
+   *  write (no second writer to clobber). Absent when nothing new was fetched. */
+  cache?: Entitlement;
+}
+
 /**
- * The full per-tick entitlement decision, orchestrating the IO around the pure
- * decision. `cache` comes from the already-read assistant-state (no extra get).
- * Never throws — a failed fetch/write falls back to the grace-held cache (or free)
- * so it can never crash a tick or stop observe. An unconfigured token short-circuits
- * to free with no network call.
+ * The full per-tick entitlement decision, orchestrating the fetch around the pure
+ * decision. `cache` comes from the already-read assistant-state (no extra get). It
+ * does NOT write — it RETURNS the value to cache so the caller can fold it into its
+ * own single state write. Never throws — a failed fetch falls back to the grace-held
+ * cache (or free) so it can never crash a tick or stop observe. An unconfigured token
+ * short-circuits to free with no network call.
  */
 export async function determineEntitlement(args: {
   cfg: Config;
   now: number;
   cache: Entitlement | null;
   fetchFn?: typeof fetch;
-}): Promise<boolean> {
+}): Promise<EntitlementDecision> {
   const { cfg, now, cache } = args;
-  if (cfg.agentToken === "") return false;
+  if (cfg.agentToken === "") return { entitled: false };
   // Default to "error" so a tick that does NOT refetch holds the last-known-good
   // cache through the grace window (or falls closed to free when there is none).
   let fetchResult: FetchResult = { status: "error" };
+  let toCache: Entitlement | undefined;
   if (shouldRefetch(cache, now, cfg)) {
     fetchResult = await fetchEntitlement(cfg.entitlementEndpoint, cfg.agentToken, args.fetchFn);
-    if (fetchResult.status === "ok") {
-      try {
-        await writeEntitlementCache(cfg, fetchResult.value);
-      } catch {
-        // best-effort cache persist; the resolved value this tick is unaffected
-      }
-    }
+    if (fetchResult.status === "ok") toCache = fetchResult.value;
   }
-  return resolveEntitlement({ cfg, now, cache, fetchResult });
+  return { entitled: resolveEntitlement({ cfg, now, cache, fetchResult }), cache: toCache };
 }
