@@ -80,7 +80,7 @@ images tagged with the release version:
 
 - `ghcr.io/<owner>/rigel-assistant` (the in-cluster agent)
 - `ghcr.io/<owner>/rigel-marketing`
-- `ghcr.io/<owner>/rigel-signups`
+- `ghcr.io/<owner>/rigel-api`
 
 Each gets three tags: `:X.Y.Z` (the exact version, immutable), `:X.Y` (the minor
 track), and `:stable` (a moving tag that always points at the latest published

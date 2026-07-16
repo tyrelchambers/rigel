@@ -37,7 +37,7 @@ import {
 const SIGNUP_ENDPOINT = process.env.RIGEL_SIGNUP_ENDPOINT || "https://api.rigel.run";
 // Shared key for the signups endpoint — deliberately baked into the client
 // (obfuscation, NOT real auth; the endpoint is a public signup). Must match the
-// APP_KEY in the `rigel-signups` k8s Secret.
+// APP_KEY in the `rigel-api` k8s Secret.
 const SIGNUP_APP_KEY = "3f0be9f2807280c51284681d4424e3883dab9650c1ae081c";
 // Minted once per launch; delivered to the forked server via env and to the
 // renderer via argv (see forkServer + createWindow). Gates /api/* + /ws.

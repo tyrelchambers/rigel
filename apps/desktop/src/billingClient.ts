@@ -1,9 +1,9 @@
 // EntitlementPayload is DEFINED here (the desktop-package copy). Do NOT cross-import
-// from @rigel/signups — that's a deployed-backend package, not wired for desktop
+// from the `api` package — that's a deployed-backend package, not wired for desktop
 // import (package boundary). This is one of the boundary mirrors of the shape
-// canonically defined in apps/signups/src/entitlements.ts; keep the fields +
+// canonically defined in apps/api/src/entitlements.ts; keep the fields +
 // precise audit union identical. desktop.ts (web) and apps/server keep their own
-// mirrors of the same shape (like Account/Org). Canonical = signups.
+// mirrors of the same shape (like Account/Org). Canonical = api.
 export interface EntitlementPayload {
   plan: "free" | "pro";
   audits: ("reliability" | "security" | "performance")[];

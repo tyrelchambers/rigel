@@ -18,7 +18,7 @@ Repo is `tyrelchambers/rigel`. Releases cut from `master`. `gh` is authed.
 
 1. **Version.** If the user gave `X.Y.Z`, use it. Otherwise show the last tag (`git tag --list 'v*' --sort=-v:refname | head -1`) and current `apps/desktop/package.json` version, and ask which bump (major/minor/patch). No leading `v`.
 
-2. **Bump in lockstep.** `node .claude/skills/cut-release/set-versions.mjs X.Y.Z` — sets `version` in desktop, agent, marketing, and web `package.json`. (`signups` has no version field.) Keeping `agent` in step matters: HELM-56's update watcher derives the agent's continuous tag minor from `agent/package.json`.
+2. **Bump in lockstep.** `node .claude/skills/cut-release/set-versions.mjs X.Y.Z` — sets `version` in desktop, agent, marketing, and web `package.json`. (`api` has no version field.) Keeping `agent` in step matters: HELM-56's update watcher derives the agent's continuous tag minor from `agent/package.json`.
 
 3. **Commit + tag + push.**
    ```sh
@@ -40,7 +40,7 @@ Repo is `tyrelchambers/rigel`. Releases cut from `master`. `gh` is authed.
    gh release edit vX.Y.Z --notes "$NOTES" --draft=false --latest
    ```
 
-7. **Watch the images.** Publishing triggers **Release versioned images** (`release-images.yml`). Watch it (`gh run watch …` as in step 4 with `-w "Release versioned images"`) and report the pushed tags (`:X.Y.Z`, `:X.Y`, `:stable`) for `rigel-assistant`, `rigel-marketing`, `rigel-signups`.
+7. **Watch the images.** Publishing triggers **Release versioned images** (`release-images.yml`). Watch it (`gh run watch …` as in step 4 with `-w "Release versioned images"`) and report the pushed tags (`:X.Y.Z`, `:X.Y`, `:stable`) for `rigel-assistant`, `rigel-marketing`, `rigel-api`.
 
 ## Notes
 
