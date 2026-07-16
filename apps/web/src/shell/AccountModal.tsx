@@ -86,7 +86,6 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
           </DialogHeader>
 
           <DialogBody className="flex flex-col gap-5">
-            {/* Profile */}
             <div className="flex items-center gap-3.5">
               <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-hover)] text-lg font-bold text-white">
                 {initials(name)}
@@ -103,7 +102,6 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
 
             <div className="h-px w-full bg-[var(--border-subtle)]" />
 
-            {/* Organizations */}
             {account.orgs.length > 0 && (
               <div className="flex flex-col gap-2.5">
                 <span className="font-mono text-3xs tracking-wide text-[var(--fg-tertiary)]">
@@ -119,7 +117,6 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
 
             <div className="h-px w-full bg-[var(--border-subtle)]" />
 
-            {/* Plan */}
             <div className="flex flex-col gap-2.5">
               <div className="flex items-center justify-between">
                 <span className="font-mono text-3xs tracking-wide text-[var(--fg-tertiary)]">

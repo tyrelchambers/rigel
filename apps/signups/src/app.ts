@@ -30,8 +30,6 @@ export function createApp({ appKey, upsert, allow, notify, auth, billing, agent 
 
   app.get("/health", (c) => c.json({ ok: true }));
 
-  // Per-request logging (method, path, status, timing) for every route below —
-  // registered after /health so liveness probes don't spam the log.
   app.use("*", logger());
 
   // Browser CORS for the waitlist form. Reflects an allowed Origin (and handles
@@ -66,8 +64,6 @@ export function createApp({ appKey, upsert, allow, notify, auth, billing, agent 
   if (billing) registerBillingRoutes(app, billing);
   if (agent) registerAgentRoutes(app, agent);
 
-  // Surface any thrown (unhandled) error with its stack — otherwise a Stripe/DB
-  // failure inside a route returns a bare 500 with no trace of the cause.
   app.onError((err, c) => {
     console.error(`[signups] unhandled error on ${c.req.method} ${c.req.path}:`, err);
     return c.json({ error: "internal error" }, 500);
