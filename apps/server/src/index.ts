@@ -84,7 +84,7 @@ let accountSignedIn = process.env.RIGEL_SIGNED_IN === "1";
     if (m?.type === "entitlement") {
       const wasAutonomous = canBeAutonomous();
       setEntitlement(m.value ?? null);
-      if (!wasAutonomous && canBeAutonomous()) {
+      if (wasAutonomous !== canBeAutonomous()) {
         void bumpAgentEntitlementRefresh().then(
           (r) => console.log(`entitlement bump: refreshed ${r.bumped.length} agent(s)${r.failures.length ? `, ${r.failures.length} failed` : ""}`),
           (err) => console.error("entitlement bump failed:", err),

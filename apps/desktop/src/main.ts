@@ -459,6 +459,8 @@ function createWindow(port: number): BrowserWindow {
   // hold a stale BrowserWindow handle after it is closed.
   win.on("closed", () => { if (mainWindow === win) mainWindow = null; });
 
+  win.on("focus", () => void entitlements?.refresh(true));
+
   // Open maximized (fill the screen) on load. Skipped for the headless smoke run.
   if (!SMOKE) win.maximize();
 
@@ -505,7 +507,7 @@ async function boot(): Promise<void> {
     pushServerMessage({ type: "entitlement", value: e });  // server gate (Task 3)
   });
   void entitlements.refresh(); // resolve on boot
-  setInterval(() => void entitlements?.refresh(), 6 * 60 * 60 * 1000); // + every 6h
+  setInterval(() => void entitlements?.refresh(), 30 * 60 * 1000); // + every 30 min
   // Set synchronously (BEFORE forkServer below) so the initial fork's env
   // reflects reality with no race; refreshAccount() below corrects it async
   // (e.g. a stale token that 401s) and pushes any change live.
