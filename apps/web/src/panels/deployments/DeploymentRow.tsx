@@ -71,7 +71,7 @@ export function DeploymentRow({
       <ContextMenuItem onClick={() => askClaude(d, "Explain")}>Ask Claude: Explain</ContextMenuItem>
       <ContextMenuItem onClick={() => askClaude(d, "Rollout")}>Ask Claude: Rollout</ContextMenuItem>
       <ContextMenuSeparator />
-      <ContextMenuItem onClick={() => restart(d)}>Restart…</ContextMenuItem>
+      <ContextMenuItem onClick={() => restart(d)}>Rollout…</ContextMenuItem>
       <ContextMenuItem onClick={() => openScale(d)}>Scale…</ContextMenuItem>
       <ContextMenuItem onClick={() => openEdit(d)}>Edit config…</ContextMenuItem>
       <ContextMenuItem onClick={() => rollback(d)}>Rollback…</ContextMenuItem>
