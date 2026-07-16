@@ -23,6 +23,7 @@ const STRIPE_PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE_KEY ?? "";
 // overridable via RIGEL_SIGNUP_ENDPOINT) — the billing window detects completion
 // by prefix-matching ${endpoint}/billing/complete. Override in a test deployment.
 const BILLING_ENDPOINT = process.env.BILLING_ENDPOINT ?? "https://api.rigel.run";
+const FREE_BETA = /^(1|true|yes|on)$/i.test(process.env.RIGEL_FREE_BETA ?? "");
 if (!APP_KEY) { console.error("APP_KEY is required"); process.exit(1); }
 if (!DATABASE_URL) { console.error("DATABASE_URL is required"); process.exit(1); }
 if (!KIT_API_KEY) console.warn("KIT_API_KEY not set — signups will not sync to Kit");
@@ -30,6 +31,7 @@ if (!RESEND_API_KEY) console.warn("RESEND_API_KEY not set — auth code emails w
 if (!STRIPE_SECRET_KEY) console.warn("[api] STRIPE_SECRET_KEY unset — /entitlements returns free for everyone");
 if (!STRIPE_PRICE_ID) console.warn("[api] STRIPE_PRICE_ID unset — /billing/checkout will fail to create a session");
 if (!STRIPE_PUBLISHABLE_KEY) console.warn("[api] STRIPE_PUBLISHABLE_KEY unset — /billing/checkout returns no usable key, the client cannot mount Embedded Checkout");
+if (FREE_BETA) console.warn("[api] RIGEL_FREE_BETA on — all accounts fully entitled; billing bypassed");
 
 const pool = new pg.Pool({ connectionString: DATABASE_URL });
 await ensureSchema(pool);
@@ -74,7 +76,7 @@ if ((stripeMode === "test" || stripeMode === "live") && STRIPE_PRICE_ID) {
     .catch((e) => console.warn(`[api] could not verify Stripe price mode (${e instanceof Error ? e.message : e}) — continuing`));
 }
 
-const resolve = makeResolver({ db: authDb, stripe: stripeAdapter, now: () => new Date().toISOString() });
+const resolve = makeResolver({ db: authDb, stripe: stripeAdapter, now: () => new Date().toISOString(), freeBeta: FREE_BETA });
 const app = createApp({
   appKey: APP_KEY,
   upsert: (s) => upsertSignup(pool, s),
@@ -84,7 +86,7 @@ const app = createApp({
   billing: { db: authDb, resolve, stripe: stripeAdapter, priceId: STRIPE_PRICE_ID, publishableKey: STRIPE_PUBLISHABLE_KEY, endpoint: BILLING_ENDPOINT },
   agent: {
     db: authDb,
-    resolveOrg: (orgId) => resolveOrgEntitlement(orgId, { db: authDb, stripe: stripeAdapter, now: () => new Date().toISOString() }),
+    resolveOrg: (orgId) => resolveOrgEntitlement(orgId, { db: authDb, stripe: stripeAdapter, now: () => new Date().toISOString(), freeBeta: FREE_BETA }),
   },
 });
 

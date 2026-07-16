@@ -181,6 +181,7 @@ export function AccountModal({ open, onOpenChange, account, startCheckoutOnOpen 
       account.account?.name ||
       (account.account?.email ? account.account.email.split("@")[0] : "Signed in");
     const isPro = account.entitlement?.plan === "pro";
+    const isBeta = account.entitlement?.beta === true;
 
     if (checkout) {
       return (
@@ -259,7 +260,7 @@ export function AccountModal({ open, onOpenChange, account, startCheckoutOnOpen 
               <div className="flex flex-col gap-3.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-sunken)] p-3.5">
                 <div className="flex items-center gap-3">
                   <div className="flex size-[38px] shrink-0 items-center justify-center rounded-[9px] bg-[var(--accent-dim)]">
-                    {isPro ? (
+                    {isPro && !isBeta ? (
                       <Zap className="size-[19px] text-[var(--accent-primary)]" />
                     ) : (
                       <Sparkles className="size-[19px] text-[var(--accent-primary)]" />
@@ -267,17 +268,19 @@ export function AccountModal({ open, onOpenChange, account, startCheckoutOnOpen 
                   </div>
                   <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span className="font-heading text-base font-semibold text-[var(--fg-primary)]">
-                      {isPro ? "Rigel Pro" : "Free"}
+                      {isBeta ? "Free during beta" : isPro ? "Rigel Pro" : "Free"}
                     </span>
                     <span className="truncate text-xs text-[var(--fg-tertiary)]">
-                      {isPro
-                        ? account.orgs.length === 1
-                          ? "1 seat"
-                          : `${account.orgs.length} orgs`
-                        : "Local-only. You're on the free plan."}
+                      {isBeta
+                        ? "All features unlocked while we gather feedback."
+                        : isPro
+                          ? account.orgs.length === 1
+                            ? "1 seat"
+                            : `${account.orgs.length} orgs`
+                          : "Local-only. You're on the free plan."}
                     </span>
                   </div>
-                  {isPro ? (
+                  {isBeta ? null : isPro ? (
                     <Button
                       size="sm"
                       variant="outline"
