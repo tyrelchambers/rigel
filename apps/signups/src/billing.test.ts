@@ -25,19 +25,19 @@ test("GET /entitlements 401 without a valid token", async () => {
   expect(res.status).toBe(401);
 });
 
-test("POST /billing/checkout creates a customer if none, persists it, returns the url", async () => {
+test("POST /billing/checkout creates a customer if none, persists it, returns the client secret + publishable key", async () => {
   const db = { accountByToken: vi.fn(async () => ({ id: "acc-1" })), touchToken: vi.fn(),
     orgBilling: vi.fn(async () => ({ stripeCustomerId: null, role: "owner" })),
     orgSeatCount: vi.fn(async () => 1), setOrgStripeCustomer: vi.fn(async () => {}),
     accountEmail: vi.fn(async () => "a@b.co") };
   const stripe = { ensureCustomer: vi.fn(async () => ({ customerId: "cus_new", created: true })),
-    createCheckoutSession: vi.fn(async () => "https://checkout/x") };
-  const app = new Hono(); registerBillingRoutes(app, { db, resolve: vi.fn(), stripe, priceId: "price_1", endpoint: "https://api.rigel.run" } as never);
+    createCheckoutSession: vi.fn(async () => "cs_test_123") };
+  const app = new Hono(); registerBillingRoutes(app, { db, resolve: vi.fn(), stripe, priceId: "price_1", endpoint: "https://api.rigel.run", publishableKey: "pk_test_abc" } as never);
   const res = await app.request("/billing/checkout", { method: "POST", headers: { authorization: "Bearer t", "content-type": "application/json" }, body: JSON.stringify({ orgId: "o1" }) });
   expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({ url: "https://checkout/x" });
+  expect(await res.json()).toEqual({ clientSecret: "cs_test_123", publishableKey: "pk_test_abc" });
   expect(db.setOrgStripeCustomer).toHaveBeenCalledWith("o1", "cus_new");
-  expect(stripe.createCheckoutSession).toHaveBeenCalledWith(expect.objectContaining({ customerId: "cus_new", quantity: 1, priceId: "price_1" }));
+  expect(stripe.createCheckoutSession).toHaveBeenCalledWith({ customerId: "cus_new", quantity: 1, priceId: "price_1" });
 });
 
 test("POST /billing/checkout 403 when caller is a plain member", async () => {

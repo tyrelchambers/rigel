@@ -15,7 +15,8 @@ export interface BillingDeps {
   resolve: (accountId: string) => Promise<EntitlementPayload>;
   stripe: StripeAdapter;
   priceId: string;
-  endpoint: string; // e.g. https://api.rigel.run — for success/cancel/return urls
+  publishableKey: string;
+  endpoint: string; // e.g. https://api.rigel.run — for portal return urls
 }
 
 /** Bearer-token account auth shared by the billing + agent routes:
@@ -57,12 +58,8 @@ export function registerBillingRoutes(app: Hono, deps: BillingDeps): void {
     const { customerId, created } = await deps.stripe.ensureCustomer({ existing: b.stripeCustomerId, email, orgId });
     if (created) await deps.db.setOrgStripeCustomer(orgId, customerId);
     const quantity = await deps.db.orgSeatCount(orgId);
-    const url = await deps.stripe.createCheckoutSession({
-      customerId, priceId: deps.priceId, quantity,
-      successUrl: `${deps.endpoint}/billing/complete`,
-      cancelUrl: `${deps.endpoint}/billing/cancelled`,
-    });
-    return c.json({ url });
+    const clientSecret = await deps.stripe.createCheckoutSession({ customerId, priceId: deps.priceId, quantity });
+    return c.json({ clientSecret, publishableKey: deps.publishableKey });
   });
 
   app.post("/billing/portal", async (c) => {
