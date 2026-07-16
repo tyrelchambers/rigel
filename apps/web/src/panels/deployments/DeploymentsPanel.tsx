@@ -115,7 +115,7 @@ export default function DeploymentsPanel() {
       kind: "restart",
       name: d.metadata.name,
       namespace: d.metadata.namespace ?? "default",
-      label: `Roll out deployment ${d.metadata.name}`,
+      label: `Rollout deployment ${d.metadata.name}`,
     });
   }
 
