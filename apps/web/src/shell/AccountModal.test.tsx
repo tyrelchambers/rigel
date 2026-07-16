@@ -137,6 +137,28 @@ test("onComplete polls refreshBilling until Pro, then returns to the account vie
   }
 });
 
+test("poll exhaustion shows the finalizing note instead of a silent drop", async () => {
+  vi.useFakeTimers();
+  try {
+    const refreshBilling = vi.fn()
+      .mockResolvedValue({ plan: "free", audits: [], cloudConnect: false, agentAutonomy: false, fetchedAt: "t" });
+    const acc = freeAccount({ refreshBilling });
+    render(<AccountModal open onOpenChange={vi.fn()} account={acc} />);
+    fireEvent.click(screen.getByRole("button", { name: /upgrade/i }));
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByTestId("embedded-checkout")).toBeTruthy();
+
+    act(() => { void lastOnComplete?.(); });
+    // 15 × 2s covers the advertised ~30s window.
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000 * 15); });
+    expect(refreshBilling).toHaveBeenCalledTimes(15);
+    expect(screen.queryByTestId("embedded-checkout")).toBeNull();
+    expect(screen.getByText(/still finalizing/i)).toBeTruthy();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 test("upgrade returning null shows an inline error, no checkout view", async () => {
   const acc = freeAccount({ upgrade: vi.fn().mockResolvedValue(null) });
   render(<AccountModal open onOpenChange={vi.fn()} account={acc} />);

@@ -108,6 +108,7 @@ export function AccountModal({ open, onOpenChange, account, startCheckoutOnOpen 
   const [checkout, setCheckout] = useState<CheckoutSession | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [finalizing, setFinalizing] = useState(false);
 
   const personalOrgId = account.orgs.find((o) => o.kind === "personal")?.id;
 
@@ -115,6 +116,7 @@ export function AccountModal({ open, onOpenChange, account, startCheckoutOnOpen 
     if (!personalOrgId || busy) return;
     setBusy(true);
     setError(null);
+    setFinalizing(false);
     const r = await account.upgrade(personalOrgId);
     setBusy(false);
     if (r) setCheckout(r);
@@ -141,14 +143,20 @@ export function AccountModal({ open, onOpenChange, account, startCheckoutOnOpen 
     if (pollRef.current) pollRef.current.cancelled = true;
     const token = { cancelled: false };
     pollRef.current = token;
-    for (let i = 0; i < 10; i++) {
+    setFinalizing(false);
+    // ~15 × 2s ≈ 30s, matching the "about 30 seconds" the checkout banner promises.
+    for (let i = 0; i < 15; i++) {
       const e = await account.refreshBilling();
       if (token.cancelled) return;
-      if (e?.plan === "pro") break;
+      if (e?.plan === "pro") {
+        setCheckout(null);
+        return;
+      }
       await new Promise((r) => setTimeout(r, 2000));
       if (token.cancelled) return;
     }
-    if (!token.cancelled) setCheckout(null);
+    setFinalizing(true);
+    setCheckout(null);
   }
 
   if (status === "loading") {
@@ -294,6 +302,12 @@ export function AccountModal({ open, onOpenChange, account, startCheckoutOnOpen 
 
                 {error && (
                   <span className="text-xs text-[var(--destructive)]">{error}</span>
+                )}
+
+                {!isPro && finalizing && (
+                  <span className="text-xs text-[var(--fg-secondary)]">
+                    Still finalizing — this can take a moment. Use Refresh if it doesn&apos;t update.
+                  </span>
                 )}
 
                 {!isPro && (

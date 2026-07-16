@@ -41,7 +41,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
 });
 
 // ---- Entitlement / upgrade stubs ----------------------------------------------
-const mockUseEntitlement = vi.fn(() => ({ payload: { cloudConnect: true }, upgrade: vi.fn() }));
+const mockUseEntitlement = vi.fn((): { payload: { cloudConnect: boolean } | null; upgrade: () => void } => ({ payload: { cloudConnect: true }, upgrade: vi.fn() }));
 vi.mock("./useEntitlement", () => ({ useEntitlement: () => mockUseEntitlement() }));
 const openUpgrade = vi.fn();
 vi.mock("./UpgradeContext", () => ({ useUpgrade: () => ({ openUpgrade }) }));
