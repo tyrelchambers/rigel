@@ -1,4 +1,5 @@
 import { test, expect, vi } from "vitest";
+import { newDb } from "pg-mem";
 import { createAuthDb, ensureAuthSchema } from "./authDb";
 import type { Pool, QueryResult } from "pg";
 
@@ -137,12 +138,27 @@ test("orgSeatCount counts memberships", async () => {
   expect(await db.orgSeatCount("o1")).toBe(3);
 });
 
-test("setOrgStripeCustomer writes the id", async () => {
+test("setOrgStripeCustomer writes the id only when still unset (guarded WHERE)", async () => {
   const { pool, calls } = recorder();
   const db = createAuthDb(pool);
   await db.setOrgStripeCustomer("o1", "cus_9");
-  expect(calls[0].sql.toUpperCase()).toContain("UPDATE ORGANIZATIONS");
+  const sql = calls[0].sql.toUpperCase();
+  expect(sql).toContain("UPDATE ORGANIZATIONS");
+  expect(sql).toContain("STRIPE_CUSTOMER_ID IS NULL");
   expect(calls[0].params).toEqual(["cus_9", "o1"]);
+});
+
+test("setOrgStripeCustomer (pg-mem) sets when null but never overwrites an existing customer", async () => {
+  const mem = newDb();
+  const { Pool } = mem.adapters.createPg();
+  const pool = new Pool() as unknown as Pool;
+  await pool.query(`CREATE TABLE organizations (id text PRIMARY KEY, stripe_customer_id text)`);
+  await pool.query(`INSERT INTO organizations (id, stripe_customer_id) VALUES ('o1', null)`);
+  const db = createAuthDb(pool);
+  await db.setOrgStripeCustomer("o1", "cus_first");
+  expect(await db.orgStripeCustomer("o1")).toBe("cus_first");
+  await db.setOrgStripeCustomer("o1", "cus_second");
+  expect(await db.orgStripeCustomer("o1")).toBe("cus_first");
 });
 
 test("accountEmail selects the email for the account id", async () => {

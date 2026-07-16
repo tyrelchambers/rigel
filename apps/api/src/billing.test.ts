@@ -43,6 +43,7 @@ test("POST /billing/checkout creates a customer if none, persists it, returns th
   const db = { accountByToken: vi.fn(async () => ({ id: "acc-1" })), touchToken: vi.fn(),
     orgBilling: vi.fn(async () => ({ stripeCustomerId: null, role: "owner" })),
     orgSeatCount: vi.fn(async () => 1), setOrgStripeCustomer: vi.fn(async () => {}),
+    orgStripeCustomer: vi.fn(async () => "cus_new"),
     accountEmail: vi.fn(async () => "a@b.co") };
   const stripe = { ensureCustomer: vi.fn(async () => ({ customerId: "cus_new", created: true })),
     createCheckoutSession: vi.fn(async () => "cs_test_123") };
@@ -52,6 +53,35 @@ test("POST /billing/checkout creates a customer if none, persists it, returns th
   expect(await res.json()).toEqual({ clientSecret: "cs_test_123", publishableKey: "pk_test_abc" });
   expect(db.setOrgStripeCustomer).toHaveBeenCalledWith("o1", "cus_new");
   expect(stripe.createCheckoutSession).toHaveBeenCalledWith({ customerId: "cus_new", quantity: 1, priceId: "price_1" });
+});
+
+test("POST /billing/checkout binds the session to the concurrent winner, not the orphan customer", async () => {
+  const db = { accountByToken: vi.fn(async () => ({ id: "acc-1" })), touchToken: vi.fn(),
+    orgBilling: vi.fn(async () => ({ stripeCustomerId: null, role: "owner" })),
+    orgSeatCount: vi.fn(async () => 1), setOrgStripeCustomer: vi.fn(async () => {}),
+    orgStripeCustomer: vi.fn(async () => "cus_winner"),
+    accountEmail: vi.fn(async () => "a@b.co") };
+  const stripe = { ensureCustomer: vi.fn(async () => ({ customerId: "cus_orphan", created: true })),
+    createCheckoutSession: vi.fn(async () => "cs_test_123") };
+  const app = new Hono(); registerBillingRoutes(app, { db, resolve: vi.fn(), stripe, priceId: "price_1", endpoint: "https://api.rigel.run", publishableKey: "pk_test_abc" } as never);
+  const res = await app.request("/billing/checkout", { method: "POST", headers: { authorization: "Bearer t", "content-type": "application/json" }, body: JSON.stringify({ orgId: "o1" }) });
+  expect(res.status).toBe(200);
+  expect(stripe.createCheckoutSession).toHaveBeenCalledWith({ customerId: "cus_winner", quantity: 1, priceId: "price_1" });
+});
+
+test("POST /billing/checkout reuses the existing customer without a create/write", async () => {
+  const db = { accountByToken: vi.fn(async () => ({ id: "acc-1" })), touchToken: vi.fn(),
+    orgBilling: vi.fn(async () => ({ stripeCustomerId: "cus_existing", role: "admin" })),
+    orgSeatCount: vi.fn(async () => 2), setOrgStripeCustomer: vi.fn(async () => {}),
+    orgStripeCustomer: vi.fn(async () => "cus_existing"),
+    accountEmail: vi.fn(async () => "a@b.co") };
+  const stripe = { ensureCustomer: vi.fn(async () => ({ customerId: "cus_existing", created: false })),
+    createCheckoutSession: vi.fn(async () => "cs_test_456") };
+  const app = new Hono(); registerBillingRoutes(app, { db, resolve: vi.fn(), stripe, priceId: "price_1", endpoint: "https://api.rigel.run", publishableKey: "pk_test_abc" } as never);
+  const res = await app.request("/billing/checkout", { method: "POST", headers: { authorization: "Bearer t", "content-type": "application/json" }, body: JSON.stringify({ orgId: "o1" }) });
+  expect(res.status).toBe(200);
+  expect(db.setOrgStripeCustomer).not.toHaveBeenCalled();
+  expect(stripe.createCheckoutSession).toHaveBeenCalledWith({ customerId: "cus_existing", quantity: 2, priceId: "price_1" });
 });
 
 test("POST /billing/checkout 403 when caller is a plain member", async () => {

@@ -260,7 +260,10 @@ export function createAuthDb(pool: Pool): AuthDb {
       return Number(r.rows[0].n);
     },
     async setOrgStripeCustomer(orgId, customerId) {
-      await pool.query(`UPDATE organizations SET stripe_customer_id = $1 WHERE id = $2`, [customerId, orgId]);
+      await pool.query(
+        `UPDATE organizations SET stripe_customer_id = $1 WHERE id = $2 AND stripe_customer_id IS NULL`,
+        [customerId, orgId],
+      );
     },
     async accountEmail(accountId) {
       const r = await pool.query(`SELECT email FROM accounts WHERE id = $1`, [accountId]);

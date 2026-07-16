@@ -10,6 +10,7 @@ export interface BillingDeps {
     orgBilling(orgId: string, accountId: string): Promise<{ stripeCustomerId: string | null; role: string } | null>;
     orgSeatCount(orgId: string): Promise<number>;
     setOrgStripeCustomer(orgId: string, customerId: string): Promise<void>;
+    orgStripeCustomer(orgId: string): Promise<string | null>;
     accountEmail(accountId: string): Promise<string>;
   };
   resolve: (accountId: string, opts?: { fresh?: boolean }) => Promise<EntitlementPayload>;
@@ -58,8 +59,9 @@ export function registerBillingRoutes(app: Hono, deps: BillingDeps): void {
     const email = await deps.db.accountEmail(acc.id);
     const { customerId, created } = await deps.stripe.ensureCustomer({ existing: b.stripeCustomerId, email, orgId });
     if (created) await deps.db.setOrgStripeCustomer(orgId, customerId);
+    const storedCustomerId = (await deps.db.orgStripeCustomer(orgId)) ?? customerId;
     const quantity = await deps.db.orgSeatCount(orgId);
-    const clientSecret = await deps.stripe.createCheckoutSession({ customerId, priceId: deps.priceId, quantity });
+    const clientSecret = await deps.stripe.createCheckoutSession({ customerId: storedCustomerId, priceId: deps.priceId, quantity });
     return c.json({ clientSecret, publishableKey: deps.publishableKey });
   });
 
