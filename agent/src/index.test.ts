@@ -820,6 +820,9 @@ describe("tick() — entitlement gate (Slice E2)", () => {
     const state = captured();
     // Observe ran despite being free — the incident is in the rolling history.
     expect(state!.incidents?.some((i) => i.fingerprint === CRASH_FP)).toBe(true);
+    // ZERO model spend: the Worker/Opus investigation never ran for a free org.
+    expect(vi.mocked(runWorker)).not.toHaveBeenCalled();
+    expect(vi.mocked(runSupervisor)).not.toHaveBeenCalled();
     // No autonomous remediation executed.
     const calls = vi.mocked(kubectl).mock.calls.map((c) => c[0]);
     expect(calls).not.toContainEqual(["rollout", "restart", "deployment/memos", "-n", "default"]);
@@ -836,12 +839,14 @@ describe("tick() — entitlement gate (Slice E2)", () => {
 
     await tick(makeConfig(), newCb(), createLoopState());
 
+    // The model investigation ran (paid spend) for the entitled org.
+    expect(vi.mocked(runWorker)).toHaveBeenCalled();
     const calls = vi.mocked(kubectl).mock.calls.map((c) => c[0]);
     expect(calls).toContainEqual(["rollout", "restart", "deployment/memos", "-n", "default"]);
     expect(captured()!.audit[0]).toMatchObject({ proposal: "Restart memos", outcome: "success" });
   });
 
-  test("not entitled → an in-scope, actionable openFixPR is NOT dispatched (no Opus review spent)", async () => {
+  test("not entitled → the investigation never runs, so no fix PR is dispatched (no Worker/Opus spend)", async () => {
     vi.mocked(determineEntitlement).mockResolvedValue({ entitled: false });
     const { captured } = wireCluster({
       configData: { enabled: "true", confirmPolls: "1", autofixEnabled: "true", autofixScope: JSON.stringify({ projects: ["default/memos"] }) },
@@ -850,10 +855,12 @@ describe("tick() — entitlement gate (Slice E2)", () => {
 
     await tick(makeConfig(), newCb(), createLoopState());
 
-    expect(dispatchedAFix()).toBe(false);
+    // ZERO model spend: neither the Worker nor the fix-quality supervisor ran.
+    expect(vi.mocked(runWorker)).not.toHaveBeenCalled();
     expect(vi.mocked(runSupervisor)).not.toHaveBeenCalled();
-    expect(captured()!.audit[0]).toMatchObject({ proposal: OPEN_FIX_PR.label, outcome: "skipped", tier: "medium" });
-    expect(captured()!.audit[0]?.detail).toMatch(/observe-only|premium/i);
+    expect(dispatchedAFix()).toBe(false);
+    // The incident is still recorded (flagged) so the free "what broke" history holds.
+    expect(captured()!.incidents?.some((i) => i.fingerprint === CRASH_FP && i.disposition === "flagged")).toBe(true);
   });
 
   test("not entitled but a due digest → the digest does NOT send", async () => {

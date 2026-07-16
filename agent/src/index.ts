@@ -383,7 +383,7 @@ export async function tick(
     // off / out of scope, so this is cheap when autofix isn't in play.
     const eligibility = new Map<string, AutofixEligibility>(
       await Promise.all(
-        confirmed.map(async (incident) => {
+        (entitled ? confirmed : []).map(async (incident) => {
           let e: AutofixEligibility;
           try {
             e = await resolveAutofixEligibility(rc.autofix, incident, detection.pods, {
@@ -406,13 +406,21 @@ export async function tick(
     // Worker model call is the slow, side-effect-free part, so overlapping the
     // calls cuts wall-clock when several incidents land in one tick. The
     // deterministic guardrails stay in Stage B below.
-    const packets = await diagnoseConfirmed(
-      {
-        diagnose: (incident) => runWorker(rc, [incident], eligibility.get(fingerprint(incident))?.repo ?? null),
-        limit: cfg.maxConcurrentDiagnoses,
-      },
-      confirmed,
-    );
+    //
+    // The investigation (Worker here + the Opus supervisor in Stage B) is the
+    // agent's model spend, and it's a PREMIUM capability: an observe-only (not
+    // entitled) org still detects and records every confirmed incident above
+    // (touchIncident) but never runs the model, so a free install burns ZERO
+    // model budget. Empty packets make the Stage B decide/execute pass a no-op.
+    const packets = entitled
+      ? await diagnoseConfirmed(
+          {
+            diagnose: (incident) => runWorker(rc, [incident], eligibility.get(fingerprint(incident))?.repo ?? null),
+            limit: cfg.maxConcurrentDiagnoses,
+          },
+          confirmed,
+        )
+      : [];
 
     // Per-day fix-PR budget baseline, computed ONCE per tick before any dispatch:
     // real opened PRs still inside the rolling 24h window PLUS the fix Jobs currently
@@ -431,7 +439,7 @@ export async function tick(
     // — a failed list is a DISTINCT call+verb from the dedup `get job` + `apply`, so it
     // does NOT imply create would fail; assuming so was the I1 over-open hole.
     let fixListUnreadable = false;
-    if (rc.autofix.enabled && confirmed.length > 0) {
+    if (entitled && rc.autofix.enabled && confirmed.length > 0) {
       let inFlight: unknown[] | null;
       try {
         inFlight = await fixReconcileDeps(cfg).listFixJobs();
