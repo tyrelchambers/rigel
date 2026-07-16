@@ -17,20 +17,6 @@ export function applyGrace(cached: EntitlementPayload | null, nowMs: number): En
   return age <= GRACE_MS ? cached : free(nowMs);
 }
 
-// Edge-trigger for the Layer-1 agent downgrade (see the entitlement-lifecycle
-// spec). True ONLY on a genuine agentAutonomy true → false transition backed by a
-// SUCCESSFUL fetch. `prevAutonomy` is the last successfully-fetched value (null
-// until the first in-process success), so this never fires on the initial load,
-// the no-cache default, or a failed fetch (grace) — any of which would strand a
-// paying user whose autonomy was silently disabled by a transient glitch.
-export function detectAgentDowngrade(
-  prevAutonomy: boolean | null,
-  nextAutonomy: boolean,
-  fetchSucceeded: boolean,
-): boolean {
-  return fetchSucceeded && prevAutonomy === true && nextAutonomy === false;
-}
-
 export interface EntitlementProviderDeps {
   client: { entitlements(): Promise<EntitlementPayload | null> };
   store: { load(): EntitlementPayload | null; save(v: EntitlementPayload): void };
@@ -39,29 +25,19 @@ export interface EntitlementProviderDeps {
 
 export function createEntitlementProvider(deps: EntitlementProviderDeps) {
   let cached: EntitlementPayload | null = deps.store.load();
-  // The last SUCCESSFULLY-fetched agentAutonomy, set only by an in-process fetch
-  // (NOT seeded from the loaded cache) so the downgrade edge is a real transition
-  // observed while the app is open, never the null/no-cache default.
-  let prevAutonomy: boolean | null = null;
   const listeners = new Set<(e: EntitlementPayload) => void>();
-  const downgradeListeners = new Set<() => void>();
   const emit = () => { const e = applyGrace(cached, deps.now()); for (const l of listeners) l(e); };
   return {
     current: () => applyGrace(cached, deps.now()),
     async refresh() {
       const fresh = await deps.client.entitlements().catch(() => null);
-      const fetchSucceeded = fresh !== null;
       if (fresh) {
-        const downgraded = detectAgentDowngrade(prevAutonomy, fresh.agentAutonomy, fetchSucceeded);
         cached = fresh;
         deps.store.save(fresh);
-        prevAutonomy = fresh.agentAutonomy;
-        if (downgraded) for (const l of downgradeListeners) l();
       }
       emit();
     },
     onChange(cb: (e: EntitlementPayload) => void) { listeners.add(cb); return () => listeners.delete(cb); },
-    onDowngrade(cb: () => void) { downgradeListeners.add(cb); return () => downgradeListeners.delete(cb); },
   };
 }
 export type EntitlementProvider = ReturnType<typeof createEntitlementProvider>;
