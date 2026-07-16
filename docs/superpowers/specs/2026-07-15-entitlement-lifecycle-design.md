@@ -192,3 +192,30 @@ _(An interim iteration built a `scaleAgentsToZero` downgrade action + a "Resume"
   running on free).
 - Billing dunning/retry UX (Stripe owns it).
 - Token rotation / a revocation UI (schema supports revoke; no admin surface in v1).
+
+## As-built updates (post-design)
+
+The core design above (agent = free observe-only, live-check gates capabilities, org-scoped
+token) shipped as written. These refinements landed on top; the canonical current-state doc is
+the Outline page **"Plan enforcement & entitlement lifecycle (Free vs Pro)"**.
+
+- **Billing = Embedded Checkout** in the Account modal (`ui_mode: "embedded_page"`,
+  `redirect_on_completion: "never"`; `POST /billing/checkout` → `{ clientSecret, publishableKey }`;
+  new `STRIPE_PUBLISHABLE_KEY`). All upgrade CTAs route through a `useUpgrade()` context that opens
+  the modal into the embedded form. Customer Portal stays a hosted window (Stripe has no embedded
+  portal). See `docs/superpowers/specs/2026-07-16-embedded-checkout-design.md`.
+- **The Assistant gate is a full-width Pro showcase** (hero + 6 capability cards), replacing the
+  scattered `ProGateCard`s and the rejected "while you were away" incident-count teaser. No
+  incident-data dependency.
+- **Cloud clusters are Pro-gated** at the rail + connect modal + a lock-aware redirect (`cloudConnect`).
+  This tightens "keep existing cloud usable on downgrade" → cloud *access* is gated (context not
+  disconnected). Remaining hole: no server-side usage gate (client-side only; only-cloud Free users
+  and API-around-the-UI can still reach a context).
+- **Upgrade propagation (instant):** poll-until-Pro on checkout complete + `GET /entitlements?fresh=1`
+  (60s-cache bypass) + the server stamps `entitlementRefreshAt` in `assistant-config` on the autonomy
+  edge → the agent force-rechecks (~30s). Desktop UI unlocks in seconds.
+- **Downgrade/cancellation latency:** focus-refetch (fresh) + idle poll 6h→30m + the
+  `entitlementRefreshAt` bump fires on **any** autonomy edge (up *or* down) so the agent drops premium
+  ~30s after a downgrade too. Refresh button = on-demand truth; boot + the agent's own check are the
+  backstops. Webhooks deliberately deferred (a push channel is overkill for latency; reserved for
+  dunning / scale).
