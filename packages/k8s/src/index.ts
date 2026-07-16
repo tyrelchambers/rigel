@@ -23,6 +23,8 @@ export {
 
 export { parseQuantity } from "./quantity";
 
+export { type ProviderKind, CLOUD_PROVIDERS, classifyProvider, isCloudProvider } from "./provider";
+
 export { extractAuditInputs } from "./extractAuditInputs";
 
 export {

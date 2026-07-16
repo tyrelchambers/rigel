@@ -5,7 +5,7 @@ import { useContexts, useDeleteCluster, useDisconnectCluster, useClusterHealth }
 import { useEntitlement } from "./useEntitlement";
 import { useUpgrade } from "./UpgradeContext";
 import { initContext, switchCluster } from "@/lib/ws";
-import { classifyProvider, providerLabel } from "./clusterTile";
+import { classifyProvider, isCloudProvider, providerLabel } from "./clusterTile";
 import { CLUSTER_ICONS, type IconId } from "./clusterIcons";
 import { loadIconOverrides, saveIconOverrides, resolveIconId } from "./clusterIconStore";
 import { ClusterIconPicker } from "./ClusterIconPicker";
@@ -25,8 +25,6 @@ import { toast } from "sonner";
  * Each tile shows the provider-default icon (or a user override). Right-clicking
  * a tile opens the icon-picker modal; left-clicking switches the active cluster.
  */
-const CLOUD_PROVIDERS = ["digitalocean", "aws", "gcp", "azure"];
-
 export function ClusterRail() {
   const { data: contexts } = useContexts();
   const activeContext = useCluster((s) => s.activeContext);
@@ -46,7 +44,7 @@ export function ClusterRail() {
   // Probe only the ACTIVE cloud context; the badge surfaces an expired login.
   const active = contexts?.find((c) => c.name === activeContext) ?? null;
   const activeProvider = active ? classifyProvider(active) : "generic";
-  const isCloud = CLOUD_PROVIDERS.includes(activeProvider);
+  const isCloud = isCloudProvider(activeProvider);
   const health = useClusterHealth(active?.name ?? null, activeProvider, isCloud);
 
   // Keep the active context valid against the live kubeconfig list. On first load
@@ -56,7 +54,7 @@ export function ClusterRail() {
   useEffect(() => {
     if (!contexts || contexts.length === 0) return;
     const isLocked = (c: { name: string; server: string }) =>
-      !cloudUnlocked && CLOUD_PROVIDERS.includes(classifyProvider(c));
+      !cloudUnlocked && isCloudProvider(classifyProvider(c));
     const fallback =
       contexts.find((c) => c.active && !isLocked(c)) ??
       contexts.find((c) => !isLocked(c)) ??
@@ -116,7 +114,7 @@ export function ClusterRail() {
             const provider = classifyProvider(c);
             const iconId = resolveIconId(c.name, provider, iconOverrides);
             const Icon = CLUSTER_ICONS[iconId].Component;
-            const locked = CLOUD_PROVIDERS.includes(provider) && !cloudUnlocked;
+            const locked = isCloudProvider(provider) && !cloudUnlocked;
             return (
               <div
                 key={c.name}
