@@ -56,8 +56,8 @@ the lease apparatus not worth its weight. We match enforcement to the now-lower 
 |---|---|---|
 | **Audits** | Can't run new (RIGEL_UNLOCKED_AUDITS empties). Stateless — nothing to preserve. | Run again. |
 | **Cloud connect** | Keep existing contexts usable; block *new* connects (already the behavior). Do **not** sever access. | Connect more. |
-| **In-cluster agent** | Drops to **observe-only**: keeps watching + recording incident history (the free job), but **no** notifications, digests, autonomous remediation, or autofix PRs. Agent stays deployed and running. The app *also* scales the Deployment to 0 as an edge-triggered courtesy. | Next entitlement check (≤ ~a day) re-unlocks the capabilities. If scaled to 0, user resumes/scales it up. |
-| **Notifications / digests / remediation / autofix** | **Stop** — these are the agent's premium capabilities. (Metric-threshold alerts the desktop app computes itself are unaffected.) | Return on re-upgrade. |
+| **In-cluster agent** | Drops to **observe-only**: keeps watching + recording incident history (the free job), but **no** LLM diagnosis, notifications, digests, autonomous remediation, or autofix PRs. Agent stays deployed and **running at its normal replica count** — a downgraded user gets the exact same free tier as a never-Pro install. | Next entitlement check (≤ ~a day) re-unlocks the capabilities in place — nothing to resume or re-provision. |
+| **LLM diagnosis / notifications / digests / remediation / autofix** | **Stop** — these are the agent's premium capabilities. Free = cheap: detection + recording only, **zero model spend** (the diagnosis worker/supervisor never runs). (Metric-threshold alerts the desktop app computes itself are unaffected.) | Return on re-upgrade. |
 
 **The free-tier job — overnight incident history.** Observe-only is not dead weight: the
 free agent records what broke while the desktop app was closed, so the user opens Rigel
@@ -98,11 +98,14 @@ is still entitled** — which requires giving it a scoped identity.
   just rebuilding the lease.
 
 ### What the agent gates
-Observe + incident-history recording **always run**. The live-check result gates only the
-premium branches: outbound notifications, scheduled digests, autonomous remediation
-(kubectl actions), and autofix PRs. The check lands **once, at the top of `tick()`** —
-structurally above the digest path, which today deliberately bypasses the `enabled`
-kill-switch — setting an "entitled" flag the premium branches consult.
+Observe (detection) + incident-history recording **always run** — that is the free tier,
+and it costs **zero model spend**. The live-check result gates every premium branch: the
+**LLM diagnosis** (worker + supervisor model calls — the expensive part, so free never
+burns the user's model budget), outbound notifications, scheduled digests, autonomous
+remediation (kubectl actions), autofix PRs, and the interactive chat surface. The check
+lands **once, near the top of `tick()`** — structurally above the digest path, which today
+deliberately bypasses the `enabled` kill-switch — setting an "entitled" flag every premium
+branch consults.
 
 ### Residual bypass (named honestly)
 The grace cache is a softer surface than the lease: a `kubectl exec` + edit the cached
@@ -114,26 +117,29 @@ one-liner), and **the prize is small**. The determined pirate still wins by patc
 image, exactly as with the lease; the casual `kubectl scale` bypass buys nothing because
 the agent is free anyway.
 
-### Scale-to-zero (app-side courtesy)
-On a **fresh, successfully-fetched free result** (edge-triggered via the already-built
-`entitlementProvider.detectAgentDowngrade` — **not** the null/no-cache default, which
-would strand a Pro user on a glitchy fetch), the forked server **scales the agent
-Deployment to 0** in every installed context, so an honest downgraded user isn't running
-even an observe-only pod. Purely resource hygiene; enforcement of the premium capabilities
-is the live-check, independent of replica count.
+### No scale-to-zero; the agent stays running observe-only
+An earlier iteration also scaled the agent Deployment to 0 on downgrade (a resource-hygiene
+"courtesy") and added a "Resume" button to undo it. That was dropped: it contradicted the
+free tier. If the free tier is "the agent runs observe-only and records incident history,"
+then a **downgraded** user must get exactly that — not a stopped agent needing a manual
+Resume. Scaling to 0 made a downgraded user's free experience differ from a never-Pro
+install's. So on downgrade the agent simply **keeps running**; its own live-check flips it
+to observe-only within a day. Uniform free tier, and less machinery (no downgrade→scale-to-0
+signal, no `detectAgentDowngrade`, no Resume UI).
 
 ## Re-upgrade
 
-The agent's next entitlement check (≤ ~a day, or immediately on the desktop pushing a
-refresh) re-unlocks the premium capabilities — no re-provisioning. If the Deployment was
-scaled to 0 on downgrade, the user resumes it explicitly (one-click "Resume" / scale to
-1); the live-check already permits the capabilities.
+The agent's next entitlement check (≤ ~a day) re-unlocks the premium capabilities **in
+place** — the agent was running the whole time, so there is nothing to resume or
+re-provision. The capabilities simply switch back on.
 
 ## Decisions (resolved via two Fable reviews + user)
 
 1. **Downgrade posture: observe-only, not off.** The agent is a **free feature**; only its
-   premium capabilities (notify/digest/remediate/autofix) are gated. Free-tier job =
-   overnight incident history.
+   premium capabilities (**LLM diagnosis**, notify/digest/remediate/autofix/chat) are gated.
+   Free = detection + recording only, **zero model spend**. Free-tier job = overnight
+   incident history. A downgraded agent keeps running observe-only — same as a never-Pro
+   install.
 2. **Enforcement: the agent checks entitlement live** against `api.rigel.run` using a
    scoped token, cached with a 30-day grace. The **signed lease is dropped** — its
    tamper-resistance guarded a prize that no longer exists.
@@ -144,10 +150,17 @@ scaled to 0 on downgrade, the user resumes it explicitly (one-click "Resume" / s
 5. **Token: install-scoped, org-bound, revocable**, stored in the agent's existing
    credentials Secret. **No new agent RBAC, no Secret read** — cache lives in
    `assistant-state` (a ConfigMap the agent already writes).
-6. **Scale-to-0 stays** as the edge-triggered downgrade courtesy (reuses
-   `detectAgentDowngrade`, already built + tested). Replaces L1's advisory-revert.
+6. **No scale-to-0 on downgrade** (and no "Resume" UI). The agent keeps running observe-only;
+   the live-check is the sole enforcement, independent of replica count. The downgrade→
+   scale-to-0 signal (`detectAgentDowngrade`, the `agent-downgrade` message, `scaleAgentsToZero`)
+   is removed as vestigial. Uninstall (not scale-to-0) is how a user stops the agent entirely.
 7. **Install path fail-closed defaults** (seeded advisory + agent's fail-closed mode read)
    remain correct defense-in-depth; the live-check is the real capability gate.
+8. **Two grace windows, intentional.** The **agent** honors a **30-day** grace on its own
+   live-check (the real enforcement wall). The **desktop** entitlement provider keeps a
+   separate **14-day** grace governing the *desktop-side* gates (canConnect / canBeAutonomous /
+   audits) and UI — a different subsystem with a different failure mode. They are not the
+   same number by design.
 
 ## Build slices
 
@@ -159,14 +172,16 @@ scaled to 0 on downgrade, the user resumes it explicitly (one-click "Resume" / s
 - **Slice E2 — agent live-check + capability gating:** read the token from env; a
   scheduled (~12–24h) `GET /agent/entitlement` with cache in `assistant-state` +
   30-day grace + authenticated-free-vs-error distinction + timestamp plausibility guard;
-  a single entitlement flag set at the top of `tick()` that gates the notify / digest /
-  remediation / autofix branches. Observe + incident recording always run.
-- **Slice E3 — desktop/server: mint on install + scale-to-0 courtesy:** desktop mints the
-  agent token (`POST /agent/token`) during agent install/setup and threads it into the
-  credentials Secret; **replace** the committed `revertAgentsToAdvisory` downgrade action
-  with `scaleAgentsToZero` (keep `detectAgentDowngrade`).
-- **Slice E4 — "Resume" UI:** one-click resume (scale the Deployment back to 1) surfaced
-  after re-upgrade when the agent is at 0 replicas.
+  a single entitlement flag set near the top of `tick()` that gates the **LLM diagnosis**,
+  notify, digest, remediation, autofix, and chat branches. Observe + incident recording
+  always run (free = detection + recording, zero model spend).
+- **Slice E3 — desktop/server: mint on install:** desktop mints the agent token
+  (`POST /agent/token`) during agent install/setup and threads it into the credentials
+  Secret. (No downgrade action — the agent self-enforces via the live-check.)
+
+_(An interim iteration built a `scaleAgentsToZero` downgrade action + a "Resume" UI + the
+`detectAgentDowngrade` signal; all were removed per Decision 6 once the free tier settled on
+"agent keeps running observe-only." Not part of the final design.)_
 
 ## Out of scope (v1)
 
