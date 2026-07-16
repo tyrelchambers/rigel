@@ -1,10 +1,33 @@
 // @vitest-environment jsdom
 import { afterEach, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { AccountModal } from "./AccountModal";
 import type { UseAccountResult } from "./useAccount";
 
-afterEach(cleanup);
+let lastOnComplete: (() => void) | undefined;
+
+vi.mock("@stripe/stripe-js", () => ({
+  loadStripe: vi.fn(() => Promise.resolve({})),
+}));
+
+vi.mock("@stripe/react-stripe-js", () => ({
+  EmbeddedCheckoutProvider: ({
+    children,
+    options,
+  }: {
+    children: React.ReactNode;
+    options: { onComplete?: () => void };
+  }) => {
+    lastOnComplete = options.onComplete;
+    return <div>{children}</div>;
+  },
+  EmbeddedCheckout: () => <div data-testid="embedded-checkout">checkout</div>,
+}));
+
+afterEach(() => {
+  cleanup();
+  lastOnComplete = undefined;
+});
 
 function fakeAccount(over: Partial<UseAccountResult> = {}): UseAccountResult {
   return {
@@ -17,7 +40,7 @@ function fakeAccount(over: Partial<UseAccountResult> = {}): UseAccountResult {
     verifyCode: vi.fn().mockResolvedValue({ ok: true, account: { id: "1", email: "a@b.co", name: "Jane" } }),
     signOut: vi.fn().mockResolvedValue(undefined),
     refresh: vi.fn().mockResolvedValue(undefined),
-    upgrade: vi.fn().mockResolvedValue({ ok: true }),
+    upgrade: vi.fn().mockResolvedValue({ clientSecret: "cs_test", publishableKey: "pk_test" }),
     manageBilling: vi.fn().mockResolvedValue({ ok: true }),
     refreshBilling: vi.fn().mockResolvedValue(undefined),
     ...over,
@@ -60,6 +83,42 @@ test("free plan shows Upgrade, calls upgrade(personalOrgId) on click", () => {
   const btn = screen.getByRole("button", { name: /upgrade/i });
   fireEvent.click(btn);
   expect(acc.upgrade).toHaveBeenCalledWith("o1");
+});
+
+function freeAccount(over: Partial<UseAccountResult> = {}) {
+  return fakeAccount({
+    status: "signed-in",
+    account: { id: "1", email: "a@b.co", name: "Jane" },
+    orgs: [{ id: "o1", kind: "personal", name: "Personal", role: "owner" }],
+    entitlement: { plan: "free", audits: [], cloudConnect: false, agentAutonomy: false, fetchedAt: "t" },
+    ...over,
+  });
+}
+
+test("clicking Upgrade enters the embedded checkout view", async () => {
+  const acc = freeAccount();
+  render(<AccountModal open onOpenChange={vi.fn()} account={acc} />);
+  fireEvent.click(screen.getByRole("button", { name: /upgrade/i }));
+  expect(await screen.findByTestId("embedded-checkout")).toBeTruthy();
+});
+
+test("onComplete refetches billing and returns to the account view", async () => {
+  const acc = freeAccount();
+  render(<AccountModal open onOpenChange={vi.fn()} account={acc} />);
+  fireEvent.click(screen.getByRole("button", { name: /upgrade/i }));
+  await screen.findByTestId("embedded-checkout");
+  act(() => lastOnComplete?.());
+  expect(acc.refreshBilling).toHaveBeenCalled();
+  await waitFor(() => expect(screen.queryByTestId("embedded-checkout")).toBeNull());
+  expect(screen.getByRole("button", { name: /upgrade/i })).toBeTruthy();
+});
+
+test("upgrade returning null shows an inline error, no checkout view", async () => {
+  const acc = freeAccount({ upgrade: vi.fn().mockResolvedValue(null) });
+  render(<AccountModal open onOpenChange={vi.fn()} account={acc} />);
+  fireEvent.click(screen.getByRole("button", { name: /upgrade/i }));
+  expect(await screen.findByText(/couldn't start checkout/i)).toBeTruthy();
+  expect(screen.queryByTestId("embedded-checkout")).toBeNull();
 });
 
 test("pro plan shows Manage billing + the seat count", () => {

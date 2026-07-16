@@ -1,4 +1,7 @@
-import { Lock, LogOut, RefreshCw, Sparkles, Zap } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowLeft, Lock, LogOut, RefreshCw, Sparkles, Zap } from "lucide-react";
+import { loadStripe } from "@stripe/stripe-js";
+import { EmbeddedCheckout, EmbeddedCheckoutProvider } from "@stripe/react-stripe-js";
 import {
   Dialog,
   DialogBody,
@@ -11,6 +14,11 @@ import { Button } from "@/components/ui/button";
 import { SignInFlow } from "./SignInFlow";
 import type { UseAccountResult } from "./useAccount";
 import type { Org } from "@/lib/desktop";
+
+interface CheckoutSession {
+  clientSecret: string;
+  publishableKey: string;
+}
 
 interface AccountModalProps {
   open: boolean;
@@ -51,8 +59,66 @@ function OrgRow({ org }: { org: Org }) {
   );
 }
 
+function CheckoutView({
+  session,
+  onBack,
+  onComplete,
+}: {
+  session: CheckoutSession;
+  onBack: () => void;
+  onComplete: () => void;
+}) {
+  const stripePromise = useMemo(
+    () => loadStripe(session.publishableKey),
+    [session.publishableKey],
+  );
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" className="text-[var(--fg-secondary)]" onClick={onBack}>
+          <ArrowLeft className="size-3.5" />
+          Back
+        </Button>
+        <span className="font-heading text-base font-semibold text-[var(--fg-primary)]">
+          Upgrade to Pro
+        </span>
+      </div>
+      <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-sunken)] p-2">
+        <EmbeddedCheckoutProvider
+          stripe={stripePromise}
+          options={{ clientSecret: session.clientSecret, onComplete }}
+        >
+          <EmbeddedCheckout />
+        </EmbeddedCheckoutProvider>
+      </div>
+    </div>
+  );
+}
+
 export function AccountModal({ open, onOpenChange, account }: AccountModalProps) {
   const { status } = account;
+  const [checkout, setCheckout] = useState<CheckoutSession | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const personalOrgId = account.orgs.find((o) => o.kind === "personal")?.id;
+
+  async function startCheckout() {
+    if (!personalOrgId || busy) return;
+    setBusy(true);
+    setError(null);
+    const r = await account.upgrade(personalOrgId);
+    setBusy(false);
+    if (r) setCheckout(r);
+    else setError("Couldn't start checkout — try again");
+  }
+
+  function handleComplete() {
+    void account.refreshBilling();
+    setCheckout(null);
+    setTimeout(() => void account.refreshBilling(), 1500);
+  }
 
   if (status === "loading") {
     return (
@@ -75,8 +141,26 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
     const name =
       account.account?.name ||
       (account.account?.email ? account.account.email.split("@")[0] : "Signed in");
-    const personalOrgId = account.orgs.find((o) => o.kind === "personal")?.id;
     const isPro = account.entitlement?.plan === "pro";
+
+    if (checkout) {
+      return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+          <DialogContent className="max-w-[30rem]">
+            <DialogHeader>
+              <DialogTitle>Account</DialogTitle>
+            </DialogHeader>
+            <DialogBody>
+              <CheckoutView
+                session={checkout}
+                onBack={() => setCheckout(null)}
+                onComplete={handleComplete}
+              />
+            </DialogBody>
+          </DialogContent>
+        </Dialog>
+      );
+    }
 
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -168,14 +252,18 @@ export function AccountModal({ open, onOpenChange, account }: AccountModalProps)
                     <Button
                       size="sm"
                       className="shrink-0"
-                      disabled={!personalOrgId}
-                      onClick={() => personalOrgId && account.upgrade(personalOrgId)}
+                      disabled={!personalOrgId || busy}
+                      onClick={startCheckout}
                     >
                       <Zap className="size-3.5" />
-                      Upgrade to Pro
+                      {busy ? "Starting…" : "Upgrade to Pro"}
                     </Button>
                   )}
                 </div>
+
+                {error && (
+                  <span className="text-xs text-[var(--destructive)]">{error}</span>
+                )}
 
                 {!isPro && (
                   <>

@@ -43,7 +43,7 @@ export interface RigelBridge {
     onChanged(cb: () => void): () => void;
   };
   billing?: {
-    checkout(orgId: string): Promise<{ ok: boolean }>;
+    checkout(orgId: string): Promise<{ clientSecret: string; publishableKey: string } | null>;
     portal(orgId: string): Promise<{ ok: boolean }>;
     agentToken(orgId: string): Promise<{ token: string; installId: string } | null>;
     entitlements(): Promise<EntitlementPayload | null>;
