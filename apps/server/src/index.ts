@@ -59,7 +59,7 @@ import { getClusterYamlSchema } from "./clusterSchema";
 import { getApiResources } from "./apiResources";
 import { runCanI, type Subject, type CanICheck, type CanIResult } from "./rbacCanI";
 import { stripStatusBlock } from "@rigel/k8s/src/manifestClean";
-import { handleAssistant, isAutonomyRequest, scaleAgentsToZero, type AssistantRequest } from "./assistant";
+import { handleAssistant, isAutonomyRequest, type AssistantRequest } from "./assistant";
 import { handleSignal, type SignalRequest } from "./signal";
 import { handleMatrix, type MatrixRequest } from "./matrix";
 import { handleChannelTest, type ChannelTestRequest } from "./channels";
@@ -82,19 +82,6 @@ let accountSignedIn = process.env.RIGEL_SIGNED_IN === "1";
     const m = e?.data as { type?: string; signedIn?: boolean; value?: EntitlementPayload | null } | undefined;
     if (m?.type === "account-auth") accountSignedIn = !!m.signedIn;
     if (m?.type === "entitlement") setEntitlement(m.value ?? null);
-    // Layer 1 (Slice L1): a genuine downgrade to Free scales every installed
-    // agent's Deployment to 0 replicas as a courtesy. Per-cluster failures are
-    // isolated inside scaleAgentsToZero and picked up next push.
-    if (m?.type === "agent-downgrade") {
-      void scaleAgentsToZero()
-        .then((r) => {
-          console.log(`[rigel] downgrade → scaled agents to 0 in [${r.scaled.join(", ")}]`);
-          if (r.failures.length > 0) {
-            console.warn(`[rigel] downgrade scale failures: ${r.failures.map((f) => `${f.context}: ${f.error}`).join("; ")}`);
-          }
-        })
-        .catch((err) => console.error("[rigel] agent-downgrade scale failed:", err));
-    }
   },
 );
 

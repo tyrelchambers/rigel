@@ -1032,52 +1032,6 @@ describe("discoverInstalledContexts", () => {
   });
 });
 
-import { scaleAgentsToZero } from "./assistant";
-
-describe("scaleAgentsToZero (Layer-1 downgrade)", () => {
-  test("scales EVERY installed context's agent Deployment to 0 replicas", async () => {
-    const ran: { ctx: string | null; args: string[] }[] = [];
-    const res = await scaleAgentsToZero({
-      discover: async () => ["ctx-a", "ctx-b"],
-      run: async (ctx, args) => {
-        ran.push({ ctx, args });
-        return { code: 0, stdout: "", stderr: "" };
-      },
-    });
-    expect(res.scaled).toEqual(["ctx-a", "ctx-b"]);
-    expect(res.failures).toEqual([]);
-    expect(ran.map((r) => r.ctx)).toEqual(["ctx-a", "ctx-b"]);
-    for (const r of ran) {
-      expect(r.args).toEqual(["scale", "deployment/rigel-assistant", "--replicas=0", "-n", "default"]);
-    }
-  });
-
-  test("isolates a per-cluster failure so the remaining contexts still scale", async () => {
-    const ran: string[] = [];
-    const res = await scaleAgentsToZero({
-      discover: async () => ["ctx-a", "ctx-bad", "ctx-c"],
-      run: async (ctx) => {
-        if (ctx === "ctx-bad") throw new Error("cluster unreachable");
-        ran.push(ctx as string);
-        return { code: 0, stdout: "", stderr: "" };
-      },
-    });
-    expect(ran).toEqual(["ctx-a", "ctx-c"]);
-    expect(res.scaled).toEqual(["ctx-a", "ctx-c"]);
-    expect(res.failures).toEqual([{ context: "ctx-bad", error: "cluster unreachable" }]);
-  });
-
-  test("no installed contexts → no scale calls, no failures", async () => {
-    let calls = 0;
-    const res = await scaleAgentsToZero({
-      discover: async () => [],
-      run: async () => { calls++; return { code: 0, stdout: "", stderr: "" }; },
-    });
-    expect(calls).toBe(0);
-    expect(res).toEqual({ scaled: [], failures: [] });
-  });
-});
-
 describe("getRbac", () => {
   afterEach(() => { vi.restoreAllMocks(); });
 
@@ -1266,21 +1220,6 @@ test("installedContexts returns managed contexts with the active flag", async ()
   expect(parsed.contexts).toEqual([
     { name: "ctx-a", active: true },
     { name: "ctx-b", active: false },
-  ]);
-  vi.restoreAllMocks();
-});
-
-test("handleAssistant resume scales the agent Deployment back to one replica", async () => {
-  let captured: string[] | null = null;
-  vi.spyOn(runMod, "runProcessWithStdin").mockImplementation(async (_prog, fullArgs) => {
-    captured = fullArgs;
-    return { code: 0, stdout: "", stderr: "" };
-  });
-  const res = await handleAssistant("active-ctx", { action: "resume", namespace: "default" });
-  expect(res.code).toBe(0);
-  expect(captured).toEqual([
-    "--context", "active-ctx",
-    "scale", "deployment/rigel-assistant", "--replicas=1", "-n", "default",
   ]);
   vi.restoreAllMocks();
 });

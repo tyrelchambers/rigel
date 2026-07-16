@@ -128,7 +128,6 @@ export type AssistantAction =
   | "setLimits"
   | "setAutofix"
   | "restart"
-  | "resume"
   | "silence"
   | "unsilence"
   | "clearReport"
@@ -666,37 +665,6 @@ export async function discoverInstalledContexts(
 }
 
 /**
- * Layer-1 downgrade courtesy (entitlement-lifecycle Slice L1): when the operator's
- * plan genuinely drops to Free, scale every installed agent's Deployment to 0
- * replicas rather than leaving it running unentitled. Enumerates every kubeconfig
- * context that has an agent installed and scales each independently; one
- * unreachable cluster does NOT abort the rest (picked up on the next push).
- * `discover`/`run` are injectable for cluster-free tests.
- */
-export async function scaleAgentsToZero(
-  deps: {
-    discover?: (namespace: string) => Promise<string[]>;
-    run?: (context: string | null, args: string[]) => Promise<RunResult>;
-  } = {},
-): Promise<{ scaled: string[]; failures: { context: string; error: string }[] }> {
-  const namespace = DEFAULT_INSTALL_CONFIG.installNamespace;
-  const discover = deps.discover ?? ((ns: string) => discoverInstalledContexts(ns));
-  const run = deps.run ?? ((ctx: string | null, args: string[]) => runKubectlStdin(ctx, args, null));
-  const contexts = await discover(namespace);
-  const scaled: string[] = [];
-  const failures: { context: string; error: string }[] = [];
-  for (const ctx of contexts) {
-    try {
-      await run(ctx, ["scale", `deployment/${DEPLOYMENT_NAME}`, "--replicas=0", "-n", namespace]);
-      scaled.push(ctx);
-    } catch (e) {
-      failures.push({ context: ctx, error: e instanceof Error ? e.message : String(e) });
-    }
-  }
-  return { scaled, failures };
-}
-
-/**
  * Persist the operator's RBAC policy AND apply it as a ClusterRole to each
  * context in `req.contexts` (default: the active context). For every target we
  * read-modify-write `assistant-config` (so stored + live agree per cluster) and
@@ -848,14 +816,6 @@ function restartAgent(context: string | null, namespace: string): Promise<RunRes
   return runKubectlStdin(
     context,
     ["rollout", "restart", "deployment/rigel-assistant", "-n", namespace],
-    null,
-  );
-}
-
-function resumeAgent(context: string | null, namespace: string): Promise<RunResult> {
-  return runKubectlStdin(
-    context,
-    ["scale", "deployment/rigel-assistant", "--replicas=1", "-n", namespace],
     null,
   );
 }
@@ -1156,8 +1116,6 @@ export async function handleAssistant(
       return setAutofix(context, namespace, req);
     case "restart":
       return restartAgent(context, namespace);
-    case "resume":
-      return resumeAgent(context, namespace);
     case "silence":
       return silenceIncident(context, namespace, req.fingerprint ?? "", true);
     case "unsilence":
