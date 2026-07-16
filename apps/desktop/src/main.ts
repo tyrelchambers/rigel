@@ -449,6 +449,8 @@ function createWindow(port: number): BrowserWindow {
   // External links (PR/GitHub target=_blank) → system browser; deny in-app
   // popups so the SPA stays a single trusted window.
   win.webContents.setWindowOpenHandler(({ url }) => {
+    const host = (() => { try { return new URL(url).hostname; } catch { return ""; } })();
+    if (host === "stripe.com" || host.endsWith(".stripe.com")) return { action: "allow" };
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
     return { action: "deny" };
   });
@@ -561,11 +563,7 @@ async function boot(): Promise<void> {
     pushServerAuth(false);
   });
   ipcMain.handle("rigel:account:status", () => refreshAccount());
-  ipcMain.handle("rigel:billing:checkout", async (_e, orgId: string) => {
-    const url = await billingClient.checkout(orgId);
-    if (url) openBillingWindow(url);
-    return { ok: !!url };
-  });
+  ipcMain.handle("rigel:billing:checkout", (_e, orgId: string) => billingClient.checkout(orgId));
   ipcMain.handle("rigel:billing:portal", async (_e, orgId: string) => {
     const url = await billingClient.portal(orgId);
     if (url) openBillingWindow(url);

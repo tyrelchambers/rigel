@@ -1,11 +1,47 @@
 import { test, expect, vi } from "vitest";
 import { createBillingClient } from "./billingClient";
 
-test("checkout posts orgId with the bearer token and returns the url", async () => {
-  const fetchFn = vi.fn(async () => ({ ok: true, json: async () => ({ url: "https://checkout/x" }) }));
+test("checkout posts orgId with the bearer token and returns the clientSecret + publishableKey", async () => {
+  const fetchFn = vi.fn(async () => ({ ok: true, json: async () => ({ clientSecret: "cs_123", publishableKey: "pk_123" }) }));
   const client = createBillingClient({ store: { getToken: () => "tok" } as never, fetchFn: fetchFn as never, endpoint: "https://api.rigel.run" });
-  expect(await client.checkout("o1")).toBe("https://checkout/x");
+  expect(await client.checkout("o1")).toEqual({ clientSecret: "cs_123", publishableKey: "pk_123" });
   expect(fetchFn).toHaveBeenCalledWith("https://api.rigel.run/billing/checkout", expect.objectContaining({
+    method: "POST", headers: expect.objectContaining({ authorization: "Bearer tok" }), body: JSON.stringify({ orgId: "o1" }),
+  }));
+});
+
+test("checkout returns null and logs on a non-2xx response", async () => {
+  const fetchFn = vi.fn(async () => ({ ok: false, status: 403, text: async () => "forbidden" }));
+  const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  const client = createBillingClient({ store: { getToken: () => "tok" } as never, fetchFn: fetchFn as never, endpoint: "https://api.rigel.run" });
+  expect(await client.checkout("o1")).toBeNull();
+  expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("403"));
+  errorSpy.mockRestore();
+});
+
+test("checkout returns null and logs on a malformed body", async () => {
+  const fetchFn = vi.fn(async () => ({ ok: true, json: async () => ({ clientSecret: "cs_123" }) }));
+  const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  const client = createBillingClient({ store: { getToken: () => "tok" } as never, fetchFn: fetchFn as never, endpoint: "https://api.rigel.run" });
+  expect(await client.checkout("o1")).toBeNull();
+  expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("malformed body"));
+  errorSpy.mockRestore();
+});
+
+test("checkout returns null and logs on a network error", async () => {
+  const fetchFn = vi.fn(async () => { throw new Error("offline"); });
+  const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  const client = createBillingClient({ store: { getToken: () => "tok" } as never, fetchFn: fetchFn as never, endpoint: "https://api.rigel.run" });
+  expect(await client.checkout("o1")).toBeNull();
+  expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("threw"));
+  errorSpy.mockRestore();
+});
+
+test("portal posts orgId with the bearer token and returns the url", async () => {
+  const fetchFn = vi.fn(async () => ({ ok: true, json: async () => ({ url: "https://portal/x" }) }));
+  const client = createBillingClient({ store: { getToken: () => "tok" } as never, fetchFn: fetchFn as never, endpoint: "https://api.rigel.run" });
+  expect(await client.portal("o1")).toBe("https://portal/x");
+  expect(fetchFn).toHaveBeenCalledWith("https://api.rigel.run/billing/portal", expect.objectContaining({
     method: "POST", headers: expect.objectContaining({ authorization: "Bearer tok" }),
   }));
 });

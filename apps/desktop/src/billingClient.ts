@@ -29,8 +29,27 @@ export function createBillingClient({ store, fetchFn, endpoint }: { store: Billi
       return null;
     }
   };
+  const checkout = async (orgId: string): Promise<{ clientSecret: string; publishableKey: string } | null> => {
+    const path = "/billing/checkout";
+    try {
+      const res = await fetchFn(`${endpoint}${path}`, { method: "POST", headers: auth(), body: JSON.stringify({ orgId }) });
+      if (!res.ok) {
+        console.error(`[billing] POST ${endpoint}${path} (org ${orgId}) → ${res.status}: ${await res.text().catch(() => "")}`);
+        return null;
+      }
+      const j = (await res.json()) as { clientSecret?: unknown; publishableKey?: unknown };
+      if (typeof j.clientSecret === "string" && typeof j.publishableKey === "string") {
+        return { clientSecret: j.clientSecret, publishableKey: j.publishableKey };
+      }
+      console.error(`[billing] POST ${endpoint}${path} (org ${orgId}) → malformed body: ${JSON.stringify(j)}`);
+      return null;
+    } catch (e) {
+      console.error(`[billing] POST ${endpoint}${path} threw: ${String(e)}`);
+      return null;
+    }
+  };
   return {
-    checkout: (orgId: string) => postUrl("/billing/checkout", orgId),
+    checkout,
     portal: (orgId: string) => postUrl("/billing/portal", orgId),
     async entitlements(): Promise<EntitlementPayload | null> {
       const res = await fetchFn(`${endpoint}/entitlements`, { headers: auth() });
