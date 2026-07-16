@@ -24,6 +24,16 @@ test("resolveOrgEntitlement: customer without agentAutonomy → not entitled", a
   expect(r.agentEntitled).toBe(false);
 });
 
+test("LOCK-IN: resolveOrgEntitlement has no cache — every call resolves live", async () => {
+  const orgStripeCustomer = vi.fn(async () => "cus_1");
+  const activeFeatureKeys = vi.fn(async () => new Set(["agentAutonomy"]));
+  const deps = { db: { orgStripeCustomer }, stripe: { activeFeatureKeys }, now: () => "T" };
+  await resolveOrgEntitlement("o1", deps);
+  await resolveOrgEntitlement("o1", deps);
+  expect(orgStripeCustomer).toHaveBeenCalledTimes(2);
+  expect(activeFeatureKeys).toHaveBeenCalledTimes(2);
+});
+
 test("resolvePayload: no features → free", () => {
   const p = resolvePayload(new Set(), "2026-07-15T00:00:00.000Z");
   expect(p).toMatchObject({ plan: "free", audits: [], cloudConnect: false, agentAutonomy: false });
