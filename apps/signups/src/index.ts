@@ -18,6 +18,7 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY ?? "";
 const RESEND_FROM = process.env.RESEND_FROM ?? "Rigel <login@rigel.run>";
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY ?? "";
 const STRIPE_PRICE_ID = process.env.STRIPE_PRICE_ID ?? "";
+const STRIPE_PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE_KEY ?? "";
 // Must match the desktop's SIGNUP_ENDPOINT base (apps/desktop/src/main.ts, itself
 // overridable via RIGEL_SIGNUP_ENDPOINT) — the billing window detects completion
 // by prefix-matching ${endpoint}/billing/complete. Override in a test deployment.
@@ -28,6 +29,7 @@ if (!KIT_API_KEY) console.warn("KIT_API_KEY not set — signups will not sync to
 if (!RESEND_API_KEY) console.warn("RESEND_API_KEY not set — auth code emails will fail");
 if (!STRIPE_SECRET_KEY) console.warn("[signups] STRIPE_SECRET_KEY unset — /entitlements returns free for everyone");
 if (!STRIPE_PRICE_ID) console.warn("[signups] STRIPE_PRICE_ID unset — /billing/checkout will fail to create a session");
+if (!STRIPE_PUBLISHABLE_KEY) console.warn("[signups] STRIPE_PUBLISHABLE_KEY unset — /billing/checkout returns no usable key, the client cannot mount Embedded Checkout");
 
 const pool = new pg.Pool({ connectionString: DATABASE_URL });
 await ensureSchema(pool);
@@ -50,6 +52,13 @@ const stripeAdapter = STRIPE_SECRET_KEY
 // broken), but a network blip verifying it must NOT gate the auth backend.
 const stripeMode = stripeKeyMode(STRIPE_SECRET_KEY);
 console.log(`[signups] Stripe: ${stripeMode} mode${STRIPE_PRICE_ID ? ` (price ${STRIPE_PRICE_ID})` : ""}`);
+const publishableMode = stripeKeyMode(STRIPE_PUBLISHABLE_KEY);
+if ((stripeMode === "test" || stripeMode === "live") && (publishableMode === "test" || publishableMode === "live") && publishableMode !== stripeMode) {
+  console.error(
+    `[signups] FATAL: Stripe key is ${stripeMode} mode but STRIPE_PUBLISHABLE_KEY is ${publishableMode} mode — refusing to run with mismatched billing config.`,
+  );
+  process.exit(1);
+}
 if ((stripeMode === "test" || stripeMode === "live") && STRIPE_PRICE_ID) {
   void stripeAdapter
     .priceLivemode(STRIPE_PRICE_ID)
@@ -72,7 +81,7 @@ const app = createApp({
   allow,
   notify,
   auth: { db: authDb, sendCode, allowRequest, allowVerify },
-  billing: { db: authDb, resolve, stripe: stripeAdapter, priceId: STRIPE_PRICE_ID, endpoint: BILLING_ENDPOINT },
+  billing: { db: authDb, resolve, stripe: stripeAdapter, priceId: STRIPE_PRICE_ID, publishableKey: STRIPE_PUBLISHABLE_KEY, endpoint: BILLING_ENDPOINT },
   agent: {
     db: authDb,
     resolveOrg: (orgId) => resolveOrgEntitlement(orgId, { db: authDb, stripe: stripeAdapter, now: () => new Date().toISOString() }),

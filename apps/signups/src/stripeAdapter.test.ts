@@ -6,8 +6,15 @@ test("stripeKeyMode reads the mode from the key prefix", () => {
   expect(stripeKeyMode("rk_test_abc")).toBe("test");
   expect(stripeKeyMode("sk_live_abc")).toBe("live");
   expect(stripeKeyMode("rk_live_abc")).toBe("live");
+  expect(stripeKeyMode("pk_test_abc")).toBe("test");
+  expect(stripeKeyMode("pk_live_abc")).toBe("live");
   expect(stripeKeyMode("")).toBe("none");
   expect(stripeKeyMode("garbage")).toBe("unknown");
+});
+
+test("stripeKeyMode flags a publishable/secret key mode mismatch", () => {
+  expect(stripeKeyMode("pk_test_abc")).not.toBe(stripeKeyMode("sk_live_abc"));
+  expect(stripeKeyMode("pk_live_abc")).toBe(stripeKeyMode("sk_live_abc"));
 });
 
 test("priceLivemode reports the price's livemode", async () => {

@@ -7,7 +7,7 @@ function appWith(overrides = {}) {
   const app = new Hono();
   const db = { accountByToken: vi.fn(async () => ({ id: "acc-1", email: "a@b.co", name: null })), touchToken: vi.fn(async () => {}) };
   const resolve = vi.fn(async (): Promise<EntitlementPayload> => ({ plan: "pro", audits: ["security"], cloudConnect: false, agentAutonomy: false, fetchedAt: "t" }));
-  registerBillingRoutes(app, { db: db as never, resolve, stripe: {} as never, priceId: "price_1", endpoint: "https://api.rigel.run", ...overrides });
+  registerBillingRoutes(app, { db: db as never, resolve, stripe: {} as never, priceId: "price_1", publishableKey: "pk_test_abc", endpoint: "https://api.rigel.run", ...overrides });
   return { app, db, resolve };
 }
 
