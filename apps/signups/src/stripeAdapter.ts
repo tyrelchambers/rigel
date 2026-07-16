@@ -14,7 +14,7 @@ export function stripeKeyMode(key: string): StripeMode {
 export interface StripeAdapter {
   activeFeatureKeys(customerId: string): Promise<Set<string>>;
   ensureCustomer(input: { existing: string | null; email: string; orgId: string }): Promise<{ customerId: string; created: boolean }>;
-  createCheckoutSession(input: { customerId: string; priceId: string; quantity: number; successUrl: string; cancelUrl: string }): Promise<string>;
+  createCheckoutSession(input: { customerId: string; priceId: string; quantity: number }): Promise<string>;
   createPortalSession(input: { customerId: string; returnUrl: string }): Promise<string>;
   /** True if the price is a live-mode object — used to guard against a key/price mode mismatch. */
   priceLivemode(priceId: string): Promise<boolean>;
@@ -36,14 +36,14 @@ export function makeStripeAdapter(stripe: Pick<Stripe, "entitlements" | "custome
       const c = await stripe.customers.create({ email, metadata: { orgId } });
       return { customerId: c.id, created: true };
     },
-    async createCheckoutSession({ customerId, priceId, quantity, successUrl, cancelUrl }) {
+    async createCheckoutSession({ customerId, priceId, quantity }) {
       const s = await stripe.checkout.sessions.create({
-        mode: "subscription", customer: customerId,
+        ui_mode: "embedded_page", mode: "subscription", customer: customerId,
         line_items: [{ price: priceId, quantity }],
-        success_url: successUrl, cancel_url: cancelUrl,
+        redirect_on_completion: "never",
       });
-      if (!s.url) throw new Error("stripe returned no checkout url");
-      return s.url;
+      if (!s.client_secret) throw new Error("Stripe returned no client secret");
+      return s.client_secret;
     },
     async createPortalSession({ customerId, returnUrl }) {
       const s = await stripe.billingPortal.sessions.create({ customer: customerId, return_url: returnUrl });

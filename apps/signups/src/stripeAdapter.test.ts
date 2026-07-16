@@ -41,16 +41,22 @@ test("ensureCustomer creates when none, tagging org metadata", async () => {
   expect(r).toEqual({ customerId: "cus_new", created: true });
 });
 
-test("createCheckoutSession passes per-seat line item + urls, returns url", async () => {
-  const create = vi.fn(async () => ({ url: "https://checkout.stripe/s1" }));
+test("createCheckoutSession creates an embedded session, returns the client secret", async () => {
+  const create = vi.fn(async () => ({ client_secret: "cs_test_123" }));
   const adapter = makeStripeAdapter({ checkout: { sessions: { create } }, entitlements: { activeEntitlements: { list: async () => ({ data: [] }) } } } as never);
-  const url = await adapter.createCheckoutSession({ customerId: "cus_1", priceId: "price_1", quantity: 3, successUrl: "https://s/ok", cancelUrl: "https://s/no" });
+  const secret = await adapter.createCheckoutSession({ customerId: "cus_1", priceId: "price_1", quantity: 3 });
   expect(create).toHaveBeenCalledWith(expect.objectContaining({
-    mode: "subscription", customer: "cus_1",
+    ui_mode: "embedded_page", mode: "subscription", customer: "cus_1",
     line_items: [{ price: "price_1", quantity: 3 }],
-    success_url: "https://s/ok", cancel_url: "https://s/no",
+    redirect_on_completion: "never",
   }));
-  expect(url).toBe("https://checkout.stripe/s1");
+  expect(secret).toBe("cs_test_123");
+});
+
+test("createCheckoutSession throws when Stripe returns no client secret", async () => {
+  const create = vi.fn(async () => ({ client_secret: null }));
+  const adapter = makeStripeAdapter({ checkout: { sessions: { create } }, entitlements: { activeEntitlements: { list: async () => ({ data: [] }) } } } as never);
+  await expect(adapter.createCheckoutSession({ customerId: "cus_1", priceId: "price_1", quantity: 1 })).rejects.toThrow(/no client secret/);
 });
 
 test("createPortalSession returns the portal url", async () => {
