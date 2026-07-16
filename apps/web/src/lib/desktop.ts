@@ -20,6 +20,7 @@ export interface EntitlementPayload {
   cloudConnect: boolean;
   agentAutonomy: boolean;
   fetchedAt: string;
+  beta?: boolean;
 }
 export interface Account { id: string; email: string; name: string | null }
 export interface Org { id: string; kind: "personal" | "team"; name: string; role: "owner" | "admin" | "member" }

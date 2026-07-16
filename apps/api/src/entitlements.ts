@@ -1,12 +1,15 @@
 export type FeatureKey = "reliability" | "security" | "performance" | "cloudConnect" | "agentAutonomy";
 const AUDIT_KEYS = ["reliability", "security", "performance"] as const;
 
+export const ALL_FEATURE_KEYS = new Set<FeatureKey>([...AUDIT_KEYS, "cloudConnect", "agentAutonomy"]);
+
 export interface EntitlementPayload {
   plan: "free" | "pro";
   audits: ("reliability" | "security" | "performance")[];
   cloudConnect: boolean;
   agentAutonomy: boolean;
   fetchedAt: string;
+  beta?: boolean;
 }
 
 export function resolvePayload(keys: Set<string>, fetchedAt: string): EntitlementPayload {
@@ -29,8 +32,13 @@ export async function resolveOrgEntitlement(
     db: { orgStripeCustomer(orgId: string): Promise<string | null> };
     stripe: { activeFeatureKeys(customerId: string): Promise<Set<string>> };
     now: () => string;
+    freeBeta?: boolean;
   },
 ): Promise<OrgEntitlement> {
+  if (deps.freeBeta) {
+    const p = resolvePayload(ALL_FEATURE_KEYS, deps.now());
+    return { agentEntitled: p.agentAutonomy, plan: p.plan, fetchedAt: p.fetchedAt };
+  }
   const customerId = await deps.db.orgStripeCustomer(orgId);
   const keys = customerId ? await deps.stripe.activeFeatureKeys(customerId) : new Set<string>();
   const payload = resolvePayload(keys, deps.now());
@@ -42,6 +50,7 @@ export interface ResolverDeps {
   stripe: { activeFeatureKeys(customerId: string): Promise<Set<string>> };
   now: () => string;
   monoNow?: () => number; // for cache; defaults to Date.now
+  freeBeta?: boolean;
 }
 
 const CACHE_MS = 60_000;
@@ -52,6 +61,7 @@ export function makeResolver(
   const mono = deps.monoNow ?? (() => Date.now());
   const cache = new Map<string, { at: number; payload: EntitlementPayload }>();
   return async (accountId, opts) => {
+    if (deps.freeBeta) return { ...resolvePayload(ALL_FEATURE_KEYS, deps.now()), beta: true };
     const hit = cache.get(accountId);
     if (!opts?.fresh && hit && mono() - hit.at < CACHE_MS) return hit.payload;
     const orgs = await deps.db.billableOrgs(accountId);

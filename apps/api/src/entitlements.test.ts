@@ -94,3 +94,22 @@ test("resolveEntitlements: a fresh resolve updates the cache for subsequent call
   await resolve("acc-1");
   expect(billableOrgs).toHaveBeenCalledTimes(1);
 });
+
+test("freeBeta: makeResolver returns full entitlement without hitting db/stripe", async () => {
+  const billableOrgs = vi.fn(async () => { throw new Error("must not query billable orgs"); });
+  const activeFeatureKeys = vi.fn(async () => { throw new Error("must not query stripe"); });
+  const resolve = makeResolver({ db: { billableOrgs }, stripe: { activeFeatureKeys }, now: () => "T", freeBeta: true });
+  const p = await resolve("acc-1");
+  expect(billableOrgs).not.toHaveBeenCalled();
+  expect(activeFeatureKeys).not.toHaveBeenCalled();
+  expect(p).toMatchObject({ plan: "pro", cloudConnect: true, agentAutonomy: true, beta: true, fetchedAt: "T" });
+  expect(p.audits.sort()).toEqual(["performance", "reliability", "security"]);
+});
+
+test("freeBeta: resolveOrgEntitlement returns entitled + pro without hitting db/stripe", async () => {
+  const orgStripeCustomer = vi.fn(async () => { throw new Error("must not query stripe customer"); });
+  const activeFeatureKeys = vi.fn(async () => { throw new Error("must not query stripe"); });
+  const r = await resolveOrgEntitlement("o1", { db: { orgStripeCustomer }, stripe: { activeFeatureKeys }, now: () => "T", freeBeta: true });
+  expect(orgStripeCustomer).not.toHaveBeenCalled();
+  expect(r).toMatchObject({ agentEntitled: true, plan: "pro", fetchedAt: "T" });
+});
