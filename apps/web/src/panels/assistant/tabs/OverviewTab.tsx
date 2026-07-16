@@ -3,12 +3,8 @@
 // rows), and the owned-resources grid. Built to Pencil frame
 // "Assistant — Overview (improved)".
 
-import { AlertTriangle, Bot, ChevronRight, GitPullRequest, PauseCircle, Play, Radar } from "lucide-react";
+import { AlertTriangle, ChevronRight, GitPullRequest, Radar } from "lucide-react";
 import { auditEntryId } from "@rigel/k8s";
-import { Button } from "@/components/ui/button";
-import { useEntitlement } from "@/shell/useEntitlement";
-import { useAccount } from "@/shell/useAccount";
-import { ProGateCard } from "@/shell/billing/ProGateCard";
 import { useAssistantCtx } from "../AssistantContext";
 import { relativeTime } from "../display";
 import { AuditRow } from "../AuditRow";
@@ -17,11 +13,6 @@ import { OwnedResources } from "../OwnedResources";
 
 export function OverviewTab() {
   const { d, ns, working, run, setTab } = useAssistantCtx();
-  const { payload, upgrade } = useEntitlement();
-  const { orgs } = useAccount();
-  const personalOrgId = orgs.find((o) => o.kind === "personal")?.id;
-  const paused = d.agentDesiredReplicas === 0;
-  const entitled = !!payload?.agentAutonomy;
   const audit = d.clusterState?.audit ?? [];
   const queue = d.clusterState?.queue ?? [];
   const report = d.clusterState?.report ?? "";
@@ -31,35 +22,6 @@ export function OverviewTab() {
 
   return (
     <div className="space-y-5">
-      {paused &&
-        (entitled ? (
-          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-4">
-            <PauseCircle className="size-5 shrink-0 text-amber-500" />
-            <div className="flex flex-col gap-0.5">
-              <p className="text-sm font-semibold text-[var(--fg-primary)]">Agent paused</p>
-              <p className="text-xs text-[var(--fg-secondary)]">
-                The in-cluster agent is scaled to zero and isn't watching your cluster.
-              </p>
-            </div>
-            <Button
-              className="ml-auto"
-              disabled={working}
-              onClick={() => run({ action: "resume", namespace: ns })}
-            >
-              <Play className="size-4" />
-              Resume agent
-            </Button>
-          </div>
-        ) : (
-          <ProGateCard
-            icon={Bot}
-            title="Agent paused"
-            body="The in-cluster agent is paused on the free plan. Upgrade to Pro to resume around-the-clock watching and autonomous remediation."
-            upgradeDisabled={!personalOrgId}
-            onUpgrade={() => personalOrgId && upgrade(personalOrgId)}
-          />
-        ))}
-
       {report && (
         <LastReportCard
           report={report}
