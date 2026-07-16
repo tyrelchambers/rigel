@@ -65,7 +65,7 @@ export function createApp({ appKey, upsert, allow, notify, auth, billing, agent 
   if (agent) registerAgentRoutes(app, agent);
 
   app.onError((err, c) => {
-    console.error(`[signups] unhandled error on ${c.req.method} ${c.req.path}:`, err);
+    console.error(`[api] unhandled error on ${c.req.method} ${c.req.path}:`, err);
     return c.json({ error: "internal error" }, 500);
   });
 

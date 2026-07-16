@@ -27,9 +27,9 @@ if (!APP_KEY) { console.error("APP_KEY is required"); process.exit(1); }
 if (!DATABASE_URL) { console.error("DATABASE_URL is required"); process.exit(1); }
 if (!KIT_API_KEY) console.warn("KIT_API_KEY not set — signups will not sync to Kit");
 if (!RESEND_API_KEY) console.warn("RESEND_API_KEY not set — auth code emails will fail");
-if (!STRIPE_SECRET_KEY) console.warn("[signups] STRIPE_SECRET_KEY unset — /entitlements returns free for everyone");
-if (!STRIPE_PRICE_ID) console.warn("[signups] STRIPE_PRICE_ID unset — /billing/checkout will fail to create a session");
-if (!STRIPE_PUBLISHABLE_KEY) console.warn("[signups] STRIPE_PUBLISHABLE_KEY unset — /billing/checkout returns no usable key, the client cannot mount Embedded Checkout");
+if (!STRIPE_SECRET_KEY) console.warn("[api] STRIPE_SECRET_KEY unset — /entitlements returns free for everyone");
+if (!STRIPE_PRICE_ID) console.warn("[api] STRIPE_PRICE_ID unset — /billing/checkout will fail to create a session");
+if (!STRIPE_PUBLISHABLE_KEY) console.warn("[api] STRIPE_PUBLISHABLE_KEY unset — /billing/checkout returns no usable key, the client cannot mount Embedded Checkout");
 
 const pool = new pg.Pool({ connectionString: DATABASE_URL });
 await ensureSchema(pool);
@@ -51,11 +51,11 @@ const stripeAdapter = STRIPE_SECRET_KEY
 // test key with a live price id) — a confirmed mismatch is fatal (billing would be
 // broken), but a network blip verifying it must NOT gate the auth backend.
 const stripeMode = stripeKeyMode(STRIPE_SECRET_KEY);
-console.log(`[signups] Stripe: ${stripeMode} mode${STRIPE_PRICE_ID ? ` (price ${STRIPE_PRICE_ID})` : ""}`);
+console.log(`[api] Stripe: ${stripeMode} mode${STRIPE_PRICE_ID ? ` (price ${STRIPE_PRICE_ID})` : ""}`);
 const publishableMode = stripeKeyMode(STRIPE_PUBLISHABLE_KEY);
 if ((stripeMode === "test" || stripeMode === "live") && (publishableMode === "test" || publishableMode === "live") && publishableMode !== stripeMode) {
   console.error(
-    `[signups] FATAL: Stripe key is ${stripeMode} mode but STRIPE_PUBLISHABLE_KEY is ${publishableMode} mode — refusing to run with mismatched billing config.`,
+    `[api] FATAL: Stripe key is ${stripeMode} mode but STRIPE_PUBLISHABLE_KEY is ${publishableMode} mode — refusing to run with mismatched billing config.`,
   );
   process.exit(1);
 }
@@ -65,13 +65,13 @@ if ((stripeMode === "test" || stripeMode === "live") && STRIPE_PRICE_ID) {
     .then((live) => {
       if (live !== (stripeMode === "live")) {
         console.error(
-          `[signups] FATAL: Stripe key is ${stripeMode} mode but STRIPE_PRICE_ID ${STRIPE_PRICE_ID} is ${live ? "live" : "test"} mode — refusing to run with mismatched billing config.`,
+          `[api] FATAL: Stripe key is ${stripeMode} mode but STRIPE_PRICE_ID ${STRIPE_PRICE_ID} is ${live ? "live" : "test"} mode — refusing to run with mismatched billing config.`,
         );
         process.exit(1);
       }
-      console.log(`[signups] Stripe price mode verified (${stripeMode}).`);
+      console.log(`[api] Stripe price mode verified (${stripeMode}).`);
     })
-    .catch((e) => console.warn(`[signups] could not verify Stripe price mode (${e instanceof Error ? e.message : e}) — continuing`));
+    .catch((e) => console.warn(`[api] could not verify Stripe price mode (${e instanceof Error ? e.message : e}) — continuing`));
 }
 
 const resolve = makeResolver({ db: authDb, stripe: stripeAdapter, now: () => new Date().toISOString() });
