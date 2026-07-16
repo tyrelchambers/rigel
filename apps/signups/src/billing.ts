@@ -12,7 +12,7 @@ export interface BillingDeps {
     setOrgStripeCustomer(orgId: string, customerId: string): Promise<void>;
     accountEmail(accountId: string): Promise<string>;
   };
-  resolve: (accountId: string) => Promise<EntitlementPayload>;
+  resolve: (accountId: string, opts?: { fresh?: boolean }) => Promise<EntitlementPayload>;
   stripe: StripeAdapter;
   priceId: string;
   publishableKey: string;
@@ -43,7 +43,8 @@ export function registerBillingRoutes(app: Hono, deps: BillingDeps): void {
   app.get("/entitlements", async (c) => {
     const acc = await authed(c, deps.db);
     if (!acc) return c.json({ error: "unauthorized" }, 401);
-    return c.json(await deps.resolve(acc.id));
+    const fresh = c.req.query("fresh") === "1" || c.req.query("fresh") === "true";
+    return c.json(await deps.resolve(acc.id, { fresh }));
   });
 
   app.post("/billing/checkout", async (c) => {

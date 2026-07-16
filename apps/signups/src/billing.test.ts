@@ -16,7 +16,21 @@ test("GET /entitlements returns the resolved payload for a valid token", async (
   const res = await app.request("/entitlements", { headers: { authorization: "Bearer tok" } });
   expect(res.status).toBe(200);
   expect(await res.json()).toMatchObject({ plan: "pro", audits: ["security"] });
-  expect(resolve).toHaveBeenCalledWith("acc-1");
+  expect(resolve).toHaveBeenCalledWith("acc-1", { fresh: false });
+});
+
+test("GET /entitlements?fresh=1 bypasses the cache", async () => {
+  const { app, resolve } = appWith();
+  const res = await app.request("/entitlements?fresh=1", { headers: { authorization: "Bearer tok" } });
+  expect(res.status).toBe(200);
+  expect(resolve).toHaveBeenCalledWith("acc-1", { fresh: true });
+});
+
+test("GET /entitlements without fresh does not force a bypass", async () => {
+  const { app, resolve } = appWith();
+  const res = await app.request("/entitlements", { headers: { authorization: "Bearer tok" } });
+  expect(res.status).toBe(200);
+  expect(resolve).toHaveBeenCalledWith("acc-1", { fresh: false });
 });
 
 test("GET /entitlements 401 without a valid token", async () => {
