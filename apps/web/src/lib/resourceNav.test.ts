@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { focusKeyFor, goToResource, goToPodLogs } from "./resourceNav";
+import { focusKeyFor, goToResource, goToLogs } from "./resourceNav";
 import { useCluster } from "@/store/cluster";
 
 beforeEach(() => useCluster.getState().setFocusRequest(null));
@@ -28,18 +28,24 @@ describe("goToResource", () => {
   });
 });
 
-describe("goToPodLogs", () => {
+describe("goToLogs", () => {
   it("routes to /logs and sets a name-based pod focusRequest the Logs panel can match", () => {
     const navigate = vi.fn();
-    goToPodLogs(navigate, { namespace: "prod", name: "api-7d9f-abc" });
+    goToLogs(navigate, { kind: "pod", namespace: "prod", name: "api-7d9f-abc" });
     expect(navigate).toHaveBeenCalledWith("/logs");
     // ns/name (not uid) so LogsPanel's ns/name-keyed sidebar can resolve it.
     expect(useCluster.getState().focusRequest).toEqual({ route: "/logs", kind: "pod", key: "prod/api-7d9f-abc" });
   });
 
+  it("carries the workload kind through for a deployment", () => {
+    const navigate = vi.fn();
+    goToLogs(navigate, { kind: "deployment", namespace: "prod", name: "api" });
+    expect(useCluster.getState().focusRequest).toEqual({ route: "/logs", kind: "deployment", key: "prod/api" });
+  });
+
   it("defaults the namespace to 'default' when omitted", () => {
     const navigate = vi.fn();
-    goToPodLogs(navigate, { name: "solo" });
+    goToLogs(navigate, { kind: "pod", name: "solo" });
     expect(useCluster.getState().focusRequest!.key).toBe("default/solo");
   });
 });

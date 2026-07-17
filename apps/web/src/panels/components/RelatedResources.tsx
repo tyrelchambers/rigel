@@ -5,7 +5,7 @@ import { TabBar, Tab } from "@/components/ui/Tabs";
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem } from "@/components/ui/context-menu";
 import { useCluster, filterByNamespace } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
-import { goToResource, goToPodLogs } from "@/lib/resourceNav";
+import { goToResource, goToLogs } from "@/lib/resourceNav";
 import { computeRelated, relatedKindsFor, type RelatedRef } from "@/lib/relatedResources";
 
 export function RelatedResources({ sourceKind, source }: { sourceKind: string; source: Record<string, any> }) {
@@ -59,7 +59,7 @@ export function RelatedResources({ sourceKind, source }: { sourceKind: string; s
             onGo={() => goToResource(navigate, it)}
             onViewLogs={
               it.kind === "pods" && it.status !== "missing"
-                ? () => goToPodLogs(navigate, { namespace: it.namespace, name: it.name })
+                ? () => goToLogs(navigate, { kind: "pod", namespace: it.namespace, name: it.name })
                 : undefined
             }
           />
