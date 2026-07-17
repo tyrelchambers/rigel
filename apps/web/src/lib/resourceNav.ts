@@ -34,6 +34,16 @@ export function goToResource(navigate: NavigateFn, ref: RelatedRef): void {
   useCluster.getState().setFocusRequest({ route: meta.route, kind: meta.focusKind, key });
 }
 
+/** Kinds the Logs panel can open directly (workloads stream by selector, pods by name). */
+export type LogFocusKind = "pod" | "deployment" | "statefulset" | "daemonset";
+
+/** Navigate to the Logs panel and request a workload's/pod's logs be opened + streamed. */
+export function goToLogs(navigate: NavigateFn, ref: { kind: LogFocusKind; namespace?: string; name: string }): void {
+  const key = `${ref.namespace ?? "default"}/${ref.name}`;
+  navigate("/logs");
+  useCluster.getState().setFocusRequest({ route: "/logs", kind: ref.kind, key });
+}
+
 export function routeForKind(storeKind: string): string | undefined {
   return NAV_META[storeKind]?.route;
 }

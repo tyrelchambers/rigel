@@ -1,8 +1,10 @@
 import { ArrowUp, ArrowDown, GitBranch } from "lucide-react";
+import { useNavigate } from "react-router";
 import { ListRow } from "@/panels/components/ListRow";
 import { TagPill } from "@/panels/components/TagPill";
 import { StatusBadge } from "@/panels/components/StatusBadge";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
+import { goToLogs } from "@/lib/resourceNav";
 import { viewYaml, editYaml } from "@/store/yamlViewer";
 import type { ActionBlock } from "@/lib/api";
 import type { GitDeployment } from "@/panels/gitops/gitApi";
@@ -64,8 +66,11 @@ export function DeploymentRow({
   const progress = rolloutProgress(d);
   const linkedSrc = linkedSourceName(d);
   const ctxRef: WorkloadRef = { name: d.metadata.name, namespace: d.metadata.namespace ?? "default", kind: "deployment" };
+  const navigate = useNavigate();
   const rowMenu = (
     <>
+      <ContextMenuItem onClick={() => goToLogs(navigate, { kind: "deployment", namespace: d.metadata.namespace, name: d.metadata.name })}>View Logs</ContextMenuItem>
+      <ContextMenuSeparator />
       <ContextMenuItem onClick={() => askClaude(d, "Errors")}>Ask Claude: Errors</ContextMenuItem>
       <ContextMenuItem onClick={() => askClaude(d, "Logs")}>Ask Claude: Logs</ContextMenuItem>
       <ContextMenuItem onClick={() => askClaude(d, "Explain")}>Ask Claude: Explain</ContextMenuItem>

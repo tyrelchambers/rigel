@@ -57,6 +57,14 @@ import {
   MAX_LINES,
 } from "./logDisplay";
 
+// An incoming focusRequest kind (singular) → the sidebar LogKind to open it under.
+const FOCUS_LOG_KIND: Record<string, LogKind> = {
+  pod: "pods",
+  deployment: "deployments",
+  statefulset: "statefulsets",
+  daemonset: "daemonsets",
+};
+
 // Status-bar / pill accents keyed on a source's coarse run state.
 const HEALTH: Record<HealthState, { label: string; color: string }> = {
   running: { label: "Running", color: "var(--status-running)" },
@@ -91,6 +99,8 @@ export default function LogsPanel() {
   const resources = useCluster((s) => s.resources);
   const isLoading = useCluster((s) => s.isLoading);
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
+  const focusRequest = useCluster((s) => s.focusRequest);
+  const setFocusRequest = useCluster((s) => s.setFocusRequest);
 
   const [logKind, setLogKind] = useState<LogKind>("deployments");
   const [sidebarSearch, setSidebarSearch] = useState("");
@@ -111,6 +121,7 @@ export default function LogsPanel() {
   const [since, setSince] = useState("");
   const [previous, setPrevious] = useState(false);
   const [droppedWhilePaused, setDroppedWhilePaused] = useState(0);
+  const [pendingSource, setPendingSource] = useState<{ namespace: string; name: string } | null>(null);
 
   // Refs so the WS callback and scroll handlers read live values without
   // re-subscribing on every state change.
@@ -260,6 +271,32 @@ export default function LogsPanel() {
     unsubscribe(logKind, "*");
     subscribe(logKind, "*");
   }, [logKind]);
+
+  // Consume a "View Logs" focus request (Deployment/pod row → this panel): switch
+  // to its kind and remember the target; a name search would hide it, so clear.
+  useEffect(() => {
+    if (focusRequest?.route !== "/logs") return;
+    const kind = FOCUS_LOG_KIND[focusRequest.kind];
+    if (!kind) return;
+    const slash = focusRequest.key.indexOf("/");
+    const namespace = slash >= 0 ? focusRequest.key.slice(0, slash) : "default";
+    const name = slash >= 0 ? focusRequest.key.slice(slash + 1) : focusRequest.key;
+    if (logKind !== kind) changeKind(kind);
+    setSidebarSearch("");
+    setPendingSource({ namespace, name });
+    setFocusRequest(null);
+  }, [focusRequest, logKind, changeKind, setFocusRequest]);
+
+  // Once the watch delivers the target row, select it — starts streaming immediately
+  // with no further clicks (container defaults to all, still switchable).
+  useEffect(() => {
+    if (!pendingSource) return;
+    const item = items.find((i) => i.key === `${pendingSource.namespace}/${pendingSource.name}`);
+    if (item) {
+      selectItem(item);
+      setPendingSource(null);
+    }
+  }, [pendingSource, items, selectItem]);
 
   const togglePause = useCallback(() => {
     setIsPaused((p) => { if (p) setDroppedWhilePaused(0); return !p; });
