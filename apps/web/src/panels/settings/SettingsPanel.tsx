@@ -24,7 +24,7 @@ const TABS = [
 export default function SettingsPanel() {
   const [tab, setTab] = useState<SettingsTab>("overview");
   return (
-    <div className="flex w-full flex-col gap-6 px-6">
+    <div className="flex w-full flex-col gap-10 px-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h1 className="text-xl font-bold text-foreground">Settings</h1>
