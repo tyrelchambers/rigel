@@ -1,10 +1,16 @@
-import { useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { remarkAlerts } from "@/lib/remarkAlerts";
-import { User, Sparkles, Settings, ChevronRight } from "lucide-react";
-import { parseSuggestedActions, type SuggestedAction, type SuggestedQuestion, type SuggestedAlert } from "@/lib/actionBlocks";
-import { cn } from "@/lib/utils";
+import { User, Settings } from "lucide-react";
+import {
+  parseSuggestedActions,
+  type SuggestedAction,
+  type SuggestedQuestion,
+  type SuggestedAlert,
+} from "@/lib/actionBlocks";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Message, MessageContent } from "@/components/ai-elements/message";
+import { Reasoning, ReasoningTrigger, ReasoningContent } from "@/components/ai-elements/reasoning";
 import { SuggestedActionList } from "./SuggestedActionList";
 import { SuggestedQuestionList } from "./SuggestedQuestionList";
 import { SuggestedAlertList } from "./SuggestedAlertList";
@@ -25,100 +31,83 @@ interface Props {
   agentNamespace?: string;
 }
 
-// Role color mirrors the Swift MessageBubble: user = pod-palette blue,
-// assistant = accent purple, system = tertiary grey.
-const ROLE_META = {
-  user: { Icon: User, label: "You", color: "#60A5FA" },
-  assistant: { Icon: Sparkles, label: "Rigel", color: "var(--accent-primary)" },
-  system: { Icon: Settings, label: "System", color: "var(--fg-tertiary)" },
-} as const;
-
-/** Role-tinted card surface + border (assistant gets a faint purple wash). */
-function cardSurface(role: ChatMessage["role"]): { background: string; borderColor: string } {
+/** Sender avatar: the Rigel mark for the assistant, a role glyph otherwise. */
+function MessageAvatar({ role }: { role: ChatMessage["role"] }) {
   if (role === "assistant") {
-    return { background: "rgba(56, 189, 248, 0.06)", borderColor: "rgba(56, 189, 248, 0.2)" };
-  }
-  return { background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" };
-}
-
-/** Collapsible "Thought for Ns" disclosure shown above an assistant message. */
-function ThinkingTrail({ thinking, seconds }: { thinking: string; seconds?: number }) {
-  const [open, setOpen] = useState(false);
-  if (!thinking.trim()) return null;
-  return (
-    <div className="mb-1">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+    return (
+      <Avatar
+        size="sm"
+        className="mt-0.5 ring-1 ring-[color-mix(in_srgb,var(--accent-primary)_30%,transparent)]"
       >
-        <ChevronRight className={cn("size-3 transition-transform", open && "rotate-90")} />
-        {seconds ? `Thought for ${seconds}s` : "Thought process"}
-      </button>
-      {open && (
-        <pre className="mt-1 max-h-60 overflow-auto rounded-md bg-muted px-3 py-2 text-xs whitespace-pre-wrap italic text-muted-foreground select-text">
-          {thinking}
-        </pre>
-      )}
-    </div>
+        <AvatarFallback className="bg-[color-mix(in_srgb,var(--accent-primary)_15%,transparent)] text-[var(--accent-primary)]">
+          <RigelMark size={14} />
+        </AvatarFallback>
+      </Avatar>
+    );
+  }
+  const Icon = role === "system" ? Settings : User;
+  return (
+    <Avatar size="sm" className="mt-0.5">
+      <AvatarFallback className="bg-muted text-muted-foreground">
+        <Icon className="size-3.5" />
+      </AvatarFallback>
+    </Avatar>
   );
 }
 
 /**
- * MessageBubble — role-styled message. Assistant text is parsed for action
- * blocks (stripped from display) and rendered as markdown; user/system text is
- * plain.
+ * MessageBubble — one chat turn. User/assistant turns are aligned bubbles with a
+ * sender avatar; assistant text is parsed for action blocks (stripped from
+ * display) and rendered as markdown. System turns (tool activity, errors) render
+ * full-width without a bubble.
  */
 export function MessageBubble({ message, onAction, onRunBatch, onAnswer, agentNamespace }: Props) {
-  const { Icon, label, color } = ROLE_META[message.role];
   const isAssistant = message.role === "assistant";
-  const isSystem = message.role === "system";
-  const surface = cardSurface(message.role);
+
+  if (message.role === "system") {
+    return (
+      <div className="w-full min-w-0">
+        {message.tool ? (
+          <ToolCard tool={message.tool} />
+        ) : message.text ? (
+          <p className="whitespace-pre-wrap rounded-md border border-border/50 bg-muted/30 px-2.5 py-1.5 text-2xs text-muted-foreground select-text">
+            {message.text}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
 
   const { display, actions, questions, alerts } = isAssistant
     ? parseSuggestedActions(message.text)
-    : { display: message.text, actions: [] as SuggestedAction[], questions: [] as SuggestedQuestion[], alerts: [] as SuggestedAlert[] };
+    : {
+        display: message.text,
+        actions: [] as SuggestedAction[],
+        questions: [] as SuggestedQuestion[],
+        alerts: [] as SuggestedAlert[],
+      };
 
   return (
-    // Role-tinted bordered card — full width, with the avatar in its header.
-    <div
-      className="chat-bubble w-full min-w-0 rounded-md border px-2.5 py-2"
-      style={surface}
-    >
-      {/* Header — role avatar (the assistant uses the Rigel mark) + label. */}
-      <div className="mb-1 flex items-center gap-1.5">
-        <div
-          className="flex size-7 shrink-0 items-center justify-center rounded-full"
-          style={{ background: `${color}26`, color }}
-          aria-hidden
-        >
-          {isAssistant ? <RigelMark size={20} /> : <Icon className="size-4" style={{ color }} />}
-        </div>
-        <div
-          className="text-3xs font-semibold uppercase tracking-[0.5px]"
-          style={{ color }}
-        >
-          {label}
-        </div>
-      </div>
+    <Message from={message.role}>
+      <MessageAvatar role={message.role} />
+      <MessageContent>
         {isAssistant && message.thinking ? (
-          <ThinkingTrail thinking={message.thinking} seconds={message.thinkingSeconds} />
+          <Reasoning duration={message.thinkingSeconds}>
+            <ReasoningTrigger />
+            <ReasoningContent>{message.thinking}</ReasoningContent>
+          </Reasoning>
         ) : null}
-        {message.tool ? (
-          <ToolCard tool={message.tool} />
-        ) : isAssistant ? (
+        {isAssistant ? (
           <div className="chat-md select-text">
-            <Markdown remarkPlugins={[remarkGfm, remarkAlerts]} components={{ pre: CodeBlock, blockquote: ChatBlockquote }}>{display}</Markdown>
+            <Markdown
+              remarkPlugins={[remarkGfm, remarkAlerts]}
+              components={{ pre: CodeBlock, blockquote: ChatBlockquote }}
+            >
+              {display}
+            </Markdown>
           </div>
         ) : display ? (
-          <p
-            className={cn(
-              "whitespace-pre-wrap select-text",
-              isSystem ? "text-xs text-muted-foreground" : "text-xs text-foreground",
-            )}
-          >
-            {display}
-          </p>
+          <p className="whitespace-pre-wrap text-xs text-foreground select-text">{display}</p>
         ) : null}
         {isAssistant && (
           <SuggestedActionList actions={actions} onAction={onAction} onRunBatch={onRunBatch} />
@@ -129,6 +118,7 @@ export function MessageBubble({ message, onAction, onRunBatch, onAnswer, agentNa
         {isAssistant && (
           <SuggestedAlertList alerts={alerts} namespace={agentNamespace ?? "default"} />
         )}
-    </div>
+      </MessageContent>
+    </Message>
   );
 }
