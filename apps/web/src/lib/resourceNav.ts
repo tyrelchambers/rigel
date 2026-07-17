@@ -34,6 +34,13 @@ export function goToResource(navigate: NavigateFn, ref: RelatedRef): void {
   useCluster.getState().setFocusRequest({ route: meta.route, kind: meta.focusKind, key });
 }
 
+/** Navigate to the Logs panel and request a pod's logs be opened + streamed. */
+export function goToPodLogs(navigate: NavigateFn, pod: { namespace?: string; name: string }): void {
+  const key = `${pod.namespace ?? "default"}/${pod.name}`;
+  navigate("/logs");
+  useCluster.getState().setFocusRequest({ route: "/logs", kind: "pod", key });
+}
+
 export function routeForKind(storeKind: string): string | undefined {
   return NAV_META[storeKind]?.route;
 }

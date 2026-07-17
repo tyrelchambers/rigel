@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { ChevronRight, Server } from "lucide-react";
+import { ChevronRight, Server, ScrollText } from "lucide-react";
 import { TabBar, Tab } from "@/components/ui/Tabs";
+import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem } from "@/components/ui/context-menu";
 import { useCluster, filterByNamespace } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
-import { goToResource } from "@/lib/resourceNav";
+import { goToResource, goToPodLogs } from "@/lib/resourceNav";
 import { computeRelated, relatedKindsFor, type RelatedRef } from "@/lib/relatedResources";
 
 export function RelatedResources({ sourceKind, source }: { sourceKind: string; source: Record<string, any> }) {
@@ -51,13 +52,24 @@ export function RelatedResources({ sourceKind, source }: { sourceKind: string; s
             ))}
           </TabBar>
         </div>
-        {activeGroup.items.map((it) => <Row key={it.key} item={it} onGo={() => goToResource(navigate, it)} />)}
+        {activeGroup.items.map((it) => (
+          <Row
+            key={it.key}
+            item={it}
+            onGo={() => goToResource(navigate, it)}
+            onViewLogs={
+              it.kind === "pods" && it.status !== "missing"
+                ? () => goToPodLogs(navigate, { namespace: it.namespace, name: it.name })
+                : undefined
+            }
+          />
+        ))}
       </div>
     </div>
   );
 }
 
-function Row({ item, onGo }: { item: RelatedRef; onGo: () => void }) {
+function Row({ item, onGo, onViewLogs }: { item: RelatedRef; onGo: () => void; onViewLogs?: () => void }) {
   const missing = item.status === "missing";
   const dot = item.status === "warn" ? "#F59E0B" : "#10B981";
   const common = { display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", width: "100%", borderBottom: "1px solid rgba(255,255,255,0.04)", background: "transparent" } as const;
@@ -69,7 +81,7 @@ function Row({ item, onGo }: { item: RelatedRef; onGo: () => void }) {
       </div>
     );
   }
-  return (
+  const button = (
     <button type="button" onClick={onGo} style={{ ...common, border: "none", cursor: "pointer", textAlign: "left" }} className="hover:bg-[#1B1C1F] transition-colors">
       <span className="text-xs" style={{ flex: 1, minWidth: 0, fontFamily: "ui-monospace, monospace", fontWeight: 500, color: "#A6A6AE", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</span>
       {item.node && (
@@ -81,5 +93,17 @@ function Row({ item, onGo }: { item: RelatedRef; onGo: () => void }) {
       <span style={{ width: 7, height: 7, borderRadius: "50%", background: dot, flexShrink: 0 }} />
       <ChevronRight size={15} style={{ color: "#6B6B73", flexShrink: 0 }} />
     </button>
+  );
+  if (!onViewLogs) return button;
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger>{button}</ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onClick={onViewLogs}>
+          <ScrollText />
+          View Logs
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }

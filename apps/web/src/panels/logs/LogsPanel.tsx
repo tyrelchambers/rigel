@@ -91,6 +91,8 @@ export default function LogsPanel() {
   const resources = useCluster((s) => s.resources);
   const isLoading = useCluster((s) => s.isLoading);
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
+  const focusRequest = useCluster((s) => s.focusRequest);
+  const setFocusRequest = useCluster((s) => s.setFocusRequest);
 
   const [logKind, setLogKind] = useState<LogKind>("deployments");
   const [sidebarSearch, setSidebarSearch] = useState("");
@@ -111,6 +113,7 @@ export default function LogsPanel() {
   const [since, setSince] = useState("");
   const [previous, setPrevious] = useState(false);
   const [droppedWhilePaused, setDroppedWhilePaused] = useState(0);
+  const [pendingPod, setPendingPod] = useState<{ namespace: string; name: string } | null>(null);
 
   // Refs so the WS callback and scroll handlers read live values without
   // re-subscribing on every state change.
@@ -260,6 +263,30 @@ export default function LogsPanel() {
     unsubscribe(logKind, "*");
     subscribe(logKind, "*");
   }, [logKind]);
+
+  // Consume a pod focus request (e.g. Deployment panel → "View Logs"): switch to
+  // the Pods kind and remember the target; a name search would hide it, so clear.
+  useEffect(() => {
+    if (focusRequest?.route !== "/logs" || focusRequest.kind !== "pod") return;
+    const slash = focusRequest.key.indexOf("/");
+    const namespace = slash >= 0 ? focusRequest.key.slice(0, slash) : "default";
+    const name = slash >= 0 ? focusRequest.key.slice(slash + 1) : focusRequest.key;
+    if (logKind !== "pods") changeKind("pods");
+    setSidebarSearch("");
+    setPendingPod({ namespace, name });
+    setFocusRequest(null);
+  }, [focusRequest, logKind, changeKind, setFocusRequest]);
+
+  // Once the Pods watch delivers the target row, select it — starts streaming
+  // immediately with no further clicks (container defaults to all, still switchable).
+  useEffect(() => {
+    if (!pendingPod) return;
+    const item = items.find((i) => i.key === `${pendingPod.namespace}/${pendingPod.name}`);
+    if (item) {
+      selectItem(item);
+      setPendingPod(null);
+    }
+  }, [pendingPod, items, selectItem]);
 
   const togglePause = useCallback(() => {
     setIsPaused((p) => { if (p) setDroppedWhilePaused(0); return !p; });
