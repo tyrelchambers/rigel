@@ -11,7 +11,7 @@ RUN pnpm --filter api build
 # ---- runtime ----
 FROM node:26-slim
 WORKDIR /app
-COPY --from=build /app/apps/api/dist/signups.mjs ./signups.mjs
+COPY --from=build /app/apps/api/dist/api.mjs ./api.mjs
 ENV PORT=8080
 EXPOSE 8080
-CMD ["node", "signups.mjs"]
+CMD ["node", "api.mjs"]

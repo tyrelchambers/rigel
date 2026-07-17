@@ -491,7 +491,7 @@ async function boot(): Promise<void> {
   const accountClient = createAccountClient({ store: accountStore, fetchFn: fetch, endpoint: SIGNUP_ENDPOINT });
   const billingClient = createBillingClient({ store: accountStore, fetchFn: fetch, endpoint: SIGNUP_ENDPOINT });
   // Entitlement provider: the single source of truth for gating. Fetches on boot
-  // + every 6h, caches to a plain JSON file (non-secret), applies the 14-day
+  // + every 30 min (and on window focus), caches to a plain JSON file (non-secret), applies the 14-day
   // grace → free fallback. On change it nudges the renderer to refetch (IPC) and
   // pushes the grace-applied value to the forked server's gate.
   const entStore = {

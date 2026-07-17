@@ -1,4 +1,4 @@
-// Bundle the signups server to a single ESM file.
+// Bundle the api server to a single ESM file.
 //
 // The output is ESM (the server uses top-level `await`), but `pg` is CommonJS
 // and dynamically `require()`s Node builtins (events/stream/…). esbuild's default
@@ -10,7 +10,7 @@ import { build } from "esbuild";
 
 await build({
   entryPoints: ["src/index.ts"],
-  outfile: "dist/signups.mjs",
+  outfile: "dist/api.mjs",
   bundle: true,
   platform: "node",
   format: "esm",
