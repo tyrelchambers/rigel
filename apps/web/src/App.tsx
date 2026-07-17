@@ -38,16 +38,15 @@ import { shouldAutoOpenOnboarding } from "@/shell/onboarding/shouldAutoOpen";
 import { ClusterOnboarding } from "@/shell/onboarding/ClusterOnboarding";
 import { OnboardingWizard } from "@/shell/OnboardingWizard";
 import { LoginGate } from "@/shell/LoginGate";
-import NavStrip from "@/shell/NavStrip";
 import { ClusterRail } from "@/shell/ClusterRail";
 import StatusBar from "@/shell/StatusBar";
 import ChatPane, { type ChatPaneHandle } from "@/shell/ChatPane";
 import { CommandPalette, useCommandPalette } from "@/shell/CommandPalette";
+import { NavLauncher, useNavLauncher } from "@/shell/NavLauncher";
 import { GlobalHeader } from "@/shell/GlobalHeader";
 import { AccountModal } from "@/shell/AccountModal";
 import { UpgradeProvider } from "@/shell/UpgradeContext";
 import { useAccount, type UseAccountResult } from "@/shell/useAccount";
-import { loadSidebarCollapsed, saveSidebarCollapsed } from "@/shell/navCollapse";
 import { registerChatReveal } from "@/lib/chatHandoff";
 
 function readTerminalOpen(): boolean {
@@ -102,16 +101,8 @@ function AppContent({ account }: { account: UseAccountResult }) {
   const { data: contexts } = useContexts();
   const [clusterSkipped, setClusterSkipped] = useState(false);
 
-  // Whole-sidebar collapse (icon-only rail). Owned here, persisted on change,
-  // driven by the GlobalHeader toggle. Distinct from the per-group nav collapse.
-  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(loadSidebarCollapsed);
-  const toggleSidebar = useCallback(() => {
-    setSidebarCollapsed((v) => {
-      const next = !v;
-      saveSidebarCollapsed(next);
-      return next;
-    });
-  }, []);
+  // Nav launcher (⌘/) — the grid popover that replaced the nav strip.
+  const [launcherOpen, setLauncherOpen] = useNavLauncher();
 
   // First-run onboarding: auto-show once when no AI agent is connected (any
   // backend) and not previously dismissed; re-openable from Settings via an event.
@@ -246,6 +237,7 @@ function AppContent({ account }: { account: UseAccountResult }) {
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--surface-primary)" }}>
       {showOnboarding && <OnboardingWizard onClose={closeOnboarding} onLeave={leaveOnboarding} />}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <NavLauncher open={launcherOpen} onClose={() => setLauncherOpen(false)} />
       <AccountModal
         open={accountOpen}
         onOpenChange={(o) => { setAccountOpen(o); if (!o) setUpgradeIntent(false); }}
@@ -255,8 +247,6 @@ function AppContent({ account }: { account: UseAccountResult }) {
 
       {/* ── Global header — full-width bar across the top of the window. ─────── */}
       <GlobalHeader
-        sidebarCollapsed={sidebarCollapsed}
-        onToggleSidebar={toggleSidebar}
         onOpenSearch={() => setPaletteOpen(true)}
         onOpenAccount={() => setAccountOpen(true)}
       />
@@ -266,10 +256,7 @@ function AppContent({ account }: { account: UseAccountResult }) {
 
         {/* ── Cluster rail — far left, Discord-style. Both navs sit under the
             full-width header now. ──────────────────────────────────────────── */}
-        <ClusterRail />
-
-        {/* ── Sidebar ──────────────────────────────────────────────────────── */}
-        <NavStrip collapsed={sidebarCollapsed} />
+        <ClusterRail launcherOpen={launcherOpen} onToggleLauncher={() => setLauncherOpen(!launcherOpen)} />
 
         {/* ── Content column ───────────────────────────────────────────────── */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, background: "var(--surface-primary)" }}>

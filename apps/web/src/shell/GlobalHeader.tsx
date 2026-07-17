@@ -1,21 +1,19 @@
 /**
  * GlobalHeader — a slim full-width bar across the top of every view.
  *
- * Left:  sidebar collapse toggle + the global NamespaceSelector.
+ * Left:  the global NamespaceSelector.
  * Right: a search affordance that opens the existing ⌘K CommandPalette, and the
  *        account avatar.
  *
- * Inline styles + CSS custom properties to match App.tsx / NavStrip.tsx.
+ * Inline styles + CSS custom properties to match App.tsx.
  */
-import { PanelLeftClose, PanelLeftOpen, Search, User } from "lucide-react";
+import { Search, User } from "lucide-react";
 import { NamespaceSelector } from "./NamespaceBar";
 import { AppUpdateChip } from "./AppUpdateChip";
 import { RigelMark } from "@/components/RigelMark";
 import { isMacDesktop } from "@/lib/desktop";
 
 interface GlobalHeaderProps {
-  sidebarCollapsed: boolean;
-  onToggleSidebar: () => void;
   /** Opens the existing CommandPalette (reuses App's setPaletteOpen). */
   onOpenSearch: () => void;
   /** Opens the Account modal. */
@@ -28,8 +26,6 @@ const NO_DRAG = {
 } as unknown as React.CSSProperties;
 
 export function GlobalHeader({
-  sidebarCollapsed,
-  onToggleSidebar,
   onOpenSearch,
   onOpenAccount,
 }: GlobalHeaderProps) {
@@ -59,33 +55,6 @@ export function GlobalHeader({
       >
         <RigelMark size={22} />
       </div>
-
-      {/* Sidebar collapse toggle (icon-only ghost button) */}
-      <button
-        onClick={onToggleSidebar}
-        title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        style={{
-          ...NO_DRAG,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: 28,
-          height: 28,
-          borderRadius: 6,
-          background: "transparent",
-          border: "none",
-          cursor: "pointer",
-          flexShrink: 0,
-        }}
-        className="hover:bg-[#1B1C1F] transition-colors"
-      >
-        {sidebarCollapsed ? (
-          <PanelLeftOpen size={16} style={{ color: "var(--fg-secondary)" }} />
-        ) : (
-          <PanelLeftClose size={16} style={{ color: "var(--fg-secondary)" }} />
-        )}
-      </button>
 
       <div style={{ ...NO_DRAG, display: "flex", minWidth: 0 }}>
         <NamespaceSelector />

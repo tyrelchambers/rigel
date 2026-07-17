@@ -14,8 +14,6 @@ test("renders an Account button that calls onOpenAccount", () => {
   const onOpenAccount = vi.fn();
   render(
     <GlobalHeader
-      sidebarCollapsed={false}
-      onToggleSidebar={vi.fn()}
       onOpenSearch={vi.fn()}
       onOpenAccount={onOpenAccount}
     />,
