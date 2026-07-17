@@ -7,10 +7,9 @@ name: Release Rigel desktop
 #   macOS   -> .dmg (Apple Silicon + Intel)
 #   Windows -> .exe (NSIS, x64)
 #   Linux   -> .AppImage + .deb (x64)
-# Review the draft on the Releases page, then hit Publish. Builds are UNSIGNED
-# for now (see electron-builder.yml `identity: null` / no Win or Linux signing):
-# macOS users right-click -> Open and Windows users More info -> Run anyway on
-# first launch. Signing + notarization is a later phase.
+# Review the draft on the Releases page, then hit Publish. macOS builds are
+# code-signed (Developer ID) and notarized via the CSC_* / APPLE_* secrets.
+# Windows + Linux are still unsigned (SmartScreen "More info -> Run anyway").
 on:
   push:
     tags:
@@ -63,10 +62,14 @@ jobs:
             exit 1
           fi
 
-      - name: Build + publish installers (unsigned)
+      - name: Build + publish installers
         run: pnpm --filter desktop run ${{ matrix.script }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # We don't sign yet (identity: null). Tell electron-builder not to go
-          # hunting for a signing identity on the runner, which would error out.
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.os == 'macos-latest' && 'true' || 'false' }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
