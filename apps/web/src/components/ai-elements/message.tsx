@@ -34,8 +34,8 @@ export const MessageContent = ({ children, className, ...props }: MessageContent
   <div
     className={cn(
       "flex min-w-0 flex-col gap-2 overflow-hidden rounded-lg border px-3 py-2 text-sm text-foreground",
-      "group-[.is-user]:max-w-[85%] group-[.is-user]:border-[var(--border-subtle)] group-[.is-user]:bg-[var(--surface-sunken)]",
-      "group-[.is-assistant]:flex-1 group-[.is-assistant]:border-[color-mix(in_srgb,var(--accent-primary)_35%,transparent)] group-[.is-assistant]:bg-[color-mix(in_srgb,var(--accent-primary)_22%,var(--surface-sunken))]",
+      "group-[.is-user]:max-w-[85%] group-[.is-user]:border-[var(--border-subtle)] group-[.is-user]:bg-[var(--surface-elevated)]",
+      "group-[.is-assistant]:flex-1 group-[.is-assistant]:border-[var(--border-subtle)] group-[.is-assistant]:bg-[color-mix(in_srgb,var(--surface-sunken)_35%,var(--surface-elevated))]",
       className,
     )}
     {...props}
