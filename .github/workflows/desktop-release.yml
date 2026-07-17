@@ -71,10 +71,17 @@ jobs:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           CSC_LINK: op://App Secrets/Rigel macOS signing/csc_link
           CSC_KEY_PASSWORD: op://App Secrets/Rigel macOS signing/csc_password
-          APPLE_API_KEY: op://App Secrets/Rigel macOS signing/apple_api_key
+          APPLE_API_KEY_B64: op://App Secrets/Rigel macOS signing/apple_api_key
           APPLE_API_KEY_ID: op://App Secrets/Rigel macOS signing/apple_api_key_id
           APPLE_API_ISSUER: op://App Secrets/Rigel macOS signing/apple_api_issuer
           APPLE_TEAM_ID: op://App Secrets/Rigel macOS signing/apple_team_id
+
+      - name: Materialize notarization API key
+        if: matrix.os == 'macos-latest'
+        run: |
+          KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+          printf '%s' "$APPLE_API_KEY_B64" | openssl base64 -A -d > "$KEY_PATH"
+          echo "APPLE_API_KEY=$KEY_PATH" >> "$GITHUB_ENV"
 
       - name: Build + publish installers
         run: pnpm --filter desktop run ${{ matrix.script }}
