@@ -52,6 +52,27 @@ test("fails closed on the Linux basic_text backend (obfuscation, not encryption)
   expect(() => a.setToken("tok")).toThrow();
 });
 
+test("constructing does not probe safeStorage (availability is lazy)", () => {
+  let probes = 0;
+  const safe = fakeSafe({ isEncryptionAvailable: () => { probes++; return true; } });
+  const a = new AccountStore(dir, safe);
+  expect(probes).toBe(0);
+  expect(a.available).toBe(true);
+  expect(a.available).toBe(true);
+  expect(probes).toBe(1);
+});
+
+test("hasToken reflects file presence without decrypting", () => {
+  let decrypts = 0;
+  const a = new AccountStore(dir, fakeSafe({ decryptString: (b) => { decrypts++; return b.toString("utf8").replace(/^enc:/, ""); } }));
+  expect(a.hasToken()).toBe(false);
+  a.setToken("tok");
+  expect(a.hasToken()).toBe(true);
+  a.clear();
+  expect(a.hasToken()).toBe(false);
+  expect(decrypts).toBe(0);
+});
+
 test("a corrupt/undecryptable file reads as null, not a crash", () => {
   // write a token with a working safe, then read with a throwing decrypt
   new AccountStore(dir, fakeSafe()).setToken("tok");
