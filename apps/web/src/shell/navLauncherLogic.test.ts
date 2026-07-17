@@ -4,7 +4,7 @@ import {
   buildFavoritesCells,
   matchesQuery,
   flattenVisible,
-  nextIndex,
+  moveSelection,
   type LauncherGroup,
   type PanelInfo,
 } from "./navLauncherLogic";
@@ -62,17 +62,33 @@ describe("flattenVisible", () => {
   });
 });
 
-describe("nextIndex", () => {
-  it("moves and wraps in a 3-column grid of 5", () => {
-    expect(nextIndex(0, "ArrowRight", 3, 5)).toBe(1);
-    expect(nextIndex(4, "ArrowRight", 3, 5)).toBe(0); // wrap end→start
-    expect(nextIndex(0, "ArrowLeft", 3, 5)).toBe(4);  // wrap start→end
-    expect(nextIndex(0, "ArrowDown", 3, 5)).toBe(3);
-    expect(nextIndex(3, "ArrowDown", 3, 5)).toBe(1);  // (3+3)%5
-    expect(nextIndex(1, "ArrowUp", 3, 5)).toBe(3);    // (1-3+5)%5
+describe("moveSelection", () => {
+  const sections = [1, 4, 2];
+
+  it("steps and wraps horizontally across the whole flat list", () => {
+    expect(moveSelection(0, "ArrowRight", sections, 3)).toBe(1);
+    expect(moveSelection(6, "ArrowRight", sections, 3)).toBe(0);
+    expect(moveSelection(0, "ArrowLeft", sections, 3)).toBe(6);
+  });
+
+  it("moves down by column within a section and crosses into the next", () => {
+    expect(moveSelection(0, "ArrowDown", sections, 3)).toBe(1);
+    expect(moveSelection(1, "ArrowDown", sections, 3)).toBe(4);
+    expect(moveSelection(4, "ArrowDown", sections, 3)).toBe(5);
+    expect(moveSelection(5, "ArrowDown", sections, 3)).toBe(0);
+  });
+
+  it("clamps to the last cell when the target column is missing", () => {
+    expect(moveSelection(2, "ArrowDown", sections, 3)).toBe(4);
+  });
+
+  it("moves up by column and crosses into the previous section's last row", () => {
+    expect(moveSelection(4, "ArrowUp", sections, 3)).toBe(1);
+    expect(moveSelection(1, "ArrowUp", sections, 3)).toBe(0);
+    expect(moveSelection(5, "ArrowUp", sections, 3)).toBe(4);
   });
 
   it("returns 0 for an empty grid", () => {
-    expect(nextIndex(0, "ArrowRight", 3, 0)).toBe(0);
+    expect(moveSelection(0, "ArrowRight", [], 3)).toBe(0);
   });
 });

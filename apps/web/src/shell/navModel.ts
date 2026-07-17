@@ -7,10 +7,6 @@ import {
 } from "lucide-react";
 import { RigelMark } from "@/components/RigelMark";
 
-/**
- * Nav icons are usually lucide icons, but the Assistant uses the Rigel mark.
- * Both accept this prop shape, so PanelMeta.icon is typed to the common surface.
- */
 export type NavIcon = ComponentType<{
   size?: number;
   strokeWidth?: number;
@@ -58,7 +54,7 @@ export const PANEL_META: Record<string, PanelMeta> = {
 
 export interface NavGroup {
   title: string | null;
-  panels: string[]; // panel keys
+  panels: string[];
 }
 
 export const NAV_GROUPS: NavGroup[] = [

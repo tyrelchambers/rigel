@@ -1,10 +1,3 @@
-/**
- * Pure helpers for the nav launcher grid. The nav model (PANEL_META / NAV_GROUPS)
- * is passed in so these functions stay free of React/icon imports and are unit-
- * testable with small fixtures. Selection uses render order (favorites first,
- * then groups) — NOT score order — so the grid stays visually coherent.
- */
-
 export interface PanelInfo {
   title: string;
   route: string;
@@ -35,7 +28,6 @@ function toCell(key: string, meta: MetaLookup): LauncherCell[] {
 
 const byTitle = (a: LauncherCell, b: LauncherCell) => a.title.localeCompare(b.title);
 
-/** Group the nav model into launcher groups, alphabetized within each group. */
 export function buildLauncherGroups(navGroups: NavGroupInput[], meta: MetaLookup): LauncherGroup[] {
   return navGroups.map((g) => ({
     title: g.title ?? "General",
@@ -43,18 +35,15 @@ export function buildLauncherGroups(navGroups: NavGroupInput[], meta: MetaLookup
   }));
 }
 
-/** Favorite keys → cells, alphabetized, unknown keys dropped. */
 export function buildFavoritesCells(favorites: string[], meta: MetaLookup): LauncherCell[] {
   return favorites.flatMap((k) => toCell(k, meta)).sort(byTitle);
 }
 
-/** Empty query matches everything; otherwise case-insensitive substring on title. */
 export function matchesQuery(title: string, query: string): boolean {
   const q = query.trim().toLowerCase();
   return q === "" || title.toLowerCase().includes(q);
 }
 
-/** Flatten visible cells in render order (favorites, then each group) for indexing. */
 export function flattenVisible(
   favoritesCells: LauncherCell[],
   groups: LauncherGroup[],
@@ -66,15 +55,45 @@ export function flattenVisible(
   return out;
 }
 
-type ArrowKey = "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown";
+export type ArrowKey = "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown";
 
-/** Move the selection index in a `cols`-wide grid of `count` cells, wrapping. */
-export function nextIndex(current: number, key: ArrowKey, cols: number, count: number): number {
-  if (count === 0) return 0;
-  const delta =
-    key === "ArrowRight" ? 1 :
-    key === "ArrowLeft" ? -1 :
-    key === "ArrowDown" ? cols :
-    -cols;
-  return (((current + delta) % count) + count) % count;
+export function moveSelection(current: number, key: ArrowKey, sections: number[], cols: number): number {
+  const total = sections.reduce((n, s) => n + s, 0);
+  if (total === 0) return 0;
+  if (key === "ArrowLeft") return (current - 1 + total) % total;
+  if (key === "ArrowRight") return (current + 1) % total;
+
+  const bases: number[] = [];
+  let acc = 0;
+  for (const s of sections) {
+    bases.push(acc);
+    acc += s;
+  }
+
+  let si = sections.length - 1;
+  for (let i = 0; i < sections.length; i++) {
+    if (current < bases[i] + sections[i]) {
+      si = i;
+      break;
+    }
+  }
+
+  const base = bases[si];
+  const len = sections[si];
+  const p = current - base;
+  const col = p % cols;
+  const row = Math.floor(p / cols);
+  const rows = Math.ceil(len / cols);
+
+  if (key === "ArrowDown") {
+    if (row + 1 < rows) return base + Math.min((row + 1) * cols + col, len - 1);
+    const ns = (si + 1) % sections.length;
+    return bases[ns] + Math.min(col, sections[ns] - 1);
+  }
+
+  if (row > 0) return base + (row - 1) * cols + col;
+  const ps = (si - 1 + sections.length) % sections.length;
+  const plen = sections[ps];
+  const lastRowStart = (Math.ceil(plen / cols) - 1) * cols;
+  return bases[ps] + Math.min(lastRowStart + col, plen - 1);
 }

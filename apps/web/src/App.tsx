@@ -101,7 +101,6 @@ function AppContent({ account }: { account: UseAccountResult }) {
   const { data: contexts } = useContexts();
   const [clusterSkipped, setClusterSkipped] = useState(false);
 
-  // Nav launcher (⌘/) — the grid popover that replaced the nav strip.
   const [launcherOpen, setLauncherOpen] = useNavLauncher();
 
   // First-run onboarding: auto-show once when no AI agent is connected (any

@@ -220,8 +220,6 @@ export function ClusterRail({
         </button>
       </div>
 
-      {/* Nav launcher trigger — circular, distinct from the square cluster
-          tiles. Idle: muted border + graphite icon. Active: white fill. */}
       <div style={{ padding: "10px 0", display: "flex", justifyContent: "center", flexShrink: 0, borderTop: "1px solid var(--border-subtle)" }}>
         <button
           type="button"

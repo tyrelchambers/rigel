@@ -1,9 +1,3 @@
-/**
- * Nav launcher — a floating grid popover anchored above the launcher button in
- * the cluster rail. Opens with ⌘/ (Ctrl+/) or the button. Search auto-focuses on
- * open; ↑/↓/←/→ move a selection across the grid, Enter opens it, Esc closes.
- * Lives alongside the ⌘K command palette (this is the browsable visual surface).
- */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { Search, Star } from "lucide-react";
@@ -13,7 +7,8 @@ import {
   buildFavoritesCells,
   flattenVisible,
   matchesQuery,
-  nextIndex,
+  moveSelection,
+  type ArrowKey,
   type LauncherCell,
 } from "./navLauncherLogic";
 import { loadFavorites, saveFavorites, toggleFavorite } from "./navFavorites";
@@ -39,7 +34,6 @@ export function NavLauncher({ open, onClose }: NavLauncherProps) {
     [favoritesCells, groups, query],
   );
 
-  // Reset + autofocus each time the launcher opens.
   useEffect(() => {
     if (open) {
       setQuery("");
@@ -48,8 +42,16 @@ export function NavLauncher({ open, onClose }: NavLauncherProps) {
     }
   }, [open]);
 
-  // Typing resets the selection to the first visible cell (the top match).
   useEffect(() => setSelected(0), [query]);
+
+  const favVisible = favoritesCells.filter((c) => matchesQuery(c.title, query));
+  const groupSections = groups
+    .map((g) => ({ title: g.title, cells: g.cells.filter((c) => matchesQuery(c.title, query)) }))
+    .filter((s) => s.cells.length > 0);
+  const sectionSizes = [
+    ...(favVisible.length > 0 ? [favVisible.length] : []),
+    ...groupSections.map((s) => s.cells.length),
+  ];
 
   const openCell = useCallback(
     (cell: LauncherCell) => {
@@ -79,22 +81,16 @@ export function NavLauncher({ open, onClose }: NavLauncherProps) {
     }
     if (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowUp" || e.key === "ArrowDown") {
       e.preventDefault();
-      setSelected((i) => nextIndex(i, e.key as "ArrowLeft", COLS, visible.length));
+      setSelected((i) => moveSelection(i, e.key as ArrowKey, sectionSizes, COLS));
     }
   }
 
   if (!open) return null;
 
-  // `idx` is the cell's position in the flat `visible` list (favorites first,
-  // then groups) — the same order `selected`/nextIndex walk. Passing it in (vs.
-  // looking it up by key) keeps highlight correct when a favorited panel also
-  // appears in its category: each copy gets its own distinct index.
   const renderCell = (cell: LauncherCell, idx: number) => {
     const isSelected = idx === selected;
     const Icon = PANEL_META[cell.key]?.icon;
     const fav = favorites.includes(cell.key);
-    // The star is the only affordance for favoriting, so reveal it on hover and
-    // for the keyboard-selected cell (not just when already favorited).
     const starVisible = fav || isSelected;
     return (
       <div
@@ -142,14 +138,6 @@ export function NavLauncher({ open, onClose }: NavLauncherProps) {
     );
   };
 
-  // The visible cells split back into their render sections. Global indices are
-  // assigned favorites-first (matching `visible` / `flattenVisible`) so keyboard
-  // selection and per-section rendering agree on each cell's position.
-  const favVisible = favoritesCells.filter((c) => matchesQuery(c.title, query));
-  const groupSections = groups
-    .map((g) => ({ title: g.title, cells: g.cells.filter((c) => matchesQuery(c.title, query)) }))
-    .filter((s) => s.cells.length > 0);
-
   const gridStyle = { display: "grid", gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))`, gap: 10 } as const;
   const sectionLabel = (label: string) => (
     <div
@@ -161,12 +149,10 @@ export function NavLauncher({ open, onClose }: NavLauncherProps) {
   );
 
   return (
-    // Transparent light-dismiss backdrop.
     <div
       style={{ position: "fixed", inset: 0, zIndex: 998 }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      {/* Popover anchored above the launcher button (rail is 56px wide). */}
       <div
         role="dialog"
         aria-label="Navigation launcher"
@@ -177,6 +163,7 @@ export function NavLauncher({ open, onClose }: NavLauncherProps) {
           bottom: 52,
           width: 700,
           maxWidth: "calc(100vw - 80px)",
+          height: 616,
           maxHeight: "calc(100vh - 120px)",
           display: "flex",
           flexDirection: "column",
@@ -187,7 +174,6 @@ export function NavLauncher({ open, onClose }: NavLauncherProps) {
           boxShadow: "0 24px 52px rgba(0,0,0,0.65)",
         }}
       >
-        {/* Search header */}
         <div
           className="flex items-center gap-2.5"
           style={{ padding: "14px 14px 12px", borderBottom: "1px solid var(--border-subtle)" }}
@@ -215,8 +201,7 @@ export function NavLauncher({ open, onClose }: NavLauncherProps) {
           </span>
         </div>
 
-        {/* Scrollable body */}
-        <div style={{ overflowY: "auto", padding: "14px 14px 20px", display: "flex", flexDirection: "column", gap: 18 }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "14px 14px 20px", display: "flex", flexDirection: "column", gap: 18 }}>
           {favVisible.length > 0 && (
             <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <span className="flex items-center gap-1.5">
@@ -254,10 +239,6 @@ export function NavLauncher({ open, onClose }: NavLauncherProps) {
   );
 }
 
-/**
- * Mount a single global keydown listener for ⌘/ (Ctrl+/). Returns
- * `[open, setOpen]` — mount ONCE at the app-shell level.
- */
 export function useNavLauncher(): [boolean, (v: boolean) => void] {
   const [open, setOpen] = useState(false);
   useEffect(() => {
