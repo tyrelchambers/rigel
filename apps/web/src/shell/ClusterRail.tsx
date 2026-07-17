@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Lock, Plus } from "lucide-react";
+import { Lock, Plus, LayoutGrid } from "lucide-react";
 import { readActiveContext, useCluster } from "@/store/cluster";
 import { useContexts, useDeleteCluster, useDisconnectCluster, useClusterHealth } from "@/lib/api";
 import { useEntitlement } from "./useEntitlement";
@@ -25,7 +25,13 @@ import { toast } from "sonner";
  * Each tile shows the provider-default icon (or a user override). Right-clicking
  * a tile opens the icon-picker modal; left-clicking switches the active cluster.
  */
-export function ClusterRail() {
+export function ClusterRail({
+  launcherOpen = false,
+  onToggleLauncher,
+}: {
+  launcherOpen?: boolean;
+  onToggleLauncher?: () => void;
+} = {}) {
   const { data: contexts } = useContexts();
   const activeContext = useCluster((s) => s.activeContext);
   const { payload } = useEntitlement();
@@ -211,6 +217,25 @@ export function ClusterRail() {
           }}
         >
           <Plus size={18} />
+        </button>
+      </div>
+
+      <div style={{ padding: "10px 0", display: "flex", justifyContent: "center", flexShrink: 0, borderTop: "1px solid var(--border-subtle)" }}>
+        <button
+          type="button"
+          aria-label="Open navigation"
+          aria-expanded={launcherOpen}
+          title="Navigation (⌘/)"
+          onClick={() => onToggleLauncher?.()}
+          style={{
+            width: 38, height: 38, borderRadius: 999,
+            display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+            background: launcherOpen ? "#FFFFFF" : "transparent",
+            border: launcherOpen ? "1px solid #FFFFFF" : "1px solid var(--border-strong)",
+            transition: "background 120ms ease, border-color 120ms ease",
+          }}
+        >
+          <LayoutGrid size={18} style={{ color: launcherOpen ? "#18181B" : "var(--fg-tertiary)" }} />
         </button>
       </div>
 

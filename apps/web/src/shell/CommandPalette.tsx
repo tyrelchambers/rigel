@@ -1,12 +1,12 @@
 /**
  * ⌘K Command Palette — mirrors CommandPalette.swift.
  * Single source of truth for panel entries: imports PANEL_META + NAV_GROUPS
- * from NavStrip (no duplication).
+ * from navModel (no duplication).
  */
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router";
 import { Search } from "lucide-react";
-import { PANEL_META, NAV_GROUPS } from "./NavStrip";
+import { PANEL_META, NAV_GROUPS } from "./navModel";
 import {
   filterEntries,
   wrapIndex,
