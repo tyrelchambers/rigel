@@ -93,11 +93,11 @@ mac:
   # Explicit name so the marketing download-page resolver matches by a known
   # pattern (e.g. Rigel-0.2.0-arm64.dmg / Rigel-0.2.0-x64.dmg).
   artifactName: Rigel-${version}-${arch}.dmg
-  # UNSIGNED / ad-hoc build: code-signing + notarization are deferred (need the
-  # user's Apple Developer ID certificate). identity:null makes electron-builder
-  # ad-hoc sign locally so it builds without certs. See report for the signing
-  # follow-up (set identity + afterSign notarize + secrets).
-  identity: null
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.inherit.plist
+  notarize: true
 
 # UNSIGNED Windows build: NSIS installer, x64 only. No Authenticode cert, so
 # users see a SmartScreen warning (More info -> Run anyway) on first launch.
