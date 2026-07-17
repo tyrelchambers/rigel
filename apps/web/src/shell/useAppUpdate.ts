@@ -6,6 +6,8 @@ const IDLE: UpdateState = {
   version: null,
   progress: 0,
   canAutoInstall: false,
+  releaseNotes: null,
+  releaseUrl: null,
   error: null,
 };
 
@@ -14,6 +16,10 @@ export interface UseAppUpdateResult {
   version: string | null;
   progress: number;
   canAutoInstall: boolean;
+  releaseNotes: string | null;
+  releaseUrl: string | null;
+  /** Ask the updater to check for a new version now. */
+  check(): void;
   /** Start downloading the update (real in-app update). */
   download(): void;
   /** Quit and install the downloaded update, then relaunch. */
@@ -45,6 +51,7 @@ export function useAppUpdate(): UseAppUpdateResult {
     };
   }, []);
 
+  const check = useCallback(() => void rigel?.appUpdate?.check(), []);
   const download = useCallback(() => void rigel?.appUpdate?.download(), []);
   const install = useCallback(() => void rigel?.appUpdate?.install(), []);
   const open = useCallback(() => void rigel?.appUpdate?.open(), []);
@@ -54,6 +61,9 @@ export function useAppUpdate(): UseAppUpdateResult {
     version: state.version,
     progress: state.progress,
     canAutoInstall: state.canAutoInstall,
+    releaseNotes: state.releaseNotes,
+    releaseUrl: state.releaseUrl,
+    check,
     download,
     install,
     open,

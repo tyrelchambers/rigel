@@ -48,6 +48,10 @@ contextBridge.exposeInMainWorld("rigel", {
       return () => ipcRenderer.removeListener("rigel:billing:changed", l);
     },
   },
+  about: {
+    get: (): Promise<{ version: string; buildDate: string | null }> =>
+      ipcRenderer.invoke("rigel:about-info"),
+  },
   appUpdate: {
     getState: (): Promise<UpdateState> => ipcRenderer.invoke("rigel:app-update:state"),
     check: (): Promise<void> => ipcRenderer.invoke("rigel:app-update:check"),

@@ -595,6 +595,12 @@ async function boot(): Promise<void> {
   ipcMain.handle("rigel:app-update:download", () => downloadUpdate());
   ipcMain.handle("rigel:app-update:install", () => quitAndInstall());
   ipcMain.handle("rigel:app-update:open", () => shell.openExternal(DOWNLOAD_URL));
+  // Baked-in app facts (no network): version from the build, release date stamped
+  // into the bundle at build time (see build.mjs → RIGEL_BUILD_DATE).
+  ipcMain.handle("rigel:about-info", () => ({
+    version: app.getVersion(),
+    buildDate: process.env.RIGEL_BUILD_DATE ?? null,
+  }));
   initAutoUpdater({
     send: (s) => BrowserWindow.getAllWindows()[0]?.webContents.send("rigel:app-update:state", s),
   });

@@ -13,7 +13,7 @@
  */
 import { app } from "electron";
 import { autoUpdater } from "electron-updater";
-import { checkForUpdate, DOWNLOAD_URL } from "./appUpdate";
+import { checkForUpdate, releaseUrlFor, DOWNLOAD_URL } from "./appUpdate";
 
 export type UpdateStatus =
   | "idle"
@@ -31,7 +31,20 @@ export interface UpdateState {
   progress: number;
   /** True when electron-updater can install in place; false = download-page only. */
   canAutoInstall: boolean;
+  /** Release notes for the available version, when the update metadata carries them. */
+  releaseNotes: string | null;
+  /** GitHub release-notes page for the available version, else null. */
+  releaseUrl: string | null;
   error: string | null;
+}
+
+/** electron-updater's releaseNotes is a string or a per-version list; flatten it. */
+function normalizeNotes(
+  n: string | { version: string; note: string | null }[] | null | undefined,
+): string | null {
+  if (!n) return null;
+  if (typeof n === "string") return n.trim() || null;
+  return n.map((r) => r.note ?? "").filter(Boolean).join("\n\n").trim() || null;
 }
 
 const SIX_HOURS = 6 * 60 * 60 * 1000;
@@ -41,6 +54,8 @@ let state: UpdateState = {
   version: null,
   progress: 0,
   canAutoInstall: false,
+  releaseNotes: null,
+  releaseUrl: null,
   error: null,
 };
 let broadcast: (s: UpdateState) => void = () => {};
@@ -54,17 +69,26 @@ export function getUpdateState(): UpdateState {
   return state;
 }
 
-/** Manual version check (GitHub API); populates a download-page-only "available". */
+const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Manual version check (GitHub API); populates a download-page-only "available".
+ *  Broadcasts `checking` first (the packaged autoUpdater emits its own checking
+ *  event, this path does not) with a minimum-visible window so the UI shows real
+ *  feedback even when the check resolves instantly. */
 async function fallbackCheck(): Promise<void> {
+  set({ status: "checking", error: null });
+  const started = Date.now();
   try {
     const info = await checkForUpdate(app.getVersion());
+    await delay(Math.max(0, 600 - (Date.now() - started)));
     if (info.updateAvailable) {
-      set({ status: "available", version: info.latestVersion, canAutoInstall: false, error: null });
+      set({ status: "available", version: info.latestVersion, canAutoInstall: false, releaseNotes: null, releaseUrl: info.releaseUrl, error: null });
     } else {
-      set({ status: "idle", version: null, canAutoInstall: false });
+      set({ status: "idle", version: null, canAutoInstall: false, releaseNotes: null, releaseUrl: null });
     }
   } catch {
-    set({ status: "idle" });
+    await delay(Math.max(0, 600 - (Date.now() - started)));
+    set({ status: "idle", version: null, canAutoInstall: false, releaseNotes: null, releaseUrl: null });
   }
 }
 
@@ -83,9 +107,9 @@ export function initAutoUpdater(opts: { send: (s: UpdateState) => void }): void 
 
   autoUpdater.on("checking-for-update", () => set({ status: "checking", error: null }));
   autoUpdater.on("update-available", (info) =>
-    set({ status: "available", version: info.version, canAutoInstall: true, error: null }),
+    set({ status: "available", version: info.version, canAutoInstall: true, releaseNotes: normalizeNotes(info.releaseNotes), releaseUrl: releaseUrlFor(info.version), error: null }),
   );
-  autoUpdater.on("update-not-available", () => set({ status: "idle", version: null }));
+  autoUpdater.on("update-not-available", () => set({ status: "idle", version: null, releaseNotes: null, releaseUrl: null }));
   autoUpdater.on("download-progress", (p) =>
     set({ status: "downloading", progress: Math.round(p.percent) }),
   );

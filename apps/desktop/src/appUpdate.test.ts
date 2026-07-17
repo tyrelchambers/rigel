@@ -1,5 +1,10 @@
 import { test, expect } from "vitest";
-import { compareVersions, isNewer, checkForUpdate, DOWNLOAD_URL } from "./appUpdate";
+import { compareVersions, isNewer, checkForUpdate, releaseUrlFor, DOWNLOAD_URL } from "./appUpdate";
+
+test("releaseUrlFor builds the GitHub tag page, normalizing a leading v", () => {
+  expect(releaseUrlFor("0.4.0")).toBe("https://github.com/tyrelchambers/rigel/releases/tag/v0.4.0");
+  expect(releaseUrlFor("v0.4.0")).toBe("https://github.com/tyrelchambers/rigel/releases/tag/v0.4.0");
+});
 
 test("compareVersions orders dotted numeric versions", () => {
   expect(compareVersions("0.2.1", "0.2.0")).toBe(1);

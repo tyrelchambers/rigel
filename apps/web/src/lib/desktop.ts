@@ -12,7 +12,17 @@ export interface UpdateState {
   progress: number;
   /** True when the update can be installed in place; false = download-page only. */
   canAutoInstall: boolean;
+  /** Release notes for the available version, when the metadata carries them. */
+  releaseNotes: string | null;
+  /** GitHub release-notes page for the available version, else null. */
+  releaseUrl: string | null;
   error: string | null;
+}
+export interface AboutInfo {
+  /** Running app version (baked into the build). */
+  version: string;
+  /** ISO build timestamp stamped at build time, or null in dev/web. */
+  buildDate: string | null;
 }
 export interface EntitlementPayload {
   plan: "free" | "pro";
@@ -50,6 +60,9 @@ export interface RigelBridge {
     entitlements(): Promise<EntitlementPayload | null>;
     refresh(): Promise<EntitlementPayload | null>;
     onChanged(cb: () => void): () => void;
+  };
+  about?: {
+    get(): Promise<AboutInfo>;
   };
   appUpdate?: {
     getState(): Promise<UpdateState>;

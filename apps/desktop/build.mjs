@@ -28,6 +28,9 @@ const electronBundles = build({
   format: "cjs",
   target: "node22",
   external: ["electron"],
+  // Stamp the build moment into the bundle so the About page shows the release
+  // date offline (no network). For CI release builds this is the release date.
+  define: { "process.env.RIGEL_BUILD_DATE": JSON.stringify(new Date().toISOString()) },
   logLevel: "info",
 });
 
