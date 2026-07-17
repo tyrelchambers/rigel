@@ -123,9 +123,11 @@ Reusable `LaunchCell`: a rounded, bordered, horizontally-laid item —
   once in `App.tsx`. **On open, auto-focus the search input** (autofocus on mount / when
   `open` flips true) so the user can type to filter immediately — whether opened by ⌘/ or by
   clicking the launcher button.
-- **Esc:** close. **↑/↓/←/→ + Enter:** move selection across the grid and open (reuse the
-  palette's index/`wrapIndex` approach adapted to a 2D grid, or start with type-to-search +
-  Enter and add arrow nav as a follow-up).
+- **Esc:** close. **↑/↓/←/→ + Enter:** move selection across the grid and open (v1 scope).
+  Selection is a single index over the visible (filtered) cells in render order — Favorites
+  first, then each group's cells. ←/→ move by one; ↑/↓ move by one row (the current column
+  count, 3); movement wraps (reuse the palette's `wrapIndex`). As the user types in search,
+  selection resets to the top match so Enter opens it.
 - ⌘K (command palette), ⌘J (chat), Ctrl+` (terminal) are unchanged and must not collide.
 
 ## Components / files
@@ -159,8 +161,3 @@ Removed:
 Pencil frame **"Nav Launcher — overlay"** in `clankerlocal.pen` (midnight palette) —
 shows the rail + launcher button (both states) + the open popover with search, Favorites,
 and the category grids. Implement in Tailwind utilities + design tokens (no hand CSS).
-
-## Open questions
-
-- Arrow-key 2D grid navigation: ship in v1 or fast-follow? (Default: type-to-search + Enter
-  in v1, arrow nav as follow-up.)
