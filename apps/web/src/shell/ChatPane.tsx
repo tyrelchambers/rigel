@@ -17,7 +17,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { Copy, SquarePen, Clock, ArrowDown } from "lucide-react";
+import { Copy, SquarePen, Clock, ArrowDown, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { BatchConfirmSheet, type BatchConfirmItem } from "@/components/BatchConfirmSheet";
@@ -697,6 +697,16 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
             aria-label="Chat history"
           >
             <Clock size={11} />
+          </button>
+
+          {/* Assistant settings */}
+          <button
+            onClick={() => navigate("/settings?tab=agents")}
+            title="Assistant settings"
+            style={headerBtnStyle}
+            aria-label="Assistant settings"
+          >
+            <Settings size={11} />
           </button>
 
           {shortId && (

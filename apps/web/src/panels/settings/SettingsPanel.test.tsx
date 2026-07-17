@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { render, screen, fireEvent } from "@testing-library/react";
+import { MemoryRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi } from "vitest";
 
@@ -34,8 +35,12 @@ vi.mock("@/lib/ws", () => ({
   unsubscribe: vi.fn(),
 }));
 
-function wrap(ui: React.ReactNode) {
-  return render(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>);
+function wrap(ui: React.ReactNode, initialEntries: string[] = ["/settings"]) {
+  return render(
+    <MemoryRouter initialEntries={initialEntries}>
+      <QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>
+    </MemoryRouter>,
+  );
 }
 
 describe("SettingsPanel", () => {
@@ -54,6 +59,12 @@ describe("SettingsPanel", () => {
     const { default: SettingsPanel } = await import("./SettingsPanel");
     wrap(<SettingsPanel />);
     fireEvent.click(screen.getByRole("tab", { name: /ai agents/i }));
+    expect(screen.getByText(/connect an agent to configure the assistant/i)).toBeInTheDocument();
+  });
+
+  it("deep-links to the AI agents tab via ?tab=agents", async () => {
+    const { default: SettingsPanel } = await import("./SettingsPanel");
+    wrap(<SettingsPanel />, ["/settings?tab=agents"]);
     expect(screen.getByText(/connect an agent to configure the assistant/i)).toBeInTheDocument();
   });
 
