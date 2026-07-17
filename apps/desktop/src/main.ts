@@ -30,6 +30,8 @@ import {
   DOWNLOAD_URL,
 } from "./appUpdater";
 
+app.setName("Rigel");
+
 // The accounts + billing backend base. Overridable so a dev/test build can point
 // at a test signups deployment (test Stripe keys) — release builds stay on live
 // at api.rigel.run. Must match that deployment's BILLING_ENDPOINT so the billing
@@ -511,13 +513,13 @@ async function boot(): Promise<void> {
   // Set synchronously (BEFORE forkServer below) so the initial fork's env
   // reflects reality with no race; refreshAccount() below corrects it async
   // (e.g. a stale token that 401s) and pushes any change live.
-  accountSignedIn = accountStore.getToken() != null;
+  accountSignedIn = accountStore.hasToken();
 
   // rigel://auth?token=... magic-link handler, invoked by handleAuthUrl.
   signInWithLink = async (token: string) => {
     // Refuse a magic link while already signed in — prevents a hostile
     // rigel:// link from silently swapping the session to the attacker's account.
-    if (accountStore.getToken() != null) {
+    if (accountStore.hasToken()) {
       if (mainWindow) await dialog.showMessageBox(mainWindow, { type: "info", message: "You're already signed in to Rigel.", buttons: ["OK"] });
       return;
     }
@@ -543,7 +545,7 @@ async function boot(): Promise<void> {
 
   async function refreshAccount(): Promise<{ signedIn: boolean; account: { id: string; email: string; name: string | null } | null; orgs: OrgSummary[] }> {
     const payload = await accountClient.me(); // clears token on 401, keeps it on network-fail
-    const signedIn = accountStore.getToken() != null;
+    const signedIn = accountStore.hasToken();
     pushServerAuth(signedIn);
     return { signedIn, account: payload?.account ?? null, orgs: payload?.orgs ?? [] };
   }

@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, rmSync } from "node:fs";
+import { readFileSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
 /** The slice of Electron's safeStorage we depend on (injected so this module
@@ -13,12 +13,20 @@ export interface SafeStorageLike {
 export class AccountStore {
   private file: string;
   private safe: SafeStorageLike;
-  readonly available: boolean;
+  private cachedAvailable: boolean | undefined;
   constructor(userDataDir: string, safe: SafeStorageLike) {
     this.file = join(userDataDir, "rigel-account.bin");
     this.safe = safe;
-    this.available =
-      safe.isEncryptionAvailable() && safe.getSelectedStorageBackend?.() !== "basic_text";
+  }
+  get available(): boolean {
+    if (this.cachedAvailable === undefined) {
+      this.cachedAvailable =
+        this.safe.isEncryptionAvailable() && this.safe.getSelectedStorageBackend?.() !== "basic_text";
+    }
+    return this.cachedAvailable;
+  }
+  hasToken(): boolean {
+    return existsSync(this.file);
   }
   getToken(): string | null {
     if (!this.available) return null;
