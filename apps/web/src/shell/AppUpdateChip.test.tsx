@@ -4,6 +4,7 @@ import { render, screen, cleanup } from "@testing-library/react";
 import { AppUpdateChip } from "./AppUpdateChip";
 import type { UseAppUpdateResult } from "./useAppUpdate";
 
+const check = vi.fn();
 const download = vi.fn();
 const install = vi.fn();
 const open = vi.fn();
@@ -11,7 +12,7 @@ const open = vi.fn();
 let state: Pick<UseAppUpdateResult, "status" | "version" | "progress" | "canAutoInstall">;
 
 vi.mock("./useAppUpdate", () => ({
-  useAppUpdate: (): UseAppUpdateResult => ({ ...state, download, install, open }),
+  useAppUpdate: (): UseAppUpdateResult => ({ releaseNotes: null, releaseUrl: null, ...state, check, download, install, open }),
 }));
 
 afterEach(() => {

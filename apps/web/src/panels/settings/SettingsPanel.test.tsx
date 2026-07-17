@@ -39,9 +39,10 @@ function wrap(ui: React.ReactNode) {
 }
 
 describe("SettingsPanel", () => {
-  it("shows the three tabs and switches to App defaults", async () => {
+  it("shows the tabs and switches to App defaults", async () => {
     const { default: SettingsPanel } = await import("./SettingsPanel");
     wrap(<SettingsPanel />);
+    expect(screen.getByRole("tab", { name: /overview/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /ai agents/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /channels/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /app defaults/i })).toBeInTheDocument();
@@ -52,6 +53,7 @@ describe("SettingsPanel", () => {
   it("grays the assistant config with a banner when no agent connected", async () => {
     const { default: SettingsPanel } = await import("./SettingsPanel");
     wrap(<SettingsPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: /ai agents/i }));
     expect(screen.getByText(/connect an agent to configure the assistant/i)).toBeInTheDocument();
   });
 

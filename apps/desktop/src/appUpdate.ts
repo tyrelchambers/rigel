@@ -13,6 +13,11 @@ const REPO = "tyrelchambers/rigel";
 /** Where the update chip sends the user to get the new build. */
 export const DOWNLOAD_URL = "https://rigel.run/download";
 
+/** The GitHub release-notes page for a version tag. */
+export function releaseUrlFor(version: string): string {
+  return `https://github.com/${REPO}/releases/tag/v${version.replace(/^v/, "")}`;
+}
+
 export interface AppUpdateInfo {
   updateAvailable: boolean;
   currentVersion: string;

@@ -1,25 +1,28 @@
-// Settings page — tabbed shell. Three tabs:
-//   1. AI agents — connect/configure the AI backend + assistant roles/limits.
-//   2. Channels — Signal bridge + Matrix channel.
-//   3. App defaults — per-cluster self-host install defaults.
+// Settings page — tabbed shell. Four tabs:
+//   1. Overview — app/version info + software updates.
+//   2. AI agents — connect/configure the AI backend + assistant roles/limits.
+//   3. Channels — Signal bridge + Matrix channel.
+//   4. App defaults — per-cluster self-host install defaults.
 
 import { useState } from "react";
-import { Bot, Radio, SlidersHorizontal, Sparkles } from "lucide-react";
+import { LayoutDashboard, Bot, Radio, SlidersHorizontal, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TabBar, Tab } from "@/components/ui/Tabs";
+import { OverviewTab } from "./tabs/OverviewTab";
 import { AiAgentsTab } from "./tabs/AiAgentsTab";
 import { ChannelsTab } from "./tabs/ChannelsTab";
 import { AppDefaultsTab } from "./tabs/AppDefaultsTab";
 
-type SettingsTab = "agents" | "channels" | "defaults";
+type SettingsTab = "overview" | "agents" | "channels" | "defaults";
 const TABS = [
+  { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "agents", label: "AI agents", icon: Bot },
   { id: "channels", label: "Channels", icon: Radio },
   { id: "defaults", label: "App defaults", icon: SlidersHorizontal },
 ];
 
 export default function SettingsPanel() {
-  const [tab, setTab] = useState<SettingsTab>("agents");
+  const [tab, setTab] = useState<SettingsTab>("overview");
   return (
     <div className="flex w-full flex-col gap-6 px-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -44,6 +47,7 @@ export default function SettingsPanel() {
           </TabBar>
         </div>
       </div>
+      {tab === "overview" && <OverviewTab />}
       {tab === "agents" && <AiAgentsTab />}
       {tab === "channels" && <ChannelsTab />}
       {tab === "defaults" && <AppDefaultsTab />}
