@@ -12,6 +12,7 @@ import {
   buildLauncherGroups,
   buildFavoritesCells,
   flattenVisible,
+  matchesQuery,
   nextIndex,
   type LauncherCell,
 } from "./navLauncherLogic";
@@ -84,14 +85,17 @@ export function NavLauncher({ open, onClose }: NavLauncherProps) {
 
   if (!open) return null;
 
-  // Index of a cell within the flat `visible` list, for highlight + focus.
-  const visIndex = (key: string) => visible.findIndex((c) => c.key === key);
-
-  const renderCell = (cell: LauncherCell) => {
-    const idx = visIndex(cell.key);
+  // `idx` is the cell's position in the flat `visible` list (favorites first,
+  // then groups) — the same order `selected`/nextIndex walk. Passing it in (vs.
+  // looking it up by key) keeps highlight correct when a favorited panel also
+  // appears in its category: each copy gets its own distinct index.
+  const renderCell = (cell: LauncherCell, idx: number) => {
     const isSelected = idx === selected;
     const Icon = PANEL_META[cell.key]?.icon;
     const fav = favorites.includes(cell.key);
+    // The star is the only affordance for favoriting, so reveal it on hover and
+    // for the keyboard-selected cell (not just when already favorited).
+    const starVisible = fav || isSelected;
     return (
       <div
         key={cell.key + "@" + idx}
@@ -101,7 +105,7 @@ export function NavLauncher({ open, onClose }: NavLauncherProps) {
         onMouseEnter={() => setSelected(idx)}
         className="group flex items-center justify-between gap-2.5 rounded-md px-2.5 py-2 cursor-pointer border transition-colors"
         style={{
-          background: isSelected ? "var(--accent-primary-dim, rgba(56,189,248,0.15))" : "var(--surface-primary)",
+          background: isSelected ? "var(--accent-dim)" : "var(--surface-primary)",
           borderColor: isSelected ? "var(--accent-primary)" : "var(--border-subtle)",
         }}
       >
@@ -123,11 +127,8 @@ export function NavLauncher({ open, onClose }: NavLauncherProps) {
           type="button"
           aria-label={fav ? `Unfavorite ${cell.title}` : `Favorite ${cell.title}`}
           onClick={(e) => { e.stopPropagation(); toggleFav(cell.key); }}
-          className="shrink-0 p-0.5"
-          style={{
-            background: "transparent", border: "none", cursor: "pointer",
-            opacity: fav ? 1 : 0,
-          }}
+          className={`shrink-0 p-0.5 transition-opacity ${starVisible ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+          style={{ background: "transparent", border: "none", cursor: "pointer" }}
         >
           <Star
             size={14}
@@ -135,12 +136,19 @@ export function NavLauncher({ open, onClose }: NavLauncherProps) {
               color: fav ? "var(--accent-primary)" : "var(--fg-tertiary)",
               fill: fav ? "var(--accent-primary)" : "transparent",
             }}
-            className={fav ? "" : "group-hover:!opacity-100"}
           />
         </button>
       </div>
     );
   };
+
+  // The visible cells split back into their render sections. Global indices are
+  // assigned favorites-first (matching `visible` / `flattenVisible`) so keyboard
+  // selection and per-section rendering agree on each cell's position.
+  const favVisible = favoritesCells.filter((c) => matchesQuery(c.title, query));
+  const groupSections = groups
+    .map((g) => ({ title: g.title, cells: g.cells.filter((c) => matchesQuery(c.title, query)) }))
+    .filter((s) => s.cells.length > 0);
 
   const gridStyle = { display: "grid", gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))`, gap: 10 } as const;
   const sectionLabel = (label: string) => (
@@ -200,7 +208,7 @@ export function NavLauncher({ open, onClose }: NavLauncherProps) {
             />
             <span
               className="text-3xs"
-              style={{ fontFamily: "monospace", color: "var(--fg-tertiary)", background: "#ffffff0f", padding: "2px 6px", borderRadius: 4 }}
+              style={{ fontFamily: "monospace", color: "var(--fg-tertiary)", background: "var(--surface-elevated)", padding: "2px 6px", borderRadius: 4 }}
             >
               Esc
             </span>
@@ -209,25 +217,28 @@ export function NavLauncher({ open, onClose }: NavLauncherProps) {
 
         {/* Scrollable body */}
         <div style={{ overflowY: "auto", padding: "14px 14px 20px", display: "flex", flexDirection: "column", gap: 18 }}>
-          {favoritesCells.length > 0 && (
+          {favVisible.length > 0 && (
             <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <span className="flex items-center gap-1.5">
                 {sectionLabel("Favorites")}
                 <Star size={11} style={{ color: "var(--accent-primary)", fill: "var(--accent-primary)" }} />
               </span>
-              <div style={gridStyle}>
-                {favoritesCells.filter((c) => visIndex(c.key) >= 0).map(renderCell)}
+              <div style={gridStyle} role="listbox" aria-label="Favorites">
+                {favVisible.map((c, i) => renderCell(c, i))}
               </div>
             </section>
           )}
 
-          {groups.map((g) => {
-            const cells = g.cells.filter((c) => visIndex(c.key) >= 0);
-            if (cells.length === 0) return null;
+          {groupSections.map((s, si) => {
+            const base =
+              favVisible.length +
+              groupSections.slice(0, si).reduce((n, x) => n + x.cells.length, 0);
             return (
-              <section key={g.title} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {sectionLabel(g.title)}
-                <div style={gridStyle}>{cells.map(renderCell)}</div>
+              <section key={s.title} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {sectionLabel(s.title)}
+                <div style={gridStyle} role="listbox" aria-label={s.title}>
+                  {s.cells.map((c, i) => renderCell(c, base + i))}
+                </div>
               </section>
             );
           })}
