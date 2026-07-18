@@ -6,7 +6,8 @@
 // 16px radius all come from DialogContent).
 
 import { useEffect, useState } from "react";
-import { GitBranch, Info } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCodeBranch, faCircleInfo } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -104,7 +105,7 @@ export function LinkRepoModal({
       <DialogContent className="max-w-[540px]">
         <DialogHeader>
           <DialogIcon>
-            <GitBranch className="size-4 text-[var(--accent-primary)]" />
+            <FontAwesomeIcon icon={faCodeBranch} className="size-4 text-[var(--accent-primary)]" />
           </DialogIcon>
           <div className="flex min-w-0 flex-col gap-1">
             <DialogTitle>Link to repo</DialogTitle>
@@ -140,7 +141,7 @@ export function LinkRepoModal({
             </div>
 
             <div className="flex items-center gap-2 rounded-lg bg-[var(--accent-dim)] px-3 py-2.5">
-              <Info className="size-3.5 shrink-0 text-[var(--accent-primary)]" />
+              <FontAwesomeIcon icon={faCircleInfo} className="size-3.5 shrink-0 text-[var(--accent-primary)]" />
               <span className="text-2xs text-[var(--fg-secondary)]">
                 Writes a rigel-git-sources entry and annotates the live deployment. No redeploy.
               </span>
@@ -159,7 +160,7 @@ export function LinkRepoModal({
             Cancel
           </Button>
           <Button onClick={submit} disabled={!canSubmit}>
-            <GitBranch aria-hidden />
+            <FontAwesomeIcon icon={faCodeBranch} aria-hidden />
             {link.isPending ? "Linking…" : "Create source & link"}
           </Button>
         </DialogFooter>

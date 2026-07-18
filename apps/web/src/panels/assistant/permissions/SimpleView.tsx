@@ -1,5 +1,6 @@
 // SimpleView — one toggle per capability. Pencil frame jCXlB.
-import { Minus } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faMinus } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import { CAPABILITIES, capabilityState, type RbacPolicy, type Risk } from "@rigel/k8s";
@@ -86,7 +87,7 @@ function CapabilityToggle({
         onClick={() => onChange(false)}
         className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full bg-[var(--accent-dim)] p-0.5 outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-50"
       >
-        <Minus className="mx-auto size-3 text-[var(--accent-primary)]" />
+        <FontAwesomeIcon icon={faMinus} className="mx-auto size-3 text-[var(--accent-primary)]" />
       </button>
     );
   }

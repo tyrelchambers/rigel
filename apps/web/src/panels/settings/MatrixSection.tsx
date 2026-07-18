@@ -3,7 +3,13 @@
 // State machine mirrors the derived matrixStatus; the connect wizard lives in
 // MatrixConnectModal.
 import { useState } from "react";
-import { MessageSquare, Plus, RefreshCw, Unplug } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faMessage,
+  faPlus,
+  faArrowsRotate,
+  faPlugCircleXmark,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { matrixStatusColor, parseAllowedSenders, type MatrixStatus } from "@rigel/k8s";
 import { useAssistantAction } from "@/lib/api";
 import type { SettingsDerived } from "./useSettings";
@@ -44,7 +50,7 @@ function Head({ tone, status }: { tone: "neutral" | "accent" | "red"; status: Ma
   return (
     <div className="flex items-center gap-3">
       <IconTile tone={tone} size={38} radius={10}>
-        <MessageSquare className={tone === "neutral" ? "size-[18px] text-muted-foreground" : "size-[18px]"} />
+        <FontAwesomeIcon icon={faMessage} className={tone === "neutral" ? "size-[18px] text-muted-foreground" : "size-[18px]"} />
       </IconTile>
       <div className="flex flex-col gap-[3px]">
         <span className="text-foreground text-base" style={{ fontWeight: 600 }}>Matrix</span>
@@ -112,7 +118,7 @@ export function MatrixSection({ derived }: { derived: SettingsDerived }) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex size-9 items-center justify-center rounded-lg bg-[var(--accent-dim)]">
-              <MessageSquare className="size-4 text-primary" />
+              <FontAwesomeIcon icon={faMessage} className="size-4 text-primary" />
             </div>
             <div className="flex flex-col gap-[3px]">
               <span className="text-sm font-semibold text-foreground">Matrix</span>
@@ -133,7 +139,7 @@ export function MatrixSection({ derived }: { derived: SettingsDerived }) {
               disabled={setMatrix.isPending}
               className="flex items-center gap-[7px] transition-opacity hover:opacity-80 disabled:opacity-50"
             >
-              <Unplug className="size-[14px] text-destructive" />
+              <FontAwesomeIcon icon={faPlugCircleXmark} className="size-[14px] text-destructive" />
               <span className="text-xs font-medium text-destructive">Disconnect</span>
             </button>
           </div>
@@ -181,7 +187,7 @@ export function MatrixSection({ derived }: { derived: SettingsDerived }) {
           className="flex w-full items-center justify-center gap-[7px] rounded-[9px] transition-colors hover:bg-[var(--accent-dim)]"
           style={{ background: "var(--accent-dim)", border: "1px solid var(--accent-primary)", padding: "10px 0" }}
         >
-          <RefreshCw className="size-[14px] text-primary" />
+          <FontAwesomeIcon icon={faArrowsRotate} className="size-[14px] text-primary" />
           <span className="text-sm font-semibold text-primary">Reconnect</span>
         </button>
         {modal}
@@ -202,7 +208,7 @@ export function MatrixSection({ derived }: { derived: SettingsDerived }) {
         className="flex w-full items-center justify-center gap-[7px] rounded-[9px] transition-opacity hover:opacity-90"
         style={{ background: "var(--accent-primary)", padding: "10px 0" }}
       >
-        <Plus className="size-[15px]" style={{ color: "var(--fg-inverse)" }} />
+        <FontAwesomeIcon icon={faPlus} className="size-[15px]" style={{ color: "var(--fg-inverse)" }} />
         <span className="text-sm" style={{ fontWeight: 600, color: "var(--fg-inverse)" }}>Connect Matrix</span>
       </button>
       {modal}

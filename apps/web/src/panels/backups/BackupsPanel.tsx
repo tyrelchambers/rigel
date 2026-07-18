@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Archive, Camera, Database, Timer } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faBoxArchive, faCamera, faDatabase, faStopwatch } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { filterByNamespace, useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { viewYaml } from "@/store/yamlViewer";
@@ -167,7 +168,7 @@ export default function BackupsPanel() {
 
         {view.kind === "empty" && groups.length === 0 && (
           <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
-            <Archive className="size-8 text-muted-foreground" />
+            <FontAwesomeIcon icon={faBoxArchive} className="size-8 text-muted-foreground" />
             <p className="text-sm font-medium">No backups or snapshots found</p>
             <p className="max-w-md text-xs text-muted-foreground">
               Runs appear here once CloudNativePG has taken a backup or a
@@ -302,9 +303,9 @@ function BackupGroupRow({
       }
     >
       {isCnpg ? (
-        <Database className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+        <FontAwesomeIcon icon={faDatabase} className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
       ) : (
-        <Camera className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+        <FontAwesomeIcon icon={faCamera} className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
       )}
       <button
         type="button"
@@ -410,7 +411,7 @@ function BackupEventRow({
             className="flex items-center gap-1 text-3xs"
             style={{ fontFamily: "ui-monospace, monospace", color: "var(--fg-tertiary)", whiteSpace: "nowrap" }}
           >
-            <Timer className="size-3 shrink-0" aria-hidden />
+            <FontAwesomeIcon icon={faStopwatch} className="size-3 shrink-0" aria-hidden />
             {formatDuration(event.durationSec)}
           </span>
           <span className="text-3xs text-muted-foreground/50" aria-hidden>

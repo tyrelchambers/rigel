@@ -2,7 +2,9 @@
 // channels (Signal, Matrix, Discord, Slack) live in Settings > Channels.
 
 import { useEffect, useState } from "react";
-import { BellOff, Bot, Check, Hand, Info, Moon, Zap } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
+import { faBellSlash, faRobot, faCheck, faHand, faCircleInfo, faMoon, faBolt } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAssistantCtx } from "../AssistantContext";
@@ -15,9 +17,9 @@ import { ProGateCard } from "@/shell/billing/ProGateCard";
 // The three autonomy modes, rendered as selectable cards. `value` is the config
 // mode the agent reads ("window" is the Quiet-hours schedule).
 const MODES = [
-  { value: "auto", label: "Auto", icon: Zap, desc: "Apply safe fixes automatically, no approval needed." },
-  { value: "advisory", label: "Advisory", icon: Hand, desc: "Suggest fixes and wait for your approval." },
-  { value: "window", label: "Quiet-hours", icon: Moon, desc: "Auto by day, hold changes overnight." },
+  { value: "auto", label: "Auto", icon: faBolt, desc: "Apply safe fixes automatically, no approval needed." },
+  { value: "advisory", label: "Advisory", icon: faHand, desc: "Suggest fixes and wait for your approval." },
+  { value: "window", label: "Quiet-hours", icon: faMoon, desc: "Auto by day, hold changes overnight." },
 ] as const;
 
 // Modes where the agent acts on its own — gated behind agentAutonomy. "advisory"
@@ -66,7 +68,7 @@ export function AlertsTab() {
 
         {autonomyLocked && (
           <ProGateCard
-            icon={Bot}
+            icon={faRobot}
             title="Unlock the in-cluster agent"
             body="Rigel watches your cluster around the clock and applies the fixes you approve. Autonomous remediation, autofix PRs, and scheduled digests."
             upgradeDisabled={!personalOrgId}
@@ -109,7 +111,7 @@ export function AlertsTab() {
         <div className="h-px w-full bg-[var(--border-subtle)]" />
 
         <div className="flex items-center gap-1.5 text-xs text-[var(--fg-tertiary)]">
-          <Info className="size-3.5 shrink-0" />
+          <FontAwesomeIcon icon={faCircleInfo} className="size-3.5 shrink-0" />
           <span>Notification channels are set up in the</span>
           <button
             type="button"
@@ -132,7 +134,7 @@ export function AlertsTab() {
                 key={fp}
                 className="flex items-center gap-2 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] p-2.5"
               >
-                <BellOff className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />
+                <FontAwesomeIcon icon={faBellSlash} className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />
                 <span className="truncate font-mono text-xs text-[var(--fg-tertiary)]">{fp}</span>
                 <Button
                   variant="muted"
@@ -162,7 +164,7 @@ function ModeCard({
   disabled,
   onClick,
 }: {
-  icon: typeof Zap;
+  icon: IconDefinition;
   title: string;
   desc: string;
   selected: boolean;
@@ -189,7 +191,8 @@ function ModeCard({
             selected ? "bg-[var(--accent-dim)]" : "bg-white/5",
           )}
         >
-          <Icon
+          <FontAwesomeIcon
+            icon={Icon}
             className={cn(
               "size-[15px]",
               selected ? "text-[var(--accent-primary)]" : "text-[var(--fg-secondary)]",
@@ -197,7 +200,7 @@ function ModeCard({
           />
         </span>
         <span className="text-sm font-semibold text-[var(--fg-primary)]">{title}</span>
-        {selected && <Check className="ml-auto size-4 text-[var(--accent-primary)]" />}
+        {selected && <FontAwesomeIcon icon={faCheck} className="ml-auto size-4 text-[var(--accent-primary)]" />}
       </div>
       <p className="text-xs leading-[1.4] text-[var(--fg-secondary)]">{desc}</p>
     </button>

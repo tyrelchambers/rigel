@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Cloud, Lock, Upload } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCloud, faLock, faUpload } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogIcon, DialogTitle } from "@/components/ui/dialog";
 import { listCloudProviders, type ProviderDescriptor } from "@rigel/cloud-connect/src/index";
-import { CLUSTER_ICONS } from "./clusterIcons";
+import { ClusterIcon } from "./clusterIcons";
 import { ConnectWizard } from "./ConnectWizard";
 import { ImportKubeconfigPanel } from "./ImportKubeconfigPanel";
 import { useEntitlement } from "./useEntitlement";
@@ -36,7 +37,7 @@ function ProviderTile({
             background: "var(--surface-elevated)", border: "1px solid var(--border-strong)",
           }}
         >
-          <Lock size={11} style={{ color: "var(--fg-secondary)" }} />
+          <FontAwesomeIcon icon={faLock} className="size-[11px]" style={{ color: "var(--fg-secondary)" }} />
         </span>
       ) : null}
       {icon}
@@ -68,7 +69,7 @@ export function ConnectClusterModal({ open, onOpenChange }: { open: boolean; onO
       <DialogContent>
         <DialogHeader>
           <DialogIcon>
-            <Cloud className="size-[17px]" />
+            <FontAwesomeIcon icon={faCloud} className="size-[17px]" />
           </DialogIcon>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
@@ -76,12 +77,11 @@ export function ConnectClusterModal({ open, onOpenChange }: { open: boolean; onO
       {selection === null ? (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
           {providers.map((d) => {
-            const Icon = CLUSTER_ICONS[d.id].Component;
             return (
               <ProviderTile
                 key={d.id}
                 label={d.displayName}
-                icon={<Icon size={26} />}
+                icon={<ClusterIcon id={d.id} className="size-[26px]" />}
                 locked={!cloudUnlocked}
                 onClick={() => {
                   if (!cloudUnlocked) { onOpenChange(false); openUpgrade(); }
@@ -90,7 +90,7 @@ export function ConnectClusterModal({ open, onOpenChange }: { open: boolean; onO
               />
             );
           })}
-          <ProviderTile label="Import a kubeconfig" icon={<Upload size={26} />} onClick={() => setSelection({ kind: "import" })} />
+          <ProviderTile label="Import a kubeconfig" icon={<FontAwesomeIcon icon={faUpload} className="size-[26px]" />} onClick={() => setSelection({ kind: "import" })} />
         </div>
       ) : selection.kind === "provider" ? (
         <ConnectWizard descriptor={selection.descriptor} onConnected={() => onOpenChange(false)} />

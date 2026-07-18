@@ -9,3 +9,4 @@ allowBuilds:
   electron-winstaller: false
 minimumReleaseAgeExclude:
   - '@iconify-json/lucide@1.2.113'
+  - '@awesome.me/kit-6050953220@1.0.4'

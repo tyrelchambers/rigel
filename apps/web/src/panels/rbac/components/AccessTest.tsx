@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { Check, X, HelpCircle, ShieldCheck, Loader2 } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faCheck,
+  faXmark,
+  faCircleQuestion,
+  faShieldCheck,
+  faSpinner,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import type { Subject } from "../types";
 import type { CanICheck, CanIResult } from "../canI";
 import { postCanICheck } from "@/lib/api";
@@ -62,7 +69,7 @@ export function AccessTest({ subject, checks, deniedLabel = "not currently allow
           disabled={disabled}
           className="flex shrink-0 items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border-strong)] px-[10px] py-[5px] text-xs font-medium text-[var(--fg-primary)] transition-colors hover:bg-white/[0.06] disabled:opacity-40"
         >
-          {loading ? <Loader2 className="size-[13px] animate-spin" /> : <ShieldCheck className="size-[13px]" />}
+          {loading ? <FontAwesomeIcon icon={faSpinner} className="size-[13px] animate-spin" /> : <FontAwesomeIcon icon={faShieldCheck} className="size-[13px]" />}
           Test access
         </button>
       </div>
@@ -75,11 +82,11 @@ export function AccessTest({ subject, checks, deniedLabel = "not currently allow
           {results.map((r, i) => (
             <div key={i} className="flex items-center gap-[8px] font-[var(--font-mono)] text-2xs">
               {r.allowed === true ? (
-                <Check className="size-[13px] shrink-0 text-[var(--status-running)]" />
+                <FontAwesomeIcon icon={faCheck} className="size-[13px] shrink-0 text-[var(--status-running)]" />
               ) : r.allowed === false ? (
-                <X className="size-[13px] shrink-0 text-[var(--fg-tertiary)]" />
+                <FontAwesomeIcon icon={faXmark} className="size-[13px] shrink-0 text-[var(--fg-tertiary)]" />
               ) : (
-                <HelpCircle className="size-[13px] shrink-0 text-[var(--fg-tertiary)]" />
+                <FontAwesomeIcon icon={faCircleQuestion} className="size-[13px] shrink-0 text-[var(--fg-tertiary)]" />
               )}
               <span className="text-[var(--fg-secondary)]">
                 {r.verb} {r.resource}

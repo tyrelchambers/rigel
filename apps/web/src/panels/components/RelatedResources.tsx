@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { ChevronRight, Server, ScrollText } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faChevronRight, faServer, faScroll } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { TabBar, Tab } from "@/components/ui/Tabs";
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem } from "@/components/ui/context-menu";
 import { useCluster, filterByNamespace } from "@/store/cluster";
@@ -86,12 +87,12 @@ function Row({ item, onGo, onViewLogs }: { item: RelatedRef; onGo: () => void; o
       <span className="text-xs" style={{ flex: 1, minWidth: 0, fontFamily: "ui-monospace, monospace", fontWeight: 500, color: "#A6A6AE", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</span>
       {item.node && (
         <span title={`Node: ${item.node}`} className="text-2xs" style={{ display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0, minWidth: 0, fontFamily: "ui-monospace, monospace", color: "#6B6B73" }}>
-          <Server size={12} style={{ color: "#6B6B73", flexShrink: 0 }} />
+          <FontAwesomeIcon icon={faServer} className="size-[12px]" style={{ color: "#6B6B73", flexShrink: 0 }} />
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.node}</span>
         </span>
       )}
       <span style={{ width: 7, height: 7, borderRadius: "50%", background: dot, flexShrink: 0 }} />
-      <ChevronRight size={15} style={{ color: "#6B6B73", flexShrink: 0 }} />
+      <FontAwesomeIcon icon={faChevronRight} className="size-[15px]" style={{ color: "#6B6B73", flexShrink: 0 }} />
     </button>
   );
   if (!onViewLogs) return button;
@@ -100,7 +101,7 @@ function Row({ item, onGo, onViewLogs }: { item: RelatedRef; onGo: () => void; o
       <ContextMenuTrigger>{button}</ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuItem onClick={onViewLogs}>
-          <ScrollText />
+          <FontAwesomeIcon icon={faScroll} />
           View Logs
         </ContextMenuItem>
       </ContextMenuContent>

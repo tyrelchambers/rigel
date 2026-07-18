@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
-  Layers,
-  Box,
-  Server,
-  Database,
-  CalendarClock,
-  AlertTriangle,
-  History,
-  Trash2,
-  Sparkles,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+  faLayerGroup,
+  faCube,
+  faServer,
+  faDatabase,
+  faCalendarClock,
+  faTriangleExclamation,
+  faClockRotateLeft,
+  faTrashCan,
+  faSparkles,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { cn } from "@/lib/utils";
@@ -232,11 +233,11 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
 
         <div className="ov-actions">
           <button className="ov-btn-purge" onClick={() => setPickerOpen(true)}>
-            <Trash2 className="ov-btn-icon" />
+            <FontAwesomeIcon icon={faTrashCan} className="ov-btn-icon" />
             Purge an app
           </button>
           <button className="ov-btn-investigate" onClick={onInvestigateCluster}>
-            <Sparkles className="ov-btn-icon" />
+            <FontAwesomeIcon icon={faSparkles} className="ov-btn-icon" />
             Investigate cluster
           </button>
         </div>
@@ -260,14 +261,14 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
         {/* Row 2 — Stats: Deployments | Pods | Nodes */}
         <div className="ov-row ov-row-3">
           <StatCard
-            icon={Layers}
+            icon={faLayerGroup}
             title="Deployments"
             value={deployments.length}
             chips={[{ label: "Unhealthy", count: deployUnhealthy, tone: "red", neutralWhenZero: true }]}
           />
 
           <StatCard
-            icon={Box}
+            icon={faCube}
             title="Pods"
             value={pods.length}
             chips={[
@@ -278,7 +279,7 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
           />
 
           <StatCard
-            icon={Server}
+            icon={faServer}
             title="Nodes"
             value={`${nodeReady.ready}/${nodeReady.total}`}
             chips={[{ label: "Pressure conditions", count: pressure, tone: "yellow", neutralWhenZero: true }]}
@@ -288,7 +289,7 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
         {/* Row 3 — Databases | Events */}
         <div className="ov-row ov-row-2">
           <SummaryCard
-            icon={Database}
+            icon={faDatabase}
             title="Databases"
             value={databases.length}
             statLabel="Unhealthy"
@@ -296,7 +297,7 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
             statTone={dbUnhealthy > 0 ? "red" : "neutral"}
           />
           <SummaryCard
-            icon={CalendarClock}
+            icon={faCalendarClock}
             title="Events"
             value={warnings.length}
             statLabel="Total cached"
@@ -311,9 +312,9 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
             display: "flex",
             flexDirection: "column",
             gap: 16,
-            background: "#0E0E11",
-            border: "1px solid rgba(255,255,255,0.07)",
-            borderRadius: 12,
+            background: "var(--surface-elevated)",
+            border: "1px solid var(--border-subtle)",
+            borderRadius: 8,
             padding: 18,
           }}
         >
@@ -322,9 +323,9 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
             <div className="flex items-center" style={{ gap: 11 }}>
               <span
                 className="inline-flex items-center justify-center"
-                style={{ width: 30, height: 30, borderRadius: 9, background: WARN_TINT }}
+                style={{ width: 30, height: 30, borderRadius: 9, background: "rgba(255,255,255,0.08)" }}
               >
-                <AlertTriangle size={16} style={{ color: WARN_RED }} />
+                <FontAwesomeIcon icon={faTriangleExclamation} className="size-[16px]" style={{ color: "var(--fg-primary)" }} />
               </span>
               <span className="text-base" style={{ fontWeight: 700, color: "#FFFFFF" }}>Recent warnings</span>
               {warnings.length > 0 && (
@@ -340,7 +341,7 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
               className="inline-flex items-center text-xs"
               style={{ gap: 6, borderRadius: 8, border: "1px solid rgba(255,255,255,0.07)", padding: "6px 11px", fontWeight: 500, color: WARN_MUTED }}
             >
-              <History size={13} /> Last hour
+              <FontAwesomeIcon icon={faClockRotateLeft} className="size-[13px]" /> Last hour
             </span>
           </div>
 
@@ -391,11 +392,11 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
 
 /** Card header: tertiary icon + uppercase mono tracked label, with an optional
  *  right-aligned slot (used for status chips on the stat/summary cards). */
-function CardHeader({ icon: Icon, title, right }: { icon: LucideIcon; title: string; right?: React.ReactNode }) {
+function CardHeader({ icon: Icon, title, right }: { icon: IconDefinition; title: string; right?: React.ReactNode }) {
   return (
     <div className="ov-card-hdr">
       <div className="ov-card-hdr-left">
-        <Icon className="ov-card-hdr-icon" />
+        <FontAwesomeIcon icon={Icon} className="ov-card-hdr-icon" />
         <span className="ov-card-hdr-label">{title}</span>
       </div>
       {right && <div className="ov-card-hdr-right">{right}</div>}
@@ -439,7 +440,7 @@ function StatCard({
   value,
   chips,
 }: {
-  icon: LucideIcon;
+  icon: IconDefinition;
   title: string;
   value: number | string;
   chips: ChipSpec[];
@@ -461,7 +462,7 @@ function SummaryCard({
   statCount,
   statTone,
 }: {
-  icon: LucideIcon;
+  icon: IconDefinition;
   title: string;
   value: number | string;
   statLabel: string;
@@ -539,7 +540,7 @@ export function WarningRow({
         </span>
         {kind && (
           <span className="inline-flex items-center" style={{ gap: 6 }}>
-            <Box size={13} style={{ color: WARN_MUTED }} />
+            <FontAwesomeIcon icon={faCube} className="size-[13px]" style={{ color: WARN_MUTED }} />
             <span className="text-xs" style={{ fontWeight: 500, color: WARN_MUTED }}>{kind}</span>
           </span>
         )}

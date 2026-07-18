@@ -1,10 +1,11 @@
-import { Lock } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faLock } from "@awesome.me/kit-6050953220/icons/classic/solid";
 
 /** Small "PRO" pill (accent-tinted, lock icon). */
 export function ProPill() {
   return (
     <span className="inline-flex items-center gap-1 rounded-md bg-[color-mix(in_oklab,var(--accent-primary)_8%,transparent)] px-1.5 py-0.5 font-mono text-3xs font-semibold uppercase tracking-wide text-[var(--accent-soft)]">
-      <Lock className="size-3" />
+      <FontAwesomeIcon icon={faLock} className="size-3" />
       Pro
     </span>
   );

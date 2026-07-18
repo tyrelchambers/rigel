@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { FileCode2, Package, Star, Trash2 } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faFileCode, faBox, faStar, faTrashCan } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import type { Secret } from "@rigel/k8s";
 import { Loader } from "@/components/Loader";
 import { TabBar, Tab } from "@/components/ui/Tabs";
@@ -147,7 +148,7 @@ export default function AccountsPanel() {
               key={account.id}
               className="flex items-center gap-3 rounded-md border bg-background px-3 py-2"
             >
-              <Package className="size-5 text-primary" aria-hidden />
+              <FontAwesomeIcon icon={faBox} className="size-5 text-primary" aria-hidden />
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-mono font-bold">{account.registry}</span>
@@ -171,7 +172,7 @@ export default function AccountsPanel() {
               <div className="ml-auto flex items-center gap-1">
                 {!account.isDefault && (
                   <Button variant="outline" size="sm" onClick={() => handleSetDefault(account)}>
-                    <Star className="size-3.5" aria-hidden /> Set default
+                    <FontAwesomeIcon icon={faStar} className="size-3.5" aria-hidden /> Set default
                   </Button>
                 )}
                 <Button
@@ -180,7 +181,7 @@ export default function AccountsPanel() {
                   aria-label={`Remove ${account.registry} account`}
                   onClick={() => setPendingDelete(account)}
                 >
-                  <Trash2 className="size-4 text-destructive" aria-hidden />
+                  <FontAwesomeIcon icon={faTrashCan} className="size-4 text-destructive" aria-hidden />
                 </Button>
               </div>
             </li>
@@ -363,7 +364,7 @@ function AddAccountSheet({
                 aria-expanded={showPreview}
                 className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
               >
-                <FileCode2 className="size-3.5" aria-hidden />
+                <FontAwesomeIcon icon={faFileCode} className="size-3.5" aria-hidden />
                 {showPreview ? "Hide YAML" : "Preview YAML"}
               </button>
               {showPreview && (

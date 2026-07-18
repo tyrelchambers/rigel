@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  Check,
-  Copy,
-  FilePenLine,
-  FilePlus2,
-  GripVertical,
-  Info,
-  Lock,
-  Plus,
-  Trash2,
-} from "lucide-react";
+  faCheck,
+  faCopy,
+  faFilePen,
+  faFilePlus,
+  faGripVertical,
+  faCircleInfo,
+  faLock,
+  faPlus,
+  faTrashCan,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Button } from "@/components/ui/button";
 import type { ConfigMap } from "./types";
 import type { KVRow } from "@rigel/k8s";
@@ -144,14 +145,14 @@ export function ConfigMapEditor({ target, open, onClose, onApplied }: ConfigMapE
     }
   }
 
-  const TileIcon = isEdit ? FilePenLine : FilePlus2;
+  const TileIcon = isEdit ? faFilePen : faFilePlus;
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-h-[86vh] w-[calc(100%-2rem)] max-w-[760px]">
         <DialogHeader>
           <DialogIcon>
-            <TileIcon className="size-[15px]" />
+            <FontAwesomeIcon icon={TileIcon} className="size-[15px]" />
           </DialogIcon>
           <DialogTitle className="flex items-center gap-2 font-heading text-base font-semibold leading-tight text-foreground">
             {isEdit ? (
@@ -234,7 +235,7 @@ export function ConfigMapEditor({ target, open, onClose, onApplied }: ConfigMapE
                   onClick={addRow}
                   className="flex w-full items-center justify-center gap-[7px] rounded-md border border-[var(--border-subtle)] bg-white/[0.02] px-[14px] py-[11px] text-xs font-semibold text-[var(--fg-secondary)] transition-colors hover:bg-white/[0.04] hover:text-foreground"
                 >
-                  <Plus className="size-[15px]" aria-hidden /> Add key
+                  <FontAwesomeIcon icon={faPlus} className="size-[15px]" aria-hidden /> Add key
                 </button>
 
                 {isEdit && binaryCount > 0 && (
@@ -295,7 +296,7 @@ function IdentityField({
         <span className="text-xs font-medium text-[var(--fg-secondary)]">{label}</span>
         {locked && (
           <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.04] px-[7px] py-px">
-            <Lock className="size-[10px] text-[var(--fg-tertiary)]" aria-hidden />
+            <FontAwesomeIcon icon={faLock} className="size-[10px] text-[var(--fg-tertiary)]" aria-hidden />
             <span className="font-mono text-3xs tracking-[0.3px] text-[var(--fg-tertiary)]">Preserved</span>
           </span>
         )}
@@ -330,7 +331,7 @@ function LockedValue({ value }: { value: string }) {
     <div className="flex items-center gap-2 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[14px] py-[12px]">
       <span className="truncate font-mono text-sm font-medium text-[var(--fg-secondary)]">{value}</span>
       <span className="flex-1" />
-      <Lock className="size-[14px] shrink-0 text-[var(--fg-tertiary)]" aria-hidden />
+      <FontAwesomeIcon icon={faLock} className="size-[14px] shrink-0 text-[var(--fg-tertiary)]" aria-hidden />
     </div>
   );
 }
@@ -370,7 +371,7 @@ function DataKeyCard({
     <div className="overflow-hidden rounded-md border border-[var(--border-subtle)] bg-[var(--surface-primary)] transition-colors focus-within:border-[var(--accent-primary)]/60">
       {/* Header */}
       <div className="flex items-center gap-[9px] border-b border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3 py-[9px]">
-        <GripVertical className="size-[14px] shrink-0 text-[var(--fg-tertiary)]" aria-hidden />
+        <FontAwesomeIcon icon={faGripVertical} className="size-[14px] shrink-0 text-[var(--fg-tertiary)]" aria-hidden />
         <input
           type="text"
           value={row.key}
@@ -391,9 +392,9 @@ function DataKeyCard({
           className="text-[var(--fg-tertiary)] transition-colors hover:text-foreground"
         >
           {copied ? (
-            <Check className="size-[15px] text-[var(--status-running)]" />
+            <FontAwesomeIcon icon={faCheck} className="size-[15px] text-[var(--status-running)]" />
           ) : (
-            <Copy className="size-[15px]" />
+            <FontAwesomeIcon icon={faCopy} className="size-[15px]" />
           )}
         </button>
         {canRemove && (
@@ -403,7 +404,7 @@ function DataKeyCard({
             aria-label="Remove key"
             className="text-[var(--fg-tertiary)] transition-colors hover:text-[var(--status-failed)]"
           >
-            <Trash2 className="size-[15px]" />
+            <FontAwesomeIcon icon={faTrashCan} className="size-[15px]" />
           </button>
         )}
       </div>
@@ -421,7 +422,7 @@ function DataKeyCard({
       {/* Footer: detection + size */}
       <div className="flex items-center justify-between border-t border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3 py-[7px]">
         <span className="flex items-center gap-[7px]">
-          <Info className="size-[12px] text-[var(--fg-tertiary)]" aria-hidden />
+          <FontAwesomeIcon icon={faCircleInfo} className="size-[12px] text-[var(--fg-tertiary)]" aria-hidden />
           <span className="text-xs text-[var(--fg-tertiary)]">{detected}</span>
         </span>
         <span className="font-mono text-2xs text-[var(--fg-tertiary)]">{humanBytes(bytes)}</span>

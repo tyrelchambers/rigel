@@ -18,7 +18,8 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Trash2 } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faTrashCan } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import type { EventBucket, EventTypeFilter, K8sEvent } from "./types";
 import {
   absoluteWhen,
@@ -182,7 +183,7 @@ export default function EventsPanel() {
           disabled={allEvents.length === 0}
           onClick={() => clearKind("events")}
         >
-          <Trash2 className="size-3.5" /> Clear
+          <FontAwesomeIcon icon={faTrashCan} className="size-3.5" /> Clear
         </Button>
       </PanelHeader>
 

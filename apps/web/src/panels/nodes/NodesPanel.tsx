@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { MoreVertical, ChevronRight, ChevronDown } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faEllipsisVertical, faChevronRight, faChevronDown } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
@@ -265,9 +266,9 @@ function NodeCard({
         {/* Title row */}
         <div className="flex items-center gap-2.5">
           {isOpen ? (
-            <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
+            <FontAwesomeIcon icon={faChevronDown} className="size-3 shrink-0 text-muted-foreground" />
           ) : (
-            <ChevronRight className="size-3 shrink-0 text-muted-foreground" />
+            <FontAwesomeIcon icon={faChevronRight} className="size-3 shrink-0 text-muted-foreground" />
           )}
           <span className="font-mono text-xs font-medium leading-none text-foreground">
             {node.metadata.name}
@@ -322,7 +323,7 @@ function NodeCard({
             title="Actions"
             className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-white/[0.07] hover:text-foreground"
           >
-            <MoreVertical className="size-3.5" />
+            <FontAwesomeIcon icon={faEllipsisVertical} className="size-3.5" />
           </button>
         </div>
 

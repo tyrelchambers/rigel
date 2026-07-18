@@ -6,7 +6,8 @@
 // the guarded ConfirmSheet (no new mutation path).
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Copy, Check, FileCode, Pencil, Play } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCopy, faCheck, faFileCode, faPencil, faPlay } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogBody,
 } from "@/components/ui/dialog";
@@ -65,20 +66,20 @@ export function ResourceYamlViewer() {
       <Dialog open onOpenChange={(o) => { if (!o) close(); }}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
-            <FileCode className="size-5 shrink-0" style={{ color: "var(--accent-primary)" }} />
+            <FontAwesomeIcon icon={faFileCode} className="size-5 shrink-0" style={{ color: "var(--accent-primary)" }} />
             <DialogTitle className="min-w-0 flex-1 truncate font-mono text-base">{title}</DialogTitle>
             {target.editable && !editing && data && (
               <Button variant="outline" size="sm" className="gap-1.5" onClick={startEdit}>
-                <Pencil className="size-3.5" /> Edit
+                <FontAwesomeIcon icon={faPencil} className="size-3.5" /> Edit
               </Button>
             )}
             {editing ? (
               <Button size="sm" className="gap-1.5" onClick={handleApply} disabled={draft.trim() === ""}>
-                <Play className="size-3.5 fill-current" /> Apply…
+                <FontAwesomeIcon icon={faPlay} className="size-3.5 fill-current" /> Apply…
               </Button>
             ) : (
               <Button variant="outline" size="sm" className="gap-1.5" onClick={handleCopy} disabled={!data}>
-                {copied ? <Check className="size-3.5" style={{ color: "#28C840" }} /> : <Copy className="size-3.5" />}
+                {copied ? <FontAwesomeIcon icon={faCheck} className="size-3.5" style={{ color: "#28C840" }} /> : <FontAwesomeIcon icon={faCopy} className="size-3.5" />}
                 {copied ? "Copied" : "Copy"}
               </Button>
             )}

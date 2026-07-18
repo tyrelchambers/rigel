@@ -1,4 +1,11 @@
-import { User, Users, Server, FileBadge } from "lucide-react";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faUser,
+  faUsers,
+  faServer,
+  faFileCertificate,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { TabBar, Tab } from "@/components/ui/Tabs";
 import type { ListSubject, RbacView } from "../types";
 
@@ -22,9 +29,9 @@ interface Props {
 }
 
 function subjectIcon(kind: string) {
-  if (kind === "Group") return Users;
-  if (kind === "ServiceAccount") return Server;
-  return User;
+  if (kind === "Group") return faUsers;
+  if (kind === "ServiceAccount") return faServer;
+  return faUser;
 }
 
 function Row({
@@ -37,7 +44,7 @@ function Row({
 }: {
   selected: boolean;
   dangerous: boolean;
-  Icon: typeof User;
+  Icon: IconDefinition;
   name: string;
   sub?: string;
   onClick: () => void;
@@ -52,7 +59,7 @@ function Row({
           : "border-transparent hover:bg-white/[0.04]"
       }`}
     >
-      <Icon className="size-[15px] shrink-0 text-[var(--fg-tertiary)]" />
+      <FontAwesomeIcon icon={Icon} className="size-[15px] shrink-0 text-[var(--fg-tertiary)]" />
       <div className="flex min-w-0 flex-col">
         <span className="truncate font-[var(--font-mono)] text-xs font-medium text-[var(--fg-primary)]">
           {name}
@@ -109,7 +116,7 @@ export function RbacList({
                 key={r.key}
                 selected={r.key === selectedKey}
                 dangerous={r.dangerous}
-                Icon={FileBadge}
+                Icon={faFileCertificate}
                 name={r.name}
                 sub={r.kind === "Role" ? `Role · ${r.namespace ?? ""}` : "ClusterRole"}
                 onClick={() => onSelectRole(r)}

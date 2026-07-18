@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faPlus } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { filterByNamespace, useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
@@ -257,7 +258,7 @@ export default function RbacPanel() {
             aria-label="New RBAC object"
             className="flex items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border-strong)] px-3 py-1.5 text-sm text-[var(--fg-primary)] hover:bg-white/[0.04]"
           >
-            <Plus className="size-[14px]" /> New
+            <FontAwesomeIcon icon={faPlus} className="size-[14px]" /> New
           </DropdownMenuTrigger>
           <DropdownMenuContent>
             <DropdownMenuItem onClick={() => newObject("Role")}>Role</DropdownMenuItem>

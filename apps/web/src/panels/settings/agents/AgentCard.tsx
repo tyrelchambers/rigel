@@ -1,4 +1,5 @@
-import { ArrowRight } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faArrowRight } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { connectionLabel, type AgentId, type AgentView } from "@/lib/api";
 import { AgentGlyph } from "./agentGlyphs";
 
@@ -63,7 +64,7 @@ export function AgentCard({
             {isActive ? "Active" : connectionLabel(agent.connection)}
           </span>
         </span>
-        <ArrowRight size={15} className="text-muted-foreground" />
+        <FontAwesomeIcon icon={faArrowRight} className="size-[15px] text-muted-foreground" />
       </div>
     </button>
   );

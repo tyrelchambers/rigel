@@ -1,19 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  ExternalLink,
-  Cpu,
-  MemoryStick,
-  HardDrive,
-  Network,
-  Link2,
-  Unlink,
-  ArrowDownToLine,
-  RefreshCw,
-  Trash2,
-  ArrowUpCircle,
-  CheckCircle2,
-  HelpCircle,
-} from "lucide-react";
+  faArrowUpRightFromSquare,
+  faMicrochip,
+  faMemory,
+  faHardDrive,
+  faNetworkWired,
+  faLink,
+  faLinkSlash,
+  faArrowDownToLine,
+  faArrowsRotate,
+  faTrashCan,
+  faCircleArrowUp,
+  faCircleCheck,
+  faCircleQuestion,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { categoryDisplayName, type CatalogApp } from "@rigel/catalog";
 import {
   Dialog,
@@ -117,28 +119,28 @@ export function CatalogDetailSheet({
 
   // REQUIREMENTS cells — port of Swift's `requirementsBlock` (CPU / Memory /
   // Storage / Ingress), moved out of the header chips into the left column.
-  const reqCells: Array<{ icon: typeof Cpu; label: string; value: string }> = [
+  const reqCells: Array<{ icon: IconDefinition; label: string; value: string }> = [
     {
-      icon: Cpu,
+      icon: faMicrochip,
       label: "CPU",
       value:
         app.requirements.cpuRequest +
         (app.requirements.cpuLimit ? ` / ${app.requirements.cpuLimit}` : ""),
     },
     {
-      icon: MemoryStick,
+      icon: faMemory,
       label: "Memory",
       value:
         app.requirements.memoryRequest +
         (app.requirements.memoryLimit ? ` / ${app.requirements.memoryLimit}` : ""),
     },
     {
-      icon: HardDrive,
+      icon: faHardDrive,
       label: "Storage",
       value: app.requirements.storageGiB != null ? `${app.requirements.storageGiB} GiB` : "—",
     },
     {
-      icon: Network,
+      icon: faNetworkWired,
       label: "Ingress",
       value: app.exposesIngress ? "Yes" : "—",
     },
@@ -155,7 +157,7 @@ export function CatalogDetailSheet({
         <DialogHeader>
           <div className="detail-sheet-hero">
             <div className="detail-sheet-icon" aria-hidden>
-              <Icon className="detail-sheet-icon-glyph" />
+              <FontAwesomeIcon icon={Icon} className="detail-sheet-icon-glyph" />
             </div>
             <div className="detail-sheet-title-group">
               <DialogTitle className="detail-sheet-name">
@@ -235,7 +237,7 @@ export function CatalogDetailSheet({
                       className="detail-sheet-link"
                     >
                       {l.label}
-                      <ExternalLink className="size-3" aria-hidden />
+                      <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="size-3" aria-hidden />
                     </a>
                   ))}
                 </div>
@@ -284,7 +286,7 @@ export function CatalogDetailSheet({
                     )}
                   </p>
                   <Button variant="outline" size="sm" onClick={onUnlink} className="self-start gap-1.5">
-                    <Unlink className="size-3.5" aria-hidden />
+                    <FontAwesomeIcon icon={faLinkSlash} className="size-3.5" aria-hidden />
                     Unlink
                   </Button>
                 </div>
@@ -295,7 +297,7 @@ export function CatalogDetailSheet({
                     can't match its image (mirror, private registry, or fork).
                   </p>
                   <Button variant="outline" size="sm" onClick={onLink} className="self-start gap-1.5">
-                    <Link2 className="size-3.5" aria-hidden />
+                    <FontAwesomeIcon icon={faLink} className="size-3.5" aria-hidden />
                     Link a workload…
                   </Button>
                 </div>
@@ -309,7 +311,7 @@ export function CatalogDetailSheet({
                 {reqCells.map((cell) => (
                   <div key={cell.label} className="detail-sheet-req-cell">
                     <span className="detail-sheet-req-label">
-                      <cell.icon className="catalog-chip-icon" aria-hidden />
+                      <FontAwesomeIcon icon={cell.icon} className="catalog-chip-icon" aria-hidden />
                       {cell.label}
                     </span>
                     <span className="detail-sheet-req-value">{cell.value}</span>
@@ -343,7 +345,7 @@ export function CatalogDetailSheet({
                   onClick={() => onUpdate(latest)}
                   title={`Update ${app.name} to ${latest}`}
                 >
-                  <RefreshCw className="size-3.5" aria-hidden />
+                  <FontAwesomeIcon icon={faArrowsRotate} className="size-3.5" aria-hidden />
                   Update to {latest}
                 </Button>
               )}
@@ -358,7 +360,7 @@ export function CatalogDetailSheet({
                     : "Can't resolve the installed workload to uninstall"
                 }
               >
-                <Trash2 className="size-3.5" aria-hidden />
+                <FontAwesomeIcon icon={faTrashCan} className="size-3.5" aria-hidden />
                 Uninstall
               </Button>
               <Button
@@ -385,7 +387,7 @@ export function CatalogDetailSheet({
                     : "No node has enough capacity for this app"
                 }
               >
-                <ArrowDownToLine className="size-3.5" aria-hidden />
+                <FontAwesomeIcon icon={faArrowDownToLine} className="size-3.5" aria-hidden />
                 {selectedNode ? `Install on ${selectedNode}` : "Install on cluster"}
               </Button>
             </>
@@ -412,7 +414,7 @@ function InstalledStatusLine({
   if (result && latest) {
     return (
       <span className="detail-sheet-installed-status detail-sheet-installed-status-update">
-        <ArrowUpCircle className="size-3 shrink-0" aria-hidden />
+        <FontAwesomeIcon icon={faCircleArrowUp} className="size-3 shrink-0" aria-hidden />
         {result.currentTag ?? "?"} → {latest}
       </span>
     );
@@ -423,7 +425,7 @@ function InstalledStatusLine({
         className="detail-sheet-installed-status detail-sheet-installed-status-unknown"
         title={result.reason ?? "Could not determine an update for this image"}
       >
-        <HelpCircle className="size-3 shrink-0" aria-hidden />
+        <FontAwesomeIcon icon={faCircleQuestion} className="size-3 shrink-0" aria-hidden />
         version unknown
       </span>
     );
@@ -431,7 +433,7 @@ function InstalledStatusLine({
   if (result) {
     return (
       <span className="detail-sheet-installed-status detail-sheet-installed-status-ok">
-        <CheckCircle2 className="size-3 shrink-0" aria-hidden />
+        <FontAwesomeIcon icon={faCircleCheck} className="size-3 shrink-0" aria-hidden />
         up to date
       </span>
     );

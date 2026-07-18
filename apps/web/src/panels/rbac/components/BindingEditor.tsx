@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link2, Plus, Trash2, Code, ChevronDown, User } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faLink,
+  faPlus,
+  faTrashCan,
+  faCode,
+  faChevronDown,
+  faUser,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import {
   Dialog,
   DialogBody,
@@ -128,7 +136,7 @@ export function BindingEditor({
       <DialogContent className="max-h-[86vh] w-[calc(100%-2rem)] max-w-[720px]">
         <DialogHeader className="border-[#26272B]">
           <DialogIcon background={false} className="size-9 rounded-[9px]" style={{ background: "#38BDF826" }}>
-            <Link2 className="size-[18px]" style={{ color: "#38BDF8" }} />
+            <FontAwesomeIcon icon={faLink} className="size-[18px]" style={{ color: "#38BDF8" }} />
           </DialogIcon>
           <div className="flex min-w-0 flex-col gap-[3px]">
             <DialogTitle className="text-[20px] font-bold text-white">
@@ -200,7 +208,7 @@ export function BindingEditor({
                     </option>
                   ))}
                 </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-[14px] -translate-y-1/2" style={{ color: "#6B6B73" }} />
+                <FontAwesomeIcon icon={faChevronDown} className="pointer-events-none absolute right-3 top-1/2 size-[14px] -translate-y-1/2" style={{ color: "#6B6B73" }} />
               </div>
             ) : (
               <input
@@ -221,7 +229,7 @@ export function BindingEditor({
             return (
               <div key={i} className="flex flex-wrap items-center gap-[10px]">
                 <div className="relative w-[170px]">
-                  <User className="pointer-events-none absolute left-3 top-1/2 size-[14px] -translate-y-1/2" style={{ color: "#6B6B73" }} />
+                  <FontAwesomeIcon icon={faUser} className="pointer-events-none absolute left-3 top-1/2 size-[14px] -translate-y-1/2" style={{ color: "#6B6B73" }} />
                   <select
                     aria-label="Subject kind"
                     value={s.kind ?? "ServiceAccount"}
@@ -233,7 +241,7 @@ export function BindingEditor({
                       <option key={k} value={k}>{k}</option>
                     ))}
                   </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-[14px] -translate-y-1/2" style={{ color: "#6B6B73" }} />
+                  <FontAwesomeIcon icon={faChevronDown} className="pointer-events-none absolute right-3 top-1/2 size-[14px] -translate-y-1/2" style={{ color: "#6B6B73" }} />
                 </div>
                 <input
                   aria-label="Subject name"
@@ -257,7 +265,7 @@ export function BindingEditor({
                   className="flex size-9 items-center justify-center rounded-[6px] border hover:bg-white/[0.05]"
                   style={{ borderColor: "#26272B", color: "#6B6B73" }}
                 >
-                  <Trash2 className="size-[14px]" />
+                  <FontAwesomeIcon icon={faTrashCan} className="size-[14px]" />
                 </button>
               </div>
             );
@@ -269,7 +277,7 @@ export function BindingEditor({
             className="flex w-full items-center justify-center gap-[7px] rounded-[6px] border px-[14px] py-[12px] text-[13px] font-semibold"
             style={{ background: "#FFFFFF05", borderColor: "#26272B", color: "#A1A1AA" }}
           >
-            <Plus className="size-[15px]" /> Add subject
+            <FontAwesomeIcon icon={faPlus} className="size-[15px]" /> Add subject
           </button>
 
           {rulesForRole && (roleRef.name ?? "").trim() && subjects.some((s) => (s.name ?? "").trim()) && (
@@ -297,7 +305,7 @@ export function BindingEditor({
         <DialogFooter>
           {isEdit && onEditYaml && (
             <Button variant="outline" onClick={onEditYaml} className="mr-auto">
-              <Code className="size-[13px]" /> Edit YAML
+              <FontAwesomeIcon icon={faCode} className="size-[13px]" /> Edit YAML
             </Button>
           )}
           <Button variant="outline" onClick={onClose}>Cancel</Button>

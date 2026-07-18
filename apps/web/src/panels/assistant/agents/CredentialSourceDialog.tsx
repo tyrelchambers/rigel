@@ -7,7 +7,8 @@
 // Names only — a secret VALUE is never requested or rendered. A method toggle (shared
 // across both modes) selects which credential id/env var is being configured.
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faChevronDown } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import {
   Dialog,
   DialogContent,
@@ -170,7 +171,7 @@ export function CredentialSourceDialog({
                     aria-label="Secret"
                   >
                     <span className="truncate">{secretName || "Choose a Secret"}</span>
-                    <ChevronDown className="size-4 shrink-0 text-primary" />
+                    <FontAwesomeIcon icon={faChevronDown} className="size-4 shrink-0 text-primary" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent>
                     {(secrets ?? []).map((s) => (
@@ -190,7 +191,7 @@ export function CredentialSourceDialog({
                     aria-label="Key"
                   >
                     <span className="truncate">{dataKey || "Choose a key"}</span>
-                    <ChevronDown className="size-4 shrink-0 text-primary" />
+                    <FontAwesomeIcon icon={faChevronDown} className="size-4 shrink-0 text-primary" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent>
                     {(chosenSecret?.keys ?? []).map((k) => (

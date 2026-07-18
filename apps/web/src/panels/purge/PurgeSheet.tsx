@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Trash2, Lock, CheckCircle2, XCircle } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faTrashCan,
+  faLock,
+  faCircleCheck,
+  faCircleXmark,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Loader } from "@/components/Loader";
 import {
   Dialog,
@@ -136,7 +142,7 @@ export function PurgeSheet({ target, open, onClose }: PurgeSheetProps) {
       <DialogContent className="border-t-2 border-destructive/50 max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Trash2 className="size-4 text-destructive" />
+            <FontAwesomeIcon icon={faTrashCan} className="size-4 text-destructive" />
             <span>Purge {appName}</span>
           </DialogTitle>
         </DialogHeader>
@@ -164,7 +170,7 @@ export function PurgeSheet({ target, open, onClose }: PurgeSheetProps) {
           {/* Blocked state — protected namespace */}
           {plan && blocked && (
             <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-3">
-              <Lock className="mt-0.5 size-4 shrink-0 text-destructive" />
+              <FontAwesomeIcon icon={faLock} className="mt-0.5 size-4 shrink-0 text-destructive" />
               <p className="text-sm text-destructive">{plan.blockedReason}</p>
             </div>
           )}
@@ -210,7 +216,7 @@ export function PurgeSheet({ target, open, onClose }: PurgeSheetProps) {
                       aria-checked={r.selected}
                       role="checkbox"
                     >
-                      {r.selected && <CheckCircle2 className="size-3" />}
+                      {r.selected && <FontAwesomeIcon icon={faCircleCheck} className="size-3" />}
                     </span>
                     <span className="shrink-0 rounded bg-accent/40 px-1.5 py-0.5 font-mono text-3xs text-accent-foreground">
                       {r.kind}
@@ -245,7 +251,7 @@ export function PurgeSheet({ target, open, onClose }: PurgeSheetProps) {
                   aria-checked={plan.dropDatabase}
                   role="checkbox"
                 >
-                  {plan.dropDatabase && <CheckCircle2 className="size-3" />}
+                  {plan.dropDatabase && <FontAwesomeIcon icon={faCircleCheck} className="size-3" />}
                 </span>
                 <span className="min-w-0">
                   <span className="block text-xs font-semibold text-destructive">
@@ -307,7 +313,7 @@ export function PurgeSheet({ target, open, onClose }: PurgeSheetProps) {
               {exec.isPending ? (
                 <Loader size={16} />
               ) : (
-                <Trash2 />
+                <FontAwesomeIcon icon={faTrashCan} />
               )}
               Purge
             </Button>
@@ -323,9 +329,9 @@ function ResultRow({ result }: { result: PurgeExecuteResultEntry }) {
   return (
     <div className="flex items-center gap-2 border-b px-2.5 py-1.5 text-xs last:border-b-0">
       {result.ok ? (
-        <CheckCircle2 className="size-3.5 shrink-0 text-green-600" />
+        <FontAwesomeIcon icon={faCircleCheck} className="size-3.5 shrink-0 text-green-600" />
       ) : (
-        <XCircle className="size-3.5 shrink-0 text-destructive" />
+        <FontAwesomeIcon icon={faCircleXmark} className="size-3.5 shrink-0 text-destructive" />
       )}
       <span className="shrink-0 font-mono">{result.resource}</span>
       <span className="min-w-0 flex-1 truncate text-muted-foreground">{result.detail}</span>

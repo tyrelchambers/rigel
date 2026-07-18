@@ -1,8 +1,9 @@
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogIcon, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Unplug, ShieldCheck } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faPlugCircleXmark, faShieldCheck } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { classifyProvider, providerLabel } from "./clusterTile";
-import { CLUSTER_ICONS, providerDefaultIcon } from "./clusterIcons";
+import { ClusterIcon, providerDefaultIcon } from "./clusterIcons";
 
 export function RemoveClusterDialog({
   cluster, open, onOpenChange, onConfirm, busy,
@@ -14,13 +15,12 @@ export function RemoveClusterDialog({
   busy?: boolean;
 }) {
   const provider = cluster ? classifyProvider(cluster) : "generic";
-  const Icon = CLUSTER_ICONS[providerDefaultIcon(provider)].Component;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogIcon>
-            <Unplug className="size-[17px]" />
+            <FontAwesomeIcon icon={faPlugCircleXmark} className="size-[17px]" />
           </DialogIcon>
           <DialogTitle>Remove cluster</DialogTitle>
         </DialogHeader>
@@ -30,7 +30,7 @@ export function RemoveClusterDialog({
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 12px", borderRadius: 10, background: "var(--surface-elevated)", border: "1px solid var(--border-subtle)" }}>
           <div style={{ width: 28, height: 28, borderRadius: 8, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--accent-dim)", color: "var(--accent-primary)" }}>
-            <Icon size={15} />
+            <ClusterIcon id={providerDefaultIcon(provider)} className="size-[15px]" />
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
             <span className="text-xs" style={{ fontFamily: "var(--font-mono)", fontWeight: 500, color: "var(--fg-primary)", wordBreak: "break-all" }}>{cluster?.name}</span>
@@ -39,14 +39,14 @@ export function RemoveClusterDialog({
         </div>
 
         <div style={{ display: "flex", alignItems: "flex-start", gap: 9, padding: "11px 12px", borderRadius: 8, background: "var(--surface-elevated)", border: "1px solid var(--border-subtle)" }}>
-          <ShieldCheck size={16} color="var(--status-running)" style={{ flexShrink: 0, marginTop: 1 }} />
+          <FontAwesomeIcon icon={faShieldCheck} className="size-[16px]" style={{ color: "var(--status-running)", flexShrink: 0, marginTop: 1 }} />
           <span className="text-xs" style={{ color: "var(--fg-secondary)", lineHeight: 1.5 }}>This only disconnects it from Rigel. The cluster keeps running on its provider, and you can reconnect anytime.</span>
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button disabled={busy} onClick={onConfirm}>
-            <Unplug size={14} />{busy ? "Removing…" : "Remove from Rigel"}
+            <FontAwesomeIcon icon={faPlugCircleXmark} className="size-[14px]" />{busy ? "Removing…" : "Remove from Rigel"}
           </Button>
         </div>
       </div>

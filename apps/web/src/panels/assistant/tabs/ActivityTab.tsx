@@ -3,14 +3,24 @@
 // ("Activity" + count, "See all" / "Clear all") above a list of rich cards.
 
 import { useEffect, useRef, useState } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faChevronLeft, faChevronRight } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { auditEntryId } from "@rigel/k8s";
 import { cn } from "@/lib/utils";
 import { useAssistantCtx } from "../AssistantContext";
 import { ActivityCard } from "../ActivityCard";
 
+const PAGE_SIZE = 10;
+
 export function ActivityTab() {
   const { d, openAllActivity, run, ns, working } = useAssistantCtx();
   const audit = d.clusterState?.audit ?? [];
+
+  const [page, setPage] = useState(0);
+  const pageCount = Math.max(1, Math.ceil(audit.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount - 1);
+  const start = currentPage * PAGE_SIZE;
+  const shown = audit.slice(start, start + PAGE_SIZE);
 
   // Two-step inline confirm: first click arms, second click within a few seconds
   // clears. Arms revert on timeout or once the list is empty.
@@ -85,9 +95,41 @@ export function ActivityTab() {
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {audit.slice(0, 10).map((e) => (
+          {shown.map((e) => (
             <ActivityCard key={auditEntryId(e)} e={e} />
           ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {audit.length > PAGE_SIZE && (
+        <div className="flex items-center justify-between pt-1">
+          <span className="text-xs text-[var(--fg-tertiary)]">
+            {start + 1}–{Math.min(start + PAGE_SIZE, audit.length)} of {audit.length}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={currentPage === 0}
+              onClick={() => setPage(Math.max(0, currentPage - 1))}
+              aria-label="Previous page"
+              className="flex size-7 items-center justify-center rounded-md border border-[var(--border-subtle)] text-[var(--fg-secondary)] transition-colors hover:bg-white/[0.03] disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              <FontAwesomeIcon icon={faChevronLeft} className="size-4" />
+            </button>
+            <span className="min-w-14 text-center font-mono text-xs text-[var(--fg-tertiary)]">
+              {currentPage + 1} / {pageCount}
+            </span>
+            <button
+              type="button"
+              disabled={currentPage >= pageCount - 1}
+              onClick={() => setPage(Math.min(pageCount - 1, currentPage + 1))}
+              aria-label="Next page"
+              className="flex size-7 items-center justify-center rounded-md border border-[var(--border-subtle)] text-[var(--fg-secondary)] transition-colors hover:bg-white/[0.03] disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              <FontAwesomeIcon icon={faChevronRight} className="size-4" />
+            </button>
+          </div>
         </div>
       )}
     </div>

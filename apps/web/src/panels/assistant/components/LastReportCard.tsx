@@ -6,18 +6,27 @@
 
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { ArrowRight, Check, ChevronDown, Copy } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faArrowRight,
+  faCube,
+  faCheck,
+  faChevronDown,
+  faCircleCheck,
+  faCopy,
+  faShieldCheck,
+  faTrashCan,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { parseIncidentFingerprint, type ParsedFingerprint } from "@rigel/k8s";
 import { Button } from "@/components/ui/button";
 import { useCluster } from "@/store/cluster";
 import { cn } from "@/lib/utils";
 import { Card } from "./primitives";
+import { LogBlock } from "./LogBlock";
+import { SectionHeader } from "./SectionHeader";
 
 const COLLAPSED_COUNT = 4;
 
-// incidentKind → owning panel, focus kind, resource-kind chip, human label, and
-// which panel the "Open" button jumps to. loggedError/unhealthyPod live in Pods;
-// degradedDeployment in Deployments (mirrors NeedsYouTab.issueTarget).
 function targetFor(incidentKind: string): {
   route: string;
   kind: string;
@@ -35,6 +44,20 @@ function targetFor(incidentKind: string): {
     default:
       return { route: "/pods", kind: "pod", chip: "Pod", what: incidentKind || "Incident", panel: "Pods" };
   }
+}
+
+/** Small white-wash pill used for the kind chip and status tags. */
+function Pill({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <span
+      className={cn(
+        "shrink-0 rounded bg-white/[0.06] px-2 py-0.5 font-mono text-3xs text-[var(--fg-tertiary)]",
+        className,
+      )}
+    >
+      {children}
+    </span>
+  );
 }
 
 export function LastReportCard({
@@ -57,8 +80,6 @@ export function LastReportCard({
   const [openRow, setOpenRow] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Keep the raw fingerprint so we can look up the human reason; fall back to the
-  // normalized signature reason for pre-existing state that predates the map.
   const items = autoSilenced
     .map((fp) => {
       const parsed = parseIncidentFingerprint(fp);
@@ -66,15 +87,11 @@ export function LastReportCard({
     })
     .filter((x): x is ParsedFingerprint & { detail: string } => x !== null);
 
-  // Report lines other than the auto-silence summary (which the list replaces).
   const otherText = report
     .split("\n")
     .filter((l) => l.trim() !== "" && !l.startsWith("Auto-silenced "))
     .join("\n");
 
-  // Jump to the affected resource: scope its namespace, navigate to the owning
-  // panel, and seed that panel's search with the exact name so it's the only row
-  // shown (and the focus-request auto-expands it).
   function openResource(it: ParsedFingerprint) {
     const { route, kind } = targetFor(it.incidentKind);
     setNamespaceFilter(it.namespace);
@@ -91,26 +108,34 @@ export function LastReportCard({
   const shown = expanded ? items : items.slice(0, COLLAPSED_COUNT);
 
   return (
-    <Card className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold">Last report</p>
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" onClick={copyReport} disabled={!report}>
-            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-            {copied ? "Copied" : "Copy"}
-          </Button>
-          <Button variant="ghost" size="sm" disabled={working} onClick={onClear}>
-            Clear
-          </Button>
-        </div>
-      </div>
+    <Card className="space-y-4 border-0 bg-transparent px-0">
+      <SectionHeader
+        icon={faShieldCheck}
+        title="Last report"
+        subtitle="Issues Rigel reviewed and cleared on its own."
+        actions={
+          <>
+            <Button variant="secondary" size="sm" onClick={copyReport} disabled={!report}>
+              {copied ? <FontAwesomeIcon icon={faCheck} className="size-3.5" /> : <FontAwesomeIcon icon={faCopy} className="size-3.5" />}
+              {copied ? "Copied" : "Copy"}
+            </Button>
+            <Button variant="secondary" size="sm" disabled={working} onClick={onClear}>
+              <FontAwesomeIcon icon={faTrashCan} className="size-3.5" />
+              Clear
+            </Button>
+          </>
+        }
+      />
 
       {items.length > 0 && (
-        <p className="text-xs text-muted-foreground">
-          Auto-silenced{" "}
-          <span className="font-semibold text-[var(--fg-primary)]">{items.length}</span> benign
-          issue{items.length === 1 ? "" : "s"}
-        </p>
+        <div className="flex items-center gap-2.5">
+          <FontAwesomeIcon icon={faCircleCheck} className="size-4 shrink-0 text-[var(--status-running)]" />
+          <p className="text-sm text-muted-foreground">
+            Rigel checked{" "}
+            <span className="font-semibold text-[var(--fg-primary)]">{items.length}</span> flagged
+            issue{items.length === 1 ? "" : "s"} and found nothing that needs your attention
+          </p>
+        </div>
       )}
 
       {otherText && (
@@ -118,55 +143,58 @@ export function LastReportCard({
       )}
 
       {items.length > 0 && (
-        <div className="overflow-hidden rounded-lg border border-[var(--border-subtle)]">
+        <div className="space-y-2">
           {shown.map((it, i) => {
             const t = targetFor(it.incidentKind);
             const isOpen = openRow === i;
             return (
-              <div key={`${it.namespace}/${it.name}/${i}`} className="border-b border-[var(--border-subtle)] last:border-b-0">
+              <div
+                key={`${it.namespace}/${it.name}/${i}`}
+                className="overflow-hidden rounded-md border border-[var(--border-subtle)] bg-[var(--surface-elevated)]"
+              >
                 <button
                   type="button"
                   aria-expanded={isOpen}
                   onClick={() => setOpenRow((cur) => (cur === i ? null : i))}
-                  className="group flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-white/[0.03]"
+                  className={cn(
+                    "flex w-full items-center gap-2.5 px-3.5 py-3 text-left hover:bg-white/[0.02]",
+                    isOpen && "border-b border-[var(--border-subtle)]",
+                  )}
                 >
-                  <ChevronDown
+                  <FontAwesomeIcon
+                    icon={faChevronDown}
                     className={cn(
                       "size-3.5 shrink-0 text-[var(--fg-tertiary)] transition-transform",
                       isOpen ? "rotate-0" : "-rotate-90",
                     )}
                   />
-                  <span className="min-w-0 flex-1 truncate font-mono text-xs text-[var(--fg-primary)]">
+                  <FontAwesomeIcon icon={faShieldCheck} className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />
+                  <span className="shrink-0 font-mono text-sm font-semibold text-[var(--fg-primary)]">
                     {it.name}
                   </span>
-                  {it.detail && (
-                    <span className="min-w-0 max-w-[40%] shrink truncate text-2xs text-[var(--fg-tertiary)]">
-                      {it.detail}
-                    </span>
-                  )}
-                  <span className="shrink-0 rounded bg-white/[0.06] px-1.5 py-px text-2xs text-[var(--fg-secondary)]">
-                    {t.chip}
-                  </span>
+                  <Pill className="font-normal text-2xs text-[var(--fg-secondary)]">{t.chip}</Pill>
                 </button>
 
                 {isOpen && (
-                  <div className="space-y-2 border-t border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3 py-2.5">
-                    <dl className="grid grid-cols-[84px_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
-                      <dt className="text-[var(--fg-tertiary)]">What</dt>
-                      <dd className="text-[var(--fg-secondary)]">{t.what}, auto-silenced as benign</dd>
-                      <dt className="text-[var(--fg-tertiary)]">Reason</dt>
-                      <dd className="min-w-0 select-text whitespace-pre-wrap break-words font-mono text-[var(--fg-primary)]">
-                        {it.detail || "—"}
-                      </dd>
-                      <dt className="text-[var(--fg-tertiary)]">Resource</dt>
-                      <dd className="min-w-0 select-text break-all font-mono text-[var(--fg-secondary)]">
-                        {it.namespace}/{it.name}
-                      </dd>
-                    </dl>
-                    <Button variant="secondary" size="sm" onClick={() => openResource(it)}>
-                      Open in {t.panel}
-                      <ArrowRight className="size-3.5" />
-                    </Button>
+                  <div className="flex flex-col gap-3 p-3.5">
+                    {it.detail && (
+                      <LogBlock
+                        label={`${it.incidentKind === "loggedError" ? "LOG" : t.chip.toUpperCase()} · ${it.name}`}
+                        detail={it.detail}
+                      />
+                    )}
+                    <div className="flex">
+                      <span className="inline-flex items-center gap-1.5 rounded border border-[var(--border-subtle)] bg-white/[0.04] px-2 py-1 font-mono text-2xs text-[var(--fg-secondary)]">
+                        <FontAwesomeIcon icon={faCube} className="size-3 text-[var(--fg-tertiary)]" />
+                        {it.namespace} / {it.name}
+                      </span>
+                    </div>
+                    <div>
+                      <Button variant="outline" size="sm" onClick={() => openResource(it)}>
+                        Open in {t.panel}
+                        <FontAwesomeIcon icon={faArrowRight} className="size-3.5" />
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -181,13 +209,11 @@ export function LastReportCard({
           onClick={() => setExpanded((v) => !v)}
           className="flex items-center gap-1 text-xs font-medium text-[var(--accent-primary)] hover:underline"
         >
-          <ChevronDown className={cn("size-3.5 transition-transform", expanded && "rotate-180")} />
+          <FontAwesomeIcon icon={faChevronDown} className={cn("size-3.5 transition-transform", expanded && "rotate-180")} />
           {expanded ? "Show less" : `Show all ${items.length}`}
         </button>
       )}
 
-      {/* Report present but nothing structured to show (non-auto-silence text
-          already handled above): fall back to the raw string. */}
       {items.length === 0 && !otherText && report && (
         <p className="select-text whitespace-pre-wrap text-sm text-muted-foreground">{report}</p>
       )}

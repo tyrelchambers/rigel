@@ -5,14 +5,16 @@
 //
 // Composable API (preferred):
 //   <TabBar value={tab} onValueChange={setTab}>
-//     <Tab value="releases" icon={LayoutList}>Releases</Tab>
-//     <Tab value="browse" icon={Store} badge={8}>Browse charts</Tab>
+//     <Tab value="releases" icon={faRectangleList}>Releases</Tab>
+//     <Tab value="browse" icon={faStore} badge={8}>Browse charts</Tab>
 //   </TabBar>
-import { createContext, use, type ComponentType, type ReactNode } from "react";
+import { createContext, use, type ReactNode } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { cn } from "@/lib/utils";
 
-/** A leading tab icon: any component that takes a `className` (e.g. a lucide icon). */
-export type TabIcon = ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+/** A leading tab icon: a Font Awesome icon definition. */
+export type TabIcon = IconDefinition;
 
 interface TabBarContextValue {
   value: string;
@@ -87,7 +89,8 @@ export function Tab({
       )}
     >
       {Icon && (
-        <Icon
+        <FontAwesomeIcon
+          icon={Icon}
           aria-hidden
           className={cn("size-[15px] shrink-0", isActive ? "text-[var(--accent-primary)]" : "text-[var(--fg-tertiary)]")}
         />

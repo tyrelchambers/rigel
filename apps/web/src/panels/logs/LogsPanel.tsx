@@ -1,24 +1,25 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  Search,
-  WrapText,
-  HeartOff,
-  Pause,
-  Trash2,
-  X,
-  ArrowDown,
-  ScrollText,
-  Sparkles,
-  Regex,
-  CircleAlert,
-  History,
-  Download,
-  Copy,
-  Boxes,
-  Box,
-  RefreshCw,
-} from "lucide-react";
+  faMagnifyingGlass,
+  faAlignLeft,
+  faHeartCrack,
+  faPause,
+  faTrashCan,
+  faXmark,
+  faArrowDown,
+  faScroll,
+  faSparkles,
+  faAsterisk,
+  faCircleExclamation,
+  faClockRotateLeft,
+  faDownload,
+  faCopy,
+  faBoxesStacked,
+  faCube,
+  faArrowsRotate,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useCluster, filterByNamespace } from "@/store/cluster";
 import {
   subscribe,
@@ -155,7 +156,7 @@ export default function LogsPanel() {
   );
   const total = scopedItems.length;
   const selectedKey = selectedItem?.key ?? null;
-  const KindIcon = logKind === "pods" ? Box : Boxes;
+  const KindIcon = logKind === "pods" ? faCube : faBoxesStacked;
 
   // Inbound log lines: append (unless paused) and append errors to the banner.
   useEffect(() => {
@@ -419,7 +420,7 @@ export default function LogsPanel() {
               title="Refresh"
               onClick={refreshSources}
             >
-              <RefreshCw />
+              <FontAwesomeIcon icon={faArrowsRotate} />
             </Button>
           </div>
           <TabBar value={logKind} onValueChange={(v) => changeKind(v as LogKind)} className="flex w-full">
@@ -464,7 +465,7 @@ export default function LogsPanel() {
                         aria-hidden
                       />
                       <span className="flex min-w-0 flex-1 items-center gap-[11px] px-3 py-[9px]">
-                        <KindIcon className="size-[15px] shrink-0 text-[var(--fg-tertiary)]" aria-hidden />
+                        <FontAwesomeIcon icon={KindIcon} className="size-[15px] shrink-0 text-[var(--fg-tertiary)]" aria-hidden />
                         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                           <span className="truncate text-[13px] font-semibold text-foreground">{it.name}</span>
                           <span className="truncate font-mono text-[11px] text-[var(--fg-tertiary)]">{it.namespace}</span>
@@ -495,7 +496,7 @@ export default function LogsPanel() {
         {!selectedItem ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
             <div className="rounded-full border border-[var(--border-subtle)] bg-white/[0.03] p-3">
-              <ScrollText className="size-6 text-[var(--fg-tertiary)]" />
+              <FontAwesomeIcon icon={faScroll} className="size-6 text-[var(--fg-tertiary)]" />
             </div>
             <p className="text-sm font-medium text-foreground">Pick a source to tail its logs</p>
             <p className="text-xs text-[var(--fg-tertiary)]">Choose any workload or pod on the left to open a live log stream.</p>
@@ -505,7 +506,7 @@ export default function LogsPanel() {
             {/* Toolbar — identity on the left, follow/filter/actions on the right. */}
             <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-[var(--border-subtle)] bg-card px-5 py-3">
               <div className="flex min-w-0 items-center gap-[11px]">
-                <KindIcon className="size-[18px] shrink-0 text-[var(--accent-primary)]" aria-hidden />
+                <FontAwesomeIcon icon={KindIcon} className="size-[18px] shrink-0 text-[var(--accent-primary)]" aria-hidden />
                 <span className="truncate font-heading text-base font-bold text-foreground">{selectedItem.name}</span>
                 <span className="shrink-0 rounded-[4px] border border-[var(--border-subtle)] bg-white/[0.04] px-2 py-0.5 font-mono text-xs text-[var(--fg-tertiary)]">
                   {selectedItem.namespace}
@@ -542,7 +543,7 @@ export default function LogsPanel() {
                 >
                   {following
                     ? <span className="size-1.5 rounded-full bg-[var(--status-running)]" aria-hidden />
-                    : <Pause className="size-3.5" aria-hidden />}
+                    : <FontAwesomeIcon icon={faPause} className="size-3.5" aria-hidden />}
                   {following ? "Following" : "Paused"}
                 </button>
 
@@ -553,7 +554,7 @@ export default function LogsPanel() {
                   )}
                   style={{ background: "var(--surface-sunken)" }}
                 >
-                  <Search className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />
+                  <FontAwesomeIcon icon={faMagnifyingGlass} className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />
                   <input
                     type="text"
                     value={filter}
@@ -570,37 +571,37 @@ export default function LogsPanel() {
                       title="Clear filter"
                       className="shrink-0 text-[var(--fg-tertiary)] hover:text-foreground"
                     >
-                      <X className="size-3.5" />
+                      <FontAwesomeIcon icon={faXmark} className="size-3.5" />
                     </button>
                   )}
                 </div>
 
                 <div className="flex items-center gap-0.5">
                   <Button variant={useRegex ? "subtle" : "outline"} size="icon-sm" aria-label="Use regular expression" aria-pressed={useRegex} title="Regex filter" onClick={() => setUseRegex((r) => !r)}>
-                    <Regex />
+                    <FontAwesomeIcon icon={faAsterisk} />
                   </Button>
                   <Button variant={errorsOnly ? "subtle" : "outline"} size="icon-sm" aria-label="Errors only" aria-pressed={errorsOnly} title="Show only error / fatal / panic lines" onClick={() => setErrorsOnly((e) => !e)}>
-                    <CircleAlert />
+                    <FontAwesomeIcon icon={faCircleExclamation} />
                   </Button>
                   <Button variant={wrapLines ? "subtle" : "outline"} size="icon-sm" aria-label="Wrap lines" aria-pressed={wrapLines} title="Wrap lines (⌥⌘W)" onClick={() => setWrapLines((w) => !w)}>
-                    <WrapText />
+                    <FontAwesomeIcon icon={faAlignLeft} />
                   </Button>
                   <Button variant={hideProbes ? "subtle" : "outline"} size="icon-sm" aria-label="Hide probes" aria-pressed={hideProbes} title="Hide probe / health-check noise" onClick={() => setHideProbes((h) => !h)}>
-                    <HeartOff />
+                    <FontAwesomeIcon icon={faHeartCrack} />
                   </Button>
                   <span className="mx-1 h-5 w-px bg-[var(--border-subtle)]" aria-hidden />
                   <Button variant="outline" size="icon-sm" aria-label="Copy visible logs" title="Copy visible logs" onClick={copyAll}>
-                    <Copy />
+                    <FontAwesomeIcon icon={faCopy} />
                   </Button>
                   <Button variant="outline" size="icon-sm" aria-label="Download logs" title="Download .log" onClick={downloadAll}>
-                    <Download />
+                    <FontAwesomeIcon icon={faDownload} />
                   </Button>
                   <Button variant="outline" size="icon-sm" aria-label="Clear" title="Clear buffer" onClick={clear}>
-                    <Trash2 />
+                    <FontAwesomeIcon icon={faTrashCan} />
                   </Button>
                   <span className="mx-1 h-5 w-px bg-[var(--border-subtle)]" aria-hidden />
                   <Button variant="ghost" size="icon-sm" aria-label="Close log stream" title="Close" onClick={closeStream}>
-                    <X />
+                    <FontAwesomeIcon icon={faXmark} />
                   </Button>
                 </div>
               </div>
@@ -704,7 +705,7 @@ export default function LogsPanel() {
                   title="Show the previous (crashed) container instance"
                   onClick={() => reissue({ previous: !previous })}
                 >
-                  <History />
+                  <FontAwesomeIcon icon={faClockRotateLeft} />
                 </Button>
               </div>
             </div>
@@ -788,7 +789,7 @@ export default function LogsPanel() {
                               title="Ask Claude about this line"
                               className="shrink-0 text-[var(--fg-tertiary)] opacity-0 hover:text-foreground group-hover:opacity-100"
                             >
-                              <Sparkles className="size-3.5" />
+                              <FontAwesomeIcon icon={faSparkles} className="size-3.5" />
                             </button>
                           </div>
                         );
@@ -822,7 +823,7 @@ export default function LogsPanel() {
               </span>
               {!stickToBottom && (
                 <Button variant="outline" size="sm" onClick={jumpToLatest}>
-                  <ArrowDown className="mr-1 size-3.5" />
+                  <FontAwesomeIcon icon={faArrowDown} className="mr-1 size-3.5" />
                   Jump to latest
                 </Button>
               )}

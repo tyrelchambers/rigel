@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Star, Package, BadgeCheck, ShieldCheck } from "lucide-react";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faStar, faBox, faCircleCheck, faShieldCheck } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useArtifactHubBrowse, type ArtifactHubChart } from "./helmApi";
 
 export function BrowseChartsView({ onPickChart }: { onPickChart: (c: ArtifactHubChart) => void }) {
@@ -41,8 +43,8 @@ export function BrowseChartsView({ onPickChart }: { onPickChart: (c: ArtifactHub
           value={input}
           onChange={(e) => setInput(e.target.value)}
         />
-        <Toggle label="Official" active={official} onClick={() => setOfficial((v) => !v)} icon={BadgeCheck} />
-        <Toggle label="Verified" active={verified} onClick={() => setVerified((v) => !v)} icon={ShieldCheck} />
+        <Toggle label="Official" active={official} onClick={() => setOfficial((v) => !v)} icon={faCircleCheck} />
+        <Toggle label="Verified" active={verified} onClick={() => setVerified((v) => !v)} icon={faShieldCheck} />
       </div>
 
       {/* Results */}
@@ -78,7 +80,7 @@ export function BrowseChartsView({ onPickChart }: { onPickChart: (c: ArtifactHub
   );
 }
 
-function Toggle({ label, active, onClick, icon: Icon }: { label: string; active: boolean; onClick: () => void; icon: typeof BadgeCheck }) {
+function Toggle({ label, active, onClick, icon: Icon }: { label: string; active: boolean; onClick: () => void; icon: IconDefinition }) {
   return (
     <button
       type="button"
@@ -87,7 +89,7 @@ function Toggle({ label, active, onClick, icon: Icon }: { label: string; active:
       className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm"
       style={{ background: active ? "rgba(255,255,255,0.1)" : "transparent", border: "1px solid var(--border-strong)" }}
     >
-      <Icon className="size-3.5" /> {label}
+      <FontAwesomeIcon icon={Icon} className="size-3.5" /> {label}
     </button>
   );
 }
@@ -104,25 +106,25 @@ function ChartCard({ chart, onClick }: { chart: ArtifactHubChart; onClick: () =>
         {chart.logoURL ? (
           <img src={chart.logoURL} alt="" className="size-6 rounded" />
         ) : (
-          <Package className="size-6 text-muted-foreground" />
+          <FontAwesomeIcon icon={faBox} className="size-6 text-muted-foreground" />
         )}
         <span className="truncate font-medium">{chart.displayName}</span>
         {chart.official && (
           <span title="Official" className="inline-flex shrink-0">
-            <BadgeCheck className="size-3.5 text-sky-400" aria-hidden="true" />
+            <FontAwesomeIcon icon={faCircleCheck} className="size-3.5 text-sky-400" aria-hidden="true" />
             <span className="sr-only">Official</span>
           </span>
         )}
         {chart.verifiedPublisher && !chart.official && (
           <span title="Verified publisher" className="inline-flex shrink-0">
-            <ShieldCheck className="size-3.5 text-emerald-400" aria-hidden="true" />
+            <FontAwesomeIcon icon={faShieldCheck} className="size-3.5 text-emerald-400" aria-hidden="true" />
             <span className="sr-only">Verified publisher</span>
           </span>
         )}
       </div>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <span className="truncate">{chart.repoName} · {chart.version}</span>
-        <span className="ml-auto inline-flex items-center gap-1 shrink-0"><Star className="size-3" /> {chart.stars}</span>
+        <span className="ml-auto inline-flex items-center gap-1 shrink-0"><FontAwesomeIcon icon={faStar} className="size-3" /> {chart.stars}</span>
       </div>
       <p className="line-clamp-2 text-xs text-muted-foreground">{chart.description}</p>
     </button>

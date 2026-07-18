@@ -13,7 +13,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Plus, X, Boxes } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faPlus, faXmark, faBoxesStacked } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import {
   useSaveSource,
   useGitHubAccount,
@@ -197,13 +198,13 @@ function DeploymentQueue({
     <div className="flex flex-col gap-2">
       <RepoPathBrowser repo={repo} branch={branch} value={path} onChange={setPath} />
       <Button size="sm" variant="outline" className="gap-1.5 self-start" onClick={addCurrent} disabled={deployments.some((d) => d.path === path)}>
-        <Plus className="size-3.5" /> Add this folder
+        <FontAwesomeIcon icon={faPlus} className="size-3.5" /> Add this folder
       </Button>
       {deployments.length > 0 && (
         <ul className="flex flex-col gap-1.5">
           {deployments.map((d, i) => (
             <li key={d.path} className="flex items-center gap-2 rounded-lg px-2 py-1.5" style={{ background: "#08080A", border: "1px solid #26272B" }}>
-              <Boxes className="size-3.5 shrink-0" style={{ color: "var(--accent-primary)" }} />
+              <FontAwesomeIcon icon={faBoxesStacked} className="size-3.5 shrink-0" style={{ color: "var(--accent-primary)" }} />
               <input
                 value={d.name}
                 onChange={(e) => onChange(deployments.map((x, xi) => (xi === i ? { ...x, name: e.target.value } : x)))}
@@ -213,7 +214,7 @@ function DeploymentQueue({
               />
               <span className="truncate font-mono text-2xs" style={{ color: "var(--fg-tertiary)" }}>{d.path}</span>
               <button type="button" aria-label={`Remove ${d.name}`} className="ml-auto opacity-60 hover:opacity-100" onClick={() => onChange(deployments.filter((_, xi) => xi !== i))}>
-                <X className="size-3.5" />
+                <FontAwesomeIcon icon={faXmark} className="size-3.5" />
               </button>
             </li>
           ))}

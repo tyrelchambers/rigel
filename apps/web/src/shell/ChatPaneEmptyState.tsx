@@ -5,7 +5,8 @@
  * Pure presentational: the parent decides when to show it (passing `show`); this
  * component never reads the store.
  */
-import { Sparkles } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faSparkles } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useNavigate } from "react-router";
 
 interface ChatPaneEmptyStateProps {
@@ -30,7 +31,7 @@ export function ChatPaneEmptyState({ show }: ChatPaneEmptyStateProps) {
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <Sparkles size={15} style={{ color: "var(--accent-primary)" }} />
+        <FontAwesomeIcon icon={faSparkles} className="size-[15px]" style={{ color: "var(--accent-primary)" }} />
         <span className="text-xs" style={{ fontWeight: 600, color: "var(--fg-primary)" }}>
           The Rigel copilot isn't set up yet
         </span>

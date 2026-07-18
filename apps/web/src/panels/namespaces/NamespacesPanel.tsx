@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faPlus } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
@@ -165,7 +166,7 @@ export default function NamespacesPanel() {
           className="w-56"
         />
         <Button size="sm" onClick={openCreate}>
-          <Plus className="size-3" />
+          <FontAwesomeIcon icon={faPlus} className="size-3" />
           New
         </Button>
       </PanelHeader>

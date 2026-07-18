@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { Search, Star } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faMagnifyingGlass, faStar } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { PANEL_META, NAV_GROUPS } from "./navModel";
 import {
   buildLauncherGroups,
@@ -110,7 +111,12 @@ export function NavLauncher({ open, onClose }: NavLauncherProps) {
             className="flex items-center justify-center rounded-sm shrink-0"
             style={{ width: 26, height: 26, background: "var(--surface-sunken)" }}
           >
-            {Icon && <Icon size={15} style={{ color: "var(--fg-secondary)" }} />}
+            {Icon &&
+              (typeof Icon === "function" ? (
+                <Icon size={15} style={{ color: "var(--fg-secondary)" }} />
+              ) : (
+                <FontAwesomeIcon icon={Icon} className="size-[15px]" style={{ color: "var(--fg-secondary)" }} />
+              ))}
           </span>
           <span
             className="text-xs truncate"
@@ -126,11 +132,11 @@ export function NavLauncher({ open, onClose }: NavLauncherProps) {
           className={`shrink-0 p-0.5 transition-opacity ${starVisible ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
           style={{ background: "transparent", border: "none", cursor: "pointer" }}
         >
-          <Star
-            size={14}
+          <FontAwesomeIcon
+            icon={faStar}
+            className="size-[14px]"
             style={{
               color: fav ? "var(--accent-primary)" : "var(--fg-tertiary)",
-              fill: fav ? "var(--accent-primary)" : "transparent",
             }}
           />
         </button>
@@ -182,7 +188,7 @@ export function NavLauncher({ open, onClose }: NavLauncherProps) {
             className="flex items-center gap-2.5 flex-1 rounded-md"
             style={{ padding: "10px 12px", background: "var(--surface-sunken)", border: "1px solid var(--border-subtle)" }}
           >
-            <Search size={16} style={{ color: "var(--fg-tertiary)", flexShrink: 0 }} />
+            <FontAwesomeIcon icon={faMagnifyingGlass} className="size-[16px]" style={{ color: "var(--fg-tertiary)", flexShrink: 0 }} />
             <input
               ref={inputRef}
               type="text"
@@ -206,7 +212,7 @@ export function NavLauncher({ open, onClose }: NavLauncherProps) {
             <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <span className="flex items-center gap-1.5">
                 {sectionLabel("Favorites")}
-                <Star size={11} style={{ color: "var(--accent-primary)", fill: "var(--accent-primary)" }} />
+                <FontAwesomeIcon icon={faStar} className="size-[11px]" style={{ color: "var(--accent-primary)" }} />
               </span>
               <div style={gridStyle} role="listbox" aria-label="Favorites">
                 {favVisible.map((c, i) => renderCell(c, i))}

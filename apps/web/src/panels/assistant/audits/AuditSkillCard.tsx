@@ -1,4 +1,5 @@
-import { type LucideIcon } from "lucide-react";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Button } from "@/components/ui/button";
 import type { AuditCounts } from "@rigel/k8s";
 import { ProLockRow } from "@/shell/billing/ProLockRow";
@@ -6,7 +7,7 @@ import { ProLockRow } from "@/shell/billing/ProLockRow";
 export interface AuditSkillCardProps {
   title: string;
   description: string;
-  Icon: LucideIcon;
+  Icon: IconDefinition;
   counts?: AuditCounts;
   onRun?: () => void;
   locked?: { reason: string; onUpgrade?: () => void };
@@ -21,7 +22,7 @@ export function AuditSkillCard({ title, description, Icon, counts, onRun, locked
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <Icon className="mt-0.5 size-[18px] shrink-0 text-[var(--accent-primary)]" />
+          <FontAwesomeIcon icon={Icon} className="mt-0.5 size-[18px] shrink-0 text-[var(--accent-primary)]" />
           <div className="min-w-0">
             <p className="text-sm font-semibold text-[var(--fg-primary)]">{title}</p>
             <p className="mt-0.5 text-xs text-[var(--fg-tertiary)]">{description}</p>

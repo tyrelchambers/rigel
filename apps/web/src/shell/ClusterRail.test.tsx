@@ -93,14 +93,14 @@ describe("ClusterRail reconciliation effect", () => {
     useCluster.setState({ activeContext: "kind-dev" });
     mockUseContexts.mockReturnValue({ data: [ctx("kind-dev", true), cloudCtx] });
     const { container } = renderRail();
-    expect(container.querySelector(".lucide-lock")).toBeTruthy();
+    expect(container.querySelector('[data-icon="lock"]')).toBeTruthy();
   });
 
   it("does not lock cloud tiles when cloud connect is entitled", () => {
     useCluster.setState({ activeContext: "kind-dev" });
     mockUseContexts.mockReturnValue({ data: [ctx("kind-dev", true), cloudCtx] });
     const { container } = renderRail();
-    expect(container.querySelector(".lucide-lock")).toBeFalsy();
+    expect(container.querySelector('[data-icon="lock"]')).toBeFalsy();
   });
 
   it("redirects a free user off a locked cloud cluster to a local one", async () => {

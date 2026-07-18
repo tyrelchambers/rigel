@@ -3,7 +3,8 @@
 // the agent exists); the rest of the form state is local to this component.
 
 import { useMemo, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faChevronDown } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -199,7 +200,7 @@ export function InstallView() {
             <DropdownMenuTrigger
               render={<Button variant="ghost" size="icon" title="Pick an existing namespace" />}
             >
-              <ChevronDown className="size-4 text-primary" />
+              <FontAwesomeIcon icon={faChevronDown} className="size-4 text-primary" />
             </DropdownMenuTrigger>
             <DropdownMenuContent>
               {d.allNamespaceNames.map((name) => (
@@ -222,7 +223,7 @@ export function InstallView() {
               <span className="truncate">
                 {monitored.size === 0 ? "All namespaces" : [...monitored].sort().join(", ")}
               </span>
-              <ChevronDown className="size-4 shrink-0 text-primary" />
+              <FontAwesomeIcon icon={faChevronDown} className="size-4 shrink-0 text-primary" />
             </DropdownMenuTrigger>
             <DropdownMenuContent>
               <DropdownMenuItem onClick={() => setConfig((c) => ({ ...c, namespaces: "" }))}>

@@ -3,7 +3,8 @@
  * ChatHistorySheet). Click a row to resume it; trash to delete. Searchable.
  */
 import { useEffect, useState } from "react";
-import { Clock, X, Search, Trash2, MessagesSquare } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faClock, faXmark, faMagnifyingGlass, faTrashCan, faComments } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { ageDescription, type ChatHistoryEntry } from "./chatHistory";
 
 interface Props {
@@ -70,7 +71,7 @@ export function ChatHistorySheet({ open, entries, onResume, onDelete, onClose }:
       >
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderBottom: "1px solid #26272B" }}>
-          <Clock size={14} style={{ color: "var(--accent-primary)" }} />
+          <FontAwesomeIcon icon={faClock} className="size-[14px]" style={{ color: "var(--accent-primary)" }} />
           <span className="text-xs" style={{ fontWeight: 600, color: "var(--fg-primary)" }}>Chat history</span>
           <span className="text-3xs" style={{ fontFamily: "var(--font-mono, monospace)", color: "var(--fg-tertiary)" }}>{entries.length}</span>
           <div style={{ flex: 1 }} />
@@ -79,13 +80,13 @@ export function ChatHistorySheet({ open, entries, onResume, onDelete, onClose }:
             aria-label="Close"
             style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, borderRadius: 6, background: "var(--surface-sunken)", border: "1px solid #34353A", color: "var(--fg-secondary)", cursor: "pointer" }}
           >
-            <X size={12} />
+            <FontAwesomeIcon icon={faXmark} className="size-[12px]" />
           </button>
         </div>
 
         {/* Search */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderBottom: "1px solid #26272B" }}>
-          <Search size={13} style={{ color: "var(--fg-tertiary)", flexShrink: 0 }} />
+          <FontAwesomeIcon icon={faMagnifyingGlass} className="size-[13px]" style={{ color: "var(--fg-tertiary)", flexShrink: 0 }} />
           <input
             autoFocus
             value={search}
@@ -99,7 +100,7 @@ export function ChatHistorySheet({ open, entries, onResume, onDelete, onClose }:
         {/* Body */}
         {filtered.length === 0 ? (
           <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, color: "var(--fg-tertiary)" }}>
-            <MessagesSquare size={30} style={{ color: "#3F4046" }} />
+            <FontAwesomeIcon icon={faComments} className="size-[30px]" style={{ color: "#3F4046" }} />
             <div className="text-xs" style={{ fontWeight: 500, color: "var(--fg-secondary)" }}>
               {entries.length === 0 ? "No saved chats yet" : "No matches"}
             </div>
@@ -148,7 +149,7 @@ export function ChatHistorySheet({ open, entries, onResume, onDelete, onClose }:
                   onMouseEnter={(ev) => (ev.currentTarget.style.color = "#EF4444")}
                   onMouseLeave={(ev) => (ev.currentTarget.style.color = "#6B6B73")}
                 >
-                  <Trash2 size={13} />
+                  <FontAwesomeIcon icon={faTrashCan} className="size-[13px]" />
                 </button>
               </div>
             ))}

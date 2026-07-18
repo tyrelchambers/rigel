@@ -8,7 +8,8 @@
  *
  * Inline styles + CSS custom properties to match GlobalHeader.tsx.
  */
-import { Download, LoaderCircle, RotateCw } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faDownload, faSpinner, faArrowRotateRight } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useAppUpdate } from "./useAppUpdate";
 
 const NO_DRAG = { WebkitAppRegion: "no-drag" } as unknown as React.CSSProperties;
@@ -44,7 +45,7 @@ export function AppUpdateChip() {
         }}
         className="hover:opacity-90 transition-opacity"
       >
-        <RotateCw size={13} style={{ color: "var(--fg-inverse)" }} />
+        <FontAwesomeIcon icon={faArrowRotateRight} className="size-[13px]" style={{ color: "var(--fg-inverse)" }} />
         <span className="text-xs" style={{ color: "var(--fg-inverse)", fontWeight: 700 }}>
           Restart to update
         </span>
@@ -59,7 +60,7 @@ export function AppUpdateChip() {
         aria-label={`Downloading update, ${progress} percent`}
         style={{ ...OUTLINE, gap: 8, cursor: "default" }}
       >
-        <LoaderCircle size={13} className="animate-spin" style={{ color: "var(--accent-primary)" }} />
+        <FontAwesomeIcon icon={faSpinner} className="size-[13px] animate-spin" style={{ color: "var(--accent-primary)" }} />
         <span className="text-xs" style={{ color: "var(--accent-soft, #7dd3fc)", fontWeight: 600 }}>
           Downloading
         </span>
@@ -108,7 +109,7 @@ export function AppUpdateChip() {
         style={OUTLINE}
         className="hover:opacity-90 transition-opacity"
       >
-        <Download size={13} style={{ color: "var(--accent-primary)" }} />
+        <FontAwesomeIcon icon={faDownload} className="size-[13px]" style={{ color: "var(--accent-primary)" }} />
         <span
           className="text-xs"
           style={{ color: "var(--accent-soft, #7dd3fc)", fontWeight: 600 }}

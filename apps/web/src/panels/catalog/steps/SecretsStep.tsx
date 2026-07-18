@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Copy, RefreshCw, KeyRound, Check } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCopy, faArrowsRotate, faKey, faCheck } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { generateSecret, type SecretFieldSpec } from "@rigel/catalog";
 import { Button } from "@/components/ui/button";
 
@@ -28,7 +29,7 @@ export function SecretsStep({
   return (
     <div className="wiz-step">
       <div className="wiz-note">
-        <KeyRound aria-hidden />
+        <FontAwesomeIcon icon={faKey} aria-hidden />
         <span>
           This app needs a value for each field below. Strong random values are pre-filled — keep
           them, regenerate, or type your own. Nothing is applied until you continue.
@@ -67,7 +68,7 @@ export function SecretsStep({
                     title="Regenerate"
                     onClick={() => set(s.key, generateSecret(s.length ?? 32, s.format ?? "alphanumeric"))}
                   >
-                    <RefreshCw />
+                    <FontAwesomeIcon icon={faArrowsRotate} />
                   </button>
                 )}
                 <button
@@ -81,7 +82,7 @@ export function SecretsStep({
                     setTimeout(() => setCopied(null), 1200);
                   }}
                 >
-                  {copied === s.key ? <Check className="text-[#10B981]" /> : <Copy />}
+                  {copied === s.key ? <FontAwesomeIcon icon={faCheck} className="text-[#10B981]" /> : <FontAwesomeIcon icon={faCopy} />}
                 </button>
               </div>
             </div>

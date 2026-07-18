@@ -1,4 +1,5 @@
-import { Globe, Lock, Network, Signpost } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faGlobe, faLock, faNetworkWired, faSignsPost } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useNavigate } from "react-router";
 import { goToResource } from "@/lib/resourceNav";
 import { MetaCard, SectionLabel } from "@/panels/components/MetaCard";
@@ -49,9 +50,9 @@ export function ConnectivityDetail({ flow }: { flow: Flow }) {
         <MetaCard label="ROUTE">
           <div className="flex items-center gap-[7px]">
             {flow.isExternal ? (
-              <Globe className="size-[13px] text-[var(--fg-tertiary)]" />
+              <FontAwesomeIcon icon={faGlobe} className="size-[13px] text-[var(--fg-tertiary)]" />
             ) : (
-              <Lock className="size-[13px] text-[var(--fg-tertiary)]" />
+              <FontAwesomeIcon icon={faLock} className="size-[13px] text-[var(--fg-tertiary)]" />
             )}
             <span className="font-mono text-xs text-[var(--fg-secondary)]">
               {flow.isExternal
@@ -65,7 +66,8 @@ export function ConnectivityDetail({ flow }: { flow: Flow }) {
 
         <MetaCard label="SERVICE">
           <div className="flex items-center gap-[7px]">
-            <Network
+            <FontAwesomeIcon
+              icon={faNetworkWired}
               className="size-[13px]"
               style={{ color: flow.serviceExists ? "var(--fg-tertiary)" : "var(--status-failed)" }}
             />
@@ -103,7 +105,7 @@ export function ConnectivityDetail({ flow }: { flow: Flow }) {
                 onClick={() => goIngress(ing)}
                 className="flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[13px] py-[10px] text-left transition-colors hover:bg-[var(--surface-elevated)] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <Signpost className="size-3.5 text-[var(--fg-tertiary)]" aria-hidden />
+                <FontAwesomeIcon icon={faSignsPost} className="size-3.5 text-[var(--fg-tertiary)]" aria-hidden />
                 <span className="font-mono text-xs text-[var(--fg-secondary)]">{ing}</span>
               </button>
             ))}

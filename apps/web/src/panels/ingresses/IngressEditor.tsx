@@ -30,7 +30,17 @@ import { YamlEditor } from "@/components/YamlEditorLazy";
 import { useClusterYamlSchema } from "@/lib/useClusterYamlSchema";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
-import { Box, Globe, Lock, Network, Plus, Server, Trash2, X } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faCube,
+  faGlobe,
+  faLock,
+  faNetworkWired,
+  faPlus,
+  faServer,
+  faTrashCan,
+  faXmark,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 
 // ---------------------------------------------------------------------------
 // IngressEditor — edit an Ingress's values (class, rules, TLS, annotations) via
@@ -173,14 +183,14 @@ export function IngressEditor({ target, open, onClose, onApplied }: IngressEdito
       <DialogContent className="max-w-[680px]">
         <DialogHeader>
           <DialogIcon className="rounded-[9px] bg-[var(--accent-dim)] text-[var(--accent-primary)]">
-            <Network className="size-[18px]" aria-hidden />
+            <FontAwesomeIcon icon={faNetworkWired} className="size-[18px]" aria-hidden />
           </DialogIcon>
           <div className="flex min-w-0 flex-col gap-1">
             <div className="flex min-w-0 items-center gap-2">
               <DialogTitle className="shrink-0 text-lg font-bold text-[var(--fg-primary)]">Edit Ingress</DialogTitle>
               {name && (
                 <span className="flex min-w-0 items-center gap-1.5 rounded bg-[var(--accent-dim)] px-2 py-0.5">
-                  <Globe className="size-3 shrink-0 text-[var(--accent-primary)]" aria-hidden />
+                  <FontAwesomeIcon icon={faGlobe} className="size-3 shrink-0 text-[var(--accent-primary)]" aria-hidden />
                   <span className="truncate font-mono text-xs text-[var(--accent-primary)]">{name}</span>
                 </span>
               )}
@@ -206,13 +216,13 @@ export function IngressEditor({ target, open, onClose, onApplied }: IngressEdito
                   <Field label="Name">
                     <div className="relative">
                       <input value={name} disabled aria-label="name" className={cn(boxInput, "pr-9")} />
-                      <Lock className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-[var(--fg-tertiary)]" aria-hidden />
+                      <FontAwesomeIcon icon={faLock} className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-[var(--fg-tertiary)]" aria-hidden />
                     </div>
                   </Field>
                   <Field label="Namespace">
                     <div className="relative">
                       <input value={namespace} disabled aria-label="namespace" className={cn(boxInput, "pl-9")} />
-                      <Box className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-[var(--fg-tertiary)]" aria-hidden />
+                      <FontAwesomeIcon icon={faCube} className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-[var(--fg-tertiary)]" aria-hidden />
                     </div>
                   </Field>
                   <Field label="Ingress class">
@@ -251,7 +261,7 @@ export function IngressEditor({ target, open, onClose, onApplied }: IngressEdito
                       </div>
                       {rules.length > 1 && (
                         <Button type="button" variant="destructive" size="sm" onClick={() => removeRule(ri)}>
-                          <Trash2 aria-hidden /> Remove
+                          <FontAwesomeIcon icon={faTrashCan} aria-hidden /> Remove
                         </Button>
                       )}
                     </div>
@@ -266,14 +276,14 @@ export function IngressEditor({ target, open, onClose, onApplied }: IngressEdito
                           </select>
                           <span className="font-mono text-sm text-[var(--fg-tertiary)]">→</span>
                           <div className="flex min-w-[120px] flex-1 items-center gap-1.5 rounded border border-[var(--border-subtle)] bg-[var(--surface-sunken)] focus-within:border-[var(--accent-primary)]">
-                            <Server className="ml-2.5 size-3.5 shrink-0 text-[var(--fg-tertiary)]" aria-hidden />
+                            <FontAwesomeIcon icon={faServer} className="ml-2.5 size-3.5 shrink-0 text-[var(--fg-tertiary)]" aria-hidden />
                             <input value={p.serviceName} placeholder="service" onChange={(e) => updatePath(ri, pi, { serviceName: e.target.value })} aria-label="service name" className="min-w-0 flex-1 bg-transparent py-2 pr-2.5 font-mono text-xs text-[var(--fg-primary)] outline-none placeholder:text-[var(--fg-tertiary)]" />
                           </div>
                           <span className="font-mono text-sm text-[var(--fg-tertiary)]">:</span>
                           <input value={p.servicePort} placeholder="80" onChange={(e) => updatePath(ri, pi, { servicePort: e.target.value })} aria-label="service port" className={cn(cellInput, "w-[56px]")} />
                           {rule.paths.length > 1 && (
                             <Button type="button" variant="destructive" size="icon-sm" aria-label="Remove path" onClick={() => removePath(ri, pi)}>
-                              <X aria-hidden />
+                              <FontAwesomeIcon icon={faXmark} aria-hidden />
                             </Button>
                           )}
                         </div>
@@ -284,7 +294,7 @@ export function IngressEditor({ target, open, onClose, onApplied }: IngressEdito
                 ))}
 
                 <Button type="button" variant="subtle" onClick={addRule} className="w-full">
-                  <Plus aria-hidden /> Add rule
+                  <FontAwesomeIcon icon={faPlus} aria-hidden /> Add rule
                 </Button>
               </section>
 
@@ -300,7 +310,7 @@ export function IngressEditor({ target, open, onClose, onApplied }: IngressEdito
                     <span className="font-mono text-sm text-[var(--fg-tertiary)]">→</span>
                     <input value={t.secretName} placeholder="tls-secret" onChange={(e) => updateTls(ti, { secretName: e.target.value })} aria-label="tls secret name" className={cn(cellInput, "w-[180px]")} />
                     <Button type="button" variant="destructive" size="icon-sm" aria-label="Remove TLS" onClick={() => removeTls(ti)}>
-                      <X aria-hidden />
+                      <FontAwesomeIcon icon={faXmark} aria-hidden />
                     </Button>
                   </div>
                 ))}
@@ -370,7 +380,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 function AddButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
   return (
     <Button type="button" variant="outline" size="sm" className="w-fit" onClick={onClick}>
-      <Plus className="text-[var(--accent-primary)]" aria-hidden /> {children}
+      <FontAwesomeIcon icon={faPlus} className="text-[var(--accent-primary)]" aria-hidden /> {children}
     </Button>
   );
 }

@@ -10,7 +10,8 @@ import { useEffect, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
-import { SquareTerminal, RotateCw, X } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faSquareTerminal, faArrowRotateRight, faXmark } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { onTermEvent, sendTermStart, sendTermInput, sendTermResize, sendTermStop } from "@/lib/ws";
 
 /** Window event that toggles the drawer — fired by the StatusBar chip, the nav
@@ -174,15 +175,15 @@ export function TerminalDrawer({ open, onClose }: { open: boolean; onClose: () =
 
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-1.5" style={{ borderBottom: "1px solid #1F1F24", flexShrink: 0 }}>
-        <SquareTerminal className="size-3.5" style={{ color: "var(--accent-primary)" }} />
+        <FontAwesomeIcon icon={faSquareTerminal} className="size-3.5" style={{ color: "var(--accent-primary)" }} />
         <span className="text-xs" style={{ fontWeight: 600 }}>Terminal</span>
         <span className="text-3xs" style={{ color: "var(--fg-tertiary)" }}>interactive cluster shell</span>
         <div className="ml-auto flex items-center gap-1">
           <button onClick={restart} title="Restart shell" className="rounded p-1 hover:bg-white/5" aria-label="Restart shell">
-            <RotateCw className="size-3.5" style={{ color: "var(--fg-tertiary)" }} />
+            <FontAwesomeIcon icon={faArrowRotateRight} className="size-3.5" style={{ color: "var(--fg-tertiary)" }} />
           </button>
           <button onClick={onClose} title="Close (⌃`)" className="rounded p-1 hover:bg-white/5" aria-label="Close terminal">
-            <X className="size-3.5" style={{ color: "var(--fg-tertiary)" }} />
+            <FontAwesomeIcon icon={faXmark} className="size-3.5" style={{ color: "var(--fg-tertiary)" }} />
           </button>
         </div>
       </div>
@@ -204,7 +205,7 @@ export function TerminalDrawer({ open, onClose }: { open: boolean; onClose: () =
           >
             <span className="text-xs" style={{ color: "var(--fg-secondary)" }}>{ended}</span>
             <button onClick={restart} className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium" style={{ background: "var(--accent-primary)", color: "var(--fg-inverse)" }}>
-              <RotateCw className="size-3.5" /> Restart shell
+              <FontAwesomeIcon icon={faArrowRotateRight} className="size-3.5" /> Restart shell
             </button>
           </div>
         )}

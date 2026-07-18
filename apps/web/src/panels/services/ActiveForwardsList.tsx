@@ -1,5 +1,10 @@
 import { useState } from "react";
-import { ChevronRight, ChevronDown, TriangleAlert } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faChevronRight,
+  faChevronDown,
+  faTriangleExclamation,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { ForwardRow } from "./ForwardRow";
 import type { ActiveForward } from "./portForward";
 
@@ -20,7 +25,7 @@ export function ActiveForwardsList({ forwards }: { forwards: ActiveForward[] }) 
         aria-expanded={open}
         className="flex w-full items-center gap-2 px-3 py-2 text-left"
       >
-        {open ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+        {open ? <FontAwesomeIcon icon={faChevronDown} className="size-4" /> : <FontAwesomeIcon icon={faChevronRight} className="size-4" />}
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Active forwards ({forwards.length})
         </span>
@@ -29,7 +34,7 @@ export function ActiveForwardsList({ forwards }: { forwards: ActiveForward[] }) 
       {open && (
         <div className="space-y-2 px-3 pb-3">
           <p className="flex gap-2 text-xs text-muted-foreground">
-            <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
+            <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5 size-3.5 shrink-0" />
             <span>
               Port forwarding runs inside the server container. 127.0.0.1:&lt;port&gt; is reachable
               from your machine only when running the server locally or when the port is published.

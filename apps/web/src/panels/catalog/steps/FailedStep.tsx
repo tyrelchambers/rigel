@@ -1,4 +1,5 @@
-import { CircleAlert } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCircleExclamation } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Button } from "@/components/ui/button";
 
 /** Step 8 — Failed. Error message + Back / Retry / Hand off buttons. */
@@ -16,7 +17,7 @@ export function FailedStep({
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-sm">
-        <CircleAlert className="size-5 text-destructive" />
+        <FontAwesomeIcon icon={faCircleExclamation} className="size-5 text-destructive" />
         <span className="font-medium">Installation failed</span>
       </div>
       <pre className="max-h-60 overflow-auto rounded-md bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap">

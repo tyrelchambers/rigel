@@ -3,7 +3,8 @@
 // Scope: Apply (active cluster), Save to all clusters, or Copy to a subset —
 // each confirmed through a dialog that shows the diff and names the cluster set.
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faChevronDown } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { TabBar, Tab } from "@/components/ui/Tabs";
@@ -97,7 +98,7 @@ export function PermissionsTab() {
                   disabled={perms.applying}
                   className="ml-1 inline-flex items-center rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-1.5 py-2 text-[var(--fg-secondary)] outline-none disabled:opacity-40"
                 >
-                  <ChevronDown className="size-4" />
+                  <FontAwesomeIcon icon={faChevronDown} className="size-4" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem
@@ -125,7 +126,7 @@ export function PermissionsTab() {
                     aria-disabled
                     className="ml-1 inline-flex cursor-not-allowed items-center rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-1.5 py-2 text-[var(--fg-secondary)] opacity-40 outline-none"
                   >
-                    <ChevronDown className="size-4" />
+                    <FontAwesomeIcon icon={faChevronDown} className="size-4" />
                   </TooltipTrigger>
                   <TooltipContent>
                     Save to all / copy needs another cluster with the assistant installed.

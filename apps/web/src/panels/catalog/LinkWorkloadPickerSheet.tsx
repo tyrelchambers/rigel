@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link2, Search } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faLink, faMagnifyingGlass } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import {
   type CatalogApp,
   type DeploymentLike,
@@ -132,7 +133,7 @@ export function LinkWorkloadPickerSheet({
       <DialogContent className="max-h-[85vh] max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Link2 className="size-4" />
+            <FontAwesomeIcon icon={faLink} className="size-4" />
             {containerStep ? "Choose a container" : `Link a workload to ${app.name}`}
           </DialogTitle>
         </DialogHeader>
@@ -167,7 +168,7 @@ export function LinkWorkloadPickerSheet({
             <>
               {/* Search */}
               <div className="flex items-center gap-2 rounded-md border bg-background px-2.5 shrink-0">
-                <Search className="size-3.5 text-muted-foreground" />
+                <FontAwesomeIcon icon={faMagnifyingGlass} className="size-3.5 text-muted-foreground" />
                 <input
                   type="text"
                   value={search}

@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Unplug } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faPlugCircleXmark } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CLUSTER_ICONS, ICON_PALETTE, type IconId } from "./clusterIcons";
+import { CLUSTER_ICONS, ClusterIcon, ICON_PALETTE, type IconId } from "./clusterIcons";
 
 /**
  * Modal icon picker for a cluster tile. Open when `contextName` is non-null.
@@ -68,7 +69,6 @@ export function ClusterIconPicker({
       />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(48px, 1fr))", gap: 8 }}>
         {ids.map((id) => {
-          const Icon = CLUSTER_ICONS[id].Component;
           const selected = id === currentId;
           return (
             <button
@@ -92,7 +92,7 @@ export function ClusterIconPicker({
                 transition: "background 100ms ease",
               }}
             >
-              <Icon size={20} />
+              <ClusterIcon id={id} className="size-[20px]" />
             </button>
           );
         })}
@@ -113,7 +113,7 @@ export function ClusterIconPicker({
                 border: "1px solid var(--border-subtle)", borderRadius: 8, padding: "6px 12px", cursor: "pointer",
                 display: "flex", alignItems: "center", gap: 6 }}
             >
-              <Unplug size={13} />
+              <FontAwesomeIcon icon={faPlugCircleXmark} className="size-[13px]" />
               Remove from Rigel
             </button>
           )}

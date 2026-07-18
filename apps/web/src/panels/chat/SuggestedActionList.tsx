@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ArrowRight, Check } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faArrowRight, faCheck } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { type SuggestedAction, isDestructiveAction } from "@/lib/actionBlocks";
 import { iconForKind } from "./actionIcons";
 
@@ -81,7 +82,7 @@ export function SuggestedActionList({ actions, onAction, onRunBatch }: Props) {
                   outline: "none",
                 }}
               >
-                {selected && <Check size={11} strokeWidth={3} />}
+                {selected && <FontAwesomeIcon icon={faCheck} className="size-[11px]" />}
               </button>
             )}
             <button
@@ -117,9 +118,9 @@ export function SuggestedActionList({ actions, onAction, onRunBatch }: Props) {
                 (e.currentTarget as HTMLButtonElement).style.boxShadow = "none";
               }}
             >
-              <Icon size={11} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+              <FontAwesomeIcon icon={Icon} className="size-[11px]" style={{ flexShrink: 0 }} />
               <span style={{ flex: 1 }}>{action.label}</span>
-              <ArrowRight size={9} strokeWidth={2.5} style={{ opacity: 0.6, flexShrink: 0 }} />
+              <FontAwesomeIcon icon={faArrowRight} className="size-[9px]" style={{ opacity: 0.6, flexShrink: 0 }} />
             </button>
           </div>
         );

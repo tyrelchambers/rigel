@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Boxes, Check, CircleCheck, CircleX, Copy, RefreshCw } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faBoxesStacked, faCheck, faCircleCheck, faCircleXmark, faCopy, faArrowsRotate } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogIcon, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -103,7 +104,7 @@ export function CreateClusterModal({ open, onOpenChange }: { open: boolean; onOp
       <DialogContent>
         <DialogHeader>
           <DialogIcon>
-            <Boxes className="size-[17px]" />
+            <FontAwesomeIcon icon={faBoxesStacked} className="size-[17px]" />
           </DialogIcon>
           <DialogTitle>Create cluster</DialogTitle>
         </DialogHeader>
@@ -135,7 +136,7 @@ export function CreateClusterModal({ open, onOpenChange }: { open: boolean; onOp
                   onClick={copyInstall}
                   className="flex items-center gap-1.5 self-stretch border-l border-white/[0.08] px-4 text-xs font-semibold text-[#4FB0F2] transition-colors hover:bg-white/[0.03]"
                 >
-                  {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                  {copied ? <FontAwesomeIcon icon={faCheck} className="size-3.5" /> : <FontAwesomeIcon icon={faCopy} className="size-3.5" />}
                   {copied ? "Copied" : "Copy"}
                 </button>
               </div>
@@ -166,7 +167,7 @@ export function CreateClusterModal({ open, onOpenChange }: { open: boolean; onOp
               disabled={isFetching}
               className="bg-white/[0.08] text-white hover:bg-white/[0.12]"
             >
-              <RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} />
+              <FontAwesomeIcon icon={faArrowsRotate} className={cn("size-3.5", isFetching && "animate-spin")} />
               {isFetching ? "Checking…" : "Re-check"}
             </Button>
             <span className="text-xs text-muted-foreground">Run the steps above, then re-check.</span>
@@ -273,9 +274,9 @@ function StatusRow({
   return (
     <div className="flex items-center gap-2.5 px-4 py-3">
       {ok ? (
-        <CircleCheck className="size-[17px] shrink-0 text-[#34D07F]" />
+        <FontAwesomeIcon icon={faCircleCheck} className="size-[17px] shrink-0 text-[#34D07F]" />
       ) : (
-        <CircleX className="size-[17px] shrink-0 text-[#FF6B6B]" />
+        <FontAwesomeIcon icon={faCircleXmark} className="size-[17px] shrink-0 text-[#FF6B6B]" />
       )}
       <span className={cn("text-sm font-medium", ok ? "text-foreground" : "text-zinc-300")}>
         {ok ? okText : badText}

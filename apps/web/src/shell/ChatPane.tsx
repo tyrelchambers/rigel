@@ -17,8 +17,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { Copy, SquarePen, Clock, ArrowDown, Settings } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCopy, faPenToSquare, faClock, faArrowDown, faGear } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { BatchConfirmSheet, type BatchConfirmItem } from "@/components/BatchConfirmSheet";
 import { PurgeSheet } from "@/panels/purge/PurgeSheet";
@@ -69,16 +69,14 @@ import {
   stampThinking,
   makeMessage,
   newId,
-  isNearBottom,
-  showJumpToNewest,
   elapsedSeconds,
   transcript,
   shortSessionId,
   toActionBlock,
-  TAIL_SCROLL_THROTTLE_MS,
 } from "@/panels/chat/chatLogic";
 import type { ChatEvent, ChatMessage } from "@/panels/chat/types";
 import { RigelMark } from "@/components/RigelMark";
+import { MessageScroller } from "@shadcn/react/message-scroller";
 
 // ── ChatPane ──────────────────────────────────────────────────────────────────
 
@@ -157,7 +155,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   const [historyEntries, setHistoryEntries] = useState<ChatHistoryEntry[]>([]);
   const [liveThinking, setLiveThinking] = useState("");
   const [turnStartedAt, setTurnStartedAt] = useState<Date | null>(null);
-  const [isAtBottom, setIsAtBottom] = useState(true);
   const [usageLimit, setUsageLimit] = useState<string | null>(null);
   const [autoFocusComposer, setAutoFocusComposer] = useState(false);
 
@@ -213,8 +210,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   }, [messages, isStreaming, sessionId, conversationId]);
 
   const composerRef = useRef<HTMLTextAreaElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
 
   // Chat enablement follows the ACTIVE agent's connection (not a Claude-only
   // token check): the composer is enabled iff the active agent is connected.
@@ -256,14 +251,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   const { data: suggestions } = useSuggestions();
   const liveThinkingRef = useRef("");
   const turnStartedAtRef = useRef<Date | null>(null);
-  const isAtBottomRef = useRef(true);
-  const lastTailScroll = useRef(0);
-
-  isAtBottomRef.current = isAtBottom;
-
-  const scrollToBottom = useCallback((smooth: boolean) => {
-    bottomRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
-  }, []);
 
   // Begin a fresh conversation. The previous one stays saved (autosave keyed by
   // conversationId). Shared by the New-chat button and the new-thread handoff.
@@ -301,8 +288,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
       const start = new Date();
       setTurnStartedAt(start);
       turnStartedAtRef.current = start;
-      setIsAtBottom(true);
-      isAtBottomRef.current = true;
       sendChat(prompt, {
         ...modelConfigRef.current,
         sessionId: opts?.newThread ? undefined : sessionIdRef.current ?? undefined,
@@ -379,32 +364,9 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     return onChatEvent(handle);
   }, []);
 
-  // ── Scroll: new message ───────────────────────────────────────────────────
-  const messageCount = messages.length;
-  useEffect(() => {
-    if (isAtBottomRef.current) scrollToBottom(true);
-  }, [messageCount, scrollToBottom]);
-
-  // ── Scroll: streaming tail (throttled) ───────────────────────────────────
-  const lastText = messages[messages.length - 1]?.text ?? "";
-  useEffect(() => {
-    if (!isAtBottomRef.current) return;
-    const now = Date.now();
-    if (now - lastTailScroll.current < TAIL_SCROLL_THROTTLE_MS) return;
-    lastTailScroll.current = now;
-    scrollToBottom(false);
-  }, [lastText, scrollToBottom]);
-
-  // ── Scroll: turn end catch-up ─────────────────────────────────────────────
-  useEffect(() => {
-    if (!isStreaming && isAtBottomRef.current) scrollToBottom(true);
-  }, [isStreaming, scrollToBottom]);
-
-  function handleScroll() {
-    const el = scrollRef.current;
-    if (!el) return;
-    setIsAtBottom(isNearBottom(el.scrollTop, el.clientHeight, el.scrollHeight));
-  }
+  // Scroll is handled by the MessageScroller below: `autoScroll` follows the
+  // live edge while streaming, and each user turn is a `scrollAnchor` so a new
+  // question scrolls to the top with its reply growing beneath it.
 
   // ── ⌘L / Ctrl+L focuses the composer ─────────────────────────────────────
   useEffect(() => {
@@ -456,8 +418,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     const start = new Date();
     setTurnStartedAt(start);
     turnStartedAtRef.current = start;
-    setIsAtBottom(true);
-    isAtBottomRef.current = true;
     sendChat(text, { ...modelConfig, sessionId: sessionId ?? undefined, scope: scopeToWire(scopeConfig) });
   }
 
@@ -491,8 +451,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     setLiveThinking("");
     liveThinkingRef.current = "";
     setHistoryOpen(false);
-    setIsAtBottom(true);
-    isAtBottomRef.current = true;
   }
   function deleteHistoryEntry(e: ChatHistoryEntry) {
     deleteSession(e.id);
@@ -537,8 +495,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     const start = new Date();
     setTurnStartedAt(start);
     turnStartedAtRef.current = start;
-    setIsAtBottom(true);
-    isAtBottomRef.current = true;
     sendChat(chatFeedback(info.commandString, info.result), {
       ...modelConfigRef.current,
       sessionId: sessionIdRef.current ?? undefined,
@@ -570,8 +526,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     const start = new Date();
     setTurnStartedAt(start);
     turnStartedAtRef.current = start;
-    setIsAtBottom(true);
-    isAtBottomRef.current = true;
 
     const ran: BatchRun[] = [];
     let failedAt = -1;
@@ -676,7 +630,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
             style={headerBtnStyle}
             aria-label="Copy conversation"
           >
-            <Copy size={11} />
+            <FontAwesomeIcon icon={faCopy} className="size-[11px]" />
           </button>
 
           {/* New chat */}
@@ -686,7 +640,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
             style={headerBtnStyle}
             aria-label="New chat"
           >
-            <SquarePen size={11} style={{ color: "var(--accent-primary)" }} />
+            <FontAwesomeIcon icon={faPenToSquare} className="size-[11px]" style={{ color: "var(--accent-primary)" }} />
           </button>
 
           {/* Chat history */}
@@ -696,7 +650,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
             style={headerBtnStyle}
             aria-label="Chat history"
           >
-            <Clock size={11} />
+            <FontAwesomeIcon icon={faClock} className="size-[11px]" />
           </button>
 
           {/* Assistant settings */}
@@ -706,7 +660,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
             style={headerBtnStyle}
             aria-label="Assistant settings"
           >
-            <Settings size={11} />
+            <FontAwesomeIcon icon={faGear} className="size-[11px]" />
           </button>
 
           {shortId && (
@@ -726,55 +680,34 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
           )}
         </header>
 
-        {/* ── Message list ─────────────────────────────────────────────────── */}
-        <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
-          <div
-            ref={scrollRef}
-            onScroll={handleScroll}
-            style={{
-              height: "100%",
-              overflowY: "auto",
-              overflowX: "hidden",
-              padding: "14px 14px 0",
-              display: "flex",
-              flexDirection: "column",
-              gap: 10,
-            }}
-          >
-            <ChatPaneEmptyState show={notConfigured && messages.length === 0} />
-            {messages.map((m) => (
-              <MessageBubble
-                key={m.id}
-                message={m}
-                onAction={handleSuggestedAction}
-                onRunBatch={handleRunBatch}
-                onAnswer={(value) => handoffToChat(value)}
-                agentNamespace={agentNamespace}
-              />
-            ))}
-            <div ref={bottomRef} style={{ height: 14 }} />
-          </div>
+        {/* ── Message list (MessageScroller: sticks to bottom while streaming) ── */}
+        <MessageScroller.Provider autoScroll defaultScrollPosition="end">
+          <MessageScroller.Root className="relative min-h-0 flex-1 overflow-hidden">
+            <MessageScroller.Viewport className="h-full overflow-x-hidden overflow-y-auto px-3.5 pt-3.5">
+              <MessageScroller.Content className="flex flex-col gap-2.5 pb-3.5">
+                <ChatPaneEmptyState show={notConfigured && messages.length === 0} />
+                {messages.map((m) => (
+                  <MessageScroller.Item key={m.id} messageId={m.id} scrollAnchor={m.role === "user"}>
+                    <MessageBubble
+                      message={m}
+                      onAction={handleSuggestedAction}
+                      onRunBatch={handleRunBatch}
+                      onAnswer={(value) => handoffToChat(value)}
+                      agentNamespace={agentNamespace}
+                    />
+                  </MessageScroller.Item>
+                ))}
+              </MessageScroller.Content>
+            </MessageScroller.Viewport>
 
-          {showJumpToNewest(isAtBottom, messages.length) && (
-            <Button
-              size="icon-sm"
-              variant="outline"
-              onClick={() => {
-                setIsAtBottom(true);
-                scrollToBottom(true);
-              }}
-              style={{
-                position: "absolute",
-                bottom: 12,
-                left: "50%",
-                transform: "translateX(-50%)",
-              }}
+            <MessageScroller.Button
               aria-label="Jump to newest"
+              className="absolute bottom-3 left-1/2 flex size-7 -translate-x-1/2 items-center justify-center rounded-full border border-border bg-popover text-popover-foreground shadow-md transition-opacity hover:bg-accent data-[active=false]:pointer-events-none data-[active=false]:opacity-0 data-[active=true]:opacity-100"
             >
-              <ArrowDown />
-            </Button>
-          )}
-        </div>
+              <FontAwesomeIcon icon={faArrowDown} className="size-4" />
+            </MessageScroller.Button>
+          </MessageScroller.Root>
+        </MessageScroller.Provider>
 
         {/* ── Thinking pane ────────────────────────────────────────────────── */}
         {showThinkingPane && (

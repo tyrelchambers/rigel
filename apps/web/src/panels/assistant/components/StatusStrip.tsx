@@ -4,7 +4,8 @@
 // narrow widths; each value shows a skeleton until its data source is ready.
 // Built to Pencil frame "Assistant — Overview (improved)" (status strip).
 
-import { Timer } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faStopwatch } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useAssistantCtx } from "../AssistantContext";
 import { Bar } from "./primitives";
 import { tokenLabel, tokenColorClass, auditCount } from "../display";
@@ -45,7 +46,7 @@ function StatValue({ children, className = "" }: { children: React.ReactNode; cl
 function TokenGroup({ children }: { children: React.ReactNode }) {
   return (
     <span className="flex items-center gap-2 whitespace-nowrap">
-      <Timer className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />
+      <FontAwesomeIcon icon={faStopwatch} className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />
       <span className="font-mono text-2xs uppercase tracking-[0.05em] text-[var(--fg-tertiary)]">
         Token
       </span>

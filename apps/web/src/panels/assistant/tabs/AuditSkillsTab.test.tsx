@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { HeartPulse } from "lucide-react";
+import { faHeartPulse } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { DEFAULT_AUDIT_ENTITLEMENT } from "@rigel/k8s";
 import { AuditSkillsTab } from "./AuditSkillsTab";
 import { AuditSkillCard } from "../audits/AuditSkillCard";
@@ -89,7 +89,7 @@ describe("AuditSkillCard count summary", () => {
       <AuditSkillCard
         title="Reliability"
         description="d"
-        Icon={HeartPulse}
+        Icon={faHeartPulse}
         counts={{ critical: 0, warning: 0, info: 0, total: 0, workloadsAffected: 0 }}
       />,
     );
@@ -101,7 +101,7 @@ describe("AuditSkillCard count summary", () => {
       <AuditSkillCard
         title="Reliability"
         description="d"
-        Icon={HeartPulse}
+        Icon={faHeartPulse}
         counts={{ critical: 1, warning: 2, info: 1, total: 4, workloadsAffected: 3 }}
       />,
     );
@@ -116,7 +116,7 @@ describe("AuditSkillCard count summary", () => {
       <AuditSkillCard
         title="Security"
         description="d"
-        Icon={HeartPulse}
+        Icon={faHeartPulse}
         locked={{ reason: "Upgrade to unlock it." }}
       />,
     );

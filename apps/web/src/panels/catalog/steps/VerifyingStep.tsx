@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, CircleAlert, Hourglass } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCheck, faCircleExclamation, faHourglass } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useCluster } from "@/store/cluster";
 import { Loader } from "@/components/Loader";
 import { Button } from "@/components/ui/button";
@@ -87,10 +88,10 @@ export function VerifyingStep({
       <ul className="space-y-2">
         {rows.map((r) => (
           <li key={r.label} className="flex items-center gap-2 text-sm">
-            {r.icon === "done" && <Check className="size-4 text-green-600 dark:text-green-400" />}
+            {r.icon === "done" && <FontAwesomeIcon icon={faCheck} className="size-4 text-green-600 dark:text-green-400" />}
             {r.icon === "spin" && <Loader size={16} className="text-muted-foreground" />}
-            {r.icon === "wait" && <Hourglass className="size-4 text-muted-foreground" />}
-            {r.icon === "fail" && <CircleAlert className="size-4 text-destructive" />}
+            {r.icon === "wait" && <FontAwesomeIcon icon={faHourglass} className="size-4 text-muted-foreground" />}
+            {r.icon === "fail" && <FontAwesomeIcon icon={faCircleExclamation} className="size-4 text-destructive" />}
             <span>{r.label}</span>
             {r.detail && <span className="ml-auto font-mono text-xs text-muted-foreground">{r.detail}</span>}
           </li>

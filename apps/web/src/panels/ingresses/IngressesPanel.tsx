@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Lock, Pencil } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faLock, faPencil } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useCluster, filterByNamespace } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
@@ -191,7 +192,7 @@ export default function IngressesPanel() {
                       }}
                       title="TLS enabled"
                     >
-                      <Lock size={9} strokeWidth={2.5} />
+                      <FontAwesomeIcon icon={faLock} className="size-[9px]" />
                       TLS
                     </span>
                   )}
@@ -264,7 +265,7 @@ function IngressDetail({ ingress, onEdit }: { ingress: Ingress; onEdit: () => vo
       {/* Manage */}
       <div className="flex items-center justify-end">
         <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={onEdit}>
-          <Pencil className="size-3" />
+          <FontAwesomeIcon icon={faPencil} className="size-3" />
           Edit
         </Button>
       </div>

@@ -1,6 +1,7 @@
 // Lazy 1-level folder browser — click a folder to descend, breadcrumb to go up.
 // The current folder IS the chosen manifest path ("." = repo root).
-import { Folder, FileText } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faFolder, faFileLines } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useRepoTree } from "./gitApi";
 
 export function RepoPathBrowser({ repo, branch, value, onChange }: { repo: string; branch: string; value: string; onChange: (path: string) => void }) {
@@ -34,13 +35,13 @@ export function RepoPathBrowser({ repo, branch, value, onChange }: { repo: strin
         )}
         {dirs.map((d) => (
           <button key={d.path} type="button" onClick={() => onChange(d.path)} className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-white/[0.04]">
-            <Folder className="size-3.5 shrink-0" style={{ color: "var(--accent-primary)" }} />
+            <FontAwesomeIcon icon={faFolder} className="size-3.5 shrink-0" style={{ color: "var(--accent-primary)" }} />
             <span className="font-mono">{d.name}/</span>
           </button>
         ))}
         {files.map((f) => (
           <div key={f.path} className="flex items-center gap-2 px-2.5 py-1.5 text-xs" style={{ color: "var(--fg-tertiary)" }}>
-            <FileText className="size-3.5 shrink-0" />
+            <FontAwesomeIcon icon={faFileLines} className="size-3.5 shrink-0" />
             <span className="font-mono">{f.name}</span>
           </div>
         ))}

@@ -5,7 +5,8 @@
 // primitives, not a Sheet.
 
 import { type ReactNode } from "react";
-import { AlertTriangle, Unplug } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faTriangleExclamation, faPlugCircleXmark } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import {
   Dialog,
   DialogBody,
@@ -48,7 +49,7 @@ export function ChannelDisconnectDialog({
           <p className="text-sm leading-relaxed text-muted-foreground">{description}</p>
           {error && (
             <div className="mt-3 flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span className="select-text">{error}</span>
             </div>
           )}
@@ -58,7 +59,7 @@ export function ChannelDisconnectDialog({
             Cancel
           </Button>
           <Button variant="destructive" onClick={onConfirm} disabled={pending}>
-            <Unplug className="size-3.5" />
+            <FontAwesomeIcon icon={faPlugCircleXmark} className="size-3.5" />
             {pending ? "Disconnecting…" : "Disconnect"}
           </Button>
         </DialogFooter>

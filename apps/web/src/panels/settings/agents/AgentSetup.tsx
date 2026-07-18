@@ -1,5 +1,10 @@
 import { useState, type ReactNode } from "react";
-import { ChevronLeft, CircleCheck, ExternalLink } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faChevronLeft,
+  faCircleCheck,
+  faArrowUpRightFromSquare,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import {
   useSetActiveAgent,
   useSetAgentAuth,
@@ -64,7 +69,7 @@ export function AgentSetup({
         className="inline-flex items-center self-start transition-opacity hover:opacity-80 text-xs"
         style={{ gap: 6, fontWeight: 500, color: MUTED }}
       >
-        <ChevronLeft size={15} /> Back
+        <FontAwesomeIcon icon={faChevronLeft} className="size-[15px]" /> Back
       </button>
 
       {/* Header: mark + name + status pill, then the vendor line */}
@@ -102,7 +107,7 @@ export function AgentSetup({
           }}
         >
           {agent.installLabel}
-          <ExternalLink size={14} />
+          <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="size-[14px]" />
         </a>
       </StepCard>
 
@@ -216,7 +221,7 @@ export function AgentSetup({
                 color: ACTIVE,
               }}
             >
-              <CircleCheck size={15} /> Active
+              <FontAwesomeIcon icon={faCircleCheck} className="size-[15px]" /> Active
             </span>
           ) : (
             <button
@@ -232,7 +237,7 @@ export function AgentSetup({
                 border: `1px solid ${ACTIVE}`,
               }}
             >
-              <CircleCheck size={15} />{" "}
+              <FontAwesomeIcon icon={faCircleCheck} className="size-[15px]" />{" "}
               {setActive.isPending ? "Switching…" : "Use this agent"}
             </button>
           ))}

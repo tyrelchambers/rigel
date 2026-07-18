@@ -1,6 +1,7 @@
 // AuditRow — a single row in the audit log, with expand/collapse and revert.
 
-import { ChevronDown, ChevronRight, Undo2 } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faChevronDown, faChevronRight, faArrowRotateLeft } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Button } from "@/components/ui/button";
 import type { AssistantAuditEntry } from "@rigel/k8s";
 import { auditEntryId } from "@rigel/k8s";
@@ -37,9 +38,9 @@ export function AuditRow({ e }: { e: AssistantAuditEntry }) {
         <span className="ml-auto flex items-center gap-2">
           {canExpand &&
             (isOpen ? (
-              <ChevronDown className="size-3" />
+              <FontAwesomeIcon icon={faChevronDown} className="size-3" />
             ) : (
-              <ChevronRight className="size-3" />
+              <FontAwesomeIcon icon={faChevronRight} className="size-3" />
             ))}
           <span className="font-mono text-3xs uppercase text-muted-foreground">{e.tier}</span>
           <span
@@ -81,7 +82,7 @@ export function AuditRow({ e }: { e: AssistantAuditEntry }) {
           disabled={working}
           onClick={() => openRevert(backup, e.proposal ?? e.incident)}
         >
-          <Undo2 className="size-3.5" /> Revert
+          <FontAwesomeIcon icon={faArrowRotateLeft} className="size-3.5" /> Revert
         </Button>
       )}
     </div>

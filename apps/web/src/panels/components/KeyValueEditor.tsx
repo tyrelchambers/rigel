@@ -1,4 +1,5 @@
-import { Plus, Minus, FileLock2 } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faPlus, faMinus, faFileLock } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import type { KVRow } from "@rigel/k8s";
 import { blankRow } from "@rigel/k8s";
 import { Button } from "@/components/ui/button";
@@ -76,14 +77,14 @@ export function KeyValueEditor({
                   aria-label={`Remove ${r.key || "row"}`}
                   onClick={() => removeRow(idx)}
                 >
-                  <Minus className="size-4 text-destructive" aria-hidden />
+                  <FontAwesomeIcon icon={faMinus} className="size-4 text-destructive" aria-hidden />
                 </Button>
               )}
             </div>
 
             {isBinary ? (
               <p className="mt-1.5 flex items-center gap-1.5 rounded-md border border-dashed px-2 py-1.5 text-xs font-mono text-muted-foreground/70">
-                <FileLock2 className="size-3.5" aria-hidden />
+                <FontAwesomeIcon icon={faFileLock} className="size-3.5" aria-hidden />
                 {`<binary, ${r.binary!.bytes} bytes>`}
                 <span className="ml-auto text-3xs uppercase tracking-wide">read-only</span>
               </p>
@@ -112,7 +113,7 @@ export function KeyValueEditor({
 
       {!fixedRows && (
         <Button type="button" variant="outline" size="sm" onClick={addRow}>
-          <Plus className="size-3.5" aria-hidden /> Add key
+          <FontAwesomeIcon icon={faPlus} className="size-3.5" aria-hidden /> Add key
         </Button>
       )}
     </div>

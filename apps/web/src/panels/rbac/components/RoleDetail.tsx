@@ -1,4 +1,12 @@
-import { Server, User, Users, Pencil, Code, Trash2 } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faServer,
+  faUser,
+  faUsers,
+  faPencil,
+  faCode,
+  faTrashCan,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import type { PolicyRule, Subject } from "../types";
 import type { Grant } from "../types";
 import { RuleRow } from "./RuleRow";
@@ -17,9 +25,9 @@ interface Props {
 }
 
 function subjectIcon(kind: string | undefined) {
-  if (kind === "Group") return Users;
-  if (kind === "ServiceAccount") return Server;
-  return User;
+  if (kind === "Group") return faUsers;
+  if (kind === "ServiceAccount") return faServer;
+  return faUser;
 }
 
 export function RoleDetail({
@@ -52,7 +60,7 @@ export function RoleDetail({
               onClick={onEdit}
               className="flex items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface-sunken)] px-3 py-1.5 text-xs font-medium text-[var(--fg-primary)] transition-colors hover:bg-white/[0.08]"
             >
-              <Pencil className="size-[13px]" /> Edit
+              <FontAwesomeIcon icon={faPencil} className="size-[13px]" /> Edit
             </button>
           )}
           {onEditYaml && (
@@ -63,7 +71,7 @@ export function RoleDetail({
               onClick={onEditYaml}
               className="flex size-8 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface-sunken)] text-[var(--fg-secondary)] transition-colors hover:bg-white/[0.08] hover:text-[var(--fg-primary)]"
             >
-              <Code className="size-[14px]" />
+              <FontAwesomeIcon icon={faCode} className="size-[14px]" />
             </button>
           )}
           {onDelete && (
@@ -74,7 +82,7 @@ export function RoleDetail({
               onClick={onDelete}
               className="flex size-8 items-center justify-center rounded-[var(--radius-md)] border border-[var(--status-failed)]/40 bg-[var(--status-failed)]/10 text-[var(--status-failed)] transition-colors hover:bg-[var(--status-failed)]/20"
             >
-              <Trash2 className="size-[14px]" />
+              <FontAwesomeIcon icon={faTrashCan} className="size-[14px]" />
             </button>
           )}
         </div>
@@ -96,7 +104,7 @@ export function RoleDetail({
             const Icon = subjectIcon(b.subject.kind);
             return (
               <div key={`${b.bindingName}:${i}`} className="flex flex-wrap items-center gap-x-[11px] gap-y-1 px-[11px] py-[9px]">
-                <Icon className="size-[15px] shrink-0 text-[var(--fg-tertiary)]" />
+                <FontAwesomeIcon icon={Icon} className="size-[15px] shrink-0 text-[var(--fg-tertiary)]" />
                 <span className="break-all font-[var(--font-mono)] text-xs text-[var(--fg-primary)]">
                   {b.subject.name}
                 </span>

@@ -54,8 +54,7 @@ describe("LastReportCard", () => {
   it("expands a row to reveal what was skipped", () => {
     wrap();
     fireEvent.click(screen.getByText("web-abc"));
-    expect(screen.getByText(/unhealthy pod, auto-silenced as benign/i)).toBeInTheDocument();
-    expect(screen.getByText("default/web-abc")).toBeInTheDocument();
+    expect(screen.getByText("default / web-abc")).toBeInTheDocument();
     // With no reason map, the Reason falls back to the fingerprint signature.
     expect(screen.getAllByText("CrashLoopBackOff").length).toBeGreaterThan(0);
   });
@@ -67,6 +66,17 @@ describe("LastReportCard", () => {
     expect(
       screen.getAllByText("fatal: connection reset by peer while reading DB socket").length,
     ).toBeGreaterThan(0);
+  });
+
+  it("shows a full-log expander when the reason spans many lines", () => {
+    const fp = SILENCED[2]; // unhealthyPod|default|web-abc|CrashLoopBackOff
+    const many = Array.from({ length: 14 }, (_, i) => `line ${i + 1}`).join("\n");
+    wrap({ autoSilencedReasons: { [fp]: many } });
+    fireEvent.click(screen.getByText("web-abc"));
+    expect(screen.getByText("6 of 14 lines")).toBeInTheDocument();
+    expect(screen.queryByText("line 14")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /show full log/i }));
+    expect(screen.getByText("line 14")).toBeInTheDocument();
   });
 
   it("navigates to the pod (namespace-scoped, search-seeded) via Open", () => {

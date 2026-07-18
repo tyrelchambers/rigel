@@ -1,4 +1,5 @@
-import { ArrowUp, ArrowDown, GitBranch } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faArrowUp, faArrowDown, faCodeBranch } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useNavigate } from "react-router";
 import { ListRow } from "@/panels/components/ListRow";
 import { TagPill } from "@/panels/components/TagPill";
@@ -189,7 +190,7 @@ export function DeploymentRow({
             textOverflow: "ellipsis",
           }}
         >
-          <GitBranch className="size-2.5 shrink-0" />
+          <FontAwesomeIcon icon={faCodeBranch} className="size-2.5 shrink-0" />
           {linkedSrc}
         </span>
       )}
@@ -206,7 +207,7 @@ export function DeploymentRow({
               style={{ color: "var(--status-running)" }}
               title={`${updated} new pod(s) up`}
             >
-              <ArrowUp className="size-2.5" />
+              <FontAwesomeIcon icon={faArrowUp} className="size-2.5" />
               {updated}
             </span>
           )}
@@ -216,7 +217,7 @@ export function DeploymentRow({
               style={{ color: "var(--status-pending)" }}
               title={`${Math.max(0, total - updated)} old terminating`}
             >
-              <ArrowDown className="size-2.5" />
+              <FontAwesomeIcon icon={faArrowDown} className="size-2.5" />
               {Math.max(0, total - updated)}
             </span>
           )}

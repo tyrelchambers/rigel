@@ -1,4 +1,5 @@
-import { X } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faXmark } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import type { Secret } from "@rigel/k8s";
 
 // ---------------------------------------------------------------------------
@@ -39,7 +40,7 @@ export function ImagePullSecretsField({ value, secrets, onChange }: ImagePullSec
               onClick={() => onChange(value.filter((x) => x !== n))}
               className="text-destructive hover:opacity-70"
             >
-              <X className="size-3" aria-hidden />
+              <FontAwesomeIcon icon={faXmark} className="size-3" aria-hidden />
             </button>
           </span>
         ))}

@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Eye, EyeOff, Plus, Pencil } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faEye,
+  faEyeSlash,
+  faPlus,
+  faPencil,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import type { Secret } from "@rigel/k8s";
 import { useCluster, filterByNamespace } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
@@ -151,7 +157,7 @@ export default function SecretsPanel() {
           className="w-56"
         />
         <Button size="sm" onClick={openCreate}>
-          <Plus className="size-4" aria-hidden /> New Secret
+          <FontAwesomeIcon icon={faPlus} className="size-4" aria-hidden /> New Secret
         </Button>
       </PanelHeader>
 
@@ -338,11 +344,11 @@ function SecretDetail({ secret, onEdit }: { secret: Secret; onEdit: () => void }
                     >
                       {isRevealed ? (
                         <>
-                          <EyeOff className="size-3" aria-hidden /> Hide
+                          <FontAwesomeIcon icon={faEyeSlash} className="size-3" aria-hidden /> Hide
                         </>
                       ) : (
                         <>
-                          <Eye className="size-3" aria-hidden /> Reveal
+                          <FontAwesomeIcon icon={faEye} className="size-3" aria-hidden /> Reveal
                         </>
                       )}
                     </button>
@@ -378,7 +384,7 @@ function SecretDetail({ secret, onEdit }: { secret: Secret; onEdit: () => void }
           Manage
         </span>
         <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={onEdit}>
-          <Pencil className="size-3" />
+          <FontAwesomeIcon icon={faPencil} className="size-3" />
           Edit
         </Button>
       </div>

@@ -7,12 +7,14 @@
 // additionally watches the RBAC kinds while the tab is open. Built to Pencil frame
 // "Assistant — Overview (improved)" (Resources block).
 import { useEffect } from "react";
-import { ArrowUpRight } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faArrowUpRight, faBoxesStacked } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useNavigate } from "react-router";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { useAssistantCtx } from "./AssistantContext";
 import { GrantRoleButton } from "./GrantRoleButton";
+import { SectionHeader } from "./components/SectionHeader";
 
 interface OwnedResource {
   kind: string;
@@ -171,7 +173,7 @@ export function OwnedResources() {
                 {r.kind}
               </span>
               <span className="truncate font-mono text-xs text-[var(--fg-primary)]">{r.name}</span>
-              <ArrowUpRight className="ml-auto size-[15px] shrink-0 text-[var(--fg-tertiary)]" />
+              <FontAwesomeIcon icon={faArrowUpRight} className="ml-auto size-[15px] shrink-0 text-[var(--fg-tertiary)]" />
             </button>
           ))}
         </div>
@@ -180,19 +182,25 @@ export function OwnedResources() {
   }
 
   return (
-    <section className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-2">
-        <h3 className="text-base font-semibold text-[var(--fg-primary)]">Resources</h3>
-        <span className="rounded-full border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-2 py-0.5 font-mono text-xs font-semibold text-[var(--fg-secondary)]">
-          {total}
-        </span>
-        <GrantRoleButton namespace={ns} />
-      </div>
-      <p className="text-xs text-[var(--fg-tertiary)]">
-        Kubernetes objects this assistant owns in <span className="font-mono">{ns}</span>. Open one to
-        view it in its panel.
-      </p>
-      <div className="mt-2 grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <section className="flex flex-col gap-4">
+      <SectionHeader
+        icon={faBoxesStacked}
+        title={
+          <>
+            Resources
+            <span className="rounded-full border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-2 py-0.5 font-mono text-xs font-semibold text-[var(--fg-secondary)]">
+              {total}
+            </span>
+          </>
+        }
+        subtitle={
+          <>
+            Kubernetes objects this assistant owns in <span className="font-mono">{ns}</span>.
+          </>
+        }
+        actions={<GrantRoleButton namespace={ns} />}
+      />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="flex flex-col gap-[18px]">{leftGroups.map(renderGroup)}</div>
         <div className="flex flex-col gap-[18px]">{rightGroups.map(renderGroup)}</div>
       </div>

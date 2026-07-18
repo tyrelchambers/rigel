@@ -2,7 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Check, ChevronDown, Cloud, CloudOff, Copy, ExternalLink, RefreshCw, ShieldAlert, UserRound } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faCheck, faChevronDown, faCloud, faCloudSlash, faCopy, faArrowUpRightFromSquare,
+  faArrowsRotate, faShieldExclamation, faUser,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { FaApple, FaLinux, FaWindows } from "react-icons/fa";
 import {
   type ProviderDescriptor, type CloudCluster, type CheckResult, type ParamSpec, nextStepFromCheck, diagnoseError,
@@ -111,8 +115,8 @@ function CommandField({ command }: { command: string }) {
           }}
         >
           {copied
-            ? <><Check size={12} /> Copied</>
-            : <><Copy size={12} /> Copy</>
+            ? <><FontAwesomeIcon icon={faCheck} className="size-[12px]" /> Copied</>
+            : <><FontAwesomeIcon icon={faCopy} className="size-[12px]" /> Copy</>
           }
         </button>
       </div>
@@ -165,7 +169,7 @@ function CopyChip({ command }: { command: string }) {
           color: copied ? "var(--fg-secondary)" : "var(--accent-primary)",
         }}
       >
-        {copied ? <Check size={12} /> : <Copy size={12} />}
+        {copied ? <FontAwesomeIcon icon={faCheck} className="size-[12px]" /> : <FontAwesomeIcon icon={faCopy} className="size-[12px]" />}
       </button>
     </div>
   );
@@ -267,7 +271,7 @@ function ErrorPanel({ descriptor, error, account, onRetry }: { descriptor: Provi
           background: "var(--surface-elevated)",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
-          <ShieldAlert size={19} color="var(--status-failed)" />
+          <FontAwesomeIcon icon={faShieldExclamation} className="size-[19px]" style={{ color: "var(--status-failed)" }} />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <div className="text-base" style={{ fontWeight: 600, color: "var(--fg-primary)" }}>
@@ -280,7 +284,7 @@ function ErrorPanel({ descriptor, error, account, onRetry }: { descriptor: Provi
           </div>
           {account ? (
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
-              <UserRound size={13} color="var(--fg-tertiary)" style={{ flexShrink: 0 }} />
+              <FontAwesomeIcon icon={faUser} className="size-[13px]" style={{ color: "var(--fg-tertiary)", flexShrink: 0 }} />
               <span className="text-xs" style={{ color: "var(--fg-tertiary)", flexShrink: 0 }}>Signed in as</span>
               <span className="text-xs" style={{ fontFamily: "var(--font-mono)", color: "var(--fg-secondary)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{account}</span>
             </div>
@@ -308,14 +312,14 @@ function ErrorPanel({ descriptor, error, account, onRetry }: { descriptor: Provi
             display: "flex", alignItems: "center", gap: 6, background: "transparent", border: "none",
             cursor: "pointer", color: "var(--fg-secondary)", padding: 0,
           }}>
-            <ChevronDown size={15} style={{ transform: showDetails ? "rotate(180deg)" : "rotate(0deg)" }} />
+            <FontAwesomeIcon icon={faChevronDown} className="size-[15px]" style={{ transform: showDetails ? "rotate(180deg)" : "rotate(0deg)" }} />
             Error details
           </button>
           <button type="button" aria-label={copied ? "Copied" : "Copy error"} onClick={copyError} className="text-xs" style={{
             display: "flex", alignItems: "center", gap: 5, background: "transparent", border: "none",
             cursor: "pointer", color: copied ? "var(--fg-secondary)" : "var(--accent-primary)",
           }}>
-            {copied ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}
+            {copied ? <><FontAwesomeIcon icon={faCheck} className="size-[12px]" /> Copied</> : <><FontAwesomeIcon icon={faCopy} className="size-[12px]" /> Copy</>}
           </button>
         </div>
         {showDetails && (
@@ -336,11 +340,11 @@ function ErrorPanel({ descriptor, error, account, onRetry }: { descriptor: Provi
           <a href={hint.docsUrl} target="_blank" rel="noreferrer" className="text-xs" style={{
             display: "flex", alignItems: "center", gap: 4, color: "var(--accent-primary)", textDecoration: "none",
           }}>
-            {hint.docsLabel ?? "Docs"} <ExternalLink size={11} />
+            {hint.docsLabel ?? "Docs"} <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="size-[11px]" />
           </a>
         ) : <span />}
         <Button onClick={onRetry}>
-          <RefreshCw size={14} style={{ marginRight: 6 }} /> Try again
+          <FontAwesomeIcon icon={faArrowsRotate} className="size-[14px]" style={{ marginRight: 6 }} /> Try again
         </Button>
       </div>
     </div>
@@ -472,7 +476,7 @@ export function ConnectWizard({
             className="text-xs"
             style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--accent-primary)", textDecoration: "none" }}
           >
-            Install docs <ExternalLink size={11} />
+            Install docs <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="size-[11px]" />
           </a>
           <Button onClick={() => void runCheck()}>Re-check</Button>
         </div>
@@ -493,7 +497,7 @@ export function ConnectWizard({
         <CommandField command={x.command} />
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <a href={x.docsUrl} target="_blank" rel="noreferrer" className="text-xs" style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--accent-primary)", textDecoration: "none" }}>
-            Plugin docs <ExternalLink size={11} />
+            Plugin docs <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="size-[11px]" />
           </a>
           <Button onClick={() => void runCheck()}>Re-check</Button>
         </div>
@@ -567,7 +571,7 @@ export function ConnectWizard({
   if (phase === "gated") {
     return (
       <ProGateCard
-        icon={Cloud}
+        icon={faCloud}
         title="Unlock cloud clusters"
         body="Connect EKS, GKE, AKS, or DigitalOcean. Importing a kubeconfig and local clusters stay free."
         upgradeDisabled={!personalOrgId}
@@ -598,7 +602,7 @@ export function ConnectWizard({
                   background: "var(--accent-dim)", border: "1px solid var(--accent-primary)",
                   display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
                 }}>
-                  <UserRound size={14} color="var(--accent-primary)" />
+                  <FontAwesomeIcon icon={faUser} className="size-[14px]" style={{ color: "var(--accent-primary)" }} />
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                   <span className="text-3xs" style={{
@@ -637,7 +641,7 @@ export function ConnectWizard({
               background: "var(--surface-elevated)", border: "1px solid var(--border-subtle)",
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
-              <CloudOff size={24} color="var(--fg-secondary)" />
+              <FontAwesomeIcon icon={faCloudSlash} className="size-[24px]" style={{ color: "var(--fg-secondary)" }} />
             </div>
             <div className="text-lg" style={{ fontWeight: 700, color: "var(--fg-primary)" }}>
               No clusters in this account
@@ -665,7 +669,7 @@ export function ConnectWizard({
                   fontWeight: 600, textDecoration: "none",
                 }}
               >
-                <ExternalLink size={14} />
+                <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="size-[14px]" />
                 Open {descriptor.displayName}
               </a>
             )}
@@ -680,7 +684,7 @@ export function ConnectWizard({
                 padding: "11px 18px", fontWeight: 500, cursor: "pointer",
               }}
             >
-              <RefreshCw size={14} />
+              <FontAwesomeIcon icon={faArrowsRotate} className="size-[14px]" />
               Re-check
             </button>
           </div>
@@ -695,7 +699,7 @@ export function ConnectWizard({
         <>
           {account && (
             <div className="text-xs" style={{ display: "flex", alignItems: "center", gap: 5, color: "var(--fg-tertiary)", marginBottom: 2 }}>
-              <UserRound size={12} />
+              <FontAwesomeIcon icon={faUser} className="size-[12px]" />
               <span>Connected as {account}</span>
             </div>
           )}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Database } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faDatabase } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { filterByNamespace, useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
@@ -230,7 +231,7 @@ export default function DatabasesPanel() {
         {/* Friendly empty state: no CNPG and nothing image-detected. */}
         {showEmpty && (
           <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
-            <Database className="size-8 text-muted-foreground" />
+            <FontAwesomeIcon icon={faDatabase} className="size-8 text-muted-foreground" />
             <p className="text-sm font-medium">No CloudNativePG clusters found</p>
             <p className="max-w-md text-xs text-muted-foreground">
               Install the CloudNativePG operator and create a Cluster resource, or deploy a

@@ -1,4 +1,5 @@
-import { CheckCircle2, Circle, CircleSlash } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCircleCheck, faCircle, faBan } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import type { CatalogApp } from "@rigel/catalog";
 import { InfoTooltip } from "@/components/InfoTooltip";
 import {
@@ -137,9 +138,9 @@ function AnyNodeRow({
       }}
     >
       {isSelected ? (
-        <CheckCircle2 size={11} style={{ color: ACCENT, flexShrink: 0 }} aria-hidden />
+        <FontAwesomeIcon icon={faCircleCheck} className="size-[11px]" style={{ color: ACCENT, flexShrink: 0 }} aria-hidden />
       ) : (
-        <Circle size={11} style={{ color: FG_TERTIARY, flexShrink: 0 }} aria-hidden />
+        <FontAwesomeIcon icon={faCircle} className="size-[11px]" style={{ color: FG_TERTIARY, flexShrink: 0 }} aria-hidden />
       )}
       <span className="flex flex-col" style={{ gap: 1 }}>
         <span
@@ -216,11 +217,11 @@ function NodeFitCard({
     >
       <div className="flex items-center" style={{ gap: 6 }}>
         {onSelect == null ? (
-          <CircleSlash size={11} style={{ color: FG_TERTIARY, flexShrink: 0 }} aria-hidden />
+          <FontAwesomeIcon icon={faBan} className="size-[11px]" style={{ color: FG_TERTIARY, flexShrink: 0 }} aria-hidden />
         ) : isSelected ? (
-          <CheckCircle2 size={11} style={{ color: ACCENT, flexShrink: 0 }} aria-hidden />
+          <FontAwesomeIcon icon={faCircleCheck} className="size-[11px]" style={{ color: ACCENT, flexShrink: 0 }} aria-hidden />
         ) : (
-          <Circle size={11} style={{ color: FG_TERTIARY, flexShrink: 0 }} aria-hidden />
+          <FontAwesomeIcon icon={faCircle} className="size-[11px]" style={{ color: FG_TERTIARY, flexShrink: 0 }} aria-hidden />
         )}
         <span
           className="text-2xs"

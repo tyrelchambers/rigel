@@ -1,8 +1,10 @@
-import { Sparkles, Zap, type LucideIcon } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
+import { faSparkles, faBolt } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Button } from "@/components/ui/button";
 
 export interface ProGateCardProps {
-  icon: LucideIcon;
+  icon: IconDefinition;
   title: string;
   body: string;
   onUpgrade?: () => void;
@@ -16,11 +18,11 @@ export function ProGateCard({ icon: Icon, title, body, onUpgrade, upgradeDisable
   return (
     <div className="mx-auto flex w-full max-w-[440px] flex-col items-center gap-4 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-8 py-9 text-center">
       <div className="flex size-14 items-center justify-center rounded-full border border-[color-mix(in_oklab,var(--accent-primary)_18%,transparent)] bg-[color-mix(in_oklab,var(--accent-primary)_8%,transparent)]">
-        <Icon className="size-6 text-[var(--accent-primary)]" />
+        <FontAwesomeIcon icon={Icon} className="size-6 text-[var(--accent-primary)]" />
       </div>
 
       <span className="inline-flex items-center gap-1.5 rounded-full bg-[color-mix(in_oklab,var(--accent-primary)_8%,transparent)] px-2.5 py-1 font-mono text-3xs font-medium uppercase tracking-[0.08em] text-[var(--accent-soft)]">
-        <Sparkles className="size-3" />
+        <FontAwesomeIcon icon={faSparkles} className="size-3" />
         Pro feature
       </span>
 
@@ -35,7 +37,7 @@ export function ProGateCard({ icon: Icon, title, body, onUpgrade, upgradeDisable
         onClick={onUpgrade}
         className="mt-1 shadow-[0_8px_28px_-8px_color-mix(in_oklab,var(--accent-primary)_55%,transparent)]"
       >
-        <Zap className="size-4" />
+        <FontAwesomeIcon icon={faBolt} className="size-4" />
         Upgrade to Pro
       </Button>
 
