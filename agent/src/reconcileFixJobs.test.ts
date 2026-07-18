@@ -103,7 +103,7 @@ describe("reconcileFixJobs", () => {
     expect(r.state.pullRequests![0]).toMatchObject({ status: "failed", prUrl: undefined });
     expect(r.state.pullRequests![0]?.summary).toMatch(/malformed/);
     expect(r.notifications).toHaveLength(0);
-    expect(r.state.audit[0]).toMatchObject({ outcome: "failure" });
+    expect(r.state.audit[0]).toMatchObject({ outcome: "failure", actor: "pr" });
     expect(r.gc).toEqual([JOB_NAME]);
   });
 
