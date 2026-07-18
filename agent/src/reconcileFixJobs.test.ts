@@ -62,7 +62,7 @@ describe("reconcileFixJobs", () => {
     expect(r.notifications[0]).toBe(`Rigel opened a PR for memos: ${TITLE} (https://github.com/me/infra/pull/7)`);
     expect(r.gc).toEqual([JOB_NAME]);
     // The terminal audit entry was recorded.
-    expect(r.state.audit[0]).toMatchObject({ outcome: "success", proposal: TITLE, fingerprint: FP });
+    expect(r.state.audit[0]).toMatchObject({ outcome: "success", proposal: TITLE, fingerprint: FP, actor: "pr" });
     expect(r.state.audit[0]?.detail).toContain("pull/7");
   });
 

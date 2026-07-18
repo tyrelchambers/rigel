@@ -53,7 +53,7 @@ describe("dispatchRepoFix", () => {
 
     const kinds = applied().map((m) => (m as { kind: string }).kind);
     expect(kinds).toEqual(["ConfigMap", "Job"]); // ConfigMap first, then the Job
-    expect(state.audit[0]).toMatchObject({ outcome: "queued", tier: "medium", proposal: ACTION.title });
+    expect(state.audit[0]).toMatchObject({ outcome: "queued", tier: "medium", proposal: ACTION.title, actor: "pr" });
     expect(state.audit[0]?.detail).toContain("fix-runner");
     expect(state.audit[0]?.detail).toContain("github.com/me/infra@main");
     expect(state.queue[0]).toMatchObject({ suggestion: ACTION.title, action: { kind: "openFixPR" } });

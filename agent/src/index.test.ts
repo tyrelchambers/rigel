@@ -273,7 +273,7 @@ describe("tick() — openFixPR routing (I1 landmine)", () => {
     expect(state).toBeDefined();
     // The fix-quality supervisor cleared the change before it was dispatched.
     expect(vi.mocked(runSupervisor)).toHaveBeenCalledTimes(1);
-    expect(state!.audit[0]).toMatchObject({ proposal: OPEN_FIX_PR.title, outcome: "queued", tier: "medium" });
+    expect(state!.audit[0]).toMatchObject({ proposal: OPEN_FIX_PR.title, outcome: "queued", tier: "medium", actor: "pr" });
     expect(state!.audit[0]?.detail).toContain("fix-runner");
     expect(state!.queue[0]).toMatchObject({ suggestion: OPEN_FIX_PR.title, action: { kind: "openFixPR" } });
   });

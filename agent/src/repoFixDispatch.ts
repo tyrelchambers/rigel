@@ -83,6 +83,7 @@ export async function dispatchRepoFix(
         tier: "medium", outcome: "skipped",
         detail: "openFixPR proposed, but autofix is disabled or this workload is outside the autofix scope",
         analysis: truncate(d.analysis),
+        actor: "pr",
       }, d.auditMaxEntries),
     };
   }
@@ -93,6 +94,7 @@ export async function dispatchRepoFix(
         tier: "medium", outcome: "skipped",
         detail: "openFixPR proposed, but the workload has no GitOps source (not autofix-eligible)",
         analysis: truncate(d.analysis),
+        actor: "pr",
       }, d.auditMaxEntries),
     };
   }
@@ -113,6 +115,7 @@ export async function dispatchRepoFix(
           tier: "medium", outcome: "failure",
           detail: "openFixPR approved, but the fix-runner image is not configured (RIGEL_FIX_RUNNER_IMAGE): cannot open the PR",
           analysis: truncate(d.analysis),
+          actor: "pr",
         }, d.auditMaxEntries),
       };
     }
@@ -141,6 +144,7 @@ export async function dispatchRepoFix(
         tier: "medium", outcome: "failure",
         detail: truncate(`openFixPR approved, but the fix Job could not be created (fail-safe): ${String(err)}`),
         analysis: truncate(d.analysis),
+        actor: "pr",
       }, d.auditMaxEntries),
     };
   }
@@ -149,6 +153,7 @@ export async function dispatchRepoFix(
   let next = appendAudit(state, {
     at: d.at, fingerprint: d.fingerprint, incident: d.incident, proposal: suggestion,
     tier: "medium", outcome: "queued", detail, analysis: truncate(d.analysis),
+    actor: "pr",
   }, d.auditMaxEntries);
 
   // Surface the pending fix in the approval queue for visibility. The fix-runner

@@ -160,11 +160,13 @@ export async function reconcileFixJobs(
         ? {
             at: ctx.at, fingerprint: meta.fingerprint, incident: meta.incident, proposal: title,
             tier: "medium", outcome: "success", detail: `Rigel opened a fix PR: ${result.prUrl}`,
+            actor: "pr",
           }
         : {
             at: ctx.at, fingerprint: meta.fingerprint, incident: meta.incident, proposal: title,
             tier: "medium", outcome: "failure",
             detail: `fix PR could not be opened: ${result.message ?? "(no detail reported)"}`,
+            actor: "pr",
           };
       state = resolveFixAudit(state, meta.fingerprint, title, terminal, ctx.auditMaxEntries);
 
