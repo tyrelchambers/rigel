@@ -203,13 +203,7 @@ export function LastReportCard({
                     {it.name}
                   </span>
                   <Pill className="font-normal text-2xs text-[var(--fg-secondary)]">{t.chip}</Pill>
-                  {isOpen ? (
-                    <span className="flex-1" />
-                  ) : (
-                    <span className="min-w-0 flex-1 font-mono text-2xs text-[var(--fg-tertiary)]">
-                      {it.detail}
-                    </span>
-                  )}
+                  <span className="flex-1" />
                   <Pill className="uppercase tracking-[0.3px]">
                     {isOpen ? "benign" : "auto-silenced"}
                   </Pill>
