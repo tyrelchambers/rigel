@@ -20,7 +20,7 @@
 //   1. `opencode run --dir <dir>` actually LOADS `<dir>/opencode.json` and honors its
 //      `permission` block (bash allowed, edit/webfetch/websearch denied, no "ask"
 //      prompt stalls the headless run). This is the one item to confirm live.
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path, { join } from "node:path";
 import { opencodeAuthEnv } from "./agentConfig";
@@ -190,14 +190,17 @@ export function mapOpencodeEvent(ev: any): ChatEvent[] {
 /**
  * Stream a single prompt through the opencode CLI in `--format json` mode.
  *
- * Provisions a throwaway run dir (OpenCode runs there, not the user's repo) into
- * which it writes an `opencode.json` permission config (bash allowed for read-only
- * kubectl, edit/webfetch/websearch denied, no "ask" so the headless run never
- * stalls), and the guarded-kubectl shim dir (prepended to PATH so every kubectl/helm
- * the agent execs is the read-only-enforcing wrapper). Both temp dirs are removed in
- * a `finally` so an abort or throw can't leak them. The spawn/stream/abort lifecycle
- * is shared with the other runners via streamAgentProcess; opencodeBridge owns only
- * the argv/env/config build and the opencode-specific JSON→ChatEvent mapping.
+ * Runs in a STABLE run dir (OpenCode runs there, not the user's repo) into which it
+ * writes an `opencode.json` permission config (bash allowed for read-only kubectl,
+ * edit/webfetch/websearch denied, no "ask" so the headless run never stalls). The dir
+ * is deliberately fixed rather than per-turn: OpenCode keys session storage by the
+ * `--dir` project path, so a fresh directory each turn would make `-s <sessionId>`
+ * resume fail with "Session not found". It is NOT removed after a turn — that is what
+ * makes multi-turn resume work. The guarded-kubectl shim dir (prepended to PATH so
+ * every kubectl/helm the agent execs is the read-only-enforcing wrapper) IS a throwaway
+ * removed in `finally` so an abort or throw can't leak it. The spawn/stream/abort
+ * lifecycle is shared with the other runners via streamAgentProcess; opencodeBridge
+ * owns only the argv/env/config build and the opencode-specific JSON→ChatEvent mapping.
  *
  * OpenCode emits NO completion event (the stream just ends on session idle), so we
  * synthesize a `done` ChatEvent on clean completion. On abort streamAgentProcess
@@ -209,7 +212,13 @@ export async function* runOpencode(
   signal?: AbortSignal,
   opts?: RunClaudeOpts,
 ): AsyncGenerator<ChatEvent> {
-  const runDir = await mkdtemp(join(tmpdir(), "rigel-opencode-"));
+  // STABLE run dir (not a per-turn mkdtemp): OpenCode keys session storage by the
+  // `--dir` project path, so a fresh directory each turn makes `-s <sessionId>` resume
+  // fail with "Session not found". A fixed path keeps the project — and thus the
+  // session — resolvable across turns (parity with claudeBridge's stable cwd). One
+  // shared dir is safe: OpenCode isolates by session id within a project.
+  const runDir = join(tmpdir(), "rigel-opencode");
+  await mkdir(runDir, { recursive: true });
   // Headless permission config: allow everything by default so read-only kubectl runs
   // unattended, then DENY edit/webfetch/websearch (no file edits, no web). No "ask"
   // values — those would stall a headless run. The guard shim still denies cluster
@@ -242,9 +251,9 @@ export async function* runOpencode(
     // finish. On abort, streamAgentProcess already yielded `done`.
     if (!signal?.aborted) yield { type: "done" };
   } finally {
-    // Clean up the throwaway run dir + guard shim even on abort/throw. force:true so a
-    // missing dir (already gone) isn't an error.
-    await rm(runDir, { recursive: true, force: true });
+    // The run dir is persistent (it holds OpenCode's per-project session state), so it
+    // is NOT removed here. Only the guard shim is cleaned up. force:true so a missing
+    // dir (already gone) isn't an error.
     if (guardBin) await rm(guardBin, { recursive: true, force: true });
   }
 }

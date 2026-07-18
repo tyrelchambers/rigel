@@ -1,5 +1,5 @@
 import { test, expect, describe } from "vitest";
-import { mkdtemp, writeFile, chmod, rm, readFile, readdir } from "node:fs/promises";
+import { mkdtemp, writeFile, chmod, rm, readFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, delimiter } from "node:path";
 import { buildOpencodeArgs, mapOpencodeEvent, runOpencode } from "./opencodeBridge";
@@ -213,29 +213,33 @@ describe("mapOpencodeEvent", () => {
 // runOpencode — integration with a FAKE `opencode` executable (no real opencode)
 // ---------------------------------------------------------------------------
 describe("runOpencode (fake opencode on PATH)", () => {
-  test("yields mapped session/text, synthesizes done, writes opencode.json, cleans up", async () => {
-    // A fake `opencode` that ignores its args, prints two emit-shape JSONL lines (a
-    // step_start carrying the session id and a text part), then exits 0. This proves
-    // runOpencode composes argv/env, writes the permission config, spawns, streams,
-    // maps, synthesizes `done`, and cleans up — without a real opencode or cluster.
+  test("streams mapped session/text, synthesizes done, and uses a STABLE run dir across turns", async () => {
+    // A fake `opencode` that records the `--dir` it was given to a sentinel, prints two
+    // emit-shape JSONL lines (a step_start carrying the session id and a text part),
+    // then exits 0. This proves runOpencode composes argv/env, writes the permission
+    // config, spawns, streams, maps, and synthesizes `done` — without a real opencode.
+    // Crucially it also proves the run dir is the SAME across two turns and persists,
+    // which is what lets OpenCode's per-dir session storage resolve `-s` on resume
+    // (the HELM-90 fix — a per-turn temp dir gave "Session not found").
     const fakeDir = await mkdtemp(join(tmpdir(), "rigel-fake-opencode-"));
+    const dirSentinel = join(fakeDir, "seen-dir.txt");
     const fakeOpencode = join(fakeDir, "opencode");
     await writeFile(
       fakeOpencode,
       [
         "#!/bin/sh",
+        "dir=''",
+        "while [ $# -gt 0 ]; do",
+        '  if [ "$1" = "--dir" ]; then dir="$2"; fi',
+        "  shift",
+        "done",
+        `printf '%s\\n' "$dir" >> '${dirSentinel}'`,
         `echo '{"type":"step_start","sessionID":"ses_fake","part":{}}'`,
         `echo '{"type":"text","part":{"text":"hello from fake opencode"}}'`,
         "exit 0",
       ].join("\n") + "\n",
     );
     await chmod(fakeOpencode, 0o755);
-
-    // Snapshot the unique run-dir prefix before/after to assert cleanup (race-free:
-    // `rigel-opencode-` is created only by runOpencode).
-    const runDirs = async () =>
-      new Set((await readdir(tmpdir())).filter((d) => d.startsWith("rigel-opencode-")));
-    const before = await runDirs();
 
     const prevPath = process.env.PATH;
     process.env.PATH = `${fakeDir}${delimiter}${prevPath ?? ""}`;
@@ -244,6 +248,10 @@ describe("runOpencode (fake opencode on PATH)", () => {
     try {
       for await (const e of runOpencode("hi", null)) {
         events.push({ type: e.type, text: e.text, sessionId: e.sessionId });
+      }
+      // Second turn (resume) — must land in the same run dir so `-s` resolves.
+      for await (const _ of runOpencode("continue", null, undefined, { sessionId: "ses_fake" })) {
+        /* drain */
       }
     } finally {
       process.env.PATH = prevPath;
@@ -255,9 +263,11 @@ describe("runOpencode (fake opencode on PATH)", () => {
     // …and runOpencode synthesized a trailing `done` (opencode emits none).
     expect(events[events.length - 1].type).toBe("done");
 
-    // The run dir (with its opencode.json) was removed — no leak.
-    const after = await runDirs();
-    expect([...after].filter((d) => !before.has(d))).toEqual([]);
+    // Both turns saw the SAME --dir, and that dir still exists (persistent, not removed).
+    const seen = (await readFile(dirSentinel, "utf8")).trim().split("\n");
+    expect(seen).toHaveLength(2);
+    expect(seen[0]).toBe(seen[1]);
+    await expect(stat(seen[0])).resolves.toBeTruthy();
 
     await rm(fakeDir, { recursive: true, force: true });
   });
