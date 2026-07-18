@@ -260,17 +260,10 @@ export function LastReportCard({
                     {it.name}
                   </span>
                   <Pill className="font-normal text-2xs text-[var(--fg-secondary)]">{t.chip}</Pill>
-                  <span className="flex-1" />
-                  <Pill className="uppercase tracking-[0.3px]">
-                    {isOpen ? "benign" : "auto-silenced"}
-                  </Pill>
                 </button>
 
                 {isOpen && (
                   <div className="flex flex-col gap-3 p-3.5">
-                    <p className="text-sm text-muted-foreground">
-                      {t.what}, evaluated and auto-silenced as benign.
-                    </p>
                     {it.detail && (
                       <LogBlock
                         label={`${it.incidentKind === "loggedError" ? "LOG" : t.chip.toUpperCase()} · ${it.name}`}
