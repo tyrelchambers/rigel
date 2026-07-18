@@ -7,7 +7,7 @@ import { AlertTriangle, ChevronRight, GitPullRequest, Radar } from "lucide-react
 import { auditEntryId } from "@rigel/k8s";
 import { useAssistantCtx } from "../AssistantContext";
 import { relativeTime } from "../display";
-import { AuditRow } from "../AuditRow";
+import { ActivityCard } from "../ActivityCard";
 import { LastReportCard } from "../components/LastReportCard";
 import { OwnedResources } from "../OwnedResources";
 
@@ -62,7 +62,7 @@ export function OverviewTab() {
 
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold text-[var(--fg-primary)]">Recent activity</h3>
+          <h3 className="text-base font-bold text-[var(--fg-primary)]">Recent activity</h3>
           <button
             type="button"
             onClick={() => setTab("activity")}
@@ -75,12 +75,10 @@ export function OverviewTab() {
         {audit.length === 0 ? (
           <RecentActivityEmpty updatedAt={d.clusterState?.updatedAt} />
         ) : (
-          <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-3">
-            <div className="max-h-80 space-y-2 overflow-auto">
-              {audit.slice(0, 5).map((e) => (
-                <AuditRow key={auditEntryId(e)} e={e} />
-              ))}
-            </div>
+          <div className="flex flex-col gap-3">
+            {audit.slice(0, 5).map((e) => (
+              <ActivityCard key={auditEntryId(e)} e={e} />
+            ))}
           </div>
         )}
       </section>
