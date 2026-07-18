@@ -3,12 +3,14 @@
 // rows), and the owned-resources grid. Built to Pencil frame
 // "Assistant — Overview (improved)".
 
-import { AlertTriangle, ChevronRight, GitPullRequest, Radar } from "lucide-react";
+import { Activity, AlertTriangle, ArrowRight, ChevronRight, GitPullRequest, Radar } from "lucide-react";
 import { auditEntryId } from "@rigel/k8s";
+import { Button } from "@/components/ui/button";
 import { useAssistantCtx } from "../AssistantContext";
 import { relativeTime } from "../display";
-import { AuditRow } from "../AuditRow";
+import { RecentActivityCard } from "../components/RecentActivityCard";
 import { LastReportCard } from "../components/LastReportCard";
+import { SectionHeader } from "../components/SectionHeader";
 import { OwnedResources } from "../OwnedResources";
 
 export function OverviewTab() {
@@ -60,27 +62,26 @@ export function OverviewTab() {
         </button>
       )}
 
-      <section className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold text-[var(--fg-primary)]">Recent activity</h3>
-          <button
-            type="button"
-            onClick={() => setTab("activity")}
-            className="text-xs font-semibold text-[var(--accent-primary)] hover:underline"
-          >
-            View all in Activity →
-          </button>
-        </div>
+      <section className="flex flex-col gap-4">
+        <SectionHeader
+          icon={Activity}
+          title="Recent activity"
+          subtitle="The latest actions Rigel took on your cluster."
+          actions={
+            <Button variant="secondary" size="sm" onClick={() => setTab("activity")}>
+              View all in Activity
+              <ArrowRight className="size-3.5" />
+            </Button>
+          }
+        />
 
         {audit.length === 0 ? (
           <RecentActivityEmpty updatedAt={d.clusterState?.updatedAt} />
         ) : (
-          <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-3">
-            <div className="max-h-80 space-y-2 overflow-auto">
-              {audit.slice(0, 5).map((e) => (
-                <AuditRow key={auditEntryId(e)} e={e} />
-              ))}
-            </div>
+          <div className="flex flex-col gap-3">
+            {audit.slice(0, 5).map((e) => (
+              <RecentActivityCard key={auditEntryId(e)} e={e} />
+            ))}
           </div>
         )}
       </section>

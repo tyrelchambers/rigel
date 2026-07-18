@@ -3,6 +3,7 @@ import { ShieldPlus } from "lucide-react";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import type { ActionBlock } from "@/lib/api";
+import { Button } from "@/components/ui/button";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import {
   BindingEditor,
@@ -84,13 +85,10 @@ export function GrantRoleButton({ namespace }: Props) {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="ml-auto flex items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface-sunken)] px-3 py-1.5 text-xs font-medium text-[var(--fg-primary)] transition-colors hover:bg-white/[0.08]"
-      >
-        <ShieldPlus className="size-[14px]" /> Grant a role
-      </button>
+      <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
+        <ShieldPlus className="size-3.5" />
+        Grant a role
+      </Button>
       {open && (
         <BindingEditor
           target={target}
