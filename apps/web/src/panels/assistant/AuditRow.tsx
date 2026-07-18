@@ -12,6 +12,7 @@ import {
   relativeTime,
   auditCanExpand,
 } from "./display";
+import { ActorBadge } from "./components/ActorBadge";
 
 export function AuditRow({ e }: { e: AssistantAuditEntry }) {
   const { expanded, toggleExpanded, run, ns, openRevert, d, working } = useAssistantCtx();
@@ -42,6 +43,7 @@ export function AuditRow({ e }: { e: AssistantAuditEntry }) {
             ) : (
               <FontAwesomeIcon icon={faChevronRight} className="size-3" />
             ))}
+          <ActorBadge actor={e.actor} />
           <span className="font-mono text-3xs uppercase text-muted-foreground">{e.tier}</span>
           <span
             className="font-mono text-3xs text-muted-foreground"
