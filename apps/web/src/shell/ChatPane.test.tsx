@@ -7,7 +7,7 @@
 //   - active agent NOT connected → composer DISABLED, empty-state shown
 //   - agents query still loading → treated as not-configured (disabled)
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, within, fireEvent } from "@testing-library/react";
+import { render, screen, within, fireEvent, act } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { AgentsResponse, AgentView, AgentModels } from "@/lib/api";
@@ -17,8 +17,14 @@ import { handoffToChat } from "@/lib/chatHandoff";
 // ChatPane touches so the render stays inert. sendChat is captured so the
 // model-picker tests can assert the config that gets sent.
 const sendChat = vi.fn();
+// Capture the chat-event handler ChatPane registers so tests can push WS events
+// (e.g. a `session` event carrying a backend-issued session id).
+const ws = { chatHandler: null as ((e: unknown) => void) | null };
 vi.mock("@/lib/ws", () => ({
-  onChatEvent: () => () => {},
+  onChatEvent: (h: (e: unknown) => void) => {
+    ws.chatHandler = h;
+    return () => {};
+  },
   sendChat: (...args: unknown[]) => sendChat(...args),
   interruptChat: vi.fn(),
   subscribe: vi.fn(),
@@ -233,5 +239,60 @@ describe("new-thread handoff", () => {
     const lastCall = sendChat.mock.calls[sendChat.mock.calls.length - 1]!;
     expect(lastCall[0]).toBe("investigate this warning");
     expect((lastCall[1] as { sessionId?: string }).sessionId).toBeUndefined();
+  });
+});
+
+describe("ChatPane per-agent session ids (no cross-agent resume)", () => {
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+    useCluster.setState({ connected: true, resources: {} });
+    localStorage.clear();
+    sendChat.mockClear();
+    ws.chatHandler = null;
+  });
+
+  function lastSessionId(): string | undefined {
+    const call = sendChat.mock.calls[sendChat.mock.calls.length - 1]!;
+    return (call[1] as { sessionId?: string }).sessionId;
+  }
+
+  it("keeps each backend's OWN session and never hands a switched-to agent a foreign one", () => {
+    // Each backend (claude/opencode/…) issues session ids from its own store, so a
+    // thread must keep them separate. Handing OpenCode a Claude session id is exactly
+    // what produced "Error: Session not found" (HELM-90). Switching the active agent
+    // is exercised the same way the codebase's model-picker test does it — remount
+    // with a different active agent (localStorage carries the per-agent session map).
+    const agents = [claudeConnected, opencode];
+
+    // ── Active = Claude ──────────────────────────────────────────────────────
+    const r1 = renderPane({ activeAgentId: "claude", agents });
+    // Turn 1: no session captured yet → fresh (undefined).
+    act(() => handoffToChat("hi claude"));
+    expect(lastSessionId()).toBeUndefined();
+    // Claude's backend issues its id; the turn settles (persists the per-agent map).
+    act(() => ws.chatHandler?.({ type: "session", sessionId: "claude-ses-1" }));
+    act(() => ws.chatHandler?.({ type: "done" }));
+    // Turn 2: resumes Claude's own id.
+    act(() => handoffToChat("more claude"));
+    expect(lastSessionId()).toBe("claude-ses-1");
+    r1.unmount();
+
+    // ── Switch active agent → OpenCode (same thread) ─────────────────────────
+    const r2 = renderPane({ activeAgentId: "opencode", agents });
+    // THE FIX: OpenCode is NOT handed Claude's id — it has no session yet → fresh.
+    act(() => handoffToChat("hi opencode"));
+    expect(lastSessionId()).toBeUndefined();
+    // OpenCode issues its own id; a follow-up as OpenCode resumes THAT one.
+    act(() => ws.chatHandler?.({ type: "session", sessionId: "oc-ses-1" }));
+    act(() => ws.chatHandler?.({ type: "done" }));
+    act(() => handoffToChat("more opencode"));
+    expect(lastSessionId()).toBe("oc-ses-1");
+    r2.unmount();
+
+    // ── Switch back → Claude ─────────────────────────────────────────────────
+    renderPane({ activeAgentId: "claude", agents });
+    // Claude's original session is intact (never clobbered by the OpenCode turns).
+    act(() => handoffToChat("back to claude"));
+    expect(lastSessionId()).toBe("claude-ses-1");
   });
 });

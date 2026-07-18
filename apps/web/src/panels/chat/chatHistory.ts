@@ -17,8 +17,12 @@ export interface ChatHistoryEntry {
   title: string;
   createdAt: number;
   updatedAt: number;
-  /** The CLI session id captured for this conversation, if any. */
+  /** The CLI session id captured for this conversation, if any. Legacy/back-compat
+   * scalar (the last active agent's id); `sessionByAgent` is the source of truth. */
   sessionId: string | null;
+  /** CLI session ids keyed by agent id. Each backend issues ids from its own store,
+   * so a thread keeps one per agent and never hands agent B agent A's id on switch. */
+  sessionByAgent?: Record<string, string>;
   messages: ChatMessage[];
 }
 

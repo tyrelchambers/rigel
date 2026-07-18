@@ -145,7 +145,12 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(boot?.messages ?? []);
   const [inputText, setInputText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(boot?.sessionId ?? null);
+  // Session ids are PER AGENT within a thread: every backend (claude/codex/gemini/
+  // opencode) issues session ids from its OWN store, so switching agent mid-thread
+  // must NOT hand the new agent the previous agent's id — that's the "Session not
+  // found" error. Keyed by agentId (same per-agent pattern as modelConfigs); the
+  // active agent's id is derived into `sessionId` once activeAgentId is known below.
+  const [sessionByAgent, setSessionByAgent] = useState<Record<string, string>>(boot?.sessionByAgent ?? {});
   // Stable id for the active conversation (used as the history-entry key).
   const [conversationId, setConversationId] = useState<string>(boot?.id ?? newId());
   const createdAtRef = useRef<number>(boot?.createdAt ?? Date.now());
@@ -189,25 +194,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   }, [scopeConfig]);
   const { data: contexts } = useContexts();
   const contextNames = useMemo(() => (contexts ?? []).map((c) => c.name), [contexts]);
-  // Mirror sessionId into a ref so the handoff `submit` closure (registered once)
-  // sends the CURRENT session id and resumes the conversation across turns.
-  const sessionIdRef = useRef<string | null>(sessionId);
-  sessionIdRef.current = sessionId;
   const mentionCandidates = useMemo(() => buildMentions(resources), [resources]);
-
-  // Persist the active conversation once each turn settles (not mid-stream, to
-  // avoid a write per token). Runs on mount too, re-saving the restored chat.
-  useEffect(() => {
-    if (isStreaming || messages.length === 0) return;
-    upsertSession({
-      id: conversationId,
-      title: deriveTitle(messages),
-      createdAt: createdAtRef.current,
-      updatedAt: Date.now(),
-      sessionId,
-      messages,
-    });
-  }, [messages, isStreaming, sessionId, conversationId]);
 
   const composerRef = useRef<HTMLTextAreaElement>(null);
 
@@ -221,6 +208,32 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   const activeAgentId = agents.data?.activeAgentId;
   const activeAgent = agents.data?.agents.find((a) => a.id === activeAgentId);
   const notConfigured = activeAgent?.connection !== "connected";
+
+  // The ACTIVE agent's session id (from the per-agent map). Every send site reads
+  // this, so switching agent automatically sends that agent's id — or none if it
+  // has no session yet (a fresh session on the new backend), never a foreign one.
+  const sessionId = activeAgentId ? sessionByAgent[activeAgentId] ?? null : null;
+  // Mirror sessionId + the active agent id into refs so the once-registered chat
+  // event handler and the handoff/action closures read the CURRENT values.
+  const sessionIdRef = useRef<string | null>(sessionId);
+  sessionIdRef.current = sessionId;
+  const activeAgentIdRef = useRef<string | undefined>(activeAgentId);
+  activeAgentIdRef.current = activeAgentId;
+
+  // Persist the active conversation once each turn settles (not mid-stream, to
+  // avoid a write per token). Runs on mount too, re-saving the restored chat.
+  useEffect(() => {
+    if (isStreaming || messages.length === 0) return;
+    upsertSession({
+      id: conversationId,
+      title: deriveTitle(messages),
+      createdAt: createdAtRef.current,
+      updatedAt: Date.now(),
+      sessionId,
+      sessionByAgent,
+      messages,
+    });
+  }, [messages, isStreaming, sessionId, sessionByAgent, conversationId]);
 
   // The active agent's selectable models/efforts (drives the agent-aware picker).
   const { data: agentModels } = useAgentModels(activeAgentId);
@@ -258,7 +271,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     setConversationId(newId());
     createdAtRef.current = Date.now();
     setMessages([]);
-    setSessionId(null);
+    setSessionByAgent({});
     setUsageLimit(null);
     setInputText("");
     setIsStreaming(false);
@@ -330,9 +343,13 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
           liveThinkingRef.current = "";
           setAutoFocusComposer(true);
           break;
-        case "session":
-          setSessionId(event.sessionId);
+        case "session": {
+          // Store under the agent that produced this turn (per-agent session map),
+          // so a later switch back to it resumes here and a switch away won't reuse it.
+          const aid = activeAgentIdRef.current;
+          if (aid) setSessionByAgent((prev) => ({ ...prev, [aid]: event.sessionId }));
           break;
+        }
         case "usageLimit":
           setUsageLimit(event.text ?? "Claude usage limit reached.");
           setMessages((prev) => [
@@ -350,7 +367,15 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
             ),
           ]);
           setIsStreaming(false);
-          setSessionId(null);
+          {
+            const aid = activeAgentIdRef.current;
+            if (aid)
+              setSessionByAgent((prev) => {
+                const next = { ...prev };
+                delete next[aid];
+                return next;
+              });
+          }
           setAutoFocusComposer(true);
           break;
         case "tool":
@@ -444,7 +469,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     setConversationId(e.id);
     createdAtRef.current = e.createdAt;
     setMessages(e.messages);
-    setSessionId(e.sessionId);
+    setSessionByAgent(e.sessionByAgent ?? {});
     setUsageLimit(null);
     setInputText("");
     setIsStreaming(false);
