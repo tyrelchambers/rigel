@@ -26,7 +26,8 @@ function entry(overrides: Record<string, unknown> = {}) {
     fingerprint: "loggedError|default|canadahires-api-7845596fdb-xr9vp|error-burst",
     outcome: "skipped",
     tier: "low",
-    analysis: "Root cause is a bad date in the DB.",
+    analysis:
+      "Root cause is a bad date in the DB.\n\n**Fix:** edit the secret.\n\n```sh\nkubectl edit secret rigel-api -n default\n```",
     detail: "ERROR bad date\nsecond line",
     ...overrides,
   } as never;
@@ -51,6 +52,8 @@ describe("RecentActivityCard", () => {
     fireEvent.click(screen.getByText("canadahires-api-7845596fdb-xr9vp"));
     expect(screen.getByText(/AI analysis/i)).toBeInTheDocument();
     expect(screen.getByText(/root cause is a bad date/i)).toBeInTheDocument();
+    // The synopsis renders as markdown: the fenced command becomes a code block.
+    expect(screen.getByText(/kubectl edit secret rigel-api/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /open in pods/i })).toBeInTheDocument();
   });
 

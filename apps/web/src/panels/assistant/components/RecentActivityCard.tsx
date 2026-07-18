@@ -6,6 +6,8 @@
 
 import { useState } from "react";
 import { useNavigate } from "react-router";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   ArrowRight,
   ChevronDown,
@@ -19,9 +21,11 @@ import {
 import { parseIncidentFingerprint, type AssistantAuditEntry } from "@rigel/k8s";
 import { useCluster } from "@/store/cluster";
 import { cn } from "@/lib/utils";
+import { remarkAlerts } from "@/lib/remarkAlerts";
+import { CodeBlock } from "@/panels/chat/CodeBlock";
+import { ChatBlockquote } from "@/panels/chat/Callout";
 import { useAssistantCtx } from "../AssistantContext";
 import { relativeTime, auditCanExpand } from "../display";
-import { LogBlock } from "./LogBlock";
 
 function targetFor(incidentKind: string) {
   switch (incidentKind) {
@@ -70,7 +74,16 @@ export function RecentActivityCard({ e }: { e: AssistantAuditEntry }) {
     parsed?.incidentKind === "loggedError" ? "Error burst" : parsed?.reason || t.label;
   const status = statusMeta(e.outcome);
   const canExpand = auditCanExpand(e.detail, e.analysis);
-  const preview = (e.analysis || e.detail || e.proposal || "").split("\n")[0] ?? "";
+  // The synopsis is the model's markdown analysis (verdict fences, callouts,
+  // code), rendered through the same pipeline as the Rigel chat.
+  const synopsis = e.analysis || e.detail || "";
+  const preview =
+    (synopsis || e.proposal || "")
+      .split("\n")
+      .map((l) => l.trim())
+      .find((l) => l && !l.startsWith("```"))
+      ?.replace(/\*\*/g, "")
+      .replace(/^[#>\-\s]+/, "") ?? "";
   const queued = e.outcome === "queued";
 
   function openResource() {
@@ -147,19 +160,22 @@ export function RecentActivityCard({ e }: { e: AssistantAuditEntry }) {
       {/* Body */}
       {open && canExpand && (
         <div className="flex flex-col gap-3.5 p-3.5">
-          {e.analysis && (
+          {synopsis && (
             <div className="flex flex-col gap-2">
               <span className="inline-flex w-fit items-center gap-1.5 rounded bg-[color-mix(in_srgb,var(--accent-primary)_10%,transparent)] px-2 py-0.5 font-mono text-3xs uppercase tracking-[0.5px] text-[var(--accent-primary)]">
                 <Sparkles className="size-3" />
                 AI analysis
               </span>
-              <p className="select-text text-sm leading-relaxed text-[var(--fg-secondary)]">
-                {e.analysis}
-              </p>
+              <div className="chat-md select-text">
+                <Markdown
+                  remarkPlugins={[remarkGfm, remarkAlerts]}
+                  components={{ pre: CodeBlock, blockquote: ChatBlockquote }}
+                >
+                  {synopsis}
+                </Markdown>
+              </div>
             </div>
           )}
-
-          {e.detail && <LogBlock label={`${t.panel.toUpperCase()} LOG · ${condition}`} detail={e.detail} />}
 
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
