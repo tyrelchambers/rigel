@@ -22,6 +22,7 @@ import { useCluster } from "@/store/cluster";
 import { cn } from "@/lib/utils";
 import { Card } from "./primitives";
 import { LogBlock } from "./LogBlock";
+import { SectionHeader } from "./SectionHeader";
 
 const COLLAPSED_COUNT = 4;
 
@@ -107,24 +108,23 @@ export function LastReportCard({
 
   return (
     <Card className="space-y-4 border-0 bg-transparent px-0">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2.5">
-          <div className="flex size-[30px] items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--accent-primary)_15%,transparent)]">
-            <ShieldCheck className="size-4 text-[var(--accent-primary)]" />
-          </div>
-          <p className="text-base font-bold text-[var(--fg-primary)]">Last report</p>
-        </div>
-        <div className="flex items-center gap-1">
-          <Button variant="secondary" size="sm" onClick={copyReport} disabled={!report}>
-            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-            {copied ? "Copied" : "Copy"}
-          </Button>
-          <Button variant="secondary" size="sm" disabled={working} onClick={onClear}>
-            <Trash2 className="size-3.5" />
-            Clear
-          </Button>
-        </div>
-      </div>
+      <SectionHeader
+        icon={ShieldCheck}
+        title="Last report"
+        subtitle="Issues Rigel reviewed and cleared on its own."
+        actions={
+          <>
+            <Button variant="secondary" size="sm" onClick={copyReport} disabled={!report}>
+              {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+              {copied ? "Copied" : "Copy"}
+            </Button>
+            <Button variant="secondary" size="sm" disabled={working} onClick={onClear}>
+              <Trash2 className="size-3.5" />
+              Clear
+            </Button>
+          </>
+        }
+      />
 
       {items.length > 0 && (
         <div className="flex items-center gap-2.5">
