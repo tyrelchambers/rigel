@@ -54,8 +54,8 @@ describe("LastReportCard", () => {
   it("expands a row to reveal what was skipped", () => {
     wrap();
     fireEvent.click(screen.getByText("web-abc"));
-    expect(screen.getByText(/unhealthy pod, auto-silenced as benign/i)).toBeInTheDocument();
-    expect(screen.getByText("default/web-abc")).toBeInTheDocument();
+    expect(screen.getByText(/unhealthy pod, evaluated and auto-silenced as benign/i)).toBeInTheDocument();
+    expect(screen.getByText("default / web-abc")).toBeInTheDocument();
     // With no reason map, the Reason falls back to the fingerprint signature.
     expect(screen.getAllByText("CrashLoopBackOff").length).toBeGreaterThan(0);
   });
