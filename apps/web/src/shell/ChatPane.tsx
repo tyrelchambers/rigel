@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCopy, faPenToSquare, faClock, faArrowDown } from "@awesome.me/kit-6050953220/icons/classic/solid";
+import { faCopy, faPenToSquare, faClock, faArrowDown, faGear } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { BatchConfirmSheet, type BatchConfirmItem } from "@/components/BatchConfirmSheet";
 import { PurgeSheet } from "@/panels/purge/PurgeSheet";
@@ -651,6 +651,16 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
             aria-label="Chat history"
           >
             <FontAwesomeIcon icon={faClock} className="size-[11px]" />
+          </button>
+
+          {/* Assistant settings */}
+          <button
+            onClick={() => navigate("/settings?tab=agents")}
+            title="Assistant settings"
+            style={headerBtnStyle}
+            aria-label="Assistant settings"
+          >
+            <FontAwesomeIcon icon={faGear} className="size-[11px]" />
           </button>
 
           {shortId && (

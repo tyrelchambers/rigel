@@ -4,7 +4,7 @@
 //   3. Channels — Signal bridge + Matrix channel.
 //   4. App defaults — per-cluster self-host install defaults.
 
-import { useState } from "react";
+import { useSearchParams } from "react-router";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faTableColumns,
@@ -28,8 +28,23 @@ const TABS = [
   { id: "defaults", label: "App defaults", icon: faSliders },
 ];
 
+function isSettingsTab(value: string | null): value is SettingsTab {
+  return value === "overview" || value === "agents" || value === "channels" || value === "defaults";
+}
+
 export default function SettingsPanel() {
-  const [tab, setTab] = useState<SettingsTab>("overview");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const paramTab = searchParams.get("tab");
+  const tab: SettingsTab = isSettingsTab(paramTab) ? paramTab : "overview";
+  const setTab = (id: SettingsTab) =>
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("tab", id);
+        return next;
+      },
+      { replace: true },
+    );
   return (
     <div className="flex w-full flex-col gap-10 px-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
