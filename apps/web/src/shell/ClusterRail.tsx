@@ -6,6 +6,7 @@ import { useContexts, useDeleteCluster, useDisconnectCluster, useClusterHealth }
 import { useEntitlement } from "./useEntitlement";
 import { useUpgrade } from "./UpgradeContext";
 import { initContext, switchCluster } from "@/lib/ws";
+import { formatShortcut } from "@/lib/platform";
 import { classifyProvider, isCloudProvider, providerLabel } from "./clusterTile";
 import { ClusterIcon, type IconId } from "./clusterIcons";
 import { loadIconOverrides, saveIconOverrides, resolveIconId } from "./clusterIconStore";
@@ -225,7 +226,7 @@ export function ClusterRail({
           type="button"
           aria-label="Open navigation"
           aria-expanded={launcherOpen}
-          title="Navigation (⌘/)"
+          title={`Navigation (${formatShortcut({ mod: true, key: "/" })})`}
           onClick={() => onToggleLauncher?.()}
           style={{
             width: 38, height: 38, borderRadius: 999,

@@ -13,6 +13,7 @@ import { NamespaceSelector } from "./NamespaceBar";
 import { AppUpdateChip } from "./AppUpdateChip";
 import { RigelMark } from "@/components/RigelMark";
 import { isMacDesktop } from "@/lib/desktop";
+import { formatShortcut } from "@/lib/platform";
 
 interface GlobalHeaderProps {
   /** Opens the existing CommandPalette (reuses App's setPaletteOpen). */
@@ -70,7 +71,7 @@ export function GlobalHeader({
       {/* Global search — opens the existing ⌘K CommandPalette */}
       <button
         onClick={onOpenSearch}
-        title="Search (⌘K)"
+        title={`Search (${formatShortcut({ mod: true, key: "K" })})`}
         aria-label="Search"
         style={{
           ...NO_DRAG,
@@ -110,7 +111,7 @@ export function GlobalHeader({
             lineHeight: "14px",
           }}
         >
-          ⌘K
+          {formatShortcut({ mod: true, key: "K" })}
         </span>
       </button>
 

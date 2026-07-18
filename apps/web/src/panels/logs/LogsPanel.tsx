@@ -31,6 +31,7 @@ import {
 } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { cn } from "@/lib/utils";
+import { formatShortcut } from "@/lib/platform";
 import { Button } from "@/components/ui/button";
 import { TabBar, Tab } from "@/components/ui/Tabs";
 import { PanelSearch } from "@/panels/components/PanelSearch";
@@ -390,7 +391,7 @@ export default function LogsPanel() {
   // ⌥⌘W toggles wrap lines (only meaningful while a stream is open).
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.altKey && e.metaKey && (e.key === "w" || e.key === "W" || e.code === "KeyW")) {
+      if (e.altKey && (e.metaKey || e.ctrlKey) && (e.key === "w" || e.key === "W" || e.code === "KeyW")) {
         e.preventDefault();
         setWrapLines((w) => !w);
       }
@@ -583,7 +584,7 @@ export default function LogsPanel() {
                   <Button variant={errorsOnly ? "subtle" : "outline"} size="icon-sm" aria-label="Errors only" aria-pressed={errorsOnly} title="Show only error / fatal / panic lines" onClick={() => setErrorsOnly((e) => !e)}>
                     <FontAwesomeIcon icon={faCircleExclamation} />
                   </Button>
-                  <Button variant={wrapLines ? "subtle" : "outline"} size="icon-sm" aria-label="Wrap lines" aria-pressed={wrapLines} title="Wrap lines (⌥⌘W)" onClick={() => setWrapLines((w) => !w)}>
+                  <Button variant={wrapLines ? "subtle" : "outline"} size="icon-sm" aria-label="Wrap lines" aria-pressed={wrapLines} title={`Wrap lines (${formatShortcut({ alt: true, mod: true, key: "W" })})`} onClick={() => setWrapLines((w) => !w)}>
                     <FontAwesomeIcon icon={faAlignLeft} />
                   </Button>
                   <Button variant={hideProbes ? "subtle" : "outline"} size="icon-sm" aria-label="Hide probes" aria-pressed={hideProbes} title="Hide probe / health-check noise" onClick={() => setHideProbes((h) => !h)}>

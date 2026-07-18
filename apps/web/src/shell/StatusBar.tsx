@@ -10,6 +10,7 @@ import { useCluster, filterByNamespace } from "@/store/cluster";
 import { TOGGLE_TERMINAL_EVENT } from "@/shell/TerminalDrawer";
 import { connectionStatus, type ConnectionTone } from "@/shell/connectionStatus";
 import { apiFetch } from "@/lib/api";
+import { formatShortcut } from "@/lib/platform";
 
 const TONE_COLOR: Record<ConnectionTone, string> = {
   ok: "var(--status-running)",
@@ -112,14 +113,14 @@ export default function StatusBar({ chatHidden, onToggleChat }: StatusBarProps =
         <Sep />
 
         {/* Hint chips */}
-        <HintChip kbd="⌘K">Commands</HintChip>
+        <HintChip kbd={formatShortcut({ mod: true, key: "K" })}>Commands</HintChip>
         <HintChip kbd="/">Search</HintChip>
-        <HintChip kbd="⌘L">Chat</HintChip>
-        <HintChip kbd="⌃`" onClick={() => window.dispatchEvent(new Event(TOGGLE_TERMINAL_EVENT))}>
+        <HintChip kbd={formatShortcut({ mod: true, key: "L" })}>Chat</HintChip>
+        <HintChip kbd={formatShortcut({ ctrl: true, key: "`" })} onClick={() => window.dispatchEvent(new Event(TOGGLE_TERMINAL_EVENT))}>
           Terminal
         </HintChip>
         {onToggleChat && (
-          <HintChip kbd="⌘J" onClick={onToggleChat}>
+          <HintChip kbd={formatShortcut({ mod: true, key: "J" })} onClick={onToggleChat}>
             {chatHidden ? "Show chat" : "Hide chat"}
           </HintChip>
         )}
