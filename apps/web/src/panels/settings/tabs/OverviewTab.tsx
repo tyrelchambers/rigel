@@ -3,15 +3,16 @@
 // useAppUpdate) plus best-effort GitHub release metadata (rigel.about.get()).
 import { useCallback, useEffect, useState } from "react";
 import { format } from "date-fns";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  Check,
-  Download,
-  LoaderCircle,
-  RotateCw,
-  RefreshCw,
-  ArrowUpRight,
-  TriangleAlert,
-} from "lucide-react";
+  faCheck,
+  faDownload,
+  faSpinner,
+  faArrowRotateRight,
+  faArrowsRotate,
+  faArrowUpRight,
+  faTriangleExclamation,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { RigelMark } from "@/components/RigelMark";
 import { rigel, isDesktop, type AboutInfo } from "@/lib/desktop";
 import { useAppUpdate } from "@/shell/useAppUpdate";
@@ -98,7 +99,8 @@ export function OverviewTab() {
                 onClick={check}
                 className="flex shrink-0 items-center gap-2 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3.5 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
               >
-                <RefreshCw
+                <FontAwesomeIcon
+                  icon={faArrowsRotate}
                   className={cn(
                     "size-3.5",
                     update.status === "checking" && "animate-spin",
@@ -147,7 +149,7 @@ function UpdateBody({
       <StatusRow
         tone="pending"
         icon={
-          <TriangleAlert className="size-[18px] text-[var(--status-pending)]" />
+          <FontAwesomeIcon icon={faTriangleExclamation} className="size-[18px] text-[var(--status-pending)]" />
         }
       >
         <span className="text-sm font-semibold text-foreground">
@@ -165,7 +167,7 @@ function UpdateBody({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <StatusRow
           tone="running"
-          icon={<Check className="size-[18px] text-[var(--status-running)]" />}
+          icon={<FontAwesomeIcon icon={faCheck} className="size-[18px] text-[var(--status-running)]" />}
           className="flex-1"
         >
           <span className="text-sm font-semibold text-foreground">
@@ -177,7 +179,7 @@ function UpdateBody({
         </StatusRow>
         <PrimaryButton
           onClick={update.install}
-          icon={<RotateCw className="size-3.5" />}
+          icon={<FontAwesomeIcon icon={faArrowRotateRight} className="size-3.5" />}
         >
           Restart to update
         </PrimaryButton>
@@ -189,7 +191,7 @@ function UpdateBody({
     return (
       <div className="flex flex-col gap-2.5 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-4 py-4">
         <div className="flex items-center gap-2">
-          <LoaderCircle className="size-4 animate-spin text-[var(--accent-primary)]" />
+          <FontAwesomeIcon icon={faSpinner} className="size-4 animate-spin text-[var(--accent-primary)]" />
           <span className="text-sm font-semibold text-foreground">
             Downloading {update.version}…
           </span>
@@ -247,7 +249,7 @@ function UpdateBody({
             <ul className="flex flex-col gap-2">
               {highlights.map((h, i) => (
                 <li key={i} className="flex items-start gap-2.5">
-                  <Check className="mt-0.5 size-3.5 shrink-0 text-[var(--status-running)]" />
+                  <FontAwesomeIcon icon={faCheck} className="mt-0.5 size-3.5 shrink-0 text-[var(--status-running)]" />
                   <span className="text-[13px] leading-relaxed text-muted-foreground">
                     {h}
                   </span>
@@ -261,7 +263,7 @@ function UpdateBody({
           <div className="flex items-center gap-4">
             <PrimaryButton
               onClick={update.canAutoInstall ? update.download : update.open}
-              icon={<Download className="size-3.5" />}
+              icon={<FontAwesomeIcon icon={faDownload} className="size-3.5" />}
             >
               {update.canAutoInstall ? "Update now" : "Download update"}
             </PrimaryButton>
@@ -273,7 +275,7 @@ function UpdateBody({
                 className="flex items-center gap-1 text-[13px] font-semibold text-[var(--accent-primary)] hover:underline"
               >
                 Release notes
-                <ArrowUpRight className="size-3.5" />
+                <FontAwesomeIcon icon={faArrowUpRight} className="size-3.5" />
               </a>
             )}
           </div>
@@ -293,9 +295,9 @@ function UpdateBody({
     <div className="flex flex-wrap items-center gap-3.5 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-4 py-4">
       <div className="flex size-9 items-center justify-center rounded-full bg-[color-mix(in_oklab,var(--status-running)_16%,transparent)]">
         {update.status === "checking" ? (
-          <LoaderCircle className="size-[18px] animate-spin text-[var(--accent-primary)]" />
+          <FontAwesomeIcon icon={faSpinner} className="size-[18px] animate-spin text-[var(--accent-primary)]" />
         ) : (
-          <Check className="size-[18px] text-[var(--status-running)]" />
+          <FontAwesomeIcon icon={faCheck} className="size-[18px] text-[var(--status-running)]" />
         )}
       </div>
       <div className="flex flex-1 flex-col gap-0.5">

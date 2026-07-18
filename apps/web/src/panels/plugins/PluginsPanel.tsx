@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faMagnifyingGlass } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { CLUSTER_ADDONS, detectInstalled, extraManifestYaml, type ClusterAddon, type AddonGroup, type InstalledWorkload } from "@rigel/catalog";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
@@ -103,7 +104,7 @@ export default function PluginsPanel() {
 
           <div className="catalog-header-controls">
             <div className="catalog-search-wrap">
-              <Search className="catalog-search-icon" aria-hidden />
+              <FontAwesomeIcon icon={faMagnifyingGlass} className="catalog-search-icon" aria-hidden />
               <input
                 type="text"
                 value={search}
@@ -151,7 +152,7 @@ export default function PluginsPanel() {
               <article key={addon.id} className="catalog-card" aria-label={`${addon.name} — ${addon.tagline}`}>
                 <div className="catalog-card-top">
                   <div className="catalog-icon-tile" aria-hidden>
-                    <Icon className="catalog-icon-glyph" />
+                    <FontAwesomeIcon icon={Icon} className="catalog-icon-glyph" />
                   </div>
                   <div className="catalog-card-meta">
                     <div className="catalog-card-name-row">

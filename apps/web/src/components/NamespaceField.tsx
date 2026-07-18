@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { ChevronDown } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faChevronDown } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 
@@ -35,7 +36,7 @@ export function NamespaceField({ value, onChange, disabled, className, ariaLabel
           </option>
         ))}
       </select>
-      <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-[14px] -translate-y-1/2 text-[var(--fg-tertiary)]" />
+      <FontAwesomeIcon icon={faChevronDown} className="pointer-events-none absolute right-2 top-1/2 size-[14px] -translate-y-1/2 text-[var(--fg-tertiary)]" />
     </div>
   );
 }

@@ -2,7 +2,17 @@
 // linked-workloads chips. Independently syncable.
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Trash2, CheckCircle2, AlertTriangle, X, Plus, Boxes, FileCode } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faArrowsRotate,
+  faTrashCan,
+  faCircleCheck,
+  faTriangleExclamation,
+  faXmark,
+  faPlus,
+  faBoxesStacked,
+  faFileCode,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import type { Deployment } from "@/panels/deployments/types";
 import type { GitDeployment } from "./gitApi";
 import type { WorkloadRef } from "./linkSource";
@@ -29,7 +39,7 @@ export function DeploymentRow({
   return (
     <div style={{ borderRadius: 10, border: "1px solid #26272B", background: "var(--surface-sunken)", padding: 10 }}>
       <div className="flex items-center gap-3">
-        <Boxes className="size-3.5 shrink-0" style={{ color: "var(--accent-primary)" }} />
+        <FontAwesomeIcon icon={faBoxesStacked} className="size-3.5 shrink-0" style={{ color: "var(--accent-primary)" }} />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="truncate text-xs font-medium">{dep.name}</span>
           <span className="truncate font-mono text-2xs" style={{ color: "var(--fg-tertiary)" }}>{dep.path}</span>
@@ -37,13 +47,13 @@ export function DeploymentRow({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <Button size="sm" variant="outline" className="gap-1.5" onClick={onEditFiles}>
-            <FileCode className="size-3.5" /> Edit files
+            <FontAwesomeIcon icon={faFileCode} className="size-3.5" /> Edit files
           </Button>
           <Button size="sm" variant="outline" className="gap-1.5" onClick={onSync}>
-            <RefreshCw className="size-3.5" /> Sync now
+            <FontAwesomeIcon icon={faArrowsRotate} className="size-3.5" /> Sync now
           </Button>
           <Button size="sm" variant="ghost" onClick={onDelete} disabled={deleting} aria-label={`Remove ${dep.name}`}>
-            <Trash2 className="size-3.5" style={{ color: "var(--status-failed)" }} />
+            <FontAwesomeIcon icon={faTrashCan} className="size-3.5" style={{ color: "var(--status-failed)" }} />
           </Button>
         </div>
       </div>
@@ -61,12 +71,12 @@ export function DeploymentRow({
               onClick={() => onUnlink({ name: w.metadata.name, namespace: w.metadata.namespace ?? "default", kind: "deployment" })}
               className="opacity-60 hover:opacity-100"
             >
-              <X className="size-3" />
+              <FontAwesomeIcon icon={faXmark} className="size-3" />
             </button>
           </span>
         ))}
         <Button size="sm" variant="ghost" className="ml-auto h-6 gap-1 text-2xs" onClick={onLink}>
-          <Plus className="size-3" /> Link workload
+          <FontAwesomeIcon icon={faPlus} className="size-3" /> Link workload
         </Button>
       </div>
     </div>
@@ -86,13 +96,13 @@ function SyncStatus({ dep }: { dep: GitDeployment }) {
   if (dep.lastStatus === "error") {
     return (
       <span className="flex items-center gap-1 text-2xs" style={{ color: "var(--status-failed)" }}>
-        <AlertTriangle className="size-3" /> Last sync failed · {when}
+        <FontAwesomeIcon icon={faTriangleExclamation} className="size-3" /> Last sync failed · {when}
       </span>
     );
   }
   return (
     <span className="flex items-center gap-1 text-2xs text-emerald-400">
-      <CheckCircle2 className="size-3" /> Synced {sha ? `@ ${sha}` : ""} · {when}
+      <FontAwesomeIcon icon={faCircleCheck} className="size-3" /> Synced {sha ? `@ ${sha}` : ""} · {when}
     </span>
   );
 }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
-import { GitBranch, ExternalLink } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCodeBranch, faArrowUpRightFromSquare } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Button } from "@/components/ui/button";
 import type { ActionBlock } from "@/lib/api";
 import type { GitDeployment } from "@/panels/gitops/gitApi";
@@ -113,7 +114,7 @@ export function DeploymentDetail({
                 className="inline-flex w-fit items-center gap-1.5 font-mono text-xs hover:underline"
                 style={{ color: "var(--accent-primary)" }}
               >
-                <ExternalLink className="size-3 shrink-0" />
+                <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="size-3 shrink-0" />
                 {e.url}
               </a>
             ))}
@@ -134,7 +135,7 @@ export function DeploymentDetail({
       >
         {/* GitHub source link — gives the AI source context + enables fix-PRs. */}
         <div className="flex items-center gap-1.5">
-          <GitBranch className="size-3" style={{ color: "var(--accent-primary)" }} />
+          <FontAwesomeIcon icon={faCodeBranch} className="size-3" style={{ color: "var(--accent-primary)" }} />
           {linkedSource ? (
             <>
               <span className="text-xs text-muted-foreground">

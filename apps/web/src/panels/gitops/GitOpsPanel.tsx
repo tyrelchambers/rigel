@@ -6,7 +6,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { PanelHeader } from "@/panels/components/PanelHeader";
-import { Plus, FolderGit2 } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faPlus, faCodeBranch } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useCluster, filterByNamespace } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
@@ -54,14 +55,14 @@ export default function GitOpsPanel() {
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       <PanelHeader title="GitOps" subtitle="Deploy manifests from a Git repo" count={repoCount} loading={isLoading}>
         <Button size="sm" className="gap-1.5" onClick={() => setAddOpen(true)}>
-          <Plus className="size-3.5" /> Add repo
+          <FontAwesomeIcon icon={faPlus} className="size-3.5" /> Add repo
         </Button>
       </PanelHeader>
 
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
         {sources && sources.length === 0 && (
           <div className="text-xs" style={{ textAlign: "center", color: "var(--fg-tertiary)", padding: "48px 0" }}>
-            <FolderGit2 className="mx-auto mb-3 size-8 opacity-50" />
+            <FontAwesomeIcon icon={faCodeBranch} className="mx-auto mb-3 size-8 opacity-50" />
             No Git repos yet. Add a repo to deploy its manifests.
           </div>
         )}

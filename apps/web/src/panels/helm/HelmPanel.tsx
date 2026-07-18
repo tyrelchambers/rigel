@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LayoutList, PackagePlus, Store } from "lucide-react";
+import { faRectangleList, faBoxOpen, faStore } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { TabBar, Tab } from "@/components/ui/Tabs";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import type { HelmRelease } from "@rigel/k8s/src/helm";
@@ -17,9 +17,9 @@ export default function HelmPanel() {
     <div className="flex h-full flex-col">
       <PanelHeader title="Helm" subtitle="Installed releases and chart repositories">
         <TabBar value={tab} onValueChange={setTab}>
-          <Tab value="releases" icon={LayoutList}>Releases</Tab>
-          <Tab value="browse" icon={Store}>Browse charts</Tab>
-          <Tab value="install" icon={PackagePlus}>Install chart</Tab>
+          <Tab value="releases" icon={faRectangleList}>Releases</Tab>
+          <Tab value="browse" icon={faStore}>Browse charts</Tab>
+          <Tab value="install" icon={faBoxOpen}>Install chart</Tab>
         </TabBar>
       </PanelHeader>
       <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">

@@ -5,7 +5,8 @@
  */
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router";
-import { Search } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faMagnifyingGlass } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { PANEL_META, NAV_GROUPS } from "./navModel";
 import {
   filterEntries,
@@ -163,8 +164,9 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
             borderBottom: "1px solid #2a2a2e",
           }}
         >
-          <Search
-            size={14}
+          <FontAwesomeIcon
+            icon={faMagnifyingGlass}
+            className="size-[14px]"
             style={{ color: "var(--fg-tertiary)", flexShrink: 0 }}
           />
           <input
@@ -240,16 +242,27 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                     transition: "background 80ms",
                   }}
                 >
-                  {Icon && (
-                    <Icon
-                      size={13}
-                      style={{
-                        flexShrink: 0,
-                        width: 18,
-                        color: isActive ? "var(--fg-inverse)" : "var(--fg-tertiary)",
-                      }}
-                    />
-                  )}
+                  {Icon &&
+                    (typeof Icon === "function" ? (
+                      <Icon
+                        size={13}
+                        style={{
+                          flexShrink: 0,
+                          width: 18,
+                          color: isActive ? "var(--fg-inverse)" : "var(--fg-tertiary)",
+                        }}
+                      />
+                    ) : (
+                      <FontAwesomeIcon
+                        icon={Icon}
+                        className="size-[13px]"
+                        style={{
+                          flexShrink: 0,
+                          width: 18,
+                          color: isActive ? "var(--fg-inverse)" : "var(--fg-tertiary)",
+                        }}
+                      />
+                    ))}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div
                       className="text-xs"

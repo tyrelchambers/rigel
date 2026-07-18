@@ -4,7 +4,13 @@
 // --status-*); the handful of bespoke greys the design uses verbatim (#8C8C95
 // sub, #9A9AA2 label, #6E6E77 caption, #C9C9CF step) match modal.tsx's palette.
 import { useId, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faChevronLeft,
+  faChevronRight,
+  faSpinner,
+  faXmark,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -12,7 +18,6 @@ import {
   DialogContent,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { XIcon } from "lucide-react";
 
 // ── shared design values ────────────────────────────────────────────────────
 export const SUB = "#8C8C95"; // secondary body text
@@ -135,7 +140,7 @@ export function WizardShell({
             className="flex shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-white/[0.05]"
             style={{ width: 32, height: 32 }}
           >
-            <XIcon className="size-[18px]" style={{ color: SUB }} />
+            <FontAwesomeIcon icon={faXmark} className="size-[18px]" style={{ color: SUB }} />
             <span className="sr-only">Close</span>
           </DialogClose>
         </div>
@@ -287,7 +292,7 @@ export function OptionCard({
         <span className="text-xs" style={{ color: SUB, lineHeight: 1.4 }}>{desc}</span>
         {badge}
       </div>
-      <ChevronRight className="size-[18px] shrink-0" style={{ color: CAPTION }} />
+      <FontAwesomeIcon icon={faChevronRight} className="size-[18px] shrink-0" style={{ color: CAPTION }} />
     </button>
   );
 }
@@ -389,7 +394,7 @@ export function BackButton({
       className="flex items-center gap-1.5 rounded-[9px] transition-colors hover:bg-white/[0.04] disabled:opacity-50 text-sm"
       style={{ padding: "10px 12px", color: SUB, fontWeight: 500 }}
     >
-      {icon ?? (chevron && <ChevronLeft className="size-[15px]" />)}
+      {icon ?? (chevron && <FontAwesomeIcon icon={faChevronLeft} className="size-[15px]" />)}
       {label}
     </button>
   );
@@ -422,7 +427,7 @@ export function PrimaryButton({
     >
       {busy ? (
         <>
-          <Loader2 className="size-4 animate-spin" />
+          <FontAwesomeIcon icon={faSpinner} className="size-4 animate-spin" />
           {busyLabel}
         </>
       ) : (

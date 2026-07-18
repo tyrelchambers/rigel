@@ -1,16 +1,18 @@
-import { useState, type ComponentType } from "react";
+import { useState } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
-  Calendar,
-  Check,
-  Copy,
-  Download,
-  FileArchive,
-  FileCode,
-  FileKey,
-  FileText,
-  Pencil,
-  Trash2,
-} from "lucide-react";
+  faCalendar,
+  faCheck,
+  faCopy,
+  faDownload,
+  faFileZipper,
+  faFileCode,
+  faFileLock,
+  faFileLines,
+  faPencil,
+  faTrashCan,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { MetaCard, SectionLabel } from "@/panels/components/MetaCard";
 import { MetaChips } from "@/panels/components/MetaChips";
 import { KindBadge } from "./KindBadge";
@@ -83,7 +85,7 @@ export function ConfigMapDetail({
 
         <MetaCard label="AGE">
           <div className="flex items-center gap-[7px]">
-            <Calendar className="size-[13px] text-[var(--fg-tertiary)]" />
+            <FontAwesomeIcon icon={faCalendar} className="size-[13px] text-[var(--fg-tertiary)]" />
             <span className="text-sm text-[var(--fg-secondary)]">
               {humanAge(configMap.metadata.creationTimestamp)}
             </span>
@@ -118,18 +120,18 @@ export function ConfigMapDetail({
       {/* Manage */}
       <div className="flex items-center gap-3 border-t pt-4 border-[var(--border-subtle)]">
         <SectionLabel>MANAGE</SectionLabel>
-        <ManageButton tone="accent" icon={Pencil} onClick={onEdit}>
+        <ManageButton tone="accent" icon={faPencil} onClick={onEdit}>
           Edit
         </ManageButton>
         <ManageButton
-          icon={Download}
+          icon={faDownload}
           disabled={busy !== null}
           onClick={() => void withYaml((yaml) => downloadText(`${name}.yaml`, yaml), "download")}
         >
           {busy === "download" ? "Downloading…" : "Download YAML"}
         </ManageButton>
         <ManageButton
-          icon={yamlCopied ? Check : Copy}
+          icon={yamlCopied ? faCheck : faCopy}
           disabled={busy !== null}
           onClick={() => void withYaml((yaml) => copyText(yaml), "copy")}
         >
@@ -138,7 +140,7 @@ export function ConfigMapDetail({
         <span className="flex-1" />
         <ManageButton
           tone="danger"
-          icon={Trash2}
+          icon={faTrashCan}
           onClick={() =>
             setPendingAction({
               kind: "deleteResource",
@@ -164,11 +166,11 @@ export function ConfigMapDetail({
 // Per-key code-preview card.
 // ---------------------------------------------------------------------------
 
-const KIND_ICON: Record<ValueKind, ComponentType<{ className?: string }>> = {
-  certificate: FileKey,
-  json: FileCode,
-  yaml: FileCode,
-  text: FileText,
+const KIND_ICON: Record<ValueKind, IconDefinition> = {
+  certificate: faFileLock,
+  json: faFileCode,
+  yaml: faFileCode,
+  text: faFileLines,
 };
 
 function KeyCard({ configMap, keyName }: { configMap: ConfigMap; keyName: string }) {
@@ -179,7 +181,7 @@ function KeyCard({ configMap, keyName }: { configMap: ConfigMap; keyName: string
     const bytes = binaryBytes(configMap.binaryData?.[keyName] ?? "");
     return (
       <div className="overflow-hidden rounded-md border bg-[var(--surface-elevated)] border-[var(--border-subtle)]">
-        <KeyHeader icon={FileArchive} name={keyName} bytes={bytes} badge={<KindBadge kind="binary" />} />
+        <KeyHeader icon={faFileZipper} name={keyName} bytes={bytes} badge={<KindBadge kind="binary" />} />
         <div className="bg-[var(--surface-sunken)] px-[16px] py-[14px]">
           <span className="font-mono text-xs text-[var(--fg-tertiary)]">{`<binary data · ${humanBytes(bytes)}>`}</span>
         </div>
@@ -207,9 +209,9 @@ function KeyCard({ configMap, keyName }: { configMap: ConfigMap; keyName: string
             className="inline-flex items-center gap-[6px] rounded-sm bg-white/[0.05] px-[10px] py-[5px] text-[var(--fg-secondary)] transition-colors hover:text-foreground"
           >
             {copied ? (
-              <Check className="size-[13px] text-[var(--status-running)]" />
+              <FontAwesomeIcon icon={faCheck} className="size-[13px] text-[var(--status-running)]" />
             ) : (
-              <Copy className="size-[13px]" />
+              <FontAwesomeIcon icon={faCopy} className="size-[13px]" />
             )}
             <span className="text-xs">{copied ? "Copied" : "Copy"}</span>
           </button>
@@ -251,7 +253,7 @@ function KeyHeader({
   badge,
   copy,
 }: {
-  icon: ComponentType<{ className?: string }>;
+  icon: IconDefinition;
   name: string;
   bytes: number;
   badge: React.ReactNode;
@@ -259,7 +261,7 @@ function KeyHeader({
 }) {
   return (
     <div className="flex items-center gap-[9px] border-b px-[14px] py-[10px] bg-[var(--surface-elevated)] border-[var(--border-subtle)]">
-      <Icon className="size-[15px] text-[var(--fg-secondary)]" />
+      <FontAwesomeIcon icon={Icon} className="size-[15px] text-[var(--fg-secondary)]" />
       <span className="select-text font-mono text-sm font-semibold text-foreground">{name}</span>
       <span className="rounded-sm bg-white/[0.05] px-[7px] py-[2px] font-mono text-2xs text-[var(--fg-tertiary)]">
         {humanBytes(bytes)}
@@ -288,7 +290,7 @@ function ManageButton({
   disabled,
 }: {
   tone?: "neutral" | "accent" | "danger";
-  icon: ComponentType<{ className?: string }>;
+  icon: IconDefinition;
   children: React.ReactNode;
   onClick: () => void;
   disabled?: boolean;
@@ -306,7 +308,7 @@ function ManageButton({
       disabled={disabled}
       className={`inline-flex items-center gap-[7px] rounded-md border px-[14px] py-[8px] text-xs font-semibold transition-colors disabled:opacity-60 ${toneClass}`}
     >
-      <Icon className="size-[14px]" aria-hidden />
+      <FontAwesomeIcon icon={Icon} className="size-[14px]" aria-hidden />
       {children}
     </button>
   );

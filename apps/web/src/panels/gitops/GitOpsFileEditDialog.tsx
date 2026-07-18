@@ -3,7 +3,8 @@
 // hands the edited content to the existing proposeRepoFix flow (diff preview →
 // PR) via the guarded ConfirmSheet. Nothing is applied to the cluster.
 import { useEffect, useState } from "react";
-import { Folder, FileText } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faFolder, faFileLines } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import {
   Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -70,18 +71,18 @@ export function GitOpsFileEditDialog({ repo, dep, onClose }: { repo: GitSource; 
                 {isLoading && <div className="px-2.5 py-2 text-xs text-muted-foreground">Loading…</div>}
                 {folder !== "." && (
                   <button type="button" onClick={() => setFolder(folder.split("/").slice(0, -1).join("/") || ".")} className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-white/[0.04]">
-                    <Folder className="size-3.5 shrink-0" style={{ color: "var(--accent-primary)" }} /> ..
+                    <FontAwesomeIcon icon={faFolder} className="size-3.5 shrink-0" style={{ color: "var(--accent-primary)" }} /> ..
                   </button>
                 )}
                 {dirs.map((d) => (
                   <button key={d.path} type="button" onClick={() => setFolder(d.path)} className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-white/[0.04]">
-                    <Folder className="size-3.5 shrink-0" style={{ color: "var(--accent-primary)" }} />
+                    <FontAwesomeIcon icon={faFolder} className="size-3.5 shrink-0" style={{ color: "var(--accent-primary)" }} />
                     <span className="font-mono">{d.name}/</span>
                   </button>
                 ))}
                 {yamlFiles.map((f) => (
                   <button key={f.path} type="button" onClick={() => openFile(f.path)} className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-white/[0.04]">
-                    <FileText className="size-3.5 shrink-0" style={{ color: "var(--fg-tertiary)" }} />
+                    <FontAwesomeIcon icon={faFileLines} className="size-3.5 shrink-0" style={{ color: "var(--fg-tertiary)" }} />
                     <span className="font-mono">{f.name}</span>
                   </button>
                 ))}

@@ -5,17 +5,18 @@
 // with copy, a result/detail line, an "AI ANALYSIS" block, and Revert.
 
 import { useState } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  Check,
-  ChevronDown,
-  CircleCheck,
-  CircleX,
-  Clock,
-  Copy,
-  Sparkles,
-  TriangleAlert,
-  Undo2,
-} from "lucide-react";
+  faCheck,
+  faChevronDown,
+  faCircleCheck,
+  faCircleXmark,
+  faClock,
+  faCopy,
+  faSparkles,
+  faTriangleExclamation,
+  faArrowRotateLeft,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import type { AssistantAuditEntry } from "@rigel/k8s";
 import { auditEntryId } from "@rigel/k8s";
 import { cn } from "@/lib/utils";
@@ -25,10 +26,10 @@ import { auditCanExpand, relativeTime } from "./display";
 /** Status glyph derived from the audit outcome. */
 function StatusIcon({ outcome }: { outcome: string }) {
   if (outcome === "success")
-    return <CircleCheck className="size-[18px] shrink-0 text-emerald-500" />;
-  if (outcome === "failure") return <CircleX className="size-[18px] shrink-0 text-red-500" />;
-  if (outcome === "queued") return <Clock className="size-[18px] shrink-0 text-amber-500" />;
-  return <TriangleAlert className="size-[17px] shrink-0 text-amber-500" />;
+    return <FontAwesomeIcon icon={faCircleCheck} className="size-[18px] shrink-0 text-emerald-500" />;
+  if (outcome === "failure") return <FontAwesomeIcon icon={faCircleXmark} className="size-[18px] shrink-0 text-red-500" />;
+  if (outcome === "queued") return <FontAwesomeIcon icon={faClock} className="size-[18px] shrink-0 text-amber-500" />;
+  return <FontAwesomeIcon icon={faTriangleExclamation} className="size-[17px] shrink-0 text-amber-500" />;
 }
 
 /** Copy-to-clipboard button with a brief confirmation. */
@@ -46,9 +47,9 @@ function CopyButton({ text }: { text: string }) {
       title="Copy command"
     >
       {copied ? (
-        <Check className="size-3.5 text-emerald-500" />
+        <FontAwesomeIcon icon={faCheck} className="size-3.5 text-emerald-500" />
       ) : (
-        <Copy className="size-3.5" />
+        <FontAwesomeIcon icon={faCopy} className="size-3.5" />
       )}
       <span className="sr-only">Copy command</span>
     </button>
@@ -94,7 +95,7 @@ export function ActivityCard({ e }: { e: AssistantAuditEntry }) {
               onClick={() => toggleExpanded(id)}
               className="text-[var(--fg-tertiary)] transition-colors hover:text-[var(--fg-secondary)]"
             >
-              <ChevronDown className={cn("size-4 transition-transform", isOpen && "rotate-180")} />
+              <FontAwesomeIcon icon={faChevronDown} className={cn("size-4 transition-transform", isOpen && "rotate-180")} />
               <span className="sr-only">{isOpen ? "Collapse" : "Expand"}</span>
             </button>
           )}
@@ -134,7 +135,7 @@ export function ActivityCard({ e }: { e: AssistantAuditEntry }) {
           {e.analysis && (
             <div className="flex flex-col gap-2">
               <span className="inline-flex w-fit items-center gap-1.5 rounded bg-[var(--accent-primary)]/[0.08] px-2 py-0.5 font-mono text-3xs tracking-[0.05em] text-[var(--accent-primary)] uppercase">
-                <Sparkles className="size-2.5" />
+                <FontAwesomeIcon icon={faSparkles} className="size-2.5" />
                 AI analysis
               </span>
               <p
@@ -165,7 +166,7 @@ export function ActivityCard({ e }: { e: AssistantAuditEntry }) {
               onClick={() => openRevert(backup, e.proposal ?? e.incident)}
               className="inline-flex w-fit items-center gap-1.5 rounded-md border border-[var(--border-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--fg-secondary)] transition-colors hover:text-[var(--fg-primary)] disabled:opacity-50"
             >
-              <Undo2 className="size-3.5" />
+              <FontAwesomeIcon icon={faArrowRotateLeft} className="size-3.5" />
               Revert
             </button>
           )}

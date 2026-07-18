@@ -1,23 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
-  Box,
-  ChevronDown,
-  ChevronUp,
-  Database,
-  FileCode,
-  FlaskConical,
-  Globe,
-  Info,
-  KeyRound,
-  Layers,
-  Play,
-  Share2,
-  Sparkles,
-  TriangleAlert,
-  Upload,
-  X,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+  faCube,
+  faChevronDown,
+  faChevronUp,
+  faDatabase,
+  faFileCode,
+  faFlask,
+  faGlobe,
+  faCircleInfo,
+  faKey,
+  faLayerGroup,
+  faPlay,
+  faShareNodes,
+  faSparkles,
+  faTriangleExclamation,
+  faUpload,
+  faXmark,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Loader } from "@/components/Loader";
 import { ManifestValidationResult } from "@/components/ManifestValidationResult";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
@@ -62,12 +63,12 @@ function resourceTally(result: ConversionResult | null): string {
     .join("   ");
 }
 
-const EXPLAIN_ICON: Record<string, LucideIcon> = {
-  Deployment: Box,
-  Service: Share2,
-  PersistentVolumeClaim: Database,
-  Secret: KeyRound,
-  Ingress: Globe,
+const EXPLAIN_ICON: Record<string, IconDefinition> = {
+  Deployment: faCube,
+  Service: faShareNodes,
+  PersistentVolumeClaim: faDatabase,
+  Secret: faKey,
+  Ingress: faGlobe,
 };
 
 const EXPLAIN_LABEL: Record<string, [string, string]> = {
@@ -247,7 +248,7 @@ export default function ComposeMigratePanel() {
             }}
           />
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => fileInput.current?.click()}>
-            <Upload className="size-3.5" /> Upload
+            <FontAwesomeIcon icon={faUpload} className="size-3.5" /> Upload
           </Button>
           <Button
             variant="outline"
@@ -256,10 +257,10 @@ export default function ComposeMigratePanel() {
             onClick={handleDryRun}
             disabled={!effectiveManifest.trim() || dryRun.pending}
           >
-            {dryRun.pending ? <><Loader size={14} /> Validating…</> : <><FlaskConical className="size-3.5" /> Dry run</>}
+            {dryRun.pending ? <><Loader size={14} /> Validating…</> : <><FontAwesomeIcon icon={faFlask} className="size-3.5" /> Dry run</>}
           </Button>
           <Button size="sm" className="gap-1.5" onClick={handleApply} disabled={!effectiveManifest.trim() || applyPrep.pending || dryRun.pending}>
-            {applyPrep.pending ? <><Loader size={14} /> Checking…</> : <><Play className="size-3.5 fill-current" /> Apply…</>}
+            {applyPrep.pending ? <><Loader size={14} /> Checking…</> : <><FontAwesomeIcon icon={faPlay} className="size-3.5 fill-current" /> Apply…</>}
           </Button>
         </div>
       </header>
@@ -268,7 +269,7 @@ export default function ComposeMigratePanel() {
         <div className="flex flex-shrink-0 flex-col gap-[11px] px-5 py-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <Sparkles className="size-3.5 text-[var(--accent-primary)]" />
+              <FontAwesomeIcon icon={faSparkles} className="size-3.5 text-[var(--accent-primary)]" />
               <h2 className="font-heading text-sm font-semibold text-[var(--fg-primary)]">What this will create</h2>
             </div>
             <Button
@@ -277,7 +278,7 @@ export default function ComposeMigratePanel() {
               aria-label={explainerCollapsed ? "Expand explainer" : "Collapse explainer"}
               onClick={() => setExplainerCollapsed((c) => !c)}
             >
-              {explainerCollapsed ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
+              {explainerCollapsed ? <FontAwesomeIcon icon={faChevronDown} className="size-4" /> : <FontAwesomeIcon icon={faChevronUp} className="size-4" />}
             </Button>
           </div>
 
@@ -287,10 +288,10 @@ export default function ComposeMigratePanel() {
 
               <div className="flex flex-col gap-3">
                 {explanation.resources.map((r) => {
-                  const Icon = EXPLAIN_ICON[r.kind] ?? Box;
+                  const Icon = EXPLAIN_ICON[r.kind] ?? faCube;
                   return (
                     <div key={r.kind} className="flex items-start gap-2.5">
-                      <Icon className="mt-0.5 size-4 shrink-0 text-[var(--accent-primary)]" />
+                      <FontAwesomeIcon icon={Icon} className="mt-0.5 size-4 shrink-0 text-[var(--accent-primary)]" />
                       <span className="text-xs leading-[1.5]">
                         <span className="font-semibold text-[var(--fg-primary)]">{explainLabel(r.kind, r.count)}</span>
                         <span className="ml-2.5 text-[var(--fg-secondary)]">{r.text}</span>
@@ -307,7 +308,7 @@ export default function ComposeMigratePanel() {
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col border-r border-[var(--border-subtle)]">
           <div className="flex flex-shrink-0 items-center gap-2 border-b border-[var(--border-subtle)] bg-[var(--surface-primary)] px-[18px] py-2">
-            <FileCode className="size-3.5 text-[var(--fg-tertiary)]" />
+            <FontAwesomeIcon icon={faFileCode} className="size-3.5 text-[var(--fg-tertiary)]" />
             <span className="font-mono text-2xs text-[var(--fg-tertiary)]">docker-compose.yml</span>
           </div>
           <div className="min-h-0 flex-1">
@@ -318,7 +319,7 @@ export default function ComposeMigratePanel() {
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex flex-shrink-0 items-center justify-between gap-2 border-b border-[var(--border-subtle)] bg-[var(--surface-primary)] px-[18px] py-2">
             <div className="flex items-center gap-2">
-              <Layers className="size-3.5 text-[var(--fg-tertiary)]" />
+              <FontAwesomeIcon icon={faLayerGroup} className="size-3.5 text-[var(--fg-tertiary)]" />
               <span className="font-mono text-2xs text-[var(--fg-tertiary)]">Generated manifests</span>
             </div>
             <span className="rounded-[4px] border border-[var(--border-subtle)] bg-white/5 px-[9px] py-0.5 font-mono text-2xs text-muted-foreground">
@@ -385,7 +386,7 @@ export default function ComposeMigratePanel() {
                         onClick={c.clear}
                         className="flex size-3.5 items-center justify-center rounded-full text-[var(--fg-tertiary)] outline-none hover:bg-white/[0.06] hover:text-[var(--fg-primary)]"
                       >
-                        <X className="size-2.5" />
+                        <FontAwesomeIcon icon={faXmark} className="size-2.5" />
                       </button>
                     </span>
                   ))}
@@ -396,7 +397,7 @@ export default function ComposeMigratePanel() {
             <div className="flex flex-col gap-2.5">
               {hints.map((h, i) => (
                 <div key={`h${i}`} className="flex items-start gap-2.5">
-                  <Info className="mt-px size-3.5 shrink-0 text-[var(--accent-primary)]" />
+                  <FontAwesomeIcon icon={faCircleInfo} className="mt-px size-3.5 shrink-0 text-[var(--accent-primary)]" />
                   <span className="text-xs leading-[1.45] text-muted-foreground">
                     <span className="font-mono">{h.service}</span> looks like {h.appName}. The catalog has a hardened version.
                   </span>
@@ -404,7 +405,8 @@ export default function ComposeMigratePanel() {
               ))}
               {warnings.map((w, i) => (
                 <div key={`w${i}`} className="flex items-start gap-2.5">
-                  <TriangleAlert
+                  <FontAwesomeIcon
+                    icon={faTriangleExclamation}
                     className={`mt-px size-3.5 shrink-0 ${w.severity === "warning" ? "text-amber-500" : "text-[var(--fg-tertiary)]"}`}
                   />
                   <span className="flex-1 text-xs leading-[1.45] text-muted-foreground">
@@ -415,7 +417,7 @@ export default function ComposeMigratePanel() {
                     w.fix.option === "expose" ? (
                       <DropdownMenu>
                         <DropdownMenuTrigger aria-label={`Fix: ${w.message}`} className={fixBtnClass}>
-                          Fix <ChevronDown className="size-3" />
+                          Fix <FontAwesomeIcon icon={faChevronDown} className="size-3" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem
@@ -465,7 +467,7 @@ export default function ComposeMigratePanel() {
         <div className="flex flex-shrink-0 flex-col gap-1.5 border-t border-[var(--border-subtle)] bg-[var(--surface-primary)] px-[18px] py-2.5">
           {skipped.length > 0 && (
             <p className="flex items-center gap-1.5 text-xs text-amber-400">
-              <TriangleAlert className="size-3.5 shrink-0" /> {skipped.length} resource{skipped.length === 1 ? "" : "s"} already exist and won&apos;t be modified
+              <FontAwesomeIcon icon={faTriangleExclamation} className="size-3.5 shrink-0" /> {skipped.length} resource{skipped.length === 1 ? "" : "s"} already exist and won&apos;t be modified
               {applyPrep.note ? "." : " — only new resources are applied."}
             </p>
           )}

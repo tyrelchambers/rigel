@@ -17,7 +17,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { Copy, SquarePen, Clock, ArrowDown } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCopy, faPenToSquare, faClock, faArrowDown } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { BatchConfirmSheet, type BatchConfirmItem } from "@/components/BatchConfirmSheet";
 import { PurgeSheet } from "@/panels/purge/PurgeSheet";
@@ -629,7 +630,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
             style={headerBtnStyle}
             aria-label="Copy conversation"
           >
-            <Copy size={11} />
+            <FontAwesomeIcon icon={faCopy} className="size-[11px]" />
           </button>
 
           {/* New chat */}
@@ -639,7 +640,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
             style={headerBtnStyle}
             aria-label="New chat"
           >
-            <SquarePen size={11} style={{ color: "var(--accent-primary)" }} />
+            <FontAwesomeIcon icon={faPenToSquare} className="size-[11px]" style={{ color: "var(--accent-primary)" }} />
           </button>
 
           {/* Chat history */}
@@ -649,7 +650,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
             style={headerBtnStyle}
             aria-label="Chat history"
           >
-            <Clock size={11} />
+            <FontAwesomeIcon icon={faClock} className="size-[11px]" />
           </button>
 
           {shortId && (
@@ -693,7 +694,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
               aria-label="Jump to newest"
               className="absolute bottom-3 left-1/2 flex size-7 -translate-x-1/2 items-center justify-center rounded-full border border-border bg-popover text-popover-foreground shadow-md transition-opacity hover:bg-accent data-[active=false]:pointer-events-none data-[active=false]:opacity-0 data-[active=true]:opacity-100"
             >
-              <ArrowDown className="size-4" />
+              <FontAwesomeIcon icon={faArrowDown} className="size-4" />
             </MessageScroller.Button>
           </MessageScroller.Root>
         </MessageScroller.Provider>

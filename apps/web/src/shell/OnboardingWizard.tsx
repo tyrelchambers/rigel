@@ -8,7 +8,8 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { Check, Bot, Activity, Bell, FileInput, X } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCheck, faRobot, faWaveform, faBell, faFileImport, faXmark } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import {
   useAgents,
   useAssistantAction,
@@ -61,7 +62,7 @@ export function OnboardingWizard({ onClose, onLeave }: { onClose: () => void; on
       node: (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <ToolCard
-            icon={<FileInput size={15} style={{ color: "var(--accent-primary)" }} />}
+            icon={<FontAwesomeIcon icon={faFileImport} className="size-[15px]" style={{ color: "var(--accent-primary)" }} />}
             title="Import a Compose stack"
             desc="Convert a docker-compose.yml into Kubernetes manifests you can review and apply in the Compose panel."
             action={
@@ -71,7 +72,7 @@ export function OnboardingWizard({ onClose, onLeave }: { onClose: () => void; on
             }
           />
           <ToolCard
-            icon={<Bell size={15} style={{ color: "var(--accent-primary)" }} />}
+            icon={<FontAwesomeIcon icon={faBell} className="size-[15px]" style={{ color: "var(--accent-primary)" }} />}
             title="Set up notifications"
             desc="Get cluster alerts where you already are. Connect a channel: Signal, Discord, Slack, or Matrix."
             action={
@@ -124,7 +125,7 @@ export function OnboardingWizard({ onClose, onLeave }: { onClose: () => void; on
             </span>
           </div>
           <button type="button" aria-label="Close" onClick={onClose} style={closeBtn}>
-            <X size={16} />
+            <FontAwesomeIcon icon={faXmark} className="size-[16px]" />
           </button>
         </div>
 
@@ -186,7 +187,7 @@ function StatusPill({ label }: { label: string }) {
         border: "1px solid #10B98140",
       }}
     >
-      <Check size={13} style={{ color: "var(--status-running)" }} />
+      <FontAwesomeIcon icon={faCheck} className="size-[13px]" style={{ color: "var(--status-running)" }} />
       <span className="text-xs" style={{ fontWeight: 600, color: "var(--status-running)" }}>{label}</span>
     </span>
   );
@@ -235,7 +236,7 @@ function Done() {
         border: "1px solid color-mix(in oklab, var(--status-running) 32%, transparent)",
       }}
     >
-      <Check size={12} /> Done
+      <FontAwesomeIcon icon={faCheck} className="size-[12px]" /> Done
     </span>
   );
 }
@@ -250,7 +251,7 @@ function AssistantCard() {
   const install = useAssistantAction();
   return (
     <ToolCard
-      icon={<Bot size={15} style={{ color: "var(--accent-primary)" }} />}
+      icon={<FontAwesomeIcon icon={faRobot} className="size-[15px]" style={{ color: "var(--accent-primary)" }} />}
       title="Assistant agent"
       desc="An in-cluster agent that watches for problems and proposes remediations. Optional."
       action={
@@ -286,7 +287,7 @@ function MetricsCard() {
   const available = metrics.data?.available === true;
   return (
     <ToolCard
-      icon={<Activity size={15} style={{ color: "var(--accent-primary)" }} />}
+      icon={<FontAwesomeIcon icon={faWaveform} className="size-[15px]" style={{ color: "var(--accent-primary)" }} />}
       title="metrics-server"
       desc="Enables live node CPU/memory. On homelab clusters the install also adds --kubelet-insecure-tls."
       action={

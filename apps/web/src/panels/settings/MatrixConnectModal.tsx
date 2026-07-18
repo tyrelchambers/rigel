@@ -13,29 +13,30 @@
 //   login mode → matrixLogin    → matrixCreateRoom → setMatrix
 //   Connect is gated on a non-empty allowed-senders list (a critical fix).
 import { useState, useEffect } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  MessageSquare,
-  Server,
-  Globe,
-  Boxes,
-  KeyRound,
-  LogIn,
-  Lock,
-  Plus,
-  Copy,
-  Send,
-  Check,
-  ArrowRight,
-  RefreshCw,
-  WifiOff,
-  ShieldAlert,
-  CircleCheckBig,
-  Circle,
-  Loader2,
-  Terminal,
-  AlertTriangle,
-  BookOpen,
-} from "lucide-react";
+  faMessage,
+  faServer,
+  faGlobe,
+  faBoxesStacked,
+  faKey,
+  faRightToBracket,
+  faLock,
+  faPlus,
+  faCopy,
+  faPaperPlane,
+  faCheck,
+  faArrowRight,
+  faArrowsRotate,
+  faWifiSlash,
+  faShieldExclamation,
+  faCircleCheck,
+  faCircle,
+  faSpinner,
+  faTerminal,
+  faTriangleExclamation,
+  faBookOpen,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { parseAllowedSenders } from "@rigel/k8s";
 import { matrixLogin, matrixValidate, matrixCreateRoom, matrixPoll, matrixSendTest, useAssistantAction } from "@/lib/api";
 import { useCopyToClipboard } from "@/lib/useCopyToClipboard";
@@ -74,7 +75,7 @@ function classifyError(message: string, homeserver: string): ErrInfo {
   if (/forbidden|unauthor|invalid.*token|token.*invalid|m_forbidden|access token|password|login|auth/.test(m)) {
     return {
       title: "Authentication failed",
-      icon: <Lock className="size-[17px]" />,
+      icon: <FontAwesomeIcon icon={faLock} className="size-[17px]" />,
       lead: "Rigel couldn't sign in as @rigel.",
       cause:
         "The homeserver rejected the credentials. Generate a fresh access token, or switch to username and password.",
@@ -84,7 +85,7 @@ function classifyError(message: string, homeserver: string): ErrInfo {
   if (/timeout|dial|econn|enotfound|unreachable|network|fetch failed|getaddrinfo|refused/.test(m)) {
     return {
       title: "Homeserver unreachable",
-      icon: <WifiOff className="size-[17px]" />,
+      icon: <FontAwesomeIcon icon={faWifiSlash} className="size-[17px]" />,
       lead: "Rigel can't reach the homeserver.",
       cause: `${homeserver || "The homeserver"} didn't respond. Check the URL and that the homeserver is reachable from this machine.`,
       detail: message,
@@ -92,7 +93,7 @@ function classifyError(message: string, homeserver: string): ErrInfo {
   }
   return {
     title: "Couldn't connect",
-    icon: <AlertTriangle className="size-[17px]" />,
+    icon: <FontAwesomeIcon icon={faTriangleExclamation} className="size-[17px]" />,
     lead: "Rigel couldn't finish connecting.",
     cause: "The homeserver returned an unexpected error. Review the details below and try again.",
     detail: message,
@@ -266,7 +267,7 @@ export function MatrixConnectModal({
             right={
               <PrimaryButton
                 label="Retry"
-                icon={<RefreshCw className="size-[15px]" />}
+                icon={<FontAwesomeIcon icon={faArrowsRotate} className="size-[15px]" />}
                 onClick={connect}
                 busy={busy}
               />
@@ -281,7 +282,7 @@ export function MatrixConnectModal({
             className="flex items-start gap-2.5 rounded-lg"
             style={{ background: "var(--surface-sunken)", border: "1px solid rgba(255,255,255,0.07)", padding: "10px 12px" }}
           >
-            <Terminal className="mt-0.5 size-[13px] shrink-0" style={{ color: CAPTION }} />
+            <FontAwesomeIcon icon={faTerminal} className="mt-0.5 size-[13px] shrink-0" style={{ color: CAPTION }} />
             <span className="select-text font-mono text-2xs" style={{ color: "#B6B6BE", lineHeight: 1.4 }}>
               {info.detail}
             </span>
@@ -298,13 +299,13 @@ export function MatrixConnectModal({
         open={open}
         onOpenChange={(o) => (o ? undefined : close())}
         title="Set up Matrix"
-        icon={<MessageSquare className="size-[17px]" />}
+        icon={<FontAwesomeIcon icon={faMessage} className="size-[17px]" />}
         progress={2 / 3}
         step={2}
       >
         <WizardBody>
           <div className="flex flex-col items-center justify-center gap-4 py-10">
-            <Loader2 className="size-7 animate-spin" style={{ color: "var(--accent-primary)" }} />
+            <FontAwesomeIcon icon={faSpinner} className="size-7 animate-spin" style={{ color: "var(--accent-primary)" }} />
             <div className="flex flex-col items-center gap-1">
               <span className="text-sm" style={{ fontWeight: 600, color: "#FFFFFF" }}>Connecting…</span>
               <span className="font-mono text-xs" style={{ color: SUB }}>
@@ -324,7 +325,7 @@ export function MatrixConnectModal({
         open={open}
         onOpenChange={(o) => (o ? undefined : close())}
         title="Set up Matrix"
-        icon={<MessageSquare className="size-[17px]" />}
+        icon={<FontAwesomeIcon icon={faMessage} className="size-[17px]" />}
         progress={1 / 3}
         step={1}
         footer={
@@ -333,7 +334,7 @@ export function MatrixConnectModal({
             right={
               <PrimaryButton
                 label="Continue"
-                icon={<ArrowRight className="size-4" />}
+                icon={<FontAwesomeIcon icon={faArrowRight} className="size-4" />}
                 onClick={goDetails}
                 disabled={!selected}
               />
@@ -352,7 +353,7 @@ export function MatrixConnectModal({
               tag="MOST PRIVATE"
               title="I already have a homeserver"
               desc="Point Rigel at a Synapse or Dendrite you already run."
-              icon={<Server className="size-5" />}
+              icon={<FontAwesomeIcon icon={faServer} className="size-5" />}
               selected={selected === "A"}
               onClick={() => setSelected("A")}
             />
@@ -361,7 +362,7 @@ export function MatrixConnectModal({
               tag="EASIEST"
               title="Use a public homeserver (matrix.org)"
               desc="Connect through shared infrastructure. Up and running in a minute."
-              icon={<Globe className="size-5" />}
+              icon={<FontAwesomeIcon icon={faGlobe} className="size-5" />}
               selected={selected === "B"}
               onClick={() => setSelected("B")}
             />
@@ -370,7 +371,7 @@ export function MatrixConnectModal({
               tag="ADVANCED"
               title="Install Matrix in my cluster"
               desc="Rigel deploys Synapse into your cluster and wires up the bot."
-              icon={<Boxes className="size-5" />}
+              icon={<FontAwesomeIcon icon={faBoxesStacked} className="size-5" />}
               disabled
               badge={
                 <span className="self-start font-mono text-3xs" style={{ letterSpacing: 0.6, color: CAPTION }}>
@@ -393,7 +394,7 @@ export function MatrixConnectModal({
         right={
           <PrimaryButton
             label="Continue"
-            icon={<ArrowRight className="size-4" />}
+            icon={<FontAwesomeIcon icon={faArrowRight} className="size-4" />}
             onClick={connect}
             disabled={allowedSendersEmpty}
             busy={busy}
@@ -406,7 +407,7 @@ export function MatrixConnectModal({
         open={open}
         onOpenChange={(o) => (o ? undefined : close())}
         title="Set up Matrix"
-        icon={<MessageSquare className="size-[17px]" />}
+        icon={<FontAwesomeIcon icon={faMessage} className="size-[17px]" />}
         progress={2 / 3}
         step={2}
         footer={footer}
@@ -438,8 +439,8 @@ export function MatrixConnectModal({
                 value={authMode}
                 onChange={setAuthMode}
                 options={[
-                  { id: "token", label: "Paste access token", icon: <KeyRound className="size-3.5" /> },
-                  { id: "login", label: "Log in", icon: <LogIn className="size-3.5" /> },
+                  { id: "token", label: "Paste access token", icon: <FontAwesomeIcon icon={faKey} className="size-3.5" /> },
+                  { id: "login", label: "Log in", icon: <FontAwesomeIcon icon={faRightToBracket} className="size-3.5" /> },
                 ]}
               />
               <span className="text-2xs" style={{ color: CAPTION, lineHeight: 1.4 }}>
@@ -464,7 +465,7 @@ export function MatrixConnectModal({
                 onChange={setPassword}
                 type="password"
                 mono={false}
-                trailing={isPublic ? undefined : <Lock className="size-[15px]" />}
+                trailing={isPublic ? undefined : <FontAwesomeIcon icon={faLock} className="size-[15px]" />}
               />
             </>
           ) : (
@@ -473,7 +474,7 @@ export function MatrixConnectModal({
               value={token}
               onChange={setToken}
               placeholder="syt_…"
-              trailing={<KeyRound className="size-[15px]" />}
+              trailing={<FontAwesomeIcon icon={faKey} className="size-[15px]" />}
             />
           )}
 
@@ -482,7 +483,7 @@ export function MatrixConnectModal({
             value={allowed}
             onChange={setAllowed}
             placeholder={isPublic ? "@you:matrix.org" : "@you:example.com"}
-            trailing={<Plus className="size-[15px]" />}
+            trailing={<FontAwesomeIcon icon={faPlus} className="size-[15px]" />}
             hint="Only these Matrix IDs can command Rigel."
           />
 
@@ -491,7 +492,7 @@ export function MatrixConnectModal({
               className="flex items-start gap-[11px] rounded-[10px]"
               style={{ background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.19)", padding: 13 }}
             >
-              <ShieldAlert className="size-[18px] shrink-0" style={{ color: "var(--status-pending)" }} />
+              <FontAwesomeIcon icon={faShieldExclamation} className="size-[18px] shrink-0" style={{ color: "var(--status-pending)" }} />
               <div className="flex flex-col gap-[3px]">
                 <span className="text-xs" style={{ fontWeight: 600, color: "#F4C77A" }}>This server isn't yours</span>
                 <span className="text-xs" style={{ color: "#C9A56A", lineHeight: 1.45 }}>
@@ -503,7 +504,7 @@ export function MatrixConnectModal({
           )}
 
           <div className="flex items-center gap-1.5">
-            <BookOpen className="size-[13px] shrink-0" style={{ color: CAPTION }} />
+            <FontAwesomeIcon icon={faBookOpen} className="size-[13px] shrink-0" style={{ color: CAPTION }} />
             <span className="text-2xs" style={{ color: LABEL }}>New to access tokens?</span>
             <a
               href="https://outline.tybit.luxe/doc/matrix-access-tokens-bot-accounts-for-the-rigel-assistant-UKyuTZRbBw"
@@ -532,7 +533,7 @@ export function MatrixConnectModal({
         open={open}
         onOpenChange={(o) => (o ? undefined : close())}
         title="Set up Matrix"
-        icon={<MessageSquare className="size-[17px]" />}
+        icon={<FontAwesomeIcon icon={faMessage} className="size-[17px]" />}
         progress={1}
         step={3}
         footer={
@@ -541,7 +542,7 @@ export function MatrixConnectModal({
             right={
               <PrimaryButton
                 label="Finish"
-                icon={<Check className="size-4" />}
+                icon={<FontAwesomeIcon icon={faCheck} className="size-4" />}
                 onClick={() => setView("connected")}
               />
             }
@@ -574,7 +575,7 @@ export function MatrixConnectModal({
               className="flex size-[30px] items-center justify-center rounded-lg transition-colors hover:bg-white/[0.08]"
               style={{ background: "rgba(255,255,255,0.05)" }}
             >
-              <Copy className="size-[15px]" style={{ color: SUB }} />
+              <FontAwesomeIcon icon={faCopy} className="size-[15px]" style={{ color: SUB }} />
             </button>
           </div>
 
@@ -628,9 +629,9 @@ export function MatrixConnectModal({
             style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.1)", padding: "11px 0" }}
           >
             {sendingTest ? (
-              <Loader2 className="size-[15px] animate-spin" style={{ color: STEP_TXT }} />
+              <FontAwesomeIcon icon={faSpinner} className="size-[15px] animate-spin" style={{ color: STEP_TXT }} />
             ) : (
-              <Send className="size-[15px]" style={{ color: STEP_TXT }} />
+              <FontAwesomeIcon icon={faPaperPlane} className="size-[15px]" style={{ color: STEP_TXT }} />
             )}
             <span className="text-xs" style={{ fontWeight: 500, color: "#FFFFFF" }}>Send a test message from Rigel</span>
           </button>
@@ -650,7 +651,7 @@ export function MatrixConnectModal({
       open={open}
       onOpenChange={(o) => (o ? undefined : close())}
       title="Matrix connected"
-      icon={<CircleCheckBig className="size-[17px]" />}
+      icon={<FontAwesomeIcon icon={faCircleCheck} className="size-[17px]" />}
       iconTone="green"
       footer={
         <WizardFooter
@@ -658,12 +659,12 @@ export function MatrixConnectModal({
             <BackButton
               label="Send a test"
               chevron={false}
-              icon={sendingTest ? <Loader2 className="size-[15px] animate-spin" /> : <Send className="size-[15px]" />}
+              icon={sendingTest ? <FontAwesomeIcon icon={faSpinner} className="size-[15px] animate-spin" /> : <FontAwesomeIcon icon={faPaperPlane} className="size-[15px]" />}
               onClick={handleSendTest}
               disabled={sendingTest}
             />
           }
-          right={<PrimaryButton label="Done" icon={<Check className="size-4" />} onClick={close} />}
+          right={<PrimaryButton label="Done" icon={<FontAwesomeIcon icon={faCheck} className="size-4" />} onClick={close} />}
         />
       }
     >
@@ -698,7 +699,7 @@ export function MatrixConnectModal({
         </div>
 
         <div className="flex items-center gap-2.5">
-          <MessageSquare className="size-[15px] shrink-0" style={{ color: "var(--accent-primary)" }} />
+          <FontAwesomeIcon icon={faMessage} className="size-[15px] shrink-0" style={{ color: "var(--accent-primary)" }} />
           <span className="text-xs" style={{ color: STEP_TXT }}>
             Message @rigel from Element to query your cluster.
           </span>
@@ -725,11 +726,11 @@ function TrackerRow({
       <div className="flex items-center gap-3">
         <span className="flex size-[22px] shrink-0 items-center justify-center">
           {state === "active" ? (
-            <Loader2 className="size-[18px] animate-spin" style={{ color: "var(--accent-primary)" }} />
+            <FontAwesomeIcon icon={faSpinner} className="size-[18px] animate-spin" style={{ color: "var(--accent-primary)" }} />
           ) : state === "done" ? (
-            <CircleCheckBig className="size-[18px]" style={{ color: "var(--status-running)" }} />
+            <FontAwesomeIcon icon={faCircleCheck} className="size-[18px]" style={{ color: "var(--status-running)" }} />
           ) : (
-            <Circle className="size-[18px]" style={{ color: "#48484F" }} />
+            <FontAwesomeIcon icon={faCircle} className="size-[18px]" style={{ color: "#48484F" }} />
           )}
         </span>
         <div className="flex flex-col gap-0.5">

@@ -2,7 +2,16 @@
 // Built to Pencil frame "Link workload modal (improved)": search + select a
 // workload from a bordered list panel, then confirm with "Link workload".
 import { useMemo, useState } from "react";
-import { Box, Check, ChevronDown, GitBranch, Link2, Search, X } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faCube,
+  faCheck,
+  faChevronDown,
+  faCodeBranch,
+  faLink,
+  faMagnifyingGlass,
+  faXmark,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import type { ActionBlock } from "@/lib/api";
@@ -63,7 +72,7 @@ export function LinkWorkloadDialog({
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--border-subtle)] px-[22px] pt-5 pb-4">
           <div className="flex gap-3">
             <div className="flex size-9 shrink-0 items-center justify-center rounded-[9px] bg-[var(--accent-dim)]">
-              <Link2 className="size-[18px] text-[var(--accent-primary)]" />
+              <FontAwesomeIcon icon={faLink} className="size-[18px] text-[var(--accent-primary)]" />
             </div>
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
@@ -71,7 +80,7 @@ export function LinkWorkloadDialog({
                   Link a workload to
                 </DialogTitle>
                 <span className="inline-flex items-center gap-1.5 rounded bg-[var(--accent-primary)]/[0.12] px-2 py-0.5">
-                  <Box className="size-3 text-[var(--accent-soft)]" />
+                  <FontAwesomeIcon icon={faCube} className="size-3 text-[var(--accent-soft)]" />
                   <span className="font-mono text-xs font-medium text-[var(--accent-soft)]">
                     {target.dep.name}
                   </span>
@@ -88,7 +97,7 @@ export function LinkWorkloadDialog({
             onClick={onClose}
             className="flex size-[30px] shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-[var(--fg-secondary)] transition-colors hover:bg-white/[0.08]"
           >
-            <X className="size-4" />
+            <FontAwesomeIcon icon={faXmark} className="size-4" />
             <span className="sr-only">Close</span>
           </button>
         </div>
@@ -97,7 +106,7 @@ export function LinkWorkloadDialog({
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-[22px] pt-4 pb-[18px]">
           {/* Search */}
           <div className="flex items-center gap-2.5 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3.5 py-[11px]">
-            <Search className="size-[15px] shrink-0 text-[var(--fg-tertiary)]" />
+            <FontAwesomeIcon icon={faMagnifyingGlass} className="size-[15px] shrink-0 text-[var(--fg-tertiary)]" />
             <input
               autoFocus
               value={search}
@@ -143,7 +152,8 @@ export function LinkWorkloadDialog({
                           : "border-transparent hover:bg-white/[0.04]",
                       )}
                     >
-                      <GitBranch
+                      <FontAwesomeIcon
+                        icon={faCodeBranch}
                         className={cn(
                           "size-[15px] shrink-0",
                           isSel ? "text-[var(--accent-primary)]" : "text-[var(--fg-secondary)]",
@@ -161,7 +171,7 @@ export function LinkWorkloadDialog({
                             re-point from {already}
                           </span>
                         )}
-                        {isSel && <Check className="size-4 text-[var(--accent-primary)]" />}
+                        {isSel && <FontAwesomeIcon icon={faCheck} className="size-4 text-[var(--accent-primary)]" />}
                       </div>
                     </button>
                   );
@@ -176,7 +186,7 @@ export function LinkWorkloadDialog({
               {filtered.length > 8 && (
                 <span className="flex items-center gap-1.5 text-2xs text-[var(--fg-tertiary)]">
                   Scroll for more
-                  <ChevronDown className="size-3" />
+                  <FontAwesomeIcon icon={faChevronDown} className="size-3" />
                 </span>
               )}
             </div>
@@ -187,7 +197,7 @@ export function LinkWorkloadDialog({
         <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--border-subtle)] px-[22px] pt-4 pb-5">
           {selected ? (
             <div className="flex items-center gap-1.5">
-              <Check className="size-3.5 text-[var(--accent-primary)]" />
+              <FontAwesomeIcon icon={faCheck} className="size-3.5 text-[var(--accent-primary)]" />
               <span className="text-xs text-[var(--fg-secondary)]">
                 {selected.metadata.name} selected
               </span>
@@ -211,7 +221,7 @@ export function LinkWorkloadDialog({
               disabled={!selected}
               className="inline-flex items-center gap-2 rounded-md bg-[var(--accent-primary)] px-[22px] py-[11px] text-sm font-bold text-[var(--fg-inverse)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <Link2 className="size-[15px]" />
+              <FontAwesomeIcon icon={faLink} className="size-[15px]" />
               Link workload
             </button>
           </div>

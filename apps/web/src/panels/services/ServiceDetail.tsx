@@ -1,4 +1,10 @@
-import { ArrowRight, Copy, Check, Calendar } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faArrowRight,
+  faCopy,
+  faCheck,
+  faCalendar,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { RelatedResources } from "@/panels/components/RelatedResources";
 import { MetaCard, SectionLabel } from "@/panels/components/MetaCard";
 import { MetaChips } from "@/panels/components/MetaChips";
@@ -37,7 +43,7 @@ export function ServiceDetail({ service }: { service: Service }) {
                     <span className="font-mono text-xs font-semibold text-foreground">{head}</span>
                     {accent && (
                       <>
-                        <ArrowRight className="size-3 text-[var(--fg-tertiary)]" />
+                        <FontAwesomeIcon icon={faArrowRight} className="size-3 text-[var(--fg-tertiary)]" />
                         <span className="font-mono text-xs text-[var(--accent-primary)]">
                           {accent}
                         </span>
@@ -59,7 +65,7 @@ export function ServiceDetail({ service }: { service: Service }) {
 
         <MetaCard label="AGE">
           <div className="flex items-center gap-[7px]">
-            <Calendar className="size-[13px] text-[var(--fg-tertiary)]" />
+            <FontAwesomeIcon icon={faCalendar} className="size-[13px] text-[var(--fg-tertiary)]" />
             <span className="text-sm text-[var(--fg-secondary)]">
               {humanAge(service.metadata.creationTimestamp)}
             </span>
@@ -109,9 +115,9 @@ function ClusterIpValue({ clusterIP }: { clusterIP: string | undefined }) {
           className="text-[var(--fg-tertiary)] hover:text-foreground"
         >
           {copied ? (
-            <Check className="size-[13px] text-[var(--status-running)]" />
+            <FontAwesomeIcon icon={faCheck} className="size-[13px] text-[var(--status-running)]" />
           ) : (
-            <Copy className="size-[13px]" />
+            <FontAwesomeIcon icon={faCopy} className="size-[13px]" />
           )}
         </button>
       )}

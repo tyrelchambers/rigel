@@ -8,16 +8,18 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
-  ArrowRight,
-  ChevronDown,
-  ChevronRight,
-  CircleCheck,
-  CircleX,
-  Sparkles,
-  TriangleAlert,
-  Wrench,
-} from "lucide-react";
+  faArrowRight,
+  faChevronDown,
+  faChevronRight,
+  faCircleCheck,
+  faCircleXmark,
+  faSparkles,
+  faTriangleExclamation,
+  faWrench,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { parseIncidentFingerprint, type AssistantAuditEntry } from "@rigel/k8s";
 import { useCluster } from "@/store/cluster";
 import { cn } from "@/lib/utils";
@@ -41,15 +43,15 @@ function targetFor(incidentKind: string) {
 }
 
 /** Status glyph + tint for the header/resolution, derived from the outcome. */
-function statusMeta(outcome: string): { Icon: typeof CircleCheck; cls: string } {
+function statusMeta(outcome: string): { icon: IconDefinition; cls: string } {
   switch (outcome) {
     case "success":
     case "skipped":
-      return { Icon: CircleCheck, cls: "text-[var(--status-running)]" };
+      return { icon: faCircleCheck, cls: "text-[var(--status-running)]" };
     case "failure":
-      return { Icon: CircleX, cls: "text-[var(--status-failed)]" };
+      return { icon: faCircleXmark, cls: "text-[var(--status-failed)]" };
     default:
-      return { Icon: TriangleAlert, cls: "text-[#E2B33E]" };
+      return { icon: faTriangleExclamation, cls: "text-[#E2B33E]" };
   }
 }
 
@@ -119,16 +121,17 @@ export function RecentActivityCard({ e }: { e: AssistantAuditEntry }) {
         )}
       >
         {canExpand ? (
-          <ChevronDown
+          <FontAwesomeIcon
+            icon={faChevronDown}
             className={cn(
               "size-3.5 shrink-0 text-[var(--fg-tertiary)] transition-transform",
               open ? "rotate-0" : "-rotate-90",
             )}
           />
         ) : (
-          <ChevronRight className="size-3.5 shrink-0 text-transparent" />
+          <FontAwesomeIcon icon={faChevronRight} className="size-3.5 shrink-0 text-transparent" />
         )}
-        <status.Icon className={cn("size-3.5 shrink-0", status.cls)} />
+        <FontAwesomeIcon icon={status.icon} className={cn("size-3.5 shrink-0", status.cls)} />
         {parsed && (
           <span className="shrink-0 rounded border border-[var(--border-subtle)] bg-white/[0.04] px-2 py-0.5 font-mono text-xs text-[var(--fg-tertiary)]">
             {parsed.namespace}
@@ -163,7 +166,7 @@ export function RecentActivityCard({ e }: { e: AssistantAuditEntry }) {
           {synopsis && (
             <div className="flex flex-col gap-2">
               <span className="inline-flex w-fit items-center gap-1.5 rounded bg-[color-mix(in_srgb,var(--accent-primary)_10%,transparent)] px-2 py-0.5 font-mono text-3xs uppercase tracking-[0.5px] text-[var(--accent-primary)]">
-                <Sparkles className="size-3" />
+                <FontAwesomeIcon icon={faSparkles} className="size-3" />
                 AI analysis
               </span>
               <div className="chat-md select-text">
@@ -179,7 +182,7 @@ export function RecentActivityCard({ e }: { e: AssistantAuditEntry }) {
 
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
-              <status.Icon className={cn("size-3.5 shrink-0", status.cls)} />
+              <FontAwesomeIcon icon={status.icon} className={cn("size-3.5 shrink-0", status.cls)} />
               <span className="min-w-0 text-xs text-[var(--fg-secondary)]">
                 {queued
                   ? `Needs you${e.proposal ? `: ${e.proposal}` : ""}`
@@ -194,7 +197,7 @@ export function RecentActivityCard({ e }: { e: AssistantAuditEntry }) {
                 onClick={() => setTab("needs")}
                 className="flex shrink-0 items-center gap-1.5 rounded-md border border-[color-mix(in_srgb,var(--accent-primary)_30%,transparent)] bg-[color-mix(in_srgb,var(--accent-primary)_12%,transparent)] px-3 py-1.5 text-xs font-semibold text-[var(--accent-primary)]"
               >
-                <Wrench className="size-3.5" />
+                <FontAwesomeIcon icon={faWrench} className="size-3.5" />
                 Review fix
               </button>
             ) : parsed ? (
@@ -204,7 +207,7 @@ export function RecentActivityCard({ e }: { e: AssistantAuditEntry }) {
                 className="flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--border-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--fg-primary)] hover:bg-white/[0.03]"
               >
                 Open in {t.panel}
-                <ArrowRight className="size-3.5" />
+                <FontAwesomeIcon icon={faArrowRight} className="size-3.5" />
               </button>
             ) : null}
           </div>

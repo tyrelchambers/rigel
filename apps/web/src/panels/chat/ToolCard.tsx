@@ -1,5 +1,13 @@
 import { useState } from "react";
-import { Wrench, ChevronDown, CircleDot, CheckCircle2, XCircle } from "lucide-react";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faWrench,
+  faChevronDown,
+  faCircleDot,
+  faCircleCheck,
+  faCircleXmark,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import type { ToolActivity } from "./types";
@@ -7,11 +15,11 @@ import { cn } from "@/lib/utils";
 
 const STATUS: Record<
   ToolActivity["status"],
-  { label: string; Icon: typeof CircleDot; className: string }
+  { label: string; icon: IconDefinition; className: string }
 > = {
-  running: { label: "Running", Icon: CircleDot, className: "animate-pulse text-muted-foreground" },
-  ok: { label: "Done", Icon: CheckCircle2, className: "text-[var(--status-running)]" },
-  error: { label: "Error", Icon: XCircle, className: "text-destructive" },
+  running: { label: "Running", icon: faCircleDot, className: "animate-pulse text-muted-foreground" },
+  ok: { label: "Done", icon: faCircleCheck, className: "text-[var(--status-running)]" },
+  error: { label: "Error", icon: faCircleXmark, className: "text-destructive" },
 };
 
 export function ToolCard({ tool }: { tool: ToolActivity }) {
@@ -24,16 +32,17 @@ export function ToolCard({ tool }: { tool: ToolActivity }) {
       className="w-full rounded-md border border-border/60 bg-background/40 text-xs"
     >
       <CollapsibleTrigger className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left">
-        <Wrench className="size-3 shrink-0 text-muted-foreground" aria-hidden />
+        <FontAwesomeIcon icon={faWrench} className="size-3 shrink-0 text-muted-foreground" aria-hidden />
         <span className="font-mono font-medium text-foreground/90">{tool.name}</span>
         {tool.description && (
           <span className="truncate text-muted-foreground">{tool.description}</span>
         )}
         <Badge variant="secondary" className="ml-auto gap-1 rounded-full font-normal">
-          <status.Icon className={cn("size-3", status.className)} />
+          <FontAwesomeIcon icon={status.icon} className={cn("size-3", status.className)} />
           {status.label}
         </Badge>
-        <ChevronDown
+        <FontAwesomeIcon
+          icon={faChevronDown}
           className={cn("size-3 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}
           aria-hidden
         />

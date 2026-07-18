@@ -9,7 +9,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Terminal } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faTerminal } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { fetchPreviewCommand, type ActionBlock } from "@/lib/api";
 import { isDestructiveAction } from "@/lib/actionBlocks";
 
@@ -100,7 +101,7 @@ export function BatchConfirmSheet({ actions, open, onClose, onConfirm }: Props) 
                   className="overflow-hidden rounded-lg border border-border bg-background shadow-sm ring-1 ring-foreground/5"
                 >
                   <div className="flex items-center gap-2 border-b border-border/60 bg-muted/30 px-3 py-1.5">
-                    <Terminal className="size-3.5 text-muted-foreground" />
+                    <FontAwesomeIcon icon={faTerminal} className="size-3.5 text-muted-foreground" />
                     <span className="text-2xs font-semibold text-foreground">{action.label ?? action.kind}</span>
                     {isDestructiveAction(action) && (
                       <span className="ml-auto text-3xs font-semibold uppercase tracking-wider" style={{ color: "var(--status-failed)" }}>

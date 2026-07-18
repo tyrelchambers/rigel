@@ -1,16 +1,18 @@
-import type { ComponentType, CSSProperties, ReactNode } from "react";
-import { Info, Lightbulb, CircleAlert, TriangleAlert, OctagonAlert, Quote } from "lucide-react";
+import type { CSSProperties, ReactNode } from "react";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCircleInfo, faLightbulb, faCircleExclamation, faTriangleExclamation, faOctagonExclamation, faQuoteLeft } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { cn } from "@/lib/utils";
 
 type CalloutType = "note" | "tip" | "important" | "warning" | "caution" | "quote";
 
-const META: Record<CalloutType, { color: string; Icon: ComponentType<{ size?: number; strokeWidth?: number; className?: string }>; label: string | null }> = {
-  note: { color: "var(--accent-primary)", Icon: Info, label: "NOTE" },
-  tip: { color: "var(--status-running)", Icon: Lightbulb, label: "TIP" },
-  important: { color: "var(--accent-primary)", Icon: CircleAlert, label: "IMPORTANT" },
-  warning: { color: "var(--status-pending)", Icon: TriangleAlert, label: "WARNING" },
-  caution: { color: "var(--status-failed)", Icon: OctagonAlert, label: "CAUTION" },
-  quote: { color: "var(--fg-tertiary)", Icon: Quote, label: null },
+const META: Record<CalloutType, { color: string; Icon: IconDefinition; label: string | null }> = {
+  note: { color: "var(--accent-primary)", Icon: faCircleInfo, label: "NOTE" },
+  tip: { color: "var(--status-running)", Icon: faLightbulb, label: "TIP" },
+  important: { color: "var(--accent-primary)", Icon: faCircleExclamation, label: "IMPORTANT" },
+  warning: { color: "var(--status-pending)", Icon: faTriangleExclamation, label: "WARNING" },
+  caution: { color: "var(--status-failed)", Icon: faOctagonExclamation, label: "CAUTION" },
+  quote: { color: "var(--fg-tertiary)", Icon: faQuoteLeft, label: null },
 };
 
 /** A typed content callout: left-accent bar, tinted fill, icon + mono label, body. */
@@ -27,12 +29,12 @@ export function Callout({ type, children }: { type: CalloutType; children?: Reac
     >
       {label && (
         <div className="mb-1 flex items-center gap-1.5 text-[color:var(--callout)]">
-          <Icon size={13} strokeWidth={2.5} />
+          <FontAwesomeIcon icon={Icon} className="size-[13px]" />
           <span className="font-mono text-3xs font-semibold tracking-[1px] uppercase">{label}</span>
         </div>
       )}
       <div className={cn("chat-callout-body text-xs leading-[1.5]", isQuote && "flex items-start gap-1.5 text-[var(--fg-secondary)] italic")}>
-        {isQuote && <Quote size={14} className="mt-0.5 shrink-0 text-[color:var(--callout)]" />}
+        {isQuote && <FontAwesomeIcon icon={faQuoteLeft} className="mt-0.5 shrink-0 text-[color:var(--callout)] size-[14px]" />}
         <div className="min-w-0 flex-1">{children}</div>
       </div>
     </div>

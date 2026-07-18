@@ -1,4 +1,5 @@
-import { ShieldCheck, Gauge, HeartPulse, type LucideIcon } from "lucide-react";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
+import { faShieldCheck, faGauge, faHeartPulse } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { canRunAudit, type AuditKind } from "@rigel/k8s";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { AuditSkillCard } from "../audits/AuditSkillCard";
@@ -9,7 +10,7 @@ import { useAccount } from "@/shell/useAccount";
 interface AuditSkill {
   key: AuditKind;
   title: string;
-  Icon: LucideIcon;
+  Icon: IconDefinition;
   description: string;
   runLabel: string;
 }
@@ -18,7 +19,7 @@ const AUDIT_SKILLS: AuditSkill[] = [
   {
     key: "reliability",
     title: "Reliability",
-    Icon: HeartPulse,
+    Icon: faHeartPulse,
     description:
       "Single replicas, missing probes, PodDisruptionBudgets, anti-affinity, resource requests, mutable image tags, hostPath volumes.",
     runLabel:
@@ -27,7 +28,7 @@ const AUDIT_SKILLS: AuditSkill[] = [
   {
     key: "security",
     title: "Security",
-    Icon: ShieldCheck,
+    Icon: faShieldCheck,
     description:
       "Privileged containers, host namespaces, root users, privilege escalation, added capabilities, writable root filesystems, host ports.",
     runLabel:
@@ -36,7 +37,7 @@ const AUDIT_SKILLS: AuditSkill[] = [
   {
     key: "performance",
     title: "Performance",
-    Icon: Gauge,
+    Icon: faGauge,
     description:
       "Missing memory limits, missing autoscaling, CPU throttling, and memory pressure. Metrics checks need a Prometheus/VictoriaMetrics backend.",
     runLabel:

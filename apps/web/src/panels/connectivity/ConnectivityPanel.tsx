@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  Globe,
-  Signpost,
-  Network,
-  Boxes,
-  Lock,
-  AlertTriangle,
-  ArrowRight,
-  Split,
-} from "lucide-react";
+  faGlobe,
+  faSignsPost,
+  faNetworkWired,
+  faBoxesStacked,
+  faLock,
+  faTriangleExclamation,
+  faArrowRight,
+  faSplit,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useNavigate } from "react-router";
 import { useCluster, filterByNamespace } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
@@ -215,7 +216,7 @@ function Chip({
 }
 
 function Arrow() {
-  return <ArrowRight className="size-3.5 shrink-0 text-muted-foreground/60" aria-hidden />;
+  return <FontAwesomeIcon icon={faArrowRight} className="size-3.5 shrink-0 text-muted-foreground/60" aria-hidden />;
 }
 
 function FlowRow({
@@ -277,14 +278,14 @@ function FlowRow({
           {flow.isExternal ? (
             <>
               <Chip
-                icon={<Globe className="size-3.5 text-muted-foreground" />}
+                icon={<FontAwesomeIcon icon={faGlobe} className="size-3.5 text-muted-foreground" />}
                 style={{ color: "var(--fg-secondary)" }}
               >
                 {flow.hosts.length > 0 ? flow.hosts.join(", ") : "(no host)"}
               </Chip>
               <Arrow />
               <Chip
-                icon={<Signpost className="size-3.5 text-muted-foreground" />}
+                icon={<FontAwesomeIcon icon={faSignsPost} className="size-3.5 text-muted-foreground" />}
                 style={{ color: "var(--fg-secondary)" }}
               >
                 {flow.ingressNames.join(", ")}
@@ -294,7 +295,7 @@ function FlowRow({
           ) : (
             <>
               <Chip
-                icon={<Lock className="size-3.5 text-muted-foreground" />}
+                icon={<FontAwesomeIcon icon={faLock} className="size-3.5 text-muted-foreground" />}
                 style={{ color: "var(--fg-tertiary)" }}
               >
                 cluster
@@ -313,7 +314,7 @@ function FlowRow({
               <TagPill label={`svc/${flow.serviceName}`} title={flow.serviceName} />
             ) : (
               <Chip
-                icon={<Network className="size-3.5" style={{ color: "var(--status-failed)" }} />}
+                icon={<FontAwesomeIcon icon={faNetworkWired} className="size-3.5" style={{ color: "var(--status-failed)" }} />}
                 style={{ color: "var(--status-failed)" }}
               >
                 svc/{flow.serviceName}
@@ -331,7 +332,7 @@ function FlowRow({
             className="rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
           >
             <Chip
-              icon={<Boxes className="size-3.5" style={{ color: healthColor(flow.health) }} />}
+              icon={<FontAwesomeIcon icon={faBoxesStacked} className="size-3.5" style={{ color: healthColor(flow.health) }} />}
               style={{ color: healthColor(flow.health) }}
             >
               {flow.serviceExists ? `${flow.readyPods}/${flow.totalPods}` : "no service"}
@@ -363,7 +364,7 @@ function FlowRow({
         {/* Issues line — always visible when present */}
         {flow.issues.length > 0 && (
           <div className={`flex items-center gap-1.5 text-xs ${tintClass}`}>
-            <AlertTriangle className="size-3.5 shrink-0" aria-hidden />
+            <FontAwesomeIcon icon={faTriangleExclamation} className="size-3.5 shrink-0" aria-hidden />
             <span className="font-mono">{flow.issues.join(" · ")}</span>
           </div>
         )}
@@ -375,7 +376,7 @@ function FlowRow({
 function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-      <Split className="size-10 text-muted-foreground/50" aria-hidden />
+      <FontAwesomeIcon icon={faSplit} className="size-10 text-muted-foreground/50" aria-hidden />
       <p className="text-sm font-medium text-muted-foreground">No services to map yet.</p>
       <p className="max-w-sm text-xs text-muted-foreground/70">
         Connectivity traces ingress → service → pods so you can spot unreachable apps.

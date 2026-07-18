@@ -9,20 +9,21 @@ import { PanelSearch } from "@/panels/components/PanelSearch";
 import { viewYaml } from "@/store/yamlViewer";
 import type { ActionBlock } from "@/lib/api";
 import { fetchCertManagerPlugin } from "@/lib/api";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  History,
-  CircleCheck,
-  Loader,
-  CircleX,
-  Globe,
-  Shield,
-  Lock,
-  Calendar,
-  RefreshCw,
-  Trash2,
-  Copy,
-  X,
-} from "lucide-react";
+  faClockRotateLeft,
+  faCircleCheck,
+  faSpinner,
+  faCircleXmark,
+  faGlobe,
+  faShield,
+  faLock,
+  faCalendar,
+  faArrowsRotate,
+  faTrashCan,
+  faCopy,
+  faXmark,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import type {
   Certificate,
   CertificateRequest,
@@ -329,34 +330,34 @@ function CertBody({
   const detailRows = [
     {
       key: "DNS NAMES",
-      icon: <Globe className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />,
+      icon: <FontAwesomeIcon icon={faGlobe} className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />,
       value: view.dnsNames.length > 0 ? view.dnsNames.join(", ") : "—",
       copy: true,
       copyValue: view.dnsNames.join(", "),
     },
     {
       key: "ISSUER",
-      icon: <Shield className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />,
+      icon: <FontAwesomeIcon icon={faShield} className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />,
       value: view.issuer,
       copy: false,
     },
     {
       key: "SECRET",
-      icon: <Lock className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />,
+      icon: <FontAwesomeIcon icon={faLock} className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />,
       value: view.secretName || "—",
       copy: !!view.secretName,
       copyValue: view.secretName,
     },
     {
       key: "NOT AFTER",
-      icon: <Calendar className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />,
+      icon: <FontAwesomeIcon icon={faCalendar} className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />,
       value: notAfterRel,
       secondary: notAfterAbs ? `· ${notAfterAbs}` : undefined,
       copy: false,
     },
     {
       key: "AGE",
-      icon: <History className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />,
+      icon: <FontAwesomeIcon icon={faClockRotateLeft} className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />,
       value: agePhrase(view.cert.metadata.creationTimestamp) || "—",
       copy: false,
       isLast: true,
@@ -486,7 +487,7 @@ function CertBody({
               : "cursor-not-allowed text-[var(--fg-tertiary)]"
           }`}
         >
-          <RefreshCw className="size-3.5" />
+          <FontAwesomeIcon icon={faArrowsRotate} className="size-3.5" />
           Force renew
         </button>
 
@@ -500,7 +501,7 @@ function CertBody({
             }}
             className="inline-flex items-center gap-1.5 rounded-md border border-destructive/30 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10"
           >
-            <Trash2 className="size-3.5" />
+            <FontAwesomeIcon icon={faTrashCan} className="size-3.5" />
             Delete secret
           </button>
         )}
@@ -526,10 +527,10 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 // ---------------------------------------------------------------------------
 
 function RequestStatusIcon({ ready, reason }: { ready: boolean; reason: string }) {
-  if (ready) return <CircleCheck className="size-3.5 shrink-0 text-[#10B981]" />;
+  if (ready) return <FontAwesomeIcon icon={faCircleCheck} className="size-3.5 shrink-0 text-[#10B981]" />;
   const isPending = !reason || reason.toLowerCase().includes("pending") || reason.toLowerCase().includes("process");
-  if (isPending) return <Loader className="size-3.5 shrink-0 text-[#F59E0B]" />;
-  return <CircleX className="size-3.5 shrink-0 text-destructive" />;
+  if (isPending) return <FontAwesomeIcon icon={faSpinner} className="size-3.5 shrink-0 text-[#F59E0B]" />;
+  return <FontAwesomeIcon icon={faCircleXmark} className="size-3.5 shrink-0 text-destructive" />;
 }
 
 // ---------------------------------------------------------------------------
@@ -590,7 +591,7 @@ function ChainActionButton({
       onClick={onClick}
       className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[#26272B] px-2 py-1 text-2xs font-medium text-[var(--fg-secondary)] hover:bg-white/5"
     >
-      <X className="size-3" />
+      <FontAwesomeIcon icon={faXmark} className="size-3" />
       {label}
     </button>
   );
@@ -612,7 +613,7 @@ function CopyButton({ value }: { value: string }) {
       title="Copy to clipboard"
       aria-label="Copy to clipboard"
     >
-      <Copy className="size-3.5" />
+      <FontAwesomeIcon icon={faCopy} className="size-3.5" />
     </button>
   );
 }

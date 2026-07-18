@@ -28,9 +28,9 @@ test("lone input-bearing option renders always-open with a pencil glyph (no tap)
   const { container } = render(<SuggestedQuestionList questions={q} onAnswer={vi.fn()} />);
   // field input is present without any click
   expect(input("Public hostname")).toBeTruthy();
-  // pencil glyph, not a radio circle (lucide sets a class on the svg)
-  expect(container.querySelector("svg.lucide-pencil")).toBeTruthy();
-  expect(container.querySelector("svg.lucide-circle")).toBeNull();
+  // pencil glyph, not a radio circle (FA sets data-icon on the svg)
+  expect(container.querySelector('svg[data-icon="pencil"]')).toBeTruthy();
+  expect(container.querySelector('svg[data-icon="circle"]')).toBeNull();
 });
 
 test("multi-option: field option is collapsed; picking expands; picking another collapses", () => {

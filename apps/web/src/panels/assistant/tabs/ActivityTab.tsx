@@ -3,7 +3,8 @@
 // ("Activity" + count, "See all" / "Clear all") above a list of rich cards.
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faChevronLeft, faChevronRight } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { auditEntryId } from "@rigel/k8s";
 import { cn } from "@/lib/utils";
 import { useAssistantCtx } from "../AssistantContext";
@@ -114,7 +115,7 @@ export function ActivityTab() {
               aria-label="Previous page"
               className="flex size-7 items-center justify-center rounded-md border border-[var(--border-subtle)] text-[var(--fg-secondary)] transition-colors hover:bg-white/[0.03] disabled:opacity-40 disabled:hover:bg-transparent"
             >
-              <ChevronLeft className="size-4" />
+              <FontAwesomeIcon icon={faChevronLeft} className="size-4" />
             </button>
             <span className="min-w-14 text-center font-mono text-xs text-[var(--fg-tertiary)]">
               {currentPage + 1} / {pageCount}
@@ -126,7 +127,7 @@ export function ActivityTab() {
               aria-label="Next page"
               className="flex size-7 items-center justify-center rounded-md border border-[var(--border-subtle)] text-[var(--fg-secondary)] transition-colors hover:bg-white/[0.03] disabled:opacity-40 disabled:hover:bg-transparent"
             >
-              <ChevronRight className="size-4" />
+              <FontAwesomeIcon icon={faChevronRight} className="size-4" />
             </button>
           </div>
         </div>

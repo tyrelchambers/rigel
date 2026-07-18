@@ -5,18 +5,19 @@
 // dispatches through the assistant `run` action.
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
-  Plus,
-  Send,
-  Eye,
-  SquarePen,
-  Trash2,
-  CalendarClock,
-  MessageCircle,
-  Hash,
-  Webhook,
-  type LucideIcon,
-} from "lucide-react";
+  faPlus,
+  faPaperPlane,
+  faEye,
+  faPenToSquare,
+  faTrashCan,
+  faCalendarClock,
+  faComment,
+  faHashtag,
+  faWebhook,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import {
   digestScheduleSummary,
   type DigestSubscription,
@@ -45,12 +46,12 @@ import { relativeTime } from "../display";
 const FIELD =
   "w-full rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3 py-2.5 text-xs text-[var(--fg-primary)] outline-none transition-colors placeholder:text-[var(--fg-tertiary)] focus:border-[var(--accent-primary)]";
 
-const CHANNEL_META: Record<DigestChannel, { label: string; Icon: LucideIcon }> = {
-  signal: { label: "Signal", Icon: MessageCircle },
-  matrix: { label: "Matrix", Icon: Hash },
-  discord: { label: "Discord", Icon: Webhook },
-  slack: { label: "Slack", Icon: Webhook },
-  webhook: { label: "Webhook", Icon: Webhook },
+const CHANNEL_META: Record<DigestChannel, { label: string; Icon: IconDefinition }> = {
+  signal: { label: "Signal", Icon: faComment },
+  matrix: { label: "Matrix", Icon: faHashtag },
+  discord: { label: "Discord", Icon: faWebhook },
+  slack: { label: "Slack", Icon: faWebhook },
+  webhook: { label: "Webhook", Icon: faWebhook },
 };
 
 const DAYS: { idx: number; letter: string; name: string }[] = [
@@ -302,7 +303,7 @@ export function ReportsTab() {
           </p>
         </div>
         <Button size="sm" className="shrink-0" onClick={openCreate}>
-          <Plus />
+          <FontAwesomeIcon icon={faPlus} />
           New digest
         </Button>
       </div>
@@ -334,7 +335,8 @@ export function ReportsTab() {
                 }`}
               >
                 <div className="flex min-w-0 items-center gap-3">
-                  <Icon
+                  <FontAwesomeIcon
+                    icon={Icon}
                     className={`size-[17px] shrink-0 ${
                       sub.enabled ? "text-[var(--accent-primary)]" : "text-[var(--fg-tertiary)]"
                     }`}
@@ -377,7 +379,7 @@ export function ReportsTab() {
                       title="Send now"
                       onClick={() => fireSendNow(sub.id, "send")}
                     >
-                      <Send />
+                      <FontAwesomeIcon icon={faPaperPlane} />
                     </Button>
                     <Button
                       variant="ghost"
@@ -387,7 +389,7 @@ export function ReportsTab() {
                       title="Preview"
                       onClick={() => rowPreview(sub)}
                     >
-                      <Eye />
+                      <FontAwesomeIcon icon={faEye} />
                     </Button>
                     <Button
                       variant="ghost"
@@ -397,7 +399,7 @@ export function ReportsTab() {
                       title="Edit"
                       onClick={() => openEdit(sub)}
                     >
-                      <SquarePen />
+                      <FontAwesomeIcon icon={faPenToSquare} />
                     </Button>
                     <Button
                       variant="ghost"
@@ -409,7 +411,7 @@ export function ReportsTab() {
                         run({ action: "deleteDigest", namespace: ns, digestId: sub.id })
                       }
                     >
-                      <Trash2 />
+                      <FontAwesomeIcon icon={faTrashCan} />
                     </Button>
                   </div>
                 </div>
@@ -424,7 +426,7 @@ export function ReportsTab() {
         <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogIcon background={false}>
-              <CalendarClock className="size-[18px] text-[var(--accent-primary)]" />
+              <FontAwesomeIcon icon={faCalendarClock} className="size-[18px] text-[var(--accent-primary)]" />
             </DialogIcon>
             <DialogTitle>
               {editingId ? "Edit digest" : "New scheduled digest"}
@@ -574,7 +576,7 @@ export function ReportsTab() {
                   disabled={!editingId || working}
                   onClick={() => editingId && fireSendNow(editingId, "preview")}
                 >
-                  <Eye />
+                  <FontAwesomeIcon icon={faEye} />
                   Generate preview
                 </Button>
               </div>

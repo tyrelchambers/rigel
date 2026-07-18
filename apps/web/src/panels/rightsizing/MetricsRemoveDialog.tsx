@@ -6,7 +6,8 @@
 // or the PersistentVolumeClaim to keep the collected history.
 
 import { useEffect, useMemo, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faTrashCan } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import {
   Dialog,
   DialogBody,
@@ -150,7 +151,7 @@ export function MetricsRemoveDialog({ open, onOpenChange, backend, onRemoved }: 
           Cancel
         </Button>
         <Button variant="destructive" onClick={handleRemove} disabled={pending || selected.length === 0}>
-          <Trash2 className="size-3.5" />
+          <FontAwesomeIcon icon={faTrashCan} className="size-3.5" />
           {pending ? "Removing…" : `Remove ${selected.length} resource${selected.length === 1 ? "" : "s"}`}
         </Button>
       </div>

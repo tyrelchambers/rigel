@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Check, ChevronsDownUp, Copy, Maximize2 } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCheck, faAnglesUpDown, faCopy, faMaximize } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { SectionCard } from "./SectionCard";
 import { useCopyToClipboard } from "@/lib/useCopyToClipboard";
 import { parseAnnotationValue } from "./annotationValue";
@@ -45,7 +46,7 @@ export function MetaChips({ title, entries }: MetaChipsProps) {
             onClick={() => setExpandedKeys(allExpanded ? new Set() : new Set(jsonKeys))}
             className="inline-flex items-center gap-1 text-3xs font-medium text-muted-foreground hover:text-foreground"
           >
-            <ChevronsDownUp className="size-3" />
+            <FontAwesomeIcon icon={faAnglesUpDown} className="size-3" />
             {allExpanded ? "Collapse all" : "Expand all"}
           </button>
         )
@@ -134,12 +135,12 @@ function MetaChip({
                 onClick={onToggle}
                 className="shrink-0"
               >
-                <Maximize2 size={14} style={{ color: "#6B6B73" }} />
+                <FontAwesomeIcon icon={faMaximize} className="size-[14px]" style={{ color: "#6B6B73" }} />
               </button>
             </>
           )}
           <button type="button" aria-label="Copy" onClick={() => copy(rawValue)} className="shrink-0">
-            {copied ? <Check size={14} style={{ color: "#6B6B73" }} /> : <Copy size={14} style={{ color: "#6B6B73" }} />}
+            {copied ? <FontAwesomeIcon icon={faCheck} className="size-[14px]" style={{ color: "#6B6B73" }} /> : <FontAwesomeIcon icon={faCopy} className="size-[14px]" style={{ color: "#6B6B73" }} />}
           </button>
         </div>
       </div>

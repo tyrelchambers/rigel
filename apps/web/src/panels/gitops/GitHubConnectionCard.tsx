@@ -3,7 +3,8 @@
 // token), see who's connected, or disconnect. The same PAT drives GitOps repo
 // listing, clone/diff/apply, and the AI PR flow.
 import { useState } from "react";
-import { GitBranch } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCodeBranch } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Button } from "@/components/ui/button";
 import { useGitHubAccount, useConnectGitHub, useDisconnectGitHub } from "./gitApi";
 
@@ -22,7 +23,7 @@ export function GitHubConnectionCard() {
   if (account?.connected) {
     return (
       <div className="flex items-center gap-3 rounded-md border bg-background px-3 py-2.5">
-        <GitBranch className="size-5" style={{ color: "var(--accent-primary)" }} aria-hidden />
+        <FontAwesomeIcon icon={faCodeBranch} className="size-5" style={{ color: "var(--accent-primary)" }} aria-hidden />
         <div className="min-w-0">
           <div className="text-sm font-semibold">GitHub</div>
           <div className="truncate text-xs text-muted-foreground">
@@ -48,7 +49,7 @@ export function GitHubConnectionCard() {
   return (
     <div className="space-y-2 rounded-md border bg-background px-3 py-2.5">
       <div className="flex items-center gap-2">
-        <GitBranch className="size-5" style={{ color: "var(--accent-primary)" }} aria-hidden />
+        <FontAwesomeIcon icon={faCodeBranch} className="size-5" style={{ color: "var(--accent-primary)" }} aria-hidden />
         <div className="text-sm font-semibold">GitHub</div>
         <span className="text-xs text-muted-foreground">connect to deploy from your repos (GitOps)</span>
       </div>

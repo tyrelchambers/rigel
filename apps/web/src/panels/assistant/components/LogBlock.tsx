@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Check, ChevronDown, Copy, Maximize2 } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCheck, faChevronDown, faCopy, faMaximize } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { cn } from "@/lib/utils";
 
 /** Colour a log line by a light heuristic (errors red, stack frames dimmed). */
@@ -44,7 +45,7 @@ export function LogBlock({ label, detail }: { label: string; detail: string }) {
               aria-label={full ? "Collapse log" : "Expand log"}
               className="text-[var(--fg-tertiary)] transition-colors hover:text-[var(--fg-secondary)]"
             >
-              <Maximize2 className="size-3.5" />
+              <FontAwesomeIcon icon={faMaximize} className="size-3.5" />
             </button>
           )}
           <button
@@ -53,7 +54,7 @@ export function LogBlock({ label, detail }: { label: string; detail: string }) {
             aria-label="Copy log"
             className="text-[var(--fg-tertiary)] transition-colors hover:text-[var(--fg-secondary)]"
           >
-            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+            {copied ? <FontAwesomeIcon icon={faCheck} className="size-3.5" /> : <FontAwesomeIcon icon={faCopy} className="size-3.5" />}
           </button>
         </div>
       </div>
@@ -83,7 +84,7 @@ export function LogBlock({ label, detail }: { label: string; detail: string }) {
           </span>
           <span className="flex items-center gap-1.5 text-xs font-medium text-[var(--fg-secondary)]">
             {full ? "Show less" : "Show full log"}
-            <ChevronDown className={cn("size-3.5 transition-transform", full && "rotate-180")} />
+            <FontAwesomeIcon icon={faChevronDown} className={cn("size-3.5 transition-transform", full && "rotate-180")} />
           </span>
         </button>
       )}

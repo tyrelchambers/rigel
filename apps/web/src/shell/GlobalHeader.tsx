@@ -7,7 +7,8 @@
  *
  * Inline styles + CSS custom properties to match App.tsx.
  */
-import { Search, User } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faMagnifyingGlass, faUser } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { NamespaceSelector } from "./NamespaceBar";
 import { AppUpdateChip } from "./AppUpdateChip";
 import { RigelMark } from "@/components/RigelMark";
@@ -86,8 +87,9 @@ export function GlobalHeader({
         }}
         className="hover:opacity-90 transition-opacity"
       >
-        <Search
-          size={13}
+        <FontAwesomeIcon
+          icon={faMagnifyingGlass}
+          className="size-[13px]"
           style={{ color: "var(--fg-tertiary)", flexShrink: 0 }}
         />
         <span
@@ -132,7 +134,7 @@ export function GlobalHeader({
         }}
         className="hover:opacity-90 transition-opacity"
       >
-        <User size={15} style={{ color: "var(--accent-primary)" }} />
+        <FontAwesomeIcon icon={faUser} className="size-[15px]" style={{ color: "var(--accent-primary)" }} />
       </button>
     </header>
   );

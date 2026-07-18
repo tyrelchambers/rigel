@@ -11,7 +11,8 @@ import { YamlEditor } from "@/components/YamlEditorLazy";
 import { useClusterYamlSchema } from "@/lib/useClusterYamlSchema";
 import { applyManifestYaml, type ActionBlock, type ActionResult } from "@/lib/api";
 import { isYamlFilename, readYamlFile } from "./readYamlFile";
-import { Play, Upload } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faPlay, faUpload } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Loader } from "@/components/Loader";
 import { ManifestValidationResult } from "@/components/ManifestValidationResult";
 
@@ -85,13 +86,13 @@ export default function ApplyYamlPanel() {
           onChange={(e) => { void loadFile(e.target.files?.[0]); e.target.value = ""; }}
         />
         <Button variant="outline" size="sm" className="gap-1.5" onClick={() => fileInput.current?.click()}>
-          <Upload className="size-3.5" /> Upload
+          <FontAwesomeIcon icon={faUpload} className="size-3.5" /> Upload
         </Button>
         <Button variant="outline" size="sm" onClick={handleValidate} disabled={!hasContent || validate.pending}>
           {validate.pending ? <><Loader size={14} /> Validating…</> : "Validate"}
         </Button>
         <Button size="sm" className="gap-1.5" onClick={handleApply} disabled={!hasContent}>
-          <Play className="size-3.5 fill-current" /> Apply…
+          <FontAwesomeIcon icon={faPlay} className="size-3.5 fill-current" /> Apply…
         </Button>
       </PanelHeader>
 
@@ -129,7 +130,7 @@ export default function ApplyYamlPanel() {
             >
               <span className="flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium"
                 style={{ background: "#15161A", border: "1px solid var(--accent-primary)", color: "var(--accent-primary)" }}>
-                <Upload className="size-3.5" /> Drop a .yaml file to load it
+                <FontAwesomeIcon icon={faUpload} className="size-3.5" /> Drop a .yaml file to load it
               </span>
             </div>
           )}

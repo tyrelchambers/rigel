@@ -2,7 +2,8 @@
 // list of independently-syncable deployment rows.
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { GitBranch, Plus, Trash2 } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCodeBranch, faPlus, faTrashCan } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import type { Deployment } from "@/panels/deployments/types";
 import { useDeleteDeployment, type GitSource, type GitDeployment } from "./gitApi";
 import type { WorkloadRef } from "./linkSource";
@@ -34,7 +35,7 @@ export function RepoCard({
     <div style={{ borderRadius: 12, border: "1px solid #26272B", background: "var(--surface-elevated)", padding: 14 }}>
       <div className="flex items-start gap-3">
         <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg" style={{ background: "var(--accent-primary)18", border: "1px solid #26272B" }}>
-          <GitBranch className="size-4" style={{ color: "var(--accent-primary)" }} />
+          <FontAwesomeIcon icon={faCodeBranch} className="size-4" style={{ color: "var(--accent-primary)" }} />
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="truncate text-sm font-semibold">{source.name}</span>
@@ -44,10 +45,10 @@ export function RepoCard({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <Button size="sm" variant="outline" className="gap-1.5" onClick={onAddDeployment}>
-            <Plus className="size-3.5" /> Add deployment
+            <FontAwesomeIcon icon={faPlus} className="size-3.5" /> Add deployment
           </Button>
           <Button size="sm" variant="ghost" onClick={onDeleteRepo} disabled={deleting} aria-label={`Remove ${source.name}`}>
-            <Trash2 className="size-3.5" style={{ color: "var(--status-failed)" }} />
+            <FontAwesomeIcon icon={faTrashCan} className="size-3.5" style={{ color: "var(--status-failed)" }} />
           </Button>
         </div>
       </div>

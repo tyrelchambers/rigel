@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { motion, useAnimationControls } from "motion/react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  ArrowUp,
-  Check,
-  HelpCircle,
-  RefreshCw,
-  Search,
-  Cpu,
-  MemoryStick,
-  HardDrive,
-} from "lucide-react";
+  faArrowUp,
+  faCheck,
+  faCircleQuestion,
+  faArrowsRotate,
+  faMagnifyingGlass,
+  faMicrochip,
+  faMemory,
+  faHardDrive,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Loader } from "@/components/Loader";
 import {
   APP_CATEGORIES,
@@ -267,7 +268,7 @@ export default function CatalogPanel() {
           <div className="catalog-header-controls">
             {/* Search */}
             <div className="catalog-search-wrap">
-              <Search className="catalog-search-icon" aria-hidden />
+              <FontAwesomeIcon icon={faMagnifyingGlass} className="catalog-search-icon" aria-hidden />
               <input
                 type="text"
                 value={search}
@@ -534,7 +535,7 @@ function CatalogCard({
       <div className="catalog-card-top">
         {/* Icon tile — flat neutral so it doesn't pop */}
         <div className="catalog-icon-tile" aria-hidden>
-          <Icon className="catalog-icon-glyph" />
+          <FontAwesomeIcon icon={Icon} className="catalog-icon-glyph" />
         </div>
 
         <div className="catalog-card-meta">
@@ -560,14 +561,14 @@ function CatalogCard({
           className="catalog-chip catalog-chip-req"
           title={`CPU: ${app.requirements.cpuRequest}${app.requirements.cpuLimit ? ` → ${app.requirements.cpuLimit}` : ""}`}
         >
-          <Cpu className="catalog-chip-icon" aria-hidden />
+          <FontAwesomeIcon icon={faMicrochip} className="catalog-chip-icon" aria-hidden />
           {app.requirements.cpuRequest}
         </span>
         <span
           className="catalog-chip catalog-chip-req"
           title={`Memory: ${app.requirements.memoryRequest}${app.requirements.memoryLimit ? ` → ${app.requirements.memoryLimit}` : ""}`}
         >
-          <MemoryStick className="catalog-chip-icon" aria-hidden />
+          <FontAwesomeIcon icon={faMemory} className="catalog-chip-icon" aria-hidden />
           {app.requirements.memoryRequest}
         </span>
         {app.requirements.storageGiB != null && (
@@ -575,7 +576,7 @@ function CatalogCard({
             className="catalog-chip catalog-chip-req"
             title={`Storage: ${app.requirements.storageGiB} GiB`}
           >
-            <HardDrive className="catalog-chip-icon" aria-hidden />
+            <FontAwesomeIcon icon={faHardDrive} className="catalog-chip-icon" aria-hidden />
             {app.requirements.storageGiB}Gi
           </span>
         )}
@@ -664,7 +665,7 @@ function UpdateStatusRow({
     return (
       <div className="catalog-update-row">
         <span className="catalog-update-chip catalog-update-chip-diff">
-          <ArrowUp className="size-3 shrink-0" aria-hidden />
+          <FontAwesomeIcon icon={faArrowUp} className="size-3 shrink-0" aria-hidden />
           {result.currentTag ?? "?"} → {latest}
         </span>
         <button
@@ -676,7 +677,7 @@ function UpdateStatusRow({
           }}
           aria-label={`Update to ${latest}`}
         >
-          <RefreshCw className="size-3" aria-hidden />
+          <FontAwesomeIcon icon={faArrowsRotate} className="size-3" aria-hidden />
           Update
         </button>
       </div>
@@ -692,7 +693,7 @@ function UpdateStatusRow({
             result.reason ?? "Could not determine an update for this image"
           }
         >
-          <HelpCircle className="size-3 shrink-0" aria-hidden />
+          <FontAwesomeIcon icon={faCircleQuestion} className="size-3 shrink-0" aria-hidden />
           version unknown
         </span>
       </div>
@@ -702,7 +703,7 @@ function UpdateStatusRow({
   return (
     <div className="catalog-update-row">
       <span className="catalog-update-chip catalog-update-chip-ok">
-        <Check className="size-3 shrink-0" aria-hidden />
+        <FontAwesomeIcon icon={faCheck} className="size-3 shrink-0" aria-hidden />
         up to date
       </span>
     </div>
@@ -740,7 +741,7 @@ function EmptyState({ search, scope }: { search: string; scope: Scope }) {
   return (
     <div className="catalog-empty">
       <div className="catalog-empty-icon" aria-hidden>
-        <Search className="size-6 text-[#6B6B73]" />
+        <FontAwesomeIcon icon={faMagnifyingGlass} className="size-6 text-[#6B6B73]" />
       </div>
       <p className="catalog-empty-title">
         {scope === "installed" && !search

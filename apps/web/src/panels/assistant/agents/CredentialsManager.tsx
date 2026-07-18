@@ -7,7 +7,8 @@
 // from the server's credentialStatus (d.credentialSources) — values never leave the
 // cluster.
 import { useState } from "react";
-import { Info, ExternalLink, AlertTriangle, Wrench } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCircleInfo, faArrowUpRightFromSquare, faTriangleExclamation, faWrench } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import {
   Dialog,
   DialogContent,
@@ -98,7 +99,7 @@ export function CredentialsManager({
             title="Stamp the credential labels onto this install's managed Secrets. This only updates Secret metadata and does not restart the agent."
             className="ml-auto shrink-0 text-muted-foreground"
           >
-            <Wrench className="mr-1 size-3.5" />
+            <FontAwesomeIcon icon={faWrench} className="mr-1 size-3.5" />
             Repair credential labels
           </Button>
         )}
@@ -173,7 +174,7 @@ function CredentialRow({
           onClick={() => setHelpOpen(true)}
           className="ml-auto text-muted-foreground transition-colors hover:text-foreground"
         >
-          <Info className="size-4" />
+          <FontAwesomeIcon icon={faCircleInfo} className="size-4" />
         </button>
         {conflict && (
           <span
@@ -183,7 +184,7 @@ function CredentialRow({
             title="More than one Secret claims this credential; the alphabetically-first is used. Repair to fix."
             className="text-amber-500 dark:text-amber-400"
           >
-            <AlertTriangle className="size-4" />
+            <FontAwesomeIcon icon={faTriangleExclamation} className="size-4" />
           </span>
         )}
         <span
@@ -306,7 +307,7 @@ function MethodCard({ method }: { method: AuthMethodHelp }) {
           className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
         >
           {method.link.label}
-          <ExternalLink className="size-3.5" />
+          <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="size-3.5" />
         </a>
       )}
       {method.note && <p className="text-xs text-muted-foreground">{method.note}</p>}

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Copy, Check } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCopy, faCheck } from "@awesome.me/kit-6050953220/icons/classic/solid";
 
 /**
  * DiffView — renders a unified git diff (the string from `git diff -- <file>`)
@@ -138,7 +139,7 @@ export function DiffView({ diff }: { diff: string }) {
           aria-label={copied ? "Copied" : "Copy diff"}
           className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-3xs font-medium text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
         >
-          {copied ? <Check className="size-3" style={{ color: "#34D399" }} /> : <Copy className="size-3" />}
+          {copied ? <FontAwesomeIcon icon={faCheck} className="size-3" style={{ color: "#34D399" }} /> : <FontAwesomeIcon icon={faCopy} className="size-3" />}
           {copied ? "Copied" : "Copy"}
         </button>
       </div>

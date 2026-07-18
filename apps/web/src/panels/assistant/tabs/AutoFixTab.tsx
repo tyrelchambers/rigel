@@ -7,20 +7,21 @@
 // source on the spot. Tailwind utilities + design tokens only.
 
 import { useEffect, useMemo, useState } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  Bell,
-  Box,
-  Check,
-  GitBranch,
-  GitMerge,
-  GitPullRequest,
-  GitPullRequestClosed,
-  Link as LinkIcon,
-  Search,
-  SquareArrowOutUpRight,
-  TriangleAlert,
-  X,
-} from "lucide-react";
+  faBell,
+  faCube,
+  faCheck,
+  faCodeBranch,
+  faCodeMerge,
+  faCodePullRequest,
+  faCodePullRequestClosed,
+  faLink,
+  faMagnifyingGlass,
+  faArrowUpRightFromSquare,
+  faTriangleExclamation,
+  faXmark,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import type { AssistantPullRequest } from "@rigel/k8s";
 import { parseRepoSlug } from "@rigel/k8s";
 import { cn } from "@/lib/utils";
@@ -149,7 +150,7 @@ function OptInCard() {
 
       {/* Notification note */}
       <div className="flex items-center gap-2">
-        <Bell className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />
+        <FontAwesomeIcon icon={faBell} className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />
         <span className="text-2xs text-[var(--fg-tertiary)]">
           Notifications use your configured channel (Matrix, Signal, or webhook).
         </span>
@@ -264,7 +265,7 @@ function RemoveButton({ onRemove, working, label }: { onRemove: () => void; work
       onClick={onRemove}
       className="shrink-0 text-[var(--fg-tertiary)] transition-colors hover:text-[var(--fg-primary)] disabled:opacity-50"
     >
-      <X className="size-3.5" />
+      <FontAwesomeIcon icon={faXmark} className="size-3.5" />
     </button>
   );
 }
@@ -294,7 +295,7 @@ function ProjectScopeRow({
   return (
     <div className={ROW}>
       <div className="flex min-w-0 items-center gap-2.5">
-        <Box className="size-[15px] shrink-0 text-[var(--fg-tertiary)]" />
+        <FontAwesomeIcon icon={faCube} className="size-[15px] shrink-0 text-[var(--fg-tertiary)]" />
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="truncate text-xs font-medium text-[var(--fg-primary)]">{deployment}</span>
           <span className="text-2xs text-[var(--fg-tertiary)]">
@@ -305,7 +306,7 @@ function ProjectScopeRow({
       <div className="flex shrink-0 items-center gap-2.5">
         {linked ? (
           <span className="flex items-center gap-1.5">
-            <GitBranch className="size-[13px] text-[var(--fg-tertiary)]" />
+            <FontAwesomeIcon icon={faCodeBranch} className="size-[13px] text-[var(--fg-tertiary)]" />
             <span className="font-mono text-xs text-[var(--fg-secondary)]">{repoLabel}</span>
           </span>
         ) : (
@@ -315,7 +316,7 @@ function ProjectScopeRow({
             onClick={() => onLink({ namespace, deployment })}
             className="inline-flex items-center gap-1.5 rounded-md border border-[var(--status-pending)] px-2.5 py-1 font-mono text-2xs text-[var(--status-pending)] transition-colors hover:bg-[var(--status-pending)]/10 disabled:opacity-50"
           >
-            <LinkIcon className="size-3" />
+            <FontAwesomeIcon icon={faLink} className="size-3" />
             Link to repo
           </button>
         )}
@@ -435,13 +436,13 @@ function AddProjectControl({
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-white/[0.02] disabled:opacity-50"
       >
-        <Search className="size-3.5 text-[var(--accent-primary)]" />
+        <FontAwesomeIcon icon={faMagnifyingGlass} className="size-3.5 text-[var(--accent-primary)]" />
         <span className="text-xs text-[var(--accent-primary)]">Add project</span>
       </button>
 
       {resolution?.status === "error" && (
         <div className="flex items-center gap-2 border-t border-[var(--border-subtle)] px-3 py-2.5">
-          <TriangleAlert className="size-3.5 shrink-0 text-[var(--status-failed)]" />
+          <FontAwesomeIcon icon={faTriangleExclamation} className="size-3.5 shrink-0 text-[var(--status-failed)]" />
           <span className="min-w-0 flex-1 text-2xs text-[var(--status-failed)]">
             Couldn't check {resolution.target.deployment}. {linkQuery.error?.message ?? "Link check failed."}
           </span>
@@ -460,7 +461,7 @@ function AddProjectControl({
           <div className="fixed inset-0 z-40" onClick={close} />
           <div className="absolute right-0 bottom-full left-0 z-50 mb-1 overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)] shadow-lg">
             <div className="flex items-center gap-2 border-b border-[var(--border-subtle)] px-2.5 py-2">
-              <Search className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />
+              <FontAwesomeIcon icon={faMagnifyingGlass} className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />
               <input
                 autoFocus
                 value={query}
@@ -483,14 +484,14 @@ function AddProjectControl({
                     onClick={() => pick(o)}
                     className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-white/[0.04] disabled:opacity-60"
                   >
-                    <Box className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />
+                    <FontAwesomeIcon icon={faCube} className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />
                     <span className="flex min-w-0 flex-col gap-0.5">
                       <span className="truncate text-[var(--fg-primary)]">{o.deployment}</span>
                       <span className="truncate font-mono text-3xs text-[var(--fg-tertiary)]">
                         {o.namespace}
                       </span>
                     </span>
-                    {added && <Check className="ml-auto size-3.5 shrink-0 text-[var(--accent-primary)]" />}
+                    {added && <FontAwesomeIcon icon={faCheck} className="ml-auto size-3.5 shrink-0 text-[var(--accent-primary)]" />}
                   </button>
                 );
               })}
@@ -549,18 +550,18 @@ function RecentPrCard({ prs }: { prs: AssistantPullRequest[] }) {
 function prStatusMeta(status: AssistantPullRequest["status"]) {
   switch (status) {
     case "merged":
-      return { label: "Merged", Icon: GitMerge, dot: "bg-purple-500", icon: "text-purple-500" };
+      return { label: "Merged", Icon: faCodeMerge, dot: "bg-purple-500", icon: "text-purple-500" };
     case "failed":
       return {
         label: "Failed",
-        Icon: GitPullRequestClosed,
+        Icon: faCodePullRequestClosed,
         dot: "bg-[var(--status-failed)]",
         icon: "text-[var(--status-failed)]",
       };
     default:
       return {
         label: "Open",
-        Icon: GitPullRequest,
+        Icon: faCodePullRequest,
         dot: "bg-[var(--status-running)]",
         icon: "text-[var(--status-running)]",
       };
@@ -577,7 +578,7 @@ function PrRow({ pr }: { pr: AssistantPullRequest }) {
   return (
     <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] px-3.5 py-3 last:border-b-0">
       <div className="flex min-w-0 items-center gap-2.5">
-        <meta.Icon className={cn("size-4 shrink-0", meta.icon)} />
+        <FontAwesomeIcon icon={meta.Icon} className={cn("size-4 shrink-0", meta.icon)} />
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="truncate text-xs font-medium text-[var(--fg-primary)]">{pr.title}</span>
           <span className="truncate font-mono text-2xs text-[var(--fg-tertiary)]">{subtitle}</span>
@@ -596,7 +597,7 @@ function PrRow({ pr }: { pr: AssistantPullRequest }) {
             aria-label={`Open ${pr.title} in browser`}
             className="text-[var(--fg-tertiary)] transition-colors hover:text-[var(--fg-primary)]"
           >
-            <SquareArrowOutUpRight className="size-3.5" />
+            <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="size-3.5" />
           </a>
         )}
       </div>

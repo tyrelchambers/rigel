@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { Lock, Plus, LayoutGrid } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faLock, faPlus, faTableCellsLarge } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { readActiveContext, useCluster } from "@/store/cluster";
 import { useContexts, useDeleteCluster, useDisconnectCluster, useClusterHealth } from "@/lib/api";
 import { useEntitlement } from "./useEntitlement";
 import { useUpgrade } from "./UpgradeContext";
 import { initContext, switchCluster } from "@/lib/ws";
 import { classifyProvider, isCloudProvider, providerLabel } from "./clusterTile";
-import { CLUSTER_ICONS, type IconId } from "./clusterIcons";
+import { ClusterIcon, type IconId } from "./clusterIcons";
 import { loadIconOverrides, saveIconOverrides, resolveIconId } from "./clusterIconStore";
 import { ClusterIconPicker } from "./ClusterIconPicker";
 import { RemoveClusterDialog } from "./RemoveClusterDialog";
@@ -123,7 +124,6 @@ export function ClusterRail({
             const isActive = c.name === activeContext;
             const provider = classifyProvider(c);
             const iconId = resolveIconId(c.name, provider, iconOverrides);
-            const Icon = CLUSTER_ICONS[iconId].Component;
             const locked = isCloudProvider(provider) && !cloudUnlocked;
             return (
               <div
@@ -154,7 +154,7 @@ export function ClusterRail({
                       background: "var(--surface-elevated)", border: "1px solid var(--border-strong)",
                     }}
                   >
-                    <Lock size={9} style={{ color: "var(--fg-secondary)" }} />
+                    <FontAwesomeIcon icon={faLock} className="size-[9px]" style={{ color: "var(--fg-secondary)" }} />
                   </span>
                 )}
                 {isActive && isCloud && health.data?.authExpired ? (
@@ -185,7 +185,7 @@ export function ClusterRail({
                           transition: "background 120ms ease, color 120ms ease, opacity 120ms ease",
                         }}
                       >
-                        <Icon size={18} />
+                        <ClusterIcon id={iconId} className="size-[18px]" />
                       </button>
                     }
                   />
@@ -216,7 +216,7 @@ export function ClusterRail({
             border: "1px dashed var(--border-strong)",
           }}
         >
-          <Plus size={18} />
+          <FontAwesomeIcon icon={faPlus} className="size-[18px]" />
         </button>
       </div>
 
@@ -235,7 +235,7 @@ export function ClusterRail({
             transition: "background 120ms ease, border-color 120ms ease",
           }}
         >
-          <LayoutGrid size={18} style={{ color: launcherOpen ? "#18181B" : "var(--fg-tertiary)" }} />
+          <FontAwesomeIcon icon={faTableCellsLarge} className="size-[18px]" style={{ color: launcherOpen ? "#18181B" : "var(--fg-tertiary)" }} />
         </button>
       </div>
 

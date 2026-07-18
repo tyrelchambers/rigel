@@ -6,16 +6,17 @@
 
 import { useState } from "react";
 import { useNavigate } from "react-router";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  ArrowRight,
-  Box,
-  Check,
-  ChevronDown,
-  CircleCheck,
-  Copy,
-  ShieldCheck,
-  Trash2,
-} from "lucide-react";
+  faArrowRight,
+  faCube,
+  faCheck,
+  faChevronDown,
+  faCircleCheck,
+  faCopy,
+  faShieldCheck,
+  faTrashCan,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { parseIncidentFingerprint, type ParsedFingerprint } from "@rigel/k8s";
 import { Button } from "@/components/ui/button";
 import { useCluster } from "@/store/cluster";
@@ -109,17 +110,17 @@ export function LastReportCard({
   return (
     <Card className="space-y-4 border-0 bg-transparent px-0">
       <SectionHeader
-        icon={ShieldCheck}
+        icon={faShieldCheck}
         title="Last report"
         subtitle="Issues Rigel reviewed and cleared on its own."
         actions={
           <>
             <Button variant="secondary" size="sm" onClick={copyReport} disabled={!report}>
-              {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+              {copied ? <FontAwesomeIcon icon={faCheck} className="size-3.5" /> : <FontAwesomeIcon icon={faCopy} className="size-3.5" />}
               {copied ? "Copied" : "Copy"}
             </Button>
             <Button variant="secondary" size="sm" disabled={working} onClick={onClear}>
-              <Trash2 className="size-3.5" />
+              <FontAwesomeIcon icon={faTrashCan} className="size-3.5" />
               Clear
             </Button>
           </>
@@ -128,7 +129,7 @@ export function LastReportCard({
 
       {items.length > 0 && (
         <div className="flex items-center gap-2.5">
-          <CircleCheck className="size-4 shrink-0 text-[var(--status-running)]" />
+          <FontAwesomeIcon icon={faCircleCheck} className="size-4 shrink-0 text-[var(--status-running)]" />
           <p className="text-sm text-muted-foreground">
             Rigel checked{" "}
             <span className="font-semibold text-[var(--fg-primary)]">{items.length}</span> flagged
@@ -160,13 +161,14 @@ export function LastReportCard({
                     isOpen && "border-b border-[var(--border-subtle)]",
                   )}
                 >
-                  <ChevronDown
+                  <FontAwesomeIcon
+                    icon={faChevronDown}
                     className={cn(
                       "size-3.5 shrink-0 text-[var(--fg-tertiary)] transition-transform",
                       isOpen ? "rotate-0" : "-rotate-90",
                     )}
                   />
-                  <ShieldCheck className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />
+                  <FontAwesomeIcon icon={faShieldCheck} className="size-3.5 shrink-0 text-[var(--fg-tertiary)]" />
                   <span className="shrink-0 font-mono text-sm font-semibold text-[var(--fg-primary)]">
                     {it.name}
                   </span>
@@ -183,14 +185,14 @@ export function LastReportCard({
                     )}
                     <div className="flex">
                       <span className="inline-flex items-center gap-1.5 rounded border border-[var(--border-subtle)] bg-white/[0.04] px-2 py-1 font-mono text-2xs text-[var(--fg-secondary)]">
-                        <Box className="size-3 text-[var(--fg-tertiary)]" />
+                        <FontAwesomeIcon icon={faCube} className="size-3 text-[var(--fg-tertiary)]" />
                         {it.namespace} / {it.name}
                       </span>
                     </div>
                     <div>
                       <Button variant="outline" size="sm" onClick={() => openResource(it)}>
                         Open in {t.panel}
-                        <ArrowRight className="size-3.5" />
+                        <FontAwesomeIcon icon={faArrowRight} className="size-3.5" />
                       </Button>
                     </div>
                   </div>
@@ -207,7 +209,7 @@ export function LastReportCard({
           onClick={() => setExpanded((v) => !v)}
           className="flex items-center gap-1 text-xs font-medium text-[var(--accent-primary)] hover:underline"
         >
-          <ChevronDown className={cn("size-3.5 transition-transform", expanded && "rotate-180")} />
+          <FontAwesomeIcon icon={faChevronDown} className={cn("size-3.5 transition-transform", expanded && "rotate-180")} />
           {expanded ? "Show less" : `Show all ${items.length}`}
         </button>
       )}

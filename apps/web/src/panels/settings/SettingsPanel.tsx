@@ -5,7 +5,14 @@
 //   4. App defaults — per-cluster self-host install defaults.
 
 import { useState } from "react";
-import { LayoutDashboard, Bot, Radio, SlidersHorizontal, Sparkles } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faTableColumns,
+  faRobot,
+  faRadio,
+  faSliders,
+  faSparkles,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Button } from "@/components/ui/button";
 import { TabBar, Tab } from "@/components/ui/Tabs";
 import { OverviewTab } from "./tabs/OverviewTab";
@@ -15,10 +22,10 @@ import { AppDefaultsTab } from "./tabs/AppDefaultsTab";
 
 type SettingsTab = "overview" | "agents" | "channels" | "defaults";
 const TABS = [
-  { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "agents", label: "AI agents", icon: Bot },
-  { id: "channels", label: "Channels", icon: Radio },
-  { id: "defaults", label: "App defaults", icon: SlidersHorizontal },
+  { id: "overview", label: "Overview", icon: faTableColumns },
+  { id: "agents", label: "AI agents", icon: faRobot },
+  { id: "channels", label: "Channels", icon: faRadio },
+  { id: "defaults", label: "App defaults", icon: faSliders },
 ];
 
 export default function SettingsPanel() {
@@ -38,7 +45,7 @@ export default function SettingsPanel() {
             size="sm"
             onClick={() => window.dispatchEvent(new Event("rigel:open-setup"))}
           >
-            <Sparkles /> Setup guide
+            <FontAwesomeIcon icon={faSparkles} /> Setup guide
           </Button>
           <TabBar value={tab} onValueChange={(id) => setTab(id as SettingsTab)}>
             {TABS.map((t) => (

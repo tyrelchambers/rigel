@@ -1,7 +1,8 @@
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { remarkAlerts } from "@/lib/remarkAlerts";
-import { User, Settings } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faUser, faGear } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import {
   parseSuggestedActions,
   type SuggestedAction,
@@ -45,11 +46,11 @@ function MessageAvatar({ role }: { role: ChatMessage["role"] }) {
       </Avatar>
     );
   }
-  const Icon = role === "system" ? Settings : User;
+  const Icon = role === "system" ? faGear : faUser;
   return (
     <Avatar size="sm" className="mt-0.5">
       <AvatarFallback className="bg-muted text-muted-foreground">
-        <Icon className="size-3.5" />
+        <FontAwesomeIcon icon={Icon} className="size-3.5" />
       </AvatarFallback>
     </Avatar>
   );
