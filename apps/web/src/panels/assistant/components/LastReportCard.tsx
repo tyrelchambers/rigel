@@ -195,7 +195,7 @@ export function LastReportCard({
   const shown = expanded ? items : items.slice(0, COLLAPSED_COUNT);
 
   return (
-    <Card className="space-y-4 p-5">
+    <Card className="space-y-4 border-0 bg-transparent px-0">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2.5">
           <div className="flex size-[30px] items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--accent-primary)_15%,transparent)]">
@@ -204,11 +204,11 @@ export function LastReportCard({
           <p className="text-base font-bold text-[var(--fg-primary)]">Last report</p>
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" onClick={copyReport} disabled={!report}>
+          <Button variant="secondary" size="sm" onClick={copyReport} disabled={!report}>
             {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
             {copied ? "Copied" : "Copy"}
           </Button>
-          <Button variant="ghost" size="sm" disabled={working} onClick={onClear}>
+          <Button variant="secondary" size="sm" disabled={working} onClick={onClear}>
             <Trash2 className="size-3.5" />
             Clear
           </Button>
@@ -238,7 +238,7 @@ export function LastReportCard({
             return (
               <div
                 key={`${it.namespace}/${it.name}/${i}`}
-                className="overflow-hidden rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)]"
+                className="overflow-hidden rounded-md border border-[var(--border-subtle)] bg-[var(--surface-elevated)]"
               >
                 <button
                   type="button"
