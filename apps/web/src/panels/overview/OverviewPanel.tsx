@@ -312,9 +312,9 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
             display: "flex",
             flexDirection: "column",
             gap: 16,
-            background: "#0E0E11",
-            border: "1px solid rgba(255,255,255,0.07)",
-            borderRadius: 12,
+            background: "var(--surface-elevated)",
+            border: "1px solid var(--border-subtle)",
+            borderRadius: 8,
             padding: 18,
           }}
         >
@@ -323,9 +323,9 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
             <div className="flex items-center" style={{ gap: 11 }}>
               <span
                 className="inline-flex items-center justify-center"
-                style={{ width: 30, height: 30, borderRadius: 9, background: WARN_TINT }}
+                style={{ width: 30, height: 30, borderRadius: 9, background: "rgba(255,255,255,0.08)" }}
               >
-                <FontAwesomeIcon icon={faTriangleExclamation} className="size-[16px]" style={{ color: WARN_RED }} />
+                <FontAwesomeIcon icon={faTriangleExclamation} className="size-[16px]" style={{ color: "var(--fg-primary)" }} />
               </span>
               <span className="text-base" style={{ fontWeight: 700, color: "#FFFFFF" }}>Recent warnings</span>
               {warnings.length > 0 && (

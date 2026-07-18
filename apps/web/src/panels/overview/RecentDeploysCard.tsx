@@ -65,12 +65,20 @@ export function RecentDeploysCard() {
       }}
     >
       <div
-        className="flex items-center justify-between"
-        style={{ padding: "12px 14px", borderBottom: `1px solid ${BORDER_SUBTLE}` }}
+        className="flex items-center justify-between gap-4"
+        style={{ padding: "14px 16px", borderBottom: `1px solid ${BORDER_SUBTLE}` }}
       >
-        <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--fg-primary)" }}>
-          Recent deployments
-        </span>
+        <div className="flex items-center" style={{ gap: 11 }}>
+          <span
+            className="inline-flex items-center justify-center"
+            style={{ width: 30, height: 30, borderRadius: 9, background: "rgba(255,255,255,0.08)" }}
+          >
+            <FontAwesomeIcon icon={faLayerGroup} className="size-[16px]" style={{ color: "var(--fg-primary)" }} />
+          </span>
+          <span className="text-base" style={{ fontWeight: 700, color: "var(--fg-primary)" }}>
+            Recent deployments
+          </span>
+        </div>
         <span className="font-mono text-2xs" style={{ color: "var(--fg-tertiary)" }}>
           {batches.length} in the last 14 days
         </span>

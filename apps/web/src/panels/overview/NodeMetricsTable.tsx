@@ -1,5 +1,5 @@
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faRecycle } from "@awesome.me/kit-6050953220/icons/classic/solid";
+import { faRecycle, faServer } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { cn } from "@/lib/utils";
 import { MetricsServerEmptyState } from "./MetricsServerEmptyState";
 import { formatCpu, formatBytes, type NodeResourceTotals } from "./overviewDisplay";
@@ -63,7 +63,15 @@ export function NodeMetricsTable({ rows, readyByName, hasMetrics, metricsAvailab
   return (
     <section className="flex flex-col gap-3.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-[18px]">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-[var(--fg-primary)]">Node overview</h2>
+        <div className="flex items-center gap-[11px]">
+          <span
+            className="inline-flex items-center justify-center"
+            style={{ width: 30, height: 30, borderRadius: 9, background: "rgba(255,255,255,0.08)" }}
+          >
+            <FontAwesomeIcon icon={faServer} className="size-[16px]" style={{ color: "var(--fg-primary)" }} />
+          </span>
+          <h2 className="text-base font-bold text-[var(--fg-primary)]">Node overview</h2>
+        </div>
         {reclaimable && (
           <div
             className="flex items-center gap-[9px] rounded-full border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[13px] py-1.5"
