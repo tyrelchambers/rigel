@@ -15,6 +15,7 @@ import {
   type PaletteEntry,
 } from "./commandPaletteLogic";
 import { useCluster } from "@/store/cluster";
+import { formatShortcut } from "@/lib/platform";
 
 // Build the flat, ordered entry list from the nav groups — same order as sidebar.
 function buildEntries(): PaletteEntry[] {
@@ -197,7 +198,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
               letterSpacing: "0.04em",
             }}
           >
-            ⌘K
+            {formatShortcut({ mod: true, key: "K" })}
           </span>
         </div>
 

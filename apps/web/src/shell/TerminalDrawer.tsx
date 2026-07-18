@@ -13,6 +13,7 @@ import "@xterm/xterm/css/xterm.css";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faSquareTerminal, faArrowRotateRight, faXmark } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { onTermEvent, sendTermStart, sendTermInput, sendTermResize, sendTermStop } from "@/lib/ws";
+import { formatShortcut } from "@/lib/platform";
 
 /** Window event that toggles the drawer — fired by the StatusBar chip, the nav
  *  item, and the command palette; App owns the open state and listens for it. */
@@ -182,7 +183,7 @@ export function TerminalDrawer({ open, onClose }: { open: boolean; onClose: () =
           <button onClick={restart} title="Restart shell" className="rounded p-1 hover:bg-white/5" aria-label="Restart shell">
             <FontAwesomeIcon icon={faArrowRotateRight} className="size-3.5" style={{ color: "var(--fg-tertiary)" }} />
           </button>
-          <button onClick={onClose} title="Close (⌃`)" className="rounded p-1 hover:bg-white/5" aria-label="Close terminal">
+          <button onClick={onClose} title={`Close (${formatShortcut({ ctrl: true, key: "`" })})`} className="rounded p-1 hover:bg-white/5" aria-label="Close terminal">
             <FontAwesomeIcon icon={faXmark} className="size-3.5" style={{ color: "var(--fg-tertiary)" }} />
           </button>
         </div>
