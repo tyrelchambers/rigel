@@ -910,6 +910,7 @@ async function executeChatAction(
         command, tier: tier === RiskTier.Medium ? "medium" : "low",
         verdict: "approved", outcome: success ? "success" : "failure",
         detail: truncate(`${matched ? "flagged fix approved" : "confirmed"} via chat — ${output}`), backupRef,
+        actor: "chat",
       }, cfg.auditMaxEntries);
       // Running a queued fix clears it (whether it succeeded or not — a failure is
       // in the audit log and re-detection re-queues); re-filter the fresh state by
