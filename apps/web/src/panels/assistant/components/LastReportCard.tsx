@@ -219,8 +219,9 @@ export function LastReportCard({
         <div className="flex items-center gap-2.5">
           <CircleCheck className="size-4 shrink-0 text-[var(--status-running)]" />
           <p className="text-sm text-muted-foreground">
-            <span className="font-semibold text-[var(--fg-primary)]">{items.length}</span> benign
-            issue{items.length === 1 ? "" : "s"} auto-silenced
+            Rigel checked{" "}
+            <span className="font-semibold text-[var(--fg-primary)]">{items.length}</span> flagged
+            issue{items.length === 1 ? "" : "s"} and found nothing that needs your attention
           </p>
         </div>
       )}
