@@ -1,4 +1,5 @@
-import { Boxes, Cloud, PlusCircle } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faBoxesStacked, faCloud, faCirclePlus } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogIcon, DialogTitle } from "@/components/ui/dialog";
 
 function ChoiceRow({
@@ -36,14 +37,14 @@ export function AddClusterChooser({
       <DialogContent>
         <DialogHeader>
           <DialogIcon>
-            <PlusCircle className="size-[17px]" />
+            <FontAwesomeIcon icon={faCirclePlus} className="size-[17px]" />
           </DialogIcon>
           <DialogTitle>Add a cluster</DialogTitle>
         </DialogHeader>
         <DialogBody>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <ChoiceRow icon={<Boxes size={20} />} title="Create a local cluster" subtitle="Spin up kind or k3d on this machine" onClick={onCreateLocal} />
-        <ChoiceRow icon={<Cloud size={20} />} title="Connect to an existing cluster" subtitle="DigitalOcean, or import a kubeconfig" onClick={onConnectExisting} />
+        <ChoiceRow icon={<FontAwesomeIcon icon={faBoxesStacked} className="size-[20px]" />} title="Create a local cluster" subtitle="Spin up kind or k3d on this machine" onClick={onCreateLocal} />
+        <ChoiceRow icon={<FontAwesomeIcon icon={faCloud} className="size-[20px]" />} title="Connect to an existing cluster" subtitle="DigitalOcean, or import a kubeconfig" onClick={onConnectExisting} />
       </div>
         </DialogBody>
       </DialogContent>

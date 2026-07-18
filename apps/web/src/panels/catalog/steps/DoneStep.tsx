@@ -1,4 +1,5 @@
-import { CircleCheck } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCircleCheck } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import type { CatalogApp } from "@rigel/catalog";
 import { Button } from "@/components/ui/button";
 import type { ConfigureValues } from "../wizardLogic";
@@ -16,7 +17,7 @@ export function DoneStep({
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-sm">
-        <CircleCheck className="size-5 text-green-600 dark:text-green-400" />
+        <FontAwesomeIcon icon={faCircleCheck} className="size-5 text-green-600 dark:text-green-400" />
         <span className="font-medium">{app.name} installed</span>
       </div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">

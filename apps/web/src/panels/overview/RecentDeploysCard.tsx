@@ -1,13 +1,14 @@
 import { useState } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
-  Boxes,
-  Package,
-  FileCode,
-  Layers,
-  RotateCcw,
-  History,
-  type LucideIcon,
-} from "lucide-react";
+  faBoxesStacked,
+  faBox,
+  faFileCode,
+  faLayerGroup,
+  faArrowRotateLeft,
+  faClockRotateLeft,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useRecentDeploys, useUndoDeploy } from "@/lib/api";
 import type { RecentBatch } from "@rigel/k8s";
 import { formatDistanceToNow } from "date-fns";
@@ -27,20 +28,20 @@ const RED = "var(--status-failed)";
 
 interface SourceMeta {
   label: string;
-  icon: LucideIcon;
+  icon: IconDefinition;
   tint: string;
 }
 
 function sourceMeta(source: string): SourceMeta {
   switch (source) {
     case "compose-migration":
-      return { label: "Compose migration", icon: Boxes, tint: "var(--accent-primary)" };
+      return { label: "Compose migration", icon: faBoxesStacked, tint: "var(--accent-primary)" };
     case "catalog-install":
-      return { label: "Catalog install", icon: Package, tint: "#A855F7" };
+      return { label: "Catalog install", icon: faBox, tint: "#A855F7" };
     case "apply-yaml":
-      return { label: "Apply YAML", icon: FileCode, tint: "#2DD4BF" };
+      return { label: "Apply YAML", icon: faFileCode, tint: "#2DD4BF" };
     default:
-      return { label: source, icon: Layers, tint: "var(--fg-secondary)" };
+      return { label: source, icon: faLayerGroup, tint: "var(--fg-secondary)" };
   }
 }
 
@@ -118,7 +119,7 @@ function DeployRow({
       }}
     >
       <div className="flex items-center" style={{ gap: 11, minWidth: 0 }}>
-        <Icon size={16} style={{ color: meta.tint, flexShrink: 0 }} />
+        <FontAwesomeIcon icon={Icon} className="size-[16px]" style={{ color: meta.tint, flexShrink: 0 }} />
         <div className="flex flex-col" style={{ gap: 3, minWidth: 0 }}>
           <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--fg-primary)" }}>
             {meta.label}
@@ -150,7 +151,7 @@ function DeployRow({
           color: "var(--fg-secondary)",
         }}
       >
-        <RotateCcw size={13} /> Undo
+        <FontAwesomeIcon icon={faArrowRotateLeft} className="size-[13px]" /> Undo
       </button>
     </div>
   );
@@ -166,7 +167,7 @@ function EmptyState() {
         className="inline-flex items-center justify-center"
         style={{ width: 46, height: 46, borderRadius: "50%", background: "#38BDF826" }}
       >
-        <History size={22} style={{ color: "var(--accent-primary)" }} />
+        <FontAwesomeIcon icon={faClockRotateLeft} className="size-[22px]" style={{ color: "var(--accent-primary)" }} />
       </span>
       <span style={{ fontSize: 15, fontWeight: 600, color: "var(--fg-primary)" }}>
         Nothing applied recently
@@ -213,7 +214,7 @@ function UndoConfirm({
             className="flex shrink-0 items-center justify-center rounded-full"
             style={{ width: 30, height: 30, background: `${RED}1F`, border: `1px solid ${RED}45` }}
           >
-            <RotateCcw size={16} style={{ color: RED }} />
+            <FontAwesomeIcon icon={faArrowRotateLeft} className="size-[16px]" style={{ color: RED }} />
           </span>
           <div className="flex min-w-0 flex-1 flex-col" style={{ gap: 3 }}>
             <DialogTitle>Undo this deployment?</DialogTitle>

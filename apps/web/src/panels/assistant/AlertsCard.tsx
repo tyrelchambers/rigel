@@ -3,32 +3,33 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
-  Bell,
-  BellPlus,
-  BellRing,
-  Box,
-  ChevronDown,
-  CircleAlert,
-  CircleX,
-  Clock,
-  Cpu,
-  Database,
-  Flame,
-  Globe,
-  History,
-  Pencil,
-  Plus,
-  Repeat,
-  RotateCcw,
-  Send,
-  Server,
-  Sparkles,
-  Trash2,
-  WandSparkles,
-  X,
-  type LucideIcon,
-} from "lucide-react";
+  faBell,
+  faBellPlus,
+  faBellRing,
+  faCube,
+  faChevronDown,
+  faCircleExclamation,
+  faCircleXmark,
+  faClock,
+  faMicrochip,
+  faDatabase,
+  faFire,
+  faGlobe,
+  faClockRotateLeft,
+  faPencil,
+  faPlus,
+  faRepeat,
+  faArrowRotateLeft,
+  faPaperPlane,
+  faServer,
+  faSparkles,
+  faTrashCan,
+  faWandMagicSparkles,
+  faXmark,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import {
   Dialog,
   DialogClose,
@@ -93,7 +94,7 @@ function AlertSelect({
       >
         {children}
       </select>
-      <ChevronDown className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-[var(--fg-tertiary)]" />
+      <FontAwesomeIcon icon={faChevronDown} className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-[var(--fg-tertiary)]" />
     </div>
   );
 }
@@ -138,18 +139,18 @@ const COND_VERBS: Record<AlertCondType, string> = {
  *  (e.g. node memory). Mirrors the "just ask in chat" copy. */
 const ALERT_SUGGESTIONS = [
   {
-    icon: Repeat,
+    icon: faRepeat,
     label: "Pod restarts > 3× / 5 min",
     prompt: "Alert me when any pod restarts more than 3 times in 5 minutes.",
   },
   {
-    icon: Cpu,
+    icon: faMicrochip,
     label: "Node memory > 90%",
     prompt: "Alert me when a node's memory usage goes above 90%.",
     preset: "nodeMemory",
   },
   {
-    icon: CircleX,
+    icon: faCircleXmark,
     label: "Any deployment fails",
     prompt: "Alert me when any deployment fails to roll out.",
   },
@@ -183,51 +184,51 @@ type Severity = "critical" | "warning";
 
 /** Icon + short badge + severity for a rule's condition, driving the row tile
  *  and the leading condition pill. */
-function conditionMeta(c: AlertCondition): { Icon: LucideIcon; badge: string; sev: Severity } {
+function conditionMeta(c: AlertCondition): { Icon: IconDefinition; badge: string; sev: Severity } {
   switch (c.type) {
     case "oomKilled":
-      return { Icon: Flame, badge: "OOMKilled", sev: "critical" };
+      return { Icon: faFire, badge: "OOMKilled", sev: "critical" };
     case "crashLoop":
-      return { Icon: Repeat, badge: "CrashLoop", sev: "critical" };
+      return { Icon: faRepeat, badge: "CrashLoop", sev: "critical" };
     case "deploymentDegraded":
-      return { Icon: CircleX, badge: "Degraded", sev: "critical" };
+      return { Icon: faCircleXmark, badge: "Degraded", sev: "critical" };
     case "podRestarts":
-      return { Icon: RotateCcw, badge: "Restarts", sev: "warning" };
+      return { Icon: faArrowRotateLeft, badge: "Restarts", sev: "warning" };
     case "pendingTooLong":
-      return { Icon: Clock, badge: "Pending", sev: "warning" };
+      return { Icon: faClock, badge: "Pending", sev: "warning" };
     case "notReady":
-      return { Icon: CircleAlert, badge: "Not ready", sev: "warning" };
+      return { Icon: faCircleExclamation, badge: "Not ready", sev: "warning" };
     case "metricThreshold": {
       const m = c.metric === "cpuPercent" ? "CPU" : "Mem";
       const op = c.comparator === "above" ? ">" : "<";
-      return { Icon: Cpu, badge: `${m} ${op}${c.threshold}%`, sev: "warning" };
+      return { Icon: faMicrochip, badge: `${m} ${op}${c.threshold}%`, sev: "warning" };
     }
   }
 }
 
 /** Icon + compact label for a rule's target scope (the second meta chip). */
-function scopeMeta(t: AlertTarget): { Icon: LucideIcon; label: string } {
+function scopeMeta(t: AlertTarget): { Icon: IconDefinition; label: string } {
   switch (t.scope) {
     case "cluster":
-      return { Icon: Globe, label: "cluster-wide" };
+      return { Icon: faGlobe, label: "cluster-wide" };
     case "namespace":
-      return { Icon: Box, label: `namespace: ${t.namespace ?? "?"}` };
+      return { Icon: faCube, label: `namespace: ${t.namespace ?? "?"}` };
     case "workload":
-      return { Icon: Box, label: `${t.kind ?? "workload"} ${t.name ?? ""}`.trim() };
+      return { Icon: faCube, label: `${t.kind ?? "workload"} ${t.name ?? ""}`.trim() };
     case "pod":
-      return { Icon: Box, label: `pod ${t.name ?? ""}`.trim() };
+      return { Icon: faCube, label: `pod ${t.name ?? ""}`.trim() };
     case "database":
-      return { Icon: Database, label: `db ${t.name ?? ""}`.trim() };
+      return { Icon: faDatabase, label: `db ${t.name ?? ""}`.trim() };
     case "node":
-      return { Icon: Server, label: t.name ? `node ${t.name}` : "all nodes" };
+      return { Icon: faServer, label: t.name ? `node ${t.name}` : "all nodes" };
   }
 }
 
 /** Hairline meta chip: small icon + mono label (scope, channel). */
-function MetaChip({ Icon, children }: { Icon: LucideIcon; children: React.ReactNode }) {
+function MetaChip({ Icon, children }: { Icon: IconDefinition; children: React.ReactNode }) {
   return (
     <span className="inline-flex items-center gap-[5px] rounded border border-[var(--border-subtle)] bg-white/[0.04] px-2 py-0.5">
-      <Icon className="size-[11px] shrink-0 text-[var(--fg-tertiary)]" />
+      <FontAwesomeIcon icon={Icon} className="size-[11px] shrink-0 text-[var(--fg-tertiary)]" />
       <span className="font-mono text-2xs text-[var(--fg-tertiary)]">{children}</span>
     </span>
   );
@@ -459,7 +460,7 @@ export function AlertsCard() {
           onClick={startCreate}
           className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--accent-primary)] bg-[var(--accent-dim)] px-3.5 py-2 text-xs font-semibold text-[var(--accent-primary)] transition-colors hover:border-[var(--accent-hover)] hover:text-[var(--accent-hover)]"
         >
-          <Plus className="size-[15px]" />
+          <FontAwesomeIcon icon={faPlus} className="size-[15px]" />
           New alert
         </button>
       </div>
@@ -468,7 +469,7 @@ export function AlertsCard() {
         <div className="mt-4 flex flex-col gap-3.5">
           <div className="flex items-center gap-3">
             <div className="flex size-[34px] shrink-0 items-center justify-center rounded-full bg-white/5">
-              <Bell className="size-[17px] text-[var(--fg-secondary)]" />
+              <FontAwesomeIcon icon={faBell} className="size-[17px] text-[var(--fg-secondary)]" />
             </div>
             <div className="flex flex-col gap-0.5">
               <p className="text-sm font-semibold text-[var(--fg-primary)]">No alerts yet</p>
@@ -501,7 +502,7 @@ export function AlertsCard() {
                 }}
                 className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3 py-1.5 text-xs text-[var(--fg-secondary)] transition-colors hover:border-[var(--accent-primary)] hover:text-[var(--fg-primary)]"
               >
-                <s.icon className="size-3.5 text-[var(--accent-primary)]" />
+                <FontAwesomeIcon icon={s.icon} className="size-3.5 text-[var(--accent-primary)]" />
                 {s.label}
               </button>
             ))}
@@ -530,7 +531,7 @@ export function AlertsCard() {
                     critical ? "bg-red-500/10" : "bg-amber-400/10",
                   )}
                 >
-                  <Icon className={cn("size-[17px]", critical ? "text-red-500" : "text-amber-400")} />
+                  <FontAwesomeIcon icon={Icon} className={cn("size-[17px]", critical ? "text-red-500" : "text-amber-400")} />
                 </div>
 
                 {/* Title + meta */}
@@ -546,9 +547,9 @@ export function AlertsCard() {
                       {badge}
                     </span>
                     <MetaChip Icon={scopeChip.Icon}>{scopeChip.label}</MetaChip>
-                    {hasWebhook && <MetaChip Icon={Bell}>Webhook</MetaChip>}
+                    {hasWebhook && <MetaChip Icon={faBell}>Webhook</MetaChip>}
                     <span className="inline-flex items-center gap-[5px]">
-                      <History className="size-[11px] shrink-0 text-[var(--fg-tertiary)]" />
+                      <FontAwesomeIcon icon={faClockRotateLeft} className="size-[11px] shrink-0 text-[var(--fg-tertiary)]" />
                       <span className="text-2xs text-[var(--fg-tertiary)]">
                         {fired ? `${relativeTime(fired)} ago` : "never"}
                       </span>
@@ -596,7 +597,7 @@ export function AlertsCard() {
                     onClick={() => startEdit(rule)}
                     className="rounded-md p-[7px] text-[var(--fg-tertiary)] transition-colors hover:bg-white/[0.06] hover:text-[var(--fg-secondary)] disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    <Pencil className="size-[15px]" />
+                    <FontAwesomeIcon icon={faPencil} className="size-[15px]" />
                   </button>
                   <button
                     type="button"
@@ -605,7 +606,7 @@ export function AlertsCard() {
                     onClick={() => run({ action: "deleteAlert", namespace: ns, alertId: rule.id })}
                     className="rounded-md p-[7px] text-[var(--fg-tertiary)] transition-colors hover:bg-red-500/10 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    <Trash2 className="size-[15px]" />
+                    <FontAwesomeIcon icon={faTrashCan} className="size-[15px]" />
                   </button>
                 </div>
               </div>
@@ -627,7 +628,7 @@ export function AlertsCard() {
           <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border-subtle)] px-6 pt-[22px] pb-[18px]">
             <div className="flex items-center gap-3">
               <div className="flex size-9 shrink-0 items-center justify-center rounded-[9px] bg-[var(--accent-dim)]">
-                <Bell className="size-[18px] text-[var(--accent-primary)]" />
+                <FontAwesomeIcon icon={faBell} className="size-[18px] text-[var(--accent-primary)]" />
               </div>
               <div className="flex flex-col gap-[3px]">
                 <DialogTitle className="text-xl font-bold text-[var(--fg-primary)]">
@@ -639,7 +640,7 @@ export function AlertsCard() {
               </div>
             </div>
             <DialogClose className="flex size-[30px] shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-[var(--fg-secondary)] transition-colors hover:bg-white/[0.08]">
-              <X className="size-4" />
+              <FontAwesomeIcon icon={faXmark} className="size-4" />
               <span className="sr-only">Close</span>
             </DialogClose>
           </div>
@@ -658,7 +659,7 @@ export function AlertsCard() {
               }}
               className="flex w-full items-center gap-2.5 rounded-md border border-[var(--accent-primary)]/25 bg-[var(--accent-primary)]/[0.08] px-3.5 py-2.5 text-left transition-colors hover:bg-[var(--accent-primary)]/[0.12]"
             >
-              <Sparkles className="size-[15px] shrink-0 text-[var(--accent-primary)]" />
+              <FontAwesomeIcon icon={faSparkles} className="size-[15px] shrink-0 text-[var(--accent-primary)]" />
               <span className="text-xs text-[var(--fg-secondary)]">
                 Prefer chat? Try{" "}
                 <span className="text-[var(--accent-primary)] italic">
@@ -875,7 +876,7 @@ export function AlertsCard() {
                   className="flex-1"
                   right={
                     <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.04] px-2 py-0.5 font-mono text-3xs text-[var(--fg-tertiary)]">
-                      <WandSparkles className="size-2.5" />
+                      <FontAwesomeIcon icon={faWandMagicSparkles} className="size-2.5" />
                       auto
                     </span>
                   }
@@ -892,7 +893,7 @@ export function AlertsCard() {
 
             {/* Live preview */}
             <div className="flex items-center gap-2.5 rounded-md border border-[var(--accent-primary)]/30 bg-[var(--accent-primary)]/[0.08] px-3.5 py-3">
-              <BellRing className="size-4 shrink-0 text-[var(--accent-primary)]" />
+              <FontAwesomeIcon icon={faBellRing} className="size-4 shrink-0 text-[var(--accent-primary)]" />
               <p className="text-xs leading-snug text-[var(--fg-secondary)]">
                 Alert me when {scope === "cluster" ? "the " : "a "}
                 <span className="font-semibold text-[var(--fg-primary)]">{subjectLabel}</span>
@@ -920,7 +921,7 @@ export function AlertsCard() {
           {/* Footer */}
           <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--border-subtle)] px-6 pt-4 pb-5">
             <div className="flex items-center gap-2 text-xs text-[var(--fg-tertiary)]">
-              <Send className="size-[13px]" />
+              <FontAwesomeIcon icon={faPaperPlane} className="size-[13px]" />
               Delivered to your notification channels.
             </div>
             <div className="flex items-center gap-2.5">
@@ -933,7 +934,7 @@ export function AlertsCard() {
                 disabled={working || !valid}
                 className="inline-flex items-center gap-2 rounded-md bg-[var(--accent-primary)] px-[22px] py-[11px] text-sm font-bold text-[var(--fg-inverse)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <BellPlus className="size-[15px]" />
+                <FontAwesomeIcon icon={faBellPlus} className="size-[15px]" />
                 {editingId ? "Save changes" : "Create alert"}
               </button>
             </div>

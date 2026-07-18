@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Circle, CornerDownLeft, Pencil } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCircle, faArrowTurnDownLeft, faPencil } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { buildQuestionAnswer, type SuggestedQuestion } from "@/lib/actionBlocks";
 
 type Option = SuggestedQuestion["options"][number];
@@ -147,7 +148,7 @@ function QuestionForm({
         }}
         {...hoverHandlers(!canSubmit)}
       >
-        <CornerDownLeft size={11} strokeWidth={2.5} />
+        <FontAwesomeIcon icon={faArrowTurnDownLeft} className="size-[11px]" />
       </button>
     </div>
   );
@@ -197,7 +198,7 @@ export function SuggestedQuestionList({ questions, onAnswer }: Props) {
                 return (
                   <div key={oi} className="flex flex-col gap-1.5">
                     <div style={{ ...rowStyle, cursor: "default" }}>
-                      <Pencil size={10} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                      <FontAwesomeIcon icon={faPencil} className="size-[10px]" style={{ flexShrink: 0 }} />
                       <span style={{ flex: 1 }}>{opt.label}</span>
                     </div>
                     <QuestionForm
@@ -223,11 +224,10 @@ export function SuggestedQuestionList({ questions, onAnswer }: Props) {
                       style={rowStyle}
                       {...hoverHandlers(locked)}
                     >
-                      <Circle
-                        size={10}
-                        strokeWidth={2.5}
-                        fill={isOpen ? COLOR : "none"}
-                        style={{ flexShrink: 0 }}
+                      <FontAwesomeIcon
+                        icon={faCircle}
+                        className="size-[10px]"
+                        style={{ flexShrink: 0, opacity: isOpen ? 1 : 0.35 }}
                       />
                       <span style={{ flex: 1 }}>{opt.label}</span>
                     </button>
@@ -253,7 +253,7 @@ export function SuggestedQuestionList({ questions, onAnswer }: Props) {
                   style={rowStyle}
                   {...hoverHandlers(locked)}
                 >
-                  <Circle size={10} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                  <FontAwesomeIcon icon={faCircle} className="size-[10px]" style={{ flexShrink: 0 }} />
                   <span style={{ flex: 1 }}>{opt.label}</span>
                 </button>
               );

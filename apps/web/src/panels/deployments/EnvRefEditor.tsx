@@ -1,4 +1,5 @@
-import { Plus, Minus } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faPlus, faMinus } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import type { Secret, ConfigMap } from "@rigel/k8s";
 import { Button } from "@/components/ui/button";
 import type { EnvRefEdit } from "./deploymentDisplay";
@@ -91,12 +92,12 @@ export function EnvRefEditor({ rows, secrets, configMaps, onChange }: EnvRefEdit
             aria-label={`Remove ${row.name || "reference"}`}
             onClick={() => onChange(rows.filter((_, i) => i !== idx))}
           >
-            <Minus className="size-4 text-destructive" aria-hidden />
+            <FontAwesomeIcon icon={faMinus} className="size-4 text-destructive" aria-hidden />
           </Button>
         </div>
       ))}
       <Button type="button" variant="outline" size="sm" onClick={() => onChange([...rows, blankRef()])}>
-        <Plus className="size-3.5" aria-hidden /> Add reference
+        <FontAwesomeIcon icon={faPlus} className="size-3.5" aria-hidden /> Add reference
       </Button>
     </div>
   );

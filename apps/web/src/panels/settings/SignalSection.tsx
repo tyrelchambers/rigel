@@ -5,7 +5,15 @@
 // assistant-config ConfigMap. Styled to match the Matrix channel card.
 
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, ChevronRight, AlertTriangle, MessageCircle, Unplug } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faCheck,
+  faChevronDown,
+  faChevronRight,
+  faTriangleExclamation,
+  faComment,
+  faPlugCircleXmark,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Button } from "@/components/ui/button";
 import { Loader } from "@/components/Loader";
 import {
@@ -222,7 +230,7 @@ export function SignalSection({
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="flex size-9 items-center justify-center rounded-lg bg-[var(--accent-dim)]">
-            <MessageCircle className="size-4 text-primary" />
+            <FontAwesomeIcon icon={faComment} className="size-4 text-primary" />
           </div>
           <div className="flex flex-col gap-[3px]">
             <span className="text-sm font-semibold text-foreground">Signal</span>
@@ -261,7 +269,7 @@ export function SignalSection({
               disabled={setSignal.isPending}
               className="flex items-center gap-[7px] transition-opacity hover:opacity-80 disabled:opacity-50"
             >
-              <Unplug className="size-[14px] text-destructive" />
+              <FontAwesomeIcon icon={faPlugCircleXmark} className="size-[14px] text-destructive" />
               <span className="text-xs font-medium text-destructive">Disconnect</span>
             </button>
           </div>
@@ -270,7 +278,7 @@ export function SignalSection({
 
       {error && (
         <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span className="select-text">{error}</span>
         </div>
       )}
@@ -282,7 +290,7 @@ export function SignalSection({
             className="flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
             onClick={() => setShowManifest((s) => !s)}
           >
-            {showManifest ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            {showManifest ? <FontAwesomeIcon icon={faChevronDown} className="h-3 w-3" /> : <FontAwesomeIcon icon={faChevronRight} className="h-3 w-3" />}
             Show manifest
           </button>
           {showManifest && (
@@ -349,7 +357,7 @@ export function SignalSection({
               </Button>
               {testResult && (
                 <span className="flex items-center gap-1 text-xs text-[var(--status-running)]">
-                  <Check className="h-3.5 w-3.5" /> {testResult}
+                  <FontAwesomeIcon icon={faCheck} className="h-3.5 w-3.5" /> {testResult}
                 </span>
               )}
             </div>

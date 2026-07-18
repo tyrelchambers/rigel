@@ -12,7 +12,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2 } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCircleCheck } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { syncDeployment, type SyncResult } from "./gitApi";
 import type { DeploymentRef } from "./gitopsLogic";
 
@@ -67,7 +68,7 @@ export function SyncDialog({ target, onClose }: { target: DeploymentRef; onClose
           )}
           {phase === "done" && result && (
             result.code === 0 ? (
-              <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-400"><CheckCircle2 className="size-4" /> Applied{result.sha ? ` @ ${result.sha.slice(0, 7)}` : ""}.</p>
+              <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-400"><FontAwesomeIcon icon={faCircleCheck} className="size-4" /> Applied{result.sha ? ` @ ${result.sha.slice(0, 7)}` : ""}.</p>
             ) : (
               <pre className="max-h-80 overflow-auto rounded-lg bg-destructive/10 p-3 text-xs font-mono text-destructive whitespace-pre-wrap">{result.stderr || result.stdout}</pre>
             )

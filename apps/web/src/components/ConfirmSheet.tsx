@@ -9,18 +9,19 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  Terminal,
-  Copy,
-  Check,
-  AlertTriangle,
-  Layers,
-  Play,
-  ArrowRight,
-  CheckCircle2,
-  GitPullRequest,
-  ExternalLink,
-} from "lucide-react";
+  faTerminal,
+  faCopy,
+  faCheck,
+  faTriangleExclamation,
+  faLayerGroup,
+  faPlay,
+  faArrowRight,
+  faCircleCheck,
+  faCodePullRequest,
+  faArrowUpRightFromSquare,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import {
   fetchPreviewCommand,
   useAction,
@@ -39,7 +40,7 @@ import { DiffView } from "@/components/DiffView";
 import { useCluster } from "@/store/cluster";
 import { classifyProvider } from "@/shell/clusterTile";
 import { resolveIconId, loadIconOverrides } from "@/shell/clusterIconStore";
-import { CLUSTER_ICONS } from "@/shell/clusterIcons";
+import { ClusterIcon } from "@/shell/clusterIcons";
 
 interface ConfirmSheetProps {
   /** The action to confirm and optionally execute. */
@@ -118,7 +119,6 @@ export function ConfirmSheet({
     clusterProvider,
     loadIconOverrides(),
   );
-  const ClusterIcon = CLUSTER_ICONS[clusterIconId].Component;
 
   // Fetch the preview command whenever the action changes
   useEffect(() => {
@@ -308,12 +308,12 @@ export function ConfirmSheet({
     ? "var(--status-failed)"
     : "var(--accent-primary)";
   const HeaderIcon = isFix
-    ? GitPullRequest
+    ? faCodePullRequest
     : isApply
-      ? Layers
+      ? faLayerGroup
       : isDestructive
-        ? AlertTriangle
-        : Terminal;
+        ? faTriangleExclamation
+        : faTerminal;
   const riskLabel = isDestructive
     ? "Destructive"
     : isApply
@@ -370,10 +370,10 @@ export function ConfirmSheet({
               border: `1px solid ${accentColor}45`,
             }}
           >
-            <HeaderIcon
+            <FontAwesomeIcon
+              icon={HeaderIcon}
               className="size-[18px]"
               style={{ color: accentColor }}
-              strokeWidth={2}
             />
           </div>
           <DialogTitle className="min-w-0 flex-1 text-base leading-snug line-clamp-2 break-words">
@@ -406,7 +406,7 @@ export function ConfirmSheet({
                 className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-foreground/90"
                 style={{ background: "#08080A", border: "1px solid #26272B" }}
               >
-                <ClusterIcon size={13} />
+                <ClusterIcon id={clusterIconId} className="size-[13px]" />
                 {activeContext}
               </span>
             </div>
@@ -463,7 +463,7 @@ export function ConfirmSheet({
                   {applyState.result &&
                     (applyState.result.code === 0 ? (
                       <p className="flex items-center gap-1.5 text-xs text-emerald-400">
-                        <CheckCircle2 className="size-3.5" /> Applied.
+                        <FontAwesomeIcon icon={faCircleCheck} className="size-3.5" /> Applied.
                       </p>
                     ) : (
                       <pre className="rounded-lg bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap">
@@ -504,8 +504,8 @@ export function ConfirmSheet({
                     rel="noreferrer"
                     className="flex items-center gap-1.5 text-sm font-medium text-emerald-400 hover:underline"
                   >
-                    <CheckCircle2 className="size-4" /> Pull request opened{" "}
-                    <ExternalLink className="size-3.5" />
+                    <FontAwesomeIcon icon={faCircleCheck} className="size-4" /> Pull request opened{" "}
+                    <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="size-3.5" />
                   </a>
                 ) : (
                   <pre className="rounded-lg bg-destructive/10 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap">
@@ -535,9 +535,9 @@ export function ConfirmSheet({
                   className="absolute right-2.5 top-2.5 flex items-center gap-1 rounded-md px-2 py-1 text-3xs font-medium text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
                 >
                   {copied ? (
-                    <Check className="size-3" style={{ color: "#28C840" }} />
+                    <FontAwesomeIcon icon={faCheck} className="size-3" style={{ color: "#28C840" }} />
                   ) : (
-                    <Copy className="size-3" />
+                    <FontAwesomeIcon icon={faCopy} className="size-3" />
                   )}
                   {copied ? "Copied" : "Copy"}
                 </button>
@@ -575,7 +575,7 @@ export function ConfirmSheet({
               </pre>
             ) : (
               <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-400">
-                <CheckCircle2 className="size-4" /> Command succeeded.
+                <FontAwesomeIcon icon={faCircleCheck} className="size-4" /> Command succeeded.
               </p>
             ))}
 
@@ -617,7 +617,7 @@ export function ConfirmSheet({
                   "Opening PR…"
                 ) : (
                   <>
-                    <GitPullRequest className="size-3.5" /> Open PR
+                    <FontAwesomeIcon icon={faCodePullRequest} className="size-3.5" /> Open PR
                   </>
                 )
               ) : isApply ? (
@@ -625,18 +625,18 @@ export function ConfirmSheet({
                   "Applying…"
                 ) : (
                   <>
-                    <Layers className="size-3.5" /> Apply
+                    <FontAwesomeIcon icon={faLayerGroup} className="size-3.5" /> Apply
                   </>
                 )
               ) : isPending ? (
                 "Running…"
               ) : isPurge ? (
                 <>
-                  Continue to removal <ArrowRight className="size-3.5" />
+                  Continue to removal <FontAwesomeIcon icon={faArrowRight} className="size-3.5" />
                 </>
               ) : (
                 <>
-                  <Play className="size-3.5 fill-current" /> Execute
+                  <FontAwesomeIcon icon={faPlay} className="size-3.5 fill-current" /> Execute
                 </>
               )}
             </Button>

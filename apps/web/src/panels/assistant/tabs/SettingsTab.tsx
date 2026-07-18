@@ -1,7 +1,8 @@
 // SettingsTab — agent pod status (with a manual restart) and uninstall.
 // Credential and token management now lives in the Agents tab.
 
-import { RotateCcw } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faArrowRotateLeft } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Button } from "@/components/ui/button";
 import { useAssistantCtx } from "../AssistantContext";
 import { Card } from "../components/primitives";
@@ -21,7 +22,7 @@ export function SettingsTab() {
             disabled={working}
             onClick={() => run({ action: "restart", namespace: ns })}
           >
-            <RotateCcw className="size-4" /> Restart
+            <FontAwesomeIcon icon={faArrowRotateLeft} className="size-4" /> Restart
           </Button>
         </div>
         {d.agentPod ? (

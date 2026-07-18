@@ -1,4 +1,5 @@
-import { AlertTriangle } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faTriangleExclamation } from "@awesome.me/kit-6050953220/icons/classic/solid";
 
 /** A small overlay dot shown on a cloud tile whose login has expired. */
 export function ClusterHealthBadge({ onReconnect }: { onReconnect: () => void }) {
@@ -14,7 +15,7 @@ export function ClusterHealthBadge({ onReconnect }: { onReconnect: () => void })
         background: "var(--destructive)", border: "2px solid var(--surface-primary)", color: "#fff",
       }}
     >
-      <AlertTriangle size={9} />
+      <FontAwesomeIcon icon={faTriangleExclamation} className="size-[9px]" />
     </button>
   );
 }

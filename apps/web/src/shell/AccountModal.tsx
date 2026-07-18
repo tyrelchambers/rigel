@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Info, Lock, LogOut, RefreshCw, Sparkles, Zap } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faArrowLeft,
+  faCircleInfo,
+  faLock,
+  faRightFromBracket,
+  faArrowsRotate,
+  faSparkles,
+  faBolt,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { loadStripe } from "@stripe/stripe-js";
 import { EmbeddedCheckout, EmbeddedCheckoutProvider } from "@stripe/react-stripe-js";
 import {
@@ -78,7 +87,7 @@ function CheckoutView({
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
         <Button variant="ghost" size="sm" className="text-[var(--fg-secondary)]" onClick={onBack}>
-          <ArrowLeft className="size-3.5" />
+          <FontAwesomeIcon icon={faArrowLeft} className="size-3.5" />
           Back
         </Button>
         <span className="font-heading text-base font-semibold text-[var(--fg-primary)]">
@@ -86,7 +95,7 @@ function CheckoutView({
         </span>
       </div>
       <div className="flex items-start gap-2 rounded-lg bg-[var(--accent-dim)] px-3 py-2 text-xs text-[var(--fg-secondary)]">
-        <Info className="mt-0.5 size-3.5 shrink-0 text-[var(--accent-primary)]" />
+        <FontAwesomeIcon icon={faCircleInfo} className="mt-0.5 size-3.5 shrink-0 text-[var(--accent-primary)]" />
         <span>
           After you pay, Pro unlocks right away — the in-cluster agent switches on within about 30 seconds.
         </span>
@@ -252,7 +261,7 @@ export function AccountModal({ open, onOpenChange, account, startCheckoutOnOpen 
                   onClick={() => account.refreshBilling()}
                   className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-3xs text-[var(--fg-tertiary)] transition-colors hover:bg-white/[0.05] hover:text-[var(--fg-secondary)]"
                 >
-                  <RefreshCw className="size-3" />
+                  <FontAwesomeIcon icon={faArrowsRotate} className="size-3" />
                   Refresh
                 </button>
               </div>
@@ -261,9 +270,9 @@ export function AccountModal({ open, onOpenChange, account, startCheckoutOnOpen 
                 <div className="flex items-center gap-3">
                   <div className="flex size-[38px] shrink-0 items-center justify-center rounded-[9px] bg-[var(--accent-dim)]">
                     {isPro && !isBeta ? (
-                      <Zap className="size-[19px] text-[var(--accent-primary)]" />
+                      <FontAwesomeIcon icon={faBolt} className="size-[19px] text-[var(--accent-primary)]" />
                     ) : (
-                      <Sparkles className="size-[19px] text-[var(--accent-primary)]" />
+                      <FontAwesomeIcon icon={faSparkles} className="size-[19px] text-[var(--accent-primary)]" />
                     )}
                   </div>
                   <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -297,7 +306,7 @@ export function AccountModal({ open, onOpenChange, account, startCheckoutOnOpen 
                       disabled={!personalOrgId || busy}
                       onClick={startCheckout}
                     >
-                      <Zap className="size-3.5" />
+                      <FontAwesomeIcon icon={faBolt} className="size-3.5" />
                       {busy ? "Starting…" : "Upgrade to Pro"}
                     </Button>
                   )}
@@ -326,7 +335,7 @@ export function AccountModal({ open, onOpenChange, account, startCheckoutOnOpen 
                             key={feat}
                             className="flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] bg-white/[0.03] px-2 py-1"
                           >
-                            <Lock className="size-3 text-[var(--fg-tertiary)]" />
+                            <FontAwesomeIcon icon={faLock} className="size-3 text-[var(--fg-tertiary)]" />
                             <span className="text-xs text-[var(--fg-secondary)]">{feat}</span>
                           </div>
                         ))}
@@ -345,7 +354,7 @@ export function AccountModal({ open, onOpenChange, account, startCheckoutOnOpen 
               className="text-[var(--fg-secondary)]"
               onClick={() => account.signOut()}
             >
-              <LogOut className="size-3.5" />
+              <FontAwesomeIcon icon={faRightFromBracket} className="size-3.5" />
               Sign out
             </Button>
             <Button onClick={() => onOpenChange(false)}>Done</Button>

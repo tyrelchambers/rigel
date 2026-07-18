@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  Hourglass,
-  Gauge,
-  Copy,
-  MessageSquare,
-  Check,
-  Database,
-} from "lucide-react";
+  faHourglass,
+  faGauge,
+  faCopy,
+  faMessage,
+  faCheck,
+  faDatabase,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useCluster } from "@/store/cluster";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { Button } from "@/components/ui/button";
@@ -328,7 +329,7 @@ export default function RightSizingPanel() {
             className="flex items-center gap-2 rounded-md px-3 py-2 text-sm"
             style={{ color: "var(--fg-tertiary)" }}
           >
-            <Hourglass className="size-4 shrink-0 animate-pulse" style={{ color: "var(--accent-primary)" }} />
+            <FontAwesomeIcon icon={faHourglass} className="size-4 shrink-0 animate-pulse" style={{ color: "var(--accent-primary)" }} />
             Loading usage history…
           </div>
         )}
@@ -336,7 +337,7 @@ export default function RightSizingPanel() {
         {/* No metrics backend → prompt to install one (no in-browser fallback). */}
         {noBackend && (
           <div className="flex flex-col items-center gap-3 py-12 text-center" style={{ color: "var(--fg-tertiary)" }}>
-            <Database className="size-8" style={{ color: "var(--accent-primary)" }} />
+            <FontAwesomeIcon icon={faDatabase} className="size-8" style={{ color: "var(--accent-primary)" }} />
             <div>
               <p className="text-sm font-medium" style={{ color: "var(--fg-secondary)" }}>
                 No metrics backend connected
@@ -347,7 +348,7 @@ export default function RightSizingPanel() {
               </p>
             </div>
             <Button onClick={() => setInstallOpen(true)}>
-              <Database className="size-3.5" />
+              <FontAwesomeIcon icon={faDatabase} className="size-3.5" />
               Set up a metrics backend
             </Button>
           </div>
@@ -359,7 +360,7 @@ export default function RightSizingPanel() {
             className="flex items-start gap-2 rounded-md px-3 py-2 text-sm"
             style={{ background: "rgba(56, 189, 248,0.08)", border: "1px solid rgba(56, 189, 248,0.2)" }}
           >
-            <Hourglass className="mt-0.5 size-4 shrink-0" style={{ color: "var(--accent-primary)" }} />
+            <FontAwesomeIcon icon={faHourglass} className="mt-0.5 size-4 shrink-0" style={{ color: "var(--accent-primary)" }} />
             <div>
               <div className="font-medium text-xs" style={{ color: "#d4b8f0" }}>
                 Collecting usage history — recommendations need ~{MIN_HOURS}h of data
@@ -375,7 +376,7 @@ export default function RightSizingPanel() {
         {/* No workloads to analyze (backend present, not warming). */}
         {usingBackend && !isWarmingUp && filtered.length === 0 && (
           <div className="flex flex-col items-center gap-2 py-12 text-center" style={{ color: "var(--fg-tertiary)" }}>
-            <Gauge className="size-8" />
+            <FontAwesomeIcon icon={faGauge} className="size-8" />
             <p className="text-sm font-medium">No workloads to analyze</p>
             <p className="text-2xs">Nothing matches the current namespace or search.</p>
           </div>
@@ -614,11 +615,11 @@ function ContainerDetail({
       {hasSuggestion && (
         <div className="mt-3 flex items-center justify-end gap-1">
           <Button variant="ghost" size="sm" onClick={copy} title="Copy YAML snippet">
-            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+            {copied ? <FontAwesomeIcon icon={faCheck} className="size-3.5" /> : <FontAwesomeIcon icon={faCopy} className="size-3.5" />}
             {copied ? "Copied" : "Copy"}
           </Button>
           <Button variant="ghost" size="sm" onClick={onAskClaude} title="Discuss in chat">
-            <MessageSquare className="size-3.5" />
+            <FontAwesomeIcon icon={faMessage} className="size-3.5" />
             Ask Claude
           </Button>
           <Button variant="default" size="sm" onClick={onApply} title="Apply suggested resources">

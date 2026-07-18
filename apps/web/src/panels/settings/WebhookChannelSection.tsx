@@ -4,7 +4,12 @@
 // and the /api/channels test-send proxy (see @rigel/k8s CHANNELS descriptor).
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, Check, Unplug } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faTriangleExclamation,
+  faCheck,
+  faPlugCircleXmark,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Button } from "@/components/ui/button";
 import { useAssistantAction, useChannelTest } from "@/lib/api";
 import { CHANNELS } from "@rigel/k8s";
@@ -147,7 +152,7 @@ export function WebhookChannelSection({
               disabled={setChannel.isPending}
               className="flex items-center gap-[7px] transition-opacity hover:opacity-80 disabled:opacity-50"
             >
-              <Unplug className="size-[14px] text-destructive" />
+              <FontAwesomeIcon icon={faPlugCircleXmark} className="size-[14px] text-destructive" />
               <span className="text-xs font-medium text-destructive">Disconnect</span>
             </button>
           )}
@@ -195,13 +200,13 @@ export function WebhookChannelSection({
           )}
           {testResult && (
             <span className="flex items-center gap-1 text-xs text-[var(--status-running)]">
-              <Check className="h-3.5 w-3.5" /> {testResult}
+              <FontAwesomeIcon icon={faCheck} className="h-3.5 w-3.5" /> {testResult}
             </span>
           )}
         </div>
         {error && (
           <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span className="select-text">{error}</span>
           </div>
         )}

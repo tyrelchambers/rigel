@@ -1,5 +1,10 @@
 import { useState } from "react";
-import { Copy, Check, ExternalLink } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faCopy,
+  faCheck,
+  faArrowUpRightFromSquare,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Button } from "@/components/ui/button";
 import { useStopForward } from "@/lib/api";
 import { formatForwardLabel, type ActiveForward } from "./portForward";
@@ -66,7 +71,7 @@ export function ForwardRow({ forward }: { forward: ActiveForward }) {
             className="flex items-center gap-1 font-mono text-primary hover:underline"
           >
             {hostPort}
-            <ExternalLink className="size-3" />
+            <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="size-3" />
           </a>
           <Button
             variant="ghost"
@@ -75,7 +80,7 @@ export function ForwardRow({ forward }: { forward: ActiveForward }) {
             aria-label="Copy local address"
             title="Copy"
           >
-            {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+            {copied ? <FontAwesomeIcon icon={faCheck} className="size-3" /> : <FontAwesomeIcon icon={faCopy} className="size-3" />}
           </Button>
         </span>
       )}

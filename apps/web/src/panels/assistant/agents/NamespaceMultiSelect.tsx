@@ -3,7 +3,8 @@
 // the user never has to type a namespace by hand. Empty selection means "all".
 // Controlled: value (string[]) + onChange.
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, Check, X, Search } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faChevronDown, faCheck, faXmark, faMagnifyingGlass } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 
@@ -62,7 +63,8 @@ export function NamespaceMultiSelect({
                 className="inline-flex items-center gap-1 rounded border bg-muted px-1.5 py-0.5 font-mono text-xs"
               >
                 {ns}
-                <X
+                <FontAwesomeIcon
+                  icon={faXmark}
                   className="size-3 text-muted-foreground hover:text-foreground"
                   role="button"
                   aria-label={`Remove ${ns}`}
@@ -75,7 +77,7 @@ export function NamespaceMultiSelect({
             ))
           )}
         </span>
-        <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+        <FontAwesomeIcon icon={faChevronDown} className="size-4 shrink-0 text-muted-foreground" />
       </button>
 
       {open && (
@@ -84,7 +86,7 @@ export function NamespaceMultiSelect({
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div className="absolute left-0 z-50 mt-1 w-full overflow-hidden rounded-md border bg-popover shadow-lg">
             <div className="flex items-center gap-2 border-b px-2.5 py-2">
-              <Search className="size-3.5 shrink-0 text-muted-foreground" />
+              <FontAwesomeIcon icon={faMagnifyingGlass} className="size-3.5 shrink-0 text-muted-foreground" />
               <input
                 autoFocus
                 value={query}
@@ -129,7 +131,7 @@ function Row({
       onClick={onSelect}
       className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors hover:bg-accent"
     >
-      <Check className={`size-3.5 shrink-0 ${selected ? "text-primary" : "text-transparent"}`} />
+      <FontAwesomeIcon icon={faCheck} className={`size-3.5 shrink-0 ${selected ? "text-primary" : "text-transparent"}`} />
       <span className={`${mono ? "font-mono" : ""} ${selected ? "font-semibold" : ""}`}>{label}</span>
     </button>
   );

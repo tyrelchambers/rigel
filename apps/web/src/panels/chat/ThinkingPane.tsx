@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faChevronRight } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Loader } from "@/components/Loader";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { cn } from "@/lib/utils";
@@ -58,7 +59,8 @@ export function ThinkingPane({ liveThinking, turnStartedAt }: Props) {
         <span>{seconds}s</span>
         <span>· esc to interrupt</span>
         {hasThinking && (
-          <ChevronRight
+          <FontAwesomeIcon
+            icon={faChevronRight}
             className={cn("ml-auto size-3.5 transition-transform", open && "rotate-90")}
           />
         )}

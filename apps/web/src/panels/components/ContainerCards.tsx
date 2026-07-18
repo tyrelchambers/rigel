@@ -1,5 +1,6 @@
 import { type ReactNode } from "react";
-import { Box, Cpu, MemoryStick } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCube, faMicrochip, faMemory } from "@awesome.me/kit-6050953220/icons/classic/solid";
 
 /** Minimal shape of a k8s container as it appears in a raw pod template spec. */
 export interface RawContainer {
@@ -52,7 +53,7 @@ export function ContainerCards({ containers }: { containers: ContainerSummary[] 
             className="flex items-center gap-2 px-2.5 py-1.5"
             style={{ background: "#101014", borderBottom: "1px solid #26272B" }}
           >
-            <Box className="size-3 shrink-0 text-muted-foreground" />
+            <FontAwesomeIcon icon={faCube} className="size-3 shrink-0 text-muted-foreground" />
             <span className="font-mono font-medium text-primary">{c.name}</span>
             {c.ports.length > 0 && (
               <span className="ml-auto font-mono text-3xs text-muted-foreground">
@@ -64,8 +65,8 @@ export function ContainerCards({ containers }: { containers: ContainerSummary[] 
           <div className="space-y-2 px-2.5 py-2">
             <div className="font-mono text-2xs text-muted-foreground break-all">{c.image}</div>
             <div className="grid grid-cols-2 gap-1.5">
-              <ResourceCell icon={<Cpu className="size-3 shrink-0 text-muted-foreground" />} label="CPU" req={c.cpuReq} lim={c.cpuLim} />
-              <ResourceCell icon={<MemoryStick className="size-3 shrink-0 text-muted-foreground" />} label="MEM" req={c.memReq} lim={c.memLim} />
+              <ResourceCell icon={<FontAwesomeIcon icon={faMicrochip} className="size-3 shrink-0 text-muted-foreground" />} label="CPU" req={c.cpuReq} lim={c.cpuLim} />
+              <ResourceCell icon={<FontAwesomeIcon icon={faMemory} className="size-3 shrink-0 text-muted-foreground" />} label="MEM" req={c.memReq} lim={c.memLim} />
             </div>
           </div>
         </div>

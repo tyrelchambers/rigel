@@ -2,10 +2,15 @@ import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router";
+import { config } from "@fortawesome/fontawesome-svg-core";
 import { queryClient } from "./lib/queryClient";
 import App from "./App";
 import { SplashScreen } from "./components/SplashScreen";
 import "./index.css";
+
+// FA's CSS is imported via index.css in the `base` layer so Tailwind size-*
+// utilities win; stop the library from also injecting it unlayered at runtime.
+config.autoAddCss = false;
 
 // One-time rebrand migration: copy legacy `helmsman.*` / `helmsman_*` localStorage
 // keys to their `rigel.*` / `rigel_*` names so saved UI state (sidebar collapse,

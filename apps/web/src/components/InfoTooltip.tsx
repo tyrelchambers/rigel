@@ -1,4 +1,5 @@
-import { Info } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCircleInfo } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import type { ReactNode } from "react";
 
 import {
@@ -37,7 +38,7 @@ export function InfoTooltip({
               aria-label={ariaLabel}
               className="inline-flex shrink-0 items-center justify-center rounded-full text-[color:var(--fg-tertiary)] transition-colors outline-none hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
             >
-              <Info aria-hidden className="size-[17px]" />
+              <FontAwesomeIcon icon={faCircleInfo} aria-hidden className="size-[17px]" />
             </button>
           }
         />

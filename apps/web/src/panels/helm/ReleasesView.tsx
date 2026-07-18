@@ -12,7 +12,16 @@ import {
 } from "@/components/ui/dialog";
 import { YamlEditor } from "@/components/YamlEditorLazy";
 import { SectionLabel } from "@/panels/components/MetaCard";
-import { ChevronRight, CircleArrowUp, FileCode, Lock, Package, Trash2, Undo2 } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faChevronRight,
+  faCircleArrowUp,
+  faFileCode,
+  faLock,
+  faBox,
+  faTrashCan,
+  faArrowRotateLeft,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { compactAge } from "@/lib/time";
 import { buildHelmRollbackArgs, buildHelmUninstallArgs, type HelmRelease, type HelmRevision } from "@rigel/k8s/src/helm";
 import { releasesFromSecrets, releaseStatusTone, formatTimestamp, type StatusTone } from "./releases";
@@ -162,7 +171,7 @@ function ReleaseCard({ release, onClick }: { release: HelmRelease; onClick: () =
     >
       <div className="flex w-full items-center gap-2.5">
         <div className="flex size-[34px] shrink-0 items-center justify-center rounded-[9px] border border-[var(--border-subtle)] bg-[var(--surface-sunken)]">
-          <Package className="size-[17px] text-[var(--fg-secondary)]" aria-hidden />
+          <FontAwesomeIcon icon={faBox} className="size-[17px] text-[var(--fg-secondary)]" aria-hidden />
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="truncate text-base font-semibold text-[var(--fg-primary)]">{release.name}</span>
@@ -188,7 +197,7 @@ function ReleaseCard({ release, onClick }: { release: HelmRelease; onClick: () =
         </div>
         <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-[var(--accent-primary)]">
           Details
-          <ChevronRight className="size-3.5" aria-hidden />
+          <FontAwesomeIcon icon={faChevronRight} className="size-3.5" aria-hidden />
         </span>
       </div>
     </button>
@@ -249,19 +258,19 @@ function ReleaseDetail({
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <Button size="sm" onClick={onUpgrade}><CircleArrowUp />Upgrade</Button>
+          <Button size="sm" onClick={onUpgrade}><FontAwesomeIcon icon={faCircleArrowUp} />Upgrade</Button>
           <Button
             size="sm"
             variant="outline"
             disabled={previousRevision == null}
             onClick={() => previousRevision != null && onRollback(previousRevision)}
           >
-            <Undo2 />Rollback
+            <FontAwesomeIcon icon={faArrowRotateLeft} />Rollback
           </Button>
           <Button size="sm" variant={showManifest ? "muted" : "outline"} onClick={() => setShowManifest((v) => !v)}>
-            <FileCode />Manifest
+            <FontAwesomeIcon icon={faFileCode} />Manifest
           </Button>
-          <Button size="sm" variant="destructive" onClick={onUninstall}><Trash2 />Uninstall</Button>
+          <Button size="sm" variant="destructive" onClick={onUninstall}><FontAwesomeIcon icon={faTrashCan} />Uninstall</Button>
         </div>
       </div>
 
@@ -315,7 +324,7 @@ function ReleaseDetail({
                       className="text-[var(--fg-tertiary)] hover:text-[var(--fg-primary)]"
                       onClick={(e) => { e.stopPropagation(); onRollback(rv.revision); }}
                     >
-                      <Undo2 className="size-3.5" />
+                      <FontAwesomeIcon icon={faArrowRotateLeft} className="size-3.5" />
                     </button>
                   )}
                 </div>
@@ -330,7 +339,7 @@ function ReleaseDetail({
         <div className="flex items-center justify-between gap-2">
           <SectionLabel>Current values</SectionLabel>
           <span className="inline-flex items-center gap-1.5 text-2xs text-[var(--fg-tertiary)]">
-            <Lock className="size-3" />read-only
+            <FontAwesomeIcon icon={faLock} className="size-3" />read-only
           </span>
         </div>
         <div className="overflow-hidden rounded-md border border-[var(--border-subtle)]">

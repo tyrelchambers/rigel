@@ -1,4 +1,5 @@
-import { Sparkles } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faSparkles } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import type { CatalogApp } from "@rigel/catalog";
 import { Button } from "@/components/ui/button";
 
@@ -22,7 +23,7 @@ export function GeneratingStep({
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-sm">
-        <Sparkles className="size-5 text-primary" />
+        <FontAwesomeIcon icon={faSparkles} className="size-5 text-primary" />
         <span className="font-medium">{app.name} needs a generated manifest</span>
       </div>
       <p className="text-sm text-muted-foreground">

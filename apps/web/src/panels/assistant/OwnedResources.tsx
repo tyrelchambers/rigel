@@ -7,7 +7,8 @@
 // additionally watches the RBAC kinds while the tab is open. Built to Pencil frame
 // "Assistant — Overview (improved)" (Resources block).
 import { useEffect } from "react";
-import { ArrowUpRight, Boxes } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faArrowUpRight, faBoxesStacked } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useNavigate } from "react-router";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
@@ -172,7 +173,7 @@ export function OwnedResources() {
                 {r.kind}
               </span>
               <span className="truncate font-mono text-xs text-[var(--fg-primary)]">{r.name}</span>
-              <ArrowUpRight className="ml-auto size-[15px] shrink-0 text-[var(--fg-tertiary)]" />
+              <FontAwesomeIcon icon={faArrowUpRight} className="ml-auto size-[15px] shrink-0 text-[var(--fg-tertiary)]" />
             </button>
           ))}
         </div>
@@ -183,7 +184,7 @@ export function OwnedResources() {
   return (
     <section className="flex flex-col gap-4">
       <SectionHeader
-        icon={Boxes}
+        icon={faBoxesStacked}
         title={
           <>
             Resources

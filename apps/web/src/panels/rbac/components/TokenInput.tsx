@@ -1,6 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, Plus } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faXmark, faPlus } from "@awesome.me/kit-6050953220/icons/classic/solid";
 
 interface Props {
   label: string;
@@ -77,7 +78,7 @@ export function TokenInput({ label, tokens, onChange, danger, placeholder, sugge
             >
               {t}
               <button type="button" aria-label={`Remove ${t}`} onClick={() => onChange(tokens.filter((x) => x !== t))}>
-                <X className="size-[11px]" style={{ color: isDanger ? "#F87171" : "#6B6B73" }} />
+                <FontAwesomeIcon icon={faXmark} className="size-[11px]" style={{ color: isDanger ? "#F87171" : "#6B6B73" }} />
               </button>
             </span>
           );
@@ -87,7 +88,7 @@ export function TokenInput({ label, tokens, onChange, danger, placeholder, sugge
           className="relative flex items-center gap-[4px] rounded-[5px] border px-[8px] py-[3px]"
           style={{ borderColor: "#26272B" }}
         >
-          <Plus className="size-[11px]" style={{ color: "#6B6B73" }} />
+          <FontAwesomeIcon icon={faPlus} className="size-[11px]" style={{ color: "#6B6B73" }} />
           <input
             ref={inputRef}
             value={draft}

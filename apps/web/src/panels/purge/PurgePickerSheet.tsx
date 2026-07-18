@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Trash2, Search } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faTrashCan, faMagnifyingGlass } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import {
   Dialog,
   DialogContent,
@@ -63,7 +64,7 @@ export function PurgePickerSheet({ open, onClose, onPick }: PurgePickerSheetProp
       <DialogContent className="max-h-[85vh] max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Trash2 className="size-4 text-destructive" />
+            <FontAwesomeIcon icon={faTrashCan} className="size-4 text-destructive" />
             Purge an app
           </DialogTitle>
         </DialogHeader>
@@ -76,7 +77,7 @@ export function PurgePickerSheet({ open, onClose, onPick }: PurgePickerSheetProp
 
           {/* Search */}
           <div className="flex items-center gap-2 rounded-md border bg-background px-2.5">
-            <Search className="size-3.5 text-muted-foreground" />
+            <FontAwesomeIcon icon={faMagnifyingGlass} className="size-3.5 text-muted-foreground" />
             <input
               type="text"
               value={search}

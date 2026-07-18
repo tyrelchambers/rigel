@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Box, Cloud, FileText, ChevronRight } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCube, faCloud, faFileLines, faChevronRight } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogIcon, DialogTitle } from "@/components/ui/dialog";
@@ -52,7 +53,7 @@ function OptionCard({
         </span>
         <span className="text-xs text-[var(--fg-secondary)]">{desc}</span>
       </span>
-      <ChevronRight className="size-4 shrink-0 text-[var(--fg-tertiary)]" />
+      <FontAwesomeIcon icon={faChevronRight} className="size-4 shrink-0 text-[var(--fg-tertiary)]" />
     </button>
   );
 }
@@ -78,19 +79,19 @@ export function ClusterOnboarding({ onSkip }: { onSkip: () => void }) {
         <div className="flex w-full flex-col gap-3">
           <OptionCard
             hero
-            icon={<Box className="size-5" />}
+            icon={<FontAwesomeIcon icon={faCube} className="size-5" />}
             title="Create a local cluster"
             desc="Spin up a kind or k3d cluster on your machine in about a minute. Perfect for trying Rigel — just needs Docker."
             onClick={() => setOpen("create")}
           />
           <OptionCard
-            icon={<Cloud className="size-5" />}
+            icon={<FontAwesomeIcon icon={faCloud} className="size-5" />}
             title="Connect a cloud cluster"
             desc="Already running on EKS, GKE, AKS, or DigitalOcean? Connect it with your provider login."
             onClick={() => setOpen("connect")}
           />
           <OptionCard
-            icon={<FileText className="size-5" />}
+            icon={<FontAwesomeIcon icon={faFileLines} className="size-5" />}
             title="Import a kubeconfig"
             desc="Paste a kubeconfig a teammate already shared with you."
             onClick={() => setOpen("import")}
@@ -121,7 +122,7 @@ export function ClusterOnboarding({ onSkip }: { onSkip: () => void }) {
         <DialogContent>
           <DialogHeader>
             <DialogIcon>
-              <FileText className="size-[17px]" />
+              <FontAwesomeIcon icon={faFileLines} className="size-[17px]" />
             </DialogIcon>
             <DialogTitle>Import a kubeconfig</DialogTitle>
           </DialogHeader>

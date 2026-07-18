@@ -1,7 +1,8 @@
 // NeedsYouTab — queued suggestions + live cluster issues.
 
 import { useNavigate } from "react-router";
-import { AlertTriangle, BellOff } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faTriangleExclamation, faBellSlash } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Button } from "@/components/ui/button";
 import { queuedSuggestionId } from "@rigel/k8s";
 import type { AssistantQueuedSuggestion } from "@rigel/k8s";
@@ -90,7 +91,7 @@ export function NeedsYouTab() {
                   }
                 }}
               >
-                <AlertTriangle className="size-3.5 shrink-0 text-red-600 dark:text-red-400" />
+                <FontAwesomeIcon icon={faTriangleExclamation} className="size-3.5 shrink-0 text-red-600 dark:text-red-400" />
                 <span className="truncate font-mono text-sm font-medium">{issue.location}</span>
                 <span className="ml-auto font-mono text-xs text-amber-600 dark:text-amber-400">
                   {issue.reason}
@@ -105,7 +106,7 @@ export function NeedsYouTab() {
                     run({ action: "silence", namespace: ns, fingerprint: issue.fingerprint });
                   }}
                 >
-                  <BellOff className="size-3.5 text-muted-foreground" />
+                  <FontAwesomeIcon icon={faBellSlash} className="size-3.5 text-muted-foreground" />
                 </Button>
               </div>
             </Card>

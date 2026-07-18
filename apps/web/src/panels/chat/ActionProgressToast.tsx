@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, ChevronDown, ChevronUp, CircleCheck, LoaderCircle, X } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCircleExclamation, faChevronDown, faChevronUp, faCircleCheck, faSpinner, faXmark } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { toast } from "sonner";
 import { onActionEvent } from "@/lib/ws";
 
@@ -78,10 +79,10 @@ export function ActionProgressToast({ id, label, toastId }: Props) {
           style={{ background: CHIP_BG[status] }}
         >
           {status === "running" && (
-            <LoaderCircle size={15} className="animate-spin text-[var(--accent-primary)]" />
+            <FontAwesomeIcon icon={faSpinner} className="animate-spin text-[var(--accent-primary)] size-[15px]" />
           )}
-          {status === "done" && <CircleCheck size={15} className="text-[var(--status-running)]" />}
-          {status === "error" && <AlertCircle size={15} className="text-[var(--status-failed)]" />}
+          {status === "done" && <FontAwesomeIcon icon={faCircleCheck} className="text-[var(--status-running)] size-[15px]" />}
+          {status === "error" && <FontAwesomeIcon icon={faCircleExclamation} className="text-[var(--status-failed)] size-[15px]" />}
         </div>
 
         {/* Label + status subline */}
@@ -113,7 +114,7 @@ export function ActionProgressToast({ id, label, toastId }: Props) {
               onClick={() => setExpanded((v) => !v)}
               className="text-[var(--fg-tertiary)] transition-colors hover:text-[var(--fg-primary)]"
             >
-              {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              {expanded ? <FontAwesomeIcon icon={faChevronUp} className="size-[14px]" /> : <FontAwesomeIcon icon={faChevronDown} className="size-[14px]" />}
             </button>
           )}
           <button
@@ -124,7 +125,7 @@ export function ActionProgressToast({ id, label, toastId }: Props) {
             }}
             className="text-[var(--fg-tertiary)] transition-colors hover:text-[var(--fg-primary)]"
           >
-            <X size={14} />
+            <FontAwesomeIcon icon={faXmark} className="size-[14px]" />
           </button>
         </div>
       </div>

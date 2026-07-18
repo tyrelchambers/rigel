@@ -8,7 +8,8 @@ import {
   useState,
 } from "react";
 import type { ComponentProps, ReactNode } from "react";
-import { Brain, ChevronDown } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faBrain, faChevronDown } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import {
   Collapsible,
   CollapsibleContent,
@@ -109,9 +110,9 @@ export function ReasoningTrigger({ className, children, ...props }: ReasoningTri
     >
       {children ?? (
         <>
-          <Brain className="size-3" />
+          <FontAwesomeIcon icon={faBrain} className="size-3" />
           {thinkingMessage(isStreaming, duration)}
-          <ChevronDown className={cn("size-3 transition-transform", isOpen && "rotate-180")} />
+          <FontAwesomeIcon icon={faChevronDown} className={cn("size-3 transition-transform", isOpen && "rotate-180")} />
         </>
       )}
     </CollapsibleTrigger>

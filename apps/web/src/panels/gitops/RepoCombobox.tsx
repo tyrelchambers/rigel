@@ -1,7 +1,8 @@
 // Searchable repo list — type to filter, click to pick (client-side over the
 // already-fetched repos).
 import { useMemo, useState } from "react";
-import { Check } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCheck } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import type { GithubRepo } from "./gitApi";
 
 export function RepoCombobox({ repos, value, onChange, error }: { repos: GithubRepo[]; value: string; onChange: (fullName: string) => void; error: string | null }) {
@@ -40,7 +41,7 @@ export function RepoCombobox({ repos, value, onChange, error }: { repos: GithubR
                   className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left font-mono text-xs hover:bg-white/[0.04]"
                   style={sel ? { background: "var(--accent-primary)22" } : undefined}
                 >
-                  {sel ? <Check className="size-3.5 shrink-0" style={{ color: "var(--accent-primary)" }} /> : <span className="w-3.5 shrink-0" />}
+                  {sel ? <FontAwesomeIcon icon={faCheck} className="size-3.5 shrink-0" style={{ color: "var(--accent-primary)" }} /> : <span className="w-3.5 shrink-0" />}
                   <span className="truncate">{r.fullName}</span>
                   {r.private && <span className="ml-auto shrink-0 text-3xs text-muted-foreground">private</span>}
                 </button>

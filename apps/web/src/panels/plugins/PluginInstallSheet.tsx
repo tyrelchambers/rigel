@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { Download, ChevronUp, ChevronDown, Timer, Code } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faDownload,
+  faChevronUp,
+  faChevronDown,
+  faStopwatch,
+  faCode,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import type { ClusterAddon, AddonField } from "@rigel/catalog";
 import { buildHelmValues, extraManifestYaml, extraManifestEnabled } from "@rigel/catalog";
 import { Dialog, DialogContent, DialogHeader, DialogIcon, DialogTitle, DialogBody, DialogFooter } from "@/components/ui/dialog";
@@ -86,7 +93,7 @@ export function PluginInstallSheet({ addon, open, onClose, onDone }: {
             background={false}
             className="size-[34px] rounded-lg bg-[var(--accent-dim)] text-[var(--accent-primary)] ring-1 ring-[color-mix(in_srgb,var(--accent-primary)_40%,transparent)]"
           >
-            <Icon className="size-[18px]" />
+            <FontAwesomeIcon icon={Icon} className="size-[18px]" />
           </DialogIcon>
           <div className="flex min-w-0 flex-col gap-0.5">
             <DialogTitle>{`Install ${addon.name}`}</DialogTitle>
@@ -110,7 +117,7 @@ export function PluginInstallSheet({ addon, open, onClose, onDone }: {
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={pending}>Cancel</Button>
           <Button onClick={install} disabled={pending || noTrigger}>
-            {pending ? "Installing…" : <><Download className="size-4" /> Install</>}
+            {pending ? "Installing…" : <><FontAwesomeIcon icon={faDownload} className="size-4" /> Install</>}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -230,11 +237,11 @@ function IntervalControl({ verb, value, onChange }: {
           />
           <div className="flex h-full w-7 flex-col border-l border-[var(--border-subtle)]">
             <button type="button" aria-label="Increase interval" onClick={() => setAmount(amount + 1)} className="flex flex-1 items-center justify-center text-[var(--fg-tertiary)] hover:text-[var(--fg-primary)]">
-              <ChevronUp className="size-3" />
+              <FontAwesomeIcon icon={faChevronUp} className="size-3" />
             </button>
             <div className="h-px bg-[var(--border-subtle)]" />
             <button type="button" aria-label="Decrease interval" onClick={() => setAmount(amount - 1)} className="flex flex-1 items-center justify-center text-[var(--fg-tertiary)] hover:text-[var(--fg-primary)]">
-              <ChevronDown className="size-3" />
+              <FontAwesomeIcon icon={faChevronDown} className="size-3" />
             </button>
           </div>
         </div>
@@ -250,7 +257,7 @@ function IntervalControl({ verb, value, onChange }: {
             <option value="hours">hours</option>
             <option value="days">days</option>
           </select>
-          <ChevronDown className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-[var(--fg-tertiary)]" />
+          <FontAwesomeIcon icon={faChevronDown} className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-[var(--fg-tertiary)]" />
         </div>
       </div>
 
@@ -276,11 +283,11 @@ function IntervalControl({ verb, value, onChange }: {
       </div>
 
       <div className="flex items-center gap-2">
-        <Timer className="size-[13px] shrink-0 text-[var(--fg-tertiary)]" aria-hidden />
+        <FontAwesomeIcon icon={faStopwatch} className="size-[13px] shrink-0 text-[var(--fg-tertiary)]" aria-hidden />
         <span className="text-xs text-[var(--fg-tertiary)]">{verb} {humanEvery(amount, unit)}.</span>
         <span className="flex-1" />
         <span className="inline-flex items-center gap-1.5 rounded-[4px] border border-[var(--border-subtle)] bg-white/[0.03] px-2 py-0.5" title="Cron expression">
-          <Code className="size-[11px] text-[var(--fg-tertiary)]" aria-hidden />
+          <FontAwesomeIcon icon={faCode} className="size-[11px] text-[var(--fg-tertiary)]" aria-hidden />
           <span className="font-mono text-2xs text-[var(--fg-tertiary)]">{value}</span>
         </span>
       </div>

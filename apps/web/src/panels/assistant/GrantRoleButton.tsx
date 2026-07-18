@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ShieldPlus } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faShieldPlus } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import type { ActionBlock } from "@/lib/api";
@@ -86,7 +87,7 @@ export function GrantRoleButton({ namespace }: Props) {
   return (
     <>
       <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
-        <ShieldPlus className="size-3.5" />
+        <FontAwesomeIcon icon={faShieldPlus} className="size-3.5" />
         Grant a role
       </Button>
       {open && (

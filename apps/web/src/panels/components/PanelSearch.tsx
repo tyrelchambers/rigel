@@ -5,7 +5,8 @@
  * leading search icon and a borderless text input. Controlled via `value` /
  * `onValueChange` so panels keep owning their filter state.
  */
-import { Search } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faMagnifyingGlass } from "@awesome.me/kit-6050953220/icons/classic/solid";
 
 interface PanelSearchProps {
   value: string;
@@ -27,7 +28,7 @@ export function PanelSearch({
     <div
       className={`flex items-center gap-[9px] rounded-[6px] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[13px] py-[9px] focus-within:ring-2 focus-within:ring-ring/50 ${className}`}
     >
-      <Search aria-hidden className="size-[15px] shrink-0 text-[color:var(--fg-tertiary)]" />
+      <FontAwesomeIcon icon={faMagnifyingGlass} aria-hidden className="size-[15px] shrink-0 text-[color:var(--fg-tertiary)]" />
       <input
         type="text"
         value={value}

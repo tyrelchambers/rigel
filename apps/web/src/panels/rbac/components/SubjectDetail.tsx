@@ -1,4 +1,11 @@
-import { Layers, Box, ShieldAlert, MessageSquare } from "lucide-react";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faLayerGroup,
+  faCube,
+  faShieldExclamation,
+  faMessage,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import type { Grant, ListSubject } from "../types";
 import { grantRisk } from "../risk";
 import { BindingCard } from "./BindingCard";
@@ -22,14 +29,14 @@ function SummaryItem({
   text,
   danger,
 }: {
-  Icon: typeof Layers;
+  Icon: IconDefinition;
   text: string;
   danger?: boolean;
 }) {
   const color = danger ? "text-[var(--status-failed)]" : "text-[var(--fg-primary)]";
   return (
     <div className="flex items-center gap-2">
-      <Icon className={`size-[15px] ${color}`} />
+      <FontAwesomeIcon icon={Icon} className={`size-[15px] ${color}`} />
       <span className={`text-xs font-semibold ${color}`}>{text}</span>
     </div>
   );
@@ -81,18 +88,18 @@ export function SubjectDetail({
           onClick={() => onAsk(subject)}
           className="flex shrink-0 items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-strong)] px-[15px] py-[9px] text-xs text-[var(--fg-primary)] hover:bg-white/[0.04]"
         >
-          <MessageSquare className="size-[14px]" />
+          <FontAwesomeIcon icon={faMessage} className="size-[14px]" />
           Ask Rigel about access
         </button>
       </div>
 
       <div className="flex flex-wrap items-center gap-x-[22px] gap-y-2 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-4 py-3">
-        <SummaryItem Icon={Layers} text={plural(grants.length, "role bound", "roles bound")} />
+        <SummaryItem Icon={faLayerGroup} text={plural(grants.length, "role bound", "roles bound")} />
         <span className="h-4 w-px bg-[var(--border-strong)]" />
-        <SummaryItem Icon={Box} text={scopeText} />
+        <SummaryItem Icon={faCube} text={scopeText} />
         <span className="h-4 w-px bg-[var(--border-strong)]" />
         <SummaryItem
-          Icon={ShieldAlert}
+          Icon={faShieldExclamation}
           text={plural(dangerousCount, "dangerous grant", "dangerous grants")}
           danger={dangerousCount > 0}
         />

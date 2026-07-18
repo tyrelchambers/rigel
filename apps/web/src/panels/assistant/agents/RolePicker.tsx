@@ -2,7 +2,8 @@
 // role (Worker or Supervisor). Controlled: value + onChange. Reuses the chat's
 // AgentGlyph + useAgentModels so the choices match the chat exactly.
 import { useEffect, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faChevronDown } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -74,7 +75,7 @@ export function RolePicker({
               <AgentGlyph id={provider} size={16} />
               {providerLabel}
             </span>
-            <ChevronDown className="size-4 shrink-0 text-primary" />
+            <FontAwesomeIcon icon={faChevronDown} className="size-4 shrink-0 text-primary" />
           </DropdownMenuTrigger>
           <DropdownMenuContent>
             {PROVIDER_IDS.map((id) => (
@@ -97,7 +98,7 @@ export function RolePicker({
             aria-label="Model"
           >
             <span className="truncate">{value.model || "Select a model"}</span>
-            <ChevronDown className="size-4 shrink-0 text-primary" />
+            <FontAwesomeIcon icon={faChevronDown} className="size-4 shrink-0 text-primary" />
           </DropdownMenuTrigger>
           <DropdownMenuContent>
             {models.map((m) => (

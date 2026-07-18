@@ -8,23 +8,25 @@
  *   (↑/↓ to move, Enter/Tab to pick, Esc to dismiss).
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
-  Box,
-  Layers,
-  Server,
-  Check,
-  ChevronDown,
-  Search,
-  Network,
-  Globe,
-  Lock,
-  FileText,
-  Database,
-  ClipboardList,
-  Clock,
-  HardDrive,
-  Boxes,
-} from "lucide-react";
+  faCube,
+  faLayerGroup,
+  faServer,
+  faCheck,
+  faChevronDown,
+  faMagnifyingGlass,
+  faNetworkWired,
+  faGlobe,
+  faLock,
+  faFileLines,
+  faDatabase,
+  faClipboardList,
+  faClock,
+  faHardDrive,
+  faBoxesStacked,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import {
   effortName,
   modelLabel,
@@ -96,26 +98,26 @@ interface PaneComposerProps {
 /** Show a search box for long model lists (always for opencode's provider/model). */
 const MODEL_SEARCH_THRESHOLD = 8;
 
-const MENTION_ICON: Record<MentionKind, typeof Box> = {
-  pod: Box,
-  deployment: Layers,
-  node: Server,
+const MENTION_ICON: Record<MentionKind, IconDefinition> = {
+  pod: faCube,
+  deployment: faLayerGroup,
+  node: faServer,
 };
 
-const DESCRIBE_ICON: Record<DescribeIconKey, typeof Box> = {
-  pod: Box,
-  deployment: Layers,
-  service: Network,
-  ingress: Globe,
-  secret: Lock,
-  configmap: FileText,
-  statefulset: Database,
-  daemonset: Layers,
-  job: ClipboardList,
-  cronjob: Clock,
-  pvc: HardDrive,
-  node: Server,
-  namespace: Boxes,
+const DESCRIBE_ICON: Record<DescribeIconKey, IconDefinition> = {
+  pod: faCube,
+  deployment: faLayerGroup,
+  service: faNetworkWired,
+  ingress: faGlobe,
+  secret: faLock,
+  configmap: faFileLines,
+  statefulset: faDatabase,
+  daemonset: faLayerGroup,
+  job: faClipboardList,
+  cronjob: faClock,
+  pvc: faHardDrive,
+  node: faServer,
+  namespace: faBoxesStacked,
 };
 
 /**
@@ -358,7 +360,7 @@ export function PaneComposer({
                   onMouseEnter={() => setSel(i)}
                   style={popRowStyle(i === sel)}
                 >
-                  <Icon style={{ width: 12, height: 12, color: i === sel ? "var(--fg-inverse)" : "var(--fg-secondary)", flexShrink: 0 }} />
+                  <FontAwesomeIcon icon={Icon} style={{ width: 12, height: 12, color: i === sel ? "var(--fg-inverse)" : "var(--fg-secondary)", flexShrink: 0 }} />
                   <span
                     className="text-xs"
                     style={{
@@ -399,7 +401,7 @@ export function PaneComposer({
                     onMouseEnter={() => setSel(i)}
                     style={popRowStyle(i === sel)}
                   >
-                    <Icon style={{ width: 12, height: 12, color: i === sel ? "var(--fg-inverse)" : "var(--fg-secondary)", flexShrink: 0 }} />
+                    <FontAwesomeIcon icon={Icon} style={{ width: 12, height: 12, color: i === sel ? "var(--fg-inverse)" : "var(--fg-secondary)", flexShrink: 0 }} />
                     <span
                       className="text-xs"
                       style={{
@@ -439,7 +441,7 @@ export function PaneComposer({
 
             {showModelSearch && (
               <div style={modelSearchStyle}>
-                <Search size={13} style={{ color: "var(--fg-tertiary)", flexShrink: 0 }} />
+                <FontAwesomeIcon icon={faMagnifyingGlass} className="size-[13px]" style={{ color: "var(--fg-tertiary)", flexShrink: 0 }} />
                 <input
                   type="text"
                   value={modelQuery}
@@ -472,7 +474,7 @@ export function PaneComposer({
                       <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {modelName(agentId, m)}
                       </span>
-                      {active && <Check style={checkStyle} />}
+                      {active && <FontAwesomeIcon icon={faCheck} style={checkStyle} />}
                     </button>
                   );
                 })
@@ -514,11 +516,11 @@ export function PaneComposer({
           <div style={modelMenuStyle}>
             <div style={modelSectionLabel}>CHAT SCOPE</div>
             <button type="button" onClick={() => { onScopeConfig({ mode: "active", picked: [] }); setScopeOpen(false); }} style={modelRowStyle(scopeConfig.mode === "active")}>
-              {scopeConfig.mode === "active" ? <Check style={checkStyle} /> : <span style={{ width: 12 }} />}
+              {scopeConfig.mode === "active" ? <FontAwesomeIcon icon={faCheck} style={checkStyle} /> : <span style={{ width: 12 }} />}
               Active cluster
             </button>
             <button type="button" onClick={() => { onScopeConfig({ mode: "all", picked: [] }); setScopeOpen(false); }} style={modelRowStyle(scopeConfig.mode === "all")}>
-              {scopeConfig.mode === "all" ? <Check style={checkStyle} /> : <span style={{ width: 12 }} />}
+              {scopeConfig.mode === "all" ? <FontAwesomeIcon icon={faCheck} style={checkStyle} /> : <span style={{ width: 12 }} />}
               All clusters
             </button>
             <div style={{ ...modelSectionLabel, marginTop: 6 }}>PICK CLUSTERS</div>
@@ -535,7 +537,7 @@ export function PaneComposer({
                   }}
                   style={modelRowStyle(picked)}
                 >
-                  {picked ? <Check style={checkStyle} /> : <span style={{ width: 12 }} />}
+                  {picked ? <FontAwesomeIcon icon={faCheck} style={checkStyle} /> : <span style={{ width: 12 }} />}
                   {name}
                 </button>
               );
@@ -584,7 +586,7 @@ export function PaneComposer({
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 140 }}>
               {modelConfig ? modelLabel(agentId, modelConfig.model) : "Model"}
             </span>
-            <ChevronDown size={11} style={{ color: "var(--fg-tertiary)", flexShrink: 0 }} />
+            <FontAwesomeIcon icon={faChevronDown} className="size-[11px]" style={{ color: "var(--fg-tertiary)", flexShrink: 0 }} />
           </button>
 
           {/* Scope picker — hidden when only one cluster is available */}
@@ -755,7 +757,7 @@ function modelRowStyle(active: boolean): React.CSSProperties {
   };
 }
 
-const checkStyle: React.CSSProperties = { width: 14, height: 14, color: "#38BDF8", flexShrink: 0 };
+const checkStyle = { width: 14, height: 14, color: "#38BDF8", flexShrink: 0 };
 
 const effortDividerStyle: React.CSSProperties = {
   height: 1,

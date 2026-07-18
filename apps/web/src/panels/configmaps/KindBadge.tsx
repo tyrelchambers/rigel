@@ -1,4 +1,5 @@
-import { ShieldCheck } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faShieldCheck } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { kindLabel, type ValueKind } from "./configmapsDisplay";
 
 // Detected value-kind badge, shared by the ConfigMap expanded-row detail and the
@@ -17,7 +18,7 @@ export function KindBadge({ kind }: { kind: ValueKind | "binary" }) {
     <span
       className={`inline-flex items-center gap-[5px] rounded-sm px-[8px] py-[2px] font-mono text-3xs tracking-[0.5px] ${toneClass}`}
     >
-      {kind === "certificate" && <ShieldCheck className="size-[11px]" />}
+      {kind === "certificate" && <FontAwesomeIcon icon={faShieldCheck} className="size-[11px]" />}
       {label}
     </span>
   );

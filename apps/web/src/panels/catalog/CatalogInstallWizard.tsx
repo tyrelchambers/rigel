@@ -36,6 +36,7 @@ import { ApplyingStep } from "./steps/ApplyingStep";
 import { VerifyingStep } from "./steps/VerifyingStep";
 import { DoneStep } from "./steps/DoneStep";
 import { FailedStep } from "./steps/FailedStep";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { iconFor } from "./icons";
 
 const STEP_LABEL: Record<WizardStep, string> = {
@@ -239,7 +240,7 @@ export function CatalogInstallWizard({
               style={{ background: "var(--border-subtle)", border: "1px solid #34353A" }}
               aria-hidden
             >
-              <Icon className="wizard-app-icon-glyph" />
+              <FontAwesomeIcon icon={Icon} className="wizard-app-icon-glyph" />
             </div>
             <div className="wizard-app-info">
               <DialogTitle className="wizard-title">Install {app.name}</DialogTitle>

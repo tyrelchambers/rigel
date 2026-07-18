@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRightLeft } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faArrowRightArrowLeft } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useCluster, filterByNamespace } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { handoffToChat } from "@/lib/chatHandoff";
@@ -253,7 +254,7 @@ export default function ServicesPanel() {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  <ArrowRightLeft className="size-2.5" />
+                  <FontAwesomeIcon icon={faArrowRightArrowLeft} className="size-2.5" />
                   Forwarding
                 </span>
               )}

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Lock } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faLock } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useAgents, useAssistantAction, type AssistantRequest } from "@/lib/api";
 import { useAssistant } from "../../assistant/useAssistant";
 import { AssistantConfigSection } from "../../assistant/agents/AssistantConfigSection";
@@ -37,7 +38,7 @@ export function AiAgentsTab() {
         </div>
         {!canConfigure && (
           <div className="flex items-center gap-2 rounded-md border border-primary bg-[var(--accent-dim)] px-3.5 py-3 text-sm text-foreground">
-            <Lock className="size-4 text-primary" />
+            <FontAwesomeIcon icon={faLock} className="size-4 text-primary" />
             {!connected
               ? "Connect an agent to configure the assistant."
               : "Install the assistant from the Assistant page to configure it."}

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Bell, Check } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faBell, faCheck } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { type SuggestedAlert } from "@/lib/actionBlocks";
 import { useAssistantAction } from "@/lib/api";
 
@@ -97,9 +98,9 @@ export function SuggestedAlertList({ alerts, namespace }: Props) {
               }}
             >
               {saved ? (
-                <Check size={11} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                <FontAwesomeIcon icon={faCheck} className="size-[11px]" style={{ flexShrink: 0 }} />
               ) : (
-                <Bell size={11} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                <FontAwesomeIcon icon={faBell} className="size-[11px]" style={{ flexShrink: 0 }} />
               )}
               <span style={{ flex: 1 }}>
                 {saved ? `Saved: ${alert.label}` : alert.label}

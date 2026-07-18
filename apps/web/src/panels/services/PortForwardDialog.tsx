@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { TriangleAlert } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faTriangleExclamation } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import {
   Dialog,
   DialogBody,
@@ -128,7 +129,7 @@ function ForwardForm({
 
         {/* Containerized-loopback caveat (docs/parity/portforward.md). */}
         <p className="flex gap-2 rounded-md bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
-          <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
+          <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5 size-3.5 shrink-0" />
           <span>
             Port forwarding runs inside the server container. The port 127.0.0.1:
             {localPort.trim() || "?"} is reachable from your machine only when running the server

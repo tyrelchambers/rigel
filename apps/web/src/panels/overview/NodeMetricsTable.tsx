@@ -1,4 +1,5 @@
-import { Recycle } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faRecycle } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { cn } from "@/lib/utils";
 import { MetricsServerEmptyState } from "./MetricsServerEmptyState";
 import { formatCpu, formatBytes, type NodeResourceTotals } from "./overviewDisplay";
@@ -68,7 +69,7 @@ export function NodeMetricsTable({ rows, readyByName, hasMetrics, metricsAvailab
             className="flex items-center gap-[9px] rounded-full border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[13px] py-1.5"
             title="Reclaimable memory (from right-sizing)"
           >
-            <Recycle className="size-[13px] shrink-0 text-[var(--status-running)]" />
+            <FontAwesomeIcon icon={faRecycle} className="size-[13px] shrink-0 text-[var(--status-running)]" />
             <span className="text-xs text-[var(--fg-secondary)]">Reclaimable</span>
             <span className="font-mono text-xs font-semibold text-[var(--status-running)]">{pct(reclaimable.fraction)}</span>
             <span className="font-mono text-2xs text-[var(--fg-tertiary)]">{reclaimable.detail}</span>

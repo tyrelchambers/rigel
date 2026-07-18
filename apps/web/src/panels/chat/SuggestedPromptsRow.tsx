@@ -3,15 +3,17 @@
  * SuggestedPromptsRow). Each chip sends a context-rich prompt on tap. Data comes
  * from GET /api/suggestions (computed server-side); see useSuggestions.
  */
-import { AlertTriangle, Layers, MessageSquareWarning, Server, Sparkles } from "lucide-react";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faTriangleExclamation, faLayerGroup, faMessageExclamation, faServer, faSparkles } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import type { SuggestedPrompt, SuggestionKind } from "@/lib/api";
 
-const META: Record<SuggestionKind, { Icon: typeof AlertTriangle; color: string }> = {
-  pod: { Icon: AlertTriangle, color: "var(--status-failed)" },
-  deploy: { Icon: Layers, color: "var(--status-pending)" },
-  warn: { Icon: MessageSquareWarning, color: "var(--status-failed)" },
-  node: { Icon: Server, color: "var(--status-pending)" },
-  investigate: { Icon: Sparkles, color: "var(--accent-primary)" },
+const META: Record<SuggestionKind, { Icon: IconDefinition; color: string }> = {
+  pod: { Icon: faTriangleExclamation, color: "var(--status-failed)" },
+  deploy: { Icon: faLayerGroup, color: "var(--status-pending)" },
+  warn: { Icon: faMessageExclamation, color: "var(--status-failed)" },
+  node: { Icon: faServer, color: "var(--status-pending)" },
+  investigate: { Icon: faSparkles, color: "var(--accent-primary)" },
 };
 
 function rgba(hex: string, a: number): string {
@@ -62,7 +64,7 @@ export function SuggestedPromptsRow({
               cursor: "pointer",
             }}
           >
-            <Icon size={11} />
+            <FontAwesomeIcon icon={Icon} className="size-[11px]" />
             {p.label}
           </button>
         );

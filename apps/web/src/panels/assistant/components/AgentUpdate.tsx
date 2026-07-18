@@ -1,4 +1,5 @@
-import { CircleArrowUp, Check, CloudOff, Info } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCircleArrowUp, faCheck, faCloudSlash, faCircleInfo } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useUpdates, type UpdateResult } from "@/lib/api";
 import { useAssistantCtx } from "../AssistantContext";
 import { withTag } from "@/panels/catalog/updateTargets";
@@ -23,7 +24,7 @@ export function AgentUpdateView({
     return (
       <>
         <span className="flex items-center gap-2 whitespace-nowrap rounded-md border border-[rgba(245,158,11,0.3)] bg-[rgba(245,158,11,0.1)] px-2.5 py-1">
-          <CircleArrowUp className="size-3.5 shrink-0 text-[var(--status-pending)]" />
+          <FontAwesomeIcon icon={faCircleArrowUp} className="size-3.5 shrink-0 text-[var(--status-pending)]" />
           {result.currentTag && (
             <>
               <span className="font-mono text-xs text-[var(--fg-tertiary)]">{result.currentTag}</span>
@@ -51,9 +52,9 @@ export function AgentUpdateView({
           title={result.reason}
           className="flex items-center gap-1.5 whitespace-nowrap text-xs text-[var(--fg-tertiary)]"
         >
-          <CloudOff className="size-3.5 shrink-0" />
+          <FontAwesomeIcon icon={faCloudSlash} className="size-3.5 shrink-0" />
           Couldn't check for updates
-          <Info className="size-3 shrink-0" />
+          <FontAwesomeIcon icon={faCircleInfo} className="size-3 shrink-0" />
         </span>
         <Divider />
       </>
@@ -63,7 +64,7 @@ export function AgentUpdateView({
   return (
     <>
       <span className="flex items-center gap-1.5 whitespace-nowrap text-xs text-[var(--fg-tertiary)]">
-        <Check className="size-3.5 shrink-0 text-[var(--status-running)]" />
+        <FontAwesomeIcon icon={faCheck} className="size-3.5 shrink-0 text-[var(--status-running)]" />
         Up to date
         {result.currentTag && <span className="font-mono">{result.currentTag}</span>}
       </span>

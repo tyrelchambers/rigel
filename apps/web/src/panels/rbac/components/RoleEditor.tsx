@@ -1,5 +1,11 @@
 import { useMemo, useState } from "react";
-import { ShieldCheck, Plus, Trash2, Code } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faShieldCheck,
+  faPlus,
+  faTrashCan,
+  faCode,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import {
   Dialog,
   DialogBody,
@@ -126,7 +132,7 @@ export function RoleEditor({ target, open, onClose, onApply, onEditYaml }: Props
       <DialogContent className="max-h-[86vh] w-[calc(100%-2rem)] max-w-[720px]">
         <DialogHeader className="border-[#26272B]">
           <DialogIcon background={false} className="size-9 rounded-[9px]" style={{ background: "#38BDF826" }}>
-            <ShieldCheck className="size-[18px]" style={{ color: "#38BDF8" }} />
+            <FontAwesomeIcon icon={faShieldCheck} className="size-[18px]" style={{ color: "#38BDF8" }} />
           </DialogIcon>
           <div className="flex min-w-0 flex-col gap-[3px]">
             <DialogTitle className="text-[20px] font-bold text-white">
@@ -221,7 +227,7 @@ export function RoleEditor({ target, open, onClose, onApply, onEditYaml }: Props
                     className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] hover:bg-white/[0.05]"
                     style={{ color: "#6B6B73" }}
                   >
-                    <Trash2 className="size-[14px]" />
+                    <FontAwesomeIcon icon={faTrashCan} className="size-[14px]" />
                   </button>
                 </div>
                 <TokenInput
@@ -258,13 +264,13 @@ export function RoleEditor({ target, open, onClose, onApply, onEditYaml }: Props
             className="flex w-full items-center justify-center gap-[7px] rounded-[6px] border px-[14px] py-[12px] text-[13px] font-semibold"
             style={{ background: "#FFFFFF05", borderColor: "#26272B", color: "#A1A1AA" }}
           >
-            <Plus className="size-[15px]" /> Add rule
+            <FontAwesomeIcon icon={faPlus} className="size-[15px]" /> Add rule
           </button>
         </DialogBody>
         <DialogFooter>
           {isEdit && onEditYaml && (
             <Button variant="outline" onClick={onEditYaml} className="mr-auto">
-              <Code className="size-[13px]" /> Edit YAML
+              <FontAwesomeIcon icon={faCode} className="size-[13px]" /> Edit YAML
             </Button>
           )}
           <Button variant="outline" onClick={onClose}>

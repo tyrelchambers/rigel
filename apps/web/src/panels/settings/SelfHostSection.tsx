@@ -4,7 +4,8 @@
 // wizard. No kubectl runs here.
 
 import { useEffect, useState } from "react";
-import { Check } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCheck } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Button } from "@/components/ui/button";
 import {
   loadSelfHostDefaults,
@@ -87,7 +88,7 @@ export function SelfHostSection() {
         <div className="flex items-center gap-2">
           {saved && (
             <span className="flex items-center gap-1 text-xs text-[var(--status-running)]">
-              <Check className="h-3.5 w-3.5" /> Saved
+              <FontAwesomeIcon icon={faCheck} className="h-3.5 w-3.5" /> Saved
             </span>
           )}
           <Button size="sm" variant="outline" onClick={revert} disabled={!dirty}>

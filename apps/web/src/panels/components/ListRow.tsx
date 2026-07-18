@@ -11,7 +11,8 @@
  * All list panels (Deployments, Pods, …) should wrap their per-item markup
  * in this component so chrome stays consistent.
  */
-import { ChevronRight, ChevronDown, MoreVertical } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faChevronRight, faChevronDown, faEllipsisVertical } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import type { ReactNode } from "react";
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent } from "@/components/ui/context-menu";
 
@@ -83,7 +84,7 @@ export function ListRow({
           aria-expanded={isOpen}
           className="shrink-0 text-muted-foreground hover:text-foreground"
         >
-          {isOpen ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+          {isOpen ? <FontAwesomeIcon icon={faChevronDown} className="size-3" /> : <FontAwesomeIcon icon={faChevronRight} className="size-3" />}
         </button>
 
         {/* Row body */}
@@ -98,7 +99,7 @@ export function ListRow({
             title="Actions"
             className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-white/[0.07] hover:text-foreground"
           >
-            <MoreVertical className="size-3.5" />
+            <FontAwesomeIcon icon={faEllipsisVertical} className="size-3.5" />
           </button>
         )}
       </div>

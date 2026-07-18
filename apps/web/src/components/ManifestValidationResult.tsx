@@ -1,4 +1,5 @@
-import { CheckCircle2, Layers, X } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCircleCheck, faLayerGroup, faXmark } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { listResources } from "@rigel/catalog";
 import type { ActionResult } from "@/lib/api";
 
@@ -26,14 +27,14 @@ export function ManifestValidationResult({
       {ok ? (
         <div className="flex flex-1 flex-col gap-1.5">
           <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-400">
-            <CheckCircle2 className="size-3.5 shrink-0" /> Valid — {resources.length} resource
+            <FontAwesomeIcon icon={faCircleCheck} className="size-3.5 shrink-0" /> Valid — {resources.length} resource
             {resources.length === 1 ? "" : "s"} (dry run, nothing applied).
           </p>
           {resources.length > 0 && (
             <ul className="max-h-32 space-y-0.5 overflow-auto rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-sunken)] p-1.5 text-xs">
               {resources.map((r, i) => (
                 <li key={i} className="flex items-center gap-2 rounded-md px-2 py-1 font-mono">
-                  <Layers className="size-3 shrink-0 text-[var(--accent-primary)]" />
+                  <FontAwesomeIcon icon={faLayerGroup} className="size-3 shrink-0 text-[var(--accent-primary)]" />
                   <span className="shrink-0 font-semibold text-[var(--accent-primary)]">{r.kind}</span>
                   <span className="truncate text-foreground/90">{r.name || "—"}</span>
                   {r.namespace && <span className="ml-auto shrink-0 text-3xs text-muted-foreground">{r.namespace}</span>}
@@ -54,7 +55,7 @@ export function ManifestValidationResult({
           onClick={onDismiss}
           className="flex size-5 shrink-0 items-center justify-center rounded-sm text-[var(--fg-tertiary)] outline-none hover:bg-white/[0.06] hover:text-[var(--fg-primary)]"
         >
-          <X className="size-3" />
+          <FontAwesomeIcon icon={faXmark} className="size-3" />
         </button>
       )}
     </div>

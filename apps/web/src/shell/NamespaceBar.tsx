@@ -5,7 +5,8 @@
  * the filter.
  */
 import { useEffect, useState } from "react";
-import { SquareDashed, ChevronDown, Check } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faSquareDashed, faChevronDown, faCheck } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
 
@@ -51,7 +52,7 @@ export function NamespaceSelector() {
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <SquareDashed size={11} style={{ color: "var(--fg-tertiary)", flexShrink: 0 }} />
+      <FontAwesomeIcon icon={faSquareDashed} className="size-[11px]" style={{ color: "var(--fg-tertiary)", flexShrink: 0 }} />
       <span className="text-2xs" style={{ color: "var(--fg-tertiary)", fontWeight: 500 }}>Namespace</span>
 
       {/* Trigger + popover (popover anchored to this relative wrapper) */}
@@ -87,7 +88,7 @@ export function NamespaceSelector() {
           >
             {currentLabel}
           </span>
-          <ChevronDown size={9} style={{ color: "var(--fg-tertiary)", flexShrink: 0 }} strokeWidth={2.5} />
+          <FontAwesomeIcon icon={faChevronDown} className="size-[9px]" style={{ color: "var(--fg-tertiary)", flexShrink: 0 }} />
         </button>
 
         {open && (
@@ -193,9 +194,9 @@ function NamespaceRow({ label, active, onSelect }: NamespaceRowProps) {
       }}
       className="hover:bg-[#1B1C1F] transition-colors"
     >
-      <Check
-        size={10}
-        strokeWidth={2.5}
+      <FontAwesomeIcon
+        icon={faCheck}
+        className="size-[10px]"
         style={{ color: active ? "var(--accent-primary)" : "transparent", flexShrink: 0, width: 12 }}
       />
       <span

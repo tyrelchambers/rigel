@@ -1,6 +1,7 @@
 // AdvancedView — the resource x verb matrix. Pencil frame riSgI.
 import { Fragment } from "react";
-import { Lock } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faLock } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { cn } from "@/lib/utils";
 import { cell, hasCell, isBaselineReadCell, MATRIX_RESOURCES, VERBS, type RbacPolicy } from "@rigel/k8s";
 
@@ -71,7 +72,7 @@ export function AdvancedView({
                       <td className="px-4 py-2 font-mono text-xs text-[var(--fg-primary)]">
                         <span className="inline-flex items-center gap-1.5">
                           {r.resource}
-                          {r.secret && <Lock className="size-3 shrink-0 text-red-400" aria-hidden />}
+                          {r.secret && <FontAwesomeIcon icon={faLock} className="size-3 shrink-0 text-red-400" aria-hidden />}
                         </span>
                       </td>
                       {VERBS.map((v) => {
@@ -101,7 +102,7 @@ export function AdvancedView({
       </div>
 
       <div className="flex items-start gap-1.5 text-xs text-[var(--fg-tertiary)]">
-        <Lock className="mt-px size-3.5 shrink-0" aria-hidden />
+        <FontAwesomeIcon icon={faLock} className="mt-px size-3.5 shrink-0" aria-hidden />
         <span>
           Secrets and roles / rolebindings aren&apos;t editable here — the assistant can never read
           secrets or escalate itself. Reads are always on (a non-editable baseline).

@@ -1,5 +1,6 @@
 import { isValidElement, type ReactNode } from "react";
-import { Check, Copy } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCheck, faCopy } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useCopyToClipboard } from "@/lib/useCopyToClipboard";
 import { cn } from "@/lib/utils";
 
@@ -40,7 +41,7 @@ export function CodeBlock({ children }: { children?: ReactNode }) {
             copied ? "text-[var(--status-running)]" : "text-[var(--fg-secondary)] hover:text-[var(--fg-primary)]",
           )}
         >
-          {copied ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}
+          {copied ? <><FontAwesomeIcon icon={faCheck} className="size-[12px]" /> Copied</> : <><FontAwesomeIcon icon={faCopy} className="size-[12px]" /> Copy</>}
         </button>
       </div>
       <pre>{children}</pre>
