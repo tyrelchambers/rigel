@@ -69,6 +69,17 @@ describe("LastReportCard", () => {
     ).toBeGreaterThan(0);
   });
 
+  it("shows a full-log expander when the reason spans many lines", () => {
+    const fp = SILENCED[2]; // unhealthyPod|default|web-abc|CrashLoopBackOff
+    const many = Array.from({ length: 14 }, (_, i) => `line ${i + 1}`).join("\n");
+    wrap({ autoSilencedReasons: { [fp]: many } });
+    fireEvent.click(screen.getByText("web-abc"));
+    expect(screen.getByText("6 of 14 lines")).toBeInTheDocument();
+    expect(screen.queryByText("line 14")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /show full log/i }));
+    expect(screen.getByText("line 14")).toBeInTheDocument();
+  });
+
   it("navigates to the pod (namespace-scoped, search-seeded) via Open", () => {
     wrap();
     fireEvent.click(screen.getByText("web-abc"));
