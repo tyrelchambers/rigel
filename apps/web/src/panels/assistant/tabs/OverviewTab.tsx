@@ -7,7 +7,7 @@ import { AlertTriangle, ChevronRight, GitPullRequest, Radar } from "lucide-react
 import { auditEntryId } from "@rigel/k8s";
 import { useAssistantCtx } from "../AssistantContext";
 import { relativeTime } from "../display";
-import { ActivityCard } from "../ActivityCard";
+import { RecentActivityCard } from "../components/RecentActivityCard";
 import { LastReportCard } from "../components/LastReportCard";
 import { OwnedResources } from "../OwnedResources";
 
@@ -77,7 +77,7 @@ export function OverviewTab() {
         ) : (
           <div className="flex flex-col gap-3">
             {audit.slice(0, 5).map((e) => (
-              <ActivityCard key={auditEntryId(e)} e={e} />
+              <RecentActivityCard key={auditEntryId(e)} e={e} />
             ))}
           </div>
         )}
