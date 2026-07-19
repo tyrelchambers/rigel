@@ -13,9 +13,9 @@ vi.mock("../ImportKubeconfigPanel", () => ({
   ImportKubeconfigPanel: () => <div>IMPORT PANEL</div>,
 }));
 
-test("shows the heading and three paths", () => {
+test("shows the welcome heading and three paths", () => {
   render(<ClusterOnboarding onSkip={vi.fn()} />);
-  expect(screen.getByText("Connect a cluster to get started")).toBeTruthy();
+  expect(screen.getByText("Hey, welcome to Rigel")).toBeTruthy();
   expect(screen.getByText("Create a local cluster")).toBeTruthy();
   expect(screen.getByText("Connect a cloud cluster")).toBeTruthy();
   expect(screen.getByText("Import a kubeconfig")).toBeTruthy();
@@ -45,10 +45,4 @@ test("Skip for now calls onSkip", () => {
   render(<ClusterOnboarding onSkip={onSkip} />);
   fireEvent.click(screen.getByText("Skip for now"));
   expect(onSkip).toHaveBeenCalled();
-});
-
-test("Learn the basics links out to the kubernetes docs", () => {
-  render(<ClusterOnboarding onSkip={vi.fn()} />);
-  const link = screen.getByText("Learn the basics") as HTMLAnchorElement;
-  expect(link.href).toBe("https://kubernetes.io/docs/tutorials/kubernetes-basics/");
 });

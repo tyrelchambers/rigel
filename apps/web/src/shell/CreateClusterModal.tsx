@@ -5,7 +5,7 @@ import { faBoxesStacked, faCheck, faCircleCheck, faCircleXmark, faCopy, faArrows
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogIcon, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useClusterTools } from "@/lib/api";
+import { useClusterTools, type ClusterOS } from "@/lib/api";
 import { sendClusterCreate, sendClusterStop, onClusterEvent } from "@/lib/ws";
 import { toast } from "sonner";
 
@@ -15,6 +15,24 @@ const VERSIONS = [
   { id: "v1.30", label: "v1.30" },
   { id: "v1.29", label: "v1.29" },
 ];
+
+// The one-liner to install kind, per OS Rigel is running on. Each is an
+// out-of-the-box option: Homebrew (macOS), winget (bundled on Win10/11 — not
+// Chocolatey, which isn't preinstalled), and the official version-pinned binary
+// download on Linux. The docs link covers everything else (scoop, arm64, etc.).
+const KIND_INSTALL: Record<ClusterOS, string> = {
+  mac: "brew install kind",
+  windows: "winget install Kubernetes.kind",
+  linux: "curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.32.0/kind-linux-amd64 && chmod +x kind && sudo mv kind /usr/local/bin/",
+};
+const KIND_DOCS = "https://kind.sigs.k8s.io/docs/user/quick-start/#installation";
+
+// Where to get the package manager itself when it's missing (the install command
+// above is useless without it).
+const INSTALLER_HELP: Record<"brew" | "winget", { label: string; url: string }> = {
+  brew: { label: "Homebrew", url: "https://brew.sh" },
+  winget: { label: "winget (App Installer)", url: "https://aka.ms/getwinget" },
+};
 
 // Mirrors the server validateClusterName rule (apps/server/src/clusterCreate.ts).
 function nameError(name: string): string | null {
@@ -85,14 +103,15 @@ export function CreateClusterModal({ open, onOpenChange }: { open: boolean; onOp
   const ready = dockerOk && hasTool;
   const nameErr = nameError(name);
   const canCreate = ready && !nameErr && !creating;
+  const kindCmd = KIND_INSTALL[tools?.os ?? "mac"];
 
   function start() {
     setError(null); setLines([]); setCreating(true);
     sendClusterCreate({ tool, name, version });
   }
 
-  function copyInstall() {
-    navigator.clipboard?.writeText("brew install kind");
+  function copyInstall(text: string) {
+    navigator.clipboard?.writeText(text);
     setCopied(true);
   }
 
@@ -127,19 +146,41 @@ export function CreateClusterModal({ open, onOpenChange }: { open: boolean; onOp
             <div className="flex flex-col gap-2">
               <div className="text-xs font-medium text-muted-foreground">Install a tool (kind is the simplest)</div>
               <div className="flex items-center justify-between overflow-hidden rounded-[10px] border border-white/[0.08] bg-[#161619] pl-4">
-                <code className="flex items-center gap-2.5 py-3.5 font-mono text-xs">
-                  <span className="text-[#5E6168]">$</span>
-                  <span className="text-[#D6D6DC]">brew install kind</span>
+                <code className="flex min-w-0 flex-1 items-center gap-2.5 overflow-x-auto py-3.5 font-mono text-xs whitespace-nowrap">
+                  <span className="shrink-0 text-[#5E6168]">{tools.os === "windows" ? ">" : "$"}</span>
+                  <span className="text-[#D6D6DC]">{kindCmd}</span>
                 </code>
                 <button
                   type="button"
-                  onClick={copyInstall}
-                  className="flex items-center gap-1.5 self-stretch border-l border-white/[0.08] px-4 text-xs font-semibold text-[#4FB0F2] transition-colors hover:bg-white/[0.03]"
+                  onClick={() => copyInstall(kindCmd)}
+                  className="flex shrink-0 items-center gap-1.5 self-stretch border-l border-white/[0.08] px-4 text-xs font-semibold text-[#4FB0F2] transition-colors hover:bg-white/[0.03]"
                 >
                   {copied ? <FontAwesomeIcon icon={faCheck} className="size-3.5" /> : <FontAwesomeIcon icon={faCopy} className="size-3.5" />}
                   {copied ? "Copied" : "Copy"}
                 </button>
               </div>
+              {tools.installer && !tools.installer.present && (
+                <p className="text-xs leading-relaxed text-[var(--status-pending)]">
+                  {INSTALLER_HELP[tools.installer.id].label} isn't installed, so this command won't run yet.{" "}
+                  <a
+                    href={INSTALLER_HELP[tools.installer.id].url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-medium underline"
+                  >
+                    Install {tools.installer.id}
+                  </a>{" "}
+                  first, or use the manual steps.
+                </p>
+              )}
+              <a
+                href={KIND_DOCS}
+                target="_blank"
+                rel="noreferrer"
+                className="self-start text-xs text-[var(--accent-primary)] hover:underline"
+              >
+                Other ways to install kind
+              </a>
             </div>
           )}
 

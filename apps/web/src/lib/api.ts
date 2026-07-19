@@ -1377,11 +1377,27 @@ export function useInstalledContexts(namespace: string) {
 // Cluster tools + local cluster management
 // ---------------------------------------------------------------------------
 
-export interface ClusterToolStatus { kind: boolean; k3d: boolean; dockerRunning: boolean }
+export type ClusterOS = "mac" | "windows" | "linux";
+export interface ClusterInstaller { id: "brew" | "winget"; present: boolean }
+export interface ClusterToolStatus {
+  kind: boolean;
+  k3d: boolean;
+  dockerRunning: boolean;
+  os: ClusterOS;
+  installer: ClusterInstaller | null;
+}
+
+/** Best-effort OS guess for the fallback when the tools probe can't be reached. */
+function detectOS(): ClusterOS {
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  if (/Windows/i.test(ua)) return "windows";
+  if (/Mac/i.test(ua)) return "mac";
+  return "linux";
+}
 
 async function fetchClusterTools(): Promise<ClusterToolStatus> {
   const res = await apiFetch("/api/cluster-tools");
-  if (!res.ok) return { kind: false, k3d: false, dockerRunning: false };
+  if (!res.ok) return { kind: false, k3d: false, dockerRunning: false, os: detectOS(), installer: null };
   return (await res.json()) as ClusterToolStatus;
 }
 export function useClusterTools() {
