@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCube, faCloud, faFileLines, faChevronRight } from "@awesome.me/kit-6050953220/icons/classic/solid";
+import { faCube, faCloud, faFileLines, faChevronRight, faSparkles } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogIcon, DialogTitle } from "@/components/ui/dialog";
@@ -64,15 +64,15 @@ export function ClusterOnboarding({ onSkip }: { onSkip: () => void }) {
   return (
     <div className="flex min-h-screen w-full items-center justify-center bg-[var(--surface-sunken)] px-4 py-10">
       <div className="flex w-full max-w-[560px] flex-col items-center gap-8">
-        <div className="flex items-center gap-2">
-          <span className="size-1.5 rounded-full bg-primary" />
-          <span className="font-mono text-2xs font-semibold tracking-widest text-[var(--fg-secondary)]">RIGEL</span>
-        </div>
-
-        <div className="flex flex-col items-center gap-2 text-center">
-          <h1 className="text-2xl font-semibold text-[var(--fg-primary)]">Connect a cluster to get started</h1>
-          <p className="text-sm text-[var(--fg-secondary)]">
-            Rigel works with any Kubernetes cluster. Pick how you&apos;d like to connect — you can add more anytime.
+        <div className="flex w-full flex-col items-start gap-3 text-left">
+          <h1 className="flex items-start gap-3 text-5xl font-semibold leading-[1.05] text-[var(--fg-primary)]">
+            <FontAwesomeIcon icon={faSparkles} className="mt-1 size-9 shrink-0 text-[var(--accent-primary)]" />
+            <span>Hey, welcome to Rigel</span>
+          </h1>
+          <p className="w-full text-sm text-[var(--fg-secondary)]">
+            Rigel is a desktop app for your Kubernetes clusters. Connect your first one below to see
+            what&apos;s running, fix what&apos;s broken, and get AI help when you need it. We&apos;re glad
+            you&apos;re here.
           </p>
         </div>
 
@@ -98,22 +98,9 @@ export function ClusterOnboarding({ onSkip }: { onSkip: () => void }) {
           />
         </div>
 
-        <div className="flex flex-col items-center gap-3 text-center">
-          <p className="text-xs text-[var(--fg-tertiary)]">
-            New to Kubernetes?{" "}
-            <a
-              href="https://kubernetes.io/docs/tutorials/kubernetes-basics/"
-              target="_blank"
-              rel="noreferrer"
-              className="text-[var(--accent-primary)] hover:underline"
-            >
-              Learn the basics
-            </a>
-          </p>
-          <Button variant="ghost" size="sm" onClick={onSkip}>
-            Skip for now
-          </Button>
-        </div>
+        <Button variant="ghost" size="sm" onClick={onSkip}>
+          Skip for now
+        </Button>
       </div>
 
       <CreateClusterModal open={open === "create"} onOpenChange={(o) => !o && setOpen(null)} />
