@@ -82,12 +82,11 @@ describe("OnboardingWizard AI-agent step", () => {
     renderWizard({ activeAgentId: "claude", agents: [claude, codex] });
 
     // AI step (label in the stepper) is the active step.
-    expect(screen.getByText("Step 1 of 3")).toBeInTheDocument();
-    expect(screen.getByText("· AI agent")).toBeInTheDocument();
+    expect(document.querySelector('[aria-current="step"]')).toHaveTextContent("AI agent");
 
     // Skip moves on without requiring a connected agent.
     fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
-    expect(screen.getByText("· Assistant")).toBeInTheDocument();
+    expect(document.querySelector('[aria-current="step"]')).toHaveTextContent("Assistant");
   });
 });
 
@@ -98,13 +97,12 @@ describe("OnboardingWizard streamlined steps", () => {
 
   it("has three steps ending in a Next steps panel", () => {
     renderWizard({ activeAgentId: "claude", agents: [claude, codex] }, false);
-    expect(screen.getByText("Step 1 of 3")).toBeInTheDocument();
-    expect(screen.getByText("· AI agent")).toBeInTheDocument();
+    expect(document.querySelector('[aria-current="step"]')).toHaveTextContent("AI agent");
     fireEvent.click(screen.getByRole("button", { name: /^next →$/i }));
-    expect(screen.getByText("· Assistant")).toBeInTheDocument();
+    expect(document.querySelector('[aria-current="step"]')).toHaveTextContent("Assistant");
     fireEvent.click(screen.getByRole("button", { name: /^next →$/i }));
-    expect(screen.getByText("Step 3 of 3")).toBeInTheDocument();
-    expect(screen.getByText("· Next steps")).toBeInTheDocument();
+    expect(document.querySelector('[aria-current="step"]')).toHaveTextContent("Next steps");
+    expect(screen.getByText("You're all set")).toBeInTheDocument();
   });
 
   it("nudges to install metrics-server on the Assistant step when it's unavailable", () => {

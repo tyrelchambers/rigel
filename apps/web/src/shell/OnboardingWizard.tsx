@@ -17,6 +17,7 @@ import {
   useInstallMetricsServer,
 } from "@/lib/api";
 import { Stepper } from "./onboarding/Stepper";
+import { ChannelGlyph, CHANNEL_GLYPH_COLORS, type ChannelGlyphId } from "@/panels/settings/channelGlyphs";
 import { AgentsTab } from "@/panels/settings/agents/AgentsTab";
 import { UpgradeBanner } from "./billing/UpgradeBanner";
 import { useEntitlement } from "./useEntitlement";
@@ -74,13 +75,15 @@ export function OnboardingWizard({ onClose, onLeave }: { onClose: () => void; on
           <ToolCard
             icon={<FontAwesomeIcon icon={faBell} className="size-[15px]" style={{ color: "var(--accent-primary)" }} />}
             title="Set up notifications"
-            desc="Get cluster alerts where you already are. Connect a channel: Signal, Discord, Slack, or Matrix."
+            desc="Get cluster alerts where you already are — no new dashboard to babysit."
             action={
               <button type="button" onClick={() => { onLeave(); navigate("/settings"); }} style={ghostBtn}>
                 Open Settings
               </button>
             }
-          />
+          >
+            <ChannelChips />
+          </ToolCard>
           {showUpsell && (
             <UpgradeBanner
               upgradeDisabled={!personalOrgId}
@@ -129,20 +132,17 @@ export function OnboardingWizard({ onClose, onLeave }: { onClose: () => void; on
           </button>
         </div>
 
-        <div style={divider} />
+        <Stepper labels={steps.map((s) => s.label)} current={i} />
 
-        <div style={stepSection}>
-          <Stepper labels={steps.map((s) => s.label)} current={i} />
-          {step.title && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                <span className="text-lg" style={{ fontWeight: 700, color: "var(--fg-primary)" }}>{step.title}</span>
-                {step.status}
-              </div>
-              <span className="text-sm" style={{ color: "var(--fg-secondary)", lineHeight: 1.45 }}>{step.description}</span>
+        {step.title && (
+          <div style={stepSection}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <span className="text-lg" style={{ fontWeight: 700, color: "var(--fg-primary)" }}>{step.title}</span>
+              {step.status}
             </div>
-          )}
-        </div>
+            <span className="text-sm" style={{ color: "var(--fg-secondary)", lineHeight: 1.45 }}>{step.description}</span>
+          </div>
+        )}
 
         <div style={body}>{step.node}</div>
 
@@ -216,6 +216,34 @@ function ToolCard({
       </div>
       <span className="text-xs" style={{ color: "var(--fg-secondary)", lineHeight: 1.5 }}>{desc}</span>
       {children}
+    </div>
+  );
+}
+
+const CHANNELS_UI: { id: ChannelGlyphId; label: string }[] = [
+  { id: "signal", label: "Signal" },
+  { id: "matrix", label: "Matrix" },
+  { id: "discord", label: "Discord" },
+  { id: "slack", label: "Slack" },
+];
+
+function ChannelChips() {
+  return (
+    <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+      {CHANNELS_UI.map(({ id, label }) => (
+        <div key={id} style={chip}>
+          <span
+            style={{
+              ...chipCircle,
+              background: `color-mix(in oklab, ${CHANNEL_GLYPH_COLORS[id]} 16%, transparent)`,
+              color: CHANNEL_GLYPH_COLORS[id],
+            }}
+          >
+            <ChannelGlyph id={id} size={17} />
+          </span>
+          <span className="text-2xs" style={{ fontWeight: 600, color: "var(--fg-secondary)" }}>{label}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -356,7 +384,7 @@ const divider: React.CSSProperties = { flexShrink: 0, height: 1, width: "100%", 
 const stepSection: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
-  gap: 16,
+  gap: 5,
   padding: "18px 26px 4px 26px",
   width: "100%",
 };
@@ -398,3 +426,22 @@ const ghostBtn: React.CSSProperties = {
   cursor: "pointer",
 };
 const errText: React.CSSProperties = { fontSize: 11, color: "var(--status-failed)" };
+const chip: React.CSSProperties = {
+  display: "flex",
+  flex: 1,
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 8,
+  padding: 12,
+  borderRadius: 8,
+  background: "#FFFFFF08",
+  border: "1px solid var(--border-subtle)",
+};
+const chipCircle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: 32,
+  height: 32,
+  borderRadius: 999,
+};
