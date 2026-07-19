@@ -7,6 +7,7 @@ import {
   auditCanExpand,
   relativeTime,
   auditCount,
+  actorLabel,
 } from "./display";
 
 describe("tokenLabel", () => {
@@ -68,5 +69,17 @@ describe("auditCount", () => {
     expect(auditCount(audit, "success")).toBe(2);
     expect(auditCount(audit, "failure")).toBe(1);
     expect(auditCount(audit, "queued")).toBe(0);
+  });
+});
+
+describe("actorLabel", () => {
+  it("maps each known actor to its label", () => {
+    expect(actorLabel("autonomous")).toBe("Autonomous");
+    expect(actorLabel("chat")).toBe("Approved by you");
+    expect(actorLabel("pr")).toBe("Opened a PR");
+  });
+  it("returns null for undefined or unknown actors", () => {
+    expect(actorLabel(undefined)).toBeNull();
+    expect(actorLabel("something-else")).toBeNull();
   });
 });

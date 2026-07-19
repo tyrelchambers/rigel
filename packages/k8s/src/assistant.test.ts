@@ -1375,3 +1375,17 @@ it("decodes digestState (lastSentAt + lastPreview)", () => {
   expect(s?.digestState?.lastSentAt.a).toBe("2026-06-30T07:00:00.000Z");
   expect(s?.digestState?.lastPreview?.text).toBe("All clear.");
 });
+
+test("decodeClusterState passes the audit actor field through", () => {
+  const raw = JSON.stringify({
+    audit: [
+      { at: "t1", fingerprint: "f", incident: "i", tier: "low", outcome: "success", detail: "", actor: "autonomous" },
+      { at: "t2", fingerprint: "f", incident: "i", tier: "medium", outcome: "success", detail: "", actor: "pr" },
+      { at: "t3", fingerprint: "f", incident: "i", tier: "low", outcome: "success", detail: "" },
+    ],
+  });
+  const s = decodeClusterState(raw)!;
+  expect(s.audit[0]!.actor).toBe("autonomous");
+  expect(s.audit[1]!.actor).toBe("pr");
+  expect(s.audit[2]!.actor).toBeUndefined();
+});

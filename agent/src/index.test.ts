@@ -273,7 +273,7 @@ describe("tick() — openFixPR routing (I1 landmine)", () => {
     expect(state).toBeDefined();
     // The fix-quality supervisor cleared the change before it was dispatched.
     expect(vi.mocked(runSupervisor)).toHaveBeenCalledTimes(1);
-    expect(state!.audit[0]).toMatchObject({ proposal: OPEN_FIX_PR.title, outcome: "queued", tier: "medium" });
+    expect(state!.audit[0]).toMatchObject({ proposal: OPEN_FIX_PR.title, outcome: "queued", tier: "medium", actor: "pr" });
     expect(state!.audit[0]?.detail).toContain("fix-runner");
     expect(state!.queue[0]).toMatchObject({ suggestion: OPEN_FIX_PR.title, action: { kind: "openFixPR" } });
   });
@@ -328,7 +328,7 @@ describe("tick() — triage verdict handling", () => {
     await tick(makeConfig(), newCb(), createLoopState());
 
     const state = captured();
-    expect(state!.audit[0]).toMatchObject({ incident: expect.stringContaining("logger-7d9f-abc"), outcome: "skipped" });
+    expect(state!.audit[0]).toMatchObject({ incident: expect.stringContaining("logger-7d9f-abc"), outcome: "skipped", actor: "autonomous" });
     expect(state!.audit[0]?.detail).toMatch(/acceptable — auto-silenced/);
     expect(state!.autoSilenced).toHaveLength(1);
     expect(state!.autoSilenced![0]).toMatch(/^loggedError\|default\|logger-7d9f-abc\|/);
@@ -366,7 +366,7 @@ describe("tick() — triage verdict handling", () => {
       // Not silenced (acceptable) and not queued (uncertain) by the verdict.
       expect(state!.autoSilenced ?? []).toHaveLength(0);
       expect(state!.queue).toHaveLength(0);
-      expect(state!.audit[0]).toMatchObject({ proposal: "Restart memos", outcome: "success" });
+      expect(state!.audit[0]).toMatchObject({ proposal: "Restart memos", outcome: "success", actor: "autonomous" });
     },
   );
 

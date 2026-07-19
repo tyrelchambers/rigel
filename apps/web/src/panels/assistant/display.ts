@@ -74,3 +74,18 @@ export function relativeTime(iso: string, now: number = Date.now()): string {
 export function auditCount(audit: Array<{ outcome: string }>, outcome: string): number {
   return audit.filter((e) => e.outcome === outcome).length;
 }
+
+/** Human label for an audit entry's actor, or null when absent/unknown (legacy
+ * entries and unrecognised values render no badge). */
+export function actorLabel(actor: string | undefined): string | null {
+  switch (actor) {
+    case "autonomous":
+      return "Autonomous";
+    case "chat":
+      return "Approved by you";
+    case "pr":
+      return "Opened a PR";
+    default:
+      return null;
+  }
+}

@@ -13,6 +13,7 @@ import { emptyAlertState, type AlertState } from "./alerts.js";
 export type Tier = "low" | "medium" | "blocked";
 export type Verdict = "auto" | "approved" | "rejected" | "escalated" | "skipped";
 export type Outcome = "success" | "failure" | "queued" | "skipped";
+export type AuditActor = "autonomous" | "chat" | "pr";
 
 export interface AuditEntry {
   at: string;
@@ -28,6 +29,8 @@ export interface AuditEntry {
   /** The worker's full prose reasoning + the supervisor verdict reason, for the
    * Rigel drill-down (why the agent did what it did). */
   analysis?: string;
+  /** Who initiated this action. Absent on entries written before actor stamping. */
+  actor?: AuditActor;
 }
 
 /** A remediation the agent could not perform (RBAC-blocked / destructive), left

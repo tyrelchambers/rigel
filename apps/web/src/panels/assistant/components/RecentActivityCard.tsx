@@ -28,6 +28,7 @@ import { CodeBlock } from "@/panels/chat/CodeBlock";
 import { ChatBlockquote } from "@/panels/chat/Callout";
 import { useAssistantCtx } from "../AssistantContext";
 import { relativeTime, auditCanExpand } from "../display";
+import { ActorBadge } from "./ActorBadge";
 
 function targetFor(incidentKind: string) {
   switch (incidentKind) {
@@ -149,6 +150,7 @@ export function RecentActivityCard({ e }: { e: AssistantAuditEntry }) {
           <span className="min-w-0 flex-1 truncate text-2xs text-[var(--fg-tertiary)]">{preview}</span>
         )}
         {(open || !preview) && <span className="flex-1" />}
+        <ActorBadge actor={e.actor} />
         {e.tier && (
           <span className="flex shrink-0 items-center gap-1.5 rounded bg-white/[0.05] px-2 py-0.5 font-mono text-3xs uppercase tracking-[0.5px] text-[var(--fg-tertiary)]">
             <span className="size-1 rounded-full bg-[var(--fg-tertiary)]" />

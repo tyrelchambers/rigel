@@ -898,6 +898,9 @@ export interface AssistantAuditEntry {
   detail: string;
   backupRef?: string;
   analysis?: string;
+  /** Who initiated this action: the autonomous loop, a chat approval, or the
+   * autofix-PR pipeline. Absent on entries written before actor stamping shipped. */
+  actor?: string;
 }
 
 export interface AssistantQueuedSuggestion {

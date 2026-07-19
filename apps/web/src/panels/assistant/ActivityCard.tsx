@@ -22,6 +22,7 @@ import { auditEntryId } from "@rigel/k8s";
 import { cn } from "@/lib/utils";
 import { useAssistantCtx } from "./AssistantContext";
 import { auditCanExpand, relativeTime } from "./display";
+import { ActorBadge } from "./components/ActorBadge";
 
 /** Status glyph derived from the audit outcome. */
 function StatusIcon({ outcome }: { outcome: string }) {
@@ -80,6 +81,7 @@ export function ActivityCard({ e }: { e: AssistantAuditEntry }) {
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-3">
+          <ActorBadge actor={e.actor} />
           {e.tier && (
             <span className="inline-flex items-center gap-1.5 rounded bg-white/[0.05] px-2 py-0.5 font-mono text-3xs tracking-[0.03em] text-[var(--fg-tertiary)] uppercase">
               <span className="size-1.5 rounded-full bg-[var(--fg-tertiary)]" />

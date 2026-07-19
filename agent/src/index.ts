@@ -344,6 +344,7 @@ export async function tick(
             {
               at: ts, fingerprint: c.item.fingerprint ?? "", incident: c.item.incident,
               proposal: c.item.suggestion, tier: "low", outcome: "skipped", detail: c.reason,
+              actor: "autonomous",
             },
             cfg.auditMaxEntries,
           );
@@ -909,6 +910,7 @@ async function executeChatAction(
         command, tier: tier === RiskTier.Medium ? "medium" : "low",
         verdict: "approved", outcome: success ? "success" : "failure",
         detail: truncate(`${matched ? "flagged fix approved" : "confirmed"} via chat — ${output}`), backupRef,
+        actor: "chat",
       }, cfg.auditMaxEntries);
       // Running a queued fix clears it (whether it succeeded or not — a failure is
       // in the audit log and re-detection re-queues); re-filter the fresh state by
@@ -990,7 +992,7 @@ function minOfDay(now: number): number {
 }
 
 function record(state: AssistantState, cfg: Config, entry: AuditEntry): AssistantState {
-  let next = appendAudit(state, entry, cfg.auditMaxEntries);
+  let next = appendAudit(state, { ...entry, actor: entry.actor ?? "autonomous" }, cfg.auditMaxEntries);
   // Mirror the disposition into the rolling incident history so a digest can
   // describe what was acted on, not only what was observed. Upserts by fingerprint
   // (the observe phase already created a "flagged" record via touchIncident), so a

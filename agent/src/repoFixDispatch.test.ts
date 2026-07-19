@@ -53,7 +53,7 @@ describe("dispatchRepoFix", () => {
 
     const kinds = applied().map((m) => (m as { kind: string }).kind);
     expect(kinds).toEqual(["ConfigMap", "Job"]); // ConfigMap first, then the Job
-    expect(state.audit[0]).toMatchObject({ outcome: "queued", tier: "medium", proposal: ACTION.title });
+    expect(state.audit[0]).toMatchObject({ outcome: "queued", tier: "medium", proposal: ACTION.title, actor: "pr" });
     expect(state.audit[0]?.detail).toContain("fix-runner");
     expect(state.audit[0]?.detail).toContain("github.com/me/infra@main");
     expect(state.queue[0]).toMatchObject({ suggestion: ACTION.title, action: { kind: "openFixPR" } });
@@ -65,6 +65,7 @@ describe("dispatchRepoFix", () => {
     const { state, notification } = await dispatchRepoFix(d, emptyState(), base({ inScope: false }));
     expect(applied()).toHaveLength(0);
     expect(state.audit[0]?.outcome).toBe("skipped");
+    expect(state.audit[0]?.actor).toBe("pr");
     expect(state.audit[0]?.detail).toMatch(/autofix is disabled or this workload is outside/);
     expect(state.queue).toHaveLength(0);
     expect(notification).toBeUndefined();
@@ -75,6 +76,7 @@ describe("dispatchRepoFix", () => {
     const { state } = await dispatchRepoFix(d, emptyState(), base({ repo: null }));
     expect(applied()).toHaveLength(0);
     expect(state.audit[0]?.outcome).toBe("skipped");
+    expect(state.audit[0]?.actor).toBe("pr");
     expect(state.audit[0]?.detail).toMatch(/no GitOps source/);
     expect(state.queue).toHaveLength(0);
   });
@@ -97,14 +99,14 @@ describe("dispatchRepoFix", () => {
     const { d, applied } = deps();
     const { state } = await dispatchRepoFix(d, emptyState(), base({ image: "" }));
     expect(applied()).toHaveLength(0);
-    expect(state.audit[0]).toMatchObject({ outcome: "failure" });
+    expect(state.audit[0]).toMatchObject({ outcome: "failure", actor: "pr" });
     expect(state.audit[0]?.detail).toMatch(/RIGEL_FIX_RUNNER_IMAGE/);
   });
 
   test("an apply failure is captured as a failure outcome, never thrown", async () => {
     const { d } = deps({ apply: async () => ({ stdout: "", stderr: "forbidden", code: 1 }) });
     const { state } = await dispatchRepoFix(d, emptyState(), base());
-    expect(state.audit[0]).toMatchObject({ outcome: "failure" });
+    expect(state.audit[0]).toMatchObject({ outcome: "failure", actor: "pr" });
     expect(state.audit[0]?.detail).toMatch(/could not be created/);
   });
 
