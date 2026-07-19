@@ -46,6 +46,21 @@ jobs:
       - name: Enable corepack (pnpm)
         run: corepack enable
 
+      # The web app uses Font Awesome Pro, whose packages live on the private
+      # npm.fontawesome.com registry — the install 401s without a token. Load it
+      # from 1Password (same service account as macOS signing) on every runner.
+      - name: Load Font Awesome token from 1Password
+        uses: 1password/load-secrets-action@v3
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          FONTAWESOME_NPM_TOKEN: op://App Secrets/Font Awesome/credential
+
+      - name: Authenticate to the Font Awesome registry
+        shell: bash
+        run: echo "//npm.fontawesome.com/:_authToken=${FONTAWESOME_NPM_TOKEN}" >> .npmrc
+
       - name: Install workspace
         run: pnpm install --frozen-lockfile
 
