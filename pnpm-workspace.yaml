@@ -10,3 +10,9 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - '@iconify-json/lucide@1.2.113'
   - '@awesome.me/kit-6050953220@1.0.4'
+  # Font Awesome runtime packages live on the private npm.fontawesome.com
+  # registry; the minimumReleaseAge check can't authenticate to it (401), so
+  # exempt them like the kit above.
+  - '@fortawesome/fontawesome-common-types@7.3.1'
+  - '@fortawesome/fontawesome-svg-core@7.3.1'
+  - '@fortawesome/react-fontawesome@3.4.0'
