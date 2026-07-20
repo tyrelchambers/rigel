@@ -63,7 +63,6 @@ import {
   type AuditEntry,
 } from "./state.js";
 import { evaluateDigests } from "./digest.js";
-import { determineEntitlement, parseEntitlement, type Entitlement } from "./entitlement.js";
 
 const VERSION = "0.1.0";
 
@@ -218,8 +217,6 @@ export interface LoopState {
   matrixSince?: string;
   /** Per-sender claude diagnosis threads (1-hour idle reset, in-memory). */
   sessions: SessionStore;
-  /** Last-computed entitlement, so the observe-only transition logs just once. */
-  lastEntitled?: boolean;
 }
 
 export async function tick(
@@ -236,28 +233,6 @@ export async function tick(
   // to the deploy-time Config when unset — see parseLimits), so a setLimits edit
   // goes live next tick without a restart.
   cb.updateLimits(rc.limits);
-
-  // Entitlement gate: the agent is a FREE observe-only feature; its premium
-  // branches (autonomous remediation, autofix PRs, outbound notifications,
-  // scheduled digests) run only for an entitled org. The cache rides in the
-  // already-read assistant-state (no extra get); a failed check never throws out
-  // of the tick — it falls to the grace-held cache (or free). Observe + incident
-  // recording below are NEVER gated.
-  let entitled = false;
-  let entitlementToPersist: Entitlement | undefined;
-  const force = !!rc.entitlementRefreshAt && rc.entitlementRefreshAt !== state.entitlementRefreshAt;
-  try {
-    const decision = await determineEntitlement({ cfg, now, cache: parseEntitlement(state.entitlement), force });
-    entitled = decision.entitled;
-    // A fresh fetch's value rides out on tick's OWN single state write below — the
-    // decision never writes itself, so the persisted cache can't be clobbered by the
-    // end-of-tick writeState (which is what previously kept shouldRefetch always true).
-    entitlementToPersist = decision.cache;
-  } catch (e) {
-    log(`entitlement check error — observe-only this tick: ${String(e)}`);
-  }
-  if (!entitled && loop.lastEntitled !== false) log("observe-only: org not entitled");
-  loop.lastEntitled = entitled;
 
   const notifications: string[] = [];
   // Count of incidents NEWLY auto-silenced this tick — drives an edge-triggered
@@ -385,7 +360,7 @@ export async function tick(
     // off / out of scope, so this is cheap when autofix isn't in play.
     const eligibility = new Map<string, AutofixEligibility>(
       await Promise.all(
-        (entitled ? confirmed : []).map(async (incident) => {
+        confirmed.map(async (incident) => {
           let e: AutofixEligibility;
           try {
             e = await resolveAutofixEligibility(rc.autofix, incident, detection.pods, {
@@ -408,21 +383,13 @@ export async function tick(
     // Worker model call is the slow, side-effect-free part, so overlapping the
     // calls cuts wall-clock when several incidents land in one tick. The
     // deterministic guardrails stay in Stage B below.
-    //
-    // The investigation (Worker here + the Opus supervisor in Stage B) is the
-    // agent's model spend, and it's a PREMIUM capability: an observe-only (not
-    // entitled) org still detects and records every confirmed incident above
-    // (touchIncident) but never runs the model, so a free install burns ZERO
-    // model budget. Empty packets make the Stage B decide/execute pass a no-op.
-    const packets = entitled
-      ? await diagnoseConfirmed(
-          {
-            diagnose: (incident) => runWorker(rc, [incident], eligibility.get(fingerprint(incident))?.repo ?? null),
-            limit: cfg.maxConcurrentDiagnoses,
-          },
-          confirmed,
-        )
-      : [];
+    const packets = await diagnoseConfirmed(
+      {
+        diagnose: (incident) => runWorker(rc, [incident], eligibility.get(fingerprint(incident))?.repo ?? null),
+        limit: cfg.maxConcurrentDiagnoses,
+      },
+      confirmed,
+    );
 
     // Per-day fix-PR budget baseline, computed ONCE per tick before any dispatch:
     // real opened PRs still inside the rolling 24h window PLUS the fix Jobs currently
@@ -441,7 +408,7 @@ export async function tick(
     // — a failed list is a DISTINCT call+verb from the dedup `get job` + `apply`, so it
     // does NOT imply create would fail; assuming so was the I1 over-open hole.
     let fixListUnreadable = false;
-    if (entitled && rc.autofix.enabled && confirmed.length > 0) {
+    if (rc.autofix.enabled && confirmed.length > 0) {
       let inFlight: unknown[] | null;
       try {
         inFlight = await fixReconcileDeps(cfg).listFixJobs();
@@ -551,16 +518,6 @@ export async function tick(
       // Eligibility is reused from Stage A (the owning-Deployment walk), not
       // re-derived from the action (which mistook a pod name for a Deployment — 2b).
       if (isRepoFixAction(action.kind)) {
-        if (!entitled) {
-          // Premium (autofix PRs) — observe-only orgs record the proposal but never
-          // open a PR (no Opus fix-quality review spent, no Job created).
-          state = record(state, cfg, {
-            at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-            tier: "medium", outcome: "skipped",
-            detail: "observe-only: opening fix PRs is a premium feature", analysis: truncate(analysis),
-          });
-          continue;
-        }
         if (packet.verdict !== "actionable") {
           state = record(state, cfg, {
             at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label, tier: "medium",
@@ -710,12 +667,9 @@ export async function tick(
 
       // Autonomy gate: advisory mode (or being outside the quiet-hours window)
       // queues the action for approval instead of auto-executing — even LOW and
-      // Opus-approved MEDIUM. An observe-only (not entitled) org NEVER auto-executes
-      // — autonomous remediation is a premium capability — so it always queues.
-      if (!entitled || decideAutonomy(rc.mode, rc.window, minOfDay(now)) === "queue") {
-        const why = !entitled
-          ? "observe-only — upgrade to enable autonomous remediation"
-          : rc.mode === "advisory" ? "advisory mode — suggestion only" : "outside quiet-hours window — queued for approval";
+      // Opus-approved MEDIUM.
+      if (decideAutonomy(rc.mode, rc.window, minOfDay(now)) === "queue") {
+        const why = rc.mode === "advisory" ? "advisory mode — suggestion only" : "outside quiet-hours window — queued for approval";
         state = queue(state, cfg, ts, fp, describe(incident), action.label, why, action);
         state = record(state, cfg, {
           at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
@@ -791,53 +745,35 @@ export async function tick(
   }
 
   // ---- REPORT ----
-  // Scheduled digests are a PREMIUM outbound feature, so — unlike observe — they are
-  // gated on entitlement (they bypass the kill-switch, hence the explicit gate). An
-  // entitled digest still fires on schedule even while remediation is paused; its
-  // send-state persists in the SAME durable write below.
-  if (entitled) state = await evaluateDigests(rc, state, detection, now);
-  // Fold a freshly-fetched entitlement into this single durable write so the 12h
-  // throttle and the 30-day grace both have a persisted last-known-good to read next tick.
-  if (entitlementToPersist) state = { ...state, entitlement: entitlementToPersist };
-  // Ack the force-recheck marker only after a SUCCESSFUL forced fetch (a fresh cache
-  // was produced). A failed forced fetch leaves the marker so the next tick retries —
-  // otherwise "instant upgrade" silently degrades to the 12h throttle.
-  if (state.entitlementRefreshAt !== rc.entitlementRefreshAt && (!force || entitlementToPersist)) {
-    state = { ...state, entitlementRefreshAt: rc.entitlementRefreshAt };
-  }
+  // Scheduled digests bypass the kill-switch, so they fire on schedule even while
+  // remediation is paused; send-state persists in the SAME durable write below.
+  state = await evaluateDigests(rc, state, detection, now);
   await writeState(cfg.stateConfigMap, cfg.stateNamespace, state);
 
   if (rc.enabled) {
     // GC reconciled fix resources AFTER the durable state write (idempotent deletes).
     for (const name of fixGc) await gcFixResources(cfg, name);
 
-    // Best-effort outbound notification for what happened this tick. Outbound
-    // notifications are a PREMIUM capability — an observe-only org never broadcasts.
-    if (entitled) flushNotifications(rc, notifications);
+    // Best-effort outbound notification for what happened this tick.
+    flushNotifications(rc, notifications);
 
-    // Interactive chat is a PREMIUM surface too: an observe-only (not entitled) org
-    // must neither reply outward nor drive cluster writes via the chat-approve path
-    // (executeChatAction is reachable ONLY through these inbound handlers). Gating both
-    // on `entitled` keeps free installs strictly observe-only.
-    if (entitled) {
-      // Signal: answer any inbound diagnosis questions / approval commands whenever
-      // the channel is configured — no separate opt-in. Never throws — failures stay
-      // out of the loop.
-      if (rc.signalApiUrl && rc.signalNumber) {
-        try {
-          await handleSignalInbound(cfg, rc, cb, loop);
-        } catch (e) {
-          log(`signal inbound error: ${String(e)}`);
-        }
+    // Signal: answer any inbound diagnosis questions / approval commands whenever
+    // the channel is configured — no separate opt-in. Never throws — failures stay
+    // out of the loop.
+    if (rc.signalApiUrl && rc.signalNumber) {
+      try {
+        await handleSignalInbound(cfg, rc, cb, loop);
+      } catch (e) {
+        log(`signal inbound error: ${String(e)}`);
       }
+    }
 
-      // Matrix: independent of Signal — runs whenever configured, never blocks it.
-      if (rc.matrix.homeserverUrl && rc.matrix.accessToken && rc.matrix.roomId) {
-        try {
-          await handleMatrixInboundIO(cfg, rc, cb, loop);
-        } catch (e) {
-          log(`matrix inbound error: ${String(e)}`);
-        }
+    // Matrix: independent of Signal — runs whenever configured, never blocks it.
+    if (rc.matrix.homeserverUrl && rc.matrix.accessToken && rc.matrix.roomId) {
+      try {
+        await handleMatrixInboundIO(cfg, rc, cb, loop);
+      } catch (e) {
+        log(`matrix inbound error: ${String(e)}`);
       }
     }
   }

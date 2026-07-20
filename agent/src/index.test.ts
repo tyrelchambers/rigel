@@ -34,20 +34,12 @@ vi.mock("./notify.js", async (importOriginal) => {
   };
 });
 vi.mock("./runModel.js", () => ({ runModel: vi.fn() }));
-// Gate the entitlement DECISION at its orchestrator seam so tick() drives
-// deterministically (the fetch/cache IO is unit-tested in entitlement.test.ts).
-// Default = entitled, so every pre-E2 premium test keeps its behavior.
-vi.mock("./entitlement.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./entitlement.js")>();
-  return { ...actual, determineEntitlement: vi.fn() };
-});
 
 import { kubectl } from "./kubectl.js";
 import { runWorker } from "./worker.js";
 import { runSupervisor } from "./supervisor.js";
 import { sendToChannel, receiveSignal } from "./notify.js";
 import { runModel } from "./runModel.js";
-import { determineEntitlement } from "./entitlement.js";
 import { tick, createLoopState, queue } from "./index.js";
 import { CircuitBreaker } from "./guardrails.js";
 
@@ -226,7 +218,6 @@ function workerOut(over: Partial<{ actions: unknown[]; analysis: string; verdict
 }
 
 beforeEach(() => {
-  vi.mocked(determineEntitlement).mockResolvedValue({ entitled: true });
   vi.mocked(runWorker).mockResolvedValue(workerOut());
   // An actionable, dispatchable openFixPR now clears the fix-quality supervisor
   // before dispatch — default it to approve; reject/escalate tests override.
@@ -793,231 +784,6 @@ describe("tick() — two-phase split: incident history + scheduled digests", () 
 
     expect(vi.mocked(sendToChannel)).not.toHaveBeenCalled();
     expect(captured()!.digestState!.lastSentAt.a).toBe(future);
-  });
-});
-
-describe("tick() — entitlement gate (Slice E2)", () => {
-  const DIGEST = {
-    id: "a", enabled: true, label: "Morning", channel: "signal",
-    days: [0, 1, 2, 3, 4, 5, 6], time: "00:00", timezone: "UTC",
-    lookback: { mode: "sinceLast" }, createdAt: "2026-06-30T00:00:00.000Z",
-  };
-
-  test("not entitled → observe still records the incident, but no remediation/notify/digest fires", async () => {
-    vi.mocked(determineEntitlement).mockResolvedValue({ entitled: false });
-    vi.mocked(runWorker).mockResolvedValue(workerOut({ actions: [RESTART], verdict: "actionable" }));
-    const { captured } = wireCluster({
-      configData: {
-        enabled: "true", confirmPolls: "1", mode: "auto",
-        signalApiUrl: "http://sig", signalNumber: "+15550001111",
-        digests: JSON.stringify([DIGEST]),
-      },
-      stateSeed: { updatedAt: "", audit: [], queue: [], report: "", digestState: { lastSentAt: { a: "2020-01-01T00:00:00.000Z" } } },
-    });
-
-    await tick(makeConfig(), newCb(), createLoopState());
-
-    const state = captured();
-    // Observe ran despite being free — the incident is in the rolling history.
-    expect(state!.incidents?.some((i) => i.fingerprint === CRASH_FP)).toBe(true);
-    // ZERO model spend: the Worker/Opus investigation never ran for a free org.
-    expect(vi.mocked(runWorker)).not.toHaveBeenCalled();
-    expect(vi.mocked(runSupervisor)).not.toHaveBeenCalled();
-    // No autonomous remediation executed.
-    const calls = vi.mocked(kubectl).mock.calls.map((c) => c[0]);
-    expect(calls).not.toContainEqual(["rollout", "restart", "deployment/memos", "-n", "default"]);
-    // No outbound notification and no digest send.
-    expect(vi.mocked(sendToChannel)).not.toHaveBeenCalled();
-    // The digest send-state was NOT advanced (evaluateDigests was skipped).
-    expect(state!.digestState!.lastSentAt.a).toBe("2020-01-01T00:00:00.000Z");
-  });
-
-  test("entitled → the premium remediation path executes (regression guard)", async () => {
-    vi.mocked(determineEntitlement).mockResolvedValue({ entitled: true });
-    vi.mocked(runWorker).mockResolvedValue(workerOut({ actions: [RESTART], verdict: "actionable" }));
-    const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1", mode: "auto" } });
-
-    await tick(makeConfig(), newCb(), createLoopState());
-
-    // The model investigation ran (paid spend) for the entitled org.
-    expect(vi.mocked(runWorker)).toHaveBeenCalled();
-    const calls = vi.mocked(kubectl).mock.calls.map((c) => c[0]);
-    expect(calls).toContainEqual(["rollout", "restart", "deployment/memos", "-n", "default"]);
-    expect(captured()!.audit[0]).toMatchObject({ proposal: "Restart memos", outcome: "success" });
-  });
-
-  test("not entitled → the investigation never runs, so no fix PR is dispatched (no Worker/Opus spend)", async () => {
-    vi.mocked(determineEntitlement).mockResolvedValue({ entitled: false });
-    const { captured } = wireCluster({
-      configData: { enabled: "true", confirmPolls: "1", autofixEnabled: "true", autofixScope: JSON.stringify({ projects: ["default/memos"] }) },
-      deploymentJSON: DEPLOYMENT_JSON,
-    });
-
-    await tick(makeConfig(), newCb(), createLoopState());
-
-    // ZERO model spend: neither the Worker nor the fix-quality supervisor ran.
-    expect(vi.mocked(runWorker)).not.toHaveBeenCalled();
-    expect(vi.mocked(runSupervisor)).not.toHaveBeenCalled();
-    expect(dispatchedAFix()).toBe(false);
-    // The incident is still recorded (flagged) so the free "what broke" history holds.
-    expect(captured()!.incidents?.some((i) => i.fingerprint === CRASH_FP && i.disposition === "flagged")).toBe(true);
-  });
-
-  test("not entitled but a due digest → the digest does NOT send", async () => {
-    vi.mocked(determineEntitlement).mockResolvedValue({ entitled: false });
-    const { captured } = wireCluster({
-      configData: {
-        enabled: "true", confirmPolls: "1",
-        signalApiUrl: "http://sig", signalNumber: "+15550001111",
-        digests: JSON.stringify([DIGEST]),
-      },
-      pods: [],
-      stateSeed: { updatedAt: "", audit: [], queue: [], report: "", digestState: { lastSentAt: { a: "2020-01-01T00:00:00.000Z" } } },
-    });
-
-    await tick(makeConfig(), newCb(), createLoopState());
-
-    expect(vi.mocked(sendToChannel)).not.toHaveBeenCalled();
-    expect(captured()!.digestState!.lastSentAt.a).toBe("2020-01-01T00:00:00.000Z");
-  });
-
-  test("not entitled → interactive chat inbound is NOT handled (no reply, no chat-driven action)", async () => {
-    vi.mocked(determineEntitlement).mockResolvedValue({ entitled: false });
-    wireCluster({
-      configData: {
-        enabled: "true", confirmPolls: "1",
-        signalApiUrl: "http://sig", signalNumber: "+15550001111", signalRecipients: "+15550001111",
-      },
-      pods: [],
-    });
-
-    await tick(makeConfig(), newCb(), createLoopState());
-
-    // The inbound poll (receiveSignal) never ran, so no chat reply / chat-approved
-    // mutation could happen for a free org.
-    expect(vi.mocked(receiveSignal)).not.toHaveBeenCalled();
-    expect(vi.mocked(sendToChannel)).not.toHaveBeenCalled();
-  });
-
-  test("entitled → interactive chat inbound IS handled", async () => {
-    vi.mocked(determineEntitlement).mockResolvedValue({ entitled: true });
-    vi.mocked(receiveSignal).mockResolvedValue([] as never);
-    wireCluster({
-      configData: {
-        enabled: "true", confirmPolls: "1",
-        signalApiUrl: "http://sig", signalNumber: "+15550001111", signalRecipients: "+15550001111",
-      },
-      pods: [],
-    });
-
-    await tick(makeConfig(), newCb(), createLoopState());
-
-    expect(vi.mocked(receiveSignal)).toHaveBeenCalled();
-  });
-
-  // Fix 1 regression: the fresh entitlement must survive tick's OWN final writeState
-  // (previously a second writer inside determineEntitlement was clobbered by it), and
-  // its fetchedAt is stamped from the AGENT clock — not the API server's — so clock
-  // skew can't flip a paying org to free.
-  test("a fresh fetch is persisted on tick's single state write, stamped agent-side (real determineEntitlement)", async () => {
-    const actual = await vi.importActual<typeof import("./entitlement.js")>("./entitlement.js");
-    vi.mocked(determineEntitlement).mockImplementation(actual.determineEntitlement);
-    // A wildly-future server timestamp must NOT be persisted — the agent restamps it.
-    const SERVER_FETCHED_AT = "2099-01-01T00:00:00.000Z";
-    const fetchSpy = vi.fn(async () => ({ status: 200, ok: true, json: async () => ({ agentEntitled: true, plan: "pro", fetchedAt: SERVER_FETCHED_AT }) }));
-    vi.stubGlobal("fetch", fetchSpy);
-    const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1" }, pods: [] });
-
-    const before = Date.now();
-    await tick(makeConfig(), newCb(), createLoopState());
-    const after = Date.now();
-
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    // The written state carries the freshly-fetched entitlement (it wasn't clobbered)...
-    expect(captured()!.entitlement!.agentEntitled).toBe(true);
-    // ...and its fetchedAt is the agent's own clock, not the API server's skewed one.
-    expect(captured()!.entitlement!.fetchedAt).not.toBe(SERVER_FETCHED_AT);
-    const t = Date.parse(captured()!.entitlement!.fetchedAt);
-    expect(t).toBeGreaterThanOrEqual(before);
-    expect(t).toBeLessThanOrEqual(after);
-  });
-
-  // Fix 1 regression: a persisted fresh cache suppresses the refetch (12h throttle),
-  // so the agent does NOT hit the backend every 30s tick.
-  test("a fresh persisted cache suppresses the next-tick refetch (real determineEntitlement)", async () => {
-    const actual = await vi.importActual<typeof import("./entitlement.js")>("./entitlement.js");
-    vi.mocked(determineEntitlement).mockImplementation(actual.determineEntitlement);
-    const fetchSpy = vi.fn(async () => ({ status: 200, ok: true, json: async () => ({ agentEntitled: true, fetchedAt: new Date().toISOString() }) }));
-    vi.stubGlobal("fetch", fetchSpy);
-    const freshCache = { agentEntitled: true, fetchedAt: new Date(Date.now() - 3_600_000).toISOString() }; // 1h old < 12h
-    vi.mocked(runWorker).mockResolvedValue(workerOut({ actions: [RESTART], verdict: "actionable" }));
-    const { captured } = wireCluster({
-      configData: { enabled: "true", confirmPolls: "1", mode: "auto" },
-      stateSeed: { updatedAt: "", audit: [], queue: [], report: "", entitlement: freshCache },
-    });
-
-    await tick(makeConfig(), newCb(), createLoopState());
-
-    // No backend call — the throttle held.
-    expect(fetchSpy).not.toHaveBeenCalled();
-    // Still entitled from the cache → the premium remediation path ran.
-    const calls = vi.mocked(kubectl).mock.calls.map((c) => c[0]);
-    expect(calls).toContainEqual(["rollout", "restart", "deployment/memos", "-n", "default"]);
-    // The cache is preserved on the write.
-    expect(captured()!.entitlement).toEqual(freshCache);
-  });
-});
-
-describe("tick() — entitlementRefreshAt force-check (Slice U3)", () => {
-  test("a changed refresh marker whose forced fetch SUCCEEDS records the new marker", async () => {
-    // A successful forced fetch produces a fresh cache — only then is the marker acked.
-    vi.mocked(determineEntitlement).mockResolvedValue({ entitled: true, cache: { agentEntitled: true, fetchedAt: new Date().toISOString() } });
-    const { captured } = wireCluster({
-      configData: { enabled: "true", confirmPolls: "1", entitlementRefreshAt: "2026-07-16T00:00:00.000Z" },
-      pods: [],
-    });
-
-    await tick(makeConfig(), newCb(), createLoopState());
-
-    expect(vi.mocked(determineEntitlement).mock.calls[0]![0]).toMatchObject({ force: true });
-    expect(captured()!.entitlementRefreshAt).toBe("2026-07-16T00:00:00.000Z");
-  });
-
-  test("a changed refresh marker whose forced fetch FAILS does NOT record it (marker stays → next tick retries)", async () => {
-    // A failed forced fetch yields no fresh cache — the marker must NOT be acked, so a
-    // later tick still forces the recheck (the "instant upgrade" isn't silently lost).
-    vi.mocked(determineEntitlement).mockResolvedValue({ entitled: false });
-    const { captured } = wireCluster({
-      configData: { enabled: "true", confirmPolls: "1", entitlementRefreshAt: "2026-07-16T00:00:00.000Z" },
-      pods: [],
-    });
-
-    await tick(makeConfig(), newCb(), createLoopState());
-
-    expect(vi.mocked(determineEntitlement).mock.calls[0]![0]).toMatchObject({ force: true });
-    // The marker was left unacked (still differs from rc), so force stays armed next tick.
-    expect(captured()!.entitlementRefreshAt).toBeUndefined();
-  });
-
-  test("an unchanged refresh marker does NOT force (honored last tick)", async () => {
-    const { captured } = wireCluster({
-      configData: { enabled: "true", confirmPolls: "1", entitlementRefreshAt: "2026-07-16T00:00:00.000Z" },
-      pods: [],
-      stateSeed: { updatedAt: "", audit: [], queue: [], report: "", entitlementRefreshAt: "2026-07-16T00:00:00.000Z" },
-    });
-
-    await tick(makeConfig(), newCb(), createLoopState());
-
-    expect(vi.mocked(determineEntitlement).mock.calls[0]![0]).toMatchObject({ force: false });
-    expect(captured()!.entitlementRefreshAt).toBe("2026-07-16T00:00:00.000Z");
-  });
-
-  test("no refresh marker at all → not forced", async () => {
-    wireCluster({ configData: { enabled: "true", confirmPolls: "1" }, pods: [] });
-
-    await tick(makeConfig(), newCb(), createLoopState());
-
-    expect(vi.mocked(determineEntitlement).mock.calls[0]![0]).toMatchObject({ force: false });
   });
 });
 
