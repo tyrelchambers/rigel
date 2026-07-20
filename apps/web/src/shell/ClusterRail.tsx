@@ -104,11 +104,11 @@ export function ClusterRail({
     return ctx ? resolveIconId(ctx.name, classifyProvider(ctx), iconOverrides) : null;
   }, [pickerFor, contexts, iconOverrides]);
 
-  // Show the rail whenever there's at least one context (the user wants the
-  // active cluster visible even in a single-cluster setup); only a truly empty
-  // list hides it.
-  if (!contexts || contexts.length === 0) return null;
-
+  // The rail always renders — it hosts the nav launcher's menu button, so it
+  // must stay visible even before the contexts query resolves (or if it fails,
+  // e.g. a Windows /api/contexts error) so navigation is never stranded. With
+  // no contexts the tile list is simply empty; the add-cluster and menu buttons
+  // still show.
   return (
     <nav
       aria-label="Clusters"
@@ -121,7 +121,7 @@ export function ClusterRail({
     >
       <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "10px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
         <TooltipProvider delay={300}>
-          {contexts.map((c) => {
+          {(contexts ?? []).map((c) => {
             const isActive = c.name === activeContext;
             const provider = classifyProvider(c);
             const iconId = resolveIconId(c.name, provider, iconOverrides);

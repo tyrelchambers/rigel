@@ -218,13 +218,29 @@ describe("ClusterRail reconciliation effect", () => {
     expect(switchCluster).not.toHaveBeenCalled();
   });
 
-  it("does not render when contexts list is empty", () => {
+  it("still renders the nav/menu button when the contexts list is empty", () => {
+    // The rail hosts the nav launcher's menu button, so it must stay visible
+    // even with zero contexts — otherwise navigation is stranded.
     useCluster.setState({ activeContext: null });
     mockUseContexts.mockReturnValue({ data: [] });
 
-    const { container } = renderRail();
+    const { getByLabelText } = renderRail();
 
-    expect(container.firstChild).toBeNull();
+    expect(getByLabelText("Open navigation")).toBeTruthy();
+    expect(initContext).not.toHaveBeenCalled();
+    expect(switchCluster).not.toHaveBeenCalled();
+  });
+
+  it("still renders the nav/menu button when the contexts query has not resolved", () => {
+    // Windows repro: GET /api/contexts errors → useContexts().data is undefined.
+    // The rail (and its menu button) must not vanish just because the query is
+    // pending or errored.
+    useCluster.setState({ activeContext: null });
+    mockUseContexts.mockReturnValue({ data: undefined });
+
+    const { getByLabelText } = renderRail();
+
+    expect(getByLabelText("Open navigation")).toBeTruthy();
     expect(initContext).not.toHaveBeenCalled();
     expect(switchCluster).not.toHaveBeenCalled();
   });
