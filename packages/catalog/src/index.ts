@@ -33,6 +33,7 @@ export * from "./addons";
 export {
   imageRepoPath,
   repoPathsMatch,
+  repoURLForImage,
   installedAppIDs,
   installedImages,
   runningImageDigest,

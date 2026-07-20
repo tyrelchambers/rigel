@@ -74,6 +74,23 @@ export function repoPathsMatch(running: string, candidate: string): boolean {
 }
 
 /**
+ * The source `repoURL` of the catalog app whose `matchImages` identify `image`,
+ * or null when no app matches or the match declares no repo. Lets the update
+ * check reach the GitHub Releases tier for a running image the caller hasn't
+ * already bound to an app id.
+ */
+export function repoURLForImage(apps: CatalogApp[], image: string): string | null {
+  const running = imageRepoPath(image);
+  for (const app of apps) {
+    if (!app.repoURL) continue;
+    for (const raw of app.matchImages) {
+      if (repoPathsMatch(running, imageRepoPath(raw))) return app.repoURL;
+    }
+  }
+  return null;
+}
+
+/**
  * Set of catalog-app `id`s installed in the cluster. Two passes, annotation
  * first:
  *

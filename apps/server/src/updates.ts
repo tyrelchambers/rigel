@@ -16,7 +16,9 @@
  */
 
 import {
+  CATALOG,
   parseImageRef,
+  repoURLForImage,
   UpdateResolver,
   type InstalledImage,
   type UpdateStatus,
@@ -149,7 +151,8 @@ export async function handleUpdates(
     const ref = parseImageRef(image);
     const currentTag = ref?.tag ?? null;
     try {
-      const item: InstalledImage = { appID: image, image, runningDigest };
+      const repoURL = repoURLForImage(CATALOG, image) ?? undefined;
+      const item: InstalledImage = { appID: image, image, runningDigest, repoURL };
       results.push(await resolveImage(resolver, item, currentTag));
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
