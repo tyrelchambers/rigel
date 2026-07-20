@@ -45,6 +45,9 @@ import { ClusterIcon } from "@/shell/clusterIcons";
 interface ConfirmSheetProps {
   /** The action to confirm and optionally execute. */
   action: ActionBlock | null;
+  /** Optional caution shown above the command — e.g. a major-version upgrade
+   *  warning. Advisory only; it never blocks the action. */
+  notice?: string | null;
   /** Controlled open state. */
   open: boolean;
   /** Called when the sheet should close (cancelled or after execution). */
@@ -80,6 +83,7 @@ interface ConfirmSheetProps {
  */
 export function ConfirmSheet({
   action,
+  notice,
   open,
   onClose,
   onPurge,
@@ -396,6 +400,15 @@ export function ConfirmSheet({
           <DialogDescription className="text-xs leading-relaxed">
             {description}
           </DialogDescription>
+
+          {notice && (
+            <p
+              role="alert"
+              className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-500"
+            >
+              {notice}
+            </p>
+          )}
 
           {/* Target cluster — the active rail context, which REST actually
               executes against via X-Rigel-Context. */}

@@ -6,7 +6,26 @@ import type {
   DaemonSetLike,
   PodLike,
 } from "@rigel/catalog";
-import { updateTargets, withTag } from "./updateTargets";
+import { updateTargets, withTag, majorUpgradeWarning } from "./updateTargets";
+
+describe("majorUpgradeWarning", () => {
+  test("warns on a major jump", () => {
+    expect(majorUpgradeWarning("nextcloud:29-apache", "34.0.1-apache")).toMatch(
+      /major version jump \(v29 → v34\)/i,
+    );
+    expect(majorUpgradeWarning("gitea/gitea:1.22", "1.27.0")).toBeNull(); // same major
+    expect(majorUpgradeWarning("registry:2", "3.0.0")).toMatch(/v2 → v3/);
+  });
+
+  test("no warning for same/minor/patch upgrades", () => {
+    expect(majorUpgradeWarning("ghcr.io/x/y:v2.1.4", "v2.2.0")).toBeNull();
+    expect(majorUpgradeWarning("ghcr.io/x/y:v2.1.4", "v2.1.5")).toBeNull();
+  });
+
+  test("no warning when the current tag has no parseable version (moving tag)", () => {
+    expect(majorUpgradeWarning("ghcr.io/toeverything/affine:stable", "0.27.1")).toBeNull();
+  });
+});
 
 function app(partial: Partial<CatalogApp> & { id: string }): CatalogApp {
   return {

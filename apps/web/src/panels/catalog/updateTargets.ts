@@ -14,6 +14,8 @@ import {
   runningImageDigest,
   boundAppID,
   boundContainer,
+  parseImageRef,
+  parseReleaseVersion,
   type CatalogApp,
   type DeploymentLike,
   type StatefulSetLike,
@@ -46,6 +48,23 @@ export function withTag(image: string, newTag: string): string {
     if (colon !== -1) s = s.slice(0, colon);
   }
   return `${s}:${newTag}`;
+}
+
+/**
+ * A warning when updating `currentImage` to `latestTag` crosses a major version
+ * (e.g. nextcloud `29` → `34`). Major upgrades commonly need manual migration
+ * (DB schema, config) and often can't skip intermediate majors, so a one-click
+ * `setImage` can break the app. Null when it isn't a major jump, or when either
+ * side has no parseable version (a moving `:stable`/`:latest` current tag).
+ */
+export function majorUpgradeWarning(currentImage: string, latestTag: string): string | null {
+  const cur = parseReleaseVersion(parseImageRef(currentImage)?.tag ?? "");
+  const next = parseReleaseVersion(latestTag);
+  if (!cur || !next) return null;
+  const from = cur.components[0];
+  const to = next.components[0];
+  if (to <= from) return null;
+  return `Major version jump (v${from} → v${to}). Major upgrades often need manual migration (database schema, config) and may not support skipping intermediate versions — review this app's upgrade notes before continuing.`;
 }
 
 /** Everything the Catalog panel needs to check + apply an update for one app. */
