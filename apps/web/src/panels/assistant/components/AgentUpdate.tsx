@@ -1,6 +1,6 @@
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCircleArrowUp, faCheck, faCloudSlash, faCircleInfo } from "@awesome.me/kit-6050953220/icons/classic/solid";
-import { useUpdates, type UpdateResult } from "@/lib/api";
+import { useUpdatesByImage, type UpdateResult } from "@/lib/api";
 import { useAssistantCtx } from "../AssistantContext";
 import { withTag } from "@/panels/catalog/updateTargets";
 
@@ -78,8 +78,8 @@ export function AgentUpdateView({
 export function AgentUpdate() {
   const { d, runSuggestion } = useAssistantCtx();
   const image = d.agentImage;
-  const updates = useUpdates(image ? [{ image }] : []);
-  const result = updates.data?.results.find((r) => r.image === image);
+  const updates = useUpdatesByImage(image ? [{ image }] : []);
+  const result = image ? updates.get(image)?.result : undefined;
 
   if (!image) return null;
 

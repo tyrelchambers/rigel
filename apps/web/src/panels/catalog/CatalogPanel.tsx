@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { motion, useAnimationControls } from "motion/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -26,7 +26,7 @@ import {
 } from "@rigel/catalog";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
-import { useUpdates, type UpdateResult, type ActionBlock } from "@/lib/api";
+import { useUpdatesByImage, type UpdateResult, type ActionBlock } from "@/lib/api";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { InfoTooltip } from "@/components/InfoTooltip";
 import { iconFor } from "./icons";
@@ -74,6 +74,10 @@ export default function CatalogPanel() {
   const [wizardNodePin, setWizardNodePin] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
   const [pendingNotice, setPendingNotice] = useState<string | null>(null);
+  // Images the user just updated: shown as current with no re-check. Populated
+  // once the watch confirms the workload's image actually advanced.
+  const [updatedImages, setUpdatedImages] = useState<ReadonlySet<string>>(() => new Set());
+  const pendingUpdates = useRef<Map<string, string>>(new Map());
   // The app whose Link workload picker is open, if any.
   const [linkApp, setLinkApp] = useState<CatalogApp | null>(null);
   // The workload targeted by the uninstall→purge flow, if any. null = closed.
@@ -170,21 +174,34 @@ export default function CatalogPanel() {
     return m;
   }, [deployments, statefulSets, daemonSets]);
 
-  // One batched /api/updates query for every installed image, cached for the
-  // session (TanStack Query owns the TTL; the server does no persistent cache).
+  // One independent /api/updates check per installed image, so updating one app
+  // re-checks only that app and never blocks or refetches the others. Images the
+  // user just updated are skipped (shown as current, no network check).
   const images = useMemo(
     () => targets.map((t) => ({ image: t.image, runningDigest: t.runningDigest })),
     [targets],
   );
-  const updates = useUpdates(images);
-  const resultByImage = useMemo(() => {
-    const m = new Map<string, UpdateResult>();
-    for (const r of updates.data?.results ?? []) m.set(r.image, r);
-    return m;
-  }, [updates.data]);
+  const updatesByImage = useUpdatesByImage(images, updatedImages);
+
+  // Clear a just-updated app once the watch confirms its image advanced.
+  useEffect(() => {
+    if (pendingUpdates.current.size === 0) return;
+    const next = new Set(updatedImages);
+    let changed = false;
+    for (const [appID, newImage] of pendingUpdates.current) {
+      if (targetByApp.get(appID)?.image === newImage) {
+        next.add(newImage);
+        pendingUpdates.current.delete(appID);
+        changed = true;
+      }
+    }
+    if (changed) setUpdatedImages(next);
+  }, [targetByApp, updatedImages]);
 
   // Hand off an [Update] click to the guarded ConfirmSheet as a setImage action.
   function onUpdate(target: UpdateTarget, latest: string) {
+    const newImage = withTag(target.image, latest);
+    pendingUpdates.current.set(target.appID, newImage);
     setPendingNotice(majorUpgradeWarning(target.image, latest));
     setPendingAction({
       kind: "setImage",
@@ -193,7 +210,7 @@ export default function CatalogPanel() {
       namespace: target.namespace,
       resourceKind: target.workloadKind,
       container: target.container,
-      image: withTag(target.image, latest),
+      image: newImage,
     });
   }
 
@@ -339,7 +356,12 @@ export default function CatalogPanel() {
           {filtered.map((app) => {
             const installed = installedIDs.has(app.id);
             const target = targetByApp.get(app.id);
-            const result = target ? resultByImage.get(target.image) : undefined;
+            const isCurrent = !!target && updatedImages.has(target.image);
+            const u = target ? updatesByImage.get(target.image) : undefined;
+            const result: UpdateResult | undefined =
+              isCurrent && target
+                ? { image: target.image, currentTag: null, latest: null, updateAvailable: false, kind: "version" }
+                : u?.result;
             return (
               <CatalogCard
                 key={app.id}
@@ -350,7 +372,7 @@ export default function CatalogPanel() {
               >
                 {installed && target && (
                   <UpdateStatusRow
-                    checking={updates.isPending && images.length > 0}
+                    checking={!isCurrent && (u?.isPending ?? false)}
                     result={result}
                     onUpdate={(latest) => onUpdate(target, latest)}
                   />
@@ -385,7 +407,10 @@ export default function CatalogPanel() {
           }}
           updateResult={(() => {
             const t = targetByApp.get(detailApp.id);
-            return t ? (resultByImage.get(t.image) ?? null) : null;
+            if (!t) return null;
+            if (updatedImages.has(t.image))
+              return { image: t.image, currentTag: null, latest: null, updateAvailable: false, kind: "version" };
+            return updatesByImage.get(t.image)?.result ?? null;
           })()}
           onUpdate={(latest) => {
             const t = targetByApp.get(detailApp.id);
