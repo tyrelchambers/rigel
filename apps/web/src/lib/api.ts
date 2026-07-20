@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ActiveForward } from "@/panels/services/portForward";
 import type { SuggestedAlert, DigestInput, ApplySource, RecentBatch, ChannelId } from "@rigel/k8s";
 import type { CheckResult, CloudProvider, CloudCluster } from "@rigel/cloud-connect/src/index";
@@ -263,20 +263,42 @@ async function fetchUpdates(images: UpdateImageInput[]): Promise<UpdatesResponse
  * pulled digest changes. Results are cached for the session (the client owns
  * the TTL; the server does no persistent caching).
  */
-export function useUpdates(images: UpdateImageInput[]) {
-  const norm = [...images]
-    .map((i) => ({ image: i.image, runningDigest: i.runningDigest ?? null }))
-    .sort((a, b) =>
-      `${a.image}@${a.runningDigest ?? ""}`.localeCompare(`${b.image}@${b.runningDigest ?? ""}`),
-    );
-  const key = norm.map((i) => `${i.image}@${i.runningDigest ?? ""}`);
-  return useQuery<UpdatesResponse, Error>({
-    queryKey: ["updates", key],
-    queryFn: () => fetchUpdates(norm),
-    enabled: norm.length > 0,
-    staleTime: 10 * 60_000, // 10 min — registries don't move that fast.
-    gcTime: 10 * 60_000,
+export interface ImageUpdate {
+  result: UpdateResult | undefined;
+  isPending: boolean;
+}
+
+/**
+ * One independent update check per image, keyed by that image alone — so
+ * updating a single app re-checks only that app and never refetches or blocks
+ * the others. Images in `skip` are treated as current: their query is disabled
+ * (no network check). Returns a Map keyed by image string.
+ */
+export function useUpdatesByImage(
+  images: UpdateImageInput[],
+  skip?: ReadonlySet<string>,
+): Map<string, ImageUpdate> {
+  const results = useQueries({
+    queries: images.map((i) => {
+      const runningDigest = i.runningDigest ?? null;
+      return {
+        queryKey: ["updates", i.image, runningDigest],
+        queryFn: () => fetchUpdates([{ image: i.image, runningDigest }]),
+        enabled: !skip?.has(i.image),
+        staleTime: 10 * 60_000, // 10 min — registries don't move that fast.
+        gcTime: 10 * 60_000,
+      };
+    }),
   });
+  const byImage = new Map<string, ImageUpdate>();
+  images.forEach((i, idx) => {
+    const q = results[idx];
+    byImage.set(i.image, {
+      result: q?.data?.results?.[0],
+      isPending: (q?.isPending ?? false) && q?.fetchStatus !== "idle",
+    });
+  });
+  return byImage;
 }
 
 // ---------------------------------------------------------------------------

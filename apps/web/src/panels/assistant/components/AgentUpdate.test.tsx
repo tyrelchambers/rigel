@@ -70,12 +70,12 @@ let ctxValue: {
   d: { agentImage: string | null; agentContainer: string | null; installedNamespace: string | null; stateNamespace: string };
   runSuggestion: typeof runSuggestion;
 };
-let updatesValue: { data?: { results: UpdateResult[] } };
+let updatesValue: Map<string, { result?: UpdateResult; isPending: boolean }>;
 
 vi.mock("../AssistantContext", () => ({ useAssistantCtx: () => ctxValue }));
 vi.mock("@/lib/api", async (orig) => ({
   ...(await orig<typeof import("@/lib/api")>()),
-  useUpdates: () => updatesValue,
+  useUpdatesByImage: () => updatesValue,
 }));
 
 describe("AgentUpdate (smart wrapper)", () => {
@@ -90,19 +90,21 @@ describe("AgentUpdate (smart wrapper)", () => {
       },
       runSuggestion,
     };
-    updatesValue = {
-      data: {
-        results: [
-          {
+    updatesValue = new Map([
+      [
+        "ghcr.io/x/rigel-assistant:0.1.412",
+        {
+          result: {
             image: "ghcr.io/x/rigel-assistant:0.1.412",
             currentTag: "0.1.412",
             latest: "0.1.415",
             updateAvailable: true,
             kind: "version",
           },
-        ],
-      },
-    };
+          isPending: false,
+        },
+      ],
+    ]);
   });
 
   it("fires a setImage ConfirmSheet with the resolved latest tag", () => {
