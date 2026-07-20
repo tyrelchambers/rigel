@@ -20,6 +20,12 @@ spec:
           image: ghcr.io/tyrelchambers/rigel-api:latest
           ports:
             - containerPort: 8080
+          env:
+            # Free public beta: every account is fully entitled (incl. the in-cluster
+            # agent's premium surfaces — Matrix/Signal chat, notify, remediate, autofix);
+            # Stripe billing is bypassed. Remove to return to paid entitlement.
+            - name: RIGEL_FREE_BETA
+              value: "true"
           envFrom:
             - secretRef:
                 name: rigel-api
