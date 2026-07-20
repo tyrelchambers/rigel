@@ -16,6 +16,7 @@ import { CHANNELS } from "@rigel/k8s";
 import type { SettingsDerived } from "./useSettings";
 import { NotifyToggle } from "./NotifyToggle";
 import { ChannelDisconnectDialog } from "./ChannelDisconnectDialog";
+import { ChannelCard, ChannelCardHeader } from "./ChannelCard";
 import { ChannelGlyph, CHANNEL_GLYPH_COLORS } from "./channelGlyphs";
 
 type WebhookChannelId = "discord" | "slack";
@@ -103,46 +104,34 @@ export function WebhookChannelSection({
   }
 
   return (
-    <div className="flex flex-col gap-4 rounded-[14px] border border-[var(--border-subtle)] bg-card p-[18px]">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div
-            className="flex size-9 items-center justify-center rounded-lg"
-            style={{ background: `color-mix(in oklab, ${brand.color} 16%, transparent)`, color: brand.color }}
-          >
-            {brand.icon}
+    <ChannelCard>
+      <ChannelCardHeader
+        icon={brand.icon}
+        iconBg={`color-mix(in oklab, ${brand.color} 16%, transparent)`}
+        iconColor={brand.color}
+        title={label}
+        dotColor={connected ? "var(--status-running)" : "var(--fg-tertiary)"}
+        statusLabel={connected ? "Connected" : "Not connected"}
+        action={
+          <div className="flex items-center gap-4">
+            <NotifyToggle channelId={channelId} namespace={namespace} enabled={notifyChannels.includes(channelId)} />
+            {connected && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDisconnectError(null);
+                  setDisconnectOpen(true);
+                }}
+                disabled={setChannel.isPending}
+                className="flex items-center gap-[7px] transition-opacity hover:opacity-80 disabled:opacity-50"
+              >
+                <FontAwesomeIcon icon={faPlugCircleXmark} className="size-[14px] text-destructive" />
+                <span className="text-xs font-medium text-destructive">Disconnect</span>
+              </button>
+            )}
           </div>
-          <div className="flex flex-col gap-[3px]">
-            <span className="text-sm font-semibold text-foreground">{label}</span>
-            <div className="flex items-center gap-[7px]">
-              <span
-                className="inline-block size-1.5 rounded-full"
-                style={{ background: connected ? "var(--status-running)" : "var(--fg-tertiary)" }}
-              />
-              <span className="text-xs text-muted-foreground">
-                {connected ? "Connected" : "Not connected"}
-              </span>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <NotifyToggle channelId={channelId} namespace={namespace} enabled={notifyChannels.includes(channelId)} />
-          {connected && (
-            <button
-              type="button"
-              onClick={() => {
-                setDisconnectError(null);
-                setDisconnectOpen(true);
-              }}
-              disabled={setChannel.isPending}
-              className="flex items-center gap-[7px] transition-opacity hover:opacity-80 disabled:opacity-50"
-            >
-              <FontAwesomeIcon icon={faPlugCircleXmark} className="size-[14px] text-destructive" />
-              <span className="text-xs font-medium text-destructive">Disconnect</span>
-            </button>
-          )}
-        </div>
-      </div>
+        }
+      />
 
       {!connected && (
         <span className="text-xs text-muted-foreground" style={{ lineHeight: 1.45 }}>
@@ -206,6 +195,6 @@ export function WebhookChannelSection({
         channel={label}
         description={`This removes the ${label} webhook from Rigel's config. Notifications stop immediately. You can reconnect anytime.`}
       />
-    </div>
+    </ChannelCard>
   );
 }

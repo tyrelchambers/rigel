@@ -27,13 +27,14 @@ import { useAssistantAction } from "@/lib/api";
 import { apiFetch, fetchSignalQR, fetchSignalAccounts, sendSignalTest } from "@/lib/api";
 import { useSettings } from "./useSettings";
 import { ChannelDisconnectDialog } from "./ChannelDisconnectDialog";
+import { ChannelCard, ChannelCardHeader } from "./ChannelCard";
 import { NotifyToggle } from "./NotifyToggle";
 
-const DOT_CLASS: Record<string, string> = {
-  gray: "bg-muted-foreground/50",
-  amber: "bg-[var(--status-pending)]",
-  blue: "bg-primary",
-  green: "bg-[var(--status-running)]",
+const DOT_COLOR: Record<string, string> = {
+  gray: "var(--fg-tertiary)",
+  amber: "var(--status-pending)",
+  blue: "var(--primary)",
+  green: "var(--status-running)",
 };
 
 
@@ -67,7 +68,7 @@ export function SignalSection({
   const [testResult, setTestResult] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
 
-  const dot = DOT_CLASS[signalStatusColor(status)];
+  const dotColor = DOT_COLOR[signalStatusColor(status)];
   const label = signalStatusLabel(status);
   const busy = status === "deploying" || status === "starting";
 
@@ -226,55 +227,45 @@ export function SignalSection({
   );
 
   return (
-    <div className="flex flex-col gap-4 rounded-[14px] border border-[var(--border-subtle)] bg-card p-[18px]">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="flex size-9 items-center justify-center rounded-lg bg-[var(--accent-dim)]">
-            <FontAwesomeIcon icon={faComment} className="size-4 text-primary" />
-          </div>
-          <div className="flex flex-col gap-[3px]">
-            <span className="text-sm font-semibold text-foreground">Signal</span>
-            <div className="flex items-center gap-[7px]">
-              <span className={`inline-block size-1.5 rounded-full ${dot}`} />
-              <span className="text-xs text-muted-foreground">{label}</span>
-              {busy && <Loader size={12} className="text-muted-foreground" />}
-            </div>
-          </div>
-        </div>
-
-        {status === "notDeployed" && (
-          <Button size="sm" disabled={applying} onClick={deploy}>
-            {applying ? "Deploying…" : "Deploy bridge"}
-          </Button>
-        )}
-        {status === "ready" && !linking && (
-          <Button size="sm" onClick={startLinking}>
-            Link phone
-          </Button>
-        )}
-        {status === "linked" && (
-          <div className="flex items-center gap-4">
-            <NotifyToggle channelId="signal" namespace={namespace} enabled={notifyChannels.includes("signal")} />
-            <Button
-              size="sm"
-              variant="muted"
-              onClick={startLinking}
-              disabled={linking}
-            >
-              Re-link
-            </Button>
-            <button
-              type="button"
-              onClick={() => { setDisconnectError(null); setDisconnectOpen(true); }}
-              disabled={setSignal.isPending}
-              className="flex items-center gap-[7px] transition-opacity hover:opacity-80 disabled:opacity-50"
-            >
-              <FontAwesomeIcon icon={faPlugCircleXmark} className="size-[14px] text-destructive" />
-              <span className="text-xs font-medium text-destructive">Disconnect</span>
-            </button>
-          </div>
-        )}
-      </div>
+    <ChannelCard>
+      <ChannelCardHeader
+        icon={<FontAwesomeIcon icon={faComment} className="size-4 text-primary" />}
+        title="Signal"
+        dotColor={dotColor}
+        statusLabel={label}
+        busy={busy}
+        action={
+          <>
+            {status === "notDeployed" && (
+              <Button size="sm" disabled={applying} onClick={deploy}>
+                {applying ? "Deploying…" : "Deploy bridge"}
+              </Button>
+            )}
+            {status === "ready" && !linking && (
+              <Button size="sm" onClick={startLinking}>
+                Link phone
+              </Button>
+            )}
+            {status === "linked" && (
+              <div className="flex items-center gap-4">
+                <NotifyToggle channelId="signal" namespace={namespace} enabled={notifyChannels.includes("signal")} />
+                <Button size="sm" variant="muted" onClick={startLinking} disabled={linking}>
+                  Re-link
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => { setDisconnectError(null); setDisconnectOpen(true); }}
+                  disabled={setSignal.isPending}
+                  className="flex items-center gap-[7px] transition-opacity hover:opacity-80 disabled:opacity-50"
+                >
+                  <FontAwesomeIcon icon={faPlugCircleXmark} className="size-[14px] text-destructive" />
+                  <span className="text-xs font-medium text-destructive">Disconnect</span>
+                </button>
+              </div>
+            )}
+          </>
+        }
+      />
 
       {error && (
         <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
@@ -374,6 +365,6 @@ export function SignalSection({
         channel="Signal"
         description="This removes the linked phone number and recipients from Rigel's config. Notifications stop immediately. The signal-cli-rest bridge stays deployed, so you can re-link anytime."
       />
-    </div>
+    </ChannelCard>
   );
 }

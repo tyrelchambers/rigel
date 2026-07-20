@@ -25,7 +25,8 @@ beforeEach(() => mutateAsync.mockClear());
 describe("MatrixSection", () => {
   it("shows a Connect call to action when not connected", () => {
     render(<MatrixSection derived={derived()} />);
-    expect(screen.getByRole("button", { name: /connect matrix/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^connect$/i })).toBeInTheDocument();
+    expect(screen.getByText("Not connected")).toBeInTheDocument();
   });
 
   it("shows the connected summary (bot id + allowed senders)", () => {
