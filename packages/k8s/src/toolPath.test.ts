@@ -1,5 +1,5 @@
-import { beforeEach, test, expect } from "vitest";
-import { gcloudSdkBin, spawnEnv, __resetGcloudSdkBinCache } from "./toolPath";
+import { beforeEach, test, expect, describe } from "vitest";
+import { gcloudSdkBin, spawnEnv, commandOnPath, __resetGcloudSdkBinCache } from "./toolPath";
 
 beforeEach(() => {
   __resetGcloudSdkBinCache();
@@ -189,4 +189,51 @@ test("base with no PATH key yields PATH === <dir> with no trailing colon", () =>
   expect(result.PATH).toBe("/opt/homebrew/share/google-cloud-sdk/bin");
   expect(result.PATH).not.toMatch(/:$/); // no trailing colon (would mean "search CWD")
   expect(result.HOME).toBe("/Users/test");
+});
+
+// ---------------------------------------------------------------------------
+// commandOnPath — cross-platform "is this CLI installed?" probe
+// ---------------------------------------------------------------------------
+
+describe("commandOnPath", () => {
+  test("POSIX: finds a bare binary on a colon-delimited PATH", () => {
+    const found = commandOnPath("claude", {
+      platform: "linux",
+      pathEnv: "/usr/bin:/usr/local/bin",
+      exists: (p) => p === "/usr/local/bin/claude",
+    });
+    expect(found).toBe(true);
+  });
+
+  test("POSIX: returns false when the binary is on no PATH dir", () => {
+    expect(
+      commandOnPath("codex", { platform: "linux", pathEnv: "/usr/bin:/bin", exists: () => false }),
+    ).toBe(false);
+  });
+
+  test("Windows: splits PATH on ';' and matches a PATHEXT extension (.CMD shim)", () => {
+    const found = commandOnPath("claude", {
+      platform: "win32",
+      pathEnv: "C:\\Windows;C:\\Users\\me\\AppData\\npm",
+      pathExt: ".EXE;.CMD;.BAT",
+      exists: (p) => p === "C:\\Users\\me\\AppData\\npm\\claude.CMD",
+    });
+    expect(found).toBe(true);
+  });
+
+  test("Windows: a bare name with no matching extension is not found", () => {
+    // Only a driver-letter colon is present; splitting on ';' must not mistake it
+    // for a delimiter (the POSIX bug this replaces).
+    const found = commandOnPath("claude", {
+      platform: "win32",
+      pathEnv: "C:\\Windows",
+      pathExt: ".EXE;.CMD",
+      exists: (p) => p === "C:\\Windows\\claude", // extensionless — should NOT match
+    });
+    expect(found).toBe(false);
+  });
+
+  test("returns false on an empty PATH", () => {
+    expect(commandOnPath("claude", { platform: "linux", pathEnv: "" })).toBe(false);
+  });
 });

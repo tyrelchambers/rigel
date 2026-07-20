@@ -12,7 +12,7 @@ function wrap(ui: React.ReactNode) {
 
 const claude: AgentView = {
   id: "claude", label: "Claude Code", vendor: "Anthropic", status: "available",
-  connection: "notConnected", authMethods: ["subscription", "apiKey"], authMethod: "subscription",
+  connection: "notSignedIn", authMethods: ["subscription", "apiKey"], authMethod: "subscription",
   installUrl: "https://x", installLabel: "Install Claude Code",
 };
 
@@ -31,18 +31,33 @@ describe("AgentSetup", () => {
   it("shows the 'Use this agent' button for a connected, non-active agent", () => {
     wrap(<AgentSetup agent={{ ...claude, connection: "connected" }} isActive={false} onBack={() => {}} />);
     expect(screen.getByRole("button", { name: /use this agent/i })).toBeInTheDocument();
-    expect(screen.queryByText(/^Active$/)).not.toBeInTheDocument();
+    // never the word "Active"
+    expect(screen.queryByText(/active/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^In use$/)).not.toBeInTheDocument();
   });
 
-  it("shows a non-interactive 'Active' indicator when the agent is already active", () => {
+  it("shows a non-interactive 'In use' indicator (never 'Active') when the agent is already in use", () => {
     wrap(<AgentSetup agent={{ ...claude, connection: "connected" }} isActive onBack={() => {}} />);
     expect(screen.queryByRole("button", { name: /use this agent/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/^Active$/)).toBeInTheDocument();
+    expect(screen.getByText(/^In use$/)).toBeInTheDocument();
+    expect(screen.queryByText(/active/i)).not.toBeInTheDocument();
   });
 
-  it("renders neither for a not-connected agent", () => {
-    wrap(<AgentSetup agent={{ ...claude, connection: "notConnected" }} onBack={() => {}} />);
+  it("renders neither the in-use indicator nor the button for a not-connected agent", () => {
+    wrap(<AgentSetup agent={{ ...claude, connection: "notSignedIn" }} onBack={() => {}} />);
     expect(screen.queryByRole("button", { name: /use this agent/i })).not.toBeInTheDocument();
-    expect(screen.queryByText(/^Active$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^In use$/)).not.toBeInTheDocument();
+  });
+
+  it("guides the steps by status: not installed shows the install prompt", () => {
+    wrap(<AgentSetup agent={{ ...claude, connection: "notInstalled" }} onBack={() => {}} />);
+    expect(screen.getByText(/isn't installed on this machine yet/i)).toBeInTheDocument();
+    expect(screen.getByText("Not installed")).toBeInTheDocument();
+  });
+
+  it("guides the steps by status: installed-but-unauthenticated shows 'Not signed in'", () => {
+    wrap(<AgentSetup agent={{ ...claude, connection: "notSignedIn" }} onBack={() => {}} />);
+    expect(screen.getByText(/CLI was found on this machine/i)).toBeInTheDocument();
+    expect(screen.getByText("Not signed in")).toBeInTheDocument();
   });
 });

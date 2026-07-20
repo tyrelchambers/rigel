@@ -15,7 +15,8 @@ import {
 describe("connectionLabel", () => {
   it("maps connection states to display labels", () => {
     expect(connectionLabel("connected")).toBe("Connected");
-    expect(connectionLabel("notConnected")).toBe("Not connected");
+    expect(connectionLabel("notInstalled")).toBe("Not installed");
+    expect(connectionLabel("notSignedIn")).toBe("Not signed in");
     expect(connectionLabel("comingSoon")).toBe("Coming soon");
   });
 });

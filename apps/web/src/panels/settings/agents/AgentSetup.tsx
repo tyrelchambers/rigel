@@ -8,6 +8,7 @@ import {
 import {
   useSetActiveAgent,
   useSetAgentAuth,
+  connectionLabel,
   type AgentAuthMethod,
   type AgentView,
 } from "@/lib/api";
@@ -50,6 +51,10 @@ export function AgentSetup({
   const saveDisabled =
     comingSoon || save.isPending || (needsSecret && !secret.trim());
   const connected = agent.connection === "connected";
+  // Guide the two steps off the real status: installed once the CLI is on PATH
+  // (notSignedIn means installed-but-unauthenticated), signed in once connected.
+  const installed = connected || agent.connection === "notSignedIn";
+  const signedIn = connected;
 
   async function onSave() {
     await save.mutateAsync({
@@ -84,15 +89,20 @@ export function AgentSetup({
               {agent.label}
             </span>
           </div>
-          <StatusPill connection={agent.connection} comingSoon={comingSoon} />
+          <StatusPill connection={agent.connection} />
         </div>
       </div>
 
       {/* Step 1 — Install */}
       <StepCard
         n={1}
+        done={installed}
         heading={`Install ${agent.label}`}
-        desc={`Install the ${agent.label} CLI on this machine if you haven't already.`}
+        desc={
+          installed
+            ? `The ${agent.label} CLI was found on this machine.`
+            : `The ${agent.label} CLI isn't installed on this machine yet. Install it, then reopen this panel.`
+        }
       >
         <a
           href={agent.installUrl}
@@ -114,8 +124,13 @@ export function AgentSetup({
       {/* Step 2 — Authenticate */}
       <StepCard
         n={2}
+        done={signedIn}
         heading="Authenticate"
-        desc={`Choose how Rigel authenticates with ${agent.label}.`}
+        desc={
+          signedIn
+            ? `Rigel is authenticated with ${agent.label}.`
+            : `Choose how Rigel authenticates with ${agent.label}.`
+        }
       >
         <div className="flex flex-col" style={{ gap: 8 }}>
           {agent.authMethods.map((m) => {
@@ -208,8 +223,9 @@ export function AgentSetup({
           Cancel
         </button>
 
-        {/* Active selection — only when the agent is connected. The active one
-            shows a non-interactive indicator; others get the "Use this agent" button. */}
+        {/* In-use selection — only when the agent is connected. The one currently
+            in use shows a non-interactive indicator; others get the "Use this agent"
+            button. */}
         {connected &&
           (isActive ? (
             <span
@@ -221,7 +237,7 @@ export function AgentSetup({
                 color: ACTIVE,
               }}
             >
-              <FontAwesomeIcon icon={faCircleCheck} className="size-[15px]" /> Active
+              <FontAwesomeIcon icon={faCircleCheck} className="size-[15px]" /> In use
             </span>
           ) : (
             <button
@@ -261,39 +277,12 @@ export function AgentSetup({
   );
 }
 
-/** Green "Connected" pill, muted "Coming soon" pill, or nothing. */
-function StatusPill({
-  connection,
-  comingSoon,
-}: {
-  connection: AgentView["connection"];
-  comingSoon: boolean;
-}) {
-  if (connection === "connected") {
-    return (
-      <span
-        className="inline-flex shrink-0 items-center rounded-full"
-        style={{
-          gap: 6,
-          padding: "5px 11px",
-          background: "rgba(52,208,127,0.12)",
-        }}
-      >
-        <span
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: "50%",
-            background: "#34D07F",
-          }}
-        />
-        <span className="text-xs" style={{ fontWeight: 600, color: "#34D07F" }}>
-          Connected
-        </span>
-      </span>
-    );
-  }
-  if (comingSoon) {
+/**
+ * Status pill reflecting the real connection state: green "Connected", amber
+ * "Not installed" / "Not signed in", or a muted "Coming soon".
+ */
+function StatusPill({ connection }: { connection: AgentView["connection"] }) {
+  if (connection === "comingSoon") {
     return (
       <span
         className="inline-flex shrink-0 items-center rounded-full text-xs"
@@ -308,20 +297,39 @@ function StatusPill({
       </span>
     );
   }
-  return null;
+  // Green when connected/usable, amber for the not-installed / not-signed-in gates.
+  const color = connection === "connected" ? "var(--status-running)" : "var(--status-pending)";
+  return (
+    <span
+      className="inline-flex shrink-0 items-center rounded-full"
+      style={{
+        gap: 6,
+        padding: "5px 11px",
+        background: `color-mix(in oklab, ${color} 14%, transparent)`,
+      }}
+    >
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: color }} />
+      <span className="text-xs" style={{ fontWeight: 600, color }}>
+        {connectionLabel(connection)}
+      </span>
+    </span>
+  );
 }
 
-/** A numbered step card: badge + heading, description, then its children. */
+/** A numbered step card: badge + heading, description, then its children. When
+ *  `done`, the number badge is replaced by a green check to show the step is met. */
 function StepCard({
   n,
   heading,
   desc,
   children,
+  done = false,
 }: {
   n: number;
   heading: string;
   desc: string;
   children: ReactNode;
+  done?: boolean;
 }) {
   return (
     <div
@@ -329,18 +337,27 @@ function StepCard({
       style={{ gap: 12, padding: 16, background: "#161618" }}
     >
       <div className="flex items-center" style={{ gap: 10 }}>
-        <span
-          className="inline-flex items-center justify-center rounded-full text-xs"
-          style={{
-            width: 22,
-            height: 22,
-            fontWeight: 700,
-            color: "#FFFFFF",
-            background: "rgba(255,255,255,0.08)",
-          }}
-        >
-          {n}
-        </span>
+        {done ? (
+          <span
+            className="inline-flex items-center justify-center"
+            style={{ width: 22, height: 22, color: "var(--status-running)" }}
+          >
+            <FontAwesomeIcon icon={faCircleCheck} className="size-[18px]" />
+          </span>
+        ) : (
+          <span
+            className="inline-flex items-center justify-center rounded-full text-xs"
+            style={{
+              width: 22,
+              height: 22,
+              fontWeight: 700,
+              color: "#FFFFFF",
+              background: "rgba(255,255,255,0.08)",
+            }}
+          >
+            {n}
+          </span>
+        )}
         <span className="text-sm" style={{ fontWeight: 700, color: "#FFFFFF" }}>
           {heading}
         </span>

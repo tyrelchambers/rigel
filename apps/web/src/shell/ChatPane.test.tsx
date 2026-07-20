@@ -36,7 +36,7 @@ import { useCluster } from "@/store/cluster";
 
 const claude: AgentView = {
   id: "claude", label: "Claude Code", vendor: "Anthropic", status: "available",
-  connection: "notConnected", authMethods: ["subscription", "apiKey"], authMethod: "subscription",
+  connection: "notSignedIn", authMethods: ["subscription", "apiKey"], authMethod: "subscription",
   installUrl: "https://x", installLabel: "Install Claude Code",
 };
 const claudeConnected: AgentView = { ...claude, connection: "connected" };

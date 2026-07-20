@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   agentsView,
   agentConnection,
+  __setInstalledProbe,
   setAgentAuth,
   setActiveAgent,
   claudeAuthEnv,
@@ -34,9 +35,13 @@ beforeEach(async () => {
   delete process.env.CODEX_HOME;
   delete process.env.XDG_DATA_HOME;
   await mkdir(join(home, ".claude"), { recursive: true });
+  // Most tests exercise the CREDENTIAL dimension, so treat every CLI as installed;
+  // the install dimension has its own describe block that drives the probe directly.
+  __setInstalledProbe(() => true);
 });
 
 afterEach(async () => {
+  __setInstalledProbe(null);
   if (ORIG_HOME === undefined) delete process.env.HOME;
   else process.env.HOME = ORIG_HOME;
   if (ORIG_TOKEN === undefined) delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
@@ -52,11 +57,33 @@ describe("agentsView", () => {
   it("defaults active=claude; all listed agents are available (none coming soon)", async () => {
     const v = await agentsView();
     expect(v.activeAgentId).toBe("claude");
-    expect(v.agents.find((a) => a.id === "claude")?.connection).toBe("notConnected");
-    // gemini is now an available runner — no auth on a fresh temp HOME → notConnected.
-    expect(v.agents.find((a) => a.id === "gemini")?.connection).toBe("notConnected");
+    // Installed (forced) but no auth on a fresh temp HOME → notSignedIn.
+    expect(v.agents.find((a) => a.id === "claude")?.connection).toBe("notSignedIn");
+    expect(v.agents.find((a) => a.id === "gemini")?.connection).toBe("notSignedIn");
     // None of the listed agents are coming soon anymore.
     expect(v.agents.every((a) => a.connection !== "comingSoon")).toBe(true);
+  });
+});
+
+describe("agentConnection install gating", () => {
+  it("reports notInstalled when the CLI is not on PATH, even with a stored credential", async () => {
+    // Credential present (Rigel-stored API key) but the CLI is missing.
+    await setAgentAuth("claude", { authMethod: "apiKey", secret: "sk-test-123" });
+    __setInstalledProbe(() => false);
+    expect(await agentConnection("claude")).toBe("notInstalled");
+  });
+
+  it("only reports connected when installed AND credentialed", async () => {
+    await setAgentAuth("claude", { authMethod: "apiKey", secret: "sk-test-123" });
+    __setInstalledProbe(() => true);
+    expect(await agentConnection("claude")).toBe("connected");
+  });
+
+  it("probes the installed state per agent id (claude present, codex absent)", async () => {
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = "sk-ant-oat-xyz"; // claude credentialed
+    __setInstalledProbe((bin) => bin === "claude");
+    expect(await agentConnection("claude")).toBe("connected");
+    expect(await agentConnection("codex")).toBe("notInstalled");
   });
 });
 
@@ -80,8 +107,8 @@ describe("setAgentAuth (claude, subscription)", () => {
     await setAgentAuth("claude", { authMethod: "apiKey", secret: "sk-test-123" });
     const view = await setAgentAuth("claude", { authMethod: "subscription", secret: "" });
     expect(view.authMethod).toBe("subscription");
-    // no token anywhere → not connected
-    expect(await agentConnection("claude")).toBe("notConnected");
+    // no token anywhere → installed but not signed in
+    expect(await agentConnection("claude")).toBe("notSignedIn");
     // an env oauth token makes it connected and is what we launch with
     process.env.CLAUDE_CODE_OAUTH_TOKEN = "sk-ant-oat-xyz";
     expect(await agentConnection("claude")).toBe("connected");
@@ -189,7 +216,7 @@ describe("geminiConnected", () => {
       activeAgentId: "claude",
       agents: { gemini: { authMethod: "subscription" } },
     });
-    expect(await agentConnection("gemini")).toBe("notConnected");
+    expect(await agentConnection("gemini")).toBe("notSignedIn");
     await mkdir(join(home, ".gemini"), { recursive: true });
     await writeFile(join(home, ".gemini", "oauth_creds.json"), "{}", "utf8");
     expect(await agentConnection("gemini")).toBe("connected");
@@ -232,8 +259,8 @@ describe("opencodeConnected", () => {
     const dataHome = await mkdtemp(join(tmpdir(), "rigel-xdg-"));
     process.env.XDG_DATA_HOME = dataHome;
     try {
-      // No login → notConnected (and NOT comingSoon — opencode is available now).
-      expect(await agentConnection("opencode")).toBe("notConnected");
+      // No login → notSignedIn (and NOT comingSoon — opencode is available now).
+      expect(await agentConnection("opencode")).toBe("notSignedIn");
 
       const ocDir = join(dataHome, "opencode");
       await mkdir(ocDir, { recursive: true });

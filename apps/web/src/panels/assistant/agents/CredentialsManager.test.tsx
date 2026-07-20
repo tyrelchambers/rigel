@@ -39,9 +39,9 @@ beforeEach(() => {
         activeAgentId: "claude",
         agents: [
           { id: "claude", label: "Claude", vendor: "Anthropic", status: "available", connection: "connected", authMethods: ["subscription", "apiKey"], authMethod: "subscription", installUrl: "x", installLabel: "i" },
-          { id: "codex", label: "Codex", vendor: "OpenAI", status: "available", connection: "notConnected", authMethods: ["apiKey"], authMethod: "apiKey", installUrl: "x", installLabel: "i" },
-          { id: "gemini", label: "Gemini", vendor: "Google", status: "available", connection: "notConnected", authMethods: ["apiKey"], authMethod: "apiKey", installUrl: "x", installLabel: "i" },
-          { id: "opencode", label: "OpenCode", vendor: "SST", status: "available", connection: "notConnected", authMethods: ["apiKey"], authMethod: "apiKey", installUrl: "x", installLabel: "i" },
+          { id: "codex", label: "Codex", vendor: "OpenAI", status: "available", connection: "notSignedIn", authMethods: ["apiKey"], authMethod: "apiKey", installUrl: "x", installLabel: "i" },
+          { id: "gemini", label: "Gemini", vendor: "Google", status: "available", connection: "notSignedIn", authMethods: ["apiKey"], authMethod: "apiKey", installUrl: "x", installLabel: "i" },
+          { id: "opencode", label: "OpenCode", vendor: "SST", status: "available", connection: "notSignedIn", authMethods: ["apiKey"], authMethod: "apiKey", installUrl: "x", installLabel: "i" },
         ],
       }));
     }

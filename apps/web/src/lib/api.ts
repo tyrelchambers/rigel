@@ -1218,7 +1218,7 @@ export function useSetChatToken() {
 // ── Agents (multi-backend settings) ──────────────────────────────────────────
 export type AgentId = "claude" | "codex" | "gemini" | "opencode";
 export type AgentAuthMethod = "subscription" | "apiKey";
-export type AgentConnection = "connected" | "notConnected" | "comingSoon";
+export type AgentConnection = "connected" | "notInstalled" | "notSignedIn" | "comingSoon";
 
 export interface AgentView {
   id: AgentId;
@@ -1321,7 +1321,16 @@ export function useSetActiveAgent() {
 }
 
 export function connectionLabel(c: AgentConnection): string {
-  return c === "connected" ? "Connected" : c === "notConnected" ? "Not connected" : "Coming soon";
+  switch (c) {
+    case "connected":
+      return "Connected";
+    case "notInstalled":
+      return "Not installed";
+    case "notSignedIn":
+      return "Not signed in";
+    case "comingSoon":
+      return "Coming soon";
+  }
 }
 
 // ---------------------------------------------------------------------------

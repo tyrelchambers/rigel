@@ -6,6 +6,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { access, readFile, writeFile } from "node:fs/promises";
+import { commandOnPath } from "@rigel/k8s/src/toolPath";
 import { effectiveClaudeToken, setClaudeToken } from "./chatConfig";
 import { decryptSecret, encryptSecret } from "./secretStore";
 import {
@@ -14,6 +15,26 @@ import {
   type AgentAuthMethod,
   type AgentId,
 } from "./agentRegistry";
+
+// The CLI command each agent spawns (argv[0] in the bridges). Equals the id today,
+// but named explicitly so the install probe tracks the real binary if that changes.
+const AGENT_COMMAND: Record<AgentId, string> = {
+  claude: "claude",
+  codex: "codex",
+  gemini: "gemini",
+  opencode: "opencode",
+};
+
+// Injectable so tests can drive install detection without touching PATH.
+let installedProbe: (bin: string) => boolean = commandOnPath;
+/** Test seam: override the "is the CLI on PATH?" probe; pass null to reset. */
+export function __setInstalledProbe(fn: ((bin: string) => boolean) | null): void {
+  installedProbe = fn ?? commandOnPath;
+}
+/** True when the agent's CLI binary is resolvable on PATH. */
+export function agentInstalled(id: AgentId): boolean {
+  return installedProbe(AGENT_COMMAND[id]);
+}
 
 interface AgentAuthEntry {
   authMethod: AgentAuthMethod;
@@ -131,41 +152,50 @@ export async function opencodeConnected(): Promise<boolean> {
   }
 }
 
-export type AgentConnection = "connected" | "notConnected" | "comingSoon";
+export type AgentConnection = "connected" | "notInstalled" | "notSignedIn" | "comingSoon";
 
+/**
+ * Whether the agent has a usable credential — a Rigel-stored API key or a provider
+ * login (token/auth file). Distinct from whether the CLI is installed: an agent can
+ * have a credential with no CLI (e.g. a stored API key) and vice versa.
+ */
+async function agentHasCredential(id: AgentId, cfg: AgentsConfig): Promise<boolean> {
+  if (id === "claude") {
+    if (authMethodFor(cfg, "claude") === "apiKey") return !!cfg.agents.claude?.apiKey;
+    return !!(await effectiveClaudeToken());
+  }
+  if (id === "codex") {
+    if (authMethodFor(cfg, "codex") === "apiKey") return !!cfg.agents.codex?.apiKey;
+    return await codexSubscriptionConnected();
+  }
+  if (id === "opencode") {
+    // OpenCode is login-managed only (no Rigel-stored key); credentialed iff its own
+    // auth.json holds ≥1 credential.
+    return await opencodeConnected();
+  }
+  if (id === "gemini") {
+    if (authMethodFor(cfg, "gemini") === "apiKey") return !!cfg.agents.gemini?.apiKey;
+    // Subscription: credentialed iff Gemini's own oauth_creds.json is on disk.
+    return await geminiConnected();
+  }
+  // Exhaustiveness guard: adding a new AgentId without a branch fails the build here.
+  return ((_exhaustive: never): boolean => {
+    throw new Error(`agentHasCredential: unhandled agent id ${String(_exhaustive)}`);
+  })(id);
+}
+
+/**
+ * Rolls the CLI-installed and has-credential signals into one status. An agent is
+ * only "connected" (usable) when its CLI is installed AND it has a credential.
+ * Install is the primary gate — you must install before you can sign in — so a
+ * missing CLI reports "notInstalled" regardless of any stored credential.
+ */
 export async function agentConnection(id: AgentId): Promise<AgentConnection> {
   const desc = getAgent(id);
   if (!desc || desc.status === "comingSoon") return "comingSoon";
+  if (!agentInstalled(id)) return "notInstalled";
   const cfg = await readAgentsConfig();
-  if (id === "claude") {
-    if (authMethodFor(cfg, "claude") === "apiKey") {
-      return cfg.agents.claude?.apiKey ? "connected" : "notConnected";
-    }
-    return (await effectiveClaudeToken()) ? "connected" : "notConnected";
-  }
-  if (id === "codex") {
-    if (authMethodFor(cfg, "codex") === "apiKey") {
-      return cfg.agents.codex?.apiKey ? "connected" : "notConnected";
-    }
-    return (await codexSubscriptionConnected()) ? "connected" : "notConnected";
-  }
-  if (id === "opencode") {
-    // OpenCode is login-managed only (no Rigel-stored key); connected iff its own
-    // auth.json holds ≥1 credential.
-    return (await opencodeConnected()) ? "connected" : "notConnected";
-  }
-  if (id === "gemini") {
-    if (authMethodFor(cfg, "gemini") === "apiKey") {
-      return cfg.agents.gemini?.apiKey ? "connected" : "notConnected";
-    }
-    // Subscription: connected iff Gemini's own oauth_creds.json is on disk.
-    return (await geminiConnected()) ? "connected" : "notConnected";
-  }
-  // Exhaustiveness guard: every AgentId is handled above, so `id` is `never` here.
-  // Adding a new AgentId without a connection branch fails the build on this line.
-  return ((_exhaustive: never): AgentConnection => {
-    throw new Error(`agentConnection: unhandled agent id ${String(_exhaustive)}`);
-  })(id);
+  return (await agentHasCredential(id, cfg)) ? "connected" : "notSignedIn";
 }
 
 export interface AgentView {

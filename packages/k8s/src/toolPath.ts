@@ -1,5 +1,5 @@
 import { existsSync, realpathSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, win32 as winPath, posix as posixPath } from "node:path";
 
 interface SdkBinDeps {
   pathEnv?: string;
@@ -45,6 +45,42 @@ export function gcloudSdkBin(deps: SdkBinDeps = {}): string | null {
 /** For tests: reset the memo so each test starts clean. */
 export function __resetGcloudSdkBinCache(): void {
   cachedSdkBin = undefined;
+}
+
+interface OnPathDeps {
+  pathEnv?: string;
+  pathExt?: string;
+  platform?: NodeJS.Platform;
+  exists?: (p: string) => boolean;
+}
+
+/**
+ * True when `bin` resolves to a file on PATH. Cross-platform: splits PATH on the
+ * OS-correct delimiter (`;` on Windows, `:` elsewhere) and, on Windows, tries each
+ * PATHEXT extension so `.exe`/`.cmd`/`.bat` shims are found. Existence-only (no
+ * exec-bit probe) — enough to answer "is this CLI installed?" without spawning it
+ * (which sidesteps the Windows `.cmd` spawn pitfalls). Deps are injectable for tests.
+ */
+export function commandOnPath(bin: string, deps: OnPathDeps = {}): boolean {
+  const pathEnv = deps.pathEnv ?? process.env.PATH ?? "";
+  if (!pathEnv) return false;
+  const platform = deps.platform ?? process.platform;
+  const exists = deps.exists ?? existsSync;
+  const isWin = platform === "win32";
+  const delim = isWin ? ";" : ":";
+  // Build paths with the OS-correct separator even when `platform` is injected on a
+  // different host (so this works in tests and in real cross-platform use).
+  const joinPath = isWin ? winPath.join : posixPath.join;
+  const exts = isWin
+    ? (deps.pathExt ?? process.env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM").split(";").filter(Boolean)
+    : [""];
+  for (const dir of pathEnv.split(delim)) {
+    if (!dir) continue;
+    for (const ext of exts) {
+      if (exists(joinPath(dir, bin + ext))) return true;
+    }
+  }
+  return false;
 }
 
 /**
