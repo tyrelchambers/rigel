@@ -22,9 +22,18 @@ import {
   type UpdateStatus,
 } from "@rigel/catalog";
 
+/** One installed image to check. `runningDigest` is the digest the pod actually
+ *  pulled (from its `imageID`); it lets the moving-tag tier detect a stale pod
+ *  whose `:latest`/`:stable` tag has since advanced. A bare string is still
+ *  accepted for back-compat (treated as `{ image }`, no running digest). */
+export interface UpdatesImage {
+  image: string;
+  runningDigest?: string | null;
+}
+
 /** Request body for `POST /api/updates`. */
 export interface UpdatesRequest {
-  images: string[];
+  images: Array<string | UpdatesImage>;
 }
 
 /** One image's update outcome on the wire. Mirrors the spec `UpdateResult`. */
@@ -130,14 +139,17 @@ export async function handleUpdates(
   body: UpdatesRequest,
   resolver: UpdateResolver = new UpdateResolver(),
 ): Promise<UpdatesResponse> {
-  const images = Array.isArray(body?.images) ? body.images : [];
+  const entries = Array.isArray(body?.images) ? body.images : [];
   const results: UpdateResult[] = [];
 
-  for (const image of images) {
+  for (const entry of entries) {
+    const image = typeof entry === "string" ? entry : entry?.image;
+    if (typeof image !== "string" || image === "") continue;
+    const runningDigest = typeof entry === "string" ? undefined : entry?.runningDigest || undefined;
     const ref = parseImageRef(image);
     const currentTag = ref?.tag ?? null;
     try {
-      const item: InstalledImage = { appID: image, image };
+      const item: InstalledImage = { appID: image, image, runningDigest };
       results.push(await resolveImage(resolver, item, currentTag));
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);

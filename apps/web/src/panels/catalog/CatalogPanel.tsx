@@ -171,7 +171,10 @@ export default function CatalogPanel() {
 
   // One batched /api/updates query for every installed image, cached for the
   // session (TanStack Query owns the TTL; the server does no persistent cache).
-  const images = useMemo(() => targets.map((t) => t.image), [targets]);
+  const images = useMemo(
+    () => targets.map((t) => ({ image: t.image, runningDigest: t.runningDigest })),
+    [targets],
+  );
   const updates = useUpdates(images);
   const resultByImage = useMemo(() => {
     const m = new Map<string, UpdateResult>();

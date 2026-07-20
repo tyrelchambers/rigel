@@ -235,8 +235,16 @@ export interface UpdatesResponse {
   results: UpdateResult[];
 }
 
-/** POST a batch of image refs to the update checker. */
-async function fetchUpdates(images: string[]): Promise<UpdatesResponse> {
+/** An installed image to check: its spec tag plus the digest the pod actually
+ *  pulled (from `imageID`), so the moving-tag tier can spot a stale pod whose
+ *  `:latest`/`:stable` tag has since advanced. */
+export interface UpdateImageInput {
+  image: string;
+  runningDigest?: string | null;
+}
+
+/** POST a batch of images (tag + running digest) to the update checker. */
+async function fetchUpdates(images: UpdateImageInput[]): Promise<UpdatesResponse> {
   const res = await apiFetch("/api/updates", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -251,16 +259,21 @@ async function fetchUpdates(images: string[]): Promise<UpdatesResponse> {
 
 /**
  * Update-status query for a set of installed-app images. Keyed by the sorted
- * image list so it re-runs only when the running images actually change.
- * Results are cached for the session (the client owns the TTL; the server does
- * no persistent caching).
+ * (tag + running digest) list so it re-runs when either the spec tag OR the
+ * pulled digest changes. Results are cached for the session (the client owns
+ * the TTL; the server does no persistent caching).
  */
-export function useUpdates(images: string[]) {
-  const key = [...images].sort();
+export function useUpdates(images: UpdateImageInput[]) {
+  const norm = [...images]
+    .map((i) => ({ image: i.image, runningDigest: i.runningDigest ?? null }))
+    .sort((a, b) =>
+      `${a.image}@${a.runningDigest ?? ""}`.localeCompare(`${b.image}@${b.runningDigest ?? ""}`),
+    );
+  const key = norm.map((i) => `${i.image}@${i.runningDigest ?? ""}`);
   return useQuery<UpdatesResponse, Error>({
     queryKey: ["updates", key],
-    queryFn: () => fetchUpdates(key),
-    enabled: images.length > 0,
+    queryFn: () => fetchUpdates(norm),
+    enabled: norm.length > 0,
     staleTime: 10 * 60_000, // 10 min — registries don't move that fast.
     gcTime: 10 * 60_000,
   });
