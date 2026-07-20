@@ -40,7 +40,7 @@ import { TabBar, Tab } from "@/components/ui/Tabs";
 import { CatalogDetailSheet } from "./CatalogDetailSheet";
 import { CatalogInstallWizard } from "./CatalogInstallWizard";
 import { PurgeSheet } from "@/panels/purge/PurgeSheet";
-import { updateTargets, withTag, type UpdateTarget } from "./updateTargets";
+import { updateTargets, withTag, majorUpgradeWarning, type UpdateTarget } from "./updateTargets";
 import { LinkWorkloadPickerSheet, type LinkSelection } from "./LinkWorkloadPickerSheet";
 
 // Watches the catalog needs cluster-wide (detection scans every namespace) plus
@@ -73,6 +73,7 @@ export default function CatalogPanel() {
   // null = "Any" (the default when launched straight from a card's Install).
   const [wizardNodePin, setWizardNodePin] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
+  const [pendingNotice, setPendingNotice] = useState<string | null>(null);
   // The app whose Link workload picker is open, if any.
   const [linkApp, setLinkApp] = useState<CatalogApp | null>(null);
   // The workload targeted by the uninstall→purge flow, if any. null = closed.
@@ -184,6 +185,7 @@ export default function CatalogPanel() {
 
   // Hand off an [Update] click to the guarded ConfirmSheet as a setImage action.
   function onUpdate(target: UpdateTarget, latest: string) {
+    setPendingNotice(majorUpgradeWarning(target.image, latest));
     setPendingAction({
       kind: "setImage",
       label: `Update ${target.appID} to ${latest}`,
@@ -436,8 +438,12 @@ export default function CatalogPanel() {
       {/* setImage confirm sheet for the [Update] button */}
       <ConfirmSheet
         action={pendingAction}
+        notice={pendingNotice}
         open={!!pendingAction}
-        onClose={() => setPendingAction(null)}
+        onClose={() => {
+          setPendingAction(null);
+          setPendingNotice(null);
+        }}
       />
 
       {/* Uninstall → typed-name purge confirm (from the Manage detail sheet) */}
