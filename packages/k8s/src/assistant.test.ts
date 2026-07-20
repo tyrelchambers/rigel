@@ -26,7 +26,7 @@ import {
   type RoleSelectionInput,
   type LimitsInput,
 } from "./assistant";
-import { rbac, clusterRoleRules, liveMatchesPolicy, cell, CAPABILITIES, DEFAULT_POLICY, setCapability } from "./index";
+import { rbac, clusterRoleRules, liveMatchesPolicy, cell, CAPABILITIES, DEFAULT_POLICY, setCapability, serializePolicy } from "./index";
 
 function config(overrides: Partial<AssistantInstallConfig> = {}): AssistantInstallConfig {
   return {
@@ -90,6 +90,20 @@ test("rbac(ns) with DEFAULT_POLICY renders the shipped ClusterRole verbs", () =>
 test("rbac(ns, policy) with deleteWorkloads enabled grants deployment delete", () => {
   const p = setCapability(DEFAULT_POLICY, "deleteWorkloads", true);
   expect(rbac("default", p)).toMatch(/deployments/);
+});
+
+test("manifest seeds assistant-config with the serialized RBAC policy (default)", () => {
+  const yaml = manifestYAML(config());
+  expect(yaml).toContain(`rbacPolicy: ${JSON.stringify(serializePolicy(DEFAULT_POLICY))}`);
+});
+
+test("manifest renders the ClusterRole from c.rbacPolicy and seeds that policy", () => {
+  // A reinstall passes the cluster's stored policy; the ClusterRole + the seeded
+  // config both reflect it (here: exec enabled), never resetting to DEFAULT.
+  const p = setCapability(DEFAULT_POLICY, "exec", true);
+  const yaml = manifestYAML(config({ rbacPolicy: p }));
+  expect(yaml).toContain("pods/exec");
+  expect(yaml).toContain(`rbacPolicy: ${JSON.stringify(serializePolicy(p))}`);
 });
 
 test("rbac(DEFAULT_POLICY) renders exactly 15 ClusterRole rules with no duplicate read", () => {

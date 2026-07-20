@@ -23,7 +23,7 @@ export function SimpleView({
             <div className="flex min-w-0 flex-col gap-0.5">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold text-[var(--fg-primary)]">{cap.label}</span>
-                <RiskChip risk={cap.risk} />
+                <RiskChip risk={cap.risk} label={cap.riskLabel} />
               </div>
               <p className="text-xs text-[var(--fg-tertiary)]">{cap.description}</p>
             </div>
@@ -46,8 +46,10 @@ export function SimpleView({
   );
 }
 
-/** Chip shown next to a non-safe capability's label: amber "Destructive", red "Secrets". */
-function RiskChip({ risk }: { risk: Risk }) {
+/** Chip shown next to a non-safe capability's label: amber "Destructive", red
+ *  "Secrets" — or a red-tier `label` override for a dangerous grant that isn't
+ *  secret management (e.g. "Exec"). */
+function RiskChip({ risk, label }: { risk: Risk; label?: string }) {
   if (risk === "safe") return null;
   const isSecret = risk === "secret";
   return (
@@ -57,7 +59,7 @@ function RiskChip({ risk }: { risk: Risk }) {
         isSecret ? "bg-red-500/15 text-red-400" : "bg-amber-500/15 text-amber-400",
       )}
     >
-      {isSecret ? "Secrets" : "Destructive"}
+      {label ?? (isSecret ? "Secrets" : "Destructive")}
     </span>
   );
 }

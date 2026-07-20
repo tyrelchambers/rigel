@@ -53,23 +53,29 @@ directly: the assistant states what it would do and queues it, and you reply
 `yes` (or `approve N`) to run it.
 
 What it's actually allowed to do is set by RBAC, not the model or the chat
-flow — **`manifests/rbac.yaml` is the assistant's real ceiling**. A verb that
-isn't granted there is refused by the API server (403) regardless of what gets
-confirmed over chat. The default posture is read + reversible, CLUSTER-WIDE:
-broad reads (secrets omitted), create/update/patch (no delete) on
+flow — **the `rigel-assistant` ClusterRole is the assistant's real ceiling**. A
+verb that isn't granted there is refused by the API server (403) regardless of
+what gets confirmed over chat. The default posture is read + reversible,
+CLUSTER-WIDE: broad reads (secrets omitted), create/update/patch (no delete) on
 workloads/config/networking, node cordon/uncordon, and pod deletion (a
 crashlooping managed pod just respawns — the autonomous loop uses this
-directly; chat still confirms it). Every OTHER destructive verb (deleting
-deployments/statefulsets/daemonsets/replicasets/services/configmaps/PVCs, pod
-`eviction`/drain) ships commented out, so destructive is hard-blocked out of
-the box even with a confirmed "yes":
-- **Enable more destructive verbs** by uncommenting the `delete`/`eviction`
-  rules in `rbac.yaml` (chat confirmation still applies).
-- **Narrow the scope** by replacing the cluster-wide reversible-write rules
-  with namespaced Role/RoleBinding pairs per namespace, if you don't want the
-  loop or chat acting outside a subset of namespaces.
-- **Grant Secrets** by adding verbs on the `secrets` resource to the
-  ClusterRole (omitted by default — no value exfiltration).
+directly; chat still confirms it). Every OTHER dangerous grant (deleting
+workloads/services/config/PVCs, pod `eviction`/drain, `pods/exec`, Secrets) is
+off by default, so destructive is hard-blocked out of the box even with a
+confirmed "yes".
+
+**The ClusterRole is rendered from a stored RBAC policy — that policy is the
+source of truth, not the manifest file.** Edit it in Rigel under **Assistant →
+Permissions** (capability toggles: exec/shell into pods, delete workloads, drain
+nodes, manage secrets, plus a per-resource/verb matrix). The policy is persisted
+to the `assistant-config` ConfigMap (`rbacPolicy` key) and applied to the live
+ClusterRole. It **survives reinstall** (install re-renders from the stored
+policy) and **self-heals** (the server re-asserts it on start and on an interval,
+so an out-of-band `kubectl` edit reverts). `manifests/rbac.yaml` is a generated
+snapshot of the *default* policy for a first manual `kubectl apply` — editing it
+by hand has no lasting effect and a guard test keeps it in sync with `rbac()`.
+To narrow scope below cluster-wide, replace the ClusterRole/binding with
+namespaced Role/RoleBinding pairs (not yet a Permissions-tab option).
 
 The **kill-switch** (`assistant-config`'s `enabled` field) is the master off —
 flipping it pauses the autonomous loop and the entire inbound block alike, so
@@ -105,7 +111,9 @@ npm run build
 TOKEN=$(claude setup-token)
 kubectl create secret generic assistant-claude-token -n default --from-literal=token="$TOKEN"
 
-# 2. Apply the RBAC cage, ConfigMaps, and Deployment (set the image first):
+# 2. Apply the RBAC cage, ConfigMaps, and Deployment (set the image first).
+#    rbac.yaml is generated from packages/k8s rbac() (default policy); after
+#    install, manage permissions in Rigel → Assistant → Permissions instead.
 kubectl apply -f manifests/rbac.yaml
 kubectl apply -f manifests/configmaps.yaml
 kubectl apply -f manifests/deployment.yaml   # edit image: ghcr.io/<owner>/rigel-assistant

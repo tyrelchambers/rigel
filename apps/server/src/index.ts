@@ -60,7 +60,7 @@ import { getClusterYamlSchema } from "./clusterSchema";
 import { getApiResources } from "./apiResources";
 import { runCanI, type Subject, type CanICheck, type CanIResult } from "./rbacCanI";
 import { stripStatusBlock } from "@rigel/k8s/src/manifestClean";
-import { handleAssistant, isAutonomyRequest, bumpAgentEntitlementRefresh, type AssistantRequest } from "./assistant";
+import { handleAssistant, isAutonomyRequest, bumpAgentEntitlementRefresh, startRbacReconcileLoop, type AssistantRequest } from "./assistant";
 import { handleSignal, type SignalRequest } from "./signal";
 import { handleMatrix, type MatrixRequest } from "./matrix";
 import { handleChannelTest, type ChannelTestRequest } from "./channels";
@@ -1288,6 +1288,11 @@ const httpServer = serve({ fetch: handler, port: PORT, hostname: HOST }, (info) 
   console.log(`rigel server on :${info.port} (kubeconfig=${KUBECONFIG})`);
 });
 
+// Self-heal the assistant ClusterRole back to each cluster's stored RBAC policy
+// on start and on an interval, so out-of-band edits can't leave the operator's
+// saved policy as anything but the source of truth.
+const stopRbacReconcile = startRbacReconcileLoop();
+
 // WebSocket upgrade wiring. node-server hands us the underlying Node http.Server,
 // so we intercept the HTTP `upgrade` event ourselves and drive the `ws` server.
 const wss = new WebSocketServer({ noServer: true });
@@ -1336,6 +1341,7 @@ wss.on("connection", (client) => {
 // server. SIGINT/SIGTERM both run stopAll() before exiting.
 for (const sig of ["SIGINT", "SIGTERM"] as const) {
   process.on(sig, () => {
+    stopRbacReconcile();
     void portForwards.stopAll().finally(() => process.exit(0));
   });
 }

@@ -36,6 +36,7 @@ describe("capabilities", () => {
     expect(capabilityState(DEFAULT_POLICY, "cordon")).toBe("on");
     expect(capabilityState(DEFAULT_POLICY, "deleteWorkloads")).toBe("off");
     expect(capabilityState(DEFAULT_POLICY, "drain")).toBe("off");
+    expect(capabilityState(DEFAULT_POLICY, "exec")).toBe("off");
     expect(capabilityState(DEFAULT_POLICY, "secrets")).toBe("off");
   });
   test("setCapability toggles all of a capability's cells", () => {
@@ -48,6 +49,38 @@ describe("capabilities", () => {
     const cap = CAPABILITIES.find((c) => c.id === "reversible")!;
     const partial: RbacPolicy = { cells: [cap.cells[0]] };
     expect(capabilityState(partial, "reversible")).toBe("partial");
+  });
+});
+
+describe("exec capability", () => {
+  const execCell = cell("", "pods/exec", "create");
+
+  test("exec grants only pods/exec create, flagged red-tier with an Exec label", () => {
+    const exec = CAPABILITIES.find((c) => c.id === "exec")!;
+    expect(exec.cells).toEqual([execCell]);
+    expect(exec.risk).toBe("secret");
+    expect(exec.riskLabel).toBe("Exec");
+  });
+
+  test("pods/exec create is representable and round-trips through serialize", () => {
+    const p = setCapability({ cells: [] }, "exec", true);
+    expect(hasCell(p, execCell)).toBe(true);
+    expect(parsePolicy(serializePolicy(p)).cells).toContain(execCell);
+  });
+
+  test("exec is never bundled into read or reversible", () => {
+    const read = CAPABILITIES.find((c) => c.id === "read")!;
+    const reversible = CAPABILITIES.find((c) => c.id === "reversible")!;
+    expect(read.cells).not.toContain(execCell);
+    expect(reversible.cells.some((c) => c.startsWith("|pods/exec|"))).toBe(false);
+  });
+
+  test("enabling exec renders a pods/exec create rule in the ClusterRole", () => {
+    const p = setCapability(DEFAULT_POLICY, "exec", true);
+    const rules = policyToClusterRoleRules(p);
+    expect(
+      rules.some((r) => r.resources.includes("pods/exec") && r.verbs.includes("create")),
+    ).toBe(true);
   });
 });
 

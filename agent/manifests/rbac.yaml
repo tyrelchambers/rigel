@@ -1,10 +1,12 @@
+# GENERATED from packages/k8s rbac() — do not edit by hand.
+# Regenerate: UPDATE_RBAC=1 pnpm -C packages/k8s exec vitest run rbacManifest
+# The live ClusterRole is rendered from code + the operator's stored RBAC policy.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: rigel-assistant
   namespace: default
   labels:
-    app.kubernetes.io/name: rigel-assistant
     app.kubernetes.io/managed-by: rigel-assistant
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -15,9 +17,7 @@ metadata:
     app.kubernetes.io/managed-by: rigel-assistant
 rules:
   - apiGroups: [""]
-    resources: [pods, pods/log, pods/status, nodes, events, namespaces, services,
-                endpoints, persistentvolumeclaims, persistentvolumes,
-                replicationcontrollers, configmaps, serviceaccounts, resourcequotas, limitranges]
+    resources: [pods, pods/log, pods/status, nodes, events, namespaces, services, endpoints, persistentvolumeclaims, persistentvolumes, replicationcontrollers, configmaps, serviceaccounts, resourcequotas, limitranges]
     verbs: [get, list, watch]
   - apiGroups: [""]
     resources: [services/proxy]
@@ -43,24 +43,24 @@ rules:
   - apiGroups: ["metrics.k8s.io"]
     resources: [pods, nodes]
     verbs: [get, list]
-  - apiGroups: [""]
-    resources: [pods, services, configmaps, persistentvolumeclaims]
-    verbs: [create, update, patch]
   - apiGroups: ["apps"]
-    resources: [deployments, replicasets, statefulsets, daemonsets, deployments/scale, statefulsets/scale]
-    verbs: [create, update, patch]
+    resources: [daemonsets, deployments, deployments/scale, replicasets, statefulsets, statefulsets/scale]
+    verbs: [create, patch, update]
   - apiGroups: ["batch"]
-    resources: [jobs, cronjobs]
-    verbs: [create, update, patch]
+    resources: [cronjobs, jobs]
+    verbs: [create, patch, update]
+  - apiGroups: [""]
+    resources: [configmaps, persistentvolumeclaims, services]
+    verbs: [create, patch, update]
   - apiGroups: ["networking.k8s.io"]
     resources: [ingresses]
-    verbs: [create, update, patch]
-  - apiGroups: [""]
-    resources: [pods]
-    verbs: [delete]
+    verbs: [create, patch, update]
   - apiGroups: [""]
     resources: [nodes]
     verbs: [patch]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [create, delete, patch, update]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

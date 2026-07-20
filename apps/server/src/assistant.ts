@@ -57,6 +57,7 @@ import {
   type DigestInput,
   parsePolicy,
   serializePolicy,
+  liveMatchesPolicy,
   DEFAULT_POLICY,
   type RbacPolicy,
 } from "@rigel/k8s";
@@ -323,6 +324,12 @@ async function installAssistant(
   // otherwise silently merge into a foreign rigel-assistant. (Re-installing OURS
   // is fine; it carries the managed-by label.)
   await assertNoForeignDeployment(context, namespace);
+
+  // Preserve the cluster's stored RBAC policy so a reinstall renders the
+  // ClusterRole from the operator's saved edits — never resets to DEFAULT_POLICY.
+  // Absent (a true first install) leaves it undefined; the manifest seeds default.
+  const existingCfg = await readConfigMapData(context, namespace, "assistant-config");
+  if (existingCfg.rbacPolicy) config.rbacPolicy = parsePolicy(existingCfg.rbacPolicy);
 
   // Credentials: req.credentials (+ legacy top-level token folded into claudeToken).
   // For Claude we still also accept the user's already-saved token (onboarding /
@@ -729,6 +736,77 @@ export async function setRbac(
     return { code: 1, stdout: JSON.stringify(result), stderr };
   }
   return { code: 0, stdout: JSON.stringify(result), stderr: "" };
+}
+
+/**
+ * Self-heal each installed context's live ClusterRole back to the policy stored
+ * in its assistant-config — so any out-of-band change (a manual `kubectl apply`,
+ * a foreign reset, a reinstall that predates this fix) reverts to the operator's
+ * source of truth. Only enforces where a policy is actually stored (the
+ * `rbacPolicy` key present): a legacy install that never saved a policy is left
+ * untouched rather than forced onto DEFAULT_POLICY. Best-effort — one failing
+ * context never aborts the rest, and a failed live read is treated as "in sync"
+ * (never healed blind). All deps are injectable for cluster-free tests.
+ */
+export async function reconcileRbac(
+  deps: {
+    discover?: (namespace: string) => Promise<string[]>;
+    readConfig?: (context: string | null, namespace: string, name: string) => Promise<Record<string, string>>;
+    readLive?: (context: string | null) => Promise<unknown[] | null>;
+    apply?: (context: string, yaml: string) => Promise<RunResult>;
+  } = {},
+): Promise<{ healed: string[]; failures: { context: string; error: string }[] }> {
+  const namespace = DEFAULT_INSTALL_CONFIG.installNamespace;
+  const discover = deps.discover ?? ((ns: string) => discoverInstalledContexts(ns));
+  const readConfig = deps.readConfig ?? readConfigMapData;
+  const readLive = deps.readLive ?? ((ctx: string | null) => readAppliedClusterRoleRules(ctx));
+  const apply = deps.apply ?? ((c: string, yaml: string) => applyStdin(c, yaml));
+  const healed: string[] = [];
+  const failures: { context: string; error: string }[] = [];
+  let contexts: string[];
+  try {
+    contexts = await discover(namespace);
+  } catch (e) {
+    return { healed, failures: [{ context: "*", error: e instanceof Error ? e.message : String(e) }] };
+  }
+  for (const ctx of contexts) {
+    try {
+      const data = await readConfig(ctx, namespace, "assistant-config");
+      if (!data.rbacPolicy) continue; // nothing stored → don't enforce
+      const policy = parsePolicy(data.rbacPolicy);
+      const live = await readLive(ctx);
+      if (!live || liveMatchesPolicy(live, policy)) continue; // in sync (or unreadable)
+      const r = await applyPolicy({ policy, contexts: [ctx] }, { apply });
+      if (r.failures.length > 0) failures.push({ context: ctx, error: r.failures[0]!.error });
+      else healed.push(ctx);
+    } catch (e) {
+      failures.push({ context: ctx, error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  return { healed, failures };
+}
+
+/**
+ * Run `reconcileRbac` once on start and then every `intervalMs` while the server
+ * lives, so out-of-band ClusterRole edits self-heal within one interval. The
+ * timer is `unref`'d so it never keeps the process alive. Returns a stop fn.
+ */
+export function startRbacReconcileLoop(intervalMs = 5 * 60_000): () => void {
+  let stopped = false;
+  const tick = () => {
+    if (stopped) return;
+    void reconcileRbac().then((r) => {
+      if (r.healed.length > 0) console.log(`rbac reconcile: healed ${r.healed.join(", ")}`);
+      for (const f of r.failures) console.warn(`rbac reconcile failed for ${f.context}: ${f.error}`);
+    });
+  };
+  const handle = setInterval(tick, intervalMs);
+  if (typeof handle.unref === "function") handle.unref();
+  tick();
+  return () => {
+    stopped = true;
+    clearInterval(handle);
+  };
 }
 
 /** List the contexts with the assistant installed (for the editor's "all

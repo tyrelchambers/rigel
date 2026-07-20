@@ -15,6 +15,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
+import { isAssistantManaged } from "@rigel/k8s";
 import { buildDeleteAction } from "./rbacActions";
 import type {
   ClusterRole,
@@ -142,6 +143,15 @@ export default function RbacPanel() {
 
   const selectedSubject = subjects.find((s) => s.key === selectedKey) ?? null;
   const selectedRole = roleItems.find((r) => r.key === selectedKey) ?? null;
+  // The assistant's own ClusterRole is driven by a stored policy — editing it
+  // here would bypass that store and be reverted by reconcile, so we route the
+  // operator to Assistant → Permissions instead of the generic editor.
+  const assistantManaged = useMemo(
+    () =>
+      selectedRole?.kind === "ClusterRole" &&
+      isAssistantManaged(clusterRoles.find((r) => r.metadata.name === selectedRole.name)?.metadata.labels),
+    [selectedRole, clusterRoles],
+  );
 
   const grants = useMemo(
     () =>
@@ -310,9 +320,10 @@ export default function RbacPanel() {
                 roleNamespace={selectedRole.namespace}
                 rules={roleRules}
                 boundSubjects={boundSubjects}
-                onEdit={() => openRoleEditor(selectedRole)}
-                onEditYaml={() => editRoleYaml(selectedRole)}
-                onDelete={() => deleteRoleItem(selectedRole)}
+                onEdit={assistantManaged ? undefined : () => openRoleEditor(selectedRole)}
+                onEditYaml={assistantManaged ? undefined : () => editRoleYaml(selectedRole)}
+                onDelete={assistantManaged ? undefined : () => deleteRoleItem(selectedRole)}
+                assistantManaged={assistantManaged}
               />
             ) : null}
           </div>
