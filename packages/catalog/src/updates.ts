@@ -205,14 +205,32 @@ export function versionLess(lhs: ReleaseVersion, rhs: ReleaseVersion): boolean {
  * pre-releases and unparseable tags (`latest`, `stable`, …). Mirrors Swift
  * `newestStableTag`. Null when no tag parses.
  */
-export function newestStableTag(availableTags: string[]): string | null {
+export function newestStableTag(
+  availableTags: string[],
+  flavorlessOnly = false,
+): string | null {
   let best: { tag: string; version: ReleaseVersion } | null = null;
   for (const tag of availableTags) {
     const v = parseReleaseVersion(tag);
     if (!v || v.isPrerelease) continue;
+    // For a moving tag (`:stable`/`:latest`) we only want the newest PLAIN
+    // release — never an arch/edition/CI-suffixed variant (`2.43.0-alpine`,
+    // `2.31.4-c7dd6b9`), which would both misreport "newest" and, via the
+    // Update button, silently switch the install onto that variant.
+    if (flavorlessOnly && tagFlavor(tag) !== "") continue;
     if (best === null || versionLess(best.version, v)) best = { tag, version: v };
   }
   return best?.tag ?? null;
+}
+
+/**
+ * A tag's flavor is a content hash (a git sha or `sha-<hex>` build stamp) rather
+ * than a real variant like `-alpine`/`-community`. Such flavors differ on every
+ * build, so date+sha schemes (supabase `2025.06.02-sha-…`, it-tools
+ * `2024.10.22-<sha>`) must be compared by numeric core, not flavor equality.
+ */
+export function isContentHashFlavor(flavor: string): boolean {
+  return /^sha-?[0-9a-f]{6,}$/.test(flavor) || /^[0-9a-f]{7,40}$/.test(flavor);
 }
 
 /**
@@ -248,8 +266,17 @@ function isComparableUpgrade(
   currentTag: string,
   current: ReleaseVersion,
 ): boolean {
-  // Same arch/OS/edition/build flavor as the running tag.
-  if (tagFlavor(candidateTag) !== tagFlavor(currentTag)) return false;
+  // Same arch/OS/edition/build flavor as the running tag — EXCEPT when the
+  // running flavor is a content hash (date+sha schemes), where the sha differs
+  // every build: then match by numeric core and only require the candidate be
+  // itself hash-flavored or plain (never a real variant like `-alpine`).
+  const curFlavor = tagFlavor(currentTag);
+  const candFlavor = tagFlavor(candidateTag);
+  if (isContentHashFlavor(curFlavor)) {
+    if (candFlavor !== "" && !isContentHashFlavor(candFlavor)) return false;
+  } else if (candFlavor !== curFlavor) {
+    return false;
+  }
   // Comparable numeric scheme — rejects date/epoch tags (e.g. "2026061506")
   // whose leading component is far wider than a semver major.
   if (!schemeComparable(candidate, current)) return false;
@@ -296,8 +323,17 @@ export function pickLatestVersion(
 // Pure release-comparison helpers — Swift `UpdateResolver` statics
 // ---------------------------------------------------------------------------
 
-/** Pure: decide status from a known tag list. Mirrors Swift `statusFromTags`. */
+/** Pure: decide status from a known tag list. Mirrors Swift `statusFromTags`.
+ *  A list with zero parseable stable tags (empty page, `{"tags": null}`, or only
+ *  prereleases) is "unknown" — we can't compare — NOT a false "up to date". */
 export function statusFromTags(current: string, tags: string[]): UpdateStatus {
+  const hasStable = tags.some((t) => {
+    const v = parseReleaseVersion(t);
+    return v !== null && !v.isPrerelease;
+  });
+  if (!hasStable) {
+    return { kind: "unknown", reason: "registry returned no comparable version tags" };
+  }
   const latest = pickLatestVersion(tags, current);
   if (latest !== null) {
     return { kind: "updateAvailable", current, latest };
@@ -716,7 +752,7 @@ export class UpdateResolver {
     let newestTag: string;
     let newestDigest: string | null;
     try {
-      const t = newestStableTag(await source.listTags(ref.repository));
+      const t = newestStableTag(await source.listTags(ref.repository), true);
       if (t === null) return null;
       newestTag = t;
       newestDigest = await source.resolveDigest(ref.repository, t);

@@ -235,6 +235,26 @@ describe("pickLatestVersion", () => {
       ),
     ).toBeNull();
   });
+
+  // ── content-hash flavors (date+git-sha schemes like supabase / it-tools): the
+  // sha differs every build, so a naive flavor-equality check hides all updates.
+  test("date+sha (content-hash flavor) compares by numeric core", () => {
+    expect(
+      pickLatestVersion(
+        ["2025.06.02-sha-8f2993d", "2026.07.20-sha-74a0848"],
+        "2025.06.02-sha-8f2993d",
+      ),
+    ).toBe("2026.07.20-sha-74a0848");
+  });
+
+  test("hash-flavored current still rejects a real variant candidate", () => {
+    expect(
+      pickLatestVersion(
+        ["2025.06.02-sha-8f2993d", "2026.07.20-alpine"],
+        "2025.06.02-sha-8f2993d",
+      ),
+    ).toBeNull();
+  });
 });
 
 describe("newestStableTag", () => {
@@ -246,6 +266,42 @@ describe("newestStableTag", () => {
 
   test("null when none parse", () => {
     expect(newestStableTag(["latest", "stable", "main"])).toBeNull();
+  });
+
+  test("flavorlessOnly ignores arch/edition/CI-suffixed tags", () => {
+    // portainer-ce: a plain 2.43.0 exists alongside 2.43.0-alpine — pick plain.
+    expect(newestStableTag(["2.39.0", "2.43.0", "2.43.0-alpine"], true)).toBe("2.43.0");
+    // n8n: a CI-sha tag is never the "newest stable" for a moving tag.
+    expect(newestStableTag(["2.25.7", "2.31.4-c7dd6b9"], true)).toBe("2.25.7");
+    // default (false) keeps the pre-existing behavior.
+    expect(newestStableTag(["2.39.0", "2.43.0-alpine"])).toBe("2.43.0-alpine");
+  });
+});
+
+describe("statusFromTags", () => {
+  test("no comparable stable tags → unknown (never a false upToDate)", () => {
+    expect(statusFromTags("1.2.3", [])).toEqual({
+      kind: "unknown",
+      reason: expect.any(String),
+    });
+    expect(statusFromTags("1.2.3", ["latest", "main", "2.0.0-rc.1"]).kind).toBe(
+      "unknown",
+    );
+  });
+
+  test("stable tags present, none newer → upToDate", () => {
+    expect(statusFromTags("1.2.3", ["1.2.0", "1.2.3"])).toEqual({
+      kind: "upToDate",
+      current: "1.2.3",
+    });
+  });
+
+  test("stable tag newer → updateAvailable", () => {
+    expect(statusFromTags("1.2.3", ["1.2.3", "1.3.0"])).toEqual({
+      kind: "updateAvailable",
+      current: "1.2.3",
+      latest: "1.3.0",
+    });
   });
 });
 
@@ -515,6 +571,27 @@ describe("UpdateResolver tiers", () => {
       appID: "app1",
       image: "ghcr.io/myrepo/app:latest",
       runningDigest: "sha256:old",
+    };
+    expect(await r.resolveViaMovingTag(item)).toEqual({
+      kind: "updateAvailable",
+      current: "latest",
+      latest: "v2.0.0",
+    });
+  });
+
+  test("Tier 1.5: picks the newest FLAVORLESS tag, not an -alpine/CI variant", async () => {
+    const r = new UpdateResolver({
+      tagSourceFor: () =>
+        new MockTagSource(["v2.0.0", "v2.1.0-alpine"], {
+          "v2.0.0": "sha256:plain",
+          latest: "sha256:running",
+        }),
+      githubSource: null,
+    });
+    const item: InstalledImage = {
+      appID: "a",
+      image: "ghcr.io/r/app:latest",
+      runningDigest: "sha256:running",
     };
     expect(await r.resolveViaMovingTag(item)).toEqual({
       kind: "updateAvailable",
