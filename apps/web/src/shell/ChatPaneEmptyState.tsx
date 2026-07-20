@@ -31,14 +31,23 @@ export function ChatPaneEmptyState({ show }: ChatPaneEmptyStateProps) {
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <FontAwesomeIcon icon={faSparkles} className="size-[15px]" style={{ color: "var(--accent-primary)" }} />
-        <span className="text-xs" style={{ fontWeight: 600, color: "var(--fg-primary)" }}>
-          The Rigel copilot isn't set up yet
+        <FontAwesomeIcon
+          icon={faSparkles}
+          className="size-[15px]"
+          style={{ color: "var(--accent-primary)" }}
+        />
+        <span
+          className="text-xs"
+          style={{ fontWeight: 600, color: "var(--fg-primary)" }}
+        >
+          The Rigel assistant isn't set up yet
         </span>
       </div>
-      <span className="text-xs" style={{ color: "var(--fg-secondary)", lineHeight: 1.5 }}>
-        Chat needs an AI agent. Open Settings, then Agents, to connect one. The rest of the app works
-        without it.
+      <span
+        className="text-xs"
+        style={{ color: "var(--fg-secondary)", lineHeight: 1.5 }}
+      >
+        Chat needs an AI agent. Open Settings, then Agents, to connect one.
       </span>
       <button
         type="button"

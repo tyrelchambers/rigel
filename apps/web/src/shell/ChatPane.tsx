@@ -18,17 +18,47 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCopy, faPenToSquare, faClock, faArrowDown, faGear } from "@awesome.me/kit-6050953220/icons/classic/solid";
+import {
+  faCopy,
+  faPenToSquare,
+  faClock,
+  faArrowDown,
+  faGear,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
-import { BatchConfirmSheet, type BatchConfirmItem } from "@/components/BatchConfirmSheet";
+import {
+  BatchConfirmSheet,
+  type BatchConfirmItem,
+} from "@/components/BatchConfirmSheet";
 import { PurgeSheet } from "@/panels/purge/PurgeSheet";
 import type { ActionBlock, ActionResult } from "@/lib/api";
-import { useAgents, useAgentModels, useSuggestions, executeAction, useContexts } from "@/lib/api";
-import { chatFeedback, visibleSummary, batchFeedback, type BatchRun } from "@/panels/chat/workloadResultReport";
+import {
+  useAgents,
+  useAgentModels,
+  useSuggestions,
+  executeAction,
+  useContexts,
+} from "@/lib/api";
+import {
+  chatFeedback,
+  visibleSummary,
+  batchFeedback,
+  type BatchRun,
+} from "@/panels/chat/workloadResultReport";
 import { SuggestedPromptsRow } from "@/panels/chat/SuggestedPromptsRow";
 import { stripActionBlocks, type SuggestedAction } from "@/lib/actionBlocks";
-import { onChatEvent, sendChat, interruptChat, subscribe, unsubscribe } from "@/lib/ws";
-import { registerChatHandoff, handoffToChat, type ChatHandoffOpts } from "@/lib/chatHandoff";
+import {
+  onChatEvent,
+  sendChat,
+  interruptChat,
+  subscribe,
+  unsubscribe,
+} from "@/lib/ws";
+import {
+  registerChatHandoff,
+  handoffToChat,
+  type ChatHandoffOpts,
+} from "@/lib/chatHandoff";
 import { useCluster } from "@/store/cluster";
 import { MessageBubble } from "@/panels/chat/MessageBubble";
 import { ThinkingPane } from "@/panels/chat/ThinkingPane";
@@ -45,14 +75,16 @@ import {
   scopeToWire,
   type ScopeSelection,
 } from "@/panels/chat/composerScope";
-import {
-  CHAT_COMMANDS,
-  commandDisplay,
-} from "@/panels/chat/chatCommands";
+import { CHAT_COMMANDS, commandDisplay } from "@/panels/chat/chatCommands";
 import { buildMentions } from "@/panels/chat/mentions";
 import { PaneComposer } from "./PaneComposer";
 import { ChatPaneEmptyState } from "./ChatPaneEmptyState";
-import { loadPaneWidth, savePaneWidth, MIN_WIDTH, MAX_WIDTH } from "./chatPaneWidth";
+import {
+  loadPaneWidth,
+  savePaneWidth,
+  MIN_WIDTH,
+  MAX_WIDTH,
+} from "./chatPaneWidth";
 import {
   loadMostRecent,
   loadSessions,
@@ -114,7 +146,10 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
       if (!resizingRef.current) return;
       // Dragging left edge: moving LEFT increases width, moving RIGHT decreases.
       const delta = startXRef.current - e.clientX;
-      const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidthRef.current + delta));
+      const next = Math.min(
+        MAX_WIDTH,
+        Math.max(MIN_WIDTH, startWidthRef.current + delta),
+      );
       setPaneWidth(next);
     }
     function onMouseUp() {
@@ -150,9 +185,13 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   // must NOT hand the new agent the previous agent's id — that's the "Session not
   // found" error. Keyed by agentId (same per-agent pattern as modelConfigs); the
   // active agent's id is derived into `sessionId` once activeAgentId is known below.
-  const [sessionByAgent, setSessionByAgent] = useState<Record<string, string>>(boot?.sessionByAgent ?? {});
+  const [sessionByAgent, setSessionByAgent] = useState<Record<string, string>>(
+    boot?.sessionByAgent ?? {},
+  );
   // Stable id for the active conversation (used as the history-entry key).
-  const [conversationId, setConversationId] = useState<string>(boot?.id ?? newId());
+  const [conversationId, setConversationId] = useState<string>(
+    boot?.id ?? newId(),
+  );
   const createdAtRef = useRef<number>(boot?.createdAt ?? Date.now());
 
   // Chat history modal.
@@ -174,8 +213,13 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     return () => unsubscribe("deployments", "*");
   }, []);
   const agentNamespace = useCluster((s) => {
-    const deps = (s.resources["deployments"] ?? {}) as Record<string, { metadata?: { name?: string; namespace?: string } }>;
-    const agent = Object.values(deps).find((d) => d.metadata?.name === "rigel-assistant");
+    const deps = (s.resources["deployments"] ?? {}) as Record<
+      string,
+      { metadata?: { name?: string; namespace?: string } }
+    >;
+    const agent = Object.values(deps).find(
+      (d) => d.metadata?.name === "rigel-assistant",
+    );
     return agent?.metadata?.namespace ?? "default";
   });
 
@@ -183,18 +227,28 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   // composer reflects the ACTIVE agent's selection, resolved against that agent's
   // currently-advertised models/efforts (useAgentModels below). @-mention
   // candidates come from the store.
-  const [modelConfigs, setModelConfigs] = useState<ModelConfigMap>(() => loadModelConfigs());
+  const [modelConfigs, setModelConfigs] = useState<ModelConfigMap>(() =>
+    loadModelConfigs(),
+  );
 
   // Cluster-scope selection (persisted) — which contexts the agent may read from.
-  const [scopeConfig, setScopeConfig] = useState<ScopeSelection>(() => loadScope());
+  const [scopeConfig, setScopeConfig] = useState<ScopeSelection>(() =>
+    loadScope(),
+  );
   const scopeConfigRef = useRef(scopeConfig);
   useEffect(() => {
     scopeConfigRef.current = scopeConfig;
     saveScope(scopeConfig);
   }, [scopeConfig]);
   const { data: contexts } = useContexts();
-  const contextNames = useMemo(() => (contexts ?? []).map((c) => c.name), [contexts]);
-  const mentionCandidates = useMemo(() => buildMentions(resources), [resources]);
+  const contextNames = useMemo(
+    () => (contexts ?? []).map((c) => c.name),
+    [contexts],
+  );
+  const mentionCandidates = useMemo(
+    () => buildMentions(resources),
+    [resources],
+  );
 
   const composerRef = useRef<HTMLTextAreaElement>(null);
 
@@ -212,7 +266,9 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   // The ACTIVE agent's session id (from the per-agent map). Every send site reads
   // this, so switching agent automatically sends that agent's id — or none if it
   // has no session yet (a fresh session on the new backend), never a foreign one.
-  const sessionId = activeAgentId ? sessionByAgent[activeAgentId] ?? null : null;
+  const sessionId = activeAgentId
+    ? (sessionByAgent[activeAgentId] ?? null)
+    : null;
   // Mirror sessionId + the active agent id into refs so the once-registered chat
   // event handler and the handoff/action closures read the CURRENT values.
   const sessionIdRef = useRef<string | null>(sessionId);
@@ -243,7 +299,13 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   // The active agent's resolved selection: stored choice when still valid, else a
   // sensible default from the agent's list. Null while models are still unknown.
   const modelConfig = useMemo(
-    () => resolveModelConfig(activeAgentId, activeAgentId ? modelConfigs[activeAgentId] : undefined, models, efforts),
+    () =>
+      resolveModelConfig(
+        activeAgentId,
+        activeAgentId ? modelConfigs[activeAgentId] : undefined,
+        models,
+        efforts,
+      ),
     [activeAgentId, modelConfigs, models, efforts],
   );
   // Persist + apply a new selection for the ACTIVE agent.
@@ -303,7 +365,9 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
       turnStartedAtRef.current = start;
       sendChat(prompt, {
         ...modelConfigRef.current,
-        sessionId: opts?.newThread ? undefined : sessionIdRef.current ?? undefined,
+        sessionId: opts?.newThread
+          ? undefined
+          : (sessionIdRef.current ?? undefined),
         scope: scopeToWire(scopeConfigRef.current),
       });
     };
@@ -336,7 +400,10 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
         case "error":
           setMessages((prev) => [
             ...prev,
-            makeMessage("system", `⚠︎ ${event.text ?? "The session ended unexpectedly."}`),
+            makeMessage(
+              "system",
+              `⚠︎ ${event.text ?? "The session ended unexpectedly."}`,
+            ),
           ]);
           setIsStreaming(false);
           setLiveThinking("");
@@ -347,14 +414,18 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
           // Store under the agent that produced this turn (per-agent session map),
           // so a later switch back to it resumes here and a switch away won't reuse it.
           const aid = activeAgentIdRef.current;
-          if (aid) setSessionByAgent((prev) => ({ ...prev, [aid]: event.sessionId }));
+          if (aid)
+            setSessionByAgent((prev) => ({ ...prev, [aid]: event.sessionId }));
           break;
         }
         case "usageLimit":
           setUsageLimit(event.text ?? "Claude usage limit reached.");
           setMessages((prev) => [
             ...prev,
-            makeMessage("system", `⚠︎ ${event.text ?? "Claude usage limit reached."}`),
+            makeMessage(
+              "system",
+              `⚠︎ ${event.text ?? "Claude usage limit reached."}`,
+            ),
           ]);
           setIsStreaming(false);
           break;
@@ -363,7 +434,8 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
             ...prev,
             makeMessage(
               "system",
-              event.text ?? "⚠︎ Claude subprocess is no longer running. Message not sent.",
+              event.text ??
+                "⚠︎ Claude subprocess is no longer running. Message not sent.",
             ),
           ]);
           setIsStreaming(false);
@@ -382,7 +454,9 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
           setMessages((prev) => appendToolActivity(prev, event));
           break;
         case "toolResult":
-          setMessages((prev) => applyToolResult(prev, event.toolId, event.isError, event.output));
+          setMessages((prev) =>
+            applyToolResult(prev, event.toolId, event.isError, event.output),
+          );
           break;
       }
     };
@@ -430,7 +504,9 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
       setInputText("");
       const help =
         "Available commands:\n" +
-        CHAT_COMMANDS.map((c) => `- \`${commandDisplay(c)}\` — ${c.description}`).join("\n");
+        CHAT_COMMANDS.map(
+          (c) => `- \`${commandDisplay(c)}\` — ${c.description}`,
+        ).join("\n");
       setMessages((prev) => [...prev, makeMessage("system", help)]);
       return;
     }
@@ -443,7 +519,11 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     const start = new Date();
     setTurnStartedAt(start);
     turnStartedAtRef.current = start;
-    sendChat(text, { ...modelConfig, sessionId: sessionId ?? undefined, scope: scopeToWire(scopeConfig) });
+    sendChat(text, {
+      ...modelConfig,
+      sessionId: sessionId ?? undefined,
+      scope: scopeToWire(scopeConfig),
+    });
   }
 
   function handleStop() {
@@ -451,7 +531,10 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     setIsStreaming(false);
     setLiveThinking("");
     liveThinkingRef.current = "";
-    setMessages((prev) => [...prev, makeMessage("system", "⏹ Stopped by user.")]);
+    setMessages((prev) => [
+      ...prev,
+      makeMessage("system", "⏹ Stopped by user."),
+    ]);
   }
 
   function startNewChat() {
@@ -494,7 +577,10 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
 
   // ── Action blocks → ConfirmSheet / PurgeSheet ─────────────────────────────
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
-  const [purgeTarget, setPurgeTarget] = useState<{ name: string; namespace: string } | null>(null);
+  const [purgeTarget, setPurgeTarget] = useState<{
+    name: string;
+    namespace: string;
+  } | null>(null);
 
   function handleSuggestedAction(action: SuggestedAction) {
     const block = toActionBlock(action);
@@ -511,9 +597,16 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   // Close the loop after a chat-proposed action runs: show a visible ✓/✗ summary
   // AND feed the full result back into the SAME session (no user bubble) so the
   // model knows it ran and can verify/continue. Parity with Swift executeWorkload.
-  function handleActionResult(info: { action: ActionBlock; result: ActionResult; commandString: string }) {
+  function handleActionResult(info: {
+    action: ActionBlock;
+    result: ActionResult;
+    commandString: string;
+  }) {
     const title = info.action.label ?? "Action";
-    setMessages((prev) => [...prev, makeMessage("system", visibleSummary(title, info.result))]);
+    setMessages((prev) => [
+      ...prev,
+      makeMessage("system", visibleSummary(title, info.result)),
+    ]);
     setIsStreaming(true);
     setLiveThinking("");
     liveThinkingRef.current = "";
@@ -556,22 +649,38 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     let failedAt = -1;
     for (let i = 0; i < items.length; i++) {
       const { action, commandString } = items[i]!;
-      setMessages((prev) => [...prev, makeMessage("system", `▶︎ ${commandString}`)]);
+      setMessages((prev) => [
+        ...prev,
+        makeMessage("system", `▶︎ ${commandString}`),
+      ]);
       let result: ActionResult;
       try {
         const resp = await executeAction(action);
-        result = "code" in resp ? resp : { code: 1, stdout: "", stderr: "unexpected response" };
+        result =
+          "code" in resp
+            ? resp
+            : { code: 1, stdout: "", stderr: "unexpected response" };
       } catch (e) {
-        result = { code: 1, stdout: "", stderr: e instanceof Error ? e.message : String(e) };
+        result = {
+          code: 1,
+          stdout: "",
+          stderr: e instanceof Error ? e.message : String(e),
+        };
       }
-      setMessages((prev) => [...prev, makeMessage("system", visibleSummary(action.label ?? "Action", result))]);
+      setMessages((prev) => [
+        ...prev,
+        makeMessage("system", visibleSummary(action.label ?? "Action", result)),
+      ]);
       ran.push({ commandString, result });
       if (result.code !== 0) {
         failedAt = i;
         break;
       }
     }
-    const skipped = failedAt >= 0 ? items.slice(failedAt + 1).map((it) => it.commandString) : [];
+    const skipped =
+      failedAt >= 0
+        ? items.slice(failedAt + 1).map((it) => it.commandString)
+        : [];
     sendChat(batchFeedback(ran, skipped), {
       ...modelConfigRef.current,
       sessionId: sessionIdRef.current ?? undefined,
@@ -631,7 +740,13 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
             flexShrink: 0,
           }}
         >
-          <span style={{ color: "var(--accent-primary)", display: "flex", flexShrink: 0 }}>
+          <span
+            style={{
+              color: "var(--accent-primary)",
+              display: "flex",
+              flexShrink: 0,
+            }}
+          >
             <RigelMark size={18} />
           </span>
           <span
@@ -665,7 +780,11 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
             style={headerBtnStyle}
             aria-label="New chat"
           >
-            <FontAwesomeIcon icon={faPenToSquare} className="size-[11px]" style={{ color: "var(--accent-primary)" }} />
+            <FontAwesomeIcon
+              icon={faPenToSquare}
+              className="size-[11px]"
+              style={{ color: "var(--accent-primary)" }}
+            />
           </button>
 
           {/* Chat history */}
@@ -710,9 +829,15 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
           <MessageScroller.Root className="relative min-h-0 flex-1 overflow-hidden">
             <MessageScroller.Viewport className="h-full overflow-x-hidden overflow-y-auto px-3.5 pt-3.5">
               <MessageScroller.Content className="flex flex-col gap-2.5 pb-3.5">
-                <ChatPaneEmptyState show={notConfigured && messages.length === 0} />
+                <ChatPaneEmptyState
+                  show={notConfigured && messages.length === 0}
+                />
                 {messages.map((m) => (
-                  <MessageScroller.Item key={m.id} messageId={m.id} scrollAnchor={m.role === "user"}>
+                  <MessageScroller.Item
+                    key={m.id}
+                    messageId={m.id}
+                    scrollAnchor={m.role === "user"}
+                  >
                     <MessageBubble
                       message={m}
                       onAction={handleSuggestedAction}
@@ -736,7 +861,10 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
 
         {/* ── Thinking pane ────────────────────────────────────────────────── */}
         {showThinkingPane && (
-          <ThinkingPane liveThinking={liveThinking} turnStartedAt={turnStartedAt} />
+          <ThinkingPane
+            liveThinking={liveThinking}
+            turnStartedAt={turnStartedAt}
+          />
         )}
 
         {/* ── Suggestion chips (cluster-aware) ─────────────────────────────── */}
@@ -747,42 +875,6 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
           />
         )}
 
-        {/* ── "connect an agent" hint (above the composer) ─────────────────── */}
-        {notConfigured && (
-          <div
-            className="text-xs"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "8px 14px 0",
-              color: "var(--fg-secondary)",
-              flexShrink: 0,
-            }}
-          >
-            <span style={{ lineHeight: 1.4 }}>Connect an agent to start chatting.</span>
-            <button
-              type="button"
-              onClick={() => navigate("/settings")}
-              style={{
-                marginLeft: "auto",
-                color: "var(--accent-primary)",
-                fontWeight: 500,
-                textDecoration: "none",
-                whiteSpace: "nowrap",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                padding: 0,
-                fontSize: "inherit",
-              }}
-            >
-              Open Settings
-            </button>
-          </div>
-        )}
-
-        {/* ── Composer ─────────────────────────────────────────────────────── */}
         <PaneComposer
           ref={composerRef}
           value={inputText}
