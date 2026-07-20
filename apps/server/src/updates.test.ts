@@ -84,6 +84,44 @@ describe("handleUpdates", () => {
     });
   });
 
+  test("moving tag: a stale pod digest is an update even when the tag's registry digest is current", async () => {
+    // Real-world Affine case: `:stable` in the registry already points at the
+    // newest build, but the pod pulled an older `:stable` months ago and never
+    // restarted. Without forwarding runningDigest the resolver compares the
+    // registry tag to itself and wrongly reports up-to-date.
+    const resolver = new UpdateResolver({
+      tagSourceFor: () =>
+        new MockTagSource(["v1.0.0", "v2.0.0"], {
+          "v2.0.0": "sha256:new",
+          stable: "sha256:new", // the moving tag already points at the newest build
+        }),
+      githubSource: null,
+    });
+    const res = await handleUpdates(
+      { images: [{ image: "ghcr.io/toeverything/affine:stable", runningDigest: "sha256:old" }] },
+      resolver,
+    );
+    expect(res.results[0]).toMatchObject({
+      image: "ghcr.io/toeverything/affine:stable",
+      updateAvailable: true,
+      kind: "digest",
+      latest: "v2.0.0",
+    });
+  });
+
+  test("moving tag: pod digest already current → up to date", async () => {
+    const resolver = new UpdateResolver({
+      tagSourceFor: () =>
+        new MockTagSource(["v2.0.0"], { "v2.0.0": "sha256:new", stable: "sha256:new" }),
+      githubSource: null,
+    });
+    const res = await handleUpdates(
+      { images: [{ image: "ghcr.io/toeverything/affine:stable", runningDigest: "sha256:new" }] },
+      resolver,
+    );
+    expect(res.results[0]).toMatchObject({ updateAvailable: false, kind: "digest" });
+  });
+
   test("Tier 2 GitHub releases when registry declines → kind 'version'", async () => {
     const resolver = new UpdateResolver({
       tagSourceFor: () => null,

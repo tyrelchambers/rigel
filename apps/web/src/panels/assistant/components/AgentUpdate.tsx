@@ -78,7 +78,7 @@ export function AgentUpdateView({
 export function AgentUpdate() {
   const { d, runSuggestion } = useAssistantCtx();
   const image = d.agentImage;
-  const updates = useUpdates(image ? [image] : []);
+  const updates = useUpdates(image ? [{ image }] : []);
   const result = updates.data?.results.find((r) => r.image === image);
 
   if (!image) return null;

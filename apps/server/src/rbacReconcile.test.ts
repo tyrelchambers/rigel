@@ -32,7 +32,7 @@ test("heals a drifted ClusterRole back to the stored policy", async () => {
   const d = deps({ readLive: async () => [] }); // live lost all rules → drift
   const res = await reconcileRbac(d);
   expect(d.apply).toHaveBeenCalledTimes(1);
-  expect(d.apply.mock.calls[0][0]).toBe("ctx-a");
+  expect(vi.mocked(d.apply).mock.calls[0][0]).toBe("ctx-a");
   expect(res.healed).toEqual(["ctx-a"]);
 });
 
@@ -44,7 +44,7 @@ test("stored exec grant is re-asserted when the live role dropped it", async () 
   });
   const res = await reconcileRbac(d);
   expect(d.apply).toHaveBeenCalledTimes(1);
-  expect(d.apply.mock.calls[0][1]).toMatch(/pods\/exec/);
+  expect(vi.mocked(d.apply).mock.calls[0][1]).toMatch(/pods\/exec/);
   expect(res.healed).toEqual(["ctx-a"]);
 });
 
