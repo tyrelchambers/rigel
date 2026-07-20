@@ -122,7 +122,25 @@ describe("handleUpdates", () => {
     expect(res.results[0]).toMatchObject({ updateAvailable: false, kind: "digest" });
   });
 
-  test("Tier 2 GitHub releases when registry declines → kind 'version'", async () => {
+  test("Tier 2 GitHub releases fires for a catalog image via repoURL enrichment → kind 'version'", async () => {
+    const resolver = new UpdateResolver({
+      tagSourceFor: () => null,
+      githubSource: new MockTagSource(["1.31.0"]),
+    });
+    const res = await handleUpdates(
+      { images: ["docker.io/vaultwarden/server:1.30.0"] },
+      resolver,
+    );
+    expect(res.results[0]).toEqual({
+      image: "docker.io/vaultwarden/server:1.30.0",
+      currentTag: "1.30.0",
+      latest: "1.31.0",
+      updateAvailable: true,
+      kind: "version",
+    });
+  });
+
+  test("image with no catalog match gets no repoURL → releases tier can't fire → unknown", async () => {
     const resolver = new UpdateResolver({
       tagSourceFor: () => null,
       githubSource: new MockTagSource(["v2.2.0"]),
@@ -131,8 +149,6 @@ describe("handleUpdates", () => {
       { images: ["quay.io/x/y:v2.1.0"] },
       resolver,
     );
-    // No repoURL is attached when the handler builds an InstalledImage from a
-    // bare ref, so the releases tier can't fire — falls through to unknown.
     expect(res.results[0].kind).toBe("unknown");
   });
 

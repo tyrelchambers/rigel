@@ -20,7 +20,7 @@ import {
   type InstalledImage,
   type ReleaseVersion,
 } from "./updates";
-import { installedImages, runningImageDigest } from "./detection";
+import { installedImages, repoURLForImage, runningImageDigest } from "./detection";
 import type { CatalogApp } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -841,5 +841,29 @@ describe("agent continuous semver scheme (HELM-56)", () => {
 
   it("picks the newest continuous patch from a clean version list", () => {
     expect(newestStableTag(["0.1.0", "0.1.410", "0.1.412", "0.1.415"])).toBe("0.1.415");
+  });
+});
+
+describe("repoURLForImage", () => {
+  const apps: CatalogApp[] = [
+    { id: "vw", matchImages: ["vaultwarden/server"], repoURL: "https://github.com/dani-garcia/vaultwarden" } as CatalogApp,
+    { id: "noRepo", matchImages: ["acme/thing"], repoURL: null } as CatalogApp,
+  ];
+
+  it("matches by repo path, host- and tag-insensitively", () => {
+    expect(repoURLForImage(apps, "docker.io/vaultwarden/server:1.30.0")).toBe(
+      "https://github.com/dani-garcia/vaultwarden",
+    );
+    expect(repoURLForImage(apps, "vaultwarden/server:latest")).toBe(
+      "https://github.com/dani-garcia/vaultwarden",
+    );
+  });
+
+  it("returns null for an unmatched image", () => {
+    expect(repoURLForImage(apps, "ghcr.io/other/app:1.0.0")).toBeNull();
+  });
+
+  it("returns null when the matched app declares no repoURL", () => {
+    expect(repoURLForImage(apps, "acme/thing:2.0")).toBeNull();
   });
 });
