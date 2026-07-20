@@ -799,6 +799,12 @@ ${credentialEnvYAML(sources)}
                   name: rigel-matrix-token
                   key: accessToken
                   optional: true
+            - name: ${AGENT_TOKEN_SECRET_KEY}
+              valueFrom:
+                secretKeyRef:
+                  name: ${CREDENTIALS_SECRET_NAME}
+                  key: ${AGENT_TOKEN_SECRET_KEY}
+                  optional: true
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

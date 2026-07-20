@@ -148,6 +148,18 @@ test("agent Deployment writes its state to the install namespace, not default", 
   expect(yaml).toContain('- name: STATE_NAMESPACE\n              value: "agents"');
 });
 
+test("agent Deployment wires RIGEL_AGENT_TOKEN from the credentials Secret", () => {
+  const yaml = deployment(config());
+  expect(yaml).toContain(
+    "- name: RIGEL_AGENT_TOKEN\n" +
+      "              valueFrom:\n" +
+      "                secretKeyRef:\n" +
+      "                  name: rigel-assistant-credentials\n" +
+      "                  key: RIGEL_AGENT_TOKEN\n" +
+      "                  optional: true",
+  );
+});
+
 test("namespaceYAML builds a Namespace", () => {
   const y = namespaceYAML("agents");
   expect(y).toContain("kind: Namespace");
