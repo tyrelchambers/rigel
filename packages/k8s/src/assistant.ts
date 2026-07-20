@@ -15,7 +15,7 @@ import { differenceInMilliseconds } from "date-fns";
 import { millisecondsInSecond, secondsInDay } from "date-fns/constants";
 
 import type { SuggestedAction } from "./actionBlocks";
-import { policyToClusterRoleRules, subtractBaseline, DEFAULT_POLICY, type PolicyRule, type RbacPolicy } from "./rbacPolicy";
+import { policyToClusterRoleRules, subtractBaseline, serializePolicy, DEFAULT_POLICY, type PolicyRule, type RbacPolicy } from "./rbacPolicy";
 
 // ---------------------------------------------------------------------------
 // Install configuration (mirrors Swift AssistantInstallConfig)
@@ -42,6 +42,10 @@ export interface AssistantInstallConfig {
    * (matching the WORKER_MODEL/SUPERVISOR_MODEL env fallbacks). */
   worker?: RoleSelectionInput;
   supervisor?: RoleSelectionInput;
+  /** The RBAC policy to render the ClusterRole from. Absent = a first install:
+   *  seed DEFAULT_POLICY. On reinstall the caller reads the cluster's stored
+   *  policy and passes it here so the operator's edits are never reset. */
+  rbacPolicy?: RbacPolicy;
 }
 
 /** Defaults baked into the install form (mirrors `AssistantInstallConfig.default`). */
@@ -496,9 +500,9 @@ export function liveMatchesPolicy(appliedRules: unknown[], policy: RbacPolicy): 
 }
 
 /** ServiceAccount + ClusterRole + ClusterRoleBinding + namespaced Role/RoleBinding.
- *  Keep in sync with agent/manifests/rbac.yaml. The ClusterRole's rules are the
- *  non-editable BASELINE_RULES plus whatever `policy` grants (default
- *  DEFAULT_POLICY renders the same effective permissions as the shipped manifest). */
+ *  The ClusterRole's rules are the non-editable BASELINE_RULES plus whatever
+ *  `policy` grants. agent/manifests/rbac.yaml is a generated snapshot of this
+ *  with DEFAULT_POLICY (see rbacManifest() + its guard test) — not hand-edited. */
 export function rbac(ns: string, policy: RbacPolicy = DEFAULT_POLICY): string {
   const ruleYaml = rulesToYaml(clusterRoleRules(policy));
   return `apiVersion: v1
@@ -579,6 +583,19 @@ metadata:
 automountServiceAccountToken: false`;
 }
 
+/** The bootstrap RBAC manifest committed at agent/manifests/rbac.yaml: the
+ *  default ClusterRole set rbac() renders, under a generated-file banner. It is a
+ *  convenience snapshot for a manual `kubectl apply`; the live ceiling is always
+ *  what rbac() renders from BASELINE_RULES + the operator's stored policy, so the
+ *  file is generated (never hand-edited) and a guard test keeps it in sync. */
+export function rbacManifest(ns = "default"): string {
+  return `# GENERATED from packages/k8s rbac() — do not edit by hand.
+# Regenerate: UPDATE_RBAC=1 pnpm -C packages/k8s exec vitest run rbacManifest
+# The live ClusterRole is rendered from code + the operator's stored RBAC policy.
+${rbac(ns)}
+`;
+}
+
 /** The three pre-created ConfigMaps: config (control surface, seeded with the
  *  role selections + operational limits), state, backups. */
 export function configMaps(c: AssistantInstallConfig): string {
@@ -607,6 +624,10 @@ export function configMaps(c: AssistantInstallConfig): string {
     `  maxAttemptsPerIncident: "${c.maxAttemptsPerIncident}"`,
     `  confirmPolls: "${c.confirmPolls}"`,
     `  namespaces: "${nsList}"`,
+    // Seed the stored RBAC policy so assistant-config always carries the source
+    // of truth the ClusterRole renders from — reinstall reads this back and
+    // never resets the operator's edits to DEFAULT_POLICY.
+    `  rbacPolicy: ${JSON.stringify(serializePolicy(c.rbacPolicy ?? DEFAULT_POLICY))}`,
   ].join("\n");
   return `apiVersion: v1
 kind: ConfigMap
@@ -818,9 +839,11 @@ ${credentialEnvYAML(sources)}
               memory: 512Mi`;
 }
 
-/** The previewable manifest: RBAC + ConfigMaps + Deployment (NO Secret). */
+/** The previewable manifest: RBAC + ConfigMaps + Deployment (NO Secret). The
+ *  ClusterRole renders from `c.rbacPolicy` (the cluster's stored policy on a
+ *  reinstall) or DEFAULT_POLICY on a first install. */
 export function manifestYAML(c: AssistantInstallConfig): string {
-  return [rbac(c.installNamespace), configMaps(c), deployment(c)].join("\n---\n");
+  return [rbac(c.installNamespace, c.rbacPolicy ?? DEFAULT_POLICY), configMaps(c), deployment(c)].join("\n---\n");
 }
 
 /**

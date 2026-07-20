@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
+import { useSearchParams } from "react-router";
 import { apiFetch, useAssistantAction, type ActionBlock, type AssistantRequest } from "@/lib/api";
 import { useAssistant, type AssistantDerived } from "./useAssistant";
 import type { AssistantAuditEntry } from "@rigel/k8s";
@@ -31,7 +32,8 @@ import { outcomeGlyph, outcomeColorClass, relativeTime } from "./display";
 // Types
 // ---------------------------------------------------------------------------
 
-export type TabKey = "overview" | "needs" | "alerts" | "autofix" | "agents" | "permissions" | "activity" | "reports" | "audits" | "settings";
+export const TAB_KEYS = ["overview", "needs", "alerts", "autofix", "agents", "permissions", "activity", "reports", "audits", "settings"] as const;
+export type TabKey = (typeof TAB_KEYS)[number];
 
 /**
  * Coarse render phase, debounced so the Installer never flashes during load.
@@ -303,7 +305,14 @@ function AssistantDialogs(p: DialogsProps) {
 
 export function AssistantProvider({ children }: { children: React.ReactNode }) {
   const [installNamespace, setInstallNamespace] = useState("default");
-  const [tab, setTab] = useState<TabKey>("overview");
+  // Seed the tab from `?tab=` so other panels can deep-link (e.g. the RBAC panel
+  // sends the operator to Permissions). Falls back to overview for anything else.
+  const [searchParams] = useSearchParams();
+  const initialTab = ((): TabKey => {
+    const t = searchParams.get("tab");
+    return (TAB_KEYS as readonly string[]).includes(t ?? "") ? (t as TabKey) : "overview";
+  })();
+  const [tab, setTab] = useState<TabKey>(initialTab);
   const [actionError, setActionError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);

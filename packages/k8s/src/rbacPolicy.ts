@@ -10,10 +10,13 @@ export type Verb = (typeof VERBS)[number];
  *  roles/rolebindings/clusterroles are DELIBERATELY absent — the assistant can never be
  *  granted the ability to escalate itself. Read-only subresources (pods/log) aren't rows;
  *  reads are the get/list/watch verbs on the parent. `pods/eviction` (drain) is a row that
- *  only meaningfully takes `create`. `deployments/scale`/`statefulsets/scale` are write-only
+ *  only meaningfully takes `create`. `pods/exec` (shell into a pod) likewise only takes
+ *  `create`, and is granted solely by its own capability — never bundled into read/write.
+ *  `deployments/scale`/`statefulsets/scale` are write-only
  *  rows (their reads ship as part of the non-editable baseline). */
 export const MATRIX_RESOURCES: { apiGroup: string; resource: string; secret?: boolean; onlyVerbs?: Verb[] }[] = [
   { apiGroup: "", resource: "pods" },
+  { apiGroup: "", resource: "pods/exec", onlyVerbs: ["create"] },
   { apiGroup: "", resource: "pods/eviction", onlyVerbs: ["create"] },
   { apiGroup: "", resource: "services" },
   { apiGroup: "", resource: "configmaps" },
@@ -76,6 +79,9 @@ export interface Capability {
   label: string;
   description: string;
   risk: Risk;
+  /** Overrides the chip text derived from `risk` (e.g. a red-tier grant that
+   *  isn't secret management). Falls back to the risk-derived label when unset. */
+  riskLabel?: string;
   /** The exact cells this capability grants. */
   cells: string[];
   /** Baseline capabilities are always-on and non-editable (rendered informational). */
@@ -89,10 +95,10 @@ const WRITE_VERBS: Verb[] = ["create", "update", "patch"];
  *  excludes them to avoid granting/duplicating a read the policy doesn't control. */
 const SCALE_SUBRESOURCES = ["deployments/scale", "statefulsets/scale"];
 const readResources = MATRIX_RESOURCES.filter(
-  (r) => !r.secret && r.resource !== "pods/eviction" && !SCALE_SUBRESOURCES.includes(r.resource),
+  (r) => !r.secret && !["pods/eviction", "pods/exec"].includes(r.resource) && !SCALE_SUBRESOURCES.includes(r.resource),
 );
 const writeResources = MATRIX_RESOURCES.filter(
-  (r) => !r.secret && !["pods/eviction", "nodes"].includes(r.resource),
+  (r) => !r.secret && !["pods/eviction", "pods/exec", "nodes"].includes(r.resource),
 );
 
 export const CAPABILITIES: Capability[] = [
@@ -105,6 +111,12 @@ export const CAPABILITIES: Capability[] = [
     id: "reversible", label: "Restart · scale · rollback · edit",
     description: "Reversible changes to workloads, pods, config and ingresses", risk: "safe",
     cells: writeResources.flatMap((r) => WRITE_VERBS.map((v) => cell(r.apiGroup, r.resource, v))),
+  },
+  {
+    id: "exec", label: "Exec / shell into pods",
+    description: "Run commands inside any pod — the model can read whatever the pod can, including mounted Secrets",
+    risk: "secret", riskLabel: "Exec",
+    cells: [cell("", "pods/exec", "create")],
   },
   {
     id: "deletePods", label: "Delete pods",

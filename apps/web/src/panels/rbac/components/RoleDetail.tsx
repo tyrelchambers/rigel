@@ -1,4 +1,5 @@
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { useNavigate } from "react-router";
 import {
   faServer,
   faUser,
@@ -6,6 +7,7 @@ import {
   faPencil,
   faCode,
   faTrashCan,
+  faShieldHalved,
 } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import type { PolicyRule, Subject } from "../types";
 import type { Grant } from "../types";
@@ -22,6 +24,10 @@ interface Props {
   onEdit?: () => void;
   onEditYaml?: () => void;
   onDelete?: () => void;
+  /** The assistant's own managed ClusterRole. Editing it here would bypass the
+   *  stored policy (and get reverted by reconcile), so inline editing is replaced
+   *  by a link to Assistant → Permissions, the surface that persists. */
+  assistantManaged?: boolean;
 }
 
 function subjectIcon(kind: string | undefined) {
@@ -39,7 +45,9 @@ export function RoleDetail({
   onEdit,
   onEditYaml,
   onDelete,
+  assistantManaged = false,
 }: Props) {
+  const navigate = useNavigate();
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -52,6 +60,16 @@ export function RoleDetail({
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-[6px]">
+          {assistantManaged && (
+            <button
+              type="button"
+              onClick={() => navigate("/assistant?tab=permissions")}
+              className="flex items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--accent-primary)]/40 bg-[var(--accent-dim)] px-3 py-1.5 text-xs font-medium text-[var(--accent-primary)] transition-colors hover:bg-[var(--accent-dim)]/70"
+            >
+              <FontAwesomeIcon icon={faShieldHalved} className="size-[13px] shrink-0" />
+              Manage in Assistant
+            </button>
+          )}
           {onEdit && (
             <button
               type="button"
@@ -87,6 +105,13 @@ export function RoleDetail({
           )}
         </div>
       </div>
+
+      {assistantManaged && (
+        <p className="rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3 py-2 text-xs text-[var(--fg-tertiary)]">
+          Rigel manages this role from a saved policy. Edit it under Assistant → Permissions
+          so your changes persist — edits made here are reverted to the saved policy.
+        </p>
+      )}
 
       <div className="flex flex-col gap-[3px]">
         <span className="font-[var(--font-mono)] text-2xs font-semibold tracking-[1px] text-[var(--fg-secondary)]">
