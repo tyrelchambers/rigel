@@ -27,6 +27,17 @@ RUN npx esbuild ../packages/audit-cli/src/index.ts --bundle --platform=node \
       --format=esm --tsconfig=../packages/audit-cli/tsconfig.json \
       --outfile=/app/packages/audit-cli/dist/rigel-audit.mjs
 
+# ── artifact stage: ONLY the built bundles, for CI content-hashing ───────────
+# Everything that actually runs in the agent comes from these esbuild outputs.
+# CI hashes them (via --target artifact --output type=local) to decide whether the
+# agent's code truly changed — an app-only change elsewhere in the monorepo that
+# tree-shakes out yields the same bundle, so no new image is published. Kept as an
+# intermediate stage (NOT last) so a plain `docker build` still targets the runtime
+# image below.
+FROM scratch AS artifact
+COPY --from=build /app/agent/dist /dist
+COPY --from=build /app/packages/audit-cli/dist/rigel-audit.mjs /rigel-audit.mjs
+
 # ── runtime stage ────────────────────────────────────────────────────────────
 FROM node:26-alpine
 

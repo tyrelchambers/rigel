@@ -52,7 +52,35 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Hash ONLY the agent's built bundles (the artifact stage), not the whole
+      # repo. esbuild is deterministic for identical source + pinned deps, so an
+      # app-only change that tree-shakes out yields the same hash. Reuses the gha
+      # cache + the job's local builder cache, so the runtime stage below doesn't
+      # rebuild the `build` stage.
+      - name: Compute agent content hash
+        id: hash
+        run: |
+          docker buildx build --target artifact --file ./agent/Dockerfile \
+            --output type=local,dest=./_agent_artifact --cache-from type=gha .
+          HASH=$(cd ./_agent_artifact && find . -type f -exec sha256sum {} \; | LC_ALL=C sort | sha256sum | awk '{print $1}')
+          echo "short=${HASH:0:16}" >> "$GITHUB_OUTPUT"
+          echo "Agent content hash: ${HASH:0:16}"
+
+      # If an image with this exact content was already published, nothing about
+      # the agent changed — skip the build & push so :latest keeps its digest and
+      # no new version tag appears, and the update watcher stays quiet.
+      - name: Check whether this content is already published
+        id: check
+        run: |
+          if docker buildx imagetools inspect "${IMAGE}:content-${{ steps.hash.outputs.short }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Agent content unchanged (content-${{ steps.hash.outputs.short }} already published) — skipping build & publish."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build and push
+        if: steps.check.outputs.exists != 'true'
         uses: docker/build-push-action@v7
         with:
           # Repo root: the image bundles both agent/ and the shared packages/k8s/
@@ -61,10 +89,14 @@ jobs:
           file: ./agent/Dockerfile
           platforms: linux/amd64
           push: true
+          # `:content-<hash>` is the idempotency key the skip check reads next time.
           tags: |
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ github.sha }}
             ${{ env.IMAGE }}:${{ steps.ver.outputs.version }}
+            ${{ env.IMAGE }}:content-${{ steps.hash.outputs.short }}
+          labels: |
+            org.rigel.agent-content-hash=${{ steps.hash.outputs.short }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
