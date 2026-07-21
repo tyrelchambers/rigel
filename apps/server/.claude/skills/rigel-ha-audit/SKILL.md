@@ -59,14 +59,35 @@ whose loss takes every app down. It is always cluster-wide — there is no
      `{"kind":"command","args":["taint","nodes","<node>","node-role.kubernetes.io/control-plane=:NoSchedule"],"label":"Taint <node> NoSchedule"}`.
      Only do this when there are dedicated worker nodes to absorb the load; say so.
 
-   The quorum and failure-domain findings (`singleNodeCluster`,
+   The quorum / failure-domain findings (`singleNodeCluster`,
    `controlPlaneSinglePoint`, `controlPlaneNoFailureTolerance`,
-   `controlPlaneEvenCount`, `controlPlaneQuorumInOneFailureDomain`) have **no
-   one-click fix** — adding, removing, or relocating control-plane nodes is an
-   infrastructure change. Present these as guidance using the `fix` text; do not
-   emit an action block for them. Cap output at ~8 action blocks.
+   `controlPlaneEvenCount`, `controlPlaneQuorumInOneFailureDomain`,
+   `controlPlaneFailureDomainUnknown`) have **no one-click fix** — adding,
+   removing, relocating, or labeling control-plane nodes is an infrastructure
+   change. Present them as guidance using the `fix` text; do not emit an action
+   block for them. Cap output at ~8 action blocks.
 
-4. Close by naming what this audit does NOT cover, so its "clean" isn't
+4. **When `controlPlaneFailureDomainUnknown` is present, ask — don't assume.** The
+   engine can't see physical placement (the nodes carry no
+   `topology.kubernetes.io/zone` labels), and a quorum of control-plane nodes
+   sharing one failure domain is invisible to it yet fatal in practice — this is
+   exactly how two nodes on the same LAN slip past a "clean" result. So ask the
+   operator, plainly, how their control-plane/etcd nodes are physically
+   distributed: are any on the same host/hypervisor, rack, switch, power feed,
+   network, or site? Reason from the answer:
+   - If a **quorum** of them share one domain (e.g. "2 of my 3 are on the same
+     network"), spell out the concrete risk: losing that single domain drops a
+     majority of etcd members, so the cluster loses quorum and the whole control
+     plane freezes — even though the remaining node stays up. Then recommend
+     mitigations as guidance (not buttons): move or add a node so no single domain
+     holds a majority, and/or label the nodes with `topology.kubernetes.io/zone` so
+     future audits verify it automatically.
+   - If they're already spread across independent domains, say so and suggest
+     adding the zone labels so it stays verifiable.
+   Ask it as a real follow-up when the run is interactive; if you genuinely can't
+   ask (non-interactive), state the risk conditionally and move on.
+
+5. Close by naming what this audit does NOT cover, so its "clean" isn't
    overread: per-workload replica counts and spread (that's the Reliability
    audit), and distributed-storage (Longhorn/Ceph) replica factor vs. failure
    domains, which needs the storage operator's own tooling.

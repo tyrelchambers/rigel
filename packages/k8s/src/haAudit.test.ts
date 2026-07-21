@@ -70,26 +70,46 @@ describe("analyzeHa — cluster / control-plane", () => {
     expect(types).toEqual(["controlPlaneNoFailureTolerance"]);
   });
 
-  it("passes a clean 3-node control plane with no dedicated workers", () => {
+  it("advises verifying failure domains when control-plane nodes lack zone labels", () => {
     const cp = (name: string) => node({ name, isControlPlane: true });
-    expect(run({ nodes: [cp("c1"), cp("c2"), cp("c3")] })).toEqual([]);
+    expect(run({ nodes: [cp("c1"), cp("c2"), cp("c3")] })).toEqual(["controlPlaneFailureDomainUnknown"]);
   });
 
-  it("warns on an even control-plane count", () => {
+  it("advises when only some control-plane nodes are zone-labeled", () => {
+    expect(
+      run({
+        nodes: [
+          node({ name: "c1", isControlPlane: true, zone: "a" }),
+          node({ name: "c2", isControlPlane: true, zone: "b" }),
+          node({ name: "c3", isControlPlane: true }),
+        ],
+      }),
+    ).toEqual(["controlPlaneFailureDomainUnknown"]);
+  });
+
+  it("warns on an even control-plane count (and still advises on unlabeled domains)", () => {
     const cp = (name: string) => node({ name, isControlPlane: true });
-    expect(run({ nodes: [cp("c1"), cp("c2"), cp("c3"), cp("c4")] })).toEqual(["controlPlaneEvenCount"]);
+    expect(run({ nodes: [cp("c1"), cp("c2"), cp("c3"), cp("c4")] })).toEqual([
+      "controlPlaneEvenCount",
+      "controlPlaneFailureDomainUnknown",
+    ]);
   });
 
   it("flags a quorum concentrated in one failure domain (the 2:1 trap)", () => {
     const cp = (name: string, zone: string) => node({ name, isControlPlane: true, zone });
-    const types = run({ nodes: [cp("c1", "onprem"), cp("c2", "onprem"), cp("c3", "offprem")] });
-    expect(types).toContain("controlPlaneQuorumInOneFailureDomain");
+    expect(run({ nodes: [cp("c1", "onprem"), cp("c2", "onprem"), cp("c3", "offprem")] })).toEqual([
+      "controlPlaneQuorumInOneFailureDomain",
+    ]);
   });
 
-  it("does not flag a control plane spread across three failure domains", () => {
+  it("flags a control plane that all shares one labeled failure domain", () => {
+    const cp = (name: string) => node({ name, isControlPlane: true, zone: "home" });
+    expect(run({ nodes: [cp("c1"), cp("c2"), cp("c3")] })).toEqual(["controlPlaneQuorumInOneFailureDomain"]);
+  });
+
+  it("passes a control plane spread across three failure domains", () => {
     const cp = (name: string, zone: string) => node({ name, isControlPlane: true, zone });
-    const types = run({ nodes: [cp("c1", "a"), cp("c2", "b"), cp("c3", "c")] });
-    expect(types).not.toContain("controlPlaneQuorumInOneFailureDomain");
+    expect(run({ nodes: [cp("c1", "a"), cp("c2", "b"), cp("c3", "c")] })).toEqual([]);
   });
 
   it("reports control-plane nodes that also run workloads, only when workers exist", () => {
@@ -115,7 +135,12 @@ describe("analyzeHa — cluster / control-plane", () => {
 });
 
 describe("analyzeHa — critical singletons", () => {
-  const healthyCluster = [node({ name: "c1", isControlPlane: true }), node({ name: "c2", isControlPlane: true }), node({ name: "c3", isControlPlane: true })];
+  // Zone-labeled + spread so the control-plane checks are silent — isolates the singleton assertions.
+  const healthyCluster = [
+    node({ name: "c1", isControlPlane: true, zone: "a" }),
+    node({ name: "c2", isControlPlane: true, zone: "b" }),
+    node({ name: "c3", isControlPlane: true, zone: "c" }),
+  ];
 
   it("flags single-replica CoreDNS as critical", () => {
     const findings = analyzeHa({ nodes: healthyCluster, components: [comp({ replicas: 1 })] });

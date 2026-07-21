@@ -14,6 +14,7 @@ export type HaFindingType =
   | "controlPlaneNoFailureTolerance"
   | "controlPlaneEvenCount"
   | "controlPlaneQuorumInOneFailureDomain"
+  | "controlPlaneFailureDomainUnknown"
   | "controlPlaneSchedulable"
   | "dnsSinglePoint"
   | "dnsNotSpread"
@@ -122,28 +123,36 @@ export function analyzeHa(input: HaAuditInput): HaFinding[] {
     });
   }
 
-  // Majority of control-plane members in a single failure domain: the domain is a
-  // hidden single point of failure because losing it loses quorum. Needs zone
-  // labels on every control-plane node and at least two distinct zones.
-  if (cpCount >= 2) {
+  // Failure-domain concentration is only a *hidden* risk once the count itself is
+  // healthy (>= 3 members, so quorum has real tolerance to negate). With every
+  // control-plane node zone-labeled we can check it deterministically; otherwise
+  // we can't see the physical layout — so we ask the operator instead of passing
+  // silently, which is exactly how a same-network pair of nodes slips through.
+  if (cpCount >= 3) {
     const zoned = controlPlane.filter((n) => n.zone);
+    const q = quorum(cpCount);
     if (zoned.length === cpCount) {
       const byZone = new Map<string, number>();
       for (const n of zoned) byZone.set(n.zone as string, (byZone.get(n.zone as string) ?? 0) + 1);
-      if (byZone.size >= 2) {
-        const q = quorum(cpCount);
-        const concentrated = [...byZone.entries()].find(([, count]) => count >= q);
-        if (concentrated) {
-          const [zone, count] = concentrated;
-          findings.push({
-            ...cp,
-            type: "controlPlaneQuorumInOneFailureDomain",
-            severity: "warning",
-            rationale: `Zone "${zone}" holds ${count} of ${cpCount} control-plane nodes — a full quorum. If that zone goes down the survivors can't form a majority, so the cluster only tolerates losing the smaller zone, not this one.`,
-            fix: "Spread control-plane nodes so no single failure domain holds a quorum (e.g. an odd split across 3 zones).",
-          });
-        }
+      const concentrated = [...byZone.entries()].find(([, count]) => count >= q);
+      if (concentrated) {
+        const [zone, count] = concentrated;
+        findings.push({
+          ...cp,
+          type: "controlPlaneQuorumInOneFailureDomain",
+          severity: "warning",
+          rationale: `Zone "${zone}" holds ${count} of ${cpCount} control-plane nodes — a full quorum. If that failure domain goes down the survivors can't form a majority and the whole control plane freezes, so the cluster only tolerates losing a node outside "${zone}".`,
+          fix: "Spread control-plane nodes so no single failure domain holds a quorum (an odd split across 3 domains).",
+        });
       }
+    } else {
+      findings.push({
+        ...cp,
+        type: "controlPlaneFailureDomainUnknown",
+        severity: "info",
+        rationale: `The ${cpCount} control-plane/etcd nodes aren't labeled with failure domains (topology.kubernetes.io/zone), so this audit can't confirm they're physically spread. If a quorum of them (${q}) share one domain — the same host, rack, switch, power feed, or network/site — losing that one domain takes the whole control plane down even though a node survives.`,
+        fix: "Confirm the control-plane nodes don't share a single failure domain (host/rack/switch/power/network/site); label them with topology.kubernetes.io/zone so it's verifiable, and if a majority do share one, move or add a node so no single domain holds a quorum.",
+      });
     }
   }
 
