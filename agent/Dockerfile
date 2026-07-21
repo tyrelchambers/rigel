@@ -15,7 +15,7 @@ WORKDIR /app
 COPY agent/package.json agent/package-lock.json agent/tsconfig.json agent/build.mjs ./agent/
 COPY agent/src ./agent/src
 COPY packages/k8s/src ./packages/k8s/src
-COPY packages/audit-cli/package.json packages/audit-cli/tsconfig.json ./packages/audit-cli/
+COPY packages/audit-cli/package.json packages/audit-cli/tsconfig.json packages/audit-cli/build.mjs ./packages/audit-cli/
 COPY packages/audit-cli/src ./packages/audit-cli/src
 WORKDIR /app/agent
 RUN npm ci
@@ -23,9 +23,9 @@ RUN npm ci
 # self-contained ESM file with @rigel/k8s inlined (Node builtins external).
 RUN npm run build
 RUN ln -s /app/agent/node_modules /app/node_modules
-RUN npx esbuild ../packages/audit-cli/src/index.ts --bundle --platform=node \
-      --format=esm --tsconfig=../packages/audit-cli/tsconfig.json \
-      --outfile=/app/packages/audit-cli/dist/rigel-audit.mjs
+# Same shared build script the standalone/desktop builds use, so the ESM
+# createRequire banner fix (see build.mjs) is applied here too.
+RUN node /app/packages/audit-cli/build.mjs
 
 # ── artifact stage: ONLY the built bundles, for CI content-hashing ───────────
 # Everything that actually runs in the agent comes from these esbuild outputs.
