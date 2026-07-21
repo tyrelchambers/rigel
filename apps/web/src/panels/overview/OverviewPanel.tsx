@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
@@ -33,10 +33,8 @@ import type {
 } from "./types";
 import {
   phaseCounts,
-  unhealthyDeploymentCount,
   nodeReadyCount,
   nodeReadyByName,
-  nodePressureCount,
   clusterResourceTotals,
   perNodeResourceTotals,
   formatBytes,
@@ -187,10 +185,8 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
         }
       : null;
 
-  const deployUnhealthy = unhealthyDeploymentCount(deployments);
   const phases = useMemo(() => phaseCounts(pods), [pods]);
   const nodeReady = nodeReadyCount(nodes);
-  const pressure = nodePressureCount(nodes);
 
   // Detected databases — CNPG clusters + image-detected workloads (same logic
   // as the Databases panel), so the count matches instead of a 0 stub.
@@ -212,10 +208,26 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
       }),
     [resources, deployments, inNamespace],
   );
-  const dbUnhealthy = databases.filter((d) => !d.isHealthy).length;
 
   const warnings = useMemo(() => events.filter(isWarning), [events]);
   const recentWarnings = warnings.slice(0, MAX_RECENT_WARNINGS);
+
+  const barStats: BarStat[] = [
+    { icon: faLayerGroup, value: deployments.length, label: "Deployments" },
+    {
+      icon: faCube,
+      value: pods.length,
+      label: "Pods",
+      dots: [
+        { on: phases.running > 0, tone: "green" },
+        { on: phases.pending > 0, tone: "yellow" },
+        { on: phases.failed > 0, tone: "red" },
+      ],
+    },
+    { icon: faServer, value: `${nodeReady.ready}/${nodeReady.total}`, label: "Nodes" },
+    { icon: faDatabase, value: databases.length, label: "Databases" },
+    { icon: faCalendarClock, value: events.length, label: "Events" },
+  ];
 
   return (
     <div className="ov-root">
@@ -247,7 +259,9 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
       <div className="ov-content">
         {error && <pre className="ov-error">{error}</pre>}
 
-        {/* Row 1 — Dense per-node metrics table (Layout C) + reclaimable badge */}
+        <StatBar stats={barStats} />
+
+        {/* Dense per-node metrics table (Layout C) + reclaimable badge */}
         <div className="ov-row">
           <NodeMetricsTable
             rows={perNode}
@@ -255,54 +269,6 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
             hasMetrics={hasMetrics}
             metricsAvailable={nodeMetricsData?.available === true}
             reclaimable={reclaimable}
-          />
-        </div>
-
-        {/* Row 2 — Stats: Deployments | Pods | Nodes */}
-        <div className="ov-row ov-row-3">
-          <StatCard
-            icon={faLayerGroup}
-            title="Deployments"
-            value={deployments.length}
-            chips={[{ label: "Unhealthy", count: deployUnhealthy, tone: "red", neutralWhenZero: true }]}
-          />
-
-          <StatCard
-            icon={faCube}
-            title="Pods"
-            value={pods.length}
-            chips={[
-              { label: "Running", count: phases.running, tone: "green" },
-              { label: "Pending", count: phases.pending, tone: "yellow" },
-              { label: "Failed", count: phases.failed, tone: "red" },
-            ]}
-          />
-
-          <StatCard
-            icon={faServer}
-            title="Nodes"
-            value={`${nodeReady.ready}/${nodeReady.total}`}
-            chips={[{ label: "Pressure conditions", count: pressure, tone: "yellow", neutralWhenZero: true }]}
-          />
-        </div>
-
-        {/* Row 3 — Databases | Events */}
-        <div className="ov-row ov-row-2">
-          <SummaryCard
-            icon={faDatabase}
-            title="Databases"
-            value={databases.length}
-            statLabel="Unhealthy"
-            statCount={dbUnhealthy}
-            statTone={dbUnhealthy > 0 ? "red" : "neutral"}
-          />
-          <SummaryCard
-            icon={faCalendarClock}
-            title="Events"
-            value={warnings.length}
-            statLabel="Total cached"
-            statCount={events.length}
-            statTone="neutral"
           />
         </div>
 
@@ -390,101 +356,43 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
 // Presentational sub-components
 // ---------------------------------------------------------------------------
 
-/** Card header: tertiary icon + uppercase mono tracked label, with an optional
- *  right-aligned slot (used for status chips on the stat/summary cards). */
-function CardHeader({ icon: Icon, title, right }: { icon: IconDefinition; title: string; right?: React.ReactNode }) {
-  return (
-    <div className="ov-card-hdr">
-      <div className="ov-card-hdr-left">
-        <FontAwesomeIcon icon={Icon} className="ov-card-hdr-icon" />
-        <span className="ov-card-hdr-label">{title}</span>
-      </div>
-      {right && <div className="ov-card-hdr-right">{right}</div>}
-    </div>
-  );
-}
+type DotTone = "green" | "yellow" | "red";
 
-type Tone = "green" | "yellow" | "red" | "neutral";
-
-const TONE_CLASS: Record<Tone, string> = {
-  green: "ov-chip-green",
-  yellow: "ov-chip-yellow",
-  red: "ov-chip-red",
-  neutral: "ov-chip-neutral",
+const DOT_CLASS: Record<DotTone, string> = {
+  green: "bg-[var(--status-running)]",
+  yellow: "bg-[var(--status-pending)]",
+  red: "bg-[var(--status-failed)]",
 };
 
-/** A bare count chip. `label` is the hover tooltip; `neutralWhenZero` greys it
- *  when the count is 0. */
-type ChipSpec = { label: string; count: number; tone: Tone; neutralWhenZero?: boolean };
-
-/** A row of label-less count chips (used in card headers); the label shows on hover. */
-function ChipRow({ chips }: { chips: ChipSpec[] }) {
-  return (
-    <>
-      {chips.map((c, i) => {
-        const tone = c.neutralWhenZero && c.count === 0 ? "neutral" : c.tone;
-        return (
-          <span key={i} className={cn("ov-chip", TONE_CLASS[tone])} title={c.label} aria-label={`${c.label}: ${c.count}`}>
-            {c.count}
-          </span>
-        );
-      })}
-    </>
-  );
-}
-
-/** Stat card: status chips on the title line + a large mono number. */
-function StatCard({
-  icon,
-  title,
-  value,
-  chips,
-}: {
+type BarStat = {
   icon: IconDefinition;
-  title: string;
   value: number | string;
-  chips: ChipSpec[];
-}) {
-  return (
-    <div className="ov-card">
-      <CardHeader icon={icon} title={title} right={<ChipRow chips={chips} />} />
-      <div className="ov-stat-big">{value}</div>
-    </div>
-  );
-}
+  label: string;
+  dots?: { on: boolean; tone: DotTone }[];
+};
 
-/** Summary card (Databases / Events): a status chip on the title line + a big number. */
-function SummaryCard({
-  icon,
-  title,
-  value,
-  statLabel,
-  statCount,
-  statTone,
-}: {
-  icon: IconDefinition;
-  title: string;
-  value: number | string;
-  statLabel: string;
-  statCount: number;
-  statTone: Tone;
-}) {
+/** Compact inline stat line: icon + value + label per metric, separated by thin
+ *  dividers. Pods carries a running/pending/failed dot glyph. */
+function StatBar({ stats }: { stats: BarStat[] }) {
   return (
-    <div className="ov-card">
-      <CardHeader
-        icon={icon}
-        title={title}
-        right={
-          <span
-            className={cn("ov-chip", statTone === "neutral" ? "ov-chip-soft" : TONE_CLASS[statTone])}
-            title={statLabel}
-            aria-label={`${statLabel}: ${statCount}`}
-          >
-            {statCount}
-          </span>
-        }
-      />
-      <div className="ov-sum-n">{value}</div>
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-7 py-4">
+      {stats.map((s, i) => (
+        <Fragment key={s.label}>
+          {i > 0 && <span aria-hidden="true" className="h-6 w-px shrink-0 bg-[var(--border-subtle)]" />}
+          <div className="flex items-center gap-2.5">
+            <FontAwesomeIcon icon={s.icon} className="size-[15px] shrink-0 text-[var(--fg-tertiary)]" />
+            <span className="text-xl font-bold leading-none tabular-nums text-[var(--fg-primary)]">{s.value}</span>
+            <span className="text-sm font-medium text-[var(--fg-secondary)]">{s.label}</span>
+            {s.dots && (
+              <span aria-hidden="true" className="flex items-center gap-1">
+                {s.dots.map((d, j) => (
+                  <span key={j} className={cn("size-[7px] rounded-full", d.on ? DOT_CLASS[d.tone] : "bg-white/10")} />
+                ))}
+              </span>
+            )}
+          </div>
+        </Fragment>
+      ))}
     </div>
   );
 }
