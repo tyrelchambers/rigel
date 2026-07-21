@@ -172,6 +172,32 @@ describe("runAudit", () => {
     expect(findings.every((f) => f.evidence === undefined)).toBe(true);
   });
 
+  it("ha reads nodes + singletons and flags a single control-plane node", async () => {
+    const cluster = list([
+      {
+        kind: "Node",
+        metadata: { name: "cp", labels: { "node-role.kubernetes.io/control-plane": "" } },
+        spec: { taints: [{ key: "node-role.kubernetes.io/control-plane", effect: "NoSchedule" }] },
+        status: { conditions: [{ type: "Ready", status: "True" }] },
+      },
+      { kind: "Node", metadata: { name: "w1" }, status: { conditions: [{ type: "Ready", status: "True" }] } },
+      { kind: "Node", metadata: { name: "w2" }, status: { conditions: [{ type: "Ready", status: "True" }] } },
+      {
+        kind: "Deployment",
+        metadata: { name: "coredns", namespace: "kube-system", labels: { "k8s-app": "kube-dns" } },
+        spec: { replicas: 1, template: { metadata: { labels: { "k8s-app": "kube-dns" } }, spec: {} } },
+      },
+    ]);
+    // gatherHaResources issues `get nodes,deployments,poddisruptionbudgets`, which
+    // the stub's default branch returns as `workloads`.
+    const runner = stubRunner({ workloads: cluster });
+    const out = await runAudit("ha", runner);
+    expect(out.audit).toBe("ha");
+    const types = findingsOf(out).map((f) => f.type);
+    expect(types).toContain("controlPlaneSinglePoint");
+    expect(types).toContain("dnsSinglePoint");
+  });
+
   it("refuses a locked audit before touching kubectl", async () => {
     const runner = vi.fn<KubectlRunner>(async () => list([]));
     await expect(

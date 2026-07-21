@@ -10,11 +10,16 @@ export const SEVERITY_RANK: Record<Severity, number> = { critical: 0, warning: 1
 
 export type AuditWorkloadKind = "Deployment" | "StatefulSet" | "DaemonSet";
 
+/** What a finding attaches to. The workload audits (reliability/security/
+ *  performance) only ever use the workload kinds; the HA audit also reports on
+ *  the cluster as a whole and on individual nodes. */
+export type AuditSubjectKind = AuditWorkloadKind | "Cluster" | "Node";
+
 /** The base shape every audit's finding conforms to. */
 export interface AuditFinding {
   type: string;
   severity: Severity;
-  kind: AuditWorkloadKind;
+  kind: AuditSubjectKind;
   name: string;
   namespace: string;
   /** Set for container-scoped findings. */

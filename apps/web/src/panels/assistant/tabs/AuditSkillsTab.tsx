@@ -1,5 +1,5 @@
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
-import { faShieldCheck, faGauge, faHeartPulse } from "@awesome.me/kit-6050953220/icons/classic/solid";
+import { faShieldCheck, faGauge, faHeartPulse, faServer } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { canRunAudit, type AuditKind } from "@rigel/k8s";
 import { handoffToChat } from "@/lib/chatHandoff";
 import { AuditSkillCard } from "../audits/AuditSkillCard";
@@ -42,6 +42,15 @@ const AUDIT_SKILLS: AuditSkill[] = [
       "Missing memory limits, missing autoscaling, CPU throttling, and memory pressure. Metrics checks need a Prometheus/VictoriaMetrics backend.",
     runLabel:
       "Run the performance audit — check missing memory limits, missing autoscaling, CPU throttling, and memory pressure (metrics-backed where a backend is available).",
+  },
+  {
+    key: "ha",
+    title: "High availability",
+    Icon: faServer,
+    description:
+      "Control-plane and etcd quorum, node redundancy, failure-domain concentration, control-plane isolation, and CoreDNS/ingress single points of failure.",
+    runLabel:
+      "Run the high-availability audit — check control-plane and etcd quorum, node redundancy, failure-domain concentration, control-plane isolation, and CoreDNS/ingress single points of failure.",
   },
 ];
 

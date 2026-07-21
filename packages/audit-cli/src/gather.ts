@@ -6,7 +6,9 @@
 // extractAuditInputs.
 import {
   extractAuditInputs,
+  extractHaAuditInputs,
   type ReliabilityAuditInput,
+  type HaAuditInput,
 } from "@rigel/k8s";
 import {
   detectAllBackendsFromServices,
@@ -27,12 +29,17 @@ const WORKLOAD_KINDS =
 /** Maps a raw object's `.kind` (as kubectl reports it, singular/PascalCase) to
  *  the watch-kind key `extractAuditInputs` slices resources by. */
 const KIND_TO_WATCH_KEY: Record<string, string> = {
+  Node: "nodes",
   Deployment: "deployments",
   StatefulSet: "statefulsets",
   DaemonSet: "daemonsets",
   PodDisruptionBudget: "poddisruptionbudgets",
   HorizontalPodAutoscaler: "horizontalpodautoscalers",
 };
+
+/** The HA audit is cluster-scoped: node topology plus the two critical singletons
+ *  (CoreDNS, ingress) and their PodDisruptionBudgets, fetched in one call. */
+const HA_KINDS = "nodes,deployments,poddisruptionbudgets";
 
 interface ListItem {
   kind?: string;
@@ -72,6 +79,15 @@ export async function gatherWorkloadResources(
   const parsed = JSON.parse(stdout) as { items?: ListItem[] };
   const grouped = groupByKind(Array.isArray(parsed.items) ? parsed.items : []);
   return extractAuditInputs(grouped);
+}
+
+/** Fetch nodes + CoreDNS/ingress deployments + PDBs (always cluster-wide — HA is
+ *  a whole-cluster property) and adapt them into an HaAuditInput. */
+export async function gatherHaResources(runner: KubectlRunner): Promise<HaAuditInput> {
+  const stdout = await runner(["get", HA_KINDS, "-A", "-o", "json"]);
+  const parsed = JSON.parse(stdout) as { items?: ListItem[] };
+  const grouped = groupByKind(Array.isArray(parsed.items) ? parsed.items : []);
+  return extractHaAuditInputs(grouped);
 }
 
 /** Detect the best available Prometheus/VictoriaMetrics backend in the

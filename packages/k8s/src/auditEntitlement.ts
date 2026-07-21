@@ -1,6 +1,6 @@
-export type AuditKind = "reliability" | "security" | "performance";
+export type AuditKind = "reliability" | "security" | "performance" | "ha";
 
-export const ALL_AUDIT_KINDS: AuditKind[] = ["reliability", "security", "performance"];
+export const ALL_AUDIT_KINDS: AuditKind[] = ["reliability", "security", "performance", "ha"];
 
 export interface AuditEntitlement {
   unlocked: AuditKind[];

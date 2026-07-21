@@ -11,6 +11,7 @@ export {
   SEVERITY_RANK,
   type AuditWorkloadKind,
   type AuditWorkloadKind as ReliabilityWorkloadKind,
+  type AuditSubjectKind,
   type AuditFinding,
   type AuditContainer,
   type AuditWorkload,
@@ -26,6 +27,7 @@ export { parseQuantity } from "./quantity";
 export { type ProviderKind, CLOUD_PROVIDERS, classifyProvider, isCloudProvider } from "./provider";
 
 export { extractAuditInputs } from "./extractAuditInputs";
+export { extractHaAuditInputs } from "./extractHaAuditInputs";
 
 export {
   type AuditKind,
@@ -61,6 +63,18 @@ export {
   type PerformanceAuditInput,
   analyzePerformance,
 } from "./performanceAudit";
+
+export {
+  type HaFindingType,
+  type HaFinding,
+  type HaNode,
+  type HaComponentRole,
+  type HaComponent,
+  type HaAuditInput,
+  quorum,
+  toleratedFailures,
+  analyzeHa,
+} from "./haAudit";
 
 export { openapiV2ToYamlSchema, gvkApiVersion } from "./openapiSchema";
 

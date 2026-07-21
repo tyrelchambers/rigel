@@ -10,6 +10,7 @@
 import { realKubectlRunner, type KubectlRunner } from "./kubectl";
 import {
   gatherWorkloadResources,
+  gatherHaResources,
   detectBackend,
   gatherUsageProvider,
 } from "./gather";
@@ -17,12 +18,13 @@ import {
   runReliability,
   runSecurity,
   runPerformance,
+  runHa,
   type AuditKind,
   type AuditRunResult,
 } from "./audits";
 import { canRunAudit, parseUnlockedAudits, type AuditEntitlement } from "@rigel/k8s";
 
-const AUDIT_KINDS: readonly AuditKind[] = ["reliability", "security", "performance"];
+const AUDIT_KINDS: readonly AuditKind[] = ["reliability", "security", "performance", "ha"];
 
 export interface ParsedArgs {
   kind: AuditKind;
@@ -32,7 +34,7 @@ export interface ParsedArgs {
 }
 
 const USAGE =
-  "Usage: rigel-audit <reliability|security|performance> [--context <ctx>] [--namespace <ns>] [--json]";
+  "Usage: rigel-audit <reliability|security|performance|ha> [--context <ctx>] [--namespace <ns>] [--json]";
 
 function isAuditKind(v: string): v is AuditKind {
   return (AUDIT_KINDS as readonly string[]).includes(v);
@@ -88,6 +90,10 @@ export async function runAudit(
 ): Promise<AuditOutput> {
   const gate = canRunAudit(kind, entitlement);
   if (!gate.allowed) throw new Error(gate.reason ?? `The ${kind} audit is not available on this plan.`);
+
+  // HA is cluster-scoped (node topology + critical singletons), so it reads its
+  // own resource set and ignores --namespace.
+  if (kind === "ha") return runHa(await gatherHaResources(runner));
 
   const input = await gatherWorkloadResources(runner, namespace);
 

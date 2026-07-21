@@ -30,12 +30,13 @@ beforeEach(() => {
 });
 
 describe("AuditSkillsTab", () => {
-  it("renders all three audit cards as live launchers when everything is unlocked", () => {
+  it("renders all audit cards as live launchers when everything is unlocked", () => {
     render(<AuditSkillsTab />);
     expect(screen.getByText("Reliability")).toBeInTheDocument();
     expect(screen.getByText("Security")).toBeInTheDocument();
     expect(screen.getByText("Performance")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /run audit/i })).toHaveLength(3);
+    expect(screen.getByText("High availability")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /run audit/i })).toHaveLength(4);
     expect(screen.queryByText("Upgrade")).not.toBeInTheDocument();
   });
 
@@ -66,17 +67,26 @@ describe("AuditSkillsTab", () => {
     );
   });
 
-  it("locks an audit the entitlement does not unlock, blocking its launch", () => {
-    vi.mocked(useAuditEntitlement).mockReturnValue({ unlocked: ["reliability", "performance"] });
+  it("hands off /rigel-ha-audit to a new thread with a friendly bubble label", () => {
     render(<AuditSkillsTab />);
-    expect(screen.getAllByRole("button", { name: /run audit/i })).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole("button", { name: /run audit/i })[3]);
+    expect(handoffToChat).toHaveBeenCalledWith(
+      "/rigel-ha-audit",
+      expect.objectContaining({ newThread: true, displayText: expect.stringContaining("high-availability audit") }),
+    );
+  });
+
+  it("locks an audit the entitlement does not unlock, blocking its launch", () => {
+    vi.mocked(useAuditEntitlement).mockReturnValue({ unlocked: ["reliability", "performance", "ha"] });
+    render(<AuditSkillsTab />);
+    expect(screen.getAllByRole("button", { name: /run audit/i })).toHaveLength(3);
     expect(screen.getByRole("button", { name: /^upgrade$/i })).toBeInTheDocument();
     expect(screen.getByText(/security audit is a premium skill/i)).toBeInTheDocument();
     expect(handoffToChat).not.toHaveBeenCalled();
   });
 
   it("clicking Upgrade on a gated skill calls upgrade with the personal org id", () => {
-    vi.mocked(useAuditEntitlement).mockReturnValue({ unlocked: ["reliability", "performance"] });
+    vi.mocked(useAuditEntitlement).mockReturnValue({ unlocked: ["reliability", "performance", "ha"] });
     render(<AuditSkillsTab />);
     fireEvent.click(screen.getByRole("button", { name: /^upgrade$/i }));
     expect(upgrade).toHaveBeenCalledWith("org-personal");
