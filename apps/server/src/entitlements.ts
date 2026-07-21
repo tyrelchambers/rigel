@@ -14,7 +14,7 @@ export interface Entitlement {
 // purpose (like Account/Org), but their shapes must not drift.
 export interface EntitlementPayload {
   plan: "free" | "pro";
-  audits: ("reliability" | "security" | "performance")[];
+  audits: ("reliability" | "security" | "performance" | "ha")[];
   cloudConnect: boolean;
   agentAutonomy: boolean;
   fetchedAt: string;

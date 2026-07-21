@@ -26,7 +26,7 @@ export interface AboutInfo {
 }
 export interface EntitlementPayload {
   plan: "free" | "pro";
-  audits: ("reliability" | "security" | "performance")[];
+  audits: ("reliability" | "security" | "performance" | "ha")[];
   cloudConnect: boolean;
   agentAutonomy: boolean;
   fetchedAt: string;

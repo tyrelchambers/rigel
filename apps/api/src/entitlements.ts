@@ -1,11 +1,11 @@
-export type FeatureKey = "reliability" | "security" | "performance" | "cloudConnect" | "agentAutonomy";
-const AUDIT_KEYS = ["reliability", "security", "performance"] as const;
+export type FeatureKey = "reliability" | "security" | "performance" | "ha" | "cloudConnect" | "agentAutonomy";
+const AUDIT_KEYS = ["reliability", "security", "performance", "ha"] as const;
 
 export const ALL_FEATURE_KEYS = new Set<FeatureKey>([...AUDIT_KEYS, "cloudConnect", "agentAutonomy"]);
 
 export interface EntitlementPayload {
   plan: "free" | "pro";
-  audits: ("reliability" | "security" | "performance")[];
+  audits: ("reliability" | "security" | "performance" | "ha")[];
   cloudConnect: boolean;
   agentAutonomy: boolean;
   fetchedAt: string;

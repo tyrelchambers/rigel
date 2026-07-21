@@ -103,7 +103,7 @@ test("freeBeta: makeResolver returns full entitlement without hitting db/stripe"
   expect(billableOrgs).not.toHaveBeenCalled();
   expect(activeFeatureKeys).not.toHaveBeenCalled();
   expect(p).toMatchObject({ plan: "pro", cloudConnect: true, agentAutonomy: true, beta: true, fetchedAt: "T" });
-  expect(p.audits.sort()).toEqual(["performance", "reliability", "security"]);
+  expect(p.audits.sort()).toEqual(["ha", "performance", "reliability", "security"]);
 });
 
 test("freeBeta: resolveOrgEntitlement returns entitled + pro without hitting db/stripe", async () => {
