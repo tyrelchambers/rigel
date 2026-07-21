@@ -8,6 +8,10 @@ on:
       # The agent image bundles @rigel/k8s by source (esbuild), so a shared-package
       # change must rebuild it too — otherwise the deployed agent runs stale code.
       - "packages/k8s/**"
+      # ...but tests aren't bundled into the image, so a test-only change to either
+      # is a no-op for the agent — don't rebuild (or bump its version) for those.
+      - "!agent/**/*.test.ts"
+      - "!packages/k8s/**/*.test.ts"
       - ".github/workflows/agent-build.yml"
   workflow_dispatch:
 
