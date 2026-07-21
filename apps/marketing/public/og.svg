@@ -64,7 +64,7 @@
 <text x="1452" y="619.0" font-family="'Geist Mono', ui-monospace, SFMono-Regular, monospace" font-size="15" fill="#6B6B73" text-anchor="end" dominant-baseline="central">42m</text>
 </g>
 <rect x="72" y="84" width="34" height="34" rx="9" fill="#38BDF8" fill-opacity="0.08" stroke="#38BDF8" stroke-opacity="0.35"/>
-<g transform="translate(78 90) scale(0.166667)"><path d="M30 46l68-16 4 66-60 6z m68-16l-56 72" stroke="#38BDF8" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none"/><circle cx="30" cy="46" r="10" fill="#38BDF8"/><circle cx="98" cy="30" r="10" fill="#38BDF8"/><circle cx="102" cy="96" r="10" fill="#38BDF8"/><circle cx="42" cy="102" r="10" fill="#38BDF8"/></g>
+<g transform="translate(78 90) scale(0.166667)"><path d="M30 46l68-16 4 66-60 6z m68-16l-56 72" stroke="#38BDF8" stroke-width="15" stroke-linecap="round" stroke-linejoin="round" fill="none"/><circle cx="30" cy="46" r="14" fill="#38BDF8"/><circle cx="98" cy="30" r="14" fill="#38BDF8"/><circle cx="102" cy="96" r="14" fill="#38BDF8"/><circle cx="42" cy="102" r="14" fill="#38BDF8"/></g>
 <text x="118" y="101" font-family="'Geist', ui-sans-serif, system-ui, sans-serif" font-size="22" font-weight="600" letter-spacing="-0.5" fill="#FFFFFF" dominant-baseline="central">Rigel</text>
 <text x="72" y="186" font-family="'Geist', ui-sans-serif, system-ui, sans-serif" font-size="54" font-weight="600" letter-spacing="-2.4" fill="#FFFFFF">Kubernetes, on</text>
 <text x="72" y="241" font-family="'Geist', ui-sans-serif, system-ui, sans-serif" font-size="54" font-weight="600" letter-spacing="-2.4" fill="#FFFFFF">your desktop.</text>
