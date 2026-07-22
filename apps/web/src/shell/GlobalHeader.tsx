@@ -12,7 +12,8 @@ import { faArrowLeft, faArrowRight, faMagnifyingGlass, faUser } from "@awesome.m
 import { NamespaceSelector } from "./NamespaceBar";
 import { AppUpdateChip } from "./AppUpdateChip";
 import { useNavHistory } from "./useNavHistory";
-import { isMacDesktop } from "@/lib/desktop";
+import { isMacDesktop, isWindowsDesktop } from "@/lib/desktop";
+import { WINDOWS_CONTROLS_WIDTH } from "./WindowControls";
 import { formatShortcut } from "@/lib/platform";
 
 interface GlobalHeaderProps {
@@ -80,7 +81,7 @@ export function GlobalHeader({
         alignItems: "center",
         gap: 12,
         paddingLeft: isMacDesktop ? 102 : 14,
-        paddingRight: 14,
+        paddingRight: isWindowsDesktop ? 0 : 14,
         background: "var(--surface-primary)",
         borderBottom: "1px solid var(--border-subtle)",
       }}
@@ -170,6 +171,10 @@ export function GlobalHeader({
       >
         <FontAwesomeIcon icon={faUser} className="size-[15px]" style={{ color: "var(--accent-primary)" }} />
       </button>
+
+      {isWindowsDesktop && (
+        <div style={{ ...NO_DRAG, width: WINDOWS_CONTROLS_WIDTH, height: "100%", flexShrink: 0 }} />
+      )}
     </header>
   );
 }

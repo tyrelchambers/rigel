@@ -52,6 +52,17 @@ contextBridge.exposeInMainWorld("rigel", {
     get: (): Promise<{ version: string; buildDate: string | null }> =>
       ipcRenderer.invoke("rigel:about-info"),
   },
+  window: {
+    minimize: (): Promise<void> => ipcRenderer.invoke("rigel:window:minimize"),
+    toggleMaximize: (): Promise<boolean> => ipcRenderer.invoke("rigel:window:toggle-maximize"),
+    close: (): Promise<void> => ipcRenderer.invoke("rigel:window:close"),
+    isMaximized: (): Promise<boolean> => ipcRenderer.invoke("rigel:window:is-maximized"),
+    onMaximized: (cb: (v: boolean) => void): (() => void) => {
+      const l = (_e: unknown, v: boolean) => cb(v);
+      ipcRenderer.on("rigel:window:maximized", l);
+      return () => ipcRenderer.removeListener("rigel:window:maximized", l);
+    },
+  },
   appUpdate: {
     getState: (): Promise<UpdateState> => ipcRenderer.invoke("rigel:app-update:state"),
     check: (): Promise<void> => ipcRenderer.invoke("rigel:app-update:check"),

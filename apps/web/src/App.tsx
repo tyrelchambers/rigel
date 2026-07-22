@@ -44,6 +44,7 @@ import ChatPane, { type ChatPaneHandle } from "@/shell/ChatPane";
 import { CommandPalette, useCommandPalette } from "@/shell/CommandPalette";
 import { NavLauncher, useNavLauncher } from "@/shell/NavLauncher";
 import { GlobalHeader } from "@/shell/GlobalHeader";
+import { WindowControls } from "@/shell/WindowControls";
 import { AccountModal } from "@/shell/AccountModal";
 import { UpgradeProvider } from "@/shell/UpgradeContext";
 import { useAccount, type UseAccountResult } from "@/shell/useAccount";
@@ -230,6 +231,7 @@ function AppContent({ account }: { account: UseAccountResult }) {
 
   return (
     <UpgradeProvider onUpgrade={openUpgrade}>
+    <WindowControls />
     {showClusterOnboarding ? (
       <ClusterOnboarding onSkip={() => setClusterSkipped(true)} />
     ) : (

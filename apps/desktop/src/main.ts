@@ -9,7 +9,7 @@
 // Trust model: the server has no built-in auth. It's bound to loopback
 // (HOST=127.0.0.1) and is only ever reachable by this desktop app on the same
 // machine.
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, safeStorage, shell, utilityProcess, type UtilityProcess } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, safeStorage, shell, utilityProcess, type BrowserWindowConstructorOptions, type UtilityProcess } from "electron";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { readFileSync, writeFileSync, chmodSync, mkdirSync } from "node:fs";
@@ -430,14 +430,19 @@ async function waitForHealth(port: number, timeoutMs = 15_000): Promise<void> {
 
 // ── Window ───────────────────────────────────────────────────────────────
 function createWindow(port: number): BrowserWindow {
+  const titleBar: Partial<BrowserWindowConstructorOptions> =
+    process.platform === "darwin"
+      ? { titleBarStyle: "hiddenInset", trafficLightPosition: { x: 16, y: 14 } }
+      : process.platform === "win32"
+        ? { titleBarStyle: "hidden" }
+        : {};
   const win = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 960,
     minHeight: 640,
     title: "Rigel",
-    titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 16, y: 14 },
+    ...titleBar,
     show: !SMOKE, // headless smoke run keeps the window hidden
     backgroundColor: "#0b0f14",
     webPreferences: {
@@ -462,6 +467,9 @@ function createWindow(port: number): BrowserWindow {
   win.on("closed", () => { if (mainWindow === win) mainWindow = null; });
 
   win.on("focus", () => void entitlements?.refresh(true));
+
+  win.on("maximize", () => win.webContents.send("rigel:window:maximized", true));
+  win.on("unmaximize", () => win.webContents.send("rigel:window:maximized", false));
 
   // Open maximized (fill the screen) on load. Skipped for the headless smoke run.
   if (!SMOKE) win.maximize();
@@ -601,6 +609,16 @@ async function boot(): Promise<void> {
     version: app.getVersion(),
     buildDate: process.env.RIGEL_BUILD_DATE ?? null,
   }));
+  ipcMain.handle("rigel:window:minimize", (e) => { BrowserWindow.fromWebContents(e.sender)?.minimize(); });
+  ipcMain.handle("rigel:window:toggle-maximize", (e) => {
+    const w = BrowserWindow.fromWebContents(e.sender);
+    if (!w) return false;
+    if (w.isMaximized()) { w.unmaximize(); return false; }
+    w.maximize();
+    return true;
+  });
+  ipcMain.handle("rigel:window:close", (e) => { BrowserWindow.fromWebContents(e.sender)?.close(); });
+  ipcMain.handle("rigel:window:is-maximized", (e) => BrowserWindow.fromWebContents(e.sender)?.isMaximized() ?? false);
   initAutoUpdater({
     send: (s) => BrowserWindow.getAllWindows()[0]?.webContents.send("rigel:app-update:state", s),
   });
