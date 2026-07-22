@@ -12,7 +12,7 @@ import { faArrowLeft, faArrowRight, faMagnifyingGlass, faUser } from "@awesome.m
 import { NamespaceSelector } from "./NamespaceBar";
 import { AppUpdateChip } from "./AppUpdateChip";
 import { useNavHistory } from "./useNavHistory";
-import { isMacDesktop } from "@/lib/desktop";
+import { isMacDesktop, isWindowsDesktop } from "@/lib/desktop";
 import { formatShortcut } from "@/lib/platform";
 
 interface GlobalHeaderProps {
@@ -80,7 +80,9 @@ export function GlobalHeader({
         alignItems: "center",
         gap: 12,
         paddingLeft: isMacDesktop ? 102 : 14,
-        paddingRight: 14,
+        paddingRight: isWindowsDesktop
+          ? "calc(100vw - env(titlebar-area-width) - env(titlebar-area-x))"
+          : 14,
         background: "var(--surface-primary)",
         borderBottom: "1px solid var(--border-subtle)",
       }}

@@ -9,7 +9,7 @@
 // Trust model: the server has no built-in auth. It's bound to loopback
 // (HOST=127.0.0.1) and is only ever reachable by this desktop app on the same
 // machine.
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, safeStorage, shell, utilityProcess, type UtilityProcess } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, safeStorage, shell, utilityProcess, type BrowserWindowConstructorOptions, type UtilityProcess } from "electron";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { readFileSync, writeFileSync, chmodSync, mkdirSync } from "node:fs";
@@ -430,14 +430,19 @@ async function waitForHealth(port: number, timeoutMs = 15_000): Promise<void> {
 
 // ── Window ───────────────────────────────────────────────────────────────
 function createWindow(port: number): BrowserWindow {
+  const titleBar: Partial<BrowserWindowConstructorOptions> =
+    process.platform === "darwin"
+      ? { titleBarStyle: "hiddenInset", trafficLightPosition: { x: 16, y: 14 } }
+      : process.platform === "win32"
+        ? { titleBarStyle: "hidden", titleBarOverlay: { color: "#121315", symbolColor: "#a1a1aa", height: 42 } }
+        : {};
   const win = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 960,
     minHeight: 640,
     title: "Rigel",
-    titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 16, y: 14 },
+    ...titleBar,
     show: !SMOKE, // headless smoke run keeps the window hidden
     backgroundColor: "#0b0f14",
     webPreferences: {

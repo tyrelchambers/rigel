@@ -77,3 +77,4 @@ export const rigel: RigelBridge | undefined =
   typeof window !== "undefined" ? (window as unknown as { rigel?: RigelBridge }).rigel : undefined;
 export const isDesktop = !!rigel;
 export const isMacDesktop = rigel?.platform === "darwin";
+export const isWindowsDesktop = rigel?.platform === "win32";
