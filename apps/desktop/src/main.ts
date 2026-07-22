@@ -434,7 +434,7 @@ function createWindow(port: number): BrowserWindow {
     process.platform === "darwin"
       ? { titleBarStyle: "hiddenInset", trafficLightPosition: { x: 16, y: 14 } }
       : process.platform === "win32"
-        ? { titleBarStyle: "hidden", titleBarOverlay: { color: "#00000000", symbolColor: "#a1a1aa", height: 42 } }
+        ? { titleBarStyle: "hidden" }
         : {};
   const win = new BrowserWindow({
     width: 1440,
@@ -467,6 +467,9 @@ function createWindow(port: number): BrowserWindow {
   win.on("closed", () => { if (mainWindow === win) mainWindow = null; });
 
   win.on("focus", () => void entitlements?.refresh(true));
+
+  win.on("maximize", () => win.webContents.send("rigel:window:maximized", true));
+  win.on("unmaximize", () => win.webContents.send("rigel:window:maximized", false));
 
   // Open maximized (fill the screen) on load. Skipped for the headless smoke run.
   if (!SMOKE) win.maximize();
@@ -606,6 +609,16 @@ async function boot(): Promise<void> {
     version: app.getVersion(),
     buildDate: process.env.RIGEL_BUILD_DATE ?? null,
   }));
+  ipcMain.handle("rigel:window:minimize", (e) => { BrowserWindow.fromWebContents(e.sender)?.minimize(); });
+  ipcMain.handle("rigel:window:toggle-maximize", (e) => {
+    const w = BrowserWindow.fromWebContents(e.sender);
+    if (!w) return false;
+    if (w.isMaximized()) { w.unmaximize(); return false; }
+    w.maximize();
+    return true;
+  });
+  ipcMain.handle("rigel:window:close", (e) => { BrowserWindow.fromWebContents(e.sender)?.close(); });
+  ipcMain.handle("rigel:window:is-maximized", (e) => BrowserWindow.fromWebContents(e.sender)?.isMaximized() ?? false);
   initAutoUpdater({
     send: (s) => BrowserWindow.getAllWindows()[0]?.webContents.send("rigel:app-update:state", s),
   });

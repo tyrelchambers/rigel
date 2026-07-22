@@ -13,6 +13,7 @@ import { NamespaceSelector } from "./NamespaceBar";
 import { AppUpdateChip } from "./AppUpdateChip";
 import { useNavHistory } from "./useNavHistory";
 import { isMacDesktop, isWindowsDesktop } from "@/lib/desktop";
+import { WINDOWS_CONTROLS_WIDTH } from "./WindowControls";
 import { formatShortcut } from "@/lib/platform";
 
 interface GlobalHeaderProps {
@@ -80,9 +81,7 @@ export function GlobalHeader({
         alignItems: "center",
         gap: 12,
         paddingLeft: isMacDesktop ? 102 : 14,
-        paddingRight: isWindowsDesktop
-          ? "calc(100vw - env(titlebar-area-width) - env(titlebar-area-x))"
-          : 14,
+        paddingRight: isWindowsDesktop ? WINDOWS_CONTROLS_WIDTH : 14,
         background: "var(--surface-primary)",
         borderBottom: "1px solid var(--border-subtle)",
       }}
