@@ -38,7 +38,7 @@ export function useNavHistory() {
       useCluster.getState().setNamespaceFilter(entry.namespace);
     }
     navigate(entry.path);
-    if (entry.focus) useCluster.getState().setFocusRequest(entry.focus);
+    useCluster.getState().setFocusRequest(entry.focus ?? null);
   }
 
   function goBack() {

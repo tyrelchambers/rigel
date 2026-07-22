@@ -70,6 +70,14 @@ describe("navHistory store", () => {
     expect(s().index).toBe(0);
   });
 
+  it("never records an entry with a null context (unrestorable boot state)", () => {
+    s().push({ path: "/pods", context: null, namespace: null, focus: null });
+    expect(s().entries).toHaveLength(0);
+    expect(s().index).toBe(-1);
+    s().push(entry("/pods"));
+    expect(s().entries).toHaveLength(1);
+  });
+
   it("pendingTarget guard: a non-matching push while pending is ignored", () => {
     s().push(entry("/a"));
     s().push(entry("/b"));

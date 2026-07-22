@@ -26,6 +26,7 @@ export const useNavHistoryStore = create<NavHistoryState>((set, get) => ({
   pendingTarget: null,
 
   push: (entry) => {
+    if (entry.context === null) return;
     const { entries, index, pendingTarget } = get();
     const sig = signature(entry);
     if (pendingTarget !== null) {
