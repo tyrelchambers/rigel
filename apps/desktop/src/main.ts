@@ -434,7 +434,7 @@ function createWindow(port: number): BrowserWindow {
     process.platform === "darwin"
       ? { titleBarStyle: "hiddenInset", trafficLightPosition: { x: 16, y: 14 } }
       : process.platform === "win32"
-        ? { titleBarStyle: "hidden", titleBarOverlay: { color: "#121315", symbolColor: "#a1a1aa", height: 42 } }
+        ? { titleBarStyle: "hidden", titleBarOverlay: { color: "#00000000", symbolColor: "#a1a1aa", height: 42 } }
         : {};
   const win = new BrowserWindow({
     width: 1440,
