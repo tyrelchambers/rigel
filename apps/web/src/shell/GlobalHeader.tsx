@@ -8,10 +8,10 @@
  * Inline styles + CSS custom properties to match App.tsx.
  */
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faMagnifyingGlass, faUser } from "@awesome.me/kit-6050953220/icons/classic/solid";
+import { faArrowLeft, faArrowRight, faMagnifyingGlass, faUser } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { NamespaceSelector } from "./NamespaceBar";
 import { AppUpdateChip } from "./AppUpdateChip";
-import { RigelMark } from "@/components/RigelMark";
+import { useNavHistory } from "./useNavHistory";
 import { isMacDesktop } from "@/lib/desktop";
 import { formatShortcut } from "@/lib/platform";
 
@@ -27,10 +27,49 @@ const NO_DRAG = {
   WebkitAppRegion: "no-drag",
 } as unknown as React.CSSProperties;
 
+function NavArrowButton({
+  icon,
+  label,
+  disabled,
+  onClick,
+}: {
+  icon: typeof faArrowLeft;
+  label: string;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+      aria-label={label}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 28,
+        height: 28,
+        borderRadius: 6,
+        background: "transparent",
+        border: "1px solid transparent",
+        cursor: disabled ? "default" : "pointer",
+        opacity: disabled ? 0.35 : 1,
+        color: "var(--fg-secondary)",
+        flexShrink: 0,
+      }}
+      className={disabled ? "" : "hover:bg-[var(--surface-sunken)] transition-colors"}
+    >
+      <FontAwesomeIcon icon={icon} className="size-[14px]" />
+    </button>
+  );
+}
+
 export function GlobalHeader({
   onOpenSearch,
   onOpenAccount,
 }: GlobalHeaderProps) {
+  const { canGoBack, canGoForward, goBack, goForward } = useNavHistory();
   return (
     <header
       style={{
@@ -46,16 +85,10 @@ export function GlobalHeader({
         borderBottom: "1px solid var(--border-subtle)",
       }}
     >
-      {/* Rigel brand mark */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          flexShrink: 0,
-          color: "var(--fg-primary)",
-        }}
-      >
-        <RigelMark size={22} />
+      {/* History back / forward */}
+      <div style={{ ...NO_DRAG, display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+        <NavArrowButton icon={faArrowLeft} label="Back" disabled={!canGoBack} onClick={goBack} />
+        <NavArrowButton icon={faArrowRight} label="Forward" disabled={!canGoForward} onClick={goForward} />
       </div>
 
       <div style={{ ...NO_DRAG, display: "flex", minWidth: 0 }}>

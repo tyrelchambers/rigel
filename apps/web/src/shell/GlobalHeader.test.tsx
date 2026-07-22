@@ -3,7 +3,14 @@ import { afterEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 vi.mock("./NamespaceBar", () => ({ NamespaceSelector: () => null }));
-vi.mock("@/components/RigelMark", () => ({ RigelMark: () => null }));
+vi.mock("./useNavHistory", () => ({
+  useNavHistory: () => ({
+    canGoBack: false,
+    canGoForward: false,
+    goBack: vi.fn(),
+    goForward: vi.fn(),
+  }),
+}));
 vi.mock("@/store/cluster", () => ({ useCluster: () => false }));
 
 import { GlobalHeader } from "./GlobalHeader";
