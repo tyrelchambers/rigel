@@ -3,6 +3,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowLeft,
   faCircleInfo,
+  faCommentDots,
   faLock,
   faRightFromBracket,
   faArrowsRotate,
@@ -37,6 +38,8 @@ interface AccountModalProps {
 }
 
 const PRO_FEATURES = ["Audits", "Cloud connect", "Autonomous agent"];
+
+const SHOW_PLAN = false;
 
 function capitalize(role: string) {
   return role[0].toUpperCase() + role.slice(1);
@@ -248,115 +251,130 @@ export function AccountModal({ open, onOpenChange, account, startCheckoutOnOpen 
               </div>
             )}
 
-            <div className="h-px w-full bg-[var(--border-subtle)]" />
+            {SHOW_PLAN && (
+              <>
+                <div className="h-px w-full bg-[var(--border-subtle)]" />
 
-            <div className="flex flex-col gap-2.5">
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-3xs tracking-wide text-[var(--fg-tertiary)]">
-                  PLAN
-                </span>
-                <button
-                  type="button"
-                  aria-label="Refresh plan"
-                  onClick={() => account.refreshBilling()}
-                  className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-3xs text-[var(--fg-tertiary)] transition-colors hover:bg-white/[0.05] hover:text-[var(--fg-secondary)]"
-                >
-                  <FontAwesomeIcon icon={faArrowsRotate} className="size-3" />
-                  Refresh
-                </button>
-              </div>
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-3xs tracking-wide text-[var(--fg-tertiary)]">
+                      PLAN
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Refresh plan"
+                      onClick={() => account.refreshBilling()}
+                      className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-3xs text-[var(--fg-tertiary)] transition-colors hover:bg-white/[0.05] hover:text-[var(--fg-secondary)]"
+                    >
+                      <FontAwesomeIcon icon={faArrowsRotate} className="size-3" />
+                      Refresh
+                    </button>
+                  </div>
 
-              <div className="flex flex-col gap-3.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-sunken)] p-3.5">
-                <div className="flex items-center gap-3">
-                  <div className="flex size-[38px] shrink-0 items-center justify-center rounded-[9px] bg-[var(--accent-dim)]">
-                    {isPro && !isBeta ? (
-                      <FontAwesomeIcon icon={faBolt} className="size-[19px] text-[var(--accent-primary)]" />
-                    ) : (
-                      <FontAwesomeIcon icon={faSparkles} className="size-[19px] text-[var(--accent-primary)]" />
+                  <div className="flex flex-col gap-3.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-sunken)] p-3.5">
+                    <div className="flex items-center gap-3">
+                      <div className="flex size-[38px] shrink-0 items-center justify-center rounded-[9px] bg-[var(--accent-dim)]">
+                        {isPro && !isBeta ? (
+                          <FontAwesomeIcon icon={faBolt} className="size-[19px] text-[var(--accent-primary)]" />
+                        ) : (
+                          <FontAwesomeIcon icon={faSparkles} className="size-[19px] text-[var(--accent-primary)]" />
+                        )}
+                      </div>
+                      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className="font-heading text-base font-semibold text-[var(--fg-primary)]">
+                          {isBeta ? "Free during beta" : isPro ? "Rigel Pro" : "Free"}
+                        </span>
+                        <span className="truncate text-xs text-[var(--fg-tertiary)]">
+                          {isBeta
+                            ? "All features unlocked while we gather feedback."
+                            : isPro
+                              ? account.orgs.length === 1
+                                ? "1 seat"
+                                : `${account.orgs.length} orgs`
+                              : "Local-only. You're on the free plan."}
+                        </span>
+                      </div>
+                      {isBeta ? null : isPro ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="shrink-0"
+                          disabled={!personalOrgId}
+                          onClick={() => personalOrgId && account.manageBilling(personalOrgId)}
+                        >
+                          Manage billing
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          className="shrink-0"
+                          disabled={!personalOrgId || busy}
+                          onClick={startCheckout}
+                        >
+                          <FontAwesomeIcon icon={faBolt} className="size-3.5" />
+                          {busy ? "Starting…" : "Upgrade to Pro"}
+                        </Button>
+                      )}
+                    </div>
+
+                    {error && (
+                      <span className="text-xs text-[var(--destructive)]">{error}</span>
+                    )}
+
+                    {!isPro && finalizing && (
+                      <span className="text-xs text-[var(--fg-secondary)]">
+                        Still finalizing — this can take a moment. Use Refresh if it doesn&apos;t update.
+                      </span>
+                    )}
+
+                    {!isPro && (
+                      <>
+                        <div className="h-px w-full bg-white/[0.04]" />
+                        <div className="flex flex-col gap-2.5">
+                          <span className="font-mono text-3xs tracking-wide text-[var(--fg-tertiary)]">
+                            PRO UNLOCKS
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {PRO_FEATURES.map((feat) => (
+                              <div
+                                key={feat}
+                                className="flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] bg-white/[0.03] px-2 py-1"
+                              >
+                                <FontAwesomeIcon icon={faLock} className="size-3 text-[var(--fg-tertiary)]" />
+                                <span className="text-xs text-[var(--fg-secondary)]">{feat}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
                     )}
                   </div>
-                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className="font-heading text-base font-semibold text-[var(--fg-primary)]">
-                      {isBeta ? "Free during beta" : isPro ? "Rigel Pro" : "Free"}
-                    </span>
-                    <span className="truncate text-xs text-[var(--fg-tertiary)]">
-                      {isBeta
-                        ? "All features unlocked while we gather feedback."
-                        : isPro
-                          ? account.orgs.length === 1
-                            ? "1 seat"
-                            : `${account.orgs.length} orgs`
-                          : "Local-only. You're on the free plan."}
-                    </span>
-                  </div>
-                  {isBeta ? null : isPro ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="shrink-0"
-                      disabled={!personalOrgId}
-                      onClick={() => personalOrgId && account.manageBilling(personalOrgId)}
-                    >
-                      Manage billing
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      className="shrink-0"
-                      disabled={!personalOrgId || busy}
-                      onClick={startCheckout}
-                    >
-                      <FontAwesomeIcon icon={faBolt} className="size-3.5" />
-                      {busy ? "Starting…" : "Upgrade to Pro"}
-                    </Button>
-                  )}
                 </div>
-
-                {error && (
-                  <span className="text-xs text-[var(--destructive)]">{error}</span>
-                )}
-
-                {!isPro && finalizing && (
-                  <span className="text-xs text-[var(--fg-secondary)]">
-                    Still finalizing — this can take a moment. Use Refresh if it doesn&apos;t update.
-                  </span>
-                )}
-
-                {!isPro && (
-                  <>
-                    <div className="h-px w-full bg-white/[0.04]" />
-                    <div className="flex flex-col gap-2.5">
-                      <span className="font-mono text-3xs tracking-wide text-[var(--fg-tertiary)]">
-                        PRO UNLOCKS
-                      </span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {PRO_FEATURES.map((feat) => (
-                          <div
-                            key={feat}
-                            className="flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] bg-white/[0.03] px-2 py-1"
-                          >
-                            <FontAwesomeIcon icon={faLock} className="size-3 text-[var(--fg-tertiary)]" />
-                            <span className="text-xs text-[var(--fg-secondary)]">{feat}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
+              </>
+            )}
           </DialogBody>
 
           <DialogFooter className="sm:justify-between">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-[var(--fg-secondary)]"
-              onClick={() => account.signOut()}
-            >
-              <FontAwesomeIcon icon={faRightFromBracket} className="size-3.5" />
-              Sign out
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-[var(--fg-secondary)]"
+                onClick={() => account.signOut()}
+              >
+                <FontAwesomeIcon icon={faRightFromBracket} className="size-3.5" />
+                Sign out
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-[var(--fg-secondary)]"
+                onClick={() => window.open("https://rigelapp.featurebase.app/", "_blank", "noreferrer")}
+              >
+                <FontAwesomeIcon icon={faCommentDots} className="size-3.5" />
+                Feedback
+              </Button>
+            </div>
             <Button onClick={() => onOpenChange(false)}>Done</Button>
           </DialogFooter>
         </DialogContent>
