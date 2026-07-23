@@ -68,6 +68,18 @@ export function DeploymentRow({
   const linkedSrc = linkedSourceName(d);
   const ctxRef: WorkloadRef = { name: d.metadata.name, namespace: d.metadata.namespace ?? "default", kind: "deployment" };
   const navigate = useNavigate();
+
+  function handleDelete(d: Deployment) {
+    setPendingAction({
+      kind: "deleteWorkload",
+      name: d.metadata.name,
+      namespace: d.metadata.namespace ?? "default",
+      resourceKind: "deployment",
+      destructive: true,
+      label: `Delete deployment ${d.metadata.name}`,
+    });
+  }
+
   const rowMenu = (
     <>
       <ContextMenuItem onClick={() => goToLogs(navigate, { kind: "deployment", namespace: d.metadata.namespace, name: d.metadata.name })}>View Logs</ContextMenuItem>
@@ -93,20 +105,10 @@ export function DeploymentRow({
       <ContextMenuItem onClick={() => editYaml("deployment", d.metadata.name, d.metadata.namespace)}>Edit YAML…</ContextMenuItem>
       <ContextMenuItem onClick={() => setMoveTarget(d)}>Move to namespace…</ContextMenuItem>
       <ContextMenuSeparator />
-      <ContextMenuItem
-        variant="destructive"
-        onClick={() =>
-          setPendingAction({
-            kind: "deleteWorkload",
-            name: d.metadata.name,
-            namespace: d.metadata.namespace ?? "default",
-            destructive: true,
-            label: `Delete deployment ${d.metadata.name}`,
-          })
-        }
-      >
+      <ContextMenuItem variant="destructive" onClick={() => handleDelete(d)}>
         Delete…
       </ContextMenuItem>
+      <ContextMenuSeparator />
       <ContextMenuItem onClick={() => toggleExpand(d)}>{isOpen ? "Collapse" : "Manage…"}</ContextMenuItem>
     </>
   );
