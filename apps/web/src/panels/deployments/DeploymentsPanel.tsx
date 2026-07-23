@@ -254,7 +254,7 @@ export default function DeploymentsPanel() {
           !isLoading && <p className="px-4 py-4 text-sm text-muted-foreground">No deployments found</p>
         ))}
       {!isLoading && allDeployments.length > 0 && filtered.length === 0 && (
-        <p className="px-4 py-4 text-sm text-muted-foreground">No deployments match search</p>
+        <p className="px-4 py-4 text-sm text-muted-foreground">No deployments match your filters</p>
       )}
       </div>
 
