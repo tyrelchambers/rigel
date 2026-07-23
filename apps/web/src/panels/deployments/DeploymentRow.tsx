@@ -92,6 +92,21 @@ export function DeploymentRow({
       <ContextMenuItem onClick={() => viewYaml("deployment", d.metadata.name, d.metadata.namespace)}>View YAML…</ContextMenuItem>
       <ContextMenuItem onClick={() => editYaml("deployment", d.metadata.name, d.metadata.namespace)}>Edit YAML…</ContextMenuItem>
       <ContextMenuItem onClick={() => setMoveTarget(d)}>Move to namespace…</ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem
+        variant="destructive"
+        onClick={() =>
+          setPendingAction({
+            kind: "deleteWorkload",
+            name: d.metadata.name,
+            namespace: d.metadata.namespace ?? "default",
+            destructive: true,
+            label: `Delete deployment ${d.metadata.name}`,
+          })
+        }
+      >
+        Delete…
+      </ContextMenuItem>
       <ContextMenuItem onClick={() => toggleExpand(d)}>{isOpen ? "Collapse" : "Manage…"}</ContextMenuItem>
     </>
   );
