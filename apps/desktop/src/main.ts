@@ -462,6 +462,17 @@ function createWindow(port: number): BrowserWindow {
     return { action: "deny" };
   });
 
+  // In-window navigations to an external site (e.g. a bare markdown link in a
+  // chat reply) → system browser. Same-origin navigations (the SPA, reloads) pass
+  // through; SPA client-side routing uses pushState and never fires this.
+  win.webContents.on("will-navigate", (event, url) => {
+    if (url.startsWith(`http://127.0.0.1:${port}`)) return;
+    if (/^https?:\/\//i.test(url)) {
+      event.preventDefault();
+      void shell.openExternal(url);
+    }
+  });
+
   // Null out the mainWindow reference when this window is destroyed so we don't
   // hold a stale BrowserWindow handle after it is closed.
   win.on("closed", () => { if (mainWindow === win) mainWindow = null; });
