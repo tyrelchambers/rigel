@@ -170,6 +170,11 @@ export interface AssistantState {
   /** Matrix /sync cursor, persisted so a restart resumes without reprocessing or
    *  missing events. Absent until the first inbound poll. */
   matrixSince?: string;
+  /** Per-room Matrix `claude` session pointers (`roomId → sessionId`), so each
+   *  topic room resumes its durable thread across pod restarts. Written
+   *  alongside `matrixSince` on every inbound poll that advances the cursor.
+   *  Absent until the first Matrix conversation. */
+  threadSessions?: Record<string, string>;
   /** Fingerprints the agent auto-silenced after an "acceptable" triage, so the
    *  same benign incident doesn't re-fire. Agent-owned and persisted here (the
    *  human `silenced` set lives separately in assistant-config); the loop unions

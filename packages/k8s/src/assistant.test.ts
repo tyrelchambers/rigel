@@ -1415,3 +1415,34 @@ test("decodeClusterState passes the audit actor field through", () => {
   expect(s.audit[1]!.actor).toBe("pr");
   expect(s.audit[2]!.actor).toBeUndefined();
 });
+
+// ---------------------------------------------------------------------------
+// Durable transcript PVC (Task 7 — mount claude CLI HOME on a persistent volume)
+// ---------------------------------------------------------------------------
+
+import { pvc } from "./assistant";
+
+describe("durable transcript PVC", () => {
+  test("pvc() renders a 1Gi RWO claim in the install namespace", () => {
+    const y = pvc(config({ installNamespace: "rigel-assistant" }));
+    expect(y).toContain("kind: PersistentVolumeClaim");
+    expect(y).toContain("name: rigel-assistant-data");
+    expect(y).toContain("namespace: rigel-assistant");
+    expect(y).toContain("ReadWriteOnce");
+    expect(y).toContain("storage: 1Gi");
+  });
+
+  test("deployment mounts the PVC at a persistent HOME", () => {
+    const y = deployment(config());
+    expect(y).toContain("name: HOME");
+    expect(y).toContain("value: /home/agent");
+    expect(y).toContain("mountPath: /home/agent");
+    expect(y).toContain("claimName: rigel-assistant-data");
+    // Single-writer safety for the RWO volume is already in place.
+    expect(y).toContain("type: Recreate");
+  });
+
+  test("manifestYAML includes the PVC document", () => {
+    expect(manifestYAML(config())).toContain("kind: PersistentVolumeClaim");
+  });
+});

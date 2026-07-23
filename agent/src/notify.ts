@@ -181,6 +181,28 @@ export async function receiveMatrix(
   return res.json();
 }
 
+/**
+ * Join `roomId` via `POST /_matrix/client/v3/rooms/{roomId}/join` (accepting a
+ * pending invite). Throws on a transport or non-2xx error so the caller can log
+ * and retry on the next poll — the invite persists until accepted.
+ */
+export async function joinMatrixRoom(
+  homeserver: string,
+  accessToken: string,
+  roomId: string,
+): Promise<void> {
+  const base = homeserver.replace(/\/+$/, "");
+  const res = await fetch(
+    `${base}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/join`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${accessToken}` },
+      body: "{}",
+    },
+  );
+  if (!res.ok) throw new Error(`matrix join returned ${res.status}`);
+}
+
 const CHANNEL_ORDER: ChannelId[] = ["signal", "matrix", "discord", "slack", "webhook"];
 
 /** Whether `channel` has everything it needs to send on this RuntimeConfig.

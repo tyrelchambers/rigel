@@ -12,11 +12,12 @@ import { resolveAutofixEligibility, type AutofixEligibility } from "./autofixEli
 import { dispatchRepoFix } from "./repoFixDispatch.js";
 import { reconcileFixJobs, type FixReconcileDeps } from "./reconcileFixJobs.js";
 import { FIX_LABEL, FIX_LABEL_VALUE } from "./fixJob.js";
-import { notifySignal, receiveSignal, notifyMatrix, receiveMatrix, markMatrixRead, setMatrixTyping, notifyTargets, sendToChannel } from "./notify.js";
-import { SessionStore } from "./sessionStore.js";
+import { notifySignal, receiveSignal, notifyMatrix, receiveMatrix, markMatrixRead, setMatrixTyping, joinMatrixRoom, notifyTargets, sendToChannel } from "./notify.js";
+import { SessionStore, ONE_HOUR_MS } from "./sessionStore.js";
 import {
   handleInbound,
   SeenTimestamps,
+  normalizeNumber,
   type MessageHandler,
   type InboundHandlers,
 } from "./signalInbound.js";
@@ -217,6 +218,9 @@ export interface LoopState {
   matrixSince?: string;
   /** Per-sender claude diagnosis threads (1-hour idle reset, in-memory). */
   sessions: SessionStore;
+  /** Per-room Matrix claude threads (durable: no idle reset, persisted to the
+   *  state ConfigMap and hydrated on the first inbound poll). */
+  roomSessions: SessionStore;
 }
 
 export async function tick(
@@ -769,7 +773,7 @@ export async function tick(
     }
 
     // Matrix: independent of Signal — runs whenever configured, never blocks it.
-    if (rc.matrix.homeserverUrl && rc.matrix.accessToken && rc.matrix.roomId) {
+    if (rc.matrix.homeserverUrl && rc.matrix.accessToken) {
       try {
         await handleMatrixInboundIO(cfg, rc, cb, loop);
       } catch (e) {
@@ -787,9 +791,10 @@ function buildMessageHandler(
   rc: RuntimeConfig,
   cb: CircuitBreaker,
   loop: LoopState,
+  sessions: SessionStore,
 ): MessageHandler {
   return {
-    respond: async (message, source, timestamp) => {
+    respond: async (message, source, timestamp, threadKey) => {
       // Show the agent the fixes the autonomous loop has queued for approval, so
       // "yes, do the flagged fix" can run a loop-surfaced item — not just what
       // the agent proposes itself. Empty when nothing is queued.
@@ -798,11 +803,11 @@ function buildMessageHandler(
       const framed = ctx ? `${ctx}\n\n${message}` : message;
       const reply = await runThreadedDiagnosis(
         {
-          sessions: loop.sessions,
+          sessions,
           diagnose: (q, resumeId) => runChatTurn(rc, q, resumeId),
           log,
         },
-        source,
+        threadKey ?? source,
         timestamp,
         framed,
       );
@@ -877,7 +882,7 @@ async function handleSignalInbound(
   const handlers: InboundHandlers = {
     receive: (apiUrl, number) => receiveSignal(apiUrl, number),
     reply: (to, text) => notifySignal(rc.signalApiUrl!, rc.signalNumber!, [to], text),
-    ...buildMessageHandler(cfg, rc, cb, loop),
+    ...buildMessageHandler(cfg, rc, cb, loop, loop.sessions),
   };
 
   await handleInbound({ enabled: true, apiUrl: rc.signalApiUrl, number: rc.signalNumber, allow }, handlers, loop.seen);
@@ -901,23 +906,26 @@ async function handleMatrixInboundIO(
   if (loop.matrixSince === undefined) {
     const s = await readState(cfg.stateConfigMap, cfg.stateNamespace);
     loop.matrixSince = s.matrixSince;
+    loop.roomSessions.load(s.threadSessions, Date.now());
   }
   const handlers: MatrixInboundHandlers = {
     sync: (since) => receiveMatrix(m.homeserverUrl!, m.accessToken!, since),
-    reply: (text) => notifyMatrix(m.homeserverUrl!, m.accessToken!, m.roomId!, text),
-    markRead: (eventId) => markMatrixRead(m.homeserverUrl!, m.accessToken!, m.roomId!, eventId),
-    setTyping: (typing) => setMatrixTyping(m.homeserverUrl!, m.accessToken!, m.roomId!, m.userId ?? "", typing),
-    ...buildMessageHandler(cfg, rc, cb, loop),
+    reply: (roomId, text) => notifyMatrix(m.homeserverUrl!, m.accessToken!, roomId, text),
+    markRead: (roomId, eventId) => markMatrixRead(m.homeserverUrl!, m.accessToken!, roomId, eventId),
+    setTyping: (roomId, typing) => setMatrixTyping(m.homeserverUrl!, m.accessToken!, roomId, m.userId ?? "", typing),
+    join: (roomId) => joinMatrixRoom(m.homeserverUrl!, m.accessToken!, roomId),
+    resetThread: async (roomId) => { loop.roomSessions.clear(roomId); },
+    ...buildMessageHandler(cfg, rc, cb, loop, loop.roomSessions),
   };
   const next = await handleMatrixInbound(
-    { enabled: true, homeserverUrl: m.homeserverUrl, accessToken: m.accessToken, roomId: m.roomId, allow, botUserId: m.userId, since: loop.matrixSince },
+    { enabled: true, homeserverUrl: m.homeserverUrl, accessToken: m.accessToken, allow, botUserId: m.userId, since: loop.matrixSince },
     handlers,
     loop.seenMatrix,
   );
   if (next !== loop.matrixSince) {
     loop.matrixSince = next;
     const s = await readState(cfg.stateConfigMap, cfg.stateNamespace);
-    await writeState(cfg.stateConfigMap, cfg.stateNamespace, { ...s, matrixSince: next });
+    await writeState(cfg.stateConfigMap, cfg.stateNamespace, { ...s, matrixSince: next, threadSessions: loop.roomSessions.snapshot() });
   }
 }
 
@@ -1032,7 +1040,8 @@ export function createLoopState(): LoopState {
     handled: new Set(),
     seen: new SeenTimestamps(),
     seenMatrix: new SeenEventIds(),
-    sessions: new SessionStore(),
+    sessions: new SessionStore(ONE_HOUR_MS, normalizeNumber),
+    roomSessions: new SessionStore(Number.POSITIVE_INFINITY),
   };
 }
 
