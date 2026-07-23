@@ -135,10 +135,11 @@ export interface InboundContext {
  *  turn. Shared verbatim by the Signal and Matrix inbound loops — the model reads
  *  intent, so there are no separate command handlers. */
 export interface MessageHandler {
-  /** Handle one inbound message (threaded per `source`): investigate, make
-   *  reversible changes, run a confirmed destructive action through the guard,
-   *  and return the reply text. */
-  respond(text: string, source: string, timestamp: number): Promise<string>;
+  /** Handle one inbound message: investigate, make reversible changes, run a
+   *  confirmed destructive action through the guard, return the reply text.
+   *  Threading is keyed by `threadKey` when given (Matrix passes the room id),
+   *  else by `source` (Signal threads by sender). */
+  respond(text: string, source: string, timestamp: number, threadKey?: string): Promise<string>;
   log?(msg: string): void;
 }
 
@@ -153,9 +154,10 @@ export async function respondSafely(
   text: string,
   source: string,
   timestamp: number,
+  threadKey?: string,
 ): Promise<string> {
   try {
-    return await h.respond(text, source, timestamp);
+    return await h.respond(text, source, timestamp, threadKey);
   } catch (e) {
     return `Sorry — that failed: ${String(e)}`;
   }

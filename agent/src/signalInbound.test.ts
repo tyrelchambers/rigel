@@ -122,7 +122,7 @@ describe("handleInbound", () => {
     const raw = [{ envelope: { sourceNumber: "+15550101234", dataMessage: { timestamp: 1, message: "why down?" } } }];
     const h = fakeHandlers({ receive: vi.fn(async () => raw) });
     await handleInbound(CTX, h, new SeenTimestamps());
-    expect(h.respond).toHaveBeenCalledWith("why down?", "+15550101234", 1);
+    expect(h.respond).toHaveBeenCalledWith("why down?", "+15550101234", 1, undefined);
     expect(h.replies).toEqual([{ to: "+15550101234", text: "HANDLED: why down?" }]);
   });
 
@@ -138,7 +138,7 @@ describe("handleInbound", () => {
     const raw = [{ envelope: { sourceNumber: "+15550101234", dataMessage: { timestamp: 3, message: "Yes let's fix it" } } }];
     const h = fakeHandlers({ receive: vi.fn(async () => raw) });
     await handleInbound(CTX, h, new SeenTimestamps());
-    expect(h.respond).toHaveBeenCalledWith("Yes let's fix it", "+15550101234", 3);
+    expect(h.respond).toHaveBeenCalledWith("Yes let's fix it", "+15550101234", 3, undefined);
     expect(h.replies.map((r) => r.text)).toEqual(["HANDLED: Yes let's fix it"]);
   });
 

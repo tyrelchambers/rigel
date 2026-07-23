@@ -101,7 +101,7 @@ describe("handleMatrixInbound", () => {
     ]);
     const h = fakeHandlers({ sync: vi.fn(async () => raw) });
     const next = await handleMatrixInbound(CTX, h, new SeenEventIds());
-    expect(h.respond).toHaveBeenCalledWith("why down?", "@me:hs", 5);
+    expect(h.respond).toHaveBeenCalledWith("why down?", "@me:hs", 5, undefined);
     expect(h.replies).toEqual(["HANDLED: why down?"]);
     expect(next).toBe("s2");
   });
