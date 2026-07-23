@@ -257,13 +257,13 @@ export function matchesSearch(d: Deployment, query: string): boolean {
   return false;
 }
 
+const byName = (a: Deployment, b: Deployment) => a.metadata.name.localeCompare(b.metadata.name);
+const byNamespaceThenName = (a: Deployment, b: Deployment) =>
+  (a.metadata.namespace ?? "default").localeCompare(b.metadata.namespace ?? "default") || byName(a, b);
+
 /** Stable display sort: namespace, then name. */
 export function sortDeployments(deployments: Deployment[]): Deployment[] {
-  return [...deployments].sort((a, b) => {
-    const ns = (a.metadata.namespace ?? "default").localeCompare(b.metadata.namespace ?? "default");
-    if (ns !== 0) return ns;
-    return a.metadata.name.localeCompare(b.metadata.name);
-  });
+  return [...deployments].sort(byNamespaceThenName);
 }
 
 /** Ready fraction (0..1) for sort; 0 when no desired replicas. */
@@ -272,7 +272,6 @@ function readyFraction(d: Deployment): number {
   return total > 0 ? (d.status?.readyReplicas ?? 0) / total : 0;
 }
 
-const byName = (a: Deployment, b: Deployment) => a.metadata.name.localeCompare(b.metadata.name);
 const ageMs = (d: Deployment) => Date.parse(d.metadata.creationTimestamp ?? "") || 0;
 
 /**
@@ -281,7 +280,7 @@ const ageMs = (d: Deployment) => Date.parse(d.metadata.creationTimestamp ?? "") 
  */
 export function deploymentSortOptions(pods: Pod[]): SortOption<Deployment>[] {
   return [
-    { value: "namespace", label: "Namespace", compare: (a, b) => (a.metadata.namespace ?? "default").localeCompare(b.metadata.namespace ?? "default") || byName(a, b) },
+    { value: "namespace", label: "Namespace", compare: byNamespaceThenName },
     { value: "name", label: "Name", compare: byName },
     { value: "ready", label: "Ready", compare: (a, b) => readyFraction(a) - readyFraction(b) || byName(a, b) },
     { value: "replicas", label: "Replicas", compare: (a, b) => desiredReplicas(a) - desiredReplicas(b) || byName(a, b) },
@@ -293,7 +292,7 @@ export function deploymentSortOptions(pods: Pod[]): SortOption<Deployment>[] {
 /** Status filter predicate. `status` is a value from the filter dropdown. */
 export function matchesStatus(d: Deployment, pods: Pod[], status: string): boolean {
   switch (status) {
-    case "unhealthy": return !isReady(d);
+    case "unhealthy": return !isReady(d) && desiredReplicas(d) > 0;
     case "paused": return d.spec?.paused === true;
     case "zero": return desiredReplicas(d) === 0;
     case "rollingOut": return isRedeploying(d, pods);

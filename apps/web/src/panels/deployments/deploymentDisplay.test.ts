@@ -361,6 +361,39 @@ describe("deploymentSortOptions", () => {
     const sorted = [a, b].sort(optByValue("namespace").compare);
     expect(sorted.map((d) => d.metadata.name)).toEqual(["a", "b"]);
   });
+
+  test("sorts by name", () => {
+    const a = dep({ metadata: { name: "b", uid: "1" } });
+    const b = dep({ metadata: { name: "a", uid: "2" } });
+    const sorted = [a, b].sort(optByValue("name").compare);
+    expect(sorted.map((d) => d.metadata.name)).toEqual(["a", "b"]);
+  });
+
+  test("sorts by ready fraction, guarding divide-by-zero", () => {
+    const zero = dep({ metadata: { name: "zero", uid: "1" }, spec: { replicas: 0 }, status: {} });
+    const partial = dep({ metadata: { name: "partial", uid: "2" }, spec: { replicas: 4 }, status: { replicas: 4, readyReplicas: 1 } });
+    const full = dep({ metadata: { name: "full", uid: "3" }, spec: { replicas: 2 }, status: { replicas: 2, readyReplicas: 2 } });
+    const sorted = [full, zero, partial].sort(optByValue("ready").compare);
+    expect(sorted.map((d) => d.metadata.name)).toEqual(["zero", "partial", "full"]);
+  });
+
+  test("sorts by restarts summed from child pods", () => {
+    const a = dep({ metadata: { name: "a", uid: "1" }, spec: { replicas: 1, selector: { matchLabels: { app: "a" } } } });
+    const b = dep({ metadata: { name: "b", uid: "2" }, spec: { replicas: 1, selector: { matchLabels: { app: "b" } } } });
+    const podsForSort = [
+      pod({ metadata: { name: "a-1", namespace: "default", uid: "p1", labels: { app: "a" } }, status: { containerStatuses: [{ name: "c", ready: true, restartCount: 5 }] } }),
+      pod({ metadata: { name: "b-1", namespace: "default", uid: "p2", labels: { app: "b" } }, status: { containerStatuses: [{ name: "c", ready: true, restartCount: 1 }] } }),
+    ];
+    const sorted = [a, b].sort(deploymentSortOptions(podsForSort).find((o) => o.value === "restarts")!.compare);
+    expect(sorted.map((d) => d.metadata.name)).toEqual(["b", "a"]);
+  });
+
+  test("sorts by age", () => {
+    const older = dep({ metadata: { name: "older", uid: "1", creationTimestamp: "2026-01-01T00:00:00Z" } });
+    const newer = dep({ metadata: { name: "newer", uid: "2", creationTimestamp: "2026-06-01T00:00:00Z" } });
+    const sorted = [newer, older].sort(optByValue("age").compare);
+    expect(sorted.map((d) => d.metadata.name)).toEqual(["older", "newer"]);
+  });
 });
 
 describe("matchesStatus", () => {
@@ -385,5 +418,17 @@ describe("matchesStatus", () => {
   test("zero matches scaled-to-zero", () => {
     expect(matchesStatus(dep({ spec: { replicas: 0 } }), pods, "zero")).toBe(true);
     expect(matchesStatus(dep(), pods, "zero")).toBe(false);
+  });
+
+  test("scaled-to-zero does not match unhealthy", () => {
+    expect(matchesStatus(dep({ spec: { replicas: 0 } }), pods, "unhealthy")).toBe(false);
+  });
+
+  test("rollingOut matches an active rollout", () => {
+    const sel = { matchLabels: { app: "web" } };
+    const rolling = dep({ spec: { replicas: 3, selector: sel }, status: { replicas: 3, readyReplicas: 1, updatedReplicas: 2 } });
+    const stable = dep({ spec: { replicas: 1 }, status: { replicas: 1, readyReplicas: 1, updatedReplicas: 1 } });
+    expect(matchesStatus(rolling, [], "rollingOut")).toBe(true);
+    expect(matchesStatus(stable, [], "rollingOut")).toBe(false);
   });
 });
