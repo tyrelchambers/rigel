@@ -786,6 +786,8 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
 ${credentialEnvYAML(sources)}
+            - name: HOME
+              value: /home/agent
             - name: WORKER_MODEL
               value: "${c.workerModel}"
             - name: SUPERVISOR_MODEL
@@ -830,20 +832,48 @@ ${credentialEnvYAML(sources)}
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
+          volumeMounts:
+            - name: agent-home
+              mountPath: /home/agent
           resources:
             requests:
               cpu: 50m
               memory: 128Mi
             limits:
               cpu: "1"
-              memory: 512Mi`;
+              memory: 512Mi
+      volumes:
+        - name: agent-home
+          persistentVolumeClaim:
+            claimName: rigel-assistant-data`;
+}
+
+/** The durable transcript volume: a 1Gi RWO claim mounted at the agent's HOME so
+ *  `claude` CLI session transcripts survive pod restarts (session pointers are
+ *  persisted separately in AssistantState). Applied with the rest of the
+ *  manifest; the single-replica + Recreate Deployment is the only writer. */
+export function pvc(c: AssistantInstallConfig): string {
+  return `apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rigel-assistant-data
+  namespace: ${c.installNamespace}
+  labels:
+    app.kubernetes.io/name: rigel-assistant
+    app.kubernetes.io/managed-by: rigel-assistant
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi`;
 }
 
 /** The previewable manifest: RBAC + ConfigMaps + Deployment (NO Secret). The
  *  ClusterRole renders from `c.rbacPolicy` (the cluster's stored policy on a
  *  reinstall) or DEFAULT_POLICY on a first install. */
 export function manifestYAML(c: AssistantInstallConfig): string {
-  return [rbac(c.installNamespace, c.rbacPolicy ?? DEFAULT_POLICY), configMaps(c), deployment(c)].join("\n---\n");
+  return [rbac(c.installNamespace, c.rbacPolicy ?? DEFAULT_POLICY), configMaps(c), pvc(c), deployment(c)].join("\n---\n");
 }
 
 /**
