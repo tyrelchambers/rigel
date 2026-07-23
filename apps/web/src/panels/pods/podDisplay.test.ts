@@ -174,11 +174,57 @@ describe("podSortOptions", () => {
     expect(values).toContain("cpu");
     expect(values).toContain("mem");
   });
+  const optByValue = (v: string, metric?: (p: Pod) => { cpu: number; mem: number }) =>
+    podSortOptions(metric).find((o) => o.value === v)!;
+
   test("sorts by restarts ascending", () => {
     const a = pod({ metadata: { name: "a", uid: "1" }, status: { phase: "Running", containerStatuses: [{ name: "c", ready: true, restartCount: 5 } as any] } });
     const b = pod({ metadata: { name: "b", uid: "2" }, status: { phase: "Running", containerStatuses: [{ name: "c", ready: true, restartCount: 1 } as any] } });
-    const opt = podSortOptions().find((o) => o.value === "restarts")!;
-    expect([a, b].sort(opt.compare).map((p) => p.metadata.name)).toEqual(["b", "a"]);
+    expect([a, b].sort(optByValue("restarts").compare).map((p) => p.metadata.name)).toEqual(["b", "a"]);
+  });
+
+  test("namespace option breaks ties by name", () => {
+    const a = pod({ metadata: { name: "b", namespace: "ns", uid: "1" } });
+    const b = pod({ metadata: { name: "a", namespace: "ns", uid: "2" } });
+    expect([a, b].sort(optByValue("namespace").compare).map((p) => p.metadata.name)).toEqual(["a", "b"]);
+  });
+
+  test("sorts by name", () => {
+    const a = pod({ metadata: { name: "b", uid: "1" } });
+    const b = pod({ metadata: { name: "a", uid: "2" } });
+    expect([a, b].sort(optByValue("name").compare).map((p) => p.metadata.name)).toEqual(["a", "b"]);
+  });
+
+  test("sorts by phase", () => {
+    const running = pod({ metadata: { name: "running", uid: "1" }, status: { phase: "Running" } });
+    const failed = pod({ metadata: { name: "failed", uid: "2" }, status: { phase: "Failed" } });
+    const pending = pod({ metadata: { name: "pending", uid: "3" }, status: { phase: "Pending" } });
+    expect([running, pending, failed].sort(optByValue("phase").compare).map((p) => p.status?.phase)).toEqual(["Failed", "Pending", "Running"]);
+  });
+
+  test("sorts by age, collapsing missing/invalid timestamps to oldest", () => {
+    const older = pod({ metadata: { name: "older", uid: "1", creationTimestamp: "2026-01-01T00:00:00Z" } });
+    const newer = pod({ metadata: { name: "newer", uid: "2", creationTimestamp: "2026-06-01T00:00:00Z" } });
+    const undated = pod({ metadata: { name: "undated", uid: "3", creationTimestamp: "not-a-date" } });
+    expect([newer, older, undated].sort(optByValue("age").compare).map((p) => p.metadata.name)).toEqual(["undated", "older", "newer"]);
+  });
+
+  test("sorts by node", () => {
+    const a = pod({ metadata: { name: "a", uid: "1" }, spec: { containers: [{ name: "web" }], nodeName: "node-b" } });
+    const b = pod({ metadata: { name: "b", uid: "2" }, spec: { containers: [{ name: "web" }], nodeName: "node-a" } });
+    expect([a, b].sort(optByValue("node").compare).map((p) => p.metadata.name)).toEqual(["b", "a"]);
+  });
+
+  test("sorts by cpu and mem ascending via the metric accessor", () => {
+    const usage: Record<string, { cpu: number; mem: number }> = {
+      a: { cpu: 30, mem: 10 },
+      b: { cpu: 10, mem: 30 },
+    };
+    const metric = (p: Pod) => usage[p.metadata.name];
+    const a = pod({ metadata: { name: "a", uid: "1" } });
+    const b = pod({ metadata: { name: "b", uid: "2" } });
+    expect([a, b].sort(optByValue("cpu", metric).compare).map((p) => p.metadata.name)).toEqual(["b", "a"]);
+    expect([a, b].sort(optByValue("mem", metric).compare).map((p) => p.metadata.name)).toEqual(["a", "b"]);
   });
 });
 
@@ -193,5 +239,21 @@ describe("matchesPhase", () => {
   test("notReady matches when a container is not ready", () => {
     const p = pod({ status: { phase: "Running", containerStatuses: [{ name: "c", ready: false, restartCount: 0 } as any] } });
     expect(matchesPhase(p, "notReady")).toBe(true);
+  });
+  test("running matches Running phase", () => {
+    expect(matchesPhase(pod({ status: { phase: "Running" } }), "running")).toBe(true);
+    expect(matchesPhase(pod({ status: { phase: "Pending" } }), "running")).toBe(false);
+  });
+  test("pending matches Pending phase", () => {
+    expect(matchesPhase(pod({ status: { phase: "Pending" } }), "pending")).toBe(true);
+    expect(matchesPhase(pod({ status: { phase: "Running" } }), "pending")).toBe(false);
+  });
+  test("crashloop matches error pods via podHasError", () => {
+    const crashing = pod({ status: { containerStatuses: [{ name: "c", ready: false, restartCount: 9, state: { waiting: { reason: "CrashLoopBackOff" } } } as any] } });
+    const failed = pod({ status: { phase: "Failed" } });
+    const healthy = pod({ status: { phase: "Running", containerStatuses: [{ name: "c", ready: true, restartCount: 0 } as any] } });
+    expect(matchesPhase(crashing, "crashloop")).toBe(true);
+    expect(matchesPhase(failed, "crashloop")).toBe(true);
+    expect(matchesPhase(healthy, "crashloop")).toBe(false);
   });
 });
