@@ -6,6 +6,7 @@ import {
   phaseColorClass,
   readyText,
   restartCount,
+  podHasError,
   matchesSearch,
   matchesNode,
   sortPods,
@@ -100,6 +101,20 @@ describe("restartCount", () => {
   });
   test("zero when no statuses", () => {
     expect(restartCount(pod())).toBe(0);
+  });
+});
+
+describe("podHasError", () => {
+  test("CrashLoopBackOff / ImagePullBackOff waiting reasons are errors", () => {
+    expect(podHasError(pod({ status: { containerStatuses: [{ name: "c", ready: false, restartCount: 5, state: { waiting: { reason: "CrashLoopBackOff" } } }] } }))).toBe(true);
+    expect(podHasError(pod({ status: { containerStatuses: [{ name: "c", ready: false, restartCount: 0, state: { waiting: { reason: "ImagePullBackOff" } } }] } }))).toBe(true);
+  });
+  test("Failed phase is an error", () => {
+    expect(podHasError(pod({ status: { phase: "Failed" } }))).toBe(true);
+  });
+  test("running / completed pods are not errors", () => {
+    expect(podHasError(pod({ status: { phase: "Running", containerStatuses: [{ name: "c", ready: true, restartCount: 0, state: { running: { startedAt: "x" } } }] } }))).toBe(false);
+    expect(podHasError(pod({ status: { containerStatuses: [{ name: "c", ready: false, restartCount: 0, state: { terminated: { reason: "Completed", exitCode: 0 } } }] } }))).toBe(false);
   });
 });
 

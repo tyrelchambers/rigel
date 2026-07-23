@@ -2,7 +2,7 @@ import type { Deployment, ContainerSummary } from "./types";
 import type { Pod } from "../pods/types";
 import type { ActionBlock } from "@/lib/api";
 import type { SortOption } from "@/panels/components/PanelSort";
-import { restartCount } from "../pods/podDisplay";
+import { restartCount, podHasError } from "../pods/podDisplay";
 import { selectorMatches } from "@/lib/relatedResources";
 import { flattenRoutes } from "../ingresses/ingressesDisplay";
 import { summarizeContainers } from "@/panels/components/ContainerCards";
@@ -43,30 +43,6 @@ export function readyColorClass(d: Deployment): string {
   return isReady(d)
     ? "bg-green-500/15 text-green-600 dark:text-green-400"
     : "bg-red-500/15 text-red-600 dark:text-red-400";
-}
-
-/** Error reasons that mark a pod (and thus its owning deployment) as failing. */
-const ERROR_WAITING_REASONS = new Set([
-  "CrashLoopBackOff",
-  "ImagePullBackOff",
-  "ErrImagePull",
-  "CreateContainerConfigError",
-  "CreateContainerError",
-  "InvalidImageName",
-  "RunContainerError",
-]);
-
-/** True when a pod has an error reason (CrashLoop, ImagePull, Failed, …). */
-export function podHasError(pod: Pod): boolean {
-  if (pod.status?.phase === "Failed") return true;
-  const statuses = pod.status?.containerStatuses ?? [];
-  for (const c of statuses) {
-    const waitingReason = c.state?.waiting?.reason;
-    if (waitingReason && ERROR_WAITING_REASONS.has(waitingReason)) return true;
-    const term = c.state?.terminated;
-    if (term && (term.exitCode ?? 0) !== 0 && term.reason !== "Completed") return true;
-  }
-  return false;
 }
 
 /**

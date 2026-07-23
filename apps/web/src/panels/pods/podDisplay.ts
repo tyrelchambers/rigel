@@ -102,6 +102,19 @@ export function restartCount(pod: Pod): number {
   return statuses.reduce((sum, c) => sum + (c.restartCount ?? 0), 0);
 }
 
+/** True when a pod has an error reason (CrashLoop, ImagePull, Failed, …). */
+export function podHasError(pod: Pod): boolean {
+  if (pod.status?.phase === "Failed") return true;
+  const statuses = pod.status?.containerStatuses ?? [];
+  for (const c of statuses) {
+    const waitingReason = c.state?.waiting?.reason;
+    if (waitingReason && ERROR_WAITING_REASONS.has(waitingReason)) return true;
+    const term = c.state?.terminated;
+    if (term && (term.exitCode ?? 0) !== 0 && term.reason !== "Completed") return true;
+  }
+  return false;
+}
+
 /**
  * Case-insensitive substring match against pod name, namespace, and label
  * keys/values. Empty/blank query matches everything.
