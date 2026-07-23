@@ -21,7 +21,6 @@ import {
   strategyDescription,
   selectorString,
   matchesSearch,
-  sortDeployments,
   namespaceOptions,
   totalRestarts,
   deploymentRevision,
@@ -260,16 +259,6 @@ describe("matchesSearch", () => {
   });
   test("no match returns false", () => {
     expect(matchesSearch(d, "nginx")).toBe(false);
-  });
-});
-
-describe("sortDeployments", () => {
-  test("sorts by namespace then name", () => {
-    const a = dep({ metadata: { name: "z", namespace: "a", uid: "1" } });
-    const b = dep({ metadata: { name: "a", namespace: "b", uid: "2" } });
-    const c = dep({ metadata: { name: "a", namespace: "a", uid: "3" } });
-    const sorted = sortDeployments([a, b, c]).map((d) => `${d.metadata.namespace}/${d.metadata.name}`);
-    expect(sorted).toEqual(["a/a", "a/z", "b/a"]);
   });
 });
 

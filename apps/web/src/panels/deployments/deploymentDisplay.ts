@@ -261,11 +261,6 @@ const byName = (a: Deployment, b: Deployment) => a.metadata.name.localeCompare(b
 const byNamespaceThenName = (a: Deployment, b: Deployment) =>
   (a.metadata.namespace ?? "default").localeCompare(b.metadata.namespace ?? "default") || byName(a, b);
 
-/** Stable display sort: namespace, then name. */
-export function sortDeployments(deployments: Deployment[]): Deployment[] {
-  return [...deployments].sort(byNamespaceThenName);
-}
-
 /** Ready fraction (0..1) for sort; 0 when no desired replicas. */
 function readyFraction(d: Deployment): number {
   const total = totalReplicas(d);
