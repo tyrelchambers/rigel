@@ -276,20 +276,52 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   const activeAgentIdRef = useRef<string | undefined>(activeAgentId);
   activeAgentIdRef.current = activeAgentId;
 
-  // Persist the active conversation once each turn settles (not mid-stream, to
-  // avoid a write per token). Runs on mount too, re-saving the restored chat.
-  useEffect(() => {
-    if (isStreaming || messages.length === 0) return;
+  // Snapshot of everything a save needs, refreshed every render so the
+  // once-registered flush listener below reads current values (no stale closure).
+  const saveSnapshotRef = useRef({ messages, conversationId, sessionId, sessionByAgent });
+  saveSnapshotRef.current = { messages, conversationId, sessionId, sessionByAgent };
+
+  const persistSession = useCallback(() => {
+    const s = saveSnapshotRef.current;
+    if (s.messages.length === 0) return;
     upsertSession({
-      id: conversationId,
-      title: deriveTitle(messages),
+      id: s.conversationId,
+      title: deriveTitle(s.messages),
       createdAt: createdAtRef.current,
       updatedAt: Date.now(),
-      sessionId,
-      sessionByAgent,
-      messages,
+      sessionId: s.sessionId,
+      sessionByAgent: s.sessionByAgent,
+      messages: s.messages,
     });
-  }, [messages, isStreaming, sessionId, sessionByAgent, conversationId]);
+  }, []);
+
+  // Persist the active conversation. On a settled turn (or mount) write
+  // immediately; mid-stream, debounce to ~1s so a close/crash loses at most a
+  // second of streamed text rather than the whole in-flight turn.
+  useEffect(() => {
+    if (messages.length === 0) return;
+    if (!isStreaming) {
+      persistSession();
+      return;
+    }
+    const t = setTimeout(persistSession, 1000);
+    return () => clearTimeout(t);
+  }, [messages, isStreaming, sessionId, sessionByAgent, conversationId, persistSession]);
+
+  // Flush synchronously when the window is hidden or torn down (app close,
+  // reload), so the current turn survives even mid-stream. localStorage writes
+  // are synchronous, so this completes before the renderer goes away.
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === "hidden") persistSession();
+    };
+    window.addEventListener("pagehide", persistSession);
+    document.addEventListener("visibilitychange", onHide);
+    return () => {
+      window.removeEventListener("pagehide", persistSession);
+      document.removeEventListener("visibilitychange", onHide);
+    };
+  }, [persistSession]);
 
   // The active agent's selectable models/efforts (drives the agent-aware picker).
   const { data: agentModels } = useAgentModels(activeAgentId);
