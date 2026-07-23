@@ -8,6 +8,7 @@ import { KindAccessNotice } from "@/components/KindAccessNotice";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { PanelSearch } from "@/panels/components/PanelSearch";
 import { PanelSort, applySort } from "@/panels/components/PanelSort";
+import { PanelSelect } from "@/panels/components/PanelSelect";
 import { LoadingState } from "@/panels/components/LoadingState";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import type { ActionBlock } from "@/lib/api";
@@ -188,18 +189,13 @@ export default function DeploymentsPanel() {
           placeholder="Search deployments…"
           className="w-56"
         />
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          aria-label="Filter by status"
-          className="h-8 max-w-44 rounded-[6px] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-2 text-xs text-foreground outline-none focus:ring-2 focus:ring-ring/50"
-        >
+        <PanelSelect value={statusFilter} onValueChange={setStatusFilter} ariaLabel="Filter by status" className="max-w-44">
           <option value="all">All statuses</option>
           <option value="unhealthy">Unhealthy</option>
           <option value="paused">Paused</option>
           <option value="zero">Scaled to zero</option>
           <option value="rollingOut">Rolling out</option>
-        </select>
+        </PanelSelect>
         <PanelSort
           options={sortOptions}
           value={sortValue}

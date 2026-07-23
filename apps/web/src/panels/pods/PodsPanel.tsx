@@ -18,6 +18,7 @@ import { RelatedResources } from "@/panels/components/RelatedResources";
 import { useFocusRow } from "@/panels/components/useFocusRow";
 import { MetaChips } from "@/panels/components/MetaChips";
 import { PanelSort, applySort } from "@/panels/components/PanelSort";
+import { PanelSelect } from "@/panels/components/PanelSelect";
 import type { ActionBlock } from "@/lib/api";
 import type { Pod } from "./types";
 import {
@@ -138,31 +139,21 @@ export default function PodsPanel() {
           className="w-56"
         />
         {nodeNames.length > 0 && (
-          <select
-            value={nodeFilter}
-            onChange={(e) => setNodeFilter(e.target.value)}
-            aria-label="Filter by node"
-            className="h-8 max-w-44 rounded-[6px] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-2 text-xs text-foreground outline-none focus:ring-2 focus:ring-ring/50"
-          >
+          <PanelSelect value={nodeFilter} onValueChange={setNodeFilter} ariaLabel="Filter by node" className="max-w-44">
             <option value="">All nodes</option>
             {nodeNames.map((n) => (
               <option key={n} value={n}>{n}</option>
             ))}
-          </select>
+          </PanelSelect>
         )}
-        <select
-          value={phaseFilter}
-          onChange={(e) => setPhaseFilter(e.target.value)}
-          aria-label="Filter by phase"
-          className="h-8 max-w-44 rounded-[6px] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-2 text-xs text-foreground outline-none focus:ring-2 focus:ring-ring/50"
-        >
+        <PanelSelect value={phaseFilter} onValueChange={setPhaseFilter} ariaLabel="Filter by phase" className="max-w-44">
           <option value="all">All phases</option>
           <option value="running">Running</option>
           <option value="pending">Pending</option>
           <option value="failed">Failed</option>
           <option value="notReady">Not ready</option>
           <option value="crashloop">CrashLoop</option>
-        </select>
+        </PanelSelect>
         <PanelSort
           options={sortOptions}
           value={sortValue}

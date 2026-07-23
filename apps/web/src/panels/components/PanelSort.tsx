@@ -1,5 +1,6 @@
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowUp, faArrowDown } from "@awesome.me/kit-6050953220/icons/classic/solid";
+import { PanelSelect } from "./PanelSelect";
 
 export interface SortOption<T> {
   value: string;
@@ -25,9 +26,6 @@ export function applySort<T>(
   return direction === "desc" ? sorted.reverse() : sorted;
 }
 
-const selectClass =
-  "h-8 max-w-44 rounded-[6px] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-2 text-xs text-foreground outline-none focus:ring-2 focus:ring-ring/50";
-
 export function PanelSort<T>({
   options,
   value,
@@ -36,25 +34,20 @@ export function PanelSort<T>({
   onDirectionChange,
 }: PanelSortProps<T>) {
   return (
-    <div className="flex items-center gap-1">
-      <select
-        value={value}
-        onChange={(e) => onValueChange(e.target.value)}
-        aria-label="Sort by"
-        className={selectClass}
-      >
+    <div className="flex items-stretch gap-1">
+      <PanelSelect value={value} onValueChange={onValueChange} ariaLabel="Sort by" className="max-w-44">
         {options.map((o) => (
           <option key={o.value} value={o.value}>
             Sort: {o.label}
           </option>
         ))}
-      </select>
+      </PanelSelect>
       <button
         type="button"
         aria-label="Sort direction"
         title={direction === "asc" ? "Ascending" : "Descending"}
         onClick={() => onDirectionChange(direction === "asc" ? "desc" : "asc")}
-        className="flex h-8 w-8 items-center justify-center rounded-[6px] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] text-foreground outline-none hover:bg-[var(--surface-elevated)] focus:ring-2 focus:ring-ring/50"
+        className="flex w-9 items-center justify-center rounded-[6px] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] text-foreground outline-none hover:bg-[var(--surface-elevated)] focus:ring-2 focus:ring-ring/50"
       >
         <FontAwesomeIcon icon={direction === "asc" ? faArrowUp : faArrowDown} className="text-xs" />
       </button>
