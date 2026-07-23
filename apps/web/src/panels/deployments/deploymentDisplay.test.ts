@@ -26,6 +26,8 @@ import {
   totalRestarts,
   deploymentRevision,
   deploymentEndpoints,
+  deploymentSortOptions,
+  matchesStatus,
 } from "./deploymentDisplay";
 
 function dep(overrides: Partial<Deployment> = {}): Deployment {
@@ -340,5 +342,48 @@ describe("deploymentEndpoints", () => {
   test("empty when no service selects the deployment's pods", () => {
     const ing = { "default/x": { metadata: { name: "x", namespace: "default" }, spec: { rules: [{ host: "x.local", http: { paths: [{ path: "/", backend: { service: { name: "other", port: { number: 80 } } } }] } }] } } };
     expect(deploymentEndpoints(d, {}, ing)).toEqual([]);
+  });
+});
+
+describe("deploymentSortOptions", () => {
+  const optByValue = (v: string) => deploymentSortOptions([]).find((o) => o.value === v)!;
+
+  test("sorts by replicas ascending", () => {
+    const a = dep({ metadata: { name: "a", uid: "1" }, spec: { replicas: 3 } });
+    const b = dep({ metadata: { name: "b", uid: "2" }, spec: { replicas: 1 } });
+    const sorted = [a, b].sort(optByValue("replicas").compare);
+    expect(sorted.map((d) => d.metadata.name)).toEqual(["b", "a"]);
+  });
+
+  test("namespace option breaks ties by name", () => {
+    const a = dep({ metadata: { name: "b", namespace: "ns", uid: "1" } });
+    const b = dep({ metadata: { name: "a", namespace: "ns", uid: "2" } });
+    const sorted = [a, b].sort(optByValue("namespace").compare);
+    expect(sorted.map((d) => d.metadata.name)).toEqual(["a", "b"]);
+  });
+});
+
+describe("matchesStatus", () => {
+  const pods: Pod[] = [];
+
+  test("all matches everything", () => {
+    expect(matchesStatus(dep(), pods, "all")).toBe(true);
+  });
+
+  test("unhealthy matches when not fully ready", () => {
+    const unhealthy = dep({ status: { replicas: 2, readyReplicas: 1 } });
+    const healthy = dep({ status: { replicas: 1, readyReplicas: 1 } });
+    expect(matchesStatus(unhealthy, pods, "unhealthy")).toBe(true);
+    expect(matchesStatus(healthy, pods, "unhealthy")).toBe(false);
+  });
+
+  test("paused matches spec.paused", () => {
+    expect(matchesStatus(dep({ spec: { replicas: 1, paused: true } }), pods, "paused")).toBe(true);
+    expect(matchesStatus(dep(), pods, "paused")).toBe(false);
+  });
+
+  test("zero matches scaled-to-zero", () => {
+    expect(matchesStatus(dep({ spec: { replicas: 0 } }), pods, "zero")).toBe(true);
+    expect(matchesStatus(dep(), pods, "zero")).toBe(false);
   });
 });

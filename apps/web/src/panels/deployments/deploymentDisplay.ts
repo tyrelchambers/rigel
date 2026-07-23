@@ -1,6 +1,7 @@
 import type { Deployment, ContainerSummary } from "./types";
 import type { Pod } from "../pods/types";
 import type { ActionBlock } from "@/lib/api";
+import type { SortOption } from "@/panels/components/PanelSort";
 import { restartCount } from "../pods/podDisplay";
 import { selectorMatches } from "@/lib/relatedResources";
 import { flattenRoutes } from "../ingresses/ingressesDisplay";
@@ -263,6 +264,41 @@ export function sortDeployments(deployments: Deployment[]): Deployment[] {
     if (ns !== 0) return ns;
     return a.metadata.name.localeCompare(b.metadata.name);
   });
+}
+
+/** Ready fraction (0..1) for sort; 0 when no desired replicas. */
+function readyFraction(d: Deployment): number {
+  const total = totalReplicas(d);
+  return total > 0 ? (d.status?.readyReplicas ?? 0) / total : 0;
+}
+
+const byName = (a: Deployment, b: Deployment) => a.metadata.name.localeCompare(b.metadata.name);
+const ageMs = (d: Deployment) => Date.parse(d.metadata.creationTimestamp ?? "") || 0;
+
+/**
+ * Sort options for the Deployments panel. `pods` is the panel's live child-pod
+ * list, needed only by the Restarts comparator (closes over it).
+ */
+export function deploymentSortOptions(pods: Pod[]): SortOption<Deployment>[] {
+  return [
+    { value: "namespace", label: "Namespace", compare: (a, b) => (a.metadata.namespace ?? "default").localeCompare(b.metadata.namespace ?? "default") || byName(a, b) },
+    { value: "name", label: "Name", compare: byName },
+    { value: "ready", label: "Ready", compare: (a, b) => readyFraction(a) - readyFraction(b) || byName(a, b) },
+    { value: "replicas", label: "Replicas", compare: (a, b) => desiredReplicas(a) - desiredReplicas(b) || byName(a, b) },
+    { value: "restarts", label: "Restarts", compare: (a, b) => totalRestarts(a, pods) - totalRestarts(b, pods) || byName(a, b) },
+    { value: "age", label: "Age", compare: (a, b) => ageMs(a) - ageMs(b) || byName(a, b) },
+  ];
+}
+
+/** Status filter predicate. `status` is a value from the filter dropdown. */
+export function matchesStatus(d: Deployment, pods: Pod[], status: string): boolean {
+  switch (status) {
+    case "unhealthy": return !isReady(d);
+    case "paused": return d.spec?.paused === true;
+    case "zero": return desiredReplicas(d) === 0;
+    case "rollingOut": return isRedeploying(d, pods);
+    default: return true;
+  }
 }
 
 // ---------------------------------------------------------------------------
