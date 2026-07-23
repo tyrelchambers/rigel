@@ -17,6 +17,7 @@ import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import { RelatedResources } from "@/panels/components/RelatedResources";
 import { useFocusRow } from "@/panels/components/useFocusRow";
 import { MetaChips } from "@/panels/components/MetaChips";
+import { PanelSort, applySort } from "@/panels/components/PanelSort";
 import type { ActionBlock } from "@/lib/api";
 import type { Pod } from "./types";
 import {
@@ -28,7 +29,8 @@ import {
   restartCount,
   matchesSearch,
   matchesNode,
-  sortPods,
+  podSortOptions,
+  matchesPhase,
 } from "./podDisplay";
 
 export default function PodsPanel() {
@@ -40,6 +42,9 @@ export default function PodsPanel() {
 
   const [search, setSearch] = useState("");
   const [nodeFilter, setNodeFilter] = useState("");
+  const [sortValue, setSortValue] = useState("namespace");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [phaseFilter, setPhaseFilter] = useState("all");
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const { available: metricsAvailable, history: metricsHistory } = useMetricsHistory();
@@ -50,7 +55,7 @@ export default function PodsPanel() {
   }, []);
 
   const allPods = useMemo(
-    () => sortPods(filterByNamespace(resources["pods"], namespaceFilter) as Pod[]),
+    () => filterByNamespace(resources["pods"], namespaceFilter) as Pod[],
     [resources, namespaceFilter],
   );
   // Nodes that the in-scope pods are actually scheduled on — the dropdown options.
@@ -58,10 +63,31 @@ export default function PodsPanel() {
     () => [...new Set(allPods.map((p) => p.spec?.nodeName).filter((n): n is string => !!n))].sort(),
     [allPods],
   );
-  const filtered = useMemo(
-    () => allPods.filter((p) => matchesSearch(p, search) && matchesNode(p, nodeFilter)),
-    [allPods, search, nodeFilter],
+
+  const sortOptions = useMemo(
+    () =>
+      podSortOptions(
+        metricsAvailable
+          ? (p: Pod) => {
+              const m = metricsHistory.get(`${p.metadata.namespace ?? ""}/${p.metadata.name}`);
+              return { cpu: m?.cpuNow ?? 0, mem: m?.memNow ?? 0 };
+            }
+          : undefined,
+      ),
+    [metricsAvailable, metricsHistory],
   );
+
+  // Drop a sort selection that no longer has a matching option (e.g. CPU/Mem when metrics drop).
+  useEffect(() => {
+    if (!sortOptions.some((o) => o.value === sortValue)) setSortValue("namespace");
+  }, [sortOptions, sortValue]);
+
+  const filtered = useMemo(() => {
+    const matched = allPods.filter(
+      (p) => matchesSearch(p, search) && matchesNode(p, nodeFilter) && matchesPhase(p, phaseFilter),
+    );
+    return applySort(matched, sortOptions.find((o) => o.value === sortValue), sortDir);
+  }, [allPods, search, nodeFilter, phaseFilter, sortOptions, sortValue, sortDir]);
 
   // Drop a node selection that no longer has pods in scope (e.g. after a namespace change).
   useEffect(() => {
@@ -124,6 +150,26 @@ export default function PodsPanel() {
             ))}
           </select>
         )}
+        <select
+          value={phaseFilter}
+          onChange={(e) => setPhaseFilter(e.target.value)}
+          aria-label="Filter by phase"
+          className="h-8 max-w-44 rounded-[6px] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-2 text-xs text-foreground outline-none focus:ring-2 focus:ring-ring/50"
+        >
+          <option value="all">All phases</option>
+          <option value="running">Running</option>
+          <option value="pending">Pending</option>
+          <option value="failed">Failed</option>
+          <option value="notReady">Not ready</option>
+          <option value="crashloop">CrashLoop</option>
+        </select>
+        <PanelSort
+          options={sortOptions}
+          value={sortValue}
+          onValueChange={setSortValue}
+          direction={sortDir}
+          onDirectionChange={setSortDir}
+        />
       </PanelHeader>
 
       <div className="flex-1 overflow-auto">
