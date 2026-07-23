@@ -8,7 +8,6 @@ import {
   readyColorClass,
   desiredReplicas,
   totalReplicas,
-  podHasError,
   childPods,
   hasErrorPods,
   isRedeploying,
@@ -21,11 +20,12 @@ import {
   strategyDescription,
   selectorString,
   matchesSearch,
-  sortDeployments,
   namespaceOptions,
   totalRestarts,
   deploymentRevision,
   deploymentEndpoints,
+  deploymentSortOptions,
+  matchesStatus,
 } from "./deploymentDisplay";
 
 function dep(overrides: Partial<Deployment> = {}): Deployment {
@@ -91,20 +91,6 @@ describe("readyText / readiness", () => {
   test("readyColorClass green when ready else red", () => {
     expect(readyColorClass(dep({ spec: { replicas: 1 }, status: { replicas: 1, readyReplicas: 1 } }))).toContain("green");
     expect(readyColorClass(dep({ spec: { replicas: 1 }, status: { replicas: 1, readyReplicas: 0 } }))).toContain("red");
-  });
-});
-
-describe("podHasError", () => {
-  test("CrashLoopBackOff / ImagePullBackOff waiting reasons are errors", () => {
-    expect(podHasError(pod({ status: { containerStatuses: [{ name: "c", ready: false, restartCount: 5, state: { waiting: { reason: "CrashLoopBackOff" } } }] } }))).toBe(true);
-    expect(podHasError(pod({ status: { containerStatuses: [{ name: "c", ready: false, restartCount: 0, state: { waiting: { reason: "ImagePullBackOff" } } }] } }))).toBe(true);
-  });
-  test("Failed phase is an error", () => {
-    expect(podHasError(pod({ status: { phase: "Failed" } }))).toBe(true);
-  });
-  test("running / completed pods are not errors", () => {
-    expect(podHasError(pod({ status: { phase: "Running", containerStatuses: [{ name: "c", ready: true, restartCount: 0, state: { running: { startedAt: "x" } } }] } }))).toBe(false);
-    expect(podHasError(pod({ status: { containerStatuses: [{ name: "c", ready: false, restartCount: 0, state: { terminated: { reason: "Completed", exitCode: 0 } } }] } }))).toBe(false);
   });
 });
 
@@ -261,16 +247,6 @@ describe("matchesSearch", () => {
   });
 });
 
-describe("sortDeployments", () => {
-  test("sorts by namespace then name", () => {
-    const a = dep({ metadata: { name: "z", namespace: "a", uid: "1" } });
-    const b = dep({ metadata: { name: "a", namespace: "b", uid: "2" } });
-    const c = dep({ metadata: { name: "a", namespace: "a", uid: "3" } });
-    const sorted = sortDeployments([a, b, c]).map((d) => `${d.metadata.namespace}/${d.metadata.name}`);
-    expect(sorted).toEqual(["a/a", "a/z", "b/a"]);
-  });
-});
-
 describe("hasErrorPods", () => {
   test("true when a child pod is failing", () => {
     const d = dep({ spec: { replicas: 1, selector: { matchLabels: { app: "web" } } } });
@@ -340,5 +316,93 @@ describe("deploymentEndpoints", () => {
   test("empty when no service selects the deployment's pods", () => {
     const ing = { "default/x": { metadata: { name: "x", namespace: "default" }, spec: { rules: [{ host: "x.local", http: { paths: [{ path: "/", backend: { service: { name: "other", port: { number: 80 } } } }] } }] } } };
     expect(deploymentEndpoints(d, {}, ing)).toEqual([]);
+  });
+});
+
+describe("deploymentSortOptions", () => {
+  const optByValue = (v: string) => deploymentSortOptions([]).find((o) => o.value === v)!;
+
+  test("sorts by replicas ascending", () => {
+    const a = dep({ metadata: { name: "a", uid: "1" }, spec: { replicas: 3 } });
+    const b = dep({ metadata: { name: "b", uid: "2" }, spec: { replicas: 1 } });
+    const sorted = [a, b].sort(optByValue("replicas").compare);
+    expect(sorted.map((d) => d.metadata.name)).toEqual(["b", "a"]);
+  });
+
+  test("namespace option breaks ties by name", () => {
+    const a = dep({ metadata: { name: "b", namespace: "ns", uid: "1" } });
+    const b = dep({ metadata: { name: "a", namespace: "ns", uid: "2" } });
+    const sorted = [a, b].sort(optByValue("namespace").compare);
+    expect(sorted.map((d) => d.metadata.name)).toEqual(["a", "b"]);
+  });
+
+  test("sorts by name", () => {
+    const a = dep({ metadata: { name: "b", uid: "1" } });
+    const b = dep({ metadata: { name: "a", uid: "2" } });
+    const sorted = [a, b].sort(optByValue("name").compare);
+    expect(sorted.map((d) => d.metadata.name)).toEqual(["a", "b"]);
+  });
+
+  test("sorts by ready fraction, guarding divide-by-zero", () => {
+    const zero = dep({ metadata: { name: "zero", uid: "1" }, spec: { replicas: 0 }, status: {} });
+    const partial = dep({ metadata: { name: "partial", uid: "2" }, spec: { replicas: 4 }, status: { replicas: 4, readyReplicas: 1 } });
+    const full = dep({ metadata: { name: "full", uid: "3" }, spec: { replicas: 2 }, status: { replicas: 2, readyReplicas: 2 } });
+    const sorted = [full, zero, partial].sort(optByValue("ready").compare);
+    expect(sorted.map((d) => d.metadata.name)).toEqual(["zero", "partial", "full"]);
+  });
+
+  test("sorts by restarts summed from child pods", () => {
+    const a = dep({ metadata: { name: "a", uid: "1" }, spec: { replicas: 1, selector: { matchLabels: { app: "a" } } } });
+    const b = dep({ metadata: { name: "b", uid: "2" }, spec: { replicas: 1, selector: { matchLabels: { app: "b" } } } });
+    const podsForSort = [
+      pod({ metadata: { name: "a-1", namespace: "default", uid: "p1", labels: { app: "a" } }, status: { containerStatuses: [{ name: "c", ready: true, restartCount: 5 }] } }),
+      pod({ metadata: { name: "b-1", namespace: "default", uid: "p2", labels: { app: "b" } }, status: { containerStatuses: [{ name: "c", ready: true, restartCount: 1 }] } }),
+    ];
+    const sorted = [a, b].sort(deploymentSortOptions(podsForSort).find((o) => o.value === "restarts")!.compare);
+    expect(sorted.map((d) => d.metadata.name)).toEqual(["b", "a"]);
+  });
+
+  test("sorts by age", () => {
+    const older = dep({ metadata: { name: "older", uid: "1", creationTimestamp: "2026-01-01T00:00:00Z" } });
+    const newer = dep({ metadata: { name: "newer", uid: "2", creationTimestamp: "2026-06-01T00:00:00Z" } });
+    const sorted = [newer, older].sort(optByValue("age").compare);
+    expect(sorted.map((d) => d.metadata.name)).toEqual(["older", "newer"]);
+  });
+});
+
+describe("matchesStatus", () => {
+  const pods: Pod[] = [];
+
+  test("all matches everything", () => {
+    expect(matchesStatus(dep(), pods, "all")).toBe(true);
+  });
+
+  test("unhealthy matches when not fully ready", () => {
+    const unhealthy = dep({ status: { replicas: 2, readyReplicas: 1 } });
+    const healthy = dep({ status: { replicas: 1, readyReplicas: 1 } });
+    expect(matchesStatus(unhealthy, pods, "unhealthy")).toBe(true);
+    expect(matchesStatus(healthy, pods, "unhealthy")).toBe(false);
+  });
+
+  test("paused matches spec.paused", () => {
+    expect(matchesStatus(dep({ spec: { replicas: 1, paused: true } }), pods, "paused")).toBe(true);
+    expect(matchesStatus(dep(), pods, "paused")).toBe(false);
+  });
+
+  test("zero matches scaled-to-zero", () => {
+    expect(matchesStatus(dep({ spec: { replicas: 0 } }), pods, "zero")).toBe(true);
+    expect(matchesStatus(dep(), pods, "zero")).toBe(false);
+  });
+
+  test("scaled-to-zero does not match unhealthy", () => {
+    expect(matchesStatus(dep({ spec: { replicas: 0 } }), pods, "unhealthy")).toBe(false);
+  });
+
+  test("rollingOut matches an active rollout", () => {
+    const sel = { matchLabels: { app: "web" } };
+    const rolling = dep({ spec: { replicas: 3, selector: sel }, status: { replicas: 3, readyReplicas: 1, updatedReplicas: 2 } });
+    const stable = dep({ spec: { replicas: 1 }, status: { replicas: 1, readyReplicas: 1, updatedReplicas: 1 } });
+    expect(matchesStatus(rolling, [], "rollingOut")).toBe(true);
+    expect(matchesStatus(stable, [], "rollingOut")).toBe(false);
   });
 });

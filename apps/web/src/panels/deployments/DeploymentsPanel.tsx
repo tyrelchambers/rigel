@@ -7,6 +7,8 @@ import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { KindAccessNotice } from "@/components/KindAccessNotice";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { PanelSearch } from "@/panels/components/PanelSearch";
+import { PanelSort, applySort } from "@/panels/components/PanelSort";
+import { PanelSelect } from "@/panels/components/PanelSelect";
 import { LoadingState } from "@/panels/components/LoadingState";
 import { buildHandoffPrompt } from "@/panels/components/chatHandoffPrompts";
 import type { ActionBlock } from "@/lib/api";
@@ -17,7 +19,8 @@ import type { Pod } from "../pods/types";
 import {
   desiredReplicas,
   matchesSearch,
-  sortDeployments,
+  matchesStatus,
+  deploymentSortOptions,
   namespaceOptions,
 } from "./deploymentDisplay";
 import { DeploymentRow } from "./DeploymentRow";
@@ -31,6 +34,9 @@ export default function DeploymentsPanel() {
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
   const access = useCluster((s) => s.accessByKind["deployments"]);
   const [search, setSearch] = useState("");
+  const [sortValue, setSortValue] = useState("namespace");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [scaleTarget, setScaleTarget] = useState<Deployment | null>(null);
@@ -55,16 +61,14 @@ export default function DeploymentsPanel() {
   }, []);
 
   const allDeployments = useMemo(
-    () =>
-      sortDeployments(
-        Object.values((resources["deployments"] ?? {}) as Record<string, Deployment>),
-      ),
+    () => Object.values((resources["deployments"] ?? {}) as Record<string, Deployment>),
     [resources],
   );
   const allPods = useMemo(
     () => Object.values((resources["pods"] ?? {}) as Record<string, Pod>),
     [resources],
   );
+  const sortOptions = useMemo(() => deploymentSortOptions(allPods), [allPods]);
   // Known namespaces (for the Move-to-namespace suggestions) — from loaded
   // deployments + any namespaces in the store.
   const nsOptions = useMemo(
@@ -73,14 +77,15 @@ export default function DeploymentsPanel() {
   );
   // Namespace is a client-side view filter: the watch is cluster-wide, so the
   // store holds all namespaces and we scope to the selected one here.
-  const filtered = useMemo(
-    () =>
-      allDeployments.filter(
-        (d) =>
-          (!namespaceFilter || d.metadata.namespace === namespaceFilter) && matchesSearch(d, search),
-      ),
-    [allDeployments, search, namespaceFilter],
-  );
+  const filtered = useMemo(() => {
+    const matched = allDeployments.filter(
+      (d) =>
+        (!namespaceFilter || d.metadata.namespace === namespaceFilter) &&
+        matchesSearch(d, search) &&
+        matchesStatus(d, allPods, statusFilter),
+    );
+    return applySort(matched, sortOptions.find((o) => o.value === sortValue), sortDir);
+  }, [allDeployments, allPods, search, namespaceFilter, statusFilter, sortOptions, sortValue, sortDir]);
 
   // Cmd-K / related-resources focus: expand + scroll to a deployment.
   useFocusRow("deployment", allDeployments, key, (k) => setExpanded((prev) => new Set(prev).add(k)), setSearch);
@@ -184,6 +189,20 @@ export default function DeploymentsPanel() {
           placeholder="Search deployments…"
           className="w-56"
         />
+        <PanelSelect value={statusFilter} onValueChange={setStatusFilter} ariaLabel="Filter by status" className="max-w-44">
+          <option value="all">All statuses</option>
+          <option value="unhealthy">Unhealthy</option>
+          <option value="paused">Paused</option>
+          <option value="zero">Scaled to zero</option>
+          <option value="rollingOut">Rolling out</option>
+        </PanelSelect>
+        <PanelSort
+          options={sortOptions}
+          value={sortValue}
+          onValueChange={setSortValue}
+          direction={sortDir}
+          onDirectionChange={setSortDir}
+        />
       </PanelHeader>
 
       <div className="flex-1 overflow-auto">
@@ -231,7 +250,7 @@ export default function DeploymentsPanel() {
           !isLoading && <p className="px-4 py-4 text-sm text-muted-foreground">No deployments found</p>
         ))}
       {!isLoading && allDeployments.length > 0 && filtered.length === 0 && (
-        <p className="px-4 py-4 text-sm text-muted-foreground">No deployments match search</p>
+        <p className="px-4 py-4 text-sm text-muted-foreground">No deployments match your filters</p>
       )}
       </div>
 
