@@ -1,4 +1,5 @@
 import type { Pod } from "./types";
+import type { SortOption } from "@/panels/components/PanelSort";
 import { compactAge, spelledAge } from "@/lib/time";
 
 /**
@@ -157,4 +158,45 @@ export function sortPods(pods: Pod[]): Pod[] {
     if (ns !== 0) return ns;
     return a.metadata.name.localeCompare(b.metadata.name);
   });
+}
+
+const byPodName = (a: Pod, b: Pod) => a.metadata.name.localeCompare(b.metadata.name);
+const podAgeMs = (p: Pod) => Date.parse(p.metadata.creationTimestamp ?? "") || 0;
+
+export interface PodMetric { cpu: number; mem: number }
+
+/**
+ * Sort options for the Pods panel. Pass `metric` (a per-pod current-usage
+ * accessor) only when metrics are available; when omitted, the CPU and Mem
+ * options are excluded.
+ */
+export function podSortOptions(metric?: (p: Pod) => PodMetric): SortOption<Pod>[] {
+  const options: SortOption<Pod>[] = [
+    { value: "namespace", label: "Namespace", compare: (a, b) => (a.metadata.namespace ?? "").localeCompare(b.metadata.namespace ?? "") || byPodName(a, b) },
+    { value: "name", label: "Name", compare: byPodName },
+    { value: "phase", label: "Phase", compare: (a, b) => (a.status?.phase ?? "").localeCompare(b.status?.phase ?? "") || byPodName(a, b) },
+    { value: "restarts", label: "Restarts", compare: (a, b) => restartCount(a) - restartCount(b) || byPodName(a, b) },
+    { value: "age", label: "Age", compare: (a, b) => podAgeMs(a) - podAgeMs(b) || byPodName(a, b) },
+    { value: "node", label: "Node", compare: (a, b) => (a.spec?.nodeName ?? "").localeCompare(b.spec?.nodeName ?? "") || byPodName(a, b) },
+  ];
+  if (metric) {
+    options.push(
+      { value: "cpu", label: "CPU", compare: (a, b) => metric(a).cpu - metric(b).cpu || byPodName(a, b) },
+      { value: "mem", label: "Mem", compare: (a, b) => metric(a).mem - metric(b).mem || byPodName(a, b) },
+    );
+  }
+  return options;
+}
+
+/** Phase filter predicate. `phase` is a value from the filter dropdown. */
+export function matchesPhase(pod: Pod, phase: string): boolean {
+  const statuses = pod.status?.containerStatuses ?? [];
+  switch (phase) {
+    case "running": return pod.status?.phase === "Running";
+    case "pending": return pod.status?.phase === "Pending";
+    case "failed": return pod.status?.phase === "Failed";
+    case "notReady": return statuses.length > 0 && !statuses.every((c) => c.ready);
+    case "crashloop": return podHasError(pod);
+    default: return true;
+  }
 }

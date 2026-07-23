@@ -10,6 +10,8 @@ import {
   matchesSearch,
   matchesNode,
   sortPods,
+  podSortOptions,
+  matchesPhase,
 } from "./podDisplay";
 
 function pod(overrides: Partial<Pod> = {}): Pod {
@@ -158,5 +160,38 @@ describe("sortPods", () => {
     const c = pod({ metadata: { name: "a", namespace: "a", uid: "3" } });
     const sorted = sortPods([a, b, c]).map((p) => `${p.metadata.namespace}/${p.metadata.name}`);
     expect(sorted).toEqual(["a/a", "a/z", "b/a"]);
+  });
+});
+
+describe("podSortOptions", () => {
+  test("omits CPU/Mem options when no metric accessor is given", () => {
+    const values = podSortOptions().map((o) => o.value);
+    expect(values).not.toContain("cpu");
+    expect(values).not.toContain("mem");
+  });
+  test("includes CPU/Mem when a metric accessor is given", () => {
+    const values = podSortOptions(() => ({ cpu: 0, mem: 0 })).map((o) => o.value);
+    expect(values).toContain("cpu");
+    expect(values).toContain("mem");
+  });
+  test("sorts by restarts ascending", () => {
+    const a = pod({ metadata: { name: "a", uid: "1" }, status: { phase: "Running", containerStatuses: [{ name: "c", ready: true, restartCount: 5 } as any] } });
+    const b = pod({ metadata: { name: "b", uid: "2" }, status: { phase: "Running", containerStatuses: [{ name: "c", ready: true, restartCount: 1 } as any] } });
+    const opt = podSortOptions().find((o) => o.value === "restarts")!;
+    expect([a, b].sort(opt.compare).map((p) => p.metadata.name)).toEqual(["b", "a"]);
+  });
+});
+
+describe("matchesPhase", () => {
+  test("all matches everything", () => {
+    expect(matchesPhase(pod({}), "all")).toBe(true);
+  });
+  test("failed matches Failed phase", () => {
+    expect(matchesPhase(pod({ status: { phase: "Failed" } }), "failed")).toBe(true);
+    expect(matchesPhase(pod({}), "failed")).toBe(false);
+  });
+  test("notReady matches when a container is not ready", () => {
+    const p = pod({ status: { phase: "Running", containerStatuses: [{ name: "c", ready: false, restartCount: 0 } as any] } });
+    expect(matchesPhase(p, "notReady")).toBe(true);
   });
 });
