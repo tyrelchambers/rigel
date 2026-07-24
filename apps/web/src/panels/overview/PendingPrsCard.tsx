@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { SiGithub } from "react-icons/si";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCodePullRequest, faXmark, faRotate, faRobot, faComment } from "@awesome.me/kit-6050953220/icons/classic/solid";
+import { faCodePullRequest, faRotate, faRobot, faComment } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { formatDistanceToNow } from "date-fns";
 import { findByDeployment } from "@rigel/k8s";
 import {
   useChatPullRequests,
-  useDismissPullRequest,
   useGitSources,
   usePrStatus,
   type PrState,
@@ -74,7 +73,6 @@ function PrRow({
 }) {
   const { data: status } = usePrStatus(row.prUrl);
   const { data: sources } = useGitSources();
-  const dismiss = useDismissPullRequest();
   const found = findByDeployment(sources ?? [], row.source);
   const origin = ORIGIN[row.origin];
   const shown = status?.state ?? row.fallbackState;
@@ -125,17 +123,6 @@ function PrRow({
             className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-2.5 py-1.5 text-xs text-[var(--fg-secondary)] hover:text-[var(--fg-primary)] disabled:opacity-40"
           >
             <FontAwesomeIcon icon={faRotate} className="size-3" /> Sync now
-          </button>
-        )}
-        {row.dismissId && (
-          <button
-            type="button"
-            aria-label="Dismiss"
-            onClick={() => dismiss.mutate(row.dismissId!)}
-            disabled={dismiss.isPending}
-            className="inline-flex size-6 items-center justify-center rounded-md text-[var(--fg-tertiary)] hover:text-[var(--fg-primary)]"
-          >
-            <FontAwesomeIcon icon={faXmark} className="size-3" />
           </button>
         )}
       </div>

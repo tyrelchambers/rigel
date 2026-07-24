@@ -18,8 +18,6 @@ export interface PrRowModel {
   createdAt: string;
   /** Status to show when there is no PR to poll (an agent fix that never opened one). */
   fallbackState?: "failed";
-  /** Ledger id; only chat PRs live in a ledger the app can delete from. */
-  dismissId?: string;
 }
 
 /** Merge chat-opened and agent-opened PRs into one newest-first list, deduped by PR url. */
@@ -34,7 +32,6 @@ export function mergePrRows(chat: ChatPrRecord[], agent: AssistantPullRequest[])
       title: c.title,
       source: c.source,
       createdAt: c.createdAt,
-      dismissId: c.id,
     })),
     ...agent.map((a) => {
       const slug = parseRepoSlug(a.repo);

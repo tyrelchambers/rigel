@@ -58,12 +58,6 @@ describe("mergePrRows", () => {
     expect(row.prUrl).toBeUndefined();
   });
 
-  it("only chat rows are dismissible", () => {
-    const rows = mergePrRows([chat({ id: "c9" })], [agent()]);
-    expect(rows.find((r) => r.origin === "chat")!.dismissId).toBe("c9");
-    expect(rows.find((r) => r.origin === "agent")!.dismissId).toBeUndefined();
-  });
-
   it("dedupes a PR recorded in both sources", () => {
     const url = "https://github.com/o/repo/pull/7";
     const rows = mergePrRows([chat({ prUrl: url })], [agent({ prUrl: url })]);

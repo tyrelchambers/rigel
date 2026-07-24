@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, test, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, cleanup } from "@testing-library/react";
 import { PendingPrsCard } from "./PendingPrsCard";
 import type { ChatPrRecord } from "@/panels/gitops/gitApi";
 
@@ -9,7 +9,6 @@ const state = vi.hoisted(() => ({
   agentPrs: [] as unknown[],
   sources: [] as unknown[],
   status: {} as Record<string, { state: string; number: number }>,
-  dismissed: [] as string[],
 }));
 
 vi.mock("@/panels/assistant/useAssistant", () => ({
@@ -20,10 +19,6 @@ vi.mock("@/panels/gitops/gitApi", () => ({
   useChatPullRequests: () => ({ data: state.prs }),
   useGitSources: () => ({ data: state.sources }),
   usePrStatus: (url: string) => ({ data: state.status[url] }),
-  useDismissPullRequest: () => ({
-    mutate: (id: string) => state.dismissed.push(id),
-    isPending: false,
-  }),
 }));
 
 afterEach(() => {
@@ -32,7 +27,6 @@ afterEach(() => {
   state.agentPrs = [];
   state.sources = [];
   state.status = {};
-  state.dismissed = [];
 });
 
 const AGENT_PR_URL = "https://github.com/o/api/pull/12";
@@ -112,13 +106,6 @@ describe("PendingPrsCard", () => {
     expect(screen.getByRole("button", { name: /sync now/i })).toBeDisabled();
   });
 
-  test("dismiss removes the PR from the ledger", () => {
-    state.prs = [pr({ id: "p9" })];
-    render(<PendingPrsCard />);
-    fireEvent.click(screen.getByRole("button", { name: /dismiss/i }));
-    expect(state.dismissed).toEqual(["p9"]);
-  });
-
   test("lists agent-opened PRs alongside chat ones, tagged by origin", () => {
     state.prs = [pr()];
     state.agentPrs = [agentPr()];
@@ -127,12 +114,6 @@ describe("PendingPrsCard", () => {
     expect(screen.getByText("o/api #12")).toBeInTheDocument();
     expect(screen.getByText("Chat")).toBeInTheDocument();
     expect(screen.getByText("Agent")).toBeInTheDocument();
-  });
-
-  test("agent PRs cannot be dismissed (the agent owns that record)", () => {
-    state.agentPrs = [agentPr()];
-    render(<PendingPrsCard />);
-    expect(screen.queryByRole("button", { name: /dismiss/i })).toBeNull();
   });
 
   test("offers Sync now for a merged agent PR too", () => {
