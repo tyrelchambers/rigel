@@ -66,6 +66,9 @@ extraResources:
   # Built by `pnpm --filter @rigel/audit-cli build` before packaging.
   - from: ../../packages/audit-cli/dist/rigel-audit.mjs
     to: server/rigel-audit.mjs
+  # The rigel-pr CLI the assistant runs to label + record a PR it opened itself.
+  - from: ../../packages/pr-cli/dist/rigel-pr.mjs
+    to: server/rigel-pr.mjs
 
 # Native node-pty is shipped unpacked via extraResources (above), so no asar
 # unpacking is needed for it. Re-state the intent defensively in case node-pty

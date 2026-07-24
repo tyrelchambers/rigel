@@ -207,7 +207,7 @@ const LABEL_META: Record<string, { color: string; description: string }> = {
  * must exist before they can be applied, so every failure here is swallowed —
  * a PR that could not be labelled is still a successfully opened PR.
  */
-async function labelPullRequest(
+export async function labelPullRequest(
   slug: { owner: string; repo: string },
   token: string,
   number: number,

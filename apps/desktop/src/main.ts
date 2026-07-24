@@ -274,24 +274,30 @@ function configureAuditSkillsEnv(env: NodeJS.ProcessEnv): void {
     const serverDir = app.isPackaged
       ? join(process.resourcesPath, "server")
       : join(APPS_DIR, "server");
-    const cliMjs = app.isPackaged
-      ? join(serverDir, "rigel-audit.mjs")
-      : join(APPS_DIR, "..", "packages", "audit-cli", "dist", "rigel-audit.mjs");
-
     env.RIGEL_SKILLS_DIR = serverDir;
 
     const binDir = join(app.getPath("userData"), "bin");
     mkdirSync(binDir, { recursive: true });
-    if (process.platform === "win32") {
-      const cmd = `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${process.execPath}" "${cliMjs}" %*\r\n`;
-      writeFileSync(join(binDir, "rigel-audit.cmd"), cmd);
-    } else {
-      const shq = (p: string) => `'${p.replace(/'/g, "'\\''")}'`;
-      const sh = `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec ${shq(process.execPath)} ${shq(cliMjs)} "$@"\n`;
-      const wrapper = join(binDir, "rigel-audit");
-      writeFileSync(wrapper, sh);
-      chmodSync(wrapper, 0o755);
-    }
+
+    // One wrapper per bundled CLI, all in the bin dir claudeBridge prepends to PATH.
+    const writeWrapper = (name: string, pkg: string) => {
+      const cliMjs = app.isPackaged
+        ? join(serverDir, `${name}.mjs`)
+        : join(APPS_DIR, "..", "packages", pkg, "dist", `${name}.mjs`);
+      if (process.platform === "win32") {
+        const cmd = `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${process.execPath}" "${cliMjs}" %*\r\n`;
+        writeFileSync(join(binDir, `${name}.cmd`), cmd);
+      } else {
+        const shq = (p: string) => `'${p.replace(/'/g, "'\\''")}'`;
+        const sh = `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec ${shq(process.execPath)} ${shq(cliMjs)} "$@"\n`;
+        const wrapper = join(binDir, name);
+        writeFileSync(wrapper, sh);
+        chmodSync(wrapper, 0o755);
+      }
+    };
+    writeWrapper("rigel-audit", "audit-cli");
+    writeWrapper("rigel-pr", "pr-cli");
+
     env.RIGEL_AUDIT_BIN_DIR = binDir;
   } catch (err) {
     console.error("[rigel] audit skills setup failed (audits disabled):", err);

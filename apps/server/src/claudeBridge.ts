@@ -289,6 +289,10 @@ export function buildClaudeArgs(
   // installed / the binary isn't on PATH — the tool just goes unused.
   argv.push("--allowedTools", "Skill");
   argv.push("--allowedTools", "Bash(rigel-audit *)");
+  // rigel-pr records a PR the model opened itself (gh/git) into the ledger and
+  // stamps its `rigel` labels — the same provenance the proposeRepoFix action
+  // produces, so a PR opened outside that path is still identifiable.
+  argv.push("--allowedTools", "Bash(rigel-pr *)");
   return argv;
 }
 
