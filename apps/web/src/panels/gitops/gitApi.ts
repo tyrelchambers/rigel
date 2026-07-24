@@ -161,6 +161,20 @@ export interface PrStatus {
   state: PrState;
 }
 
+/** One chat-opened PR from the server ledger (mirrors the server ChatPrRecord). */
+export interface ChatPrRecord {
+  id: string;
+  prUrl: string;
+  number: number;
+  repoSlug: string;
+  repoName: string;
+  source: string;
+  title: string;
+  branch: string;
+  filePath: string;
+  createdAt: string;
+}
+
 /** Live status of one opened PR (open/merged/closed), read from GitHub via the server. */
 export function usePrStatus(prUrl: string | undefined) {
   const activeContext = useCluster((s) => s.activeContext);
@@ -170,6 +184,26 @@ export function usePrStatus(prUrl: string | undefined) {
     enabled: !!prUrl,
     staleTime: 60_000,
     retry: false,
+  });
+}
+
+/** Chat-opened PRs (the Pending PRs card). */
+export function useChatPullRequests() {
+  const activeContext = useCluster((s) => s.activeContext);
+  return useQuery({
+    queryKey: [activeContext, "chat-pull-requests"],
+    queryFn: () => req<{ pullRequests: ChatPrRecord[] }>("/api/git/pull-requests").then((r) => r.pullRequests),
+  });
+}
+
+/** Dismiss one PR from the ledger (does not touch the PR on GitHub). */
+export function useDismissPullRequest() {
+  const qc = useQueryClient();
+  const activeContext = useCluster((s) => s.activeContext);
+  return useMutation({
+    mutationFn: (id: string) =>
+      req<{ pullRequests: ChatPrRecord[] }>(`/api/git/pull-requests?id=${encodeURIComponent(id)}`, { method: "DELETE" }),
+    onSuccess: (r) => qc.setQueryData([activeContext, "chat-pull-requests"], r.pullRequests),
   });
 }
 

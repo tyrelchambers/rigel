@@ -366,6 +366,16 @@ export {
   type LedgerRef,
 } from "./recentDeploys";
 
+export {
+  addPrRecord,
+  removePrRecord,
+  parsePullRequests,
+  pullRequestsConfigMapJSON,
+  PULL_REQUESTS_CONFIGMAP,
+  PULL_REQUESTS_DATA_KEY,
+  type ChatPrRecord,
+} from "./pullRequestLedger";
+
 /** Kubernetes ObjectMeta (subset used by the web panels). */
 export interface ObjectMeta {
   name: string;

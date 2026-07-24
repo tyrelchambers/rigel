@@ -45,6 +45,15 @@ export {
   type RepoFixPreview,
   type RepoFixResult,
 } from "@rigel/k8s/src/repoFix";
+import {
+  parsePullRequests,
+  addPrRecord,
+  removePrRecord,
+  pullRequestsConfigMapJSON,
+  PULL_REQUESTS_CONFIGMAP,
+  PULL_REQUESTS_DATA_KEY,
+  type ChatPrRecord,
+} from "@rigel/k8s/src/pullRequestLedger";
 import { applyManifest } from "./install";
 
 const STATE_NAMESPACE = process.env.HELMSMAN_NAMESPACE ?? "default";
@@ -68,6 +77,38 @@ export async function loadSources(context: string | null): Promise<GitSource[]> 
 /** Persist the full source list (apply the ConfigMap). */
 export async function saveSources(context: string | null, sources: GitSource[]): Promise<RunResult> {
   return applyManifest(context, gitSourcesConfigMapJSON(STATE_NAMESPACE, sources));
+}
+
+// ---------------------------------------------------------------------------
+// Chat-opened PR ledger (rigel-pull-requests ConfigMap) — the Pending PRs card
+// ---------------------------------------------------------------------------
+
+/** Read the chat-opened PR ledger (empty when absent). */
+export async function loadPullRequests(context: string | null): Promise<ChatPrRecord[]> {
+  const res = await kubectl(context, ["get", "configmap", PULL_REQUESTS_CONFIGMAP, "-n", STATE_NAMESPACE, "-o", "json"]);
+  if (res.code !== 0) return [];
+  try {
+    const cm = JSON.parse(res.stdout) as { data?: Record<string, string> };
+    return parsePullRequests(cm.data?.[PULL_REQUESTS_DATA_KEY]);
+  } catch {
+    return [];
+  }
+}
+
+/** Append a chat-opened PR to the ledger. Best-effort: a ledger write never fails the PR open. */
+export async function recordChatPullRequest(context: string | null, record: ChatPrRecord): Promise<void> {
+  try {
+    const list = await loadPullRequests(context);
+    await applyManifest(context, pullRequestsConfigMapJSON(STATE_NAMESPACE, addPrRecord(list, record, { now: Date.now() })));
+  } catch {
+    /* best-effort */
+  }
+}
+
+/** Remove one PR from the ledger (dismiss). */
+export async function dismissChatPullRequest(context: string | null, id: string): Promise<RunResult> {
+  const list = await loadPullRequests(context);
+  return applyManifest(context, pullRequestsConfigMapJSON(STATE_NAMESPACE, removePrRecord(list, id)));
 }
 
 // ---------------------------------------------------------------------------

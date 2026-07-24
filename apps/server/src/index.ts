@@ -1,4 +1,5 @@
 import { homedir } from "node:os";
+import { randomUUID } from "node:crypto";
 import { IncomingMessage } from "node:http";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "./staticFiles";
@@ -27,6 +28,7 @@ import {
   loadSources, saveSources, diffSource, applySource, previewRepoFix, proposeRepoFix,
   loadGithubToken, githubAccountStatus, connectGithub, disconnectGithub, listGithubRepos, listRepoTree, readRepoFile,
   linkRepo, resolveDeploymentLink, ClusterWriteError, githubPrStatus,
+  loadPullRequests, recordChatPullRequest, dismissChatPullRequest,
 } from "./git";
 import {
   sanitizeSourceName,
@@ -34,6 +36,7 @@ import {
   resolveTarget,
   findByDeployment,
   upsertDeployment,
+  parseRepoSlug,
   type GitSource,
   type GitDeployment,
 } from "@rigel/k8s/src/gitSources";
@@ -1038,7 +1041,36 @@ async function handler(req: Request): Promise<Response> {
       const token = await loadGithubToken(context);
       const input = { source: resolveTarget(found.repo, found.dep), token, filePath: body.filePath, content: body.content, title: body.title, body: body.body };
       if (body.dryRun === true) return Response.json(await previewRepoFix(input));
-      return Response.json(await proposeRepoFix(input));
+      const result = await proposeRepoFix(input);
+      if (result.ok && result.prUrl) {
+        const slug = parseRepoSlug(input.source.repoURL);
+        await recordChatPullRequest(context, {
+          id: randomUUID(),
+          prUrl: result.prUrl,
+          number: Number(result.prUrl.match(/\/pull\/(\d+)/)?.[1] ?? 0),
+          repoSlug: slug ? `${slug.owner}/${slug.repo}` : input.source.repoURL,
+          repoName: found.repo.name,
+          source: body.source,
+          title: body.title,
+          branch: result.branch ?? "",
+          filePath: body.filePath,
+          createdAt: new Date().toISOString(),
+        });
+      }
+      return Response.json(result);
+    }
+
+    // GET /api/git/pull-requests — chat-opened PRs (the Pending PRs card).
+    if (url.pathname === "/api/git/pull-requests" && req.method === "GET") {
+      return Response.json({ pullRequests: await loadPullRequests(context) });
+    }
+
+    // DELETE /api/git/pull-requests?id=<id> — dismiss one PR from the ledger.
+    if (url.pathname === "/api/git/pull-requests" && req.method === "DELETE") {
+      const id = url.searchParams.get("id");
+      if (!id) return Response.json({ error: "missing id" }, { status: 422 });
+      await dismissChatPullRequest(context, id);
+      return Response.json({ pullRequests: await loadPullRequests(context) });
     }
 
     // POST /api/purge — full app-removal flow (docs/parity/purge.md).

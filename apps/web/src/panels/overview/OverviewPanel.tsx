@@ -41,6 +41,7 @@ import {
 } from "./overviewDisplay";
 import { NodeMetricsTable } from "./NodeMetricsTable";
 import { RecentDeploysCard } from "./RecentDeploysCard";
+import { PendingPrsCard } from "./PendingPrsCard";
 import {
   sortEvents,
   isWarning,
@@ -334,6 +335,11 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
         {/* Recent deployments — batches Rigel applied, with per-batch undo */}
         <div className="ov-row">
           <RecentDeploysCard />
+        </div>
+
+        {/* Pending PRs — chat-opened pull requests, with sync once merged */}
+        <div className="ov-row">
+          <PendingPrsCard />
         </div>
       </div>
 
