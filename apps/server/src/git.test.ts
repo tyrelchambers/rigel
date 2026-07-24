@@ -13,7 +13,10 @@ vi.mock("@rigel/k8s/src/run", async (importOriginal) => {
 });
 vi.mock("./install", () => ({ applyManifest: applyManifestMock }));
 
-import { planRepoLink, provenanceId, linkRepo, ClusterWriteError, derivePrState, githubPrStatus } from "./git";
+import {
+  planRepoLink, provenanceId, linkRepo, ClusterWriteError, derivePrState, githubPrStatus,
+  recordChatPullRequest,
+} from "./git";
 import { SOURCE_REPO_ANNOTATION, SOURCE_PATH_ANNOTATION, type GitSource } from "@rigel/k8s/src/gitSources";
 
 // planRepoLink is the pure core of the "Link to repo" flow: derive the source
@@ -288,5 +291,40 @@ describe("githubPrStatus", () => {
   test("returns null when the API responds not-ok", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) }) as unknown as typeof fetch;
     expect(await githubPrStatus("tok", "https://github.com/owner/repo/pull/9")).toBeNull();
+  });
+});
+
+// A silently-dropped ledger write is indistinguishable from "no PRs yet", so a
+// failed write must surface rather than being swallowed.
+describe("recordChatPullRequest", () => {
+  const record = {
+    id: "1", prUrl: "https://github.com/o/r/pull/1", number: 1, repoSlug: "o/r",
+    repoName: "r", source: "web", title: "Fix", branch: "b", filePath: "f.yaml",
+    createdAt: "2026-07-24T00:00:00.000Z",
+  };
+
+  beforeEach(() => {
+    kubectlMock.mockReset();
+    applyManifestMock.mockReset();
+    kubectlMock.mockResolvedValue({ code: 1, stdout: "", stderr: "NotFound" }); // empty ledger
+  });
+
+  test("reports ok when the ConfigMap write succeeds", async () => {
+    applyManifestMock.mockResolvedValue({ code: 0, stdout: "configmap/rigel-pull-requests created", stderr: "" });
+    expect(await recordChatPullRequest(null, record)).toMatchObject({ ok: true });
+  });
+
+  test("reports the failure when kubectl rejects the write", async () => {
+    applyManifestMock.mockResolvedValue({ code: 1, stdout: "", stderr: "forbidden" });
+    const res = await recordChatPullRequest(null, record);
+    expect(res.ok).toBe(false);
+    expect(res.message).toContain("forbidden");
+  });
+
+  test("reports the failure when the write throws", async () => {
+    applyManifestMock.mockRejectedValue(new Error("boom"));
+    const res = await recordChatPullRequest(null, record);
+    expect(res.ok).toBe(false);
+    expect(res.message).toContain("boom");
   });
 });

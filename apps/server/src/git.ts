@@ -95,13 +95,31 @@ export async function loadPullRequests(context: string | null): Promise<ChatPrRe
   }
 }
 
-/** Append a chat-opened PR to the ledger. Best-effort: a ledger write never fails the PR open. */
-export async function recordChatPullRequest(context: string | null, record: ChatPrRecord): Promise<void> {
+/**
+ * Append a chat-opened PR to the ledger. Best-effort — a ledger write never fails
+ * the PR open — but the outcome is reported and logged rather than swallowed: a
+ * silently dropped record is indistinguishable from "Rigel has opened no PRs".
+ */
+export async function recordChatPullRequest(
+  context: string | null,
+  record: ChatPrRecord,
+): Promise<{ ok: boolean; message?: string }> {
   try {
     const list = await loadPullRequests(context);
-    await applyManifest(context, pullRequestsConfigMapJSON(STATE_NAMESPACE, addPrRecord(list, record, { now: Date.now() })));
-  } catch {
-    /* best-effort */
+    const res = await applyManifest(
+      context,
+      pullRequestsConfigMapJSON(STATE_NAMESPACE, addPrRecord(list, record, { now: Date.now() })),
+    );
+    if (res.code !== 0) {
+      const message = res.stderr || res.stdout || `kubectl exited ${res.code}`;
+      process.stderr.write(`rigel: could not record PR ${record.prUrl} in the ledger: ${message}\n`);
+      return { ok: false, message };
+    }
+    return { ok: true };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    process.stderr.write(`rigel: could not record PR ${record.prUrl} in the ledger: ${message}\n`);
+    return { ok: false, message };
   }
 }
 
