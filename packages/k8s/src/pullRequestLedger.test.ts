@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { addPrRecord, removePrRecord, parsePullRequests, type ChatPrRecord } from "./pullRequestLedger";
+import { addPrRecord, parsePullRequests, type ChatPrRecord } from "./pullRequestLedger";
 
 const rec = (over: Partial<ChatPrRecord>): ChatPrRecord => ({
   id: "1",
@@ -41,13 +41,6 @@ describe("addPrRecord", () => {
     const stale = rec({ id: "stale", prUrl: "https://github.com/o/r/pull/2", createdAt: "2026-06-01T00:00:00.000Z" });
     const out = addPrRecord([stale], rec({ id: "new" }), { now: NOW, ttlDays: 30 });
     expect(out.map((r) => r.id)).toEqual(["new"]);
-  });
-});
-
-describe("removePrRecord", () => {
-  it("removes the matching id", () => {
-    const out = removePrRecord([rec({ id: "a" }), rec({ id: "b", prUrl: "x" })], "a");
-    expect(out.map((r) => r.id)).toEqual(["b"]);
   });
 });
 

@@ -196,17 +196,6 @@ export function useChatPullRequests() {
   });
 }
 
-/** Dismiss one PR from the ledger (does not touch the PR on GitHub). */
-export function useDismissPullRequest() {
-  const qc = useQueryClient();
-  const activeContext = useCluster((s) => s.activeContext);
-  return useMutation({
-    mutationFn: (id: string) =>
-      req<{ pullRequests: ChatPrRecord[] }>(`/api/git/pull-requests?id=${encodeURIComponent(id)}`, { method: "DELETE" }),
-    onSuccess: (r) => qc.setQueryData([activeContext, "chat-pull-requests"], r.pullRequests),
-  });
-}
-
 export function useSaveSource() {
   const qc = useQueryClient();
   const activeContext = useCluster((s) => s.activeContext);

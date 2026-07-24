@@ -368,7 +368,6 @@ export {
 
 export {
   addPrRecord,
-  removePrRecord,
   parsePullRequests,
   pullRequestsConfigMapJSON,
   PULL_REQUESTS_CONFIGMAP,

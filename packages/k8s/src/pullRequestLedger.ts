@@ -38,11 +38,6 @@ export function addPrRecord(
   return [record, ...deduped].filter((r) => Date.parse(r.createdAt) >= cutoff).slice(0, max);
 }
 
-/** Drop the record with the given id. */
-export function removePrRecord(list: ChatPrRecord[], id: string): ChatPrRecord[] {
-  return list.filter((r) => r.id !== id);
-}
-
 /** Parse the ledger's JSON array (empty on missing/invalid input). */
 export function parsePullRequests(dataJSON: string | undefined | null): ChatPrRecord[] {
   if (!dataJSON) return [];

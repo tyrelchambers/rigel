@@ -28,7 +28,7 @@ import {
   loadSources, saveSources, diffSource, applySource, previewRepoFix, proposeRepoFix,
   loadGithubToken, githubAccountStatus, connectGithub, disconnectGithub, listGithubRepos, listRepoTree, readRepoFile,
   linkRepo, resolveDeploymentLink, ClusterWriteError, githubPrStatus,
-  loadPullRequests, recordChatPullRequest, dismissChatPullRequest,
+  loadPullRequests, recordChatPullRequest,
 } from "./git";
 import {
   sanitizeSourceName,
@@ -1062,14 +1062,6 @@ async function handler(req: Request): Promise<Response> {
 
     // GET /api/git/pull-requests — chat-opened PRs (the Pending PRs card).
     if (url.pathname === "/api/git/pull-requests" && req.method === "GET") {
-      return Response.json({ pullRequests: await loadPullRequests(context) });
-    }
-
-    // DELETE /api/git/pull-requests?id=<id> — dismiss one PR from the ledger.
-    if (url.pathname === "/api/git/pull-requests" && req.method === "DELETE") {
-      const id = url.searchParams.get("id");
-      if (!id) return Response.json({ error: "missing id" }, { status: 422 });
-      await dismissChatPullRequest(context, id);
       return Response.json({ pullRequests: await loadPullRequests(context) });
     }
 

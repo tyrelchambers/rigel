@@ -48,7 +48,6 @@ export {
 import {
   parsePullRequests,
   addPrRecord,
-  removePrRecord,
   pullRequestsConfigMapJSON,
   PULL_REQUESTS_CONFIGMAP,
   PULL_REQUESTS_DATA_KEY,
@@ -121,12 +120,6 @@ export async function recordChatPullRequest(
     process.stderr.write(`rigel: could not record PR ${record.prUrl} in the ledger: ${message}\n`);
     return { ok: false, message };
   }
-}
-
-/** Remove one PR from the ledger (dismiss). */
-export async function dismissChatPullRequest(context: string | null, id: string): Promise<RunResult> {
-  const list = await loadPullRequests(context);
-  return applyManifest(context, pullRequestsConfigMapJSON(STATE_NAMESPACE, removePrRecord(list, id)));
 }
 
 // ---------------------------------------------------------------------------
