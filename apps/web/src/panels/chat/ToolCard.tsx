@@ -7,10 +7,12 @@ import {
   faCircleDot,
   faCircleCheck,
   faCircleXmark,
+  faServer,
 } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import type { ToolActivity } from "./types";
+import { parseCommandTarget } from "./toolTarget";
 import { cn } from "@/lib/utils";
 
 const STATUS: Record<
@@ -25,6 +27,7 @@ const STATUS: Record<
 export function ToolCard({ tool }: { tool: ToolActivity }) {
   const [open, setOpen] = useState(false);
   const status = STATUS[tool.status];
+  const target = parseCommandTarget(tool.command);
   return (
     <Collapsible
       open={open}
@@ -37,7 +40,16 @@ export function ToolCard({ tool }: { tool: ToolActivity }) {
         {tool.description && (
           <span className="truncate text-muted-foreground">{tool.description}</span>
         )}
-        <Badge variant="secondary" className="ml-auto gap-1 rounded-full font-normal">
+        {target.context && (
+          <span className="ml-auto flex shrink-0 items-center gap-1 font-mono text-2xs text-muted-foreground">
+            <FontAwesomeIcon icon={faServer} className="size-2.5" aria-hidden />
+            {target.namespace ? `${target.context} · ${target.namespace}` : target.context}
+          </span>
+        )}
+        <Badge
+          variant="secondary"
+          className={cn("gap-1 rounded-full font-normal", !target.context && "ml-auto")}
+        >
           <FontAwesomeIcon icon={status.icon} className={cn("size-3", status.className)} />
           {status.label}
         </Badge>
