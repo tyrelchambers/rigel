@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { repoSlugFromSource, repoSlugFromText, prUrlFromText, collectRepoBadges } from "./repoSlug";
+import { repoSlugFromSource, repoSlugFromText, prUrlFromText, prNumberFromUrl, collectRepoBadges } from "./repoSlug";
 import type { GitSource } from "@/panels/gitops/gitApi";
 import type { SuggestedAction } from "@/lib/actionBlocks";
 
@@ -61,6 +61,16 @@ describe("prUrlFromText", () => {
 
   it("returns null when there is no pull-request URL", () => {
     expect(prUrlFromText("nothing here")).toBeNull();
+  });
+});
+
+describe("prNumberFromUrl", () => {
+  it("extracts the PR number", () => {
+    expect(prNumberFromUrl("https://github.com/tyrelchambers/jobwatch-canada/pull/42")).toBe(42);
+  });
+
+  it("returns null when there is no PR number", () => {
+    expect(prNumberFromUrl("https://github.com/tyrelchambers/jobwatch-canada")).toBeNull();
   });
 });
 

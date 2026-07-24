@@ -26,7 +26,7 @@ import { discoverRecent, undoBatch } from "./recentDeploys";
 import {
   loadSources, saveSources, diffSource, applySource, previewRepoFix, proposeRepoFix,
   loadGithubToken, githubAccountStatus, connectGithub, disconnectGithub, listGithubRepos, listRepoTree, readRepoFile,
-  linkRepo, resolveDeploymentLink, ClusterWriteError,
+  linkRepo, resolveDeploymentLink, ClusterWriteError, githubPrStatus,
 } from "./git";
 import {
   sanitizeSourceName,
@@ -813,6 +813,17 @@ async function handler(req: Request): Promise<Response> {
       const r = await readRepoFile(token, repo, branch, path);
       if (!r.ok) return Response.json({ error: r.message ?? "could not read file" }, { status: 422 });
       return Response.json({ content: r.content });
+    }
+
+    // GET /api/git/pr-status?url=<prUrl> — one PR's number + state (open/merged/closed).
+    if (url.pathname === "/api/git/pr-status" && req.method === "GET") {
+      const prUrl = url.searchParams.get("url");
+      if (!prUrl) return Response.json({ error: "missing url" }, { status: 422 });
+      const token = await loadGithubToken(context);
+      if (!token) return Response.json({ error: "GitHub not connected" }, { status: 409 });
+      const status = await githubPrStatus(token, prUrl);
+      if (!status) return Response.json({ error: "could not read PR" }, { status: 422 });
+      return Response.json(status);
     }
 
     // GET /api/git/sources — list configured sources (never includes tokens).

@@ -399,6 +399,33 @@ export async function listGithubRepos(token: string): Promise<GithubRepo[]> {
   return out;
 }
 
+export type PrState = "open" | "merged" | "closed";
+export interface PrStatus {
+  number: number;
+  state: PrState;
+}
+
+/** Map a GitHub PR API object to open/merged/closed (a merged PR reports state "closed"). */
+export function derivePrState(pr: { state?: string; merged_at?: string | null }): PrState {
+  if (pr.merged_at) return "merged";
+  return pr.state === "closed" ? "closed" : "open";
+}
+
+const PR_URL_RE = /github\.com\/([^/\s]+)\/([^/\s]+)\/pull\/(\d+)/;
+
+/** Read one pull request's number + state from the GitHub API, or null on a bad URL / API error. */
+export async function githubPrStatus(token: string, prUrl: string): Promise<PrStatus | null> {
+  const m = prUrl.match(PR_URL_RE);
+  if (!m) return null;
+  const [, owner, repo, num] = m;
+  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${num}`, {
+    headers: githubHeaders(token),
+  });
+  if (!res.ok) return null;
+  const j = (await res.json().catch(() => ({}))) as { state?: string; merged_at?: string | null };
+  return { number: Number(num), state: derivePrState(j) };
+}
+
 /** Extract the `rel="next"` URL from a GitHub Link header, or null. */
 function nextLink(header: string | null): string | null {
   if (!header) return null;

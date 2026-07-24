@@ -1,4 +1,4 @@
-import { test, expect, describe, beforeEach, vi } from "vitest";
+import { test, expect, describe, beforeEach, afterEach, vi } from "vitest";
 
 // linkRepo's cluster I/O is exercised via mocked module deps (kubectl +
 // applyManifest); the pure planRepoLink / provenanceId tests below don't touch
@@ -13,7 +13,7 @@ vi.mock("@rigel/k8s/src/run", async (importOriginal) => {
 });
 vi.mock("./install", () => ({ applyManifest: applyManifestMock }));
 
-import { planRepoLink, provenanceId, linkRepo, ClusterWriteError } from "./git";
+import { planRepoLink, provenanceId, linkRepo, ClusterWriteError, derivePrState, githubPrStatus } from "./git";
 import { SOURCE_REPO_ANNOTATION, SOURCE_PATH_ANNOTATION, type GitSource } from "@rigel/k8s/src/gitSources";
 
 // planRepoLink is the pure core of the "Link to repo" flow: derive the source
@@ -249,5 +249,44 @@ describe("linkRepo error classification", () => {
     expect(err).toBeInstanceOf(Error);
     expect(err).not.toBeInstanceOf(ClusterWriteError);
     expect(applyManifestMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("derivePrState", () => {
+  test("merged when merged_at is set, regardless of state", () => {
+    expect(derivePrState({ state: "closed", merged_at: "2026-07-24T00:00:00Z" })).toBe("merged");
+  });
+  test("closed when closed and not merged", () => {
+    expect(derivePrState({ state: "closed", merged_at: null })).toBe("closed");
+  });
+  test("open otherwise", () => {
+    expect(derivePrState({ state: "open", merged_at: null })).toBe("open");
+  });
+});
+
+describe("githubPrStatus", () => {
+  const origFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = origFetch;
+  });
+
+  test("returns number + derived state from the PR API", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ state: "closed", merged_at: "2026-07-24T00:00:00Z" }),
+    }) as unknown as typeof fetch;
+    expect(await githubPrStatus("tok", "https://github.com/owner/repo/pull/42")).toEqual({
+      number: 42,
+      state: "merged",
+    });
+  });
+
+  test("returns null for a non-PR URL", async () => {
+    expect(await githubPrStatus("tok", "https://github.com/owner/repo")).toBeNull();
+  });
+
+  test("returns null when the API responds not-ok", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) }) as unknown as typeof fetch;
+    expect(await githubPrStatus("tok", "https://github.com/owner/repo/pull/9")).toBeNull();
   });
 });

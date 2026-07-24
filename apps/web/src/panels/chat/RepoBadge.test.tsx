@@ -20,4 +20,17 @@ describe("RepoBadge", () => {
     render(<RepoBadge slug="tyrelchambers/jobwatch-canada" />);
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
+
+  it("includes the PR number and state in the label and stamps the state", () => {
+    render(
+      <RepoBadge
+        slug="tyrelchambers/jobwatch-canada"
+        href="https://github.com/tyrelchambers/jobwatch-canada/pull/42"
+        state="merged"
+        prNumber={42}
+      />,
+    );
+    const link = screen.getByRole("link", { name: "tyrelchambers/jobwatch-canada #42 · merged" });
+    expect(link).toHaveAttribute("data-pr-state", "merged");
+  });
 });

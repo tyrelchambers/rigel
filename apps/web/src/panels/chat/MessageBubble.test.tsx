@@ -18,6 +18,7 @@ vi.mock("@/lib/api", () => ({
 const gitState = vi.hoisted(() => ({ sources: [] as unknown[] }));
 vi.mock("@/panels/gitops/gitApi", () => ({
   useGitSources: () => ({ data: gitState.sources }),
+  usePrStatus: () => ({ data: undefined }),
 }));
 
 const writeText = vi.fn().mockResolvedValue(undefined);
@@ -164,7 +165,7 @@ describe("MessageBubble repo badge", () => {
       text: "✓ Open PR — Opened pull request: https://github.com/tyrelchambers/jobwatch-canada/pull/42",
     });
     render(<MessageBubble message={msg} onAction={noop} />);
-    const link = screen.getByRole("link", { name: "tyrelchambers/jobwatch-canada" });
+    const link = screen.getByRole("link", { name: "tyrelchambers/jobwatch-canada #42" });
     expect(link).toHaveAttribute("href", "https://github.com/tyrelchambers/jobwatch-canada/pull/42");
   });
 });

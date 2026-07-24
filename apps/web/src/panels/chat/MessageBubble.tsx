@@ -22,6 +22,7 @@ import type { ChatMessage } from "./types";
 import { CodeBlock } from "./CodeBlock";
 import { ChatBlockquote } from "./Callout";
 import { RepoBadge } from "./RepoBadge";
+import { ChatPrBadge } from "./ChatPrBadge";
 import { collectRepoBadges } from "./repoSlug";
 
 interface Props {
@@ -82,9 +83,13 @@ export function MessageBubble({ message, onAction, onRunBatch, onAnswer, agentNa
   const badgeRow =
     repoBadges.length > 0 ? (
       <div className="flex flex-wrap gap-1">
-        {repoBadges.map((b) => (
-          <RepoBadge key={b.slug + (b.href ?? "")} slug={b.slug} href={b.href} />
-        ))}
+        {repoBadges.map((b) =>
+          b.href ? (
+            <ChatPrBadge key={b.slug + b.href} slug={b.slug} href={b.href} />
+          ) : (
+            <RepoBadge key={b.slug} slug={b.slug} />
+          ),
+        )}
       </div>
     ) : null;
 

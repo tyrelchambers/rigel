@@ -155,6 +155,24 @@ export function useGitSources() {
   });
 }
 
+export type PrState = "open" | "merged" | "closed";
+export interface PrStatus {
+  number: number;
+  state: PrState;
+}
+
+/** Live status of one opened PR (open/merged/closed), read from GitHub via the server. */
+export function usePrStatus(prUrl: string | undefined) {
+  const activeContext = useCluster((s) => s.activeContext);
+  return useQuery({
+    queryKey: [activeContext, "pr-status", prUrl],
+    queryFn: () => req<PrStatus>(`/api/git/pr-status?url=${encodeURIComponent(prUrl!)}`),
+    enabled: !!prUrl,
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
 export function useSaveSource() {
   const qc = useQueryClient();
   const activeContext = useCluster((s) => s.activeContext);

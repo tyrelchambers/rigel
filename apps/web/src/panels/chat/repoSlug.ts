@@ -24,6 +24,12 @@ export function prUrlFromText(text: string): string | null {
   return text.match(PR_URL)?.[0] ?? null;
 }
 
+/** The PR number from a GitHub pull-request URL, or null. */
+export function prNumberFromUrl(url: string): number | null {
+  const m = url.match(/\/pull\/(\d+)/);
+  return m ? Number(m[1]) : null;
+}
+
 export interface RepoBadgeSpec {
   slug: string;
   href?: string;
