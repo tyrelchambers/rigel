@@ -207,4 +207,75 @@ describe("proposeRepoFix", () => {
     expect(res.ok).toBe(false);
     expect(res.message).toContain("Validation Failed");
   });
+
+  test("returns the PR number from the create response", async () => {
+    mockRun.mockImplementation(gitOk());
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ html_url: "https://github.com/owner/repo/pull/7", number: 7 }), { status: 201 }),
+      ),
+    );
+    const res = await proposeRepoFix(input);
+    expect(res.number).toBe(7);
+  });
+
+  test("labels the PR with rigel + its origin, creating the labels first", async () => {
+    mockRun.mockImplementation(gitOk());
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ html_url: "https://github.com/owner/repo/pull/7", number: 7 }), { status: 201 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await proposeRepoFix({ ...input, origin: "agent" });
+    expect(res.ok).toBe(true);
+
+    const urls = fetchMock.mock.calls.map((c) => String(c[0]));
+    // Each label is created (ignored if it already exists) before being applied.
+    expect(urls.filter((u) => u.endsWith("/labels"))).toContain("https://api.github.com/repos/owner/repo/labels");
+    const add = fetchMock.mock.calls.find(
+      (c) => String(c[0]) === "https://api.github.com/repos/owner/repo/issues/7/labels",
+    );
+    expect(add).toBeDefined();
+    const sent = JSON.parse((add![1] as RequestInit).body as string) as { labels: string[] };
+    expect(sent.labels).toEqual(["rigel", "rigel:agent"]);
+  });
+
+  test("uses the chat origin label for chat-opened PRs", async () => {
+    mockRun.mockImplementation(gitOk());
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ html_url: "https://github.com/owner/repo/pull/7", number: 7 }), { status: 201 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await proposeRepoFix({ ...input, origin: "chat" });
+    const add = fetchMock.mock.calls.find((c) => String(c[0]).endsWith("/issues/7/labels"));
+    const sent = JSON.parse((add![1] as RequestInit).body as string) as { labels: string[] };
+    expect(sent.labels).toEqual(["rigel", "rigel:chat"]);
+  });
+
+  test("a labelling failure never fails the PR", async () => {
+    mockRun.mockImplementation(gitOk());
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: unknown) =>
+        String(url).endsWith("/pulls")
+          ? new Response(JSON.stringify({ html_url: "https://github.com/owner/repo/pull/7", number: 7 }), { status: 201 })
+          : new Response(JSON.stringify({ message: "Resource not accessible" }), { status: 403 }),
+      ),
+    );
+    const res = await proposeRepoFix({ ...input, origin: "agent" });
+    expect(res.ok).toBe(true);
+    expect(res.prUrl).toBe("https://github.com/owner/repo/pull/7");
+  });
+
+  test("skips labelling when no origin is given", async () => {
+    mockRun.mockImplementation(gitOk());
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ html_url: "https://github.com/owner/repo/pull/7", number: 7 }), { status: 201 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await proposeRepoFix(input);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

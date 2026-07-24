@@ -1039,7 +1039,7 @@ async function handler(req: Request): Promise<Response> {
       const found = findByDeployment(sources, body.source);
       if (!found) return Response.json({ error: "unknown source" }, { status: 404 });
       const token = await loadGithubToken(context);
-      const input = { source: resolveTarget(found.repo, found.dep), token, filePath: body.filePath, content: body.content, title: body.title, body: body.body };
+      const input = { source: resolveTarget(found.repo, found.dep), token, filePath: body.filePath, content: body.content, title: body.title, body: body.body, origin: "chat" as const };
       if (body.dryRun === true) return Response.json(await previewRepoFix(input));
       const result = await proposeRepoFix(input);
       if (result.ok && result.prUrl) {
@@ -1047,7 +1047,7 @@ async function handler(req: Request): Promise<Response> {
         await recordChatPullRequest(context, {
           id: randomUUID(),
           prUrl: result.prUrl,
-          number: Number(result.prUrl.match(/\/pull\/(\d+)/)?.[1] ?? 0),
+          number: result.number ?? 0,
           repoSlug: slug ? `${slug.owner}/${slug.repo}` : input.source.repoURL,
           repoName: found.repo.name,
           source: body.source,

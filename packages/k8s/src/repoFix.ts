@@ -65,6 +65,9 @@ export async function ensureCheckout(
 // AI fix → pull request (feature 3c)
 // ---------------------------------------------------------------------------
 
+/** Who asked for the fix: the desktop chat assistant, or the in-cluster agent. */
+export type RepoFixOrigin = "chat" | "agent";
+
 export interface RepoFixInput {
   source: ResolvedTarget;
   token: string | null;
@@ -72,6 +75,8 @@ export interface RepoFixInput {
   content: string;
   title: string;
   body?: string;
+  /** Stamps `rigel` + `rigel:<origin>` labels on the PR. Omit to skip labelling. */
+  origin?: RepoFixOrigin;
 }
 
 export interface RepoFixPreview {
@@ -83,6 +88,8 @@ export interface RepoFixPreview {
 export interface RepoFixResult {
   ok: boolean;
   prUrl?: string;
+  /** The opened PR's number. */
+  number?: number;
   branch?: string;
   message?: string;
 }
@@ -143,12 +150,16 @@ export async function proposeRepoFix(input: RepoFixInput): Promise<RepoFixResult
   const push = await runGit(["-C", co.dir, "push", authed, `${branch}:${branch}`]);
   if (push.code !== 0) return { ok: false, branch, message: redactURL(push.stderr || "git push failed") };
 
-  return createPullRequest(slug, input.token, {
+  const result = await createPullRequest(slug, input.token, {
     title: input.title,
     head: branch,
     base: input.source.branch,
     body: input.body ?? "",
   });
+  if (result.ok && result.number && input.origin) {
+    await labelPullRequest(slug, input.token, result.number, input.origin);
+  }
+  return result;
 }
 
 async function writeProposedFile(dir: string, rel: string, content: string): Promise<void> {
@@ -176,9 +187,54 @@ async function createPullRequest(
     },
     body: JSON.stringify(pr),
   });
-  const json = (await res.json().catch(() => ({}))) as { html_url?: string; message?: string };
+  const json = (await res.json().catch(() => ({}))) as { html_url?: string; number?: number; message?: string };
   if (!res.ok) {
     return { ok: false, branch: pr.head, message: `GitHub PR creation failed: ${json.message ?? res.statusText}` };
   }
-  return { ok: true, prUrl: json.html_url, branch: pr.head, message: "ok" };
+  return { ok: true, prUrl: json.html_url, number: json.number, branch: pr.head, message: "ok" };
+}
+
+/** The provenance labels Rigel stamps on a PR it opened. */
+const LABEL_META: Record<string, { color: string; description: string }> = {
+  rigel: { color: "38BDF8", description: "Opened by Rigel" },
+  "rigel:agent": { color: "A855F7", description: "Opened by the in-cluster Rigel agent" },
+  "rigel:chat": { color: "22D3EE", description: "Opened by Rigel from chat" },
+};
+
+/**
+ * Stamp `rigel` + `rigel:<origin>` on the opened PR so its provenance lives on
+ * GitHub, not only in cluster state. Best-effort: labels need write access and
+ * must exist before they can be applied, so every failure here is swallowed —
+ * a PR that could not be labelled is still a successfully opened PR.
+ */
+async function labelPullRequest(
+  slug: { owner: string; repo: string },
+  token: string,
+  number: number,
+  origin: RepoFixOrigin,
+): Promise<void> {
+  const labels = ["rigel", `rigel:${origin}`];
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/vnd.github+json",
+    "Content-Type": "application/json",
+    "User-Agent": "rigel",
+  };
+  try {
+    // Create each label first; an "already exists" 422 is the expected steady state.
+    for (const name of labels) {
+      await fetch(`https://api.github.com/repos/${slug.owner}/${slug.repo}/labels`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ name, ...LABEL_META[name] }),
+      });
+    }
+    await fetch(`https://api.github.com/repos/${slug.owner}/${slug.repo}/issues/${number}/labels`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ labels }),
+    });
+  } catch {
+    /* best-effort: never fail the PR over a label */
+  }
 }

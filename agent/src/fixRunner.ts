@@ -137,6 +137,7 @@ export async function runFix(deps: FixRunnerDeps): Promise<number> {
       content: spec.content,
       title: spec.title,
       body: spec.body,
+      origin: "agent",
     });
   } catch (e) {
     await deps.writeResult(serializeResult({ ok: false, message: e instanceof Error ? e.message : String(e) }));
