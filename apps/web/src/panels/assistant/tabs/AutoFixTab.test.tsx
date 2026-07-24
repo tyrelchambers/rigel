@@ -6,7 +6,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AutoFixTab } from "./AutoFixTab";
 import { AssistantContext, type AssistantContextValue } from "../AssistantContext";
 import type { AssistantDerived, AutofixView } from "../useAssistant";
-import type { AssistantPullRequest } from "@rigel/k8s";
 import { useCluster } from "@/store/cluster";
 
 const setAutofixBodies: Array<Record<string, unknown>> = [];
@@ -246,69 +245,5 @@ describe("AutoFixTab — add project (deployment search)", () => {
         autofixScope: { projects: ["default/api"] },
       }),
     );
-  });
-});
-
-describe("AutoFixTab — recent pull requests", () => {
-  const prs: AssistantPullRequest[] = [
-    {
-      at: new Date().toISOString(),
-      fingerprint: "fp1",
-      filePath: "k8s/deploy.yaml",
-      incident: "OOMKilled",
-      app: "default/canada-hires",
-      repo: "https://github.com/tyrel/canada-hires",
-      branch: "rigel/fix-oom-7f3",
-      prUrl: "https://github.com/tyrel/canada-hires/pull/7",
-      title: "Raise memory limit for canada-hires",
-      summary: "opened",
-      status: "open",
-      kind: "config",
-    },
-    {
-      at: new Date().toISOString(),
-      fingerprint: "fp2",
-      filePath: "k8s/probe.yaml",
-      incident: "probe",
-      app: "default/signups",
-      repo: "https://github.com/tyrel/rigel-signups",
-      branch: "rigel/fix-probe-d41",
-      prUrl: "https://github.com/tyrel/rigel-signups/pull/3",
-      title: "Correct readiness probe path",
-      summary: "merged",
-      status: "merged",
-      kind: "config",
-    },
-    {
-      at: new Date().toISOString(),
-      fingerprint: "fp3",
-      filePath: "k8s/env.yaml",
-      incident: "boom",
-      app: "default/api",
-      repo: "https://github.com/tyrel/api",
-      title: "Failed fix attempt",
-      summary: "error: push rejected",
-      status: "failed",
-      kind: "config",
-    },
-  ];
-
-  it("renders open/merged/failed badges, titles, and the open-in-browser link", () => {
-    wrap(derived({ pullRequests: prs }));
-    expect(screen.getByText("Raise memory limit for canada-hires")).toBeInTheDocument();
-    expect(screen.getByText("Open")).toBeInTheDocument();
-    expect(screen.getByText("Merged")).toBeInTheDocument();
-    expect(screen.getByText("Failed")).toBeInTheDocument();
-    // The summary header counts each status.
-    expect(screen.getByText("1 open · 1 merged · 1 failed")).toBeInTheDocument();
-    // Open PRs link out; the failed one (no prUrl) has no link.
-    const link = screen.getByRole("link", { name: /open Raise memory limit/i });
-    expect(link).toHaveAttribute("href", "https://github.com/tyrel/canada-hires/pull/7");
-    expect(screen.queryByRole("link", { name: /open Failed fix attempt/i })).not.toBeInTheDocument();
-  });
-
-  it("shows an empty state when there are no pull requests", () => {
-    wrap(derived({ pullRequests: [] }));
-    expect(screen.getByText(/no pull requests yet/i)).toBeInTheDocument();
   });
 });

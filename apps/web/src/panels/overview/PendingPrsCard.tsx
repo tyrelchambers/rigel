@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { SiGithub } from "react-icons/si";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCodePullRequest, faXmark, faRotate } from "@awesome.me/kit-6050953220/icons/classic/solid";
+import { faCodePullRequest, faXmark, faRotate, faRobot, faComment } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { formatDistanceToNow } from "date-fns";
 import { findByDeployment } from "@rigel/k8s";
 import {
@@ -9,24 +9,32 @@ import {
   useDismissPullRequest,
   useGitSources,
   usePrStatus,
-  type ChatPrRecord,
   type PrState,
 } from "@/panels/gitops/gitApi";
 import { SyncDialog } from "@/panels/gitops/SyncDialog";
 import type { DeploymentRef } from "@/panels/gitops/gitopsLogic";
+import { useAssistant } from "@/panels/assistant/useAssistant";
+import { mergePrRows, type PrOrigin, type PrRowModel } from "./pendingPrs";
 import { cn } from "@/lib/utils";
 
-const STATE_TINT: Record<PrState, string> = {
+const STATE_TINT: Record<PrState | "failed", string> = {
   open: "text-amber-500",
   merged: "text-purple-500",
   closed: "text-muted-foreground",
+  failed: "text-[var(--status-failed)]",
 };
 
-/** PRs the chat assistant opened: live status, and a Sync once one is merged. */
+const ORIGIN = {
+  chat: { label: "Chat", icon: faComment },
+  agent: { label: "Agent", icon: faRobot },
+} satisfies Record<PrOrigin, { label: string; icon: typeof faRobot }>;
+
+/** Every PR Rigel opened — from chat and from the in-cluster agent — with a sync once merged. */
 export function PendingPrsCard() {
-  const { data: prs } = useChatPullRequests();
+  const { data: chatPrs } = useChatPullRequests();
+  const { pullRequests: agentPrs } = useAssistant("default");
   const [syncTarget, setSyncTarget] = useState<DeploymentRef | null>(null);
-  const rows = prs ?? [];
+  const rows = mergePrRows(chatPrs ?? [], agentPrs ?? []);
 
   return (
     <div className="overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)]">
@@ -38,15 +46,15 @@ export function PendingPrsCard() {
           <span className="text-base font-bold text-[var(--fg-primary)]">Pending PRs</span>
         </div>
         <span className="font-mono text-2xs text-[var(--fg-tertiary)]">
-          {rows.length} opened from chat
+          {rows.length} opened by Rigel
         </span>
       </div>
 
       {rows.length === 0 ? (
         <EmptyState />
       ) : (
-        rows.map((pr, i) => (
-          <PrRow key={pr.id} pr={pr} last={i === rows.length - 1} onSync={setSyncTarget} />
+        rows.map((row, i) => (
+          <PrRow key={row.key} row={row} last={i === rows.length - 1} onSync={setSyncTarget} />
         ))
       )}
 
@@ -56,19 +64,21 @@ export function PendingPrsCard() {
 }
 
 function PrRow({
-  pr,
+  row,
   last,
   onSync,
 }: {
-  pr: ChatPrRecord;
+  row: PrRowModel;
   last: boolean;
   onSync: (target: DeploymentRef) => void;
 }) {
-  const { data: status } = usePrStatus(pr.prUrl);
+  const { data: status } = usePrStatus(row.prUrl);
   const { data: sources } = useGitSources();
   const dismiss = useDismissPullRequest();
-  const found = findByDeployment(sources ?? [], pr.source);
-  const age = formatDistanceToNow(new Date(pr.createdAt), { addSuffix: true });
+  const found = findByDeployment(sources ?? [], row.source);
+  const origin = ORIGIN[row.origin];
+  const shown = status?.state ?? row.fallbackState;
+  const age = formatDistanceToNow(new Date(row.createdAt), { addSuffix: true });
 
   return (
     <div
@@ -78,21 +88,29 @@ function PrRow({
       )}
     >
       <div className="flex min-w-0 items-center gap-3">
-        <SiGithub
-          aria-hidden
-          className={cn("size-4 shrink-0", status ? STATE_TINT[status.state] : "text-muted-foreground")}
-        />
+        <SiGithub aria-hidden className={cn("size-4 shrink-0", shown ? STATE_TINT[shown] : "text-muted-foreground")} />
         <div className="flex min-w-0 flex-col gap-0.5">
-          <a
-            href={pr.prUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="truncate text-[13.5px] font-semibold text-[var(--fg-primary)] hover:underline"
-          >
-            {pr.repoSlug} #{pr.number}
-          </a>
+          <div className="flex min-w-0 items-center gap-2">
+            {row.prUrl ? (
+              <a
+                href={row.prUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="truncate text-[13.5px] font-semibold text-[var(--fg-primary)] hover:underline"
+              >
+                {row.repoSlug}
+                {row.number ? ` #${row.number}` : ""}
+              </a>
+            ) : (
+              <span className="truncate text-[13.5px] font-semibold text-[var(--fg-primary)]">{row.repoSlug}</span>
+            )}
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded bg-white/[0.05] px-2 py-0.5 font-mono text-3xs tracking-[0.03em] text-[var(--fg-tertiary)] uppercase">
+              <FontAwesomeIcon icon={origin.icon} className="size-2.5" />
+              {origin.label}
+            </span>
+          </div>
           <span className="truncate font-mono text-2xs text-[var(--fg-tertiary)]">
-            {pr.title} · {status?.state ?? "checking…"} · {age}
+            {row.title} · {shown ?? "checking…"} · {age}
           </span>
         </div>
       </div>
@@ -109,15 +127,17 @@ function PrRow({
             <FontAwesomeIcon icon={faRotate} className="size-3" /> Sync now
           </button>
         )}
-        <button
-          type="button"
-          aria-label="Dismiss"
-          onClick={() => dismiss.mutate(pr.id)}
-          disabled={dismiss.isPending}
-          className="inline-flex size-6 items-center justify-center rounded-md text-[var(--fg-tertiary)] hover:text-[var(--fg-primary)]"
-        >
-          <FontAwesomeIcon icon={faXmark} className="size-3" />
-        </button>
+        {row.dismissId && (
+          <button
+            type="button"
+            aria-label="Dismiss"
+            onClick={() => dismiss.mutate(row.dismissId!)}
+            disabled={dismiss.isPending}
+            className="inline-flex size-6 items-center justify-center rounded-md text-[var(--fg-tertiary)] hover:text-[var(--fg-primary)]"
+          >
+            <FontAwesomeIcon icon={faXmark} className="size-3" />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -131,8 +151,8 @@ function EmptyState() {
       </span>
       <span className="text-[15px] font-semibold text-[var(--fg-primary)]">No open pull requests</span>
       <p className="m-0 max-w-[320px] text-[12.5px] text-[var(--fg-secondary)]">
-        Fixes Rigel opens as pull requests from chat show up here, so you can
-        track them and sync once they merge.
+        Fixes Rigel opens as pull requests — from chat or from the in-cluster
+        agent — show up here, so you can track them and sync once they merge.
       </p>
     </div>
   );

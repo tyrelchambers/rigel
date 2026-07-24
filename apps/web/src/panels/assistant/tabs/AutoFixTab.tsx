@@ -1,7 +1,8 @@
-// AutoFixTab — the agent-opened fix-PR control surface. Reproduces the Pencil
-// "Auto Fix" tab (frame qv5Tx): an opt-in card (Off/On toggle, daily cap, the
-// "Applies to" scope list of per-project link status) plus a "Recent pull
-// requests" list. Scope is per-project ONLY — a "🔍 Add project" search row lists
+// AutoFixTab — the agent-opened fix-PR control surface: an opt-in card (Off/On
+// toggle, daily cap, the "Applies to" scope list of per-project link status).
+// Opened PRs themselves are listed on the Overview "Pending PRs" card, which
+// covers both agent- and chat-opened PRs. Scope is per-project ONLY — a
+// "🔍 Add project" search row lists
 // the user's deployments (as <namespace>/<deployment>) and adds one as a project;
 // an unlinked pick opens the LinkRepoModal (frame xSyQL) to create its GitOps
 // source on the spot. Tailwind utilities + design tokens only.
@@ -13,23 +14,17 @@ import {
   faCube,
   faCheck,
   faCodeBranch,
-  faCodeMerge,
-  faCodePullRequest,
-  faCodePullRequestClosed,
   faLink,
   faMagnifyingGlass,
-  faArrowUpRightFromSquare,
   faTriangleExclamation,
   faXmark,
 } from "@awesome.me/kit-6050953220/icons/classic/solid";
-import type { AssistantPullRequest } from "@rigel/k8s";
 import { parseRepoSlug } from "@rigel/k8s";
 import { cn } from "@/lib/utils";
 import { useCluster } from "@/store/cluster";
 import { useSetAutofix } from "@/lib/api";
 import { useRepoLink } from "@/panels/gitops/gitApi";
 import { useAssistantCtx } from "../AssistantContext";
-import { relativeTime } from "../display";
 import { LinkRepoModal } from "../components/LinkRepoModal";
 
 type Scope = { projects: string[] };
@@ -49,12 +44,9 @@ function splitProject(id: string): LinkTarget {
 }
 
 export function AutoFixTab() {
-  const { d } = useAssistantCtx();
-
   return (
     <div className="space-y-5">
       <OptInCard />
-      <RecentPrCard prs={d.pullRequests} />
     </div>
   );
 }
@@ -508,99 +500,3 @@ function AddProjectControl({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Recent pull requests
-// ---------------------------------------------------------------------------
-
-function prSummary(prs: AssistantPullRequest[]): string {
-  const count = (s: AssistantPullRequest["status"]) => prs.filter((p) => p.status === s).length;
-  const parts: string[] = [];
-  for (const [s, label] of [
-    ["open", "open"],
-    ["merged", "merged"],
-    ["failed", "failed"],
-  ] as const) {
-    const n = count(s);
-    if (n > 0) parts.push(`${n} ${label}`);
-  }
-  return parts.join(" · ");
-}
-
-function RecentPrCard({ prs }: { prs: AssistantPullRequest[] }) {
-  const summary = prSummary(prs);
-  return (
-    <div className="overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)]">
-      <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] px-3.5 py-3">
-        <p className="text-sm font-semibold text-[var(--fg-primary)]">Recent pull requests</p>
-        {summary && <p className="font-mono text-2xs text-[var(--fg-tertiary)]">{summary}</p>}
-      </div>
-      {prs.length === 0 ? (
-        <p className="px-3.5 py-6 text-center text-xs text-[var(--fg-tertiary)]">
-          No pull requests yet. Rigel opens one when it finds a fixable error.
-        </p>
-      ) : (
-        prs.map((pr) => <PrRow key={`${pr.fingerprint}|${pr.filePath}|${pr.at}`} pr={pr} />)
-      )}
-    </div>
-  );
-}
-
-/** Per-status badge + leading-icon styling. The agent emits open/failed today;
- *  merged is covered for forward-compat (and matches the design). */
-function prStatusMeta(status: AssistantPullRequest["status"]) {
-  switch (status) {
-    case "merged":
-      return { label: "Merged", Icon: faCodeMerge, dot: "bg-purple-500", icon: "text-purple-500" };
-    case "failed":
-      return {
-        label: "Failed",
-        Icon: faCodePullRequestClosed,
-        dot: "bg-[var(--status-failed)]",
-        icon: "text-[var(--status-failed)]",
-      };
-    default:
-      return {
-        label: "Open",
-        Icon: faCodePullRequest,
-        dot: "bg-[var(--status-running)]",
-        icon: "text-[var(--status-running)]",
-      };
-  }
-}
-
-function PrRow({ pr }: { pr: AssistantPullRequest }) {
-  const meta = prStatusMeta(pr.status);
-  const slug = parseRepoSlug(pr.repo);
-  const repoLabel = slug ? `${slug.owner}/${slug.repo}` : pr.repo || pr.app;
-  const rel = relativeTime(pr.at);
-  const subtitle = [repoLabel, pr.branch, rel ? `${rel} ago` : null].filter(Boolean).join(" · ");
-
-  return (
-    <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] px-3.5 py-3 last:border-b-0">
-      <div className="flex min-w-0 items-center gap-2.5">
-        <FontAwesomeIcon icon={meta.Icon} className={cn("size-4 shrink-0", meta.icon)} />
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="truncate text-xs font-medium text-[var(--fg-primary)]">{pr.title}</span>
-          <span className="truncate font-mono text-2xs text-[var(--fg-tertiary)]">{subtitle}</span>
-        </div>
-      </div>
-      <div className="flex shrink-0 items-center gap-2.5">
-        <span className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-2.5 py-1">
-          <span className={cn("size-[7px] rounded-full", meta.dot)} />
-          <span className="text-2xs text-[var(--fg-secondary)]">{meta.label}</span>
-        </span>
-        {pr.prUrl && (
-          <a
-            href={pr.prUrl}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={`Open ${pr.title} in browser`}
-            className="text-[var(--fg-tertiary)] transition-colors hover:text-[var(--fg-primary)]"
-          >
-            <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="size-3.5" />
-          </a>
-        )}
-      </div>
-    </div>
-  );
-}
