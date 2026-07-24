@@ -4,11 +4,20 @@ import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/re
 import { MessageBubble } from "./MessageBubble";
 import type { ChatMessage } from "./types";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  gitState.sources = [];
+});
 
 // SuggestedAlertList uses useAssistantAction — mock to avoid a QueryClient provider.
 vi.mock("@/lib/api", () => ({
   useAssistantAction: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+
+// The repo badge reads git sources via a query hook — stub it with seedable data.
+const gitState = vi.hoisted(() => ({ sources: [] as unknown[] }));
+vi.mock("@/panels/gitops/gitApi", () => ({
+  useGitSources: () => ({ data: gitState.sources }),
 }));
 
 const writeText = vi.fn().mockResolvedValue(undefined);
@@ -123,6 +132,40 @@ describe("MessageBubble structure", () => {
     expect(screen.getByText("Done")).toBeInTheDocument();
     fireEvent.click(screen.getByText("Bash"));
     expect(screen.getByText(/kubectl get pods/)).toBeInTheDocument();
+  });
+});
+
+describe("MessageBubble repo badge", () => {
+  const seedJobWatch = () => {
+    gitState.sources = [
+      {
+        name: "JobWatch",
+        repoURL: "https://github.com/tyrelchambers/jobwatch-canada.git",
+        branch: "main",
+        deployments: [{ name: "jobwatch-web", path: "k8s" }],
+      },
+    ];
+  };
+
+  test("assistant proposeRepoFix message shows an unlinked repo badge", () => {
+    seedJobWatch();
+    const action = JSON.stringify({ kind: "proposeRepoFix", label: "Open PR", source: "jobwatch-web" });
+    const msg = makeMessage({
+      text: `I'll update it.\n\n\`\`\`action\n${action}\n\`\`\`\n\n\`\`\`yaml\nreplicas: 3\n\`\`\``,
+    });
+    render(<MessageBubble message={msg} onAction={noop} />);
+    expect(screen.getByLabelText("tyrelchambers/jobwatch-canada")).toBeInTheDocument();
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  test("system result message links its repo badge to the PR", () => {
+    const msg = makeMessage({
+      role: "system",
+      text: "✓ Open PR — Opened pull request: https://github.com/tyrelchambers/jobwatch-canada/pull/42",
+    });
+    render(<MessageBubble message={msg} onAction={noop} />);
+    const link = screen.getByRole("link", { name: "tyrelchambers/jobwatch-canada" });
+    expect(link).toHaveAttribute("href", "https://github.com/tyrelchambers/jobwatch-canada/pull/42");
   });
 });
 

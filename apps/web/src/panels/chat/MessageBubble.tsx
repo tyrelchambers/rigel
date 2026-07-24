@@ -17,9 +17,12 @@ import { SuggestedQuestionList } from "./SuggestedQuestionList";
 import { SuggestedAlertList } from "./SuggestedAlertList";
 import { ToolCard } from "./ToolCard";
 import { RigelMark } from "@/components/RigelMark";
+import { useGitSources } from "@/panels/gitops/gitApi";
 import type { ChatMessage } from "./types";
 import { CodeBlock } from "./CodeBlock";
 import { ChatBlockquote } from "./Callout";
+import { RepoBadge } from "./RepoBadge";
+import { collectRepoBadges } from "./repoSlug";
 
 interface Props {
   message: ChatMessage;
@@ -63,7 +66,27 @@ function MessageAvatar({ role }: { role: ChatMessage["role"] }) {
  * full-width without a bubble.
  */
 export function MessageBubble({ message, onAction, onRunBatch, onAnswer, agentNamespace }: Props) {
+  const { data: gitSources } = useGitSources();
   const isAssistant = message.role === "assistant";
+
+  const { display, actions, questions, alerts } = isAssistant
+    ? parseSuggestedActions(message.text)
+    : {
+        display: message.text,
+        actions: [] as SuggestedAction[],
+        questions: [] as SuggestedQuestion[],
+        alerts: [] as SuggestedAlert[],
+      };
+
+  const repoBadges = collectRepoBadges(actions, message.text, gitSources);
+  const badgeRow =
+    repoBadges.length > 0 ? (
+      <div className="mt-1.5 flex flex-wrap gap-1">
+        {repoBadges.map((b) => (
+          <RepoBadge key={b.slug + (b.href ?? "")} slug={b.slug} href={b.href} />
+        ))}
+      </div>
+    ) : null;
 
   if (message.role === "system") {
     return (
@@ -75,18 +98,10 @@ export function MessageBubble({ message, onAction, onRunBatch, onAnswer, agentNa
             {message.text}
           </p>
         ) : null}
+        {badgeRow}
       </div>
     );
   }
-
-  const { display, actions, questions, alerts } = isAssistant
-    ? parseSuggestedActions(message.text)
-    : {
-        display: message.text,
-        actions: [] as SuggestedAction[],
-        questions: [] as SuggestedQuestion[],
-        alerts: [] as SuggestedAlert[],
-      };
 
   return (
     <Message from={message.role}>
@@ -119,6 +134,7 @@ export function MessageBubble({ message, onAction, onRunBatch, onAnswer, agentNa
         {isAssistant && (
           <SuggestedAlertList alerts={alerts} namespace={agentNamespace ?? "default"} />
         )}
+        {badgeRow}
       </MessageContent>
     </Message>
   );
