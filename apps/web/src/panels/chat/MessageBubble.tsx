@@ -81,7 +81,7 @@ export function MessageBubble({ message, onAction, onRunBatch, onAnswer, agentNa
   const repoBadges = collectRepoBadges(actions, message.text, gitSources);
   const badgeRow =
     repoBadges.length > 0 ? (
-      <div className="mt-1.5 flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-1">
         {repoBadges.map((b) => (
           <RepoBadge key={b.slug + (b.href ?? "")} slug={b.slug} href={b.href} />
         ))}
@@ -98,44 +98,46 @@ export function MessageBubble({ message, onAction, onRunBatch, onAnswer, agentNa
             {message.text}
           </p>
         ) : null}
-        {badgeRow}
+        {badgeRow && <div className="mt-1">{badgeRow}</div>}
       </div>
     );
   }
 
   return (
-    <Message from={message.role}>
-      <MessageAvatar role={message.role} />
-      <MessageContent>
-        {isAssistant && message.thinking ? (
-          <Reasoning duration={message.thinkingSeconds}>
-            <ReasoningTrigger />
-            <ReasoningContent>{message.thinking}</ReasoningContent>
-          </Reasoning>
-        ) : null}
-        {isAssistant ? (
-          <div className="chat-md select-text">
-            <Markdown
-              remarkPlugins={[remarkGfm, remarkAlerts]}
-              components={{ pre: CodeBlock, blockquote: ChatBlockquote }}
-            >
-              {display}
-            </Markdown>
-          </div>
-        ) : display ? (
-          <p className="whitespace-pre-wrap text-xs text-foreground select-text">{display}</p>
-        ) : null}
-        {isAssistant && (
-          <SuggestedActionList actions={actions} onAction={onAction} onRunBatch={onRunBatch} />
-        )}
-        {isAssistant && onAnswer && (
-          <SuggestedQuestionList questions={questions} onAnswer={onAnswer} />
-        )}
-        {isAssistant && (
-          <SuggestedAlertList alerts={alerts} namespace={agentNamespace ?? "default"} />
-        )}
-        {badgeRow}
-      </MessageContent>
-    </Message>
+    <div className="flex flex-col gap-1">
+      <Message from={message.role}>
+        <MessageAvatar role={message.role} />
+        <MessageContent>
+          {isAssistant && message.thinking ? (
+            <Reasoning duration={message.thinkingSeconds}>
+              <ReasoningTrigger />
+              <ReasoningContent>{message.thinking}</ReasoningContent>
+            </Reasoning>
+          ) : null}
+          {isAssistant ? (
+            <div className="chat-md select-text">
+              <Markdown
+                remarkPlugins={[remarkGfm, remarkAlerts]}
+                components={{ pre: CodeBlock, blockquote: ChatBlockquote }}
+              >
+                {display}
+              </Markdown>
+            </div>
+          ) : display ? (
+            <p className="whitespace-pre-wrap text-xs text-foreground select-text">{display}</p>
+          ) : null}
+          {isAssistant && (
+            <SuggestedActionList actions={actions} onAction={onAction} onRunBatch={onRunBatch} />
+          )}
+          {isAssistant && onAnswer && (
+            <SuggestedQuestionList questions={questions} onAnswer={onAnswer} />
+          )}
+          {isAssistant && (
+            <SuggestedAlertList alerts={alerts} namespace={agentNamespace ?? "default"} />
+          )}
+        </MessageContent>
+      </Message>
+      {badgeRow && <div className="pl-8">{badgeRow}</div>}
+    </div>
   );
 }
