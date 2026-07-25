@@ -15,7 +15,7 @@ export function renderLinkEmailHtml(confirmUrl: string): string {
 <meta name="color-scheme" content="dark light">
 </head>
 <body style="margin:0;padding:0;background:#0c0d0f;">
-<span style="display:none!important;visibility:hidden;opacity:0;height:0;width:0;overflow:hidden;mso-hide:all;">Confirm your Rigel sign-in. This link works for 24 hours.</span>
+<span style="display:none!important;visibility:hidden;opacity:0;height:0;width:0;overflow:hidden;mso-hide:all;">Confirm your Rigel sign-in. This link works for 15 minutes.</span>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0c0d0f;">
 <tr><td align="center" style="padding:40px 16px;">
 <table role="presentation" width="480" cellpadding="0" cellspacing="0" border="0" style="width:480px;max-width:100%;background:#101012;border:1px solid rgba(255,255,255,0.10);border-radius:16px;">
@@ -31,7 +31,7 @@ export function renderLinkEmailHtml(confirmUrl: string): string {
 <a href="${confirmUrl}" style="display:inline-block;background:#38bdf8;color:#04232e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;font-weight:600;line-height:1;text-decoration:none;padding:13px 24px;border-radius:8px;">Confirm sign-in</a>
 </td></tr>
 </table>
-<p style="margin:0 0 4px;font-size:13px;line-height:1.5;color:#8c8c95;">This link works for 24 hours and can only be used once.</p>
+<p style="margin:0 0 4px;font-size:13px;line-height:1.5;color:#8c8c95;">This link works for 15 minutes and can only be used once.</p>
 <p style="margin:0;font-size:13px;line-height:1.5;color:#6b6b73;">If you didn't request this, you can safely ignore this email.</p>
 </td></tr>
 </table>
@@ -51,7 +51,7 @@ export function createResendSender({ apiKey, from, fetchFn = fetch }: ResendConf
         from,
         to: email,
         subject: "Sign in to Rigel",
-        text: `Confirm your Rigel sign-in: ${confirmUrl}\n\nThe link works for 24 hours and can only be used once.\n\nIf you did not request this, ignore this email.`,
+        text: `Confirm your Rigel sign-in: ${confirmUrl}\n\nThe link works for 15 minutes and can only be used once.\n\nIf you did not request this, ignore this email.`,
         html: renderLinkEmailHtml(confirmUrl),
       }),
     });

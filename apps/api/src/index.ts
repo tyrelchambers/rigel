@@ -44,7 +44,7 @@ const sendLink = createResendSender({ apiKey: RESEND_API_KEY, from: RESEND_FROM 
 // Tighter, separate limiters (namespaced keys prevent collision with /signups).
 const allowRequest = createRateLimiter(5, 10 * 60_000);  // 5 link requests / 10 min per key
 const allowVerify = createRateLimiter(10, 10 * 60_000);  // 10 confirm attempts / 10 min per key
-// The desktop polls every 2s for the first 2 min, then every 15s, for up to 24h.
+// The desktop polls every 2s for the first 2 min, then every 15s, until the 15 min TTL.
 // Keyed by poll-token hash, so one app instance cannot starve another.
 const allowPoll = createRateLimiter(240, 10 * 60_000);
 const stripeAdapter = STRIPE_SECRET_KEY

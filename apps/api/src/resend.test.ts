@@ -13,7 +13,7 @@ test("the email links to the confirm page and carries no code", () => {
 });
 
 test("the email states the 24-hour validity", () => {
-  expect(renderLinkEmailHtml(URL_)).toMatch(/24 hours/);
+  expect(renderLinkEmailHtml(URL_)).toMatch(/15 minutes/);
 });
 
 test("createResendSender posts the link email to Resend", async () => {

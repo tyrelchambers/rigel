@@ -13,7 +13,7 @@ export interface AuthDeps {
   publicUrl: string;
 }
 
-const LOGIN_TTL_SECONDS = 24 * 60 * 60; // 24 hours
+const LOGIN_TTL_SECONDS = 15 * 60; // 15 minutes
 
 function clientIp(c: { req: { header: (k: string) => string | undefined } }): string {
   return c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
