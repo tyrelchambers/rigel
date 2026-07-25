@@ -217,16 +217,16 @@ export function CreateClusterBody({ active, onDone, onBusyChange }: CreateCluste
         </p>
       )}
 
-      {/* Both tools are always listed and both stay selectable, each saying
-          whether it was found. Picking the one that isn't installed is how you
-          ask for its install instructions, so it leads the form: selecting it
-          swaps everything below, and disabling it would strand a user who wants
-          that tool with no way to learn how to get it. */}
+      {/* Both tools are always listed and both stay selectable. Picking the one
+          that isn't installed is how you ask for its install instructions, so it
+          leads the form: selecting it swaps everything below, and disabling it
+          would strand a user who wants that tool with no way to learn how to get
+          it. Whether a tool is present is reported by the checks below, not
+          crammed into the tab. */}
       <div>
         <span className={LABEL_CLASS}>Tool</span>
         <div className="flex w-full gap-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-sunken)] p-1">
           {(["kind", "k3d"] as const).map((t) => {
-            const available = t === "kind" ? tools.kind : tools.k3d;
             const selected = tool === t;
             return (
               <button
@@ -235,14 +235,13 @@ export function CreateClusterBody({ active, onDone, onBusyChange }: CreateCluste
                 disabled={creating}
                 onClick={() => setTool(t)}
                 className={cn(
-                  "flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-md px-3.5 py-2.5 transition-colors",
+                  "flex flex-1 cursor-pointer items-center justify-center rounded-md px-3.5 py-2.5 transition-colors",
                   selected ? "bg-white/[0.07]" : "bg-transparent",
                 )}
               >
                 <span className={cn("text-sm font-semibold", selected ? "text-foreground" : "text-muted-foreground")}>
                   {t}
                 </span>
-                <span className="text-xs text-[var(--fg-tertiary)]">{available ? "detected" : "not installed"}</span>
               </button>
             );
           })}

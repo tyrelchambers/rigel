@@ -47,10 +47,15 @@ describe("CreateClusterBody tool choice", () => {
     expect(screen.getByRole("button", { name: /k3d/i })).toBeInTheDocument();
   });
 
-  it("says which tool was found and which was not", () => {
+  // The tabs are just the names. Whether a tool is present is the checks' job,
+  // and it surfaces the moment it matters: picking a missing one swaps the panel
+  // for its install instructions.
+  it("keeps the tabs to the tool names, with no availability caption", () => {
     wrap();
-    expect(screen.getByRole("button", { name: /kind/i })).toHaveTextContent("detected");
-    expect(screen.getByRole("button", { name: /k3d/i })).toHaveTextContent("not installed");
+    expect(screen.getByRole("button", { name: /kind/i })).toHaveTextContent(/^kind$/);
+    expect(screen.getByRole("button", { name: /k3d/i })).toHaveTextContent(/^k3d$/);
+    expect(screen.queryByText("detected")).not.toBeInTheDocument();
+    expect(screen.queryByText("not installed")).not.toBeInTheDocument();
   });
 
   it("lets the user pick a tool that is not installed", () => {
