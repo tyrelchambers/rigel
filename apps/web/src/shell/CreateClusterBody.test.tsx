@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const tools = { dockerRunning: true, kind: true, k3d: false, os: "mac" as const, installer: null };
@@ -34,7 +34,7 @@ function wrap(host?: { actionSlot: HTMLElement | null }) {
 }
 
 beforeEach(() => {
-  Object.assign(tools, { dockerRunning: true, kind: true, k3d: false });
+  Object.assign(tools, { dockerRunning: true, kind: true, k3d: false, os: "mac" as const });
 });
 
 describe("CreateClusterBody tool choice", () => {
@@ -53,10 +53,61 @@ describe("CreateClusterBody tool choice", () => {
     expect(screen.getByRole("button", { name: /k3d/i })).toHaveTextContent("not installed");
   });
 
-  it("does not let the user pick a tool that is not installed", () => {
+  it("lets the user pick a tool that is not installed", () => {
     wrap();
-    expect(screen.getByRole("button", { name: /k3d/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /k3d/i })).toBeEnabled();
     expect(screen.getByRole("button", { name: /kind/i })).toBeEnabled();
+  });
+});
+
+// Picking a tool you do not have is how you ask how to get it, so readiness
+// follows the SELECTED tool rather than "any tool is installed".
+describe("CreateClusterBody install instructions", () => {
+  it("swaps the form for install instructions when the picked tool is missing", () => {
+    wrap();
+    expect(screen.getByLabelText(/cluster name/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /k3d/i }));
+
+    expect(screen.getByText("Install k3d on macOS")).toBeInTheDocument();
+    expect(screen.getByText("brew install k3d")).toBeInTheDocument();
+    expect(screen.getByText("k3d is not installed")).toBeInTheDocument();
+    // Nothing to name or version until the tool exists.
+    expect(screen.queryByLabelText(/cluster name/i)).not.toBeInTheDocument();
+  });
+
+  it("names the command for the platform Rigel is running on", () => {
+    Object.assign(tools, { os: "windows" as const });
+    wrap();
+    fireEvent.click(screen.getByRole("button", { name: /k3d/i }));
+    expect(screen.getByText("Install k3d on Windows")).toBeInTheDocument();
+    expect(screen.getByText("choco install k3d")).toBeInTheDocument();
+  });
+
+  it("offers Re-check, not Create, while the picked tool is missing", () => {
+    const slot = document.createElement("div");
+    document.body.appendChild(slot);
+    wrap({ actionSlot: slot });
+    expect(slot).toHaveTextContent("Create cluster");
+
+    fireEvent.click(screen.getByRole("button", { name: /k3d/i }));
+    expect(slot).toHaveTextContent("Re-check");
+    expect(slot).not.toHaveTextContent("Create cluster");
+  });
+
+  it("goes back to the form when the user picks the installed tool again", () => {
+    wrap();
+    fireEvent.click(screen.getByRole("button", { name: /k3d/i }));
+    fireEvent.click(screen.getByRole("button", { name: /kind/i }));
+    expect(screen.getByLabelText(/cluster name/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Install k3d/)).not.toBeInTheDocument();
+  });
+
+  it("links the picked tool's own docs, not the other tool's", () => {
+    wrap();
+    fireEvent.click(screen.getByRole("button", { name: /k3d/i }));
+    const link = screen.getByRole("link", { name: /other ways to install k3d/i });
+    expect(link).toHaveAttribute("href", expect.stringContaining("k3d.io"));
   });
 });
 
