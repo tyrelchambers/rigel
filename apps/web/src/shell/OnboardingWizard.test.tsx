@@ -63,6 +63,7 @@ function renderWizard(agents?: AgentsResponse, metricsAvailable?: boolean, accou
 
 const skip = () => fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
 const currentStep = () => document.querySelector('[aria-current="step"]');
+const pending = { email: "jane@acme.com", expiresAt: Date.now() + 1000 };
 
 describe("OnboardingWizard AI-agent step", () => {
   beforeEach(() => {
@@ -186,7 +187,9 @@ describe("OnboardingWizard finishing is explicit", () => {
   });
 
   it("finishes when Done is clicked on the last step", () => {
-    const { onClose, onLeave } = renderWizard();
+    // Done only exists once a sign-in is pending, so the wizard's primary is
+    // never competing with SignInFlow's own "Send sign-in link" primary.
+    const { onClose, onLeave } = renderWizard(undefined, undefined, fakeAccount({ pendingSignIn: pending }));
     skip();
     skip();
     fireEvent.click(screen.getByRole("button", { name: /^done$/i }));
@@ -216,6 +219,42 @@ describe("OnboardingWizard finishing is explicit", () => {
     renderWizard();
     fireEvent.keyDown(document, { key: "Enter" });
     expect(currentStep()).toHaveTextContent("AI agent");
+  });
+});
+
+// One primary at a time on the last step. The two candidates are SignInFlow's
+// "Send sign-in link" (in the body) and the footer's "Done"; exactly one of them
+// is on screen, keyed off account.pendingSignIn.
+describe("OnboardingWizard last step has a single primary", () => {
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it("hides Done until a sign-in is pending, leaving Send sign-in link the only primary", () => {
+    renderWizard(undefined, undefined, fakeAccount({ pendingSignIn: null }));
+    skip();
+    skip();
+    expect(currentStep()).toHaveTextContent("Email");
+
+    // Done would set the onboarded flag with no email captured and no sign-in
+    // in flight, permanently retiring setup. It must not be reachable yet.
+    expect(screen.queryByRole("button", { name: /^done$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /send sign-in link/i })).toBeInTheDocument();
+
+    // Still leavable and still skippable.
+    expect(screen.getByRole("button", { name: /^skip$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^back$/i })).toBeInTheDocument();
+  });
+
+  it("shows Done once a sign-in is pending, when the body primary is gone", () => {
+    renderWizard(undefined, undefined, fakeAccount({ pendingSignIn: pending }));
+    skip();
+    skip();
+
+    expect(screen.getByText("Check your inbox")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /send sign-in link/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^done$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^skip$/i })).toBeInTheDocument();
   });
 });
 

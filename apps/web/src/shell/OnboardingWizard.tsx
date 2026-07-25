@@ -132,7 +132,12 @@ export function OnboardingWizard({
             {!isLast && (
               <button type="button" onClick={() => setI((n) => n + 1)} style={primaryBtn}>Next →</button>
             )}
-            {isLast && (
+            {/* One primary at a time. Until a sign-in is pending, SignInFlow's
+                own "Send sign-in link" is the primary, so the footer offers no
+                competing one: finishing here would set the onboarded flag with
+                nothing captured. Once the link is sent, SignInFlow drops to a
+                ghost "Send it again" and Done becomes the only primary. */}
+            {isLast && account.pendingSignIn != null && (
               <button type="button" onClick={onClose} style={primaryBtn}>Done</button>
             )}
           </div>
