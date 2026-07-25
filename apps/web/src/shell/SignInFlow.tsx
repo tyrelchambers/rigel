@@ -140,7 +140,7 @@ export function SignInFlow({ account, className, hideHeading = false }: SignInFl
           />
 
           <div className="flex flex-col gap-2">
-            <Note icon={faShieldCheck}>No password and no code to type.</Note>
+            <Note icon={faShieldCheck}>No password to remember.</Note>
             <Note icon={faMobile}>The link works on any device, not just this one.</Note>
           </div>
 
