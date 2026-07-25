@@ -246,6 +246,22 @@ describe("OnboardingWizard last step has a single primary", () => {
     expect(screen.getByRole("button", { name: /^back$/i })).toBeInTheDocument();
   });
 
+  it("keeps Done once the sign-in succeeded and the pending record cleared", () => {
+    // A successful poll clears pendingSignIn and sets status "signed-in" in the
+    // same refresh, so the gate must accept either or Done would vanish from
+    // under a user who just signed in.
+    const { onClose } = renderWizard(
+      undefined,
+      undefined,
+      fakeAccount({ status: "signed-in", pendingSignIn: null }),
+    );
+    skip();
+    skip();
+    expect(screen.queryByRole("button", { name: /send sign-in link/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^done$/i }));
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
   it("shows Done once a sign-in is pending, when the body primary is gone", () => {
     renderWizard(undefined, undefined, fakeAccount({ pendingSignIn: pending }));
     skip();

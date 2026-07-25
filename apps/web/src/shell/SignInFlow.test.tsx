@@ -3,6 +3,9 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { SignInFlow } from "./SignInFlow";
 import type { UseAccountResult } from "./useAccount";
+import type { Account } from "@/lib/desktop";
+
+const jane: Account = { id: "a1", email: "jane@acme.com", name: null };
 
 function account(over: Partial<UseAccountResult> = {}): UseAccountResult {
   return {
@@ -64,6 +67,39 @@ describe("SignInFlow", () => {
     fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: "jane@acme.com" } });
     fireEvent.click(screen.getByRole("button", { name: /send.*link/i }));
     expect(await screen.findByText(/too many requests/i)).toBeInTheDocument();
+  });
+
+  // A successful poll clears pendingSignIn and flips status to "signed-in" in the
+  // same refresh. Without a signed-in branch the flow would fall back to the
+  // email form and show a just-signed-in user "Sign in to Rigel" again.
+  it("confirms the signed-in account instead of falling back to the form", () => {
+    render(<SignInFlow account={account({ status: "signed-in", account: jane })} />);
+    expect(screen.getByText(/you're signed in/i)).toBeInTheDocument();
+    expect(screen.getByText(/jane@acme\.com/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/email address/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/check your inbox/i)).not.toBeInTheDocument();
+  });
+
+  it("prefers the signed-in state over a stale pending record", () => {
+    render(
+      <SignInFlow
+        account={account({
+          status: "signed-in",
+          account: jane,
+          pendingSignIn: { email: "jane@acme.com", expiresAt: Date.now() + 1000 },
+        })}
+      />,
+    );
+    expect(screen.getByText(/you're signed in/i)).toBeInTheDocument();
+    expect(screen.queryByText(/check your inbox/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /send it again/i })).not.toBeInTheDocument();
+  });
+
+  it("confirms sign-in without an address when the account has no email", () => {
+    render(<SignInFlow account={account({ status: "signed-in", account: null })} />);
+    expect(screen.getByText(/you're signed in/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/email address/i)).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toContain("undefined");
   });
 
   it("drops the wordmark and heading when the host supplies its own chrome", () => {

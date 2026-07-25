@@ -59,6 +59,9 @@ export function OnboardingWizard({
 
   const isFirst = i === 0;
   const isLast = i === steps.length - 1;
+  // A successful sign-in clears pendingSignIn and flips status in the same
+  // refresh, so either one means the user is past the email form.
+  const signInStarted = account.pendingSignIn != null || account.status === "signed-in";
 
   // Enter advances to the next step. It yields to the focused control so it
   // never discards typed input or double-fires: a focused input/textarea/
@@ -132,12 +135,12 @@ export function OnboardingWizard({
             {!isLast && (
               <button type="button" onClick={() => setI((n) => n + 1)} style={primaryBtn}>Next →</button>
             )}
-            {/* One primary at a time. Until a sign-in is pending, SignInFlow's
+            {/* One primary at a time. Until the sign-in has started, SignInFlow's
                 own "Send sign-in link" is the primary, so the footer offers no
                 competing one: finishing here would set the onboarded flag with
-                nothing captured. Once the link is sent, SignInFlow drops to a
-                ghost "Send it again" and Done becomes the only primary. */}
-            {isLast && account.pendingSignIn != null && (
+                nothing captured. Once the link is sent (or confirmed) SignInFlow
+                has no primary of its own and Done becomes the only one. */}
+            {isLast && signInStarted && (
               <button type="button" onClick={onClose} style={primaryBtn}>Done</button>
             )}
           </div>
