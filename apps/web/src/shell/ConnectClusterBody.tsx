@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faLock, faUpload } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { listCloudProviders, type ProviderDescriptor } from "@rigel/cloud-connect/src/index";
@@ -77,7 +77,7 @@ export function ConnectClusterBody({ active, onDone, onTitleChange }: ConnectClu
     onTitleChangeRef.current?.(titleFor(next));
   }, []);
 
-  useEffect(() => { if (active) select(null); }, [active, select]);
+  useLayoutEffect(() => { if (active) select(null); }, [active, select]);
 
   const { payload } = useEntitlement();
   const cloudUnlocked = !!payload?.cloudConnect;

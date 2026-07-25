@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { useState } from "react";
 import { test, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -24,6 +25,32 @@ test("renders all cloud providers and Import as enabled tiles when entitled", ()
   expect(screen.getByRole("button", { name: /azure aks/i })).toBeEnabled();
   expect(screen.queryByText(/coming soon/i)).toBeNull();
   expect(screen.queryByText("Pro")).toBeNull();
+});
+
+function Host() {
+  const [open, setOpen] = useState(true);
+  return (
+    <>
+      <button onClick={() => setOpen(false)}>close-from-flow</button>
+      <button onClick={() => setOpen(true)}>reopen</button>
+      <ConnectClusterModal open={open} onOpenChange={setOpen} />
+    </>
+  );
+}
+
+test("returns to the default title when a flow closes the modal and it reopens", async () => {
+  mockUseEntitlement.mockReturnValue({ payload: { cloudConnect: true }, upgrade: vi.fn() });
+  const u = userEvent.setup();
+  wrap(<Host />);
+
+  await u.click(screen.getByRole("button", { name: /import a kubeconfig/i }));
+  expect(screen.getByRole("heading", { name: "Import a kubeconfig" })).toBeInTheDocument();
+
+  await u.click(screen.getByRole("button", { name: "close-from-flow", hidden: true }));
+  await u.click(screen.getByRole("button", { name: "reopen", hidden: true }));
+
+  expect(screen.getByRole("heading", { name: "Connect a cluster" })).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Import a kubeconfig" })).toBeNull();
 });
 
 test("locks cloud providers on the free plan and opens upgrade on click", async () => {
