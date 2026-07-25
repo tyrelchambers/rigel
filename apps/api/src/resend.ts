@@ -15,7 +15,7 @@ export function renderLinkEmailHtml(confirmUrl: string): string {
 <meta name="color-scheme" content="dark light">
 </head>
 <body style="margin:0;padding:0;background:#0c0d0f;">
-<span style="display:none!important;visibility:hidden;opacity:0;height:0;width:0;overflow:hidden;mso-hide:all;">Confirm your Rigel sign-in — this link works for 24 hours.</span>
+<span style="display:none!important;visibility:hidden;opacity:0;height:0;width:0;overflow:hidden;mso-hide:all;">Confirm your Rigel sign-in. This link works for 24 hours.</span>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0c0d0f;">
 <tr><td align="center" style="padding:40px 16px;">
 <table role="presentation" width="480" cellpadding="0" cellspacing="0" border="0" style="width:480px;max-width:100%;background:#101012;border:1px solid rgba(255,255,255,0.10);border-radius:16px;">
@@ -25,7 +25,7 @@ export function renderLinkEmailHtml(confirmUrl: string): string {
 <span style="display:inline-block;margin-left:8px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;font-weight:600;letter-spacing:1.5px;color:#38bdf8;vertical-align:middle;">RIGEL</span>
 </div>
 <h1 style="margin:0 0 8px;font-size:20px;line-height:1.3;font-weight:600;color:#ffffff;">Sign in to Rigel</h1>
-<p style="margin:0 0 20px;font-size:14px;line-height:1.5;color:#a1a1aa;">Click the button to confirm. Rigel signs itself in — there is nothing to copy back.</p>
+<p style="margin:0 0 20px;font-size:14px;line-height:1.5;color:#a1a1aa;">Click the button to confirm. Rigel signs itself in, so there is nothing to copy back.</p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px;">
 <tr><td align="center">
 <a href="${confirmUrl}" style="display:inline-block;background:#38bdf8;color:#04232e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;font-weight:600;line-height:1;text-decoration:none;padding:13px 24px;border-radius:8px;">Confirm sign-in</a>
