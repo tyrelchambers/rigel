@@ -92,7 +92,7 @@ export function OnboardingWizard({
           <div style={{ display: "flex", flexDirection: "column", gap: 5, flex: 1 }}>
             <span className="text-xl" style={{ fontWeight: 700, color: "var(--fg-primary)" }}>Welcome to Rigel</span>
             <span className="text-sm" style={{ color: "var(--fg-tertiary)", lineHeight: 1.45 }}>
-              A minute of optional setup. Skip anything you don't need. Everything here can be changed later in Settings.
+              A minute of optional setup. Nothing here is required. Everything can be changed later in Settings.
             </span>
           </div>
           <button type="button" aria-label="Close" onClick={onLeave} style={closeBtn}>
