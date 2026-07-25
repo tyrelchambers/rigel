@@ -33,11 +33,9 @@ import { TerminalDrawer, TOGGLE_TERMINAL_EVENT } from "@/shell/TerminalDrawer";
 import { ResourceYamlViewer } from "@/components/ResourceYamlViewer";
 import { Toaster } from "@/components/ui/sonner";
 import { connectCluster } from "@/lib/ws";
-import { useAgents, useContexts } from "@/lib/api";
+import { useAgents } from "@/lib/api";
 import { shouldAutoOpenOnboarding } from "@/shell/onboarding/shouldAutoOpen";
-import { ClusterOnboarding } from "@/shell/onboarding/ClusterOnboarding";
 import { OnboardingWizard } from "@/shell/OnboardingWizard";
-import { LoginGate } from "@/shell/LoginGate";
 import { ClusterRail } from "@/shell/ClusterRail";
 import StatusBar from "@/shell/StatusBar";
 import ChatPane, { type ChatPaneHandle } from "@/shell/ChatPane";
@@ -86,10 +84,9 @@ export default function App() {
   if (account.status === "loading") {
     return <div style={{ height: "100vh", background: "var(--surface-sunken)" }} />;
   }
-  if (account.status === "signed-out") {
-    return <LoginGate account={account} />;
-  }
 
+  // Signed out is a normal, fully usable state: sign-in is the last onboarding
+  // step and can be skipped. Features that need an account prompt in place.
   return <AppContent account={account} />;
 }
 
@@ -99,9 +96,6 @@ function AppContent({ account }: { account: UseAccountResult }) {
   }, []);
   const [paletteOpen, setPaletteOpen] = useCommandPalette();
 
-  const { data: contexts } = useContexts();
-  const [clusterSkipped, setClusterSkipped] = useState(false);
-
   const [launcherOpen, setLauncherOpen] = useNavLauncher();
 
   // First-run onboarding: auto-show once when no AI agent is connected (any
@@ -109,8 +103,7 @@ function AppContent({ account }: { account: UseAccountResult }) {
   const { data: agentsData } = useAgents();
   const [showOnboarding, setShowOnboarding] = useState(false);
 
-  // Account modal — session state (sign-in/out) is owned by useAccount, gated
-  // in App above (signed-out renders ONLY LoginGate, never this component).
+  // Account modal — session state (sign-in/out) is owned by useAccount.
   const [accountOpen, setAccountOpen] = useState(false);
   const [upgradeIntent, setUpgradeIntent] = useState(false);
   const openUpgrade = useCallback(() => {
@@ -227,14 +220,9 @@ function AppContent({ account }: { account: UseAccountResult }) {
     };
   }, [toggleTerminal]);
 
-  const showClusterOnboarding = contexts && contexts.length === 0 && !clusterSkipped;
-
   return (
     <UpgradeProvider onUpgrade={openUpgrade}>
     <WindowControls />
-    {showClusterOnboarding ? (
-      <ClusterOnboarding onSkip={() => setClusterSkipped(true)} />
-    ) : (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--surface-primary)" }}>
       {showOnboarding && <OnboardingWizard onClose={closeOnboarding} onLeave={leaveOnboarding} />}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
@@ -335,7 +323,6 @@ function AppContent({ account }: { account: UseAccountResult }) {
       {/* Toast host — background action progress (see lib/actionRunner). */}
       <Toaster />
     </div>
-    )}
     </UpgradeProvider>
   );
 }
