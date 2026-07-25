@@ -9,7 +9,6 @@ const sha = (v: string) => createHash("sha256").update(v).digest("hex");
 
 /** In-memory AuthDb honoring the same contract the SQL implements. */
 function fakeDb() {
-  const codes: { email: string; codeHash: string; linkTokenHash: string; attempts: number; consumed: boolean }[] = [];
   const pendings: {
     email: string; pollTokenHash: string; confirmTokenHash: string;
     confirmed: boolean; consumed: boolean; expired: boolean;
@@ -21,27 +20,6 @@ function fakeDb() {
   const personalOrgs = new Map<string, OrgMembership>();
   let seq = 0;
   const db: AuthDb = {
-    async insertCode(email, codeHash, linkTokenHash) { codes.push({ email, codeHash, linkTokenHash, attempts: 0, consumed: false }); },
-    async invalidateCodes(email) { codes.forEach((c) => { if (c.email === email) c.consumed = true; }); },
-    async claimAttempt(email) {
-      const c = [...codes].reverse().find((c) => c.email === email && !c.consumed && c.attempts < 5);
-      if (!c) return null;
-      c.attempts++;
-      return { codeHash: c.codeHash };
-    },
-    async consumeCode(email) {
-      const c = [...codes].reverse().find((c) => c.email === email && !c.consumed);
-      if (!c) return false;
-      c.consumed = true;
-      return true;
-    },
-    async consumeLinkToken(linkTokenHash) {
-      const c = [...codes].reverse().find((c) => c.linkTokenHash === linkTokenHash && !c.consumed);
-      if (!c) return null;
-      c.consumed = true;
-      return { email: c.email };
-    },
-    async cleanupExpiredCodes() {},
     async createPendingLogin({ email, pollTokenHash, confirmTokenHash }) {
       pendings.push({ email, pollTokenHash, confirmTokenHash, confirmed: false, consumed: false, expired: false });
     },
@@ -123,7 +101,7 @@ function fakeDb() {
     async agentTokenByHash() { return null; },
     async orgStripeCustomer() { return null; },
   };
-  return { db, codes, pendings, revokeTokens };
+  return { db, pendings, revokeTokens };
 }
 
 interface Overrides {
@@ -135,7 +113,7 @@ interface Overrides {
 }
 
 function make(over: Overrides = {}) {
-  const { db, codes, pendings, revokeTokens } = fakeDb();
+  const { db, pendings, revokeTokens } = fakeDb();
   const sent: { email: string; confirmUrl: string }[] = [];
   const notices: { email: string; revokeUrl: string; when: string }[] = [];
   const sendLink = over.sendLink ?? (async (email, confirmUrl) => { sent.push({ email, confirmUrl }); });
@@ -153,18 +131,11 @@ function make(over: Overrides = {}) {
     allowPollIp: over.allowPollIp ?? allow,
     publicUrl: "https://api.example.test",
   });
-  const seed =(email: string, code: string, linkToken: string) => db.insertCode(email, sha(code), sha(linkToken), 600);
-  return { app, db, codes, pendings, revokeTokens, sent, notices, seed };
+  return { app, db, pendings, revokeTokens, sent, notices };
 }
 
 const json = (app: Hono, path: string, body: unknown, headers: Record<string, string> = {}) =>
   app.request(path, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
-
-async function signIn(app: Hono, seed: (e: string, c: string, l: string) => Promise<void>, email = "a@b.co") {
-  await seed(email, "123456", "link-1");
-  const res = await json(app, "/auth/verify", { email, code: "123456" });
-  return (await res.json()) as { token: string };
-}
 
 test("POST /auth/request returns a poll token and emails a confirm link", async () => {
   const { db, pendings } = fakeDb();
@@ -287,39 +258,26 @@ test("request with a bad email → 400, nothing sent", async () => {
   expect(sent.length).toBe(0);
 });
 
-test("verify with the right code → token + account", async () => {
-  const { app, seed } = make();
-  await seed("a@b.co", "123456", "link-1");
-  const res = await json(app, "/auth/verify", { email: "a@b.co", code: "123456" });
-  expect(res.status).toBe(200);
-  const body = (await res.json()) as { token: string; account: { id: string; email: string; name: string } };
-  expect(body.token.length).toBeGreaterThan(20);
-  expect(body.account).toEqual({ id: "acc-1", email: "a@b.co", name: "Jane" });
-});
+test("the code and magic-link routes are gone", async () => {
+  const { app } = await appWithPendingLogin();
+  const verify = await app.request("/auth/verify", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: "jane@acme.com", code: "123456" }),
+  });
+  expect(verify.status).toBe(404);
 
-test("verify with the wrong code → 401", async () => {
-  const { app, seed } = make();
-  await seed("a@b.co", "123456", "link-1");
-  expect((await json(app, "/auth/verify", { email: "a@b.co", code: "000000" })).status).toBe(401);
-});
-
-test("verify is single-use", async () => {
-  const { app, seed } = make();
-  await seed("a@b.co", "123456", "link-1");
-  expect((await json(app, "/auth/verify", { email: "a@b.co", code: "123456" })).status).toBe(200);
-  expect((await json(app, "/auth/verify", { email: "a@b.co", code: "123456" })).status).toBe(401);
-});
-
-test("verify caps at 5 attempts then locks the code out", async () => {
-  const { app, seed } = make();
-  await seed("a@b.co", "123456", "link-1");
-  for (let i = 0; i < 5; i++) await json(app, "/auth/verify", { email: "a@b.co", code: "000000" });
-  expect((await json(app, "/auth/verify", { email: "a@b.co", code: "123456" })).status).toBe(401);
+  const link = await app.request("/auth/verify-link", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token: "abc" }),
+  });
+  expect(link.status).toBe(404);
 });
 
 test("me returns the account for a valid bearer, 401 after logout", async () => {
-  const { app, seed } = make();
-  const body = await signIn(app, seed);
+  const { app, sent, notices } = make();
+  const body = await signInViaPoll(app, sent, notices, "a@b.co");
   const auth = { authorization: `Bearer ${body.token}` };
   const meRes = await app.request("/me", { headers: auth });
   expect(meRes.status).toBe(200);
@@ -332,8 +290,8 @@ test("me returns the account for a valid bearer, 401 after logout", async () => 
 test("me self-heals a personal org for an account that has none, and returns it", async () => {
   // The fake upsertAccount creates NO org (legacy account); /me must lazily
   // create the personal org so every signed-in account always has one.
-  const { app, seed } = make();
-  const body = await signIn(app, seed);
+  const { app, sent, notices } = make();
+  const body = await signInViaPoll(app, sent, notices, "a@b.co");
   const me = await (await app.request("/me", { headers: { authorization: `Bearer ${body.token}` } })).json() as { account: { email: string }; orgs: Array<{ kind: string; role: string }> };
   expect(me.account.email).toBe("a@b.co");
   expect(me.orgs).toHaveLength(1);
@@ -349,40 +307,6 @@ test("request rate-limited → 429", async () => {
   const { app, sent } = make({ allow: () => false });
   expect((await json(app, "/auth/request", { email: "a@b.co" })).status).toBe(429);
   expect(sent.length).toBe(0);
-});
-
-test("verify-link with the emailed token → bearer + account", async () => {
-  const { app, seed } = make();
-  await seed("a@b.co", "123456", "link-1");
-  const res = await json(app, "/auth/verify-link", { token: "link-1" });
-  expect(res.status).toBe(200);
-  const body = (await res.json()) as { token: string; account: { id: string; email: string; name: string | null } };
-  expect(body.token.length).toBeGreaterThan(20);
-  expect(body.account.email).toBe("a@b.co");
-});
-
-test("verify-link with an unknown token → 401", async () => {
-  const { app } = make();
-  expect((await json(app, "/auth/verify-link", { token: "nope" })).status).toBe(401);
-});
-
-test("using the code first invalidates the magic link (shared row)", async () => {
-  const { app, seed } = make();
-  await seed("a@b.co", "123456", "link-1");
-  await json(app, "/auth/verify", { email: "a@b.co", code: "123456" });   // consume via code
-  expect((await json(app, "/auth/verify-link", { token: "link-1" })).status).toBe(401);   // link now dead
-});
-
-test("using the magic link first invalidates the code (shared row)", async () => {
-  const { app, seed } = make();
-  await seed("a@b.co", "123456", "link-1");
-  expect((await json(app, "/auth/verify-link", { token: "link-1" })).status).toBe(200);         // link consumed
-  expect((await json(app, "/auth/verify", { email: "a@b.co", code: "123456" })).status).toBe(401); // code now dead
-});
-
-test("verify-link is rate-limited → 429", async () => {
-  const { app } = make({ allow: () => false });
-  expect((await json(app, "/auth/verify-link", { token: "anything" })).status).toBe(429);
 });
 
 const form = (app: Hono, path: string, fields: Record<string, string>) =>

@@ -16,12 +16,6 @@ export interface OrgMembership {
 /** All account/code/token IO behind one object, so the route handlers take one
  *  dep (matches the repo convention of a small injected IO surface). */
 export interface AuthDb {
-  insertCode(email: string, codeHash: string, linkTokenHash: string, ttlSeconds: number): Promise<void>;
-  invalidateCodes(email: string): Promise<void>;
-  claimAttempt(email: string): Promise<{ codeHash: string } | null>;
-  consumeCode(email: string): Promise<boolean>;
-  consumeLinkToken(linkTokenHash: string): Promise<{ email: string } | null>;
-  cleanupExpiredCodes(): Promise<void>;
   createPendingLogin(
     input: { email: string; pollTokenHash: string; confirmTokenHash: string; ttlSeconds: number },
   ): Promise<void>;
@@ -62,18 +56,6 @@ CREATE TABLE IF NOT EXISTS accounts (
   last_login_at timestamptz
 );
 CREATE UNIQUE INDEX IF NOT EXISTS accounts_email_lower_idx ON accounts (lower(email));
-
-CREATE TABLE IF NOT EXISTS login_codes (
-  email       text NOT NULL,
-  code_hash   text NOT NULL,
-  expires_at  timestamptz NOT NULL,
-  attempts    int NOT NULL DEFAULT 0,
-  consumed_at timestamptz,
-  created_at  timestamptz NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS login_codes_email_idx ON login_codes (email);
-ALTER TABLE login_codes ADD COLUMN IF NOT EXISTS link_token_hash text;
-CREATE INDEX IF NOT EXISTS login_codes_link_idx ON login_codes (link_token_hash);
 
 CREATE TABLE IF NOT EXISTS auth_tokens (
   token_hash   text PRIMARY KEY,
@@ -186,64 +168,6 @@ export function createAuthDb(pool: Pool): AuthDb {
     }));
   }
   return {
-    async insertCode(email, codeHash, linkTokenHash, ttlSeconds) {
-      await pool.query(
-        `INSERT INTO login_codes (email, code_hash, link_token_hash, expires_at)
-         VALUES ($1, $2, $3, now() + ($4 || ' seconds')::interval)`,
-        [email, codeHash, linkTokenHash, String(ttlSeconds)],
-      );
-    },
-    async invalidateCodes(email) {
-      await pool.query(
-        `UPDATE login_codes SET consumed_at = now()
-         WHERE email = $1 AND consumed_at IS NULL`,
-        [email],
-      );
-    },
-    async claimAttempt(email) {
-      const r = await pool.query(
-        `UPDATE login_codes SET attempts = attempts + 1
-         WHERE ctid = (
-           SELECT ctid FROM login_codes
-           WHERE email = $1 AND consumed_at IS NULL AND expires_at > now() AND attempts < 5
-           ORDER BY created_at DESC LIMIT 1
-         )
-         RETURNING code_hash`,
-        [email],
-      );
-      const row = r.rows[0] as { code_hash: string } | undefined;
-      return row ? { codeHash: row.code_hash } : null;
-    },
-    async consumeCode(email) {
-      const r = await pool.query(
-        `UPDATE login_codes SET consumed_at = now()
-         WHERE ctid = (
-           SELECT ctid FROM login_codes
-           WHERE email = $1 AND consumed_at IS NULL AND expires_at > now()
-           ORDER BY created_at DESC LIMIT 1
-         )
-         RETURNING 1 AS ok`,
-        [email],
-      );
-      return r.rows.length > 0;
-    },
-    async consumeLinkToken(linkTokenHash) {
-      const r = await pool.query(
-        `UPDATE login_codes SET consumed_at = now()
-         WHERE ctid = (
-           SELECT ctid FROM login_codes
-           WHERE link_token_hash = $1 AND consumed_at IS NULL AND expires_at > now()
-           ORDER BY created_at DESC LIMIT 1
-         )
-         RETURNING email`,
-        [linkTokenHash],
-      );
-      const row = r.rows[0] as { email: string } | undefined;
-      return row ? { email: row.email } : null;
-    },
-    async cleanupExpiredCodes() {
-      await pool.query(`DELETE FROM login_codes WHERE expires_at < now() - interval '1 day'`);
-    },
     async createPendingLogin({ email, pollTokenHash, confirmTokenHash, ttlSeconds }) {
       await pool.query(
         `INSERT INTO pending_logins (email, poll_token_hash, confirm_token_hash, expires_at)

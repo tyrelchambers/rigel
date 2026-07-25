@@ -1,8 +1,8 @@
 import type { Hono } from "hono";
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { sha, bearer } from "./authToken";
 import type { AuthDb } from "./authDb";
-import { parsePollBody, parseRequestBody, parseVerifyBody } from "./authValidate";
+import { parsePollBody, parseRequestBody } from "./authValidate";
 import { displayCodeFor } from "./displayCode";
 import {
   renderConfirmPage,
@@ -29,12 +29,6 @@ const REVOKE_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
 
 function clientIp(c: { req: { header: (k: string) => string | undefined } }): string {
   return c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-}
-
-function timingSafeEqualHex(a: string, b: string): boolean {
-  const ba = Buffer.from(a, "hex");
-  const bb = Buffer.from(b, "hex");
-  return ba.length === bb.length && timingSafeEqual(ba, bb);
 }
 
 export function registerAuthRoutes(app: Hono, deps: AuthDeps): void {
@@ -112,24 +106,6 @@ export function registerAuthRoutes(app: Hono, deps: AuthDeps): void {
     return c.html(renderRevokedPage(count));
   });
 
-  app.post("/auth/verify", async (c) => {
-    let body: unknown;
-    try { body = await c.req.json(); } catch { return c.json({ error: "invalid json" }, 400); }
-    const parsed = parseVerifyBody(body);
-    if (!parsed.ok) return c.json({ error: "invalid" }, 400);
-    const { email, code } = parsed;
-    if (!allowVerify(`auth:vrf:ip:${clientIp(c)}`) || !allowVerify(`auth:vrf:email:${email}`)) {
-      return c.json({ error: "rate limited" }, 429);
-    }
-    const claim = await db.claimAttempt(email);
-    if (!claim || !timingSafeEqualHex(sha(code), claim.codeHash)) return c.json({ error: "invalid code" }, 401);
-    if (!(await db.consumeCode(email))) return c.json({ error: "invalid code" }, 401);
-    const account = await db.upsertAccount(email);
-    const token = randomBytes(32).toString("base64url");
-    await db.insertToken(sha(token), account.id);
-    return c.json({ token, account: { id: account.id, email: account.email, name: account.name } });
-  });
-
   app.post("/auth/poll", async (c) => {
     let body: unknown;
     try { body = await c.req.json(); } catch { return c.json({ error: "invalid json" }, 400); }
@@ -155,20 +131,6 @@ export function registerAuthRoutes(app: Hono, deps: AuthDeps): void {
     }
     if (await db.pendingLoginActive(hash)) return c.json({ status: "pending" });
     return c.json({ status: "expired" }, 404);
-  });
-
-  app.post("/auth/verify-link", async (c) => {
-    let body: unknown;
-    try { body = await c.req.json(); } catch { return c.json({ error: "invalid json" }, 400); }
-    const token = typeof (body as { token?: unknown })?.token === "string" ? (body as { token: string }).token.trim() : "";
-    if (!token) return c.json({ error: "invalid" }, 400);
-    if (!allowVerify(`auth:vrf:ip:${clientIp(c)}`)) return c.json({ error: "rate limited" }, 429);
-    const claimed = await db.consumeLinkToken(sha(token));
-    if (!claimed) return c.json({ error: "invalid or expired link" }, 401);
-    const account = await db.upsertAccount(claimed.email);
-    const bearer = randomBytes(32).toString("base64url");
-    await db.insertToken(sha(bearer), account.id);
-    return c.json({ token: bearer, account: { id: account.id, email: account.email, name: account.name } });
   });
 
   app.get("/me", async (c) => {
