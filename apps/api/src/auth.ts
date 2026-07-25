@@ -1,17 +1,20 @@
 import type { Hono } from "hono";
-import { randomInt, randomBytes, timingSafeEqual } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { sha, bearer } from "./authToken";
 import type { AuthDb } from "./authDb";
 import { parseRequestBody, parseVerifyBody } from "./authValidate";
 
 export interface AuthDeps {
   db: AuthDb;
-  sendCode: (email: string, code: string, magicUrl: string) => Promise<void>;
+  sendLink: (email: string, confirmUrl: string) => Promise<void>;
   allowRequest: (key: string) => boolean;
   allowVerify: (key: string) => boolean;
+  allowPoll: (key: string) => boolean;
+  publicUrl: string;
 }
 
-const CODE_TTL_SECONDS = 600; // 10 minutes
+const CODE_TTL_SECONDS = 600; // 10 minutes — legacy code path, removed in a later task
+const LOGIN_TTL_SECONDS = 24 * 60 * 60; // 24 hours
 
 function clientIp(c: { req: { header: (k: string) => string | undefined } }): string {
   return c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
@@ -24,7 +27,7 @@ function timingSafeEqualHex(a: string, b: string): boolean {
 }
 
 export function registerAuthRoutes(app: Hono, deps: AuthDeps): void {
-  const { db, sendCode, allowRequest, allowVerify } = deps;
+  const { db, sendLink, allowRequest, allowVerify, allowPoll, publicUrl } = deps;
 
   app.post("/auth/request", async (c) => {
     let body: unknown;
@@ -35,19 +38,24 @@ export function registerAuthRoutes(app: Hono, deps: AuthDeps): void {
     if (!allowRequest(`auth:req:ip:${clientIp(c)}`) || !allowRequest(`auth:req:email:${email}`)) {
       return c.json({ error: "rate limited" }, 429);
     }
-    const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
-    const linkToken = randomBytes(32).toString("base64url");
-    await db.invalidateCodes(email);
-    await db.insertCode(email, sha(code), sha(linkToken), CODE_TTL_SECONDS);
-    db.cleanupExpiredCodes().catch(() => {}); // opportunistic, never blocks the response
-    const magicUrl = `rigel://auth?token=${linkToken}`;
+    const pollToken = randomBytes(32).toString("base64url");
+    const confirmToken = randomBytes(32).toString("base64url");
+    await db.invalidatePendingLogins(email);
+    await db.createPendingLogin({
+      email,
+      pollTokenHash: sha(pollToken),
+      confirmTokenHash: sha(confirmToken),
+      ttlSeconds: LOGIN_TTL_SECONDS,
+    });
+    db.cleanupExpiredPendingLogins().catch(() => {}); // opportunistic, never blocks the response
     try {
-      await sendCode(email, code, magicUrl);
+      await sendLink(email, `${publicUrl}/auth/confirm?t=${confirmToken}`);
     } catch (e) {
-      console.error("auth: sendCode failed", e);
-      return c.json({ error: "could not send code" }, 502);
+      console.error("auth: sendLink failed", e);
+      await db.invalidatePendingLogins(email); // no email means the row can never be confirmed
+      return c.json({ error: "could not send link" }, 502);
     }
-    return c.json({ ok: true });
+    return c.json({ pollToken });
   });
 
   app.post("/auth/verify", async (c) => {

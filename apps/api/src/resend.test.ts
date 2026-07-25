@@ -1,30 +1,38 @@
 import { test, expect, vi } from "vitest";
-import { createResendSender } from "./resend";
+import { renderLinkEmailHtml, createResendSender } from "./resend";
 
-test("posts the code to Resend and resolves on 200", async () => {
-  const fetchFn = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ id: "x" }), { status: 200 }));
-  const send = createResendSender({ apiKey: "re_test", from: "Rigel <login@rigel.run>", fetchFn });
-  await send("jane@acme.com", "123456", "rigel://auth?token=abc123");
-  expect(fetchFn).toHaveBeenCalledTimes(1);
+const URL_ = "https://api.example.test/auth/confirm?t=abc123";
+
+test("the email links to the confirm page and carries no code", () => {
+  const html = renderLinkEmailHtml(URL_);
+  expect(html).toContain(`href="${URL_}"`);
+  expect(html).toContain("Sign in to Rigel");
+  expect(html).not.toMatch(/enter (this|the) code/i);
+  // Digits in the rendered copy only — matching raw HTML would hit the #101012 background.
+  expect(html.replace(/<[^>]*>/g, " ")).not.toMatch(/\b\d{6}\b/);
+});
+
+test("the email states the 24-hour validity", () => {
+  expect(renderLinkEmailHtml(URL_)).toMatch(/24 hours/);
+});
+
+test("createResendSender posts the link email to Resend", async () => {
+  const fetchFn = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => "" });
+  const sendLink = createResendSender({ apiKey: "k", from: "Rigel <login@rigel.run>", fetchFn: fetchFn as never });
+  await sendLink("jane@acme.com", URL_);
+
+  expect(fetchFn).toHaveBeenCalledOnce();
   const [url, init] = fetchFn.mock.calls[0] as [string, RequestInit];
   expect(url).toBe("https://api.resend.com/emails");
-  expect((init.headers as Record<string, string>).Authorization).toBe("Bearer re_test");
-  const payload = JSON.parse(init.body as string);
+  const payload = JSON.parse(init.body as string) as { to: string; subject: string; text: string; html: string };
   expect(payload.to).toBe("jane@acme.com");
-  expect(payload.from).toBe("Rigel <login@rigel.run>");
-  // Code is NOT in the subject (keeps it off lock-screen/notification previews).
-  expect(payload.subject).toBe("Your Rigel sign-in code");
-  expect(payload.subject).not.toContain("123456");
-  // Both the plaintext fallback and the branded HTML carry the code and magic link.
-  expect(payload.text).toContain("123456");
-  expect(payload.text).toContain("rigel://auth?token=abc123");
-  expect(payload.html).toContain("123456");
-  expect(payload.html).toContain("RIGEL");
-  expect(payload.html).toContain('href="rigel://auth?token=abc123"');
+  expect(payload.subject).toBe("Sign in to Rigel");
+  expect(payload.text).toContain(URL_);
+  expect(payload.html).toContain(URL_);
 });
 
 test("throws on a non-2xx from Resend", async () => {
   const fetchFn = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response("nope", { status: 422 }));
-  const send = createResendSender({ apiKey: "re_test", from: "x", fetchFn });
-  await expect(send("a@b.co", "000000", "rigel://auth?token=xyz")).rejects.toThrow();
+  const sendLink = createResendSender({ apiKey: "re_test", from: "x", fetchFn });
+  await expect(sendLink("a@b.co", URL_)).rejects.toThrow();
 });

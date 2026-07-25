@@ -108,9 +108,11 @@ test("auth routes are mounted when auth deps are provided", async () => {
         orgBilling: async () => null, orgSeatCount: async () => 0, setOrgStripeCustomer: async () => {}, accountEmail: async () => "a@b.co",
         createAgentToken: async () => {}, agentTokenByHash: async () => null, orgStripeCustomer: async () => null,
       },
-      sendCode: async () => {},
+      sendLink: async () => {},
       allowRequest: () => true,
       allowVerify: () => true,
+      allowPoll: () => true,
+      publicUrl: "https://api.example.test",
     },
   });
   // /me with no token is a mounted route that returns 401 (not a 404)
