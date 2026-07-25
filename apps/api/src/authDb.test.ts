@@ -1,7 +1,18 @@
 import { test, expect, vi } from "vitest";
 import { newDb } from "pg-mem";
-import { createAuthDb, ensureAuthSchema } from "./authDb";
+import { createAuthDb, ensureAuthSchema, AUTH_SCHEMA } from "./authDb";
 import type { Pool, QueryResult } from "pg";
+
+function fakePool() {
+  const queries: { text: string; values: unknown[] }[] = [];
+  return {
+    queries,
+    async query(text: string, values: unknown[] = []) {
+      queries.push({ text, values });
+      return { rows: [] };
+    },
+  };
+}
 
 function recorder() {
   const calls: { sql: string; params: unknown[] }[] = [];
@@ -220,4 +231,47 @@ test("orgStripeCustomer selects the customer id (null when none/no row)", async 
   expect(sql).toContain("SELECT STRIPE_CUSTOMER_ID FROM ORGANIZATIONS");
   expect(calls[0].params).toEqual(["o1"]);
   expect(await db.orgStripeCustomer("missing")).toBeNull();
+});
+
+test("createPendingLogin then confirm then claim yields the email exactly once", async () => {
+  const pool = fakePool();
+  const db = createAuthDb(pool as never);
+  await db.createPendingLogin({
+    email: "jane@acme.com",
+    pollTokenHash: "poll-hash",
+    confirmTokenHash: "confirm-hash",
+    ttlSeconds: 86_400,
+  });
+  expect(pool.queries[0].text).toMatch(/INSERT INTO pending_logins/);
+  expect(pool.queries[0].values).toEqual([
+    "jane@acme.com",
+    "poll-hash",
+    "confirm-hash",
+    "86400",
+  ]);
+});
+
+test("confirmPendingLogin only matches an unconfirmed, unexpired row", async () => {
+  const pool = fakePool();
+  const db = createAuthDb(pool as never);
+  await db.confirmPendingLogin("confirm-hash");
+  const q = pool.queries[0].text;
+  expect(q).toMatch(/UPDATE pending_logins/);
+  expect(q).toMatch(/confirmed_at IS NULL/);
+  expect(q).toMatch(/expires_at > now\(\)/);
+});
+
+test("claimConfirmedLogin requires confirmed and unconsumed", async () => {
+  const pool = fakePool();
+  const db = createAuthDb(pool as never);
+  await db.claimConfirmedLogin("poll-hash");
+  const q = pool.queries[0].text;
+  expect(q).toMatch(/confirmed_at IS NOT NULL/);
+  expect(q).toMatch(/consumed_at IS NULL/);
+});
+
+test("AUTH_SCHEMA creates pending_logins with both token indexes", () => {
+  expect(AUTH_SCHEMA).toMatch(/CREATE TABLE IF NOT EXISTS pending_logins/);
+  expect(AUTH_SCHEMA).toMatch(/pending_logins_poll_idx/);
+  expect(AUTH_SCHEMA).toMatch(/pending_logins_confirm_idx/);
 });
