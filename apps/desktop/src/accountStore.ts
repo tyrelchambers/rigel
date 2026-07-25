@@ -14,6 +14,7 @@ export interface SafeStorageLike {
  *  the user confirms the emailed link, or `expiresAt` passes. */
 export interface PendingLogin {
   pollToken: string;
+  displayCode: string;
   email: string;
   startedAt: number;
   expiresAt: number;
@@ -69,7 +70,7 @@ export class AccountStore {
     if (raw === null) return null;
     try {
       const p = JSON.parse(raw) as PendingLogin;
-      if (typeof p?.pollToken !== "string" || typeof p?.expiresAt !== "number") return null;
+      if (typeof p?.pollToken !== "string" || typeof p?.displayCode !== "string" || typeof p?.expiresAt !== "number") return null;
       return p;
     } catch {
       return null;

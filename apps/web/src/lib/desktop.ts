@@ -35,7 +35,7 @@ export interface EntitlementPayload {
 export interface Account { id: string; email: string; name: string | null }
 export interface Org { id: string; kind: "personal" | "team"; name: string; role: "owner" | "admin" | "member" }
 export interface MePayload { account: Account; orgs?: Org[]; invitations?: unknown[] }
-export interface PendingSignIn { email: string; expiresAt: number }
+export interface PendingSignIn { email: string; expiresAt: number; displayCode: string }
 
 export interface RigelBridge {
   desktop: true;

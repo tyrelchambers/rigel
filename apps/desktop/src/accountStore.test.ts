@@ -84,9 +84,9 @@ test("pending login round-trips through safeStorage", () => {
   const store = new AccountStore(dir, fakeSafe());
   expect(store.getPending()).toBeNull();
 
-  store.setPending({ pollToken: "poll-abc", email: "jane@acme.com", startedAt: 1000, expiresAt: 90_000 });
+  store.setPending({ pollToken: "poll-abc", displayCode: "WX7Q", email: "jane@acme.com", startedAt: 1000, expiresAt: 90_000 });
   expect(store.getPending()).toEqual({
-    pollToken: "poll-abc", email: "jane@acme.com", startedAt: 1000, expiresAt: 90_000,
+    pollToken: "poll-abc", displayCode: "WX7Q", email: "jane@acme.com", startedAt: 1000, expiresAt: 90_000,
   });
 
   store.clearPending();
@@ -96,7 +96,7 @@ test("pending login round-trips through safeStorage", () => {
 test("pending login lives in its own file, so clear() does not drop the token", () => {
   const store = new AccountStore(dir, fakeSafe());
   store.setToken("bearer-1");
-  store.setPending({ pollToken: "poll-abc", email: "jane@acme.com", startedAt: 0, expiresAt: 1 });
+  store.setPending({ pollToken: "poll-abc", displayCode: "WX7Q", email: "jane@acme.com", startedAt: 0, expiresAt: 1 });
 
   store.clear();
   expect(store.getToken()).toBeNull();
@@ -110,4 +110,14 @@ test("getPending returns null on corrupt contents rather than throwing", () => {
   const store = new AccountStore(dir, fakeSafe());
   writeFileSync(join(dir, "rigel-pending-login.bin"), "not-base64-json");
   expect(store.getPending()).toBeNull();
+});
+
+test("getPending rejects a record missing displayCode rather than surfacing undefined", () => {
+  const safe = fakeSafe();
+  const file = join(dir, "rigel-pending-login.bin");
+  writeFileSync(
+    file,
+    safe.encryptString(JSON.stringify({ pollToken: "poll-abc", email: "jane@acme.com", startedAt: 0, expiresAt: 90_000 })).toString("base64"),
+  );
+  expect(new AccountStore(dir, safe).getPending()).toBeNull();
 });
