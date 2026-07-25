@@ -22,11 +22,13 @@ export interface AuthDb {
   consumeCode(email: string): Promise<boolean>;
   consumeLinkToken(linkTokenHash: string): Promise<{ email: string } | null>;
   cleanupExpiredCodes(): Promise<void>;
-  createPendingLogin(input: { email: string; pollTokenHash: string; confirmTokenHash: string; ttlSeconds: number }): Promise<void>;
+  createPendingLogin(
+    input: { email: string; pollTokenHash: string; confirmTokenHash: string; ttlSeconds: number },
+  ): Promise<void>;
   invalidatePendingLogins(email: string): Promise<void>;
   confirmPendingLogin(confirmTokenHash: string): Promise<{ email: string } | null>;
-  claimConfirmedLogin(pollTokenHash: string): Promise<{ email: string } | null>;
-  pendingLoginAwaiting(pollTokenHash: string): Promise<boolean>;
+  consumeConfirmedLogin(pollTokenHash: string): Promise<{ email: string } | null>;
+  pendingLoginActive(pollTokenHash: string): Promise<boolean>;
   cleanupExpiredPendingLogins(): Promise<void>;
   upsertAccount(email: string): Promise<Account>;
   insertToken(tokenHash: string, accountId: string): Promise<void>;
@@ -47,7 +49,7 @@ export interface AuthDb {
 
 const TOKEN_MAX_AGE = "1 year";
 
-export const AUTH_SCHEMA = `
+const AUTH_SCHEMA = `
 CREATE TABLE IF NOT EXISTS accounts (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   email         text NOT NULL,
@@ -117,8 +119,8 @@ CREATE TABLE IF NOT EXISTS pending_logins (
   confirmed_at       timestamptz,
   consumed_at        timestamptz
 );
-CREATE INDEX IF NOT EXISTS pending_logins_poll_idx ON pending_logins (poll_token_hash);
-CREATE INDEX IF NOT EXISTS pending_logins_confirm_idx ON pending_logins (confirm_token_hash);
+CREATE UNIQUE INDEX IF NOT EXISTS pending_logins_poll_idx ON pending_logins (poll_token_hash);
+CREATE UNIQUE INDEX IF NOT EXISTS pending_logins_confirm_idx ON pending_logins (confirm_token_hash);
 CREATE INDEX IF NOT EXISTS pending_logins_email_idx ON pending_logins (email);
 INSERT INTO organizations (kind, name, personal_account_id)
   SELECT 'personal', coalesce(name, email), id FROM accounts a
@@ -247,34 +249,26 @@ export function createAuthDb(pool: Pool): AuthDb {
     async confirmPendingLogin(confirmTokenHash) {
       const r = await pool.query(
         `UPDATE pending_logins SET confirmed_at = now()
-         WHERE id = (
-           SELECT id FROM pending_logins
-           WHERE confirm_token_hash = $1 AND confirmed_at IS NULL
-             AND consumed_at IS NULL AND expires_at > now()
-           ORDER BY created_at DESC LIMIT 1
-         )
+         WHERE confirm_token_hash = $1 AND confirmed_at IS NULL
+           AND consumed_at IS NULL AND expires_at > now()
          RETURNING email`,
         [confirmTokenHash],
       );
       const row = r.rows[0] as { email: string } | undefined;
       return row ? { email: row.email } : null;
     },
-    async claimConfirmedLogin(pollTokenHash) {
+    async consumeConfirmedLogin(pollTokenHash) {
       const r = await pool.query(
         `UPDATE pending_logins SET consumed_at = now()
-         WHERE id = (
-           SELECT id FROM pending_logins
-           WHERE poll_token_hash = $1 AND confirmed_at IS NOT NULL
-             AND consumed_at IS NULL AND expires_at > now()
-           ORDER BY created_at DESC LIMIT 1
-         )
+         WHERE poll_token_hash = $1 AND confirmed_at IS NOT NULL
+           AND consumed_at IS NULL AND expires_at > now()
          RETURNING email`,
         [pollTokenHash],
       );
       const row = r.rows[0] as { email: string } | undefined;
       return row ? { email: row.email } : null;
     },
-    async pendingLoginAwaiting(pollTokenHash) {
+    async pendingLoginActive(pollTokenHash) {
       const r = await pool.query(
         `SELECT 1 AS ok FROM pending_logins
           WHERE poll_token_hash = $1 AND consumed_at IS NULL AND expires_at > now()

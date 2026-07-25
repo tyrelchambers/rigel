@@ -39,8 +39,8 @@ function fakeDb() {
     async createPendingLogin() {},
     async invalidatePendingLogins() {},
     async confirmPendingLogin() { return null; },
-    async claimConfirmedLogin() { return null; },
-    async pendingLoginAwaiting() { return false; },
+    async consumeConfirmedLogin() { return null; },
+    async pendingLoginActive() { return false; },
     async cleanupExpiredPendingLogins() {},
     async upsertAccount(email) {
       // Deliberately does NOT create a personal org here — models a "legacy"

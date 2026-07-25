@@ -1,17 +1,25 @@
 import { test, expect, vi } from "vitest";
 import { newDb } from "pg-mem";
-import { createAuthDb, ensureAuthSchema, AUTH_SCHEMA } from "./authDb";
+import { createAuthDb, ensureAuthSchema } from "./authDb";
 import type { Pool, QueryResult } from "pg";
 
-function fakePool() {
-  const queries: { text: string; values: unknown[] }[] = [];
-  return {
-    queries,
-    async query(text: string, values: unknown[] = []) {
-      queries.push({ text, values });
-      return { rows: [] };
-    },
-  };
+async function pendingLoginsPool() {
+  const mem = newDb();
+  const { Pool } = mem.adapters.createPg();
+  const pool = new Pool() as unknown as Pool;
+  await pool.query(`
+    CREATE TABLE pending_logins (
+      id                 serial PRIMARY KEY,
+      email              text NOT NULL,
+      poll_token_hash    text NOT NULL,
+      confirm_token_hash text NOT NULL,
+      created_at         timestamptz NOT NULL DEFAULT now(),
+      expires_at         timestamptz NOT NULL,
+      confirmed_at       timestamptz,
+      consumed_at        timestamptz
+    )
+  `);
+  return pool;
 }
 
 function recorder() {
@@ -233,45 +241,146 @@ test("orgStripeCustomer selects the customer id (null when none/no row)", async 
   expect(await db.orgStripeCustomer("missing")).toBeNull();
 });
 
-test("createPendingLogin then confirm then claim yields the email exactly once", async () => {
-  const pool = fakePool();
-  const db = createAuthDb(pool as never);
+test("ensureAuthSchema creates pending_logins with all three indexes", async () => {
+  const { pool, calls } = recorder();
+  await ensureAuthSchema(pool);
+  const j = calls.map((c) => c.sql.toUpperCase()).join("\n");
+  expect(j).toContain("CREATE TABLE IF NOT EXISTS PENDING_LOGINS");
+  expect(j).toContain("PENDING_LOGINS_POLL_IDX");
+  expect(j).toContain("PENDING_LOGINS_CONFIRM_IDX");
+  expect(j).toContain("PENDING_LOGINS_EMAIL_IDX");
+});
+
+test("createPendingLogin inserts the hashed poll+confirm tokens with a ttl-based expiry", async () => {
+  const { pool, calls } = recorder();
+  const db = createAuthDb(pool);
   await db.createPendingLogin({
     email: "jane@acme.com",
     pollTokenHash: "poll-hash",
     confirmTokenHash: "confirm-hash",
     ttlSeconds: 86_400,
   });
-  expect(pool.queries[0].text).toMatch(/INSERT INTO pending_logins/);
-  expect(pool.queries[0].values).toEqual([
-    "jane@acme.com",
-    "poll-hash",
-    "confirm-hash",
-    "86400",
-  ]);
+  const sql = calls[0].sql.toUpperCase();
+  expect(sql).toContain("INSERT INTO PENDING_LOGINS");
+  expect(calls[0].params).toEqual(["jane@acme.com", "poll-hash", "confirm-hash", "86400"]);
 });
 
-test("confirmPendingLogin only matches an unconfirmed, unexpired row", async () => {
-  const pool = fakePool();
-  const db = createAuthDb(pool as never);
-  await db.confirmPendingLogin("confirm-hash");
-  const q = pool.queries[0].text;
-  expect(q).toMatch(/UPDATE pending_logins/);
-  expect(q).toMatch(/confirmed_at IS NULL/);
-  expect(q).toMatch(/expires_at > now\(\)/);
+test("confirmPendingLogin matches by confirm_token_hash, guarded, and returns the email", async () => {
+  const { pool, calls, push } = recorder();
+  push({ email: "jane@acme.com" });
+  const db = createAuthDb(pool);
+  expect(await db.confirmPendingLogin("confirm-hash")).toEqual({ email: "jane@acme.com" });
+  const sql = calls[0].sql.toUpperCase();
+  expect(sql).toContain("UPDATE PENDING_LOGINS SET CONFIRMED_AT = NOW()");
+  expect(sql).toContain("CONFIRM_TOKEN_HASH = $1");
+  expect(sql).toContain("CONFIRMED_AT IS NULL");
+  expect(sql).toContain("CONSUMED_AT IS NULL");
+  expect(sql).toContain("EXPIRES_AT > NOW()");
+  expect(sql).toContain("RETURNING EMAIL");
+  expect(calls[0].params).toEqual(["confirm-hash"]);
 });
 
-test("claimConfirmedLogin requires confirmed and unconsumed", async () => {
-  const pool = fakePool();
-  const db = createAuthDb(pool as never);
-  await db.claimConfirmedLogin("poll-hash");
-  const q = pool.queries[0].text;
-  expect(q).toMatch(/confirmed_at IS NOT NULL/);
-  expect(q).toMatch(/consumed_at IS NULL/);
+test("confirmPendingLogin returns null when no row matches", async () => {
+  const { pool } = recorder();
+  expect(await createAuthDb(pool).confirmPendingLogin("missing")).toBeNull();
 });
 
-test("AUTH_SCHEMA creates pending_logins with both token indexes", () => {
-  expect(AUTH_SCHEMA).toMatch(/CREATE TABLE IF NOT EXISTS pending_logins/);
-  expect(AUTH_SCHEMA).toMatch(/pending_logins_poll_idx/);
-  expect(AUTH_SCHEMA).toMatch(/pending_logins_confirm_idx/);
+test("consumeConfirmedLogin matches by poll_token_hash, requires confirmed+unconsumed, and returns the email", async () => {
+  const { pool, calls, push } = recorder();
+  push({ email: "jane@acme.com" });
+  const db = createAuthDb(pool);
+  expect(await db.consumeConfirmedLogin("poll-hash")).toEqual({ email: "jane@acme.com" });
+  const sql = calls[0].sql.toUpperCase();
+  expect(sql).toContain("UPDATE PENDING_LOGINS SET CONSUMED_AT = NOW()");
+  expect(sql).toContain("POLL_TOKEN_HASH = $1");
+  expect(sql).toContain("CONFIRMED_AT IS NOT NULL");
+  expect(sql).toContain("CONSUMED_AT IS NULL");
+  expect(sql).toContain("EXPIRES_AT > NOW()");
+  expect(sql).toContain("RETURNING EMAIL");
+  expect(calls[0].params).toEqual(["poll-hash"]);
+});
+
+test("consumeConfirmedLogin returns null when no row matches", async () => {
+  const { pool } = recorder();
+  expect(await createAuthDb(pool).consumeConfirmedLogin("missing")).toBeNull();
+});
+
+test("pendingLoginActive reports whether an unconsumed, unexpired row exists", async () => {
+  const { pool, calls, push } = recorder();
+  push({ ok: 1 });
+  const db = createAuthDb(pool);
+  expect(await db.pendingLoginActive("poll-hash")).toBe(true);
+  const sql = calls[0].sql.toUpperCase();
+  expect(sql).toContain("FROM PENDING_LOGINS");
+  expect(sql).toContain("POLL_TOKEN_HASH = $1");
+  expect(sql).toContain("CONSUMED_AT IS NULL");
+  expect(sql).toContain("EXPIRES_AT > NOW()");
+  expect(calls[0].params).toEqual(["poll-hash"]);
+  expect(await db.pendingLoginActive("missing")).toBe(false);
+});
+
+test("invalidatePendingLogins marks unconsumed rows for the email as consumed", async () => {
+  const { pool, calls } = recorder();
+  const db = createAuthDb(pool);
+  await db.invalidatePendingLogins("jane@acme.com");
+  const sql = calls[0].sql.toUpperCase();
+  expect(sql).toContain("UPDATE PENDING_LOGINS SET CONSUMED_AT = NOW()");
+  expect(sql).toContain("EMAIL = $1");
+  expect(sql).toContain("CONSUMED_AT IS NULL");
+  expect(calls[0].params).toEqual(["jane@acme.com"]);
+});
+
+test("cleanupExpiredPendingLogins deletes rows expired more than a day ago", async () => {
+  const { pool, calls } = recorder();
+  await createAuthDb(pool).cleanupExpiredPendingLogins();
+  const sql = calls[0].sql.toUpperCase();
+  expect(sql).toContain("DELETE FROM PENDING_LOGINS");
+  expect(sql).toContain("EXPIRES_AT <");
+});
+
+test("pending_logins lifecycle (pg-mem): confirm then consume yields the email exactly once", async () => {
+  const pool = await pendingLoginsPool();
+  const db = createAuthDb(pool);
+  await db.createPendingLogin({
+    email: "jane@acme.com",
+    pollTokenHash: "p",
+    confirmTokenHash: "c",
+    ttlSeconds: 86_400,
+  });
+
+  expect(await db.pendingLoginActive("p")).toBe(true);
+  expect(await db.consumeConfirmedLogin("p")).toBeNull(); // not yet confirmed
+
+  expect(await db.confirmPendingLogin("c")).toEqual({ email: "jane@acme.com" });
+  expect(await db.confirmPendingLogin("c")).toBeNull(); // already confirmed
+
+  expect(await db.consumeConfirmedLogin("p")).toEqual({ email: "jane@acme.com" }); // minted once
+  expect(await db.consumeConfirmedLogin("p")).toBeNull(); // replay fails
+  expect(await db.pendingLoginActive("p")).toBe(false);
+});
+
+test("invalidatePendingLogins (pg-mem) deactivates every unconsumed row for the email", async () => {
+  const pool = await pendingLoginsPool();
+  const db = createAuthDb(pool);
+  await db.createPendingLogin({ email: "jane@acme.com", pollTokenHash: "p1", confirmTokenHash: "c1", ttlSeconds: 86_400 });
+  await db.createPendingLogin({ email: "jane@acme.com", pollTokenHash: "p2", confirmTokenHash: "c2", ttlSeconds: 86_400 });
+  await db.invalidatePendingLogins("jane@acme.com");
+  expect(await db.pendingLoginActive("p1")).toBe(false);
+  expect(await db.pendingLoginActive("p2")).toBe(false);
+});
+
+test("cleanupExpiredPendingLogins (pg-mem) deletes only rows expired more than a day ago", async () => {
+  const pool = await pendingLoginsPool();
+  await pool.query(
+    `INSERT INTO pending_logins (email, poll_token_hash, confirm_token_hash, expires_at)
+     VALUES ('old@acme.com', 'p-old', 'c-old', now() - interval '2 days')`,
+  );
+  await pool.query(
+    `INSERT INTO pending_logins (email, poll_token_hash, confirm_token_hash, expires_at)
+     VALUES ('fresh@acme.com', 'p-fresh', 'c-fresh', now() + interval '1 day')`,
+  );
+  const db = createAuthDb(pool);
+  await db.cleanupExpiredPendingLogins();
+  const r = await pool.query(`SELECT email FROM pending_logins`);
+  expect(r.rows).toEqual([{ email: "fresh@acme.com" }]);
 });
