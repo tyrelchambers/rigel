@@ -87,8 +87,18 @@ export function SignInFlow({ account, className, hideHeading = false }: SignInFl
           <div className="flex flex-col gap-1.5">
             <h2 className="text-base font-semibold text-[var(--fg-primary)]">Check your inbox</h2>
             <p className="text-sm leading-relaxed text-[var(--fg-secondary)]">
-              We sent a sign-in link to {pending.email}. Open it on any device and Rigel signs itself
-              in, no code to copy back.
+              We sent a sign-in link to {pending.email}. Open it on any device.
+            </p>
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-xs text-[var(--fg-secondary)]">The page will ask you to check this code:</p>
+            {/* Named for screen readers so it is announced as the sign-in code
+             *  rather than a bare run of characters. */}
+            <output aria-label="Sign-in code" className="font-mono text-3xl font-semibold tracking-widest text-[var(--accent-primary)]">
+              {pending.displayCode}
+            </output>
+            <p className="text-xs leading-relaxed text-[var(--fg-secondary)]">
+              You won&apos;t need to type it. Just check the page shows the same code.
             </p>
           </div>
           <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-4 py-3 text-xs text-[var(--fg-secondary)]">

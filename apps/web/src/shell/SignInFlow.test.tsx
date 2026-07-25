@@ -54,6 +54,45 @@ describe("SignInFlow", () => {
     expect(screen.queryByLabelText(/email address/i)).not.toBeInTheDocument();
   });
 
+  // The display code is the login-CSRF guard: the confirm page asks the human to
+  // match it, so an attacker who started the sign-in cannot borrow the victim's
+  // click. It has to be the code THIS pending record carries, not a placeholder.
+  it("shows the pending record's own display code for the human to match", () => {
+    render(<SignInFlow account={account({ pendingSignIn: { email: "jane@acme.com", expiresAt: Date.now() + 1000, displayCode: "ZZZZ-1111" } })} />);
+    expect(screen.getByLabelText(/sign-in code/i)).toHaveTextContent("ZZZZ-1111");
+    expect(screen.getByText(/check this code/i)).toBeInTheDocument();
+    expect(screen.getByText(/same code/i)).toBeInTheDocument();
+  });
+
+  it("no longer claims there is no code to copy back", () => {
+    render(<SignInFlow account={account({ pendingSignIn: { email: "jane@acme.com", expiresAt: Date.now() + 1000, displayCode: "ZZZZ-1111" } })} />);
+    expect(screen.getByText(/check your inbox/i)).toBeInTheDocument();
+    expect(document.body.textContent).toContain("ZZZZ-1111");
+    expect(document.body.textContent).not.toMatch(/no code to copy back/i);
+  });
+
+  it("keeps the code out of the email form, where there is nothing to match", () => {
+    render(<SignInFlow account={account()} />);
+    expect(screen.getByLabelText(/email address/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/sign-in code/i)).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/\b[0-9A-Z]{4}-[0-9A-Z]{4}\b/);
+  });
+
+  it("keeps the code out of the signed-in state even with a stale pending record", () => {
+    render(
+      <SignInFlow
+        account={account({
+          status: "signed-in",
+          account: jane,
+          pendingSignIn: { email: "jane@acme.com", expiresAt: Date.now() + 1000, displayCode: "ZZZZ-1111" },
+        })}
+      />,
+    );
+    expect(screen.getByText(/you're signed in/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/sign-in code/i)).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toContain("ZZZZ-1111");
+  });
+
   it("resends from the inbox panel", async () => {
     const acct = account({ pendingSignIn: { email: "jane@acme.com", expiresAt: Date.now() + 1000, displayCode: "4K7Q-9WXZ" } });
     render(<SignInFlow account={acct} />);
