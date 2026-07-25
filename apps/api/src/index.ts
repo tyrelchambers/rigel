@@ -47,6 +47,10 @@ const allowVerify = createRateLimiter(10, 10 * 60_000);  // 10 confirm attempts 
 // The desktop polls every 2s for the first 2 min, then every 15s, until the 15 min TTL.
 // Keyed by poll-token hash, so one app instance cannot starve another.
 const allowPoll = createRateLimiter(240, 10 * 60_000);
+// Per-IP gate for /auth/poll, checked BEFORE the token key so a flood of random
+// tokens cannot grow the limiter's map. Generous enough for a whole office
+// behind one egress IP; each in-flight sign-in spends ~112 requests.
+const allowPollIp = createRateLimiter(2000, 10 * 60_000);
 const stripeAdapter = STRIPE_SECRET_KEY
   ? createStripeAdapter(STRIPE_SECRET_KEY)
   : makeStripeAdapter({ entitlements: { activeEntitlements: { list: async () => ({ data: [] }) } } } as never); // unset key → everyone free
@@ -85,7 +89,7 @@ const app = createApp({
   upsert: (s) => upsertSignup(pool, s),
   allow,
   notify,
-  auth: { db: authDb, sendLink, allowRequest, allowVerify, allowPoll, publicUrl: BILLING_ENDPOINT },
+  auth: { db: authDb, sendLink, allowRequest, allowVerify, allowPoll, allowPollIp, publicUrl: BILLING_ENDPOINT },
   billing: { db: authDb, resolve, stripe: stripeAdapter, priceId: STRIPE_PRICE_ID, publishableKey: STRIPE_PUBLISHABLE_KEY, endpoint: BILLING_ENDPOINT },
   agent: {
     db: authDb,

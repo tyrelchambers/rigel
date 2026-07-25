@@ -2,7 +2,7 @@ import type { Hono } from "hono";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { sha, bearer } from "./authToken";
 import type { AuthDb } from "./authDb";
-import { parseRequestBody, parseVerifyBody } from "./authValidate";
+import { parsePollBody, parseRequestBody, parseVerifyBody } from "./authValidate";
 import { displayCodeFor } from "./displayCode";
 import { renderConfirmPage, renderConfirmedPage, renderDeniedPage, renderInvalidPage } from "./authPages";
 
@@ -12,6 +12,7 @@ export interface AuthDeps {
   allowRequest: (key: string) => boolean;
   allowVerify: (key: string) => boolean;
   allowPoll: (key: string) => boolean;
+  allowPollIp: (key: string) => boolean;
   publicUrl: string;
 }
 
@@ -28,7 +29,7 @@ function timingSafeEqualHex(a: string, b: string): boolean {
 }
 
 export function registerAuthRoutes(app: Hono, deps: AuthDeps): void {
-  const { db, sendLink, allowRequest, allowVerify, allowPoll, publicUrl } = deps;
+  const { db, sendLink, allowRequest, allowVerify, allowPoll, allowPollIp, publicUrl } = deps;
 
   app.post("/auth/request", async (c) => {
     let body: unknown;
@@ -101,6 +102,29 @@ export function registerAuthRoutes(app: Hono, deps: AuthDeps): void {
     const token = randomBytes(32).toString("base64url");
     await db.insertToken(sha(token), account.id);
     return c.json({ token, account: { id: account.id, email: account.email, name: account.name } });
+  });
+
+  app.post("/auth/poll", async (c) => {
+    let body: unknown;
+    try { body = await c.req.json(); } catch { return c.json({ error: "invalid json" }, 400); }
+    const parsed = parsePollBody(body);
+    if (!parsed.ok) return c.json({ error: "invalid" }, 400);
+    if (!allowPollIp(`auth:poll:ip:${clientIp(c)}`)) return c.json({ error: "rate limited" }, 429);
+    const hash = sha(parsed.pollToken);
+    if (!allowPoll(`auth:poll:${hash}`)) return c.json({ error: "rate limited" }, 429);
+    const claimed = await db.consumeConfirmedLogin(hash);
+    if (claimed) {
+      const account = await db.upsertAccount(claimed.email);
+      const token = randomBytes(32).toString("base64url");
+      await db.insertToken(sha(token), account.id);
+      return c.json({
+        status: "confirmed",
+        token,
+        account: { id: account.id, email: account.email, name: account.name },
+      });
+    }
+    if (await db.pendingLoginActive(hash)) return c.json({ status: "pending" });
+    return c.json({ status: "expired" }, 404);
   });
 
   app.post("/auth/verify-link", async (c) => {

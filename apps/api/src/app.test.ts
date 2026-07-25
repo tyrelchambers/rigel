@@ -113,6 +113,7 @@ test("auth routes are mounted when auth deps are provided", async () => {
       allowRequest: () => true,
       allowVerify: () => true,
       allowPoll: () => true,
+      allowPollIp: () => true,
       publicUrl: "https://api.example.test",
     },
   });

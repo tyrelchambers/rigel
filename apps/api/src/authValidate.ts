@@ -23,3 +23,12 @@ export function parseVerifyBody(body: unknown): VerifyResult {
   if (!CODE.test(code)) return { ok: false };
   return { ok: true, email, code };
 }
+
+type PollResult = { ok: true; pollToken: string } | { ok: false };
+export function parsePollBody(body: unknown): PollResult {
+  if (typeof body !== "object" || body === null) return { ok: false };
+  const raw = (body as Record<string, unknown>).pollToken;
+  const pollToken = typeof raw === "string" ? raw.trim() : "";
+  if (pollToken.length < 1 || pollToken.length > 512) return { ok: false };
+  return { ok: true, pollToken };
+}

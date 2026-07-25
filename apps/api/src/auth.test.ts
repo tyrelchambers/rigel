@@ -109,7 +109,14 @@ function fakeDb() {
   return { db, codes, pendings };
 }
 
-function make(over: { sendLink?: (e: string, url: string) => Promise<void>; allow?: () => boolean } = {}) {
+interface Overrides {
+  sendLink?: (e: string, url: string) => Promise<void>;
+  allow?: () => boolean;
+  allowPoll?: (key: string) => boolean;
+  allowPollIp?: (key: string) => boolean;
+}
+
+function make(over: Overrides = {}) {
   const { db, codes, pendings } = fakeDb();
   const sent: { email: string; confirmUrl: string }[] = [];
   const sendLink = over.sendLink ?? (async (email, confirmUrl) => { sent.push({ email, confirmUrl }); });
@@ -120,7 +127,8 @@ function make(over: { sendLink?: (e: string, url: string) => Promise<void>; allo
     sendLink,
     allowRequest: allow,
     allowVerify: allow,
-    allowPoll: allow,
+    allowPoll: over.allowPoll ?? allow,
+    allowPollIp: over.allowPollIp ?? allow,
     publicUrl: "https://api.example.test",
   });
   const seed =(email: string, code: string, linkToken: string) => db.insertCode(email, sha(code), sha(linkToken), 600);
@@ -146,6 +154,7 @@ test("POST /auth/request returns a poll token and emails a confirm link", async 
     allowRequest: () => true,
     allowVerify: () => true,
     allowPoll: () => true,
+    allowPollIp: () => true,
     publicUrl: "https://api.example.test",
   });
 
@@ -175,7 +184,7 @@ test("POST /auth/request returns a display code derived from the poll token", as
   const app = new Hono();
   registerAuthRoutes(app, {
     db, sendLink: async () => {}, allowRequest: () => true, allowVerify: () => true,
-    allowPoll: () => true, publicUrl: "https://api.example.test",
+    allowPoll: () => true, allowPollIp: () => true, publicUrl: "https://api.example.test",
   });
   const res = await app.request("/auth/request", {
     method: "POST",
@@ -193,7 +202,7 @@ test("the display code is never emailed", async () => {
   const app = new Hono();
   registerAuthRoutes(app, {
     db, sendLink: async (_e, url) => { sentUrl = url; }, allowRequest: () => true,
-    allowVerify: () => true, allowPoll: () => true, publicUrl: "https://api.example.test",
+    allowVerify: () => true, allowPoll: () => true, allowPollIp: () => true, publicUrl: "https://api.example.test",
   });
   const res = await app.request("/auth/request", {
     method: "POST",
@@ -214,6 +223,7 @@ test("POST /auth/request 502s and issues no poll token when the email fails", as
     allowRequest: () => true,
     allowVerify: () => true,
     allowPoll: () => true,
+    allowPollIp: () => true,
     publicUrl: "https://api.example.test",
   });
 
@@ -233,7 +243,7 @@ test("POST /auth/request invalidates any earlier pending login for the same emai
   const app = new Hono();
   registerAuthRoutes(app, {
     db, sendLink: async () => {}, allowRequest: () => true, allowVerify: () => true,
-    allowPoll: () => true, publicUrl: "https://api.example.test",
+    allowPoll: () => true, allowPollIp: () => true, publicUrl: "https://api.example.test",
   });
   const send = () => app.request("/auth/request", {
     method: "POST",
@@ -362,10 +372,10 @@ const form = (app: Hono, path: string, fields: Record<string, string>) =>
 async function appWithPendingLogin(email = "jane@acme.com") {
   const { app, pendings, sent } = make();
   const res = await json(app, "/auth/request", { email });
-  const { displayCode } = (await res.json()) as { displayCode: string };
+  const { pollToken, displayCode } = (await res.json()) as { pollToken: string; displayCode: string };
   const confirmToken = new URL(sent[0].confirmUrl).searchParams.get("t") ?? "";
   expect(confirmToken.length).toBeGreaterThan(20);
-  return { app, pendings, confirmToken, displayCode };
+  return { app, pendings, pollToken, confirmToken, displayCode };
 }
 
 test("GET /auth/confirm shows the code and leaves the row unconfirmed", async () => {
@@ -420,4 +430,85 @@ test("GET /auth/confirm with a bogus token renders the invalid page", async () =
   expect(res.status).toBe(400);
   expect((await res.text()).toLowerCase()).toContain("expired");
   expect((await app.request("/auth/confirm")).status).toBe(400);
+});
+
+test("POST /auth/poll is pending until the human confirms", async () => {
+  const { app, pollToken } = await appWithPendingLogin();
+  const res = await json(app, "/auth/poll", { pollToken });
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ status: "pending" });
+});
+
+test("POST /auth/poll mints a bearer token once the login is confirmed", async () => {
+  const { app, pollToken, confirmToken } = await appWithPendingLogin();
+  expect((await form(app, "/auth/confirm", { t: confirmToken, action: "confirm" })).status).toBe(200);
+  const res = await json(app, "/auth/poll", { pollToken });
+  expect(res.status).toBe(200);
+  const body = (await res.json()) as { status: string; token: string; account: { id: string; email: string; name: string | null } };
+  expect(body.status).toBe("confirmed");
+  expect(typeof body.token).toBe("string");
+  expect(body.token.length).toBeGreaterThan(20);
+  expect(body.account.email).toBe("jane@acme.com");
+});
+
+test("the token POST /auth/poll mints authenticates /me", async () => {
+  const { app, pollToken, confirmToken } = await appWithPendingLogin();
+  await form(app, "/auth/confirm", { t: confirmToken, action: "confirm" });
+  const { token } = (await (await json(app, "/auth/poll", { pollToken })).json()) as { token: string };
+  const meRes = await app.request("/me", { headers: { authorization: `Bearer ${token}` } });
+  expect(meRes.status).toBe(200);
+  const me = (await meRes.json()) as { account: { email: string } };
+  expect(me.account.email).toBe("jane@acme.com");
+});
+
+test("a replayed POST /auth/poll is expired and mints nothing", async () => {
+  const { app, pollToken, confirmToken } = await appWithPendingLogin();
+  await form(app, "/auth/confirm", { t: confirmToken, action: "confirm" });
+  expect((await json(app, "/auth/poll", { pollToken })).status).toBe(200);
+  const replay = await json(app, "/auth/poll", { pollToken });
+  expect(replay.status).toBe(404);
+  expect(await replay.json()).toEqual({ status: "expired" });
+});
+
+test("POST /auth/poll with a token that was never issued reports expired, not pending", async () => {
+  const { app } = make();
+  const res = await json(app, "/auth/poll", { pollToken: "never-issued" });
+  expect(res.status).toBe(404);
+  expect(await res.json()).toEqual({ status: "expired" });
+});
+
+test("POST /auth/poll rate-limited by poll token → 429", async () => {
+  const { app } = make({ allowPoll: () => false });
+  const res = await json(app, "/auth/poll", { pollToken: "anything" });
+  expect(res.status).toBe(429);
+  expect(await res.json()).toEqual({ error: "rate limited" });
+});
+
+test("POST /auth/poll rate-limited by IP → 429", async () => {
+  const { app } = make({ allowPollIp: () => false });
+  const res = await json(app, "/auth/poll", { pollToken: "anything" });
+  expect(res.status).toBe(429);
+  expect(await res.json()).toEqual({ error: "rate limited" });
+});
+
+test("POST /auth/poll gates on IP before it touches the token-keyed limiter", async () => {
+  const calls: string[] = [];
+  const { app } = make({
+    allowPoll: (key) => { calls.push(`token ${key}`); return true; },
+    allowPollIp: (key) => { calls.push(`ip ${key}`); return true; },
+  });
+  await json(app, "/auth/poll", { pollToken: "anything" }, { "x-forwarded-for": "9.9.9.9" });
+  expect(calls).toEqual([`ip auth:poll:ip:9.9.9.9`, `token auth:poll:${sha("anything")}`]);
+});
+
+test("a flooding IP never reaches the token-keyed limiter, so its map cannot grow", async () => {
+  const tokenKeys: string[] = [];
+  const { app } = make({
+    allowPoll: (key) => { tokenKeys.push(key); return true; },
+    allowPollIp: () => false,
+  });
+  for (const t of ["rand-1", "rand-2", "rand-3"]) {
+    expect((await json(app, "/auth/poll", { pollToken: t })).status).toBe(429);
+  }
+  expect(tokenKeys).toEqual([]);
 });
