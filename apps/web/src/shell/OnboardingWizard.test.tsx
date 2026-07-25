@@ -130,6 +130,24 @@ describe("OnboardingWizard steps", () => {
     expect(screen.getByText("Create a local cluster")).toBeInTheDocument();
   });
 
+  // The rail opens with progress already banked: installing the app is a step
+  // the user HAS finished, so it reads Complete from the first frame and Cluster
+  // becomes step two of four.
+  it("shows Installed as an already-complete first step without making it current", () => {
+    renderWizard();
+    expect(screen.getByText("Installed").parentElement).toHaveTextContent("Complete");
+    expect(currentStep()).toHaveTextContent("Cluster");
+    expect(currentStep()).not.toHaveTextContent("Installed");
+    expect(currentStep()).toHaveTextContent("2");
+  });
+
+  // Installed is rail chrome, not a destination: there is no body behind it, so
+  // the opening step must not offer a way back to it.
+  it("offers no Back from the cluster step", () => {
+    renderWizard();
+    expect(screen.queryByRole("button", { name: /^back$/i })).not.toBeInTheDocument();
+  });
+
   it("walks Cluster to AI agent to Email and finishes", () => {
     const { onClose } = renderWizard();
     // Asserted on the step chrome, which renders for the CURRENT step only. The

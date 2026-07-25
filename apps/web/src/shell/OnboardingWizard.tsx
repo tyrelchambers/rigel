@@ -99,7 +99,12 @@ export function OnboardingWizard({
           </button>
         </div>
 
-        <Stepper labels={steps.map((s) => s.label)} current={i} />
+        {/* The rail opens with progress already banked. Installing the app is a
+            step the user HAS finished, so it leads the rail as Complete and the
+            real work starts at two of four. It is chrome only: there is no body
+            behind it and no way back to it, hence the offset rather than a
+            fourth entry in `steps`. */}
+        <Stepper labels={["Installed", ...steps.map((s) => s.label)]} current={i + 1} />
 
         <div style={stepSection}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
