@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { rigel, type Account, type EntitlementPayload, type MePayload, type Org, type VerifyResult } from "@/lib/desktop";
+import { rigel, type Account, type EntitlementPayload, type MePayload, type Org, type PendingSignIn } from "@/lib/desktop";
 
 export type AccountStatus = "loading" | "signed-out" | "signed-in";
 
@@ -9,8 +9,9 @@ export interface UseAccountResult {
   me: MePayload | null;
   orgs: Org[];
   entitlement: EntitlementPayload | null;
-  requestCode(email: string): Promise<{ ok: boolean; status: number }>;
-  verifyCode(email: string, code: string): Promise<VerifyResult>;
+  /** An emailed sign-in link that has not been confirmed yet, if any. */
+  pendingSignIn: PendingSignIn | null;
+  startSignIn(email: string): Promise<{ ok: boolean; status: number }>;
   signOut(): Promise<void>;
   refresh(): Promise<void>;
   upgrade(orgId: string): Promise<{ clientSecret: string; publishableKey: string } | null>;
@@ -23,13 +24,15 @@ export function useAccount(): UseAccountResult {
   const [status, setStatus] = useState<AccountStatus>(rigel ? "loading" : "signed-out");
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [entitlement, setEntitlement] = useState<EntitlementPayload | null>(null);
+  const [pendingSignIn, setPendingSignIn] = useState<PendingSignIn | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!rigel) { setStatus("signed-out"); setOrgs([]); setEntitlement(null); return; }
+    if (!rigel) { setStatus("signed-out"); setOrgs([]); setEntitlement(null); setPendingSignIn(null); return; }
     const s = await rigel.account.status();
     setMe(s.account ? { account: s.account } : null);
     setOrgs(s.orgs ?? []);
     setStatus(s.signedIn ? "signed-in" : "signed-out");
+    setPendingSignIn(s.pendingSignIn ?? null);
     setEntitlement((await rigel.billing?.entitlements()) ?? null);
   }, []);
 
@@ -45,14 +48,10 @@ export function useAccount(): UseAccountResult {
     return rigel.billing?.onChanged(() => { void refresh(); });
   }, [refresh]);
 
-  const requestCode = useCallback(
-    (email: string) => rigel!.account.requestCode(email),
-    [],
-  );
-  const verifyCode = useCallback(
-    async (email: string, code: string): Promise<VerifyResult> => {
-      const r = await rigel!.account.verifyCode(email, code);
-      if (r.ok) await refresh();
+  const startSignIn = useCallback(
+    async (email: string) => {
+      const r = await rigel!.account.startSignIn(email);
+      if (r.ok) await refresh(); // surfaces pendingSignIn immediately
       return r;
     },
     [refresh],
@@ -62,6 +61,7 @@ export function useAccount(): UseAccountResult {
     setMe(null);
     setOrgs([]);
     setEntitlement(null);
+    setPendingSignIn(null);
     setStatus("signed-out");
   }, []);
   const upgrade = useCallback((orgId: string) => rigel?.billing?.checkout(orgId) ?? Promise.resolve(null), []);
@@ -69,5 +69,5 @@ export function useAccount(): UseAccountResult {
   // Manual entitlement refetch (the provider re-emits rigel:billing:changed → this hook refetches).
   const refreshBilling = useCallback(() => rigel?.billing?.refresh() ?? Promise.resolve(null), []);
 
-  return { status, account: me?.account ?? null, me, orgs, entitlement, requestCode, verifyCode, signOut, refresh, upgrade, manageBilling, refreshBilling };
+  return { status, account: me?.account ?? null, me, orgs, entitlement, pendingSignIn, startSignIn, signOut, refresh, upgrade, manageBilling, refreshBilling };
 }

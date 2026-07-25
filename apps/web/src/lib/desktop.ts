@@ -35,7 +35,7 @@ export interface EntitlementPayload {
 export interface Account { id: string; email: string; name: string | null }
 export interface Org { id: string; kind: "personal" | "team"; name: string; role: "owner" | "admin" | "member" }
 export interface MePayload { account: Account; orgs?: Org[]; invitations?: unknown[] }
-export type VerifyResult = { ok: true; account: Account } | { ok: false; status: number };
+export interface PendingSignIn { email: string; expiresAt: number }
 
 export interface RigelBridge {
   desktop: true;
@@ -46,11 +46,15 @@ export interface RigelBridge {
   getSignupData(): Promise<{ name: string; email: string } | null>;
   openChartFile?(): Promise<{ canceled: boolean; path?: string }>;
   account: {
-    requestCode(email: string): Promise<{ ok: boolean; status: number }>;
-    verifyCode(email: string, code: string): Promise<VerifyResult>;
+    startSignIn(email: string): Promise<{ ok: boolean; status: number }>;
     me(): Promise<MePayload | null>;
     signOut(): Promise<void>;
-    status(): Promise<{ signedIn: boolean; account: Account | null; orgs: Org[] }>;
+    status(): Promise<{
+      signedIn: boolean;
+      account: Account | null;
+      orgs: Org[];
+      pendingSignIn: PendingSignIn | null;
+    }>;
     onChanged(cb: () => void): () => void;
   };
   billing?: {
