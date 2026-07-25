@@ -20,13 +20,15 @@ export function UpgradeCard() {
 
   const personalOrgId = orgs.find((o) => o.kind === "personal")?.id;
   return (
-    <UpgradeBanner
-      upgradeDisabled={!personalOrgId}
-      onUpgrade={openUpgrade}
-      onDismiss={() => {
-        try { localStorage.setItem(DISMISS_KEY, "1"); } catch { /* ignore quota / private-browsing errors */ }
-        setDismissed(true);
-      }}
-    />
+    <div className="ov-row">
+      <UpgradeBanner
+        upgradeDisabled={!personalOrgId}
+        onUpgrade={openUpgrade}
+        onDismiss={() => {
+          try { localStorage.setItem(DISMISS_KEY, "1"); } catch { /* ignore quota / private-browsing errors */ }
+          setDismissed(true);
+        }}
+      />
+    </div>
   );
 }

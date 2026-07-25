@@ -343,9 +343,7 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
           <PendingPrsCard />
         </div>
 
-        <div className="ov-row">
-          <UpgradeCard />
-        </div>
+        <UpgradeCard />
       </div>
 
       {/* Purge flow: pick → discover → typed-name confirm → execute. */}

@@ -4,11 +4,18 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import type { EntitlementPayload } from "@/lib/desktop";
 
 const entitlement = vi.hoisted(() => ({ payload: null as EntitlementPayload | null }));
-vi.mock("@/shell/useEntitlement", () => ({ useEntitlement: () => entitlement }));
-vi.mock("@/shell/UpgradeContext", () => ({ useUpgrade: () => ({ openUpgrade: vi.fn() }) }));
-vi.mock("@/shell/useAccount", () => ({
-  useAccount: () => ({ orgs: [{ id: "o1", kind: "personal", name: "Jane", role: "owner" }] }),
+const upgrade = vi.hoisted(() => ({ openUpgrade: vi.fn() }));
+const account = vi.hoisted(() => ({
+  orgs: [{ id: "o1", kind: "personal", name: "Jane", role: "owner" }] as {
+    id: string;
+    kind: "personal" | "team";
+    name: string;
+    role: "owner" | "admin" | "member";
+  }[],
 }));
+vi.mock("@/shell/useEntitlement", () => ({ useEntitlement: () => ({ payload: entitlement.payload, upgrade: vi.fn() }) }));
+vi.mock("@/shell/UpgradeContext", () => ({ useUpgrade: () => upgrade }));
+vi.mock("@/shell/useAccount", () => ({ useAccount: () => account }));
 
 import { UpgradeCard } from "./UpgradeCard";
 
@@ -20,6 +27,8 @@ describe("UpgradeCard", () => {
   beforeEach(() => {
     localStorage.clear();
     entitlement.payload = free;
+    upgrade.openUpgrade = vi.fn();
+    account.orgs = [{ id: "o1", kind: "personal", name: "Jane", role: "owner" }];
   });
 
   it("renders for a free plan", () => {
@@ -31,12 +40,14 @@ describe("UpgradeCard", () => {
     entitlement.payload = { ...free, plan: "pro" };
     const { container } = render(<UpgradeCard />);
     expect(container).toBeEmptyDOMElement();
+    expect(container.querySelector(".ov-row")).toBeNull();
   });
 
   it("renders nothing before entitlements resolve", () => {
     entitlement.payload = null;
     const { container } = render(<UpgradeCard />);
     expect(container).toBeEmptyDOMElement();
+    expect(container.querySelector(".ov-row")).toBeNull();
   });
 
   it("stays dismissed across remounts", () => {
@@ -47,5 +58,17 @@ describe("UpgradeCard", () => {
     first.unmount();
     const second = render(<UpgradeCard />);
     expect(second.container).toBeEmptyDOMElement();
+  });
+
+  it("disables the upgrade button when there is no personal org", () => {
+    account.orgs = [{ id: "t1", kind: "team", name: "Acme", role: "owner" }];
+    render(<UpgradeCard />);
+    expect(screen.getByRole("button", { name: /upgrade to pro/i })).toBeDisabled();
+  });
+
+  it("calls openUpgrade when the upgrade button is clicked", () => {
+    render(<UpgradeCard />);
+    fireEvent.click(screen.getByRole("button", { name: /upgrade to pro/i }));
+    expect(upgrade.openUpgrade).toHaveBeenCalledTimes(1);
   });
 });
