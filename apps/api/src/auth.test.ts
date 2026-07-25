@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { createHash } from "node:crypto";
 import { registerAuthRoutes } from "./auth";
 import type { AuthDb, Account, OrgMembership } from "./authDb";
+import { displayCodeFor } from "./displayCode";
 
 const sha = (v: string) => createHash("sha256").update(v).digest("hex");
 
@@ -53,6 +54,12 @@ function fakeDb() {
       if (!p) return null;
       p.confirmed = true;
       return { email: p.email };
+    },
+    async pendingLoginByConfirmHash(confirmTokenHash) {
+      const p = [...pendings].reverse().find(
+        (p) => p.confirmTokenHash === confirmTokenHash && !p.confirmed && !p.consumed && !p.expired,
+      );
+      return p ? { email: p.email, pollTokenHash: p.pollTokenHash } : null;
     },
     async consumeConfirmedLogin(pollTokenHash) {
       const p = [...pendings].reverse().find(
@@ -161,6 +168,41 @@ test("POST /auth/request returns a poll token and emails a confirm link", async 
   expect(pendings[0].email).toBe("jane@acme.com");
   expect(pendings[0].pollTokenHash).toBe(sha(body.pollToken));
   expect(pendings[0].confirmTokenHash).not.toBe(pendings[0].pollTokenHash);
+});
+
+test("POST /auth/request returns a display code derived from the poll token", async () => {
+  const { db } = fakeDb();
+  const app = new Hono();
+  registerAuthRoutes(app, {
+    db, sendLink: async () => {}, allowRequest: () => true, allowVerify: () => true,
+    allowPoll: () => true, publicUrl: "https://api.example.test",
+  });
+  const res = await app.request("/auth/request", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: "jane@acme.com" }),
+  });
+  const body = (await res.json()) as { pollToken: string; displayCode: string };
+  expect(body.displayCode).toBe(displayCodeFor(sha(body.pollToken)));
+  expect(body.displayCode).toMatch(/^[0-9A-Z]{4}-[0-9A-Z]{4}$/);
+});
+
+test("the display code is never emailed", async () => {
+  const { db } = fakeDb();
+  let sentUrl = "";
+  const app = new Hono();
+  registerAuthRoutes(app, {
+    db, sendLink: async (_e, url) => { sentUrl = url; }, allowRequest: () => true,
+    allowVerify: () => true, allowPoll: () => true, publicUrl: "https://api.example.test",
+  });
+  const res = await app.request("/auth/request", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: "jane@acme.com" }),
+  });
+  const { displayCode } = (await res.json()) as { displayCode: string };
+  expect(sentUrl).toMatch(/^https:\/\/api\.example\.test\/auth\/confirm\?t=[\w-]+$/);
+  expect(sentUrl).not.toContain(displayCode);
 });
 
 test("POST /auth/request 502s and issues no poll token when the email fails", async () => {

@@ -287,6 +287,40 @@ test("confirmPendingLogin returns null when no row matches", async () => {
   expect(await createAuthDb(pool).confirmPendingLogin("missing")).toBeNull();
 });
 
+test("pendingLoginByConfirmHash reads the row by confirm_token_hash without mutating it", async () => {
+  const { pool, calls, push } = recorder();
+  push({ email: "jane@acme.com", poll_token_hash: "poll-hash" });
+  const db = createAuthDb(pool);
+  expect(await db.pendingLoginByConfirmHash("confirm-hash")).toEqual({
+    email: "jane@acme.com",
+    pollTokenHash: "poll-hash",
+  });
+  const sql = calls[0].sql.toUpperCase();
+  expect(sql).toContain("FROM PENDING_LOGINS");
+  expect(sql).toContain("CONFIRM_TOKEN_HASH = $1");
+  expect(sql).toContain("CONFIRMED_AT IS NULL");
+  expect(sql).toContain("CONSUMED_AT IS NULL");
+  expect(sql).toContain("EXPIRES_AT > NOW()");
+  expect(sql).not.toContain("UPDATE");
+  expect(sql).not.toContain("DELETE");
+  expect(calls[0].params).toEqual(["confirm-hash"]);
+});
+
+test("pendingLoginByConfirmHash returns null when no row matches", async () => {
+  const { pool } = recorder();
+  expect(await createAuthDb(pool).pendingLoginByConfirmHash("missing")).toBeNull();
+});
+
+test("pendingLoginByConfirmHash (pg-mem) returns the live row and leaves it confirmable", async () => {
+  const pool = await pendingLoginsPool();
+  const db = createAuthDb(pool);
+  await db.createPendingLogin({ email: "jane@acme.com", pollTokenHash: "p", confirmTokenHash: "c", ttlSeconds: 86_400 });
+  expect(await db.pendingLoginByConfirmHash("c")).toEqual({ email: "jane@acme.com", pollTokenHash: "p" });
+  expect(await db.pendingLoginByConfirmHash("c")).toEqual({ email: "jane@acme.com", pollTokenHash: "p" });
+  expect(await db.confirmPendingLogin("c")).toEqual({ email: "jane@acme.com" });
+  expect(await db.pendingLoginByConfirmHash("c")).toBeNull();
+});
+
 test("consumeConfirmedLogin matches by poll_token_hash, requires confirmed+unconsumed, and returns the email", async () => {
   const { pool, calls, push } = recorder();
   push({ email: "jane@acme.com" });

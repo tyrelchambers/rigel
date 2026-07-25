@@ -3,6 +3,7 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { sha, bearer } from "./authToken";
 import type { AuthDb } from "./authDb";
 import { parseRequestBody, parseVerifyBody } from "./authValidate";
+import { displayCodeFor } from "./displayCode";
 
 export interface AuthDeps {
   db: AuthDb;
@@ -54,7 +55,7 @@ export function registerAuthRoutes(app: Hono, deps: AuthDeps): void {
       await db.invalidatePendingLogins(email).catch(() => {}); // best-effort; without the email the row is unconsumable anyway
       return c.json({ error: "could not send link" }, 502);
     }
-    return c.json({ pollToken });
+    return c.json({ pollToken, displayCode: displayCodeFor(sha(pollToken)) });
   });
 
   app.post("/auth/verify", async (c) => {

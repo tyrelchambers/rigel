@@ -27,6 +27,7 @@ export interface AuthDb {
   ): Promise<void>;
   invalidatePendingLogins(email: string): Promise<void>;
   confirmPendingLogin(confirmTokenHash: string): Promise<{ email: string } | null>;
+  pendingLoginByConfirmHash(confirmTokenHash: string): Promise<{ email: string; pollTokenHash: string } | null>;
   consumeConfirmedLogin(pollTokenHash: string): Promise<{ email: string } | null>;
   pendingLoginActive(pollTokenHash: string): Promise<boolean>;
   cleanupExpiredPendingLogins(): Promise<void>;
@@ -256,6 +257,17 @@ export function createAuthDb(pool: Pool): AuthDb {
       );
       const row = r.rows[0] as { email: string } | undefined;
       return row ? { email: row.email } : null;
+    },
+    async pendingLoginByConfirmHash(confirmTokenHash) {
+      const r = await pool.query(
+        `SELECT email, poll_token_hash FROM pending_logins
+          WHERE confirm_token_hash = $1 AND confirmed_at IS NULL
+            AND consumed_at IS NULL AND expires_at > now()
+          LIMIT 1`,
+        [confirmTokenHash],
+      );
+      const row = r.rows[0] as { email: string; poll_token_hash: string } | undefined;
+      return row ? { email: row.email, pollTokenHash: row.poll_token_hash } : null;
     },
     async consumeConfirmedLogin(pollTokenHash) {
       const r = await pool.query(
