@@ -13,7 +13,6 @@ export interface AuthDeps {
   publicUrl: string;
 }
 
-const CODE_TTL_SECONDS = 600; // 10 minutes — legacy code path, removed in a later task
 const LOGIN_TTL_SECONDS = 24 * 60 * 60; // 24 hours
 
 function clientIp(c: { req: { header: (k: string) => string | undefined } }): string {
@@ -52,7 +51,7 @@ export function registerAuthRoutes(app: Hono, deps: AuthDeps): void {
       await sendLink(email, `${publicUrl}/auth/confirm?t=${confirmToken}`);
     } catch (e) {
       console.error("auth: sendLink failed", e);
-      await db.invalidatePendingLogins(email); // no email means the row can never be confirmed
+      await db.invalidatePendingLogins(email).catch(() => {}); // best-effort; without the email the row is unconsumable anyway
       return c.json({ error: "could not send link" }, 502);
     }
     return c.json({ pollToken });
