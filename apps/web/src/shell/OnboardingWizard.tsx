@@ -219,7 +219,7 @@ function OptionalInstalls() {
       </span>
       <div style={tool}>
         <InstallRow
-          icon={<FontAwesomeIcon icon={faRobot} className="size-[15px]" style={{ color: "var(--accent-primary)" }} />}
+          icon={<FontAwesomeIcon icon={faRobot} className="size-[16px] text-[var(--fg-secondary)]" />}
           title="Assistant agent"
           desc="An in-cluster agent that watches for problems and proposes remediations."
           install={assistant}
@@ -229,7 +229,7 @@ function OptionalInstalls() {
           <>
             <div style={hairline} />
             <InstallRow
-              icon={<FontAwesomeIcon icon={faWaveform} className="size-[15px]" style={{ color: "var(--accent-primary)" }} />}
+              icon={<FontAwesomeIcon icon={faWaveform} className="size-[16px] text-[var(--fg-secondary)]" />}
               title="metrics-server"
               desc="Enables live node CPU and memory. On homelab clusters the install also adds --kubelet-insecure-tls."
               install={metricsServer}
@@ -249,6 +249,9 @@ interface InstallState {
   error: Error | null;
 }
 
+/** One optional install. The description sits beside the icon under the title,
+ *  not on a full-width line of its own below the whole row, which is what made
+ *  a single optional extra as tall as the form above it. */
 function InstallRow({
   icon,
   title,
@@ -263,28 +266,31 @@ function InstallRow({
   onInstall: () => void;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "12px 0" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        {icon}
-        <span className="text-xs" style={{ fontWeight: 600, color: "var(--fg-primary)" }}>{title}</span>
-        <div style={{ flex: 1 }} />
-        {install.isSuccess ? (
-          <span className="text-2xs" style={{ display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 600, color: "var(--status-running)" }}>
-            <FontAwesomeIcon icon={faCheck} className="size-[12px]" /> Done
-          </span>
-        ) : (
-          <button
-            type="button"
-            disabled={install.isPending}
-            onClick={onInstall}
-            style={{ ...ghostBtn, opacity: install.isPending ? 0.6 : 1 }}
-          >
-            {install.isPending ? "Installing…" : "Install"}
-          </button>
-        )}
+    <div className="flex items-center justify-between gap-3.5 py-3.5">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <span className="flex size-[34px] shrink-0 items-center justify-center rounded-lg bg-white/[0.05]">
+          {icon}
+        </span>
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="text-sm font-semibold text-[var(--fg-primary)]">{title}</span>
+          <span className="text-xs leading-snug text-[var(--fg-secondary)]">{desc}</span>
+          {install.isError && <span style={errText}>{install.error?.message}</span>}
+        </span>
       </div>
-      <span className="text-xs" style={{ color: "var(--fg-secondary)", lineHeight: 1.45 }}>{desc}</span>
-      {install.isError && <span style={errText}>{install.error?.message}</span>}
+      {install.isSuccess ? (
+        <span className="inline-flex shrink-0 items-center gap-1.5 text-2xs font-semibold text-[var(--status-running)]">
+          <FontAwesomeIcon icon={faCheck} className="size-[12px]" /> Done
+        </span>
+      ) : (
+        <button
+          type="button"
+          disabled={install.isPending}
+          onClick={onInstall}
+          style={{ ...ghostBtn, opacity: install.isPending ? 0.6 : 1, flexShrink: 0 }}
+        >
+          {install.isPending ? "Installing…" : "Install"}
+        </button>
+      )}
     </div>
   );
 }
@@ -347,13 +353,14 @@ const footer: React.CSSProperties = {
   padding: "16px 26px 20px 26px",
   width: "100%",
 };
+// The rows carry their own vertical padding, so the card only insets them
+// horizontally. Padding on both was what doubled the card's height.
 const tool: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
-  gap: 8,
-  padding: 14,
+  padding: "0 16px",
   background: "var(--surface-sunken)",
-  border: "1px solid #26272B",
+  border: "1px solid var(--border-subtle)",
   borderRadius: 10,
 };
 const primaryBtn: React.CSSProperties = {
