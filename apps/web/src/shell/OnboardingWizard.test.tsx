@@ -61,7 +61,8 @@ function renderWizard(agents?: AgentsResponse, metricsAvailable?: boolean, accou
   return { onClose, onLeave, account, container };
 }
 
-const skip = () => fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
+const next = () => fireEvent.click(screen.getByRole("button", { name: /^next →$/i }));
+const done = () => fireEvent.click(screen.getByRole("button", { name: /^done$/i }));
 const currentStep = () => document.querySelector('[aria-current="step"]');
 const pending = { email: "jane@acme.com", expiresAt: Date.now() + 1000, displayCode: "4K7Q-9WXZ" };
 
@@ -72,7 +73,7 @@ describe("OnboardingWizard AI-agent step", () => {
 
   it("renders the real Agents picker on the AI step, not a Claude-token field", () => {
     renderWizard({ activeAgentId: "claude", agents: [claude, codex] });
-    fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
+    next();
 
     expect(screen.getByText(/connect your ai agent/i)).toBeInTheDocument();
     expect(screen.getByText("Claude Code")).toBeInTheDocument();
@@ -87,7 +88,7 @@ describe("OnboardingWizard AI-agent step", () => {
   it("shows the Provider connected pill when the active agent is connected", () => {
     // Codex is active + connected → the step head shows the status pill.
     renderWizard({ activeAgentId: "codex", agents: [claude, codex] });
-    fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
+    next();
     expect(screen.getByText(/provider connected/i)).toBeInTheDocument();
   });
 
@@ -95,18 +96,18 @@ describe("OnboardingWizard AI-agent step", () => {
     // Claude is active but notSignedIn; codex is connected but NOT active. The
     // pill tracks the ACTIVE agent, so "any agent connected" must not light it.
     renderWizard({ activeAgentId: "claude", agents: [claude, codex] });
-    fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
+    next();
     expect(screen.getByText("Codex")).toBeInTheDocument();
     expect(screen.queryByText(/provider connected/i)).not.toBeInTheDocument();
   });
 
-  it("keeps the AI step skippable (Skip advances past it without connecting)", () => {
+  it("keeps the AI step optional (Next advances past it without connecting)", () => {
     renderWizard({ activeAgentId: "claude", agents: [claude, codex] });
-    fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
+    next();
 
     expect(document.querySelector('[aria-current="step"]')).toHaveTextContent("AI agent");
 
-    fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
+    next();
     expect(document.querySelector('[aria-current="step"]')).toHaveTextContent("Email");
   });
 });
@@ -154,22 +155,25 @@ describe("OnboardingWizard steps", () => {
     // bodies are all mounted (hidden), so a body query proves nothing here.
     expect(currentStep()).toHaveTextContent("Cluster");
 
-    skip();
+    next();
     expect(currentStep()).toHaveTextContent("AI agent");
     expect(screen.getByText(/connect your ai agent/i)).toBeInTheDocument();
 
-    skip();
+    next();
     expect(currentStep()).toHaveTextContent("Email");
     expect(screen.getByText("Sign in to Rigel")).toBeInTheDocument();
 
-    skip();
+    // The last step swaps Next for Done, so there is exactly one way onward at
+    // every point and never two controls doing the same thing.
+    expect(screen.queryByRole("button", { name: /^next →$/i })).not.toBeInTheDocument();
+    done();
     expect(onClose).toHaveBeenCalledOnce();
   });
 
   it("drops the Compose and notifications link farm and the upsell", () => {
     renderWizard();
-    fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
+    next();
+    next();
     expect(screen.queryByText(/compose stack/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/set up notifications/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/free plan/i)).not.toBeInTheDocument();
@@ -177,14 +181,14 @@ describe("OnboardingWizard steps", () => {
 
   it("offers the Assistant and metrics-server installs as an optional row on the AI step", () => {
     renderWizard(undefined, false);
-    fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
+    next();
     expect(screen.getByText("Assistant agent")).toBeInTheDocument();
     expect(screen.getByText("metrics-server")).toBeInTheDocument();
   });
 
   it("hides metrics-server when the cluster already has it", () => {
     renderWizard(undefined, true);
-    fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
+    next();
     expect(screen.getByText("Assistant agent")).toBeInTheDocument();
     expect(screen.queryByText("metrics-server")).not.toBeInTheDocument();
   });
@@ -208,8 +212,8 @@ describe("OnboardingWizard finishing is explicit", () => {
     // Done only exists once a sign-in is pending, so the wizard's primary is
     // never competing with SignInFlow's own "Send sign-in link" primary.
     const { onClose, onLeave } = renderWizard(undefined, undefined, fakeAccount({ pendingSignIn: pending }));
-    skip();
-    skip();
+    next();
+    next();
     fireEvent.click(screen.getByRole("button", { name: /^done$/i }));
     expect(onClose).toHaveBeenCalledOnce();
     expect(onLeave).not.toHaveBeenCalled();
@@ -226,8 +230,8 @@ describe("OnboardingWizard finishing is explicit", () => {
     // A stray Enter that reached onClose would set rigel_onboarded and retire
     // first-run setup for good, so the last step must ignore it entirely.
     const { onClose } = renderWizard();
-    skip();
-    skip();
+    next();
+    next();
     (document.activeElement as HTMLElement | null)?.blur();
     fireEvent.keyDown(document, { key: "Enter" });
     expect(onClose).not.toHaveBeenCalled();
@@ -240,28 +244,40 @@ describe("OnboardingWizard finishing is explicit", () => {
   });
 });
 
-// One primary at a time on the last step. The two candidates are SignInFlow's
-// "Send sign-in link" (in the body) and the footer's "Done"; exactly one of them
-// is on screen, keyed off account.pendingSignIn.
+// One primary at a time on the last step. Both candidates are on screen at once
+// now that Done is unconditional, so the rule is carried by weight rather than
+// presence: Done is styled secondary until SignInFlow gives up its own primary.
+// The two buttons encode "primary" differently: the wizard footer is inline
+// styled, SignInFlow uses the shadcn Button's default variant.
+const isPrimary = (b: HTMLElement) =>
+  b.style.background.includes("accent-primary") || b.classList.contains("bg-primary");
+
 describe("OnboardingWizard last step has a single primary", () => {
   beforeEach(() => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
-  it("hides Done until a sign-in is pending, leaving Send sign-in link the only primary", () => {
+  it("keeps Done secondary until a sign-in is pending, leaving Send sign-in link the only primary", () => {
     renderWizard(undefined, undefined, fakeAccount({ pendingSignIn: null }));
-    skip();
-    skip();
+    next();
+    next();
     expect(currentStep()).toHaveTextContent("Email");
 
-    // Done would set the onboarded flag with no email captured and no sign-in
-    // in flight, permanently retiring setup. It must not be reachable yet.
-    expect(screen.queryByRole("button", { name: /^done$/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /send sign-in link/i })).toBeInTheDocument();
-
-    // Still leavable and still skippable.
-    expect(screen.getByRole("button", { name: /^skip$/i })).toBeInTheDocument();
+    expect(isPrimary(screen.getByRole("button", { name: /send sign-in link/i }))).toBe(true);
+    expect(isPrimary(screen.getByRole("button", { name: /^done$/i }))).toBe(false);
     expect(screen.getByRole("button", { name: /^back$/i })).toBeInTheDocument();
+  });
+
+  // Done is the ONLY control that marks setup complete: the X deliberately
+  // leaves it unset so onboarding can reopen. Gating Done on a sign-in would
+  // strand anyone who declines to leave an email, reopening setup every launch.
+  it("finishes without an email, with no sign-in started", () => {
+    const { onClose, onLeave } = renderWizard(undefined, undefined, fakeAccount({ pendingSignIn: null }));
+    next();
+    next();
+    done();
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(onLeave).not.toHaveBeenCalled();
   });
 
   it("keeps Done once the sign-in succeeded and the pending record cleared", () => {
@@ -273,22 +289,38 @@ describe("OnboardingWizard last step has a single primary", () => {
       undefined,
       fakeAccount({ status: "signed-in", pendingSignIn: null }),
     );
-    skip();
-    skip();
+    next();
+    next();
     expect(screen.queryByRole("button", { name: /send sign-in link/i })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^done$/i }));
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("shows Done once a sign-in is pending, when the body primary is gone", () => {
+  it("promotes Done to primary once a sign-in is pending, when the body primary is gone", () => {
     renderWizard(undefined, undefined, fakeAccount({ pendingSignIn: pending }));
-    skip();
-    skip();
+    next();
+    next();
 
     expect(screen.getByText("Check your inbox")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /send sign-in link/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^done$/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^skip$/i })).toBeInTheDocument();
+    expect(isPrimary(screen.getByRole("button", { name: /^done$/i }))).toBe(true);
+  });
+});
+
+// Skip is gone from every step: on the earlier ones it duplicated Next exactly
+// (same handler), and on the last one Done absorbed it.
+describe("OnboardingWizard has no Skip control", () => {
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it("offers no Skip on any step", () => {
+    renderWizard();
+    for (const label of ["Cluster", "AI agent", "Email"]) {
+      expect(currentStep()).toHaveTextContent(label);
+      expect(screen.queryByRole("button", { name: /^skip$/i })).not.toBeInTheDocument();
+      if (label !== "Email") next();
+    }
   });
 });
 
@@ -299,8 +331,8 @@ describe("OnboardingWizard keeps step state across navigation", () => {
 
   it("keeps a typed email across a Back then Next round trip", () => {
     renderWizard();
-    skip();
-    skip();
+    next();
+    next();
     fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: "jane@acme.com" } });
 
     fireEvent.click(screen.getByRole("button", { name: /^back$/i }));

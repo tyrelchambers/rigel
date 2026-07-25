@@ -1,7 +1,8 @@
 /**
  * First-run setup. The single onboarding surface: connect a cluster, connect an
  * AI agent (with the optional in-cluster installs), then leave an email for a
- * sign-in link. Every step is skippable, and nothing here blocks the app.
+ * sign-in link. No step is required: Next moves on without doing the step, and
+ * Done finishes whether or not an email was left. Nothing here blocks the app.
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -133,20 +134,21 @@ export function OnboardingWizard({
               </button>
             )}
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button type="button" onClick={() => (isLast ? onClose() : setI((n) => n + 1))} style={ghostBtn}>
-              Skip
-            </button>
-            {!isLast && (
+          {/* One control per step. Next carries the earlier steps, and it does
+              not require the step to have been done, which is what makes each
+              one optional. Done always finishes, with or without an email: it
+              is the only control that marks setup complete, so gating it on a
+              sign-in would trap anyone who declines to leave one.
+              One primary at a time: while SignInFlow still offers its own "Send
+              sign-in link" primary, Done stays secondary rather than competing
+              with it, and takes over as the primary once the link is on its way. */}
+          <div>
+            {isLast ? (
+              <button type="button" onClick={onClose} style={signInStarted ? primaryBtn : ghostBtn}>
+                Done
+              </button>
+            ) : (
               <button type="button" onClick={() => setI((n) => n + 1)} style={primaryBtn}>Next →</button>
-            )}
-            {/* One primary at a time. Until the sign-in has started, SignInFlow's
-                own "Send sign-in link" is the primary, so the footer offers no
-                competing one: finishing here would set the onboarded flag with
-                nothing captured. Once the link is sent (or confirmed) SignInFlow
-                has no primary of its own and Done becomes the only one. */}
-            {isLast && signInStarted && (
-              <button type="button" onClick={onClose} style={primaryBtn}>Done</button>
             )}
           </div>
         </div>
