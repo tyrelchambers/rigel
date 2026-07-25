@@ -277,6 +277,8 @@ test("confirmPendingLogin matches by confirm_token_hash, guarded, and returns th
   expect(sql).toContain("CONSUMED_AT IS NULL");
   expect(sql).toContain("EXPIRES_AT > NOW()");
   expect(sql).toContain("RETURNING EMAIL");
+  expect(sql).not.toContain("SELECT");
+  expect(sql).not.toContain("WHERE ID =");
   expect(calls[0].params).toEqual(["confirm-hash"]);
 });
 
@@ -297,6 +299,8 @@ test("consumeConfirmedLogin matches by poll_token_hash, requires confirmed+uncon
   expect(sql).toContain("CONSUMED_AT IS NULL");
   expect(sql).toContain("EXPIRES_AT > NOW()");
   expect(sql).toContain("RETURNING EMAIL");
+  expect(sql).not.toContain("SELECT");
+  expect(sql).not.toContain("WHERE ID =");
   expect(calls[0].params).toEqual(["poll-hash"]);
 });
 
