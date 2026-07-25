@@ -19,60 +19,80 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 const ENDPOINT = "https://api.test";
 
-test("requestCode POSTs the email and returns the status", async () => {
-  const calls: { url: string; init?: RequestInit }[] = [];
-  const fetchFn = (async (url: string, init?: RequestInit) => { calls.push({ url, init }); return jsonResponse({ ok: true }); }) as typeof fetch;
-  const client = createAccountClient({ store: memStore(), fetchFn, endpoint: ENDPOINT });
-  const r = await client.requestCode("jane@acme.com");
-  expect(r).toEqual({ ok: true, status: 200 });
-  expect(calls[0].url).toBe(`${ENDPOINT}/auth/request`);
-  expect(JSON.parse(calls[0].init!.body as string)).toEqual({ email: "jane@acme.com" });
-});
-
-test("requestCode surfaces a non-2xx status without throwing", async () => {
-  const fetchFn = (async () => jsonResponse({ error: "rate limited" }, 429)) as typeof fetch;
-  const client = createAccountClient({ store: memStore(), fetchFn, endpoint: ENDPOINT });
-  expect(await client.requestCode("a@b.co")).toEqual({ ok: false, status: 429 });
-});
-
-test("verifyCode stores the token and returns the account on 200", async () => {
-  const store = memStore();
-  const fetchFn = (async () => jsonResponse({ token: "tok-xyz", account: { id: "1", email: "a@b.co", name: "Jane" } })) as typeof fetch;
-  const client = createAccountClient({ store, fetchFn, endpoint: ENDPOINT });
-  const r = await client.verifyCode("a@b.co", "123456");
-  expect(r).toEqual({ ok: true, account: { id: "1", email: "a@b.co", name: "Jane" } });
-  expect(store.value).toBe("tok-xyz");
-});
-
-test("verifyCode returns the status and stores no token on failure", async () => {
-  const store = memStore();
-  const fetchFn = (async () => jsonResponse({ error: "invalid code" }, 401)) as typeof fetch;
-  const client = createAccountClient({ store, fetchFn, endpoint: ENDPOINT });
-  expect(await client.verifyCode("a@b.co", "000000")).toEqual({ ok: false, status: 401 });
-  expect(store.value).toBeNull();
-});
-
-test("verifyLink stores the token and returns the account on 200", async () => {
+test("startSignIn POSTs the email and returns the poll token plus display code", async () => {
   const store = memStore();
   const calls: { url: string; init?: RequestInit }[] = [];
   const fetchFn = (async (url: string, init?: RequestInit) => {
     calls.push({ url, init });
-    expect(url).toBe(`${ENDPOINT}/auth/verify-link`);
-    return jsonResponse({ token: "tok-link", account: { id: "1", email: "a@b.co", name: "Jane" } });
+    return jsonResponse({ pollToken: "poll-abc", displayCode: "WX7Q" });
   }) as typeof fetch;
   const client = createAccountClient({ store, fetchFn, endpoint: ENDPOINT });
-  const r = await client.verifyLink("linktoken123");
-  expect(r).toEqual({ ok: true, account: { id: "1", email: "a@b.co", name: "Jane" } });
-  expect(store.value).toBe("tok-link");
-  expect(JSON.parse(calls[0].init!.body as string)).toEqual({ token: "linktoken123" });
+  const r = await client.startSignIn("jane@acme.com");
+  expect(r).toEqual({ ok: true, status: 200, pollToken: "poll-abc", displayCode: "WX7Q" });
+  expect(calls[0].url).toBe(`${ENDPOINT}/auth/request`);
+  expect(JSON.parse(calls[0].init!.body as string)).toEqual({ email: "jane@acme.com" });
+  expect(store.value).toBeNull(); // no bearer token until the sign-in is confirmed
 });
 
-test("verifyLink returns the status and stores no token on failure", async () => {
+test("startSignIn surfaces a non-2xx status without throwing", async () => {
+  const fetchFn = (async () => jsonResponse({ error: "rate limited" }, 429)) as typeof fetch;
+  const client = createAccountClient({ store: memStore(), fetchFn, endpoint: ENDPOINT });
+  expect(await client.startSignIn("a@b.co")).toEqual({ ok: false, status: 429 });
+});
+
+test("startSignIn fails when the response omits displayCode (the CSRF guard must be armed)", async () => {
+  const fetchFn = (async () => jsonResponse({ pollToken: "poll-abc" })) as typeof fetch;
+  const client = createAccountClient({ store: memStore(), fetchFn, endpoint: ENDPOINT });
+  expect(await client.startSignIn("a@b.co")).toEqual({ ok: false, status: 200 });
+});
+
+test("startSignIn fails when the response omits pollToken", async () => {
+  const fetchFn = (async () => jsonResponse({ displayCode: "WX7Q" })) as typeof fetch;
+  const client = createAccountClient({ store: memStore(), fetchFn, endpoint: ENDPOINT });
+  expect(await client.startSignIn("a@b.co")).toEqual({ ok: false, status: 200 });
+});
+
+test("poll stores the bearer token and returns the account on confirmation", async () => {
   const store = memStore();
-  const fetchFn = (async () => jsonResponse({ error: "invalid or expired link" }, 401)) as typeof fetch;
+  const calls: { url: string; init?: RequestInit }[] = [];
+  const fetchFn = (async (url: string, init?: RequestInit) => {
+    calls.push({ url, init });
+    return jsonResponse({ status: "confirmed", token: "tok-xyz", account: { id: "1", email: "a@b.co", name: "Jane" } });
+  }) as typeof fetch;
   const client = createAccountClient({ store, fetchFn, endpoint: ENDPOINT });
-  expect(await client.verifyLink("nope")).toEqual({ ok: false, status: 401 });
+  const r = await client.poll("poll-abc");
+  expect(r).toEqual({ status: "confirmed", account: { id: "1", email: "a@b.co", name: "Jane" } });
+  expect(store.value).toBe("tok-xyz");
+  expect(calls[0].url).toBe(`${ENDPOINT}/auth/poll`);
+  expect(JSON.parse(calls[0].init!.body as string)).toEqual({ pollToken: "poll-abc" });
+});
+
+test("poll reports pending and stores nothing while the user has not confirmed", async () => {
+  const store = memStore();
+  const fetchFn = (async () => jsonResponse({ status: "pending" })) as typeof fetch;
+  const client = createAccountClient({ store, fetchFn, endpoint: ENDPOINT });
+  expect(await client.poll("poll-abc")).toEqual({ status: "pending" });
   expect(store.value).toBeNull();
+});
+
+test("poll reports expired on 404", async () => {
+  const store = memStore();
+  const fetchFn = (async () => jsonResponse({ status: "expired" }, 404)) as typeof fetch;
+  const client = createAccountClient({ store, fetchFn, endpoint: ENDPOINT });
+  expect(await client.poll("poll-abc")).toEqual({ status: "expired" });
+  expect(store.value).toBeNull();
+});
+
+test("poll reports pending on a server error, so a blip never ends a live sign-in", async () => {
+  const fetchFn = (async () => jsonResponse({ error: "boom" }, 500)) as typeof fetch;
+  const client = createAccountClient({ store: memStore(), fetchFn, endpoint: ENDPOINT });
+  expect(await client.poll("poll-abc")).toEqual({ status: "pending" });
+});
+
+test("poll reports pending when fetch throws", async () => {
+  const fetchFn = (async () => { throw new Error("offline"); }) as typeof fetch;
+  const client = createAccountClient({ store: memStore(), fetchFn, endpoint: ENDPOINT });
+  expect(await client.poll("poll-abc")).toEqual({ status: "pending" });
 });
 
 test("me sends the bearer and returns the full payload", async () => {

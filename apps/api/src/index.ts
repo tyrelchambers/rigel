@@ -27,7 +27,7 @@ const FREE_BETA = /^(1|true|yes|on)$/i.test(process.env.RIGEL_FREE_BETA ?? "");
 if (!APP_KEY) { console.error("APP_KEY is required"); process.exit(1); }
 if (!DATABASE_URL) { console.error("DATABASE_URL is required"); process.exit(1); }
 if (!KIT_API_KEY) console.warn("KIT_API_KEY not set — signups will not sync to Kit");
-if (!RESEND_API_KEY) console.warn("RESEND_API_KEY not set — auth code emails will fail");
+if (!RESEND_API_KEY) console.warn("RESEND_API_KEY not set — sign-in link emails will fail");
 if (!STRIPE_SECRET_KEY) console.warn("[api] STRIPE_SECRET_KEY unset — /entitlements returns free for everyone");
 if (!STRIPE_PRICE_ID) console.warn("[api] STRIPE_PRICE_ID unset — /billing/checkout will fail to create a session");
 if (!STRIPE_PUBLISHABLE_KEY) console.warn("[api] STRIPE_PUBLISHABLE_KEY unset — /billing/checkout returns no usable key, the client cannot mount Embedded Checkout");
@@ -40,10 +40,17 @@ await ensureAuthSchema(pool);
 const allow = createRateLimiter(30, 60_000); // 30 req/min per IP
 const notify = createKitNotifier({ apiKey: KIT_API_KEY, tagId: KIT_TAG_ID });
 const authDb = createAuthDb(pool);
-const sendCode = createResendSender({ apiKey: RESEND_API_KEY, from: RESEND_FROM });
+const { sendLink, sendSignInNotice } = createResendSender({ apiKey: RESEND_API_KEY, from: RESEND_FROM });
 // Tighter, separate limiters (namespaced keys prevent collision with /signups).
-const allowRequest = createRateLimiter(5, 10 * 60_000);  // 5 code requests / 10 min per key
-const allowVerify = createRateLimiter(10, 10 * 60_000);  // 10 verify attempts / 10 min per key
+const allowRequest = createRateLimiter(5, 10 * 60_000);  // 5 link requests / 10 min per key
+const allowVerify = createRateLimiter(10, 10 * 60_000);  // 10 confirm attempts / 10 min per key
+// The desktop polls every 2s for the first 2 min, then every 15s, until the 15 min TTL.
+// Keyed by poll-token hash, so one app instance cannot starve another.
+const allowPoll = createRateLimiter(240, 10 * 60_000);
+// Per-IP gate for /auth/poll, checked BEFORE the token key so a flood of random
+// tokens cannot grow the limiter's map. Generous enough for a whole office
+// behind one egress IP; each in-flight sign-in spends ~112 requests.
+const allowPollIp = createRateLimiter(2000, 10 * 60_000);
 const stripeAdapter = STRIPE_SECRET_KEY
   ? createStripeAdapter(STRIPE_SECRET_KEY)
   : makeStripeAdapter({ entitlements: { activeEntitlements: { list: async () => ({ data: [] }) } } } as never); // unset key → everyone free
@@ -82,7 +89,7 @@ const app = createApp({
   upsert: (s) => upsertSignup(pool, s),
   allow,
   notify,
-  auth: { db: authDb, sendCode, allowRequest, allowVerify },
+  auth: { db: authDb, sendLink, sendSignInNotice, allowRequest, allowVerify, allowPoll, allowPollIp, publicUrl: BILLING_ENDPOINT },
   billing: { db: authDb, resolve, stripe: stripeAdapter, priceId: STRIPE_PRICE_ID, publishableKey: STRIPE_PUBLISHABLE_KEY, endpoint: BILLING_ENDPOINT },
   agent: {
     db: authDb,

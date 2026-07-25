@@ -1,140 +1,134 @@
 /**
- * First-run setup. Auto-shown after login when no AI agent is connected
- * (dismissible; re-openable from Settings via the "rigel:open-setup" event). A
- * guided front-end over existing flows: connect an AI agent through the real
- * Agents picker and install the Assistant (with a metrics-server nudge when it's
- * missing), then a final Next-steps panel pointing at the heavier do-it-in-the-
- * real-panel actions (Compose import, notifications). Every step is skippable.
+ * First-run setup. The single onboarding surface: connect a cluster, connect an
+ * AI agent (with the optional in-cluster installs), then leave an email for a
+ * sign-in link. No step is required: Next moves on without doing the step, and
+ * Done finishes whether or not an email was left. Nothing here blocks the app.
  */
-import { useEffect, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCheck, faRobot, faWaveform, faBell, faFileImport, faXmark } from "@awesome.me/kit-6050953220/icons/classic/solid";
-import {
-  useAgents,
-  useAssistantAction,
-  useNodeMetrics,
-  useInstallMetricsServer,
-} from "@/lib/api";
+import { faCheck, faRobot, faWaveform, faXmark } from "@awesome.me/kit-6050953220/icons/classic/solid";
+import { useAgents, useAssistantAction, useNodeMetrics, useInstallMetricsServer } from "@/lib/api";
 import { Stepper } from "./onboarding/Stepper";
-import { ChannelGlyph, CHANNEL_GLYPH_COLORS, type ChannelGlyphId } from "@/panels/settings/channelGlyphs";
+import { ClusterStep } from "./onboarding/ClusterStep";
+import { WizardHostContext } from "./onboarding/wizardHost";
 import { AgentsTab } from "@/panels/settings/agents/AgentsTab";
-import { UpgradeBanner } from "./billing/UpgradeBanner";
-import { useEntitlement } from "./useEntitlement";
-import { useAccount } from "./useAccount";
-import { useUpgrade } from "./UpgradeContext";
+import { SignInFlow } from "./SignInFlow";
+import type { UseAccountResult } from "./useAccount";
 
-export function OnboardingWizard({ onClose, onLeave }: { onClose: () => void; onLeave: () => void }) {
-  const navigate = useNavigate();
+export function OnboardingWizard({
+  account,
+  onClose,
+  onLeave,
+}: {
+  account: UseAccountResult;
+  onClose: () => void;
+  onLeave: () => void;
+}) {
   const [i, setI] = useState(0);
+  // A sub-flow (create a cluster, connect one, import a kubeconfig) takes over
+  // the step: it describes itself in the head and owns the footer's action.
+  const [subflow, setSubflowOpen] = useState(false);
+  const [subflowOwnsAction, setSubflowOwnsAction] = useState(false);
+  const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
+  const host = useMemo(
+    () => ({
+      actionSlot,
+      setSubflow: (open: boolean, ownsAction: boolean) => {
+        setSubflowOpen(open);
+        setSubflowOwnsAction(open && ownsAction);
+      },
+    }),
+    [actionSlot],
+  );
   const { data: agentsData } = useAgents();
   const activeAgent = agentsData?.agents.find((a) => a.id === agentsData?.activeAgentId);
   const agentConnected = activeAgent?.connection === "connected";
 
-  const { payload } = useEntitlement();
-  const { orgs } = useAccount();
-  const { openUpgrade } = useUpgrade();
-  const personalOrgId = orgs.find((o) => o.kind === "personal")?.id;
-  const [upsellDismissed, setUpsellDismissed] = useState(false);
-  const showUpsell = payload != null && payload.plan !== "pro" && !upsellDismissed;
-
-  const steps: { label: string; title?: string; description?: string; status?: ReactNode; node: ReactNode }[] = [
+  const steps: { label: string; title: string; description: string; status?: ReactNode; node: ReactNode }[] = [
+    {
+      label: "Cluster",
+      title: "Connect a cluster",
+      description:
+        "Rigel works with any Kubernetes cluster. Pick how you want to connect, and you can add more later from the cluster rail.",
+      node: <ClusterStep />,
+    },
     {
       label: "AI agent",
       title: "Connect your AI agent",
       description:
         "Pick which provider Rigel uses and connect it with an existing subscription or an API key. Your credentials never leave your machine.",
       status: agentConnected ? <StatusPill label="Provider connected" /> : undefined,
-      node: <AgentStep />,
-    },
-    {
-      label: "Assistant",
       node: (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <AssistantCard />
-          <MetricsNudge />
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          <AgentsTab hideHeading />
+          <OptionalInstalls />
         </div>
       ),
     },
     {
-      label: "Next steps",
-      title: "You're all set",
-      description: "Here are the bigger things to set up whenever you're ready. They live in the app, so you can come back anytime.",
-      node: (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <ToolCard
-            icon={<FontAwesomeIcon icon={faFileImport} className="size-[15px]" style={{ color: "var(--accent-primary)" }} />}
-            title="Import a Compose stack"
-            desc="Convert a docker-compose.yml into Kubernetes manifests you can review and apply in the Compose panel."
-            action={
-              <button type="button" onClick={() => { onLeave(); navigate("/compose"); }} style={ghostBtn}>
-                Import
-              </button>
-            }
-          />
-          <ToolCard
-            icon={<FontAwesomeIcon icon={faBell} className="size-[15px]" style={{ color: "var(--accent-primary)" }} />}
-            title="Set up notifications"
-            desc="Get cluster alerts where you already are — no new dashboard to babysit."
-            action={
-              <button type="button" onClick={() => { onLeave(); navigate("/settings"); }} style={ghostBtn}>
-                Open Settings
-              </button>
-            }
-          >
-            <ChannelChips />
-          </ToolCard>
-          {showUpsell && (
-            <UpgradeBanner
-              upgradeDisabled={!personalOrgId}
-              onUpgrade={openUpgrade}
-              onDismiss={() => setUpsellDismissed(true)}
-            />
-          )}
-        </div>
-      ),
+      label: "Email",
+      title: "Sign in to Rigel",
+      description:
+        "Enter your email and we'll send you a sign-in link. Open it whenever you like and Rigel signs itself in, even if you're already busy in the app.",
+      node: <SignInFlow account={account} hideHeading />,
     },
   ];
 
   const isFirst = i === 0;
   const isLast = i === steps.length - 1;
+  // A successful sign-in clears pendingSignIn and flips status in the same
+  // refresh, so either one means the user is past the email form.
+  const signInStarted = account.pendingSignIn != null || account.status === "signed-in";
 
-  // Enter advances to the next step (or finishes on the last). It yields to the
-  // focused control so it never discards typed input or double-fires: a focused
-  // input/textarea/button/link handles Enter itself.
+  // Enter advances to the next step. It yields to the focused control so it
+  // never discards typed input or double-fires: a focused input/textarea/
+  // button/link handles Enter itself. It never FINISHES, because finishing
+  // writes the onboarded flag and first run would not come back on its own.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key !== "Enter" || e.isComposing) return;
+      // Advancing out of an open sub-flow would leave its action stranded in the
+      // footer of a step it has nothing to do with.
+      if (isLast || subflow) return;
       const tag = (document.activeElement as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "BUTTON" || tag === "A") return;
       e.preventDefault();
-      if (isLast) onClose();
-      else setI((n) => n + 1);
+      setI((n) => n + 1);
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isLast, onClose]);
+  }, [isLast, subflow]);
 
   const step = steps[i];
 
   return (
-    <div style={overlay} onClick={onClose}>
-      <div style={card} onClick={(e) => e.stopPropagation()}>
+    // No click-outside-to-close: a stray click on the scrim must not dismiss
+    // first-run setup. The X and the footer buttons are the ways out.
+    <div style={overlay}>
+      <WizardHostContext.Provider value={host}>
+      <div style={card}>
         <div style={header}>
           <div style={{ display: "flex", flexDirection: "column", gap: 5, flex: 1 }}>
             <span className="text-xl" style={{ fontWeight: 700, color: "var(--fg-primary)" }}>Welcome to Rigel</span>
             <span className="text-sm" style={{ color: "var(--fg-tertiary)", lineHeight: 1.45 }}>
-              A minute of optional setup. Skip anything you don't need. Everything here can be changed later in Settings.
+              A minute of optional setup. Nothing here is required. Everything can be changed later in Settings.
             </span>
           </div>
-          <button type="button" aria-label="Close" onClick={onClose} style={closeBtn}>
+          <button type="button" aria-label="Close" onClick={onLeave} style={closeBtn}>
             <FontAwesomeIcon icon={faXmark} className="size-[16px]" />
           </button>
         </div>
 
-        <Stepper labels={steps.map((s) => s.label)} current={i} />
+        {/* The rail opens with progress already banked. Installing the app is a
+            step the user HAS finished, so it leads the rail as Complete and the
+            real work starts at two of four. It is chrome only: there is no body
+            behind it and no way back to it, hence the offset rather than a
+            fourth entry in `steps`. */}
+        <Stepper labels={["Installed", ...steps.map((s) => s.label)]} current={i + 1} />
 
-        {step.title && (
+        {/* A sub-flow describes itself, so the step's own head steps aside
+            rather than captioning a screen the user has already left. */}
+        {!subflow && (
           <div style={stepSection}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
               <span className="text-lg" style={{ fontWeight: 700, color: "var(--fg-primary)" }}>{step.title}</span>
@@ -144,7 +138,14 @@ export function OnboardingWizard({ onClose, onLeave }: { onClose: () => void; on
           </div>
         )}
 
-        <div style={body}>{step.node}</div>
+        {/* Every body stays mounted (hidden via display:none) so a typed email,
+            an in-flight install, or a half-finished connect flow survives
+            stepping away and back. Only the chrome above tracks the step. */}
+        {steps.map((s, n) => (
+          <div key={s.label} style={{ ...body, display: n === i ? undefined : "none" }}>
+            {s.node}
+          </div>
+        ))}
 
         <div style={divider} />
 
@@ -156,20 +157,30 @@ export function OnboardingWizard({ onClose, onLeave }: { onClose: () => void; on
               </button>
             )}
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            {!isLast && (
-              <button type="button" onClick={() => setI((n) => n + 1)} style={ghostBtn}>
-                Skip
+          {/* One control per step. Next carries the earlier steps, and it does
+              not require the step to have been done, which is what makes each
+              one optional. Done always finishes, with or without an email: it
+              is the only control that marks setup complete, so gating it on a
+              sign-in would trap anyone who declines to leave one.
+              One primary at a time: while SignInFlow still offers its own "Send
+              sign-in link" primary, Done stays secondary rather than competing
+              with it, and takes over as the primary once the link is on its way. */}
+          <div>
+            {subflowOwnsAction ? (
+              // The open sub-flow portals its own primary in here, so the card
+              // keeps one action row and it is always this one.
+              <div ref={setActionSlot} style={{ display: "flex", gap: 8 }} />
+            ) : isLast ? (
+              <button type="button" onClick={onClose} style={signInStarted ? primaryBtn : ghostBtn}>
+                Done
               </button>
-            )}
-            {isLast ? (
-              <button type="button" onClick={onClose} style={primaryBtn}>Done</button>
             ) : (
               <button type="button" onClick={() => setI((n) => n + 1)} style={primaryBtn}>Next →</button>
             )}
           </div>
         </div>
       </div>
+      </WizardHostContext.Provider>
     </div>
   );
 }
@@ -193,148 +204,94 @@ function StatusPill({ label }: { label: string }) {
   );
 }
 
-function ToolCard({
+/** The two optional in-cluster installs: a captioned section wrapping one
+ *  bordered card of rows. metrics-server only appears when the cluster is known
+ *  to be missing it. */
+function OptionalInstalls() {
+  const metrics = useNodeMetrics();
+  const assistant = useAssistantAction();
+  const metricsServer = useInstallMetricsServer();
+  const showMetrics = metrics.data?.available === false;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <span className="text-3xs" style={{ fontFamily: "var(--font-mono)", letterSpacing: 1.2, color: "var(--fg-tertiary)" }}>
+        OPTIONAL
+      </span>
+      <div style={tool}>
+        <InstallRow
+          icon={<FontAwesomeIcon icon={faRobot} className="size-[16px] text-[var(--fg-secondary)]" />}
+          title="Assistant agent"
+          desc="An in-cluster agent that watches for problems and proposes remediations."
+          install={assistant}
+          onInstall={() => assistant.mutate({ action: "install" })}
+        />
+        {showMetrics && (
+          <>
+            <div style={hairline} />
+            <InstallRow
+              icon={<FontAwesomeIcon icon={faWaveform} className="size-[16px] text-[var(--fg-secondary)]" />}
+              title="metrics-server"
+              desc="Enables live node CPU and memory. On homelab clusters the install also adds --kubelet-insecure-tls."
+              install={metricsServer}
+              onInstall={() => metricsServer.mutate()}
+            />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface InstallState {
+  isSuccess: boolean;
+  isPending: boolean;
+  isError: boolean;
+  error: Error | null;
+}
+
+/** One optional install. The description sits beside the icon under the title,
+ *  not on a full-width line of its own below the whole row, which is what made
+ *  a single optional extra as tall as the form above it. */
+function InstallRow({
   icon,
   title,
   desc,
-  action,
-  children,
+  install,
+  onInstall,
 }: {
   icon: ReactNode;
   title: string;
   desc: string;
-  action?: ReactNode;
-  children?: ReactNode;
+  install: InstallState;
+  onInstall: () => void;
 }) {
   return (
-    <div style={tool}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        {icon}
-        <span className="text-xs" style={{ fontWeight: 600, color: "var(--fg-primary)" }}>{title}</span>
-        <div style={{ flex: 1 }} />
-        {action}
+    <div className="flex items-center justify-between gap-3.5 py-3.5">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <span className="flex size-[34px] shrink-0 items-center justify-center rounded-lg bg-white/[0.05]">
+          {icon}
+        </span>
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="text-sm font-semibold text-[var(--fg-primary)]">{title}</span>
+          <span className="text-xs leading-snug text-[var(--fg-secondary)]">{desc}</span>
+          {install.isError && <span style={errText}>{install.error?.message}</span>}
+        </span>
       </div>
-      <span className="text-xs" style={{ color: "var(--fg-secondary)", lineHeight: 1.5 }}>{desc}</span>
-      {children}
+      {install.isSuccess ? (
+        <span className="inline-flex shrink-0 items-center gap-1.5 text-2xs font-semibold text-[var(--status-running)]">
+          <FontAwesomeIcon icon={faCheck} className="size-[12px]" /> Done
+        </span>
+      ) : (
+        <button
+          type="button"
+          disabled={install.isPending}
+          onClick={onInstall}
+          style={{ ...ghostBtn, opacity: install.isPending ? 0.6 : 1, flexShrink: 0 }}
+        >
+          {install.isPending ? "Installing…" : "Install"}
+        </button>
+      )}
     </div>
-  );
-}
-
-const CHANNELS_UI: { id: ChannelGlyphId; label: string }[] = [
-  { id: "signal", label: "Signal" },
-  { id: "matrix", label: "Matrix" },
-  { id: "discord", label: "Discord" },
-  { id: "slack", label: "Slack" },
-];
-
-function ChannelChips() {
-  return (
-    <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-      {CHANNELS_UI.map(({ id, label }) => (
-        <div key={id} style={chip}>
-          <span
-            style={{
-              ...chipCircle,
-              background: `color-mix(in oklab, ${CHANNEL_GLYPH_COLORS[id]} 16%, transparent)`,
-              color: CHANNEL_GLYPH_COLORS[id],
-            }}
-          >
-            <ChannelGlyph id={id} size={17} />
-          </span>
-          <span className="text-2xs" style={{ fontWeight: 600, color: "var(--fg-secondary)" }}>{label}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function Done() {
-  return (
-    <span
-      className="text-2xs"
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 5,
-        fontWeight: 600,
-        padding: "3px 9px",
-        borderRadius: 999,
-        color: "var(--status-running)",
-        background: "color-mix(in oklab, var(--status-running) 14%, transparent)",
-        border: "1px solid color-mix(in oklab, var(--status-running) 32%, transparent)",
-      }}
-    >
-      <FontAwesomeIcon icon={faCheck} className="size-[12px]" /> Done
-    </span>
-  );
-}
-
-// AI-agent step body: the real pick-and-connect grid, headingless (the step
-// title and connection status live in the wizard chrome above the cards).
-function AgentStep() {
-  return <AgentsTab hideHeading />;
-}
-
-function AssistantCard() {
-  const install = useAssistantAction();
-  return (
-    <ToolCard
-      icon={<FontAwesomeIcon icon={faRobot} className="size-[15px]" style={{ color: "var(--accent-primary)" }} />}
-      title="Assistant agent"
-      desc="An in-cluster agent that watches for problems and proposes remediations. Optional."
-      action={
-        install.isSuccess ? (
-          <Done />
-        ) : (
-          <button
-            type="button"
-            disabled={install.isPending}
-            onClick={() => install.mutate({ action: "install" })}
-            style={{ ...ghostBtn, opacity: install.isPending ? 0.6 : 1 }}
-          >
-            {install.isPending ? "Installing…" : "Install"}
-          </button>
-        )
-      }
-    >
-      {install.isError && <span style={errText}>{install.error.message}</span>}
-    </ToolCard>
-  );
-}
-
-// Assistant-step nudge: only when metrics-server is known missing (available === false).
-function MetricsNudge() {
-  const metrics = useNodeMetrics();
-  if (metrics.data?.available !== false) return null;
-  return <MetricsCard />;
-}
-
-function MetricsCard() {
-  const metrics = useNodeMetrics();
-  const install = useInstallMetricsServer();
-  const available = metrics.data?.available === true;
-  return (
-    <ToolCard
-      icon={<FontAwesomeIcon icon={faWaveform} className="size-[15px]" style={{ color: "var(--accent-primary)" }} />}
-      title="metrics-server"
-      desc="Enables live node CPU/memory. On homelab clusters the install also adds --kubelet-insecure-tls."
-      action={
-        available || install.isSuccess ? (
-          <Done />
-        ) : (
-          <button
-            type="button"
-            disabled={install.isPending}
-            onClick={() => install.mutate()}
-            style={{ ...ghostBtn, opacity: install.isPending ? 0.6 : 1 }}
-          >
-            {install.isPending ? "Installing…" : "Install"}
-          </button>
-        )
-      }
-    >
-      {install.isError && <span style={errText}>{install.error.message}</span>}
-    </ToolCard>
   );
 }
 
@@ -396,13 +353,14 @@ const footer: React.CSSProperties = {
   padding: "16px 26px 20px 26px",
   width: "100%",
 };
+// The rows carry their own vertical padding, so the card only insets them
+// horizontally. Padding on both was what doubled the card's height.
 const tool: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
-  gap: 8,
-  padding: 14,
+  padding: "0 16px",
   background: "var(--surface-sunken)",
-  border: "1px solid #26272B",
+  border: "1px solid var(--border-subtle)",
   borderRadius: 10,
 };
 const primaryBtn: React.CSSProperties = {
@@ -425,23 +383,8 @@ const ghostBtn: React.CSSProperties = {
   border: "1px solid #34353A",
   cursor: "pointer",
 };
+const hairline: React.CSSProperties = {
+  height: 1,
+  background: "color-mix(in oklab, var(--border-subtle) 55%, transparent)",
+};
 const errText: React.CSSProperties = { fontSize: 11, color: "var(--status-failed)" };
-const chip: React.CSSProperties = {
-  display: "flex",
-  flex: 1,
-  flexDirection: "column",
-  alignItems: "center",
-  gap: 8,
-  padding: 12,
-  borderRadius: 8,
-  background: "#FFFFFF08",
-  border: "1px solid var(--border-subtle)",
-};
-const chipCircle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: 32,
-  height: 32,
-  borderRadius: 999,
-};

@@ -1,0 +1,91 @@
+// @vitest-environment jsdom
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ClusterStep } from "./ClusterStep";
+
+// The body is stubbed, but clusterToolsReady is the rule the HEAD copy turns on,
+// so the stub mirrors it (the rule itself is covered in CreateClusterBody.test).
+vi.mock("../CreateClusterBody", () => ({
+  CreateClusterBody: () => <div>create-cluster-body</div>,
+  clusterToolsReady: (t?: { dockerRunning?: boolean; kind?: boolean; k3d?: boolean }) =>
+    !!t?.dockerRunning && !!(t.kind || t.k3d),
+}));
+vi.mock("../ConnectClusterBody", () => ({
+  ConnectClusterBody: () => <div>connect-cluster-body</div>,
+}));
+vi.mock("../ImportKubeconfigPanel", () => ({
+  ImportKubeconfigPanel: () => <div>import-kubeconfig-panel</div>,
+}));
+
+/** `useContexts()` yields ClusterContext objects, not strings. */
+function ctx(name: string, active = true) {
+  return { name, cluster: name, server: "https://127.0.0.1:6443", active };
+}
+
+const READY_TOOLS = { dockerRunning: true, kind: true, k3d: false, os: "mac", installer: null };
+
+function renderStep(contexts: ReturnType<typeof ctx>[] = [], tools: object = READY_TOOLS) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  qc.setQueryData(["contexts"], contexts);
+  qc.setQueryData(["cluster-tools"], tools);
+  render(
+    <QueryClientProvider client={qc}>
+      <ClusterStep />
+    </QueryClientProvider>,
+  );
+}
+
+describe("ClusterStep", () => {
+  it("lists the three ways to connect", () => {
+    renderStep();
+    expect(screen.getByText("Create a local cluster")).toBeInTheDocument();
+    expect(screen.getByText("Connect a cloud cluster")).toBeInTheDocument();
+    expect(screen.getByText("Import a kubeconfig")).toBeInTheDocument();
+  });
+
+  it("renders the chosen flow inline instead of opening a dialog", () => {
+    renderStep();
+    fireEvent.click(screen.getByText("Create a local cluster"));
+    expect(screen.getByText("create-cluster-body")).toBeInTheDocument();
+    expect(screen.queryByText("Connect a cloud cluster")).not.toBeInTheDocument();
+  });
+
+  it("goes back to the card list from an inline flow", () => {
+    renderStep();
+    fireEvent.click(screen.getByText("Connect a cloud cluster"));
+    expect(screen.getByText("connect-cluster-body")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /all connection options/i }));
+    expect(screen.getByText("Create a local cluster")).toBeInTheDocument();
+  });
+
+  // The head names the one thing in the way, so it never asks for a tool the
+  // user already has.
+  it("heads the create flow with what is actually blocking it", () => {
+    const open = () => fireEvent.click(screen.getByText("Create a local cluster"));
+
+    renderStep([], READY_TOOLS);
+    open();
+    expect(screen.getByText(/Rigel runs the create for you/)).toBeInTheDocument();
+    cleanup();
+
+    renderStep([], { ...READY_TOOLS, dockerRunning: false });
+    open();
+    expect(screen.getByText(/Docker itself is not running/)).toBeInTheDocument();
+    cleanup();
+
+    renderStep([], { ...READY_TOOLS, kind: false, k3d: false });
+    open();
+    expect(screen.getByText(/You need one of them installed/)).toBeInTheDocument();
+  });
+
+  it("shows a connected pill naming the active context once one exists", () => {
+    renderStep([ctx("docker-desktop", false), ctx("kind-rigel-dev", true)]);
+    expect(screen.getByText(/kind-rigel-dev/)).toBeInTheDocument();
+  });
+
+  it("shows no pill when there is no context", () => {
+    renderStep([]);
+    expect(screen.queryByText(/connected/i)).not.toBeInTheDocument();
+  });
+});

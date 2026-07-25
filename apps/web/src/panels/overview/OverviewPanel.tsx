@@ -42,6 +42,7 @@ import {
 import { NodeMetricsTable } from "./NodeMetricsTable";
 import { RecentDeploysCard } from "./RecentDeploysCard";
 import { PendingPrsCard } from "./PendingPrsCard";
+import { UpgradeCard } from "./UpgradeCard";
 import {
   sortEvents,
   isWarning,
@@ -341,6 +342,8 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
         <div className="ov-row">
           <PendingPrsCard />
         </div>
+
+        <UpgradeCard />
       </div>
 
       {/* Purge flow: pick → discover → typed-name confirm → execute. */}

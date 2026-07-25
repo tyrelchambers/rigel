@@ -36,8 +36,13 @@ export interface AccountClientDeps {
   endpoint: string;
 }
 
-export type RequestResult = { ok: boolean; status: number };
-export type VerifyResult = { ok: true; account: Account } | { ok: false; status: number };
+export type StartSignInResult =
+  | { ok: true; status: number; pollToken: string; displayCode: string }
+  | { ok: false; status: number };
+export type PollResult =
+  | { status: "confirmed"; account: Account }
+  | { status: "pending" }
+  | { status: "expired" };
 
 export function createAccountClient({ store, fetchFn, endpoint }: AccountClientDeps) {
   const postJson = (path: string, body: unknown, token?: string) =>
@@ -51,25 +56,37 @@ export function createAccountClient({ store, fetchFn, endpoint }: AccountClientD
     });
 
   return {
-    async requestCode(email: string): Promise<RequestResult> {
+    /** Begin a device-authorization sign-in. Returns the poll token to hand to
+     *  poll(), and the code the app must display for the user to match against
+     *  the confirm page. */
+    async startSignIn(email: string): Promise<StartSignInResult> {
       const res = await postJson("/auth/request", { email });
-      return { ok: res.ok, status: res.status };
+      if (!res.ok) return { ok: false, status: res.status };
+      const body = (await res.json()) as { pollToken?: string; displayCode?: string };
+      if (typeof body.pollToken !== "string" || typeof body.displayCode !== "string") {
+        return { ok: false, status: res.status };
+      }
+      return { ok: true, status: res.status, pollToken: body.pollToken, displayCode: body.displayCode };
     },
 
-    async verifyCode(email: string, code: string): Promise<VerifyResult> {
-      const res = await postJson("/auth/verify", { email, code });
-      if (!res.ok) return { ok: false, status: res.status };
-      const body = (await res.json()) as { token: string; account: Account };
-      store.setToken(body.token);
-      return { ok: true, account: body.account };
-    },
-
-    async verifyLink(token: string): Promise<VerifyResult> {
-      const res = await postJson("/auth/verify-link", { token });
-      if (!res.ok) return { ok: false, status: res.status };
-      const body = (await res.json()) as { token: string; account: Account };
-      store.setToken(body.token);
-      return { ok: true, account: body.account };
+    /** One poll tick. Network and server errors report "pending" so a blip never
+     *  ends a sign-in that is still valid server-side; only an explicit 404 means
+     *  the pending login is gone. */
+    async poll(pollToken: string): Promise<PollResult> {
+      let res: Awaited<ReturnType<typeof postJson>>;
+      try {
+        res = await postJson("/auth/poll", { pollToken });
+      } catch {
+        return { status: "pending" };
+      }
+      if (res.status === 404) return { status: "expired" };
+      if (!res.ok) return { status: "pending" };
+      const body = (await res.json()) as { status?: string; token?: string; account?: Account };
+      if (body.status === "confirmed" && body.token && body.account) {
+        store.setToken(body.token);
+        return { status: "confirmed", account: body.account };
+      }
+      return { status: "pending" };
     },
 
     async me(): Promise<MePayload | null> {

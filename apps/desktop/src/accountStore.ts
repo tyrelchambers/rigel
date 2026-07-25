@@ -10,12 +10,24 @@ export interface SafeStorageLike {
   decryptString(encrypted: Buffer): string;
 }
 
+/** An in-flight device-authorization sign-in: the app polls `pollToken` until
+ *  the user confirms the emailed link, or `expiresAt` passes. */
+export interface PendingLogin {
+  pollToken: string;
+  displayCode: string;
+  email: string;
+  startedAt: number;
+  expiresAt: number;
+}
+
 export class AccountStore {
-  private file: string;
+  private tokenFile: string;
+  private pendingFile: string;
   private safe: SafeStorageLike;
   private cachedAvailable: boolean | undefined;
   constructor(userDataDir: string, safe: SafeStorageLike) {
-    this.file = join(userDataDir, "rigel-account.bin");
+    this.tokenFile = join(userDataDir, "rigel-account.bin");
+    this.pendingFile = join(userDataDir, "rigel-pending-login.bin");
     this.safe = safe;
   }
   get available(): boolean {
@@ -25,24 +37,49 @@ export class AccountStore {
     }
     return this.cachedAvailable;
   }
-  hasToken(): boolean {
-    return existsSync(this.file);
-  }
-  getToken(): string | null {
+  private read(file: string): string | null {
     if (!this.available) return null;
     try {
-      const b64 = readFileSync(this.file, "utf8");
+      const b64 = readFileSync(file, "utf8");
       return this.safe.decryptString(Buffer.from(b64, "base64"));
     } catch {
       return null;
     }
   }
-  setToken(token: string): void {
+  private write(file: string, value: string): void {
     if (!this.available) throw new Error("secure storage unavailable");
-    const enc = this.safe.encryptString(token);
-    writeFileSync(this.file, enc.toString("base64"), { mode: 0o600 });
+    writeFileSync(file, this.safe.encryptString(value).toString("base64"), { mode: 0o600 });
+  }
+  private remove(file: string): void {
+    try { rmSync(file, { force: true }); } catch { /* already gone */ }
+  }
+  hasToken(): boolean {
+    return existsSync(this.tokenFile);
+  }
+  getToken(): string | null {
+    return this.read(this.tokenFile);
+  }
+  setToken(token: string): void {
+    this.write(this.tokenFile, token);
   }
   clear(): void {
-    try { rmSync(this.file, { force: true }); } catch { /* already gone */ }
+    this.remove(this.tokenFile);
+  }
+  getPending(): PendingLogin | null {
+    const raw = this.read(this.pendingFile);
+    if (raw === null) return null;
+    try {
+      const p = JSON.parse(raw) as PendingLogin;
+      if (typeof p?.pollToken !== "string" || typeof p?.displayCode !== "string" || typeof p?.expiresAt !== "number") return null;
+      return p;
+    } catch {
+      return null;
+    }
+  }
+  setPending(pending: PendingLogin): void {
+    this.write(this.pendingFile, JSON.stringify(pending));
+  }
+  clearPending(): void {
+    this.remove(this.pendingFile);
   }
 }

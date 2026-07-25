@@ -13,20 +13,26 @@ export interface OrgMembership {
   role: "owner" | "admin" | "member";
 }
 
-/** All account/code/token IO behind one object, so the route handlers take one
+/** All account/login/token IO behind one object, so the route handlers take one
  *  dep (matches the repo convention of a small injected IO surface). */
 export interface AuthDb {
-  insertCode(email: string, codeHash: string, linkTokenHash: string, ttlSeconds: number): Promise<void>;
-  invalidateCodes(email: string): Promise<void>;
-  claimAttempt(email: string): Promise<{ codeHash: string } | null>;
-  consumeCode(email: string): Promise<boolean>;
-  consumeLinkToken(linkTokenHash: string): Promise<{ email: string } | null>;
-  cleanupExpiredCodes(): Promise<void>;
+  createPendingLogin(
+    input: { email: string; pollTokenHash: string; confirmTokenHash: string; ttlSeconds: number },
+  ): Promise<void>;
+  invalidatePendingLogins(email: string): Promise<void>;
+  confirmPendingLogin(confirmTokenHash: string): Promise<{ email: string } | null>;
+  pendingLoginByConfirmHash(confirmTokenHash: string): Promise<{ email: string; pollTokenHash: string } | null>;
+  consumeConfirmedLogin(pollTokenHash: string): Promise<{ email: string } | null>;
+  pendingLoginActive(pollTokenHash: string): Promise<boolean>;
+  cleanupExpiredPendingLogins(): Promise<void>;
   upsertAccount(email: string): Promise<Account>;
   insertToken(tokenHash: string, accountId: string): Promise<void>;
   accountByToken(tokenHash: string): Promise<Account | null>;
   touchToken(tokenHash: string): Promise<void>;
   revokeToken(tokenHash: string): Promise<void>;
+  createRevokeToken(input: { tokenHash: string; accountId: string; ttlSeconds: number }): Promise<void>;
+  consumeRevokeToken(tokenHash: string): Promise<{ accountId: string } | null>;
+  revokeTokensForAccount(accountId: string): Promise<number>;
   ensurePersonalOrg(accountId: string, name: string): Promise<void>;
   getOrgsForAccount(accountId: string): Promise<OrgMembership[]>;
   billableOrgs(accountId: string): Promise<{ orgId: string; stripeCustomerId: string | null }[]>;
@@ -41,7 +47,7 @@ export interface AuthDb {
 
 const TOKEN_MAX_AGE = "1 year";
 
-export const AUTH_SCHEMA = `
+const AUTH_SCHEMA = `
 CREATE TABLE IF NOT EXISTS accounts (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   email         text NOT NULL,
@@ -50,18 +56,6 @@ CREATE TABLE IF NOT EXISTS accounts (
   last_login_at timestamptz
 );
 CREATE UNIQUE INDEX IF NOT EXISTS accounts_email_lower_idx ON accounts (lower(email));
-
-CREATE TABLE IF NOT EXISTS login_codes (
-  email       text NOT NULL,
-  code_hash   text NOT NULL,
-  expires_at  timestamptz NOT NULL,
-  attempts    int NOT NULL DEFAULT 0,
-  consumed_at timestamptz,
-  created_at  timestamptz NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS login_codes_email_idx ON login_codes (email);
-ALTER TABLE login_codes ADD COLUMN IF NOT EXISTS link_token_hash text;
-CREATE INDEX IF NOT EXISTS login_codes_link_idx ON login_codes (link_token_hash);
 
 CREATE TABLE IF NOT EXISTS auth_tokens (
   token_hash   text PRIMARY KEY,
@@ -101,6 +95,27 @@ CREATE TABLE IF NOT EXISTS agent_tokens (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS agent_tokens_org_idx ON agent_tokens (org_id);
+CREATE TABLE IF NOT EXISTS pending_logins (
+  id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  email              text NOT NULL,
+  poll_token_hash    text NOT NULL,
+  confirm_token_hash text NOT NULL,
+  created_at         timestamptz NOT NULL DEFAULT now(),
+  expires_at         timestamptz NOT NULL,
+  confirmed_at       timestamptz,
+  consumed_at        timestamptz
+);
+CREATE UNIQUE INDEX IF NOT EXISTS pending_logins_poll_idx ON pending_logins (poll_token_hash);
+CREATE UNIQUE INDEX IF NOT EXISTS pending_logins_confirm_idx ON pending_logins (confirm_token_hash);
+CREATE INDEX IF NOT EXISTS pending_logins_email_idx ON pending_logins (email);
+CREATE TABLE IF NOT EXISTS revoke_tokens (
+  token_hash text PRIMARY KEY,
+  account_id uuid NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  expires_at timestamptz NOT NULL,
+  used_at    timestamptz
+);
+CREATE INDEX IF NOT EXISTS revoke_tokens_account_idx ON revoke_tokens (account_id);
 INSERT INTO organizations (kind, name, personal_account_id)
   SELECT 'personal', coalesce(name, email), id FROM accounts a
   WHERE NOT EXISTS (SELECT 1 FROM organizations o WHERE o.personal_account_id = a.id)
@@ -153,63 +168,64 @@ export function createAuthDb(pool: Pool): AuthDb {
     }));
   }
   return {
-    async insertCode(email, codeHash, linkTokenHash, ttlSeconds) {
+    async createPendingLogin({ email, pollTokenHash, confirmTokenHash, ttlSeconds }) {
       await pool.query(
-        `INSERT INTO login_codes (email, code_hash, link_token_hash, expires_at)
+        `INSERT INTO pending_logins (email, poll_token_hash, confirm_token_hash, expires_at)
          VALUES ($1, $2, $3, now() + ($4 || ' seconds')::interval)`,
-        [email, codeHash, linkTokenHash, String(ttlSeconds)],
+        [email, pollTokenHash, confirmTokenHash, String(ttlSeconds)],
       );
     },
-    async invalidateCodes(email) {
+    async invalidatePendingLogins(email) {
       await pool.query(
-        `UPDATE login_codes SET consumed_at = now()
+        `UPDATE pending_logins SET consumed_at = now()
          WHERE email = $1 AND consumed_at IS NULL`,
         [email],
       );
     },
-    async claimAttempt(email) {
+    async confirmPendingLogin(confirmTokenHash) {
       const r = await pool.query(
-        `UPDATE login_codes SET attempts = attempts + 1
-         WHERE ctid = (
-           SELECT ctid FROM login_codes
-           WHERE email = $1 AND consumed_at IS NULL AND expires_at > now() AND attempts < 5
-           ORDER BY created_at DESC LIMIT 1
-         )
-         RETURNING code_hash`,
-        [email],
-      );
-      const row = r.rows[0] as { code_hash: string } | undefined;
-      return row ? { codeHash: row.code_hash } : null;
-    },
-    async consumeCode(email) {
-      const r = await pool.query(
-        `UPDATE login_codes SET consumed_at = now()
-         WHERE ctid = (
-           SELECT ctid FROM login_codes
-           WHERE email = $1 AND consumed_at IS NULL AND expires_at > now()
-           ORDER BY created_at DESC LIMIT 1
-         )
-         RETURNING 1 AS ok`,
-        [email],
-      );
-      return r.rows.length > 0;
-    },
-    async consumeLinkToken(linkTokenHash) {
-      const r = await pool.query(
-        `UPDATE login_codes SET consumed_at = now()
-         WHERE ctid = (
-           SELECT ctid FROM login_codes
-           WHERE link_token_hash = $1 AND consumed_at IS NULL AND expires_at > now()
-           ORDER BY created_at DESC LIMIT 1
-         )
+        `UPDATE pending_logins SET confirmed_at = now()
+         WHERE confirm_token_hash = $1 AND confirmed_at IS NULL
+           AND consumed_at IS NULL AND expires_at > now()
          RETURNING email`,
-        [linkTokenHash],
+        [confirmTokenHash],
       );
       const row = r.rows[0] as { email: string } | undefined;
       return row ? { email: row.email } : null;
     },
-    async cleanupExpiredCodes() {
-      await pool.query(`DELETE FROM login_codes WHERE expires_at < now() - interval '1 day'`);
+    async pendingLoginByConfirmHash(confirmTokenHash) {
+      const r = await pool.query(
+        `SELECT email, poll_token_hash FROM pending_logins
+          WHERE confirm_token_hash = $1 AND confirmed_at IS NULL
+            AND consumed_at IS NULL AND expires_at > now()
+          LIMIT 1`,
+        [confirmTokenHash],
+      );
+      const row = r.rows[0] as { email: string; poll_token_hash: string } | undefined;
+      return row ? { email: row.email, pollTokenHash: row.poll_token_hash } : null;
+    },
+    async consumeConfirmedLogin(pollTokenHash) {
+      const r = await pool.query(
+        `UPDATE pending_logins SET consumed_at = now()
+         WHERE poll_token_hash = $1 AND confirmed_at IS NOT NULL
+           AND consumed_at IS NULL AND expires_at > now()
+         RETURNING email`,
+        [pollTokenHash],
+      );
+      const row = r.rows[0] as { email: string } | undefined;
+      return row ? { email: row.email } : null;
+    },
+    async pendingLoginActive(pollTokenHash) {
+      const r = await pool.query(
+        `SELECT 1 AS ok FROM pending_logins
+          WHERE poll_token_hash = $1 AND consumed_at IS NULL AND expires_at > now()
+          LIMIT 1`,
+        [pollTokenHash],
+      );
+      return r.rows.length > 0;
+    },
+    async cleanupExpiredPendingLogins() {
+      await pool.query(`DELETE FROM pending_logins WHERE expires_at < now() - interval '1 day'`);
     },
     async upsertAccount(email) {
       const r = await pool.query(
@@ -244,6 +260,31 @@ export function createAuthDb(pool: Pool): AuthDb {
     },
     async revokeToken(tokenHash) {
       await pool.query(`UPDATE auth_tokens SET revoked_at = now() WHERE token_hash = $1 AND revoked_at IS NULL`, [tokenHash]);
+    },
+    async createRevokeToken({ tokenHash, accountId, ttlSeconds }) {
+      await pool.query(
+        `INSERT INTO revoke_tokens (token_hash, account_id, expires_at)
+         VALUES ($1, $2, now() + ($3 || ' seconds')::interval)`,
+        [tokenHash, accountId, String(ttlSeconds)],
+      );
+    },
+    async consumeRevokeToken(tokenHash) {
+      const r = await pool.query(
+        `UPDATE revoke_tokens SET used_at = now()
+         WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
+         RETURNING account_id`,
+        [tokenHash],
+      );
+      const row = r.rows[0] as { account_id: string } | undefined;
+      return row ? { accountId: row.account_id } : null;
+    },
+    async revokeTokensForAccount(accountId) {
+      const r = await pool.query(
+        `UPDATE auth_tokens SET revoked_at = now()
+         WHERE account_id = $1 AND revoked_at IS NULL`,
+        [accountId],
+      );
+      return r.rowCount ?? 0;
     },
     async orgBilling(orgId, accountId) {
       const r = await pool.query(

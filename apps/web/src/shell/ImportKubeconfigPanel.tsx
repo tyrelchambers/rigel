@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { importKubeconfig as defaultImport } from "@/lib/api";
+import { useWizardHost } from "./onboarding/wizardHost";
 import { toast } from "sonner";
 
 export function ImportKubeconfigPanel({
@@ -15,6 +17,8 @@ export function ImportKubeconfigPanel({
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // In the wizard the single action row is the card footer, not this panel.
+  const host = useWizardHost();
 
   async function submit() {
     setBusy(true);
@@ -33,6 +37,12 @@ export function ImportKubeconfigPanel({
       setBusy(false);
     }
   }
+
+  const importBtn = (
+    <Button disabled={!text.trim() || busy} onClick={submit}>
+      {busy ? "Importing…" : "Import"}
+    </Button>
+  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -53,11 +63,11 @@ export function ImportKubeconfigPanel({
         }}
       />
       {error ? <div className="text-xs" style={{ color: "var(--destructive)" }}>{error}</div> : null}
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <Button disabled={!text.trim() || busy} onClick={submit}>
-          {busy ? "Importing…" : "Import"}
-        </Button>
-      </div>
+      {host ? (
+        host.actionSlot && createPortal(importBtn, host.actionSlot)
+      ) : (
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>{importBtn}</div>
+      )}
     </div>
   );
 }

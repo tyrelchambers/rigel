@@ -97,17 +97,24 @@ test("auth routes are mounted when auth deps are provided", async () => {
     allow: () => true,
     auth: {
       db: {
-        insertCode: async () => {}, invalidateCodes: async () => {}, claimAttempt: async () => null,
-        consumeCode: async () => false, consumeLinkToken: async () => null, cleanupExpiredCodes: async () => {},
+        createPendingLogin: async () => {}, invalidatePendingLogins: async () => {},
+        confirmPendingLogin: async () => null, consumeConfirmedLogin: async () => null,
+        pendingLoginByConfirmHash: async () => null,
+        pendingLoginActive: async () => false, cleanupExpiredPendingLogins: async () => {},
         upsertAccount: async () => ({ id: "a", email: "a@b.co", name: null }),
         insertToken: async () => {}, accountByToken: async () => null, touchToken: async () => {}, revokeToken: async () => {},
+        createRevokeToken: async () => {}, consumeRevokeToken: async () => null, revokeTokensForAccount: async () => 0,
         ensurePersonalOrg: async () => {}, getOrgsForAccount: async () => [], billableOrgs: async () => [],
         orgBilling: async () => null, orgSeatCount: async () => 0, setOrgStripeCustomer: async () => {}, accountEmail: async () => "a@b.co",
         createAgentToken: async () => {}, agentTokenByHash: async () => null, orgStripeCustomer: async () => null,
       },
-      sendCode: async () => {},
+      sendLink: async () => {},
+      sendSignInNotice: async () => {},
       allowRequest: () => true,
       allowVerify: () => true,
+      allowPoll: () => true,
+      allowPollIp: () => true,
+      publicUrl: "https://api.example.test",
     },
   });
   // /me with no token is a mounted route that returns 401 (not a 404)

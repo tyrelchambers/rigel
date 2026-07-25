@@ -4,23 +4,21 @@ import { renderHook, waitFor, act } from "@testing-library/react";
 
 const account = { id: "1", email: "a@b.co", name: "Jane" };
 const status = vi.fn();
-const requestCode = vi.fn();
-const verifyCode = vi.fn();
+const startSignIn = vi.fn();
 const signOut = vi.fn();
 let changedCb: (() => void) | null = null;
 vi.mock("@/lib/desktop", () => ({
   rigel: {
     account: {
       status: (...a: unknown[]) => status(...a),
-      requestCode: (...a: unknown[]) => requestCode(...a),
-      verifyCode: (...a: unknown[]) => verifyCode(...a),
+      startSignIn: (...a: unknown[]) => startSignIn(...a),
       signOut: (...a: unknown[]) => signOut(...a),
       onChanged: (cb: () => void) => { changedCb = cb; return () => { changedCb = null; }; },
     },
   },
 }));
 
-beforeEach(() => { status.mockReset(); requestCode.mockReset(); verifyCode.mockReset(); signOut.mockReset(); changedCb = null; });
+beforeEach(() => { status.mockReset(); startSignIn.mockReset(); signOut.mockReset(); changedCb = null; });
 afterEach(() => vi.clearAllMocks());
 
 test("resolves to signed-in when status() reports signedIn", async () => {
@@ -47,14 +45,33 @@ test("resolves to signed-out when status() reports not signed in", async () => {
   await waitFor(() => expect(result.current.status).toBe("signed-out"));
 });
 
-test("verifyCode success refreshes to signed-in", async () => {
-  status.mockResolvedValueOnce({ signedIn: false, account: null, orgs: [] }).mockResolvedValue({ signedIn: true, account, orgs: [] });
-  verifyCode.mockResolvedValue({ ok: true, account });
+test("startSignIn calls through and refreshes so pendingSignIn surfaces", async () => {
+  const pendingSignIn = { email: "a@b.co", expiresAt: 1_700_000_000_000 };
+  status
+    .mockResolvedValueOnce({ signedIn: false, account: null, orgs: [], pendingSignIn: null })
+    .mockResolvedValue({ signedIn: false, account: null, orgs: [], pendingSignIn });
+  startSignIn.mockResolvedValue({ ok: true, status: 200 });
   const { useAccount } = await import("./useAccount");
   const { result } = renderHook(() => useAccount());
   await waitFor(() => expect(result.current.status).toBe("signed-out"));
-  await act(async () => { await result.current.verifyCode("a@b.co", "123456"); });
-  await waitFor(() => expect(result.current.status).toBe("signed-in"));
+  expect(result.current.pendingSignIn).toBeNull();
+  await act(async () => { await result.current.startSignIn("a@b.co"); });
+  expect(startSignIn).toHaveBeenCalledWith("a@b.co");
+  await waitFor(() => expect(result.current.pendingSignIn).toEqual(pendingSignIn));
+});
+
+test("a failed startSignIn does not refresh and leaves pendingSignIn null", async () => {
+  status.mockResolvedValue({ signedIn: false, account: null, orgs: [], pendingSignIn: null });
+  startSignIn.mockResolvedValue({ ok: false, status: 429 });
+  const { useAccount } = await import("./useAccount");
+  const { result } = renderHook(() => useAccount());
+  await waitFor(() => expect(result.current.status).toBe("signed-out"));
+  status.mockClear();
+  let r: { ok: boolean; status: number } | undefined;
+  await act(async () => { r = await result.current.startSignIn("a@b.co"); });
+  expect(r).toEqual({ ok: false, status: 429 });
+  expect(status).not.toHaveBeenCalled();
+  expect(result.current.pendingSignIn).toBeNull();
 });
 
 test("re-checks and flips to signed-in when main signals a change (magic link)", async () => {

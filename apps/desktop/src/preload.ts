@@ -19,14 +19,12 @@ contextBridge.exposeInMainWorld("rigel", {
   openChartFile: (): Promise<{ canceled: boolean; path?: string }> =>
     ipcRenderer.invoke("rigel:open-chart-file"),
   account: {
-    requestCode: (email: string): Promise<{ ok: boolean; status: number }> =>
-      ipcRenderer.invoke("rigel:account:request-code", email),
-    verifyCode: (email: string, code: string): Promise<{ ok: true; account: { id: string; email: string; name: string | null } } | { ok: false; status: number }> =>
-      ipcRenderer.invoke("rigel:account:verify-code", { email, code }),
+    startSignIn: (email: string): Promise<{ ok: boolean; status: number }> =>
+      ipcRenderer.invoke("rigel:account:start-sign-in", email),
     me: (): Promise<{ account: { id: string; email: string; name: string | null }; orgs?: Array<{ id: string; kind: "personal" | "team"; name: string; role: "owner" | "admin" | "member" }>; invitations?: unknown[] } | null> =>
       ipcRenderer.invoke("rigel:account:me"),
     signOut: (): Promise<void> => ipcRenderer.invoke("rigel:account:sign-out"),
-    status: (): Promise<{ signedIn: boolean; account: { id: string; email: string; name: string | null } | null; orgs: Array<{ id: string; kind: "personal" | "team"; name: string; role: "owner" | "admin" | "member" }> }> =>
+    status: (): Promise<{ signedIn: boolean; account: { id: string; email: string; name: string | null } | null; orgs: Array<{ id: string; kind: "personal" | "team"; name: string; role: "owner" | "admin" | "member" }>; pendingSignIn: { email: string; expiresAt: number; displayCode: string } | null }> =>
       ipcRenderer.invoke("rigel:account:status"),
     onChanged: (cb: () => void): (() => void) => {
       const listener = () => cb();
