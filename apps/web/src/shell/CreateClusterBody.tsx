@@ -1,12 +1,20 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheck, faCircleCheck, faCircleXmark, faCopy, faArrowsRotate } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useClusterTools, type ClusterOS } from "@/lib/api";
+import { useClusterTools, type ClusterOS, type ClusterToolStatus } from "@/lib/api";
+import { useWizardHost } from "./onboarding/wizardHost";
 import { sendClusterCreate, onClusterEvent } from "@/lib/ws";
 import { toast } from "sonner";
+
+/** Creating needs Docker up and at least one of kind/k3d. Shared so a host can
+ *  caption the flow without duplicating the rule. */
+export function clusterToolsReady(tools: ClusterToolStatus | undefined): boolean {
+  return !!tools?.dockerRunning && (tools.kind || tools.k3d);
+}
 
 const VERSIONS = [
   { id: "default", label: "Latest" },
@@ -112,8 +120,10 @@ export function CreateClusterBody({ active, onDone, onBusyChange }: CreateCluste
   useEffect(() => { logRef.current?.scrollTo(0, logRef.current.scrollHeight); }, [lines]);
 
   const dockerOk = !!tools?.dockerRunning;
-  const hasTool = !!tools && (tools.kind || tools.k3d);
-  const ready = dockerOk && hasTool;
+  const ready = clusterToolsReady(tools);
+  // Inside the wizard the head and the single footer action belong to the host,
+  // so the body renders neither its intro nor its own button row.
+  const host = useWizardHost();
   const nameErr = nameError(name);
   const canCreate = ready && !nameErr && !creating;
   const kindCmd = KIND_INSTALL[tools?.os ?? "mac"];
@@ -132,17 +142,32 @@ export function CreateClusterBody({ active, onDone, onBusyChange }: CreateCluste
     return <p className="text-sm text-muted-foreground">Checking your environment…</p>;
   }
 
+  const recheck = (
+    <Button
+      variant={host ? "default" : "ghost"}
+      size={host ? undefined : "sm"}
+      onClick={() => refetch()}
+      disabled={isFetching}
+      className={host ? undefined : "bg-white/[0.08] text-white hover:bg-white/[0.12]"}
+    >
+      <FontAwesomeIcon icon={faArrowsRotate} className={cn("size-3.5", isFetching && "animate-spin")} />
+      {isFetching ? "Checking…" : "Re-check"}
+    </Button>
+  );
+
   if (!ready) {
     // ── Setup state: explain what's needed and how to get it ──────────────
     return (
       <div className="flex flex-col gap-5">
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          This runs a real Kubernetes cluster on your own machine inside Docker, using{" "}
-          <span className="font-medium text-foreground">kind</span> or{" "}
-          <span className="font-medium text-foreground">k3d</span>. Once it's up, you can deploy to
-          it and manage it from Rigel like any other cluster. You just need one of them installed,
-          plus Docker running.
-        </p>
+        {!host && (
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            This runs a real Kubernetes cluster on your own machine inside Docker, using{" "}
+            <span className="font-medium text-foreground">kind</span> or{" "}
+            <span className="font-medium text-foreground">k3d</span>. Once it's up, you can deploy to
+            it and manage it from Rigel like any other cluster. You just need one of them installed,
+            plus Docker running.
+          </p>
+        )}
 
         {/* Step 1: install a tool (only when neither is present) */}
         {!tools.kind && !tools.k3d && (
@@ -188,47 +213,52 @@ export function CreateClusterBody({ active, onDone, onBusyChange }: CreateCluste
         )}
 
         {/* Status checks */}
-        <div className="flex flex-col divide-y divide-white/[0.04] overflow-hidden rounded-[10px] border border-white/[0.08] bg-[#141417]">
+        <div className="flex flex-col divide-y divide-white/[0.04] overflow-hidden rounded-[10px] border border-white/[0.08] bg-[var(--surface-sunken)]">
           <StatusRow
             ok={tools.kind || tools.k3d}
             okText="kind or k3d installed"
             badText="No cluster tool found"
+            badSub="Install kind or k3d to continue"
             badStatus="Not found"
           />
           <StatusRow
             ok={dockerOk}
             okText="Docker is running"
             badText="Docker is not running"
+            badSub="Start Docker, then re-check"
             badStatus="Not running"
           />
         </div>
 
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="bg-white/[0.08] text-white hover:bg-white/[0.12]"
-          >
-            <FontAwesomeIcon icon={faArrowsRotate} className={cn("size-3.5", isFetching && "animate-spin")} />
-            {isFetching ? "Checking…" : "Re-check"}
-          </Button>
-          <span className="text-xs text-muted-foreground">Run the steps above, then re-check.</span>
-        </div>
+        {host
+          ? host.actionSlot && createPortal(recheck, host.actionSlot)
+          : (
+            <div className="flex items-center gap-3">
+              {recheck}
+              <span className="text-xs text-muted-foreground">Run the steps above, then re-check.</span>
+            </div>
+          )}
       </div>
     );
   }
 
+  const create = (
+    <Button onClick={start} disabled={!canCreate}>
+      {creating ? "Creating…" : "Create cluster"}
+    </Button>
+  );
+
   // ── Form state: ready to create ───────────────────────────────────────
   return (
     <div className="flex flex-col gap-5">
-      <p className="text-sm leading-relaxed text-muted-foreground">
-        kind and k3d run the cluster as Docker containers on this machine. It shows up in Rigel once it's ready.
-      </p>
+      {!host && (
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          kind and k3d run the cluster as Docker containers on this machine. It shows up in Rigel once it's ready.
+        </p>
+      )}
 
       <div>
-        <label htmlFor="cc-name" className={LABEL_CLASS}>Name</label>
+        <label htmlFor="cc-name" className={LABEL_CLASS}>Cluster name</label>
         <input
           id="cc-name"
           value={name}
@@ -242,29 +272,48 @@ export function CreateClusterBody({ active, onDone, onBusyChange }: CreateCluste
         {name && nameErr && <p className="mt-1.5 text-xs text-destructive">{nameErr}</p>}
       </div>
 
-      <div className="flex flex-wrap items-end gap-6">
-        {/* Tool choice only matters when both are installed. */}
-        {tools.kind && tools.k3d && (
-          <div>
-            <span className={LABEL_CLASS}>Tool</span>
-            <div className="flex gap-2">
-              <Button variant={tool === "kind" ? "default" : "outline"} size="sm" disabled={creating} onClick={() => setTool("kind")}>kind</Button>
-              <Button variant={tool === "k3d" ? "default" : "outline"} size="sm" disabled={creating} onClick={() => setTool("k3d")}>k3d</Button>
-            </div>
-          </div>
-        )}
-        <div>
-          <label htmlFor="cc-version" className={LABEL_CLASS}>Kubernetes version</label>
-          <select
-            id="cc-version"
-            value={version}
-            onChange={(e) => setVersion(e.target.value)}
-            disabled={creating}
-            className={INPUT_CLASS + " cursor-pointer"}
-          >
-            {VERSIONS.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-          </select>
+      {/* Both tools are always listed, each saying whether it was found. Hiding
+          the one that isn't installed reads as a missing option and leaves the
+          user with no idea which tool is about to run. */}
+      <div>
+        <span className={LABEL_CLASS}>Tool</span>
+        <div className="flex w-full gap-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-sunken)] p-1">
+          {(["kind", "k3d"] as const).map((t) => {
+            const available = t === "kind" ? tools.kind : tools.k3d;
+            const selected = tool === t;
+            return (
+              <button
+                key={t}
+                type="button"
+                disabled={!available || creating}
+                onClick={() => setTool(t)}
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-2 rounded-md px-3.5 py-2.5 transition-colors",
+                  selected ? "bg-white/[0.07]" : "bg-transparent",
+                  available ? "cursor-pointer" : "cursor-not-allowed",
+                )}
+              >
+                <span className={cn("text-sm font-semibold", selected ? "text-foreground" : "text-muted-foreground")}>
+                  {t}
+                </span>
+                <span className="text-xs text-[var(--fg-tertiary)]">{available ? "detected" : "not installed"}</span>
+              </button>
+            );
+          })}
         </div>
+      </div>
+
+      <div>
+        <label htmlFor="cc-version" className={LABEL_CLASS}>Kubernetes version</label>
+        <select
+          id="cc-version"
+          value={version}
+          onChange={(e) => setVersion(e.target.value)}
+          disabled={creating}
+          className={INPUT_CLASS + " cursor-pointer"}
+        >
+          {VERSIONS.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+        </select>
       </div>
 
       {(creating || lines.length > 0 || error) && (
@@ -286,19 +335,21 @@ export function CreateClusterBody({ active, onDone, onBusyChange }: CreateCluste
         </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">
-          Creates a local cluster with {tools.kind && tools.k3d ? tool : tools.kind ? "kind" : "k3d"}.
-        </span>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => onDone()} disabled={creating}>
-            Cancel
-          </Button>
-          <Button onClick={start} disabled={!canCreate}>
-            {creating ? "Creating…" : "Create cluster"}
-          </Button>
+      {host ? (
+        host.actionSlot && createPortal(create, host.actionSlot)
+      ) : (
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">
+            Creates a local cluster with {tool}.
+          </span>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => onDone()} disabled={creating}>
+              Cancel
+            </Button>
+            {create}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -307,24 +358,37 @@ function StatusRow({
   ok,
   okText,
   badText,
+  badSub,
   badStatus,
 }: {
   ok: boolean;
   okText: string;
   badText: string;
+  /** What to do about it, shown only while the check is failing. */
+  badSub: string;
   badStatus: string;
 }) {
   return (
     <div className="flex items-center gap-2.5 px-4 py-3">
       {ok ? (
-        <FontAwesomeIcon icon={faCircleCheck} className="size-[17px] shrink-0 text-[#34D07F]" />
+        <FontAwesomeIcon icon={faCircleCheck} className="size-[17px] shrink-0 text-[var(--status-running)]" />
       ) : (
-        <FontAwesomeIcon icon={faCircleXmark} className="size-[17px] shrink-0 text-[#FF6B6B]" />
+        <FontAwesomeIcon icon={faCircleXmark} className="size-[17px] shrink-0 text-[var(--status-failed)]" />
       )}
-      <span className={cn("text-sm font-medium", ok ? "text-foreground" : "text-zinc-300")}>
-        {ok ? okText : badText}
+      <span className="flex flex-col gap-0.5">
+        <span className={cn("text-sm font-medium", ok ? "text-foreground" : "text-zinc-300")}>
+          {ok ? okText : badText}
+        </span>
+        {!ok && <span className="text-xs text-muted-foreground">{badSub}</span>}
       </span>
-      <span className="ml-auto text-xs font-medium text-muted-foreground">{ok ? "OK" : badStatus}</span>
+      <span
+        className={cn(
+          "ml-auto text-xs font-medium",
+          ok ? "text-muted-foreground" : "text-[var(--status-failed)]",
+        )}
+      >
+        {ok ? "OK" : badStatus}
+      </span>
     </div>
   );
 }

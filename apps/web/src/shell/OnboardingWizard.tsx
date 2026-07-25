@@ -4,12 +4,13 @@
  * sign-in link. No step is required: Next moves on without doing the step, and
  * Done finishes whether or not an email was left. Nothing here blocks the app.
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheck, faRobot, faWaveform, faXmark } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useAgents, useAssistantAction, useNodeMetrics, useInstallMetricsServer } from "@/lib/api";
 import { Stepper } from "./onboarding/Stepper";
 import { ClusterStep } from "./onboarding/ClusterStep";
+import { WizardHostContext } from "./onboarding/wizardHost";
 import { AgentsTab } from "@/panels/settings/agents/AgentsTab";
 import { SignInFlow } from "./SignInFlow";
 import type { UseAccountResult } from "./useAccount";
@@ -24,6 +25,21 @@ export function OnboardingWizard({
   onLeave: () => void;
 }) {
   const [i, setI] = useState(0);
+  // A sub-flow (create a cluster, connect one, import a kubeconfig) takes over
+  // the step: it describes itself in the head and owns the footer's action.
+  const [subflow, setSubflowOpen] = useState(false);
+  const [subflowOwnsAction, setSubflowOwnsAction] = useState(false);
+  const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
+  const host = useMemo(
+    () => ({
+      actionSlot,
+      setSubflow: (open: boolean, ownsAction: boolean) => {
+        setSubflowOpen(open);
+        setSubflowOwnsAction(open && ownsAction);
+      },
+    }),
+    [actionSlot],
+  );
   const { data: agentsData } = useAgents();
   const activeAgent = agentsData?.agents.find((a) => a.id === agentsData?.activeAgentId);
   const agentConnected = activeAgent?.connection === "connected";
@@ -71,7 +87,9 @@ export function OnboardingWizard({
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key !== "Enter" || e.isComposing) return;
-      if (isLast) return;
+      // Advancing out of an open sub-flow would leave its action stranded in the
+      // footer of a step it has nothing to do with.
+      if (isLast || subflow) return;
       const tag = (document.activeElement as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "BUTTON" || tag === "A") return;
       e.preventDefault();
@@ -79,7 +97,7 @@ export function OnboardingWizard({
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isLast]);
+  }, [isLast, subflow]);
 
   const step = steps[i];
 
@@ -87,6 +105,7 @@ export function OnboardingWizard({
     // No click-outside-to-close: a stray click on the scrim must not dismiss
     // first-run setup. The X and the footer buttons are the ways out.
     <div style={overlay}>
+      <WizardHostContext.Provider value={host}>
       <div style={card}>
         <div style={header}>
           <div style={{ display: "flex", flexDirection: "column", gap: 5, flex: 1 }}>
@@ -107,13 +126,17 @@ export function OnboardingWizard({
             fourth entry in `steps`. */}
         <Stepper labels={["Installed", ...steps.map((s) => s.label)]} current={i + 1} />
 
-        <div style={stepSection}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <span className="text-lg" style={{ fontWeight: 700, color: "var(--fg-primary)" }}>{step.title}</span>
-            {step.status}
+        {/* A sub-flow describes itself, so the step's own head steps aside
+            rather than captioning a screen the user has already left. */}
+        {!subflow && (
+          <div style={stepSection}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <span className="text-lg" style={{ fontWeight: 700, color: "var(--fg-primary)" }}>{step.title}</span>
+              {step.status}
+            </div>
+            <span className="text-sm" style={{ color: "var(--fg-secondary)", lineHeight: 1.45 }}>{step.description}</span>
           </div>
-          <span className="text-sm" style={{ color: "var(--fg-secondary)", lineHeight: 1.45 }}>{step.description}</span>
-        </div>
+        )}
 
         {/* Every body stays mounted (hidden via display:none) so a typed email,
             an in-flight install, or a half-finished connect flow survives
@@ -143,7 +166,11 @@ export function OnboardingWizard({
               sign-in link" primary, Done stays secondary rather than competing
               with it, and takes over as the primary once the link is on its way. */}
           <div>
-            {isLast ? (
+            {subflowOwnsAction ? (
+              // The open sub-flow portals its own primary in here, so the card
+              // keeps one action row and it is always this one.
+              <div ref={setActionSlot} style={{ display: "flex", gap: 8 }} />
+            ) : isLast ? (
               <button type="button" onClick={onClose} style={signInStarted ? primaryBtn : ghostBtn}>
                 Done
               </button>
@@ -153,6 +180,7 @@ export function OnboardingWizard({
           </div>
         </div>
       </div>
+      </WizardHostContext.Provider>
     </div>
   );
 }

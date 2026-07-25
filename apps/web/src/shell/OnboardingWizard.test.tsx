@@ -12,6 +12,7 @@ import type { AgentsResponse, AgentView } from "@/lib/api";
 import type { UseAccountResult } from "./useAccount";
 
 import { OnboardingWizard } from "./OnboardingWizard";
+import { UpgradeProvider } from "./UpgradeContext";
 
 const claude: AgentView = {
   id: "claude", label: "Claude Code", vendor: "Anthropic", status: "available",
@@ -54,7 +55,10 @@ function renderWizard(agents?: AgentsResponse, metricsAvailable?: boolean, accou
   const { container } = render(
     <QueryClientProvider client={qc}>
       <MemoryRouter>
-        <OnboardingWizard account={account} onClose={onClose} onLeave={onLeave} />
+        {/* The cloud connect flow reads the upgrade context to gate itself. */}
+        <UpgradeProvider onUpgrade={vi.fn()}>
+          <OnboardingWizard account={account} onClose={onClose} onLeave={onLeave} />
+        </UpgradeProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -341,18 +345,41 @@ describe("OnboardingWizard keeps step state across navigation", () => {
     expect(screen.getByLabelText(/email address/i)).toHaveValue("jane@acme.com");
   });
 
-  it("keeps an in-progress kubeconfig import across a Next then Back round trip", () => {
+  // An open sub-flow takes the footer, so there is no Next to step past it with.
+  // That is deliberate (one action row, and the action is the flow's own), and it
+  // replaces the old guarantee that a half-pasted kubeconfig survived stepping
+  // away: you now back out of the flow first, which discards it.
+  it("offers no Next while a sub-flow is open", () => {
     renderWizard();
     fireEvent.click(screen.getByText("Import a kubeconfig"));
-    const box = screen.getByRole("textbox");
-    fireEvent.change(box, { target: { value: "apiVersion: v1" } });
-
-    fireEvent.click(screen.getByRole("button", { name: /^next →$/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^back$/i }));
-
-    // Still inside the import flow (not dumped back to the option list), with
-    // the pasted kubeconfig intact.
     expect(screen.getByText("All connection options")).toBeInTheDocument();
-    expect(screen.getByRole("textbox")).toHaveValue("apiVersion: v1");
+    expect(screen.queryByRole("button", { name: /^next →$/i })).not.toBeInTheDocument();
+  });
+
+  it("does not advance on Enter while a sub-flow is open", () => {
+    renderWizard();
+    fireEvent.click(screen.getByText("Import a kubeconfig"));
+    (document.activeElement as HTMLElement | null)?.blur();
+    fireEvent.keyDown(document, { key: "Enter" });
+    // Enter would have stranded the flow's action in another step's footer.
+    expect(screen.getByText("All connection options")).toBeInTheDocument();
+    expect(currentStep()).toHaveTextContent("Cluster");
+  });
+
+  // The cloud connect flow hoists nothing, so taking its footer would leave an
+  // empty action row with no way forward.
+  it("keeps Next for a sub-flow that has no single action to hoist", () => {
+    renderWizard();
+    fireEvent.click(screen.getByText("Connect a cloud cluster"));
+    expect(screen.getByText("All connection options")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^next →$/i })).toBeInTheDocument();
+  });
+
+  it("puts the sub-flow's action in the footer, not in the flow body", () => {
+    renderWizard();
+    fireEvent.click(screen.getByText("Import a kubeconfig"));
+    const panel = screen.getByRole("textbox").parentElement!;
+    expect(panel).toHaveTextContent("Paste a kubeconfig");
+    expect(panel.contains(screen.getByRole("button", { name: /^import$/i }))).toBe(false);
   });
 });

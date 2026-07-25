@@ -6,6 +6,7 @@ import { ClusterStep } from "./ClusterStep";
 
 vi.mock("../CreateClusterBody", () => ({
   CreateClusterBody: () => <div>create-cluster-body</div>,
+  clusterToolsReady: () => true,
 }));
 vi.mock("../ConnectClusterBody", () => ({
   ConnectClusterBody: () => <div>connect-cluster-body</div>,

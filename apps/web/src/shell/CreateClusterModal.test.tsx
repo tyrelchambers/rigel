@@ -41,7 +41,7 @@ function emit(e: Record<string, unknown>) {
 }
 
 function startCreate() {
-  fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "dev" } });
+  fireEvent.change(screen.getByLabelText(/cluster name/i), { target: { value: "dev" } });
   fireEvent.click(screen.getByRole("button", { name: /^create cluster$/i }));
 }
 
