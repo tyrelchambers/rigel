@@ -51,15 +51,18 @@ function renderWizard(agents?: AgentsResponse, metricsAvailable?: boolean, accou
   qc.setQueryData(["contexts"], []);
   const onClose = vi.fn();
   const onLeave = vi.fn();
-  render(
+  const { container } = render(
     <QueryClientProvider client={qc}>
       <MemoryRouter>
         <OnboardingWizard account={account} onClose={onClose} onLeave={onLeave} />
       </MemoryRouter>
     </QueryClientProvider>,
   );
-  return { onClose, onLeave, account };
+  return { onClose, onLeave, account, container };
 }
+
+const skip = () => fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
+const currentStep = () => document.querySelector('[aria-current="step"]');
 
 describe("OnboardingWizard AI-agent step", () => {
   beforeEach(() => {
@@ -128,13 +131,19 @@ describe("OnboardingWizard steps", () => {
 
   it("walks Cluster to AI agent to Email and finishes", () => {
     const { onClose } = renderWizard();
-    fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
+    // Asserted on the step chrome, which renders for the CURRENT step only. The
+    // bodies are all mounted (hidden), so a body query proves nothing here.
+    expect(currentStep()).toHaveTextContent("Cluster");
+
+    skip();
+    expect(currentStep()).toHaveTextContent("AI agent");
     expect(screen.getByText(/connect your ai agent/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
-    expect(screen.getByLabelText(/email address/i)).toBeInTheDocument();
+    skip();
+    expect(currentStep()).toHaveTextContent("Email");
+    expect(screen.getByText("Sign in to Rigel")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
+    skip();
     expect(onClose).toHaveBeenCalledOnce();
   });
 
@@ -166,5 +175,79 @@ describe("OnboardingWizard steps", () => {
     fireEvent.click(screen.getByLabelText("Close"));
     expect(onClose).not.toHaveBeenCalled();
     expect(onLeave).toHaveBeenCalledOnce();
+  });
+});
+
+// The two rules that make this a hand-rolled modal rather than the Dialog
+// primitive: finishing is always an explicit click, and the scrim is inert.
+describe("OnboardingWizard finishing is explicit", () => {
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it("finishes when Done is clicked on the last step", () => {
+    const { onClose, onLeave } = renderWizard();
+    skip();
+    skip();
+    fireEvent.click(screen.getByRole("button", { name: /^done$/i }));
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(onLeave).not.toHaveBeenCalled();
+  });
+
+  it("does not close when the scrim is clicked", () => {
+    const { onClose, onLeave, container } = renderWizard();
+    fireEvent.click(container.firstElementChild!);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(onLeave).not.toHaveBeenCalled();
+  });
+
+  it("does NOT finish on a stray Enter on the last step", () => {
+    // A stray Enter that reached onClose would set rigel_onboarded and retire
+    // first-run setup for good, so the last step must ignore it entirely.
+    const { onClose } = renderWizard();
+    skip();
+    skip();
+    (document.activeElement as HTMLElement | null)?.blur();
+    fireEvent.keyDown(document, { key: "Enter" });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("still advances on Enter from an earlier step", () => {
+    renderWizard();
+    fireEvent.keyDown(document, { key: "Enter" });
+    expect(currentStep()).toHaveTextContent("AI agent");
+  });
+});
+
+describe("OnboardingWizard keeps step state across navigation", () => {
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it("keeps a typed email across a Back then Next round trip", () => {
+    renderWizard();
+    skip();
+    skip();
+    fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: "jane@acme.com" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /^back$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^next →$/i }));
+
+    expect(screen.getByLabelText(/email address/i)).toHaveValue("jane@acme.com");
+  });
+
+  it("keeps an in-progress kubeconfig import across a Next then Back round trip", () => {
+    renderWizard();
+    fireEvent.click(screen.getByText("Import a kubeconfig"));
+    const box = screen.getByRole("textbox");
+    fireEvent.change(box, { target: { value: "apiVersion: v1" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /^next →$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^back$/i }));
+
+    // Still inside the import flow (not dumped back to the option list), with
+    // the pasted kubeconfig intact.
+    expect(screen.getByText("All connection options")).toBeInTheDocument();
+    expect(screen.getByRole("textbox")).toHaveValue("apiVersion: v1");
   });
 });

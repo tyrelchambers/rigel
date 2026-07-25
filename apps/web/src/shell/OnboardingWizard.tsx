@@ -27,7 +27,7 @@ export function OnboardingWizard({
   const activeAgent = agentsData?.agents.find((a) => a.id === agentsData?.activeAgentId);
   const agentConnected = activeAgent?.connection === "connected";
 
-  const steps: { label: string; title?: string; description?: string; status?: ReactNode; node: ReactNode }[] = [
+  const steps: { label: string; title: string; description: string; status?: ReactNode; node: ReactNode }[] = [
     {
       label: "Cluster",
       title: "Connect a cluster",
@@ -44,7 +44,7 @@ export function OnboardingWizard({
       node: (
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           <AgentsTab hideHeading />
-          <OptionalRow />
+          <OptionalInstalls />
         </div>
       ),
     },
@@ -60,21 +60,22 @@ export function OnboardingWizard({
   const isFirst = i === 0;
   const isLast = i === steps.length - 1;
 
-  // Enter advances to the next step (or finishes on the last). It yields to the
-  // focused control so it never discards typed input or double-fires: a focused
-  // input/textarea/button/link handles Enter itself.
+  // Enter advances to the next step. It yields to the focused control so it
+  // never discards typed input or double-fires: a focused input/textarea/
+  // button/link handles Enter itself. It never FINISHES, because finishing
+  // writes the onboarded flag and first run would not come back on its own.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key !== "Enter" || e.isComposing) return;
+      if (isLast) return;
       const tag = (document.activeElement as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "BUTTON" || tag === "A") return;
       e.preventDefault();
-      if (isLast) onClose();
-      else setI((n) => n + 1);
+      setI((n) => n + 1);
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isLast, onClose]);
+  }, [isLast]);
 
   const step = steps[i];
 
@@ -97,17 +98,22 @@ export function OnboardingWizard({
 
         <Stepper labels={steps.map((s) => s.label)} current={i} />
 
-        {step.title && (
-          <div style={stepSection}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-              <span className="text-lg" style={{ fontWeight: 700, color: "var(--fg-primary)" }}>{step.title}</span>
-              {step.status}
-            </div>
-            <span className="text-sm" style={{ color: "var(--fg-secondary)", lineHeight: 1.45 }}>{step.description}</span>
+        <div style={stepSection}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <span className="text-lg" style={{ fontWeight: 700, color: "var(--fg-primary)" }}>{step.title}</span>
+            {step.status}
           </div>
-        )}
+          <span className="text-sm" style={{ color: "var(--fg-secondary)", lineHeight: 1.45 }}>{step.description}</span>
+        </div>
 
-        <div style={body}>{step.node}</div>
+        {/* Every body stays mounted (hidden via display:none) so a typed email,
+            an in-flight install, or a half-finished connect flow survives
+            stepping away and back. Only the chrome above tracks the step. */}
+        {steps.map((s, n) => (
+          <div key={s.label} style={{ ...body, display: n === i ? undefined : "none" }}>
+            {s.node}
+          </div>
+        ))}
 
         <div style={divider} />
 
@@ -155,9 +161,13 @@ function StatusPill({ label }: { label: string }) {
   );
 }
 
-/** The two optional in-cluster installs, one bordered card, two rows. */
-function OptionalRow() {
+/** The two optional in-cluster installs: a captioned section wrapping one
+ *  bordered card of rows. metrics-server only appears when the cluster is known
+ *  to be missing it. */
+function OptionalInstalls() {
   const metrics = useNodeMetrics();
+  const assistant = useAssistantAction();
+  const metricsServer = useInstallMetricsServer();
   const showMetrics = metrics.data?.available === false;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -165,11 +175,23 @@ function OptionalRow() {
         OPTIONAL
       </span>
       <div style={tool}>
-        <AssistantInstall />
+        <InstallRow
+          icon={<FontAwesomeIcon icon={faRobot} className="size-[15px]" style={{ color: "var(--accent-primary)" }} />}
+          title="Assistant agent"
+          desc="An in-cluster agent that watches for problems and proposes remediations."
+          install={assistant}
+          onInstall={() => assistant.mutate({ action: "install" })}
+        />
         {showMetrics && (
           <>
-            <div style={{ height: 1, background: "#FFFFFF0A" }} />
-            <MetricsInstall />
+            <div style={hairline} />
+            <InstallRow
+              icon={<FontAwesomeIcon icon={faWaveform} className="size-[15px]" style={{ color: "var(--accent-primary)" }} />}
+              title="metrics-server"
+              desc="Enables live node CPU and memory. On homelab clusters the install also adds --kubelet-insecure-tls."
+              install={metricsServer}
+              onInstall={() => metricsServer.mutate()}
+            />
           </>
         )}
       </div>
@@ -177,21 +199,24 @@ function OptionalRow() {
   );
 }
 
+interface InstallState {
+  isSuccess: boolean;
+  isPending: boolean;
+  isError: boolean;
+  error: Error | null;
+}
+
 function InstallRow({
   icon,
   title,
   desc,
-  done,
-  pending,
-  error,
+  install,
   onInstall,
 }: {
   icon: ReactNode;
   title: string;
   desc: string;
-  done: boolean;
-  pending: boolean;
-  error: string | null;
+  install: InstallState;
   onInstall: () => void;
 }) {
   return (
@@ -200,54 +225,24 @@ function InstallRow({
         {icon}
         <span className="text-xs" style={{ fontWeight: 600, color: "var(--fg-primary)" }}>{title}</span>
         <div style={{ flex: 1 }} />
-        {done ? (
+        {install.isSuccess ? (
           <span className="text-2xs" style={{ display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 600, color: "var(--status-running)" }}>
             <FontAwesomeIcon icon={faCheck} className="size-[12px]" /> Done
           </span>
         ) : (
           <button
             type="button"
-            disabled={pending}
+            disabled={install.isPending}
             onClick={onInstall}
-            style={{ ...ghostBtn, opacity: pending ? 0.6 : 1 }}
+            style={{ ...ghostBtn, opacity: install.isPending ? 0.6 : 1 }}
           >
-            {pending ? "Installing…" : "Install"}
+            {install.isPending ? "Installing…" : "Install"}
           </button>
         )}
       </div>
       <span className="text-xs" style={{ color: "var(--fg-secondary)", lineHeight: 1.45 }}>{desc}</span>
-      {error && <span style={errText}>{error}</span>}
+      {install.isError && <span style={errText}>{install.error?.message}</span>}
     </div>
-  );
-}
-
-function AssistantInstall() {
-  const install = useAssistantAction();
-  return (
-    <InstallRow
-      icon={<FontAwesomeIcon icon={faRobot} className="size-[15px]" style={{ color: "var(--accent-primary)" }} />}
-      title="Assistant agent"
-      desc="An in-cluster agent that watches for problems and proposes remediations."
-      done={install.isSuccess}
-      pending={install.isPending}
-      error={install.isError ? install.error.message : null}
-      onInstall={() => install.mutate({ action: "install" })}
-    />
-  );
-}
-
-function MetricsInstall() {
-  const install = useInstallMetricsServer();
-  return (
-    <InstallRow
-      icon={<FontAwesomeIcon icon={faWaveform} className="size-[15px]" style={{ color: "var(--accent-primary)" }} />}
-      title="metrics-server"
-      desc="Enables live node CPU and memory. On homelab clusters the install also adds --kubelet-insecure-tls."
-      done={install.isSuccess}
-      pending={install.isPending}
-      error={install.isError ? install.error.message : null}
-      onInstall={() => install.mutate()}
-    />
   );
 }
 
@@ -337,5 +332,9 @@ const ghostBtn: React.CSSProperties = {
   fontWeight: 500,
   border: "1px solid #34353A",
   cursor: "pointer",
+};
+const hairline: React.CSSProperties = {
+  height: 1,
+  background: "color-mix(in oklab, var(--border-subtle) 55%, transparent)",
 };
 const errText: React.CSSProperties = { fontSize: 11, color: "var(--status-failed)" };
