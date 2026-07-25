@@ -48,14 +48,14 @@ describe("SignInFlow", () => {
   });
 
   it("shows the inbox panel with the address once a sign-in is pending", () => {
-    render(<SignInFlow account={account({ pendingSignIn: { email: "jane@acme.com", expiresAt: Date.now() + 1000 } })} />);
+    render(<SignInFlow account={account({ pendingSignIn: { email: "jane@acme.com", expiresAt: Date.now() + 1000, displayCode: "4K7Q-9WXZ" } })} />);
     expect(screen.getByText(/check your inbox/i)).toBeInTheDocument();
     expect(screen.getByText(/jane@acme\.com/)).toBeInTheDocument();
     expect(screen.queryByLabelText(/email address/i)).not.toBeInTheDocument();
   });
 
   it("resends from the inbox panel", async () => {
-    const acct = account({ pendingSignIn: { email: "jane@acme.com", expiresAt: Date.now() + 1000 } });
+    const acct = account({ pendingSignIn: { email: "jane@acme.com", expiresAt: Date.now() + 1000, displayCode: "4K7Q-9WXZ" } });
     render(<SignInFlow account={acct} />);
     fireEvent.click(screen.getByRole("button", { name: /send it again/i }));
     await waitFor(() => expect(acct.startSignIn).toHaveBeenCalledWith("jane@acme.com"));
@@ -86,7 +86,7 @@ describe("SignInFlow", () => {
         account={account({
           status: "signed-in",
           account: jane,
-          pendingSignIn: { email: "jane@acme.com", expiresAt: Date.now() + 1000 },
+          pendingSignIn: { email: "jane@acme.com", expiresAt: Date.now() + 1000, displayCode: "4K7Q-9WXZ" },
         })}
       />,
     );

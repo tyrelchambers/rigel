@@ -63,7 +63,7 @@ function renderWizard(agents?: AgentsResponse, metricsAvailable?: boolean, accou
 
 const skip = () => fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
 const currentStep = () => document.querySelector('[aria-current="step"]');
-const pending = { email: "jane@acme.com", expiresAt: Date.now() + 1000 };
+const pending = { email: "jane@acme.com", expiresAt: Date.now() + 1000, displayCode: "4K7Q-9WXZ" };
 
 describe("OnboardingWizard AI-agent step", () => {
   beforeEach(() => {
