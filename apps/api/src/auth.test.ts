@@ -350,3 +350,74 @@ test("verify-link is rate-limited → 429", async () => {
   const { app } = make({ allow: () => false });
   expect((await json(app, "/auth/verify-link", { token: "anything" })).status).toBe(429);
 });
+
+const form = (app: Hono, path: string, fields: Record<string, string>) =>
+  app.request(path, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams(fields).toString(),
+  });
+
+/** A live pending login, plus the confirm token as it reaches the human's inbox. */
+async function appWithPendingLogin(email = "jane@acme.com") {
+  const { app, pendings, sent } = make();
+  const res = await json(app, "/auth/request", { email });
+  const { displayCode } = (await res.json()) as { displayCode: string };
+  const confirmToken = new URL(sent[0].confirmUrl).searchParams.get("t") ?? "";
+  expect(confirmToken.length).toBeGreaterThan(20);
+  return { app, pendings, confirmToken, displayCode };
+}
+
+test("GET /auth/confirm shows the code and leaves the row unconfirmed", async () => {
+  const { app, pendings, confirmToken, displayCode } = await appWithPendingLogin();
+  const res = await app.request(`/auth/confirm?t=${confirmToken}`);
+  expect(res.status).toBe(200);
+  const html = await res.text();
+  expect(displayCode).toMatch(/^[0-9A-Z]{4}-[0-9A-Z]{4}$/);
+  expect(html).toContain(displayCode);
+  expect(html).toContain("jane@acme.com");
+  expect(pendings[0].confirmed).toBe(false);
+  expect(pendings[0].consumed).toBe(false);
+  expect((await form(app, "/auth/confirm", { t: confirmToken, action: "confirm" })).status).toBe(200);
+});
+
+test("the code GET renders is displayCodeFor the row's poll token hash", async () => {
+  const { app, pendings, confirmToken } = await appWithPendingLogin();
+  const html = await (await app.request(`/auth/confirm?t=${confirmToken}`)).text();
+  const expected = displayCodeFor(pendings[0].pollTokenHash);
+  expect(expected).toMatch(/^[0-9A-Z]{4}-[0-9A-Z]{4}$/);
+  expect(html).toContain(`>${expected}<`);
+});
+
+test("POST /auth/confirm confirms the row once, and a replay is rejected", async () => {
+  const { app, pendings, confirmToken } = await appWithPendingLogin();
+  const first = await form(app, "/auth/confirm", { t: confirmToken, action: "confirm" });
+  expect(first.status).toBe(200);
+  expect(await first.text()).toContain("jane@acme.com");
+  expect(pendings[0].confirmed).toBe(true);
+  expect((await form(app, "/auth/confirm", { t: confirmToken, action: "confirm" })).status).toBe(400);
+});
+
+test("denying kills the row so a later confirm cannot succeed", async () => {
+  const { app, pendings, confirmToken } = await appWithPendingLogin();
+  expect((await form(app, "/auth/confirm", { t: confirmToken, action: "deny" })).status).toBe(200);
+  expect(pendings[0].consumed).toBe(true);
+  expect(pendings[0].confirmed).toBe(false);
+  expect((await form(app, "/auth/confirm", { t: confirmToken, action: "confirm" })).status).toBe(400);
+});
+
+test("POST /auth/confirm with a bogus token renders the invalid page", async () => {
+  const { app, pendings } = await appWithPendingLogin();
+  const res = await form(app, "/auth/confirm", { t: "not-a-token", action: "confirm" });
+  expect(res.status).toBe(400);
+  expect((await res.text()).toLowerCase()).toContain("expired");
+  expect(pendings[0].confirmed).toBe(false);
+});
+
+test("GET /auth/confirm with a bogus token renders the invalid page", async () => {
+  const { app } = await appWithPendingLogin();
+  const res = await app.request("/auth/confirm?t=not-a-token");
+  expect(res.status).toBe(400);
+  expect((await res.text()).toLowerCase()).toContain("expired");
+  expect((await app.request("/auth/confirm")).status).toBe(400);
+});

@@ -4,6 +4,7 @@ import { sha, bearer } from "./authToken";
 import type { AuthDb } from "./authDb";
 import { parseRequestBody, parseVerifyBody } from "./authValidate";
 import { displayCodeFor } from "./displayCode";
+import { renderConfirmPage, renderConfirmedPage, renderDeniedPage, renderInvalidPage } from "./authPages";
 
 export interface AuthDeps {
   db: AuthDb;
@@ -56,6 +57,32 @@ export function registerAuthRoutes(app: Hono, deps: AuthDeps): void {
       return c.json({ error: "could not send link" }, 502);
     }
     return c.json({ pollToken, displayCode: displayCodeFor(sha(pollToken)) });
+  });
+
+  app.get("/auth/confirm", async (c) => {
+    const token = c.req.query("t") ?? "";
+    if (!token) return c.html(renderInvalidPage(), 400);
+    const pending = await db.pendingLoginByConfirmHash(sha(token));
+    if (!pending) return c.html(renderInvalidPage(), 400);
+    return c.html(renderConfirmPage(token, pending.email, displayCodeFor(pending.pollTokenHash)));
+  });
+
+  app.post("/auth/confirm", async (c) => {
+    const form = await c.req.parseBody();
+    const token = typeof form.t === "string" ? form.t.trim() : "";
+    const action = typeof form.action === "string" ? form.action : "";
+    if (!token) return c.html(renderInvalidPage(), 400);
+    if (!allowVerify(`auth:cfm:ip:${clientIp(c)}`)) return c.html(renderInvalidPage(), 429);
+
+    if (action === "deny") {
+      const pending = await db.pendingLoginByConfirmHash(sha(token));
+      if (pending) await db.invalidatePendingLogins(pending.email);
+      return c.html(renderDeniedPage());
+    }
+
+    const claimed = await db.confirmPendingLogin(sha(token));
+    if (!claimed) return c.html(renderInvalidPage(), 400);
+    return c.html(renderConfirmedPage(claimed.email));
   });
 
   app.post("/auth/verify", async (c) => {
