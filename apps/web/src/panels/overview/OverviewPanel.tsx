@@ -42,6 +42,7 @@ import {
 import { NodeMetricsTable } from "./NodeMetricsTable";
 import { RecentDeploysCard } from "./RecentDeploysCard";
 import { PendingPrsCard } from "./PendingPrsCard";
+import { UpgradeCard } from "./UpgradeCard";
 import {
   sortEvents,
   isWarning,
@@ -340,6 +341,10 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
         {/* Pending PRs — chat-opened pull requests, with sync once merged */}
         <div className="ov-row">
           <PendingPrsCard />
+        </div>
+
+        <div className="ov-row">
+          <UpgradeCard />
         </div>
       </div>
 
