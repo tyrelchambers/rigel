@@ -1,18 +1,15 @@
-import type { AgentsResponse } from "@/lib/api";
+import type { ClusterContext } from "@/lib/api";
 
-/** True when the active agent (any backend) reports a live connection. */
-export function activeAgentConnected(agents: AgentsResponse | undefined): boolean {
-  if (!agents) return false;
-  const active = agents.agents.find((a) => a.id === agents.activeAgentId);
-  return active?.connection === "connected";
-}
-
-/** Auto-open onboarding when no active agent is connected — keyed off the active agent, not the Claude token (HELM-12). */
+/**
+ * Auto-open onboarding until the user has both finished it and attached a
+ * cluster. Keyed off contexts, not the AI agent: onboarding is now the single
+ * first-run surface, and an app with no cluster has nothing to show.
+ */
 export function shouldAutoOpenOnboarding(opts: {
-  agents: AgentsResponse | undefined;
+  contexts: ClusterContext[] | undefined;
   onboarded: boolean;
 }): boolean {
-  if (!opts.agents) return false;
-  if (opts.onboarded) return false;
-  return !activeAgentConnected(opts.agents);
+  if (opts.contexts === undefined) return false; // still loading
+  if (!opts.onboarded) return true;
+  return opts.contexts.length === 0;
 }

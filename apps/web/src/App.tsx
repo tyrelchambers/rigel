@@ -33,7 +33,7 @@ import { TerminalDrawer, TOGGLE_TERMINAL_EVENT } from "@/shell/TerminalDrawer";
 import { ResourceYamlViewer } from "@/components/ResourceYamlViewer";
 import { Toaster } from "@/components/ui/sonner";
 import { connectCluster } from "@/lib/ws";
-import { useAgents } from "@/lib/api";
+import { useContexts } from "@/lib/api";
 import { shouldAutoOpenOnboarding } from "@/shell/onboarding/shouldAutoOpen";
 import { OnboardingWizard } from "@/shell/OnboardingWizard";
 import { ClusterRail } from "@/shell/ClusterRail";
@@ -98,9 +98,9 @@ function AppContent({ account }: { account: UseAccountResult }) {
 
   const [launcherOpen, setLauncherOpen] = useNavLauncher();
 
-  // First-run onboarding: auto-show once when no AI agent is connected (any
-  // backend) and not previously dismissed; re-openable from Settings via an event.
-  const { data: agentsData } = useAgents();
+  // First-run onboarding: auto-show until finished and a cluster is attached;
+  // re-openable from Settings via an event.
+  const { data: contexts } = useContexts();
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   // Account modal — session state (sign-in/out) is owned by useAccount.
@@ -118,19 +118,19 @@ function AppContent({ account }: { account: UseAccountResult }) {
   }, []);
 
   // Suppresses auto-open once onboarding has been closed or left this session, so
-  // an agents refetch can't pop the wizard back over a panel the user navigated to.
+  // a contexts refetch can't pop the wizard back over a panel the user navigated to.
   const onboardingHandledRef = useRef(false);
   useEffect(() => {
     if (onboardingHandledRef.current) return;
     if (
       shouldAutoOpenOnboarding({
-        agents: agentsData,
+        contexts,
         onboarded: localStorage.getItem("rigel_onboarded") !== null,
       })
     ) {
       setShowOnboarding(true);
     }
-  }, [agentsData]);
+  }, [contexts]);
   function closeOnboarding() {
     onboardingHandledRef.current = true;
     setShowOnboarding(false);
