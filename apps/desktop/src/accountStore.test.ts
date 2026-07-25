@@ -1,5 +1,5 @@
 import { test, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AccountStore, type SafeStorageLike } from "./accountStore";
@@ -78,4 +78,36 @@ test("a corrupt/undecryptable file reads as null, not a crash", () => {
   new AccountStore(dir, fakeSafe()).setToken("tok");
   const a = new AccountStore(dir, fakeSafe({ decryptString: () => { throw new Error("bad"); } }));
   expect(a.getToken()).toBeNull();
+});
+
+test("pending login round-trips through safeStorage", () => {
+  const store = new AccountStore(dir, fakeSafe());
+  expect(store.getPending()).toBeNull();
+
+  store.setPending({ pollToken: "poll-abc", email: "jane@acme.com", startedAt: 1000, expiresAt: 90_000 });
+  expect(store.getPending()).toEqual({
+    pollToken: "poll-abc", email: "jane@acme.com", startedAt: 1000, expiresAt: 90_000,
+  });
+
+  store.clearPending();
+  expect(store.getPending()).toBeNull();
+});
+
+test("pending login lives in its own file, so clear() does not drop the token", () => {
+  const store = new AccountStore(dir, fakeSafe());
+  store.setToken("bearer-1");
+  store.setPending({ pollToken: "poll-abc", email: "jane@acme.com", startedAt: 0, expiresAt: 1 });
+
+  store.clear();
+  expect(store.getToken()).toBeNull();
+  expect(store.getPending()).not.toBeNull();
+
+  store.clearPending();
+  expect(store.getPending()).toBeNull();
+});
+
+test("getPending returns null on corrupt contents rather than throwing", () => {
+  const store = new AccountStore(dir, fakeSafe());
+  writeFileSync(join(dir, "rigel-pending-login.bin"), "not-base64-json");
+  expect(store.getPending()).toBeNull();
 });
