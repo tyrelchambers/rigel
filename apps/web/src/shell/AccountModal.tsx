@@ -121,6 +121,9 @@ export function AccountModal({ open, onOpenChange, account, startCheckoutOnOpen 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [finalizing, setFinalizing] = useState(false);
+  // Two-click confirm rather than a nested dialog: signing out every device is
+  // rare and recoverable, but not something a stray click should do.
+  const [confirmSignOutAll, setConfirmSignOutAll] = useState(false);
 
   const personalOrgId = account.orgs.find((o) => o.kind === "personal")?.id;
 
@@ -364,6 +367,21 @@ export function AccountModal({ open, onOpenChange, account, startCheckoutOnOpen 
               >
                 <FontAwesomeIcon icon={faRightFromBracket} className="size-3.5" />
                 Sign out
+              </Button>
+              {/* Tokens never expire, so this is how a device you no longer have
+                  gets signed out. It used to be reachable only from a link in a
+                  sign-in email. */}
+              <Button
+                variant="ghost"
+                size="sm"
+                className={confirmSignOutAll ? "text-[var(--fg-primary)]" : "text-[var(--fg-secondary)]"}
+                onClick={() => {
+                  if (!confirmSignOutAll) { setConfirmSignOutAll(true); return; }
+                  setConfirmSignOutAll(false);
+                  void account.signOutEverywhere();
+                }}
+              >
+                {confirmSignOutAll ? "Sign out all devices?" : "Sign out everywhere"}
               </Button>
               <Button
                 variant="ghost"

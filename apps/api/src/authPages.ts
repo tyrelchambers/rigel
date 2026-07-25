@@ -103,34 +103,6 @@ export function renderDeniedPage(): string {
   );
 }
 
-/** The recovery screen reached from the sign-in notice email. Renders only: the
- *  POST does the revoking, so a mail scanner prefetching the link signs nobody out. */
-export function renderRevokePage(revokeToken: string): string {
-  return shell(
-    "Sign out all devices",
-    `<h1>Sign out all devices</h1>
-<p>This signs out every device currently signed in to your Rigel account, including this one if it is signed in.</p>
-<p>You can sign in again any time from the Rigel app.</p>
-<form method="post" action="/auth/revoke">
-<input type="hidden" name="t" value="${esc(revokeToken)}">
-<button class="destructive" type="submit">Sign out all devices</button>
-</form>`,
-  );
-}
-
-/** Shown after a successful revoke, naming how many sessions it ended. */
-export function renderRevokedPage(count: number): string {
-  const ended = count === 0
-    ? "There were no other active sessions, so nothing needed signing out."
-    : `${count} ${count === 1 ? "device was" : "devices were"} signed out.`;
-  return shell(
-    "Signed out everywhere",
-    `<h1>Signed out everywhere</h1>
-<p>${ended}</p>
-<p>Sign in again from the Rigel app whenever you are ready.</p>`,
-  );
-}
-
 /** Shown for a link that is unknown, already used, or past its 15 minute life. */
 export function renderInvalidPage(): string {
   return shell(

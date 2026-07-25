@@ -16,7 +16,6 @@ function fakeDb() {
   const accounts = new Map<string, Account>();
   const tokens = new Map<string, string>(); // tokenHash -> accountId
   const revoked = new Set<string>();
-  const revokeTokens = new Map<string, { accountId: string; ttlSeconds: number; used: boolean }>();
   const personalOrgs = new Map<string, OrgMembership>();
   let seq = 0;
   const db: AuthDb = {
@@ -69,15 +68,6 @@ function fakeDb() {
     },
     async touchToken() {},
     async revokeToken(tokenHash) { revoked.add(tokenHash); },
-    async createRevokeToken({ tokenHash, accountId, ttlSeconds }) {
-      revokeTokens.set(tokenHash, { accountId, ttlSeconds, used: false });
-    },
-    async consumeRevokeToken(tokenHash) {
-      const r = revokeTokens.get(tokenHash);
-      if (!r || r.used) return null;
-      r.used = true;
-      return { accountId: r.accountId };
-    },
     async revokeTokensForAccount(accountId) {
       let n = 0;
       for (const [hash, accId] of tokens) {
@@ -101,37 +91,32 @@ function fakeDb() {
     async agentTokenByHash() { return null; },
     async orgStripeCustomer() { return null; },
   };
-  return { db, pendings, revokeTokens };
+  return { db, pendings };
 }
 
 interface Overrides {
   sendLink?: (e: string, url: string) => Promise<void>;
-  sendSignInNotice?: (e: string, url: string, when: string) => Promise<void>;
   allow?: () => boolean;
   allowPoll?: (key: string) => boolean;
   allowPollIp?: (key: string) => boolean;
 }
 
 function make(over: Overrides = {}) {
-  const { db, pendings, revokeTokens } = fakeDb();
+  const { db, pendings } = fakeDb();
   const sent: { email: string; confirmUrl: string }[] = [];
-  const notices: { email: string; revokeUrl: string; when: string }[] = [];
   const sendLink = over.sendLink ?? (async (email, confirmUrl) => { sent.push({ email, confirmUrl }); });
-  const sendSignInNotice = over.sendSignInNotice
-    ?? (async (email: string, revokeUrl: string, when: string) => { notices.push({ email, revokeUrl, when }); });
   const allow = over.allow ?? (() => true);
   const app = new Hono();
   registerAuthRoutes(app, {
     db,
     sendLink,
-    sendSignInNotice,
     allowRequest: allow,
     allowVerify: allow,
     allowPoll: over.allowPoll ?? allow,
     allowPollIp: over.allowPollIp ?? allow,
     publicUrl: "https://api.example.test",
   });
-  return { app, db, pendings, revokeTokens, sent, notices };
+  return { app, db, pendings, sent };
 }
 
 const json = (app: Hono, path: string, body: unknown, headers: Record<string, string> = {}) =>
@@ -144,7 +129,6 @@ test("POST /auth/request returns a poll token and emails a confirm link", async 
   registerAuthRoutes(app, {
     db,
     sendLink: async (email, confirmUrl) => { sent.push({ email, confirmUrl }); },
-    sendSignInNotice: async () => {},
     allowRequest: () => true,
     allowVerify: () => true,
     allowPoll: () => true,
@@ -177,7 +161,7 @@ test("POST /auth/request returns a display code derived from the poll token", as
   const { db } = fakeDb();
   const app = new Hono();
   registerAuthRoutes(app, {
-    db, sendLink: async () => {}, sendSignInNotice: async () => {}, allowRequest: () => true, allowVerify: () => true,
+    db, sendLink: async () => {}, allowRequest: () => true, allowVerify: () => true,
     allowPoll: () => true, allowPollIp: () => true, publicUrl: "https://api.example.test",
   });
   const res = await app.request("/auth/request", {
@@ -195,7 +179,7 @@ test("the display code is never emailed", async () => {
   let sentUrl = "";
   const app = new Hono();
   registerAuthRoutes(app, {
-    db, sendLink: async (_e, url) => { sentUrl = url; }, sendSignInNotice: async () => {}, allowRequest: () => true,
+    db, sendLink: async (_e, url) => { sentUrl = url; }, allowRequest: () => true,
     allowVerify: () => true, allowPoll: () => true, allowPollIp: () => true, publicUrl: "https://api.example.test",
   });
   const res = await app.request("/auth/request", {
@@ -214,7 +198,6 @@ test("POST /auth/request 502s and issues no poll token when the email fails", as
   registerAuthRoutes(app, {
     db,
     sendLink: async () => { throw new Error("resend down"); },
-    sendSignInNotice: async () => {},
     allowRequest: () => true,
     allowVerify: () => true,
     allowPoll: () => true,
@@ -237,7 +220,7 @@ test("POST /auth/request invalidates any earlier pending login for the same emai
   const { db, pendings } = fakeDb();
   const app = new Hono();
   registerAuthRoutes(app, {
-    db, sendLink: async () => {}, sendSignInNotice: async () => {}, allowRequest: () => true, allowVerify: () => true,
+    db, sendLink: async () => {}, allowRequest: () => true, allowVerify: () => true,
     allowPoll: () => true, allowPollIp: () => true, publicUrl: "https://api.example.test",
   });
   const send = () => app.request("/auth/request", {
@@ -276,8 +259,8 @@ test("the code and magic-link routes are gone", async () => {
 });
 
 test("me returns the account for a valid bearer, 401 after logout", async () => {
-  const { app, sent, notices } = make();
-  const body = await signInViaPoll(app, sent, notices, "a@b.co");
+  const { app, sent } = make();
+  const body = await signInViaPoll(app, sent, "a@b.co");
   const auth = { authorization: `Bearer ${body.token}` };
   const meRes = await app.request("/me", { headers: auth });
   expect(meRes.status).toBe(200);
@@ -287,11 +270,39 @@ test("me returns the account for a valid bearer, 401 after logout", async () => 
   expect((await app.request("/me", { headers: auth })).status).toBe(401);
 });
 
+// Tokens never expire, so revoking every device is the only way to end a session
+// you no longer control. It has to be reachable from the app with nothing but the
+// bearer token: the emailed revoke link it replaces expired and could be deleted.
+test("logout-all revokes every device's token, not just the caller's", async () => {
+  const { app, sent } = make();
+  const first = await signInViaPoll(app, sent, "a@b.co");
+  const second = await signInViaPoll(app, sent, "a@b.co");
+  const authA = { authorization: `Bearer ${first.token}` };
+  const authB = { authorization: `Bearer ${second.token}` };
+  expect((await app.request("/me", { headers: authA })).status).toBe(200);
+  expect((await app.request("/me", { headers: authB })).status).toBe(200);
+
+  const res = await app.request("/auth/logout-all", { method: "POST", headers: authB });
+  expect(res.status).toBe(200);
+
+  // The OTHER device is signed out too, which plain /auth/logout would not do.
+  expect((await app.request("/me", { headers: authA })).status).toBe(401);
+  expect((await app.request("/me", { headers: authB })).status).toBe(401);
+});
+
+test("logout-all refuses an unauthenticated or unknown token", async () => {
+  const { app } = make();
+  expect((await app.request("/auth/logout-all", { method: "POST" })).status).toBe(401);
+  expect(
+    (await app.request("/auth/logout-all", { method: "POST", headers: { authorization: "Bearer nope" } })).status,
+  ).toBe(401);
+});
+
 test("me self-heals a personal org for an account that has none, and returns it", async () => {
   // The fake upsertAccount creates NO org (legacy account); /me must lazily
   // create the personal org so every signed-in account always has one.
-  const { app, sent, notices } = make();
-  const body = await signInViaPoll(app, sent, notices, "a@b.co");
+  const { app, sent } = make();
+  const body = await signInViaPoll(app, sent, "a@b.co");
   const me = await (await app.request("/me", { headers: { authorization: `Bearer ${body.token}` } })).json() as { account: { email: string }; orgs: Array<{ kind: string; role: string }> };
   expect(me.account.email).toBe("a@b.co");
   expect(me.orgs).toHaveLength(1);
@@ -318,12 +329,12 @@ const form = (app: Hono, path: string, fields: Record<string, string>) =>
 
 /** A live pending login, plus the confirm token as it reaches the human's inbox. */
 async function appWithPendingLogin(over: Overrides = {}, email = "jane@acme.com") {
-  const { app, db, pendings, revokeTokens, sent, notices } = make(over);
+  const { app, db, pendings, sent } = make(over);
   const res = await json(app, "/auth/request", { email });
   const { pollToken, displayCode } = (await res.json()) as { pollToken: string; displayCode: string };
   const confirmToken = new URL(sent[0].confirmUrl).searchParams.get("t") ?? "";
   expect(confirmToken.length).toBeGreaterThan(20);
-  return { app, db, pendings, revokeTokens, notices, pollToken, confirmToken, displayCode };
+  return { app, db, pendings, pollToken, confirmToken, displayCode };
 }
 
 test("GET /auth/confirm shows the code and leaves the row unconfirmed", async () => {
@@ -465,131 +476,12 @@ const tokenFrom = (url: string) => new URL(url).searchParams.get("t") ?? "";
 
 const me = (app: Hono, token: string) => app.request("/me", { headers: { authorization: `Bearer ${token}` } });
 
-/** Drives the whole device flow once, returning the minted bearer and the notice it triggered. */
-async function signInViaPoll(
-  app: Hono,
-  sent: { confirmUrl: string }[],
-  notices: { revokeUrl: string }[],
-  email = "jane@acme.com",
-) {
+/** Drives the whole device flow once, returning the minted bearer. */
+async function signInViaPoll(app: Hono, sent: { confirmUrl: string }[], email = "jane@acme.com") {
   const { pollToken } = (await (await json(app, "/auth/request", { email })).json()) as { pollToken: string };
   const confirmToken = tokenFrom(sent[sent.length - 1].confirmUrl);
   expect((await form(app, "/auth/confirm", { t: confirmToken, action: "confirm" })).status).toBe(200);
   const body = (await (await json(app, "/auth/poll", { pollToken })).json()) as { token: string };
-  return { token: body.token, revokeUrl: notices[notices.length - 1].revokeUrl };
+  return { token: body.token };
 }
 
-test("a confirmed poll emails a sign-in notice carrying a single-use revoke link", async () => {
-  const { app, pollToken, confirmToken, notices, revokeTokens } = await appWithPendingLogin();
-  await form(app, "/auth/confirm", { t: confirmToken, action: "confirm" });
-  expect((await json(app, "/auth/poll", { pollToken })).status).toBe(200);
-
-  expect(notices).toHaveLength(1);
-  expect(notices[0].email).toBe("jane@acme.com");
-  expect(notices[0].revokeUrl).toMatch(/^https:\/\/api\.example\.test\/auth\/revoke\?t=[\w-]+$/);
-  expect(Number.isNaN(Date.parse(notices[0].when))).toBe(false);
-  const stored = revokeTokens.get(sha(tokenFrom(notices[0].revokeUrl)));
-  expect(stored).toMatchObject({ accountId: "acc-1", ttlSeconds: 30 * 24 * 60 * 60, used: false });
-});
-
-test("no notice goes out while the login is still pending", async () => {
-  const { app, pollToken, notices } = await appWithPendingLogin();
-  expect((await json(app, "/auth/poll", { pollToken })).status).toBe(200);
-  expect(notices).toEqual([]);
-});
-
-test("a confirmed poll still mints a working token when the notice email rejects", async () => {
-  const { app, pollToken, confirmToken } = await appWithPendingLogin({
-    sendSignInNotice: async () => { throw new Error("resend down"); },
-  });
-  await form(app, "/auth/confirm", { t: confirmToken, action: "confirm" });
-  const res = await json(app, "/auth/poll", { pollToken });
-  expect(res.status).toBe(200);
-  const body = (await res.json()) as { status: string; token: string };
-  expect(body.status).toBe("confirmed");
-  expect(body.token.length).toBeGreaterThan(20);
-  expect((await me(app, body.token)).status).toBe(200);
-});
-
-test("GET /auth/revoke renders the form and consumes nothing", async () => {
-  const { app, db, sent, notices } = make();
-  const { revokeUrl } = await signInViaPoll(app, sent, notices);
-  const revokeToken = tokenFrom(revokeUrl);
-  const consume = vi.spyOn(db, "consumeRevokeToken");
-  const killAll = vi.spyOn(db, "revokeTokensForAccount");
-
-  const res = await app.request(`/auth/revoke?t=${revokeToken}`);
-  expect(res.status).toBe(200);
-  const html = await res.text();
-  expect(html).toContain(`value="${revokeToken}"`);
-  expect(html).toContain('action="/auth/revoke"');
-  expect(html).toContain("Sign out all devices");
-  expect(consume).not.toHaveBeenCalled();
-  expect(killAll).not.toHaveBeenCalled();
-
-  expect((await form(app, "/auth/revoke", { t: revokeToken })).status).toBe(200);
-});
-
-test("GET /auth/revoke without a token renders the invalid page", async () => {
-  const { app } = make();
-  expect((await app.request("/auth/revoke")).status).toBe(400);
-  const res = await app.request("/auth/revoke?t=");
-  expect(res.status).toBe(400);
-  expect((await res.text()).toLowerCase()).toContain("expired");
-});
-
-test("POST /auth/revoke signs out every device, reports the count, and cannot be replayed", async () => {
-  const { app, sent, notices } = make();
-  const first = await signInViaPoll(app, sent, notices);
-  const second = await signInViaPoll(app, sent, notices);
-  expect((await me(app, first.token)).status).toBe(200);
-  expect((await me(app, second.token)).status).toBe(200);
-
-  const res = await form(app, "/auth/revoke", { t: tokenFrom(second.revokeUrl) });
-  expect(res.status).toBe(200);
-  expect(await res.text()).toContain("2 devices");
-
-  expect((await me(app, first.token)).status).toBe(401);
-  expect((await me(app, second.token)).status).toBe(401);
-
-  const replay = await form(app, "/auth/revoke", { t: tokenFrom(second.revokeUrl) });
-  expect(replay.status).toBe(400);
-  expect((await replay.text()).toLowerCase()).toContain("expired");
-});
-
-test("POST /auth/revoke reports a single device when only one session is live", async () => {
-  const { app, sent, notices } = make();
-  const only = await signInViaPoll(app, sent, notices);
-  const res = await form(app, "/auth/revoke", { t: tokenFrom(only.revokeUrl) });
-  expect(res.status).toBe(200);
-  const html = await res.text();
-  expect(html).toContain("1 device");
-  expect(html).not.toContain("1 devices");
-  expect((await me(app, only.token)).status).toBe(401);
-});
-
-test("POST /auth/revoke with a bogus token renders the invalid page and revokes nothing", async () => {
-  const { app, sent, notices } = make();
-  const { token } = await signInViaPoll(app, sent, notices);
-  const res = await form(app, "/auth/revoke", { t: "not-a-token" });
-  expect(res.status).toBe(400);
-  expect((await res.text()).toLowerCase()).toContain("expired");
-  expect((await me(app, token)).status).toBe(200);
-});
-
-test("POST /auth/revoke without a token → 400", async () => {
-  const { app } = make();
-  expect((await form(app, "/auth/revoke", { t: "" })).status).toBe(400);
-});
-
-test("POST /auth/revoke is rate-limited → 429, and the token survives to be used later", async () => {
-  let allowed = true;
-  const { app, sent, notices } = make({ allow: () => allowed });
-  const { revokeUrl, token } = await signInViaPoll(app, sent, notices);
-  allowed = false;
-  expect((await form(app, "/auth/revoke", { t: tokenFrom(revokeUrl) })).status).toBe(429);
-  expect((await me(app, token)).status).toBe(200);
-  allowed = true;
-  expect((await form(app, "/auth/revoke", { t: tokenFrom(revokeUrl) })).status).toBe(200);
-  expect((await me(app, token)).status).toBe(401);
-});

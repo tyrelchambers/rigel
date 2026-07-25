@@ -38,6 +38,7 @@ function fakeAccount(over: Partial<UseAccountResult> = {}): UseAccountResult {
     entitlement: null,
     pendingSignIn: null,
     startSignIn: vi.fn().mockResolvedValue({ ok: true, status: 200 }),
+    signOutEverywhere: vi.fn().mockResolvedValue(undefined),
     signOut: vi.fn().mockResolvedValue(undefined),
     refresh: vi.fn().mockResolvedValue(undefined),
     upgrade: vi.fn().mockResolvedValue({ clientSecret: "cs_test", publishableKey: "pk_test" }),
@@ -90,6 +91,26 @@ function freeAccount(over: Partial<UseAccountResult> = {}) {
     ...over,
   });
 }
+
+// Tokens never expire, so this is the only way to end a session on a device you
+// no longer have. It replaced a link that arrived by email and expired.
+test("signed-in offers Sign out everywhere, and asks before ending every session", () => {
+  const acc = fakeAccount({
+    status: "signed-in",
+    account: { id: "1", email: "a@b.co", name: "Jane" },
+    me: { account: { id: "1", email: "a@b.co", name: "Jane" } },
+  });
+  render(<AccountModal open onOpenChange={vi.fn()} account={acc} />);
+
+  // First click only arms it: a stray click must not sign out every device.
+  fireEvent.click(screen.getByText("Sign out everywhere"));
+  expect(acc.signOutEverywhere).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByText("Sign out all devices?"));
+  expect(acc.signOutEverywhere).toHaveBeenCalledTimes(1);
+  // The single-device sign-out is untouched by the confirm dance.
+  expect(acc.signOut).not.toHaveBeenCalled();
+});
 
 test("signed-in hides the plan section for a free account", () => {
   const acc = freeAccount();
