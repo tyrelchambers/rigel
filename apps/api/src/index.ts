@@ -40,7 +40,7 @@ await ensureAuthSchema(pool);
 const allow = createRateLimiter(30, 60_000); // 30 req/min per IP
 const notify = createKitNotifier({ apiKey: KIT_API_KEY, tagId: KIT_TAG_ID });
 const authDb = createAuthDb(pool);
-const sendLink = createResendSender({ apiKey: RESEND_API_KEY, from: RESEND_FROM });
+const { sendLink, sendSignInNotice } = createResendSender({ apiKey: RESEND_API_KEY, from: RESEND_FROM });
 // Tighter, separate limiters (namespaced keys prevent collision with /signups).
 const allowRequest = createRateLimiter(5, 10 * 60_000);  // 5 link requests / 10 min per key
 const allowVerify = createRateLimiter(10, 10 * 60_000);  // 10 confirm attempts / 10 min per key
@@ -89,7 +89,7 @@ const app = createApp({
   upsert: (s) => upsertSignup(pool, s),
   allow,
   notify,
-  auth: { db: authDb, sendLink, allowRequest, allowVerify, allowPoll, allowPollIp, publicUrl: BILLING_ENDPOINT },
+  auth: { db: authDb, sendLink, sendSignInNotice, allowRequest, allowVerify, allowPoll, allowPollIp, publicUrl: BILLING_ENDPOINT },
   billing: { db: authDb, resolve, stripe: stripeAdapter, priceId: STRIPE_PRICE_ID, publishableKey: STRIPE_PUBLISHABLE_KEY, endpoint: BILLING_ENDPOINT },
   agent: {
     db: authDb,

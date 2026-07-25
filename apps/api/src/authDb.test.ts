@@ -25,13 +25,21 @@ async function pendingLoginsPool() {
 function recorder() {
   const calls: { sql: string; params: unknown[] }[] = [];
   const rowsToReturn: Record<string, unknown>[] = [];
+  let nextRowCount: number | null = null;
   const pool = {
     query: vi.fn(async (sql: string, params: unknown[] = []): Promise<QueryResult> => {
       calls.push({ sql: sql.trim(), params });
-      return { rows: rowsToReturn.splice(0), rowCount: 0, command: "", oid: 0, fields: [] };
+      const rowCount = nextRowCount ?? 0;
+      nextRowCount = null;
+      return { rows: rowsToReturn.splice(0), rowCount, command: "", oid: 0, fields: [] };
     }),
   } as unknown as Pool;
-  return { pool, calls, push: (r: Record<string, unknown>) => rowsToReturn.push(r) };
+  return {
+    pool,
+    calls,
+    push: (r: Record<string, unknown>) => rowsToReturn.push(r),
+    pushCount: (n: number) => { nextRowCount = n; },
+  };
 }
 
 test("ensureAuthSchema issues CREATE TABLE for the three auth tables", async () => {
@@ -405,6 +413,112 @@ test("invalidatePendingLogins (pg-mem) deactivates every unconsumed row for the 
   await db.invalidatePendingLogins("jane@acme.com");
   expect(await db.pendingLoginActive("p1")).toBe(false);
   expect(await db.pendingLoginActive("p2")).toBe(false);
+});
+
+async function revokeTokensPool() {
+  const mem = newDb();
+  const { Pool } = mem.adapters.createPg();
+  const pool = new Pool() as unknown as Pool;
+  await pool.query(`
+    CREATE TABLE revoke_tokens (
+      token_hash text PRIMARY KEY,
+      account_id text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      expires_at timestamptz NOT NULL,
+      used_at    timestamptz
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE auth_tokens (
+      token_hash   text PRIMARY KEY,
+      account_id   text NOT NULL,
+      created_at   timestamptz NOT NULL DEFAULT now(),
+      last_used_at timestamptz,
+      revoked_at   timestamptz
+    )
+  `);
+  return pool;
+}
+
+test("ensureAuthSchema creates revoke_tokens with its account index", async () => {
+  const { pool, calls } = recorder();
+  await ensureAuthSchema(pool);
+  const j = calls.map((c) => c.sql.toUpperCase()).join("\n");
+  expect(j).toContain("CREATE TABLE IF NOT EXISTS REVOKE_TOKENS");
+  expect(j).toContain("REVOKE_TOKENS_ACCOUNT_IDX");
+});
+
+test("createRevokeToken inserts the hashed token for the account with a ttl-based expiry", async () => {
+  const { pool, calls } = recorder();
+  const db = createAuthDb(pool);
+  await db.createRevokeToken({ tokenHash: "rvk-hash", accountId: "acc-1", ttlSeconds: 2_592_000 });
+  const sql = calls[0].sql.toUpperCase();
+  expect(sql).toContain("INSERT INTO REVOKE_TOKENS");
+  expect(sql).toContain("EXPIRES_AT");
+  expect(calls[0].params).toEqual(["rvk-hash", "acc-1", "2592000"]);
+});
+
+test("consumeRevokeToken is one flat guarded UPDATE and returns the account id", async () => {
+  const { pool, calls, push } = recorder();
+  push({ account_id: "acc-1" });
+  const db = createAuthDb(pool);
+  expect(await db.consumeRevokeToken("rvk-hash")).toEqual({ accountId: "acc-1" });
+  expect(calls).toHaveLength(1);
+  const sql = calls[0].sql.toUpperCase();
+  expect(sql).toContain("UPDATE REVOKE_TOKENS SET USED_AT = NOW()");
+  expect(sql).toContain("TOKEN_HASH = $1");
+  expect(sql).toContain("USED_AT IS NULL");
+  expect(sql).toContain("EXPIRES_AT > NOW()");
+  expect(sql).toContain("RETURNING ACCOUNT_ID");
+  expect(sql).not.toContain("SELECT");
+  expect(sql).not.toContain("WHERE ID =");
+  expect(calls[0].params).toEqual(["rvk-hash"]);
+});
+
+test("consumeRevokeToken returns null when no row matches", async () => {
+  const { pool } = recorder();
+  expect(await createAuthDb(pool).consumeRevokeToken("missing")).toBeNull();
+});
+
+test("revokeTokensForAccount revokes the account's live tokens and returns how many", async () => {
+  const { pool, calls, pushCount } = recorder();
+  pushCount(3);
+  const db = createAuthDb(pool);
+  expect(await db.revokeTokensForAccount("acc-1")).toBe(3);
+  const sql = calls[0].sql.toUpperCase();
+  expect(sql).toContain("UPDATE AUTH_TOKENS SET REVOKED_AT = NOW()");
+  expect(sql).toContain("ACCOUNT_ID = $1");
+  expect(sql).toContain("REVOKED_AT IS NULL");
+  expect(sql).not.toContain("SELECT");
+  expect(sql).not.toContain("WHERE ID =");
+  expect(calls[0].params).toEqual(["acc-1"]);
+});
+
+test("revokeTokensForAccount reports zero when the driver reports no rows", async () => {
+  const { pool } = recorder();
+  expect(await createAuthDb(pool).revokeTokensForAccount("acc-1")).toBe(0);
+});
+
+test("revoke_tokens lifecycle (pg-mem): single-use, expiry-guarded, kills only that account's sessions", async () => {
+  const pool = await revokeTokensPool();
+  const db = createAuthDb(pool);
+  await db.createRevokeToken({ tokenHash: "rvk", accountId: "acc-1", ttlSeconds: 2_592_000 });
+  await pool.query(
+    `INSERT INTO revoke_tokens (token_hash, account_id, expires_at)
+     VALUES ('rvk-old', 'acc-1', now() - interval '1 day')`,
+  );
+  await pool.query(
+    `INSERT INTO auth_tokens (token_hash, account_id) VALUES ('t1', 'acc-1'), ('t2', 'acc-1'), ('t3', 'acc-2')`,
+  );
+
+  expect(await db.consumeRevokeToken("rvk-old")).toBeNull();
+  expect(await db.consumeRevokeToken("rvk")).toEqual({ accountId: "acc-1" });
+  expect(await db.consumeRevokeToken("rvk")).toBeNull();
+
+  expect(await db.revokeTokensForAccount("acc-1")).toBe(2);
+  expect(await db.revokeTokensForAccount("acc-1")).toBe(0);
+  const live = await pool.query(`SELECT token_hash FROM auth_tokens WHERE revoked_at IS NULL`);
+  expect(live.rows).toEqual([{ token_hash: "t3" }]);
 });
 
 test("cleanupExpiredPendingLogins (pg-mem) deletes only rows expired more than a day ago", async () => {

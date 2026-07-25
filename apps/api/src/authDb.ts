@@ -36,6 +36,9 @@ export interface AuthDb {
   accountByToken(tokenHash: string): Promise<Account | null>;
   touchToken(tokenHash: string): Promise<void>;
   revokeToken(tokenHash: string): Promise<void>;
+  createRevokeToken(input: { tokenHash: string; accountId: string; ttlSeconds: number }): Promise<void>;
+  consumeRevokeToken(tokenHash: string): Promise<{ accountId: string } | null>;
+  revokeTokensForAccount(accountId: string): Promise<number>;
   ensurePersonalOrg(accountId: string, name: string): Promise<void>;
   getOrgsForAccount(accountId: string): Promise<OrgMembership[]>;
   billableOrgs(accountId: string): Promise<{ orgId: string; stripeCustomerId: string | null }[]>;
@@ -123,6 +126,14 @@ CREATE TABLE IF NOT EXISTS pending_logins (
 CREATE UNIQUE INDEX IF NOT EXISTS pending_logins_poll_idx ON pending_logins (poll_token_hash);
 CREATE UNIQUE INDEX IF NOT EXISTS pending_logins_confirm_idx ON pending_logins (confirm_token_hash);
 CREATE INDEX IF NOT EXISTS pending_logins_email_idx ON pending_logins (email);
+CREATE TABLE IF NOT EXISTS revoke_tokens (
+  token_hash text PRIMARY KEY,
+  account_id uuid NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  expires_at timestamptz NOT NULL,
+  used_at    timestamptz
+);
+CREATE INDEX IF NOT EXISTS revoke_tokens_account_idx ON revoke_tokens (account_id);
 INSERT INTO organizations (kind, name, personal_account_id)
   SELECT 'personal', coalesce(name, email), id FROM accounts a
   WHERE NOT EXISTS (SELECT 1 FROM organizations o WHERE o.personal_account_id = a.id)
@@ -325,6 +336,31 @@ export function createAuthDb(pool: Pool): AuthDb {
     },
     async revokeToken(tokenHash) {
       await pool.query(`UPDATE auth_tokens SET revoked_at = now() WHERE token_hash = $1 AND revoked_at IS NULL`, [tokenHash]);
+    },
+    async createRevokeToken({ tokenHash, accountId, ttlSeconds }) {
+      await pool.query(
+        `INSERT INTO revoke_tokens (token_hash, account_id, expires_at)
+         VALUES ($1, $2, now() + ($3 || ' seconds')::interval)`,
+        [tokenHash, accountId, String(ttlSeconds)],
+      );
+    },
+    async consumeRevokeToken(tokenHash) {
+      const r = await pool.query(
+        `UPDATE revoke_tokens SET used_at = now()
+         WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
+         RETURNING account_id`,
+        [tokenHash],
+      );
+      const row = r.rows[0] as { account_id: string } | undefined;
+      return row ? { accountId: row.account_id } : null;
+    },
+    async revokeTokensForAccount(accountId) {
+      const r = await pool.query(
+        `UPDATE auth_tokens SET revoked_at = now()
+         WHERE account_id = $1 AND revoked_at IS NULL`,
+        [accountId],
+      );
+      return r.rowCount ?? 0;
     },
     async orgBilling(orgId, accountId) {
       const r = await pool.query(
