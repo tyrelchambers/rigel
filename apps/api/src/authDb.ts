@@ -13,7 +13,7 @@ export interface OrgMembership {
   role: "owner" | "admin" | "member";
 }
 
-/** All account/code/token IO behind one object, so the route handlers take one
+/** All account/login/token IO behind one object, so the route handlers take one
  *  dep (matches the repo convention of a small injected IO surface). */
 export interface AuthDb {
   createPendingLogin(
