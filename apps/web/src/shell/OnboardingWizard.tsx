@@ -1,98 +1,55 @@
 /**
- * First-run setup. Auto-shown after login when no AI agent is connected
- * (dismissible; re-openable from Settings via the "rigel:open-setup" event). A
- * guided front-end over existing flows: connect an AI agent through the real
- * Agents picker and install the Assistant (with a metrics-server nudge when it's
- * missing), then a final Next-steps panel pointing at the heavier do-it-in-the-
- * real-panel actions (Compose import, notifications). Every step is skippable.
+ * First-run setup. The single onboarding surface: connect a cluster, connect an
+ * AI agent (with the optional in-cluster installs), then leave an email for a
+ * sign-in link. Every step is skippable, and nothing here blocks the app.
  */
 import { useEffect, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCheck, faRobot, faWaveform, faBell, faFileImport, faXmark } from "@awesome.me/kit-6050953220/icons/classic/solid";
-import {
-  useAgents,
-  useAssistantAction,
-  useNodeMetrics,
-  useInstallMetricsServer,
-} from "@/lib/api";
+import { faCheck, faRobot, faWaveform, faXmark } from "@awesome.me/kit-6050953220/icons/classic/solid";
+import { useAssistantAction, useNodeMetrics, useInstallMetricsServer } from "@/lib/api";
 import { Stepper } from "./onboarding/Stepper";
-import { ChannelGlyph, CHANNEL_GLYPH_COLORS, type ChannelGlyphId } from "@/panels/settings/channelGlyphs";
+import { ClusterStep } from "./onboarding/ClusterStep";
 import { AgentsTab } from "@/panels/settings/agents/AgentsTab";
-import { UpgradeBanner } from "./billing/UpgradeBanner";
-import { useEntitlement } from "./useEntitlement";
-import { useAccount } from "./useAccount";
-import { useUpgrade } from "./UpgradeContext";
+import { SignInFlow } from "./SignInFlow";
+import type { UseAccountResult } from "./useAccount";
 
-export function OnboardingWizard({ onClose, onLeave }: { onClose: () => void; onLeave: () => void }) {
-  const navigate = useNavigate();
+export function OnboardingWizard({
+  account,
+  onClose,
+  onLeave,
+}: {
+  account: UseAccountResult;
+  onClose: () => void;
+  onLeave: () => void;
+}) {
   const [i, setI] = useState(0);
-  const { data: agentsData } = useAgents();
-  const activeAgent = agentsData?.agents.find((a) => a.id === agentsData?.activeAgentId);
-  const agentConnected = activeAgent?.connection === "connected";
 
-  const { payload } = useEntitlement();
-  const { orgs } = useAccount();
-  const { openUpgrade } = useUpgrade();
-  const personalOrgId = orgs.find((o) => o.kind === "personal")?.id;
-  const [upsellDismissed, setUpsellDismissed] = useState(false);
-  const showUpsell = payload != null && payload.plan !== "pro" && !upsellDismissed;
-
-  const steps: { label: string; title?: string; description?: string; status?: ReactNode; node: ReactNode }[] = [
+  const steps: { label: string; title?: string; description?: string; node: ReactNode }[] = [
+    {
+      label: "Cluster",
+      title: "Connect a cluster",
+      description:
+        "Rigel works with any Kubernetes cluster. Pick how you want to connect, and you can add more later from the cluster rail.",
+      node: <ClusterStep />,
+    },
     {
       label: "AI agent",
       title: "Connect your AI agent",
       description:
         "Pick which provider Rigel uses and connect it with an existing subscription or an API key. Your credentials never leave your machine.",
-      status: agentConnected ? <StatusPill label="Provider connected" /> : undefined,
-      node: <AgentStep />,
-    },
-    {
-      label: "Assistant",
       node: (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <AssistantCard />
-          <MetricsNudge />
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          <AgentsTab hideHeading />
+          <OptionalRow />
         </div>
       ),
     },
     {
-      label: "Next steps",
-      title: "You're all set",
-      description: "Here are the bigger things to set up whenever you're ready. They live in the app, so you can come back anytime.",
-      node: (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <ToolCard
-            icon={<FontAwesomeIcon icon={faFileImport} className="size-[15px]" style={{ color: "var(--accent-primary)" }} />}
-            title="Import a Compose stack"
-            desc="Convert a docker-compose.yml into Kubernetes manifests you can review and apply in the Compose panel."
-            action={
-              <button type="button" onClick={() => { onLeave(); navigate("/compose"); }} style={ghostBtn}>
-                Import
-              </button>
-            }
-          />
-          <ToolCard
-            icon={<FontAwesomeIcon icon={faBell} className="size-[15px]" style={{ color: "var(--accent-primary)" }} />}
-            title="Set up notifications"
-            desc="Get cluster alerts where you already are — no new dashboard to babysit."
-            action={
-              <button type="button" onClick={() => { onLeave(); navigate("/settings"); }} style={ghostBtn}>
-                Open Settings
-              </button>
-            }
-          >
-            <ChannelChips />
-          </ToolCard>
-          {showUpsell && (
-            <UpgradeBanner
-              upgradeDisabled={!personalOrgId}
-              onUpgrade={openUpgrade}
-              onDismiss={() => setUpsellDismissed(true)}
-            />
-          )}
-        </div>
-      ),
+      label: "Email",
+      title: "Sign in to Rigel",
+      description:
+        "Enter your email and we'll send you a sign-in link. Open it whenever you like and Rigel signs itself in, even if you're already busy in the app.",
+      node: <SignInFlow account={account} hideHeading />,
     },
   ];
 
@@ -118,8 +75,10 @@ export function OnboardingWizard({ onClose, onLeave }: { onClose: () => void; on
   const step = steps[i];
 
   return (
-    <div style={overlay} onClick={onClose}>
-      <div style={card} onClick={(e) => e.stopPropagation()}>
+    // No click-outside-to-close: a stray click on the scrim must not dismiss
+    // first-run setup. The X and the footer buttons are the ways out.
+    <div style={overlay}>
+      <div style={card}>
         <div style={header}>
           <div style={{ display: "flex", flexDirection: "column", gap: 5, flex: 1 }}>
             <span className="text-xl" style={{ fontWeight: 700, color: "var(--fg-primary)" }}>Welcome to Rigel</span>
@@ -127,7 +86,7 @@ export function OnboardingWizard({ onClose, onLeave }: { onClose: () => void; on
               A minute of optional setup. Skip anything you don't need. Everything here can be changed later in Settings.
             </span>
           </div>
-          <button type="button" aria-label="Close" onClick={onClose} style={closeBtn}>
+          <button type="button" aria-label="Close" onClick={onLeave} style={closeBtn}>
             <FontAwesomeIcon icon={faXmark} className="size-[16px]" />
           </button>
         </div>
@@ -136,10 +95,7 @@ export function OnboardingWizard({ onClose, onLeave }: { onClose: () => void; on
 
         {step.title && (
           <div style={stepSection}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-              <span className="text-lg" style={{ fontWeight: 700, color: "var(--fg-primary)" }}>{step.title}</span>
-              {step.status}
-            </div>
+            <span className="text-lg" style={{ fontWeight: 700, color: "var(--fg-primary)" }}>{step.title}</span>
             <span className="text-sm" style={{ color: "var(--fg-secondary)", lineHeight: 1.45 }}>{step.description}</span>
           </div>
         )}
@@ -157,15 +113,14 @@ export function OnboardingWizard({ onClose, onLeave }: { onClose: () => void; on
             )}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" onClick={() => (isLast ? onClose() : setI((n) => n + 1))} style={ghostBtn}>
+              Skip
+            </button>
             {!isLast && (
-              <button type="button" onClick={() => setI((n) => n + 1)} style={ghostBtn}>
-                Skip
-              </button>
-            )}
-            {isLast ? (
-              <button type="button" onClick={onClose} style={primaryBtn}>Done</button>
-            ) : (
               <button type="button" onClick={() => setI((n) => n + 1)} style={primaryBtn}>Next →</button>
+            )}
+            {isLast && (
+              <button type="button" onClick={onClose} style={primaryBtn}>Done</button>
             )}
           </div>
         </div>
@@ -174,167 +129,99 @@ export function OnboardingWizard({ onClose, onLeave }: { onClose: () => void; on
   );
 }
 
-function StatusPill({ label }: { label: string }) {
+/** The two optional in-cluster installs, one bordered card, two rows. */
+function OptionalRow() {
+  const metrics = useNodeMetrics();
+  const showMetrics = metrics.data?.available === false;
   return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "4px 11px",
-        borderRadius: 999,
-        background: "#10B9811A",
-        border: "1px solid #10B98140",
-      }}
-    >
-      <FontAwesomeIcon icon={faCheck} className="size-[13px]" style={{ color: "var(--status-running)" }} />
-      <span className="text-xs" style={{ fontWeight: 600, color: "var(--status-running)" }}>{label}</span>
-    </span>
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <span className="text-3xs" style={{ fontFamily: "var(--font-mono)", letterSpacing: 1.2, color: "var(--fg-tertiary)" }}>
+        OPTIONAL
+      </span>
+      <div style={tool}>
+        <AssistantInstall />
+        {showMetrics && (
+          <>
+            <div style={{ height: 1, background: "#FFFFFF0A" }} />
+            <MetricsInstall />
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
-function ToolCard({
+function InstallRow({
   icon,
   title,
   desc,
-  action,
-  children,
+  done,
+  pending,
+  error,
+  onInstall,
 }: {
   icon: ReactNode;
   title: string;
   desc: string;
-  action?: ReactNode;
-  children?: ReactNode;
+  done: boolean;
+  pending: boolean;
+  error: string | null;
+  onInstall: () => void;
 }) {
   return (
-    <div style={tool}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "12px 0" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         {icon}
         <span className="text-xs" style={{ fontWeight: 600, color: "var(--fg-primary)" }}>{title}</span>
         <div style={{ flex: 1 }} />
-        {action}
-      </div>
-      <span className="text-xs" style={{ color: "var(--fg-secondary)", lineHeight: 1.5 }}>{desc}</span>
-      {children}
-    </div>
-  );
-}
-
-const CHANNELS_UI: { id: ChannelGlyphId; label: string }[] = [
-  { id: "signal", label: "Signal" },
-  { id: "matrix", label: "Matrix" },
-  { id: "discord", label: "Discord" },
-  { id: "slack", label: "Slack" },
-];
-
-function ChannelChips() {
-  return (
-    <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-      {CHANNELS_UI.map(({ id, label }) => (
-        <div key={id} style={chip}>
-          <span
-            style={{
-              ...chipCircle,
-              background: `color-mix(in oklab, ${CHANNEL_GLYPH_COLORS[id]} 16%, transparent)`,
-              color: CHANNEL_GLYPH_COLORS[id],
-            }}
-          >
-            <ChannelGlyph id={id} size={17} />
+        {done ? (
+          <span className="text-2xs" style={{ display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 600, color: "var(--status-running)" }}>
+            <FontAwesomeIcon icon={faCheck} className="size-[12px]" /> Done
           </span>
-          <span className="text-2xs" style={{ fontWeight: 600, color: "var(--fg-secondary)" }}>{label}</span>
-        </div>
-      ))}
+        ) : (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={onInstall}
+            style={{ ...ghostBtn, opacity: pending ? 0.6 : 1 }}
+          >
+            {pending ? "Installing…" : "Install"}
+          </button>
+        )}
+      </div>
+      <span className="text-xs" style={{ color: "var(--fg-secondary)", lineHeight: 1.45 }}>{desc}</span>
+      {error && <span style={errText}>{error}</span>}
     </div>
   );
 }
 
-function Done() {
-  return (
-    <span
-      className="text-2xs"
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 5,
-        fontWeight: 600,
-        padding: "3px 9px",
-        borderRadius: 999,
-        color: "var(--status-running)",
-        background: "color-mix(in oklab, var(--status-running) 14%, transparent)",
-        border: "1px solid color-mix(in oklab, var(--status-running) 32%, transparent)",
-      }}
-    >
-      <FontAwesomeIcon icon={faCheck} className="size-[12px]" /> Done
-    </span>
-  );
-}
-
-// AI-agent step body: the real pick-and-connect grid, headingless (the step
-// title and connection status live in the wizard chrome above the cards).
-function AgentStep() {
-  return <AgentsTab hideHeading />;
-}
-
-function AssistantCard() {
+function AssistantInstall() {
   const install = useAssistantAction();
   return (
-    <ToolCard
+    <InstallRow
       icon={<FontAwesomeIcon icon={faRobot} className="size-[15px]" style={{ color: "var(--accent-primary)" }} />}
       title="Assistant agent"
-      desc="An in-cluster agent that watches for problems and proposes remediations. Optional."
-      action={
-        install.isSuccess ? (
-          <Done />
-        ) : (
-          <button
-            type="button"
-            disabled={install.isPending}
-            onClick={() => install.mutate({ action: "install" })}
-            style={{ ...ghostBtn, opacity: install.isPending ? 0.6 : 1 }}
-          >
-            {install.isPending ? "Installing…" : "Install"}
-          </button>
-        )
-      }
-    >
-      {install.isError && <span style={errText}>{install.error.message}</span>}
-    </ToolCard>
+      desc="An in-cluster agent that watches for problems and proposes remediations."
+      done={install.isSuccess}
+      pending={install.isPending}
+      error={install.isError ? install.error.message : null}
+      onInstall={() => install.mutate({ action: "install" })}
+    />
   );
 }
 
-// Assistant-step nudge: only when metrics-server is known missing (available === false).
-function MetricsNudge() {
-  const metrics = useNodeMetrics();
-  if (metrics.data?.available !== false) return null;
-  return <MetricsCard />;
-}
-
-function MetricsCard() {
-  const metrics = useNodeMetrics();
+function MetricsInstall() {
   const install = useInstallMetricsServer();
-  const available = metrics.data?.available === true;
   return (
-    <ToolCard
+    <InstallRow
       icon={<FontAwesomeIcon icon={faWaveform} className="size-[15px]" style={{ color: "var(--accent-primary)" }} />}
       title="metrics-server"
-      desc="Enables live node CPU/memory. On homelab clusters the install also adds --kubelet-insecure-tls."
-      action={
-        available || install.isSuccess ? (
-          <Done />
-        ) : (
-          <button
-            type="button"
-            disabled={install.isPending}
-            onClick={() => install.mutate()}
-            style={{ ...ghostBtn, opacity: install.isPending ? 0.6 : 1 }}
-          >
-            {install.isPending ? "Installing…" : "Install"}
-          </button>
-        )
-      }
-    >
-      {install.isError && <span style={errText}>{install.error.message}</span>}
-    </ToolCard>
+      desc="Enables live node CPU and memory. On homelab clusters the install also adds --kubelet-insecure-tls."
+      done={install.isSuccess}
+      pending={install.isPending}
+      error={install.isError ? install.error.message : null}
+      onInstall={() => install.mutate()}
+    />
   );
 }
 
@@ -426,22 +313,3 @@ const ghostBtn: React.CSSProperties = {
   cursor: "pointer",
 };
 const errText: React.CSSProperties = { fontSize: 11, color: "var(--status-failed)" };
-const chip: React.CSSProperties = {
-  display: "flex",
-  flex: 1,
-  flexDirection: "column",
-  alignItems: "center",
-  gap: 8,
-  padding: 12,
-  borderRadius: 8,
-  background: "#FFFFFF08",
-  border: "1px solid var(--border-subtle)",
-};
-const chipCircle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: 32,
-  height: 32,
-  borderRadius: 999,
-};

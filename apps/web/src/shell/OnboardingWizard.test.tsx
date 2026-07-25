@@ -1,18 +1,15 @@
 // @vitest-environment jsdom
 //
-// The onboarding AI step now connects an agent through the REAL Agents flow
-// (AgentsTab: grid → per-agent auth), NOT a Claude-token field. These tests prove:
-//   - the AI step renders the agents picker (no Claude-token input)
-//   - the step is present in the wizard and is skippable (Skip/Next advance it)
-//   - the step shows "Done" once the ACTIVE agent is connected (derived from
-//     useAgents, mirroring ChatPane), and does not when it isn't
+// The wizard is the single first-run surface: Cluster → AI agent → Email. The AI
+// step connects an agent through the REAL Agents flow (AgentsTab: grid →
+// per-agent auth), NOT a Claude-token field, and carries the two optional
+// in-cluster installs. Leaving early must not mark setup complete.
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { AgentsResponse, AgentView } from "@/lib/api";
-
-vi.mock("./UpgradeContext", () => ({ useUpgrade: () => ({ openUpgrade: vi.fn() }) }));
+import type { UseAccountResult } from "./useAccount";
 
 import { OnboardingWizard } from "./OnboardingWizard";
 
@@ -27,24 +24,41 @@ const codex: AgentView = {
   installUrl: "https://x", installLabel: "Install Codex",
 };
 
-/** Render the wizard (optional onboarding, no About-you gate) with the agents
- *  query pre-seeded so the AI step's pick-and-connect grid has data. */
-function renderWizard(agents?: AgentsResponse, metricsAvailable?: boolean) {
+function fakeAccount(over: Partial<UseAccountResult> = {}): UseAccountResult {
+  return {
+    status: "signed-out",
+    account: null,
+    me: null,
+    orgs: [],
+    entitlement: null,
+    pendingSignIn: null,
+    startSignIn: vi.fn().mockResolvedValue({ ok: true, status: 200 }),
+    signOut: vi.fn(),
+    refresh: vi.fn(),
+    upgrade: vi.fn(),
+    manageBilling: vi.fn(),
+    refreshBilling: vi.fn(),
+    ...over,
+  } as UseAccountResult;
+}
+
+function renderWizard(agents?: AgentsResponse, metricsAvailable?: boolean, account = fakeAccount()) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   if (agents) qc.setQueryData(["agents"], agents);
   if (metricsAvailable !== undefined) {
     qc.setQueryData([null, "metrics", "nodes"], { available: metricsAvailable, items: [] });
   }
+  qc.setQueryData(["contexts"], []);
   const onClose = vi.fn();
   const onLeave = vi.fn();
   render(
     <QueryClientProvider client={qc}>
       <MemoryRouter>
-        <OnboardingWizard onClose={onClose} onLeave={onLeave} />
+        <OnboardingWizard account={account} onClose={onClose} onLeave={onLeave} />
       </MemoryRouter>
     </QueryClientProvider>,
   );
-  return { onClose, onLeave };
+  return { onClose, onLeave, account };
 }
 
 describe("OnboardingWizard AI-agent step", () => {
@@ -54,9 +68,8 @@ describe("OnboardingWizard AI-agent step", () => {
 
   it("renders the real Agents picker on the AI step, not a Claude-token field", () => {
     renderWizard({ activeAgentId: "claude", agents: [claude, codex] });
+    fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
 
-    // The wizard opens on the AI step (first optional step). It shows the step
-    // title + description in the chrome, and the agent cards below.
     expect(screen.getByText(/connect your ai agent/i)).toBeInTheDocument();
     expect(screen.getByText("Claude Code")).toBeInTheDocument();
     expect(screen.getByText("Codex")).toBeInTheDocument();
@@ -67,77 +80,75 @@ describe("OnboardingWizard AI-agent step", () => {
     expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
   });
 
-  it("shows the Provider connected pill when the active agent is connected", () => {
-    // Codex is active + connected → the stepper shows the status pill.
-    renderWizard({ activeAgentId: "codex", agents: [claude, codex] });
-    expect(screen.getByText(/provider connected/i)).toBeInTheDocument();
-  });
-
-  it("does NOT show the Provider connected pill when the active agent is not connected", () => {
-    renderWizard({ activeAgentId: "claude", agents: [claude, codex] });
-    expect(screen.queryByText(/provider connected/i)).not.toBeInTheDocument();
-  });
-
   it("keeps the AI step skippable (Skip advances past it without connecting)", () => {
     renderWizard({ activeAgentId: "claude", agents: [claude, codex] });
-
-    // AI step (label in the stepper) is the active step.
-    expect(document.querySelector('[aria-current="step"]')).toHaveTextContent("AI agent");
-
-    // Skip moves on without requiring a connected agent.
     fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
-    expect(document.querySelector('[aria-current="step"]')).toHaveTextContent("Assistant");
-  });
-});
 
-describe("OnboardingWizard streamlined steps", () => {
-  beforeEach(() => {
-    Element.prototype.scrollIntoView = vi.fn();
-  });
-
-  it("has three steps ending in a Next steps panel", () => {
-    renderWizard({ activeAgentId: "claude", agents: [claude, codex] }, false);
     expect(document.querySelector('[aria-current="step"]')).toHaveTextContent("AI agent");
-    fireEvent.click(screen.getByRole("button", { name: /^next →$/i }));
-    expect(document.querySelector('[aria-current="step"]')).toHaveTextContent("Assistant");
-    fireEvent.click(screen.getByRole("button", { name: /^next →$/i }));
-    expect(document.querySelector('[aria-current="step"]')).toHaveTextContent("Next steps");
-    expect(screen.getByText("You're all set")).toBeInTheDocument();
-  });
 
-  it("nudges to install metrics-server on the Assistant step when it's unavailable", () => {
-    renderWizard({ activeAgentId: "claude", agents: [claude, codex] }, false);
-    fireEvent.click(screen.getByRole("button", { name: /^next →$/i })); // → Assistant
-    expect(screen.getByText(/metrics-server/i)).toBeInTheDocument();
-  });
-
-  it("hides the metrics nudge when metrics-server is already available", () => {
-    renderWizard({ activeAgentId: "claude", agents: [claude, codex] }, true);
-    fireEvent.click(screen.getByRole("button", { name: /^next →$/i })); // → Assistant
-    expect(screen.queryByText(/metrics-server/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
+    expect(document.querySelector('[aria-current="step"]')).toHaveTextContent("Email");
   });
 });
 
-describe("OnboardingWizard leaving to a real feature", () => {
+describe("OnboardingWizard steps", () => {
   beforeEach(() => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
-  it("the Compose next-step leaves without marking onboarding complete", () => {
-    const { onClose, onLeave } = renderWizard({ activeAgentId: "claude", agents: [claude, codex] }, false);
-    fireEvent.click(screen.getByRole("button", { name: /^next →$/i })); // → Assistant
-    fireEvent.click(screen.getByRole("button", { name: /^next →$/i })); // → Next steps
-    fireEvent.click(screen.getByRole("button", { name: /^import$/i }));
-    expect(onLeave).toHaveBeenCalledTimes(1);
-    expect(onClose).not.toHaveBeenCalled();
+  it("has exactly three steps: Cluster, AI agent, Email", () => {
+    renderWizard();
+    expect(screen.getByText("Cluster")).toBeInTheDocument();
+    expect(screen.getByText("AI agent")).toBeInTheDocument();
+    expect(screen.getByText("Email")).toBeInTheDocument();
+    expect(screen.queryByText("Assistant")).not.toBeInTheDocument();
+    expect(screen.queryByText("Next steps")).not.toBeInTheDocument();
   });
 
-  it("the notifications next-step leaves without marking onboarding complete", () => {
-    const { onClose, onLeave } = renderWizard({ activeAgentId: "claude", agents: [claude, codex] }, false);
-    fireEvent.click(screen.getByRole("button", { name: /^next →$/i })); // → Assistant
-    fireEvent.click(screen.getByRole("button", { name: /^next →$/i })); // → Next steps
-    fireEvent.click(screen.getByRole("button", { name: /open settings/i }));
-    expect(onLeave).toHaveBeenCalledTimes(1);
+  it("opens on the cluster step", () => {
+    renderWizard();
+    expect(screen.getByText("Create a local cluster")).toBeInTheDocument();
+  });
+
+  it("walks Cluster to AI agent to Email and finishes", () => {
+    const { onClose } = renderWizard();
+    fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
+    expect(screen.getByText(/connect your ai agent/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
+    expect(screen.getByLabelText(/email address/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("drops the Compose and notifications link farm and the upsell", () => {
+    renderWizard();
+    fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
+    expect(screen.queryByText(/compose stack/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/set up notifications/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/free plan/i)).not.toBeInTheDocument();
+  });
+
+  it("offers the Assistant and metrics-server installs as an optional row on the AI step", () => {
+    renderWizard(undefined, false);
+    fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
+    expect(screen.getByText("Assistant agent")).toBeInTheDocument();
+    expect(screen.getByText("metrics-server")).toBeInTheDocument();
+  });
+
+  it("hides metrics-server when the cluster already has it", () => {
+    renderWizard(undefined, true);
+    fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
+    expect(screen.getByText("Assistant agent")).toBeInTheDocument();
+    expect(screen.queryByText("metrics-server")).not.toBeInTheDocument();
+  });
+
+  it("marks onboarding complete only from the last step", () => {
+    const { onClose, onLeave } = renderWizard();
+    fireEvent.click(screen.getByLabelText("Close"));
     expect(onClose).not.toHaveBeenCalled();
+    expect(onLeave).toHaveBeenCalledOnce();
   });
 });

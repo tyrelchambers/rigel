@@ -224,7 +224,7 @@ function AppContent({ account }: { account: UseAccountResult }) {
     <UpgradeProvider onUpgrade={openUpgrade}>
     <WindowControls />
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--surface-primary)" }}>
-      {showOnboarding && <OnboardingWizard onClose={closeOnboarding} onLeave={leaveOnboarding} />}
+      {showOnboarding && <OnboardingWizard account={account} onClose={closeOnboarding} onLeave={leaveOnboarding} />}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <NavLauncher open={launcherOpen} onClose={() => setLauncherOpen(false)} />
       <AccountModal
