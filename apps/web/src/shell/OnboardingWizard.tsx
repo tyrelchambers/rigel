@@ -6,7 +6,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheck, faRobot, faWaveform, faXmark } from "@awesome.me/kit-6050953220/icons/classic/solid";
-import { useAssistantAction, useNodeMetrics, useInstallMetricsServer } from "@/lib/api";
+import { useAgents, useAssistantAction, useNodeMetrics, useInstallMetricsServer } from "@/lib/api";
 import { Stepper } from "./onboarding/Stepper";
 import { ClusterStep } from "./onboarding/ClusterStep";
 import { AgentsTab } from "@/panels/settings/agents/AgentsTab";
@@ -23,8 +23,11 @@ export function OnboardingWizard({
   onLeave: () => void;
 }) {
   const [i, setI] = useState(0);
+  const { data: agentsData } = useAgents();
+  const activeAgent = agentsData?.agents.find((a) => a.id === agentsData?.activeAgentId);
+  const agentConnected = activeAgent?.connection === "connected";
 
-  const steps: { label: string; title?: string; description?: string; node: ReactNode }[] = [
+  const steps: { label: string; title?: string; description?: string; status?: ReactNode; node: ReactNode }[] = [
     {
       label: "Cluster",
       title: "Connect a cluster",
@@ -37,6 +40,7 @@ export function OnboardingWizard({
       title: "Connect your AI agent",
       description:
         "Pick which provider Rigel uses and connect it with an existing subscription or an API key. Your credentials never leave your machine.",
+      status: agentConnected ? <StatusPill label="Provider connected" /> : undefined,
       node: (
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           <AgentsTab hideHeading />
@@ -95,7 +99,10 @@ export function OnboardingWizard({
 
         {step.title && (
           <div style={stepSection}>
-            <span className="text-lg" style={{ fontWeight: 700, color: "var(--fg-primary)" }}>{step.title}</span>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <span className="text-lg" style={{ fontWeight: 700, color: "var(--fg-primary)" }}>{step.title}</span>
+              {step.status}
+            </div>
             <span className="text-sm" style={{ color: "var(--fg-secondary)", lineHeight: 1.45 }}>{step.description}</span>
           </div>
         )}
@@ -126,6 +133,25 @@ export function OnboardingWizard({
         </div>
       </div>
     </div>
+  );
+}
+
+function StatusPill({ label }: { label: string }) {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "4px 11px",
+        borderRadius: 999,
+        background: "#10B9811A",
+        border: "1px solid #10B98140",
+      }}
+    >
+      <FontAwesomeIcon icon={faCheck} className="size-[13px]" style={{ color: "var(--status-running)" }} />
+      <span className="text-xs" style={{ fontWeight: 600, color: "var(--status-running)" }}>{label}</span>
+    </span>
   );
 }
 

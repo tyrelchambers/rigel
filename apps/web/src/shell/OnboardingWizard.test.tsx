@@ -80,6 +80,22 @@ describe("OnboardingWizard AI-agent step", () => {
     expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
   });
 
+  it("shows the Provider connected pill when the active agent is connected", () => {
+    // Codex is active + connected → the step head shows the status pill.
+    renderWizard({ activeAgentId: "codex", agents: [claude, codex] });
+    fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
+    expect(screen.getByText(/provider connected/i)).toBeInTheDocument();
+  });
+
+  it("does NOT show the pill when a non-active agent is the connected one", () => {
+    // Claude is active but notSignedIn; codex is connected but NOT active. The
+    // pill tracks the ACTIVE agent, so "any agent connected" must not light it.
+    renderWizard({ activeAgentId: "claude", agents: [claude, codex] });
+    fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
+    expect(screen.getByText("Codex")).toBeInTheDocument();
+    expect(screen.queryByText(/provider connected/i)).not.toBeInTheDocument();
+  });
+
   it("keeps the AI step skippable (Skip advances past it without connecting)", () => {
     renderWizard({ activeAgentId: "claude", agents: [claude, codex] });
     fireEvent.click(screen.getByRole("button", { name: /^skip$/i }));
