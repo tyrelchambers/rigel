@@ -111,6 +111,63 @@ describe("CreateClusterBody install instructions", () => {
   });
 });
 
+// Docker down is a different failure from a missing tool: the tool picker is
+// fine, so the panel says how to start Docker on this platform instead.
+describe("CreateClusterBody Docker not running", () => {
+  beforeEach(() => {
+    Object.assign(tools, { dockerRunning: false, kind: true, k3d: false });
+  });
+
+  it("says how to start Docker on this platform, and keeps the tool row intact", () => {
+    wrap();
+    expect(screen.getByText("Start Docker Desktop on macOS")).toBeInTheDocument();
+    expect(screen.getByText("open -a Docker")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /get docker desktop/i })).toBeInTheDocument();
+    expect(screen.getByText("Docker is not running")).toBeInTheDocument();
+    expect(screen.getByText("kind is installed")).toBeInTheDocument();
+    // The tool is not the problem, so no install instructions for it.
+    expect(screen.queryByText(/^Install kind on/)).not.toBeInTheDocument();
+  });
+
+  it("uses systemd on Linux", () => {
+    Object.assign(tools, { os: "linux" as const });
+    wrap();
+    expect(screen.getByText("Start Docker Desktop on Linux")).toBeInTheDocument();
+    expect(screen.getByText("sudo systemctl start docker")).toBeInTheDocument();
+  });
+
+  // Launching Docker Desktop on Windows means an exe whose path varies by
+  // install, so a wrong path would be worse than a sentence.
+  it("gives Windows a written step instead of a command to copy", () => {
+    Object.assign(tools, { os: "windows" as const });
+    wrap();
+    expect(screen.getByText(/Start Docker Desktop from the Start menu/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^copy$/i })).not.toBeInTheDocument();
+  });
+
+  it("shows both remedies when the tool is missing too", () => {
+    Object.assign(tools, { kind: false });
+    wrap();
+    expect(screen.getByText("Install kind on macOS")).toBeInTheDocument();
+    expect(screen.getByText("Start Docker Desktop on macOS")).toBeInTheDocument();
+    expect(screen.getByText("kind is not installed")).toBeInTheDocument();
+    expect(screen.getByText("Docker is not running")).toBeInTheDocument();
+  });
+
+  // Two command boxes are on screen at once here, so a shared "copied" flag
+  // would make both claim to have been copied.
+  it("confirms only the command that was copied", () => {
+    Object.assign(tools, { kind: false });
+    Object.assign(navigator, { clipboard: { writeText: vi.fn() } });
+    wrap();
+    const [toolCopy] = screen.getAllByRole("button", { name: /^copy$/i });
+    fireEvent.click(toolCopy);
+
+    expect(screen.getAllByRole("button", { name: /copied/i })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: /^copy$/i })).toHaveLength(1);
+  });
+});
+
 describe("CreateClusterBody hosting", () => {
   it("keeps its own intro and button row outside the wizard", () => {
     wrap();

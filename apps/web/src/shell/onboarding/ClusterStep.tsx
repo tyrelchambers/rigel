@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCube, faCloud, faFileLines, faCheck } from "@awesome.me/kit-6050953220/icons/classic/solid";
-import { useContexts, useClusterTools } from "@/lib/api";
+import { useContexts, useClusterTools, type ClusterToolStatus } from "@/lib/api";
 import { CreateClusterBody, clusterToolsReady } from "../CreateClusterBody";
 import { ConnectClusterBody } from "../ConnectClusterBody";
 import { ImportKubeconfigPanel } from "../ImportKubeconfigPanel";
@@ -33,12 +33,23 @@ const PATHS: { id: Exclude<Path, null>; icon: typeof faCube; title: string; desc
   },
 ];
 
-/** The create flow explains two different things depending on what it finds on
- *  the machine, so the head says which one the user is looking at. */
+/** The create flow explains a different thing depending on what it finds on the
+ *  machine, so the head says which one the user is looking at. */
 const CREATE_READY =
   "Rigel runs the create for you and adds the new context to your kubeconfig. Takes about a minute.";
 const CREATE_SETUP =
   "This runs a real Kubernetes cluster on your machine inside Docker, using kind or k3d. You need one of them installed, plus Docker running.";
+const CREATE_DOCKER_DOWN =
+  "This runs a real Kubernetes cluster on your machine inside Docker. A cluster tool is ready, but Docker itself is not running.";
+
+/** Names the one thing standing in the way, so the head is not still asking for
+ *  a tool the user already has. It cannot name the SELECTED tool, which the body
+ *  owns, so it speaks of "a cluster tool". */
+function createDescription(tools: ClusterToolStatus | undefined): string {
+  if (clusterToolsReady(tools)) return CREATE_READY;
+  if (tools && !tools.dockerRunning && (tools.kind || tools.k3d)) return CREATE_DOCKER_DOWN;
+  return CREATE_SETUP;
+}
 
 const HEADS: Record<Exclude<Path, null>, string> = {
   create: "Create a local cluster",
@@ -69,9 +80,7 @@ export function ClusterStep() {
     const back = () => setPath(null);
     const description =
       path === "create"
-        ? clusterToolsReady(tools)
-          ? CREATE_READY
-          : CREATE_SETUP
+        ? createDescription(tools)
         : path === "connect"
           ? "Pick your provider and sign in, and Rigel adds the cluster to your kubeconfig."
           : "Paste a kubeconfig a teammate already shared with you.";

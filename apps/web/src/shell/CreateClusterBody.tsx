@@ -55,6 +55,19 @@ const INSTALL: Record<Tool, { cmd: Record<ClusterOS, string>; manager: Record<Cl
   },
 };
 
+// How to get Docker going again, per OS. Windows gets prose rather than a
+// command: launching Docker Desktop there means an exe whose path varies by
+// install, and a wrong path is worse than a sentence. The commands assume Docker
+// Desktop (mac) and dockerd under systemd (Linux), which is why the block says
+// so and links the download for anyone who has no Docker at all — the probe
+// reports only whether Docker is RUNNING, so it cannot tell missing from stopped.
+const DOCKER_START: Record<ClusterOS, { cmd: string } | { text: string }> = {
+  mac: { cmd: "open -a Docker" },
+  linux: { cmd: "sudo systemctl start docker" },
+  windows: { text: "Start Docker Desktop from the Start menu, then re-check." },
+};
+const DOCKER_DOCS = "https://docs.docker.com/desktop/";
+
 // Where to get the package manager itself when it's missing (the install command
 // above is useless without it).
 const INSTALLER_HELP: Record<Manager, { label: string; url: string }> = {
@@ -95,7 +108,9 @@ export function CreateClusterBody({ active, onDone, onBusyChange }: CreateCluste
   const [creating, setCreating] = useState(false);
   const [lines, setLines] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  // Which command was copied, not just "something was": two boxes can be on
+  // screen at once and only the one clicked should confirm.
+  const [copied, setCopied] = useState<string | null>(null);
   const logRef = useRef<HTMLPreElement>(null);
   const onDoneRef = useRef(onDone);
   const onBusyChangeRef = useRef(onBusyChange);
@@ -104,13 +119,13 @@ export function CreateClusterBody({ active, onDone, onBusyChange }: CreateCluste
   useEffect(() => { onBusyChangeRef.current?.(creating); }, [creating]);
 
   useEffect(() => {
-    if (active) { setName(""); setVersion("default"); setTool("kind"); setCreating(false); setLines([]); setError(null); setCopied(false); }
+    if (active) { setName(""); setVersion("default"); setTool("kind"); setCreating(false); setLines([]); setError(null); setCopied(null); }
   }, [active]);
 
   // Brief "Copied" confirmation on the install command, then revert.
   useEffect(() => {
     if (!copied) return;
-    const t = setTimeout(() => setCopied(false), 1500);
+    const t = setTimeout(() => setCopied(null), 1500);
     return () => clearTimeout(t);
   }, [copied]);
 
@@ -154,6 +169,8 @@ export function CreateClusterBody({ active, onDone, onBusyChange }: CreateCluste
   const canCreate = !blocked && !nameErr && !creating;
   const install = INSTALL[tool];
   const os = tools?.os ?? "mac";
+  const prompt = os === "windows" ? ">" : "$";
+  const dockerStart = DOCKER_START[os];
   const installCmd = install.cmd[os];
   const manager = install.manager[os];
   // Only warn about a manager the probe actually looked for and did not find.
@@ -166,7 +183,7 @@ export function CreateClusterBody({ active, onDone, onBusyChange }: CreateCluste
 
   function copyInstall(text: string) {
     navigator.clipboard?.writeText(text);
-    setCopied(true);
+    setCopied(text);
   }
 
   if (!tools) {
@@ -240,20 +257,12 @@ export function CreateClusterBody({ active, onDone, onBusyChange }: CreateCluste
               <div className="text-xs font-medium text-muted-foreground">
                 Install {tool} on {OS_LABEL[os]}
               </div>
-              <div className="flex items-center justify-between overflow-hidden rounded-[10px] border border-white/[0.08] bg-[var(--surface-sunken)] pl-4">
-                <code className="flex min-w-0 flex-1 items-center gap-2.5 overflow-x-auto py-3.5 font-mono text-xs whitespace-nowrap">
-                  <span className="shrink-0 text-[var(--fg-tertiary)]">{os === "windows" ? ">" : "$"}</span>
-                  <span className="text-[var(--fg-primary)]">{installCmd}</span>
-                </code>
-                <button
-                  type="button"
-                  onClick={() => copyInstall(installCmd)}
-                  className="flex shrink-0 items-center gap-1.5 self-stretch border-l border-white/[0.08] px-4 text-xs font-semibold text-[var(--accent-primary)] transition-colors hover:bg-white/[0.03]"
-                >
-                  {copied ? <FontAwesomeIcon icon={faCheck} className="size-3.5" /> : <FontAwesomeIcon icon={faCopy} className="size-3.5" />}
-                  {copied ? "Copied" : "Copy"}
-                </button>
-              </div>
+              <CommandBox
+                cmd={installCmd}
+                prompt={prompt}
+                copied={copied === installCmd}
+                onCopy={() => copyInstall(installCmd)}
+              />
               {managerMissing && manager && (
                 <p className="text-xs leading-relaxed text-[var(--status-pending)]">
                   {INSTALLER_HELP[manager].label} isn't installed, so this command won't run yet.{" "}
@@ -270,6 +279,34 @@ export function CreateClusterBody({ active, onDone, onBusyChange }: CreateCluste
                 className="self-start text-xs text-[var(--accent-primary)] hover:underline"
               >
                 Other ways to install {tool}
+              </a>
+            </div>
+          )}
+
+          {/* How to get Docker going, on this platform. Shown alongside the tool
+              block when both are wrong, in the same order as the checks below. */}
+          {!dockerOk && (
+            <div className="flex flex-col gap-2">
+              <div className="text-xs font-medium text-muted-foreground">
+                Start Docker Desktop on {OS_LABEL[os]}
+              </div>
+              {"cmd" in dockerStart ? (
+                <CommandBox
+                  cmd={dockerStart.cmd}
+                  prompt={prompt}
+                  copied={copied === dockerStart.cmd}
+                  onCopy={() => copyInstall(dockerStart.cmd)}
+                />
+              ) : (
+                <p className="text-sm leading-relaxed text-[var(--fg-secondary)]">{dockerStart.text}</p>
+              )}
+              <a
+                href={DOCKER_DOCS}
+                target="_blank"
+                rel="noreferrer"
+                className="self-start text-xs text-[var(--accent-primary)] hover:underline"
+              >
+                Get Docker Desktop
               </a>
             </div>
           )}
@@ -367,6 +404,37 @@ export function CreateClusterBody({ active, onDone, onBusyChange }: CreateCluste
           )}
         </>
       )}
+    </div>
+  );
+}
+
+/** A copyable shell one-liner. `copied` is per command, not per component, so
+ *  the tool-install and start-Docker boxes never both claim to be copied. */
+function CommandBox({
+  cmd,
+  prompt,
+  copied,
+  onCopy,
+}: {
+  cmd: string;
+  prompt: string;
+  copied: boolean;
+  onCopy: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between overflow-hidden rounded-[10px] border border-white/[0.08] bg-[var(--surface-sunken)] pl-4">
+      <code className="flex min-w-0 flex-1 items-center gap-2.5 overflow-x-auto py-3.5 font-mono text-xs whitespace-nowrap">
+        <span className="shrink-0 text-[var(--fg-tertiary)]">{prompt}</span>
+        <span className="text-[var(--fg-primary)]">{cmd}</span>
+      </code>
+      <button
+        type="button"
+        onClick={onCopy}
+        className="flex shrink-0 items-center gap-1.5 self-stretch border-l border-white/[0.08] px-4 text-xs font-semibold text-[var(--accent-primary)] transition-colors hover:bg-white/[0.03]"
+      >
+        {copied ? <FontAwesomeIcon icon={faCheck} className="size-3.5" /> : <FontAwesomeIcon icon={faCopy} className="size-3.5" />}
+        {copied ? "Copied" : "Copy"}
+      </button>
     </div>
   );
 }
