@@ -67,9 +67,14 @@ export function CreateClusterBody({ active, onDone, onBusyChange }: CreateCluste
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const logRef = useRef<HTMLPreElement>(null);
+  const onDoneRef = useRef(onDone);
+  const onBusyChangeRef = useRef(onBusyChange);
+  useEffect(() => { onDoneRef.current = onDone; onBusyChangeRef.current = onBusyChange; });
+
+  useEffect(() => { onBusyChangeRef.current?.(creating); }, [creating]);
 
   useEffect(() => {
-    if (active) { setName(""); setVersion("default"); setTool("kind"); setCreating(false); onBusyChange?.(false); setLines([]); setError(null); setCopied(false); }
+    if (active) { setName(""); setVersion("default"); setTool("kind"); setCreating(false); setLines([]); setError(null); setCopied(false); }
   }, [active]);
 
   // Brief "Copied" confirmation on the install command, then revert.
@@ -89,12 +94,11 @@ export function CreateClusterBody({ active, onDone, onBusyChange }: CreateCluste
     if (!creating) return;
     const off = onClusterEvent((e) => {
       if (e.type === "cluster.progress" && e.line) setLines((p) => [...p, e.line!]);
-      else if (e.type === "cluster.error") { setError(e.message ?? "create failed"); setCreating(false); onBusyChange?.(false); }
+      else if (e.type === "cluster.error") { setError(e.message ?? "create failed"); setCreating(false); }
       else if (e.type === "cluster.done") {
         qc.invalidateQueries({ queryKey: ["contexts"] });
         setCreating(false);
-        onBusyChange?.(false);
-        onDone();
+        onDoneRef.current();
         toast.success(`Cluster "${e.context ?? name}" created`, {
           description: e.backupPath
             ? `Kubeconfig backed up to ${e.backupPath}`
@@ -103,7 +107,7 @@ export function CreateClusterBody({ active, onDone, onBusyChange }: CreateCluste
       }
     });
     return off;
-  }, [creating, qc, onDone, onBusyChange]);
+  }, [creating, qc]);
 
   useEffect(() => { logRef.current?.scrollTo(0, logRef.current.scrollHeight); }, [lines]);
 
@@ -115,7 +119,7 @@ export function CreateClusterBody({ active, onDone, onBusyChange }: CreateCluste
   const kindCmd = KIND_INSTALL[tools?.os ?? "mac"];
 
   function start() {
-    setError(null); setLines([]); setCreating(true); onBusyChange?.(true);
+    setError(null); setLines([]); setCreating(true);
     sendClusterCreate({ tool, name, version });
   }
 

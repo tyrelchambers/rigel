@@ -7,10 +7,7 @@ import { ConnectClusterBody, CONNECT_CLUSTER_TITLE } from "./ConnectClusterBody"
 export function ConnectClusterModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const [title, setTitle] = useState(CONNECT_CLUSTER_TITLE);
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => { if (!o) setTitle(CONNECT_CLUSTER_TITLE); onOpenChange(o); }}
-    >
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogIcon>

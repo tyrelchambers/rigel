@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faLock, faUpload } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { listCloudProviders, type ProviderDescriptor } from "@rigel/cloud-connect/src/index";
@@ -11,6 +11,12 @@ import { useUpgrade } from "./UpgradeContext";
 type Selection = { kind: "provider"; descriptor: ProviderDescriptor } | { kind: "import" } | null;
 
 export const CONNECT_CLUSTER_TITLE = "Connect a cluster";
+
+function titleFor(s: Selection): string {
+  return s?.kind === "provider" ? `Connect to ${s.descriptor.displayName}`
+    : s?.kind === "import" ? "Import a kubeconfig"
+    : CONNECT_CLUSTER_TITLE;
+}
 
 function ProviderTile({
   label, icon, disabled, locked, onClick,
@@ -63,18 +69,21 @@ export interface ConnectClusterBodyProps {
 
 export function ConnectClusterBody({ active, onDone, onTitleChange }: ConnectClusterBodyProps) {
   const [selection, setSelection] = useState<Selection>(null);
-  useEffect(() => { if (active) setSelection(null); }, [active]);
+  const onTitleChangeRef = useRef(onTitleChange);
+  useEffect(() => { onTitleChangeRef.current = onTitleChange; });
+
+  const select = useCallback((next: Selection) => {
+    setSelection(next);
+    onTitleChangeRef.current?.(titleFor(next));
+  }, []);
+
+  useEffect(() => { if (active) select(null); }, [active, select]);
 
   const { payload } = useEntitlement();
   const cloudUnlocked = !!payload?.cloudConnect;
   const { openUpgrade } = useUpgrade();
 
   const providers = listCloudProviders();
-  const title = selection?.kind === "provider"
-    ? `Connect to ${selection.descriptor.displayName}`
-    : selection?.kind === "import" ? "Import a kubeconfig" : CONNECT_CLUSTER_TITLE;
-
-  useEffect(() => { onTitleChange?.(title); }, [title, onTitleChange]);
 
   return selection === null ? (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
@@ -87,12 +96,12 @@ export function ConnectClusterBody({ active, onDone, onTitleChange }: ConnectClu
             locked={!cloudUnlocked}
             onClick={() => {
               if (!cloudUnlocked) { onDone(); openUpgrade(); }
-              else setSelection({ kind: "provider", descriptor: d });
+              else select({ kind: "provider", descriptor: d });
             }}
           />
         );
       })}
-      <ProviderTile label="Import a kubeconfig" icon={<FontAwesomeIcon icon={faUpload} className="size-[26px]" />} onClick={() => setSelection({ kind: "import" })} />
+      <ProviderTile label="Import a kubeconfig" icon={<FontAwesomeIcon icon={faUpload} className="size-[26px]" />} onClick={() => select({ kind: "import" })} />
     </div>
   ) : selection.kind === "provider" ? (
     <ConnectWizard descriptor={selection.descriptor} onConnected={() => onDone()} />
