@@ -358,25 +358,6 @@ test("invalidatePendingLogins (pg-mem) deactivates every unconsumed row for the 
   expect(await db.pendingLoginActive("p2")).toBe(false);
 });
 
-test("revokeTokensForAccount revokes the account's live tokens and returns how many", async () => {
-  const { pool, calls, pushCount } = recorder();
-  pushCount(3);
-  const db = createAuthDb(pool);
-  expect(await db.revokeTokensForAccount("acc-1")).toBe(3);
-  const sql = calls[0].sql.toUpperCase();
-  expect(sql).toContain("UPDATE AUTH_TOKENS SET REVOKED_AT = NOW()");
-  expect(sql).toContain("ACCOUNT_ID = $1");
-  expect(sql).toContain("REVOKED_AT IS NULL");
-  expect(sql).not.toContain("SELECT");
-  expect(sql).not.toContain("WHERE ID =");
-  expect(calls[0].params).toEqual(["acc-1"]);
-});
-
-test("revokeTokensForAccount reports zero when the driver reports no rows", async () => {
-  const { pool } = recorder();
-  expect(await createAuthDb(pool).revokeTokensForAccount("acc-1")).toBe(0);
-});
-
 test("cleanupExpiredPendingLogins (pg-mem) deletes only rows expired more than a day ago", async () => {
   const pool = await pendingLoginsPool();
   await pool.query(

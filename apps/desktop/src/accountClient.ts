@@ -110,17 +110,6 @@ export function createAccountClient({ store, fetchFn, endpoint }: AccountClientD
       store.clear();
     },
 
-    /** Revoke every device, this one included. Unlike signOut the server call is
-     *  the whole point, so a failure is reported rather than swallowed: clearing
-     *  locally while other devices stay signed in would be a lie. */
-    async signOutEverywhere(): Promise<{ ok: boolean }> {
-      const token = store.getToken();
-      if (!token) return { ok: true };
-      const res = await postJson("/auth/logout-all", {}, token);
-      if (!res.ok) throw new Error(`sign out everywhere failed: ${res.status}`);
-      store.clear();
-      return { ok: true };
-    },
   };
 }
 

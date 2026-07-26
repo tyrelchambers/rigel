@@ -13,7 +13,6 @@ export interface UseAccountResult {
   pendingSignIn: PendingSignIn | null;
   startSignIn(email: string): Promise<{ ok: boolean; status: number }>;
   signOut(): Promise<void>;
-  signOutEverywhere(): Promise<void>;
   refresh(): Promise<void>;
   upgrade(orgId: string): Promise<{ clientSecret: string; publishableKey: string } | null>;
   manageBilling(orgId: string): Promise<{ ok: boolean } | undefined>;
@@ -57,26 +56,18 @@ export function useAccount(): UseAccountResult {
     },
     [refresh],
   );
-  const clearLocal = useCallback(() => {
+  const signOut = useCallback(async () => {
+    await rigel?.account.signOut();
     setMe(null);
     setOrgs([]);
     setEntitlement(null);
     setPendingSignIn(null);
     setStatus("signed-out");
   }, []);
-  const signOut = useCallback(async () => {
-    await rigel?.account.signOut();
-    clearLocal();
-  }, [clearLocal]);
-  // Ends every session for the account, not just this device.
-  const signOutEverywhere = useCallback(async () => {
-    await rigel?.account.signOutEverywhere();
-    clearLocal();
-  }, [clearLocal]);
   const upgrade = useCallback((orgId: string) => rigel?.billing?.checkout(orgId) ?? Promise.resolve(null), []);
   const manageBilling = useCallback((orgId: string) => rigel?.billing?.portal(orgId) ?? Promise.resolve(undefined), []);
   // Manual entitlement refetch (the provider re-emits rigel:billing:changed → this hook refetches).
   const refreshBilling = useCallback(() => rigel?.billing?.refresh() ?? Promise.resolve(null), []);
 
-  return { status, account: me?.account ?? null, me, orgs, entitlement, pendingSignIn, startSignIn, signOut, signOutEverywhere, refresh, upgrade, manageBilling, refreshBilling };
+  return { status, account: me?.account ?? null, me, orgs, entitlement, pendingSignIn, startSignIn, signOut, refresh, upgrade, manageBilling, refreshBilling };
 }

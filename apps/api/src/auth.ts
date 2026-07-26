@@ -130,15 +130,4 @@ export function registerAuthRoutes(app: Hono, deps: AuthDeps): void {
     return c.json({ ok: true });
   });
 
-  // Revoking every device is a capability the account holder should reach from
-  // the app, not from a link in an email that expires and can be deleted. Tokens
-  // never expire, so this is the only way to end a session you no longer control.
-  app.post("/auth/logout-all", async (c) => {
-    const token = bearer(c);
-    if (!token) return c.json({ error: "unauthorized" }, 401);
-    const account = await db.accountByToken(sha(token));
-    if (!account) return c.json({ error: "unauthorized" }, 401);
-    const revoked = await db.revokeTokensForAccount(account.id);
-    return c.json({ ok: true, revoked });
-  });
 }

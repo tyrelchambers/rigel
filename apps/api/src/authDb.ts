@@ -30,7 +30,6 @@ export interface AuthDb {
   accountByToken(tokenHash: string): Promise<Account | null>;
   touchToken(tokenHash: string): Promise<void>;
   revokeToken(tokenHash: string): Promise<void>;
-  revokeTokensForAccount(accountId: string): Promise<number>;
   ensurePersonalOrg(accountId: string, name: string): Promise<void>;
   getOrgsForAccount(accountId: string): Promise<OrgMembership[]>;
   billableOrgs(accountId: string): Promise<{ orgId: string; stripeCustomerId: string | null }[]>;
@@ -250,14 +249,6 @@ export function createAuthDb(pool: Pool): AuthDb {
     },
     async revokeToken(tokenHash) {
       await pool.query(`UPDATE auth_tokens SET revoked_at = now() WHERE token_hash = $1 AND revoked_at IS NULL`, [tokenHash]);
-    },
-    async revokeTokensForAccount(accountId) {
-      const r = await pool.query(
-        `UPDATE auth_tokens SET revoked_at = now()
-         WHERE account_id = $1 AND revoked_at IS NULL`,
-        [accountId],
-      );
-      return r.rowCount ?? 0;
     },
     async orgBilling(orgId, accountId) {
       const r = await pool.query(

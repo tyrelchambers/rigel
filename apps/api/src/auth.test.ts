@@ -68,13 +68,6 @@ function fakeDb() {
     },
     async touchToken() {},
     async revokeToken(tokenHash) { revoked.add(tokenHash); },
-    async revokeTokensForAccount(accountId) {
-      let n = 0;
-      for (const [hash, accId] of tokens) {
-        if (accId === accountId && !revoked.has(hash)) { revoked.add(hash); n++; }
-      }
-      return n;
-    },
     async ensurePersonalOrg(accountId, name) {
       personalOrgs.set(accountId, { id: `org-${accountId}`, kind: "personal", name, role: "owner" });
     },
@@ -268,34 +261,6 @@ test("me returns the account for a valid bearer, 401 after logout", async () => 
   expect(me.account).toEqual({ id: "acc-1", email: "a@b.co", name: "Jane" });
   expect((await app.request("/auth/logout", { method: "POST", headers: auth })).status).toBe(200);
   expect((await app.request("/me", { headers: auth })).status).toBe(401);
-});
-
-// Tokens never expire, so revoking every device is the only way to end a session
-// you no longer control. It has to be reachable from the app with nothing but the
-// bearer token: the emailed revoke link it replaces expired and could be deleted.
-test("logout-all revokes every device's token, not just the caller's", async () => {
-  const { app, sent } = make();
-  const first = await signInViaPoll(app, sent, "a@b.co");
-  const second = await signInViaPoll(app, sent, "a@b.co");
-  const authA = { authorization: `Bearer ${first.token}` };
-  const authB = { authorization: `Bearer ${second.token}` };
-  expect((await app.request("/me", { headers: authA })).status).toBe(200);
-  expect((await app.request("/me", { headers: authB })).status).toBe(200);
-
-  const res = await app.request("/auth/logout-all", { method: "POST", headers: authB });
-  expect(res.status).toBe(200);
-
-  // The OTHER device is signed out too, which plain /auth/logout would not do.
-  expect((await app.request("/me", { headers: authA })).status).toBe(401);
-  expect((await app.request("/me", { headers: authB })).status).toBe(401);
-});
-
-test("logout-all refuses an unauthenticated or unknown token", async () => {
-  const { app } = make();
-  expect((await app.request("/auth/logout-all", { method: "POST" })).status).toBe(401);
-  expect(
-    (await app.request("/auth/logout-all", { method: "POST", headers: { authorization: "Bearer nope" } })).status,
-  ).toBe(401);
 });
 
 test("me self-heals a personal org for an account that has none, and returns it", async () => {

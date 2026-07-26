@@ -24,7 +24,6 @@ contextBridge.exposeInMainWorld("rigel", {
     me: (): Promise<{ account: { id: string; email: string; name: string | null }; orgs?: Array<{ id: string; kind: "personal" | "team"; name: string; role: "owner" | "admin" | "member" }>; invitations?: unknown[] } | null> =>
       ipcRenderer.invoke("rigel:account:me"),
     signOut: (): Promise<void> => ipcRenderer.invoke("rigel:account:sign-out"),
-    signOutEverywhere: (): Promise<void> => ipcRenderer.invoke("rigel:account:sign-out-everywhere"),
     status: (): Promise<{ signedIn: boolean; account: { id: string; email: string; name: string | null } | null; orgs: Array<{ id: string; kind: "personal" | "team"; name: string; role: "owner" | "admin" | "member" }>; pendingSignIn: { email: string; expiresAt: number; displayCode: string } | null }> =>
       ipcRenderer.invoke("rigel:account:status"),
     onChanged: (cb: () => void): (() => void) => {

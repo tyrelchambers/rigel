@@ -136,30 +136,4 @@ test("signOut revokes then clears the token, even if the request fails", async (
   expect(store.value).toBeNull();
 });
 
-test("signOutEverywhere revokes every device and clears the local token", async () => {
-  const store = memStore("tok-1");
-  const calls: { url: string; auth?: string }[] = [];
-  const fetchFn = (async (url: string, init?: RequestInit) => {
-    calls.push({ url, auth: (init?.headers as Record<string, string> | undefined)?.Authorization });
-    return jsonResponse({ ok: true, revoked: 3 });
-  }) as typeof fetch;
-  const client = createAccountClient({ store, fetchFn, endpoint: ENDPOINT });
 
-  await client.signOutEverywhere();
-
-  expect(calls[0].url).toBe(`${ENDPOINT}/auth/logout-all`);
-  expect(calls[0].auth).toBe("Bearer tok-1");
-  expect(store.value).toBeNull();
-});
-
-// signOut swallows a failed revoke because the local token is going away either
-// way. Here the server call IS the point: clearing locally while other devices
-// stay signed in would tell the user something untrue.
-test("signOutEverywhere surfaces a failure instead of clearing the token", async () => {
-  const store = memStore("tok-1");
-  const fetchFn = (async () => new Response("nope", { status: 500 })) as typeof fetch;
-  const client = createAccountClient({ store, fetchFn, endpoint: ENDPOINT });
-
-  await expect(client.signOutEverywhere()).rejects.toThrow();
-  expect(store.value).toBe("tok-1");
-});

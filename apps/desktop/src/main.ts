@@ -576,12 +576,6 @@ async function boot(): Promise<void> {
     await accountClient.signOut();
     pushServerAuth(false);
   });
-  ipcMain.handle("rigel:account:sign-out-everywhere", async () => {
-    pollLoop.stop();
-    accountStore.clearPending();
-    await accountClient.signOutEverywhere();
-    pushServerAuth(false);
-  });
   ipcMain.handle("rigel:account:status", () => refreshAccount());
   ipcMain.handle("rigel:billing:checkout", (_e, orgId: string) => billingClient.checkout(orgId));
   ipcMain.handle("rigel:billing:portal", async (_e, orgId: string) => {

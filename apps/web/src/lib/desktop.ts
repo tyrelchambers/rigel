@@ -49,7 +49,6 @@ export interface RigelBridge {
     startSignIn(email: string): Promise<{ ok: boolean; status: number }>;
     me(): Promise<MePayload | null>;
     signOut(): Promise<void>;
-    signOutEverywhere(): Promise<void>;
     status(): Promise<{
       signedIn: boolean;
       account: Account | null;
