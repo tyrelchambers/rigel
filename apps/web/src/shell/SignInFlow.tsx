@@ -1,24 +1,15 @@
 import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faEnvelopeCircleCheck, faShieldCheck, faMobile, faArrowsRotate, faCheck } from "@awesome.me/kit-6050953220/icons/classic/solid";
+import { faEnvelopeCircleCheck, faArrowsRotate, faCheck } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Button } from "@/components/ui/button";
 import type { UseAccountResult } from "./useAccount";
 
 interface SignInFlowProps {
   account: UseAccountResult;
   className?: string;
-  /** Suppress the wordmark and the "Sign in to Rigel" heading when the host
-   *  already supplies that chrome (the onboarding wizard's step header does). */
+  /** Suppress the "Sign in to Rigel" heading when the host already supplies it
+   *  (the onboarding wizard's step header does). */
   hideHeading?: boolean;
-}
-
-function Note({ icon, children }: { icon: typeof faShieldCheck; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <FontAwesomeIcon icon={icon} className="size-[13px] text-[var(--fg-tertiary)]" />
-      <span className="text-xs text-[var(--fg-secondary)]">{children}</span>
-    </div>
-  );
 }
 
 /** Email in, sign-in link out. All three states are derived from the account,
@@ -56,15 +47,6 @@ export function SignInFlow({ account, className, hideHeading = false }: SignInFl
 
   return (
     <div className={`flex flex-col gap-5 ${className ?? ""}`}>
-      {!hideHeading && (
-        <div className="flex items-center gap-2">
-          <span className="size-1.5 rounded-full bg-primary" />
-          <span className="font-mono text-2xs font-semibold tracking-widest text-[var(--fg-secondary)]">
-            RIGEL
-          </span>
-        </div>
-      )}
-
       {signedIn ? (
         <div className="flex flex-col items-center gap-4 text-center">
           <span className="flex size-14 items-center justify-center rounded-full border border-[color-mix(in_oklab,var(--status-running)_32%,transparent)] bg-[color-mix(in_oklab,var(--status-running)_12%,transparent)]">
@@ -80,6 +62,8 @@ export function SignInFlow({ account, className, hideHeading = false }: SignInFl
           </div>
         </div>
       ) : pending ? (
+        // One idea per line: where the link went, the code to match, resend.
+        // Everything else said the same thing twice.
         <div className="flex flex-col items-center gap-4 text-center">
           <span className="flex size-14 items-center justify-center rounded-full border border-[color-mix(in_oklab,var(--accent-primary)_32%,transparent)] bg-[color-mix(in_oklab,var(--accent-primary)_12%,transparent)]">
             <FontAwesomeIcon icon={faEnvelopeCircleCheck} className="size-[24px] text-[var(--accent-primary)]" />
@@ -87,22 +71,16 @@ export function SignInFlow({ account, className, hideHeading = false }: SignInFl
           <div className="flex flex-col gap-1.5">
             <h2 className="text-base font-semibold text-[var(--fg-primary)]">Check your inbox</h2>
             <p className="text-sm leading-relaxed text-[var(--fg-secondary)]">
-              We sent a sign-in link to {pending.email}. Open it on any device.
+              We sent a sign-in link to {pending.email}.
             </p>
           </div>
-          <div className="flex flex-col items-center gap-2">
-            <p className="text-xs text-[var(--fg-secondary)]">The page will ask you to check this code:</p>
+          <div className="flex flex-col items-center gap-1.5">
             {/* Named for screen readers so it is announced as the sign-in code
              *  rather than a bare run of characters. */}
             <output aria-label="Sign-in code" className="font-mono text-3xl font-semibold tracking-widest text-[var(--accent-primary)]">
               {pending.displayCode}
             </output>
-            <p className="text-xs leading-relaxed text-[var(--fg-secondary)]">
-              You won&apos;t need to type it. Just check the page shows the same code.
-            </p>
-          </div>
-          <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-4 py-3 text-xs text-[var(--fg-secondary)]">
-            Keep using Rigel in the meantime. Nothing here is blocked.
+            <p className="text-xs text-[var(--fg-secondary)]">Confirm the page shows this code.</p>
           </div>
           {error && (
             <div className="w-full rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div>
@@ -138,11 +116,6 @@ export function SignInFlow({ account, className, hideHeading = false }: SignInFl
             onChange={(e) => setEmail(e.target.value)}
             className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3 py-2.5 text-sm text-[var(--fg-primary)] outline-none placeholder:text-[var(--fg-tertiary)] focus:border-primary/50"
           />
-
-          <div className="flex flex-col gap-2">
-            <Note icon={faShieldCheck}>No password to remember.</Note>
-            <Note icon={faMobile}>The link works on any device, not just this one.</Note>
-          </div>
 
           {error && (
             <div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div>

@@ -60,8 +60,19 @@ describe("SignInFlow", () => {
   it("shows the pending record's own display code for the human to match", () => {
     render(<SignInFlow account={account({ pendingSignIn: { email: "jane@acme.com", expiresAt: Date.now() + 1000, displayCode: "ZZZZ-1111" } })} />);
     expect(screen.getByLabelText(/sign-in code/i)).toHaveTextContent("ZZZZ-1111");
-    expect(screen.getByText(/check this code/i)).toBeInTheDocument();
-    expect(screen.getByText(/same code/i)).toBeInTheDocument();
+    // One caption, not three sentences circling the same instruction.
+    expect(screen.getByText(/confirm the page shows this code/i)).toBeInTheDocument();
+  });
+
+  // The panel had four lines of prose plus a reassurance box for one idea. It is
+  // where the link went, the code, and resend.
+  it("keeps the inbox panel to one line per idea", () => {
+    render(<SignInFlow account={account({ pendingSignIn: { email: "jane@acme.com", expiresAt: Date.now() + 1000, displayCode: "ZZZZ-1111" } })} />);
+    const body = document.body.textContent ?? "";
+    expect(body).not.toMatch(/nothing here is blocked/i);
+    expect(body).not.toMatch(/won't need to type it/i);
+    expect(body).not.toMatch(/open it on any device/i);
+    expect(screen.queryByText("RIGEL")).not.toBeInTheDocument();
   });
 
   it("no longer claims there is no code to copy back", () => {
