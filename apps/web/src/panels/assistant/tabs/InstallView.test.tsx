@@ -48,7 +48,7 @@ beforeEach(() => {
   mockOrgs = [];
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     if (url.includes("/api/chat-config")) return new Response(JSON.stringify({ configured: false, source: null }));
-    if (url.includes("/api/agents/claude/models")) return new Response(JSON.stringify({ models: ["claude-sonnet-4-6", "claude-opus-4-8"], efforts: ["low", "medium", "high"] }));
+    if (url.includes("/api/agents/claude/models")) return new Response(JSON.stringify({ models: ["claude-sonnet-4-6", "claude-opus-5"], efforts: ["low", "medium", "high"] }));
     if (url.includes("/api/agents")) return new Response(JSON.stringify({ activeAgentId: "claude", agents: [
       { id: "claude", label: "Claude", vendor: "Anthropic", status: "available", connection: "connected", authMethods: ["subscription", "apiKey"], authMethod: "subscription", installUrl: "x", installLabel: "i" },
       { id: "codex", label: "Codex", vendor: "OpenAI", status: "available", connection: "notSignedIn", authMethods: ["apiKey"], authMethod: "apiKey", installUrl: "x", installLabel: "i" },
@@ -77,7 +77,7 @@ describe("InstallView (multi-provider)", () => {
       expect.objectContaining({
         action: "install",
         worker: expect.objectContaining({ provider: "claude", model: "claude-sonnet-4-6" }),
-        supervisor: expect.objectContaining({ provider: "claude", model: "claude-opus-4-8" }),
+        supervisor: expect.objectContaining({ provider: "claude", model: "claude-opus-5" }),
         credentials: expect.objectContaining({ claudeToken: "tok-abc" }),
       }),
       expect.any(Function),

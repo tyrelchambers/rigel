@@ -14,7 +14,7 @@ describe("parseRolesFromConfig", () => {
   test("falls back to the Claude defaults when no role keys are present", () => {
     const roles = parseRolesFromConfig({});
     expect(roles.worker).toEqual({ provider: "claude", model: "claude-sonnet-4-6", effort: "high" });
-    expect(roles.supervisor).toEqual({ provider: "claude", model: "claude-opus-4-8", effort: "high" });
+    expect(roles.supervisor).toEqual({ provider: "claude", model: "claude-opus-5", effort: "high" });
   });
 });
 

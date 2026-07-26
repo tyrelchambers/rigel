@@ -16,7 +16,7 @@ export const DEFAULT_WORKER: AssistantRoleSelection = {
 };
 export const DEFAULT_SUPERVISOR: AssistantRoleSelection = {
   provider: "claude",
-  model: "claude-opus-4-8",
+  model: "claude-opus-5",
   effort: "high",
 };
 

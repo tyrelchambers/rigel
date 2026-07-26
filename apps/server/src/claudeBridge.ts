@@ -210,6 +210,7 @@ export function mapClaudeEvent(ev: any): ChatEvent[] {
  * Update when a new Claude model ships — there is no `claude` CLI command to list models.
  */
 export const ALLOWED_MODELS = new Set([
+  "claude-opus-5",
   "claude-opus-4-8",
   "claude-sonnet-4-6",
   "claude-haiku-4-5-20251001",

@@ -54,7 +54,7 @@ export const DEFAULT_INSTALL_CONFIG: AssistantInstallConfig = {
   installNamespace: "default",
   namespaces: "",
   workerModel: "claude-sonnet-4-6",
-  supervisorModel: "claude-opus-4-8",
+  supervisorModel: "claude-opus-5",
   pollIntervalMs: 30000,
   maxPerResourcePerHour: 3,
   maxPerNight: 20,

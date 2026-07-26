@@ -83,7 +83,7 @@ test("buildInstallConfig falls back to legacy model knobs + defaults when no sel
   const cfg = buildInstallConfig({ action: "install" });
   expect(cfg.installNamespace).toBe("default");
   expect(cfg.workerModel).toBe("claude-sonnet-4-6");
-  expect(cfg.supervisorModel).toBe("claude-opus-4-8");
+  expect(cfg.supervisorModel).toBe("claude-opus-5");
   expect(cfg.pollIntervalMs).toBe(30000);
   expect(cfg.worker).toBeUndefined();
   expect(cfg.supervisor).toBeUndefined();
