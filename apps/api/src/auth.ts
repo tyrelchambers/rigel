@@ -9,14 +9,11 @@ import {
   renderConfirmedPage,
   renderDeniedPage,
   renderInvalidPage,
-  renderRevokePage,
-  renderRevokedPage,
 } from "./authPages";
 
 export interface AuthDeps {
   db: AuthDb;
   sendLink: (email: string, confirmUrl: string) => Promise<void>;
-  sendSignInNotice: (email: string, revokeUrl: string, when: string) => Promise<void>;
   allowRequest: (key: string) => boolean;
   allowVerify: (key: string) => boolean;
   allowPoll: (key: string) => boolean;
@@ -25,14 +22,13 @@ export interface AuthDeps {
 }
 
 const LOGIN_TTL_SECONDS = 15 * 60; // 15 minutes
-const REVOKE_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
 
 function clientIp(c: { req: { header: (k: string) => string | undefined } }): string {
   return c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
 }
 
 export function registerAuthRoutes(app: Hono, deps: AuthDeps): void {
-  const { db, sendLink, sendSignInNotice, allowRequest, allowVerify, allowPoll, allowPollIp, publicUrl } = deps;
+  const { db, sendLink, allowRequest, allowVerify, allowPoll, allowPollIp, publicUrl } = deps;
 
   app.post("/auth/request", async (c) => {
     let body: unknown;
@@ -89,23 +85,6 @@ export function registerAuthRoutes(app: Hono, deps: AuthDeps): void {
     return c.html(renderConfirmedPage(claimed.email));
   });
 
-  app.get("/auth/revoke", (c) => {
-    const token = c.req.query("t") ?? "";
-    if (!token) return c.html(renderInvalidPage(), 400);
-    return c.html(renderRevokePage(token));
-  });
-
-  app.post("/auth/revoke", async (c) => {
-    const form = await c.req.parseBody();
-    const token = typeof form.t === "string" ? form.t.trim() : "";
-    if (!token) return c.html(renderInvalidPage(), 400);
-    if (!allowVerify(`auth:rvk:ip:${clientIp(c)}`)) return c.html(renderInvalidPage(), 429);
-    const claimed = await db.consumeRevokeToken(sha(token));
-    if (!claimed) return c.html(renderInvalidPage(), 400);
-    const count = await db.revokeTokensForAccount(claimed.accountId);
-    return c.html(renderRevokedPage(count));
-  });
-
   app.post("/auth/poll", async (c) => {
     let body: unknown;
     try { body = await c.req.json(); } catch { return c.json({ error: "invalid json" }, 400); }
@@ -119,10 +98,6 @@ export function registerAuthRoutes(app: Hono, deps: AuthDeps): void {
       const account = await db.upsertAccount(claimed.email);
       const token = randomBytes(32).toString("base64url");
       await db.insertToken(sha(token), account.id);
-      const revokeToken = randomBytes(32).toString("base64url");
-      await db.createRevokeToken({ tokenHash: sha(revokeToken), accountId: account.id, ttlSeconds: REVOKE_TTL_SECONDS });
-      void sendSignInNotice(account.email, `${publicUrl}/auth/revoke?t=${revokeToken}`, new Date().toISOString())
-        .catch((e) => console.error("auth: sendSignInNotice failed", e));
       return c.json({
         status: "confirmed",
         token,
@@ -154,4 +129,5 @@ export function registerAuthRoutes(app: Hono, deps: AuthDeps): void {
     if (token) await db.revokeToken(sha(token));
     return c.json({ ok: true });
   });
+
 }

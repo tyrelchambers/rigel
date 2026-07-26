@@ -4,8 +4,6 @@ import {
   renderConfirmedPage,
   renderDeniedPage,
   renderInvalidPage,
-  renderRevokePage,
-  renderRevokedPage,
 } from "./authPages";
 
 test("the confirm page shows the code and both actions", () => {
@@ -49,35 +47,3 @@ test("the invalid page explains expiry and offers no form", () => {
   expect(html.toLowerCase()).toContain("expired");
 });
 
-test("the revoke page posts the token back and styles the action as destructive", () => {
-  const html = renderRevokePage("rvk-123");
-  expect(html).toContain('action="/auth/revoke"');
-  expect(html).toContain('method="post"');
-  expect(html).toContain('value="rvk-123"');
-  expect(html).toContain("Sign out all devices");
-  expect(html).toContain('class="destructive"');
-  expect(html).not.toContain('class="primary"');
-  expect(renderConfirmPage("t", "a@b.co", "CODE")).not.toContain('class="destructive"');
-});
-
-test("the revoke page escapes the token it echoes back", () => {
-  const html = renderRevokePage('"><script>alert(1)</script>');
-  expect(html).not.toContain("<script>alert(1)</script>");
-  expect(html).toContain("&quot;&gt;&lt;script&gt;");
-});
-
-test("the revoked page reports how many sessions ended, pluralised, with no form", () => {
-  const none = renderRevokedPage(0);
-  expect(none).not.toContain("<form");
-  expect(none.toLowerCase()).toContain("no other active sessions");
-  expect(none).not.toContain("0 device");
-
-  const one = renderRevokedPage(1);
-  expect(one).not.toContain("<form");
-  expect(one).toContain("1 device");
-  expect(one).not.toContain("1 devices");
-
-  const two = renderRevokedPage(2);
-  expect(two).not.toContain("<form");
-  expect(two).toContain("2 devices");
-});

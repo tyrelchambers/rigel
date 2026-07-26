@@ -135,3 +135,5 @@ test("signOut revokes then clears the token, even if the request fails", async (
   await client.signOut();
   expect(store.value).toBeNull();
 });
+
+
