@@ -1,6 +1,6 @@
 {
   "name": "rigel-assistant-agent",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "private": true,
   "type": "module",
   "description": "In-cluster autonomous remediation agent for Rigel. Detects incidents, has Claude diagnose them, and auto-remediates the safe tier under deterministic guardrails.",
