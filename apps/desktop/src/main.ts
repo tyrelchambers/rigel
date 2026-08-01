@@ -449,6 +449,28 @@ function createWindow(port: number): BrowserWindow {
   // hold a stale BrowserWindow handle after it is closed.
   win.on("closed", () => { if (mainWindow === win) mainWindow = null; });
 
+  // A renderer that dies (OOM, GPU/compositor kill after a long sleep) leaves an
+  // empty window painted in `backgroundColor` with nothing to notice it. Reload
+  // it, rate-limited so a crash-on-boot can't spin.
+  let lastRecoveryReload = 0;
+  const recoverRenderer = (why: string): void => {
+    console.error(`[rigel] renderer ${why}`);
+    const now = Date.now();
+    if (now - lastRecoveryReload < 10_000) return;
+    lastRecoveryReload = now;
+    if (!win.isDestroyed()) win.reload();
+  };
+
+  win.webContents.on("render-process-gone", (_event, details) => {
+    if (details.reason === "clean-exit") return;
+    recoverRenderer(`gone (${details.reason}, exit ${details.exitCode})`);
+  });
+  win.webContents.on("unresponsive", () => console.error("[rigel] renderer unresponsive"));
+  win.webContents.on("did-fail-load", (_event, code, desc, url, isMainFrame) => {
+    if (!isMainFrame || code === -3) return; // -3 = ABORTED (navigation superseded)
+    console.error(`[rigel] load failed ${code} ${desc} ${url}`);
+  });
+
   win.on("focus", () => void entitlements?.refresh(true));
 
   win.on("maximize", () => win.webContents.send("rigel:window:maximized", true));
