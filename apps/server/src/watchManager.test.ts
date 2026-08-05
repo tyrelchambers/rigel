@@ -502,3 +502,33 @@ test("classifyWatchError maps stderr to a reason", () => {
   expect(classifyWatchError("ERROR FROM SERVER (FORBIDDEN)")).toBe("forbidden");
   expect(classifyWatchError("connection refused")).toBe("error");
 });
+
+// A long-idle watch receives BOOKMARK (metadata = resourceVersion only) and
+// ERROR (a Status object, empty metadata) frames. Neither names an object, so
+// neither can be keyed — forwarding them let the client store a resource under
+// the literal key "undefined", which then blew up name-sorted panels.
+test("nameless watch frames (BOOKMARK/ERROR) are not forwarded to listeners", async () => {
+  const rec = makeRecorder();
+  const mgr = new WatchManager(null, rec.spawnFn as any);
+
+  const deltas: any[] = [];
+  mgr.subscribe({ kind: "nodes", namespace: "*" }, () => {}, (e) => deltas.push(e));
+  rec.lastList().emitList([pod("n1")]);
+  await new Promise((r) => setImmediate(r));
+
+  const watch = rec.lastWatch();
+  (watch as any).stdout.write(
+    JSON.stringify({ type: "BOOKMARK", object: { kind: "Node", metadata: { resourceVersion: "12345" } } }),
+  );
+  (watch as any).stdout.write(
+    JSON.stringify({ type: "ERROR", object: { kind: "Status", metadata: {}, reason: "Expired" } }),
+  );
+  await new Promise((r) => setImmediate(r));
+
+  expect(deltas).toEqual([]);
+
+  // A real event still gets through.
+  (watch as any).stdout.write(JSON.stringify({ type: "MODIFIED", object: pod("n1") }));
+  await new Promise((r) => setImmediate(r));
+  expect(deltas.map((d) => d.type)).toEqual(["MODIFIED"]);
+});

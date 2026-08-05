@@ -12,11 +12,16 @@ export function cacheKey(obj: any): string | undefined {
   return ns ? `${ns}/${name}` : name;
 }
 
-export function applyEvent(cache: Map<string, any>, e: WatchEvent): void {
+// Returns false for an event carrying no keyable object — BOOKMARK (metadata is
+// just a resourceVersion) and ERROR (a Status object), both of which a long-idle
+// watch emits. Callers must not forward those: with no name they key to
+// "undefined" downstream and masquerade as a real resource.
+export function applyEvent(cache: Map<string, any>, e: WatchEvent): boolean {
   const key = cacheKey(e.object);
-  if (!key) return;
+  if (!key) return false;
   if (e.type === "DELETED") cache.delete(key);
   else cache.set(key, e.object);
+  return true;
 }
 
 export type WatchError = { reason: "forbidden" | "notfound" | "error"; message: string };
@@ -275,7 +280,7 @@ export class WatchManager {
 
     proc.stdout!.on("data", (buf: Buffer) => {
       parser.push(buf.toString("utf8"), (e) => {
-        applyEvent(w.cache, e);
+        if (!applyEvent(w.cache, e)) return;
         for (const l of w.listeners) l.onDelta(e);
       });
     });

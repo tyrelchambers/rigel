@@ -1,4 +1,7 @@
-export interface WatchEvent { type: "ADDED" | "MODIFIED" | "DELETED"; object: any }
+// BOOKMARK and ERROR are what a long-idle watch emits (a resourceVersion-only
+// object and a Status object respectively). Neither names a resource, so both
+// must be filtered before an event is treated as a live object.
+export interface WatchEvent { type: "ADDED" | "MODIFIED" | "DELETED" | "BOOKMARK" | "ERROR"; object: any }
 
 /** Frames concatenated JSON objects from a kubectl --output-watch-events stream. */
 export class WatchEventParser {

@@ -46,10 +46,14 @@ let currentContext: string | null = null;
  * Store key for a watched object: `namespace/name` for namespaced resources,
  * bare `name` for cluster-scoped ones (nodes, namespaces). Namespace-qualified
  * so same-named resources in different namespaces don't clobber each other when
- * watching all namespaces.
+ * watching all namespaces. Undefined when the frame names no resource (a
+ * BOOKMARK or ERROR event): such an object must never enter the store, where it
+ * would sit under the key "undefined" and break every name-sorted panel.
  */
-function resourceKey(o: { metadata: { name: string; namespace?: string } }): string {
-  return o.metadata.namespace ? `${o.metadata.namespace}/${o.metadata.name}` : o.metadata.name;
+function resourceKey(o: { metadata?: { name?: string; namespace?: string } }): string | undefined {
+  const name = o?.metadata?.name;
+  if (!name) return undefined;
+  return o.metadata!.namespace ? `${o.metadata!.namespace}/${name}` : name;
 }
 
 /** Raw frames queued while the socket is still CONNECTING; flushed on open. */
@@ -329,11 +333,16 @@ export function connectCluster(): void {
       store.setError(null);
       store.setAccess(m.kind, { status: "ok" });
       const items: Record<string, unknown> = {};
-      for (const o of m.items) items[resourceKey(o)] = o;
+      for (const o of m.items) {
+        const key = resourceKey(o);
+        if (key) items[key] = o;
+      }
       store.replaceKind(m.kind, items, typeof m.namespace === "string" ? m.namespace : "*");
     } else if (m.type === "delta") {
-      if (m.event === "DELETED") store.remove(m.kind, resourceKey(m.object));
-      else store.upsert(m.kind, resourceKey(m.object), m.object);
+      const key = resourceKey(m.object);
+      if (!key) return;
+      if (m.event === "DELETED") store.remove(m.kind, key);
+      else store.upsert(m.kind, key, m.object);
     } else if (m.type === "error") {
       store.setLoading(false);
       if (typeof m.kind === "string") {
