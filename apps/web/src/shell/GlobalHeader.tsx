@@ -23,6 +23,10 @@ interface GlobalHeaderProps {
   onOpenAccount: () => void;
 }
 
+// Local use needs no account, so the header offers no sign-in affordance. The
+// button below is kept, wired and tested behind this flag for the day it does.
+const SHOW_ACCOUNT_BUTTON = false;
+
 const DRAG = { WebkitAppRegion: "drag" } as unknown as React.CSSProperties;
 const NO_DRAG = {
   WebkitAppRegion: "no-drag",
@@ -149,28 +153,29 @@ export function GlobalHeader({
         </span>
       </button>
 
-      {/* Account — user avatar opens the Account modal */}
-      <button
-        onClick={onOpenAccount}
-        title="Account"
-        aria-label="Account"
-        style={{
-          ...NO_DRAG,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: 28,
-          height: 28,
-          borderRadius: "50%",
-          background: "var(--accent-dim)",
-          border: "1px solid var(--border-subtle)",
-          cursor: "pointer",
-          flexShrink: 0,
-        }}
-        className="hover:opacity-90 transition-opacity"
-      >
-        <FontAwesomeIcon icon={faUser} className="size-[15px]" style={{ color: "var(--accent-primary)" }} />
-      </button>
+      {SHOW_ACCOUNT_BUTTON && (
+        <button
+          onClick={onOpenAccount}
+          title="Account"
+          aria-label="Account"
+          style={{
+            ...NO_DRAG,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 28,
+            height: 28,
+            borderRadius: "50%",
+            background: "var(--accent-dim)",
+            border: "1px solid var(--border-subtle)",
+            cursor: "pointer",
+            flexShrink: 0,
+          }}
+          className="hover:opacity-90 transition-opacity"
+        >
+          <FontAwesomeIcon icon={faUser} className="size-[15px]" style={{ color: "var(--accent-primary)" }} />
+        </button>
+      )}
 
       {isWindowsDesktop && (
         <div style={{ ...NO_DRAG, width: WINDOWS_CONTROLS_WIDTH, height: "100%", flexShrink: 0 }} />
