@@ -17,14 +17,14 @@ import { GlobalHeader } from "./GlobalHeader";
 
 afterEach(cleanup);
 
-test("renders an Account button that calls onOpenAccount", () => {
-  const onOpenAccount = vi.fn();
-  render(
-    <GlobalHeader
-      onOpenSearch={vi.fn()}
-      onOpenAccount={onOpenAccount}
-    />,
-  );
-  fireEvent.click(screen.getByLabelText("Account"));
-  expect(onOpenAccount).toHaveBeenCalledTimes(1);
+test("shows no Account affordance: local use needs no sign-in", () => {
+  render(<GlobalHeader onOpenSearch={vi.fn()} onOpenAccount={vi.fn()} />);
+  expect(screen.queryByLabelText("Account")).toBeNull();
+});
+
+test("still renders the search button", () => {
+  const onOpenSearch = vi.fn();
+  render(<GlobalHeader onOpenSearch={onOpenSearch} onOpenAccount={vi.fn()} />);
+  fireEvent.click(screen.getByLabelText("Search"));
+  expect(onOpenSearch).toHaveBeenCalledTimes(1);
 });
