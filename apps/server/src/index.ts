@@ -69,7 +69,7 @@ import { handleMatrix, type MatrixRequest } from "./matrix";
 import { handleChannelTest, type ChannelTestRequest } from "./channels";
 import { PortForwardManager, type TargetKind } from "./portForward";
 import { makeFatalHandler } from "./fatalHandler";
-import { accessAllowed } from "./sessionAuth";
+import { checkSessionSecret } from "./sessionAuth";
 
 const KUBECONFIG = resolveKubeconfigPath(process.env, homedir());
 const PORT = Number(process.env.PORT ?? 8787);
@@ -78,13 +78,11 @@ const HOST = process.env.HOST ?? "0.0.0.0"; // Electron pins 127.0.0.1; Docker/H
 const SESSION_SECRET = process.env.RIGEL_SESSION_SECRET ?? "";
 if (!SESSION_SECRET) console.warn("RIGEL_SESSION_SECRET not set — local /api/* + /ws access control is DISABLED");
 
-let accountSignedIn = process.env.RIGEL_SIGNED_IN === "1";
 // Electron utilityProcess only; no-op (and inert) elsewhere.
 (process as unknown as { parentPort?: { on(ev: string, cb: (e: { data?: unknown }) => void): void } }).parentPort?.on(
   "message",
   (e: { data?: unknown }) => {
-    const m = e?.data as { type?: string; signedIn?: boolean; value?: EntitlementPayload | null } | undefined;
-    if (m?.type === "account-auth") accountSignedIn = !!m.signedIn;
+    const m = e?.data as { type?: string; value?: EntitlementPayload | null } | undefined;
     if (m?.type === "entitlement") {
       const wasAutonomous = canBeAutonomous();
       setEntitlement(m.value ?? null);
@@ -170,7 +168,7 @@ async function handler(req: Request): Promise<Response> {
       return Response.json({ ok: true });
     }
 
-    if (url.pathname.startsWith("/api/") && !accessAllowed(req.headers.get("x-rigel-session"), SESSION_SECRET, accountSignedIn)) {
+    if (url.pathname.startsWith("/api/") && !checkSessionSecret(req.headers.get("x-rigel-session"), SESSION_SECRET)) {
       return new Response("unauthorized", { status: 401 });
     }
 
@@ -1340,7 +1338,7 @@ httpServer.on("upgrade", (req: IncomingMessage, socket, head) => {
         socket.destroy();
         return;
       }
-      if (!accessAllowed(url.searchParams.get("s"), SESSION_SECRET, accountSignedIn)) {
+      if (!checkSessionSecret(url.searchParams.get("s"), SESSION_SECRET)) {
         socket.destroy();
         return;
       }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { checkSessionSecret, accessAllowed } from "./sessionAuth";
+import { checkSessionSecret } from "./sessionAuth";
 
 describe("checkSessionSecret", () => {
   it("allows everything when no secret is configured (empty expected = disabled)", () => {
@@ -23,17 +23,12 @@ describe("checkSessionSecret", () => {
     expect(checkSessionSecret("s3cr3é", "s3cr3t")).toBe(false);
     expect(checkSessionSecret("é", "s3cr3t")).toBe(false);
   });
-});
 
-describe("accessAllowed", () => {
-  it("is fully open when no secret is configured (web-dev/Docker)", () => {
-    expect(accessAllowed(null, "", false)).toBe(true);
-    expect(accessAllowed("whatever", "", false)).toBe(true);
-  });
-  it("requires the session secret AND signed-in when configured", () => {
-    expect(accessAllowed("sekret", "sekret", true)).toBe(true);
-    expect(accessAllowed("sekret", "sekret", false)).toBe(false);
-    expect(accessAllowed("wrong", "sekret", true)).toBe(false);
-    expect(accessAllowed(null, "sekret", true)).toBe(false);
+  it("is the whole local gate: account state never enters into it", () => {
+    // A signed-out user still owns the machine, the kubeconfig, and the cluster.
+    // The secret proves the caller is this app's renderer; that is all local
+    // access requires. Gating it on sign-in bricked the app when a token
+    // expired, with nothing on screen to say why.
+    expect(checkSessionSecret("sekret", "sekret")).toBe(true);
   });
 });

@@ -66,18 +66,9 @@ const APP_ICON = join(DESKTOP_DIR, "build", "icon.png");
 const SMOKE = process.env.HELMSMAN_SMOKE === "1";
 
 let serverProc: UtilityProcess | null = null;
-// Whether the account is currently signed in. Delivered to the forked server
-// via env at fork time (see forkServer) and pushed live on login/logout via
-// postMessage (see pushServerAuth) so the server's gating stays in sync
-// without a restart.
-let accountSignedIn = false;
-// postMessage to the forked server over the same channel account-auth uses.
+// postMessage to the forked server (entitlement pushes; see setEntitlement there).
 function pushServerMessage(msg: unknown): void {
   serverProc?.postMessage(msg);
-}
-function pushServerAuth(signedIn: boolean): void {
-  accountSignedIn = signedIn;
-  pushServerMessage({ type: "account-auth", signedIn });
 }
 // The desktop entitlement provider (fetch + cache + 14-day grace → free). Set in
 // boot(); the source of truth for the renderer (IPC) + the server (postMessage).
@@ -281,7 +272,6 @@ function forkServer(port: number): UtilityProcess {
   // Expose the audit skills + rigel-audit CLI to the chat claude (see helper).
   configureAuditSkillsEnv(env);
   env.RIGEL_SESSION_SECRET = SESSION_SECRET;
-  env.RIGEL_SIGNED_IN = accountSignedIn ? "1" : "0";
 
   let entry: string;
   let cwd: string;
@@ -336,7 +326,7 @@ function forkServer(port: number): UtilityProcess {
 
   // Re-deliver the current entitlement to the freshly-(re)spawned server so its
   // gate (canConnect / audit env / autonomy) survives a crash-restart without a
-  // full app relaunch — mirrors how RIGEL_SIGNED_IN reseeds account-auth.
+  // full app relaunch.
   if (entitlements) child.postMessage({ type: "entitlement", value: entitlements.current() });
 
   // Surface the server's logs in the main process console so the dev sees the
@@ -523,11 +513,6 @@ async function boot(): Promise<void> {
   });
   void entitlements.refresh(); // resolve on boot
   setInterval(() => void entitlements?.refresh(), 30 * 60 * 1000); // + every 30 min
-  // Set synchronously (BEFORE forkServer below) so the initial fork's env
-  // reflects reality with no race; refreshAccount() below corrects it async
-  // (e.g. a stale token that 401s) and pushes any change live.
-  accountSignedIn = accountStore.hasToken();
-
   const LOGIN_TTL_MS = 15 * 60 * 1000;
 
   const pollLoop = createPollLoop({
@@ -539,7 +524,6 @@ async function boot(): Promise<void> {
     setTimer: (fn, ms) => setTimeout(fn, ms),
     clearTimer: (h) => clearTimeout(h as NodeJS.Timeout),
     onSignedIn: () => {
-      pushServerAuth(true);
       void entitlements?.refresh(true);
       mainWindow?.webContents.send("rigel:account:changed");
     },
@@ -573,7 +557,6 @@ async function boot(): Promise<void> {
   }> {
     const payload = await accountClient.me(); // clears token on 401, keeps it on network-fail
     const signedIn = accountStore.hasToken();
-    pushServerAuth(signedIn);
     const pending = accountStore.getPending();
     return {
       signedIn,
@@ -596,7 +579,6 @@ async function boot(): Promise<void> {
     pollLoop.stop();
     accountStore.clearPending();
     await accountClient.signOut();
-    pushServerAuth(false);
   });
   ipcMain.handle("rigel:account:status", () => refreshAccount());
   ipcMain.handle("rigel:billing:checkout", (_e, orgId: string) => billingClient.checkout(orgId));
