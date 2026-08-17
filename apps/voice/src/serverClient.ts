@@ -6,6 +6,8 @@ export interface AgentConfig {
   url: string;
   token: string;
   model: string;
+  apiKey: string;
+  apiSecret: string;
   openrouterApiKey: string;
   deepgramApiKey: string;
   cartesiaApiKey: string;

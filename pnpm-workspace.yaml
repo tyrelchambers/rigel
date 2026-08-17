@@ -5,12 +5,13 @@ allowBuilds:
   esbuild: true
   sharp: true
   node-pty: true
-  # LiveKit voice worker: native turn-detector inference + protobuf codegen.
-  "@livekit/local-inference": true
+  # LiveKit voice worker: silero's native VAD inference.
   onnxruntime-node: true
-  protobufjs: true
   # Windows-only installer pulled in by electron-builder; never built on macOS.
   electron-winstaller: false
+  # Transitive dep of @livekit/agents core; its native binding is never
+  # loaded (silero VAD + the cloud v1 turn detector don't touch it).
+  '@livekit/local-inference': false
 minimumReleaseAgeExclude:
   - '@iconify-json/lucide@1.2.113'
   - '@awesome.me/kit-6050953220@1.0.4'

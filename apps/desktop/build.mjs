@@ -96,18 +96,17 @@ const permissionHookMjsBundle = build({
 // from apps/desktop/node_modules at fork time — same reason node-pty is a
 // desktop dependency above:
 //   - @livekit/rtc-node   the LiveKit room/track client
-//   - onnxruntime-node    used directly by @huggingface/transformers (imported
-//                          for local model inference) and indirectly by silero
-//   - @livekit/local-inference  on-device VAD/EOT; loaded via a runtime
-//     `createRequire(import.meta.url)` inside @livekit/agents, which resolves
-//     against the BUNDLE's own URL once bundled, so it must be resolvable from
-//     apps/desktop/node_modules (not just nested under the voice workspace)
-//   - sharp               statically imported at the top of
-//     @huggingface/transformers' node entrypoint; if it isn't resolvable the
-//     import throws at module-load time and voice.mjs never boots, even though
-//     the audio-only pipeline here never touches sharp's image codepaths
-// protobufjs is pure JS (its allowBuilds entry is only a postinstall step) and
-// bundles in cleanly, so it's not listed here.
+//   - onnxruntime-node    used by silero's local VAD model; bundling it trips
+//     esbuild on its platform .node binaries, so it must stay external and
+//     resolvable from apps/desktop/node_modules
+//   - sharp               imported unconditionally by @livekit/agents' own
+//     llm/utils.js (image-frame encoding, unrelated to voice); if it isn't
+//     resolvable the import throws at module-load time and voice.mjs never
+//     boots, even though the audio-only pipeline here never touches it
+// @livekit/local-inference (on-device VAD/EOT, superseded here by silero +
+// the cloud turn detector) is NOT external: @livekit/agents loads it via a
+// runtime `createRequire(...)` wrapped in try/catch and degrades gracefully
+// when it's unresolvable, so it doesn't need to be a desktop dependency.
 const voiceBundle = build({
   entryPoints: ["../voice/src/index.ts"],
   outfile: "dist/voice.mjs",
@@ -115,7 +114,7 @@ const voiceBundle = build({
   platform: "node",
   format: "esm",
   target: "node22",
-  external: ["@livekit/rtc-node", "@livekit/local-inference", "onnxruntime-node", "sharp", "electron", "node-pty"],
+  external: ["@livekit/rtc-node", "onnxruntime-node", "sharp", "electron", "node-pty"],
   banner: {
     js: "import { createRequire as __rigelCreateRequire } from 'node:module'; const require = __rigelCreateRequire(import.meta.url);",
   },

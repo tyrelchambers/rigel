@@ -1,12 +1,11 @@
 // Voice worker entry. Fetches its bootstrap from the local server (retrying
 // while the server comes up), dials the LiveKit room, and starts the pipeline.
 // No LiveKit worker registration/dispatch: this process serves exactly one room.
-import { voice } from "@livekit/agents";
+import { voice, inference } from "@livekit/agents";
 import * as openai from "@livekit/agents-plugin-openai";
 import * as deepgram from "@livekit/agents-plugin-deepgram";
 import * as cartesia from "@livekit/agents-plugin-cartesia";
 import * as silero from "@livekit/agents-plugin-silero";
-import * as livekitPlugin from "@livekit/agents-plugin-livekit";
 import { Room } from "@livekit/rtc-node";
 import { voiceSystemPrompt } from "@rigel/server/src/systemPrompt";
 import { createServerClient, type AgentConfig, type ServerClient } from "./serverClient.js";
@@ -46,7 +45,13 @@ async function main(): Promise<void> {
     }),
     tts: new cartesia.TTS({ apiKey: cfg.cartesiaApiKey }),
     vad: await silero.VAD.load(),
-    turnHandling: { turnDetection: new livekitPlugin.turnDetector.MultilingualModel() },
+    turnHandling: {
+      turnDetection: new inference.TurnDetector({
+        version: "v1",
+        apiKey: cfg.apiKey,
+        apiSecret: cfg.apiSecret,
+      }),
+    },
   });
   const agent = new voice.Agent({ instructions: voiceSystemPrompt(null) });
   await session.start({ agent, room });
