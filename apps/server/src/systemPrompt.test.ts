@@ -1,5 +1,5 @@
 import { test, expect, describe, it } from "vitest";
-import { systemPrompt } from "./systemPrompt";
+import { systemPrompt, voiceSystemPrompt } from "./systemPrompt";
 
 test("single-context prompt has no fan-out section", () => {
   const p = systemPrompt("dev");
@@ -25,5 +25,19 @@ describe("systemPrompt status callouts", () => {
     const prompt = systemPrompt("prod");
     expect(prompt).toContain("[!WARNING]");
     expect(prompt).toContain("[!TIP]");
+  });
+});
+
+describe("voiceSystemPrompt", () => {
+  test("names the active context and forbids markdown", () => {
+    const p = voiceSystemPrompt("prod");
+    expect(p).toContain("prod");
+    expect(p).toContain("Never use markdown");
+    expect(p).toContain("proposeMutation");
+    expect(p).toContain("readCluster");
+  });
+
+  test("does not modify the chat prompt", () => {
+    expect(systemPrompt("prod", ["prod"])).not.toContain("You are SPEAKING aloud");
   });
 });
