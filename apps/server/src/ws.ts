@@ -186,7 +186,13 @@ export function makeWsHandlers(
           }
         });
       } else if (m.type === "tools.recheck") {
-        void requiredTools.probeAll();
+        // Always answer the asker, even when nothing changed — a subscribe-only
+        // reply would leave "Check again" looking dead when the tool is still gone.
+        void requiredTools.probeAll().then((missing) => {
+          if (ws.readyState === ws.OPEN) {
+            ws.send(JSON.stringify({ type: "tools.status", missing }));
+          }
+        });
       } else if (m.type === "unsubscribe") {
         const { key } = resolveSub(m);
         map.get(key)?.();
