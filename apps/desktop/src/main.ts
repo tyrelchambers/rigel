@@ -9,7 +9,7 @@
 // Trust model: the server has no built-in auth. It's bound to loopback
 // (HOST=127.0.0.1) and is only ever reachable by this desktop app on the same
 // machine.
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, safeStorage, shell, utilityProcess, type BrowserWindowConstructorOptions, type UtilityProcess } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, safeStorage, session, shell, utilityProcess, type BrowserWindowConstructorOptions, type UtilityProcess } from "electron";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { readFileSync, writeFileSync, chmodSync, mkdirSync } from "node:fs";
@@ -22,6 +22,7 @@ import { createPollLoop } from "./pollLoop";
 import { createBillingClient, type EntitlementPayload } from "./billingClient";
 import { createEntitlementProvider, type EntitlementProvider } from "./entitlementProvider";
 import { decideRestart } from "./restartPolicy";
+import { decideMicPermission } from "./micPermission";
 import {
   initAutoUpdater,
   getUpdateState,
@@ -428,6 +429,41 @@ async function waitForHealth(port: number, timeoutMs = 15_000): Promise<void> {
   throw new Error(`server health timeout after ${timeoutMs}ms${lastErr ? `: ${String(lastErr)}` : ""}`);
 }
 
+// ── Media permission (voice) ────────────────────────────────────────────────
+// Electron denies every permission request by default. The voice assistant's
+// `room.localParticipant.setMicrophoneEnabled(true)` goes through
+// `getUserMedia`, which Chromium routes through both of these handlers: the
+// check handler for synchronous permission-state queries, the request handler
+// for the actual prompt. Registered once on the default session (the one
+// `createWindow` uses); the allow/deny decision itself lives in
+// micPermission.ts so it's unit-testable without mocking `session`.
+function configureMicPermissionHandlers(): void {
+  const ses = session.defaultSession;
+  const ownOrigin = () => `http://127.0.0.1:${serverPort}`;
+
+  ses.setPermissionRequestHandler((_webContents, permission, callback, details) => {
+    callback(
+      decideMicPermission({
+        permission,
+        requestingUrl: details.requestingUrl,
+        mediaTypes: "mediaTypes" in details ? details.mediaTypes : undefined,
+        voiceEnabled: process.env.RIGEL_VOICE === "1",
+        ownOriginPrefix: ownOrigin(),
+      }),
+    );
+  });
+
+  ses.setPermissionCheckHandler((_webContents, permission, _requestingOrigin, details) =>
+    decideMicPermission({
+      permission,
+      requestingUrl: details.requestingUrl,
+      mediaTypes: details.mediaType ? [details.mediaType] : undefined,
+      voiceEnabled: process.env.RIGEL_VOICE === "1",
+      ownOriginPrefix: ownOrigin(),
+    }),
+  );
+}
+
 // ── Window ───────────────────────────────────────────────────────────────
 function createWindow(port: number): BrowserWindow {
   const titleBar: Partial<BrowserWindowConstructorOptions> =
@@ -678,6 +714,7 @@ async function boot(): Promise<void> {
 
   serverPort = await resolveServerPort();
   savePreferredPort(serverPort); // remember it so the origin stays stable next launch
+  configureMicPermissionHandlers(); // needs serverPort resolved (own-origin check)
   console.log(`[rigel] starting server on 127.0.0.1:${serverPort}`);
   serverProc = forkServer(serverPort);
 
