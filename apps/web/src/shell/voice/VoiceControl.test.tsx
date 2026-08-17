@@ -12,6 +12,7 @@ const h = vi.hoisted(() => {
       setMicrophoneEnabled: vi.fn(async () => {
         if (behavior.failMic) throw new Error("mic failed");
       }),
+      publishData: vi.fn(),
     };
     connect = vi.fn(async () => {
       if (behavior.failConnect) throw new Error("connect failed");

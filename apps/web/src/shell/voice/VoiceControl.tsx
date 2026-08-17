@@ -11,6 +11,7 @@ import { useVoiceStatus } from "@/lib/api";
 import { VoiceMark, visualStateFor } from "./VoiceMark";
 import { VoicePopoverBody } from "./VoicePopoverBody";
 import { useMicTrackRef, useVoiceRoom, type VoiceConnection } from "./useVoiceRoom";
+import { VoiceSessionEffects } from "./VoiceSessionEffects";
 
 function LiveVoiceMark() {
   const { state, audioTrack } = useVoiceAssistant();
@@ -37,6 +38,7 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
       {room && (
         <RoomContext.Provider value={room}>
           <RoomAudioRenderer />
+          <VoiceSessionEffects room={room} />
         </RoomContext.Provider>
       )}
       <Popover

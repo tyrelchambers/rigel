@@ -6,9 +6,10 @@ import * as openai from "@livekit/agents-plugin-openai";
 import * as deepgram from "@livekit/agents-plugin-deepgram";
 import * as cartesia from "@livekit/agents-plugin-cartesia";
 import * as silero from "@livekit/agents-plugin-silero";
-import { Room } from "@livekit/rtc-node";
+import { Room, RoomEvent } from "@livekit/rtc-node";
 import { voiceSystemPrompt } from "@rigel/server/src/systemPrompt";
 import { createServerClient, type AgentConfig, type ServerClient } from "./serverClient.js";
+import { applyDataFrame, emptySessionState } from "./state.js";
 
 async function bootstrap(server: ServerClient): Promise<AgentConfig> {
   for (let i = 0; i < 30; i++) {
@@ -35,6 +36,12 @@ async function main(): Promise<void> {
   const room = new Room();
   await room.connect(cfg.url, cfg.token, { autoSubscribe: true, dynacast: true });
   console.log("[voice] connected to room");
+
+  const state = emptySessionState();
+  const decoder = new TextDecoder();
+  room.on(RoomEvent.DataReceived, (payload: Uint8Array, participant, _kind, topic?: string) => {
+    applyDataFrame(state, participant?.identity, topic, decoder.decode(payload));
+  });
 
   const session = new voice.AgentSession({
     stt: new deepgram.STT({ apiKey: cfg.deepgramApiKey }),
