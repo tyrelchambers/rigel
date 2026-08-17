@@ -8,6 +8,7 @@ import { ClusterCreateManager } from "./clusterCreateManager";
 import { ActionRunManager } from "./actionRunManager";
 import { parseChatScope, resolveReadContexts } from "./chatScope";
 import { listContexts } from "./contexts";
+import { requiredTools } from "./requiredTools";
 import { isCloudContext } from "./cloudGate";
 import { cloudEnabled } from "./entitlements";
 import type { Access } from "./access";
@@ -134,6 +135,8 @@ export function makeWsHandlers(
       const bootKey = context ?? "";
       ctxAccessByWs.get(ws)!.set(bootKey, resolvedAccess);
       announceAccess(ws, bootKey, resolvedAccess);
+      // A client that connects after a binary went missing still learns about it.
+      ws.send(JSON.stringify({ type: "tools.status", missing: requiredTools.state() }));
     },
     close(ws: WebSocket) {
       unsubs.get(ws)?.forEach((u) => u());
@@ -182,6 +185,8 @@ export function makeWsHandlers(
             });
           }
         });
+      } else if (m.type === "tools.recheck") {
+        void requiredTools.probeAll();
       } else if (m.type === "unsubscribe") {
         const { key } = resolveSub(m);
         map.get(key)?.();

@@ -11,6 +11,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowLeft, faArrowRight, faMagnifyingGlass, faUser } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { NamespaceSelector } from "./NamespaceBar";
 import { AppUpdateChip } from "./AppUpdateChip";
+import { ToolIssues } from "./ToolIssues";
 import { useNavHistory } from "./useNavHistory";
 import { isMacDesktop, isWindowsDesktop } from "@/lib/desktop";
 import { WINDOWS_CONTROLS_WIDTH } from "./WindowControls";
@@ -105,6 +106,9 @@ export function GlobalHeader({
 
       {/* Update-available pill — shown only when a newer release exists */}
       <AppUpdateChip />
+
+      {/* Missing kubectl/helm — shown only while a required binary is gone */}
+      <ToolIssues style={NO_DRAG} />
 
       {/* Global search — opens the existing ⌘K CommandPalette */}
       <button

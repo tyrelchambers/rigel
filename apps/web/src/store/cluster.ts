@@ -143,6 +143,12 @@ function writeNamespaceByContext(map: Record<string, string | null>): void {
 
 export type KindAccess = { status: "ok" | "forbidden" | "error"; message?: string };
 
+/** A required binary the server could not spawn, with where to get it. */
+export interface MissingTool {
+  bin: "kubectl" | "helm";
+  installUrl: string;
+}
+
 interface ClusterState {
   connected: boolean;
   resources: ResourceMap;
@@ -209,6 +215,10 @@ interface ClusterState {
    * watched kinds (e.g. events) the next snapshot/delta will repopulate it.
    */
   clearKind: (kind: string) => void;
+  /** Required binaries (kubectl, helm) the server can't find on PATH. Empty in
+   *  the healthy case; drives the header issues indicator. */
+  missingTools: MissingTool[];
+  setMissingTools: (tools: MissingTool[]) => void;
   /** A request to focus/open a specific resource after navigation (set by the palette).
    *  Optional `search` seeds the destination panel's search box so the list narrows
    *  to (ideally just) the target row. */
@@ -228,6 +238,8 @@ export const useCluster = create<ClusterState>((set) => ({
   accessNamespaces: [],
   accessByContext: {},
   namespaceByContext: readNamespaceByContext(),
+  missingTools: [],
+  setMissingTools: (missingTools) => set({ missingTools }),
   setActiveContextInitial: (context) =>
     set((s) => {
       const remembered = s.namespaceByContext[context];

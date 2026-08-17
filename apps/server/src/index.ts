@@ -5,7 +5,7 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "./staticFiles";
 import { WebSocketServer } from "ws";
 import { resolveKubeconfigPath } from "./kubeconfig";
-import { kubectl, runProcess } from "@rigel/k8s/src/run";
+import { kubectl, onSpawnFailure, runProcess } from "@rigel/k8s/src/run";
 import { WatchManager } from "./watchManager";
 import { makeWsHandlers } from "./ws";
 import { resolveRequestContext } from "./requestContext";
@@ -43,6 +43,7 @@ import {
 import { getPodMetrics, getNodeMetrics, getNodeDisk } from "./metrics";
 import { listContexts } from "./contexts";
 import { detectClusterTools } from "./clusterTools";
+import { requiredTools } from "./requiredTools";
 import { toolForContext, buildKindDeleteArgs, buildK3dDeleteArgs } from "./clusterCreate";
 import { backupKubeconfig } from "./kubeconfigBackup";
 import {
@@ -1352,6 +1353,17 @@ httpServer.on("upgrade", (req: IncomingMessage, socket, head) => {
   })();
 });
 wss.on("error", (err) => console.error("websocket server error:", err));
+
+// Missing kubectl/helm: probe once at boot, let any ENOENT from a real command
+// flip it thereafter, and push every change to every connected client.
+onSpawnFailure((bin, stderr) => requiredTools.noteSpawnFailure(bin, stderr));
+requiredTools.subscribe((missing) => {
+  const frame = JSON.stringify({ type: "tools.status", missing });
+  for (const client of wss.clients) {
+    if (client.readyState === client.OPEN) client.send(frame);
+  }
+});
+void requiredTools.probeAll();
 wss.on("connection", (client) => {
   client.on("error", () => { try { client.close(); } catch { /* already gone */ } });
   const pending: any[] = [];
