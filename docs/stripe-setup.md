@@ -30,6 +30,32 @@ A test/dev desktop build points at the test backend via `RIGEL_SIGNUP_ENDPOINT`
 (release builds stay on `api.rigel.run`); that endpoint must equal the test
 deployment's `BILLING_ENDPOINT` so the in-app billing window detects the redirect.
 
+## Running the backend locally
+
+The api runs straight on your machine — no Docker, no local Postgres. Its database
+is `rigel` on the shared Postgres at `100.85.103.61`, the same server every other
+app uses.
+
+```sh
+cp .env.example .env          # then fill in your TEST-mode Stripe values
+pnpm --filter api dev         # reads the root .env
+```
+
+Watch for `[api] Stripe: test mode (price price_...)` on boot — that confirms the
+keys. The api creates its own tables on first connect. In another terminal, point
+the desktop at it:
+
+```sh
+RIGEL_SIGNUP_ENDPOINT=http://localhost:8080 pnpm --filter desktop dev
+```
+
+For a clean slate, recreate the database on the remote node:
+
+```sh
+ssh docker-remote "docker exec infra-postgres psql -U postgres \
+  -c 'drop database rigel' -c 'create database rigel owner rigel'"
+```
+
 ## 1. Product + Price
 
 Create one **Product**: "Rigel Pro". Add a **recurring, per-seat (licensed) Price**,
