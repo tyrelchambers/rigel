@@ -11,6 +11,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowLeft, faArrowRight, faMagnifyingGlass, faUser } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { NamespaceSelector } from "./NamespaceBar";
 import { AppUpdateChip } from "./AppUpdateChip";
+import { VoiceControl } from "./voice/VoiceControl";
 import { useNavHistory } from "./useNavHistory";
 import { isMacDesktop, isWindowsDesktop } from "@/lib/desktop";
 import { WINDOWS_CONTROLS_WIDTH } from "./WindowControls";
@@ -105,6 +106,9 @@ export function GlobalHeader({
 
       {/* Update-available pill — shown only when a newer release exists */}
       <AppUpdateChip />
+
+      {/* Voice assistant: renders nothing unless the server has RIGEL_VOICE on */}
+      <VoiceControl style={NO_DRAG} />
 
       {/* Global search — opens the existing ⌘K CommandPalette */}
       <button
