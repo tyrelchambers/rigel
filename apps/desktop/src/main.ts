@@ -45,6 +45,9 @@ const SIGNUP_APP_KEY = "3f0be9f2807280c51284681d4424e3883dab9650c1ae081c";
 // Minted once per launch; delivered to the forked server via env and to the
 // renderer via argv (see forkServer + createWindow). Gates /api/* + /ws.
 const SESSION_SECRET = randomBytes(24).toString("hex");
+// Minted once per launch; delivered to the forked voice worker via env, gating
+// its calls back into the server's /api/voice routes.
+const VOICE_WORKER_TOKEN = randomBytes(24).toString("hex");
 
 // ── Layout ────────────────────────────────────────────────────────────────
 // In dev, __dirname is apps/desktop/dist. The server source and built web SPA
@@ -57,6 +60,9 @@ const APPS_DIR = join(DESKTOP_DIR, ".."); // apps
 // wrapper that imports server.mjs) so the server self-terminates if the Electron
 // main process is killed with SIGKILL. Both files live in dist/ next to main.js.
 const SERVER_BUNDLE_DEV = join(__dirname, "server-entry.mjs");
+// The voice worker is bundled the same way (see build.mjs). Dev-only: forked
+// only when RIGEL_VOICE=1 (see forkVoiceWorker); packaging is a later task.
+const VOICE_BUNDLE_DEV = join(__dirname, "voice-entry.mjs");
 const WEB_DIST_DEV = join(APPS_DIR, "web", "dist");
 // The Rigel app icon. The packaged .app embeds build/icon.icns via
 // electron-builder, but `electron .` (dev) shows the default Electron dock icon
@@ -66,6 +72,7 @@ const APP_ICON = join(DESKTOP_DIR, "build", "icon.png");
 const SMOKE = process.env.HELMSMAN_SMOKE === "1";
 
 let serverProc: UtilityProcess | null = null;
+let voiceProc: UtilityProcess | null = null;
 // postMessage to the forked server (entitlement pushes; see setEntitlement there).
 function pushServerMessage(msg: unknown): void {
   serverProc?.postMessage(msg);
@@ -272,6 +279,7 @@ function forkServer(port: number): UtilityProcess {
   // Expose the audit skills + rigel-audit CLI to the chat claude (see helper).
   configureAuditSkillsEnv(env);
   env.RIGEL_SESSION_SECRET = SESSION_SECRET;
+  env.RIGEL_VOICE_WORKER_TOKEN = VOICE_WORKER_TOKEN;
 
   let entry: string;
   let cwd: string;
@@ -341,6 +349,36 @@ function forkServer(port: number): UtilityProcess {
     // health race owns that failure) are all left alone.
     if (quitting || SMOKE || mainWindow === null) return;
     scheduleServerRestart();
+  });
+
+  return child;
+}
+
+// ── Voice worker fork ────────────────────────────────────────────────────────
+// Dev-only, flag-gated: forks the desktop-bundled voice.mjs (see build.mjs)
+// alongside the server when RIGEL_VOICE=1. Packaging (resourcesPath layout,
+// crash-restart, etc.) is a later task — a packaged app never forks this.
+function forkVoiceWorker(port: number): UtilityProcess | null {
+  if (process.env.RIGEL_VOICE !== "1" || app.isPackaged) return null;
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PORT: String(port),
+    RIGEL_SESSION_SECRET: SESSION_SECRET,
+    RIGEL_VOICE_WORKER_TOKEN: VOICE_WORKER_TOKEN,
+  };
+  if (process.env.PATH) env.PATH = process.env.PATH;
+
+  const child = utilityProcess.fork(VOICE_BUNDLE_DEV, [], {
+    env: env as Record<string, string>,
+    cwd: DESKTOP_DIR,
+    stdio: "pipe",
+  });
+
+  child.stdout?.on("data", (b: Buffer) => process.stdout.write(`[voice] ${b}`));
+  child.stderr?.on("data", (b: Buffer) => process.stderr.write(`[voice] ${b}`));
+  child.on("exit", (code) => {
+    console.log(`[rigel] voice worker exited (code=${code})`);
+    voiceProc = null;
   });
 
   return child;
@@ -655,6 +693,8 @@ async function boot(): Promise<void> {
 
   console.log(`[rigel] server healthy on :${serverPort}`);
 
+  voiceProc = forkVoiceWorker(serverPort);
+
   mainWindow = createWindow(serverPort);
 
   if (SMOKE) {
@@ -753,7 +793,10 @@ if (SMOKE || gotLock) {
 // C2: best-effort sync cleanup for catchable main-process exits (uncaught
 // exceptions, normal exit). Does NOT cover SIGKILL of the Electron main —
 // see the parent-death watchdog in dist/server-entry.mjs for that case.
-process.on("exit", () => { try { serverProc?.kill(); } catch { /* noop */ } });
+process.on("exit", () => {
+  try { serverProc?.kill(); } catch { /* noop */ }
+  try { voiceProc?.kill(); } catch { /* noop */ }
+});
 
 // macOS: stay in the dock when all windows close (do NOT quit).
 app.on("window-all-closed", () => {
@@ -781,6 +824,7 @@ app.on("activate", () => {
 app.on("before-quit", (event) => {
   if (quitting) return;
   quitting = true; // suppress any in-flight server-restart timer
+  try { voiceProc?.kill(); } catch { /* noop */ }
   if (!serverProc) return; // nothing to drain; let the quit proceed
   event.preventDefault();
   const child = serverProc;
