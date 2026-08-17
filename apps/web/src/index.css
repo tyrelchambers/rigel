@@ -1999,3 +1999,15 @@
     padding-top: 14px;
     border-top: 1px solid var(--border-subtle);
 }
+
+/* ─── Voice mark ────────────────────────────────────────────────────────────── */
+
+@keyframes rigel-voice-pulse {
+    0%,
+    100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(0.9);
+    }
+}
