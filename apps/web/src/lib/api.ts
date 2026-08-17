@@ -1538,6 +1538,35 @@ export async function importKubeconfig(kubeconfig: string) {
   return r;
 }
 
+export interface VoiceStatus {
+  enabled: boolean;
+  configured: boolean;
+}
+
+/** Drives whether the voice affordance exists at all. A failed request reads as
+ * "off" so the header stays quiet on an older server. */
+export function useVoiceStatus() {
+  return useQuery({
+    queryKey: ["voice-status"],
+    queryFn: async (): Promise<VoiceStatus> => {
+      const res = await apiFetch("/api/voice/status");
+      if (!res.ok) return { enabled: false, configured: false };
+      return (await res.json()) as VoiceStatus;
+    },
+    staleTime: 60_000,
+  });
+}
+
+export async function fetchVoiceToken(): Promise<{ url: string; token: string }> {
+  const res = await apiFetch("/api/voice/token", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ role: "desktop" }),
+  });
+  if (!res.ok) throw new Error(`voice token failed: ${res.status}`);
+  return (await res.json()) as { url: string; token: string };
+}
+
 export interface ClusterHealth { ok: boolean; authExpired: boolean }
 
 /** Poll a connected cloud context's health to drive the "Needs re-login" badge. */
