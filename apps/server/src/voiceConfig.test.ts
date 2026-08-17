@@ -45,7 +45,7 @@ describe("voiceConfig", () => {
     expect(c.apiKey).toBe("file-key");
   });
 
-  test("set + read round-trips, and secrets are not stored verbatim-readable as config", async () => {
+  test("set + read round-trips through the public API", async () => {
     await setVoiceConfig({ apiSecret: "s3cret", openrouterApiKey: "or-key", url: "wss://x" });
     const c = await voiceConfig();
     expect(c.apiSecret).toBe("s3cret");
