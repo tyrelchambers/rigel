@@ -9,11 +9,13 @@ export type VoiceConnection = "idle" | "connecting" | "connected" | "error";
  * connected while the popover is closed, disconnect on End. */
 export function useVoiceRoom() {
   const roomRef = useRef<Room | null>(null);
+  const connectingRef = useRef(false);
   const [room, setRoom] = useState<Room | null>(null);
   const [status, setStatus] = useState<VoiceConnection>("idle");
 
   const connect = useCallback(async () => {
-    if (roomRef.current) return;
+    if (roomRef.current || connectingRef.current) return;
+    connectingRef.current = true;
     setStatus("connecting");
     let r: Room | null = null;
     const onDisconnected = () => {
@@ -38,6 +40,8 @@ export function useVoiceRoom() {
       roomRef.current = null;
       setRoom(null);
       setStatus("error");
+    } finally {
+      connectingRef.current = false;
     }
   }, []);
 

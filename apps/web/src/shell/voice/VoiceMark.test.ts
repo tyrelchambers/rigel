@@ -44,10 +44,15 @@ describe("visualStateFor", () => {
     expect(visualStateFor("speaking", true)).toBe("speaking");
   });
 
-  test("every other connected agent state is listening, because the mic is live", () => {
-    for (const s of ["initializing", "connecting", "idle", "pre-connect-buffering", "disconnected", undefined]) {
+  test("failed passes through while connected, distinct from every listening state", () => {
+    expect(visualStateFor("failed", true)).toBe("failed");
+  });
+
+  test("every other connected agent state is listening, because the mic is live; failed is excluded", () => {
+    for (const s of ["initializing", "connecting", "idle", "pre-connect-buffering", "disconnected", undefined] as const) {
       expect(visualStateFor(s, true)).toBe("listening");
     }
+    expect(visualStateFor("failed", true)).not.toBe("listening");
   });
 });
 
@@ -86,5 +91,23 @@ describe("markAppearance", () => {
       expect(a.color).toBe("var(--accent-primary)");
     }
     expect(new Set(seen.map((a) => a.opacity)).size).toBe(3);
+  });
+
+  test("failed reads as a problem, not activity: no ripple, no pulse, destructive color", () => {
+    const a = markAppearance("failed", 0.9, false);
+    expect(a.color).toBe("var(--destructive)");
+    expect(a.ripple).toBe(0);
+    expect(a.pulsing).toBe(false);
+  });
+
+  test("failed stays distinguishable from every other state under reduced motion", () => {
+    const others = ["disconnected", "listening", "thinking", "speaking"] as const;
+    const failed = markAppearance("failed", 0.9, true);
+    for (const s of others) {
+      expect(failed.opacity).not.toBe(markAppearance(s, 0.9, true).opacity);
+    }
+    expect(failed.color).toBe("var(--destructive)");
+    expect(failed.ripple).toBe(0);
+    expect(failed.pulsing).toBe(false);
   });
 });

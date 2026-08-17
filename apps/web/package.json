@@ -50,7 +50,7 @@
     "date-fns": "^4.4.0",
     "date-fns-tz": "^3.2.0",
     "fflate": "^0.8.3",
-    "livekit-client": "^2.21.0",
+    "livekit-client": "^2.22.0",
     "monaco-editor": "^0.55.1",
     "monaco-yaml": "^5.5.1",
     "motion": "^12.40.0",

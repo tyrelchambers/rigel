@@ -4,8 +4,9 @@
  * output while speaking) and drives the ripple scale.
  */
 import { useEffect, useState } from "react";
+import type { AgentState } from "@livekit/components-react";
 
-export type VoiceVisualState = "disconnected" | "listening" | "thinking" | "speaking";
+export type VoiceVisualState = "disconnected" | "listening" | "thinking" | "speaking" | "failed";
 
 export interface MarkAppearance {
   color: string;
@@ -32,11 +33,28 @@ export function wavyCircle(cx: number, cy: number, r: number, waves = 6, amp = 0
 /** The room owns "is there a session at all"; the agent owns what it is doing
  * inside one. A connected room with no agent yet is still listening, because
  * the mic is published and transcribing. */
-export function visualStateFor(agentState: string | undefined, connected: boolean): VoiceVisualState {
+export function visualStateFor(agentState: AgentState | undefined, connected: boolean): VoiceVisualState {
   if (!connected) return "disconnected";
-  if (agentState === "thinking") return "thinking";
-  if (agentState === "speaking") return "speaking";
-  return "listening";
+  switch (agentState) {
+    case undefined:
+    case "disconnected":
+    case "connecting":
+    case "pre-connect-buffering":
+    case "initializing":
+    case "idle":
+    case "listening":
+      return "listening";
+    case "thinking":
+      return "thinking";
+    case "speaking":
+      return "speaking";
+    case "failed":
+      return "failed";
+    default: {
+      const exhaustive: never = agentState;
+      return exhaustive;
+    }
+  }
 }
 
 const REDUCED_MOTION_OPACITY: Record<VoiceVisualState, number> = {
@@ -44,6 +62,7 @@ const REDUCED_MOTION_OPACITY: Record<VoiceVisualState, number> = {
   listening: 0.7,
   thinking: 0.45,
   speaking: 1,
+  failed: 0.55,
 };
 
 export function markAppearance(
@@ -51,7 +70,12 @@ export function markAppearance(
   level: number,
   reducedMotion: boolean,
 ): MarkAppearance {
-  const color = state === "disconnected" ? "var(--fg-tertiary)" : "var(--accent-primary)";
+  const color =
+    state === "disconnected"
+      ? "var(--fg-tertiary)"
+      : state === "failed"
+        ? "var(--destructive)"
+        : "var(--accent-primary)";
   if (reducedMotion) {
     return { color, opacity: REDUCED_MOTION_OPACITY[state], ripple: 0, pulsing: false };
   }

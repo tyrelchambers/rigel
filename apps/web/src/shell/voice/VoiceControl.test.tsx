@@ -1,15 +1,27 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, renderHook, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const h = vi.hoisted(() => {
   const rooms: FakeRoom[] = [];
+  const behavior = { failConnect: false, failMic: false };
   class FakeRoom {
     handlers = new Map<string, () => void>();
-    localParticipant = { setMicrophoneEnabled: vi.fn(async () => {}) };
-    connect = vi.fn(async () => {});
+    localParticipant = {
+      setMicrophoneEnabled: vi.fn(async () => {
+        if (behavior.failMic) throw new Error("mic failed");
+      }),
+    };
+    connect = vi.fn(async () => {
+      if (behavior.failConnect) throw new Error("connect failed");
+    });
     disconnect = vi.fn(async () => {
+      // Deferred like the real SDK: Disconnected fires after teardown, not
+      // synchronously inside the disconnect() call, so a bug that leaves the
+      // listener attached only shows up once the surrounding catch block has
+      // already finished and set its own status.
+      await Promise.resolve();
       this.handlers.get("disconnected")?.();
     });
     constructor() {
@@ -27,6 +39,7 @@ const h = vi.hoisted(() => {
   return {
     rooms,
     FakeRoom,
+    behavior,
     status: { data: undefined as { enabled: boolean; configured: boolean } | undefined },
     fetchVoiceToken: vi.fn(async () => ({ url: "wss://example", token: "jwt" })),
     agent: { state: "listening" },
@@ -54,12 +67,15 @@ vi.mock("@livekit/components-react", () => ({
 }));
 
 import { notReadyMessage, VoiceControl } from "./VoiceControl";
+import { useVoiceRoom } from "./useVoiceRoom";
 
 beforeEach(() => {
   h.rooms.length = 0;
   h.fetchVoiceToken.mockClear();
   h.agent.state = "listening";
   h.transcriptions = [];
+  h.behavior.failConnect = false;
+  h.behavior.failMic = false;
 });
 afterEach(cleanup);
 
@@ -121,6 +137,37 @@ test("a failed token request surfaces the retry copy instead of hanging on Conne
   expect(await screen.findByText(/Could not connect/)).toBeTruthy();
 });
 
+test("Room.connect rejecting lands on error and stays there once the deferred Disconnected fires", async () => {
+  h.status.data = { enabled: true, configured: true };
+  h.behavior.failConnect = true;
+  render(<VoiceControl />);
+  await userEvent.click(screen.getByLabelText("Voice assistant"));
+
+  expect(await screen.findByText(/Could not connect/)).toBeTruthy();
+  await waitFor(() => expect(h.rooms).toHaveLength(1));
+  expect(h.rooms[0]!.disconnect).toHaveBeenCalled();
+
+  await waitFor(() => expect(h.rooms[0]!.handlers.has("disconnected")).toBe(false));
+  expect(screen.getByText(/Could not connect/)).toBeTruthy();
+  expect(screen.queryByText("Connecting…")).toBeNull();
+});
+
+test("setMicrophoneEnabled rejecting lands on error and stays there once the deferred Disconnected fires", async () => {
+  h.status.data = { enabled: true, configured: true };
+  h.behavior.failMic = true;
+  render(<VoiceControl />);
+  await userEvent.click(screen.getByLabelText("Voice assistant"));
+
+  expect(await screen.findByText(/Could not connect/)).toBeTruthy();
+  await waitFor(() => expect(h.rooms).toHaveLength(1));
+  expect(h.rooms[0]!.connect).toHaveBeenCalled();
+  expect(h.rooms[0]!.disconnect).toHaveBeenCalled();
+
+  await waitFor(() => expect(h.rooms[0]!.handlers.has("disconnected")).toBe(false));
+  expect(screen.getByText(/Could not connect/)).toBeTruthy();
+  expect(screen.queryByText("Connecting…")).toBeNull();
+});
+
 test("reopening after a failure retries, which is what the failure copy promises", async () => {
   h.status.data = { enabled: true, configured: true };
   h.fetchVoiceToken.mockRejectedValueOnce(new Error("voice token failed: 409"));
@@ -160,6 +207,17 @@ test("agent lines and user lines land on opposite sides of the transcript", asyn
   await userEvent.click(screen.getByLabelText("Voice assistant"));
   expect((await screen.findByText("scale the api")).className).toContain("self-end");
   expect(screen.getByText("scaled to three").className).toContain("self-start");
+});
+
+test("two connect() calls fired before the token resolves only produce one Room", async () => {
+  const { result } = renderHook(() => useVoiceRoom());
+
+  await act(async () => {
+    await Promise.all([result.current.connect(), result.current.connect()]);
+  });
+
+  expect(h.fetchVoiceToken).toHaveBeenCalledTimes(1);
+  expect(h.rooms).toHaveLength(1);
 });
 
 test("notReadyMessage distinguishes unconfigured, failed and in-flight", () => {

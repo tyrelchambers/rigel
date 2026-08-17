@@ -21,3 +21,4 @@ minimumReleaseAgeExclude:
   - '@fortawesome/fontawesome-common-types@7.3.1'
   - '@fortawesome/fontawesome-svg-core@7.3.1'
   - '@fortawesome/react-fontawesome@3.4.0'
+  - livekit-client@2.22.0
