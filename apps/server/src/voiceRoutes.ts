@@ -19,7 +19,17 @@ export async function mintVoiceToken(role: VoiceRole): Promise<{ url: string; to
   const c = await voiceConfig();
   if (!c.url || !c.apiKey || !c.apiSecret) return null;
   const at = new AccessToken(c.apiKey, c.apiSecret, { identity: identityFor(role), ttl: "6h" });
-  at.addGrant({ roomJoin: true, room: VOICE_ROOM, canPublish: true, canSubscribe: true, canPublishData: true });
+  // phone excluded: the desktop and the worker trust data-channel frames
+  // (rigel.state / rigel.context) to carry the active kubectl context. A
+  // phone with canPublishData could forge those and redirect the worker to
+  // a different cluster.
+  at.addGrant({
+    roomJoin: true,
+    room: VOICE_ROOM,
+    canPublish: true,
+    canSubscribe: true,
+    canPublishData: role !== "phone",
+  });
   return { url: c.url, token: await at.toJwt() };
 }
 
@@ -52,7 +62,7 @@ export async function agentConfigResponse(): Promise<AgentConfigResponse | null>
  * UNSET expected token denies (there is no allow-all dev mode for this
  * route). */
 export function checkWorkerToken(provided: string | null | undefined): boolean {
-  const expected = process.env.RIGEL_VOICE_WORKER_TOKEN ?? "";
+  const expected = process.env.RIGEL_VOICE_WORKER_TOKEN?.trim() ?? "";
   if (!expected) return false;
   return checkSessionSecret(provided, expected);
 }

@@ -47,6 +47,15 @@ describe("mintVoiceToken", () => {
     delete process.env.LIVEKIT_URL;
     expect(await mintVoiceToken("desktop")).toBeNull();
   });
+
+  test("phone tokens cannot publish data; desktop tokens can", async () => {
+    const phone = await mintVoiceToken("phone");
+    const desktop = await mintVoiceToken("desktop");
+    const phonePayload = decodeJwt(phone!.token) as { video: Record<string, unknown> };
+    const desktopPayload = decodeJwt(desktop!.token) as { video: Record<string, unknown> };
+    expect(phonePayload.video.canPublishData).toBeFalsy();
+    expect(desktopPayload.video.canPublishData).toBe(true);
+  });
 });
 
 describe("agentConfigResponse", () => {

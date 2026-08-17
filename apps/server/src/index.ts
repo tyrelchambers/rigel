@@ -519,13 +519,8 @@ async function handler(req: Request): Promise<Response> {
     // the spike). The LiveKit API secret never leaves this process.
     if (url.pathname === "/api/voice/token" && req.method === "POST") {
       if (!voiceEnabled()) return Response.json({ error: "voice is disabled" }, { status: 404 });
-      let role: VoiceRole = "desktop";
-      try {
-        const body = (await req.json()) as { role?: string };
-        if (body.role === "phone") role = "phone";
-      } catch {
-        /* default role */
-      }
+      const body = (await req.json().catch(() => ({}))) as { role?: string };
+      const role: VoiceRole = body.role === "phone" ? "phone" : "desktop";
       const minted = await mintVoiceToken(role);
       if (!minted) return Response.json({ error: "voice is not configured" }, { status: 409 });
       return Response.json(minted);
