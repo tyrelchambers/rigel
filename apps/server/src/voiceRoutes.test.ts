@@ -63,6 +63,8 @@ describe("agentConfigResponse", () => {
     const res = await agentConfigResponse();
     expect(res?.openrouterApiKey).toBe("or-key");
     expect(res?.model).toBeTruthy();
+    expect(res?.apiKey).toBe("APIkey");
+    expect(res?.apiSecret).toBe("sixty-four-chars-of-secret-material-for-hs256-signing-goes-here!");
     expect(decodeJwt(res!.token).sub).toBe("rigel-agent");
   });
 

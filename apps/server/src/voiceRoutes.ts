@@ -1,5 +1,9 @@
-// Voice room tokens. The LiveKit API secret lives server-side only: the
-// renderer and the worker both receive short-lived JWTs, never the secret.
+// Voice room tokens. The LiveKit API secret never reaches the renderer: it
+// only receives short-lived JWTs. The worker is a local process forked by
+// Electron at the same trust level as the server, and its one route for
+// this, /api/voice/agent-config, is gated by both the global session secret
+// and the worker token, so it can receive the secret directly (it needs to
+// sign its own requests to LiveKit's inference gateway).
 import { randomBytes } from "node:crypto";
 import { AccessToken } from "livekit-server-sdk";
 import { voiceConfig } from "./voiceConfig";
@@ -37,6 +41,8 @@ export interface AgentConfigResponse {
   url: string;
   token: string;
   model: string;
+  apiKey: string;
+  apiSecret: string;
   openrouterApiKey: string;
   deepgramApiKey: string;
   cartesiaApiKey: string;
@@ -49,6 +55,8 @@ export async function agentConfigResponse(): Promise<AgentConfigResponse | null>
   return {
     ...minted,
     model: c.model,
+    apiKey: c.apiKey,
+    apiSecret: c.apiSecret,
     openrouterApiKey: c.openrouterApiKey,
     deepgramApiKey: c.deepgramApiKey,
     cartesiaApiKey: c.cartesiaApiKey,
