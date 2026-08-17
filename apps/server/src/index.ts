@@ -55,6 +55,8 @@ import type { CloudCluster } from "@rigel/cloud-connect/src/index";
 import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusMetrics";
 import { handleUpdates, type UpdatesRequest } from "./updates";
 import { chatConfig, setClaudeToken } from "./chatConfig";
+import { voiceStatus, voiceEnabled } from "./voiceConfig";
+import { mintVoiceToken, agentConfigResponse, checkWorkerToken, type VoiceRole } from "./voiceRoutes";
 import { agentsView, setAgentAuth, setActiveAgent } from "./agentConfig";
 import { agentModels } from "./agentModels";
 import { getAgent, type AgentAuthMethod } from "./agentRegistry";
@@ -506,6 +508,40 @@ async function handler(req: Request): Promise<Response> {
       // Execute mode: run kubectl and return the result
       const result = await kubectl(context, argv);
       return Response.json(result);
+    }
+
+    // GET /api/voice/status: is the voice feature flag on, and is it configured.
+    if (url.pathname === "/api/voice/status" && req.method === "GET") {
+      return Response.json(await voiceStatus());
+    }
+
+    // POST /api/voice/token: mint a room JWT for the renderer (or a phone, for
+    // the spike). The LiveKit API secret never leaves this process.
+    if (url.pathname === "/api/voice/token" && req.method === "POST") {
+      if (!voiceEnabled()) return Response.json({ error: "voice is disabled" }, { status: 404 });
+      let role: VoiceRole = "desktop";
+      try {
+        const body = (await req.json()) as { role?: string };
+        if (body.role === "phone") role = "phone";
+      } catch {
+        /* default role */
+      }
+      const minted = await mintVoiceToken(role);
+      if (!minted) return Response.json({ error: "voice is not configured" }, { status: 409 });
+      return Response.json(minted);
+    }
+
+    // GET /api/voice/agent-config: the worker's bootstrap, a room JWT + provider
+    // keys. Gated by the worker token so the renderer (which holds only the
+    // session secret) can never read provider keys.
+    if (url.pathname === "/api/voice/agent-config" && req.method === "GET") {
+      if (!voiceEnabled()) return Response.json({ error: "voice is disabled" }, { status: 404 });
+      if (!checkWorkerToken(req.headers.get("x-rigel-voice-worker"))) {
+        return Response.json({ error: "forbidden" }, { status: 403 });
+      }
+      const cfg = await agentConfigResponse();
+      if (!cfg) return Response.json({ error: "voice is not configured" }, { status: 409 });
+      return Response.json(cfg);
     }
 
     // POST /api/apply — MANIFEST apply, used by the catalog wizard and the
