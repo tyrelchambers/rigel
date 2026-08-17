@@ -121,6 +121,20 @@ test("a failed token request surfaces the retry copy instead of hanging on Conne
   expect(await screen.findByText(/Could not connect/)).toBeTruthy();
 });
 
+test("reopening after a failure retries, which is what the failure copy promises", async () => {
+  h.status.data = { enabled: true, configured: true };
+  h.fetchVoiceToken.mockRejectedValueOnce(new Error("voice token failed: 409"));
+  render(<VoiceControl />);
+  const button = screen.getByLabelText("Voice assistant");
+  await userEvent.click(button);
+  await screen.findByText(/Could not connect/);
+
+  await userEvent.click(button);
+  await userEvent.click(button);
+  await waitFor(() => expect(h.rooms).toHaveLength(1));
+  expect(await screen.findByText("End session")).toBeTruthy();
+});
+
 test("the agent state names itself in the popover header", async () => {
   h.status.data = { enabled: true, configured: true };
   h.agent.state = "thinking";

@@ -43,7 +43,9 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
         open={open}
         onOpenChange={(o) => {
           setOpen(o);
-          if (o && data.configured && status === "idle") void connect();
+          // "error" reconnects too: reopening the popover is the retry the
+          // failure copy promises.
+          if (o && data.configured && (status === "idle" || status === "error")) void connect();
         }}
       >
         <PopoverTrigger
