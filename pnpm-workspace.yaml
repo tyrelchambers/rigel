@@ -5,6 +5,10 @@ allowBuilds:
   esbuild: true
   sharp: true
   node-pty: true
+  # LiveKit voice worker: native turn-detector inference + protobuf codegen.
+  "@livekit/local-inference": true
+  onnxruntime-node: true
+  protobufjs: true
   # Windows-only installer pulled in by electron-builder; never built on macOS.
   electron-winstaller: false
 minimumReleaseAgeExclude:
