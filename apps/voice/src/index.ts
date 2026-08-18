@@ -90,6 +90,13 @@ async function main(): Promise<void> {
     const effect = applyDataFrame(state, participant?.identity, topic, decoder.decode(payload));
     if (effect.contextChanged) void refreshInstructions(agent, state);
     if (effect.keytermsChanged) session.updateOptions({ keyterms: state.keyterms });
+    // A rigel.state frame is the first thing the renderer publishes once its
+    // own handlers are mounted, and the only proof this side gets of that.
+    // ParticipantConnected fires earlier, so the announce there can land in a
+    // renderer that is not listening yet and simply be dropped.
+    if (participant?.identity === DESKTOP_IDENTITY && topic === "rigel.state") {
+      void announceAgentState(room, session.agentState);
+    }
   });
 
   session.on(voice.AgentSessionEventTypes.AgentStateChanged, (ev) => {
