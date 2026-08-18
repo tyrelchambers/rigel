@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { markAppearance, visualStateFor, wavyCircle } from "./VoiceMark";
+import { markAppearance, spectrumAt, visualStateFor, VOICE_SPECTRUM, voiceHalo, wavyCircle } from "./VoiceMark";
 
 test("wavyCircle produces a closed path around the center", () => {
   const d = wavyCircle(12, 12, 8);
@@ -57,12 +57,31 @@ describe("visualStateFor", () => {
 });
 
 describe("markAppearance", () => {
-  test("disconnected is tertiary, still, and fully opaque", () => {
+  test("disconnected is tertiary, still, unglowing and fully opaque", () => {
     const a = markAppearance("disconnected", 0.9, false);
     expect(a.color).toBe("var(--fg-tertiary)");
     expect(a.ripple).toBe(0);
     expect(a.pulsing).toBe(false);
     expect(a.opacity).toBe(1);
+    expect(a.glow).toBeNull();
+  });
+
+  test("the three live states key off the three spectrum stops", () => {
+    expect(markAppearance("listening", 0, false).color).toBe(VOICE_SPECTRUM[0]);
+    expect(markAppearance("thinking", 0, false).color).toBe(VOICE_SPECTRUM[1]);
+    expect(markAppearance("speaking", 0, false).color).toBe(VOICE_SPECTRUM[2]);
+  });
+
+  test("only the live states glow, each in its own colour", () => {
+    for (const [i, s] of (["listening", "thinking", "speaking"] as const).entries()) {
+      expect(markAppearance(s, 0, false).glow).toBe(voiceHalo(VOICE_SPECTRUM[i]!, "55"));
+    }
+    expect(markAppearance("disconnected", 0.9, false).glow).toBeNull();
+    expect(markAppearance("failed", 0.9, false).glow).toBeNull();
+  });
+
+  test("the halo fades to a fully transparent edge of the same colour", () => {
+    expect(voiceHalo("#38bdf8", "55")).toContain("#38bdf800 100%");
   });
 
   test("listening and speaking couple the ripple to the level", () => {
@@ -88,16 +107,22 @@ describe("markAppearance", () => {
     for (const a of seen) {
       expect(a.ripple).toBe(0);
       expect(a.pulsing).toBe(false);
-      expect(a.color).toBe("var(--accent-primary)");
     }
     expect(new Set(seen.map((a) => a.opacity)).size).toBe(3);
   });
 
-  test("failed reads as a problem, not activity: no ripple, no pulse, destructive color", () => {
+  test("reduced motion keeps the halo, which is colour rather than motion", () => {
+    for (const s of ["listening", "thinking", "speaking"] as const) {
+      expect(markAppearance(s, 0.9, true).glow).toBe(markAppearance(s, 0.9, false).glow);
+    }
+  });
+
+  test("failed reads as a problem, not activity: no ripple, no pulse, no glow, destructive color", () => {
     const a = markAppearance("failed", 0.9, false);
     expect(a.color).toBe("var(--destructive)");
     expect(a.ripple).toBe(0);
     expect(a.pulsing).toBe(false);
+    expect(a.glow).toBeNull();
   });
 
   test("failed stays distinguishable from every other state under reduced motion", () => {
@@ -109,5 +134,25 @@ describe("markAppearance", () => {
     expect(failed.color).toBe("var(--destructive)");
     expect(failed.ripple).toBe(0);
     expect(failed.pulsing).toBe(false);
+  });
+});
+
+describe("spectrumAt", () => {
+  test("the ends and the midpoint are the three stops themselves", () => {
+    expect(spectrumAt(0)).toBe(VOICE_SPECTRUM[0]);
+    expect(spectrumAt(0.5)).toBe(VOICE_SPECTRUM[1]);
+    expect(spectrumAt(1)).toBe(VOICE_SPECTRUM[2]);
+  });
+
+  test("it reproduces the bar colours the design exported", () => {
+    // Bars 8 and 15 of 28 in design/export/voice-popover.html.
+    expect(spectrumAt(7 / 27)).toBe("#4e90f4");
+    expect(spectrumAt(14 / 27)).toBe("#6466f1");
+  });
+
+  test("out-of-range and NaN positions stay on the ramp instead of emitting junk", () => {
+    expect(spectrumAt(-1)).toBe(VOICE_SPECTRUM[0]);
+    expect(spectrumAt(4)).toBe(VOICE_SPECTRUM[2]);
+    expect(spectrumAt(Number.NaN)).toBe(VOICE_SPECTRUM[0]);
   });
 });

@@ -1,10 +1,18 @@
 /**
- * The voice mark: three concentric wavy circles, animated from the assistant
- * state. Pure presentational; `level` is 0..1 (mic while listening, agent
- * output while speaking) and drives the ripple scale.
+ * The voice mark: three concentric wavy circles over a soft halo, animated
+ * from the assistant state. Pure presentational; `level` is 0..1 (mic while
+ * listening, agent output while speaking) and drives the ripple scale.
  */
 import { useEffect, useState } from "react";
 import type { AgentState } from "@livekit/components-react";
+
+/**
+ * Cyan → indigo → violet. Held as hex rather than CSS variables because the
+ * waveform interpolates between the stops, which var() cannot do. The mark's
+ * live states key off the same three, so the header icon and the waveform
+ * read as one instrument. The first stop is --accent-primary.
+ */
+export const VOICE_SPECTRUM = ["#38bdf8", "#6366f1", "#8b5cf6"] as const;
 
 export type VoiceVisualState = "disconnected" | "listening" | "thinking" | "speaking" | "failed";
 
@@ -15,7 +23,38 @@ export interface MarkAppearance {
   ripple: number;
   /** Drives the rigel-voice-pulse keyframe. */
   pulsing: boolean;
+  /**
+   * Radial gradient painted behind the rings, or null on the states where
+   * nothing is happening, so a still mark never glows.
+   */
+  glow: string | null;
 }
+
+function channel(hex: string, i: number): number {
+  return parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
+}
+
+function mix(from: string, to: string, t: number): string {
+  const parts = [0, 1, 2].map((i) => {
+    const v = Math.round(channel(from, i) + (channel(to, i) - channel(from, i)) * t);
+    return v.toString(16).padStart(2, "0");
+  });
+  return `#${parts.join("")}`;
+}
+
+/** Position 0..1 along the spectrum, with the indigo stop at the midpoint. */
+export function spectrumAt(t: number): string {
+  const [low, mid, high] = VOICE_SPECTRUM;
+  const clamped = Number.isFinite(t) ? Math.min(1, Math.max(0, t)) : 0;
+  return clamped <= 0.5 ? mix(low, mid, clamped * 2) : mix(mid, high, (clamped - 0.5) * 2);
+}
+
+/** `alpha` is the two-hex-digit suffix; `color` must be a 6-digit hex. */
+export function voiceHalo(color: string, alpha: string): string {
+  return `radial-gradient(ellipse 50% 50% at 50% 50%, ${color}${alpha} 0%, ${color}00 100%)`;
+}
+
+const MARK_GLOW_ALPHA = "55";
 
 export function wavyCircle(cx: number, cy: number, r: number, waves = 6, amp = 0.5): string {
   const steps = 48;
@@ -57,6 +96,22 @@ export function visualStateFor(agentState: AgentState | undefined, connected: bo
   }
 }
 
+const STATE_COLOR: Record<VoiceVisualState, string> = {
+  disconnected: "var(--fg-tertiary)",
+  listening: VOICE_SPECTRUM[0],
+  thinking: VOICE_SPECTRUM[1],
+  speaking: VOICE_SPECTRUM[2],
+  failed: "var(--destructive)",
+};
+
+const STATE_GLOW: Record<VoiceVisualState, string | null> = {
+  disconnected: null,
+  listening: voiceHalo(VOICE_SPECTRUM[0], MARK_GLOW_ALPHA),
+  thinking: voiceHalo(VOICE_SPECTRUM[1], MARK_GLOW_ALPHA),
+  speaking: voiceHalo(VOICE_SPECTRUM[2], MARK_GLOW_ALPHA),
+  failed: null,
+};
+
 const REDUCED_MOTION_OPACITY: Record<VoiceVisualState, number> = {
   disconnected: 1,
   listening: 0.7,
@@ -70,18 +125,16 @@ export function markAppearance(
   level: number,
   reducedMotion: boolean,
 ): MarkAppearance {
-  const color =
-    state === "disconnected"
-      ? "var(--fg-tertiary)"
-      : state === "failed"
-        ? "var(--destructive)"
-        : "var(--accent-primary)";
+  const color = STATE_COLOR[state];
+  // The halo is colour, not motion, so it survives the reduced-motion path and
+  // keeps carrying the state once the ripple and the pulse are gone.
+  const glow = STATE_GLOW[state];
   if (reducedMotion) {
-    return { color, opacity: REDUCED_MOTION_OPACITY[state], ripple: 0, pulsing: false };
+    return { color, glow, opacity: REDUCED_MOTION_OPACITY[state], ripple: 0, pulsing: false };
   }
   const coupled = state === "listening" || state === "speaking";
   const ripple = coupled && Number.isFinite(level) ? Math.min(1, Math.max(0, level)) : 0;
-  return { color, opacity: 1, ripple, pulsing: state === "thinking" };
+  return { color, glow, opacity: 1, ripple, pulsing: state === "thinking" };
 }
 
 function reducedMotionQuery(): MediaQueryList | null {
@@ -105,37 +158,53 @@ export function usePrefersReducedMotion(): boolean {
 }
 
 const RADII = [4, 7.5, 11];
+const MARK_PX = 18;
+/** 60px of halo around a 44px mark in the design. */
+const GLOW_INSET = "-18.2%";
 
 export function VoiceMark({ state, level }: { state: VoiceVisualState; level: number }) {
   const reducedMotion = usePrefersReducedMotion();
-  const { color, opacity, ripple, pulsing } = markAppearance(state, level, reducedMotion);
+  const { color, opacity, ripple, pulsing, glow } = markAppearance(state, level, reducedMotion);
   return (
-    <svg
-      viewBox="-2 -2 28 28"
-      width={18}
-      height={18}
+    <span
       aria-hidden
-      data-voice-state={state}
+      className="relative inline-flex shrink-0"
       style={{
-        color,
+        width: MARK_PX,
+        height: MARK_PX,
         opacity,
         animation: pulsing ? "rigel-voice-pulse 1.6s ease-in-out infinite" : undefined,
       }}
     >
-      {RADII.map((r, i) => (
-        <path
-          key={r}
-          d={wavyCircle(12, 12, r)}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={1.5}
-          style={{
-            transform: `scale(${1 + ripple * 0.05 * (i + 1)})`,
-            transformOrigin: "center",
-            transition: reducedMotion ? undefined : "transform 80ms linear",
-          }}
+      {glow && (
+        <span
+          className="pointer-events-none absolute rounded-full"
+          style={{ inset: GLOW_INSET, backgroundImage: glow }}
         />
-      ))}
-    </svg>
+      )}
+      <svg
+        viewBox="-2 -2 28 28"
+        width={MARK_PX}
+        height={MARK_PX}
+        data-voice-state={state}
+        className="relative"
+        style={{ color }}
+      >
+        {RADII.map((r, i) => (
+          <path
+            key={r}
+            d={wavyCircle(12, 12, r)}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.5}
+            style={{
+              transform: `scale(${1 + ripple * 0.05 * (i + 1)})`,
+              transformOrigin: "center",
+              transition: reducedMotion ? undefined : "transform 80ms linear",
+            }}
+          />
+        ))}
+      </svg>
+    </span>
   );
 }
