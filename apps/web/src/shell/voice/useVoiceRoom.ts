@@ -6,50 +6,83 @@ import { fetchVoiceToken } from "@/lib/api";
 export type VoiceConnection = "idle" | "connecting" | "connected" | "error";
 
 /** Owns the renderer's LiveKit room: connect on demand, publish the mic, stay
- * connected while the popover is closed, disconnect on End. */
+ * connected while the popover is closed, disconnect on End.
+ *
+ * `roomRef` is only populated once connect/mic-enable both succeed, never
+ * earlier: that's what lets `disconnect()` tell "there is a live Room to
+ * hang up on" apart from "a connect attempt is still in flight", and route
+ * the latter through `cancelledRef` instead of racing `Room.disconnect()`
+ * against `Room.connect()` on the same instance. */
 export function useVoiceRoom() {
   const roomRef = useRef<Room | null>(null);
   const connectingRef = useRef(false);
+  const cancelledRef = useRef(false);
+  const mountedRef = useRef(true);
   const [room, setRoom] = useState<Room | null>(null);
   const [status, setStatus] = useState<VoiceConnection>("idle");
 
   const connect = useCallback(async () => {
     if (roomRef.current || connectingRef.current) return;
     connectingRef.current = true;
+    cancelledRef.current = false;
     setStatus("connecting");
     let r: Room | null = null;
     const onDisconnected = () => {
       roomRef.current = null;
-      setRoom(null);
-      setStatus("idle");
+      if (mountedRef.current) {
+        setRoom(null);
+        setStatus("idle");
+      }
     };
     try {
       const { url, token } = await fetchVoiceToken();
       r = new Room();
-      roomRef.current = r;
       r.on(RoomEvent.Disconnected, onDisconnected);
       await r.connect(url, token);
       await r.localParticipant.setMicrophoneEnabled(true);
-      setRoom(r);
-      setStatus("connected");
+      if (cancelledRef.current) {
+        r.off(RoomEvent.Disconnected, onDisconnected);
+        void r.disconnect();
+        return;
+      }
+      roomRef.current = r;
+      if (mountedRef.current) {
+        setRoom(r);
+        setStatus("connected");
+      }
     } catch {
       // Detach first: tearing down a half-connected room fires Disconnected,
       // and that handler would overwrite "error" with "idle".
       r?.off(RoomEvent.Disconnected, onDisconnected);
       void r?.disconnect();
-      roomRef.current = null;
-      setRoom(null);
-      setStatus("error");
+      if (mountedRef.current && !cancelledRef.current) {
+        setRoom(null);
+        setStatus("error");
+      }
     } finally {
       connectingRef.current = false;
     }
   }, []);
 
   const disconnect = useCallback(() => {
-    void roomRef.current?.disconnect();
+    if (roomRef.current) {
+      void roomRef.current.disconnect();
+      return;
+    }
+    if (connectingRef.current) {
+      cancelledRef.current = true;
+      if (mountedRef.current) setStatus("idle");
+    }
   }, []);
 
-  useEffect(() => () => void roomRef.current?.disconnect(), []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      cancelledRef.current = true;
+      void roomRef.current?.disconnect();
+    };
+  }, []);
 
   return { room, status, connect, disconnect };
 }

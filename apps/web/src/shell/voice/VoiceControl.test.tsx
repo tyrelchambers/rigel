@@ -95,7 +95,7 @@ vi.mock("@/components/ConfirmSheet", () => ({
 }));
 
 import { useCluster } from "@/store/cluster";
-import { notReadyMessage, resultSummary, VoiceControl } from "./VoiceControl";
+import { notReadyMessage, resultSummary, voiceButtonLabel, VoiceControl } from "./VoiceControl";
 import { useVoiceRoom } from "./useVoiceRoom";
 
 beforeEach(() => {
@@ -267,7 +267,7 @@ test("a resource the user named shows up as a pill and its summary reaches the w
   expect(published).toContainEqual({ id: "dep-u-cm", context: "Deployment cert-manager in default: 2/2 ready, image —" });
 });
 
-test("pills outlive the popover closing", async () => {
+test("the header mark ends the session instead of only hiding the popover", async () => {
   h.status.data = { enabled: true, configured: true };
   useCluster.setState({
     resources: {
@@ -279,11 +279,75 @@ test("pills outlive the popover closing", async () => {
   const button = screen.getByLabelText("Voice assistant");
   await userEvent.click(button);
   expect(await screen.findByText("NODE")).toBeTruthy();
+  expect(button.getAttribute("aria-label")).toBe("End voice session");
+  expect(button.getAttribute("title")).toBe("End voice session");
 
   await userEvent.click(button);
+  expect(h.rooms[0]!.disconnect).toHaveBeenCalled();
   await waitFor(() => expect(screen.queryByText("NODE")).toBeNull());
+  expect(button.getAttribute("aria-label")).toBe("Voice assistant");
+
+  h.transcriptions = [];
   await userEvent.click(button);
-  expect(await screen.findByText("NODE")).toBeTruthy();
+  await waitFor(() => expect(h.rooms).toHaveLength(2));
+  expect(screen.queryByText("NODE")).toBeNull();
+});
+
+test("clicking again while connecting cancels instead of leaving an orphaned Room", async () => {
+  h.status.data = { enabled: true, configured: true };
+  let resolveToken: ((v: { url: string; token: string }) => void) | undefined;
+  h.fetchVoiceToken.mockImplementationOnce(
+    () => new Promise((resolve) => { resolveToken = resolve; }),
+  );
+  render(<VoiceControl />);
+  const button = screen.getByLabelText("Voice assistant");
+
+  await userEvent.click(button);
+  expect(await screen.findByText("Connecting…")).toBeTruthy();
+  expect(h.rooms).toHaveLength(0);
+
+  await userEvent.click(button);
+  expect(screen.queryByText("Connecting…")).toBeNull();
+
+  await act(async () => {
+    resolveToken?.({ url: "wss://example", token: "jwt" });
+  });
+
+  await waitFor(() => expect(h.rooms).toHaveLength(1));
+  expect(h.rooms[0]!.connect).toHaveBeenCalled();
+  await waitFor(() => expect(h.rooms[0]!.disconnect).toHaveBeenCalled());
+  expect(screen.queryByLabelText("End voice session")).toBeNull();
+  expect(screen.queryByText("End session")).toBeNull();
+});
+
+test("closing while connecting never leaves a Room reachable through a later reconnect", async () => {
+  h.status.data = { enabled: true, configured: true };
+  let resolveToken: ((v: { url: string; token: string }) => void) | undefined;
+  h.fetchVoiceToken.mockImplementationOnce(
+    () => new Promise((resolve) => { resolveToken = resolve; }),
+  );
+  render(<VoiceControl />);
+  const button = screen.getByLabelText("Voice assistant");
+  await userEvent.click(button);
+  await userEvent.click(button);
+  await act(async () => {
+    resolveToken?.({ url: "wss://example", token: "jwt" });
+  });
+  await waitFor(() => expect(h.rooms).toHaveLength(1));
+  await waitFor(() => expect(h.rooms[0]!.disconnect).toHaveBeenCalled());
+
+  await userEvent.click(button);
+  await waitFor(() => expect(h.rooms).toHaveLength(2));
+  expect(await screen.findByText("End session")).toBeTruthy();
+});
+
+test("voiceButtonLabel only names the ending action while the popover is open on a live or in-flight session", () => {
+  expect(voiceButtonLabel(false, "idle")).toBe("Voice assistant");
+  expect(voiceButtonLabel(true, "idle")).toBe("Voice assistant");
+  expect(voiceButtonLabel(true, "error")).toBe("Voice assistant");
+  expect(voiceButtonLabel(false, "connected")).toBe("Voice assistant");
+  expect(voiceButtonLabel(true, "connecting")).toBe("End voice session");
+  expect(voiceButtonLabel(true, "connected")).toBe("End voice session");
 });
 
 test("a new session starts with no pills from the last one", async () => {

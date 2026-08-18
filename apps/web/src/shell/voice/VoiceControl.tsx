@@ -1,8 +1,11 @@
 /**
  * Header entry point for voice: a 28px NO_DRAG button (three wavy circles)
- * plus the anchored popover. Room lifetime is owned here so audio and (from
- * Phase 2) session effects survive the popover closing. Renders nothing unless
- * the server reports the voice flag enabled.
+ * plus the anchored popover. Room lifetime is owned here: a press on the mark
+ * itself toggles the session (connect+open, or end+close, or cancel a
+ * connect in flight), so a closed popover never leaves the mic hot. Other
+ * ways the popover closes (Escape, an outside click, a nested dialog like
+ * ConfirmSheet stealing focus) only hide it — the session outlives those.
+ * Renders nothing unless the server reports the voice flag enabled.
  */
 import { useCallback, useEffect, useState } from "react";
 import { RoomAudioRenderer, RoomContext, useTrackVolume, useVoiceAssistant } from "@livekit/components-react";
@@ -47,6 +50,14 @@ export function notReadyMessage(configured: boolean, status: VoiceConnection): s
   return "Connecting…";
 }
 
+/** What the header mark's next click will do. Reachable outside interactions
+ * (a proposal's ConfirmSheet stealing focus, Escape, an outside click) close
+ * the popover without ending the session, so this only switches to the
+ * ending copy while the popover is open on a live or in-flight session. */
+export function voiceButtonLabel(open: boolean, status: VoiceConnection): string {
+  return open && (status === "connecting" || status === "connected") ? "End voice session" : "Voice assistant";
+}
+
 export function VoiceControl({ style }: { style?: React.CSSProperties }) {
   const { data } = useVoiceStatus();
   const { room, status, connect, disconnect } = useVoiceRoom();
@@ -68,6 +79,16 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
       return [...prev.filter((a) => a.id !== frame.id), frame].slice(-MAX_ACTIONS);
     });
   }, []);
+
+  const openSession = useCallback(() => {
+    setOpen(true);
+    if (data?.configured && (status === "idle" || status === "error")) void connect();
+  }, [data?.configured, status, connect]);
+
+  const closeSession = useCallback(() => {
+    setOpen(false);
+    if (status === "connecting" || status === "connected") disconnect();
+  }, [status, disconnect]);
 
   const reportResult = useCallback(
     async (frame: VoiceAction, ok: boolean, summary: string) => {
@@ -115,16 +136,22 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
       )}
       <Popover
         open={open}
-        onOpenChange={(o) => {
-          setOpen(o);
-          // "error" reconnects too: reopening the popover is the retry the
-          // failure copy promises.
-          if (o && data.configured && (status === "idle" || status === "error")) void connect();
+        onOpenChange={(o, eventDetails) => {
+          // Only a press on our own mark drives the session: an outside
+          // press or a nested dialog stealing focus (a proposal's
+          // ConfirmSheet) also closes the popover, and must not hang up on
+          // a session the user never asked to end.
+          if (eventDetails.reason !== "trigger-press") {
+            setOpen(o);
+            return;
+          }
+          if (o) openSession();
+          else closeSession();
         }}
       >
         <PopoverTrigger
-          aria-label="Voice assistant"
-          title="Voice assistant"
+          aria-label={voiceButtonLabel(open, status)}
+          title={voiceButtonLabel(open, status)}
           style={{ ...style, background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}
           className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full border transition-opacity hover:opacity-90"
         >
@@ -143,10 +170,7 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
                 pills={pills}
                 actions={actions}
                 onRunClick={setConfirmAction}
-                onEnd={() => {
-                  disconnect();
-                  setOpen(false);
-                }}
+                onEnd={closeSession}
               />
             </RoomContext.Provider>
           ) : (
