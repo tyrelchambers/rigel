@@ -7,6 +7,11 @@ import { readFile, writeFile } from "node:fs/promises";
 import { decryptSecret, encryptSecret } from "./secretStore";
 
 export const DEFAULT_VOICE_MODEL = "openai/gpt-4.1-mini";
+// LiveKit Inference model strings (provider/model). nova-3 is Deepgram's
+// low-latency streaming STT; sonic-2 is Cartesia's balanced low-latency TTS.
+// Both run through the same LiveKit API key/secret as the turn detector.
+export const DEFAULT_STT_MODEL = "deepgram/nova-3";
+export const DEFAULT_TTS_MODEL = "cartesia/sonic-2";
 
 export interface VoiceConfig {
   url: string;
@@ -14,8 +19,8 @@ export interface VoiceConfig {
   apiSecret: string;
   openrouterApiKey: string;
   model: string;
-  deepgramApiKey: string;
-  cartesiaApiKey: string;
+  sttModel: string;
+  ttsModel: string;
 }
 
 const ENV_KEYS: Record<keyof VoiceConfig, string> = {
@@ -24,13 +29,11 @@ const ENV_KEYS: Record<keyof VoiceConfig, string> = {
   apiSecret: "LIVEKIT_API_SECRET",
   openrouterApiKey: "OPENROUTER_API_KEY",
   model: "RIGEL_VOICE_MODEL",
-  deepgramApiKey: "DEEPGRAM_API_KEY",
-  cartesiaApiKey: "CARTESIA_API_KEY",
+  sttModel: "RIGEL_VOICE_STT_MODEL",
+  ttsModel: "RIGEL_VOICE_TTS_MODEL",
 };
 
-const SECRET_FIELDS = new Set<keyof VoiceConfig>([
-  "apiSecret", "openrouterApiKey", "deepgramApiKey", "cartesiaApiKey",
-]);
+const SECRET_FIELDS = new Set<keyof VoiceConfig>(["apiSecret", "openrouterApiKey"]);
 
 const FIELDS = Object.keys(ENV_KEYS) as (keyof VoiceConfig)[];
 
@@ -63,8 +66,8 @@ export async function voiceConfig(): Promise<VoiceConfig> {
     apiSecret: pick("apiSecret"),
     openrouterApiKey: pick("openrouterApiKey"),
     model: pick("model") || DEFAULT_VOICE_MODEL,
-    deepgramApiKey: pick("deepgramApiKey"),
-    cartesiaApiKey: pick("cartesiaApiKey"),
+    sttModel: pick("sttModel") || DEFAULT_STT_MODEL,
+    ttsModel: pick("ttsModel") || DEFAULT_TTS_MODEL,
   };
 }
 
@@ -77,8 +80,8 @@ export interface VoiceStatus {
   configured: boolean;
 }
 
-/** configured = the room can be minted AND the LLM can run. STT/TTS keys are
- * validated by the worker at session start, not here. */
+/** configured = the room can be minted AND the LLM can run. STT/TTS ride on
+ * the same LiveKit apiKey/apiSecret already checked here. */
 export async function voiceStatus(): Promise<VoiceStatus> {
   const c = await voiceConfig();
   return {

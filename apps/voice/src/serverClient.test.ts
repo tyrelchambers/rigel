@@ -9,7 +9,7 @@ const BASE = "http://127.0.0.1:4321";
 
 describe("createServerClient", () => {
   test("agentConfig sends the worker + session headers", async () => {
-    const f = fakeFetch(200, { url: "wss://x", token: "t", model: "m", apiKey: "k", apiSecret: "s", openrouterApiKey: "o", deepgramApiKey: "", cartesiaApiKey: "" });
+    const f = fakeFetch(200, { url: "wss://x", token: "t", model: "m", sttModel: "deepgram/nova-3", ttsModel: "cartesia/sonic-2", apiKey: "k", apiSecret: "s", openrouterApiKey: "o" });
     const c = createServerClient(BASE, "sess", "wt", f);
     const cfg = await c.agentConfig();
     expect(cfg.url).toBe("wss://x");

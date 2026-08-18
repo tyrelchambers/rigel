@@ -6,11 +6,11 @@ export interface AgentConfig {
   url: string;
   token: string;
   model: string;
+  sttModel: string;
+  ttsModel: string;
   apiKey: string;
   apiSecret: string;
   openrouterApiKey: string;
-  deepgramApiKey: string;
-  cartesiaApiKey: string;
 }
 
 export interface ActionResult {

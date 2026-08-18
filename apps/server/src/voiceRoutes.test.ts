@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { identityFor, mintVoiceToken, agentConfigResponse, checkWorkerToken, VOICE_ROOM } from "./voiceRoutes";
+import {
+  identityFor, mintVoiceToken, agentConfigResponse, checkWorkerToken, isVoiceWorkerRequest,
+  VOICE_ROOM, VOICE_WORKER_HEADER,
+} from "./voiceRoutes";
 
 function decodeJwt(token: string): Record<string, unknown> {
   return JSON.parse(Buffer.from(token.split(".")[1]!, "base64url").toString("utf8"));
@@ -65,6 +68,8 @@ describe("agentConfigResponse", () => {
     expect(res?.model).toBeTruthy();
     expect(res?.apiKey).toBe("APIkey");
     expect(res?.apiSecret).toBe("sixty-four-chars-of-secret-material-for-hs256-signing-goes-here!");
+    expect(res?.sttModel).toBeTruthy();
+    expect(res?.ttsModel).toBeTruthy();
     expect(decodeJwt(res!.token).sub).toBe("rigel-agent");
   });
 
@@ -84,5 +89,26 @@ describe("checkWorkerToken", () => {
     expect(checkWorkerToken("wt-123")).toBe(true);
     expect(checkWorkerToken("wrong")).toBe(false);
     expect(checkWorkerToken(null)).toBe(false);
+  });
+});
+
+describe("isVoiceWorkerRequest", () => {
+  const reqWith = (headers: Record<string, string>) =>
+    new Request("http://localhost/api/action", { method: "POST", headers });
+
+  test("true only when the request carries a valid worker token", () => {
+    process.env.RIGEL_VOICE_WORKER_TOKEN = "wt-123";
+    expect(isVoiceWorkerRequest(reqWith({ [VOICE_WORKER_HEADER]: "wt-123" }))).toBe(true);
+    expect(isVoiceWorkerRequest(reqWith({ [VOICE_WORKER_HEADER]: "wrong" }))).toBe(false);
+  });
+
+  test("false for a renderer request, which never holds the worker token", () => {
+    process.env.RIGEL_VOICE_WORKER_TOKEN = "wt-123";
+    expect(isVoiceWorkerRequest(reqWith({ "x-rigel-session": "session-secret" }))).toBe(false);
+  });
+
+  test("false when the expected token is unset, so voice is never inferred", () => {
+    delete process.env.RIGEL_VOICE_WORKER_TOKEN;
+    expect(isVoiceWorkerRequest(reqWith({ [VOICE_WORKER_HEADER]: "anything" }))).toBe(false);
   });
 });

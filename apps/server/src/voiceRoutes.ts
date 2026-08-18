@@ -41,11 +41,11 @@ export interface AgentConfigResponse {
   url: string;
   token: string;
   model: string;
+  sttModel: string;
+  ttsModel: string;
   apiKey: string;
   apiSecret: string;
   openrouterApiKey: string;
-  deepgramApiKey: string;
-  cartesiaApiKey: string;
 }
 
 export async function agentConfigResponse(): Promise<AgentConfigResponse | null> {
@@ -55,11 +55,11 @@ export async function agentConfigResponse(): Promise<AgentConfigResponse | null>
   return {
     ...minted,
     model: c.model,
+    sttModel: c.sttModel,
+    ttsModel: c.ttsModel,
     apiKey: c.apiKey,
     apiSecret: c.apiSecret,
     openrouterApiKey: c.openrouterApiKey,
-    deepgramApiKey: c.deepgramApiKey,
-    cartesiaApiKey: c.cartesiaApiKey,
   };
 }
 
@@ -73,4 +73,17 @@ export function checkWorkerToken(provided: string | null | undefined): boolean {
   const expected = process.env.RIGEL_VOICE_WORKER_TOKEN?.trim() ?? "";
   if (!expected) return false;
   return checkSessionSecret(provided, expected);
+}
+
+/** The header the voice worker signs every request to this server with. */
+export const VOICE_WORKER_HEADER = "x-rigel-voice-worker";
+
+/**
+ * Whether a request came from the voice worker rather than the renderer. Used
+ * to tag which AI surface performed an action; both post the same routes, so
+ * the signed worker header is the only thing that tells them apart. Falls to
+ * false for the renderer, which never holds the worker token.
+ */
+export function isVoiceWorkerRequest(req: { headers: { get(name: string): string | null } }): boolean {
+  return checkWorkerToken(req.headers.get(VOICE_WORKER_HEADER));
 }

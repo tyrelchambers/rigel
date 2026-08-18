@@ -2,11 +2,13 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { mkdtemp, mkdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { voiceConfig, voiceStatus, setVoiceConfig, DEFAULT_VOICE_MODEL } from "./voiceConfig";
+import {
+  voiceConfig, voiceStatus, setVoiceConfig, DEFAULT_VOICE_MODEL, DEFAULT_STT_MODEL, DEFAULT_TTS_MODEL,
+} from "./voiceConfig";
 
 const ENV_KEYS = [
   "LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "OPENROUTER_API_KEY",
-  "RIGEL_VOICE_MODEL", "DEEPGRAM_API_KEY", "CARTESIA_API_KEY", "RIGEL_VOICE",
+  "RIGEL_VOICE_MODEL", "RIGEL_VOICE_STT_MODEL", "RIGEL_VOICE_TTS_MODEL", "RIGEL_VOICE",
 ];
 
 let prevHome: string | undefined;
@@ -30,11 +32,13 @@ afterEach(() => {
 });
 
 describe("voiceConfig", () => {
-  test("empty when nothing is set, with the default model", async () => {
+  test("empty when nothing is set, with the default models", async () => {
     const c = await voiceConfig();
     expect(c.url).toBe("");
     expect(c.apiSecret).toBe("");
     expect(c.model).toBe(DEFAULT_VOICE_MODEL);
+    expect(c.sttModel).toBe(DEFAULT_STT_MODEL);
+    expect(c.ttsModel).toBe(DEFAULT_TTS_MODEL);
   });
 
   test("env wins over the file, per field", async () => {
@@ -43,6 +47,14 @@ describe("voiceConfig", () => {
     const c = await voiceConfig();
     expect(c.url).toBe("wss://env.example");
     expect(c.apiKey).toBe("file-key");
+  });
+
+  test("sttModel/ttsModel follow the env-then-file-then-default pattern", async () => {
+    await setVoiceConfig({ sttModel: "deepgram/nova-2" });
+    process.env.RIGEL_VOICE_TTS_MODEL = "cartesia/sonic-turbo";
+    const c = await voiceConfig();
+    expect(c.sttModel).toBe("deepgram/nova-2");
+    expect(c.ttsModel).toBe("cartesia/sonic-turbo");
   });
 
   test("set + read round-trips through the public API", async () => {
