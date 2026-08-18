@@ -7,7 +7,7 @@ import * as deepgram from "@livekit/agents-plugin-deepgram";
 import * as cartesia from "@livekit/agents-plugin-cartesia";
 import * as silero from "@livekit/agents-plugin-silero";
 import { Room, RoomEvent } from "@livekit/rtc-node";
-import { voiceSystemPrompt } from "@rigel/server/src/systemPrompt";
+import { buildAgent } from "./agent.js";
 import { createServerClient, type AgentConfig, type ServerClient } from "./serverClient.js";
 import { applyDataFrame, emptySessionState } from "./state.js";
 
@@ -60,7 +60,7 @@ async function main(): Promise<void> {
       }),
     },
   });
-  const agent = new voice.Agent({ instructions: voiceSystemPrompt(null) });
+  const agent = buildAgent(state);
   await session.start({ agent, room });
   console.log("[voice] session started");
 }
