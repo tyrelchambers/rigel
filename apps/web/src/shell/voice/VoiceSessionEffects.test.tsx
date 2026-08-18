@@ -3,11 +3,34 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import type { Room } from "livekit-client";
 import { useCluster } from "@/store/cluster";
+import { loadSessions } from "@/panels/chat/chatHistory";
 
-const h = vi.hoisted(() => ({ transcriptions: [] as { text: string; participantInfo?: { identity: string } }[] }));
+interface FakeTranscript {
+  text: string;
+  participantInfo?: { identity: string };
+  streamInfo?: { id: string; attributes?: Record<string, string> };
+}
+
+const h = vi.hoisted(() => ({ transcriptions: [] as FakeTranscript[] }));
 vi.mock("@livekit/components-react", () => ({ useTranscriptions: () => h.transcriptions }));
 
 import { publishJson, VoiceSessionEffects } from "./VoiceSessionEffects";
+
+function finalSegment(id: string, text: string, identity: string): FakeTranscript {
+  return {
+    text,
+    participantInfo: { identity },
+    streamInfo: { id, attributes: { "lk.transcription_final": "true" } },
+  };
+}
+
+function interimSegment(id: string, text: string, identity: string): FakeTranscript {
+  return {
+    text,
+    participantInfo: { identity },
+    streamInfo: { id, attributes: { "lk.transcription_final": "false" } },
+  };
+}
 
 function fakeRoom() {
   return { localParticipant: { publishData: vi.fn() } } as unknown as Room;
@@ -46,6 +69,7 @@ const RESOURCES = {
 beforeEach(() => {
   useCluster.setState({ activeContext: null, resources: {} });
   h.transcriptions = [];
+  localStorage.clear();
 });
 afterEach(cleanup);
 
@@ -166,4 +190,98 @@ test("pills are capped at six, keeping the most recent", () => {
 
   expect(frames(room, "rigel.context")).toHaveLength(8);
   expect(pills.names()).toEqual(["svc-2", "svc-3", "svc-4", "svc-5", "svc-6", "svc-7"]);
+});
+
+test("a final user segment is recorded into chat history", () => {
+  h.transcriptions = [finalSegment("seg-1", "restart web", "rigel-desktop")];
+  const room = fakeRoom();
+
+  render(<VoiceSessionEffects room={room} onPills={() => {}} />);
+
+  const sessions = loadSessions();
+  expect(sessions).toHaveLength(1);
+  expect(sessions[0]!.title).toBe("Voice session");
+  expect(sessions[0]!.messages.map((m) => [m.role, m.text])).toEqual([["user", "restart web"]]);
+});
+
+test("a final agent segment is recorded as an assistant message", () => {
+  h.transcriptions = [finalSegment("seg-1", "Proposed a restart of web.", "rigel-agent-1")];
+  const room = fakeRoom();
+
+  render(<VoiceSessionEffects room={room} onPills={() => {}} />);
+
+  expect(loadSessions()[0]!.messages).toEqual([{ id: "seg-1", role: "assistant", text: "Proposed a restart of web." }]);
+});
+
+test("interim (non-final) segments are never recorded", () => {
+  h.transcriptions = [interimSegment("seg-1", "restart w", "rigel-desktop")];
+  const room = fakeRoom();
+
+  render(<VoiceSessionEffects room={room} onPills={() => {}} />);
+
+  expect(loadSessions()).toHaveLength(0);
+});
+
+test("a segment that goes interim then final is recorded exactly once", () => {
+  h.transcriptions = [interimSegment("seg-1", "restart w", "rigel-desktop")];
+  const room = fakeRoom();
+  const { rerender } = render(<VoiceSessionEffects room={room} onPills={() => {}} />);
+  expect(loadSessions()).toHaveLength(0);
+
+  h.transcriptions = [finalSegment("seg-1", "restart web", "rigel-desktop")];
+  rerender(<VoiceSessionEffects room={room} onPills={() => {}} />);
+
+  const sessions = loadSessions();
+  expect(sessions).toHaveLength(1);
+  expect(sessions[0]!.messages).toHaveLength(1);
+  expect(sessions[0]!.messages[0]!.text).toBe("restart web");
+});
+
+test("a later unrelated interim tick does not rewrite an already-recorded final", () => {
+  h.transcriptions = [finalSegment("seg-1", "restart web", "rigel-desktop")];
+  const room = fakeRoom();
+  const { rerender } = render(<VoiceSessionEffects room={room} onPills={() => {}} />);
+  const firstUpdatedAt = loadSessions()[0]!.updatedAt;
+
+  h.transcriptions = [finalSegment("seg-1", "restart web", "rigel-desktop"), interimSegment("seg-2", "and then", "rigel-desktop")];
+  rerender(<VoiceSessionEffects room={room} onPills={() => {}} />);
+
+  const sessions = loadSessions();
+  expect(sessions).toHaveLength(1);
+  expect(sessions[0]!.messages).toHaveLength(1);
+  expect(sessions[0]!.updatedAt).toBe(firstUpdatedAt);
+});
+
+test("multiple final turns accumulate under one session entry", () => {
+  h.transcriptions = [finalSegment("seg-1", "restart web", "rigel-desktop")];
+  const room = fakeRoom();
+  const { rerender } = render(<VoiceSessionEffects room={room} onPills={() => {}} />);
+
+  h.transcriptions = [
+    finalSegment("seg-1", "restart web", "rigel-desktop"),
+    finalSegment("seg-2", "Proposed a restart of web.", "rigel-agent-1"),
+  ];
+  rerender(<VoiceSessionEffects room={room} onPills={() => {}} />);
+
+  const sessions = loadSessions();
+  expect(sessions).toHaveLength(1);
+  expect(sessions[0]!.messages.map((m) => [m.role, m.text])).toEqual([
+    ["user", "restart web"],
+    ["assistant", "Proposed a restart of web."],
+  ]);
+});
+
+test("two separate room mounts record under two separate session ids", () => {
+  h.transcriptions = [finalSegment("seg-1", "restart web", "rigel-desktop")];
+  const roomA = fakeRoom();
+  const { unmount } = render(<VoiceSessionEffects room={roomA} onPills={() => {}} />);
+  unmount();
+
+  h.transcriptions = [finalSegment("seg-2", "scale api to 3", "rigel-desktop")];
+  const roomB = fakeRoom();
+  render(<VoiceSessionEffects room={roomB} onPills={() => {}} />);
+
+  const sessions = loadSessions();
+  expect(sessions).toHaveLength(2);
+  expect(new Set(sessions.map((s) => s.id)).size).toBe(2);
 });
