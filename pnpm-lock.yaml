@@ -59,9 +59,6 @@ importers:
       node-pty:
         specifier: 1.1.0
         version: 1.1.0
-      sharp:
-        specifier: ^0.34.5
-        version: 0.34.5
     devDependencies:
       '@types/node':
         specifier: latest
@@ -12515,6 +12512,7 @@ snapshots:
       '@img/sharp-win32-arm64': 0.34.5
       '@img/sharp-win32-ia32': 0.34.5
       '@img/sharp-win32-x64': 0.34.5
+    optional: true
 
   sharp@0.35.3(@types/node@26.2.0):
     dependencies:

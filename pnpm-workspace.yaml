@@ -3,7 +3,11 @@ packages:
   - "packages/*"
 allowBuilds:
   esbuild: true
-  sharp: true
+  # Transitive only (astro's optional image service, and @livekit/agents, whose
+  # sharp import the voice bundle stubs out). Both resolve the prebuilt @img/*
+  # binaries at runtime, so nothing needs sharp's install script, which used to
+  # fall through to a libvips source build.
+  sharp: false
   node-pty: true
   # Windows-only installer pulled in by electron-builder; never built on macOS.
   electron-winstaller: false

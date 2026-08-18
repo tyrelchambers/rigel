@@ -91,6 +91,31 @@ const permissionHookMjsBundle = build({
   logLevel: "info",
 });
 
+// @livekit/agents' llm/utils.js has a top-level `import sharp from "sharp"`,
+// used only by serializeImage() to encode a VideoFrame into a multimodal LLM
+// request. This worker is audio-only: nothing ever puts an ImageContent in the
+// chat context, so that branch is unreachable. Rather than ship sharp (a native
+// libvips addon, and a SECOND copy of it, since @livekit/agents pins 0.35.3
+// exactly while the desktop had ^0.34.5) the import is aliased to a module that
+// throws. If the image path ever does become reachable, it must fail loudly
+// instead of returning a plausible but wrong encoding.
+const stubSharpPlugin = {
+  name: "rigel-stub-sharp",
+  setup(build) {
+    build.onResolve({ filter: /^sharp$/ }, () => ({ path: "sharp", namespace: "rigel-stub-sharp" }));
+    build.onLoad({ filter: /.*/, namespace: "rigel-stub-sharp" }, () => ({
+      contents: `export default function sharp() {
+  throw new Error(
+    "sharp is stubbed out of the Rigel voice worker: the audio-only pipeline is " +
+      "not supposed to encode image frames. See stubSharpPlugin in apps/desktop/build.mjs.",
+  );
+}
+`,
+      loader: "js",
+    }));
+  },
+};
+
 // Voice worker bundle. Same story as server.mjs: Electron's utility ESM loader
 // can't run tsx, so we bundle. Native N-API addons stay external and resolve
 // from apps/desktop/node_modules at fork time — same reason node-pty is a
@@ -102,10 +127,6 @@ const permissionHookMjsBundle = build({
 //     to THIS output file, so it must be an apps/desktop dependency. When it
 //     can't be resolved the SDK does not throw: the VAD silently becomes a
 //     no-op stream and end-of-turn prediction degrades to always-true.
-//   - sharp                      imported unconditionally by @livekit/agents'
-//     own llm/utils.js (image-frame encoding, unrelated to voice); if it isn't
-//     resolvable the import throws at module-load time and voice.mjs never
-//     boots, even though the audio-only pipeline here never touches it
 const voiceBundle = build({
   entryPoints: ["../voice/src/index.ts"],
   outfile: "dist/voice.mjs",
@@ -113,7 +134,8 @@ const voiceBundle = build({
   platform: "node",
   format: "esm",
   target: "node22",
-  external: ["@livekit/rtc-node", "@livekit/local-inference", "sharp", "electron", "node-pty"],
+  external: ["@livekit/rtc-node", "@livekit/local-inference", "electron", "node-pty"],
+  plugins: [stubSharpPlugin],
   banner: {
     js: "import { createRequire as __rigelCreateRequire } from 'node:module'; const require = __rigelCreateRequire(import.meta.url);",
   },
