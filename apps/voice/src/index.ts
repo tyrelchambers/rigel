@@ -1,7 +1,7 @@
 // Voice worker entry. Fetches its bootstrap from the local server (retrying
 // while the server comes up), dials the LiveKit room, and starts the pipeline.
 // No LiveKit worker registration/dispatch: this process serves exactly one room.
-import { voice, inference } from "@livekit/agents";
+import { voice, inference, initializeLogger } from "@livekit/agents";
 import * as openai from "@livekit/agents-plugin-openai";
 import { Room, RoomEvent } from "@livekit/rtc-node";
 import { buildAgent, refreshInstructions } from "./agent.js";
@@ -21,6 +21,9 @@ async function bootstrap(server: ServerClient): Promise<AgentConfig> {
 }
 
 async function main(): Promise<void> {
+  // Every agents-SDK class logs from a field initializer, so constructing one
+  // before this throws "logger not initialized". Must run before the pipeline.
+  initializeLogger({ pretty: false, level: "info" });
   const port = process.env.PORT;
   if (!port) throw new Error("PORT is required");
   const server = createServerClient(
