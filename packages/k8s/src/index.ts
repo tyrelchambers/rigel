@@ -131,6 +131,8 @@ export {
   parseSuggestedActions,
   isDestructiveAction,
   buildQuestionAnswer,
+  VOICE_CONFIRMABLE_KINDS,
+  isVoiceConfirmable,
 } from "./actionBlocks";
 
 export {
