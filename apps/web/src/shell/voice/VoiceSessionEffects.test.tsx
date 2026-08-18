@@ -18,6 +18,15 @@ function decode(call: unknown[]) {
   return { body: JSON.parse(new TextDecoder().decode(payload)), topic: options.topic };
 }
 
+/** The pills the component last handed up, which is what the popover renders. */
+function pillCollector() {
+  const onPills = vi.fn();
+  return {
+    onPills,
+    names: () => ((onPills.mock.calls[onPills.mock.calls.length - 1]?.[0] ?? []) as { name: string }[]).map((p) => p.name),
+  };
+}
+
 function frames(room: Room, topic: string) {
   const publishData = room.localParticipant.publishData as ReturnType<typeof vi.fn>;
   return publishData.mock.calls.map(decode).filter((f) => f.topic === topic).map((f) => f.body);
@@ -104,42 +113,41 @@ test("a spoken resource name publishes its summary and becomes a pill", () => {
   useCluster.setState({ resources: RESOURCES });
   h.transcriptions = [{ text: "what's up with cert manager", participantInfo: { identity: "rigel-desktop" } }];
   const room = fakeRoom();
-  const onPills = vi.fn();
+  const pills = pillCollector();
 
-  render(<VoiceSessionEffects room={room} onPills={onPills} />);
+  render(<VoiceSessionEffects room={room} onPills={pills.onPills} />);
 
   expect(frames(room, "rigel.context")).toEqual([
-    { id: "dep-u-cm", context: "Deployment cert-manager in default: 1/1 ready, image —" },
+    { id: "dep-u-cm", context: "Deployment cert-manager in default: 1/1 ready, image \u2014" },
   ]);
-  expect(onPills).toHaveBeenCalledTimes(1);
-  expect(onPills.mock.calls[0]![0].map((p: { name: string }) => p.name)).toEqual(["cert-manager"]);
+  expect(pills.names()).toEqual(["cert-manager"]);
 });
 
 test("the same resource named again in a later turn is not republished", () => {
   useCluster.setState({ resources: RESOURCES });
   h.transcriptions = [{ text: "check certmanager", participantInfo: { identity: "rigel-desktop" } }];
   const room = fakeRoom();
-  const onPills = vi.fn();
-  const { rerender } = render(<VoiceSessionEffects room={room} onPills={onPills} />);
+  const pills = pillCollector();
+  const { rerender } = render(<VoiceSessionEffects room={room} onPills={pills.onPills} />);
   expect(frames(room, "rigel.context")).toHaveLength(1);
 
   h.transcriptions = [...h.transcriptions, { text: "and cert manager again", participantInfo: { identity: "rigel-desktop" } }];
-  rerender(<VoiceSessionEffects room={room} onPills={onPills} />);
+  rerender(<VoiceSessionEffects room={room} onPills={pills.onPills} />);
 
   expect(frames(room, "rigel.context")).toHaveLength(1);
-  expect(onPills).toHaveBeenCalledTimes(1);
+  expect(pills.names()).toEqual(["cert-manager"]);
 });
 
 test("what the agent says back never pins a resource", () => {
   useCluster.setState({ resources: RESOURCES });
   h.transcriptions = [{ text: "cert manager is healthy", participantInfo: { identity: "rigel-agent-1" } }];
   const room = fakeRoom();
-  const onPills = vi.fn();
+  const pills = pillCollector();
 
-  render(<VoiceSessionEffects room={room} onPills={onPills} />);
+  render(<VoiceSessionEffects room={room} onPills={pills.onPills} />);
 
   expect(frames(room, "rigel.context")).toEqual([]);
-  expect(onPills).not.toHaveBeenCalled();
+  expect(pills.names()).toEqual([]);
 });
 
 test("pills are capped at six, keeping the most recent", () => {
@@ -152,11 +160,10 @@ test("pills are capped at six, keeping the most recent", () => {
     { text: "svc-0 svc-1 svc-2 svc-3 svc-4 svc-5 svc-6 svc-7", participantInfo: { identity: "rigel-desktop" } },
   ];
   const room = fakeRoom();
-  const onPills = vi.fn();
+  const pills = pillCollector();
 
-  render(<VoiceSessionEffects room={room} onPills={onPills} />);
+  render(<VoiceSessionEffects room={room} onPills={pills.onPills} />);
 
   expect(frames(room, "rigel.context")).toHaveLength(8);
-  const last = onPills.mock.calls[onPills.mock.calls.length - 1]![0] as { name: string }[];
-  expect(last.map((p) => p.name)).toEqual(["svc-2", "svc-3", "svc-4", "svc-5", "svc-6", "svc-7"]);
+  expect(pills.names()).toEqual(["svc-2", "svc-3", "svc-4", "svc-5", "svc-6", "svc-7"]);
 });

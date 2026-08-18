@@ -34,6 +34,15 @@ export function VoiceSessionEffects({
   const publishedIds = useRef(new Set<string>());
   const pillsRef = useRef<MentionCandidate[]>([]);
 
+  // Pills belong to a session, but they are held above this component so they
+  // survive the popover. Ending one session and starting another mounts a new
+  // instance, which is where they have to be dropped.
+  useEffect(() => {
+    publishedIds.current = new Set();
+    pillsRef.current = [];
+    onPills([]);
+  }, [room, onPills]);
+
   useEffect(() => {
     const publish = () => publishJson(room, "rigel.state", { activeContext: useCluster.getState().activeContext });
     publish();

@@ -256,6 +256,28 @@ test("pills outlive the popover closing", async () => {
   expect(await screen.findByText("NODE")).toBeTruthy();
 });
 
+test("a new session starts with no pills from the last one", async () => {
+  h.status.data = { enabled: true, configured: true };
+  useCluster.setState({
+    resources: {
+      nodes: { "k3s-slave": { metadata: { uid: "u-node", name: "k3s-slave" }, status: { conditions: [] } } },
+    },
+  });
+  h.transcriptions = [{ text: "cordon k3s slave", participantInfo: { identity: "rigel-desktop" } }];
+  render(<VoiceControl />);
+  const button = screen.getByLabelText("Voice assistant");
+  await userEvent.click(button);
+  expect(await screen.findByText("NODE")).toBeTruthy();
+
+  await userEvent.click(await screen.findByText("End session"));
+  h.transcriptions = [];
+  await userEvent.click(button);
+
+  await waitFor(() => expect(h.rooms).toHaveLength(2));
+  expect(await screen.findByText("End session")).toBeTruthy();
+  expect(screen.queryByText("NODE")).toBeNull();
+});
+
 test("two connect() calls fired before the token resolves only produce one Room", async () => {
   const { result } = renderHook(() => useVoiceRoom());
 
