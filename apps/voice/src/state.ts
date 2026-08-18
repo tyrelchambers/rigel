@@ -23,6 +23,22 @@ export function emptySessionState(): SessionState {
   return { activeContext: null, contextLines: [], pending: null, keyterms: buildKeyterms([]) };
 }
 
+/**
+ * Scrubs a finished session in place. The state object is captured by the
+ * agent's tools and turn hook, so it is mutated rather than replaced.
+ *
+ * `pending` is the reason this exists: an armed mutation surviving into the
+ * next session would let a reconnecting operator run a proposal they never
+ * heard, just by saying "confirm". The rest goes with it because the desktop
+ * republishes rigel.state and rigel.keyterms the moment it reconnects.
+ */
+export function resetSessionState(state: SessionState): void {
+  state.activeContext = null;
+  state.contextLines = [];
+  state.pending = null;
+  state.keyterms = buildKeyterms([]);
+}
+
 /** What a frame moved, so the caller can re-issue only what actually changed. */
 export interface FrameEffect {
   contextChanged: boolean;

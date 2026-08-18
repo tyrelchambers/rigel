@@ -20,20 +20,28 @@ export function identityFor(role: VoiceRole): string {
 }
 
 /**
- * `agent: true` and `canUpdateOwnMetadata: true` are load-bearing beyond
- * what their names suggest. `@livekit/components-react`'s `useVoiceAssistant`
- * finds the agent solely via `participant.kind === ParticipantKind.AGENT`
- * (set server-side from the `agent` grant on the room-join token) and reads
- * its state solely from the `lk.agent.state` attribute, which `@livekit/agents`
- * writes with `localParticipant.setAttributes(...)`, a call that requires
- * `canUpdateOwnMetadata` and silently rejects without it. Omit either grant
- * and the renderer can never see the agent: it stays on "Connecting..."
- * forever with no error, because nothing in this file's types says so.
+ * The `kind` claim, not the `agent` video grant, is what makes LiveKit report a
+ * participant as `ParticipantKind.AGENT`. The grant only says "allowed to
+ * register as an Agent Framework worker", which is a different permission and
+ * one this worker never uses, since it joins the room directly instead of being
+ * dispatched. `@livekit/agents` mints its own agent-participant tokens the same
+ * way (see `workflows/warm_transfer.js`: `token.kind = "agent"`).
+ *
+ * `canUpdateOwnMetadata` is the other half: `@livekit/agents` reports its state
+ * through `localParticipant.setAttributes({ "lk.agent.state": ... })`, and
+ * rtc-node never surfaces the server's rejection when the grant is missing, so
+ * the write just does not land.
+ *
+ * Both feed `useVoiceAssistant`, whose only failure mode is a permanent
+ * "connecting". The renderer no longer depends on that hook for state (the
+ * worker publishes its own on `rigel.agent.state`), but the hook still supplies
+ * the agent's audio track for the waveform.
  */
 export async function mintVoiceToken(role: VoiceRole): Promise<{ url: string; token: string } | null> {
   const c = await voiceConfig();
   if (!c.url || !c.apiKey || !c.apiSecret) return null;
   const at = new AccessToken(c.apiKey, c.apiSecret, { identity: identityFor(role), ttl: "6h" });
+  if (role === "agent") at.kind = "agent";
   // phone excluded: the desktop and the worker trust data-channel frames
   // (rigel.state / rigel.context) to carry the active kubectl context. A
   // phone with canPublishData could forge those and redirect the worker to

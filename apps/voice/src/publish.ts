@@ -40,7 +40,7 @@ export async function publishJson(room: PublishRoom, topic: string, payload: unk
       destination_identities: [DESKTOP_IDENTITY],
     });
   } catch (err) {
-    console.error(`[voice] publishing ${topic} failed:`, err);
+    console.error(`publishing ${topic} failed:`, err);
   }
 }
 

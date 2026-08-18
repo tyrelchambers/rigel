@@ -60,18 +60,20 @@ describe("mintVoiceToken", () => {
     expect(desktopPayload.video.canPublishData).toBe(true);
   });
 
-  test("agent tokens carry the agent marker and canUpdateOwnMetadata", async () => {
+  test("agent tokens carry the agent kind claim, the agent marker, and canUpdateOwnMetadata", async () => {
     const agent = await mintVoiceToken("agent");
-    const payload = decodeJwt(agent!.token) as { video: Record<string, unknown> };
+    const payload = decodeJwt(agent!.token) as { kind?: string; video: Record<string, unknown> };
+    expect(payload.kind).toBe("agent");
     expect(payload.video.agent).toBe(true);
     expect(payload.video.canUpdateOwnMetadata).toBe(true);
   });
 
-  test("desktop tokens carry canUpdateOwnMetadata but not the agent marker", async () => {
+  test("desktop tokens carry canUpdateOwnMetadata but neither the agent kind nor the marker", async () => {
     const desktop = await mintVoiceToken("desktop");
-    const payload = decodeJwt(desktop!.token) as { video: Record<string, unknown> };
+    const payload = decodeJwt(desktop!.token) as { kind?: string; video: Record<string, unknown> };
     expect(payload.video.canUpdateOwnMetadata).toBe(true);
     expect(payload.video.agent).toBeFalsy();
+    expect(payload.kind).toBeUndefined();
   });
 
   test("phone tokens carry neither the agent marker nor canUpdateOwnMetadata", async () => {
