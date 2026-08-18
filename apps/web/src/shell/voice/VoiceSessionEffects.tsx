@@ -39,9 +39,12 @@ export interface VoiceActionFrame {
   done?: { ok: boolean; summary: string };
 }
 
-/** A frame plus renderer-only state. `unreported` never crosses the wire. */
+/** A frame plus renderer-only state. Neither field crosses the wire;
+ *  `receivedAt` is stamped on arrival so the popover can count the voice
+ *  confirmation's TTL down, which the frame itself does not carry. */
 export interface VoiceAction extends VoiceActionFrame {
   unreported?: string;
+  receivedAt?: number;
 }
 
 /**

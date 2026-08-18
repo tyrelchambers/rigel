@@ -96,6 +96,7 @@ vi.mock("@/components/ConfirmSheet", () => ({
 
 import { useCluster } from "@/store/cluster";
 import { notReadyMessage, resultSummary, voiceButtonLabel, VoiceControl } from "./VoiceControl";
+import { confirmSecondsLeft } from "./VoicePopoverBody";
 import { useVoiceRoom } from "./useVoiceRoom";
 
 beforeEach(() => {
@@ -549,4 +550,37 @@ test("resultSummary caps a runaway stderr line so the packet cannot blow the 64K
   const { ok, summary } = resultSummary({ code: 1, stdout: "", stderr: "x".repeat(5000) });
   expect(ok).toBe(false);
   expect(summary).toHaveLength(400);
+});
+
+test("a voice-tier proposal counts its arming window down beside the command", async () => {
+  h.status.data = { enabled: true, configured: true };
+  render(<VoiceControl />);
+  await userEvent.click(screen.getByLabelText("Voice assistant"));
+  await screen.findByText("End session");
+  deliver("rigel.action", { ...CLICK_FRAME, tier: "voice" }, AGENT);
+
+  expect(await screen.findByText(/Say "confirm" to run/)).toBeTruthy();
+  expect(screen.getByText("45s")).toBeTruthy();
+});
+
+test("confirmSecondsLeft floors at zero and stays absent for an unstamped frame", () => {
+  const armed = 1_000_000;
+  expect(confirmSecondsLeft(armed, armed)).toBe(45);
+  expect(confirmSecondsLeft(armed, armed + 200)).toBe(45);
+  expect(confirmSecondsLeft(armed, armed + 30_000)).toBe(15);
+  expect(confirmSecondsLeft(armed, armed + 90_000)).toBe(0);
+  expect(confirmSecondsLeft(undefined, armed)).toBeNull();
+});
+
+test("the waveform rests at a baseline instead of vanishing when no track is published", async () => {
+  h.status.data = { enabled: true, configured: true };
+  const { baseElement } = render(<VoiceControl />);
+  await userEvent.click(screen.getByLabelText("Voice assistant"));
+  await screen.findByText("End session");
+
+  // useMultibandTrackVolume hands back [] with no track, which used to render
+  // an empty band.
+  const bars = baseElement.querySelectorAll("[data-voice-waveform] > div");
+  expect(bars).toHaveLength(28);
+  expect((bars[0] as HTMLElement).style.height).toBe("6px");
 });

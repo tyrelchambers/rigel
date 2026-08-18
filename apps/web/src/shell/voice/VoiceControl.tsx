@@ -76,7 +76,7 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
   const onAction = useCallback((frame: VoiceActionFrame) => {
     setActions((prev) => {
       if (frame.done) return prev.map((a) => (a.id === frame.id ? { ...a, done: frame.done } : a));
-      return [...prev.filter((a) => a.id !== frame.id), frame].slice(-MAX_ACTIONS);
+      return [...prev.filter((a) => a.id !== frame.id), { ...frame, receivedAt: Date.now() }].slice(-MAX_ACTIONS);
     });
   }, []);
 

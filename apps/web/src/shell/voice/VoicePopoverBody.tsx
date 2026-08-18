@@ -1,8 +1,13 @@
 /**
- * Popover contents, top to bottom: state line, live waveform, rolling
- * transcript, the mutations the worker has proposed, and the resources the
- * session has pinned. Must be rendered inside a RoomContext.Provider.
+ * Popover contents, top to bottom: the spectrum hairline, state line, live
+ * waveform, rolling transcript, the mutations the worker has proposed, and the
+ * resources the session has pinned. Must be rendered inside a
+ * RoomContext.Provider.
  */
+import { useEffect, useState } from "react";
+import { differenceInSeconds } from "date-fns";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faCircleExclamation } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import {
   useMultibandTrackVolume,
   useTranscriptions,
@@ -11,6 +16,14 @@ import {
 } from "@livekit/components-react";
 import { MENTION_KIND_LABEL, type MentionCandidate } from "@/panels/chat/mentions";
 import { useMicTrackRef } from "./useVoiceRoom";
+import {
+  markAppearance,
+  spectrumAt,
+  usePrefersReducedMotion,
+  visualStateFor,
+  voiceHalo,
+  VOICE_SPECTRUM,
+} from "./VoiceMark";
 import { AGENT_IDENTITY_PREFIX, type VoiceAction } from "./VoiceSessionEffects";
 
 // Exhaustive on purpose: a new AgentState in a future SDK should break the
@@ -27,23 +40,90 @@ const STATE_LABEL: Record<AgentState, string> = {
   speaking: "Speaking",
 };
 
+/** Must stay in step with PENDING_TTL_MS in apps/voice/src/mutationFlow.ts. */
+const CONFIRM_TTL_MS = 45_000;
+
+const DOT_HALO_ALPHA = "66";
+
+const BAR_COUNT = 28;
+const BAR_MIN_PX = 6;
+const BAR_MAX_PX = 60;
+/** Saturates a bar at the same input level the old 40px waveform did. */
+const BAR_GAIN = 2.6;
+
+function SignalEdge() {
+  return (
+    <div
+      aria-hidden
+      className="h-[2px] w-full shrink-0"
+      style={{
+        backgroundImage: `linear-gradient(-90deg, ${VOICE_SPECTRUM[0]} 0%, ${VOICE_SPECTRUM[1]} 55%, ${VOICE_SPECTRUM[2]} 100%)`,
+      }}
+    />
+  );
+}
+
 function Waveform() {
   const { state, audioTrack } = useVoiceAssistant();
   const micRef = useMicTrackRef();
-  const bands = useMultibandTrackVolume(state === "speaking" ? audioTrack : micRef, { bands: 24 });
+  const bands = useMultibandTrackVolume(state === "speaking" ? audioTrack : micRef, { bands: BAR_COUNT });
+  // With no track the hook hands back an empty array, which would leave the
+  // band blank rather than resting.
+  const levels = bands.length > 0 ? bands : (new Array<number>(BAR_COUNT).fill(0) as number[]);
   return (
-    <div className="flex h-10 items-end justify-center gap-[3px] px-3.5" aria-hidden>
-      {bands.map((v, i) => (
-        <div
-          key={i}
-          className="w-[4px] rounded-full"
-          style={{
-            height: `${Math.max(8, Math.min(100, v * 260))}%`,
-            background: "var(--accent-primary)",
-            opacity: 0.4 + Math.min(0.6, v * 2),
-          }}
-        />
-      ))}
+    <div
+      aria-hidden
+      data-voice-waveform
+      className="flex h-[76px] shrink-0 items-center justify-center gap-[3px] border-y px-4"
+      style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}
+    >
+      {levels.map((v, i) => {
+        const amp = Number.isFinite(v) ? Math.min(1, Math.max(0, v * BAR_GAIN)) : 0;
+        return (
+          <div
+            key={i}
+            className="w-[6px] shrink-0 rounded-[3px]"
+            style={{
+              height: BAR_MIN_PX + amp * (BAR_MAX_PX - BAR_MIN_PX),
+              background: spectrumAt(i / Math.max(1, levels.length - 1)),
+              opacity: 0.6 + amp * 0.4,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function StateRow({ onEnd }: { onEnd: () => void }) {
+  const { state } = useVoiceAssistant();
+  const reducedMotion = usePrefersReducedMotion();
+  const { color, glow } = markAppearance(visualStateFor(state, true), 0, reducedMotion);
+  return (
+    <div className="flex shrink-0 items-center gap-2 px-4 pt-3.5 pb-2.5">
+      <span className="relative size-2 shrink-0">
+        {glow && (
+          <span
+            className="pointer-events-none absolute -inset-1 rounded-full"
+            style={{ backgroundImage: voiceHalo(color, DOT_HALO_ALPHA) }}
+          />
+        )}
+        <span className="absolute inset-0 rounded-full" style={{ background: color }} />
+      </span>
+      <span className="text-xs font-semibold" style={{ color: "var(--fg-primary)" }}>
+        {STATE_LABEL[state]}
+      </span>
+      <button
+        onClick={onEnd}
+        className="ml-auto cursor-pointer rounded-lg border px-2.5 py-1 text-2xs font-medium transition-opacity hover:opacity-90"
+        style={{
+          background: "var(--surface-sunken)",
+          borderColor: "var(--border-subtle)",
+          color: "var(--fg-secondary)",
+        }}
+      >
+        End session
+      </button>
     </div>
   );
 }
@@ -53,23 +133,32 @@ function Transcript() {
   const recent = transcriptions.slice(-12);
   if (recent.length === 0) {
     return (
-      <span className="px-3.5 py-2.5 text-2xs" style={{ color: "var(--fg-tertiary)" }}>
+      <span className="px-4 py-3.5 text-2xs" style={{ color: "var(--fg-tertiary)" }}>
         Say something. Your words appear here as you speak.
       </span>
     );
   }
   return (
-    <div className="flex max-h-52 flex-col gap-1.5 overflow-y-auto px-3.5 py-2.5">
+    <div className="flex max-h-52 flex-col gap-2.5 overflow-y-auto px-4 py-3.5">
       {recent.map((t, i) => {
         const fromAgent = (t.participantInfo?.identity ?? "").startsWith(AGENT_IDENTITY_PREFIX);
         return (
           <span
             key={t.streamInfo?.id ?? i}
-            className={`max-w-[90%] rounded-lg px-2.5 py-1.5 text-xs ${fromAgent ? "self-start" : "self-end"}`}
-            style={{
-              background: fromAgent ? "var(--surface-sunken)" : "var(--accent-dim)",
-              color: "var(--fg-primary)",
-            }}
+            className={`rounded-[9px] border px-[11px] py-2 text-xs leading-[18px] ${fromAgent ? "max-w-[260px] self-start" : "max-w-[90%] self-end"}`}
+            style={
+              fromAgent
+                ? {
+                    background: `${VOICE_SPECTRUM[0]}14`,
+                    borderColor: `${VOICE_SPECTRUM[0]}3d`,
+                    color: "var(--fg-primary)",
+                  }
+                : {
+                    background: "var(--surface-sunken)",
+                    borderColor: "var(--border-subtle)",
+                    color: "var(--fg-secondary)",
+                  }
+            }
           >
             {t.text}
           </span>
@@ -85,51 +174,100 @@ function actionTarget(action: VoiceAction["action"]): string {
   return [action.kind, name, action.namespace && `in ${action.namespace}`].filter(Boolean).join(" ");
 }
 
-function Actions({ actions, onRunClick }: { actions: VoiceAction[]; onRunClick: (a: VoiceAction) => void }) {
-  if (actions.length === 0) return null;
+/** Seconds left before the worker drops the arming, or null if it never stamped.
+ *  Rounded up so the first tick reads the full window rather than one short. */
+export function confirmSecondsLeft(receivedAt: number | undefined, now: number): number | null {
+  if (receivedAt == null) return null;
+  return Math.max(0, differenceInSeconds(receivedAt + CONFIRM_TTL_MS, now, { roundingMethod: "ceil" }));
+}
+
+function PendingConfirm({ action, now }: { action: VoiceAction; now: number }) {
+  const left = confirmSecondsLeft(action.receivedAt, now);
   return (
-    <div className="flex flex-col gap-2 border-t px-3.5 py-2.5" style={{ borderColor: "var(--border-subtle)" }}>
-      {actions.map((a) => (
-        <div key={a.id} className="flex flex-col gap-1.5">
-          {a.command ? (
-            <code
-              className="rounded px-2 py-1 font-mono text-3xs break-all"
-              style={{ background: "var(--surface-sunken)", color: "var(--fg-secondary)" }}
-            >
-              {a.command}
-            </code>
-          ) : (
-            <span className="text-2xs" style={{ color: "var(--fg-secondary)" }}>
-              {actionTarget(a.action)}
-            </span>
-          )}
-          {a.done ? (
-            <span
-              className="text-2xs font-semibold"
-              style={{ color: a.done.ok ? "var(--status-running)" : "var(--status-failed)" }}
-            >
-              {a.done.ok ? "Ran" : a.done.summary || "Failed"}
-            </span>
-          ) : a.tier === "voice" ? (
-            <span className="text-2xs" style={{ color: "var(--fg-tertiary)" }}>
-              Say "confirm" to run, or "cancel".
-            </span>
-          ) : (
-            <button
-              onClick={() => onRunClick(a)}
-              className="self-start cursor-pointer rounded border px-2.5 py-1 text-2xs font-semibold transition-opacity hover:opacity-90"
-              style={{ borderColor: "var(--border-subtle)", color: "var(--fg-primary)", background: "var(--surface-sunken)" }}
-            >
-              {a.action.label ?? "Review and run"}
-            </button>
-          )}
-          {a.unreported && (
-            <span className="text-2xs" style={{ color: "var(--status-pending)" }}>
-              {a.unreported}
-            </span>
-          )}
-        </div>
-      ))}
+    <div
+      className="flex shrink-0 flex-col gap-2 border-t px-4 pt-3 pb-3.5"
+      style={{
+        background: "color-mix(in oklab, var(--status-pending) 6%, transparent)",
+        borderColor: "var(--status-pending)",
+      }}
+    >
+      <div className="flex items-center gap-[7px]">
+        <FontAwesomeIcon
+          icon={faCircleExclamation}
+          className="size-[13px] shrink-0"
+          style={{ color: "var(--status-pending)" }}
+        />
+        <span className="text-2xs font-semibold" style={{ color: "var(--status-pending)" }}>
+          Say "confirm" to run
+        </span>
+        {left != null && (
+          <span className="ml-auto font-mono text-2xs" style={{ color: "var(--fg-tertiary)" }}>
+            {`${left}s`}
+          </span>
+        )}
+      </div>
+      <code
+        className="rounded-[7px] border px-2.5 py-2 font-mono text-2xs leading-[17px] break-all"
+        style={{
+          background: "var(--surface-sunken)",
+          borderColor: "var(--border-subtle)",
+          color: "var(--fg-secondary)",
+        }}
+      >
+        {action.command ?? actionTarget(action.action)}
+      </code>
+      {action.unreported && (
+        <span className="text-2xs" style={{ color: "var(--status-pending)" }}>
+          {action.unreported}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function ActionRow({ action, onRunClick }: { action: VoiceAction; onRunClick: (a: VoiceAction) => void }) {
+  return (
+    <div
+      className="flex shrink-0 flex-col gap-1.5 border-t px-4 py-2.5"
+      style={{ borderColor: "var(--border-subtle)" }}
+    >
+      {action.command ? (
+        <code
+          className="rounded-[7px] px-2 py-1 font-mono text-3xs break-all"
+          style={{ background: "var(--surface-sunken)", color: "var(--fg-secondary)" }}
+        >
+          {action.command}
+        </code>
+      ) : (
+        <span className="text-2xs" style={{ color: "var(--fg-secondary)" }}>
+          {actionTarget(action.action)}
+        </span>
+      )}
+      {action.done ? (
+        <span
+          className="text-2xs font-semibold"
+          style={{ color: action.done.ok ? "var(--status-running)" : "var(--status-failed)" }}
+        >
+          {action.done.ok ? "Ran" : action.done.summary || "Failed"}
+        </span>
+      ) : (
+        <button
+          onClick={() => onRunClick(action)}
+          className="cursor-pointer self-start rounded-lg border px-2.5 py-1 text-2xs font-semibold transition-opacity hover:opacity-90"
+          style={{
+            borderColor: "var(--border-subtle)",
+            color: "var(--fg-primary)",
+            background: "var(--surface-sunken)",
+          }}
+        >
+          {action.action.label ?? "Review and run"}
+        </button>
+      )}
+      {action.unreported && (
+        <span className="text-2xs" style={{ color: "var(--status-pending)" }}>
+          {action.unreported}
+        </span>
+      )}
     </div>
   );
 }
@@ -137,14 +275,20 @@ function Actions({ actions, onRunClick }: { actions: VoiceAction[]; onRunClick: 
 function Pills({ pills }: { pills: MentionCandidate[] }) {
   if (pills.length === 0) return null;
   return (
-    <div className="flex flex-wrap gap-1.5 border-t px-3.5 py-2.5" style={{ borderColor: "var(--border-subtle)" }}>
+    <div className="flex shrink-0 flex-wrap items-center gap-1.5 px-4 pt-2.5 pb-3.5">
       {pills.map((p) => (
         <span
           key={p.id}
-          className="inline-flex items-center gap-1.5 rounded px-2 py-0.5 font-mono text-3xs"
-          style={{ background: "var(--surface-sunken)", color: "var(--fg-secondary)" }}
+          className="inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-2xs"
+          style={{
+            background: "var(--surface-sunken)",
+            borderColor: "var(--border-subtle)",
+            color: "var(--fg-secondary)",
+          }}
         >
-          <span style={{ color: "var(--accent-primary)", fontWeight: 600, letterSpacing: 0.5 }}>{MENTION_KIND_LABEL[p.kind]}</span>
+          <span className="font-mono text-3xs font-semibold" style={{ color: "var(--accent-primary)" }}>
+            {MENTION_KIND_LABEL[p.kind]}
+          </span>
           {p.name}
         </span>
       ))}
@@ -163,27 +307,27 @@ export function VoicePopoverBody({
   actions: VoiceAction[];
   onRunClick: (a: VoiceAction) => void;
 }) {
-  const { state } = useVoiceAssistant();
+  const counting = actions.some((a) => a.tier === "voice" && !a.done);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!counting) return;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [counting]);
   return (
     <>
-      <div
-        className="flex items-center border-b px-3.5 py-2.5"
-        style={{ borderColor: "var(--border-subtle)" }}
-      >
-        <span className="text-xs font-semibold" style={{ color: "var(--fg-primary)" }}>
-          {STATE_LABEL[state]}
-        </span>
-        <button
-          onClick={onEnd}
-          className="ml-auto cursor-pointer text-2xs font-semibold transition-opacity hover:opacity-90"
-          style={{ color: "var(--fg-secondary)" }}
-        >
-          End session
-        </button>
-      </div>
+      <SignalEdge />
+      <StateRow onEnd={onEnd} />
       <Waveform />
       <Transcript />
-      <Actions actions={actions} onRunClick={onRunClick} />
+      {actions.map((a) =>
+        a.tier === "voice" && !a.done ? (
+          <PendingConfirm key={a.id} action={a} now={now} />
+        ) : (
+          <ActionRow key={a.id} action={a} onRunClick={onRunClick} />
+        ),
+      )}
       <Pills pills={pills} />
     </>
   );
